@@ -1,82 +1,90 @@
 {
 	"schema_version": 1,
 	"host": "darwin-arm64",
-	"executed_at": "2026-07-17T08:37:12.906Z",
+	"executed_at": "2026-07-17T09:26:33.516Z",
 	"executed_commands": [
 		{
 			"id": "build-sdk",
-			"status": "fail",
-			"started_at": "2026-07-17T08:35:09.249Z",
-			"finished_at": "2026-07-17T08:35:09.558Z",
-			"duration_ms": 309,
-			"exit_code": 1,
+			"status": "pass",
+			"started_at": "2026-07-17T09:19:49.043Z",
+			"finished_at": "2026-07-17T09:19:55.370Z",
+			"duration_ms": 6327,
+			"exit_code": 0,
 			"signal": null,
 			"timeout": false,
-			"stdout_sha256": "5279a81a767fd457127e629254a729caef2c0bc616009d905faba72535430d0e",
-			"stderr_sha256": "f7b9b7d686c1eeae6a0d50b856df407577ba5bc0718e4a5d9926cc90d6ce60ee",
+			"stdout_sha256": "b391609211a1b111eb8eec59469da45672bae63fc5dab801ab78150bab7d88ab",
+			"stderr_sha256": "f6f27c84ec40fd89f193f756e8f571669755b4d7cfdd551e27a9fc9910b51497",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
+			"notes": "argv: bun run build:sdk\nexit_code: 0\nsignal: \ntimeout: false\nstderr_tail: $ bun --production -F './sdk/packages/*' build\n"
 		},
 		{
 			"id": "cli-build",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:09.559Z",
-			"finished_at": "2026-07-17T08:35:09.610Z",
-			"duration_ms": 51,
+			"started_at": "2026-07-17T09:19:55.370Z",
+			"finished_at": "2026-07-17T09:19:59.916Z",
+			"duration_ms": 4546,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
-			"stdout_sha256": "6c286840ea714cf0442a4dcf151b70f79ff06589d44e6f3799a14b69ed36494d",
+			"stdout_sha256": "b420b21da2772be048cd5cffea2c50198e11c0026f5e840b60f66d0d393921b3",
 			"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun -F @cline/cli build\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: "
 		},
 		{
 			"id": "cline-hub-build-webview",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:09.610Z",
-			"finished_at": "2026-07-17T08:35:09.631Z",
-			"duration_ms": 21,
-			"exit_code": 127,
+			"started_at": "2026-07-17T09:19:59.945Z",
+			"finished_at": "2026-07-17T09:20:04.084Z",
+			"duration_ms": 4139,
+			"exit_code": 2,
 			"signal": null,
 			"timeout": false,
-			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "b3838a1853dcfbecfc1be5cb87d8f034c8e7323ad0b951af7942767cce2b632f",
+			"stdout_sha256": "905f5c1bfd9dd62dc03810aa09dbf2235df4c5a5ee58f01dabb2478ee0e6d51f",
+			"stderr_sha256": "628c181f9cc2c6cc24acda92a8b6fb7087aae47b06384d56e85b2be82a9e31df",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run build:webview\nexit_code: 2\nsignal: \ntimeout: false\nstderr_tail: $ bun run --cwd src/webview build\n$ tsc -b && vite build\n"
 		},
 		{
 			"id": "cline-hub-tests",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:09.631Z",
-			"finished_at": "2026-07-17T08:35:13.639Z",
-			"duration_ms": 4008,
-			"exit_code": null,
-			"signal": "SIGTERM",
-			"timeout": true,
+			"started_at": "2026-07-17T09:20:04.084Z",
+			"finished_at": "2026-07-17T09:20:04.463Z",
+			"duration_ms": 379,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
 			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "f0f53f500e6ae6ecea6251236fcb0966fbba54c2a3c66b050941cde61d873a2d",
+			"stderr_sha256": "1b499b43a62b074d8499710442ff593418436626367ffaa268278d62e7ab1e88",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bunx vitest run --config vitest.config.ts\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...istyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:214:13)\n        at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:475:18 {\n      code: 'MODULE_NOT_FOUND',\n      requireStack: [Array],\n      cause: [Error]\n    }\n  }\n}\n\n\n\n"
 		},
 		{
 			"id": "install-root-frozen",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:13.644Z",
-			"finished_at": "2026-07-17T08:35:17.660Z",
-			"duration_ms": 4016,
+			"started_at": "2026-07-17T09:20:04.488Z",
+			"finished_at": "2026-07-17T09:21:04.484Z",
+			"duration_ms": 59996,
 			"exit_code": null,
 			"signal": "SIGTERM",
 			"timeout": true,
@@ -84,16 +92,18 @@
 			"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "TIMEOUT",
+			"notes": "argv: bun install --frozen-lockfile\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: "
 		},
 		{
 			"id": "root-check",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:17.663Z",
-			"finished_at": "2026-07-17T08:35:18.044Z",
-			"duration_ms": 381,
+			"started_at": "2026-07-17T09:21:04.484Z",
+			"finished_at": "2026-07-17T09:21:04.816Z",
+			"duration_ms": 332,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
@@ -101,84 +111,94 @@
 			"stderr_sha256": "e6397dbed974d9af2fe00603c63a24fea0fae370c47da59a8ae06aad06c52e5d",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run check\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...js/biome check \"--diagnostic-level=error\" sdk/ apps/cli/ apps/cline-hub/ apps/examples/\nerror: Cannot find module '@biomejs/cli-darwin-arm64/biome' from '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@biomejs+biome@2.4.5/node_modules/@biomejs/biome/bin/biome'\n\nBun v1.3.14 (macOS arm64)\nerror: script \"biome\" exited with code 1\nerror: script \"check\" exited with code 1\n"
 		},
 		{
 			"id": "root-e2e",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:18.045Z",
-			"finished_at": "2026-07-17T08:35:18.530Z",
-			"duration_ms": 485,
+			"started_at": "2026-07-17T09:21:04.816Z",
+			"finished_at": "2026-07-17T09:21:05.027Z",
+			"duration_ms": 211,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
-			"stdout_sha256": "39727044f2868137696cfef00ef4cb8dc46cabf353887f313c9fa59a12475ed5",
+			"stdout_sha256": "7c2a07feea51ccdcca9182a6308f179c83d6e80ade5b6b558ef72090b06d069c",
 			"stderr_sha256": "79a92d4917edc4325152f121f2ba671d4720a4cb09ca0442b345e1bc167c8017",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run test:e2e\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: $ bun -F @cline/core test:e2e && bun -F @cline/cli test:e2e\nerror: script \"test:e2e\" exited with code 1\n"
 		},
 		{
 			"id": "root-types",
-			"status": "fail",
-			"started_at": "2026-07-17T08:35:18.531Z",
-			"finished_at": "2026-07-17T08:35:22.533Z",
-			"duration_ms": 4002,
-			"exit_code": null,
-			"signal": "SIGTERM",
-			"timeout": true,
-			"stdout_sha256": "8bfcfc80fbdf96a2193245d119a2e46d0ad160ff9d871f7dc559c448afa399fe",
-			"stderr_sha256": "c6ae309436a3af28ef60074da2e5a3798e47fa6591a02d5ce79728b4048a1ad7",
+			"status": "pass",
+			"started_at": "2026-07-17T09:21:05.047Z",
+			"finished_at": "2026-07-17T09:21:20.576Z",
+			"duration_ms": 15529,
+			"exit_code": 0,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "f939bf04cbdc5486e19b35ac8169c116c5be662495f7c3f0b3ab6449248286e5",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
+			"notes": "argv: bun run types\nexit_code: 0\nsignal: \ntimeout: false\nstderr_tail: ...ne in 9.59s\n@cline/vscode:typecheck            | Done in 9.61s\n@cline/menubar:typecheck           | Done in 9.82s\nexamples:typecheck                 | Done in 9.84s\n@cline/code:typecheck              | Done in 10.11s\n@cline/core:typecheck              | $ bun tsc -p tsconfig.smoke.json --noEmit\n@cline/cli:typecheck               | Done in 12.03s\n@cline/core:typecheck              | Done in 15.52s\n"
 		},
 		{
 			"id": "root-unit",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:22.533Z",
-			"finished_at": "2026-07-17T08:35:22.774Z",
-			"duration_ms": 241,
+			"started_at": "2026-07-17T09:21:20.577Z",
+			"finished_at": "2026-07-17T09:21:20.826Z",
+			"duration_ms": 249,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
-			"stdout_sha256": "6cca3031073794bc7f859b2d24bc18b3b6fa909ae96f0c9916cd73fb91369f38",
+			"stdout_sha256": "f724842d59531790a4776708779b958b3b0a4ae3e702687738378ae892e378e7",
 			"stderr_sha256": "f9d3b81606a71b304b130904a4a218d7a43ad4d410d046987f60a141468f322d",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run test:unit\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: $ bash -lc 'set -euo pipefail; bun -F @cline/agents test & p1=$!; bun -F @cline/llms test & p2=$!; bun -F @cline/core test:unit & p3=$!; bun -F @cline/cli test:unit & p4=$!; bun -F @cline/cline-hub test & p5=$!; wait $p1; wait $p2; wait $p3; wait $p4; wait $p5'\nerror: script \"test:unit\" exited with code 1\n"
 		},
 		{
 			"id": "sdk-cli-hub-tests",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:22.774Z",
-			"finished_at": "2026-07-17T08:35:22.997Z",
-			"duration_ms": 223,
-			"exit_code": 130,
+			"started_at": "2026-07-17T09:21:20.827Z",
+			"finished_at": "2026-07-17T09:21:21.030Z",
+			"duration_ms": 203,
+			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "abe8caa11835a43704bbb34e11671915a237ad1b8010008f5af45be36439abce",
+			"stderr_sha256": "69c5ea5d266afc731814f19a5580fb3e149a912922900bd6f4536ef93ea2e1a1",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run test\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...re:test      |       requireStack: [Array],\n@cline/core:test      |       cause: [Error]\n@cline/core:test      |     }\n@cline/core:test      |   }\n@cline/core:test      | }\n@cline/core:test      | \n@cline/core:test      | \n@cline/core:test      | \n@cline/core:test      | error: script \"test:unit\" exited with code 1\n@cline/core:test      | Exited with code 1\nerror: script \"test\" exited with code 1\n"
 		},
 		{
 			"id": "vscode-analyze-unused",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:22.998Z",
-			"finished_at": "2026-07-17T08:35:27.005Z",
-			"duration_ms": 4007,
+			"started_at": "2026-07-17T09:21:21.091Z",
+			"finished_at": "2026-07-17T09:22:21.096Z",
+			"duration_ms": 60005,
 			"exit_code": null,
 			"signal": "SIGTERM",
 			"timeout": true,
@@ -186,67 +206,75 @@
 			"stderr_sha256": "38e9f2d9c32be4061e40f5edf4ffd9c25d0c9a0075474f13dd4566c84762e389",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "TIMEOUT",
+			"notes": "argv: bun run analyze:unused\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: $ bunx --yes knip --config knip.json --include files,exports,types,enumMembers,duplicates\nResolving dependencies\nerror: script \"analyze:unused\" was terminated by signal SIGTERM (Polite quit request)\n"
 		},
 		{
 			"id": "vscode-build",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:27.005Z",
-			"finished_at": "2026-07-17T08:35:27.099Z",
-			"duration_ms": 94,
-			"exit_code": 1,
-			"signal": null,
-			"timeout": false,
+			"started_at": "2026-07-17T09:22:21.096Z",
+			"finished_at": "2026-07-17T09:23:21.101Z",
+			"duration_ms": 60005,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
 			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "2090aeb978eb3f75ddece3ac52206ebbb6a00a85e9b1aaf99bff72106a497550",
+			"stderr_sha256": "42c077cb7eb0beb6dd9028dfb644a84d155683f5cdece8e8866fe6803e787c6b",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "TIMEOUT",
+			"notes": "argv: bun run ci:build\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: ...-tools@1.13.1/node_modules/grpc-tools/bin/grpc_tools.node\" (not found)\n[log] GET https://node-precompiled-binaries.grpc.io/grpc-tools/v1.13.1/darwin-arm64.tar.gz\n[info] install unpacking arm64/\n[info] install unpacking arm64/grpc_node_plugin\nerror: script \"ci:build\" was terminated by signal SIGTERM (Polite quit request)\nerror: script \"protos\" was terminated by signal SIGTERM (Polite quit request)\n"
 		},
 		{
 			"id": "vscode-compile-standalone",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:27.099Z",
-			"finished_at": "2026-07-17T08:35:27.194Z",
-			"duration_ms": 95,
+			"started_at": "2026-07-17T09:23:21.102Z",
+			"finished_at": "2026-07-17T09:23:39.691Z",
+			"duration_ms": 18589,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
-			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "a39ed4f9a8ea3d51d8994f9d28f8757bec437ee44e21ce8c6e2396d05527dfd2",
+			"stdout_sha256": "a76d10b493ec092aa939b8454f98e9a812b5c52f581417fe2e1b39447e7e3c57",
+			"stderr_sha256": "124445cae32b8931a76a3efa1f7c71458aab64bdefbea1622178005d9a523d95",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "UNKNOWN",
+			"notes": "argv: bun run compile-standalone\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...o download protoc via node-pre-gyp: Command failed: /opt/homebrew/Cellar/node/26.0.0/bin/node /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@mapbox+node-pre-gyp@2.0.3/node_modules/@mapbox/node-pre-gyp/bin/node-pre-gyp install\nerror: script \"protos\" exited with code 1\nerror: script \"check-types\" exited with code 1\nerror: script \"compile-standalone\" exited with code 1\n"
 		},
 		{
 			"id": "vscode-download-ripgrep",
-			"status": "fail",
-			"started_at": "2026-07-17T08:35:27.194Z",
-			"finished_at": "2026-07-17T08:35:31.202Z",
-			"duration_ms": 4008,
-			"exit_code": null,
-			"signal": "SIGTERM",
-			"timeout": true,
-			"stdout_sha256": "97c7db6e9a1a37ee8ff56b40c882df31f2a552a3ac9bd291322507cc48480c59",
-			"stderr_sha256": "152836a211b94d6f5c8686ae256682a6e75022db76ad7964414dcb53ec14d44e",
+			"status": "pass",
+			"started_at": "2026-07-17T09:23:39.692Z",
+			"finished_at": "2026-07-17T09:24:22.018Z",
+			"duration_ms": 42326,
+			"exit_code": 0,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "177aa2da96ab196f4d5b4ae35d5b470e25e90ec2f4f6602cf97343ac029ad701",
+			"stderr_sha256": "5dff2076f19caade31cf654aaa9a4bf68c0d00792c2b24f49cd10a9fa91d1c17",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
+			"notes": "argv: bun run download-ripgrep\nexit_code: 0\nsignal: \ntimeout: false\nstderr_tail: $ node scripts/download-ripgrep.mjs\n"
 		},
 		{
 			"id": "vscode-e2e",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:31.203Z",
-			"finished_at": "2026-07-17T08:35:31.224Z",
-			"duration_ms": 21,
+			"started_at": "2026-07-17T09:24:22.018Z",
+			"finished_at": "2026-07-17T09:24:22.033Z",
+			"duration_ms": 15,
 			"exit_code": 127,
 			"signal": null,
 			"timeout": false,
@@ -254,303 +282,328 @@
 			"stderr_sha256": "21820bdfa688725e71b9352c9d8703001ce56d2944311074b8c1be5563fd1642",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run test:e2e\nexit_code: 127\nsignal: \ntimeout: false\nstderr_tail: $ playwright install && bun run test:e2e:build && node src/test/e2e/utils/build.mjs && playwright test\n/opt/homebrew/bin/bash: line 1: playwright: command not found\nerror: script \"test:e2e\" exited with code 127\n"
 		},
 		{
 			"id": "vscode-protos",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:31.224Z",
-			"finished_at": "2026-07-17T08:35:31.303Z",
-			"duration_ms": 79,
-			"exit_code": 1,
-			"signal": null,
-			"timeout": false,
+			"started_at": "2026-07-17T09:24:22.059Z",
+			"finished_at": "2026-07-17T09:25:22.064Z",
+			"duration_ms": 60005,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
 			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "bd4e817884e0e10a57c5028e68453a747538c2e323e8eebd7f81cc24fb5a6940",
+			"stderr_sha256": "6c40c2992727a9245358db19540e939744a71ff4aa6f5bb21537116298a0202e",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "TIMEOUT",
+			"notes": "argv: bun run protos\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: ...Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/grpc-tools@1.13.1/node_modules/grpc-tools/bin/grpc_tools.node\" (not found)\n[log] GET https://node-precompiled-binaries.grpc.io/grpc-tools/v1.13.1/darwin-arm64.tar.gz\n[info] install unpacking arm64/\n[info] install unpacking arm64/grpc_node_plugin\nerror: script \"protos\" was terminated by signal SIGTERM (Polite quit request)\n"
 		},
 		{
 			"id": "vscode-quality",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:31.304Z",
-			"finished_at": "2026-07-17T08:35:31.396Z",
-			"duration_ms": 92,
-			"exit_code": 1,
-			"signal": null,
-			"timeout": false,
+			"started_at": "2026-07-17T09:25:22.064Z",
+			"finished_at": "2026-07-17T09:26:22.068Z",
+			"duration_ms": 60004,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
 			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "2a6bdf925739d049b38e681348053588ac6596c9dee489fb964f48926f4d1a0e",
+			"stderr_sha256": "1d116194a757437b0108aaa19a44133f49bbd52a898611bd6656420bedc65abc",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "TIMEOUT",
+			"notes": "argv: bun run ci:check-all\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: ...X/clinemm/node_modules/.bun/grpc-tools@1.13.1/node_modules/grpc-tools/bin/grpc_tools.node\" (not found)\ncheck-types | [log] GET https://node-precompiled-binaries.grpc.io/grpc-tools/v1.13.1/darwin-arm64.tar.gz\ncheck-types | [info] install unpacking arm64/\ncheck-types | [info] install unpacking arm64/grpc_node_plugin\nerror: script \"ci:check-all\" was terminated by signal SIGTERM (Polite quit request)\n"
 		},
 		{
 			"id": "vscode-unit",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:31.396Z",
-			"finished_at": "2026-07-17T08:35:34.035Z",
-			"duration_ms": 2639,
+			"started_at": "2026-07-17T09:26:22.069Z",
+			"finished_at": "2026-07-17T09:26:33.151Z",
+			"duration_ms": 11082,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
-			"stdout_sha256": "81ea84c7b585650ebb95af4fbcb559f7a3fcb7df9fdd59b7eb28b17f0f29a5d2",
+			"stdout_sha256": "8803fbf230b6cf88eb6dd5280fdb951b333e89a07eee235e89418e1c35843a1e",
 			"stderr_sha256": "5ef8e7dbae6cc35e5a6b7872657f4e8022b654079c512e5095e5433fe13bd92e",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run test:unit\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: $ bun scripts/run-bun-unit-tests.ts\nerror: script \"test:unit\" exited with code 1\n"
 		},
 		{
 			"id": "vscode-vitest",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:34.036Z",
-			"finished_at": "2026-07-17T08:35:34.205Z",
-			"duration_ms": 169,
+			"started_at": "2026-07-17T09:26:33.151Z",
+			"finished_at": "2026-07-17T09:26:33.344Z",
+			"duration_ms": 193,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "aa7294d5a785ab1564f31e273d6d98d972915ea99fc33738e69dc6cf112d1588",
+			"stderr_sha256": "3534c40681f7e12bb04a9c617e78235254942bbf48f3b65fce6208a931b86dd6",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run test:vitest\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:214:13)\n        at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:475:18 {\n      code: 'MODULE_NOT_FOUND',\n      requireStack: [Array],\n      cause: [Error]\n    }\n  }\n}\n\n\n\nerror: script \"test:vitest\" exited with code 1\n"
 		},
 		{
 			"id": "vscode-webview",
 			"status": "fail",
-			"started_at": "2026-07-17T08:35:34.206Z",
-			"finished_at": "2026-07-17T08:35:34.379Z",
-			"duration_ms": 173,
+			"started_at": "2026-07-17T09:26:33.344Z",
+			"finished_at": "2026-07-17T09:26:33.515Z",
+			"duration_ms": 171,
 			"exit_code": 1,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			"stderr_sha256": "72513f23f84d4bb55e16ff0097b995c8a69597b8d0d2603d97346fb43a33a2d4",
+			"stderr_sha256": "241f6568bdccf6f882db62941e15e0141679c31ac0917577859387df7970b66d",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stderr",
-			"head_oid": "36f7e974447fc7aad20efc9b974d85d12bd054e2",
-			"tree_oid": "d8024c9d2d70f1775ac2b0ce9ee2998b9f99d92d",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": "ENVIRONMENTAL",
+			"notes": "argv: bun run test:webview\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...dist/shared/binding-TuFFIE_J.mjs:214:13)\n        at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:475:18 {\n      code: 'MODULE_NOT_FOUND',\n      requireStack: [Array],\n      cause: [Error]\n    }\n  }\n}\n\n\n\nerror: script \"test\" exited with code 1\nerror: script \"test:webview\" exited with code 1\n"
 		}
 	],
 	"skipped_commands": [
 		{
 			"id": "cli-build-platforms",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:09.610Z",
-			"finished_at": "2026-07-17T08:35:09.610Z",
+			"started_at": "2026-07-17T09:19:59.927Z",
+			"finished_at": "2026-07-17T09:19:59.927Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=release-only (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "cli-publish-npm",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:09.610Z",
-			"finished_at": "2026-07-17T08:35:09.610Z",
+			"started_at": "2026-07-17T09:19:59.941Z",
+			"finished_at": "2026-07-17T09:19:59.941Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=release-only (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "ext-publish-marketplace",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:13.640Z",
-			"finished_at": "2026-07-17T08:35:13.640Z",
+			"started_at": "2026-07-17T09:20:04.472Z",
+			"finished_at": "2026-07-17T09:20:04.472Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=release-only (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "ext-publish-nightly",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:13.643Z",
-			"finished_at": "2026-07-17T08:35:13.643Z",
+			"started_at": "2026-07-17T09:20:04.484Z",
+			"finished_at": "2026-07-17T09:20:04.484Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=release-only (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "root-e2e-interactive",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:18.530Z",
-			"finished_at": "2026-07-17T08:35:18.530Z",
+			"started_at": "2026-07-17T09:21:05.034Z",
+			"finished_at": "2026-07-17T09:21:05.034Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=manual-interactive (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "root-test-agents",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:18.530Z",
-			"finished_at": "2026-07-17T08:35:18.530Z",
+			"started_at": "2026-07-17T09:21:05.044Z",
+			"finished_at": "2026-07-17T09:21:05.044Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=obsolete (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "sdk-core-live-tests",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:22.998Z",
-			"finished_at": "2026-07-17T08:35:22.998Z",
+			"started_at": "2026-07-17T09:21:21.040Z",
+			"finished_at": "2026-07-17T09:21:21.040Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=live-credentialed (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "sdk-llms-live-tests",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:22.998Z",
-			"finished_at": "2026-07-17T08:35:22.998Z",
+			"started_at": "2026-07-17T09:21:21.053Z",
+			"finished_at": "2026-07-17T09:21:21.053Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=live-credentialed (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "sdk-publish",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:22.998Z",
-			"finished_at": "2026-07-17T08:35:22.998Z",
+			"started_at": "2026-07-17T09:21:21.065Z",
+			"finished_at": "2026-07-17T09:21:21.065Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=release-only (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "testing-platform-integration",
 			"status": "unavailable",
-			"started_at": "2026-07-17T08:35:22.998Z",
-			"finished_at": "2026-07-17T08:35:22.998Z",
+			"started_at": "2026-07-17T09:21:21.076Z",
+			"finished_at": "2026-07-17T09:21:21.076Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "host=darwin-arm64 not in host_support=linux-x64"
 		},
 		{
 			"id": "verify-workos-device-auth",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:22.998Z",
-			"finished_at": "2026-07-17T08:35:22.998Z",
+			"started_at": "2026-07-17T09:21:21.087Z",
+			"finished_at": "2026-07-17T09:21:21.087Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=live-credentialed (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "vscode-e2e-ui",
 			"status": "skip",
-			"started_at": "2026-07-17T08:35:31.224Z",
-			"finished_at": "2026-07-17T08:35:31.224Z",
+			"started_at": "2026-07-17T09:24:22.042Z",
+			"finished_at": "2026-07-17T09:24:22.042Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "class=manual-interactive (not executed by runner; classification preserved)"
 		},
 		{
 			"id": "vscode-integration",
 			"status": "unavailable",
-			"started_at": "2026-07-17T08:35:31.224Z",
-			"finished_at": "2026-07-17T08:35:31.224Z",
+			"started_at": "2026-07-17T09:24:22.055Z",
+			"finished_at": "2026-07-17T09:24:22.055Z",
 			"duration_ms": 0,
 			"exit_code": null,
 			"signal": null,
 			"timeout": false,
 			"stdout_sha256": "",
 			"stderr_sha256": "",
-			"head_oid": "",
-			"tree_oid": "",
-			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"head_oid": "2bc4a16e8e425e43b6d214f0207217ba4ac786b6",
+			"tree_oid": "b161a014020fc6a1171e2587e49ff115cdb8eaab",
+			"environment_sha256": "5b5084b10a25cb7070ce11c77728e1c97005482209ad45a343f11cd0ffcf8ea1",
+			"failure_classification": null,
 			"notes": "host=darwin-arm64 not in host_support=linux-x64,windows-x64"
 		}
 	],
@@ -578,8 +631,9 @@
 			"expected_outputs": [
 				"sdk/packages/*/dist/index.js"
 			],
-			"result": "fail",
-			"reason": null
+			"result": "pass",
+			"reason": "argv: bun run build:sdk\nexit_code: 0\nsignal: \ntimeout: false\nstderr_tail: $ bun --production -F './sdk/packages/*' build\n",
+			"failure_classification": null
 		},
 		{
 			"id": "cli-build",
@@ -605,7 +659,8 @@
 				"apps/cli/dist/index.js"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun -F @cline/cli build\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "cli-build-platforms",
@@ -631,7 +686,8 @@
 				"apps/cli/bin/cline-*"
 			],
 			"result": "skip",
-			"reason": "class=release-only (not executed by runner; classification preserved)"
+			"reason": "class=release-only (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "cli-publish-npm",
@@ -657,7 +713,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=release-only (not executed by runner; classification preserved)"
+			"reason": "class=release-only (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "cline-hub-build-webview",
@@ -683,7 +740,8 @@
 				"apps/cline-hub/src/webview/dist/**"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run build:webview\nexit_code: 2\nsignal: \ntimeout: false\nstderr_tail: $ bun run --cwd src/webview build\n$ tsc -b && vite build\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "cline-hub-tests",
@@ -707,7 +765,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bunx vitest run --config vitest.config.ts\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...istyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:214:13)\n        at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:475:18 {\n      code: 'MODULE_NOT_FOUND',\n      requireStack: [Array],\n      cause: [Error]\n    }\n  }\n}\n\n\n\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "ext-publish-marketplace",
@@ -733,7 +792,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=release-only (not executed by runner; classification preserved)"
+			"reason": "class=release-only (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "ext-publish-nightly",
@@ -757,7 +817,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=release-only (not executed by runner; classification preserved)"
+			"reason": "class=release-only (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "install-root-frozen",
@@ -786,7 +847,8 @@
 				"bun.lock unchanged"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun install --frozen-lockfile\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: ",
+			"failure_classification": "TIMEOUT"
 		},
 		{
 			"id": "root-check",
@@ -810,7 +872,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run check\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...js/biome check \"--diagnostic-level=error\" sdk/ apps/cli/ apps/cline-hub/ apps/examples/\nerror: Cannot find module '@biomejs/cli-darwin-arm64/biome' from '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@biomejs+biome@2.4.5/node_modules/@biomejs/biome/bin/biome'\n\nBun v1.3.14 (macOS arm64)\nerror: script \"biome\" exited with code 1\nerror: script \"check\" exited with code 1\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "root-e2e",
@@ -833,7 +896,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run test:e2e\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: $ bun -F @cline/core test:e2e && bun -F @cline/cli test:e2e\nerror: script \"test:e2e\" exited with code 1\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "root-e2e-interactive",
@@ -855,7 +919,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=manual-interactive (not executed by runner; classification preserved)"
+			"reason": "class=manual-interactive (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "root-test-agents",
@@ -879,7 +944,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=obsolete (not executed by runner; classification preserved)"
+			"reason": "class=obsolete (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "root-types",
@@ -902,8 +968,9 @@
 			"requires_credentials": [],
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
-			"result": "fail",
-			"reason": null
+			"result": "pass",
+			"reason": "argv: bun run types\nexit_code: 0\nsignal: \ntimeout: false\nstderr_tail: ...ne in 9.59s\n@cline/vscode:typecheck            | Done in 9.61s\n@cline/menubar:typecheck           | Done in 9.82s\nexamples:typecheck                 | Done in 9.84s\n@cline/code:typecheck              | Done in 10.11s\n@cline/core:typecheck              | $ bun tsc -p tsconfig.smoke.json --noEmit\n@cline/cli:typecheck               | Done in 12.03s\n@cline/core:typecheck              | Done in 15.52s\n",
+			"failure_classification": null
 		},
 		{
 			"id": "root-unit",
@@ -927,7 +994,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run test:unit\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: $ bash -lc 'set -euo pipefail; bun -F @cline/agents test & p1=$!; bun -F @cline/llms test & p2=$!; bun -F @cline/core test:unit & p3=$!; bun -F @cline/cli test:unit & p4=$!; bun -F @cline/cline-hub test & p5=$!; wait $p1; wait $p2; wait $p3; wait $p4; wait $p5'\nerror: script \"test:unit\" exited with code 1\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "sdk-cli-hub-tests",
@@ -951,7 +1019,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run test\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...re:test      |       requireStack: [Array],\n@cline/core:test      |       cause: [Error]\n@cline/core:test      |     }\n@cline/core:test      |   }\n@cline/core:test      | }\n@cline/core:test      | \n@cline/core:test      | \n@cline/core:test      | \n@cline/core:test      | error: script \"test:unit\" exited with code 1\n@cline/core:test      | Exited with code 1\nerror: script \"test\" exited with code 1\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "sdk-core-live-tests",
@@ -977,7 +1046,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=live-credentialed (not executed by runner; classification preserved)"
+			"reason": "class=live-credentialed (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "sdk-llms-live-tests",
@@ -1004,7 +1074,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=live-credentialed (not executed by runner; classification preserved)"
+			"reason": "class=live-credentialed (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "sdk-publish",
@@ -1028,7 +1099,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=release-only (not executed by runner; classification preserved)"
+			"reason": "class=release-only (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "testing-platform-integration",
@@ -1050,7 +1122,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "unavailable",
-			"reason": "host=darwin-arm64 not in host_support=linux-x64"
+			"reason": "host=darwin-arm64 not in host_support=linux-x64",
+			"failure_classification": null
 		},
 		{
 			"id": "verify-workos-device-auth",
@@ -1076,7 +1149,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=live-credentialed (not executed by runner; classification preserved)"
+			"reason": "class=live-credentialed (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "vscode-analyze-unused",
@@ -1100,7 +1174,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run analyze:unused\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: $ bunx --yes knip --config knip.json --include files,exports,types,enumMembers,duplicates\nResolving dependencies\nerror: script \"analyze:unused\" was terminated by signal SIGTERM (Polite quit request)\n",
+			"failure_classification": "TIMEOUT"
 		},
 		{
 			"id": "vscode-build",
@@ -1127,7 +1202,8 @@
 				"apps/vscode/out/**"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run ci:build\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: ...-tools@1.13.1/node_modules/grpc-tools/bin/grpc_tools.node\" (not found)\n[log] GET https://node-precompiled-binaries.grpc.io/grpc-tools/v1.13.1/darwin-arm64.tar.gz\n[info] install unpacking arm64/\n[info] install unpacking arm64/grpc_node_plugin\nerror: script \"ci:build\" was terminated by signal SIGTERM (Polite quit request)\nerror: script \"protos\" was terminated by signal SIGTERM (Polite quit request)\n",
+			"failure_classification": "TIMEOUT"
 		},
 		{
 			"id": "vscode-compile-standalone",
@@ -1153,7 +1229,8 @@
 				"apps/vscode/dist-standalone/cline-core.js"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run compile-standalone\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...o download protoc via node-pre-gyp: Command failed: /opt/homebrew/Cellar/node/26.0.0/bin/node /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@mapbox+node-pre-gyp@2.0.3/node_modules/@mapbox/node-pre-gyp/bin/node-pre-gyp install\nerror: script \"protos\" exited with code 1\nerror: script \"check-types\" exited with code 1\nerror: script \"compile-standalone\" exited with code 1\n",
+			"failure_classification": "UNKNOWN"
 		},
 		{
 			"id": "vscode-download-ripgrep",
@@ -1178,8 +1255,9 @@
 			"expected_outputs": [
 				"apps/vscode/dist/ripgrep/*"
 			],
-			"result": "fail",
-			"reason": null
+			"result": "pass",
+			"reason": "argv: bun run download-ripgrep\nexit_code: 0\nsignal: \ntimeout: false\nstderr_tail: $ node scripts/download-ripgrep.mjs\n",
+			"failure_classification": null
 		},
 		{
 			"id": "vscode-e2e",
@@ -1205,7 +1283,8 @@
 				"dist/e2e.vsix"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run test:e2e\nexit_code: 127\nsignal: \ntimeout: false\nstderr_tail: $ playwright install && bun run test:e2e:build && node src/test/e2e/utils/build.mjs && playwright test\n/opt/homebrew/bin/bash: line 1: playwright: command not found\nerror: script \"test:e2e\" exited with code 127\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "vscode-e2e-ui",
@@ -1227,7 +1306,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "skip",
-			"reason": "class=manual-interactive (not executed by runner; classification preserved)"
+			"reason": "class=manual-interactive (not executed by runner; classification preserved)",
+			"failure_classification": null
 		},
 		{
 			"id": "vscode-integration",
@@ -1252,7 +1332,8 @@
 				".vscode-test/**"
 			],
 			"result": "unavailable",
-			"reason": "host=darwin-arm64 not in host_support=linux-x64,windows-x64"
+			"reason": "host=darwin-arm64 not in host_support=linux-x64,windows-x64",
+			"failure_classification": null
 		},
 		{
 			"id": "vscode-protos",
@@ -1279,7 +1360,8 @@
 				"apps/vscode/src/shared/proto/**"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run protos\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: ...Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/grpc-tools@1.13.1/node_modules/grpc-tools/bin/grpc_tools.node\" (not found)\n[log] GET https://node-precompiled-binaries.grpc.io/grpc-tools/v1.13.1/darwin-arm64.tar.gz\n[info] install unpacking arm64/\n[info] install unpacking arm64/grpc_node_plugin\nerror: script \"protos\" was terminated by signal SIGTERM (Polite quit request)\n",
+			"failure_classification": "TIMEOUT"
 		},
 		{
 			"id": "vscode-quality",
@@ -1303,7 +1385,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run ci:check-all\nexit_code: null\nsignal: SIGTERM\ntimeout: true\nstderr_tail: ...X/clinemm/node_modules/.bun/grpc-tools@1.13.1/node_modules/grpc-tools/bin/grpc_tools.node\" (not found)\ncheck-types | [log] GET https://node-precompiled-binaries.grpc.io/grpc-tools/v1.13.1/darwin-arm64.tar.gz\ncheck-types | [info] install unpacking arm64/\ncheck-types | [info] install unpacking arm64/grpc_node_plugin\nerror: script \"ci:check-all\" was terminated by signal SIGTERM (Polite quit request)\n",
+			"failure_classification": "TIMEOUT"
 		},
 		{
 			"id": "vscode-unit",
@@ -1327,7 +1410,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run test:unit\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: $ bun scripts/run-bun-unit-tests.ts\nerror: script \"test:unit\" exited with code 1\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "vscode-vitest",
@@ -1351,7 +1435,8 @@
 			"mutates_tracked_files": false,
 			"expected_outputs": [],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run test:vitest\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:214:13)\n        at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:475:18 {\n      code: 'MODULE_NOT_FOUND',\n      requireStack: [Array],\n      cause: [Error]\n    }\n  }\n}\n\n\n\nerror: script \"test:vitest\" exited with code 1\n",
+			"failure_classification": "ENVIRONMENTAL"
 		},
 		{
 			"id": "vscode-webview",
@@ -1377,7 +1462,8 @@
 				"apps/vscode/webview-ui/coverage/lcov.info (in CI)"
 			],
 			"result": "fail",
-			"reason": null
+			"reason": "argv: bun run test:webview\nexit_code: 1\nsignal: \ntimeout: false\nstderr_tail: ...dist/shared/binding-TuFFIE_J.mjs:214:13)\n        at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/rolldown@1.1.5/node_modules/rolldown/dist/shared/binding-TuFFIE_J.mjs:475:18 {\n      code: 'MODULE_NOT_FOUND',\n      requireStack: [Array],\n      cause: [Error]\n    }\n  }\n}\n\n\n\nerror: script \"test\" exited with code 1\nerror: script \"test:webview\" exited with code 1\n",
+			"failure_classification": "ENVIRONMENTAL"
 		}
 	]
 }
