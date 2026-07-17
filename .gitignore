@@ -92,3 +92,6 @@ apps/examples/desktop-app/webview/.next
 
 # Next.js generated type shim (churns between dev and build)
 apps/examples/desktop-app/webview/next-env.d.ts
+
+# Factory-detached evidence (ACT-CLINEMM-FORK-BASELINE01)
+.factory/

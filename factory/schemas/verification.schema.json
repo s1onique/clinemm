@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://cline--.local/schemas/verification.schema.json",
+  "title": "Verification Matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "commands"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "working_directory",
+          "command",
+          "class",
+          "source",
+          "host_support",
+          "requires_network",
+          "requires_gui",
+          "requires_credentials",
+          "mutates_tracked_files",
+          "result",
+          "reason"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "scope": { "type": "string" },
+          "working_directory": { "type": "string" },
+          "command": { "type": "string" },
+          "class": { "enum": ["mandatory", "affected-scope", "release-only", "live-credentialed", "manual-interactive", "unsupported-on-host", "obsolete", "unknown"] },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "locator"],
+            "properties": {
+              "path": { "type": "string" },
+              "locator": { "type": "string" }
+            }
+          },
+          "host_support": { "type": "array", "items": { "type": "string" } },
+          "requires_network": { "type": "boolean" },
+          "requires_gui": { "type": "boolean" },
+          "requires_credentials": { "type": "array", "items": { "type": "string" } },
+          "mutates_tracked_files": { "type": "boolean" },
+          "expected_outputs": { "type": "array", "items": { "type": "string" } },
+          "result": { "enum": ["pass", "fail", "skip", "unavailable", "not-run"] },
+          "reason": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

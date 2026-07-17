@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://cline--.local/schemas/repository.schema.json",
+  "title": "Repository Identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "upstream", "fork", "working_copy", "tags"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remote_name", "url", "branch", "commit_oid", "tree_oid"],
+      "properties": {
+        "remote_name": { "type": "string" },
+        "url": { "type": "string" },
+        "branch": { "type": "string" },
+        "commit_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "fork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remote_name", "url", "branch"],
+      "properties": {
+        "remote_name": { "type": "string" },
+        "url": { "type": "string" },
+        "branch": { "type": "string" }
+      }
+    },
+    "working_copy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head_oid", "tree_oid", "merge_base_with_upstream", "ahead", "behind", "is_shallow", "submodules", "lfs_pointer_count"],
+      "properties": {
+        "head_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree_oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "merge_base_with_upstream": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "ahead": { "type": "integer", "minimum": 0 },
+        "behind": { "type": "integer", "minimum": 0 },
+        "is_shallow": { "type": "boolean" },
+        "submodules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "url", "oid"],
+            "properties": {
+              "path": { "type": "string" },
+              "url": { "type": "string" },
+              "oid": { "type": "string" }
+            }
+          }
+        },
+        "lfs_pointer_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nearest", "distance"],
+      "properties": {
+        "nearest": { "type": "string" },
+        "distance": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
