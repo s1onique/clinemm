@@ -459,6 +459,7 @@ async function finalizeEvidence(): Promise<void> {
 	// detached evidence bundle below is the authoritative final binding to
 	// HEAD/tree. Re-writing would create an OID-update cycle that prevents
 	// `git status` from settling at a clean post-finalize state.
+	const host = hostClass();
 
 	// Rebuild the detached evidence bundle.
 	const detachedDir = join(ROOT, DETACHED_DIR);
