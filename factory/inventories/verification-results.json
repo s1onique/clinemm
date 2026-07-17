@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
 	"host": "darwin-arm64",
-	"executed_at": "2026-07-17T08:36:29.365Z",
+	"executed_at": "2026-07-17T08:36:41.272Z",
 	"executed_commands": [
 		{
 			"id": "build-sdk",
@@ -16,8 +16,8 @@
 			"stderr_sha256": "f7b9b7d686c1eeae6a0d50b856df407577ba5bc0718e4a5d9926cc90d6ce60ee",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -33,8 +33,8 @@
 			"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -50,8 +50,8 @@
 			"stderr_sha256": "b3838a1853dcfbecfc1be5cb87d8f034c8e7323ad0b951af7942767cce2b632f",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -67,8 +67,8 @@
 			"stderr_sha256": "f0f53f500e6ae6ecea6251236fcb0966fbba54c2a3c66b050941cde61d873a2d",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -84,8 +84,8 @@
 			"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -101,8 +101,8 @@
 			"stderr_sha256": "e6397dbed974d9af2fe00603c63a24fea0fae370c47da59a8ae06aad06c52e5d",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -118,8 +118,8 @@
 			"stderr_sha256": "79a92d4917edc4325152f121f2ba671d4720a4cb09ca0442b345e1bc167c8017",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -135,8 +135,8 @@
 			"stderr_sha256": "c6ae309436a3af28ef60074da2e5a3798e47fa6591a02d5ce79728b4048a1ad7",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -152,8 +152,8 @@
 			"stderr_sha256": "f9d3b81606a71b304b130904a4a218d7a43ad4d410d046987f60a141468f322d",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -169,8 +169,8 @@
 			"stderr_sha256": "abe8caa11835a43704bbb34e11671915a237ad1b8010008f5af45be36439abce",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -186,8 +186,8 @@
 			"stderr_sha256": "38e9f2d9c32be4061e40f5edf4ffd9c25d0c9a0075474f13dd4566c84762e389",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -203,8 +203,8 @@
 			"stderr_sha256": "2090aeb978eb3f75ddece3ac52206ebbb6a00a85e9b1aaf99bff72106a497550",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -220,8 +220,8 @@
 			"stderr_sha256": "a39ed4f9a8ea3d51d8994f9d28f8757bec437ee44e21ce8c6e2396d05527dfd2",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -237,8 +237,8 @@
 			"stderr_sha256": "152836a211b94d6f5c8686ae256682a6e75022db76ad7964414dcb53ec14d44e",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -254,8 +254,8 @@
 			"stderr_sha256": "21820bdfa688725e71b9352c9d8703001ce56d2944311074b8c1be5563fd1642",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -271,8 +271,8 @@
 			"stderr_sha256": "bd4e817884e0e10a57c5028e68453a747538c2e323e8eebd7f81cc24fb5a6940",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -288,8 +288,8 @@
 			"stderr_sha256": "2a6bdf925739d049b38e681348053588ac6596c9dee489fb964f48926f4d1a0e",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -305,8 +305,8 @@
 			"stderr_sha256": "5ef8e7dbae6cc35e5a6b7872657f4e8022b654079c512e5095e5433fe13bd92e",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -322,8 +322,8 @@
 			"stderr_sha256": "aa7294d5a785ab1564f31e273d6d98d972915ea99fc33738e69dc6cf112d1588",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		},
 		{
@@ -339,8 +339,8 @@
 			"stderr_sha256": "72513f23f84d4bb55e16ff0097b995c8a69597b8d0d2603d97346fb43a33a2d4",
 			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stdout",
 			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stderr",
-			"head_oid": "4044d18cd0e2b6d6ac3ef69ae31bfb1a7731b782",
-			"tree_oid": "677c806941e9892a501c7f575510e52ff099366b",
+			"head_oid": "febe833496bc6ac769b535a32485a2f0a6fc662b",
+			"tree_oid": "6d528254dfc33bbdef46e0f38bb412d9a567474c",
 			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
 		}
 	],
