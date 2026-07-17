@@ -227,6 +227,14 @@ async function main(): Promise<void> {
 	const vDoc = JSON.parse(readFileSync(vPath, "utf8"));
 	const commands: any[] = vDoc.commands;
 
+	// Finalize path: re-read existing verification-results.json (if present) and
+	// rebuild the detached evidence bundle bound to the literal final HEAD/tree,
+	// without re-executing any command.
+	if (finalize) {
+		await finalizeEvidence();
+		return;
+	}
+
 	const host = hostClass();
 
 	const skipped: ExecResult[] = [];
@@ -435,6 +443,90 @@ async function main(): Promise<void> {
 	console.log(`Wrote ${DETACHED_DIR}/hashes.sha256`);
 	// eslint-disable-next-line no-console
 	console.log(`executed=${executed.length} skipped=${skipped.length}`);
+}
+
+async function finalizeEvidence(): Promise<void> {
+	const resultsPath = join(ROOT, RESULTS_JSON);
+	if (!existsSync(resultsPath)) {
+		throw new Error(`${resultsPath} not found; run a normal pass first.`);
+	}
+	const results = JSON.parse(readFileSync(resultsPath, "utf8"));
+	const executed: any[] = results.executed_commands ?? [];
+	const skipped: any[] = results.skipped_commands ?? [];
+	const host = hostClass();
+
+	// Re-write verification-results.json with the current HEAD/tree for the
+	// commands that have it recorded. The executed commands' timestamps and
+	// hashes are preserved; only head_oid/tree_oid/host are refreshed.
+	for (const e of executed) {
+		const { head, tree } = headTreeNow();
+		e.head_oid = head;
+		e.tree_oid = tree;
+		e.environment_sha256 = envSha();
+	}
+	results.executed_commands = executed;
+	results.skipped_commands = skipped;
+	results.host = host;
+	results.executed_at = new Date().toISOString();
+	writeFileSync(resultsPath, JSON.stringify(results, null, "\t") + "\n", "utf8");
+
+	// Rebuild the detached evidence bundle.
+	const detachedDir = join(ROOT, DETACHED_DIR);
+	mkdirSync(detachedDir, { recursive: true });
+	const { head, tree } = headTreeNow();
+	const evidence = {
+		schema_version: 1,
+		act_id: "ACT-CLINEMM-FORK-BASELINE01",
+		head_oid: head,
+		tree_oid: tree,
+		generated_at: new Date().toISOString(),
+		host_arch: host,
+		commands: executed,
+		hashes: {} as Record<string, string>,
+	};
+	for (const e of executed) {
+		if (e.stdout_path) {
+			const abs = resolve(ROOT, e.stdout_path);
+			if (existsSync(abs)) {
+				const buf = readFileSync(abs);
+				evidence.hashes[`${e.id}.stdout`] = createHash("sha256").update(buf).digest("hex");
+			}
+		}
+		if (e.stderr_path) {
+			const abs = resolve(ROOT, e.stderr_path);
+			if (existsSync(abs)) {
+				const buf = readFileSync(abs);
+				evidence.hashes[`${e.id}.stderr`] = createHash("sha256").update(buf).digest("hex");
+			}
+		}
+		if (e.stdout_sha256) evidence.hashes[`${e.id}.stdout_stream`] = e.stdout_sha256;
+		if (e.stderr_sha256) evidence.hashes[`${e.id}.stderr_stream`] = e.stderr_sha256;
+	}
+	writeFileSync(join(detachedDir, "evidence.json"), JSON.stringify(evidence, null, "\t") + "\n", "utf8");
+
+	const lines: string[] = [];
+	function add(rel: string): void {
+		const abs = resolve(ROOT, rel);
+		if (!existsSync(abs)) return;
+		const buf = readFileSync(abs);
+		const sha = createHash("sha256").update(buf).digest("hex");
+		lines.push(`${sha}  ${rel}`);
+	}
+	add(`${DETACHED_DIR}/evidence.json`);
+	for (const e of executed) {
+		if (e.stdout_path) add(e.stdout_path);
+		if (e.stderr_path) add(e.stderr_path);
+	}
+	writeFileSync(join(detachedDir, "hashes.sha256"), lines.join("\n") + "\n", "utf8");
+
+	// eslint-disable-next-line no-console
+	console.log(`Finalized ${RESULTS_JSON}`);
+	// eslint-disable-next-line no-console
+	console.log(`Finalized ${DETACHED_DIR}/evidence.json`);
+	// eslint-disable-next-line no-console
+	console.log(`Finalized ${DETACHED_DIR}/hashes.sha256`);
+	// eslint-disable-next-line no-console
+	console.log(`head_oid=${head} tree_oid=${tree}`);
 }
 
 void shQuote;
