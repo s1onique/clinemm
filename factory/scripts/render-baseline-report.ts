@@ -42,6 +42,7 @@ import {
 	type EvidenceView,
 	type ReasonCode,
 } from "./baseline-closure";
+import { computeFilteredSubjectTreeOid, SUBJECT_TREE_EXCLUDES } from "./subject-tree";
 
 // ---------- constants --------------------------------------------------------
 
@@ -52,20 +53,6 @@ const ROOT = spawnSync("git", ["rev-parse", "--show-toplevel"], {
 const OUT = join(ROOT, "docs/factory/baseline-report.md");
 const OUT_TMP = OUT + ".tmp";
 
-/**
- * Subject-tree self-references that must be excluded when computing
- * the binding subject. The closure report itself is in this list;
- * the detached evidence directory is too.
- *
- * CORRECTION08: the renderer asserts that the filtered tree
- * containing these prefix-excluded entries is stable across
- * regenerations and commits.
- */
-const SUBJECT_TREE_EXCLUDES: ReadonlyArray<string> = [
-	"docs/factory/baseline-report.md",
-	".factory",
-];
-
 // ---------- main entry (only runs when invoked directly) --------------------
 
 if (import.meta.main) {
@@ -75,7 +62,7 @@ if (import.meta.main) {
 function main(): void {
 	const HEAD_OID_NOW = sh(["rev-parse", "HEAD"]);
 	const TREE_OID_NOW = sh(["rev-parse", "HEAD^{tree}"]);
-	const FILTERED_SUBJECT_TREE_OID_NOW = filteredSubjectTreeOid(ROOT);
+	const FILTERED_SUBJECT_TREE_OID_NOW = computeFilteredSubjectTreeOid(ROOT);
 
 	const REPO = readJson(join(ROOT, "factory/inventories/repository.json"));
 	const ENV = readJson(join(ROOT, "factory/inventories/environment.json"));
@@ -262,7 +249,7 @@ implementing the CORRECTION08 contract.
 Reported identity values:
 
 \`\`\`
-subject_tree_oid (current worktree, filtered): ${FILTERED_SUBJECT_TREE_OID_NOW ?? "n/a"}
+filtered_subject_tree_oid (committed HEAD, minus self-referential paths): ${FILTERED_SUBJECT_TREE_OID_NOW ?? "n/a"}
 subject_tree_oid (recorded in evidence):       ${evidenceSubjectTreeOid ?? "(not recorded)"}
 git rev-parse HEAD:                            ${HEAD_OID_NOW}
 git rev-parse HEAD^{tree}:                    ${TREE_OID_NOW}
@@ -438,46 +425,6 @@ ${successorBlock(closure, {
 function sh(args: string[]): string {
 	const r = spawnSync("git", args, { encoding: "utf8", cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
 	return (r.stdout ?? "").toString().trim();
-}
-
-/**
- * Compute a deterministic OID for `HEAD`'s tree minus self-referential
- * paths. The exclusion list intentionally contains the closure report
- * itself plus the detached evidence directory.
- *
- * Pipeline: `git ls-tree -r HEAD` → filter → `git mktree --batch`.
- *
- * Returns `null` if either `git ls-tree` or `git mktree` fails (e.g.,
- * head detached, or very old git without `mktree`).
- */
-function filteredSubjectTreeOid(root: string): string | null {
-	const ls = spawnSync("git", ["ls-tree", "-r", "HEAD"], {
-		encoding: "utf8",
-		cwd: root,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
-	if (ls.status !== 0) return null;
-	const filtered = (ls.stdout ?? "")
-		.split("\n")
-		.filter(Boolean)
-		.filter((line) => {
-			const idx = line.indexOf("\t");
-			const path = idx >= 0 ? line.slice(idx + 1) : "";
-			return !SUBJECT_TREE_EXCLUDES.some(
-				(ex) => path === ex || path.startsWith(ex + "/"),
-			);
-		});
-	if (filtered.length === 0) return null;
-	const input = filtered.join("\n") + "\n";
-	const mk = spawnSync("git", ["mktree", "--batch"], {
-		encoding: "utf8",
-		cwd: root,
-		input,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
-	if (mk.status !== 0) return null;
-	const out = (mk.stdout ?? "").trim();
-	return out.length > 0 ? out : null;
 }
 
 function readJson(p: string): any {

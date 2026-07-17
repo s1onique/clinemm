@@ -14,13 +14,13 @@
 ACT-CLINEMM-FORK-BASELINE01 is FAIL.
 ```
 
-Reason codes: `EVIDENCE_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
+Reason codes: `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
 
 
 
 Closure is **FAIL** under the CORRECTION08 fail-closed policy.
 
-**Reason codes:** `EVIDENCE_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
+**Reason codes:** `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
 
 Detached evidence does not satisfy the integrity dimensions:
 - exists: `true`
@@ -76,10 +76,10 @@ implementing the CORRECTION08 contract.
 Reported identity values:
 
 ```
-subject_tree_oid (current worktree, filtered): n/a
+filtered_subject_tree_oid (committed HEAD, minus self-referential paths): ee3484e3ca25a5591ef4d87c2ab4bd0f464b321d
 subject_tree_oid (recorded in evidence):       (not recorded)
-git rev-parse HEAD:                            55334eebeac205d84bd5f03554bb71912a972800
-git rev-parse HEAD^{tree}:                    ed0fc8d89030d8f1355529e60f8d41e6938d7bef
+git rev-parse HEAD:                            462c28caf95a90d9bee7edc938d50d7fb2068bb7
+git rev-parse HEAD^{tree}:                    7cc224c4cba75a9052aca8d74a03b205f23ca52f
 ```
 
 ## Upstream and fork identity (from `factory/inventories/repository.json`)
@@ -212,7 +212,7 @@ git rev-parse HEAD^{tree}:                    ed0fc8d89030d8f1355529e60f8d41e693
 | subject_tree_oid (CORRECTION08) | `(not recorded)` |
 | subject tree contract | legacy (CORRECTION07 fallback) |
 | tree binding holds | false |
-| current worktree HEAD^{tree} | `ed0fc8d89030d8f1355529e60f8d41e6938d7bef` |
+| current worktree HEAD^{tree} | `7cc224c4cba75a9052aca8d74a03b205f23ca52f` |
 | hash manifest valid | false |
 | command-set exact | true |
 | execution trees | `d43f3579fe73…`, `63f47c8f1eef…`, `34bbccae1650…` |
@@ -349,7 +349,7 @@ open and is transferred to the next ACT.
 
 ## Closure decision (mechanical)
 
-Closure is **FAIL** — fail-closed policy: evidence is invalid (stale subject tree, hash-invalid manifest, outside-evidence-dir payload, malformed JSON/rows, symlink, multi-tree, command-set mismatch) or UNKNOWN-classified failures are present. The next correction must fix the underlying evidence, not relabel the report. Reason codes: `EVIDENCE_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`.
+Closure is **FAIL** — fail-closed policy: evidence is invalid (stale subject tree, hash-invalid manifest, outside-evidence-dir payload, malformed JSON/rows, symlink, multi-tree, command-set mismatch) or UNKNOWN-classified failures are present. The next correction must fix the underlying evidence, not relabel the report. Reason codes: `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`.
 
 ## Successor ACT readiness
 

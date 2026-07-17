@@ -78,6 +78,8 @@ export type Verdict = "PASS" | "PARTIAL" | "FAIL";
 
 export type ReasonCode =
 	| "EVIDENCE_INCOMPLETE"
+	| "SUBJECT_TREE_COMPUTATION_FAILED"
+	| "SUBJECT_TREE_CONTRACT_MISSING"
 	| "UNKNOWN_FAILURES_PRESENT"
 	| "R4_UNSATISFIED"
 	| "R5_UNSATISFIED"
@@ -129,6 +131,8 @@ export interface EvidenceView {
 	treeMatches: boolean;
 	/** Whether the bundle used the new subject-tree contract (true) or fell back to legacy literal `tree_oid`/`HEAD^{tree}` (false). */
 	subjectTreeContract: boolean;
+	/** Whether the renderer could compute the current filtered subject-tree OID. False ⇒ closure must fail (SUBJECT_TREE_COMPUTATION_FAILED). */
+	subjectTreeComputationOk: boolean;
 	/** Manifest is well-formed and every declared path matches its declared hash. */
 	hashManifestValid: boolean;
 	missingFiles: PathDiagnostic[];
@@ -214,6 +218,8 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 
 	const reasonCodes: ReasonCode[] = [];
 	if (!evidenceOk) reasonCodes.push("EVIDENCE_INCOMPLETE");
+	if (!input.evidence.subjectTreeComputationOk) reasonCodes.push("SUBJECT_TREE_COMPUTATION_FAILED");
+	if (!input.evidence.subjectTreeContract) reasonCodes.push("SUBJECT_TREE_CONTRACT_MISSING");
 	if (hasUnknown) reasonCodes.push("UNKNOWN_FAILURES_PRESENT");
 	if (!r4) reasonCodes.push("R4_UNSATISFIED");
 	if (!r5) reasonCodes.push("R5_UNSATISFIED");
@@ -250,6 +256,8 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 export function isEvidenceOk(e: EvidenceView): boolean {
 	return (
 		e.exists &&
+		e.subjectTreeComputationOk && // CORRECTION09: must compute the filtered tree
+		e.subjectTreeContract && // CORRECTION09: must be on the new contract (legacy is fail-closed)
 		e.treeMatches &&
 		e.executionTreeBound &&
 		e.hashManifestValid &&
@@ -308,6 +316,7 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		headOidWellformed: false,
 		treeMatches: false,
 		subjectTreeContract: false,
+		subjectTreeComputationOk: filteredSubjectTreeOidNow !== null,
 		hashManifestValid: false,
 		missingFiles: [],
 		unexpectedFiles: [],

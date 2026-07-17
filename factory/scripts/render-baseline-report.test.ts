@@ -62,6 +62,7 @@ function baseOk(overrides: Partial<EvidenceView> = {}): EvidenceView {
 		headOidWellformed: true,
 		treeMatches: true,
 		subjectTreeContract: true,
+		subjectTreeComputationOk: true,
 		hashManifestValid: true,
 		missingFiles: [],
 		unexpectedFiles: [],
@@ -419,6 +420,8 @@ describe("computeClosure — additional invariants", () => {
 function isEvidenceOkV(e: EvidenceView): boolean {
 	return (
 		e.exists &&
+		e.subjectTreeComputationOk && // CORRECTION09: filtered tree must compute
+		e.subjectTreeContract && // CORRECTION09: must be on new contract (legacy is fail-closed)
 		e.treeMatches &&
 		e.executionTreeBound &&
 		e.hashManifestValid &&
