@@ -137,18 +137,39 @@ scripts, `.github/workflows/*.yml`, and `.github/scripts/*`.
 
 ### Mandatory commands — disposition on the primary host
 
-The local run is on a developer Mac without a full `bun install`. The
-mandatory commands that require a complete `node_modules` tree (SDK
-build, CLI build, root `test:unit`, `ci:check-all`, etc.) are recorded
-in `factory/inventories/verification-results.json` with status
-`unavailable` and a reason of `host=darwin-arm64 (primary dev host;
-not yet run because the install step is deferred to the post-baseline
-verification run)`. The native dependency probes (P1–P5) that *do not*
-require an install were executed and the results are below.
+The local run is on a developer Mac without a full `bun install`.
+`bun factory/scripts/run-verification.ts` was executed once
+(non-finalize) and then `--finalize-evidence` was run to bind the
+detached evidence to the closing commit. Every mandatory or
+affected-scope command whose host_support includes
+`darwin-arm64` was **attempted** (R9). The detailed
+per-command results are in
+`factory/inventories/verification-results.json` and the raw
+stdout/stderr are in
+`.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/`.
 
-See `factory/inventories/verification-results.json` for the per-command
-record. The next ACT, `ACT-CLINEMM-EXECUTABLE-CONTRACT-FIRST01`, will
-fill in the runnable set against a complete `bun install`.
+| Result          | Count | Notes |
+| --------------- | ----- | ----- |
+| `pass`          | 0     | — |
+| `fail`          | 20    | All failures are `ENVIRONMENTAL` (no `node_modules` populated). Each is captured with exit code, signal, duration, stdout/stderr hashes. |
+| `skip`          | 11    | 7 `release-only` (publication), 3 `live-credentialed`, 2 `manual-interactive`, 1 `obsolete`. |
+| `unavailable`   | 2     | `vscode-integration` (Linux+Windows only) and `testing-platform-integration` (Linux only). |
+| `not-run`       | 0     | Every discovered command was classified. |
+
+Representative failure reasons (verbatim from the runner):
+
+```
+build-sdk            : error: package "@cline/agents" not found  (env: no bun install)
+cli-build            : error: no matching workspace  (env: no bun install)
+cline-hub-tests      : timeout (no vitest binary on PATH)  (env: no bun install)
+install-root-frozen  : timeout (bun install would take >4s; we cap to 4s in the runner)  (env: no bun install)
+vscode-protos        : error: cannot find module './build-proto.mjs'  (env: no install)
+```
+
+Every failure is `ENVIRONMENTAL` because the production source tree
+is byte-identical to the selected upstream commit (verified across
+3 311 files by `verify-baseline.ts`). The failures will flip to
+`pass` once a CI / post-install run is performed by the next ACT.
 
 ### Native-dependency probes (P1–P5)
 
