@@ -103,8 +103,8 @@ execution_head_oid   (recorded in evidence): (not recorded)
 execution_tree_oid   (recorded in evidence): (not recorded)
 worktree_clean_before (recorded in evidence): (not recorded)
 worktree_clean_after  (recorded in evidence): (not recorded)
-git rev-parse HEAD:                          b758c0b27bf856141ae63c86d2c2fd4069e028df
-git rev-parse HEAD^{tree}:                   b18112eb1ae58bb5d821b44bf6db03f0f8d15ac5
+git rev-parse HEAD:                          b62ada6d2f98d20988cecaf04b3b771454782405
+git rev-parse HEAD^{tree}:                   7c03838f2abbb35f549aaa57c8eb36fbae35320d
 ```
 
 ## Upstream and fork identity (from `factory/inventories/repository.json`)
@@ -250,7 +250,7 @@ git rev-parse HEAD^{tree}:                   b18112eb1ae58bb5d821b44bf6db03f0f8d
 | worktree_clean_after (CORRECTION10) | (not recorded) |
 | tree binding holds (subject) | false |
 | execution tree bound (CORRECTION10) | false |
-| current worktree HEAD^{tree} | `b18112eb1ae58bb5d821b44bf6db03f0f8d15ac5` |
+| current worktree HEAD^{tree} | `7c03838f2abbb35f549aaa57c8eb36fbae35320d` |
 | hash manifest valid | false |
 | command-set exact | true |
 | execution trees | `d43f3579fe73…`, `63f47c8f1eef…`, `34bbccae1650…` |
