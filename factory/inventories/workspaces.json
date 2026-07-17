@@ -1,0 +1,770 @@
+{
+	"schema_version": 1,
+	"root_workspaces_patterns": [
+		"sdk/packages/*",
+		"apps/*",
+		"apps/vscode/webview-ui",
+		"apps/vscode/testing-platform",
+		"apps/cline-hub/src/webview",
+		"apps/examples/*",
+		"apps/examples/vscode/src/webview",
+		"sdk/examples",
+		"sdk/examples/plugins/*"
+	],
+	"workspace_count": 24,
+	"named_count": 24,
+	"unnamed_count": 0,
+	"publishable_count": 3,
+	"application_count": 7,
+	"sdk_count": 6,
+	"example_count": 10,
+	"duplicate_package_names": [],
+	"missing_package_names": 0,
+	"matched_paths_without_package_json": [],
+	"workspace_dependency_cycles": [],
+	"workspaces": [
+		{
+			"name": "@cline/cli",
+			"path": "apps/cli",
+			"private": false,
+			"version": "3.0.44",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"build": "bun run bun.mts",
+				"build:platforms": "bun script/build.ts --install-native-variants",
+				"build:platforms:single": "bun script/build.ts --single",
+				"prepack": "bun script/guard-direct-publish.ts",
+				"prepublishOnly": "bun script/guard-direct-publish.ts",
+				"publish:npm": "bun script/publish-npm.ts",
+				"publish:npm:dry": "bun script/publish-npm.ts --dry-run",
+				"dev": "CLINE_BUILD_ENV=development bun --conditions=development ./src/index.ts",
+				"typecheck": "tsc --noEmit",
+				"test": "bun run test:unit",
+				"test:unit": "vitest run --config vitest.config.ts",
+				"test:e2e": "vitest run --config vitest.e2e.config.ts",
+				"test:e2e:interactive": "vitest run --config vitest.interactive.e2e.config.ts",
+				"test:watch": "vitest --config vitest.config.ts",
+				"test:e2e:cli:tui": "cd src/tests && tui-test",
+				"link": "bun unlink && bun link"
+			},
+			"workspace_dependencies": [
+				"@cline/cline-hub",
+				"@cline/core",
+				"@cline/shared"
+			],
+			"external_dependency_count": 27,
+			"dev_dependency_count": 6,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": true,
+			"publishable": true,
+			"example": false,
+			"classification": "application"
+		},
+		{
+			"name": "@cline/cline-hub",
+			"path": "apps/cline-hub",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"build:webview": "bun run --cwd src/webview build",
+				"dev": "bun run src/dev.ts",
+				"start": "bun run src/server.ts",
+				"smoke:options": "bun run src/validate-options.ts",
+				"test": "bunx vitest run --config vitest.config.ts",
+				"typecheck": "bun tsc -p tsconfig.json --noEmit"
+			},
+			"workspace_dependencies": [
+				"@cline/core",
+				"@cline/llms",
+				"@cline/shared"
+			],
+			"external_dependency_count": 3,
+			"dev_dependency_count": 0,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "application"
+		},
+		{
+			"name": "@cline/cline-hub-webview",
+			"path": "apps/cline-hub/src/webview",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"dev": "vite",
+				"build": "tsc -b && vite build",
+				"preview": "vite preview"
+			},
+			"workspace_dependencies": [],
+			"external_dependency_count": 32,
+			"dev_dependency_count": 17,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "application"
+		},
+		{
+			"name": "@cline/example-cli-agent",
+			"path": "apps/examples/cli-agent",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"dev": "bun run src/index.ts",
+				"build:sdk": "bun run --cwd ../../.. build:sdk",
+				"build": "tsc",
+				"start": "node dist/index.js"
+			},
+			"workspace_dependencies": [
+				"@cline/sdk"
+			],
+			"external_dependency_count": 2,
+			"dev_dependency_count": 1,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/example-cline-core-cli-agent",
+			"path": "apps/examples/cline-core-cli-agent",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"dev": "bun run src/index.ts",
+				"build:sdk": "bun run --cwd ../../.. build:sdk",
+				"build": "tsc",
+				"start": "node dist/index.js"
+			},
+			"workspace_dependencies": [
+				"@cline/sdk"
+			],
+			"external_dependency_count": 1,
+			"dev_dependency_count": 1,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/example-code-review-bot",
+			"path": "apps/examples/code-review-bot",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"dev": "bun run src/index.ts",
+				"build:sdk": "bun run --cwd ../../.. build:sdk",
+				"build": "tsc",
+				"start": "node dist/index.js"
+			},
+			"workspace_dependencies": [
+				"@cline/sdk"
+			],
+			"external_dependency_count": 2,
+			"dev_dependency_count": 1,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/code",
+			"path": "apps/examples/desktop-app",
+			"private": true,
+			"version": "0.0.1",
+			"type": null,
+			"engines": {},
+			"scripts": {
+				"dev:web": "next dev webview -p 3125 --turbo",
+				"dev:sidecar": "bun run sidecar/index.ts",
+				"dev": "tauri dev",
+				"build": "bun run bun.mts",
+				"build:sidecar": "mkdir -p dist/sidecar && bun build ./sidecar/index.ts --outfile ./dist/sidecar/index.js --target bun",
+				"build:sidecar:bin": "bun run scripts/build-sidecar-bin.ts",
+				"build:binary": "tauri build",
+				"package": "bun run package:desktop",
+				"package:desktop": "bun run scripts/package-desktop.ts",
+				"package:desktop:mac": "bun run scripts/package-desktop.ts --platform mac",
+				"package:desktop:windows": "bun run scripts/package-desktop.ts --platform windows",
+				"package:desktop:linux": "bun run scripts/package-desktop.ts --platform linux",
+				"start": "next start webview",
+				"typecheck": "tsc -p tsconfig.dev.json --noEmit",
+				"clean": "rm -rf webview/.next webview/out node_modules dist && (cd src-tauri && rm -rf target node_modules dist)"
+			},
+			"workspace_dependencies": [
+				"@cline/core",
+				"@cline/llms",
+				"@cline/shared",
+				"@cline/ui"
+			],
+			"external_dependency_count": 63,
+			"dev_dependency_count": 11,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/menubar",
+			"path": "apps/examples/menubar",
+			"private": true,
+			"version": "0.1.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"dev:ui": "python3 -m http.server 3466 --bind 127.0.0.1 --directory ui",
+				"dev": "tauri dev",
+				"build": "tauri build",
+				"build:sidecar:bin": "bun run scripts/build-sidecar-bin.ts",
+				"typecheck": "tsc --noEmit",
+				"clean": "rm -rf node_modules dist src-tauri/target"
+			},
+			"workspace_dependencies": [
+				"@cline/core",
+				"@cline/shared"
+			],
+			"external_dependency_count": 2,
+			"dev_dependency_count": 4,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/example-multi-agent",
+			"path": "apps/examples/multi-agent",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"dev": "bun run src/index.ts",
+				"build:sdk": "bun run --cwd ../../.. build:sdk",
+				"build": "tsc",
+				"start": "node dist/index.js"
+			},
+			"workspace_dependencies": [
+				"@cline/sdk"
+			],
+			"external_dependency_count": 1,
+			"dev_dependency_count": 1,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/example-quickstart",
+			"path": "apps/examples/quickstart",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"dev": "bun run src/index.ts",
+				"build:sdk": "bun run --cwd ../../.. build:sdk",
+				"build": "tsc",
+				"start": "node dist/index.js"
+			},
+			"workspace_dependencies": [
+				"@cline/sdk"
+			],
+			"external_dependency_count": 1,
+			"dev_dependency_count": 1,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/vscode",
+			"path": "apps/examples/vscode",
+			"private": true,
+			"version": "0.0.0",
+			"type": null,
+			"engines": {
+				"vscode": "^1.90.0"
+			},
+			"scripts": {
+				"build:webview": "cd ./src/webview && bun run build",
+				"build": "bun run build:webview && bun build ./src/extension.ts ./src/hub-daemon.ts --outdir ./dist --target=node --format=cjs --external=vscode --minify",
+				"watch": "bun build ./src/extension.ts ./src/hub-daemon.ts --outdir ./dist --target=node --format=cjs --external=vscode --minify --watch",
+				"typecheck": "tsc --noEmit",
+				"dev": "bun run watch"
+			},
+			"workspace_dependencies": [
+				"@cline/core",
+				"@cline/llms",
+				"@cline/shared"
+			],
+			"external_dependency_count": 5,
+			"dev_dependency_count": 4,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "webview",
+			"path": "apps/examples/vscode/src/webview",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"dev": "vite",
+				"build": "tsc -b && vite build",
+				"preview": "vite preview"
+			},
+			"workspace_dependencies": [],
+			"external_dependency_count": 32,
+			"dev_dependency_count": 17,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "claude-dev",
+			"path": "apps/vscode",
+			"private": false,
+			"version": "4.0.0",
+			"type": null,
+			"engines": {
+				"vscode": "^1.101.0"
+			},
+			"scripts": {
+				"vscode:prepublish": "bun run package",
+				"compile": "bun run check-types && bun run lint && bun esbuild.mjs",
+				"compile-standalone": "bun run check-types && bun run lint && bun esbuild.mjs --standalone",
+				"postcompile-standalone": "node scripts/package-standalone.mjs",
+				"dev": "bun run protos && bun run watch",
+				"watch": "bun run --parallel watch:esbuild watch:tsc",
+				"watch:esbuild": "bun esbuild.mjs --watch",
+				"watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+				"package": "bun run check-types && bun run build:webview && bun run lint && bun esbuild.mjs --production",
+				"protos": "node scripts/build-proto.mjs",
+				"protos-python": "node scripts/build-python-proto.mjs",
+				"download-ripgrep": "node scripts/download-ripgrep.mjs",
+				"postprotos": "biome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched",
+				"clean:build": "rimraf dist dist-standalone webview-ui/build src/generated out/",
+				"clean:deps": "rimraf node_modules webview-ui/node_modules",
+				"clean:all": "bun run clean:build && bun run clean:deps",
+				"compile-tests": "node ./scripts/build-tests.js",
+				"watch-tests": "tsc -p . -w --outDir out",
+				"check-types": "bun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit",
+				"check-types:compat": "bunx tsc --project tsconfig.vscode-compat.json --noEmit",
+				"lint": "biome lint --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && bun run lint:proto",
+				"lint:proto": "bash ./scripts/proto-lint.sh",
+				"analyze:unused": "bunx --yes knip --config knip.json --include files,exports,types,enumMembers,duplicates",
+				"analyze:unused:prod": "bunx --yes knip --config knip.json --production --include files,exports,types,enumMembers,dependencies",
+				"analyze:unused:fix-exports": "node scripts/remove-unused-exports.mjs --apply",
+				"analyze:unused:fix-exports:dry": "node scripts/remove-unused-exports.mjs",
+				"format": "biome format --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error --semicolons=as-needed",
+				"format:fix": "biome check --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --write --semicolons=as-needed",
+				"fix:all": "biome check --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe --semicolons=as-needed",
+				"ci:check-all": "bun run --parallel check-types lint format",
+				"ci:build": "bun run protos && bun run build:webview && bun esbuild.mjs && bun run compile-tests",
+				"pretest": "bun run compile && bun run compile-tests && bun run compile-standalone && bun run lint",
+				"test": "bun run test:unit && bun run test:integration",
+				"test:integration": "bun run compile-tests && vscode-test",
+				"test:unit": "bun scripts/run-bun-unit-tests.ts",
+				"test:vitest": "vitest run --config vitest.config.ts",
+				"test:vitest:watch": "vitest --config vitest.config.ts",
+				"test:bun": "bun scripts/run-bun-tests.ts",
+				"test:bun:unit": "bun scripts/run-bun-unit-tests.ts",
+				"test:coverage": "bun run compile-tests && vscode-test --coverage",
+				"test:sca-server": "bun --watch scripts/test-standalone-core-api-server.ts",
+				"test:tp-orchestrator": "bun scripts/testing-platform-orchestrator.ts",
+				"dev:mcp-oauth-test-server": "bun src/dev/mcp-oauth-test-server/server.ts",
+				"e2e": "playwright test -c playwright.config.ts",
+				"test:e2e:build": "vsce package --no-dependencies --allow-package-secrets sendgrid --out dist/e2e.vsix",
+				"test:e2e": "playwright install && bun run test:e2e:build && node src/test/e2e/utils/build.mjs && playwright test",
+				"test:e2e:optimal": "bun run test:e2e:build && node src/test/e2e/utils/build.mjs && playwright test",
+				"test:e2e:ui": "bun scripts/interactive-playwright.ts",
+				"install:all": "bun install",
+				"dev:webview": "node scripts/clean-webview-vite-cache.mjs && cd webview-ui && bun run dev",
+				"build:webview": "bun run protos && cd webview-ui && bun run build",
+				"test:webview": "cd webview-ui && bun run test",
+				"publish:marketplace": "node scripts/publish-marketplace.mjs",
+				"publish:marketplace:prerelease": "node scripts/publish-marketplace.mjs --pre-release",
+				"publish:marketplace:nightly": "node ./scripts/publish-nightly.mjs",
+				"docs": "cd docs && bun run dev",
+				"docs:check-links": "cd docs && bun run check",
+				"docs:rename-file": "cd docs && bun run rename",
+				"report-issue": "node scripts/report-issue.js",
+				"storybook": "cd webview-ui && bun run storybook",
+				"eval:smoke:run": "bun evals/smoke-tests/run-smoke-tests.ts"
+			},
+			"workspace_dependencies": [
+				"@cline/agents",
+				"@cline/core",
+				"@cline/llms",
+				"@cline/shared"
+			],
+			"external_dependency_count": 91,
+			"dev_dependency_count": 43,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "application"
+		},
+		{
+			"name": "@cline/vscode-rollout",
+			"path": "apps/vscode-rollout",
+			"private": true,
+			"version": "0.1.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"build": "node esbuild.mjs",
+				"build:production": "node esbuild.mjs --production",
+				"typecheck": "tsc --noEmit",
+				"test": "bun test src scripts",
+				"stitch": "node scripts/stitch.mjs"
+			},
+			"workspace_dependencies": [],
+			"external_dependency_count": 0,
+			"dev_dependency_count": 5,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "application"
+		},
+		{
+			"name": "testing-infra",
+			"path": "apps/vscode/testing-platform",
+			"private": false,
+			"version": "0.1.0",
+			"type": null,
+			"engines": {},
+			"scripts": {
+				"build": "tsc",
+				"start:dev": "bun index.ts",
+				"start": "bun run build && node dist/runner.js"
+			},
+			"workspace_dependencies": [],
+			"external_dependency_count": 1,
+			"dev_dependency_count": 4,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "application"
+		},
+		{
+			"name": "webview-ui",
+			"path": "apps/vscode/webview-ui",
+			"private": true,
+			"version": "0.3.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"dev": "vite",
+				"build": "tsc -b && vite build",
+				"build:test": "tsc -b && vite build -- --dev-build",
+				"preview": "vite preview",
+				"lint": "biome lint --changed --no-errors-on-unmatched",
+				"test": "vitest run",
+				"test:watch": "vitest dev",
+				"test:coverage": "vitest run --coverage",
+				"storybook": "storybook dev -p 6006",
+				"build-storybook": "storybook build"
+			},
+			"workspace_dependencies": [],
+			"external_dependency_count": 50,
+			"dev_dependency_count": 22,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": false,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "application"
+		},
+		{
+			"name": "examples",
+			"path": "sdk/examples",
+			"private": true,
+			"version": null,
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"typecheck": "tsc --noEmit",
+				"clean": "rm -rf node_modules dist"
+			},
+			"workspace_dependencies": [
+				"@cline/core"
+			],
+			"external_dependency_count": 1,
+			"dev_dependency_count": 1,
+			"has_tests": false,
+			"has_build": false,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "example"
+		},
+		{
+			"name": "cline-agent-squad-plugin",
+			"path": "sdk/examples/plugins/agents-squad",
+			"private": true,
+			"version": "0.1.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"typecheck": "tsc --noEmit",
+				"clean": "rm -rf node_modules dist"
+			},
+			"workspace_dependencies": [
+				"@cline/core"
+			],
+			"external_dependency_count": 2,
+			"dev_dependency_count": 0,
+			"has_tests": false,
+			"has_build": false,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": true,
+			"classification": "example"
+		},
+		{
+			"name": "@cline/agents",
+			"path": "sdk/packages/agents",
+			"private": false,
+			"version": "0.0.64",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"build": "bun run bun.mts && bun tsc -p tsconfig.build.json",
+				"dev": "bun build ./src/index.ts --outdir ./dist --target node --format esm --watch",
+				"typecheck": "bun tsc -p tsconfig.dev.json --noEmit",
+				"test": "vitest run",
+				"test:watch": "vitest"
+			},
+			"workspace_dependencies": [
+				"@cline/llms",
+				"@cline/shared"
+			],
+			"external_dependency_count": 3,
+			"dev_dependency_count": 0,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "sdk"
+		},
+		{
+			"name": "@cline/core",
+			"path": "sdk/packages/core",
+			"private": false,
+			"version": "0.0.64",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"build": "bun run ./bun.mts && bun tsc -p tsconfig.build.json",
+				"typecheck": "bun tsc -p tsconfig.dev.json --noEmit && bun run typecheck:smoke",
+				"typecheck:smoke": "bun tsc -p tsconfig.smoke.json --noEmit",
+				"test": "bun run test:unit && bun run test:e2e",
+				"test:live": "vitest run --config vitest.config.ts src/extensions/context/compaction.live.test.ts",
+				"test:unit": "vitest run --config vitest.config.ts",
+				"test:e2e": "vitest run --config vitest.e2e.config.ts",
+				"verify:routines": "zsh -lc 'bunx vitest run src/cron/schedule-service.test.ts --config vitest.config.ts'",
+				"test:watch": "vitest --config vitest.config.ts"
+			},
+			"workspace_dependencies": [
+				"@cline/agents",
+				"@cline/llms",
+				"@cline/shared"
+			],
+			"external_dependency_count": 22,
+			"dev_dependency_count": 2,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": true,
+			"publishable": true,
+			"example": false,
+			"classification": "sdk"
+		},
+		{
+			"name": "@cline/llms",
+			"path": "sdk/packages/llms",
+			"private": false,
+			"version": "0.0.64",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"build": "bun run bun.mts && bun tsc -p tsconfig.build.json",
+				"typecheck": "bun tsc -p tsconfig.dev.json --noEmit",
+				"test": "vitest run",
+				"test:live": "vitest run src/tests/provider-live*.test.ts",
+				"test:vcr": "vitest run src/tests/provider-vcr.test.ts",
+				"test:watch": "vitest",
+				"generate:models": "bun run scripts/generate-models.ts"
+			},
+			"workspace_dependencies": [
+				"@cline/shared"
+			],
+			"external_dependency_count": 23,
+			"dev_dependency_count": 0,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "sdk"
+		},
+		{
+			"name": "@cline/sdk",
+			"path": "sdk/packages/sdk",
+			"private": false,
+			"version": "0.0.64",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"build": "bun run bun.mts && bun tsc -p tsconfig.build.json",
+				"typecheck": "bun tsc -p tsconfig.json --noEmit"
+			},
+			"workspace_dependencies": [
+				"@cline/core"
+			],
+			"external_dependency_count": 1,
+			"dev_dependency_count": 0,
+			"has_tests": false,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": true,
+			"publishable": true,
+			"example": false,
+			"classification": "sdk"
+		},
+		{
+			"name": "@cline/shared",
+			"path": "sdk/packages/shared",
+			"private": false,
+			"version": "0.0.64",
+			"type": "module",
+			"engines": {
+				"node": ">=22"
+			},
+			"scripts": {
+				"build": "BUILD_MODE=package bun bun.mts",
+				"typecheck": "bun tsc --noEmit",
+				"test": "bun run test:unit",
+				"test:unit": "vitest run --config vitest.config.ts"
+			},
+			"workspace_dependencies": [],
+			"external_dependency_count": 4,
+			"dev_dependency_count": 0,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "sdk"
+		},
+		{
+			"name": "@cline/ui",
+			"path": "sdk/packages/ui",
+			"private": true,
+			"version": "0.0.0",
+			"type": "module",
+			"engines": {},
+			"scripts": {
+				"build": "bun scripts/validate-theme.ts",
+				"typecheck": "bun tsc -p tsconfig.json --noEmit",
+				"test": "vitest run --config vitest.config.ts"
+			},
+			"workspace_dependencies": [],
+			"external_dependency_count": 0,
+			"dev_dependency_count": 0,
+			"has_tests": true,
+			"has_build": true,
+			"has_typecheck": true,
+			"has_publish_config": false,
+			"publishable": false,
+			"example": false,
+			"classification": "sdk"
+		}
+	]
+}

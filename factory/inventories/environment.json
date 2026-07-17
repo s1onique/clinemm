@@ -1,0 +1,51 @@
+{
+	"schema_version": 1,
+	"timestamp": "2026-07-17T08:12:39.419Z",
+	"os": {
+		"name": "macOS",
+		"version": "14.7.4",
+		"build": "23H420"
+	},
+	"kernel": "Darwin",
+	"architecture": "arm64",
+	"process_architecture": "arm64",
+	"bun_architecture": "arm64",
+	"node_architecture": "darwin/arm64",
+	"rosetta_translated": false,
+	"cpu": "Apple M3 Max",
+	"logical_cpus": 16,
+	"memory_bytes": 68719476736,
+	"fs_case_sensitive": true,
+	"git_version": "2.51.2",
+	"git_lfs_version": "git: 'lfs' is not a git command. See 'git --help'.",
+	"bun_version": "1.3.14",
+	"bun_revision": "1.3.14+0d9b296af",
+	"node_version": "26.0.0",
+	"npm_version": "11.12.1",
+	"vscode_version": null,
+	"vscode_architecture": null,
+	"xcode_path": "/Library/Developer/CommandLineTools",
+	"xcode_version": null,
+	"python_version": "Python 3.14.5",
+	"clang_version": "Apple clang version 15.0.0 (clang-1500.0.40.1)",
+	"shell": "/bin/zsh",
+	"locale": "en-US",
+	"timezone": "Europe/Moscow",
+	"proxy_variable_names": [
+		"HTTPS_PROXY",
+		"HTTP_PROXY",
+		"https_proxy",
+		"http_proxy",
+		"NO_PROXY",
+		"no_proxy"
+	],
+	"ci_indicator": false,
+	"native_assertions": {
+		"uname_m": "arm64",
+		"process_arch": "arm64",
+		"bun_arch": "arm64",
+		"node_arch": "darwin/arm64",
+		"rosetta_disabled": true,
+		"all_pass": true
+	}
+}

@@ -37,11 +37,10 @@ function readText(path: string): string {
 	}
 }
 
-function expandGlobs(patterns: string[], base = ROOT): string[] {
+async function expandGlobs(patterns: string[], base = ROOT): Promise<string[]> {
 	const out = new Set<string>();
 	for (const pattern of patterns) {
 		if (pattern.includes("*")) {
-			// Bun.Glob is available
 			const glob = new Bun.Glob(pattern);
 			for await (const match of glob.scan({ cwd: base, onlyFiles: false })) {
 				const fullPath = join(base, match);
@@ -97,11 +96,11 @@ function hasTypecheck(pkg: any): boolean {
 	return keys.some((k) => /typecheck|types|^tsc/i.test(k));
 }
 
-function main(): void {
+async function main(): Promise<void> {
 	const rootPkg = readJson(`${ROOT}/package.json`) as any;
 	if (!rootPkg) throw new Error("root package.json unreadable");
 	const workspacePatterns: string[] = rootPkg.workspaces ?? [];
-	const workspacePaths = expandGlobs(workspacePatterns);
+	const workspacePaths = await expandGlobs(workspacePatterns);
 
 	const records = [];
 	for (const relPath of workspacePaths) {
@@ -207,4 +206,7 @@ function main(): void {
 	console.log(`workspace_count=${records.length} cycles=${cycles.length}`);
 }
 
-main();
+main().catch((err) => {
+	console.error(err);
+	process.exit(1);
+});
