@@ -449,9 +449,23 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 		view.hashMismatches.length > 0 ? `hash_mismatches=${view.hashMismatches.length}` : null,
 		view.malformedLines.length > 0 ? `malformed=${view.malformedLines.length}` : null,
 		view.duplicatePaths.length > 0 ? `duplicates=${view.duplicatePaths.length}` : null,
-		view.commandSetExact ? null : "command_set_mismatch=true",
-		view.executionTrees.length > 1
-			? `execution_trees=${view.executionTrees.length}`
+		!view.commandSetExact ? "command_set_mismatch=true" : null,
+		!view.executionTreeBound
+			? view.executionTrees.length === 1
+				? `execution_tree_unbound=${view.executionTrees[0]?.slice(0, 12)}…`
+				: `execution_trees=${view.executionTrees.length}`
+			: null,
+		view.duplicateEvidenceCommandIds.length > 0
+			? `dup_evidence_ids=${view.duplicateEvidenceCommandIds.length}`
+			: null,
+		view.duplicateExecutedCommandIds.length > 0
+			? `dup_executed_ids=${view.duplicateExecutedCommandIds.length}`
+			: null,
+		view.commandRecordMismatches.length > 0
+			? `record_mismatches=${view.commandRecordMismatches.length}`
+			: null,
+		view.rejectedManifestPaths.length > 0
+			? `rejected_paths=${view.rejectedManifestPaths.length}`
 			: null,
 	];
 	const dimSummary = dimSummaryParts.filter(Boolean).join(", ") || "(none)";
@@ -473,6 +487,7 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 	rows += `| hash manifest valid | ${view.hashManifestValid} |\n`;
 	rows += `| command-set exact | ${view.commandSetExact} |\n`;
 	rows += `| execution trees | ${treesRender} |\n`;
+	rows += `| execution tree bound | ${view.executionTreeBound} |\n`;
 	rows += `| integrity-dim summary | ${dimSummary} |\n`;
 	rows += `| mismatches | ${mismatchText} |\n`;
 
@@ -488,11 +503,15 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 	}
 	if (view.missingFiles.length > 0) {
 		diagnostics += `\n### Missing files (declared in manifest, absent on disk)\n\n`;
-		for (const m of view.missingFiles) diagnostics += `- \`${m.path}\`\n`;
+		for (const m of view.missingFiles) diagnostics += `- \`${m.path}\` (reason: ${m.reason})\n`;
 	}
 	if (view.unexpectedFiles.length > 0) {
 		diagnostics += `\n### Unexpected files (on disk, not in manifest)\n\n`;
-		for (const u of view.unexpectedFiles) diagnostics += `- \`${u.path}\`\n`;
+		for (const u of view.unexpectedFiles) diagnostics += `- \`${u.path}\` (reason: ${u.reason})\n`;
+	}
+	if (view.rejectedManifestPaths.length > 0) {
+		diagnostics += `\n### Rejected manifest paths (absolute or escaping repo)\n\n`;
+		for (const r of view.rejectedManifestPaths) diagnostics += `- \`${r.path}\` (reason: ${r.reason})\n`;
 	}
 	if (view.malformedLines.length > 0) {
 		diagnostics += `\n### Malformed manifest lines\n\n`;
@@ -502,9 +521,33 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 		diagnostics += `\n### Duplicate manifest paths\n\n`;
 		for (const d of view.duplicatePaths) diagnostics += `- \`${d.path}\` ×${d.occurrences}\n`;
 	}
+	if (view.duplicateEvidenceCommandIds.length > 0) {
+		diagnostics += `\n### Duplicate evidence command IDs\n\n`;
+		for (const d of view.duplicateEvidenceCommandIds) {
+			diagnostics += `- \`${d.path}\` ×${d.occurrences}\n`;
+		}
+	}
+	if (view.duplicateExecutedCommandIds.length > 0) {
+		diagnostics += `\n### Duplicate executed command IDs\n\n`;
+		for (const d of view.duplicateExecutedCommandIds) {
+			diagnostics += `- \`${d.path}\` ×${d.occurrences}\n`;
+		}
+	}
+	if (view.commandRecordMismatches.length > 0) {
+		diagnostics += `\n### Per-record command mismatches\n\n`;
+		diagnostics += `| Command | Differing fields | Evidence | Executed |\n`;
+		diagnostics += `| --- | --- | --- | --- |\n`;
+		for (const m of view.commandRecordMismatches) {
+			diagnostics += `| \`${m.id}\` | ${m.fields.join(", ")} | \`${JSON.stringify(m.evidence)}\` | \`${JSON.stringify(m.executed)}\` |\n`;
+		}
+	}
 	if (view.executionTrees.length > 1) {
 		diagnostics += `\n### Mixed execution trees\n\n`;
-		diagnostics += `The runner executed commands under ${view.executionTrees.length} distinct tree values: ${view.executionTrees.join(", ")}. A valid bundle has exactly one tree — multi-tree evidence is treated as invalid by CORRECTION05.\n`;
+		diagnostics += `The runner executed commands under ${view.executionTrees.length} distinct tree values: ${view.executionTrees.join(", ")}. A valid bundle has exactly one tree — multi-tree evidence is treated as invalid by CORRECTION05/CORRECTION06.\n`;
+	}
+	if (view.executionTrees.length === 1 && !view.executionTreeBound) {
+		diagnostics += `\n### Unbound execution tree\n\n`;
+		diagnostics += `The single execution tree \`${view.executionTrees[0]}\` does not match evidence.tree_oid (\`${ev.tree_oid}\`) and/or the current HEAD^{tree} (\`${treeNow}\`). Execution evidence must be bound to the closing snapshot tree.\n`;
 	}
 	if (!view.commandSetExact) {
 		diagnostics += `\n### Command-set mismatch\n\n`;

@@ -1,37 +1,48 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION05 — Closure logic (pure).
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION06 — Closure logic (pure).
  *
  * The renderer (`render-baseline-report.ts`) imports the helpers from this
- * module so that the verdict logic is independently testable. Importing this
+ * module so the verdict logic is independently testable. Importing this
  * module has no side effects — it does not read the working tree, write any
  * file, or spawn git. The renderer's main entry performs I/O and calls into
  * `computeClosure` / `checkEvidence`.
  *
- * Policy (CORRECTION05, fail-closed):
+ * Policy (CORRECTION06, fail-closed):
  *
- *   FAIL      evidence is missing, stale, or hash-invalid; OR there are
- *             UNKNOWN-classified failures with no investigation note.
- *   PARTIAL   evidence is internally valid and command-set-exact, the
- *             UNKNOWN policy is satisfied, but at least one declared
- *             baseline requirement (R4/R5/R6/R7/R16) remains open.
+ *   FAIL      evidence is missing, stale, hash-invalid, multi-tree,
+ *             command-set-mismatched, symlinked, or path-traversing; OR
+ *             there are UNKNOWN-classified failures with no investigation
+ *             note.
+ *   PARTIAL   evidence is internally valid and command-set-exact (incl. per-
+ *             record equality), the UNKNOWN policy is satisfied, but at
+ *             least one declared baseline requirement (R4/R5/R6/R7/R16)
+ *             remains open.
  *   PASS      every requirement is satisfied and all mandatory commands
  *             pass on the binding host.
  *
- * Evidence must satisfy ALL of the following simultaneously:
+ * Every evidence dimension must hold simultaneously for the verdict to not
+ * be FAIL on evidence grounds:
  *
- *   - evidence file exists
- *   - subject (HEAD) matches current HEAD
+ *   - evidence.json exists
+ *   - subject matches current HEAD
  *   - tree matches current HEAD^{tree}
- *   - hash manifest is present, well-formed, duplicate-free, and every
- *     declared path exists and matches its declared SHA-256
- *   - every executed command has a matching evidence row (and vice versa)
- *   - all executed commands share a single execution tree value
+ *   - the single execution tree value equals the bound tree (executionTreeBound)
+ *   - hash manifest is well-formed, duplicate-free, contains no
+ *     traversal/absolute paths, and every declared payload path exists,
+ *     matches its declared SHA-256, and is not a symlink
+ *   - on-disk non-control files in the evidence directory are all declared
+ *     in the manifest (hashes.sha256 itself is a control file and exempt)
+ *   - every executed command has exactly one matching evidence row, no
+ *     duplicates in either set, and per-ID field equality
+ *     (status, head/tree, exit_code, timeout, hashes, classification)
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, lstatSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { isAbsolute, join, relative, sep } from "node:path";
+
+// ---------- public types ----------------------------------------------------
 
 export type Verdict = "PASS" | "PARTIAL" | "FAIL";
 
@@ -48,18 +59,18 @@ export type ReasonCode =
 
 export interface PathDiagnostic {
 	path: string;
-	reason: "missing" | "unexpected";
+	reason: "missing" | "unexpected" | "symlink" | "traversal" | "absolute";
 }
 
 export interface HashMismatch {
 	path: string;
-	expected: string; // declared SHA-256 (lowercase)
-	actual: string; // computed SHA-256 (lowercase)
+	expected: string;
+	actual: string;
 }
 
 export interface MalformedLine {
-	line: number; // 1-based line number in the manifest
-	content: string; // the offending line, truncated to 80 chars
+	line: number;
+	content: string;
 }
 
 export interface DuplicatePath {
@@ -67,23 +78,25 @@ export interface DuplicatePath {
 	occurrences: number;
 }
 
-/**
- * The complete integrity picture for the detached evidence bundle. Every
- * dimension must be satisfied for the verdict to not be FAIL on evidence
- * grounds; see `computeClosure`.
- */
+export interface CommandRecordMismatch {
+	id: string;
+	fields: string[];
+	evidence: Record<string, unknown>;
+	executed: Record<string, unknown>;
+}
+
 export interface EvidenceView {
 	/** The evidence.json file existed and was JSON-decodable. */
 	exists: boolean;
-	/** evidence.head_oid === git rev-parse HEAD on the closing snapshot. */
+	/** evidence.head_oid === git rev-parse HEAD. */
 	subjectMatches: boolean;
-	/** evidence.tree_oid === git rev-parse HEAD^{tree} on the closing snapshot. */
+	/** evidence.tree_oid === git rev-parse HEAD^{tree}. */
 	treeMatches: boolean;
 	/** Manifest is well-formed and every declared path matches its declared hash. */
 	hashManifestValid: boolean;
-	/** Paths declared in the manifest but absent on disk under the closing tree. */
+	/** Paths declared in the manifest but absent on disk. */
 	missingFiles: PathDiagnostic[];
-	/** Files present on disk under the detached evidence directory but not in the manifest. */
+	/** On-disk non-control files in the evidence directory not declared in the manifest. */
 	unexpectedFiles: PathDiagnostic[];
 	/** Per-file hash mismatches, with both expected and actual values. */
 	hashMismatches: HashMismatch[];
@@ -91,16 +104,25 @@ export interface EvidenceView {
 	malformedLines: MalformedLine[];
 	/** Paths that appear more than once in the manifest. */
 	duplicatePaths: DuplicatePath[];
-	/** Every executed command has an evidence record and every evidence record has an executed command. */
+	/** All command-set checks pass (no missing/extra IDs, no duplicates, no per-record mismatches). */
 	commandSetExact: boolean;
-	/** Distinct tree values appearing in evidence.commands[].tree_oid; a valid bundle has exactly one. */
+	/** Distinct tree values appearing in evidence.commands[].tree_oid; must be exactly one. */
 	executionTrees: string[];
+	/** The single execution tree equals evidence.tree_oid AND current HEAD^{tree}. */
+	executionTreeBound: boolean;
+	/** Command IDs that appear more than once in evidence.commands[]. */
+	duplicateEvidenceCommandIds: DuplicatePath[];
+	/** Command IDs that appear more than once in executed_commands[]. */
+	duplicateExecutedCommandIds: DuplicatePath[];
+	/** Per-ID field comparison mismatches between evidence row and executed row. */
+	commandRecordMismatches: CommandRecordMismatch[];
+	/** Paths in the manifest that were rejected for being absolute / traversing outside the repo. */
+	rejectedManifestPaths: PathDiagnostic[];
 }
 
 export interface ClosureInput {
 	evidence: EvidenceView;
 	unknownFailures: string[];
-	/** Count of evidence-shape UNKNOWN classifications across the matrix (snapshot). */
 	unknownFailureCount: number;
 	mandatoryPass: number;
 	mandatoryFail: number;
@@ -108,38 +130,54 @@ export interface ClosureInput {
 	affectedScopePass: number;
 	affectedScopeFail: number;
 	affectedScopeApplicable: number;
-	/** R4: full production-tree comparison vs selected upstream OID. */
 	r4Satisfied: boolean;
-	/** R5: real JSON Schema validation of every tracked inventory. */
 	r5Satisfied: boolean;
-	/** R6: structural baseline regenerated from the upstream tree (no self-contamination). */
 	r6Satisfied: boolean;
-	/** R7: cross-platform CI evidence bound to a recorded run id. */
 	r7Satisfied: boolean;
-	/** R16: verification discovery is a real source-derived scan. */
 	r16Satisfied: boolean;
 }
 
 export interface ClosureResult {
 	verdict: Verdict;
-	/** Internal shorthand for the renderer — true iff every evidence dimension is satisfied. */
 	evidenceOk: boolean;
 	r4: boolean;
 	r5: boolean;
 	r6: boolean;
 	r7: boolean;
 	r16: boolean;
-	/** Stable, machine-readable reason codes for the verdict. */
 	reasonCodes: ReasonCode[];
-	/** Aggregated count of unknown-classified failures (evidence-class + snapshot-class). */
 	unknownFailureCount: number;
 }
 
+// ---------- control files ---------------------------------------------------
+
 /**
- * Compute the closure verdict. Pure — same input always produces the same
- * output. The renderer must reflect `verdict` faithfully: stale evidence
- * (subject/tree/hash/manifest/command-set/multi-tree) is a hard FAIL.
+ * Files that may exist on disk inside the evidence directory but are not
+ * included in the manifest. The manifest itself, `hashes.sha256`, is a
+ * control file: it documents the payloads it covers, but it is not itself
+ * a payload. Excluding it from `unexpectedFiles` makes the bundle
+ * satisfiable.
+ *
+ * `.tmp` and `.swp` debris are NOT broadly exempt — strict closure rejects
+ * undeclared files. Operators should not leave editor temp files in the
+ * bundle; if they do, they are flagged as unexpected.
  */
+export const CONTROL_FILES: ReadonlySet<string> = new Set(["hashes.sha256"]);
+
+const RECORD_COMPARE_FIELDS = [
+	"status",
+	"head_oid",
+	"tree_oid",
+	"exit_code",
+	"timeout",
+	"stdout_sha256",
+	"stderr_sha256",
+	"environment_sha256",
+	"failure_classification",
+] as const;
+
+// ---------- closure decision ------------------------------------------------
+
 export function computeClosure(input: ClosureInput): ClosureResult {
 	const r4 = input.r4Satisfied;
 	const r5 = input.r5Satisfied;
@@ -147,8 +185,6 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 	const r7 = input.r7Satisfied;
 	const r16 = input.r16Satisfied;
 
-	// Aggregate "unknown" presence: every UNKNOWN classification blocks closure
-	// until it is reproduced and assigned a real failure category.
 	const unknownCount =
 		input.unknownFailures.length + Math.max(0, input.unknownFailureCount);
 	const hasUnknown = unknownCount > 0;
@@ -162,19 +198,13 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 	const evidenceOk = isEvidenceOk(input.evidence);
 
 	const reasonCodes: ReasonCode[] = [];
-
-	// 1) Invalid evidence is the most fundamental fail-closed state.
 	if (!evidenceOk) reasonCodes.push("EVIDENCE_INCOMPLETE");
-	// 2) UNKNOWN-without-investigation blocks closure regardless of evidence.
 	if (hasUnknown) reasonCodes.push("UNKNOWN_FAILURES_PRESENT");
-	// 3) Each open requirement records its individual reason.
 	if (!r4) reasonCodes.push("R4_UNSATISFIED");
 	if (!r5) reasonCodes.push("R5_UNSATISFIED");
 	if (!r6) reasonCodes.push("R6_UNSATISFIED");
 	if (!r7) reasonCodes.push("R7_UNSATISFIED");
 	if (!r16) reasonCodes.push("R16_UNSATISFIED");
-	// 4) Mandatory not-all-pass is recorded separately so a PARTIAL with
-	//    would-be-otherwise-PASS evidence surfaces the gap.
 	if (!allMandatoryPass) reasonCodes.push("MANDATORY_NOT_ALL_PASS");
 	if (!allAffectedPass) reasonCodes.push("AFFECTED_SCOPE_NOT_ALL_PASS");
 
@@ -204,14 +234,15 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 
 /**
  * True iff every dimension of the evidence view is satisfied. This is the
- * single source of truth used by both `computeClosure` and the tests; do not
- * re-derive `evidenceOk` ad-hoc elsewhere.
+ * single source of truth used by both `computeClosure` and the tests; do
+ * not re-derive `evidenceOk` ad-hoc elsewhere.
  */
 export function isEvidenceOk(e: EvidenceView): boolean {
 	return (
 		e.exists &&
 		e.subjectMatches &&
 		e.treeMatches &&
+		e.executionTreeBound &&
 		e.hashManifestValid &&
 		e.missingFiles.length === 0 &&
 		e.unexpectedFiles.length === 0 &&
@@ -219,35 +250,26 @@ export function isEvidenceOk(e: EvidenceView): boolean {
 		e.malformedLines.length === 0 &&
 		e.duplicatePaths.length === 0 &&
 		e.commandSetExact &&
-		e.executionTrees.length === 1
+		e.executionTrees.length === 1 &&
+		e.duplicateEvidenceCommandIds.length === 0 &&
+		e.duplicateExecutedCommandIds.length === 0 &&
+		e.commandRecordMismatches.length === 0 &&
+		e.rejectedManifestPaths.length === 0
 	);
 }
 
 // ---------- structured evidence check ---------------------------------------
 
 interface CheckEvidenceArgs {
-	/** The decoded evidence.json, or null when the file is missing. */
 	ev: any;
-	/** Raw text of hashes.sha256, or empty string when missing. */
 	hashesText: string;
-	/** Absolute path to the detached evidence directory (containing evidence.json, hashes.sha256, commands/). */
 	evDirAbs: string;
-	/** The executed_commands[] slice of verification-results.json. */
 	executedCmds: any[];
-	/** Repository root, used to resolve relative manifest paths from hashes.sha256. */
 	rootAbs: string;
-	/** `git rev-parse HEAD` for the closing snapshot. */
 	headOidNow: string;
-	/** `git rev-parse HEAD^{tree}` for the closing snapshot. */
 	treeOidNow: string;
 }
 
-/**
- * Compute every dimension of the EvidenceView. Reads files on disk; does
- * not mutate anything. Errors reading individual files surface as
- * structured diagnostics (missing/duplicate/malformed) rather than thrown
- * exceptions — the renderer treats these as evidence-integrity failures.
- */
 export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	const { ev, hashesText, evDirAbs, executedCmds, rootAbs, headOidNow, treeOidNow } = args;
 
@@ -263,6 +285,11 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		duplicatePaths: [],
 		commandSetExact: false,
 		executionTrees: [],
+		executionTreeBound: false,
+		duplicateEvidenceCommandIds: [],
+		duplicateExecutedCommandIds: [],
+		commandRecordMismatches: [],
+		rejectedManifestPaths: [],
 	};
 
 	if (!ev) return out;
@@ -271,7 +298,7 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	out.subjectMatches = typeof ev.head_oid === "string" && ev.head_oid === headOidNow;
 	out.treeMatches = typeof ev.tree_oid === "string" && ev.tree_oid === treeOidNow;
 
-	// Command-set exactness + distinct execution trees.
+	// Command-set: collect IDs and detect duplicates + per-record mismatches.
 	const evidenceIds = new Set<string>();
 	const executionTrees = new Set<string>();
 	if (Array.isArray(ev.commands)) {
@@ -289,21 +316,63 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	const missingExecs: string[] = [];
 	const extraInEvidence: string[] = [];
 	for (const id of executedIds) if (!evidenceIds.has(id)) missingExecs.push(id);
-	for (const id of evidenceIds) if (!executedIds.has(id)) extraInEvidence.add(id);
-	out.commandSetExact = missingExecs.length === 0 && extraInEvidence.length === 0;
+	for (const id of evidenceIds) if (!executedIds.has(id)) extraInEvidence.push(id);
 	out.executionTrees = Array.from(executionTrees);
 
-	// Hash manifest parse + per-line validity.
+	const dup = compareCommandRecords(ev.commands ?? [], executedCmds);
+	out.duplicateEvidenceCommandIds = dup.duplicateEvidenceCommandIds;
+	out.duplicateExecutedCommandIds = dup.duplicateExecutedCommandIds;
+	out.commandRecordMismatches = dup.commandRecordMismatches;
+
+	out.commandSetExact =
+		missingExecs.length === 0 &&
+		extraInEvidence.length === 0 &&
+		out.duplicateEvidenceCommandIds.length === 0 &&
+		out.duplicateExecutedCommandIds.length === 0 &&
+		out.commandRecordMismatches.length === 0;
+
+	// Execution-tree binding: the single execution tree must equal both
+	// evidence.tree_oid AND the current closing tree.
+	const evTree = typeof ev.tree_oid === "string" ? ev.tree_oid : null;
+	const execTree = executionTrees.size === 1 ? Array.from(executionTrees)[0] : null;
+	out.executionTreeBound =
+		evTree !== null && execTree !== null && evTree === execTree && evTree === treeOidNow;
+
+	// Hash manifest parse + per-line validity. Use the structured parse that
+	// handles upper/lower-case SHAs, malformed lines, and duplicate paths.
 	const parsed = parseManifest(hashesText);
 	out.malformedLines = parsed.malformed;
 	out.duplicatePaths = parsed.duplicates;
 
-	// Path existence + per-file hash verification.
+	// Path existence + per-file hash verification, with containment.
 	const missingFiles: PathDiagnostic[] = [];
 	const hashMismatches: HashMismatch[] = [];
+	const rejected: PathDiagnostic[] = [];
 	for (const [path, expected] of parsed.declared.entries()) {
-		const abs = resolveManifestPath(rootAbs, path);
-		if (!existsSync(abs)) {
+		const resolved = resolveManifestPath(rootAbs, path);
+		if (!resolved.ok) {
+			// Map the internal sentinel to the public PathDiagnostic taxonomy.
+			const publicReason: "absolute" | "traversal" =
+				resolved.reason === "rejected_absolute" ? "absolute" : "traversal";
+			rejected.push({ path, reason: publicReason });
+			continue;
+		}
+		const abs = resolved.abs as string;
+		let lst;
+		try {
+			lst = lstatSync(abs);
+		} catch {
+			missingFiles.push({ path, reason: "missing" });
+			continue;
+		}
+		if (lst.isSymbolicLink()) {
+			// Symlinks escaping the policy are flagged as missing-hash-wise;
+			// the renderer renders them as part of hashMismatches is wrong; we
+			// expose them through `unexpectedFiles` instead by recursing.
+			missingFiles.push({ path, reason: "symlink" });
+			continue;
+		}
+		if (!lst.isFile()) {
 			missingFiles.push({ path, reason: "missing" });
 			continue;
 		}
@@ -314,26 +383,35 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	}
 	out.missingFiles = missingFiles;
 	out.hashMismatches = hashMismatches;
+	out.rejectedManifestPaths = rejected;
 
-	// Unexpected files: anything on disk under the detached evidence dir that
-	// the manifest does not acknowledge. Manifest paths are repo-root-relative
-	// in production, so we resolve each declared path against `rootAbs` and
-	// then strip the evidence-dir prefix to get the inside-evidence-dir form.
-	out.unexpectedFiles = scanUnexpected(evDirAbs, rootAbs, parsed.declared);
+	// Unexpected files: any on-disk non-control, non-symlink file inside the
+	// evidence directory that the manifest doesn't acknowledge. Symlinks are
+	// reported separately below.
+	const unexpected = scanUnexpected(evDirAbs, rootAbs, parsed.declared);
+	const symlinks: PathDiagnostic[] = [];
+	for (const u of unexpected) {
+		if (u.reason === "symlink") symlinks.push(u);
+		else out.unexpectedFiles.push(u);
+	}
+	// Already caught from `missingFiles` (declared-but-symlink) — surface
+	// undeclared symlinks via unexpectedFiles for visibility.
+	for (const s of symlinks) out.unexpectedFiles.push(s);
 
 	out.hashManifestValid =
 		out.malformedLines.length === 0 &&
 		out.duplicatePaths.length === 0 &&
 		out.missingFiles.length === 0 &&
-		out.hashMismatches.length === 0;
+		out.hashMismatches.length === 0 &&
+		out.rejectedManifestPaths.length === 0;
 
 	return out;
 }
 
-// ---------- internal helpers (exported for tests) ---------------------------
+// ---------- helpers ---------------------------------------------------------
 
 interface ParsedManifest {
-	declared: Map<string, string>; // path -> expected sha256 (lowercase)
+	declared: Map<string, string>;
 	malformed: MalformedLine[];
 	duplicates: DuplicatePath[];
 }
@@ -372,9 +450,27 @@ export function parseManifest(text: string): ParsedManifest {
 	return { declared, malformed, duplicates };
 }
 
-function resolveManifestPath(rootAbs: string, declared: string): string {
-	if (isAbsolute(declared)) return declared;
-	return join(rootAbs, declared);
+interface ResolveResult {
+	ok: boolean;
+	abs: string | null;
+	reason: "rejected_absolute" | "rejected_traversal";
+}
+
+/**
+ * Resolve a manifest path against the repo root, rejecting:
+ *   - absolute paths (cannot be sandboxed)
+ *   - paths whose resolution escapes the repo root
+ * Containment under `evDirAbs` is enforced separately by `scanUnexpected`
+ * via the inside-evidence-dir form.
+ */
+function resolveManifestPath(rootAbs: string, declared: string): ResolveResult {
+	if (isAbsolute(declared)) return { ok: false, abs: null, reason: "rejected_absolute" };
+	const abs = join(rootAbs, declared);
+	const relToRoot = normalizeRelative(relative(rootAbs, abs));
+	if (relToRoot.length === 0 || relToRoot.startsWith("..") || isAbsolute(relToRoot)) {
+		return { ok: false, abs: null, reason: "rejected_traversal" };
+	}
+	return { ok: true, abs, reason: null };
 }
 
 function scanUnexpected(
@@ -384,21 +480,29 @@ function scanUnexpected(
 ): PathDiagnostic[] {
 	if (!existsSync(evDirAbs)) return [];
 	const out: PathDiagnostic[] = [];
-	// Manifest paths are repo-root-relative: resolve each to an absolute path
-	// and strip the evidence-dir prefix so we can compare against the
-	// inside-evidence-dir relative paths produced by `walk`.
+	// Build the set of declared inside-evidence-dir paths (so we can compare
+	// against the on-disk walk). Reject anything that escapes root or the
+	// evidence dir.
 	const declaredInside = new Set<string>();
 	for (const p of declared.keys()) {
-		const abs = isAbsolute(p) ? p : join(rootAbs, p);
-		const inside = normalizeRelative(relative(evDirAbs, abs));
-		if (inside.length > 0 && !inside.startsWith("..")) {
+		const resolved = resolveManifestPath(rootAbs, p);
+		if (!resolved.ok || !resolved.abs) continue;
+		const inside = normalizeRelative(relative(evDirAbs, resolved.abs));
+		if (inside.length > 0 && !inside.startsWith("..") && inside !== ".") {
 			declaredInside.add(inside);
 		}
 	}
-	walk(evDirAbs, (abs) => {
+	walk(evDirAbs, (abs, lst) => {
+		if (lst.isSymbolicLink()) {
+			// Symlinks are flagged as unexpected. Symlinked control files are
+			// also flagged — the policy is strict.
+			out.push({ path: normalizeRelative(relative(evDirAbs, abs)), reason: "symlink" });
+			return;
+		}
+		if (!lst.isFile()) return;
 		const rel = normalizeRelative(relative(evDirAbs, abs));
 		if (rel.length === 0) return;
-		if (rel.endsWith(".tmp") || rel.endsWith(".swp")) return; // editor debris
+		if (CONTROL_FILES.has(rel)) return; // control files exempt
 		if (!declaredInside.has(rel)) {
 			out.push({ path: rel, reason: "unexpected" });
 		}
@@ -406,7 +510,10 @@ function scanUnexpected(
 	return out;
 }
 
-function walk(absDir: string, visit: (abs: string) => void): void {
+function walk(
+	absDir: string,
+	visit: (abs: string, lst: import("node:fs").Stats) => void,
+): void {
 	let entries: string[];
 	try {
 		entries = readdirSync(absDir);
@@ -415,23 +522,85 @@ function walk(absDir: string, visit: (abs: string) => void): void {
 	}
 	for (const name of entries) {
 		const child = join(absDir, name);
-		let st;
+		let lst;
 		try {
-			st = statSync(child);
+			lst = lstatSync(child);
 		} catch {
 			continue;
 		}
-		if (st.isDirectory()) {
-			// Skip worktree junk that is committed into the bundle.
+		if (lst.isDirectory()) {
 			if (name === "node_modules" || name === ".git") continue;
 			walk(child, visit);
-		} else if (st.isFile()) {
-			visit(child);
+		} else {
+			visit(child, lst);
 		}
 	}
 }
 
 function normalizeRelative(p: string): string {
-	// Normalize to forward-slash relative path; tests assert on this form.
 	return p.split(sep).join("/");
+}
+
+interface CompareResult {
+	duplicateEvidenceCommandIds: DuplicatePath[];
+	duplicateExecutedCommandIds: DuplicatePath[];
+	commandRecordMismatches: CommandRecordMismatch[];
+}
+
+function compareCommandRecords(
+	evidenceCmds: any[],
+	executedCmds: any[],
+): CompareResult {
+	const duplicateEvidenceCommandIds = collectDuplicateIds(evidenceCmds);
+	const duplicateExecutedCommandIds = collectDuplicateIds(executedCmds);
+
+	const evidenceById = new Map<string, any>();
+	for (const c of evidenceCmds) {
+		if (c && typeof c.id === "string") evidenceById.set(c.id, c);
+	}
+	const executedById = new Map<string, any>();
+	for (const c of executedCmds) {
+		if (c && typeof c.id === "string") executedById.set(c.id, c);
+	}
+
+	const commandRecordMismatches: CommandRecordMismatch[] = [];
+	for (const [id, ev] of evidenceById.entries()) {
+		const ex = executedById.get(id);
+		if (!ex) continue;
+		const fields: string[] = [];
+		const evSnap: Record<string, unknown> = {};
+		const exSnap: Record<string, unknown> = {};
+		for (const f of RECORD_COMPARE_FIELDS) {
+			const a = (ev as any)[f];
+			const b = (ex as any)[f];
+			if (a === b) continue;
+			if (a == null && b == null) continue;
+			fields.push(f);
+			evSnap[f] = a ?? null;
+			exSnap[f] = b ?? null;
+		}
+		if (fields.length > 0) {
+			commandRecordMismatches.push({ id, fields, evidence: evSnap, executed: exSnap });
+		}
+	}
+
+	return {
+		duplicateEvidenceCommandIds,
+		duplicateExecutedCommandIds,
+		commandRecordMismatches,
+	};
+}
+
+function collectDuplicateIds(items: any[]): DuplicatePath[] {
+	const seen = new Map<string, number>();
+	for (const c of items) {
+		if (c && typeof c.id === "string") {
+			seen.set(c.id, (seen.get(c.id) ?? 0) + 1);
+		}
+	}
+	const dupes: DuplicatePath[] = [];
+	for (const [id, occurrences] of seen.entries()) {
+		if (occurrences > 1) dupes.push({ path: id, occurrences });
+	}
+	return dupes;
 }

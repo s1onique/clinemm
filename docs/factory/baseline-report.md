@@ -28,7 +28,7 @@ Detached evidence does not satisfy the integrity dimensions:
 - command-set exact: `true`
 - execution trees (must be exactly 1): `3` value(s) [d43f3579fe734472be82f2696bb620c3feb767de, 63f47c8f1eef1d32c00751ce4116d18497e67c9e, 34bbccae1650af529b0aa497510c1a3aa88e4231]
 - missing files: `0`
-- unexpected files: `21`
+- unexpected files: `20`
 - hash mismatches: `0`
 - malformed lines: `0`
 - duplicate paths: `0`
@@ -167,36 +167,36 @@ Affected-scope on primary host: pass=0, fail=3, applicable=4.
 | hash manifest valid | true |
 | command-set exact | true |
 | execution trees | `d43f3579fe73…`, `63f47c8f1eef…`, `34bbccae1650…` |
-| integrity-dim summary | unexpected=21, execution_trees=3 |
-| mismatches | head: evidence=e4e98cf0c1ae7ba8f4720979300e075308d5d558 git=8aba00107f33a0d36f7c30a81d4633dc2370d39d; tree: evidence=34bbccae1650af529b0aa497510c1a3aa88e4231 git=b297ced6c67a63f8799979187f09e72607bc840f |
+| execution tree bound | false |
+| integrity-dim summary | unexpected=20, execution_trees=3 |
+| mismatches | head: evidence=e4e98cf0c1ae7ba8f4720979300e075308d5d558 git=c29888c674eb436042154d7014e0713412c0948d; tree: evidence=34bbccae1650af529b0aa497510c1a3aa88e4231 git=666b2627578ae19ea2a2277b195a2e4fd9f8680c |
 
 ### Unexpected files (on disk, not in manifest)
 
-- `hashes.sha256`
-- `commands/vscode-unit.metadata.json`
-- `commands/vscode-download-ripgrep.metadata.json`
-- `commands/vscode-build.metadata.json`
-- `commands/vscode-webview.metadata.json`
-- `commands/root-check.metadata.json`
-- `commands/cli-build.metadata.json`
-- `commands/build-sdk.metadata.json`
-- `commands/cline-hub-build-webview.metadata.json`
-- `commands/vscode-compile-standalone.metadata.json`
-- `commands/vscode-quality.metadata.json`
-- `commands/vscode-analyze-unused.metadata.json`
-- `commands/cline-hub-tests.metadata.json`
-- `commands/root-e2e.metadata.json`
-- `commands/sdk-cli-hub-tests.metadata.json`
-- `commands/vscode-protos.metadata.json`
-- `commands/vscode-vitest.metadata.json`
-- `commands/root-unit.metadata.json`
-- `commands/install-root-frozen.metadata.json`
-- `commands/vscode-e2e.metadata.json`
-- `commands/root-types.metadata.json`
+- `commands/vscode-unit.metadata.json` (reason: unexpected)
+- `commands/vscode-download-ripgrep.metadata.json` (reason: unexpected)
+- `commands/vscode-build.metadata.json` (reason: unexpected)
+- `commands/vscode-webview.metadata.json` (reason: unexpected)
+- `commands/root-check.metadata.json` (reason: unexpected)
+- `commands/cli-build.metadata.json` (reason: unexpected)
+- `commands/build-sdk.metadata.json` (reason: unexpected)
+- `commands/cline-hub-build-webview.metadata.json` (reason: unexpected)
+- `commands/vscode-compile-standalone.metadata.json` (reason: unexpected)
+- `commands/vscode-quality.metadata.json` (reason: unexpected)
+- `commands/vscode-analyze-unused.metadata.json` (reason: unexpected)
+- `commands/cline-hub-tests.metadata.json` (reason: unexpected)
+- `commands/root-e2e.metadata.json` (reason: unexpected)
+- `commands/sdk-cli-hub-tests.metadata.json` (reason: unexpected)
+- `commands/vscode-protos.metadata.json` (reason: unexpected)
+- `commands/vscode-vitest.metadata.json` (reason: unexpected)
+- `commands/root-unit.metadata.json` (reason: unexpected)
+- `commands/install-root-frozen.metadata.json` (reason: unexpected)
+- `commands/vscode-e2e.metadata.json` (reason: unexpected)
+- `commands/root-types.metadata.json` (reason: unexpected)
 
 ### Mixed execution trees
 
-The runner executed commands under 3 distinct tree values: d43f3579fe734472be82f2696bb620c3feb767de, 63f47c8f1eef1d32c00751ce4116d18497e67c9e, 34bbccae1650af529b0aa497510c1a3aa88e4231. A valid bundle has exactly one tree — multi-tree evidence is treated as invalid by CORRECTION05.
+The runner executed commands under 3 distinct tree values: d43f3579fe734472be82f2696bb620c3feb767de, 63f47c8f1eef1d32c00751ce4116d18497e67c9e, 34bbccae1650af529b0aa497510c1a3aa88e4231. A valid bundle has exactly one tree — multi-tree evidence is treated as invalid by CORRECTION05/CORRECTION06.
 
 
 ## Production-code identity
