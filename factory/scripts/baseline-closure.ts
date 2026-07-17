@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION07 — Closure logic (pure).
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION08 — Closure logic (pure).
  *
  * The renderer (`render-baseline-report.ts`) imports the helpers from this
  * module so the verdict logic is independently testable. Importing this
@@ -8,12 +8,12 @@
  * file, or spawn git. The renderer's main entry performs I/O and calls into
  * `computeClosure` / `checkEvidence`.
  *
- * Policy (CORRECTION07, fail-closed + subject-tree binding):
+ * Policy (CORRECTION08, fail-closed + non-self-referential subject-tree):
  *
  *   FAIL      evidence is missing, malformed, stale-bound, hash-invalid,
- *             multi-tree, command-set-mismatched, symlinked, or
- *             outside-evidence-dir; OR there are UNKNOWN-classified
- *             failures with no investigation note.
+ *             multi-tree, command-set-mismatched, symlinked,
+ *             outside-evidence-dir, or self-referential; OR there are
+ *             UNKNOWN-classified failures with no investigation note.
  *   PARTIAL   evidence is internally valid and command-set-exact (incl. per-
  *             record equality), the UNKNOWN policy is satisfied, but at
  *             least one declared baseline requirement (R4/R5/R6/R7/R16)
@@ -21,26 +21,33 @@
  *   PASS      every requirement is satisfied and all mandatory commands
  *             pass on the binding host.
  *
- * CORRECTION07 binding model:
+ * CORRECTION08 binding model:
  *
- *   The report and the runner record both a `tree_oid`. When `tree_oid` of
- *   the detached evidence equals `git rev-parse HEAD^{tree}` on the closing
- *   snapshot, the bundle is bound to the worktree. `head_oid` is recorded
- *   for traceability but is NOT required to equal the enclosing HEAD —
- *   that literal-HEAD contract was identified as inherently unsatisfiable
- *   (regenerating a tracked closure report changes HEAD while the bundle
- *   was bound to the prior HEAD). Bind through `tree_oid`, not through
- *   `head_oid`. This makes the subject-tree model stable across
- *   regenerations and across commits that touch the closure tooling.
+ *   Reports are tracked files. Hashing evidence against `HEAD^{tree}`
+ *   would create a cycle: regenerate the report, commit it, and the
+ *   binding tree changes. Instead, evidence binds against an *immutable
+ *   subject tree*: the current `HEAD`'s tree with self-referential
+ *   paths (`docs/factory/baseline-report.md`, `.factory/`) excluded.
+ *
+ *   The runner records this filtered tree as `evidence.subject_tree_oid`.
+ *   The renderer computes the same filtered tree from current `HEAD`
+ *   and demands equality. Because the tracked report and the detached
+ *   evidence are excluded, regenerating the report does not change the
+ *   subject tree, so binding is stable across report regenerations.
+ *
+ *   Evidence without `subject_tree_oid` (legacy bundles produced before
+ *   this correction) falls back to the old comparison:
+ *   `evidence.tree_oid === git rev-parse HEAD^{tree}`. Such legacy bundles
+ *   are still verified to be stale/non-bound unless rewritten.
  *
  * Every evidence dimension must hold simultaneously for the verdict to
  * not be FAIL on evidence grounds:
  *
  *   - evidence.json exists and was JSON-decodable
- *   - evidence.head_oid is syntactically well-formed (information only)
- *   - evidence.tree_oid matches current HEAD^{tree}
+ *   - subject binding matches (subject_tree_oid comparison, with
+ *     fallback for legacy bundles)
  *   - the single execution tree value equals evidence.tree_oid and the
- *     current HEAD^{tree} (executionTreeBound)
+ *     closing subject tree (executionTreeBound)
  *   - hash manifest is well-formed, contained under the evidence directory,
  *     duplicate-free, contains no absolute/traversal paths, and every
  *     declared payload path exists, matches its declared SHA-256, and is
@@ -51,6 +58,10 @@
  *     duplicates in either set, no malformed rows, and per-ID field
  *     equality (status, head/tree, exit_code, timeout, hashes,
  *     classification)
+ *
+ * Note: `evidence.head_oid` is *informational*. Its well-formedness is
+ * documented for traceability but does NOT drive closure — only the
+ * subject tree does. This is the CORRECTION07/CORRECTION08 model.
  */
 
 import { existsSync, readFileSync, readdirSync, lstatSync } from "node:fs";
@@ -112,47 +123,29 @@ export interface CommandRecordMismatch {
 export interface EvidenceView {
 	/** The evidence.json file existed and was JSON-decodable. */
 	exists: boolean;
-	/**
-	 * Information-only: evidence.head_oid is a syntactically valid 40-char
-	 * lowercase hex OID. This is NOT in the closure conjunction — the
-	 * subject binding is `tree_oid`, not `head_oid` (CORRECTION07 model).
-	 */
+	/** Information-only: evidence.head_oid is a syntactically valid 40-char lowercase hex OID. Not in the closure conjunction. */
 	headOidWellformed: boolean;
-	/** evidence.tree_oid === git rev-parse HEAD^{tree} on the closing snapshot. */
+	/** Subject binding holds: either `subject_tree_oid` matches `filteredTreeOidNow`, or `tree_oid` matches `treeOidNow` (legacy fallback). */
 	treeMatches: boolean;
+	/** Whether the bundle used the new subject-tree contract (true) or fell back to legacy literal `tree_oid`/`HEAD^{tree}` (false). */
+	subjectTreeContract: boolean;
 	/** Manifest is well-formed and every declared path matches its declared hash. */
 	hashManifestValid: boolean;
-	/** Paths declared in the manifest but absent on disk under the evidence dir. */
 	missingFiles: PathDiagnostic[];
-	/** On-disk non-control files in the evidence directory not declared in the manifest. */
 	unexpectedFiles: PathDiagnostic[];
-	/** Per-file hash mismatches, with both expected and actual values. */
 	hashMismatches: HashMismatch[];
-	/** Lines in hashes.sha256 that do not match the canonical `<sha>  <path>` format. */
 	malformedLines: MalformedLine[];
-	/** Paths that appear more than once in the manifest. */
 	duplicatePaths: DuplicatePath[];
-	/** All command-set checks pass (no missing/extra IDs, no duplicates, no per-record mismatches, no malformed rows). */
 	commandSetExact: boolean;
-	/** Distinct tree values appearing in evidence.commands[].tree_oid; must be exactly one. */
 	executionTrees: string[];
-	/** The single execution tree equals evidence.tree_oid AND current HEAD^{tree}. */
 	executionTreeBound: boolean;
-	/** Command IDs that appear more than once in evidence.commands[]. */
 	duplicateEvidenceCommandIds: DuplicatePath[];
-	/** Command IDs that appear more than once in executed_commands[]. */
 	duplicateExecutedCommandIds: DuplicatePath[];
-	/** Per-ID field comparison mismatches between evidence row and executed row. */
 	commandRecordMismatches: CommandRecordMismatch[];
-	/** Manifest paths that were rejected for being absolute or escaping the repo root. */
 	rejectedManifestPaths: PathDiagnostic[];
-	/** Manifest paths that resolve inside the repo but outside `evDirAbs`. */
 	outOfEvidenceDirPaths: PathDiagnostic[];
-	/** Count of evidence rows whose `id` is absent or non-string (silently dropped by set membership). */
 	malformedEvidenceCommandRows: number;
-	/** Count of executed rows whose `id` is absent or non-string. */
 	malformedExecutedCommandRows: number;
-	/** `JSON.parse` error from `evidence.json`, or `null` if it decoded. */
 	decodeError: string | null;
 }
 
@@ -182,16 +175,6 @@ export interface ClosureResult {
 
 // ---------- control files ---------------------------------------------------
 
-/**
- * Files that may exist on disk inside the evidence directory but are not
- * included in the payload manifest. The manifest itself, `hashes.sha256`,
- * is a control file: it documents the payloads it covers, but it is not
- * itself a payload. Excluding it from `unexpectedFiles` makes the bundle
- * satisfiable (CORRECTION06 R1).
- *
- * No broad `.tmp` / `.swp` exemption — strict closure rejects undeclared
- * debris.
- */
 export const CONTROL_FILES: ReadonlySet<string> = new Set(["hashes.sha256"]);
 
 const RECORD_COMPARE_FIELDS = [
@@ -206,7 +189,6 @@ const RECORD_COMPARE_FIELDS = [
 	"failure_classification",
 ] as const;
 
-/** Regex for a syntactically well-formed git SHA-1 OID. */
 const OID_PATTERN = /^[0-9a-f]{40}$/;
 
 // ---------- closure decision ------------------------------------------------
@@ -264,9 +246,6 @@ export function computeClosure(input: ClosureInput): ClosureResult {
  * True iff every dimension of the evidence view is satisfied. This is the
  * single source of truth used by both `computeClosure` and the tests; do
  * not re-derive `evidenceOk` ad-hoc elsewhere.
- *
- * CORRECTION07: `subjectMatches` is gone. The subject binding is the
- * tree, not the enclosing commit. The check is `treeMatches`.
  */
 export function isEvidenceOk(e: EvidenceView): boolean {
 	return (
@@ -295,20 +274,21 @@ export function isEvidenceOk(e: EvidenceView): boolean {
 // ---------- structured evidence check ---------------------------------------
 
 interface CheckEvidenceArgs {
-	/** The decoded evidence.json, or a parse-error sentinel if it was malformed. */
 	ev: { ok: boolean; value: unknown; error: string | null };
-	/** Raw text of hashes.sha256, or empty string when missing. */
 	hashesText: string;
-	/** Absolute path to the detached evidence directory. */
 	evDirAbs: string;
-	/** The executed_commands[] slice of verification-results.json. */
 	executedCmds: any[];
-	/** Repository root, used to resolve absolute manifest paths. */
 	rootAbs: string;
-	/** `git rev-parse HEAD` for the closing snapshot. */
 	headOidNow: string;
-	/** `git rev-parse HEAD^{tree}` for the closing snapshot. */
 	treeOidNow: string;
+	/**
+	 * The current filtered subject-tree OID (HEAD^{tree} minus
+	 * self-referential paths). If supplied, the binding subject is
+	 * `evidence.subject_tree_oid` and this must match. Falls back to
+	 * `treeOidNow` (HEAD^{tree}) when not supplied, or when evidence
+	 * lacks a `subject_tree_oid` field.
+	 */
+	filteredSubjectTreeOidNow?: string | null;
 }
 
 export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
@@ -320,12 +300,14 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		rootAbs,
 		headOidNow: _headOidNow,
 		treeOidNow,
+		filteredSubjectTreeOidNow = null,
 	} = args;
 
 	const out: EvidenceView = {
 		exists: ev.ok,
 		headOidWellformed: false,
 		treeMatches: false,
+		subjectTreeContract: false,
 		hashManifestValid: false,
 		missingFiles: [],
 		unexpectedFiles: [],
@@ -348,10 +330,24 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	const evObj = ev.ok && typeof ev.value === "object" && ev.value !== null ? (ev.value as any) : null;
 	if (!evObj) return out;
 
-	// Subject-tree binding (CORRECTION07): tree is the authority, not head.
 	out.headOidWellformed =
 		typeof evObj.head_oid === "string" && OID_PATTERN.test(evObj.head_oid);
-	out.treeMatches = typeof evObj.tree_oid === "string" && evObj.tree_oid === treeOidNow;
+
+	// Subject binding (CORRECTION08): prefer the new subject-tree contract.
+	const subjectTreeFromEvidence =
+		typeof evObj.subject_tree_oid === "string" ? evObj.subject_tree_oid : null;
+	const filteredTree =
+		typeof filteredSubjectTreeOidNow === "string" && filteredSubjectTreeOidNow.length > 0
+			? filteredSubjectTreeOidNow
+			: null;
+	if (subjectTreeFromEvidence && filteredTree) {
+		out.subjectTreeContract = true;
+		out.treeMatches = subjectTreeFromEvidence === filteredTree;
+	} else {
+		out.subjectTreeContract = false;
+		out.treeMatches =
+			typeof evObj.tree_oid === "string" && evObj.tree_oid === treeOidNow;
+	}
 
 	// Command-set: collect IDs and detect duplicates + per-record mismatches.
 	const evidenceIds = new Set<string>();
@@ -413,20 +409,22 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		out.malformedEvidenceCommandRows === 0 &&
 		out.malformedExecutedCommandRows === 0;
 
-	// Execution-tree binding: the single execution tree must equal both
-	// evidence.tree_oid AND the current closing tree.
-	const evTree = typeof evObj.tree_oid === "string" ? evObj.tree_oid : null;
+	// Execution-tree binding (CORRECTION08): the single execution tree
+	// value across evidence.commands must equal the bound subject, which
+	// is `evidence.subject_tree_oid` (CORRECTION08) or falls back to
+	// `evidence.tree_oid` (legacy CORRECTION07). The renderer-side
+	// `filteredSubjectTreeOidNow` is the comparison target for the
+	// `treeMatches` dimension above, not for the execution tree.
+	const subjectForBinding =
+		subjectTreeFromEvidence ?? (typeof evObj.tree_oid === "string" ? evObj.tree_oid : null);
 	const execTree = executionTrees.size === 1 ? Array.from(executionTrees)[0] : null;
-	out.executionTreeBound =
-		evTree !== null && execTree !== null && evTree === execTree && evTree === treeOidNow;
+	out.executionTreeBound = subjectForBinding !== null && execTree !== null && subjectForBinding === execTree;
 
 	// Hash manifest parse + per-line validity.
 	const parsed = parseManifest(hashesText);
 	out.malformedLines = parsed.malformed;
 	out.duplicatePaths = parsed.duplicates;
 
-	// Path existence + per-file hash verification, with containment to BOTH
-	// the repo root AND the evidence directory (CORRECTION07).
 	const missingFiles: PathDiagnostic[] = [];
 	const hashMismatches: HashMismatch[] = [];
 	const rejected: PathDiagnostic[] = [];
@@ -437,6 +435,7 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 			if (resolved.reason === "outside-evidence-dir") {
 				outOfEvDir.push({ path, reason: "outside-evidence-dir" });
 			} else {
+				// resolved.reason is "absolute" | "traversal"
 				rejected.push({ path, reason: resolved.reason });
 			}
 			continue;
@@ -467,8 +466,6 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	out.rejectedManifestPaths = rejected;
 	out.outOfEvidenceDirPaths = outOfEvDir;
 
-	// Unexpected files: any on-disk non-control, non-symlink file inside the
-	// evidence directory that the manifest doesn't acknowledge.
 	const unexpected = scanUnexpected(evDirAbs, parsed.declared);
 	const symlinks: PathDiagnostic[] = [];
 	for (const u of unexpected) {
@@ -491,7 +488,7 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 // ---------- public helpers (exported for tests) -----------------------------
 
 interface ParsedManifest {
-	declared: Map<string, string>; // path (evidence-dir-relative) -> expected sha256 (lowercase)
+	declared: Map<string, string>;
 	malformed: MalformedLine[];
 	duplicates: DuplicatePath[];
 }
@@ -530,16 +527,12 @@ export function parseManifest(text: string): ParsedManifest {
 	return { declared, malformed, duplicates };
 }
 
-/**
- * Evidence.json decoder result. `error` is non-null when JSON.parse threw.
- */
 export type EvidenceLoad = {
 	ok: boolean;
 	value: unknown;
 	error: string | null;
 };
 
-/** Decode evidence.json from disk; never throws. */
 export function loadEvidenceFile(path: string): EvidenceLoad {
 	if (!existsSync(path)) return { ok: false, value: null, error: "missing" };
 	try {
@@ -552,31 +545,28 @@ export function loadEvidenceFile(path: string): EvidenceLoad {
 
 // ---------- helpers ---------------------------------------------------------
 
-type ResolveResult =
+/**
+ * Discriminated union with `reason` ∈ the public `PathDiagnostic.reason`
+ * vocabulary. There is no separate internal sentinel.
+ */
+export type ResolveResult =
 	| { ok: true; abs: string; reason: null }
 	| {
 			ok: false;
 			abs: null;
-			reason: "rejected_absolute" | "rejected_traversal" | "outside-evidence-dir";
+			reason: "absolute" | "traversal" | "outside-evidence-dir";
 	  };
 
-/**
- * Resolve a manifest path against the evidence directory (CORRECTION07
- * P0 #1). Strict containment: declared paths must resolve inside
- * `evDirAbs`. Absolute paths and traversal-escaping paths are rejected.
- * Outside-evidence-dir-but-inside-repo paths are kept separate under
- * `outside-evidence-dir` so the renderer can distinguish them.
- */
 export function resolveEvidencePayloadPath(
 	evDirAbs: string,
 	rootAbs: string,
 	declared: string,
 ): ResolveResult {
 	if (typeof declared !== "string" || declared.length === 0) {
-		return { ok: false, abs: null, reason: "rejected_traversal" };
+		return { ok: false, abs: null, reason: "traversal" };
 	}
 	if (isAbsolute(declared)) {
-		return { ok: false, abs: null, reason: "rejected_absolute" };
+		return { ok: false, abs: null, reason: "absolute" };
 	}
 
 	const normalizedEvDir = resolve(evDirAbs);
@@ -590,7 +580,6 @@ export function resolveEvidencePayloadPath(
 		relToEvDir.startsWith(`..${sep}`) ||
 		isAbsolute(relToEvDir)
 	) {
-		// Distinguish "escapes repo entirely" from "inside repo, outside evDir".
 		const relToRoot = normalizeRelative(relative(normalizedRoot, abs));
 		if (
 			relToRoot === "" ||
@@ -598,7 +587,7 @@ export function resolveEvidencePayloadPath(
 			relToRoot.startsWith(`..${sep}`) ||
 			isAbsolute(relToRoot)
 		) {
-			return { ok: false, abs: null, reason: "rejected_traversal" };
+			return { ok: false, abs: null, reason: "traversal" };
 		}
 		return { ok: false, abs: null, reason: "outside-evidence-dir" };
 	}
@@ -623,7 +612,7 @@ function scanUnexpected(
 		if (!lst.isFile()) return;
 		const rel = normalizeRelative(relative(evDirAbs, abs));
 		if (rel.length === 0) return;
-		if (CONTROL_FILES.has(rel)) return; // control files exempt
+		if (CONTROL_FILES.has(rel)) return;
 		if (!declaredInside.has(rel)) {
 			out.push({ path: rel, reason: "unexpected" });
 		}

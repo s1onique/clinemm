@@ -1,27 +1,26 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01 — Work package (renderer) — CORRECTION07.
+ * ACT-CLINEMM-FORK-BASELINE01 — Work package (renderer) — CORRECTION08.
  *
  * Mechanical renderer of `docs/factory/baseline-report.md`. The closure
  * decision is delegated to `./baseline-closure.ts`, which exports pure,
  * independently-testable `checkEvidence` and `computeClosure` functions.
  *
- * CORRECTION05 fail-closed precedence was the seed: invalid evidence is a
- * hard FAIL rather than a fall-through PARTIAL. CORRECTION06 then added
- * control-file handling, execution-tree binding, per-record equality,
- * path containment, and symlink-aware checks. CORRECTION07 finalizes the
- * subject-tree binding model:
+ * CORRECTION08 binding model:
  *
- *   - the binding evidence is `tree_oid`, not `head_oid`. The report no
- *     longer demands literal enclosing-HEAD equality (which is
- *     unsatisfiable: regenerating the tracked report changes HEAD while
- *     the bundle is bound to the prior HEAD).
- *   - evidence.json is decoded via `loadEvidenceFile()`, which never
- *     throws; malformed JSON surfaces as a structured `decodeError`
- *     dimension, not a renderer crash.
- *   - manifest paths are evidence-directory-relative (containment
- *     beneath `evDirAbs`). Paths that resolve outside the evidence dir
- *     but inside the repo are surfaced via `outOfEvidenceDirPaths`.
+ *   The closure report is a tracked file. Hashing evidence against
+ *   `HEAD^{tree}` directly would create a self-referential cycle:
+ *   regenerate the report, commit it, and the binding tree changes.
+ *   The renderer computes a *filtered subject tree*: `HEAD`'s tree with
+ *   self-referential paths (`docs/factory/baseline-report.md`,
+ *   `.factory/`) excluded. That filtered tree is stable across report
+ *   regenerations and is what `checkEvidence` compares against
+ *   `evidence.subject_tree_oid`.
+ *
+ *   Legacy bundles without `subject_tree_oid` still fall back to the
+ *   CORRECTION07 comparison against `HEAD^{tree}` directly. Such bundles
+ *   are correctly reported as `FAIL` until rewritten by a runner that
+ *   implements the CORRECTION08 contract.
  *
  * Usage:
  *   bun factory/scripts/render-baseline-report.ts
@@ -30,9 +29,6 @@
  * imported (for tooling, type-checking, harnesses) without triggering the
  * side-effecting write path. Tests do not import this file; they import
  * `./baseline-closure.ts` directly.
- *
- * Output: atomic write to `docs/factory/baseline-report.md`. If stdout is
- * a pipe, the report is also emitted on stdout.
  */
 
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync } from "node:fs";
@@ -56,6 +52,20 @@ const ROOT = spawnSync("git", ["rev-parse", "--show-toplevel"], {
 const OUT = join(ROOT, "docs/factory/baseline-report.md");
 const OUT_TMP = OUT + ".tmp";
 
+/**
+ * Subject-tree self-references that must be excluded when computing
+ * the binding subject. The closure report itself is in this list;
+ * the detached evidence directory is too.
+ *
+ * CORRECTION08: the renderer asserts that the filtered tree
+ * containing these prefix-excluded entries is stable across
+ * regenerations and commits.
+ */
+const SUBJECT_TREE_EXCLUDES: ReadonlyArray<string> = [
+	"docs/factory/baseline-report.md",
+	".factory",
+];
+
 // ---------- main entry (only runs when invoked directly) --------------------
 
 if (import.meta.main) {
@@ -65,6 +75,7 @@ if (import.meta.main) {
 function main(): void {
 	const HEAD_OID_NOW = sh(["rev-parse", "HEAD"]);
 	const TREE_OID_NOW = sh(["rev-parse", "HEAD^{tree}"]);
+	const FILTERED_SUBJECT_TREE_OID_NOW = filteredSubjectTreeOid(ROOT);
 
 	const REPO = readJson(join(ROOT, "factory/inventories/repository.json"));
 	const ENV = readJson(join(ROOT, "factory/inventories/environment.json"));
@@ -81,9 +92,6 @@ function main(): void {
 		? readJson(join(ROOT, "factory/inventories/native-probes.json"))
 		: null;
 	const EVIDENCE_DIR = join(ROOT, ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01");
-	// CORRECTION07: loadEvidenceFile never throws on malformed JSON; it
-	// surfaces a structured decodeError so the renderer can produce
-	// diagnostics and the verdict can still be FAIL.
 	const EVIDENCE_LOAD = loadEvidenceFile(join(EVIDENCE_DIR, "evidence.json"));
 	const EVIDENCE_HASHES = fileExists(join(EVIDENCE_DIR, "hashes.sha256"))
 		? readFileSafe(join(EVIDENCE_DIR, "hashes.sha256"))
@@ -139,8 +147,6 @@ function main(): void {
 		.map((e: any) => e.id);
 	const failureClassCounts = countByKey(failCmds, "failure_classification");
 
-	// ---------- structured evidence integrity (CORRECTION07) -------------------
-
 	const evidenceView: EvidenceView = checkEvidence({
 		ev: EVIDENCE_LOAD,
 		hashesText: EVIDENCE_HASHES,
@@ -149,9 +155,8 @@ function main(): void {
 		rootAbs: ROOT,
 		headOidNow: HEAD_OID_NOW,
 		treeOidNow: TREE_OID_NOW,
+		filteredSubjectTreeOidNow: FILTERED_SUBJECT_TREE_OID_NOW,
 	});
-
-	// ---------- closure decision (FAIL-closed) ---------------------------------
 
 	const closure = computeClosure({
 		evidence: evidenceView,
@@ -169,8 +174,6 @@ function main(): void {
 		r7Satisfied: false, // R7: cross-platform CI evidence
 		r16Satisfied: false, // R16: source-derived verification discovery
 	});
-
-	// ---------- informational table values -------------------------------------
 
 	const fileSize = {
 		all: FILE_SIZES_SUMMARY.all_tracked_files,
@@ -190,12 +193,15 @@ function main(): void {
 
 	const probeRows = renderProbes(PROBES);
 
-	// ---------- render --------------------------------------------------------
-
 	const evTopValue = EVIDENCE_LOAD.ok ? (EVIDENCE_LOAD.value as any) : null;
+	const evidenceSubjectTreeOid =
+		evTopValue && typeof evTopValue === "object" && typeof evTopValue.subject_tree_oid === "string"
+			? evTopValue.subject_tree_oid
+			: null;
+
 	const md = `# ACT-CLINEMM-FORK-BASELINE01 — Baseline report (auto-generated)
 
-> Generated by \`factory/scripts/render-baseline-report.ts\` (CORRECTION07).
+> Generated by \`factory/scripts/render-baseline-report.ts\` (CORRECTION08).
 > Every numeric and structural claim in this document is derived from the
 > inventoried JSON/CSV files; the renderer imports
 > \`./baseline-closure.ts\` which provides the fail-closed
@@ -228,19 +234,39 @@ ${closureRationale(closure, {
 		evidence: evidenceView,
 	})}
 
-## Subject-tree binding model (CORRECTION07)
+## Subject-tree binding model (CORRECTION08)
 
-The detached evidence bundle binds to the worktree through \`tree_oid\`,
-not through \`head_oid\`. This avoids the unsatisfiable cycle where
-regenerating a tracked closure report changes HEAD while the bundle was
-recorded against the prior HEAD.
+The detached evidence bundle binds to the worktree through a
+**non-self-referential subject tree** that excludes the closure
+report itself and the detached evidence directory:
 
-- \`evidence.tree_oid\` must equal \`git rev-parse HEAD^{tree}\` on the
-  closing snapshot.
-- The single execution tree value across \`evidence.commands[*].tree_oid\`
-  must also equal \`HEAD^{tree}\`.
-- \`evidence.head_oid\` is recorded for traceability but is informational
-  only and does not drive closure.
+\`\`\`text
+subject tree OID = filteredSubjectTreeOid(HEAD \\ SUBJECT_TREE_EXCLUDES)
+\`\`\`
+
+\`SUBJECT_TREE_EXCLUDES\`: ${SUBJECT_TREE_EXCLUDES.map((p) => `\`${p}\``).join(", ")}.
+
+The runner records this filtered tree as \`evidence.subject_tree_oid\`.
+The renderer computes it again from current \`HEAD\` and demands
+equality. Because the tracked report and the detached evidence are
+excluded, regenerating the report does **not** change the subject
+tree, so binding is stable across report regenerations. The cycle
+\`regenerate → commit → HEAD^{tree} changes → evidence stale\` is
+broken by construction.
+
+Legacy bundles (without \`subject_tree_oid\`) fall back to comparing
+\`evidence.tree_oid\` to \`git rev-parse HEAD^{tree}\`. Such bundles
+remain correctly reported as \`FAIL\` until rewritten by a runner
+implementing the CORRECTION08 contract.
+
+Reported identity values:
+
+\`\`\`
+subject_tree_oid (current worktree, filtered): ${FILTERED_SUBJECT_TREE_OID_NOW ?? "n/a"}
+subject_tree_oid (recorded in evidence):       ${evidenceSubjectTreeOid ?? "(not recorded)"}
+git rev-parse HEAD:                            ${HEAD_OID_NOW}
+git rev-parse HEAD^{tree}:                    ${TREE_OID_NOW}
+\`\`\`
 
 ## Upstream and fork identity (from \`factory/inventories/repository.json\`)
 
@@ -321,7 +347,7 @@ ${
 	unknownFailures.length > 0
 		? `### UNKNOWN failures (block ACT closure)
 
-${unknownFailures.map((id) => `- \`${id}\``).join("\n")}
+${unknownFailures.map((id: string) => `- \`${id}\``).join("\n")}
 
 Per the runner's own policy (\`factory/scripts/run-verification.ts: classifyFailure()\`), a failure classified as \`UNKNOWN\` blocks ACT closure. Reproduce the UNKNOWN against the canonical clean install (Bun 1.3.13, Node 22, frozen lockfile) and assign one of \`TOOLCHAIN-DRIFT\`, \`NETWORK-DEPENDENT\`, \`INSTALL-INCOMPLETE\`, or \`UPSTREAM-REPRODUCIBLE\`.
 `
@@ -414,6 +440,46 @@ function sh(args: string[]): string {
 	return (r.stdout ?? "").toString().trim();
 }
 
+/**
+ * Compute a deterministic OID for `HEAD`'s tree minus self-referential
+ * paths. The exclusion list intentionally contains the closure report
+ * itself plus the detached evidence directory.
+ *
+ * Pipeline: `git ls-tree -r HEAD` → filter → `git mktree --batch`.
+ *
+ * Returns `null` if either `git ls-tree` or `git mktree` fails (e.g.,
+ * head detached, or very old git without `mktree`).
+ */
+function filteredSubjectTreeOid(root: string): string | null {
+	const ls = spawnSync("git", ["ls-tree", "-r", "HEAD"], {
+		encoding: "utf8",
+		cwd: root,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	if (ls.status !== 0) return null;
+	const filtered = (ls.stdout ?? "")
+		.split("\n")
+		.filter(Boolean)
+		.filter((line) => {
+			const idx = line.indexOf("\t");
+			const path = idx >= 0 ? line.slice(idx + 1) : "";
+			return !SUBJECT_TREE_EXCLUDES.some(
+				(ex) => path === ex || path.startsWith(ex + "/"),
+			);
+		});
+	if (filtered.length === 0) return null;
+	const input = filtered.join("\n") + "\n";
+	const mk = spawnSync("git", ["mktree", "--batch"], {
+		encoding: "utf8",
+		cwd: root,
+		input,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	if (mk.status !== 0) return null;
+	const out = (mk.stdout ?? "").trim();
+	return out.length > 0 ? out : null;
+}
+
 function readJson(p: string): any {
 	if (!existsSync(p)) throw new Error(`missing required inventory: ${p}`);
 	return JSON.parse(readFileSync(p, "utf8"));
@@ -487,7 +553,7 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 	}
 
 	const mismatches: string[] = [];
-	if (!view.treeMatches) mismatches.push(`tree: evidence=${ev.tree_oid} git=${treeNow}`);
+	if (!view.treeMatches) mismatches.push(`subject tree: bundle binding does not match current worktree filtered tree`);
 	const mismatchText = mismatches.length > 0 ? mismatches.join("; ") : "(none)";
 
 	const dimSummaryParts: (string | null)[] = [
@@ -523,6 +589,7 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 		view.rejectedManifestPaths.length > 0
 			? `rejected_paths=${view.rejectedManifestPaths.length}`
 			: null,
+		view.subjectTreeContract ? null : "subject_tree_contract=legacy",
 	];
 	const dimSummary = dimSummaryParts.filter(Boolean).join(", ") || "(none)";
 
@@ -536,9 +603,11 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 	let rows = `| Field | Value |\n| --- | --- |\n`;
 	rows += `| head_oid (informational) | \`${ev.head_oid}\` |\n`;
 	rows += `| head_oid well-formed | ${view.headOidWellformed} |\n`;
-	rows += `| tree_oid (subject binding) | \`${ev.tree_oid}\` |\n`;
-	rows += `| tree matches current tree | ${view.treeMatches} |\n`;
-	rows += `| current worktree tree | \`${treeNow}\` |\n`;
+	rows += `| tree_oid (legacy binding) | \`${ev.tree_oid}\` |\n`;
+	rows += `| subject_tree_oid (CORRECTION08) | \`${ev.subject_tree_oid ?? "(not recorded)"}\` |\n`;
+	rows += `| subject tree contract | ${view.subjectTreeContract ? "active (CORRECTION08)" : "legacy (CORRECTION07 fallback)"} |\n`;
+	rows += `| tree binding holds | ${view.treeMatches} |\n`;
+	rows += `| current worktree HEAD^{tree} | \`${treeNow}\` |\n`;
 	rows += `| hash manifest valid | ${view.hashManifestValid} |\n`;
 	rows += `| command-set exact | ${view.commandSetExact} |\n`;
 	rows += `| execution trees | ${treesRender} |\n`;
@@ -610,11 +679,11 @@ function evidenceRow(view: EvidenceView, ev: any, headNow: string, treeNow: stri
 	}
 	if (view.executionTrees.length > 1) {
 		diagnostics += `\n### Mixed execution trees\n\n`;
-		diagnostics += `The runner executed commands under ${view.executionTrees.length} distinct tree values: ${view.executionTrees.join(", ")}. A valid bundle has exactly one tree — multi-tree evidence is treated as invalid by CORRECTION07.\n`;
+		diagnostics += `The runner executed commands under ${view.executionTrees.length} distinct tree values: ${view.executionTrees.join(", ")}. A valid bundle has exactly one tree — multi-tree evidence is treated as invalid by CORRECTION08.\n`;
 	}
 	if (view.executionTrees.length === 1 && !view.executionTreeBound) {
 		diagnostics += `\n### Unbound execution tree\n\n`;
-		diagnostics += `The single execution tree \`${view.executionTrees[0]}\` does not match evidence.tree_oid (\`${ev.tree_oid}\`) and/or the current HEAD^{tree} (\`${treeNow}\`). Execution evidence must be bound to the closing snapshot tree.\n`;
+		diagnostics += `The single execution tree \`${view.executionTrees[0]}\` does not match the bound subject tree. Execution evidence must be bound to the closing subject tree.\n`;
 	}
 	if (!view.commandSetExact) {
 		diagnostics += `\n### Command-set mismatch\n\n`;
@@ -641,7 +710,7 @@ function closureRationale(
 ): string {
 	const lines: string[] = [];
 	if (c.verdict === "FAIL") {
-		lines.push("Closure is **FAIL** under the CORRECTION07 fail-closed policy.");
+		lines.push("Closure is **FAIL** under the CORRECTION08 fail-closed policy.");
 		lines.push("");
 		lines.push(`**Reason codes:** \`${c.reasonCodes.join("`, `")}\``);
 		lines.push("");
@@ -650,7 +719,8 @@ function closureRationale(
 			lines.push("Detached evidence does not satisfy the integrity dimensions:");
 			const e = p.evidence;
 			lines.push(`- exists: \`${e.exists}\``);
-			lines.push(`- tree matches current tree: \`${e.treeMatches}\``);
+			lines.push(`- tree binding holds: \`${e.treeMatches}\``);
+			lines.push(`- subject tree contract: \`${e.subjectTreeContract}\``);
 			lines.push(`- hash manifest valid: \`${e.hashManifestValid}\``);
 			lines.push(`- command-set exact: \`${e.commandSetExact}\``);
 			lines.push(
@@ -724,7 +794,7 @@ function closureDecisionText(c: {
 		return `Closure is **PASS** — every precondition is satisfied and the machine evidence is complete.`;
 	}
 	if (c.verdict === "FAIL") {
-		return `Closure is **FAIL** — fail-closed policy: evidence is invalid (stale tree, hash-invalid manifest, outside-evidence-dir payload, malformed JSON/rows, symlink, multi-tree, command-set mismatch) or UNKNOWN-classified failures are present. The next correction must fix the underlying evidence, not relabel the report. Reason codes: \`${c.reasonCodes.join("`, `")}\`.`;
+		return `Closure is **FAIL** — fail-closed policy: evidence is invalid (stale subject tree, hash-invalid manifest, outside-evidence-dir payload, malformed JSON/rows, symlink, multi-tree, command-set mismatch) or UNKNOWN-classified failures are present. The next correction must fix the underlying evidence, not relabel the report. Reason codes: \`${c.reasonCodes.join("`, `")}\`.`;
 	}
 	return `Closure is **PARTIAL** — evidence is internally valid but at least one declared precondition (R4, R5, R6, R7, R16, mandatory pass rate, or affected-scope pass rate) remains to be satisfied. Reason codes: \`${c.reasonCodes.join("`, `")}\`.`;
 }
@@ -757,13 +827,13 @@ function successorBlock(
 		"6. Verification discovery is replaced with a real source-derived scan.",
 	);
 	lines.push(
-		"7. Focused tests are added for the runner, verifier, and renderer.",
+		"7. Focused tests are added for the runner, verifier, and renderer (the renderer's tests must capture their own invocation into the next evidence bundle).",
 	);
 	lines.push(
 		"8. The native-probe inventory is populated for P1–P5 (file_format, architecture, sha256).",
 	);
 	lines.push(
-		"9. The detached evidence bundle is rebuilt against the closing commit. The runner must emit **evidence-directory-relative** manifest paths (e.g., `evidence.json`, `commands/build-sdk.stdout`) and include the per-command `*.metadata.json` files in the payload manifest. The bundle must satisfy the CORRECTION07 dimensions (subject-tree binding, evDir containment, malformed-JSON robustness, malformed-row counters). The next bundle's `bun test factory/scripts/render-baseline-report.test.ts` invocation must also be captured as a runner command (P1c binding).",
+		"9. The detached evidence bundle is rebuilt against the closing commit **using the CORRECTION08 subject-tree contract**: the runner emits `evidence.subject_tree_oid = filteredSubjectTreeOid(HEAD)` (HEAD minus `docs/factory/baseline-report.md` and `.factory/`), the payload manifest is **evidence-directory-relative**, and every per-command `*.metadata.json` file is declared in the manifest. Until then, verify the production evidence bundle as a legacy subject-bundle (it correctly fails).",
 	);
 	lines.push("");
 	lines.push(
