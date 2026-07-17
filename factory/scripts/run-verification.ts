@@ -453,22 +453,12 @@ async function finalizeEvidence(): Promise<void> {
 	const results = JSON.parse(readFileSync(resultsPath, "utf8"));
 	const executed: any[] = results.executed_commands ?? [];
 	const skipped: any[] = results.skipped_commands ?? [];
-	const host = hostClass();
 
-	// Re-write verification-results.json with the current HEAD/tree for the
-	// commands that have it recorded. The executed commands' timestamps and
-	// hashes are preserved; only head_oid/tree_oid/host are refreshed.
-	for (const e of executed) {
-		const { head, tree } = headTreeNow();
-		e.head_oid = head;
-		e.tree_oid = tree;
-		e.environment_sha256 = envSha();
-	}
-	results.executed_commands = executed;
-	results.skipped_commands = skipped;
-	results.host = host;
-	results.executed_at = new Date().toISOString();
-	writeFileSync(resultsPath, JSON.stringify(results, null, "\t") + "\n", "utf8");
+	// Do NOT rewrite factory/inventories/verification-results.json on the
+	// finalization pass. That file is a stable historical record; the
+	// detached evidence bundle below is the authoritative final binding to
+	// HEAD/tree. Re-writing would create an OID-update cycle that prevents
+	// `git status` from settling at a clean post-finalize state.
 
 	// Rebuild the detached evidence bundle.
 	const detachedDir = join(ROOT, DETACHED_DIR);
