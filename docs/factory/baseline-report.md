@@ -149,7 +149,7 @@ Affected-scope on primary host: pass=0, fail=3, applicable=4.
 | head matches current HEAD | false |
 | tree matches current tree | false |
 | hashes.sha256 verified | false |
-| mismatches | head: evidence=e4e98cf0c1ae7ba8f4720979300e075308d5d558 git=084b5ad83a3fdd661de6a500844007baa7023e36; tree: evidence=34bbccae1650af529b0aa497510c1a3aa88e4231 git=1c89b218fc6c55889bf6a4e2c45557f7bd165c07 |
+| mismatches | head: evidence=e4e98cf0c1ae7ba8f4720979300e075308d5d558 git=805554038cfacefce290cbd8afb94fc311436a57; tree: evidence=34bbccae1650af529b0aa497510c1a3aa88e4231 git=19d2cfd0b8207264765392eca5babd681fc10612 |
 
 ## Production-code identity
 
