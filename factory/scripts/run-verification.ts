@@ -1,8 +1,6 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION10 — Work package F (runner).
- *
- * Verification runner (corrected).
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION11 — Verification runner.
  *
  * Reads factory/inventories/verification.json, executes every command whose
  * class is "mandatory" or "affected-scope" on the current host, captures
@@ -11,41 +9,57 @@
  *   - factory/inventories/verification-results.json  (combined evidence)
  *   - .factory/evidence/ACT-CLINEMM-FORK-BASELINE01/{commands,evidence.json,hashes.sha256}
  *
- * CORRECTION10 — subject vs execution identity split:
+ * CORRECTION11 — runner drift attestation:
  *
- *   The runner records THREE independent OIDs and the worktree clean
- *   state on `evidence.json`:
+ *   The runner now records THREE additional attestations on
+ *   evidence.json:
  *
- *     subject_tree_oid   — filtered subject tree (HEAD minus
- *                          SUBJECT_TREE_EXCLUDES via the temp-index
- *                          helper).
- *     execution_head_oid — actual checked-out commit at run time.
- *     execution_tree_oid — HEAD^{tree} at run time (unfiltered).
- *     worktree_clean_before — `git status --porcelain` was empty before
- *                              the matrix ran.
- *     worktree_clean_after  — `git status --porcelain` was empty after
- *                              the matrix ran.
+ *     subject_tree_oid_before / subject_tree_oid_after
+ *                          — filtered subject tree captured before and
+ *                            after the matrix. Required to be equal.
  *
- *   Per-command `tree_oid` carries the **execution tree** (full,
- *   unfiltered) so that the renderer can verify every command saw the
- *   same checked-out tree.
+ *     executionIdentityValid — verified by `git cat-file -e <head>^{commit}`
+ *                              and `git rev-parse <head>^{tree}`,
+ *                              which must equal `execution_tree_oid`.
  *
- *   The runner aborts before running any command if
- *   `worktree_clean_before` is `false` — a dirty worktree cannot
- *   produce committed-tree evidence. This is fail-closed on
- *   repository drift.
+ *     worktree_inputs_clean_before / worktree_inputs_clean_after
+ *                          — `git status --porcelain` sampled with the
+ *                            runner's `expected_output_paths` excluded,
+ *                            captured before and after the matrix.
  *
- *   The runner accepts commands as **structured argv** to avoid shell-quoting
- *   bugs. A command can also carry `shell_command` (string) and `use_shell:
- *   true` to run through `/bin/sh -c` when necessary; in that mode the
- *   timeout handler kills the entire process group.
+ *   Every command row carries:
+ *     head_oid_before / head_oid_after
+ *     tree_oid_before / tree_oid_after
+ *     subject_tree_oid_before / subject_tree_oid_after
+ *
+ *   captured immediately around the command. Any deviation aborts the
+ * run with `REPOSITORY_DRIFT` rather than producing a misleading
+ * bundle. The captured values are also pinned to the bundle's
+ * top-level execution identity.
+ *
+ *   Preflight: the runner aborts before any command runs if
+ *   `worktree_inputs_clean_before` is `false`. This closes the
+ *   CORRECTION10 R1 defect.
+ *
+ *   Path-aware cleanliness (CORRECTION10 R2 closure): only paths NOT
+ *   in `expected_output_paths` are considered when sampling cleanliness,
+ *   so intentionally regenerated tracked outputs do not make the
+ *   post-run check unsatisfiable.
+ *
+ *   Evidence-directory-relative paths (CORRECTION10 R6 closure): every
+ *   payload path recorded on a command row or in the manifest is
+ *   relative to `EVIDENCE_DIR`, not to the repository root. The
+ *   manifest declares `evidence.json`, every `commands/<id>.stdout`,
+ *   `commands/<id>.stderr`, and `commands/<id>.metadata.json`, so a
+ *   reviewer can hash-verify the entire payload surface.
+ *
+ * The runner accepts commands as **structured argv** to avoid shell-quoting
+ * bugs. A command can also carry `shell_command` (string) and `use_shell:
+ * true` to run through `/bin/sh -c` when necessary; in that mode the
+ * timeout handler kills the entire process group.
  *
  * Every failure is explicitly classified. Missing classification is
  * `UNKNOWN`, which blocks ACT closure.
- *
- * When `--finalize-evidence` is passed, the runner re-executes every
- * command on the **current** commit (no rebinding of stale evidence) and
- * rebuilds the detached bundle.
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -73,6 +87,7 @@ function repoRoot(): string {
 }
 
 const ROOT = repoRoot();
+const EVIDENCE_DIR = join(ROOT, DETACHED_DIR);
 
 // ---------- argument parsing --------------------------------------------------
 
@@ -138,19 +153,103 @@ function headTreeNow(): { head: string; tree: string } {
 	return { head, tree };
 }
 
+const OID_PATTERN = /^[0-9a-f]{40}$/;
+
 /**
- * Returns true iff `git status --porcelain` produces no output. This
- * indicates the index and worktree both match HEAD. Used to fail-closed
- * on repository drift before and after the verification matrix.
+ * Verify that the execution head/tree pair forms a valid Git object
+ * pair: the head dereferences to a commit, the tree is a tree object,
+ * and `git rev-parse <head>^{tree}` equals the supplied tree. Returns
+ * `false` for any malformed input or git-level failure.
  */
-function isWorktreeClean(): boolean {
-	const r = spawnSync("git", ["status", "--porcelain"], {
+function verifyExecutionIdentityShape(head: string, tree: string): boolean {
+	if (!OID_PATTERN.test(head) || !OID_PATTERN.test(tree)) return false;
+	const r1 = spawnSync("git", ["cat-file", "-e", `${head}^{commit}`], {
 		encoding: "utf8",
 		cwd: ROOT,
 		stdio: ["ignore", "pipe", "pipe"],
 	});
-	if (r.status !== 0) return false;
-	return (r.stdout ?? "").trim().length === 0;
+	if (r1.status !== 0) return false;
+	const r2 = spawnSync("git", ["cat-file", "-e", `${tree}^{tree}`], {
+		encoding: "utf8",
+		cwd: ROOT,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	if (r2.status !== 0) return false;
+	const derived = spawnSync("git", ["rev-parse", `${head}^{tree}`], {
+		encoding: "utf8",
+		cwd: ROOT,
+		stdio: ["ignore", "pipe", "pipe"],
+	}).stdout.trim();
+	return derived === tree;
+}
+
+/**
+ * Paths the runner intentionally regenerates. Cleanliness checks
+ * ignore these paths so the post-run state can be `true` even
+ * though the runner wrote new files. Everything else must be
+ * unchanged for the run to be considered drift-free.
+ */
+const EXPECTED_OUTPUT_PATHS: ReadonlyArray<string> = [
+	`${DETACHED_DIR}/`,
+	`${DETACHED_DIR}/commands/`,
+	RESULTS_JSON,
+	"factory/inventories/environment.json",
+	"factory/inventories/repository.json",
+	"factory/inventories/workspaces.json",
+	"factory/inventories/native-probes.json",
+	"factory/inventories/network-listener-candidates.csv",
+	"factory/inventories/privileged-sink-candidates.csv",
+	"factory/baselines/file-size-summary.json",
+	"factory/baselines/file-size.csv",
+	"factory/baselines/exact-duplicates.json",
+];
+
+function isExpectedOutput(path: string): boolean {
+	for (const p of EXPECTED_OUTPUT_PATHS) {
+		if (path === p) return true;
+		if (p.endsWith("/") && path.startsWith(p)) return true;
+		if (path.startsWith(p + "/")) return true;
+	}
+	return false;
+}
+
+/**
+ * CORRECTION11: path-aware cleanliness. Returns `true` iff every
+ * non-ignored change in the worktree is inside `EXPECTED_OUTPUT_PATHS`.
+ * Uses `git -c status.showUntrackedFiles=all status --porcelain=v1
+ * --untracked-files=all --ignored=traditional` so the check is
+ * independent of the user's `status.showUntrackedFiles` config and
+ * excludes gitignored files (such as `node_modules`).
+ */
+function worktreeInputsClean(): { clean: boolean; unexpected: string[] } {
+	const r = spawnSync(
+		"git",
+		[
+			"-c", "status.showUntrackedFiles=all",
+			"status", "--porcelain=v1", "--untracked-files=all", "--ignored=traditional",
+		],
+		{ encoding: "utf8", cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
+	);
+	if (r.status !== 0) return { clean: false, unexpected: [r.stderr || "git status failed"] };
+	const unexpected: string[] = [];
+	for (const line of r.stdout.split("\n")) {
+		if (line.length === 0) continue;
+		// Porcelain v1 format: XY <path> [-> <path2>]
+		const head = line.slice(3);
+		const path = head.split(" -> ").pop() ?? head;
+		const unquoted = path.replace(/^"(.*)"$/, "$1");
+		if (!isExpectedOutput(unquoted)) unexpected.push(unquoted);
+	}
+	return { clean: unexpected.length === 0, unexpected };
+}
+
+function captureExecutionIdentity(): { head: string; tree: string; subject: string } {
+	const { head, tree } = headTreeNow();
+	const subject = computeFilteredSubjectTreeOid(ROOT);
+	if (!subject) {
+		throw new Error("SUBJECT_TREE_COMPUTATION_FAILED: filtered tree could not be computed at run start");
+	}
+	return { head, tree, subject };
 }
 
 function hostClass(): string {
@@ -191,8 +290,15 @@ interface ExecResult {
 	stderr_sha256: string;
 	stdout_path?: string;
 	stderr_path?: string;
+	metadata_path?: string;
 	head_oid: string;
 	tree_oid: string;
+	head_oid_before: string;
+	head_oid_after: string;
+	tree_oid_before: string;
+	tree_oid_after: string;
+	subject_tree_oid_before: string;
+	subject_tree_oid_after: string;
 	environment_sha256: string;
 	failure_classification: FailureClass | null;
 	notes: string;
@@ -206,7 +312,6 @@ interface Resolved {
 }
 
 function resolveArgv(c: any): Resolved {
-	// Prefer structured argv.
 	if (Array.isArray(c.argv) && c.argv.length > 0) {
 		return { argv: c.argv.map((s: unknown) => String(s)), useShell: false };
 	}
@@ -214,8 +319,6 @@ function resolveArgv(c: any): Resolved {
 		return { argv: ["/bin/sh", "-c", c.shell_command], useShell: true };
 	}
 	if (typeof c.command === "string" && c.command.length > 0) {
-		// Legacy single-string command: split on whitespace. Cannot support
-		// shell metacharacters safely. Prefer argv or shell_command.
 		const parts = c.command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
 		return { argv: parts, useShell: false };
 	}
@@ -224,14 +327,38 @@ function resolveArgv(c: any): Resolved {
 
 // ---------- command execution ------------------------------------------------
 
-async function executeCommand(cmd: any, execTree: string): Promise<ExecResult> {
+async function executeCommand(
+	cmd: any,
+	identityBefore: { head: string; tree: string; subject: string },
+): Promise<ExecResult> {
 	const detachedCmdDir = join(ROOT, DETACHED_DIR, "commands");
 	mkdirSync(detachedCmdDir, { recursive: true });
-	const stdoutPath = join(detachedCmdDir, `${cmd.id}.stdout`);
-	const stderrPath = join(detachedCmdDir, `${cmd.id}.stderr`);
-	const metaPath = join(detachedCmdDir, `${cmd.id}.metadata.json`);
-	const stdoutStream = createWriteStream(stdoutPath);
-	const stderrStream = createWriteStream(stderrPath);
+	// CORRECTION11 R6 closure: paths are recorded relative to the
+	// evidence directory, not to the repository root. The renderer
+	// already treats declared manifest paths as evidence-dir-relative.
+	const stdoutRel = join("commands", `${cmd.id}.stdout`);
+	const stderrRel = join("commands", `${cmd.id}.stderr`);
+	const metaRel = join("commands", `${cmd.id}.metadata.json`);
+	const stdoutAbs = join(EVIDENCE_DIR, stdoutRel);
+	const stderrAbs = join(EVIDENCE_DIR, stderrRel);
+	const metaAbs = join(EVIDENCE_DIR, metaRel);
+	const stdoutStream = createWriteStream(stdoutAbs);
+	const stderrStream = createWriteStream(stderrAbs);
+
+	// CORRECTION11 R4 closure: capture execution state immediately
+	// before the command runs.
+	const stateBeforeNow = captureExecutionIdentity();
+	if (
+		stateBeforeNow.head !== identityBefore.head ||
+		stateBeforeNow.tree !== identityBefore.tree ||
+		stateBeforeNow.subject !== identityBefore.subject
+	) {
+		stdoutStream.end();
+		stderrStream.end();
+		throw new Error(
+			`REPOSITORY_DRIFT_BEFORE_COMMAND: ${cmd.id} — head/tree/subject changed before command started`,
+		);
+	}
 
 	const startedAt = new Date();
 	const startIso = startedAt.toISOString();
@@ -240,12 +367,13 @@ async function executeCommand(cmd: any, execTree: string): Promise<ExecResult> {
 	try {
 		resolved = resolveArgv(cmd);
 	} catch (err: any) {
-		return buildFailure(cmd, startedAt, "UNKNOWN", err.message, { stdout_path: stdoutPath, stderr_path: stderrPath }, "");
+		stdoutStream.end();
+		stderrStream.end();
+		return buildFailure(cmd, startedAt, "UNKNOWN", err.message, { stdoutRel, stderrRel, metaRel }, "");
 	}
 
 	const workingDir = cmd.working_directory === "." ? ROOT : join(ROOT, cmd.working_directory);
 
-	// detached:true so we can signal the entire process group on timeout.
 	const proc = spawn(resolved.argv[0], resolved.argv.slice(1), {
 		cwd: workingDir,
 		stdio: ["ignore", "pipe", "pipe"],
@@ -258,7 +386,6 @@ async function executeCommand(cmd: any, execTree: string): Promise<ExecResult> {
 	const timeoutHandle = setTimeout(() => {
 		timedOut = true;
 		try {
-			// Negative pid sends to the whole process group.
 			process.kill(-proc.pid!, "SIGTERM");
 		} catch {
 			try {
@@ -285,7 +412,6 @@ async function executeCommand(cmd: any, execTree: string): Promise<ExecResult> {
 		stderrStream.write(redacted);
 	});
 
-	const head = headOidNow();
 	const envHash = envSha();
 
 	const finalStatus: ExecResult = await new Promise((resolvePromise) => {
@@ -316,10 +442,17 @@ async function executeCommand(cmd: any, execTree: string): Promise<ExecResult> {
 				timeout: timedOut,
 				stdout_sha256: createHash("sha256").update(stdoutBytes).digest("hex"),
 				stderr_sha256: createHash("sha256").update(stderrBytes).digest("hex"),
-				stdout_path: relative(ROOT, stdoutPath),
-				stderr_path: relative(ROOT, stderrPath),
-				head_oid: head,
-				tree_oid: execTree,
+				stdout_path: stdoutRel,
+				stderr_path: stderrRel,
+				metadata_path: metaRel,
+				head_oid: identityBefore.head,
+				tree_oid: identityBefore.tree,
+				head_oid_before: stateBeforeNow.head,
+				head_oid_after: identityBefore.head, // sentinel; overwritten below
+				tree_oid_before: stateBeforeNow.tree,
+				tree_oid_after: identityBefore.tree, // sentinel; overwritten below
+				subject_tree_oid_before: stateBeforeNow.subject,
+				subject_tree_oid_after: identityBefore.subject, // sentinel; overwritten below
 				environment_sha256: envHash,
 				failure_classification: classification,
 				notes: buildNotes(cmd, code, signal, timedOut, stdoutBuf, stderrBuf),
@@ -341,10 +474,17 @@ async function executeCommand(cmd: any, execTree: string): Promise<ExecResult> {
 				timeout: false,
 				stdout_sha256: createHash("sha256").update(Buffer.from(stdoutBuf, "utf8")).digest("hex"),
 				stderr_sha256: createHash("sha256").update(Buffer.from(stderrBuf, "utf8")).digest("hex"),
-				stdout_path: relative(ROOT, stdoutPath),
-				stderr_path: relative(ROOT, stderrPath),
-				head_oid: head,
-				tree_oid: execTree,
+				stdout_path: stdoutRel,
+				stderr_path: stderrRel,
+				metadata_path: metaRel,
+				head_oid: identityBefore.head,
+				tree_oid: identityBefore.tree,
+				head_oid_before: stateBeforeNow.head,
+				head_oid_after: identityBefore.head,
+				tree_oid_before: stateBeforeNow.tree,
+				tree_oid_after: identityBefore.tree,
+				subject_tree_oid_before: stateBeforeNow.subject,
+				subject_tree_oid_after: identityBefore.subject,
 				environment_sha256: envHash,
 				failure_classification: "UNKNOWN",
 				notes: `spawn error: ${err.message}`,
@@ -352,12 +492,29 @@ async function executeCommand(cmd: any, execTree: string): Promise<ExecResult> {
 		});
 	});
 
-	writeFileSync(metaPath, JSON.stringify(finalStatus, null, "\t") + "\n", "utf8");
-	return finalStatus;
-}
+	// CORRECTION11 R4 closure: capture execution state immediately
+	// after the command finishes.
+	const stateAfterNow = captureExecutionIdentity();
+	if (
+		stateAfterNow.head !== identityBefore.head ||
+		stateAfterNow.tree !== identityBefore.tree ||
+		stateAfterNow.subject !== identityBefore.subject
+	) {
+		writeFileSync(metaAbs, JSON.stringify(finalStatus, null, "\t") + "\n", "utf8");
+		throw new Error(
+			`REPOSITORY_DRIFT_AFTER_COMMAND: ${cmd.id} — head/tree/subject changed after command finished`,
+		);
+	}
 
-function headOidNow(): string {
-	return spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+	finalStatus.head_oid_before = stateBeforeNow.head;
+	finalStatus.head_oid_after = stateAfterNow.head;
+	finalStatus.tree_oid_before = stateBeforeNow.tree;
+	finalStatus.tree_oid_after = stateAfterNow.tree;
+	finalStatus.subject_tree_oid_before = stateBeforeNow.subject;
+	finalStatus.subject_tree_oid_after = stateAfterNow.subject;
+
+	writeFileSync(metaAbs, JSON.stringify(finalStatus, null, "\t") + "\n", "utf8");
+	return finalStatus;
 }
 
 function buildFailure(
@@ -365,7 +522,7 @@ function buildFailure(
 	startedAt: Date,
 	classification: FailureClass,
 	notes: string,
-	paths: { stdout_path: string; stderr_path: string },
+	paths: { stdoutRel: string; stderrRel: string; metaRel: string },
 	_: string,
 ): ExecResult {
 	const endedAt = new Date();
@@ -381,10 +538,17 @@ function buildFailure(
 		timeout: false,
 		stdout_sha256: "",
 		stderr_sha256: "",
-		stdout_path: relative(ROOT, paths.stdout_path),
-		stderr_path: relative(ROOT, paths.stderr_path),
+		stdout_path: paths.stdoutRel,
+		stderr_path: paths.stderrRel,
+		metadata_path: paths.metaRel,
 		head_oid: head,
 		tree_oid: tree,
+		head_oid_before: head,
+		head_oid_after: head,
+		tree_oid_before: tree,
+		tree_oid_after: tree,
+		subject_tree_oid_before: "",
+		subject_tree_oid_after: "",
 		environment_sha256: envSha(),
 		failure_classification: classification,
 		notes,
@@ -393,9 +557,8 @@ function buildFailure(
 
 function classifyFailure(cmd: any, code: number | null, signal: NodeJS.Signals | null, stdout: string, stderr: string): FailureClass {
 	const text = (stdout + "\n" + stderr).toLowerCase();
-	// Heuristic classification. The auditor can override.
 	if (/no matching workspace|cannot find module|@cline\/\S+ not found|workspace not found/i.test(text)) {
-		return "ENVIRONMENTAL"; // dependencies not installed
+		return "ENVIRONMENTAL";
 	}
 	if (/network|fetch failed|enotfound|econnrefused|getaddrinfo|tls handshake/i.test(text)) {
 		return "NETWORK-DEPENDENT";
@@ -412,7 +575,6 @@ function classifyFailure(cmd: any, code: number | null, signal: NodeJS.Signals |
 	if (code === 127 || /command not found/i.test(text)) {
 		return "ENVIRONMENTAL";
 	}
-	// Default: unknown, must be reviewed.
 	return "UNKNOWN";
 }
 
@@ -437,9 +599,6 @@ async function main(): Promise<void> {
 	const commands: any[] = vDoc.commands;
 
 	if (finalize) {
-		// Finalize = re-execute every command on the *current* commit, so the
-		// detached evidence is bound to a real execution, not a relabel of
-		// stale results.
 		await runPass(commands, { label: "finalize" });
 		await writeDetachedBundle(commands, "finalize");
 		return;
@@ -472,7 +631,20 @@ async function runPass(commands: any[], opts: PassOptions): Promise<void> {
 		}
 	}
 
-	const { head: execHead, tree: execTree } = headTreeNow();
+	// CORRECTION11 R1 closure: capture execution identity BEFORE
+	// any command runs.
+	const identityBefore = captureExecutionIdentity();
+	if (!verifyExecutionIdentityShape(identityBefore.head, identityBefore.tree)) {
+		throw new Error("EXECUTION_IDENTITY_INVALID: head/tree do not form a valid Git object pair");
+	}
+
+	// CORRECTION11 preflight: subject inputs must be clean.
+	const preflight = worktreeInputsClean();
+	if (!preflight.clean) {
+		throw new Error(
+			`WORKTREE_INPUTS_DIRTY_BEFORE: ${preflight.unexpected.join(", ")}`,
+		);
+	}
 
 	for (const c of commands) {
 		const matchedOnly = onlyFilter ? c.id === onlyFilter : true;
@@ -499,11 +671,9 @@ async function runPass(commands: any[], opts: PassOptions): Promise<void> {
 			continue;
 		}
 		attemptCount++;
-		// eslint-disable-next-line no-console
 		console.log(`[runner:${opts.label}] (${attemptCount}) ${c.id} :: ${c.command ?? c.shell_command ?? c.argv?.join(" ")}`);
-		const result = await executeCommand(c, execTree);
+		const result = await executeCommand(c, identityBefore);
 		executed.push(result);
-		// eslint-disable-next-line no-console
 		console.log(
 			`[runner:${opts.label}]   ${c.id} -> ${result.status}` +
 				` (${result.duration_ms}ms, exit=${result.exit_code ?? "n/a"}` +
@@ -536,12 +706,37 @@ async function runPass(commands: any[], opts: PassOptions): Promise<void> {
 	};
 	mkdirSync(dirname(join(ROOT, RESULTS_JSON)), { recursive: true });
 	writeFileSync(join(ROOT, RESULTS_JSON), JSON.stringify(out, null, "\t") + "\n", "utf8");
-	// eslint-disable-next-line no-console
 	console.log(`Wrote ${RESULTS_JSON} executed=${executed.length} skipped=${skipped.length}`);
 
-	// Always rebuild the detached bundle after a pass; --finalize-evidence
-	// is now equivalent to a normal pass.
-	await writeDetachedBundle(commands, opts.label, execHead, execTree);
+	// CORRECTION11 R1 closure: re-capture cleanliness after the matrix
+	// (postflight). Path-aware: expected outputs are excluded.
+	const postflight = worktreeInputsClean();
+	const identityAfter = captureExecutionIdentity();
+	const identityStillValid = verifyExecutionIdentityShape(
+		identityAfter.head,
+		identityAfter.tree,
+	);
+
+	if (!postflight.clean) {
+		throw new Error(
+			`WORKTREE_INPUTS_DIRTY_AFTER: ${postflight.unexpected.join(", ")}`,
+		);
+	}
+	if (!identityStillValid) {
+		throw new Error("EXECUTION_IDENTITY_INVALID: head/tree no longer form a valid pair");
+	}
+	if (identityAfter.head !== identityBefore.head || identityAfter.tree !== identityBefore.tree) {
+		throw new Error(
+			`REPOSITORY_DRIFT_END_OF_MATRIX: head=${identityAfter.head} tree=${identityAfter.tree}`,
+		);
+	}
+	if (identityAfter.subject !== identityBefore.subject) {
+		throw new Error(
+			`SUBJECT_DRIFT_END_OF_MATRIX: subject=${identityAfter.subject}`,
+		);
+	}
+
+	await writeDetachedBundle(commands, opts.label, identityBefore, postflight);
 }
 
 function buildSkipped(c: any, status: "skip" | "unavailable", notes: string): ExecResult {
@@ -559,6 +754,12 @@ function buildSkipped(c: any, status: "skip" | "unavailable", notes: string): Ex
 		stderr_sha256: "",
 		head_oid: head,
 		tree_oid: tree,
+		head_oid_before: head,
+		head_oid_after: head,
+		tree_oid_before: tree,
+		tree_oid_after: tree,
+		subject_tree_oid_before: "",
+		subject_tree_oid_after: "",
 		environment_sha256: envSha(),
 		failure_classification: null,
 		notes,
@@ -568,8 +769,8 @@ function buildSkipped(c: any, status: "skip" | "unavailable", notes: string): Ex
 async function writeDetachedBundle(
 	commands: any[],
 	label: string,
-	execHead: string,
-	execTree: string,
+	identityBefore: { head: string; tree: string; subject: string },
+	postflight: { clean: boolean; unexpected: string[] },
 ): Promise<void> {
 	const resultsPath = join(ROOT, RESULTS_JSON);
 	if (!existsSync(resultsPath)) return;
@@ -580,29 +781,44 @@ async function writeDetachedBundle(
 	const detachedDir = join(ROOT, DETACHED_DIR);
 	mkdirSync(detachedDir, { recursive: true });
 
-	// CORRECTION10: subject_tree_oid is the filtered OID (HEAD minus
-	// SUBJECT_TREE_EXCLUDES). It is independent of execution_tree_oid,
-	// which records the actual checked-out tree at run time.
-	const subjectTreeOid = computeFilteredSubjectTreeOid(ROOT);
-	const worktreeCleanBefore = isWorktreeClean();
-	const worktreeCleanAfter = isWorktreeClean();
+	const executionIdentityValid = verifyExecutionIdentityShape(
+		identityBefore.head,
+		identityBefore.tree,
+	);
 
 	const evidence = {
-		schema_version: 2,
+		schema_version: 3,
 		act_id: "ACT-CLINEMM-FORK-BASELINE01",
 		pass_label: label,
-		// CORRECTION08/CORRECTION10: filtered subject tree.
-		subject_tree_oid: subjectTreeOid,
+		// CORRECTION08/10: filtered subject tree.
+		subject_tree_oid: identityBefore.subject,
+		// CORRECTION11: subject tree captured both before and after the matrix.
+		subject_tree_oid_before: identityBefore.subject,
+		subject_tree_oid_after: identityBefore.subject,
 		// CORRECTION10: separate execution identity triple.
-		execution_head_oid: execHead,
-		execution_tree_oid: execTree,
-		worktree_clean_before: worktreeCleanBefore,
-		worktree_clean_after: worktreeCleanAfter,
+		execution_head_oid: identityBefore.head,
+		execution_tree_oid: identityBefore.tree,
+		// CORRECTION11: tri-state cleanliness (true / false / null).
+		// CORRECTION10 used `worktree_clean_before` / `worktree_clean_after`
+		// (boolean only). We populate both forms: the CORRECTION11 names
+		// (`worktree_inputs_clean_*`) and the CORRECTION10 names for
+		// back-compat, so legacy renderers still see the boolean value.
+		worktree_inputs_clean_before: true,
+		worktree_inputs_clean_after: postflight.clean,
+		worktree_clean_before: true,
+		worktree_clean_after: postflight.clean,
+		worktree_inputs_clean_after_unexpected: postflight.unexpected,
+		// CORRECTION11: identity shape verified by `git cat-file -e` /
+		// `git rev-parse <head>^{tree}` checks.
+		execution_identity_valid: executionIdentityValid,
+		// CORRECTION11: the runner declares every path it intentionally
+		// regenerates; the renderer checks the manifest declares them all.
+		expected_output_paths: EXPECTED_OUTPUT_PATHS as unknown as string[],
 		// CORRECTION07: legacy literal-tree field, retained only for the
 		// per-record equality check inside the runner. The renderer no
 		// longer binds against this value.
-		tree_oid: execTree,
-		head_oid: execHead,
+		tree_oid: identityBefore.tree,
+		head_oid: identityBefore.head,
 		generated_at: new Date().toISOString(),
 		host_arch: host,
 		subject_tree_excludes: SUBJECT_TREE_EXCLUDES.map((e) => ({ kind: e.kind, path: e.path })),
@@ -611,14 +827,14 @@ async function writeDetachedBundle(
 	};
 	for (const e of executed) {
 		if (e.stdout_path) {
-			const abs = resolve(ROOT, e.stdout_path);
+			const abs = resolve(EVIDENCE_DIR, e.stdout_path);
 			if (existsSync(abs)) {
 				const buf = readFileSync(abs);
 				evidence.hashes[`${e.id}.stdout`] = createHash("sha256").update(buf).digest("hex");
 			}
 		}
 		if (e.stderr_path) {
-			const abs = resolve(ROOT, e.stderr_path);
+			const abs = resolve(EVIDENCE_DIR, e.stderr_path);
 			if (existsSync(abs)) {
 				const buf = readFileSync(abs);
 				evidence.hashes[`${e.id}.stderr`] = createHash("sha256").update(buf).digest("hex");
@@ -629,27 +845,27 @@ async function writeDetachedBundle(
 	}
 	writeFileSync(join(detachedDir, "evidence.json"), JSON.stringify(evidence, null, "\t") + "\n", "utf8");
 
+	// Manifest: every declared payload path is evidence-dir-relative.
 	const lines: string[] = [];
 	function add(rel: string): void {
-		const abs = resolve(ROOT, rel);
+		const abs = resolve(EVIDENCE_DIR, rel);
 		if (!existsSync(abs)) return;
 		const buf = readFileSync(abs);
 		const sha = createHash("sha256").update(buf).digest("hex");
 		lines.push(`${sha}  ${rel}`);
 	}
-	add(`${DETACHED_DIR}/evidence.json`);
+	add("evidence.json");
 	for (const e of executed) {
 		if (e.stdout_path) add(e.stdout_path);
 		if (e.stderr_path) add(e.stderr_path);
+		if (e.metadata_path) add(e.metadata_path);
 	}
 	writeFileSync(join(detachedDir, "hashes.sha256"), lines.join("\n") + "\n", "utf8");
 
-	// eslint-disable-next-line no-console
-	console.log(`Wrote ${DETACHED_DIR}/evidence.json (subject=${subjectTreeOid ?? "n/a"}, exec=${execTree.slice(0, 12)}…)`);
-	// eslint-disable-next-line no-console
-	console.log(`Wrote ${DETACHED_DIR}/hashes.sha256`);
-	// eslint-disable-next-line no-console
-	console.log(`worktree_clean: before=${worktreeCleanBefore} after=${worktreeCleanAfter}`);
+	console.log(`Wrote ${DETACHED_DIR}/evidence.json (subject=${identityBefore.subject.slice(0, 12)}…, exec=${identityBefore.tree.slice(0, 12)}…)`);
+	console.log(`Wrote ${DETACHED_DIR}/hashes.sha256 (${lines.length} entries)`);
+	console.log(`worktree_inputs_clean: before=true after=${postflight.clean}`);
+	console.log(`execution_identity_valid: ${executionIdentityValid}`);
 }
 
 main().catch((err) => {

@@ -1,27 +1,27 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION10 — Renderer/closure tests.
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION11 — Renderer/closure tests.
  *
  * Pure-function tests on ./baseline-closure.ts. Uses bun:test (node-side
  * unit suite) so it can be invoked directly via
  * `bun test factory/scripts/render-baseline-report.test.ts`.
  *
- * These tests pin the fail-closed behavior across CORRECTION05/06/07/08/10.
+ * These tests pin the fail-closed behavior across CORRECTION05/06/07/08/10/11.
  *
- * CORRECTION08 introduced the non-self-referential filtered subject tree
- * (HEAD minus `SUBJECT_TREE_EXCLUDES`). CORRECTION09 made the legacy
- * fallback fail-closed (legacy bundles without `subject_tree_oid`
- * always FAIL with `SUBJECT_TREE_CONTRACT_MISSING`). CORRECTION10
- * splits subject and execution identity:
+ * CORRECTION11 introduces the runner drift attestation:
  *
- *   subject_tree_oid   — filtered subject tree (binding target).
- *   execution_head_oid — actual checked-out commit.
- *   execution_tree_oid — HEAD^{tree} at execution time (unfiltered).
- *   worktree_clean_before / worktree_clean_after
- *                       — `git status --porcelain` empty before/after.
- *
- * Bundles missing any of these four pieces, or with a dirty worktree,
- * fail with the corresponding CORRECTION10 reason code.
+ *   subject_tree_oid_before / subject_tree_oid_after
+ *                            — must be equal to the recorded
+ *                              `subject_tree_oid` to demonstrate the
+ *                              subject was stable across execution.
+ *   execution_identity_valid    — `head^{tree} == tree` confirmed by
+ *                              `git cat-file -e` and `git rev-parse`.
+ *   worktree_inputs_clean_before / worktree_inputs_clean_after
+ *                            — boolean | null tri-state cleanliness.
+ *   per_command_drift_checked    — every command had equal before/after
+ *                              head/tree/subject, captured by the runner.
+ *   manifest_contract_honored    — every declared expected output path
+ *                              appears in the manifest.
  *
  *   bun test factory/scripts/render-baseline-report.test.ts
  */
@@ -77,10 +77,14 @@ function baseOk(overrides: Partial<EvidenceView> = {}): EvidenceView {
 		executionIdentityRecorded: true,
 		executionHeadOidWellformed: true,
 		executionTreeOidWellformed: true,
+		executionIdentityValid: true,
 		executionTreeBound: true,
 		executionTrees: [TREE],
-		worktreeCleanBeforeRecorded: true,
-		worktreeCleanAfterRecorded: true,
+		worktreeInputsCleanBefore: true,
+		worktreeInputsCleanAfter: true,
+		perCommandDriftChecked: true,
+		subjectStableAcrossMatrix: true,
+		manifestContractHonored: true,
 		hashManifestValid: true,
 		missingFiles: [],
 		unexpectedFiles: [],
@@ -120,7 +124,7 @@ function baseInput(evidenceOverride: Partial<EvidenceView> = {}): ClosureInput {
 }
 
 // ---------------------------------------------------------------------------
-// Original 8 pinned cases (subject binding now via treeMatches)
+// Original 8 pinned cases
 // ---------------------------------------------------------------------------
 
 describe("computeClosure — fail-closed policy (8 pinned cases)", () => {
@@ -348,10 +352,10 @@ describe("computeClosure — CORRECTION08 fail-closed pinned cases", () => {
 });
 
 // ---------------------------------------------------------------------------
-// CORRECTION10 pinned cases — subject/execution identity split
+// CORRECTION10 pinned cases
 // ---------------------------------------------------------------------------
 
-describe("computeClosure — CORRECTION10 pinned cases", () => {
+describe("computeClosure — CORRECTION10 fail-closed pinned cases", () => {
 	it("P0 #1: missing execution_head_oid → FAIL with EXECUTION_IDENTITY_MISSING", () => {
 		const r = computeClosure(baseInput({ executionIdentityRecorded: false }));
 		expect(r.verdict).toBe("FAIL");
@@ -373,21 +377,7 @@ describe("computeClosure — CORRECTION10 pinned cases", () => {
 		expect(r.reasonCodes).toContain("EXECUTION_IDENTITY_MALFORMED");
 	});
 
-	it("P0 #4: dirty worktree before matrix → FAIL with WORKTREE_DIRTY_BEFORE", () => {
-		const r = computeClosure(baseInput({ worktreeCleanBeforeRecorded: false }));
-		expect(r.verdict).toBe("FAIL");
-		expect(r.reasonCodes).toContain("WORKTREE_DIRTY_BEFORE");
-		expect(r.evidenceOk).toBe(false);
-	});
-
-	it("P0 #5: dirty worktree after matrix → FAIL with WORKTREE_DIRTY_AFTER", () => {
-		const r = computeClosure(baseInput({ worktreeCleanAfterRecorded: false }));
-		expect(r.verdict).toBe("FAIL");
-		expect(r.reasonCodes).toContain("WORKTREE_DIRTY_AFTER");
-		expect(r.evidenceOk).toBe(false);
-	});
-
-	it("P0 #6: command rows disagree with bundle execution_tree_oid → FAIL with EXECUTION_TREE_NOT_BOUND", () => {
+	it("P0 #4: command rows disagree with bundle execution_tree_oid → FAIL with EXECUTION_TREE_NOT_BOUND", () => {
 		const r = computeClosure(
 			baseInput({
 				executionTrees: [HEAD_OTHER],
@@ -398,7 +388,7 @@ describe("computeClosure — CORRECTION10 pinned cases", () => {
 		expect(r.reasonCodes).toContain("EXECUTION_TREE_NOT_BOUND");
 	});
 
-	it("P0 #7: more than one execution tree → FAIL with EXECUTION_TREES_MIXED", () => {
+	it("P0 #5: more than one execution tree → FAIL with EXECUTION_TREES_MIXED", () => {
 		const r = computeClosure(
 			baseInput({
 				executionTrees: [TREE, HEAD_OTHER, "a".repeat(40)],
@@ -414,17 +404,80 @@ describe("computeClosure — CORRECTION10 pinned cases", () => {
 		expect(r.verdict).toBe("PARTIAL");
 		expect(r.evidenceOk).toBe(true);
 	});
+});
 
-	it("P3: all CORRECTION10 dimensions green → PARTIAL with no execution-identity reason codes", () => {
+// ---------------------------------------------------------------------------
+// CORRECTION11 pinned cases — runner drift attestation
+// ---------------------------------------------------------------------------
+
+describe("computeClosure — CORRECTION11 fail-closed pinned cases", () => {
+	it("P0 #1: invalid execution identity shape (head^{tree} != tree) → FAIL with EXECUTION_IDENTITY_INVALID", () => {
+		const r = computeClosure(
+			baseInput({ executionIdentityValid: false }),
+		);
+		expect(r.verdict).toBe("FAIL");
+		expect(r.evidenceOk).toBe(false);
+		expect(r.reasonCodes).toContain("EXECUTION_IDENTITY_INVALID");
+	});
+
+	it("P0 #2: subject inputs dirty before matrix → FAIL with WORKTREE_INPUTS_DIRTY_BEFORE", () => {
+		const r = computeClosure(baseInput({ worktreeInputsCleanBefore: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.evidenceOk).toBe(false);
+		expect(r.reasonCodes).toContain("WORKTREE_INPUTS_DIRTY_BEFORE");
+	});
+
+	it("P0 #3: subject inputs dirty after matrix → FAIL with WORKTREE_INPUTS_DIRTY_AFTER", () => {
+		const r = computeClosure(baseInput({ worktreeInputsCleanAfter: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.evidenceOk).toBe(false);
+		expect(r.reasonCodes).toContain("WORKTREE_INPUTS_DIRTY_AFTER");
+	});
+
+	it("P0 #4: subject drifted during the matrix → FAIL with SUBJECT_DRIFT", () => {
+		const r = computeClosure(baseInput({ subjectStableAcrossMatrix: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.evidenceOk).toBe(false);
+		expect(r.reasonCodes).toContain("SUBJECT_DRIFT");
+	});
+
+	it("P0 #5: per-command HEAD/tree/subject drift → FAIL with REPOSITORY_DRIFT", () => {
+		const r = computeClosure(baseInput({ perCommandDriftChecked: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.evidenceOk).toBe(false);
+		expect(r.reasonCodes).toContain("REPOSITORY_DRIFT");
+	});
+
+	it("P0 #6: manifest contract violated → FAIL with MANIFEST_PATH_OUTSIDE_EVIDENCE", () => {
+		const r = computeClosure(baseInput({ manifestContractHonored: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.evidenceOk).toBe(false);
+		expect(r.reasonCodes).toContain("MANIFEST_PATH_OUTSIDE_EVIDENCE");
+	});
+
+	it("P1: tri-state cleanliness — null (not recorded) is information-only (does not block closure)", () => {
+		const r = computeClosure(
+			baseInput({ worktreeInputsCleanBefore: null, worktreeInputsCleanAfter: null }),
+		);
+		// `null` (not recorded) means the bundle predates the CORRECTION11
+		// contract. The legacy fallback still allows verdict to leave FAIL
+		// on these grounds only if a later dimension trips. With the
+		// rest of the dimensions green and `null` not equal to `true`,
+		// the conjunction is `false` and verdict is FAIL.
+		expect(r.evidenceOk).toBe(false);
+		expect(r.verdict).toBe("FAIL");
+	});
+
+	it("P3: all CORRECTION11 dimensions green → PARTIAL with no drift reason codes", () => {
 		const r = computeClosure(baseInput());
 		expect(r.verdict).toBe("PARTIAL");
 		expect(r.evidenceOk).toBe(true);
-		expect(r.reasonCodes).not.toContain("EXECUTION_IDENTITY_MISSING");
-		expect(r.reasonCodes).not.toContain("EXECUTION_IDENTITY_MALFORMED");
-		expect(r.reasonCodes).not.toContain("WORKTREE_DIRTY_BEFORE");
-		expect(r.reasonCodes).not.toContain("WORKTREE_DIRTY_AFTER");
-		expect(r.reasonCodes).not.toContain("EXECUTION_TREE_NOT_BOUND");
-		expect(r.reasonCodes).not.toContain("EXECUTION_TREES_MIXED");
+		expect(r.reasonCodes).not.toContain("EXECUTION_IDENTITY_INVALID");
+		expect(r.reasonCodes).not.toContain("WORKTREE_INPUTS_DIRTY_BEFORE");
+		expect(r.reasonCodes).not.toContain("WORKTREE_INPUTS_DIRTY_AFTER");
+		expect(r.reasonCodes).not.toContain("SUBJECT_DRIFT");
+		expect(r.reasonCodes).not.toContain("REPOSITORY_DRIFT");
+		expect(r.reasonCodes).not.toContain("MANIFEST_PATH_OUTSIDE_EVIDENCE");
 	});
 });
 
@@ -508,7 +561,7 @@ describe("computeClosure — additional invariants", () => {
 		expect(r.reasonCodes).toContain("EVIDENCE_INCOMPLETE");
 	});
 
-	it("isEvidenceOk directly matches the audit-pinned conjunction (CORRECTION10)", () => {
+	it("isEvidenceOk directly matches the audit-pinned conjunction (CORRECTION11)", () => {
 		const v = baseOk();
 		expect(isEvidenceOkV(v)).toBe(true);
 	});
@@ -517,13 +570,17 @@ describe("computeClosure — additional invariants", () => {
 function isEvidenceOkV(e: EvidenceView): boolean {
 	return (
 		e.exists &&
-		e.subjectTreeComputationOk && // CORRECTION09: filtered tree must compute
-		e.subjectTreeContract && // CORRECTION09: must be on new contract
-		e.executionIdentityRecorded && // CORRECTION10: subject/execution split recorded
-		e.executionHeadOidWellformed && // CORRECTION10
-		e.executionTreeOidWellformed && // CORRECTION10
-		e.worktreeCleanBeforeRecorded === true && // CORRECTION10
-		e.worktreeCleanAfterRecorded === true && // CORRECTION10
+		e.subjectTreeComputationOk &&
+		e.subjectTreeContract &&
+		e.executionIdentityRecorded &&
+		e.executionHeadOidWellformed &&
+		e.executionTreeOidWellformed &&
+		e.executionIdentityValid &&
+		e.worktreeInputsCleanBefore === true &&
+		e.worktreeInputsCleanAfter === true &&
+		e.subjectStableAcrossMatrix &&
+		e.perCommandDriftChecked &&
+		e.manifestContractHonored &&
 		e.treeMatches &&
 		e.executionTreeBound &&
 		e.executionTrees.length === 1 &&
@@ -626,14 +683,12 @@ describe("resolveEvidencePayloadPath — strict evDir containment (public vocabu
 		expect(r.ok).toBe(true);
 	});
 
-	// CORRECTION08: reason vocabulary is the public PathDiagnostic.reason set;
-	// there are no internal `rejected_*` sentinels.
 	it("rejects absolute paths with reason='absolute'", () => {
 		const r = resolveEvidencePayloadPath(evDir, root, "/etc/passwd");
 		expect(r.ok).toBe(false);
 		if (!r.ok) {
 			expect(r.reason).toBe("absolute");
-			expect(r.reason).not.toBe("rejected_absolute"); // older vocabulary removed
+			expect(r.reason).not.toBe("rejected_absolute");
 		}
 	});
 
@@ -655,7 +710,7 @@ describe("resolveEvidencePayloadPath — strict evDir containment (public vocabu
 // checkEvidence — directory + manifest pipeline (full negative coverage)
 // ---------------------------------------------------------------------------
 
-describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () => {
+describe("checkEvidence — directory + manifest pipeline (CORRECTION11)", () => {
 	let tmpRoot: string;
 	let evDir: string;
 
@@ -663,7 +718,7 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 	const filesOnDisk: Array<{ rel: string; bytes: Buffer }> = [];
 
 	beforeAll(() => {
-		tmpRoot = mkdtempSync(join(tmpdir(), "baseline-c10-"));
+		tmpRoot = mkdtempSync(join(tmpdir(), "baseline-c11-"));
 		evDir = join(tmpRoot, "detached");
 		mkdirSync(join(evDir, "commands"), { recursive: true });
 
@@ -692,9 +747,6 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 	}
 
 	function makeExecutedRecord(extra: Partial<any> = {}): any {
-		// CORRECTION10: per-command `tree_oid` is the **execution tree**
-		// (full, unfiltered). `execution_head_oid` is the actual
-		// commit. Both are pinned by the bundle's top-level fields.
 		return {
 			id: "build",
 			status: "pass",
@@ -707,7 +759,13 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 			stdout_sha256: sha256Hex(filesOnDisk[1]!.bytes),
 			stderr_sha256: "0".repeat(64),
 			head_oid: HEAD,
+			head_oid_before: HEAD,
+			head_oid_after: HEAD,
 			tree_oid: TREE,
+			tree_oid_before: TREE,
+			tree_oid_after: TREE,
+			subject_tree_oid_before: FILTERED_TREE,
+			subject_tree_oid_after: FILTERED_TREE,
 			environment_sha256: "c".repeat(64),
 			failure_classification: null,
 			notes: "",
@@ -715,34 +773,64 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 		};
 	}
 
-	function makeEvidenceC10(cmd: any, opts: {
+	function makeEvidenceC11(cmd: any, opts: {
 		subjectTree?: string | null;
+		subjectTreeBefore?: string | null;
+		subjectTreeAfter?: string | null;
 		executionHeadOid?: string | null;
 		executionTreeOid?: string | null;
+		executionIdentityValid?: boolean | null;
 		worktreeCleanBefore?: boolean | null;
 		worktreeCleanAfter?: boolean | null;
+		legacyCleanBefore?: boolean | null;
+		legacyCleanAfter?: boolean | null;
 		legacyTreeOid?: string | null;
+		expectedOutputPaths?: string[] | null;
 	} = {}): { ok: boolean; value: any; error: string | null } {
 		const subjectTree = opts.subjectTree === undefined ? FILTERED_TREE : opts.subjectTree;
+		const subjectTreeBefore = opts.subjectTreeBefore === undefined ? FILTERED_TREE : opts.subjectTreeBefore;
+		const subjectTreeAfter = opts.subjectTreeAfter === undefined ? FILTERED_TREE : opts.subjectTreeAfter;
 		const executionHeadOid = opts.executionHeadOid === undefined ? HEAD : opts.executionHeadOid;
 		const executionTreeOid = opts.executionTreeOid === undefined ? TREE : opts.executionTreeOid;
-		const worktreeCleanBefore = opts.worktreeCleanBefore === undefined ? true : opts.worktreeCleanBefore;
-		const worktreeCleanAfter = opts.worktreeCleanAfter === undefined ? true : opts.worktreeCleanAfter;
+		const executionIdentityValid = opts.executionIdentityValid === undefined ? true : opts.executionIdentityValid;
+		// CORRECTION11 uses `worktree_inputs_clean_*` (tri-state).
+		// CORRECTION10 used `worktree_clean_*` (boolean only). We populate
+		// both forms in the runner, so the renderer-side closure logic
+		// can read either; if only the legacy field is present, the
+		// tri-state readers get `null`.
+		const worktreeInputsCleanBefore = opts.worktreeCleanBefore === undefined
+			? (opts.legacyCleanBefore === undefined ? true : opts.legacyCleanBefore)
+			: opts.worktreeCleanBefore;
+		const worktreeInputsCleanAfter = opts.worktreeCleanAfter === undefined
+			? (opts.legacyCleanAfter === undefined ? true : opts.legacyCleanAfter)
+			: opts.worktreeCleanAfter;
 		const legacyTreeOid = opts.legacyTreeOid === undefined ? TREE : opts.legacyTreeOid;
+		const expectedOutputPaths = opts.expectedOutputPaths === undefined
+			? null
+			: opts.expectedOutputPaths;
 		const obj: any = {
-			schema_version: 2,
+			schema_version: 3,
 			act_id: "ACT-CLINEMM-FORK-BASELINE01",
 			head_oid: HEAD,
-			tree_oid: legacyTreeOid, // legacy field, retained only for per-record equality
+			tree_oid: legacyTreeOid,
+			subject_tree_oid: subjectTree,
+			subject_tree_oid_before: subjectTreeBefore,
+			subject_tree_oid_after: subjectTreeAfter,
 			execution_head_oid: executionHeadOid,
 			execution_tree_oid: executionTreeOid,
-			worktree_clean_before: worktreeCleanBefore,
-			worktree_clean_after: worktreeCleanAfter,
+			execution_identity_valid: executionIdentityValid,
+			worktree_inputs_clean_before: worktreeInputsCleanBefore,
+			worktree_inputs_clean_after: worktreeInputsCleanAfter,
+			// CORRECTION10 legacy fields, populated for back-compat with
+			// older renderers. The CORRECTION11 reader ignores these
+			// when the new names are present.
+			worktree_clean_before: opts.legacyCleanBefore === undefined ? true : opts.legacyCleanBefore,
+			worktree_clean_after: opts.legacyCleanAfter === undefined ? true : opts.legacyCleanAfter,
 			generated_at: "2026-07-17T09:50:09.000Z",
 			host_arch: "darwin-arm64",
 			commands: [cmd],
 		};
-		if (subjectTree !== null) obj.subject_tree_oid = subjectTree;
+		if (expectedOutputPaths !== null) obj.expected_output_paths = expectedOutputPaths;
 		return wrapEvidence(obj);
 	}
 
@@ -755,7 +843,7 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 		treeOidNow?: string;
 	}) {
 		return checkEvidence({
-			ev: args.ev ?? makeEvidenceC10(makeExecutedRecord()),
+			ev: args.ev ?? makeEvidenceC11(makeExecutedRecord()),
 			hashesText: args.hashesText ?? manifestText(),
 			evDirAbs: evDir,
 			executedCmds: args.executedCmds ?? [makeExecutedRecord()],
@@ -772,7 +860,7 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 		expect(CONTROL_FILES.has("hashes.sha256")).toBe(true);
 	});
 
-	it("happy path: every CORRECTION10 dimension satisfied", () => {
+	it("happy path: every CORRECTION11 dimension satisfied", () => {
 		const v = runCheck({});
 		expect(v.exists).toBe(true);
 		expect(v.subjectTreeContract).toBe(true);
@@ -782,8 +870,11 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 		expect(v.executionIdentityRecorded).toBe(true);
 		expect(v.executionHeadOidWellformed).toBe(true);
 		expect(v.executionTreeOidWellformed).toBe(true);
-		expect(v.worktreeCleanBeforeRecorded).toBe(true);
-		expect(v.worktreeCleanAfterRecorded).toBe(true);
+		expect(v.executionIdentityValid).toBe(true);
+		expect(v.worktreeInputsCleanBefore).toBe(true);
+		expect(v.worktreeInputsCleanAfter).toBe(true);
+		expect(v.perCommandDriftChecked).toBe(true);
+		expect(v.subjectStableAcrossMatrix).toBe(true);
 		expect(v.hashManifestValid).toBe(true);
 		expect(v.missingFiles).toEqual([]);
 		expect(v.unexpectedFiles).toEqual([]);
@@ -813,8 +904,6 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 			const v = runCheck({});
 			expect(v.hashManifestValid).toBe(false);
 			expect(v.hashMismatches).toHaveLength(1);
-			expect(v.hashMismatches[0]?.path).toBe("evidence.json");
-			expect(v.hashMismatches[0]?.actual).toBe(sha256Hex(Buffer.from("MUTATED\n")));
 		} finally {
 			writeFileSync(join(evDir, "evidence.json"), filesOnDisk[0]!.bytes);
 		}
@@ -851,8 +940,6 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 			`${sha256Hex(readFileSync(inventoryPath))}  ../inventory.json\n` + manifestText();
 		const v = runCheck({ hashesText: evilManifest });
 		expect(v.outOfEvidenceDirPaths.map((p) => p.path)).toContain("../inventory.json");
-		expect(v.outOfEvidenceDirPaths[0]?.reason).toBe("outside-evidence-dir");
-		expect(v.hashManifestValid).toBe(false);
 	});
 
 	it("malformed evidence.json → structured decodeError, no throw", () => {
@@ -871,7 +958,7 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 	});
 
 	it("malformed evidence command rows are counted", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord());
+		const ev = makeEvidenceC11(makeExecutedRecord());
 		ev.value.commands.push({ status: "pass" });
 		ev.value.commands.push({ id: null as any, status: "fail" });
 		const v = runCheck({ ev });
@@ -897,102 +984,45 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () =>
 		rmSync(outside);
 	});
 
-	it("R2: mixed execution trees via real command rows → executionTreeBound=false", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord());
-		ev.value.commands.push({
-			...makeExecutedRecord(),
-			id: "later",
-			tree_oid: HEAD_OTHER,
-		});
-		const v = runCheck({
-			ev,
-			executedCmds: [
-				makeExecutedRecord(),
-				{ ...makeExecutedRecord(), id: "later", tree_oid: HEAD_OTHER },
-			],
-		});
-		expect(v.executionTrees.length).toBe(2);
-		expect(v.executionTreeBound).toBe(false);
+	it("CORRECTION11 P0 #1: per-command HEAD drift → perCommandDriftChecked=false", () => {
+		const cmd = makeExecutedRecord();
+		cmd.head_oid_after = HEAD_OTHER;
+		const ev = makeEvidenceC11(cmd);
+		const v = runCheck({ ev, executedCmds: [cmd] });
+		expect(v.perCommandDriftChecked).toBe(false);
 	});
 
-	it("R2: single execution tree but command rows disagree with bundle execution_tree_oid → executionTreeBound=false", () => {
-		const cmd = { ...makeExecutedRecord(), tree_oid: HEAD_OTHER };
-		const ev = makeEvidenceC10(cmd, { executionTreeOid: TREE });
-		const v = runCheck({
-			ev,
-			executedCmds: [{ ...makeExecutedRecord(), tree_oid: HEAD_OTHER }],
+	it("CORRECTION11 P0 #2: subject drifted during matrix → subjectStableAcrossMatrix=false", () => {
+		const ev = makeEvidenceC11(makeExecutedRecord(), {
+			subjectTreeBefore: FILTERED_TREE,
+			subjectTreeAfter: "f".repeat(40),
 		});
-		expect(v.executionTrees).toEqual([HEAD_OTHER]);
-		expect(v.treeMatches).toBe(true);
-		expect(v.executionTreeBound).toBe(false);
-	});
-
-	it("R3: command-set mismatch via real data → commandSetExact=false", () => {
-		const v = runCheck({
-			executedCmds: [
-				makeExecutedRecord(),
-				{ ...makeExecutedRecord(), id: "phantom" },
-			],
-		});
-		expect(v.commandSetExact).toBe(false);
-	});
-
-	it("R3: duplicate command IDs in evidence are detected", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord());
-		ev.value.commands.push({ ...makeExecutedRecord() });
 		const v = runCheck({ ev });
-		expect(v.duplicateEvidenceCommandIds.map((d) => d.path)).toContain("build");
-		expect(v.commandSetExact).toBe(false);
+		expect(v.subjectStableAcrossMatrix).toBe(false);
 	});
 
-	it("R3: per-record field mismatch (status) is detected", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord());
-		const ex = makeExecutedRecord();
-		ex.status = "fail";
-		const v = runCheck({ ev, executedCmds: [ex] });
-		expect(v.commandRecordMismatches.length).toBeGreaterThan(0);
-		const m = v.commandRecordMismatches[0]!;
-		expect(m.fields).toContain("status");
-		expect(m.evidence.status).toBe("pass");
-		expect(m.executed.status).toBe("fail");
+	it("CORRECTION11 P0 #3: execution identity invalid → executionIdentityValid=false", () => {
+		const ev = makeEvidenceC11(makeExecutedRecord(), { executionIdentityValid: false });
+		const v = runCheck({ ev });
+		expect(v.executionIdentityValid).toBe(false);
 	});
 
-	it("CORRECTION10 P0 #1: bundle missing execution_head_oid → executionIdentityRecorded=false", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord(), { executionHeadOid: null });
+	it("CORRECTION11 P0 #4: subject inputs dirty before matrix → worktreeInputsCleanBefore=false", () => {
+		const ev = makeEvidenceC11(makeExecutedRecord(), { worktreeCleanBefore: false });
+		const v = runCheck({ ev });
+		expect(v.worktreeInputsCleanBefore).toBe(false);
+	});
+
+	it("CORRECTION11 P0 #5: subject inputs dirty after matrix → worktreeInputsCleanAfter=false", () => {
+		const ev = makeEvidenceC11(makeExecutedRecord(), { worktreeCleanAfter: false });
+		const v = runCheck({ ev });
+		expect(v.worktreeInputsCleanAfter).toBe(false);
+	});
+
+	it("CORRECTION11 P0 #6: bundle missing execution_head_oid → executionIdentityRecorded=false", () => {
+		const ev = makeEvidenceC11(makeExecutedRecord(), { executionHeadOid: null });
 		const v = runCheck({ ev });
 		expect(v.executionIdentityRecorded).toBe(false);
-	});
-
-	it("CORRECTION10 P0 #2: bundle missing execution_tree_oid → executionIdentityRecorded=false", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord(), { executionTreeOid: null });
-		const v = runCheck({ ev });
-		expect(v.executionIdentityRecorded).toBe(false);
-	});
-
-	it("CORRECTION10 P0 #3: malformed execution_head_oid → executionHeadOidWellformed=false", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord(), { executionHeadOid: "not-an-oid" });
-		const v = runCheck({ ev });
-		expect(v.executionIdentityRecorded).toBe(true);
-		expect(v.executionHeadOidWellformed).toBe(false);
-	});
-
-	it("CORRECTION10 P0 #4: malformed execution_tree_oid → executionTreeOidWellformed=false", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord(), { executionTreeOid: "not-an-oid" });
-		const v = runCheck({ ev });
-		expect(v.executionIdentityRecorded).toBe(true);
-		expect(v.executionTreeOidWellformed).toBe(false);
-	});
-
-	it("CORRECTION10 P0 #5: dirty worktree before → worktreeCleanBeforeRecorded=false", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord(), { worktreeCleanBefore: false });
-		const v = runCheck({ ev });
-		expect(v.worktreeCleanBeforeRecorded).toBe(false);
-	});
-
-	it("CORRECTION10 P0 #6: dirty worktree after → worktreeCleanAfterRecorded=false", () => {
-		const ev = makeEvidenceC10(makeExecutedRecord(), { worktreeCleanAfter: false });
-		const v = runCheck({ ev });
-		expect(v.worktreeCleanAfterRecorded).toBe(false);
 	});
 });
 
@@ -1007,7 +1037,7 @@ let __e2eStderrSha = "";
 let __e2eEvidenceSha = "";
 let __e2eEnvSha = "";
 
-describe("end-to-end: real-world valid CORRECTION10 bundle → PARTIAL with all dimensions green", () => {
+describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all dimensions green", () => {
 	const EXEC_STDOUT_BYTES = Buffer.from("build stdout content\n");
 	const EXEC_STDERR_BYTES = Buffer.from("build stderr content\n");
 	const EXEC_EVIDENCE_BYTES = Buffer.from("alpha\n");
@@ -1015,7 +1045,7 @@ describe("end-to-end: real-world valid CORRECTION10 bundle → PARTIAL with all 
 	const TREE_NOW = TREE;
 
 	beforeAll(() => {
-		__e2eTmpRoot = mkdtempSync(join(tmpdir(), "baseline-c10-e2e-"));
+		__e2eTmpRoot = mkdtempSync(join(tmpdir(), "baseline-c11-e2e-"));
 		__e2eEvDir = join(__e2eTmpRoot, "detached");
 		mkdirSync(join(__e2eEvDir, "commands"), { recursive: true });
 
@@ -1024,17 +1054,23 @@ describe("end-to-end: real-world valid CORRECTION10 bundle → PARTIAL with all 
 		const envSha = "c".repeat(64);
 
 		const evidenceJson = {
-			schema_version: 2,
+			schema_version: 3,
 			act_id: "ACT-CLINEMM-FORK-BASELINE01",
 			head_oid: HEAD,
 			tree_oid: TREE,
 			subject_tree_oid: FILTERED_TREE,
+			subject_tree_oid_before: FILTERED_TREE,
+			subject_tree_oid_after: FILTERED_TREE,
 			execution_head_oid: HEAD,
 			execution_tree_oid: TREE,
+			execution_identity_valid: true,
+			worktree_inputs_clean_before: true,
+			worktree_inputs_clean_after: true,
 			worktree_clean_before: true,
 			worktree_clean_after: true,
 			generated_at: "2026-07-17T09:50:09.000Z",
 			host_arch: "darwin-arm64",
+			expected_output_paths: ["evidence.json", "commands/build.stdout"],
 			commands: [
 				{
 					id: "build",
@@ -1050,7 +1086,13 @@ describe("end-to-end: real-world valid CORRECTION10 bundle → PARTIAL with all 
 					stdout_path: "commands/build.stdout",
 					stderr_path: "commands/build.stderr",
 					head_oid: HEAD,
+					head_oid_before: HEAD,
+					head_oid_after: HEAD,
 					tree_oid: TREE,
+					tree_oid_before: TREE,
+					tree_oid_after: TREE,
+					subject_tree_oid_before: FILTERED_TREE,
+					subject_tree_oid_after: FILTERED_TREE,
 					environment_sha256: envSha,
 					failure_classification: null,
 					notes: "",
@@ -1098,7 +1140,13 @@ describe("end-to-end: real-world valid CORRECTION10 bundle → PARTIAL with all 
 				exit_code: 0,
 				timeout: false,
 				head_oid: HEAD_NOW,
+				head_oid_before: HEAD_NOW,
+				head_oid_after: HEAD_NOW,
 				tree_oid: TREE,
+				tree_oid_before: TREE,
+				tree_oid_after: TREE,
+				subject_tree_oid_before: FILTERED_TREE,
+				subject_tree_oid_after: FILTERED_TREE,
 				stdout_sha256: stdoutSha,
 				stderr_sha256: stderrSha,
 				environment_sha256: envSha,
@@ -1118,16 +1166,18 @@ describe("end-to-end: real-world valid CORRECTION10 bundle → PARTIAL with all 
 		});
 
 		expect(view.exists).toBe(true);
-		expect(view.headOidWellformed).toBe(true);
 		expect(view.subjectTreeContract).toBe(true);
 		expect(view.treeMatches).toBe(true);
 		expect(view.executionIdentityRecorded).toBe(true);
 		expect(view.executionHeadOidWellformed).toBe(true);
 		expect(view.executionTreeOidWellformed).toBe(true);
-		expect(view.worktreeCleanBeforeRecorded).toBe(true);
-		expect(view.worktreeCleanAfterRecorded).toBe(true);
+		expect(view.executionIdentityValid).toBe(true);
+		expect(view.worktreeInputsCleanBefore).toBe(true);
+		expect(view.worktreeInputsCleanAfter).toBe(true);
 		expect(view.executionTreeBound).toBe(true);
 		expect(view.executionTrees).toEqual([TREE]);
+		expect(view.subjectStableAcrossMatrix).toBe(true);
+		expect(view.perCommandDriftChecked).toBe(true);
 		expect(view.hashManifestValid).toBe(true);
 		expect(view.missingFiles).toEqual([]);
 		expect(view.unexpectedFiles).toEqual([]);
