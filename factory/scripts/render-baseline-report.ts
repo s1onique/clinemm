@@ -289,8 +289,8 @@ execution_tree_oid          = HEAD^{tree} at run start  (full unfiltered tree)
 execution_identity_valid    = (cat-file -e <head>^{commit}) AND
                                (cat-file -e <tree>^{tree}) AND
                                (rev-parse <head>^{tree} == <tree>)
-worktree_inputs_clean_before = path-aware `git status` clean at start
-worktree_inputs_clean_after  = path-aware `git status` clean at end
+worktree_inputs_clean_before = path-aware \`git status\` clean at start
+worktree_inputs_clean_after  = path-aware \`git status\` clean at end
 per_command_drift_checked    = every command had equal before/after
                                 head/tree/subject, captured by the runner
 \`\`\`
