@@ -52,7 +52,7 @@ function main(): void {
 		stdio: ["ignore", "pipe", "pipe"],
 	});
 	if (proc.status !== 0) throw new Error(`git ls-files failed`);
-	const buf = proc[0] as Buffer;
+	const buf = proc.stdout as Buffer | null;
 	if (!buf) throw new Error("git ls-files returned no output");
 	const files = buf.toString("utf8").split("\0").filter((s) => s.length > 0);
 

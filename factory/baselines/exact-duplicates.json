@@ -1,0 +1,2242 @@
+{
+	"schema_version": 1,
+	"algorithm": "sha256-byte-exact-whole-file",
+	"tracked_files_examined": 3335,
+	"duplicate_group_count": 151,
+	"duplicate_files_total": 328,
+	"represented_duplicated_bytes": 2065842,
+	"groups": [
+		{
+			"sha256": "eeb9817e4420611c81dcd4569977767e8b9a40a609752cb66e44d8c5f91fb8c7",
+			"bytes": 454183,
+			"lines": 1845,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/icon.icns",
+				"apps/examples/menubar/src-tauri/icons/icon.icns"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 454183,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c8789f4bee15d5615717432cbb254d8989292af8ac86887c4f72d0ca56fd689b",
+			"bytes": 78645,
+			"lines": 263,
+			"paths": [
+				"apps/cline-hub/src/webview/public/icon.png",
+				"apps/examples/desktop-app/src-tauri/icons/icon.png",
+				"apps/examples/desktop-app/webview/public/icon.png",
+				"apps/examples/menubar/src-tauri/icons/icon.png",
+				"apps/examples/vscode/src/webview/public/icon.png"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 314580,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "4513832ebb6b1d11357c3419c52f64e1a0bb874b69d6d0b9f961868e6c14311c",
+			"bytes": 201706,
+			"lines": 765,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-512@2x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-512@2x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 201706,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "1a166f17ed190ead753fa4827e5e4edcb85cd42a820de2db36b06b95edadcde0",
+			"bytes": 40082,
+			"lines": 158,
+			"paths": [
+				"apps/cline-hub/src/webview/public/icon.ico",
+				"apps/examples/desktop-app/src-tauri/icons/icon.ico",
+				"apps/examples/menubar/src-tauri/icons/icon.ico",
+				"apps/examples/vscode/src/webview/public/icon.ico"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 120246,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "45aec214d5bfaa344f164994201e429a179f281c911ce9c335b87e93c41c3da5",
+			"bytes": 60370,
+			"lines": 218,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 60370,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "fa540502161f401a54d107db6735b242fd6fe8a948588c1e268691a9a45ad16d",
+			"bytes": 51293,
+			"lines": 1770,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/views/settings/extensions-view.tsx",
+				"apps/examples/desktop-app/webview/components/views/settings/extensions-view.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 51293,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "194990fd4e97c8c1189e8f342e27200afa01e4c3d54940c25f9f62cf10e58b67",
+			"bytes": 38808,
+			"lines": 148,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 38808,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "98f1e965d8a10a663e3c8eaeb3dde2a4a5efd2875a75cd93ee84b8bcd3eaada9",
+			"bytes": 37349,
+			"lines": 1503,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/prompt-input.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/prompt-input.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 37349,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "a1c3138347c704d4c4570963e390b0cc8d709827f91448a2dc6046181af97ca6",
+			"bytes": 35985,
+			"lines": 127,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square310x310Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square310x310Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 35985,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "07c1b6c587a501a97fea15f873f3baed5c79377e69edd2610d48eacad5350e93",
+			"bytes": 31545,
+			"lines": 104,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square284x284Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square284x284Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 31545,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "aea0481c06215ad40cb68ddc4fd9ca5647e3084cb2954061f4a3a8306fd40d53",
+			"bytes": 28807,
+			"lines": 999,
+			"paths": [
+				"apps/cline-hub/src/server/marketplace.ts",
+				"apps/examples/desktop-app/sidecar/marketplace.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 28807,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "60b2186f245d1bb6e15adf58e1fae57a1d3286fdd9b26ececcf04876bf97137c",
+			"bytes": 27220,
+			"lines": 108,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/128x128@2x.png",
+				"apps/examples/menubar/src-tauri/icons/128x128@2x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 27220,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f37e92eaab0181647d5568b430ec702419333701688ff406b90a5da738f872c7",
+			"bytes": 23328,
+			"lines": 854,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/views/settings/mcp-view.tsx",
+				"apps/examples/desktop-app/webview/components/views/settings/mcp-view.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 23328,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "a281f8491bc36f9438edea76bd85b2cc3dafdadfec8a49eacb8428df565bbc7a",
+			"bytes": 7562,
+			"lines": 31,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-40x40@3x.png",
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-60x60@2x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-40x40@3x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-60x60@2x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 22686,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "65ab364a3fbf4d517d5810fcf6e72887a8420e792756496d4c809238fd87a004",
+			"bytes": 20157,
+			"lines": 68,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 20157,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "0031ad07318c98650d072869f13e87d00734216eac3d9b7c31dbb65d9928953f",
+			"bytes": 16351,
+			"lines": 395,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/open-in-chat.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/open-in-chat.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 16351,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "0dbb946dcb1b54a0b11014ab6d63ca1a2ed2790c002c425286da8fa615380b8c",
+			"bytes": 15167,
+			"lines": 85,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 15167,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f3a7ade3df397f8197a28c25336860b252f69753f44244d4ad400a516562dfc2",
+			"bytes": 14043,
+			"lines": 51,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-60x60@3x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-60x60@3x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 14043,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f202eda43ac2390ed0c0dfd46112003f40f71034f62b2cfa676a8d8b9236dbbb",
+			"bytes": 4528,
+			"lines": 18,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-40x40@2x-1.png",
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-40x40@2x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-40x40@2x-1.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-40x40@2x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 13584,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b8d15f70a9d8002d3d1f98e3f276e0cf496eab8ecbed7652930f827ac0ec2e0d",
+			"bytes": 12805,
+			"lines": 533,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/stack-trace.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/stack-trace.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 12805,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c7e79c48b3dacb0a5b26387f629692574bf9b998c236803a91357f146881cc3d",
+			"bytes": 12620,
+			"lines": 49,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 12620,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "7ae6f01308fad749c5513d22722ecc0e9e79e9de3fa16ea78c910be04fbae73d",
+			"bytes": 12508,
+			"lines": 44,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 12508,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "e1386f78906337bf3e13a494cd5eedf276de6b72d11d6a54d75e0dae19457106",
+			"bytes": 11761,
+			"lines": 473,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/schema-display.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/schema-display.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 11761,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "861b6a4d15be40ad4bef99f1841864d1b68127b09fab174450807fefb41d472b",
+			"bytes": 2322,
+			"lines": 7,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-20x20@2x-1.png",
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-20x20@2x.png",
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-40x40@1x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-20x20@2x-1.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-20x20@2x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-40x40@1x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 11610,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "28dd265747f818ed9f3eb39c0d4bb1304203165486af5e4eed58bfbda51f7270",
+			"bytes": 11422,
+			"lines": 49,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square150x150Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square150x150Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 11422,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f704446a5f1271608805598b557e4288cf8580477ea038c9c3d8b361f693f6b8",
+			"bytes": 11344,
+			"lines": 202,
+			"paths": [
+				"LICENSE",
+				"apps/vscode/LICENSE"
+			],
+			"classifications": [
+				"production"
+			],
+			"repeated_bytes": 11344,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "a6572d67cd2bcbca4f354b257b5a07451987790543c604dcc8ff3ca1f5777849",
+			"bytes": 10898,
+			"lines": 42,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-76x76@2x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-76x76@2x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 10898,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b238e3b7c0df2d05944be3947a29fdaad51f25160e5ee37b563488d7c9f8b56c",
+			"bytes": 10802,
+			"lines": 426,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/attachments.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/attachments.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 10802,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "5ab667d11cd8d707fd51cbdca81352a0781059aad69f1473732299b6ff5bbe18",
+			"bytes": 10626,
+			"lines": 497,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/test-results.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/test-results.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 10626,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f0451eac65509fe76f2b335fae82e04949468b24a2b1d40c913ca5494304fcbe",
+			"bytes": 10604,
+			"lines": 534,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/voice-selector.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/voice-selector.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 10604,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "851acd22cf71032fb4cfbe72bbaf5bfce78089e6f2ae4157d82fa57d5ef73c4a",
+			"bytes": 10485,
+			"lines": 66,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 10485,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "42f2a98cba037c92cdfcbaab41a68ba4c4de6a5f5c0ca65ca74e4f5012cb22e7",
+			"bytes": 10403,
+			"lines": 43,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square142x142Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square142x142Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 10403,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "63d1f47d0b0311e8e8fe3d5a14507765d31ee3445a194e1b1b09246656cd7ed0",
+			"bytes": 10054,
+			"lines": 61,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 10054,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "39fc56c7e4facc022e55d6ffaa6c9ec63f467537966e3610fb769bef73e3be47",
+			"bytes": 3295,
+			"lines": 10,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-29x29@2x-1.png",
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-29x29@2x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-29x29@2x-1.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-29x29@2x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 9885,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66",
+			"bytes": 9522,
+			"lines": 1,
+			"paths": [
+				"apps/cline-hub/src/webview/public/favicon.svg",
+				"apps/examples/vscode/src/webview/public/favicon.svg"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 9522,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "16364f8116b0972908d2aa7ceea4d02e9c9032eb4a3b9900dff8f33a2513ef8c",
+			"bytes": 9386,
+			"lines": 463,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/commit.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/commit.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 9386,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b705ef1be92617eab521a2225e734f9272b3023e39084766edbe9ea14c394d10",
+			"bytes": 9280,
+			"lines": 410,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/context.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/context.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 9280,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "422e2709eccb2abc604c9a8f71fc754e673def14e23a2bb58893d6116152cda1",
+			"bytes": 8992,
+			"lines": 356,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/chart.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/chart.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 8992,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c3e9fedd039a620906e049d689db1f1f692ad222148415fd2e74c1baac9e06ef",
+			"bytes": 8956,
+			"lines": 324,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/speech-input.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/speech-input.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 8956,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "46db19776d9a9c09d253c68a3d23d0e77dda7538aab4c654df08ebace11b0d3c",
+			"bytes": 8814,
+			"lines": 374,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/mic-selector.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/mic-selector.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 8814,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "eda116115db8a3ed3776215ffaff900283ba58a912a53ff5bdb4213fc90edef1",
+			"bytes": 8148,
+			"lines": 242,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/TeamTasks.tsx",
+				"apps/examples/vscode/src/webview/src/components/TeamTasks.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 8148,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "22c52dbe52ac431d0542fe502d6b16e018171cb19ab333e2d4693aab11761ae3",
+			"bytes": 1942,
+			"lines": 11,
+			"paths": [
+				"apps/cline-hub/src/webview/public/32x32.png",
+				"apps/examples/desktop-app/src-tauri/icons/32x32.png",
+				"apps/examples/desktop-app/webview/public/32x32.png",
+				"apps/examples/menubar/src-tauri/icons/32x32.png",
+				"apps/examples/vscode/src/webview/public/32x32.png"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 7768,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "71f3cbd66a2fb32fd35160ee001c723291515b062fa92c01008a9417dd903e58",
+			"bytes": 7627,
+			"lines": 307,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/persona.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/persona.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 7627,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f3c539bb9904de29ffc927adba7a6f15b831e7c610e2f233ea9e002a334a3202",
+			"bytes": 7510,
+			"lines": 325,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/environment-variables.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/environment-variables.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 7510,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "903bcfa6ff1e80653dfc3fc8c051445f860d46d23cb16e49365153fc01b8cd2e",
+			"bytes": 7110,
+			"lines": 308,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/file-tree.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/file-tree.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 7110,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "ebd58ea0d421a0e18ac5b22bc7f404ad2715ccf30c34067717cad95043a3b31c",
+			"bytes": 7074,
+			"lines": 24,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 7074,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b12b0fe7a57fa4c357db0a005d24dbb22f7eec491def93948891de5fd93c7293",
+			"bytes": 7060,
+			"lines": 42,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 7060,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "65241666a838e4f15a10abf406984550cf9fb93509d714ca15e367a7c038e106",
+			"bytes": 6939,
+			"lines": 20,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square107x107Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square107x107Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 6939,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "d9470e72b912d21c07e11853d02b1dd1f46467aa027195cd81b9881a220d5d17",
+			"bytes": 6833,
+			"lines": 302,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/jsx-preview.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/jsx-preview.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 6833,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "a6522212704a83e7ce814a9a6e07e0b7dc2101a812a5544c1c9927d179fb9f80",
+			"bytes": 6501,
+			"lines": 286,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/web-preview.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/web-preview.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 6501,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c882258b95a2383a05d2e1b1c69f612c1ca801bab545c018d94dedc03b04d0d1",
+			"bytes": 6361,
+			"lines": 299,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/inline-citation.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/inline-citation.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 6361,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "e6bcb55005e9059434a990af23463819ef4eb17e86513ac22d92ea1c3fc36887",
+			"bytes": 2092,
+			"lines": 16,
+			"paths": [
+				"apps/cline-hub/src/webview/public/icon.svg",
+				"apps/examples/desktop-app/webview/public/icon.svg",
+				"apps/examples/vscode/src/webview/public/icon.svg",
+				"apps/vscode/assets/icons/icon.svg"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 6276,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "9ebfe11610b6208340776829045247275a6fbbf53d0b779abefa5a9217825b89",
+			"bytes": 5993,
+			"lines": 256,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/audio-player.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/audio-player.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 5993,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "93dffde09d5d716e4acd4eb57998dbcd6617ea68e8d4bf68c8b3ba80d3c78998",
+			"bytes": 5981,
+			"lines": 277,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/queue.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/queue.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 5981,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3e773917834d7bdff958475fa1ead869c5b598cd52d7fafad9daaba6e81b34a0",
+			"bytes": 5913,
+			"lines": 27,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 5913,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b9c15f575a3dec5035149c08e2dd4c1dc80beb853ed1a3d98de80fc7019678c8",
+			"bytes": 5834,
+			"lines": 223,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/chain-of-thought.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/chain-of-thought.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 5834,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "cce0bf28801780243fbdd2f16c5b87bf5514867f13e1341c4994e76ac1eeac05",
+			"bytes": 5721,
+			"lines": 240,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/package-info.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/package-info.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 5721,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "a1b72e96ef419b1e456c8d76d6254787454dff8339a635389d8267a247bbadf7",
+			"bytes": 5688,
+			"lines": 274,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/terminal.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/terminal.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 5688,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "7329b858ba93685e610a0f28f5eee94c0f229d4388fe7ccdbf58425e83ee118d",
+			"bytes": 5589,
+			"lines": 188,
+			"paths": [
+				".claude/commands/hotfix-release.md",
+				".clinerules/workflows/hotfix-release.md"
+			],
+			"classifications": [
+				"documentation"
+			],
+			"repeated_bytes": 5589,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "af7d94cf9bcb38ce6da034a4b7a5ff3bc548f22ef202bca8f625ea67238373f1",
+			"bytes": 5431,
+			"lines": 242,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/carousel.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/carousel.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 5431,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "6b8078794b5f468e266f072d3d5a3882a79ccda1fcf213a50a5f012ca793b5d6",
+			"bytes": 5339,
+			"lines": 25,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square89x89Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square89x89Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 5339,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "55ce8566df969503d00e669c27c7be8e0b87f1c017c9b4223bc59c9171fbe847",
+			"bytes": 5256,
+			"lines": 159,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/input-group.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/input-group.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 5256,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3375f1e5f8a68330c85733c820450072d382600003fdaa2e81ade486dae49688",
+			"bytes": 5047,
+			"lines": 35,
+			"paths": [
+				"apps/vscode/assets/icons/icon.png",
+				"assets/icons/icon.png"
+			],
+			"classifications": [
+				"production"
+			],
+			"repeated_bytes": 5047,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "185b1f97dee39b4fd15abd91631f9918b7865e796bb17d2b025b878eeabb8c89",
+			"bytes": 4997,
+			"lines": 22,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-29x29@3x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-29x29@3x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 4997,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "8ac46cbfaae366eba368f80c8c9073f550bf6b91a54c206df6c11bfca0f15eed",
+			"bytes": 4990,
+			"lines": 187,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/alert-dialog.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/alert-dialog.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 4990,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3043244821544f35bf74916a61b9edfc966a66dcfe705eb6d1556b1e1f08ff96",
+			"bytes": 4840,
+			"lines": 214,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/model-selector.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/model-selector.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 4840,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "be198812cfc02c1c2d45a013de0de09375519feb79a416df54606f89310c53ad",
+			"bytes": 4839,
+			"lines": 155,
+			"paths": [
+				"apps/cline-hub/src/server/mcp.ts",
+				"apps/examples/desktop-app/sidecar/mcp.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 4839,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3a370b58edf45bcd1e7f711ee2bf6bf86db07861fc2d9832df27ae3ca82b10bf",
+			"bytes": 4691,
+			"lines": 17,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 4691,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f80a5179d98c9294b8ea10435fbb26077e4fceab1a0b87439b7e253edcda0899",
+			"bytes": 4462,
+			"lines": 21,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/128x128.png",
+				"apps/examples/menubar/src-tauri/icons/128x128.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 4462,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "eed643b707fc5a7da84b824fba01862cc1d6566af6491dd2e9fcb42c4e2c365b",
+			"bytes": 4282,
+			"lines": 24,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square71x71Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square71x71Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 4282,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "5558c8f9728ef4c00f542cb9cc90ee080ba2c113331ab8dcd18af295be97bd51",
+			"bytes": 4217,
+			"lines": 160,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/tool.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/tool.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 4217,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b1c95be16eee141a2f7b504d02be289dd8f2fab2f55ac95e571aa4c3a622df0f",
+			"bytes": 4182,
+			"lines": 12,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-76x76@1x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-76x76@1x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 4182,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "d1ff9ad26b07dcaf73bc6736786091c2504405cfe5817cbf07a4f25acdc4d82d",
+			"bytes": 4175,
+			"lines": 169,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/conversation.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/conversation.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 4175,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "848e352539d292dc062c5061e63ee7795bf572ccb0e5f76ea1869a74bbc4076b",
+			"bytes": 3922,
+			"lines": 20,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/64x64.png",
+				"apps/examples/menubar/src-tauri/icons/64x64.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 3922,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "275026cae9a0f9bd6ccee282737f50020ca3db381acd4be9740b12ad370d41a4",
+			"bytes": 3755,
+			"lines": 142,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/agent.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/agent.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3755,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "96f299ce2da7f3abe4e89519d5f49fe1c95eb751df8b2b2bec491245dd70332e",
+			"bytes": 3733,
+			"lines": 156,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/dialog.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/dialog.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3733,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "4d2bb314e154386998f6f564d7cd87f17eb4cc35b1b74e0b4fc4636fa8fc7ed9",
+			"bytes": 3721,
+			"lines": 175,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/confirmation.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/confirmation.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3721,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "bada6206b97ea97c0fdacd09121672a883c73724c6a6fbb77810ff984dc24a5f",
+			"bytes": 3677,
+			"lines": 192,
+			"paths": [
+				"apps/examples/desktop-app/webview/components/ui/use-toast.ts",
+				"apps/examples/desktop-app/webview/hooks/use-toast.ts"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 3677,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "2b25735f9253f633eae13bbd5779bc968b93671dc9d69be75e5e5d1f8c310604",
+			"bytes": 3457,
+			"lines": 157,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/plan.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/plan.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3457,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "7b50bb5d5ff62b9a9fbcfa0b8773a7b9c1e4a089faa6eab1350c6e570eabc6c9",
+			"bytes": 3402,
+			"lines": 21,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-20x20@3x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-20x20@3x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 3402,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "ee40b9b51130745a47c43004993e85b1dcaf720af2f89eaf4fa767ba1f2c5d79",
+			"bytes": 3292,
+			"lines": 128,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/sandbox.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/sandbox.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3292,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "28aea8d159b9be4463b4ee2a39ea7aab37ea217decd97a5554d6afa7ec22676d",
+			"bytes": 3186,
+			"lines": 149,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/artifact.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/artifact.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3186,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f8957a2c1c07080cdc6d33ee19484beb83315a03ad17a7adec52c86bc9d10177",
+			"bytes": 3099,
+			"lines": 126,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/transcription.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/transcription.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3099,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "e27a46e9500ba75d8bc63b662abab8f6e8f22c33a031852d6648aa393a882ca4",
+			"bytes": 3056,
+			"lines": 17,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-mdpi/ic_launcher.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-mdpi/ic_launcher.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 3056,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "8fbcee37b1258084dcb014d4e1fab33896e3576052499634fe6705958dfd8132",
+			"bytes": 3053,
+			"lines": 146,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/snippet.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/snippet.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3053,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "fd6ed1ca9d99f408611ae8fac9bec69158f303182dadd60ef354b955585d8e43",
+			"bytes": 3040,
+			"lines": 144,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/edge.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/edge.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 3040,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "6790024cff9d59e649a5b8765d7041ca168513ae48054023fd68caf688a9d119",
+			"bytes": 3021,
+			"lines": 13,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/StoreLogo.png",
+				"apps/examples/menubar/src-tauri/icons/StoreLogo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 3021,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "32e95c83cb7017aca890551c803b100eccc04226102243650019f98f9cd1dabc",
+			"bytes": 2996,
+			"lines": 24,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-hdpi/ic_launcher.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 2996,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "70aded44a4b3e0e85a2b28eb8797e47c9185b68f661d90f2d397717491dff209",
+			"bytes": 2876,
+			"lines": 110,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/avatar.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/avatar.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2876,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "72fd371b54cb6f47aeb2c318477265869bb485b3b35680e662fa7389b9583856",
+			"bytes": 2720,
+			"lines": 17,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square44x44Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square44x44Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 2720,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "70b6036bad2e70ed07ea2301a7ca223ac72514dc4013f992377efb5b60b50c9b",
+			"bytes": 2719,
+			"lines": 65,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/tooltip.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/tooltip.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2719,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c75ae0e4437af663346af027cd083fed87173cdc7e4233cdc629bd5007732fb0",
+			"bytes": 2557,
+			"lines": 11,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 2557,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "48f814e4d3feea8614242aad02bde223865a21df70db19266d907d38f2a6d669",
+			"bytes": 2475,
+			"lines": 104,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/card.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/card.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2475,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f351df4cdb7c737888c3b94a545b12721137443c722b14cd2f315909aaeee88d",
+			"bytes": 2434,
+			"lines": 89,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/popover.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/popover.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2434,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "1e87242f00d60b5ff5926457f3bcbedac908baf2edf26e4ed1a94e1ec8c85bf6",
+			"bytes": 2433,
+			"lines": 88,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/button-group.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/button-group.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2433,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "028369e2129c2a38ca3bc11b1b61c691bf36f38bb4ed4a879dff9a207723c869",
+			"bytes": 2423,
+			"lines": 16,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 2423,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "202ea722e940677a756a3e15b6943239b776138489804c4b35a35939d3ac90f2",
+			"bytes": 2254,
+			"lines": 88,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/task.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/task.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2254,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "67576690cdc83a4d9292b51da69a7d1c690493e97abf805dd6cf629cde1222f7",
+			"bytes": 2187,
+			"lines": 115,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/table.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/table.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2187,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "88ce1dccc0f4160e4e2b3df972b65eb1c6b0cc2e48653be6ac2211afb4c6c214",
+			"bytes": 2011,
+			"lines": 78,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/shimmer.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/shimmer.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 2011,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "68780dec3dcf1f31a950f50d02275631a7947439dc987f7ca7cccd09ebe12ba6",
+			"bytes": 1942,
+			"lines": 77,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/alert.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/alert.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1942,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "01c0bf70487c10cc804d2c8a979eee43a5efc1df6ae6240a5975e1d5d001a725",
+			"bytes": 1929,
+			"lines": 72,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/node.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/node.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1929,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "934de593841ca3cc14895fb33da86161caa33b63ea792b157a2e58d52519518a",
+			"bytes": 1913,
+			"lines": 86,
+			"paths": [
+				"apps/cline-hub/src/webview/src/lib/model-selection.ts",
+				"apps/examples/desktop-app/webview/lib/model-selection.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1913,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c3c9fdab946d04ae389dcf33a65c4ac4eb7b805c8ca7520a8922ac236cfd8d2f",
+			"bytes": 1910,
+			"lines": 61,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/hover-card.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/hover-card.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1910,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "333c574ec5871154a7a404d629980d7d003211358c92af4003b41da7349a1c48",
+			"bytes": 1833,
+			"lines": 53,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/badge.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/badge.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1833,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "215a228b1bef6d6898d90e8d67564d103088f72c88808f735428477dd92bbe5f",
+			"bytes": 1776,
+			"lines": 8,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/Square30x30Logo.png",
+				"apps/examples/menubar/src-tauri/icons/Square30x30Logo.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 1776,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "07ca53d8b79067d0a4afe791b51831422c47e3526eb1fa06686bbfc29e09a605",
+			"bytes": 1770,
+			"lines": 78,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/sources.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/sources.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1770,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "451a3c5a06f37cbeaf9cddc24a35d54176a56779d6f39283f1a3352953f4523f",
+			"bytes": 1759,
+			"lines": 98,
+			"paths": [
+				".gitignore",
+				".worktreeinclude"
+			],
+			"classifications": [
+				"production"
+			],
+			"repeated_bytes": 1759,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "f70b131c442198a3b57ea4fdadcb3873dec5afba945b8866787e092264f496ee",
+			"bytes": 1713,
+			"lines": 69,
+			"paths": [
+				"apps/cline-hub/src/webview/src/lib/provider-model-catalog.ts",
+				"apps/examples/desktop-app/webview/lib/provider-model-catalog.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1713,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "15e0f2eaf8a8cf00c647c4174c28a7cab1eb1db313718cc8b4bd0df7c2c909c2",
+			"bytes": 1610,
+			"lines": 82,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/progress.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/progress.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1610,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3ec7a32850b3764e043ac1865d867965c23a33cb81191f784e6b24cfd9a59af2",
+			"bytes": 1588,
+			"lines": 9,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-29x29@1x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-29x29@1x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 1588,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "e3d226a413d43f83e0211441df3293ee377bd786bbf157a47627c868ad52dcd1",
+			"bytes": 1550,
+			"lines": 74,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/checkpoint.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/checkpoint.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1550,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3535d03a4ccd7ec4d1ca1b7cbeb6b10be0e9ff4c4a9620134898c0830706758c",
+			"bytes": 1549,
+			"lines": 72,
+			"paths": [
+				"apps/cline-hub/src/webview/src/lib/provider-schema.ts",
+				"apps/examples/desktop-app/webview/lib/provider-schema.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1549,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "aa0a0a351680008d4ebac5b70bb56a32e3702fc3ad2b830ca0885d641e11fcc7",
+			"bytes": 1492,
+			"lines": 65,
+			"paths": [
+				".claude/commands/release.md",
+				".clinerules/workflows/release.md"
+			],
+			"classifications": [
+				"documentation"
+			],
+			"repeated_bytes": 1492,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "82da8abcb6d48c0fba6974c0c4642783a2493d04500ba9362cb82caa234adfa6",
+			"bytes": 1487,
+			"lines": 53,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/scroll-area.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/scroll-area.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1487,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "0332ce99b694c2b1a82f1cbadbf706f954467e207e70451c6756addec69499ed",
+			"bytes": 1281,
+			"lines": 55,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/suggestion.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/suggestion.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1281,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "d194151232de2012ecd298d726bb3e321d6d9266a8bd9af3fe0df9e78c379a66",
+			"bytes": 1048,
+			"lines": 8,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/ios/AppIcon-20x20@1x.png",
+				"apps/examples/menubar/src-tauri/icons/ios/AppIcon-20x20@1x.png"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 1048,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "0bf1d6c379c87149134c1bb4ad2bdaf6494dd88482ab2e8570eb3495c8bb31a4",
+			"bytes": 1022,
+			"lines": 21,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/input.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/input.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1022,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "358a40cdbf0a601aba9f25d5c4a0e916c2985804c0c6ef635f0dead4b303e738",
+			"bytes": 1020,
+			"lines": 44,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/sonner.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/sonner.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 1020,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "99f7ad9115d3354274c6e81e916b86db4ee423b8038da6a1ac0de8cf2287c3ac",
+			"bytes": 255,
+			"lines": 14,
+			"paths": [
+				"apps/examples/cli-agent/tsconfig.json",
+				"apps/examples/cline-core-cli-agent/tsconfig.json",
+				"apps/examples/code-review-bot/tsconfig.json",
+				"apps/examples/multi-agent/tsconfig.json",
+				"apps/examples/quickstart/tsconfig.json"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 1020,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "ddf296a709c22007f96c93972e372e6664ba69bd3d77d0e244c11f098bba70d0",
+			"bytes": 944,
+			"lines": 29,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/status-badge.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/status-badge.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 944,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "89218828cbd046d4d80195087a952e75d370beaf9829a7fccc7a39b8c2ded145",
+			"bytes": 915,
+			"lines": 33,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/views/settings/settings-patch.ts",
+				"apps/examples/desktop-app/webview/components/views/settings/settings-patch.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 915,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "e0ecda23d232799897b1cf47a528c5ef84c3c074200bf2b4d86bbd68ea2ee632",
+			"bytes": 902,
+			"lines": 4,
+			"paths": [
+				"apps/vscode/assets/icons/robot_panel_dark.png",
+				"docs/assets/robot_panel_dark.png"
+			],
+			"classifications": [
+				"documentation",
+				"production"
+			],
+			"repeated_bytes": 902,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "dd384ee8d6b1a3297a9f0603441aea0d79a7f57fa26abfa844c1f265d90d8662",
+			"bytes": 826,
+			"lines": 19,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/textarea.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/textarea.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 826,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "d13e1166763e09692a70eb629b8aa17c986079dea9ffddd426f95de64d32cc0f",
+			"bytes": 727,
+			"lines": 32,
+			"paths": [
+				"apps/cline-hub/src/webview/tsconfig.app.json",
+				"apps/examples/vscode/src/webview/tsconfig.app.json"
+			],
+			"classifications": [
+				"configuration",
+				"example"
+			],
+			"repeated_bytes": 727,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "efd6cd9152af91d6eefc043ca0d8b5a492dbdd83903fda804cca5efe4499ff27",
+			"bytes": 706,
+			"lines": 30,
+			"paths": [
+				"apps/cline-hub/src/webview/eslint.config.js",
+				"apps/examples/vscode/src/webview/eslint.config.js"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 706,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "ee61fa24bb8128f29cd37d56dd3933d7e8775a17bab2b0bf0f597beb8d6458bd",
+			"bytes": 666,
+			"lines": 6,
+			"paths": [
+				"apps/vscode/assets/icons/robot_panel_light.png",
+				"docs/assets/robot_panel_light.png"
+			],
+			"classifications": [
+				"documentation",
+				"production"
+			],
+			"repeated_bytes": 666,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c78f2b53a137e87b66fd9ccece7e04f60e6924ffdf59230d98047aac53f49dfc",
+			"bytes": 655,
+			"lines": 22,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/collapsible.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/collapsible.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 655,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3cab78589b87c68503a09c33d3f1933e6f6f42e4d7b2531b138d68317f583b16",
+			"bytes": 612,
+			"lines": 27,
+			"paths": [
+				"apps/cline-hub/src/webview/tsconfig.node.json",
+				"apps/examples/vscode/src/webview/tsconfig.node.json"
+			],
+			"classifications": [
+				"configuration",
+				"example"
+			],
+			"repeated_bytes": 612,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "988c899d012f93cae9851c0a4b522cf575bf41b429db5b1bb5ebc69b8ef87f9a",
+			"bytes": 596,
+			"lines": 27,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/canvas.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/canvas.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 596,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "58af17c3d3236af98c3a83fde3707caa3bb97e56558d206f8c82819cc6ef783e",
+			"bytes": 563,
+			"lines": 22,
+			"paths": [
+				"apps/examples/desktop-app/webview/components/ui/use-mobile.tsx",
+				"apps/examples/desktop-app/webview/hooks/use-mobile.ts"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 563,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b53028243dcdcd547ef109fa72fbfef37807cdc17028b9e7f5c0215688d42fcf",
+			"bytes": 562,
+			"lines": 20,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/label.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/label.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 562,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "4696d02ad7ec83994687aab3307da12523583c530f2911dafcdfa26d8f90e812",
+			"bytes": 557,
+			"lines": 19,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/controls.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/controls.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 557,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "6c3e778ed209722f7f97b0a390afdfca0cd29a7542da451a3e58a4da56572f08",
+			"bytes": 523,
+			"lines": 29,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/connection.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/connection.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 523,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "4aa612ae3b7c4485c1d2333845887e73fc35ee109ebc33cad34c3a188f485359",
+			"bytes": 519,
+			"lines": 26,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/separator.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/separator.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 519,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "b7e861cfbb7ed79412e25c675b4976d3ac86a588b954afd4d3645bdf79287056",
+			"bytes": 470,
+			"lines": 25,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/image.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/image.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 470,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "2f108eb34cedc923078c4442604aa1f26816724e2df2573c6af34a2db8b2e8da",
+			"bytes": 427,
+			"lines": 17,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/toolbar.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/toolbar.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 427,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "78e0fd0c65a8c4732aa8ae10f8d1fb42828cfde25552ce9ae2b0dfa3395b36e3",
+			"bytes": 398,
+			"lines": 22,
+			"paths": [
+				"apps/cline-hub/src/webview/components.json",
+				"apps/examples/desktop-app/webview/components.json"
+			],
+			"classifications": [
+				"configuration",
+				"example"
+			],
+			"repeated_bytes": 398,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "949c69b8b25ec3fb43cc6c04bae67b5737733d3245000a56c5430231248decbf",
+			"bytes": 388,
+			"lines": 16,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ai-elements/panel.tsx",
+				"apps/examples/vscode/src/webview/src/components/ai-elements/panel.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 388,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "0fca478853f3fc4310e40ebff727a53da7ec677938f4e3e0d5ecaa62e936a199",
+			"bytes": 168,
+			"lines": 7,
+			"paths": [
+				"apps/cline-hub/src/webview/src/lib/utils.ts",
+				"apps/examples/desktop-app/webview/lib/utils.ts",
+				"apps/examples/vscode/src/webview/src/lib/utils.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 336,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "a6861d8d9a5530efc0213b9d6759f2ecba57ac1ea862d919deb10585f049a8f6",
+			"bytes": 316,
+			"lines": 16,
+			"paths": [
+				"apps/cline-hub/src/webview/src/components/ui/spinner.tsx",
+				"apps/examples/vscode/src/webview/src/components/ui/spinner.tsx"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 316,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "d2bde041f0ee1e1430a747787be30fedf92cb1a9de4ee3c131c3935262455b4f",
+			"bytes": 289,
+			"lines": 13,
+			"paths": [
+				"apps/cline-hub/src/webview/src/lib/provider-id.ts",
+				"apps/examples/desktop-app/webview/lib/provider-id.ts"
+			],
+			"classifications": [
+				"example",
+				"production"
+			],
+			"repeated_bytes": 289,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "760d4b8a06bf7163dd010c33ad2cac9e4a75fa0177afaba042f83e311eef0c3e",
+			"bytes": 261,
+			"lines": 5,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/mipmap-anydpi-v26/ic_launcher.xml",
+				"apps/examples/menubar/src-tauri/icons/android/mipmap-anydpi-v26/ic_launcher.xml"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 261,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "5b2a992eb16b6ac981cb66f2043df7a223744cd23f04da50e774e3e59f5ff892",
+			"bytes": 208,
+			"lines": 10,
+			"paths": [
+				"sdk/packages/agents/tsconfig.json",
+				"sdk/packages/shared/tsconfig.json"
+			],
+			"classifications": [
+				"configuration"
+			],
+			"repeated_bytes": 208,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "3f415d7d911c31fbd437c43c2fb9bef3bd955675d935d4213f9f317587668860",
+			"bytes": 187,
+			"lines": 10,
+			"paths": [
+				"sdk/packages/core/vitest.config.ts",
+				"sdk/packages/shared/vitest.config.ts"
+			],
+			"classifications": [
+				"production"
+			],
+			"repeated_bytes": 187,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "257668bf29d69767f87960d19816ee9bc9b1e7a124492e1a100711a3daa8d93c",
+			"bytes": 177,
+			"lines": 13,
+			"paths": [
+				"apps/cline-hub/src/webview/tsconfig.json",
+				"apps/examples/vscode/src/webview/tsconfig.json"
+			],
+			"classifications": [
+				"configuration",
+				"example"
+			],
+			"repeated_bytes": 177,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "dfa9ca9cab73dbd5d4200f36357c7f2aff74e04ab561df9f30c3f0b7e83130c5",
+			"bytes": 154,
+			"lines": 12,
+			"paths": [
+				"evals/smoke-tests/scenarios/06-apply-patch/template/config.txt",
+				"evals/smoke-tests/scenarios/08-openai-compat-gpt-oss-edit/template/config.txt"
+			],
+			"classifications": [
+				"production"
+			],
+			"repeated_bytes": 154,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "29ff148d0264889b34f4c9be0978cf48940c5f46f9a7fcc8c4810fbf594b23b3",
+			"bytes": 76,
+			"lines": 4,
+			"paths": [
+				"apps/vscode/src/core/hooks/__tests__/fixtures/hooks/taskcomplete/error/TaskComplete",
+				"apps/vscode/src/core/hooks/__tests__/fixtures/hooks/taskstart/error/TaskStart",
+				"apps/vscode/src/core/hooks/__tests__/fixtures/hooks/userpromptsubmit/error/UserPromptSubmit"
+			],
+			"classifications": [
+				"fixture"
+			],
+			"repeated_bytes": 152,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "0687336f0ccc6f7ee09c7c95110667c63b75931238df779a21af401fb864cd34",
+			"bytes": 115,
+			"lines": 4,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/icons/android/values/ic_launcher_background.xml",
+				"apps/examples/menubar/src-tauri/icons/android/values/ic_launcher_background.xml"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 115,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "c8cd6bf4e4dedba06e770dfdaa2e1be4e8becd75896bae95d6ed07762456aa8f",
+			"bytes": 22,
+			"lines": 4,
+			"paths": [
+				"apps/cli/src/tests/configs/claude-sonnet-4.6/data/settings/cline_mcp_settings.json",
+				"apps/cli/src/tests/configs/default/data/settings/cline_mcp_settings.json",
+				"apps/cli/src/tests/configs/unauthenticated/data/settings/cline_mcp_settings.json"
+			],
+			"classifications": [
+				"test"
+			],
+			"repeated_bytes": 44,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "487059eaf8a947b80f20a9aacac038a5047b2ad69d2401b827376c67d6fe847f",
+			"bytes": 39,
+			"lines": 4,
+			"paths": [
+				"apps/examples/desktop-app/src-tauri/build.rs",
+				"apps/examples/menubar/src-tauri/build.rs"
+			],
+			"classifications": [
+				"example"
+			],
+			"repeated_bytes": 39,
+			"disposition": "unreviewed"
+		},
+		{
+			"sha256": "eecf1b17a507ec4d671b45fc6443f804c345e6a278b6174068b0ff7a3a6b2ade",
+			"bytes": 38,
+			"lines": 2,
+			"paths": [
+				"evals/smoke-tests/scenarios/02-edit-file/template/greeting.txt",
+				"evals/smoke-tests/scenarios/07-edit-gemini/template/greeting.txt"
+			],
+			"classifications": [
+				"production"
+			],
+			"repeated_bytes": 38,
+			"disposition": "unreviewed"
+		}
+	]
+}

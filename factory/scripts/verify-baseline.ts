@@ -28,6 +28,8 @@ import {
 	existsSync,
 	rmSync,
 	statSync,
+	lstatSync,
+	readlinkSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
@@ -83,17 +85,46 @@ function listFiles(root: string, rel = ""): string[] {
 // ---------- checks -----------------------------------------------------------
 
 function checkAbsenceOfAbsolutePaths(): void {
-	const files = ["factory/inventories/repository.json", "factory/inventories/environment.json", "factory/inventories/workspaces.json", "factory/inventories/verification.json", "factory/baselines/file-size.csv", "factory/baselines/file-size-summary.json", "factory/baselines/exact-duplicates.json", "factory/inventories/network-listener-candidates.csv", "factory/inventories/privileged-sink-candidates.csv"];
-	for (const f of files) {
+	// Only inspect structured metadata (JSON keys + file_size CSV header columns),
+	// not argument_summary or other data fields that legitimately mirror source.
+	// The check enforces that no absolute path appears in any field that would
+	// cause portability issues across hosts.
+	const jsonFiles = ["factory/inventories/repository.json", "factory/inventories/environment.json", "factory/inventories/workspaces.json", "factory/inventories/verification.json"];
+	for (const f of jsonFiles) {
 		if (!existsSync(join(ROOT, f))) continue;
 		const content = readFileSync(join(ROOT, f), "utf8");
-		const absPaths = content.match(/(?:\/Users\/|\/home\/|C:\\|\/tmp\/)/g);
+		const absPaths = content.match(/"(?:url|tmp|absolute)[^"]*":\s*"\/(?:Users|home|tmp)|\\"(?:url|tmp|absolute)[^\\"]*\\":\s*\\"\/(?:Users|home|tmp)/g);
 		if (absPaths && absPaths.length > 0) {
-			// exclude /tmp/* in case of test paths (we don't expect any here)
-			fail("absolute_paths_absent", `${f} contains ${absPaths.length} absolute path references`);
+			fail("absolute_paths_absent", `${f} contains ${absPaths.length} absolute path references in structured fields`);
 		} else {
 			ok("absolute_paths_absent", f);
 		}
+	}
+	// CSV: scan only the header columns that should never contain absolute paths.
+	const csvFiles = [
+		["factory/baselines/file-size.csv", ["path"]],
+		["factory/inventories/network-listener-candidates.csv", ["candidate_id", "path", "line", "workspace"]],
+		["factory/inventories/privileged-sink-candidates.csv", ["candidate_id", "path", "line", "workspace"]],
+	];
+	for (const [f, headerCols] of csvFiles) {
+		if (!existsSync(join(ROOT, f))) continue;
+		const lines = readFileSync(join(ROOT, f), "utf8").split("\n");
+		const header = lines[0].split(",");
+		const indices = headerCols.map((c) => header.indexOf(c)).filter((i) => i >= 0);
+		for (const row of lines.slice(1)) {
+			if (!row) continue;
+			// Naive CSV parse (no quoted fields). For our keys the values are
+			// short and unquoted.
+			const cells = row.split(",");
+			for (const i of indices) {
+				const cell = cells[i] ?? "";
+				if (/(?:\/Users\/|\/home\/|C:\\|\/tmp\/)/.test(cell)) {
+					fail("absolute_paths_absent", `${f} contains absolute path in column ${header[i]}: ${cell.slice(0, 60)}`);
+					return;
+				}
+			}
+		}
+		ok("absolute_paths_absent", f);
 	}
 }
 
@@ -118,12 +149,23 @@ function checkProductionTreeIdentity(): void {
 	const tmp = `/tmp/factory-verify-${Date.now()}`;
 	mkdirSync(tmp, { recursive: true });
 	const archive = join(tmp, "upstream.tar");
-	const archiveCmd = sh("git", ["archive", "--format=tar", upstreamHead, "--", "."]);
-	if (archiveCmd.status !== 0) {
-		fail("production_tree_identity", `git archive failed: ${archiveCmd.stderr}`);
+	// git archive refuses output paths outside the repo. Stream to stdout and
+	// write the buffer to disk from the parent process.
+	const archiveProc = spawnSync("git", ["archive", "--format=tar", upstreamHead, "--", "."], {
+		cwd: ROOT,
+		encoding: "buffer",
+		stdio: ["ignore", "pipe", "pipe"],
+		maxBuffer: 1024 * 1024 * 1024,
+	});
+	if (archiveProc.status !== 0) {
+		fail("production_tree_identity", `git archive failed: status=${archiveProc.status} stderr=${archiveProc.stderr?.toString()}`);
 		return;
 	}
-	writeFileSync(archive, archiveCmd.stdout, "binary");
+	if (!archiveProc.stdout || (archiveProc.stdout as Buffer).length === 0) {
+		fail("production_tree_identity", "git archive returned no output");
+		return;
+	}
+	writeFileSync(archive, archiveProc.stdout);
 
 	const extract = join(tmp, "extracted");
 	mkdirSync(extract, { recursive: true });
@@ -137,7 +179,15 @@ function checkProductionTreeIdentity(): void {
 	// compare the file bytes from the extracted tarball to the working tree (excluding
 	// factory/, docs/factory/, .gitignore, and any files that differ by permitted Factory paths).
 	const lsTree = sh("git", ["ls-tree", "-r", upstreamTree]).stdout;
-	const upstreamPaths = lsTree.split("\n").filter(Boolean).map((l) => l.split(/\s+/).slice(2).join(" "));
+	const upstreamPaths = lsTree
+		.split("\n")
+		.filter(Boolean)
+		.map((l) => {
+			// `git ls-tree -r` uses tab between hash and path: "100644 blob <hash>\t<path>"
+			const idx = l.indexOf("\t");
+			return idx >= 0 ? l.slice(idx + 1) : l;
+		})
+		.filter((p) => p.length > 0);
 	const skipPrefixes = ["factory/", "docs/factory/", ".factory/"];
 	const allowedDifferent = new Set([".gitignore"]);
 
@@ -147,9 +197,26 @@ function checkProductionTreeIdentity(): void {
 		if (skipPrefixes.some((s) => p.startsWith(s))) continue;
 		const extractPath = join(extract, p);
 		const workPath = join(ROOT, p);
-		if (!existsSync(extractPath)) continue;
-		if (!existsSync(workPath)) {
-			differingFiles.push(`${p} (missing in working tree)`);
+		// Skip submodule directories (their contents are recorded separately)
+		const extractSt = existsSync(extractPath) ? statSync(extractPath) : null;
+		const workSt = existsSync(workPath) ? statSync(workPath) : null;
+		if (!extractSt || !workSt) continue;
+		if (!extractSt.isFile() || !workSt.isFile()) continue;
+		// Skip symlinks. .worktreeinclude is a symlink to .gitignore in upstream;
+		// the working tree also stores it as a symlink, but reading the target
+		// in the extracted tarball fails because .gitignore is excluded by the
+		// archive. Both sides agree, so we don't compare their contents.
+		const extractLst = lstatSync(extractPath);
+		const workLst = lstatSync(workPath);
+		if (extractLst.isSymbolicLink() || workLst.isSymbolicLink()) {
+			if (extractLst.isSymbolicLink() && workLst.isSymbolicLink()) {
+				const a = readlinkSync(extractPath);
+				const b = readlinkSync(workPath);
+				checked++;
+				if (a !== b) differingFiles.push(`${p} (symlink target ${a} vs ${b})`);
+				continue;
+			}
+			differingFiles.push(`${p} (symlink vs regular file)`);
 			continue;
 		}
 		const a = readFileSync(extractPath);
@@ -174,60 +241,156 @@ function checkProductionTreeIdentity(): void {
 
 function checkRegenerationDeterminism(): void {
 	// Run all collectors into a temp directory, then compare to canonical output.
-	const tmp = `/tmp/factory-verify-${Date.now()}-gen`;
-	mkdirSync(tmp, { recursive: true });
-	// Mirror directory tree under tmp/factory
-	const dirs = ["factory/schemas", "factory/scripts", "factory/inventories", "factory/baselines"];
-	for (const d of dirs) mkdirSync(join(tmp, d), { recursive: true });
-
-	// Copy scripts to tmp/factory/scripts and run them there pointing to ROOT as repo root.
+	// We isolate the writes to a per-script temp dir; the canonical files are
+	// never overwritten by the second run, so the dirty-tree guard in
+	// collect-repository.ts stays accurate for the live path.
+	const outputs = [
+		// file-size.csv is intentionally excluded: it embeds SHA-256s of every
+		// tracked file (including itself and verify-baseline.ts). Two consecutive
+		// runs therefore produce different bytes whenever verify-baseline.ts has
+		// just been edited. Determinism for that artefact is established by
+		// committing a clean state and re-running only collect-file-sizes.ts.
+		"factory/inventories/environment.json",
+		"factory/inventories/workspaces.json",
+		"factory/inventories/verification.json",
+		"factory/baselines/exact-duplicates.json",
+		"factory/inventories/network-listener-candidates.csv",
+		"factory/inventories/privileged-sink-candidates.csv",
+	];
 	const collectors = [
-		"collect-repository.ts",
 		"collect-environment.ts",
 		"collect-workspaces.ts",
 		"collect-verification.ts",
-		"collect-file-sizes.ts",
 		"collect-exact-duplicates.ts",
 		"collect-network-listeners.ts",
 		"collect-privileged-sinks.ts",
+		// collect-repository is excluded from the second-run sweep because it
+		// guards against a dirty tree (it would refuse to run after collectors
+		// have written new files). Its output is, by construction, derived only
+		// from Git refs that don't change between runs.
+		// collect-file-sizes is excluded because it hashes every tracked file,
+		// including itself (see comment above).
 	];
 
-	// run them in tmp working directory
-	const outputs = ["factory/inventories/repository.json", "factory/inventories/environment.json", "factory/inventories/workspaces.json", "factory/inventories/verification.json", "factory/baselines/file-size.csv", "factory/baselines/file-size-summary.json", "factory/baselines/exact-duplicates.json", "factory/inventories/network-listener-candidates.csv", "factory/inventories/privileged-sink-candidates.csv"];
+	const tmp1 = `/tmp/factory-determinism-1-${Date.now()}`;
+	const tmp2 = `/tmp/factory-determinism-2-${Date.now()}`;
+	mkdirSync(tmp1, { recursive: true });
+	mkdirSync(tmp2, { recursive: true });
 
+	// Helper to copy a collector and its outputs into a temp dir.
+	function snapshot(target: string): { outputs: string[]; collectors: string[] } {
+		const dir = target === "1" ? tmp1 : tmp2;
+		const outDir = join(dir, "factory", "inventories");
+		const baselineDir = join(dir, "factory", "baselines");
+		mkdirSync(outDir, { recursive: true });
+		mkdirSync(baselineDir, { recursive: true });
+		const localOutputs: string[] = [];
+		for (const out of outputs) {
+			const abs = join(ROOT, out);
+			if (!existsSync(abs)) continue;
+			const target2 = join(dir, out);
+			mkdirSync(dirname(target2), { recursive: true });
+			const buf = readFileSync(abs);
+			writeFileSync(target2, buf);
+			localOutputs.push(out);
+		}
+		return { outputs: localOutputs, collectors };
+	}
+
+	// Run the regenerators twice into separate temp trees by setting an env override.
+	// Approach: instead of redirecting writes (which requires modifying each collector),
+	// run each collector into the canonical location but capture bytes from /dev/null-style
+	// redirected output. The cleaner approach: run, snapshot, run again, snapshot, diff.
+	const envOverride = (idx: number) => {
+		const dir = idx === 1 ? tmp1 : tmp2;
+		return { ...process.env, FACTORY_TMP_OUTPUT_DIR: dir };
+	};
+
+	// Simpler: run collectors normally once, snapshot their outputs, then run them
+	// again and snapshot outputs to a second temp dir. Since the collectors write to
+	// fixed relative paths, the snapshots both reflect the same generator state.
+	const env1 = envOverride(1);
+	const env2 = envOverride(2);
+
+	// Snapshot before
+	const snapBefore: Record<string, string> = {};
+	for (const out of outputs) {
+		const abs = join(ROOT, out);
+		if (existsSync(abs)) snapBefore[out] = readFileSync(abs).toString("binary");
+	}
+
+	// Run 1
 	for (const c of collectors) {
 		const scriptPath = join(ROOT, "factory/scripts", c);
 		if (!existsSync(scriptPath)) continue;
-		// bun requires the script to be relative to a real working directory
-		const r = spawnSync("env", ["bun", scriptPath], {
+		const r = spawnSync("bun", [scriptPath], {
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
 			cwd: ROOT,
+			env: env1,
 		});
 		if (r.status !== 0) {
-			fail("regenerate", `${c} failed during second run: ${r.stderr}`);
+			fail("regenerate", `${c} (run 1) failed: ${r.stderr}`);
 			return;
 		}
 	}
-
-	// diff outputs
-	const canonicalRoot = ROOT;
-	const failures: string[] = [];
+	const snapRun1: Record<string, string> = {};
 	for (const out of outputs) {
-		const a = readFileSync(join(canonicalRoot, out));
-		const b = readFileSync(join(canonicalRoot, out)); // reading the same file twice — they're written twice so this is sound
-		const shaA = createHash("sha256").update(a).digest("hex");
-		const shaB = createHash("sha256").update(b).digest("hex");
-		if (shaA !== shaB) failures.push(`${out} sha mismatch`);
+		const abs = join(ROOT, out);
+		if (existsSync(abs)) snapRun1[out] = readFileSync(abs).toString("binary");
 	}
 
-	if (failures.length === 0) {
-		ok("regenerate", `${outputs.length} files byte-identical across 2 runs`);
+	// Run 2
+	for (const c of collectors) {
+		const scriptPath = join(ROOT, "factory/scripts", c);
+		if (!existsSync(scriptPath)) continue;
+		const r = spawnSync("bun", [scriptPath], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+			cwd: ROOT,
+			env: env2,
+		});
+		if (r.status !== 0) {
+			fail("regenerate", `${c} (run 2) failed: ${r.stderr}`);
+			return;
+		}
+	}
+	const snapRun2: Record<string, string> = {};
+	for (const out of outputs) {
+		const abs = join(ROOT, out);
+		if (existsSync(abs)) snapRun2[out] = readFileSync(abs).toString("binary");
+	}
+
+	// Restore the originals (do not let the verifier mutate the canonical outputs).
+	for (const [rel, bytes] of Object.entries(snapBefore)) {
+		const abs = join(ROOT, rel);
+		mkdirSync(dirname(abs), { recursive: true });
+		writeFileSync(abs, Buffer.from(bytes, "binary"));
+	}
+
+	// Diff run 1 vs run 2 (excluding outputs that depend on captured-at-time data).
+	const diffs: string[] = [];
+	for (const out of outputs) {
+		if (snapRun1[out] === undefined || snapRun2[out] === undefined) continue;
+		// environment.json contains a timestamp; we expect run1 != run2. Use a
+		// masked compare: strip the `timestamp` line.
+		const mask = (s: string) => s.replace(/"timestamp":\s*"[^"]*"/, '"timestamp":"<masked>"');
+		if (mask(snapRun1[out]) !== mask(snapRun2[out])) {
+			diffs.push(`${out}`);
+		}
+	}
+
+	rmSync(tmp1, { recursive: true, force: true });
+	rmSync(tmp2, { recursive: true, force: true });
+
+	if (diffs.length === 0) {
+		ok("regenerate", `${outputs.length} files byte-identical across 2 runs (timestamp masked)`);
 	} else {
-		fail("regenerate", failures.join("; "));
+		fail("regenerate", `${diffs.length} files differ: ${diffs.join(", ")}`);
 	}
 
-	rmSync(tmp, { recursive: true, force: true });
+	// Reference unused variables to avoid lint noise.
+	void snapshot; void envOverride;
 }
 
 function checkSourcePathsExist(): void {

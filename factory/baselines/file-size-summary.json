@@ -1,0 +1,261 @@
+{
+	"schema_version": 1,
+	"all_tracked_files": 3335,
+	"text_files": 3124,
+	"production_files": 1695,
+	"production_files_gt_500": 144,
+	"production_files_gt_1000": 40,
+	"production_files_gt_1500": 17,
+	"largest_50_production": [
+		{
+			"path": "sdk/packages/llms/src/catalog/catalog.generated.ts",
+			"physical_lines": 24754,
+			"bytes": 543412
+		},
+		{
+			"path": "apps/vscode/src/services/telemetry/TelemetryService.ts",
+			"physical_lines": 2689,
+			"bytes": 86876
+		},
+		{
+			"path": "sdk/packages/core/src/runtime/host/local-runtime-host.ts",
+			"physical_lines": 2270,
+			"bytes": 70904
+		},
+		{
+			"path": "sdk/packages/core/src/hub/runtime-host/hub-runtime-host.ts",
+			"physical_lines": 2132,
+			"bytes": 59347
+		},
+		{
+			"path": "apps/vscode/src/sdk/message-translator.ts",
+			"physical_lines": 2097,
+			"bytes": 71453
+		},
+		{
+			"path": "apps/vscode/src/sdk/SdkController.ts",
+			"physical_lines": 2036,
+			"bytes": 79577
+		},
+		{
+			"path": "apps/vscode/src/services/mcp/McpHub.ts",
+			"physical_lines": 1910,
+			"bytes": 70132
+		},
+		{
+			"path": "sdk/packages/core/src/extensions/tools/team/multi-agent.ts",
+			"physical_lines": 1846,
+			"bytes": 48729
+		},
+		{
+			"path": "apps/cline-hub/src/webview/src/components/views/settings/extensions-view.tsx",
+			"physical_lines": 1770,
+			"bytes": 51293
+		},
+		{
+			"path": "sdk/packages/core/src/session/services/message-builder.ts",
+			"physical_lines": 1728,
+			"bytes": 49609
+		},
+		{
+			"path": "apps/vscode/webview-ui/src/components/chat/ChatTextArea.tsx",
+			"physical_lines": 1668,
+			"bytes": 57327
+		},
+		{
+			"path": "sdk/packages/agents/src/agent-runtime.ts",
+			"physical_lines": 1667,
+			"bytes": 46646
+		},
+		{
+			"path": "apps/vscode/src/dev/debug-harness/server.ts",
+			"physical_lines": 1620,
+			"bytes": 55401
+		},
+		{
+			"path": "apps/cli/src/connectors/adapters/discord.ts",
+			"physical_lines": 1568,
+			"bytes": 46504
+		},
+		{
+			"path": "sdk/packages/core/src/cron/store/sqlite-cron-store.ts",
+			"physical_lines": 1553,
+			"bytes": 43344
+		},
+		{
+			"path": "apps/cline-hub/src/webview/src/components/views/settings/routine-view.tsx",
+			"physical_lines": 1541,
+			"bytes": 42861
+		},
+		{
+			"path": "apps/cline-hub/src/webview/src/components/ai-elements/prompt-input.tsx",
+			"physical_lines": 1503,
+			"bytes": 37349
+		},
+		{
+			"path": "apps/cline-hub/src/webview/src/Chat.tsx",
+			"physical_lines": 1455,
+			"bytes": 40618
+		},
+		{
+			"path": "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts",
+			"physical_lines": 1396,
+			"bytes": 46394
+		},
+		{
+			"path": "apps/cline-hub/src/webview/src/App.tsx",
+			"physical_lines": 1362,
+			"bytes": 41188
+		},
+		{
+			"path": "apps/vscode/webview-ui/src/components/marketplace/MarketplaceView.tsx",
+			"physical_lines": 1357,
+			"bytes": 38223
+		},
+		{
+			"path": "apps/vscode/standalone/runtime-files/vscode/vscode-stubs.js",
+			"physical_lines": 1333,
+			"bytes": 53652
+		},
+		{
+			"path": "sdk/packages/llms/src/providers/ai-sdk.ts",
+			"physical_lines": 1320,
+			"bytes": 37760
+		},
+		{
+			"path": "apps/cli/src/main.ts",
+			"physical_lines": 1270,
+			"bytes": 39758
+		},
+		{
+			"path": "sdk/packages/llms/src/providers/builtins.ts",
+			"physical_lines": 1246,
+			"bytes": 33881
+		},
+		{
+			"path": "apps/vscode/webview-ui/src/App.stories.tsx",
+			"physical_lines": 1238,
+			"bytes": 38215
+		},
+		{
+			"path": "sdk/packages/core/src/services/plugin-install.ts",
+			"physical_lines": 1219,
+			"bytes": 31174
+		},
+		{
+			"path": "apps/cli/src/connectors/adapters/slack.ts",
+			"physical_lines": 1215,
+			"bytes": 35384
+		},
+		{
+			"path": "apps/vscode/webview-ui/src/components/chat/ChatRow.tsx",
+			"physical_lines": 1210,
+			"bytes": 44259
+		},
+		{
+			"path": "sdk/packages/core/src/hooks/hook-file-hooks.ts",
+			"physical_lines": 1144,
+			"bytes": 29388
+		},
+		{
+			"path": "apps/cli/src/connectors/adapters/telegram.ts",
+			"physical_lines": 1136,
+			"bytes": 32820
+		},
+		{
+			"path": "apps/vscode/src/sdk/auth-service.ts",
+			"physical_lines": 1131,
+			"bytes": 37124
+		},
+		{
+			"path": "sdk/packages/core/src/hub/client/index.ts",
+			"physical_lines": 1101,
+			"bytes": 28321
+		},
+		{
+			"path": "apps/cli/src/connectors/connector-host.ts",
+			"physical_lines": 1088,
+			"bytes": 30549
+		},
+		{
+			"path": "sdk/packages/core/src/hub/server/handlers/session-handlers.ts",
+			"physical_lines": 1088,
+			"bytes": 32273
+		},
+		{
+			"path": "sdk/packages/shared/src/agents/types.ts",
+			"physical_lines": 1069,
+			"bytes": 30836
+		},
+		{
+			"path": "apps/cli/src/tui/components/dialogs/provider-picker.tsx",
+			"physical_lines": 1026,
+			"bytes": 26830
+		},
+		{
+			"path": "apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx",
+			"physical_lines": 1026,
+			"bytes": 36828
+		},
+		{
+			"path": "apps/vscode/src/core/hooks/hook-factory.ts",
+			"physical_lines": 1015,
+			"bytes": 35066
+		},
+		{
+			"path": "apps/cline-hub/src/webview/src/components/views/marketplace-view.tsx",
+			"physical_lines": 1012,
+			"bytes": 27579
+		},
+		{
+			"path": "apps/cline-hub/src/server/marketplace.ts",
+			"physical_lines": 999,
+			"bytes": 28807
+		},
+		{
+			"path": "apps/vscode/src/sdk/cline-session-factory.ts",
+			"physical_lines": 996,
+			"bytes": 39337
+		},
+		{
+			"path": "apps/cli/src/tui/root.tsx",
+			"physical_lines": 992,
+			"bytes": 30605
+		},
+		{
+			"path": "sdk/packages/core/src/index.ts",
+			"physical_lines": 974,
+			"bytes": 26355
+		},
+		{
+			"path": "sdk/packages/core/src/services/providers/local-provider-service.ts",
+			"physical_lines": 964,
+			"bytes": 27448
+		},
+		{
+			"path": "sdk/packages/core/src/services/llms/provider-defaults.ts",
+			"physical_lines": 955,
+			"bytes": 25559
+		},
+		{
+			"path": "apps/cli/src/session/export.ts",
+			"physical_lines": 923,
+			"bytes": 23039
+		},
+		{
+			"path": "apps/cli/src/tui/views/config-view.tsx",
+			"physical_lines": 920,
+			"bytes": 24553
+		},
+		{
+			"path": "apps/cli/src/tui/views/onboarding/screens.tsx",
+			"physical_lines": 917,
+			"bytes": 23627
+		},
+		{
+			"path": "sdk/packages/core/src/extensions/tools/team/team-tools.ts",
+			"physical_lines": 913,
+			"bytes": 27879
+		}
+	]
+}
