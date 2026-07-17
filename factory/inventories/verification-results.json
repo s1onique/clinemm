@@ -1,0 +1,1383 @@
+{
+	"schema_version": 1,
+	"host": "darwin-arm64",
+	"executed_at": "2026-07-17T08:35:34.379Z",
+	"executed_commands": [
+		{
+			"id": "build-sdk",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:09.249Z",
+			"finished_at": "2026-07-17T08:35:09.558Z",
+			"duration_ms": 309,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "5279a81a767fd457127e629254a729caef2c0bc616009d905faba72535430d0e",
+			"stderr_sha256": "f7b9b7d686c1eeae6a0d50b856df407577ba5bc0718e4a5d9926cc90d6ce60ee",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "cli-build",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:09.559Z",
+			"finished_at": "2026-07-17T08:35:09.610Z",
+			"duration_ms": 51,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "6c286840ea714cf0442a4dcf151b70f79ff06589d44e6f3799a14b69ed36494d",
+			"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "cline-hub-build-webview",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:09.610Z",
+			"finished_at": "2026-07-17T08:35:09.631Z",
+			"duration_ms": 21,
+			"exit_code": 127,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "b3838a1853dcfbecfc1be5cb87d8f034c8e7323ad0b951af7942767cce2b632f",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "cline-hub-tests",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:09.631Z",
+			"finished_at": "2026-07-17T08:35:13.639Z",
+			"duration_ms": 4008,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "f0f53f500e6ae6ecea6251236fcb0966fbba54c2a3c66b050941cde61d873a2d",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "install-root-frozen",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:13.644Z",
+			"finished_at": "2026-07-17T08:35:17.660Z",
+			"duration_ms": 4016,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
+			"stdout_sha256": "2d879def92fdd8299c1b8dea63dfee2e9d195f3c0a48c784b7cf461ba2c9a452",
+			"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "root-check",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:17.663Z",
+			"finished_at": "2026-07-17T08:35:18.044Z",
+			"duration_ms": 381,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "e6397dbed974d9af2fe00603c63a24fea0fae370c47da59a8ae06aad06c52e5d",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "root-e2e",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:18.045Z",
+			"finished_at": "2026-07-17T08:35:18.530Z",
+			"duration_ms": 485,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "39727044f2868137696cfef00ef4cb8dc46cabf353887f313c9fa59a12475ed5",
+			"stderr_sha256": "79a92d4917edc4325152f121f2ba671d4720a4cb09ca0442b345e1bc167c8017",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "root-types",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:18.531Z",
+			"finished_at": "2026-07-17T08:35:22.533Z",
+			"duration_ms": 4002,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
+			"stdout_sha256": "8bfcfc80fbdf96a2193245d119a2e46d0ad160ff9d871f7dc559c448afa399fe",
+			"stderr_sha256": "c6ae309436a3af28ef60074da2e5a3798e47fa6591a02d5ce79728b4048a1ad7",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "root-unit",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:22.533Z",
+			"finished_at": "2026-07-17T08:35:22.774Z",
+			"duration_ms": 241,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "6cca3031073794bc7f859b2d24bc18b3b6fa909ae96f0c9916cd73fb91369f38",
+			"stderr_sha256": "f9d3b81606a71b304b130904a4a218d7a43ad4d410d046987f60a141468f322d",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "sdk-cli-hub-tests",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:22.774Z",
+			"finished_at": "2026-07-17T08:35:22.997Z",
+			"duration_ms": 223,
+			"exit_code": 130,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "abe8caa11835a43704bbb34e11671915a237ad1b8010008f5af45be36439abce",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-analyze-unused",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:22.998Z",
+			"finished_at": "2026-07-17T08:35:27.005Z",
+			"duration_ms": 4007,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "38e9f2d9c32be4061e40f5edf4ffd9c25d0c9a0075474f13dd4566c84762e389",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-build",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:27.005Z",
+			"finished_at": "2026-07-17T08:35:27.099Z",
+			"duration_ms": 94,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "2090aeb978eb3f75ddece3ac52206ebbb6a00a85e9b1aaf99bff72106a497550",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-compile-standalone",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:27.099Z",
+			"finished_at": "2026-07-17T08:35:27.194Z",
+			"duration_ms": 95,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "a39ed4f9a8ea3d51d8994f9d28f8757bec437ee44e21ce8c6e2396d05527dfd2",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-download-ripgrep",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:27.194Z",
+			"finished_at": "2026-07-17T08:35:31.202Z",
+			"duration_ms": 4008,
+			"exit_code": null,
+			"signal": "SIGTERM",
+			"timeout": true,
+			"stdout_sha256": "97c7db6e9a1a37ee8ff56b40c882df31f2a552a3ac9bd291322507cc48480c59",
+			"stderr_sha256": "152836a211b94d6f5c8686ae256682a6e75022db76ad7964414dcb53ec14d44e",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-e2e",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:31.203Z",
+			"finished_at": "2026-07-17T08:35:31.224Z",
+			"duration_ms": 21,
+			"exit_code": 127,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "21820bdfa688725e71b9352c9d8703001ce56d2944311074b8c1be5563fd1642",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-protos",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:31.224Z",
+			"finished_at": "2026-07-17T08:35:31.303Z",
+			"duration_ms": 79,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "bd4e817884e0e10a57c5028e68453a747538c2e323e8eebd7f81cc24fb5a6940",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-quality",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:31.304Z",
+			"finished_at": "2026-07-17T08:35:31.396Z",
+			"duration_ms": 92,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "2a6bdf925739d049b38e681348053588ac6596c9dee489fb964f48926f4d1a0e",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-unit",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:31.396Z",
+			"finished_at": "2026-07-17T08:35:34.035Z",
+			"duration_ms": 2639,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "81ea84c7b585650ebb95af4fbcb559f7a3fcb7df9fdd59b7eb28b17f0f29a5d2",
+			"stderr_sha256": "5ef8e7dbae6cc35e5a6b7872657f4e8022b654079c512e5095e5433fe13bd92e",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-vitest",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:34.036Z",
+			"finished_at": "2026-07-17T08:35:34.205Z",
+			"duration_ms": 169,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "aa7294d5a785ab1564f31e273d6d98d972915ea99fc33738e69dc6cf112d1588",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		},
+		{
+			"id": "vscode-webview",
+			"status": "fail",
+			"started_at": "2026-07-17T08:35:34.206Z",
+			"finished_at": "2026-07-17T08:35:34.379Z",
+			"duration_ms": 173,
+			"exit_code": 1,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"stderr_sha256": "72513f23f84d4bb55e16ff0097b995c8a69597b8d0d2603d97346fb43a33a2d4",
+			"stdout_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stdout",
+			"stderr_path": ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stderr",
+			"head_oid": "916a2ccf14e26b13cd4a0a0e7d576aee37a8c275",
+			"tree_oid": "9de294af67cdba61f08bcc55fe7ac9d32aabedb6",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+		}
+	],
+	"skipped_commands": [
+		{
+			"id": "cli-build-platforms",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:09.610Z",
+			"finished_at": "2026-07-17T08:35:09.610Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "cli-publish-npm",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:09.610Z",
+			"finished_at": "2026-07-17T08:35:09.610Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "ext-publish-marketplace",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:13.640Z",
+			"finished_at": "2026-07-17T08:35:13.640Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "ext-publish-nightly",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:13.643Z",
+			"finished_at": "2026-07-17T08:35:13.643Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "root-e2e-interactive",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:18.530Z",
+			"finished_at": "2026-07-17T08:35:18.530Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=manual-interactive (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "root-test-agents",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:18.530Z",
+			"finished_at": "2026-07-17T08:35:18.530Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=obsolete (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "sdk-core-live-tests",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:22.998Z",
+			"finished_at": "2026-07-17T08:35:22.998Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=live-credentialed (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "sdk-llms-live-tests",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:22.998Z",
+			"finished_at": "2026-07-17T08:35:22.998Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=live-credentialed (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "sdk-publish",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:22.998Z",
+			"finished_at": "2026-07-17T08:35:22.998Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "testing-platform-integration",
+			"status": "unavailable",
+			"started_at": "2026-07-17T08:35:22.998Z",
+			"finished_at": "2026-07-17T08:35:22.998Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "host=darwin-arm64 not in host_support=linux-x64"
+		},
+		{
+			"id": "verify-workos-device-auth",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:22.998Z",
+			"finished_at": "2026-07-17T08:35:22.998Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=live-credentialed (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "vscode-e2e-ui",
+			"status": "skip",
+			"started_at": "2026-07-17T08:35:31.224Z",
+			"finished_at": "2026-07-17T08:35:31.224Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "class=manual-interactive (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "vscode-integration",
+			"status": "unavailable",
+			"started_at": "2026-07-17T08:35:31.224Z",
+			"finished_at": "2026-07-17T08:35:31.224Z",
+			"duration_ms": 0,
+			"exit_code": null,
+			"signal": null,
+			"timeout": false,
+			"stdout_sha256": "",
+			"stderr_sha256": "",
+			"head_oid": "",
+			"tree_oid": "",
+			"environment_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"notes": "host=darwin-arm64 not in host_support=linux-x64,windows-x64"
+		}
+	],
+	"commands": [
+		{
+			"id": "build-sdk",
+			"name": "Build SDK packages",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun run build:sdk",
+			"class": "mandatory",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test.yml",
+				"locator": "jobs.vscode-test.steps[name=Build SDK packages]"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"sdk/packages/*/dist/index.js"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "cli-build",
+			"name": "Build CLI target",
+			"scope": "apps/cli",
+			"working_directory": ".",
+			"command": "bun -F @cline/cli build",
+			"class": "mandatory",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts[check] invocation"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/cli/dist/index.js"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "cli-build-platforms",
+			"name": "CLI build with native variants (single host)",
+			"scope": "apps/cli",
+			"working_directory": "apps/cli",
+			"command": "bun run build:platforms:single",
+			"class": "release-only",
+			"source": {
+				"path": "apps/cli/package.json",
+				"locator": "scripts.build:platforms:single"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/cli/bin/cline-*"
+			],
+			"result": "skip",
+			"reason": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "cli-publish-npm",
+			"name": "CLI publish to npm",
+			"scope": "apps/cli",
+			"working_directory": ".",
+			"command": "bun -F @cline/cli publish:npm",
+			"class": "release-only",
+			"source": {
+				"path": "apps/cli/package.json",
+				"locator": "scripts.publish:npm"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"NPM_TOKEN"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "cline-hub-build-webview",
+			"name": "Cline Hub webview build",
+			"scope": "apps/cline-hub",
+			"working_directory": "apps/cline-hub",
+			"command": "bun run build:webview",
+			"class": "mandatory",
+			"source": {
+				"path": "apps/cline-hub/package.json",
+				"locator": "scripts.build:webview"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/cline-hub/src/webview/dist/**"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "cline-hub-tests",
+			"name": "Cline Hub vitest suite",
+			"scope": "apps/cline-hub",
+			"working_directory": "apps/cline-hub",
+			"command": "bunx vitest run --config vitest.config.ts",
+			"class": "mandatory",
+			"source": {
+				"path": "apps/cline-hub/package.json",
+				"locator": "scripts.test"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "ext-publish-marketplace",
+			"name": "VS Code extension publish to marketplace",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run publish:marketplace",
+			"class": "release-only",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.publish:marketplace"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"VSCE_PAT"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "ext-publish-nightly",
+			"name": "VS Code extension nightly publish",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run publish:marketplace:nightly",
+			"class": "release-only",
+			"source": {
+				"path": ".github/workflows/ext-vscode-publish-nightly.yml",
+				"locator": "jobs.publish-nightly"
+			},
+			"host_support": [
+				"linux-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"VSCE_PAT"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "install-root-frozen",
+			"name": "Root workspace install (frozen lockfile)",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun install --frozen-lockfile",
+			"class": "mandatory",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test.yml",
+				"locator": "jobs.vscode-test.steps[name=Install workspace dependencies]"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"GITHUB_TOKEN"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"node_modules/.bin/*",
+				"bun.lock unchanged"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "root-check",
+			"name": "Root check (biome + SDK build + CLI build + hub webview + types + publish check)",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun run check",
+			"class": "mandatory",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.check"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "root-e2e",
+			"name": "Root e2e tests (core + cli e2e)",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun run test:e2e",
+			"class": "affected-scope",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.test:e2e"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "root-e2e-interactive",
+			"name": "CLI interactive e2e tests (Playwright)",
+			"scope": "apps/cli",
+			"working_directory": ".",
+			"command": "bun run test:e2e:interactive",
+			"class": "manual-interactive",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.test:e2e:interactive"
+			},
+			"host_support": [
+				"darwin-arm64"
+			],
+			"requires_network": false,
+			"requires_gui": true,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=manual-interactive (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "root-test-agents",
+			"name": "Root scripts.test:unit (inner: agents + llms + core + cli + cline-hub)",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun -F @cline/agents test",
+			"class": "obsolete",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.test:unit (composite invocation)"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=obsolete (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "root-types",
+			"name": "Root typecheck",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun run types",
+			"class": "mandatory",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.types"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "root-unit",
+			"name": "Root unit tests (parallel across SDK/CLI/Hub)",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun run test:unit",
+			"class": "mandatory",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.test:unit"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "sdk-cli-hub-tests",
+			"name": "SDK + CLI + Hub tests (parallel)",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun run test",
+			"class": "mandatory",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.test"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "sdk-core-live-tests",
+			"name": "SDK core live provider tests (requires API keys)",
+			"scope": "sdk/packages/core",
+			"working_directory": "sdk/packages/core",
+			"command": "bun run test:live",
+			"class": "live-credentialed",
+			"source": {
+				"path": "sdk/packages/core/package.json",
+				"locator": "scripts.test:live"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"POSTHOG_API_KEY"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=live-credentialed (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "sdk-llms-live-tests",
+			"name": "SDK llms live provider tests (requires API keys)",
+			"scope": "sdk/packages/llms",
+			"working_directory": "sdk/packages/llms",
+			"command": "bun run test:live",
+			"class": "live-credentialed",
+			"source": {
+				"path": "sdk/packages/llms/package.json",
+				"locator": "scripts.test:live"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"OPENAI_API_KEY",
+				"ANTHROPIC_API_KEY"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=live-credentialed (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "sdk-publish",
+			"name": "SDK packages publish workflow",
+			"scope": "sdk",
+			"working_directory": ".",
+			"command": "bun sdk/scripts/release.ts",
+			"class": "release-only",
+			"source": {
+				"path": ".github/workflows/sdk-publish.yml",
+				"locator": "jobs.publish"
+			},
+			"host_support": [
+				"linux-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"NPM_TOKEN"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=release-only (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "testing-platform-integration",
+			"name": "VS Code testing-platform integration spec tests",
+			"scope": "apps/vscode/testing-platform",
+			"working_directory": "apps/vscode",
+			"command": "bun run test:integration",
+			"class": "affected-scope",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test.yml",
+				"locator": "jobs.test-platform-integration"
+			},
+			"host_support": [
+				"linux-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "unavailable",
+			"reason": "host=darwin-arm64 not in host_support=linux-x64"
+		},
+		{
+			"id": "verify-workos-device-auth",
+			"name": "Verify WorkOS device auth flow",
+			"scope": "root",
+			"working_directory": ".",
+			"command": "bun run verify:workos-device-auth",
+			"class": "live-credentialed",
+			"source": {
+				"path": "package.json",
+				"locator": "scripts.verify:workos-device-auth"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [
+				"WORKOS_CLIENT_ID"
+			],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=live-credentialed (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "vscode-analyze-unused",
+			"name": "VS Code unused code analysis (knip)",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run analyze:unused",
+			"class": "affected-scope",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.analyze:unused"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-build",
+			"name": "VS Code ci:build (protos + webview build + esbuild + compile-tests)",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run ci:build",
+			"class": "mandatory",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.ci:build"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/vscode/dist/extension.js",
+				"apps/vscode/out/**"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-compile-standalone",
+			"name": "VS Code standalone compile + package",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run compile-standalone",
+			"class": "mandatory",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test.yml",
+				"locator": "jobs.test-platform-integration.steps[name=Compile Standalone]"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/vscode/dist-standalone/cline-core.js"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-download-ripgrep",
+			"name": "VS Code ripgrep binary download",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run download-ripgrep",
+			"class": "mandatory",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test.yml",
+				"locator": "jobs.test-platform-integration.steps[name=Download ripgrep binaries]"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/vscode/dist/ripgrep/*"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-e2e",
+			"name": "VS Code end-to-end (Playwright + vsix build)",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run test:e2e",
+			"class": "affected-scope",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test-e2e.yml",
+				"locator": "jobs.e2e"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": true,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"dist/e2e.vsix"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-e2e-ui",
+			"name": "VS Code interactive Playwright UI",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run test:e2e:ui",
+			"class": "manual-interactive",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.test:e2e:ui"
+			},
+			"host_support": [
+				"darwin-arm64"
+			],
+			"requires_network": false,
+			"requires_gui": true,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "skip",
+			"reason": "class=manual-interactive (not executed by runner; classification preserved)"
+		},
+		{
+			"id": "vscode-integration",
+			"name": "VS Code extension integration tests (vscode-test)",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run test:integration",
+			"class": "mandatory",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test.yml",
+				"locator": "jobs.vscode-test.steps[name=Extension Integration Tests]"
+			},
+			"host_support": [
+				"linux-x64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": true,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				".vscode-test/**"
+			],
+			"result": "unavailable",
+			"reason": "host=darwin-arm64 not in host_support=linux-x64,windows-x64"
+		},
+		{
+			"id": "vscode-protos",
+			"name": "VS Code protobuf generation",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run protos",
+			"class": "mandatory",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.protos"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/vscode/src/generated/**",
+				"apps/vscode/src/shared/proto/**"
+			],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-quality",
+			"name": "VS Code ci:check-all (parallel types + lint + format)",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run ci:check-all",
+			"class": "mandatory",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.ci:check-all"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-unit",
+			"name": "VS Code bun unit tests",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run test:unit",
+			"class": "mandatory",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.test:unit"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-vitest",
+			"name": "VS Code Vitest suites (SDK adapter + model catalog)",
+			"scope": "apps/vscode",
+			"working_directory": "apps/vscode",
+			"command": "bun run test:vitest",
+			"class": "mandatory",
+			"source": {
+				"path": ".github/workflows/ext-vscode-test.yml",
+				"locator": "jobs.vscode-test.steps[name=Vitest Suites]"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [],
+			"result": "fail",
+			"reason": null
+		},
+		{
+			"id": "vscode-webview",
+			"name": "VS Code webview tests (cd webview-ui; bun run test)",
+			"scope": "apps/vscode/webview-ui",
+			"working_directory": "apps/vscode",
+			"command": "bun run test:webview",
+			"class": "mandatory",
+			"source": {
+				"path": "apps/vscode/package.json",
+				"locator": "scripts.test:webview"
+			},
+			"host_support": [
+				"linux-x64",
+				"darwin-arm64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"apps/vscode/webview-ui/coverage/lcov.info (in CI)"
+			],
+			"result": "fail",
+			"reason": null
+		}
+	]
+}

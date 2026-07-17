@@ -236,8 +236,47 @@ async function main(): Promise<void> {
 	// Sequential execution. We keep simple ordering and per-command timeout.
 	// Independent commands are not parallelized in this baseline ACT (determinism over speed).
 	for (const c of commands) {
-		if (onlyFilter && c.id !== onlyFilter) continue;
-		if (skipFilter && skipFilter.has(c.id)) continue;
+		const matchedOnly = onlyFilter ? c.id === onlyFilter : true;
+		const matchedSkip = skipFilter ? skipFilter.has(c.id) : false;
+		if (onlyFilter && !matchedOnly) {
+			// not selected by --only
+			skipped.push({
+				id: c.id,
+				status: "skip",
+				started_at: new Date().toISOString(),
+				finished_at: new Date().toISOString(),
+				duration_ms: 0,
+				exit_code: null,
+				signal: null,
+				timeout: false,
+				stdout_sha256: "",
+				stderr_sha256: "",
+				head_oid: "",
+				tree_oid: "",
+				environment_sha256: envSha(),
+				notes: `class=${c.class}; --only=${onlyFilter} excluded`,
+			});
+			continue;
+		}
+		if (matchedSkip) {
+			skipped.push({
+				id: c.id,
+				status: "skip",
+				started_at: new Date().toISOString(),
+				finished_at: new Date().toISOString(),
+				duration_ms: 0,
+				exit_code: null,
+				signal: null,
+				timeout: false,
+				stdout_sha256: "",
+				stderr_sha256: "",
+				head_oid: "",
+				tree_oid: "",
+				environment_sha256: envSha(),
+				notes: `class=${c.class}; --skip filter excluded`,
+			});
+			continue;
+		}
 
 		// Filter to classes we actually run
 		const runnable = c.class === "mandatory" || c.class === "affected-scope";
