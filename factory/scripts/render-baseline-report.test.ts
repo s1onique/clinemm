@@ -1,16 +1,27 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION08 — Renderer/closure tests.
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION10 — Renderer/closure tests.
  *
  * Pure-function tests on ./baseline-closure.ts. Uses bun:test (node-side
  * unit suite) so it can be invoked directly via
  * `bun test factory/scripts/render-baseline-report.test.ts`.
  *
- * These tests pin the fail-closed behavior across CORRECTION05/06/07/08.
- * The CORRECTION08 model replaces the literal HEAD/HEAD^{tree} binding
- * with a non-self-referential filtered subject tree (HEAD minus
- * `docs/factory/baseline-report.md` and `.factory/`). The pinned cases
- * exercise both the new subject-tree contract and the legacy fallback.
+ * These tests pin the fail-closed behavior across CORRECTION05/06/07/08/10.
+ *
+ * CORRECTION08 introduced the non-self-referential filtered subject tree
+ * (HEAD minus `SUBJECT_TREE_EXCLUDES`). CORRECTION09 made the legacy
+ * fallback fail-closed (legacy bundles without `subject_tree_oid`
+ * always FAIL with `SUBJECT_TREE_CONTRACT_MISSING`). CORRECTION10
+ * splits subject and execution identity:
+ *
+ *   subject_tree_oid   — filtered subject tree (binding target).
+ *   execution_head_oid — actual checked-out commit.
+ *   execution_tree_oid — HEAD^{tree} at execution time (unfiltered).
+ *   worktree_clean_before / worktree_clean_after
+ *                       — `git status --porcelain` empty before/after.
+ *
+ * Bundles missing any of these four pieces, or with a dirty worktree,
+ * fail with the corresponding CORRECTION10 reason code.
  *
  *   bun test factory/scripts/render-baseline-report.test.ts
  */
@@ -44,7 +55,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
-const TREE = "89abcdef0123456789abcdef0123456789abcdef01";
+const TREE = "89abcdef0123456789abcdef0123456789abcdef";
 const HEAD_OTHER = "ffffffff11112222333344445555666677778888";
 const FILTERED_TREE = "1234abcd1234abcd1234abcd1234abcd1234abcd";
 
@@ -63,6 +74,13 @@ function baseOk(overrides: Partial<EvidenceView> = {}): EvidenceView {
 		treeMatches: true,
 		subjectTreeContract: true,
 		subjectTreeComputationOk: true,
+		executionIdentityRecorded: true,
+		executionHeadOidWellformed: true,
+		executionTreeOidWellformed: true,
+		executionTreeBound: true,
+		executionTrees: [TREE],
+		worktreeCleanBeforeRecorded: true,
+		worktreeCleanAfterRecorded: true,
 		hashManifestValid: true,
 		missingFiles: [],
 		unexpectedFiles: [],
@@ -70,8 +88,6 @@ function baseOk(overrides: Partial<EvidenceView> = {}): EvidenceView {
 		malformedLines: [],
 		duplicatePaths: [],
 		commandSetExact: true,
-		executionTrees: [TREE],
-		executionTreeBound: true,
 		duplicateEvidenceCommandIds: [],
 		duplicateExecutedCommandIds: [],
 		commandRecordMismatches: [],
@@ -332,6 +348,87 @@ describe("computeClosure — CORRECTION08 fail-closed pinned cases", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CORRECTION10 pinned cases — subject/execution identity split
+// ---------------------------------------------------------------------------
+
+describe("computeClosure — CORRECTION10 pinned cases", () => {
+	it("P0 #1: missing execution_head_oid → FAIL with EXECUTION_IDENTITY_MISSING", () => {
+		const r = computeClosure(baseInput({ executionIdentityRecorded: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.evidenceOk).toBe(false);
+		expect(r.reasonCodes).toContain("EXECUTION_IDENTITY_MISSING");
+		expect(r.reasonCodes).toContain("EVIDENCE_INCOMPLETE");
+	});
+
+	it("P0 #2: malformed execution_head_oid → FAIL with EXECUTION_IDENTITY_MALFORMED", () => {
+		const r = computeClosure(baseInput({ executionHeadOidWellformed: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.reasonCodes).toContain("EXECUTION_IDENTITY_MALFORMED");
+		expect(r.evidenceOk).toBe(false);
+	});
+
+	it("P0 #3: malformed execution_tree_oid → FAIL with EXECUTION_IDENTITY_MALFORMED", () => {
+		const r = computeClosure(baseInput({ executionTreeOidWellformed: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.reasonCodes).toContain("EXECUTION_IDENTITY_MALFORMED");
+	});
+
+	it("P0 #4: dirty worktree before matrix → FAIL with WORKTREE_DIRTY_BEFORE", () => {
+		const r = computeClosure(baseInput({ worktreeCleanBeforeRecorded: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.reasonCodes).toContain("WORKTREE_DIRTY_BEFORE");
+		expect(r.evidenceOk).toBe(false);
+	});
+
+	it("P0 #5: dirty worktree after matrix → FAIL with WORKTREE_DIRTY_AFTER", () => {
+		const r = computeClosure(baseInput({ worktreeCleanAfterRecorded: false }));
+		expect(r.verdict).toBe("FAIL");
+		expect(r.reasonCodes).toContain("WORKTREE_DIRTY_AFTER");
+		expect(r.evidenceOk).toBe(false);
+	});
+
+	it("P0 #6: command rows disagree with bundle execution_tree_oid → FAIL with EXECUTION_TREE_NOT_BOUND", () => {
+		const r = computeClosure(
+			baseInput({
+				executionTrees: [HEAD_OTHER],
+				executionTreeBound: false,
+			}),
+		);
+		expect(r.verdict).toBe("FAIL");
+		expect(r.reasonCodes).toContain("EXECUTION_TREE_NOT_BOUND");
+	});
+
+	it("P0 #7: more than one execution tree → FAIL with EXECUTION_TREES_MIXED", () => {
+		const r = computeClosure(
+			baseInput({
+				executionTrees: [TREE, HEAD_OTHER, "a".repeat(40)],
+				executionTreeBound: false,
+			}),
+		);
+		expect(r.verdict).toBe("FAIL");
+		expect(r.reasonCodes).toContain("EXECUTION_TREES_MIXED");
+	});
+
+	it("P2: head well-formedness is information-only (does not block closure under CORRECTION10)", () => {
+		const r = computeClosure(baseInput({ headOidWellformed: false }));
+		expect(r.verdict).toBe("PARTIAL");
+		expect(r.evidenceOk).toBe(true);
+	});
+
+	it("P3: all CORRECTION10 dimensions green → PARTIAL with no execution-identity reason codes", () => {
+		const r = computeClosure(baseInput());
+		expect(r.verdict).toBe("PARTIAL");
+		expect(r.evidenceOk).toBe(true);
+		expect(r.reasonCodes).not.toContain("EXECUTION_IDENTITY_MISSING");
+		expect(r.reasonCodes).not.toContain("EXECUTION_IDENTITY_MALFORMED");
+		expect(r.reasonCodes).not.toContain("WORKTREE_DIRTY_BEFORE");
+		expect(r.reasonCodes).not.toContain("WORKTREE_DIRTY_AFTER");
+		expect(r.reasonCodes).not.toContain("EXECUTION_TREE_NOT_BOUND");
+		expect(r.reasonCodes).not.toContain("EXECUTION_TREES_MIXED");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // Additional invariants
 // ---------------------------------------------------------------------------
 
@@ -411,7 +508,7 @@ describe("computeClosure — additional invariants", () => {
 		expect(r.reasonCodes).toContain("EVIDENCE_INCOMPLETE");
 	});
 
-	it("isEvidenceOk directly matches the audit-pinned conjunction", () => {
+	it("isEvidenceOk directly matches the audit-pinned conjunction (CORRECTION10)", () => {
 		const v = baseOk();
 		expect(isEvidenceOkV(v)).toBe(true);
 	});
@@ -421,9 +518,15 @@ function isEvidenceOkV(e: EvidenceView): boolean {
 	return (
 		e.exists &&
 		e.subjectTreeComputationOk && // CORRECTION09: filtered tree must compute
-		e.subjectTreeContract && // CORRECTION09: must be on new contract (legacy is fail-closed)
+		e.subjectTreeContract && // CORRECTION09: must be on new contract
+		e.executionIdentityRecorded && // CORRECTION10: subject/execution split recorded
+		e.executionHeadOidWellformed && // CORRECTION10
+		e.executionTreeOidWellformed && // CORRECTION10
+		e.worktreeCleanBeforeRecorded === true && // CORRECTION10
+		e.worktreeCleanAfterRecorded === true && // CORRECTION10
 		e.treeMatches &&
 		e.executionTreeBound &&
+		e.executionTrees.length === 1 &&
 		e.hashManifestValid &&
 		e.missingFiles.length === 0 &&
 		e.unexpectedFiles.length === 0 &&
@@ -431,7 +534,6 @@ function isEvidenceOkV(e: EvidenceView): boolean {
 		e.malformedLines.length === 0 &&
 		e.duplicatePaths.length === 0 &&
 		e.commandSetExact &&
-		e.executionTrees.length === 1 &&
 		e.duplicateEvidenceCommandIds.length === 0 &&
 		e.duplicateExecutedCommandIds.length === 0 &&
 		e.commandRecordMismatches.length === 0 &&
@@ -553,7 +655,7 @@ describe("resolveEvidencePayloadPath — strict evDir containment (public vocabu
 // checkEvidence — directory + manifest pipeline (full negative coverage)
 // ---------------------------------------------------------------------------
 
-describe("checkEvidence — directory + manifest pipeline", () => {
+describe("checkEvidence — directory + manifest pipeline (CORRECTION10)", () => {
 	let tmpRoot: string;
 	let evDir: string;
 
@@ -561,7 +663,7 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 	const filesOnDisk: Array<{ rel: string; bytes: Buffer }> = [];
 
 	beforeAll(() => {
-		tmpRoot = mkdtempSync(join(tmpdir(), "baseline-c08-"));
+		tmpRoot = mkdtempSync(join(tmpdir(), "baseline-c10-"));
 		evDir = join(tmpRoot, "detached");
 		mkdirSync(join(evDir, "commands"), { recursive: true });
 
@@ -590,8 +692,9 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 	}
 
 	function makeExecutedRecord(extra: Partial<any> = {}): any {
-		// Test fixture: the simulated execution tree matches the bound
-		// subject tree (FILTERED_TREE) so the bundle is internally coherent.
+		// CORRECTION10: per-command `tree_oid` is the **execution tree**
+		// (full, unfiltered). `execution_head_oid` is the actual
+		// commit. Both are pinned by the bundle's top-level fields.
 		return {
 			id: "build",
 			status: "pass",
@@ -604,7 +707,7 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 			stdout_sha256: sha256Hex(filesOnDisk[1]!.bytes),
 			stderr_sha256: "0".repeat(64),
 			head_oid: HEAD,
-			tree_oid: FILTERED_TREE,
+			tree_oid: TREE,
 			environment_sha256: "c".repeat(64),
 			failure_classification: null,
 			notes: "",
@@ -612,14 +715,29 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 		};
 	}
 
-	function makeEvidenceWithSubject(cmd: any, opts: { subjectTree?: string | null; treeOid?: string } = {}): { ok: boolean; value: any; error: string | null } {
-		const treeOid = opts.treeOid ?? FILTERED_TREE;
+	function makeEvidenceC10(cmd: any, opts: {
+		subjectTree?: string | null;
+		executionHeadOid?: string | null;
+		executionTreeOid?: string | null;
+		worktreeCleanBefore?: boolean | null;
+		worktreeCleanAfter?: boolean | null;
+		legacyTreeOid?: string | null;
+	} = {}): { ok: boolean; value: any; error: string | null } {
 		const subjectTree = opts.subjectTree === undefined ? FILTERED_TREE : opts.subjectTree;
+		const executionHeadOid = opts.executionHeadOid === undefined ? HEAD : opts.executionHeadOid;
+		const executionTreeOid = opts.executionTreeOid === undefined ? TREE : opts.executionTreeOid;
+		const worktreeCleanBefore = opts.worktreeCleanBefore === undefined ? true : opts.worktreeCleanBefore;
+		const worktreeCleanAfter = opts.worktreeCleanAfter === undefined ? true : opts.worktreeCleanAfter;
+		const legacyTreeOid = opts.legacyTreeOid === undefined ? TREE : opts.legacyTreeOid;
 		const obj: any = {
-			schema_version: 1,
+			schema_version: 2,
 			act_id: "ACT-CLINEMM-FORK-BASELINE01",
 			head_oid: HEAD,
-			tree_oid: treeOid,
+			tree_oid: legacyTreeOid, // legacy field, retained only for per-record equality
+			execution_head_oid: executionHeadOid,
+			execution_tree_oid: executionTreeOid,
+			worktree_clean_before: worktreeCleanBefore,
+			worktree_clean_after: worktreeCleanAfter,
 			generated_at: "2026-07-17T09:50:09.000Z",
 			host_arch: "darwin-arm64",
 			commands: [cmd],
@@ -637,7 +755,7 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 		treeOidNow?: string;
 	}) {
 		return checkEvidence({
-			ev: args.ev ?? makeEvidenceWithSubject(makeExecutedRecord()),
+			ev: args.ev ?? makeEvidenceC10(makeExecutedRecord()),
 			hashesText: args.hashesText ?? manifestText(),
 			evDirAbs: evDir,
 			executedCmds: args.executedCmds ?? [makeExecutedRecord()],
@@ -654,12 +772,18 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 		expect(CONTROL_FILES.has("hashes.sha256")).toBe(true);
 	});
 
-	it("happy path: every CORRECTION08 dimension satisfied", () => {
+	it("happy path: every CORRECTION10 dimension satisfied", () => {
 		const v = runCheck({});
 		expect(v.exists).toBe(true);
 		expect(v.subjectTreeContract).toBe(true);
 		expect(v.treeMatches).toBe(true);
 		expect(v.executionTreeBound).toBe(true);
+		expect(v.executionTrees).toEqual([TREE]);
+		expect(v.executionIdentityRecorded).toBe(true);
+		expect(v.executionHeadOidWellformed).toBe(true);
+		expect(v.executionTreeOidWellformed).toBe(true);
+		expect(v.worktreeCleanBeforeRecorded).toBe(true);
+		expect(v.worktreeCleanAfterRecorded).toBe(true);
 		expect(v.hashManifestValid).toBe(true);
 		expect(v.missingFiles).toEqual([]);
 		expect(v.unexpectedFiles).toEqual([]);
@@ -667,7 +791,6 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 		expect(v.malformedLines).toEqual([]);
 		expect(v.duplicatePaths).toEqual([]);
 		expect(v.commandSetExact).toBe(true);
-		expect(v.executionTrees).toEqual([FILTERED_TREE]);
 		expect(v.duplicateEvidenceCommandIds).toEqual([]);
 		expect(v.duplicateExecutedCommandIds).toEqual([]);
 		expect(v.commandRecordMismatches).toEqual([]);
@@ -676,33 +799,6 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 		expect(v.malformedEvidenceCommandRows).toBe(0);
 		expect(v.malformedExecutedCommandRows).toBe(0);
 		expect(v.decodeError).toBe(null);
-	});
-
-	it("legacy bundle (no subject_tree_oid) → subjectTreeContract=false, but treeMatches via legacy fallback", () => {
-		// Legacy bundle: tree_oid matches HEAD^{tree} (TREE), no subject_tree_oid.
-		const legacyCmd = {
-			id: "build",
-			status: "pass",
-			head_oid: HEAD,
-			tree_oid: TREE,
-			stdout_sha256: sha256Hex(filesOnDisk[1]!.bytes),
-			stderr_sha256: "0".repeat(64),
-			environment_sha256: "c".repeat(64),
-			exit_code: 0,
-			signal: null,
-			timeout: false,
-			failure_classification: null,
-			notes: "",
-		};
-		const ev = makeEvidenceWithSubject(legacyCmd, { subjectTree: null, treeOid: TREE });
-		const v = runCheck({
-			ev,
-			filteredSubjectTreeOidNow: null,
-			treeOidNow: TREE,
-			executedCmds: [legacyCmd],
-		});
-		expect(v.subjectTreeContract).toBe(false);
-		expect(v.treeMatches).toBe(true);
 	});
 
 	it("stale subject tree → FAIL (subject_tree_oid mismatch)", () => {
@@ -775,7 +871,7 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 	});
 
 	it("malformed evidence command rows are counted", () => {
-		const ev = makeEvidenceWithSubject(makeExecutedRecord());
+		const ev = makeEvidenceC10(makeExecutedRecord());
 		ev.value.commands.push({ status: "pass" });
 		ev.value.commands.push({ id: null as any, status: "fail" });
 		const v = runCheck({ ev });
@@ -802,7 +898,7 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 	});
 
 	it("R2: mixed execution trees via real command rows → executionTreeBound=false", () => {
-		const ev = makeEvidenceWithSubject(makeExecutedRecord());
+		const ev = makeEvidenceC10(makeExecutedRecord());
 		ev.value.commands.push({
 			...makeExecutedRecord(),
 			id: "later",
@@ -819,10 +915,9 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 		expect(v.executionTreeBound).toBe(false);
 	});
 
-	it("R2: single execution tree but bound to wrong tree → executionTreeBound=false", () => {
+	it("R2: single execution tree but command rows disagree with bundle execution_tree_oid → executionTreeBound=false", () => {
 		const cmd = { ...makeExecutedRecord(), tree_oid: HEAD_OTHER };
-		const ev = makeEvidenceWithSubject(cmd);
-		ev.value.tree_oid = TREE; // top-level still TREE
+		const ev = makeEvidenceC10(cmd, { executionTreeOid: TREE });
 		const v = runCheck({
 			ev,
 			executedCmds: [{ ...makeExecutedRecord(), tree_oid: HEAD_OTHER }],
@@ -843,7 +938,7 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 	});
 
 	it("R3: duplicate command IDs in evidence are detected", () => {
-		const ev = makeEvidenceWithSubject(makeExecutedRecord());
+		const ev = makeEvidenceC10(makeExecutedRecord());
 		ev.value.commands.push({ ...makeExecutedRecord() });
 		const v = runCheck({ ev });
 		expect(v.duplicateEvidenceCommandIds.map((d) => d.path)).toContain("build");
@@ -851,7 +946,7 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 	});
 
 	it("R3: per-record field mismatch (status) is detected", () => {
-		const ev = makeEvidenceWithSubject(makeExecutedRecord());
+		const ev = makeEvidenceC10(makeExecutedRecord());
 		const ex = makeExecutedRecord();
 		ex.status = "fail";
 		const v = runCheck({ ev, executedCmds: [ex] });
@@ -860,6 +955,44 @@ describe("checkEvidence — directory + manifest pipeline", () => {
 		expect(m.fields).toContain("status");
 		expect(m.evidence.status).toBe("pass");
 		expect(m.executed.status).toBe("fail");
+	});
+
+	it("CORRECTION10 P0 #1: bundle missing execution_head_oid → executionIdentityRecorded=false", () => {
+		const ev = makeEvidenceC10(makeExecutedRecord(), { executionHeadOid: null });
+		const v = runCheck({ ev });
+		expect(v.executionIdentityRecorded).toBe(false);
+	});
+
+	it("CORRECTION10 P0 #2: bundle missing execution_tree_oid → executionIdentityRecorded=false", () => {
+		const ev = makeEvidenceC10(makeExecutedRecord(), { executionTreeOid: null });
+		const v = runCheck({ ev });
+		expect(v.executionIdentityRecorded).toBe(false);
+	});
+
+	it("CORRECTION10 P0 #3: malformed execution_head_oid → executionHeadOidWellformed=false", () => {
+		const ev = makeEvidenceC10(makeExecutedRecord(), { executionHeadOid: "not-an-oid" });
+		const v = runCheck({ ev });
+		expect(v.executionIdentityRecorded).toBe(true);
+		expect(v.executionHeadOidWellformed).toBe(false);
+	});
+
+	it("CORRECTION10 P0 #4: malformed execution_tree_oid → executionTreeOidWellformed=false", () => {
+		const ev = makeEvidenceC10(makeExecutedRecord(), { executionTreeOid: "not-an-oid" });
+		const v = runCheck({ ev });
+		expect(v.executionIdentityRecorded).toBe(true);
+		expect(v.executionTreeOidWellformed).toBe(false);
+	});
+
+	it("CORRECTION10 P0 #5: dirty worktree before → worktreeCleanBeforeRecorded=false", () => {
+		const ev = makeEvidenceC10(makeExecutedRecord(), { worktreeCleanBefore: false });
+		const v = runCheck({ ev });
+		expect(v.worktreeCleanBeforeRecorded).toBe(false);
+	});
+
+	it("CORRECTION10 P0 #6: dirty worktree after → worktreeCleanAfterRecorded=false", () => {
+		const ev = makeEvidenceC10(makeExecutedRecord(), { worktreeCleanAfter: false });
+		const v = runCheck({ ev });
+		expect(v.worktreeCleanAfterRecorded).toBe(false);
 	});
 });
 
@@ -874,7 +1007,7 @@ let __e2eStderrSha = "";
 let __e2eEvidenceSha = "";
 let __e2eEnvSha = "";
 
-describe("end-to-end: real-world valid bundle → PARTIAL with all CORRECTION08 dimensions green", () => {
+describe("end-to-end: real-world valid CORRECTION10 bundle → PARTIAL with all dimensions green", () => {
 	const EXEC_STDOUT_BYTES = Buffer.from("build stdout content\n");
 	const EXEC_STDERR_BYTES = Buffer.from("build stderr content\n");
 	const EXEC_EVIDENCE_BYTES = Buffer.from("alpha\n");
@@ -882,7 +1015,7 @@ describe("end-to-end: real-world valid bundle → PARTIAL with all CORRECTION08 
 	const TREE_NOW = TREE;
 
 	beforeAll(() => {
-		__e2eTmpRoot = mkdtempSync(join(tmpdir(), "baseline-c08-e2e-"));
+		__e2eTmpRoot = mkdtempSync(join(tmpdir(), "baseline-c10-e2e-"));
 		__e2eEvDir = join(__e2eTmpRoot, "detached");
 		mkdirSync(join(__e2eEvDir, "commands"), { recursive: true });
 
@@ -891,11 +1024,15 @@ describe("end-to-end: real-world valid bundle → PARTIAL with all CORRECTION08 
 		const envSha = "c".repeat(64);
 
 		const evidenceJson = {
-			schema_version: 1,
+			schema_version: 2,
 			act_id: "ACT-CLINEMM-FORK-BASELINE01",
 			head_oid: HEAD,
 			tree_oid: TREE,
 			subject_tree_oid: FILTERED_TREE,
+			execution_head_oid: HEAD,
+			execution_tree_oid: TREE,
+			worktree_clean_before: true,
+			worktree_clean_after: true,
 			generated_at: "2026-07-17T09:50:09.000Z",
 			host_arch: "darwin-arm64",
 			commands: [
@@ -913,7 +1050,7 @@ describe("end-to-end: real-world valid bundle → PARTIAL with all CORRECTION08 
 					stdout_path: "commands/build.stdout",
 					stderr_path: "commands/build.stderr",
 					head_oid: HEAD,
-					tree_oid: FILTERED_TREE,
+					tree_oid: TREE,
 					environment_sha256: envSha,
 					failure_classification: null,
 					notes: "",
@@ -961,7 +1098,7 @@ describe("end-to-end: real-world valid bundle → PARTIAL with all CORRECTION08 
 				exit_code: 0,
 				timeout: false,
 				head_oid: HEAD_NOW,
-				tree_oid: FILTERED_TREE,
+				tree_oid: TREE,
 				stdout_sha256: stdoutSha,
 				stderr_sha256: stderrSha,
 				environment_sha256: envSha,
@@ -984,7 +1121,13 @@ describe("end-to-end: real-world valid bundle → PARTIAL with all CORRECTION08 
 		expect(view.headOidWellformed).toBe(true);
 		expect(view.subjectTreeContract).toBe(true);
 		expect(view.treeMatches).toBe(true);
+		expect(view.executionIdentityRecorded).toBe(true);
+		expect(view.executionHeadOidWellformed).toBe(true);
+		expect(view.executionTreeOidWellformed).toBe(true);
+		expect(view.worktreeCleanBeforeRecorded).toBe(true);
+		expect(view.worktreeCleanAfterRecorded).toBe(true);
 		expect(view.executionTreeBound).toBe(true);
+		expect(view.executionTrees).toEqual([TREE]);
 		expect(view.hashManifestValid).toBe(true);
 		expect(view.missingFiles).toEqual([]);
 		expect(view.unexpectedFiles).toEqual([]);
@@ -992,7 +1135,6 @@ describe("end-to-end: real-world valid bundle → PARTIAL with all CORRECTION08 
 		expect(view.malformedLines).toEqual([]);
 		expect(view.duplicatePaths).toEqual([]);
 		expect(view.commandSetExact).toBe(true);
-		expect(view.executionTrees).toEqual([FILTERED_TREE]);
 		expect(view.duplicateEvidenceCommandIds).toEqual([]);
 		expect(view.duplicateExecutedCommandIds).toEqual([]);
 		expect(view.commandRecordMismatches).toEqual([]);
