@@ -1,19 +1,21 @@
 path,bytes,physical_lines,blank_lines,extension,workspace,classification,generated,test,production,sha256
-"sdk/packages/llms/src/catalog/catalog.generated.ts",543412,24754,1,.ts,sdk/packages/llms,production,0,0,1,0cf4058296402904b8e240eb49f73daf53547af6308caf06fb02266a5e58a48f
+"sdk/packages/llms/src/catalog/catalog.generated.ts",543412,24754,1,.ts,sdk/packages/llms,generated,1,0,0,0cf4058296402904b8e240eb49f73daf53547af6308caf06fb02266a5e58a48f
 "docs/package-lock.json",446422,13287,1,.json,docs,configuration,0,0,0,9e3a323f90383297274eaaed715a75905db6205459b5f56c34408df36c16cf95
 "bun.lock",987925,7538,3388,.lock,root,configuration,0,0,0,c776f31549c53bda666beab9e76ebd98f6ea997021ecaa4c987cc547f5b36038
 "sdk/packages/core/src/runtime/host/local-runtime-host.test.ts",173164,5844,246,.ts,sdk/packages/core,test,0,1,0,b25968581d4004ab6e73d467becba08495fbac37f0c916f0831a6ee0c6370163
 "apps/examples/desktop-app/src-tauri/Cargo.lock",127625,5242,495,.lock,apps/examples,example,0,0,0,f8936e0da50ef5bf4bcba46c973889c5712a522032d0da5238b3d4565489c34d
 "sdk/packages/llms/src/providers/gateway.test.ts",112198,4636,368,.ts,sdk/packages/llms,test,0,1,0,918247ee37e66c879b3d982df917fdf771ada37c62940143c9dcb877515ae6a7
 "apps/examples/menubar/src-tauri/Cargo.lock",111635,4576,437,.lock,apps/examples,example,0,0,0,c35d2fcc921a9b0b371b065f516c3910a48a725be6eb16e48a732da67b707137
-"apps/cli/src/tui/components/robot-frames.generated.json",156650,4259,1,.json,apps/cli,configuration,0,0,0,f9a709913cb0f28c85db3de22282f2f8f0e0586ad110bbcc99f23edb598d5bc9
+"apps/cli/src/tui/components/robot-frames.generated.json",156650,4259,1,.json,apps/cli,generated,1,0,0,f9a709913cb0f28c85db3de22282f2f8f0e0586ad110bbcc99f23edb598d5bc9
 "apps/vscode/src/sdk/message-translator.test.ts",90032,3189,255,.ts,apps/vscode,test,0,1,0,63fad26fd1783e50f228ed3a5f19b882afe7c0a4211ed4d96cc7ddb81e05a21c
+"factory/baselines/file-size.csv",509845,3126,1,.csv,root,production,0,0,1,77f9cba2d67dc58bbebf005f378366fba467d0e55d0004d6dd8e5cae7d1745cd
 "sdk/packages/core/src/extensions/context/compaction.test.ts",80603,2898,178,.ts,sdk/packages/core,test,0,1,0,d868a380859f66bb7ba765af5b97dd81788e68a1f0e97e0eaf5b96061109b2c8
 "apps/vscode/src/services/telemetry/TelemetryService.ts",86876,2689,172,.ts,apps/vscode,production,0,0,1,31b987c39ed7ae5c3d289c48ada04064895dfed44bb6d92330a509b613fa0f3c
 "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.test.ts",62843,2400,137,.ts,sdk/packages/core,test,0,1,0,35848229d6df03f392feed1fc57048e10c0c6e440a5daebc97d795503f9b9bf5
 "CHANGELOG.md",98472,2396,799,.md,root,documentation,0,0,0,851ec47c177a1bb6bbb84ab47925feceae115205a83be3df65a8678ce80adcae
 "sdk/packages/core/src/runtime/host/local-runtime-host.ts",70904,2270,104,.ts,sdk/packages/core,production,0,0,1,af47eb82d2b2fdc0389c497685ad7c82a1939e9b74ab2da619532b5e51e4a112
 "sdk/packages/core/src/session/services/message-builder.test.ts",64362,2254,157,.ts,sdk/packages/core,test,0,1,0,a966f54386ef7beef95406399aa49dccde4b1fa32ce3367a08c64f7523da2667
+"factory/baselines/exact-duplicates.json",62001,2243,1,.json,root,configuration,0,0,0,fc76f8539dc87642287b1dec28341621cc5bf66efcdfbe415f1967819bf7e067
 "sdk/packages/core/src/hub/runtime-host/hub-runtime-host.ts",59347,2132,79,.ts,sdk/packages/core,production,0,0,1,02e88b4acd5682714e60901a107822a5d977472f8c6e1bb6227036bf95b3fde1
 "apps/vscode/src/sdk/message-translator.ts",71453,2097,184,.ts,apps/vscode,production,0,0,1,78366294d0d4d6c3a7d00cbeeeeb98aa4384be67c4fb23cf6147a52d8e9b5db9
 "apps/vscode/src/sdk/SdkController.ts",79577,2036,194,.ts,apps/vscode,production,0,0,1,72f3443ad56e2ad194561f926f10b765e26f75bc489c7e628ff5a4deb9dcfdf2
@@ -23,6 +25,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/examples/desktop-app/webview/hooks/use-chat-session.ts",53213,1896,105,.ts,apps/examples,example,0,0,0,965fccad1ec3f913e399353765acb7a671f74093abf7003107e5c0dd322b18ed
 "sdk/packages/agents/src/agent-runtime.test.ts",49027,1864,125,.ts,sdk/packages/agents,test,0,1,0,8a010c39b4a5a9bdd4c3e03324a9539806e99e97d3eb6155da6c29d2f3f13afc
 "sdk/packages/core/src/extensions/tools/team/multi-agent.ts",48729,1846,139,.ts,sdk/packages/core,production,0,0,1,a21447ed3ec4b9481542a543f7e1e50924175ca6c9e1f56711ce65e9ecd3ea00
+"factory/inventories/privileged-sink-candidates.csv",439012,1775,1,.csv,root,production,0,0,1,44abfc27df86c8a5d70df931a6981eeec66f563d1352c054d5d9afbc603ae724
 "apps/cline-hub/src/webview/src/components/views/settings/extensions-view.tsx",51293,1770,89,.tsx,apps/cline-hub,production,0,0,1,fa540502161f401a54d107db6735b242fd6fe8a948588c1e268691a9a45ad16d
 "apps/examples/desktop-app/webview/components/views/settings/extensions-view.tsx",51293,1770,89,.tsx,apps/examples,example,0,0,0,fa540502161f401a54d107db6735b242fd6fe8a948588c1e268691a9a45ad16d
 "apps/cli/src/main.test.ts",54106,1739,221,.ts,apps/cli,test,0,1,0,e3b5937174d6d5bafb6aed70a4347dfe01de4af379587fe191dbc1abd759a776
@@ -46,6 +49,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/examples/desktop-app/webview/components/views/chat/chat-messages.tsx",42104,1474,65,.tsx,apps/examples,example,0,0,0,7ed8b72f5e89add4e1a2a7bc70881b282fe355c8f1322a44498f0cae2b5d7acc
 "apps/cline-hub/src/webview/src/Chat.tsx",40618,1455,64,.tsx,apps/cline-hub,production,0,0,1,80524ed4c973c89030e0fdf3f7a7acbd07c12dd76b4a744ec5517f3679af8aa0
 "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts",46394,1396,67,.ts,sdk/packages/core,production,0,0,1,2ab1444caf3c357c3b1472d73bc0cf00c3aa71bb1167c63956c24fd9372538dd
+"factory/inventories/verification-results.json",44035,1384,1,.json,root,configuration,0,0,0,272d496f1d4232f353c24aa85fe8137bc6d28ac728c686b0030a5ab881844365
 "apps/cline-hub/src/webview/src/App.tsx",41188,1362,60,.tsx,apps/cline-hub,production,0,0,1,45a3a83afac22a320b18cf37e93b2ba3419e8afba9a4d571f985fb9b06b5ccfa
 "apps/vscode/webview-ui/src/components/marketplace/MarketplaceView.tsx",38223,1357,111,.tsx,apps/vscode,production,0,0,1,0acafa3b1a311515e7ac0091fe0b0c5674f170b8748ceaf5bd064f941f89b415
 "apps/examples/menubar/ui/index.html",34609,1342,138,.html,apps/examples,example,0,0,0,ba740e05107669b7af1424600e825c204912e6694e40cc81ed66d48cc6bd170e
@@ -222,6 +226,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "sdk/packages/core/src/hooks/hook-file-hooks.test.ts",16040,594,28,.ts,sdk/packages/core,test,0,1,0,87ab7097faeeeb6fb8ed717d7279460517e786b56177698627272549d16aca62
 "apps/vscode/package.json",18240,592,1,.json,apps/vscode,configuration,0,0,0,c96fadc0094e6ddae297a6567f690ee61e1da7118e94c52d221103e91735e42f
 "apps/examples/desktop-app/webview/components/views/settings/settings-view.tsx",17421,588,35,.tsx,apps/examples,example,0,0,0,da563fe3c266faa1c2f7b89db29f0e979e0138343e8a7ef741285001c9e42f17
+"factory/scripts/run-verification.ts",18953,587,51,.ts,root,script,0,0,0,b8d9275d9c636536c4a3c1615069201239f4b5345d53c7cb0fba524a32d99c77
 "apps/vscode/src/core/hooks/__tests__/taskcancel.test.ts",17439,582,86,.ts,apps/vscode,test,0,1,0,2564bebcd5643b5f63d3b1bf85ea98f9baad0e4547f87cc9f4cde8c4f0244286
 "sdk/packages/core/src/extensions/context/compaction.ts",17622,582,27,.ts,sdk/packages/core,production,0,0,1,84c15bd9d58ecee3f7b6d5cc2b88cbe4f094edb6a1fbcf339deeed382a4114d9
 "sdk/packages/core/src/hub/daemon/index.test.ts",17324,582,53,.ts,sdk/packages/core,test,0,1,0,15d936c2c383c3a2e0b92cbb256a45504c847157af918aafe72b6fc96fed20fd
@@ -332,6 +337,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/scripts/generate-state-proto.mjs",14883,463,74,.mjs,apps/vscode,script,0,0,0,da616dd1f1a1b76272ee653434810078c7c6ba0cb4c17eedb0939e85362939b1
 "apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts",14258,462,24,.ts,apps/vscode,production,0,0,1,11263c3911c675c1bfd5c7eebecf26be11695bbc18bec5d5b59aad587f150bc5
 "apps/vscode/src/core/hooks/HookProcess.ts",13420,457,58,.ts,apps/vscode,production,0,0,1,6c292ebe27f0ce45b2b4088c0bff616921bd63d91b79a9d50e44665d7a26740e
+"factory/scripts/verify-baseline.ts",17329,457,41,.ts,root,script,0,0,0,f898d85eb8966ab25f48a6a5887e7c59b44203ea4d6727ec6ccef82c07db27f5
 "apps/cli/src/commands/auth.ts",12443,456,26,.ts,apps/cli,production,0,0,1,16ba3e3c2c9f88cb6d1cf2a36816b7879ad3c1a717292157b43e63492fdb8d24
 "sdk/packages/shared/src/team/schema.ts",13907,453,51,.ts,sdk/packages/shared,production,0,0,1,9b803329d5f5659f9c7ec740cd82bd47e4d1a41a3555499a9df859843ee186d7
 "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.stories.tsx",10985,452,17,.tsx,apps/vscode,production,0,0,1,d5c49214a7ae6c693fe5489b658cf16ceb6dadf425fa638dd02e8fe8fe3c76af
@@ -400,7 +406,6 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/src/hosts/vscode/terminal/osc633Parser.ts",14453,407,29,.ts,apps/vscode,production,0,0,1,be6e13fdb3629b72d3ec4366ea765b246db6d3deb4df080d6ea3db5ae3eb9473
 "apps/cli/src/commands/kanban.ts",9661,406,50,.ts,apps/cli,production,0,0,1,34ce0d854e1e74af37bd75986a7524cce8e1d83590e1cc1a22e9c19ad4451fc8
 "apps/vscode/src/sdk/sdk-mode-coordinator.ts",16423,406,32,.ts,apps/vscode,production,0,0,1,4654b2a32bea138c0f6034dbabcf3a40d4412034bb31de3dbd2b3b87fbe8496b
-"factory/scripts/run-verification.ts",12764,406,38,.ts,root,script,0,0,0,0045ad3799fc94408e0275deaf5d7e2054e9f1d68461ea1a2dd1a57165ce4638
 "apps/vscode/src/sdk/model-catalog/effective-config.ts",14020,404,47,.ts,apps/vscode,production,0,0,1,65db245a1c3012d87ebcc90a0ee764c70b36e8618c9861832d5d32930229b15c
 "apps/cli/src/tui/hooks/use-agent-events.ts",11472,403,13,.ts,apps/cli,production,0,0,1,bf5e804750ab3d6996da9c6629230019c51810f0317bb1ee49a46f0c9f88eb27
 "sdk/packages/core/src/extensions/mcp/oauth.ts",11487,403,23,.ts,sdk/packages/core,production,0,0,1,118e399f4d4b5ee8000b079427984feedb9eead4583d9c3f7cff85d8b2435ed5
@@ -413,7 +418,6 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/cli/src/connectors/adapters/telegram.test.ts",9735,395,40,.ts,apps/cli,test,0,1,0,83be9bdd70367f5a703db92670a8185ef8b9e1a6521399373f8cb1275a843841
 "apps/cline-hub/src/webview/src/components/ai-elements/open-in-chat.tsx",16351,395,30,.tsx,apps/cline-hub,production,0,0,1,0031ad07318c98650d072869f13e87d00734216eac3d9b7c31dbb65d9928953f
 "apps/examples/vscode/src/webview/src/components/ai-elements/open-in-chat.tsx",16351,395,30,.tsx,apps/examples,example,0,0,0,0031ad07318c98650d072869f13e87d00734216eac3d9b7c31dbb65d9928953f
-"factory/scripts/verify-baseline.ts",14400,395,41,.ts,root,script,0,0,0,6001310456b5f68b7c9e3cff1dfb849595c070bf211f9ee1457fa30aed842dbb
 ".agents/skills/opentui/references/core/gotchas.md",7789,394,108,.md,root,documentation,0,0,0,08b4a64fe162f53f8dee4c595b7ce674afd364f5de396498efe4722a16c26fc7
 "sdk/packages/core/src/auth/provider-auth-registry.ts",11268,394,33,.ts,sdk/packages/core,production,0,0,1,a69d95af1509150a5f4657d5bfd12078e1e03065a5af3506ad199ccaeec6739f
 ".clinerules/workflows/writing-documentation.md",21815,393,155,.md,root,documentation,0,0,0,1ef6f89969a10aeb0e85952dce320e2053ed5cb4a70ca740930f25d150be5a5b
@@ -476,6 +480,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "sdk/scripts/check-publish.ts",10340,352,27,.ts,root,script,0,0,0,9f41fc7d6e0de1456f65848c6cc30217d90098fe6dc897c51fc33eb651608778
 "apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useScrollBehavior.ts",11420,351,44,.ts,apps/vscode,production,0,0,1,c5bc23a3cbeb501f404d54f40349fb4a25e5a466e2e2678ce221556dcd122267
 "apps/vscode/webview-ui/src/components/chat/ErrorRow.stories.tsx",9967,351,29,.tsx,apps/vscode,production,0,0,1,b226efd44a9bdb15d4032a1bb242ec2901fba03114e5a6033bc29904bbe85f07
+"docs/factory/baseline-report.md",16959,351,57,.md,docs,documentation,0,0,0,b2ceb7e0280c7379bfc90e018e4371bbc3860ec663648afa73e08d8ba876c200
 "sdk/packages/llms/src/tests/provider-live.test.ts",9761,351,24,.ts,sdk/packages/llms,test,0,1,0,89e6e59393ae6d21393c1803ac97d0c3006459649088417d3517f784fd4165d0
 "apps/examples/desktop-app/webview/components/ui/chart.tsx",8678,350,38,.tsx,apps/examples,example,0,0,0,dcb0889e815bd0d5de0ef4eac15c970b3a45b853b71f4b15b4d05e0c5f5d773b
 "apps/vscode/src/config.ts",11047,350,41,.ts,apps/vscode,production,0,0,1,fc5e26d5c9cda6d3b6310f5ca437a88f61927b889180f3b287aacf0eb2bc3b75
@@ -547,6 +552,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/src/services/account/ClineAccountService.ts",10728,317,21,.ts,apps/vscode,production,0,0,1,ad3963d176bf9f6f2eff778871e6160c80ba222665561f8486fb3de425664e26
 "apps/vscode/src/utils/fs.test.ts",12759,317,65,.ts,apps/vscode,test,0,1,0,28b68d8056f6de8d1e640782577f5270cf5169d3d7767b48d55acde87f79685c
 "docs/enterprise-solutions/team-management/managing-members.mdx",11271,317,73,.mdx,docs,documentation,0,0,0,2f1ea1a8b66d654fe6017209f8f7fa7a23bc1162c5f66e0c53df466ddbcb4599
+"factory/scripts/collect-file-sizes.ts",9733,317,34,.ts,root,script,0,0,0,54265f9b3ecde15d2a39e674d8d9054f63a679e91a63e1ee30fc496fecf6a63f
 ".vscode/launch.json",8349,315,1,.json,root,configuration,0,0,0,e99542240ba5f0611c72bf32b2183cb75907a1989daaec603b001408663641bd
 "docs/sdk/guides/writing-plugins.mdx",9500,315,52,.mdx,docs,documentation,0,0,0,042a347b655b13aaa620defb3e4e85d56cfca5b3df5dfea8fb5ce4f9607e5aad
 "apps/vscode/src/core/context/instructions/user-instructions/skills.ts",10519,314,36,.ts,apps/vscode,production,0,0,1,bc3c226061b37a013bc35b9cbd34fa76f009c1a4b0edf8b96de5eea4ab65085d
@@ -555,7 +561,6 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "sdk/packages/core/src/extensions/plugin/plugin-config-loader.ts",8954,314,29,.ts,sdk/packages/core,production,0,0,1,77960a16b0cb192ea239d1eb749cbfa28dea03c255f818c5c37b1fb9620c4eb3
 "apps/cli/src/connectors/thread-bindings.test.ts",7827,313,32,.ts,apps/cli,test,0,1,0,e1a7efb2835c754fe416b0299a230f0ad8f05df7ff9bc5e7d5029bb40d26fd09
 "apps/vscode/src/utils/git.ts",8539,313,47,.ts,apps/vscode,production,0,0,1,6b1b539d6fc3cc24b2b2ce9b33a360392a03ff69c67010aaf650ce46990fa559
-"factory/scripts/collect-file-sizes.ts",9556,313,34,.ts,root,script,0,0,0,fa295488f5c0acf888ac1054a277267d8c7629936025dcfa58cf07aaf6d88bf4
 "apps/cli/src/tui/cline-account.test.ts",8333,312,24,.ts,apps/cli,test,0,1,0,bc5ce833f9743046d5bf324c9cd7953f822bb8b9ecfd0b54ad6c7c32f8bcaa9b
 "apps/cli/src/tui/components/model-selector/cline-model-selector.tsx",7820,312,19,.tsx,apps/cli,production,0,0,1,0f4c7b46a4523b28ef64cab862d3715c6df9ae426c9cfa0e01e4d21a1962953f
 "apps/examples/desktop-app/scripts/package-desktop.ts",8811,312,44,.ts,apps/examples,example,0,0,0,42e0a84e3cf6373cf0e56afe2e133a71050de3f9c261ec316a76fdc75d9399d3
@@ -729,6 +734,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/src/shared/remote-config/schema.ts",10143,262,42,.ts,apps/vscode,production,0,0,1,b7951b758caafc974dbbeb2cfd815e4a6dc85602e39fa2cf615745e8b57296f8
 "apps/vscode/src/test/e2e/README.md",7591,262,67,.md,apps/vscode,test,0,1,0,5a26c6e54dbb9bf7741374b73b4aba4ae3405c8c4851eb5b1e361f86ce1b22d7
 "apps/vscode/webview-ui/src/components/chat/RequestStartRow.tsx",8678,262,22,.tsx,apps/vscode,production,0,0,1,dcb6c9a88f05d3593610362f1a1298f0f76c3cfbf4abc3f1717ede60e8510ab3
+"factory/baselines/file-size-summary.json",6110,262,1,.json,root,configuration,0,0,0,009a16dfa8617d17405696a86750f4336c6c4a2eb3444b06ad74082a9f8588bb
 "sdk/packages/core/src/extensions/tools/runtime.ts",7105,262,21,.ts,sdk/packages/core,production,0,0,1,afa4c701c169106734483a07236026ffe1fd2ff2dfd7f8cd52088475274fa020
 "sdk/packages/core/src/extensions/mcp/manager.ts",7107,261,26,.ts,sdk/packages/core,production,0,0,1,f763edd5e0b8fddfa0ac8b3e8f42133f899b608f2d02e0448bf597f162b35f47
 "sdk/packages/core/src/extensions/mcp/plugin-server-registration.ts",6526,261,22,.ts,sdk/packages/core,production,0,0,1,f441aa0331f0f72ad13eda318bcc89f03193cd13ea28516cd9faba907028c273
@@ -1582,6 +1588,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/tests/specs/grpc_recorded_session_single_root.json",1967,105,1,.json,apps/vscode,test,0,1,0,f80b9aa08297d778cc9b05a5f587b7c81773f80da8b89c672f44d47ee308db28
 "apps/vscode/webview-ui/src/components/common/CopyButton.tsx",2527,105,12,.tsx,apps/vscode,production,0,0,1,87d52814c32c01f42029bb405d8bf965dcd04e0efbcb934dab9bd2d638c169d1
 "apps/vscode/webview-ui/src/components/settings/common/ApiKeyField.tsx",2633,105,9,.tsx,apps/vscode,production,0,0,1,8d6575b60c46566ad484605f0d446e1f0af330d56c99283bf572e307619db036
+"docs/factory/upstream-sync.md",3981,105,28,.md,docs,documentation,0,0,0,fd57f6b63d3fd65698d1c6152f903339937e1a31f40815454e20444a1e94f23f
 "sdk/packages/core/src/extensions/mcp/plugin-server-registration.test.ts",2417,105,11,.ts,sdk/packages/core,test,0,1,0,6f82674244111dd40931ae77c92b0566e3b20ddcdd7c225254441d81ff4704b4
 "sdk/packages/shared/src/cron/cron-spec-types.ts",3062,105,11,.ts,sdk/packages/shared,production,0,0,1,13eb421fd9208d3c949b0e2ca8e101f9c80045a425928db24db4a01e36e3de6d
 "apps/cline-hub/src/webview/src/components/ui/card.tsx",2475,104,10,.tsx,apps/cline-hub,production,0,0,1,48f814e4d3feea8614242aad02bde223865a21df70db19266d907d38f2a6d669
@@ -1732,6 +1739,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/src/core/controller/models/__tests__/providerCatalogSmoke.test.ts",3412,89,10,.ts,apps/vscode,test,0,1,0,069da2aa623343f2b7bdc016c1f0e21d19f838540a586ce2d2932f63aefda02a
 "apps/vscode/src/core/controller/slash/getAvailableSlashCommands.ts",2762,89,10,.ts,apps/vscode,production,0,0,1,bd200ed0330255475678edc53d1f9addf911ddbe2b5a26221f14fd25f21cc271
 "apps/vscode/src/hosts/external/grpc-types.ts",2853,89,13,.ts,apps/vscode,production,0,0,1,d26211d42d0cef3d1cd2d7c977e1d103d702df70a23ab6f6f5be2fd088c629cd
+"docs/factory/structural-baseline.md",3796,89,18,.md,docs,documentation,0,0,0,bc87780cd97b44f5438e0f7f7ea4c0129979e5dc2ca073642e256d2ce44ce7d9
 "apps/cli/src/commands/bin-wrapper.test.ts",2331,88,14,.ts,apps/cli,test,0,1,0,8a6dd13b1e03fb73368610fe92b945d97b91f2b79d36bba1a991cbec16e3c3ce
 "apps/cli/src/utils/internal-launch.ts",2313,88,8,.ts,apps/cli,production,0,0,1,c7d1391ec8c782079f11eeb598b784391d779ad91c3769ab7bc1387f979a8043
 "apps/cline-hub/src/webview/src/components/ai-elements/task.tsx",2254,88,12,.tsx,apps/cline-hub,production,0,0,1,202ea722e940677a756a3e15b6943239b776138489804c4b35a35939d3ac90f2
@@ -1784,6 +1792,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/examples/desktop-app/sidecar/index.ts",2328,84,12,.ts,apps/examples,example,0,0,0,5bc7edaa5cb9c9b5c095f66a322b6f891dca124e45e38edc71638e2cfdb329db
 "apps/vscode/webview-ui/src/components/chat/TypewriterText.stories.tsx",2939,84,10,.tsx,apps/vscode,production,0,0,1,250d8eca364c00f3c81d755eb44760d56d7f0a68db3e271e2c6f0bb0860b3bd4
 "apps/vscode/webview-ui/src/components/common/Tab.tsx",2267,84,10,.tsx,apps/vscode,production,0,0,1,61e65c86c5be800b8c8e664625fa816fa4b88305a1d75af76a8cc188852db94a
+"docs/factory/security-candidate-inventory.md",3156,84,18,.md,docs,documentation,0,0,0,02545fbcdc1528a02f48dc21763089b8b2ee90ba70276ccb70505af83272c15a
 "sdk/examples/plugins/agents-squad/skills/documentation.md",2797,84,24,.md,root,example,0,0,0,858aeed6226e4c2323dd55757b78c31922930cde4c748fd1d0243dccaeb2cdeb
 "apps/cli/src/tui/utils/provider-config-values.ts",2267,83,11,.ts,apps/cli,production,0,0,1,f4537f060b860ca6b85de72f4f3627015a5eb81b88f3a3578f7b48639b0146b1
 "apps/cline-hub/src/webview/src/components/ui/tabs.tsx",3386,83,9,.tsx,apps/cline-hub,production,0,0,1,3f62ea2a545db092d1e3e08c8f03c5781a562b8c82392430c82786227408be29
@@ -2077,6 +2086,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/webview-ui/src/components/mcp/configuration/tabs/installed/server-row/McpResourceRow.tsx",1358,60,5,.tsx,apps/vscode,production,0,0,1,043e5e234158725a69a1e12d27af92cdbd0b6d0aef5d00eb5000e67db73c1952
 "apps/vscode/webview-ui/src/components/settings/ClineAccountInfoCard.tsx",1808,60,8,.tsx,apps/vscode,production,0,0,1,14ca7eb05edf38a46fff693803c755ba374f1083ae5d54f59e58e431cec84a16
 "apps/vscode/webview-ui/src/components/settings/providers/VercelAIGatewayProvider.tsx",1903,60,5,.tsx,apps/vscode,production,0,0,1,b74f4f07ecd8eb11a4d60f40d55a343e01bee57a707f91869beb4e07583142c5
+"docs/factory/verification-matrix.md",2476,60,12,.md,docs,documentation,0,0,0,7d7ab7d880e22e6f154c903fe08f90b2c3b8e06f7c717ec9ee0e23f2db0405b7
 "docs/provider-config/openai-compatible.mdx",4009,60,18,.mdx,docs,documentation,0,0,0,b724ac1bd0e05fb39b344430f788dbf5b9e4d1aa6f0f857587d2604f6fa5dd12
 "sdk/packages/llms/src/index.browser.ts",1579,60,1,.ts,sdk/packages/llms,production,0,0,1,609c3a2ec5c6e222c74e3c0091b6e9cdc0382f3c4795c2e25f0ae9f9ab0d90cd
 "sdk/packages/shared/src/parse/shell.test.ts",1503,60,6,.ts,sdk/packages/shared,test,0,1,0,38e983263d4a323fa3bac4cdedfa753cae379207957ab9b3a4f42e7bc4a8a48d
@@ -2428,7 +2438,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/webview-ui/src/components/settings/providers/GroqProvider.tsx",1039,36,5,.tsx,apps/vscode,production,0,0,1,5a1a0e1fc53f24ce6b7c7096cc673076d4fc996e3385c455e61497239e86f2de
 "apps/vscode/webview-ui/src/components/ui/input.stories.tsx",1108,36,4,.tsx,apps/vscode,production,0,0,1,6eb872e727a50e4d3cd90da2f2813644f46070ad9a7408e18f9125b997e91f43
 "apps/vscode/webview-ui/src/utils/bannerUtils.tsx",1007,36,4,.tsx,apps/vscode,production,0,0,1,b0a67ab90eb8622bf903d2094a4c356829d67dc7b1011c35974ac335692a66ef
-"factory/inventories/repository.json",896,36,1,.json,root,configuration,0,0,0,dce9b8bbc360ccdd78968ed9ebe5c3644acaaee040c6c3adc28612300a18da2c
+"factory/inventories/repository.json",911,36,1,.json,root,configuration,0,0,0,8365b9ef0edf13db5875573c2eae37062915a9efd2af73e4c4dd53ce2b6ad2d5
 "sdk/examples/cron/dependency-check.cron.md",1013,36,4,.md,root,example,0,0,0,093a86702595b7300a8e17af7c4acd180d9d4215df18734d4ba154e27fd86125
 "sdk/packages/core/src/extensions/mcp/name-transform.ts",1272,36,6,.ts,sdk/packages/core,production,0,0,1,007a654d99d4980cf0e918d8d99dcc49fd381d6cfc270ab2542aa7493db4c734
 "sdk/packages/core/src/hub/discovery/workspace.ts",1025,36,5,.ts,sdk/packages/core,production,0,0,1,d2a57f99bd0efb34ef0be592bac8f745cf16d42d66d675bdf03cbcc4520c02e6
@@ -2746,6 +2756,7 @@ path,bytes,physical_lines,blank_lines,extension,workspace,classification,generat
 "apps/vscode/standalone/runtime-files/vscode/stub-utils.js",507,20,2,.js,apps/vscode,production,0,0,1,d685055478a793a2b3246b97aa11658bea0e7a9198be1873acb3be4cf792ef19
 "apps/vscode/testing-platform/package.json",372,20,1,.json,apps/vscode,test,0,1,0,54dba070e675f40dabb77cd3ad711c72f8d3b2e04cc6c79ba9f35c050b4e9017
 "evals/smoke-tests/scenarios/05-typescript-function/config.json",454,20,1,.json,evals,configuration,0,0,0,6ab6fca30b211872b12796773841fb3bb50e019061af3398d2a3f7e725580bd6
+"factory/inventories/network-listener-candidates.csv",3966,20,1,.csv,root,production,0,0,1,93a404fdcf85734b97d4c49773be4e1c8b53e7607ed9f6c13adc15dfd4ed6bed
 "sdk/examples/hooks/PreToolUse_RequireReview.sh",642,20,4,.sh,root,example,0,0,0,ed5cf49a90bbee1c958ec2a3e163daaa16f2676a2156b556681725df4f1c1696
 "sdk/examples/package.json",352,20,1,.json,root,example,0,0,0,9fddc8d23a1edb5913bd520636dafa6ecda96f3f6ec7ec4d234a03c57ec74963
 "sdk/packages/core/src/extensions/index.ts",644,20,1,.ts,sdk/packages/core,production,0,0,1,4d88c3f1f251f173f3379701d5fb967a65f94f0af9cf6b6bc265879bd803393f

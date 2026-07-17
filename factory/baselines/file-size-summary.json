@@ -1,16 +1,16 @@
 {
 	"schema_version": 1,
-	"all_tracked_files": 3335,
-	"text_files": 3124,
-	"production_files": 1695,
-	"production_files_gt_500": 144,
-	"production_files_gt_1000": 40,
-	"production_files_gt_1500": 17,
+	"all_tracked_files": 3346,
+	"text_files": 3135,
+	"production_files": 1697,
+	"production_files_gt_500": 145,
+	"production_files_gt_1000": 41,
+	"production_files_gt_1500": 18,
 	"largest_50_production": [
 		{
-			"path": "sdk/packages/llms/src/catalog/catalog.generated.ts",
-			"physical_lines": 24754,
-			"bytes": 543412
+			"path": "factory/baselines/file-size.csv",
+			"physical_lines": 3126,
+			"bytes": 509845
 		},
 		{
 			"path": "apps/vscode/src/services/telemetry/TelemetryService.ts",
@@ -46,6 +46,11 @@
 			"path": "sdk/packages/core/src/extensions/tools/team/multi-agent.ts",
 			"physical_lines": 1846,
 			"bytes": 48729
+		},
+		{
+			"path": "factory/inventories/privileged-sink-candidates.csv",
+			"physical_lines": 1775,
+			"bytes": 439012
 		},
 		{
 			"path": "apps/cline-hub/src/webview/src/components/views/settings/extensions-view.tsx",
@@ -251,11 +256,6 @@
 			"path": "apps/cli/src/tui/views/onboarding/screens.tsx",
 			"physical_lines": 917,
 			"bytes": 23627
-		},
-		{
-			"path": "sdk/packages/core/src/extensions/tools/team/team-tools.ts",
-			"physical_lines": 913,
-			"bytes": 27879
 		}
 	]
 }
