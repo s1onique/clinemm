@@ -18,6 +18,7 @@ Closure is not PASS because at least one of the following is not satisfied:
 - R6 (structural baseline regenerated from upstream tree) is not satisfied
 - R7 (cross-platform CI evidence) is not satisfied
 - R16 (verification discovery is source-derived) is not satisfied
+- Detached evidence is missing or not bound to the closing commit
 
 Mandatory on primary host: pass=2, fail=15, applicable=18.
 Affected-scope on primary host: pass=0, fail=3, applicable=4.
@@ -145,10 +146,10 @@ Affected-scope on primary host: pass=0, fail=3, applicable=4.
 | host | `darwin-arm64` |
 | commands (in evidence) | 20 |
 | commands (matched) | 20 |
-| head matches current HEAD | true |
-| tree matches current tree | true |
+| head matches current HEAD | false |
+| tree matches current tree | false |
 | hashes.sha256 verified | false |
-| mismatches | (none) |
+| mismatches | head: evidence=e4e98cf0c1ae7ba8f4720979300e075308d5d558 git=084b5ad83a3fdd661de6a500844007baa7023e36; tree: evidence=34bbccae1650af529b0aa497510c1a3aa88e4231 git=1c89b218fc6c55889bf6a4e2c45557f7bd165c07 |
 
 ## Production-code identity
 
