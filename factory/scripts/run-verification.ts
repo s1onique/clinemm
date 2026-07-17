@@ -1,197 +1,53 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION11 — Verification runner.
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION12 — verification runner.
  *
- * Reads factory/inventories/verification.json, executes every command whose
- * class is "mandatory" or "affected-scope" on the current host, captures
- * stdout/stderr separately, hashes each stream, records start/end/duration/
- * exit code/signal/timeout, and writes both:
- *   - factory/inventories/verification-results.json  (combined evidence)
- *   - .factory/evidence/ACT-CLINEMM-FORK-BASELINE01/{commands,evidence.json,hashes.sha256}
- *
- * CORRECTION11 — runner drift attestation:
- *
- *   The runner now records THREE additional attestations on
- *   evidence.json:
- *
- *     subject_tree_oid_before / subject_tree_oid_after
- *                          — filtered subject tree captured before and
- *                            after the matrix. Required to be equal.
- *
- *     executionIdentityValid — verified by `git cat-file -e <head>^{commit}`
- *                              and `git rev-parse <head>^{tree}`,
- *                              which must equal `execution_tree_oid`.
- *
- *     worktree_inputs_clean_before / worktree_inputs_clean_after
- *                          — `git status --porcelain` sampled with the
- *                            runner's `expected_output_paths` excluded,
- *                            captured before and after the matrix.
- *
- *   Every command row carries:
- *     head_oid_before / head_oid_after
- *     tree_oid_before / tree_oid_after
- *     subject_tree_oid_before / subject_tree_oid_after
- *
- *   captured immediately around the command. Any deviation aborts the
- * run with `REPOSITORY_DRIFT` rather than producing a misleading
- * bundle. The captured values are also pinned to the bundle's
- * top-level execution identity.
- *
- *   Preflight: the runner aborts before any command runs if
- *   `worktree_inputs_clean_before` is `false`. This closes the
- *   CORRECTION10 R1 defect.
- *
- *   Path-aware cleanliness (CORRECTION10 R2 closure): only paths NOT
- *   in `expected_output_paths` are considered when sampling cleanliness,
- *   so intentionally regenerated tracked outputs do not make the
- *   post-run check unsatisfiable.
- *
- *   Evidence-directory-relative paths (CORRECTION10 R6 closure): every
- *   payload path recorded on a command row or in the manifest is
- *   relative to `EVIDENCE_DIR`, not to the repository root. The
- *   manifest declares `evidence.json`, every `commands/<id>.stdout`,
- *   `commands/<id>.stderr`, and `commands/<id>.metadata.json`, so a
- *   reviewer can hash-verify the entire payload surface.
- *
- * The runner accepts commands as **structured argv** to avoid shell-quoting
- * bugs. A command can also carry `shell_command` (string) and `use_shell:
- * true` to run through `/bin/sh -c` when necessary; in that mode the
- * timeout handler kills the entire process group.
- *
- * Every failure is explicitly classified. Missing classification is
- * `UNKNOWN`, which blocks ACT closure.
+ * The runner binds every command to one execution HEAD/tree and one filtered
+ * subject tree, samples path-aware worktree cleanliness around every command,
+ * and builds evidence transactionally in a fresh sibling staging directory.
+ * The canonical bundle is replaced only after the staged bundle passes the
+ * same structural `checkEvidence()` validation used by the renderer.
  */
 
 import { spawn, spawnSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 import {
-	readFileSync,
-	writeFileSync,
-	mkdirSync,
 	existsSync,
-	createWriteStream,
-	readdirSync,
-	statSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	renameSync,
+	rmSync,
+	watch,
+	writeFileSync,
+	type FSWatcher,
 } from "node:fs";
-import { createHash } from "node:crypto";
-import { dirname, join, resolve, relative } from "node:path";
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 
+import {
+	checkEvidence,
+	isEvidenceOk,
+	loadEvidenceFile,
+	resolveEvidencePayloadPath,
+	type ExecutionIdentityDerivation,
+} from "./baseline-closure";
+import { parsePorcelainV1Z } from "./git-status";
 import { computeFilteredSubjectTreeOid, SUBJECT_TREE_EXCLUDES } from "./subject-tree";
 
+const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01";
 const RESULTS_JSON = "factory/inventories/verification-results.json";
-const DETACHED_DIR = ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01";
-
-function repoRoot(): string {
-	const r = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-	if (r.status !== 0) throw new Error("git rev-parse failed");
-	return (r.stdout ?? "").trim();
-}
-
-const ROOT = repoRoot();
-const EVIDENCE_DIR = join(ROOT, DETACHED_DIR);
-
-// ---------- argument parsing --------------------------------------------------
-
-const argv = process.argv.slice(2);
-const finalize = argv.includes("--finalize-evidence");
-const onlyFilter = (() => {
-	const i = argv.indexOf("--only");
-	return i >= 0 ? argv[i + 1] : null;
-})();
-const skipFilter = (() => {
-	const i = argv.indexOf("--skip");
-	return i >= 0 ? new Set(argv[i + 1].split(",")) : null;
-})();
-const timeoutMs = (() => {
-	const i = argv.indexOf("--timeout-ms");
-	return i >= 0 ? Number.parseInt(argv[i + 1], 10) : 600_000; // 10min default
-})();
-
-// ---------- secret redaction -------------------------------------------------
-
-const SECRET_PATTERNS: RegExp[] = [
-	/AKIA[0-9A-Z]{16}/g,
-	/sk-[A-Za-z0-9_-]{20,}/g,
-	/ghp_[A-Za-z0-9]{20,}/g,
-	/xox[baprs]-[0-9A-Za-z-]{20,}/g,
-	/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-	/Bearer\s+[A-Za-z0-9._-]{20,}/g,
-];
-
-function redact(s: string): string {
-	let out = s;
-	for (const p of SECRET_PATTERNS) {
-		out = out.replace(p, "[REDACTED]");
-	}
-	return out;
-}
-
-// ---------- environment hash -------------------------------------------------
-
-function envSha(): string {
-	const env = {
-		platform: process.platform,
-		arch: process.arch,
-		nodeVersion: process.version,
-		bunVersion: (() => {
-			try {
-				return spawnSync("bun", ["--version"], { encoding: "utf8" }).stdout.trim();
-			} catch {
-				return "unknown";
-			}
-		})(),
-		envVarNames: Object.keys(process.env).sort(),
-		ci: process.env.CI ?? null,
-		githubActions: process.env.GITHUB_ACTIONS ?? null,
-		shell: process.env.SHELL ?? null,
-	};
-	return createHash("sha256").update(JSON.stringify(env)).digest("hex");
-}
-
-function headTreeNow(): { head: string; tree: string } {
-	const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
-	const tree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).stdout.trim();
-	return { head, tree };
-}
-
+const EVIDENCE_PARENT = ".factory/evidence";
+const DETACHED_DIR = `${EVIDENCE_PARENT}/${ACT_ID}`;
 const OID_PATTERN = /^[0-9a-f]{40}$/;
+const SAFE_COMMAND_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /**
- * Verify that the execution head/tree pair forms a valid Git object
- * pair: the head dereferences to a commit, the tree is a tree object,
- * and `git rev-parse <head>^{tree}` equals the supplied tree. Returns
- * `false` for any malformed input or git-level failure.
+ * Repository-relative files intentionally regenerated by this workflow.
+ * This list participates only in worktree cleanliness. It is never copied to
+ * evidence.json and is unrelated to manifest payload completeness.
  */
-function verifyExecutionIdentityShape(head: string, tree: string): boolean {
-	if (!OID_PATTERN.test(head) || !OID_PATTERN.test(tree)) return false;
-	const r1 = spawnSync("git", ["cat-file", "-e", `${head}^{commit}`], {
-		encoding: "utf8",
-		cwd: ROOT,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
-	if (r1.status !== 0) return false;
-	const r2 = spawnSync("git", ["cat-file", "-e", `${tree}^{tree}`], {
-		encoding: "utf8",
-		cwd: ROOT,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
-	if (r2.status !== 0) return false;
-	const derived = spawnSync("git", ["rev-parse", `${head}^{tree}`], {
-		encoding: "utf8",
-		cwd: ROOT,
-		stdio: ["ignore", "pipe", "pipe"],
-	}).stdout.trim();
-	return derived === tree;
-}
-
-/**
- * Paths the runner intentionally regenerates. Cleanliness checks
- * ignore these paths so the post-run state can be `true` even
- * though the runner wrote new files. Everything else must be
- * unchanged for the run to be considered drift-free.
- */
-const EXPECTED_OUTPUT_PATHS: ReadonlyArray<string> = [
-	`${DETACHED_DIR}/`,
-	`${DETACHED_DIR}/commands/`,
+export const EXPECTED_REPOSITORY_OUTPUT_PATHS: ReadonlyArray<string> = [
 	RESULTS_JSON,
 	"factory/inventories/environment.json",
 	"factory/inventories/repository.json",
@@ -202,68 +58,40 @@ const EXPECTED_OUTPUT_PATHS: ReadonlyArray<string> = [
 	"factory/baselines/file-size-summary.json",
 	"factory/baselines/file-size.csv",
 	"factory/baselines/exact-duplicates.json",
+	"docs/factory/baseline-report.md",
 ];
 
-function isExpectedOutput(path: string): boolean {
-	for (const p of EXPECTED_OUTPUT_PATHS) {
-		if (path === p) return true;
-		if (p.endsWith("/") && path.startsWith(p)) return true;
-		if (path.startsWith(p + "/")) return true;
-	}
-	return false;
+const REQUIRED_RUNNER_SOURCE_PATHS: ReadonlyArray<string> = [
+	"factory/scripts/run-verification.ts",
+	"factory/scripts/baseline-closure.ts",
+	"factory/scripts/git-status.ts",
+	"factory/scripts/subject-tree.ts",
+];
+
+interface RunnerArgs {
+	finalize: boolean;
+	onlyFilter: string | null;
+	skipFilter: Set<string> | null;
+	timeoutMs: number;
 }
 
-/**
- * CORRECTION11: path-aware cleanliness. Returns `true` iff every
- * non-ignored change in the worktree is inside `EXPECTED_OUTPUT_PATHS`.
- * Uses `git -c status.showUntrackedFiles=all status --porcelain=v1
- * --untracked-files=all --ignored=traditional` so the check is
- * independent of the user's `status.showUntrackedFiles` config and
- * excludes gitignored files (such as `node_modules`).
- */
-function worktreeInputsClean(): { clean: boolean; unexpected: string[] } {
-	const r = spawnSync(
-		"git",
-		[
-			"-c", "status.showUntrackedFiles=all",
-			"status", "--porcelain=v1", "--untracked-files=all", "--ignored=traditional",
-		],
-		{ encoding: "utf8", cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] },
-	);
-	if (r.status !== 0) return { clean: false, unexpected: [r.stderr || "git status failed"] };
-	const unexpected: string[] = [];
-	for (const line of r.stdout.split("\n")) {
-		if (line.length === 0) continue;
-		// Porcelain v1 format: XY <path> [-> <path2>]
-		const head = line.slice(3);
-		const path = head.split(" -> ").pop() ?? head;
-		const unquoted = path.replace(/^"(.*)"$/, "$1");
-		if (!isExpectedOutput(unquoted)) unexpected.push(unquoted);
-	}
-	return { clean: unexpected.length === 0, unexpected };
+interface VerificationCommand {
+	id: string;
+	class: string;
+	host_support: string[];
+	requires_gui?: boolean;
+	working_directory?: string;
+	argv?: unknown[];
+	shell_command?: string;
+	command?: string;
+	[key: string]: unknown;
 }
 
-function captureExecutionIdentity(): { head: string; tree: string; subject: string } {
-	const { head, tree } = headTreeNow();
-	const subject = computeFilteredSubjectTreeOid(ROOT);
-	if (!subject) {
-		throw new Error("SUBJECT_TREE_COMPUTATION_FAILED: filtered tree could not be computed at run start");
-	}
-	return { head, tree, subject };
+interface ExecutionIdentity {
+	head: string;
+	tree: string;
+	subject: string;
 }
-
-function hostClass(): string {
-	const a = process.arch;
-	const p = process.platform;
-	if (p === "darwin" && a === "arm64") return "darwin-arm64";
-	if (p === "linux" && a === "x64") return "linux-x64";
-	if (p === "win32" && a === "x64") return "windows-x64";
-	if (p === "linux" && a === "arm64") return "linux-arm64";
-	if (p === "win32" && a === "arm64") return "windows-arm64";
-	return `${p}-${a}`;
-}
-
-// ---------- result type ------------------------------------------------------
 
 type FailureClass =
 	| "FORK-INTRODUCED"
@@ -279,7 +107,7 @@ type FailureClass =
 
 interface ExecResult {
 	id: string;
-	status: "pass" | "fail" | "skip" | "unavailable" | "not-run";
+	status: "pass" | "fail";
 	started_at: string;
 	finished_at: string;
 	duration_ms: number;
@@ -288,9 +116,9 @@ interface ExecResult {
 	timeout: boolean;
 	stdout_sha256: string;
 	stderr_sha256: string;
-	stdout_path?: string;
-	stderr_path?: string;
-	metadata_path?: string;
+	stdout_path: string;
+	stderr_path: string;
+	metadata_path: string;
 	head_oid: string;
 	tree_oid: string;
 	head_oid_before: string;
@@ -299,264 +127,638 @@ interface ExecResult {
 	tree_oid_after: string;
 	subject_tree_oid_before: string;
 	subject_tree_oid_after: string;
+	inputs_clean_before_command: boolean;
+	inputs_clean_after_command: boolean;
+	unexpected_paths_before: string[];
+	unexpected_paths_after: string[];
 	environment_sha256: string;
 	failure_classification: FailureClass | null;
 	notes: string;
 }
 
-// ---------- argv resolver -----------------------------------------------------
+interface SkippedResult {
+	id: string;
+	status: "skip" | "unavailable";
+	started_at: string;
+	finished_at: string;
+	duration_ms: 0;
+	exit_code: null;
+	signal: null;
+	timeout: false;
+	stdout_sha256: string;
+	stderr_sha256: string;
+	head_oid: string;
+	tree_oid: string;
+	environment_sha256: string;
+	failure_classification: null;
+	notes: string;
+}
 
-interface Resolved {
+interface CleanlinessSample {
+	clean: boolean;
+	unexpected: string[];
+}
+
+interface ResolvedCommand {
 	argv: string[];
-	useShell: boolean;
 }
 
-function resolveArgv(c: any): Resolved {
-	if (Array.isArray(c.argv) && c.argv.length > 0) {
-		return { argv: c.argv.map((s: unknown) => String(s)), useShell: false };
-	}
-	if (typeof c.shell_command === "string" && c.shell_command.length > 0) {
-		return { argv: ["/bin/sh", "-c", c.shell_command], useShell: true };
-	}
-	if (typeof c.command === "string" && c.command.length > 0) {
-		const parts = c.command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
-		return { argv: parts, useShell: false };
-	}
-	throw new Error(`command ${c.id} has no executable form (argv/shell_command/command)`);
+interface ProcessOutcome {
+	code: number | null;
+	signal: NodeJS.Signals | null;
+	timedOut: boolean;
+	stdout: string;
+	stderr: string;
+	spawnError: Error | null;
 }
 
-// ---------- command execution ------------------------------------------------
+interface PayloadPaths {
+	stdoutRel: string;
+	stderrRel: string;
+	metadataRel: string;
+	stdoutAbs: string;
+	stderrAbs: string;
+	metadataAbs: string;
+}
+
+interface PassResultDocument {
+	schema_version: number;
+	host: string;
+	executed_at: string;
+	executed_commands: ExecResult[];
+	skipped_commands: SkippedResult[];
+	commands: Array<Record<string, unknown>>;
+}
+
+const SECRET_PATTERNS: RegExp[] = [
+	/AKIA[0-9A-Z]{16}/g,
+	/sk-[A-Za-z0-9_-]{20,}/g,
+	/ghp_[A-Za-z0-9]{20,}/g,
+	/xox[baprs]-[0-9A-Za-z-]{20,}/g,
+	/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+	/Bearer\s+[A-Za-z0-9._-]{20,}/g,
+];
+
+function repoRoot(): string {
+	const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+		cwd: process.cwd(),
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	if (result.status !== 0) {
+		throw new Error(`git rev-parse --show-toplevel failed: ${(result.stderr ?? "").trim()}`);
+	}
+	return (result.stdout ?? "").trim();
+}
+
+const ROOT = repoRoot();
+const CANONICAL_EVIDENCE_DIR = join(ROOT, DETACHED_DIR);
+const ARGS = parseArgs(process.argv.slice(2));
+const ENVIRONMENT_SHA256 = envSha();
+
+function parseArgs(argv: string[]): RunnerArgs {
+	const valueAfter = (flag: string): string | null => {
+		const index = argv.indexOf(flag);
+		if (index < 0) return null;
+		const value = argv[index + 1];
+		if (!value || value.startsWith("--")) throw new Error(`${flag} requires a value`);
+		return value;
+	};
+	const timeoutText = valueAfter("--timeout-ms");
+	const timeoutMs = timeoutText === null ? 600_000 : Number.parseInt(timeoutText, 10);
+	if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+		throw new Error(`--timeout-ms must be a positive integer; received ${timeoutText}`);
+	}
+	const onlyFilter = valueAfter("--only");
+	const skipText = valueAfter("--skip");
+	return {
+		finalize: argv.includes("--finalize-evidence"),
+		onlyFilter,
+		skipFilter: skipText === null ? null : new Set(skipText.split(",").filter(Boolean)),
+		timeoutMs,
+	};
+}
+
+function redact(value: string): string {
+	let redacted = value;
+	for (const pattern of SECRET_PATTERNS) redacted = redacted.replace(pattern, "[REDACTED]");
+	return redacted;
+}
+
+function envSha(): string {
+	const bunVersion = spawnSync("bun", ["--version"], { encoding: "utf8" });
+	const environment = {
+		platform: process.platform,
+		arch: process.arch,
+		nodeVersion: process.version,
+		bunVersion: bunVersion.status === 0 ? (bunVersion.stdout ?? "").trim() : "unknown",
+		envVarNames: Object.keys(process.env).sort(),
+		ci: process.env.CI ?? null,
+		githubActions: process.env.GITHUB_ACTIONS ?? null,
+		shell: process.env.SHELL ?? null,
+	};
+	return sha256(JSON.stringify(environment));
+}
+
+function sha256(value: Buffer | string): string {
+	return createHash("sha256").update(value).digest("hex");
+}
+
+function runGitText(args: string[]): { status: number | null; stdout: string; stderr: string } {
+	const result = spawnSync("git", args, {
+		cwd: ROOT,
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	return {
+		status: result.status,
+		stdout: (result.stdout ?? "").toString(),
+		stderr: (result.stderr ?? "").toString(),
+	};
+}
+
+function revParseVerify(expression: string): string | null {
+	const result = runGitText(["rev-parse", "--verify", "--end-of-options", expression]);
+	if (result.status !== 0) return null;
+	const oid = result.stdout.trim();
+	return OID_PATTERN.test(oid) ? oid : null;
+}
+
+function headTreeNow(): { head: string; tree: string } {
+	const head = revParseVerify("HEAD^{commit}");
+	const tree = revParseVerify("HEAD^{tree}");
+	if (!head || !tree) throw new Error("EXECUTION_IDENTITY_INVALID: HEAD or HEAD^{tree} did not resolve");
+	return { head, tree };
+}
+
+function captureExecutionIdentity(): ExecutionIdentity {
+	const { head, tree } = headTreeNow();
+	const subject = computeFilteredSubjectTreeOid(ROOT);
+	if (!subject) {
+		throw new Error("SUBJECT_TREE_COMPUTATION_FAILED: filtered tree could not be computed");
+	}
+	return { head, tree, subject };
+}
+
+/** Runner assertion retained in evidence; the renderer verifies independently. */
+function verifyExecutionIdentityShape(head: string, tree: string): boolean {
+	if (!OID_PATTERN.test(head) || !OID_PATTERN.test(tree)) return false;
+	const resolvedHead = revParseVerify(`${head}^{commit}`);
+	const resolvedTree = revParseVerify(`${tree}^{tree}`);
+	const derivedTree = revParseVerify(`${head}^{tree}`);
+	return resolvedHead !== null && resolvedTree !== null && derivedTree === tree;
+}
+
+function deriveExecutionIdentityForLocalCheck(head: string, tree: string): ExecutionIdentityDerivation {
+	return {
+		executionHeadExists: revParseVerify(`${head}^{commit}`) !== null,
+		executionTreeExists: revParseVerify(`${tree}^{tree}`) !== null,
+		derivedTreeOid: revParseVerify(`${head}^{tree}`),
+	};
+}
+
+function isExpectedRepositoryOutput(path: string): boolean {
+	return EXPECTED_REPOSITORY_OUTPUT_PATHS.includes(normalizeGitPath(path));
+}
+
+/**
+ * Uses the machine-readable NUL protocol and intentionally does not pass
+ * `--ignored`: ignored files are outside ordinary worktree cleanliness.
+ */
+export function worktreeInputsClean(): CleanlinessSample {
+	const result = spawnSync(
+		"git",
+		[
+			"-c",
+			"status.showUntrackedFiles=all",
+			"status",
+			"--porcelain=v1",
+			"-z",
+			"--untracked-files=all",
+		],
+		{
+			cwd: ROOT,
+			stdio: ["ignore", "pipe", "pipe"],
+			maxBuffer: 32 * 1024 * 1024,
+		},
+	);
+	if (result.status !== 0) {
+		const stderr = (result.stderr ?? Buffer.alloc(0)).toString("utf8").trim();
+		return { clean: false, unexpected: [`<git-status-error:${stderr || "unknown"}>`] };
+	}
+	try {
+		const unexpected = new Set<string>();
+		for (const entry of parsePorcelainV1Z(result.stdout ?? Buffer.alloc(0))) {
+			for (const path of [entry.path, entry.originalPath]) {
+				if (path !== null && !isExpectedRepositoryOutput(path)) {
+					unexpected.add(normalizeGitPath(path));
+				}
+			}
+		}
+		return { clean: unexpected.size === 0, unexpected: [...unexpected].sort() };
+	} catch (error) {
+		return {
+			clean: false,
+			unexpected: [`<git-status-parse-error:${error instanceof Error ? error.message : String(error)}>`],
+		};
+	}
+}
+
+function normalizeGitPath(path: string): string {
+	return path.split(sep).join("/");
+}
+
+function hostClass(): string {
+	const platform = process.platform;
+	const arch = process.arch;
+	if (platform === "darwin" && arch === "arm64") return "darwin-arm64";
+	if (platform === "linux" && arch === "x64") return "linux-x64";
+	if (platform === "win32" && arch === "x64") return "windows-x64";
+	if (platform === "linux" && arch === "arm64") return "linux-arm64";
+	if (platform === "win32" && arch === "arm64") return "windows-arm64";
+	return `${platform}-${arch}`;
+}
+
+function verifyRunnerSourceBound(): void {
+	const expectedRunner = join(ROOT, "factory/scripts/run-verification.ts");
+	if (
+		!existsSync(expectedRunner) ||
+		realpathSync(import.meta.path) !== realpathSync(expectedRunner)
+	) {
+		throw new Error(
+			`RUNNER_SOURCE_NOT_BOUND: invoked ${import.meta.path} outside repository ${ROOT}`,
+		);
+	}
+	for (const path of REQUIRED_RUNNER_SOURCE_PATHS) {
+		const absolute = join(ROOT, ...path.split("/"));
+		if (!existsSync(absolute) || !lstatSync(absolute).isFile() || lstatSync(absolute).isSymbolicLink()) {
+			throw new Error(`RUNNER_SOURCE_NOT_BOUND: ${path} is missing, non-regular, or symlinked`);
+		}
+		const tracked = runGitText(["ls-files", "--error-unmatch", "--", path]);
+		const committed = runGitText(["cat-file", "-e", `HEAD:${path}`]);
+		if (tracked.status !== 0 || committed.status !== 0) {
+			throw new Error(`RUNNER_SOURCE_NOT_BOUND: ${path} is not tracked at the execution HEAD`);
+		}
+	}
+}
+
+function validateCommands(commands: unknown): asserts commands is VerificationCommand[] {
+	if (!Array.isArray(commands)) throw new Error("verification.json commands must be an array");
+	const seen = new Set<string>();
+	for (const [index, command] of commands.entries()) {
+		if (command === null || typeof command !== "object") {
+			throw new Error(`verification command at index ${index} is not an object`);
+		}
+		const value = command as Record<string, unknown>;
+		if (typeof value.id !== "string" || !SAFE_COMMAND_ID.test(value.id)) {
+			throw new Error(`INVALID_EVIDENCE_PATH: command id ${JSON.stringify(value.id)} is not path-safe`);
+		}
+		if (seen.has(value.id)) throw new Error(`duplicate verification command id: ${value.id}`);
+		seen.add(value.id);
+		if (typeof value.class !== "string") throw new Error(`command ${value.id} has no class`);
+		if (!Array.isArray(value.host_support) || !value.host_support.every((h) => typeof h === "string")) {
+			throw new Error(`command ${value.id} has invalid host_support`);
+		}
+	}
+}
+
+function resolveArgv(command: VerificationCommand): ResolvedCommand {
+	if (Array.isArray(command.argv) && command.argv.length > 0) {
+		return { argv: command.argv.map((value) => String(value)) };
+	}
+	if (typeof command.shell_command === "string" && command.shell_command.length > 0) {
+		return { argv: ["/bin/sh", "-c", command.shell_command] };
+	}
+	if (typeof command.command === "string" && command.command.length > 0) {
+		const parts = command.command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+		return {
+			argv: parts.map((part) => part.replace(/^(?:"(.*)"|'(.*)')$/, "$1$2")),
+		};
+	}
+	throw new Error(`command ${command.id} has no executable form (argv/shell_command/command)`);
+}
+
+function resolveWorkingDirectory(command: VerificationCommand): string {
+	const declared = command.working_directory ?? ".";
+	if (typeof declared !== "string" || declared.length === 0 || isAbsolute(declared)) {
+		throw new Error(`command ${command.id} has invalid working_directory`);
+	}
+	const absolute = resolve(ROOT, declared);
+	const rel = relative(ROOT, absolute);
+	if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+		throw new Error(`command ${command.id} working_directory escapes the repository`);
+	}
+	return absolute;
+}
+
+function payloadPaths(evidenceDir: string, commandId: string): PayloadPaths {
+	if (!SAFE_COMMAND_ID.test(commandId)) {
+		throw new Error(`INVALID_EVIDENCE_PATH: command id ${JSON.stringify(commandId)} is not path-safe`);
+	}
+	const stdoutRel = posix.join("commands", `${commandId}.stdout`);
+	const stderrRel = posix.join("commands", `${commandId}.stderr`);
+	const metadataRel = posix.join("commands", `${commandId}.metadata.json`);
+	return {
+		stdoutRel,
+		stderrRel,
+		metadataRel,
+		stdoutAbs: join(evidenceDir, ...stdoutRel.split("/")),
+		stderrAbs: join(evidenceDir, ...stderrRel.split("/")),
+		metadataAbs: join(evidenceDir, ...metadataRel.split("/")),
+	};
+}
+
+function listTrackedInputPaths(): string[] {
+	const result = spawnSync("git", ["ls-files", "-z"], {
+		cwd: ROOT,
+		stdio: ["ignore", "pipe", "pipe"],
+		maxBuffer: 32 * 1024 * 1024,
+	});
+	if (result.status !== 0) throw new Error("git ls-files -z failed while preparing command monitor");
+	return (result.stdout ?? Buffer.alloc(0))
+		.toString("utf8")
+		.split("\0")
+		.filter(Boolean)
+		.map(normalizeGitPath)
+		.filter((path) => !isExpectedRepositoryOutput(path));
+}
+
+interface TrackedInputObservation {
+	touched: string[];
+	degraded: boolean;
+}
+
+interface TrackedInputMonitor {
+	stop(): TrackedInputObservation;
+}
+
+function startTrackedInputMonitor(paths: string[]): TrackedInputMonitor {
+	const tracked = new Set(paths);
+	const before = new Map<string, string>();
+	for (const path of paths) before.set(path, fingerprint(path));
+	const touched = new Set<string>();
+	let watcher: FSWatcher | null = null;
+	let degraded = false;
+	try {
+		watcher = watch(ROOT, { recursive: true }, (_event, filename) => {
+			if (filename === null) {
+				degraded = true;
+				return;
+			}
+			const path = normalizeGitPath(Buffer.isBuffer(filename) ? filename.toString("utf8") : filename);
+			if (tracked.has(path)) touched.add(path);
+		});
+		watcher.on("error", () => {
+			degraded = true;
+			watcher?.close();
+		});
+	} catch {
+		degraded = true;
+	}
+	let stopped = false;
+	let finalObservation: TrackedInputObservation | null = null;
+	return {
+		stop(): TrackedInputObservation {
+			if (stopped && finalObservation) return finalObservation;
+			stopped = true;
+			watcher?.close();
+			for (const path of paths) {
+				if (before.get(path) !== fingerprint(path)) touched.add(path);
+			}
+			finalObservation = { touched: [...touched].sort(), degraded };
+			return finalObservation;
+		},
+	};
+}
+
+function fingerprint(path: string): string {
+	try {
+		const value = lstatSync(join(ROOT, ...path.split("/")), { bigint: true });
+		return [
+			value.dev,
+			value.ino,
+			value.mode,
+			value.size,
+			value.mtimeNs,
+			value.ctimeNs,
+		].join(":");
+	} catch {
+		return "<missing>";
+	}
+}
 
 async function executeCommand(
-	cmd: any,
-	identityBefore: { head: string; tree: string; subject: string },
+	command: VerificationCommand,
+	bundleIdentity: ExecutionIdentity,
+	evidenceDir: string,
+	trackedInputs: string[],
 ): Promise<ExecResult> {
-	const detachedCmdDir = join(ROOT, DETACHED_DIR, "commands");
-	mkdirSync(detachedCmdDir, { recursive: true });
-	// CORRECTION11 R6 closure: paths are recorded relative to the
-	// evidence directory, not to the repository root. The renderer
-	// already treats declared manifest paths as evidence-dir-relative.
-	const stdoutRel = join("commands", `${cmd.id}.stdout`);
-	const stderrRel = join("commands", `${cmd.id}.stderr`);
-	const metaRel = join("commands", `${cmd.id}.metadata.json`);
-	const stdoutAbs = join(EVIDENCE_DIR, stdoutRel);
-	const stderrAbs = join(EVIDENCE_DIR, stderrRel);
-	const metaAbs = join(EVIDENCE_DIR, metaRel);
-	const stdoutStream = createWriteStream(stdoutAbs);
-	const stderrStream = createWriteStream(stderrAbs);
+	const paths = payloadPaths(evidenceDir, command.id);
+	mkdirSync(dirname(paths.stdoutAbs), { recursive: true });
 
-	// CORRECTION11 R4 closure: capture execution state immediately
-	// before the command runs.
-	const stateBeforeNow = captureExecutionIdentity();
-	if (
-		stateBeforeNow.head !== identityBefore.head ||
-		stateBeforeNow.tree !== identityBefore.tree ||
-		stateBeforeNow.subject !== identityBefore.subject
-	) {
-		stdoutStream.end();
-		stderrStream.end();
+	const stateBefore = captureExecutionIdentity();
+	assertIdentityPinned(stateBefore, bundleIdentity, `REPOSITORY_DRIFT_BEFORE_COMMAND: ${command.id}`);
+
+	const monitor = startTrackedInputMonitor(trackedInputs);
+	const cleanlinessBefore = worktreeInputsClean();
+	if (!cleanlinessBefore.clean) {
+		monitor.stop();
 		throw new Error(
-			`REPOSITORY_DRIFT_BEFORE_COMMAND: ${cmd.id} — head/tree/subject changed before command started`,
+			`WORKTREE_INPUTS_DIRTY_BEFORE_COMMAND: ${command.id}: ${cleanlinessBefore.unexpected.join(", ")}`,
 		);
 	}
 
 	const startedAt = new Date();
-	const startIso = startedAt.toISOString();
-
-	let resolved: Resolved;
+	let outcome: ProcessOutcome;
 	try {
-		resolved = resolveArgv(cmd);
-	} catch (err: any) {
-		stdoutStream.end();
-		stderrStream.end();
-		return buildFailure(cmd, startedAt, "UNKNOWN", err.message, { stdoutRel, stderrRel, metaRel }, "");
+		const resolved = resolveArgv(command);
+		const workingDirectory = resolveWorkingDirectory(command);
+		outcome = await runProcess(resolved, workingDirectory);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		outcome = {
+			code: null,
+			signal: null,
+			timedOut: false,
+			stdout: "",
+			stderr: `command setup error: ${message}\n`,
+			spawnError: error instanceof Error ? error : new Error(message),
+		};
 	}
 
-	const workingDir = cmd.working_directory === "." ? ROOT : join(ROOT, cmd.working_directory);
+	const cleanlinessAfterRaw = worktreeInputsClean();
+	const monitorObservation = monitor.stop();
+	const unexpectedAfter = [
+		...new Set([
+			...cleanlinessAfterRaw.unexpected,
+			...monitorObservation.touched,
+			...(monitorObservation.degraded ? ["<tracked-input-monitor-degraded>"] : []),
+		]),
+	].sort();
+	const inputsCleanAfter = cleanlinessAfterRaw.clean && unexpectedAfter.length === 0;
 
-	const proc = spawn(resolved.argv[0], resolved.argv.slice(1), {
-		cwd: workingDir,
-		stdio: ["ignore", "pipe", "pipe"],
-		detached: true,
-		env: process.env,
-		shell: false,
-	});
-
-	let timedOut = false;
-	const timeoutHandle = setTimeout(() => {
-		timedOut = true;
-		try {
-			process.kill(-proc.pid!, "SIGTERM");
-		} catch {
-			try {
-				proc.kill("SIGTERM");
-			} catch {}
-		}
-		setTimeout(() => {
-			try {
-				process.kill(-proc.pid!, "SIGKILL");
-			} catch {}
-		}, 5000).unref();
-	}, timeoutMs);
-
-	let stdoutBuf = "";
-	let stderrBuf = "";
-	proc.stdout.on("data", (chunk: Buffer) => {
-		const redacted = redact(chunk.toString("utf8"));
-		stdoutBuf += redacted;
-		stdoutStream.write(redacted);
-	});
-	proc.stderr.on("data", (chunk: Buffer) => {
-		const redacted = redact(chunk.toString("utf8"));
-		stderrBuf += redacted;
-		stderrStream.write(redacted);
-	});
-
-	const envHash = envSha();
-
-	const finalStatus: ExecResult = await new Promise((resolvePromise) => {
-		proc.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
-			clearTimeout(timeoutHandle);
-			stdoutStream.end();
-			stderrStream.end();
-			const endedAt = new Date();
-			let status: ExecResult["status"];
-			if (timedOut) status = "fail";
-			else if (code === 0) status = "pass";
-			else status = "fail";
-			const stdoutBytes = Buffer.from(stdoutBuf, "utf8");
-			const stderrBytes = Buffer.from(stderrBuf, "utf8");
-			const classification: FailureClass | null = status === "pass"
-				? null
-				: timedOut
-					? "TIMEOUT"
-					: classifyFailure(cmd, code, signal, stdoutBuf, stderrBuf);
-			resolvePromise({
-				id: cmd.id,
-				status,
-				started_at: startIso,
-				finished_at: endedAt.toISOString(),
-				duration_ms: endedAt.getTime() - startedAt.getTime(),
-				exit_code: code,
-				signal: signal ?? null,
-				timeout: timedOut,
-				stdout_sha256: createHash("sha256").update(stdoutBytes).digest("hex"),
-				stderr_sha256: createHash("sha256").update(stderrBytes).digest("hex"),
-				stdout_path: stdoutRel,
-				stderr_path: stderrRel,
-				metadata_path: metaRel,
-				head_oid: identityBefore.head,
-				tree_oid: identityBefore.tree,
-				head_oid_before: stateBeforeNow.head,
-				head_oid_after: identityBefore.head, // sentinel; overwritten below
-				tree_oid_before: stateBeforeNow.tree,
-				tree_oid_after: identityBefore.tree, // sentinel; overwritten below
-				subject_tree_oid_before: stateBeforeNow.subject,
-				subject_tree_oid_after: identityBefore.subject, // sentinel; overwritten below
-				environment_sha256: envHash,
-				failure_classification: classification,
-				notes: buildNotes(cmd, code, signal, timedOut, stdoutBuf, stderrBuf),
-			});
-		});
-		proc.on("error", (err) => {
-			clearTimeout(timeoutHandle);
-			stdoutStream.end();
-			stderrStream.end();
-			const endedAt = new Date();
-			resolvePromise({
-				id: cmd.id,
-				status: "fail",
-				started_at: startIso,
-				finished_at: endedAt.toISOString(),
-				duration_ms: endedAt.getTime() - startedAt.getTime(),
-				exit_code: -1,
-				signal: null,
-				timeout: false,
-				stdout_sha256: createHash("sha256").update(Buffer.from(stdoutBuf, "utf8")).digest("hex"),
-				stderr_sha256: createHash("sha256").update(Buffer.from(stderrBuf, "utf8")).digest("hex"),
-				stdout_path: stdoutRel,
-				stderr_path: stderrRel,
-				metadata_path: metaRel,
-				head_oid: identityBefore.head,
-				tree_oid: identityBefore.tree,
-				head_oid_before: stateBeforeNow.head,
-				head_oid_after: identityBefore.head,
-				tree_oid_before: stateBeforeNow.tree,
-				tree_oid_after: identityBefore.tree,
-				subject_tree_oid_before: stateBeforeNow.subject,
-				subject_tree_oid_after: identityBefore.subject,
-				environment_sha256: envHash,
-				failure_classification: "UNKNOWN",
-				notes: `spawn error: ${err.message}`,
-			});
-		});
-	});
-
-	// CORRECTION11 R4 closure: capture execution state immediately
-	// after the command finishes.
-	const stateAfterNow = captureExecutionIdentity();
-	if (
-		stateAfterNow.head !== identityBefore.head ||
-		stateAfterNow.tree !== identityBefore.tree ||
-		stateAfterNow.subject !== identityBefore.subject
-	) {
-		writeFileSync(metaAbs, JSON.stringify(finalStatus, null, "\t") + "\n", "utf8");
-		throw new Error(
-			`REPOSITORY_DRIFT_AFTER_COMMAND: ${cmd.id} — head/tree/subject changed after command finished`,
-		);
+	let stateAfter = bundleIdentity;
+	let identityCaptureError: Error | null = null;
+	try {
+		stateAfter = captureExecutionIdentity();
+	} catch (error) {
+		identityCaptureError = error instanceof Error ? error : new Error(String(error));
 	}
 
-	finalStatus.head_oid_before = stateBeforeNow.head;
-	finalStatus.head_oid_after = stateAfterNow.head;
-	finalStatus.tree_oid_before = stateBeforeNow.tree;
-	finalStatus.tree_oid_after = stateAfterNow.tree;
-	finalStatus.subject_tree_oid_before = stateBeforeNow.subject;
-	finalStatus.subject_tree_oid_after = stateAfterNow.subject;
-
-	writeFileSync(metaAbs, JSON.stringify(finalStatus, null, "\t") + "\n", "utf8");
-	return finalStatus;
-}
-
-function buildFailure(
-	cmd: any,
-	startedAt: Date,
-	classification: FailureClass,
-	notes: string,
-	paths: { stdoutRel: string; stderrRel: string; metaRel: string },
-	_: string,
-): ExecResult {
-	const endedAt = new Date();
-	const { head, tree } = headTreeNow();
-	return {
-		id: cmd.id,
-		status: "fail",
+	const finishedAt = new Date();
+	const status: ExecResult["status"] =
+		outcome.spawnError === null && !outcome.timedOut && outcome.code === 0 ? "pass" : "fail";
+	const classification =
+		status === "pass"
+			? null
+			: outcome.timedOut
+				? "TIMEOUT"
+				: classifyFailure(command, outcome.code, outcome.signal, outcome.stdout, outcome.stderr);
+	const stdoutBytes = Buffer.from(outcome.stdout, "utf8");
+	const stderrBytes = Buffer.from(outcome.stderr, "utf8");
+	const result: ExecResult = {
+		id: command.id,
+		status,
 		started_at: startedAt.toISOString(),
-		finished_at: endedAt.toISOString(),
-		duration_ms: endedAt.getTime() - startedAt.getTime(),
-		exit_code: null,
-		signal: null,
-		timeout: false,
-		stdout_sha256: "",
-		stderr_sha256: "",
+		finished_at: finishedAt.toISOString(),
+		duration_ms: finishedAt.getTime() - startedAt.getTime(),
+		exit_code: outcome.spawnError ? (outcome.code ?? -1) : outcome.code,
+		signal: outcome.signal,
+		timeout: outcome.timedOut,
+		stdout_sha256: sha256(stdoutBytes),
+		stderr_sha256: sha256(stderrBytes),
 		stdout_path: paths.stdoutRel,
 		stderr_path: paths.stderrRel,
-		metadata_path: paths.metaRel,
-		head_oid: head,
-		tree_oid: tree,
-		head_oid_before: head,
-		head_oid_after: head,
-		tree_oid_before: tree,
-		tree_oid_after: tree,
-		subject_tree_oid_before: "",
-		subject_tree_oid_after: "",
-		environment_sha256: envSha(),
+		metadata_path: paths.metadataRel,
+		head_oid: bundleIdentity.head,
+		tree_oid: bundleIdentity.tree,
+		head_oid_before: stateBefore.head,
+		head_oid_after: stateAfter.head,
+		tree_oid_before: stateBefore.tree,
+		tree_oid_after: stateAfter.tree,
+		subject_tree_oid_before: stateBefore.subject,
+		subject_tree_oid_after: stateAfter.subject,
+		inputs_clean_before_command: cleanlinessBefore.clean,
+		inputs_clean_after_command: inputsCleanAfter,
+		unexpected_paths_before: cleanlinessBefore.unexpected,
+		unexpected_paths_after: unexpectedAfter,
+		environment_sha256: ENVIRONMENT_SHA256,
 		failure_classification: classification,
-		notes,
+		notes: buildNotes(command, outcome),
 	};
+
+	// Always materialize all three payloads, including setup/spawn failures.
+	atomicWriteFile(paths.stdoutAbs, stdoutBytes);
+	atomicWriteFile(paths.stderrAbs, stderrBytes);
+	atomicWriteFile(paths.metadataAbs, JSON.stringify(result, null, "\t") + "\n");
+
+	if (identityCaptureError) {
+		throw new Error(`REPOSITORY_DRIFT_AFTER_COMMAND: ${command.id}: ${identityCaptureError.message}`);
+	}
+	assertIdentityPinned(stateAfter, bundleIdentity, `REPOSITORY_DRIFT_AFTER_COMMAND: ${command.id}`);
+	if (!inputsCleanAfter) {
+		throw new Error(
+			`WORKTREE_INPUTS_DIRTY_AFTER_COMMAND: ${command.id}: ${unexpectedAfter.join(", ")}`,
+		);
+	}
+	return result;
 }
 
-function classifyFailure(cmd: any, code: number | null, signal: NodeJS.Signals | null, stdout: string, stderr: string): FailureClass {
-	const text = (stdout + "\n" + stderr).toLowerCase();
+function assertIdentityPinned(actual: ExecutionIdentity, expected: ExecutionIdentity, prefix: string): void {
+	if (
+		actual.head !== expected.head ||
+		actual.tree !== expected.tree ||
+		actual.subject !== expected.subject
+	) {
+		throw new Error(
+			`${prefix}: expected head=${expected.head} tree=${expected.tree} subject=${expected.subject}; ` +
+				`observed head=${actual.head} tree=${actual.tree} subject=${actual.subject}`,
+		);
+	}
+}
+
+async function runProcess(resolved: ResolvedCommand, cwd: string): Promise<ProcessOutcome> {
+	return await new Promise((resolvePromise) => {
+		let child;
+		try {
+			child = spawn(resolved.argv[0]!, resolved.argv.slice(1), {
+				cwd,
+				stdio: ["ignore", "pipe", "pipe"],
+				detached: true,
+				env: process.env,
+				shell: false,
+			});
+		} catch (error) {
+			const spawnError = error instanceof Error ? error : new Error(String(error));
+			resolvePromise({
+				code: -1,
+				signal: null,
+				timedOut: false,
+				stdout: "",
+				stderr: `spawn error: ${spawnError.message}\n`,
+				spawnError,
+			});
+			return;
+		}
+
+		const stdoutChunks: Buffer[] = [];
+		const stderrChunks: Buffer[] = [];
+		child.stdout?.on("data", (chunk: Buffer | string) => stdoutChunks.push(Buffer.from(chunk)));
+		child.stderr?.on("data", (chunk: Buffer | string) => stderrChunks.push(Buffer.from(chunk)));
+
+		let timedOut = false;
+		let spawnError: Error | null = null;
+		let settled = false;
+		let killTimer: ReturnType<typeof setTimeout> | null = null;
+		const timeout = setTimeout(() => {
+			timedOut = true;
+			killProcessGroup(child.pid, "SIGTERM");
+			killTimer = setTimeout(() => killProcessGroup(child.pid, "SIGKILL"), 5_000);
+			killTimer.unref();
+		}, ARGS.timeoutMs);
+
+		const finish = (code: number | null, signal: NodeJS.Signals | null): void => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			if (killTimer) clearTimeout(killTimer);
+			const stdout = redact(Buffer.concat(stdoutChunks).toString("utf8"));
+			let stderr = redact(Buffer.concat(stderrChunks).toString("utf8"));
+			if (spawnError && !stderr.includes(spawnError.message)) {
+				stderr += `${stderr.length > 0 && !stderr.endsWith("\n") ? "\n" : ""}spawn error: ${spawnError.message}\n`;
+			}
+			resolvePromise({ code, signal, timedOut, stdout, stderr, spawnError });
+		};
+
+		child.once("error", (error) => {
+			spawnError = error;
+			queueMicrotask(() => finish(-1, null));
+		});
+		child.once("close", finish);
+	});
+}
+
+function killProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
+	if (pid === undefined) return;
+	try {
+		process.kill(-pid, signal);
+	} catch {
+		try {
+			process.kill(pid, signal);
+		} catch {
+			// Process already exited.
+		}
+	}
+}
+
+function classifyFailure(
+	_command: VerificationCommand,
+	code: number | null,
+	signal: NodeJS.Signals | null,
+	stdout: string,
+	stderr: string,
+): FailureClass {
+	const text = `${stdout}\n${stderr}`.toLowerCase();
 	if (/no matching workspace|cannot find module|@cline\/\S+ not found|workspace not found/i.test(text)) {
 		return "ENVIRONMENTAL";
 	}
@@ -569,306 +771,325 @@ function classifyFailure(cmd: any, code: number | null, signal: NodeJS.Signals |
 	if (signal === "SIGSEGV" || /segmentation fault|out of memory/i.test(text)) {
 		return "ENVIRONMENTAL";
 	}
-	if (/timeout|timed out/i.test(text)) {
-		return "TIMEOUT";
-	}
-	if (code === 127 || /command not found/i.test(text)) {
-		return "ENVIRONMENTAL";
-	}
+	if (/timeout|timed out/i.test(text)) return "TIMEOUT";
+	if (code === 127 || /command not found/i.test(text)) return "ENVIRONMENTAL";
 	return "UNKNOWN";
 }
 
-function buildNotes(cmd: any, code: number | null, signal: NodeJS.Signals | null, timedOut: boolean, stdout: string, stderr: string): string {
-	const argv = Array.isArray(cmd.argv) ? cmd.argv.join(" ") : (cmd.shell_command ?? cmd.command ?? "");
-	const tail = (s: string) => s.length > 400 ? "..." + s.slice(s.length - 400) : s;
+function buildNotes(command: VerificationCommand, outcome: ProcessOutcome): string {
+	const invocation = Array.isArray(command.argv)
+		? command.argv.join(" ")
+		: (command.shell_command ?? command.command ?? "");
+	const tail = outcome.stderr.length > 400 ? `...${outcome.stderr.slice(-400)}` : outcome.stderr;
 	return [
-		`argv: ${argv}`,
-		`exit_code: ${code}`,
-		`signal: ${signal ?? ""}`,
-		`timeout: ${timedOut}`,
-		`stderr_tail: ${tail(stderr)}`,
+		`argv: ${invocation}`,
+		`exit_code: ${outcome.code}`,
+		`signal: ${outcome.signal ?? ""}`,
+		`timeout: ${outcome.timedOut}`,
+		`stderr_tail: ${tail}`,
 	].join("\n");
 }
 
-// ---------- main --------------------------------------------------------------
-
-async function main(): Promise<void> {
-	const vPath = join(ROOT, "factory/inventories/verification.json");
-	if (!existsSync(vPath)) throw new Error(`missing ${vPath}; run collect-verification first`);
-	const vDoc = JSON.parse(readFileSync(vPath, "utf8"));
-	const commands: any[] = vDoc.commands;
-
-	if (finalize) {
-		await runPass(commands, { label: "finalize" });
-		await writeDetachedBundle(commands, "finalize");
-		return;
-	}
-
-	const host = hostClass();
-	await runPass(commands, { label: "execute" });
-}
-
-interface PassOptions {
-	label: string;
-}
-
-async function runPass(commands: any[], opts: PassOptions): Promise<void> {
-	const host = hostClass();
-	const skipped: ExecResult[] = [];
-	const executed: ExecResult[] = [];
-	let attemptCount = 0;
-
-	// Wipe existing per-command evidence so this pass is the only source.
-	const detachedCmdDir = join(ROOT, DETACHED_DIR, "commands");
-	if (existsSync(detachedCmdDir)) {
-		for (const f of readdirSync(detachedCmdDir)) {
-			try {
-				const full = join(detachedCmdDir, f);
-				if (statSync(full).isFile()) {
-					require("node:fs").unlinkSync(full);
-				}
-			} catch {}
-		}
-	}
-
-	// CORRECTION11 R1 closure: capture execution identity BEFORE
-	// any command runs.
-	const identityBefore = captureExecutionIdentity();
-	if (!verifyExecutionIdentityShape(identityBefore.head, identityBefore.tree)) {
-		throw new Error("EXECUTION_IDENTITY_INVALID: head/tree do not form a valid Git object pair");
-	}
-
-	// CORRECTION11 preflight: subject inputs must be clean.
-	const preflight = worktreeInputsClean();
-	if (!preflight.clean) {
-		throw new Error(
-			`WORKTREE_INPUTS_DIRTY_BEFORE: ${preflight.unexpected.join(", ")}`,
-		);
-	}
-
-	for (const c of commands) {
-		const matchedOnly = onlyFilter ? c.id === onlyFilter : true;
-		const matchedSkip = skipFilter ? skipFilter.has(c.id) : false;
-		if (onlyFilter && !matchedOnly) {
-			skipped.push(buildSkipped(c, "skip", `class=${c.class}; --only=${onlyFilter} excluded`));
-			continue;
-		}
-		if (matchedSkip) {
-			skipped.push(buildSkipped(c, "skip", `class=${c.class}; --skip filter excluded`));
-			continue;
-		}
-		const runnable = c.class === "mandatory" || c.class === "affected-scope";
-		if (!runnable) {
-			skipped.push(buildSkipped(c, "skip", `class=${c.class} (not executed by runner; classification preserved)`));
-			continue;
-		}
-		if (!c.host_support.includes(host)) {
-			skipped.push(buildSkipped(c, "unavailable", `host=${host} not in host_support=${c.host_support.join(",")}`));
-			continue;
-		}
-		if (c.requires_gui && process.env.CI) {
-			skipped.push(buildSkipped(c, "unavailable", "requires GUI; skipped on CI host"));
-			continue;
-		}
-		attemptCount++;
-		console.log(`[runner:${opts.label}] (${attemptCount}) ${c.id} :: ${c.command ?? c.shell_command ?? c.argv?.join(" ")}`);
-		const result = await executeCommand(c, identityBefore);
-		executed.push(result);
-		console.log(
-			`[runner:${opts.label}]   ${c.id} -> ${result.status}` +
-				` (${result.duration_ms}ms, exit=${result.exit_code ?? "n/a"}` +
-				`, class=${result.failure_classification ?? "n/a"})`,
-		);
-	}
-
-	const merged = commands.map((c) => {
-		const e = executed.find((x) => x.id === c.id);
-		const s = skipped.find((x) => x.id === c.id);
-		const r = e ?? s;
-		if (!r) {
-			return { ...c, result: "not-run", reason: "runner did not produce a row (filter excluded?)", failure_classification: null };
-		}
-		return {
-			...c,
-			result: r.status,
-			reason: r.notes,
-			failure_classification: r.failure_classification,
-		};
-	});
-
-	const out = {
-		schema_version: 1,
-		host,
-		executed_at: new Date().toISOString(),
-		executed_commands: executed,
-		skipped_commands: skipped,
-		commands: merged,
-	};
-	mkdirSync(dirname(join(ROOT, RESULTS_JSON)), { recursive: true });
-	writeFileSync(join(ROOT, RESULTS_JSON), JSON.stringify(out, null, "\t") + "\n", "utf8");
-	console.log(`Wrote ${RESULTS_JSON} executed=${executed.length} skipped=${skipped.length}`);
-
-	// CORRECTION11 R1 closure: re-capture cleanliness after the matrix
-	// (postflight). Path-aware: expected outputs are excluded.
-	const postflight = worktreeInputsClean();
-	const identityAfter = captureExecutionIdentity();
-	const identityStillValid = verifyExecutionIdentityShape(
-		identityAfter.head,
-		identityAfter.tree,
-	);
-
-	if (!postflight.clean) {
-		throw new Error(
-			`WORKTREE_INPUTS_DIRTY_AFTER: ${postflight.unexpected.join(", ")}`,
-		);
-	}
-	if (!identityStillValid) {
-		throw new Error("EXECUTION_IDENTITY_INVALID: head/tree no longer form a valid pair");
-	}
-	if (identityAfter.head !== identityBefore.head || identityAfter.tree !== identityBefore.tree) {
-		throw new Error(
-			`REPOSITORY_DRIFT_END_OF_MATRIX: head=${identityAfter.head} tree=${identityAfter.tree}`,
-		);
-	}
-	if (identityAfter.subject !== identityBefore.subject) {
-		throw new Error(
-			`SUBJECT_DRIFT_END_OF_MATRIX: subject=${identityAfter.subject}`,
-		);
-	}
-
-	await writeDetachedBundle(commands, opts.label, identityBefore, postflight);
-}
-
-function buildSkipped(c: any, status: "skip" | "unavailable", notes: string): ExecResult {
+function buildSkipped(command: VerificationCommand, status: SkippedResult["status"], notes: string): SkippedResult {
 	const { head, tree } = headTreeNow();
+	const now = new Date().toISOString();
 	return {
-		id: c.id,
+		id: command.id,
 		status,
-		started_at: new Date().toISOString(),
-		finished_at: new Date().toISOString(),
+		started_at: now,
+		finished_at: now,
 		duration_ms: 0,
 		exit_code: null,
 		signal: null,
 		timeout: false,
-		stdout_sha256: "",
-		stderr_sha256: "",
+		stdout_sha256: sha256(""),
+		stderr_sha256: sha256(""),
 		head_oid: head,
 		tree_oid: tree,
-		head_oid_before: head,
-		head_oid_after: head,
-		tree_oid_before: tree,
-		tree_oid_after: tree,
-		subject_tree_oid_before: "",
-		subject_tree_oid_after: "",
-		environment_sha256: envSha(),
+		environment_sha256: ENVIRONMENT_SHA256,
 		failure_classification: null,
 		notes,
 	};
 }
 
-async function writeDetachedBundle(
-	commands: any[],
-	label: string,
-	identityBefore: { head: string; tree: string; subject: string },
-	postflight: { clean: boolean; unexpected: string[] },
-): Promise<void> {
-	const resultsPath = join(ROOT, RESULTS_JSON);
-	if (!existsSync(resultsPath)) return;
-	const results = JSON.parse(readFileSync(resultsPath, "utf8"));
-	const executed: any[] = results.executed_commands ?? [];
-	const host = hostClass();
+function createStagingDirectory(): string {
+	const parent = join(ROOT, EVIDENCE_PARENT);
+	mkdirSync(parent, { recursive: true });
+	const nonce = `${process.pid}-${Date.now()}-${randomBytes(6).toString("hex")}`;
+	const staging = join(parent, `.${ACT_ID}-staging-${nonce}`);
+	mkdirSync(join(staging, "commands"), { recursive: true });
+	return staging;
+}
 
-	const detachedDir = join(ROOT, DETACHED_DIR);
-	mkdirSync(detachedDir, { recursive: true });
-
-	const executionIdentityValid = verifyExecutionIdentityShape(
-		identityBefore.head,
-		identityBefore.tree,
+function atomicWriteFile(path: string, content: string | Buffer): void {
+	mkdirSync(dirname(path), { recursive: true });
+	const temp = join(
+		dirname(path),
+		`.${basename(path)}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`,
 	);
+	try {
+		writeFileSync(temp, content);
+		renameSync(temp, path);
+	} finally {
+		rmSync(temp, { force: true });
+	}
+}
 
+function replaceCanonicalBundle(stagingDir: string): void {
+	const parent = dirname(CANONICAL_EVIDENCE_DIR);
+	const backup = join(
+		parent,
+		`.${ACT_ID}-previous-${process.pid}-${Date.now()}-${randomBytes(4).toString("hex")}`,
+	);
+	let previousMoved = false;
+	try {
+		if (existsSync(CANONICAL_EVIDENCE_DIR)) {
+			renameSync(CANONICAL_EVIDENCE_DIR, backup);
+			previousMoved = true;
+		}
+		renameSync(stagingDir, CANONICAL_EVIDENCE_DIR);
+	} catch (error) {
+		if (!existsSync(CANONICAL_EVIDENCE_DIR) && previousMoved && existsSync(backup)) {
+			renameSync(backup, CANONICAL_EVIDENCE_DIR);
+		}
+		throw error;
+	}
+	if (previousMoved) rmSync(backup, { recursive: true, force: true });
+}
+
+async function runPass(commands: VerificationCommand[], label: string): Promise<void> {
+	const stagingDir = createStagingDirectory();
+	try {
+		const identityBefore = captureExecutionIdentity();
+		if (!verifyExecutionIdentityShape(identityBefore.head, identityBefore.tree)) {
+			throw new Error("EXECUTION_IDENTITY_INVALID: runner could not verify head/tree object relationship");
+		}
+		const preflight = worktreeInputsClean();
+		if (!preflight.clean) {
+			throw new Error(`WORKTREE_INPUTS_DIRTY_BEFORE: ${preflight.unexpected.join(", ")}`);
+		}
+
+		const trackedInputs = listTrackedInputPaths();
+		const host = hostClass();
+		const skipped: SkippedResult[] = [];
+		const executed: ExecResult[] = [];
+		let attemptCount = 0;
+
+		for (const command of commands) {
+			if (ARGS.onlyFilter && command.id !== ARGS.onlyFilter) {
+				skipped.push(buildSkipped(command, "skip", `class=${command.class}; --only=${ARGS.onlyFilter} excluded`));
+				continue;
+			}
+			if (ARGS.skipFilter?.has(command.id)) {
+				skipped.push(buildSkipped(command, "skip", `class=${command.class}; --skip filter excluded`));
+				continue;
+			}
+			const runnable = command.class === "mandatory" || command.class === "affected-scope";
+			if (!runnable) {
+				skipped.push(buildSkipped(command, "skip", `class=${command.class} (not executed by runner)`));
+				continue;
+			}
+			if (!command.host_support.includes(host)) {
+				skipped.push(
+					buildSkipped(command, "unavailable", `host=${host} not in host_support=${command.host_support.join(",")}`),
+				);
+				continue;
+			}
+			if (command.requires_gui && process.env.CI) {
+				skipped.push(buildSkipped(command, "unavailable", "requires GUI; skipped on CI host"));
+				continue;
+			}
+
+			attemptCount += 1;
+			console.log(
+				`[runner:${label}] (${attemptCount}) ${command.id} :: ${command.command ?? command.shell_command ?? command.argv?.join(" ")}`,
+			);
+			const result = await executeCommand(command, identityBefore, stagingDir, trackedInputs);
+			executed.push(result);
+			console.log(
+				`[runner:${label}]   ${command.id} -> ${result.status} ` +
+					`(${result.duration_ms}ms, exit=${result.exit_code ?? "n/a"}, class=${result.failure_classification ?? "n/a"})`,
+			);
+		}
+
+		const merged = commands.map((command) => {
+			const result = executed.find((row) => row.id === command.id) ?? skipped.find((row) => row.id === command.id);
+			if (!result) {
+				return {
+					...command,
+					result: "not-run",
+					reason: "runner did not produce a row",
+					failure_classification: null,
+				};
+			}
+			return {
+				...command,
+				result: result.status,
+				reason: result.notes,
+				failure_classification: result.failure_classification,
+			};
+		});
+		const resultDocument: PassResultDocument = {
+			schema_version: 1,
+			host,
+			executed_at: new Date().toISOString(),
+			executed_commands: executed,
+			skipped_commands: skipped,
+			commands: merged,
+		};
+		atomicWriteFile(join(ROOT, RESULTS_JSON), JSON.stringify(resultDocument, null, "\t") + "\n");
+		console.log(`Wrote ${RESULTS_JSON} executed=${executed.length} skipped=${skipped.length}`);
+
+		const postflight = worktreeInputsClean();
+		if (!postflight.clean) {
+			throw new Error(`WORKTREE_INPUTS_DIRTY_AFTER: ${postflight.unexpected.join(", ")}`);
+		}
+		const identityAfter = captureExecutionIdentity();
+		assertIdentityPinned(identityAfter, identityBefore, "REPOSITORY_DRIFT_END_OF_MATRIX");
+		if (!verifyExecutionIdentityShape(identityAfter.head, identityAfter.tree)) {
+			throw new Error("EXECUTION_IDENTITY_INVALID: postflight head/tree object relationship failed");
+		}
+
+		writeDetachedBundle({
+			label,
+			stagingDir,
+			identity: identityBefore,
+			preflight,
+			postflight,
+			resultDocument,
+		});
+		replaceCanonicalBundle(stagingDir);
+		console.log(`Published ${DETACHED_DIR} from one validated staging bundle`);
+	} finally {
+		// If publication succeeded this path no longer exists. Otherwise a
+		// failed pass cannot disturb the previous complete canonical bundle.
+		rmSync(stagingDir, { recursive: true, force: true });
+	}
+}
+
+function writeDetachedBundle(args: {
+	label: string;
+	stagingDir: string;
+	identity: ExecutionIdentity;
+	preflight: CleanlinessSample;
+	postflight: CleanlinessSample;
+	resultDocument: PassResultDocument;
+}): void {
+	const { label, stagingDir, identity, preflight, postflight, resultDocument } = args;
+	const executed = resultDocument.executed_commands;
+	for (const row of executed) {
+		for (const rel of [row.stdout_path, row.stderr_path, row.metadata_path]) {
+			const resolved = resolveEvidencePayloadPath(stagingDir, ROOT, rel);
+			if (!resolved.ok) throw new Error(`INVALID_EVIDENCE_PATH: ${row.id}: ${rel}: ${resolved.reason}`);
+			if (!existsSync(resolved.abs) || !lstatSync(resolved.abs).isFile()) {
+				throw new Error(`EVIDENCE_PAYLOAD_MISSING: ${row.id}: ${rel}`);
+			}
+		}
+	}
+
+	const expectedEvidencePayloadPaths = executed.flatMap((row) => [
+		row.stdout_path,
+		row.stderr_path,
+		row.metadata_path,
+	]);
+	expectedEvidencePayloadPaths.unshift("evidence.json");
+
+	const executionIdentityValid = verifyExecutionIdentityShape(identity.head, identity.tree);
 	const evidence = {
 		schema_version: 3,
-		act_id: "ACT-CLINEMM-FORK-BASELINE01",
+		act_id: ACT_ID,
 		pass_label: label,
-		// CORRECTION08/10: filtered subject tree.
-		subject_tree_oid: identityBefore.subject,
-		// CORRECTION11: subject tree captured both before and after the matrix.
-		subject_tree_oid_before: identityBefore.subject,
-		subject_tree_oid_after: identityBefore.subject,
-		// CORRECTION10: separate execution identity triple.
-		execution_head_oid: identityBefore.head,
-		execution_tree_oid: identityBefore.tree,
-		// CORRECTION11: tri-state cleanliness (true / false / null).
-		// CORRECTION10 used `worktree_clean_before` / `worktree_clean_after`
-		// (boolean only). We populate both forms: the CORRECTION11 names
-		// (`worktree_inputs_clean_*`) and the CORRECTION10 names for
-		// back-compat, so legacy renderers still see the boolean value.
-		worktree_inputs_clean_before: true,
-		worktree_inputs_clean_after: postflight.clean,
-		worktree_clean_before: true,
-		worktree_clean_after: postflight.clean,
-		worktree_inputs_clean_after_unexpected: postflight.unexpected,
-		// CORRECTION11: identity shape verified by `git cat-file -e` /
-		// `git rev-parse <head>^{tree}` checks.
+		subject_tree_oid: identity.subject,
+		subject_tree_oid_before: identity.subject,
+		subject_tree_oid_after: identity.subject,
+		execution_head_oid: identity.head,
+		execution_tree_oid: identity.tree,
 		execution_identity_valid: executionIdentityValid,
-		// CORRECTION11: the runner declares every path it intentionally
-		// regenerates; the renderer checks the manifest declares them all.
-		expected_output_paths: EXPECTED_OUTPUT_PATHS as unknown as string[],
-		// CORRECTION07: legacy literal-tree field, retained only for the
-		// per-record equality check inside the runner. The renderer no
-		// longer binds against this value.
-		tree_oid: identityBefore.tree,
-		head_oid: identityBefore.head,
+		worktree_inputs_clean_before: preflight.clean,
+		worktree_inputs_clean_after: postflight.clean,
+		worktree_inputs_clean_before_unexpected: preflight.unexpected,
+		worktree_inputs_clean_after_unexpected: postflight.unexpected,
+		worktree_clean_before: preflight.clean,
+		worktree_clean_after: postflight.clean,
+		expected_evidence_payload_paths: expectedEvidencePayloadPaths,
+		tree_oid: identity.tree,
+		head_oid: identity.head,
 		generated_at: new Date().toISOString(),
-		host_arch: host,
-		subject_tree_excludes: SUBJECT_TREE_EXCLUDES.map((e) => ({ kind: e.kind, path: e.path })),
+		host_arch: resultDocument.host,
+		subject_tree_excludes: SUBJECT_TREE_EXCLUDES.map((entry) => ({ ...entry })),
 		commands: executed,
 		hashes: {} as Record<string, string>,
 	};
-	for (const e of executed) {
-		if (e.stdout_path) {
-			const abs = resolve(EVIDENCE_DIR, e.stdout_path);
-			if (existsSync(abs)) {
-				const buf = readFileSync(abs);
-				evidence.hashes[`${e.id}.stdout`] = createHash("sha256").update(buf).digest("hex");
-			}
-		}
-		if (e.stderr_path) {
-			const abs = resolve(EVIDENCE_DIR, e.stderr_path);
-			if (existsSync(abs)) {
-				const buf = readFileSync(abs);
-				evidence.hashes[`${e.id}.stderr`] = createHash("sha256").update(buf).digest("hex");
-			}
-		}
-		if (e.stdout_sha256) evidence.hashes[`${e.id}.stdout_stream`] = e.stdout_sha256;
-		if (e.stderr_sha256) evidence.hashes[`${e.id}.stderr_stream`] = e.stderr_sha256;
-	}
-	writeFileSync(join(detachedDir, "evidence.json"), JSON.stringify(evidence, null, "\t") + "\n", "utf8");
 
-	// Manifest: every declared payload path is evidence-dir-relative.
-	const lines: string[] = [];
-	function add(rel: string): void {
-		const abs = resolve(EVIDENCE_DIR, rel);
-		if (!existsSync(abs)) return;
-		const buf = readFileSync(abs);
-		const sha = createHash("sha256").update(buf).digest("hex");
-		lines.push(`${sha}  ${rel}`);
+	for (const row of executed) {
+		const stdout = readFileSync(join(stagingDir, ...row.stdout_path.split("/")));
+		const stderr = readFileSync(join(stagingDir, ...row.stderr_path.split("/")));
+		evidence.hashes[`${row.id}.stdout`] = sha256(stdout);
+		evidence.hashes[`${row.id}.stderr`] = sha256(stderr);
+		evidence.hashes[`${row.id}.stdout_stream`] = row.stdout_sha256;
+		evidence.hashes[`${row.id}.stderr_stream`] = row.stderr_sha256;
 	}
-	add("evidence.json");
-	for (const e of executed) {
-		if (e.stdout_path) add(e.stdout_path);
-		if (e.stderr_path) add(e.stderr_path);
-		if (e.metadata_path) add(e.metadata_path);
-	}
-	writeFileSync(join(detachedDir, "hashes.sha256"), lines.join("\n") + "\n", "utf8");
 
-	console.log(`Wrote ${DETACHED_DIR}/evidence.json (subject=${identityBefore.subject.slice(0, 12)}…, exec=${identityBefore.tree.slice(0, 12)}…)`);
-	console.log(`Wrote ${DETACHED_DIR}/hashes.sha256 (${lines.length} entries)`);
-	console.log(`worktree_inputs_clean: before=true after=${postflight.clean}`);
-	console.log(`execution_identity_valid: ${executionIdentityValid}`);
+	atomicWriteFile(join(stagingDir, "evidence.json"), JSON.stringify(evidence, null, "\t") + "\n");
+	const manifestLines = expectedEvidencePayloadPaths.map((rel) => {
+		const resolved = resolveEvidencePayloadPath(stagingDir, ROOT, rel);
+		if (!resolved.ok) throw new Error(`INVALID_EVIDENCE_PATH: ${rel}: ${resolved.reason}`);
+		if (!existsSync(resolved.abs) || !lstatSync(resolved.abs).isFile()) {
+			throw new Error(`EVIDENCE_PAYLOAD_MISSING: ${rel}`);
+		}
+		return `${sha256(readFileSync(resolved.abs))}  ${rel}`;
+	});
+	atomicWriteFile(join(stagingDir, "hashes.sha256"), `${manifestLines.join("\n")}\n`);
+
+	const localView = checkEvidence({
+		ev: loadEvidenceFile(join(stagingDir, "evidence.json")),
+		hashesText: readFileSync(join(stagingDir, "hashes.sha256"), "utf8"),
+		evDirAbs: stagingDir,
+		executedCmds: executed,
+		rootAbs: ROOT,
+		headOidNow: identity.head,
+		treeOidNow: identity.tree,
+		filteredSubjectTreeOidNow: identity.subject,
+		executionIdentityDerivation: deriveExecutionIdentityForLocalCheck(identity.head, identity.tree),
+	});
+	if (!isEvidenceOk(localView)) {
+		throw new Error(
+			`EVIDENCE_SELF_CHECK_FAILED: ${JSON.stringify({
+				executionIdentityValid: localView.executionIdentityValid,
+				perCommandDriftChecked: localView.perCommandDriftChecked,
+				perCommandInputsClean: localView.perCommandInputsClean,
+				manifestContractHonored: localView.manifestContractHonored,
+				hashManifestValid: localView.hashManifestValid,
+				commandSetExact: localView.commandSetExact,
+				missingFiles: localView.missingFiles,
+				unexpectedFiles: localView.unexpectedFiles,
+				commandRecordMismatches: localView.commandRecordMismatches,
+			})}`,
+		);
+	}
+	console.log(`Prepared detached evidence bundle once (${manifestLines.length} payloads)`);
 }
 
-main().catch((err) => {
-	console.error(err);
-	process.exit(1);
-});
+async function main(): Promise<void> {
+	const verificationPath = join(ROOT, "factory/inventories/verification.json");
+	if (!existsSync(verificationPath)) {
+		throw new Error(`missing ${verificationPath}; run collect-verification first`);
+	}
+	verifyRunnerSourceBound();
+	const document = JSON.parse(readFileSync(verificationPath, "utf8"));
+	validateCommands(document.commands);
+	const commands = document.commands;
+
+	if (ARGS.finalize) {
+		await runPass(commands, "finalize");
+		return;
+	}
+	await runPass(commands, "execute");
+}
+
+if (import.meta.main) {
+	main().catch((error) => {
+		console.error(error);
+		process.exitCode = 1;
+	});
+}

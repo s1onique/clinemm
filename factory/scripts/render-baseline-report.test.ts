@@ -77,12 +77,18 @@ function baseOk(overrides: Partial<EvidenceView> = {}): EvidenceView {
 		executionIdentityRecorded: true,
 		executionHeadOidWellformed: true,
 		executionTreeOidWellformed: true,
+		executionHeadExists: true,
+		executionTreeExists: true,
+		derivedExecutionTreeOid: TREE,
+		runnerExecutionIdentityAssertion: true,
+		executionIdentityAssertionAgrees: true,
 		executionIdentityValid: true,
 		executionTreeBound: true,
 		executionTrees: [TREE],
 		worktreeInputsCleanBefore: true,
 		worktreeInputsCleanAfter: true,
 		perCommandDriftChecked: true,
+		perCommandInputsClean: true,
 		subjectStableAcrossMatrix: true,
 		manifestContractHonored: true,
 		hashManifestValid: true,
@@ -575,11 +581,15 @@ function isEvidenceOkV(e: EvidenceView): boolean {
 		e.executionIdentityRecorded &&
 		e.executionHeadOidWellformed &&
 		e.executionTreeOidWellformed &&
+		e.executionHeadExists &&
+		e.executionTreeExists &&
+		e.executionIdentityAssertionAgrees &&
 		e.executionIdentityValid &&
 		e.worktreeInputsCleanBefore === true &&
 		e.worktreeInputsCleanAfter === true &&
 		e.subjectStableAcrossMatrix &&
 		e.perCommandDriftChecked &&
+		e.perCommandInputsClean &&
 		e.manifestContractHonored &&
 		e.treeMatches &&
 		e.executionTreeBound &&
@@ -724,16 +734,24 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION11)", () =>
 
 		const a = Buffer.from("alpha\n");
 		const b = Buffer.from("bravo\n");
+		const c = Buffer.from("");
+		const d = Buffer.from("{}\n");
 		writeFileSync(join(evDir, "evidence.json"), a);
 		writeFileSync(join(evDir, "commands", "build.stdout"), b);
+		writeFileSync(join(evDir, "commands", "build.stderr"), c);
+		writeFileSync(join(evDir, "commands", "build.metadata.json"), d);
 		writeFileSync(
 			join(evDir, "hashes.sha256"),
 			Buffer.from("placeholder manifest, controlled by runner\n"),
 		);
 		manifest.set("evidence.json", sha256Hex(a));
 		manifest.set("commands/build.stdout", sha256Hex(b));
+		manifest.set("commands/build.stderr", sha256Hex(c));
+		manifest.set("commands/build.metadata.json", sha256Hex(d));
 		filesOnDisk.push({ rel: "evidence.json", bytes: a });
 		filesOnDisk.push({ rel: "commands/build.stdout", bytes: b });
+		filesOnDisk.push({ rel: "commands/build.stderr", bytes: c });
+		filesOnDisk.push({ rel: "commands/build.metadata.json", bytes: d });
 	});
 
 	afterAll(() => {
@@ -768,6 +786,13 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION11)", () =>
 			subject_tree_oid_after: FILTERED_TREE,
 			environment_sha256: "c".repeat(64),
 			failure_classification: null,
+			stdout_path: "commands/build.stdout",
+			stderr_path: "commands/build.stderr",
+			metadata_path: "commands/build.metadata.json",
+			inputs_clean_before_command: true,
+			inputs_clean_after_command: true,
+			unexpected_paths_before: [],
+			unexpected_paths_after: [],
 			notes: "",
 			...extra,
 		};
@@ -806,7 +831,12 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION11)", () =>
 			: opts.worktreeCleanAfter;
 		const legacyTreeOid = opts.legacyTreeOid === undefined ? TREE : opts.legacyTreeOid;
 		const expectedOutputPaths = opts.expectedOutputPaths === undefined
-			? null
+			? [
+				"evidence.json",
+				"commands/build.stdout",
+				"commands/build.stderr",
+				"commands/build.metadata.json",
+			]
 			: opts.expectedOutputPaths;
 		const obj: any = {
 			schema_version: 3,
@@ -830,7 +860,7 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION11)", () =>
 			host_arch: "darwin-arm64",
 			commands: [cmd],
 		};
-		if (expectedOutputPaths !== null) obj.expected_output_paths = expectedOutputPaths;
+		if (expectedOutputPaths !== null) obj.expected_evidence_payload_paths = expectedOutputPaths;
 		return wrapEvidence(obj);
 	}
 
@@ -851,6 +881,11 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION11)", () =>
 			headOidNow: args.headOidNow ?? HEAD,
 			treeOidNow: args.treeOidNow ?? TREE,
 			filteredSubjectTreeOidNow: args.filteredSubjectTreeOidNow ?? FILTERED_TREE,
+			executionIdentityDerivation: {
+				executionHeadExists: true,
+				executionTreeExists: true,
+				derivedTreeOid: TREE,
+			},
 		});
 	}
 
@@ -952,6 +987,11 @@ describe("checkEvidence — directory + manifest pipeline (CORRECTION11)", () =>
 			headOidNow: HEAD,
 			treeOidNow: TREE,
 			filteredSubjectTreeOidNow: FILTERED_TREE,
+			executionIdentityDerivation: {
+				executionHeadExists: true,
+				executionTreeExists: true,
+				derivedTreeOid: TREE,
+			},
 		});
 		expect(v.exists).toBe(false);
 		expect(v.decodeError).toMatch(/JSON/);
@@ -1040,7 +1080,7 @@ let __e2eEnvSha = "";
 describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all dimensions green", () => {
 	const EXEC_STDOUT_BYTES = Buffer.from("build stdout content\n");
 	const EXEC_STDERR_BYTES = Buffer.from("build stderr content\n");
-	const EXEC_EVIDENCE_BYTES = Buffer.from("alpha\n");
+	const EXEC_METADATA_BYTES = Buffer.from("{}\n");
 	const HEAD_NOW = HEAD;
 	const TREE_NOW = TREE;
 
@@ -1070,7 +1110,12 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 			worktree_clean_after: true,
 			generated_at: "2026-07-17T09:50:09.000Z",
 			host_arch: "darwin-arm64",
-			expected_output_paths: ["evidence.json", "commands/build.stdout"],
+			expected_evidence_payload_paths: [
+				"evidence.json",
+				"commands/build.stdout",
+				"commands/build.stderr",
+				"commands/build.metadata.json",
+			],
 			commands: [
 				{
 					id: "build",
@@ -1085,6 +1130,7 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 					stderr_sha256: stderrSha,
 					stdout_path: "commands/build.stdout",
 					stderr_path: "commands/build.stderr",
+					metadata_path: "commands/build.metadata.json",
 					head_oid: HEAD,
 					head_oid_before: HEAD,
 					head_oid_after: HEAD,
@@ -1093,6 +1139,10 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 					tree_oid_after: TREE,
 					subject_tree_oid_before: FILTERED_TREE,
 					subject_tree_oid_after: FILTERED_TREE,
+					inputs_clean_before_command: true,
+					inputs_clean_after_command: true,
+					unexpected_paths_before: [],
+					unexpected_paths_after: [],
 					environment_sha256: envSha,
 					failure_classification: null,
 					notes: "",
@@ -1103,6 +1153,7 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 		writeFileSync(join(__e2eEvDir, "evidence.json"), serializedEvidence);
 		writeFileSync(join(__e2eEvDir, "commands", "build.stdout"), EXEC_STDOUT_BYTES);
 		writeFileSync(join(__e2eEvDir, "commands", "build.stderr"), EXEC_STDERR_BYTES);
+		writeFileSync(join(__e2eEvDir, "commands", "build.metadata.json"), EXEC_METADATA_BYTES);
 		writeFileSync(join(__e2eEvDir, "hashes.sha256"), Buffer.from("placeholder\n"));
 
 		const onDiskEvidenceSha = sha256Hex(serializedEvidence);
@@ -1110,6 +1161,7 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 			`${onDiskEvidenceSha}  evidence.json`,
 			`${stdoutSha}  commands/build.stdout`,
 			`${stderrSha}  commands/build.stderr`,
+			`${sha256Hex(EXEC_METADATA_BYTES)}  commands/build.metadata.json`,
 		];
 		writeFileSync(join(__e2eEvDir, "hashes.sha256"), manifestLines.join("\n") + "\n");
 
@@ -1137,7 +1189,11 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 			{
 				id: "build",
 				status: "pass",
+				started_at: "2026-07-17T09:41:41.693Z",
+				finished_at: "2026-07-17T09:41:55.259Z",
+				duration_ms: 13566,
 				exit_code: 0,
+				signal: null,
 				timeout: false,
 				head_oid: HEAD_NOW,
 				head_oid_before: HEAD_NOW,
@@ -1147,6 +1203,13 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 				tree_oid_after: TREE,
 				subject_tree_oid_before: FILTERED_TREE,
 				subject_tree_oid_after: FILTERED_TREE,
+				inputs_clean_before_command: true,
+				inputs_clean_after_command: true,
+				unexpected_paths_before: [],
+				unexpected_paths_after: [],
+				stdout_path: "commands/build.stdout",
+				stderr_path: "commands/build.stderr",
+				metadata_path: "commands/build.metadata.json",
 				stdout_sha256: stdoutSha,
 				stderr_sha256: stderrSha,
 				environment_sha256: envSha,
@@ -1163,6 +1226,11 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 			headOidNow: HEAD_NOW,
 			treeOidNow: TREE_NOW,
 			filteredSubjectTreeOidNow: FILTERED_TREE,
+			executionIdentityDerivation: {
+				executionHeadExists: true,
+				executionTreeExists: true,
+				derivedTreeOid: TREE,
+			},
 		});
 
 		expect(view.exists).toBe(true);
@@ -1178,6 +1246,8 @@ describe("end-to-end: real-world valid CORRECTION11 bundle → PARTIAL with all 
 		expect(view.executionTrees).toEqual([TREE]);
 		expect(view.subjectStableAcrossMatrix).toBe(true);
 		expect(view.perCommandDriftChecked).toBe(true);
+		expect(view.perCommandInputsClean).toBe(true);
+		expect(view.manifestContractHonored).toBe(true);
 		expect(view.hashManifestValid).toBe(true);
 		expect(view.missingFiles).toEqual([]);
 		expect(view.unexpectedFiles).toEqual([]);
