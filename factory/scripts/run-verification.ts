@@ -2,7 +2,7 @@
 /**
  * ACT-CLINEMM-FORK-BASELINE01 — Work package F
  *
- * Verification runner.
+ * Verification runner (corrected).
  *
  * Reads factory/inventories/verification.json, executes every command whose
  * class is "mandatory" or "affected-scope" on the current host, captures
@@ -11,8 +11,17 @@
  *   - factory/inventories/verification-results.json  (combined evidence)
  *   - .factory/evidence/ACT-CLINEMM-FORK-BASELINE01/{commands,evidence.json,hashes.sha256}
  *
- * When `--finalize-evidence` is passed, the detached evidence bundle is
- * regenerated and bound to the literal final HEAD/tree.
+ * The runner accepts commands as **structured argv** to avoid shell-quoting
+ * bugs. A command can also carry `shell_command` (string) and `use_shell:
+ * true` to run through `/bin/sh -c` when necessary; in that mode the
+ * timeout handler kills the entire process group.
+ *
+ * Every failure is explicitly classified. Missing classification is
+ * `UNKNOWN`, which blocks ACT closure.
+ *
+ * When `--finalize-evidence` is passed, the runner re-executes every
+ * command on the **current** commit (no rebinding of stale evidence) and
+ * rebuilds the detached bundle.
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -22,9 +31,11 @@ import {
 	mkdirSync,
 	existsSync,
 	createWriteStream,
+	readdirSync,
+	statSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, relative } from "node:path";
 
 const RESULTS_JSON = "factory/inventories/verification-results.json";
 const DETACHED_DIR = ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01";
@@ -54,12 +65,77 @@ const timeoutMs = (() => {
 	return i >= 0 ? Number.parseInt(argv[i + 1], 10) : 600_000; // 10min default
 })();
 
-// ---------- helpers -----------------------------------------------------------
+// ---------- secret redaction -------------------------------------------------
 
-function shQuote(s: string): string {
-	if (/^[A-Za-z0-9._\/=:@+-]+$/.test(s)) return s;
-	return `'${s.replace(/'/g, `'\\''`)}'`;
+const SECRET_PATTERNS: RegExp[] = [
+	/AKIA[0-9A-Z]{16}/g,
+	/sk-[A-Za-z0-9_-]{20,}/g,
+	/ghp_[A-Za-z0-9]{20,}/g,
+	/xox[baprs]-[0-9A-Za-z-]{20,}/g,
+	/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+	/Bearer\s+[A-Za-z0-9._-]{20,}/g,
+];
+
+function redact(s: string): string {
+	let out = s;
+	for (const p of SECRET_PATTERNS) {
+		out = out.replace(p, "[REDACTED]");
+	}
+	return out;
 }
+
+// ---------- environment hash -------------------------------------------------
+
+function envSha(): string {
+	const env = {
+		platform: process.platform,
+		arch: process.arch,
+		nodeVersion: process.version,
+		bunVersion: (() => {
+			try {
+				return spawnSync("bun", ["--version"], { encoding: "utf8" }).stdout.trim();
+			} catch {
+				return "unknown";
+			}
+		})(),
+		envVarNames: Object.keys(process.env).sort(),
+		ci: process.env.CI ?? null,
+		githubActions: process.env.GITHUB_ACTIONS ?? null,
+		shell: process.env.SHELL ?? null,
+	};
+	return createHash("sha256").update(JSON.stringify(env)).digest("hex");
+}
+
+function headTreeNow(): { head: string; tree: string } {
+	const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+	const tree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).stdout.trim();
+	return { head, tree };
+}
+
+function hostClass(): string {
+	const a = process.arch;
+	const p = process.platform;
+	if (p === "darwin" && a === "arm64") return "darwin-arm64";
+	if (p === "linux" && a === "x64") return "linux-x64";
+	if (p === "win32" && a === "x64") return "windows-x64";
+	if (p === "linux" && a === "arm64") return "linux-arm64";
+	if (p === "win32" && a === "arm64") return "windows-arm64";
+	return `${p}-${a}`;
+}
+
+// ---------- result type ------------------------------------------------------
+
+type FailureClass =
+	| "FORK-INTRODUCED"
+	| "UPSTREAM-REPRODUCIBLE"
+	| "ENVIRONMENTAL"
+	| "CREDENTIAL-REQUIRED"
+	| "NETWORK-DEPENDENT"
+	| "HOST-UNSUPPORTED"
+	| "NONDETERMINISTIC"
+	| "TIMEOUT"
+	| "TOOLCHAIN-DRIFT"
+	| "UNKNOWN";
 
 interface ExecResult {
 	id: string;
@@ -77,45 +153,37 @@ interface ExecResult {
 	head_oid: string;
 	tree_oid: string;
 	environment_sha256: string;
-	failure_classification?: string;
-	notes?: string;
+	failure_classification: FailureClass | null;
+	notes: string;
 }
 
-function headTreeNow(): { head: string; tree: string } {
-	const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
-	const tree = spawnSync("git", ["rev-parse", "HEAD^{tree}"], { encoding: "utf8" }).stdout.trim();
-	return { head, tree };
+// ---------- argv resolver -----------------------------------------------------
+
+interface Resolved {
+	argv: string[];
+	useShell: boolean;
 }
 
-function envSha(): string {
-	const env = JSON.stringify({
-		platform: process.platform,
-		arch: process.arch,
-		nodeVersion: process.version,
-	}, Object.keys(process.env).sort());
-	return createHash("sha256").update(env).digest("hex");
+function resolveArgv(c: any): Resolved {
+	// Prefer structured argv.
+	if (Array.isArray(c.argv) && c.argv.length > 0) {
+		return { argv: c.argv.map((s: unknown) => String(s)), useShell: false };
+	}
+	if (typeof c.shell_command === "string" && c.shell_command.length > 0) {
+		return { argv: ["/bin/sh", "-c", c.shell_command], useShell: true };
+	}
+	if (typeof c.command === "string" && c.command.length > 0) {
+		// Legacy single-string command: split on whitespace. Cannot support
+		// shell metacharacters safely. Prefer argv or shell_command.
+		const parts = c.command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+		return { argv: parts, useShell: false };
+	}
+	throw new Error(`command ${c.id} has no executable form (argv/shell_command/command)`);
 }
 
-function hostClass(): string {
-	const a = process.arch;
-	const p = process.platform;
-	if (p === "darwin" && a === "arm64") return "darwin-arm64";
-	if (p === "linux" && a === "x64") return "linux-x64";
-	if (p === "win32" && a === "x64") return "windows-x64";
-	if (p === "linux" && a === "arm64") return "linux-arm64";
-	if (p === "win32" && a === "arm64") return "windows-arm64";
-	return `${p}-${a}`;
-}
+// ---------- command execution ------------------------------------------------
 
-async function executeCommand(cmd: {
-	id: string;
-	command: string;
-	working_directory: string;
-	class: string;
-	host_support: string[];
-	requires_gui: boolean;
-	mutates_tracked_files: boolean;
-}): Promise<ExecResult> {
+async function executeCommand(cmd: any): Promise<ExecResult> {
 	const detachedCmdDir = join(ROOT, DETACHED_DIR, "commands");
 	mkdirSync(detachedCmdDir, { recursive: true });
 	const stdoutPath = join(detachedCmdDir, `${cmd.id}.stdout`);
@@ -127,35 +195,53 @@ async function executeCommand(cmd: {
 	const startedAt = new Date();
 	const startIso = startedAt.toISOString();
 
-	const cmdParts = cmd.command.split(/\s+/);
-	const cmdBin = cmdParts[0];
-	const cmdArgs = cmdParts.slice(1);
+	let resolved: Resolved;
+	try {
+		resolved = resolveArgv(cmd);
+	} catch (err: any) {
+		return buildFailure(cmd, startedAt, "UNKNOWN", err.message, { stdout_path: stdoutPath, stderr_path: stderrPath }, "");
+	}
 
 	const workingDir = cmd.working_directory === "." ? ROOT : join(ROOT, cmd.working_directory);
 
-	const proc = spawn(cmdBin, cmdArgs, {
+	// detached:true so we can signal the entire process group on timeout.
+	const proc = spawn(resolved.argv[0], resolved.argv.slice(1), {
 		cwd: workingDir,
 		stdio: ["ignore", "pipe", "pipe"],
-		detached: false,
+		detached: true,
 		env: process.env,
+		shell: false,
 	});
 
 	let timedOut = false;
 	const timeoutHandle = setTimeout(() => {
 		timedOut = true;
-		proc.kill("SIGTERM");
-		setTimeout(() => proc.kill("SIGKILL"), 5000).unref();
+		try {
+			// Negative pid sends to the whole process group.
+			process.kill(-proc.pid!, "SIGTERM");
+		} catch {
+			try {
+				proc.kill("SIGTERM");
+			} catch {}
+		}
+		setTimeout(() => {
+			try {
+				process.kill(-proc.pid!, "SIGKILL");
+			} catch {}
+		}, 5000).unref();
 	}, timeoutMs);
 
 	let stdoutBuf = "";
 	let stderrBuf = "";
 	proc.stdout.on("data", (chunk: Buffer) => {
-		stdoutBuf += chunk.toString("utf8");
-		stdoutStream.write(chunk);
+		const redacted = redact(chunk.toString("utf8"));
+		stdoutBuf += redacted;
+		stdoutStream.write(redacted);
 	});
 	proc.stderr.on("data", (chunk: Buffer) => {
-		stderrBuf += chunk.toString("utf8");
-		stderrStream.write(chunk);
+		const redacted = redact(chunk.toString("utf8"));
+		stderrBuf += redacted;
+		stderrStream.write(redacted);
 	});
 
 	const { head, tree } = headTreeNow();
@@ -167,9 +253,17 @@ async function executeCommand(cmd: {
 			stdoutStream.end();
 			stderrStream.end();
 			const endedAt = new Date();
-			const status: ExecResult["status"] = timedOut ? "fail" : code === 0 ? "pass" : "fail";
+			let status: ExecResult["status"];
+			if (timedOut) status = "fail";
+			else if (code === 0) status = "pass";
+			else status = "fail";
 			const stdoutBytes = Buffer.from(stdoutBuf, "utf8");
 			const stderrBytes = Buffer.from(stderrBuf, "utf8");
+			const classification: FailureClass | null = status === "pass"
+				? null
+				: timedOut
+					? "TIMEOUT"
+					: classifyFailure(cmd, code, signal, stdoutBuf, stderrBuf);
 			resolvePromise({
 				id: cmd.id,
 				status,
@@ -181,18 +275,19 @@ async function executeCommand(cmd: {
 				timeout: timedOut,
 				stdout_sha256: createHash("sha256").update(stdoutBytes).digest("hex"),
 				stderr_sha256: createHash("sha256").update(stderrBytes).digest("hex"),
-				stdout_path: stdoutPath.replace(`${ROOT}/`, ""),
-				stderr_path: stderrPath.replace(`${ROOT}/`, ""),
+				stdout_path: relative(ROOT, stdoutPath),
+				stderr_path: relative(ROOT, stderrPath),
 				head_oid: head,
 				tree_oid: tree,
 				environment_sha256: envHash,
+				failure_classification: classification,
+				notes: buildNotes(cmd, code, signal, timedOut, stdoutBuf, stderrBuf),
 			});
 		});
 		proc.on("error", (err) => {
 			clearTimeout(timeoutHandle);
 			stdoutStream.end();
 			stderrStream.end();
-			stderrBuf += `\n[runner-error] ${err.message}\n`;
 			const endedAt = new Date();
 			resolvePromise({
 				id: cmd.id,
@@ -203,13 +298,14 @@ async function executeCommand(cmd: {
 				exit_code: -1,
 				signal: null,
 				timeout: false,
-				stdout_sha256: createHash("sha256").update(stdoutBuf).digest("hex"),
-				stderr_sha256: createHash("sha256").update(stderrBuf).digest("hex"),
-				stdout_path: stdoutPath.replace(`${ROOT}/`, ""),
-				stderr_path: stderrPath.replace(`${ROOT}/`, ""),
+				stdout_sha256: createHash("sha256").update(Buffer.from(stdoutBuf, "utf8")).digest("hex"),
+				stderr_sha256: createHash("sha256").update(Buffer.from(stderrBuf, "utf8")).digest("hex"),
+				stdout_path: relative(ROOT, stdoutPath),
+				stderr_path: relative(ROOT, stderrPath),
 				head_oid: head,
 				tree_oid: tree,
 				environment_sha256: envHash,
+				failure_classification: "UNKNOWN",
 				notes: `spawn error: ${err.message}`,
 			});
 		});
@@ -217,6 +313,74 @@ async function executeCommand(cmd: {
 
 	writeFileSync(metaPath, JSON.stringify(finalStatus, null, "\t") + "\n", "utf8");
 	return finalStatus;
+}
+
+function buildFailure(
+	cmd: any,
+	startedAt: Date,
+	classification: FailureClass,
+	notes: string,
+	paths: { stdout_path: string; stderr_path: string },
+	_: string,
+): ExecResult {
+	const endedAt = new Date();
+	const { head, tree } = headTreeNow();
+	return {
+		id: cmd.id,
+		status: "fail",
+		started_at: startedAt.toISOString(),
+		finished_at: endedAt.toISOString(),
+		duration_ms: endedAt.getTime() - startedAt.getTime(),
+		exit_code: null,
+		signal: null,
+		timeout: false,
+		stdout_sha256: "",
+		stderr_sha256: "",
+		stdout_path: relative(ROOT, paths.stdout_path),
+		stderr_path: relative(ROOT, paths.stderr_path),
+		head_oid: head,
+		tree_oid: tree,
+		environment_sha256: envSha(),
+		failure_classification: classification,
+		notes,
+	};
+}
+
+function classifyFailure(cmd: any, code: number | null, signal: NodeJS.Signals | null, stdout: string, stderr: string): FailureClass {
+	const text = (stdout + "\n" + stderr).toLowerCase();
+	// Heuristic classification. The auditor can override.
+	if (/no matching workspace|cannot find module|@cline\/\S+ not found|workspace not found/i.test(text)) {
+		return "ENVIRONMENTAL"; // dependencies not installed
+	}
+	if (/network|fetch failed|enotfound|econnrefused|getaddrinfo|tls handshake/i.test(text)) {
+		return "NETWORK-DEPENDENT";
+	}
+	if (/credential|api.?key|unauthorized|forbidden|401|403|authentication/i.test(text)) {
+		return "CREDENTIAL-REQUIRED";
+	}
+	if (signal === "SIGSEGV" || /segmentation fault|out of memory/i.test(text)) {
+		return "ENVIRONMENTAL";
+	}
+	if (/timeout|timed out/i.test(text)) {
+		return "TIMEOUT";
+	}
+	if (code === 127 || /command not found/i.test(text)) {
+		return "ENVIRONMENTAL";
+	}
+	// Default: unknown, must be reviewed.
+	return "UNKNOWN";
+}
+
+function buildNotes(cmd: any, code: number | null, signal: NodeJS.Signals | null, timedOut: boolean, stdout: string, stderr: string): string {
+	const argv = Array.isArray(cmd.argv) ? cmd.argv.join(" ") : (cmd.shell_command ?? cmd.command ?? "");
+	const tail = (s: string) => s.length > 400 ? "..." + s.slice(s.length - 400) : s;
+	return [
+		`argv: ${argv}`,
+		`exit_code: ${code}`,
+		`signal: ${signal ?? ""}`,
+		`timeout: ${timedOut}`,
+		`stderr_tail: ${tail(stderr)}`,
+	].join("\n");
 }
 
 // ---------- main --------------------------------------------------------------
@@ -227,152 +391,94 @@ async function main(): Promise<void> {
 	const vDoc = JSON.parse(readFileSync(vPath, "utf8"));
 	const commands: any[] = vDoc.commands;
 
-	// Finalize path: re-read existing verification-results.json (if present) and
-	// rebuild the detached evidence bundle bound to the literal final HEAD/tree,
-	// without re-executing any command.
 	if (finalize) {
-		await finalizeEvidence();
+		// Finalize = re-execute every command on the *current* commit, so the
+		// detached evidence is bound to a real execution, not a relabel of
+		// stale results.
+		await runPass(commands, { label: "finalize" });
+		await writeDetachedBundle(commands, "finalize");
 		return;
 	}
 
 	const host = hostClass();
+	await runPass(commands, { label: "execute" });
+}
 
+interface PassOptions {
+	label: string;
+}
+
+async function runPass(commands: any[], opts: PassOptions): Promise<void> {
+	const host = hostClass();
 	const skipped: ExecResult[] = [];
 	const executed: ExecResult[] = [];
 	let attemptCount = 0;
 
-	// Sequential execution. We keep simple ordering and per-command timeout.
-	// Independent commands are not parallelized in this baseline ACT (determinism over speed).
+	// Wipe existing per-command evidence so this pass is the only source.
+	const detachedCmdDir = join(ROOT, DETACHED_DIR, "commands");
+	if (existsSync(detachedCmdDir)) {
+		for (const f of readdirSync(detachedCmdDir)) {
+			try {
+				const full = join(detachedCmdDir, f);
+				if (statSync(full).isFile()) {
+					require("node:fs").unlinkSync(full);
+				}
+			} catch {}
+		}
+	}
+
 	for (const c of commands) {
 		const matchedOnly = onlyFilter ? c.id === onlyFilter : true;
 		const matchedSkip = skipFilter ? skipFilter.has(c.id) : false;
 		if (onlyFilter && !matchedOnly) {
-			// not selected by --only
-			skipped.push({
-				id: c.id,
-				status: "skip",
-				started_at: new Date().toISOString(),
-				finished_at: new Date().toISOString(),
-				duration_ms: 0,
-				exit_code: null,
-				signal: null,
-				timeout: false,
-				stdout_sha256: "",
-				stderr_sha256: "",
-				head_oid: "",
-				tree_oid: "",
-				environment_sha256: envSha(),
-				notes: `class=${c.class}; --only=${onlyFilter} excluded`,
-			});
+			skipped.push(buildSkipped(c, "skip", `class=${c.class}; --only=${onlyFilter} excluded`));
 			continue;
 		}
 		if (matchedSkip) {
-			skipped.push({
-				id: c.id,
-				status: "skip",
-				started_at: new Date().toISOString(),
-				finished_at: new Date().toISOString(),
-				duration_ms: 0,
-				exit_code: null,
-				signal: null,
-				timeout: false,
-				stdout_sha256: "",
-				stderr_sha256: "",
-				head_oid: "",
-				tree_oid: "",
-				environment_sha256: envSha(),
-				notes: `class=${c.class}; --skip filter excluded`,
-			});
+			skipped.push(buildSkipped(c, "skip", `class=${c.class}; --skip filter excluded`));
 			continue;
 		}
-
-		// Filter to classes we actually run
 		const runnable = c.class === "mandatory" || c.class === "affected-scope";
 		if (!runnable) {
-			skipped.push({
-				id: c.id,
-				status: "skip",
-				started_at: new Date().toISOString(),
-				finished_at: new Date().toISOString(),
-				duration_ms: 0,
-				exit_code: null,
-				signal: null,
-				timeout: false,
-				stdout_sha256: "",
-				stderr_sha256: "",
-				head_oid: "",
-				tree_oid: "",
-				environment_sha256: envSha(),
-				notes: `class=${c.class} (not executed by runner; classification preserved)`,
-			});
+			skipped.push(buildSkipped(c, "skip", `class=${c.class} (not executed by runner; classification preserved)`));
 			continue;
 		}
-
-		// host support check
 		if (!c.host_support.includes(host)) {
-			skipped.push({
-				id: c.id,
-				status: "unavailable",
-				started_at: new Date().toISOString(),
-				finished_at: new Date().toISOString(),
-				duration_ms: 0,
-				exit_code: null,
-				signal: null,
-				timeout: false,
-				stdout_sha256: "",
-				stderr_sha256: "",
-				head_oid: "",
-				tree_oid: "",
-				environment_sha256: envSha(),
-				notes: `host=${host} not in host_support=${c.host_support.join(",")}`,
-			});
+			skipped.push(buildSkipped(c, "unavailable", `host=${host} not in host_support=${c.host_support.join(",")}`));
 			continue;
 		}
-
-		// GUI requirement on headless CI: skip
 		if (c.requires_gui && process.env.CI) {
-			skipped.push({
-				id: c.id,
-				status: "unavailable",
-				started_at: new Date().toISOString(),
-				finished_at: new Date().toISOString(),
-				duration_ms: 0,
-				exit_code: null,
-				signal: null,
-				timeout: false,
-				stdout_sha256: "",
-				stderr_sha256: "",
-				head_oid: "",
-				tree_oid: "",
-				environment_sha256: envSha(),
-				notes: "requires GUI; skipped on CI host",
-			});
+			skipped.push(buildSkipped(c, "unavailable", "requires GUI; skipped on CI host"));
 			continue;
 		}
-
 		attemptCount++;
 		// eslint-disable-next-line no-console
-		console.log(`[runner] (${attemptCount}) ${c.id} :: ${c.command}`);
+		console.log(`[runner:${opts.label}] (${attemptCount}) ${c.id} :: ${c.command ?? c.shell_command ?? c.argv?.join(" ")}`);
 		const result = await executeCommand(c);
 		executed.push(result);
 		// eslint-disable-next-line no-console
-		console.log(`[runner]   ${c.id} -> ${result.status} (${result.duration_ms}ms, exit=${result.exit_code ?? "n/a"})`);
+		console.log(
+			`[runner:${opts.label}]   ${c.id} -> ${result.status}` +
+				` (${result.duration_ms}ms, exit=${result.exit_code ?? "n/a"}` +
+				`, class=${result.failure_classification ?? "n/a"})`,
+		);
 	}
 
-	// Merge with input verification.json, mark result per command
 	const merged = commands.map((c) => {
 		const e = executed.find((x) => x.id === c.id);
 		const s = skipped.find((x) => x.id === c.id);
 		const r = e ?? s;
-		if (!r) return { ...c, result: "not-run", reason: "runner did not produce a row (filter excluded?)" };
+		if (!r) {
+			return { ...c, result: "not-run", reason: "runner did not produce a row (filter excluded?)", failure_classification: null };
+		}
 		return {
 			...c,
 			result: r.status,
-			reason: r.notes ?? null,
+			reason: r.notes,
+			failure_classification: r.failure_classification,
 		};
 	});
 
-	// Write results back into verification-results.json
 	const out = {
 		schema_version: 1,
 		host,
@@ -383,91 +489,49 @@ async function main(): Promise<void> {
 	};
 	mkdirSync(dirname(join(ROOT, RESULTS_JSON)), { recursive: true });
 	writeFileSync(join(ROOT, RESULTS_JSON), JSON.stringify(out, null, "\t") + "\n", "utf8");
+	// eslint-disable-next-line no-console
+	console.log(`Wrote ${RESULTS_JSON} executed=${executed.length} skipped=${skipped.length}`);
 
-	// Detached evidence bundle
-	const detachedDir = join(ROOT, DETACHED_DIR);
-	mkdirSync(detachedDir, { recursive: true });
-	const { head, tree } = headTreeNow();
-	const evidence = {
-		schema_version: 1,
-		act_id: "ACT-CLINEMM-FORK-BASELINE01",
-		head_oid: head,
-		tree_oid: tree,
-		generated_at: new Date().toISOString(),
-		host_arch: host,
-		commands: executed,
-		hashes: {} as Record<string, string>,
-	};
-	// hashes over command stdout/stderr files
-	for (const e of executed) {
-		if (e.stdout_path) {
-			const abs = resolve(ROOT, e.stdout_path);
-			if (existsSync(abs)) {
-				const buf = readFileSync(abs);
-				evidence.hashes[`${e.id}.stdout`] = createHash("sha256").update(buf).digest("hex");
-			}
-		}
-		if (e.stderr_path) {
-			const abs = resolve(ROOT, e.stderr_path);
-			if (existsSync(abs)) {
-				const buf = readFileSync(abs);
-				evidence.hashes[`${e.id}.stderr`] = createHash("sha256").update(buf).digest("hex");
-			}
-		}
-		if (e.stdout_sha256) evidence.hashes[`${e.id}.stdout_stream`] = e.stdout_sha256;
-		if (e.stderr_sha256) evidence.hashes[`${e.id}.stderr_stream`] = e.stderr_sha256;
-	}
-	writeFileSync(join(detachedDir, "evidence.json"), JSON.stringify(evidence, null, "\t") + "\n", "utf8");
-
-	// Combined hashes.sha256 over evidence + commands
-	const lines: string[] = [];
-	function add(rel: string): void {
-		const abs = resolve(ROOT, rel);
-		if (!existsSync(abs)) return;
-		const buf = readFileSync(abs);
-		const sha = createHash("sha256").update(buf).digest("hex");
-		lines.push(`${sha}  ${rel}`);
-	}
-	add(`${DETACHED_DIR}/evidence.json`);
-	for (const e of executed) {
-		if (e.stdout_path) add(e.stdout_path);
-		if (e.stderr_path) add(e.stderr_path);
-	}
-	writeFileSync(join(detachedDir, "hashes.sha256"), lines.join("\n") + "\n", "utf8");
-
-	// eslint-disable-next-line no-console
-	console.log(`Wrote ${RESULTS_JSON}`);
-	// eslint-disable-next-line no-console
-	console.log(`Wrote ${DETACHED_DIR}/evidence.json`);
-	// eslint-disable-next-line no-console
-	console.log(`Wrote ${DETACHED_DIR}/hashes.sha256`);
-	// eslint-disable-next-line no-console
-	console.log(`executed=${executed.length} skipped=${skipped.length}`);
+	// Always rebuild the detached bundle after a pass; --finalize-evidence
+	// is now equivalent to a normal pass.
+	await writeDetachedBundle(commands, opts.label);
 }
 
-async function finalizeEvidence(): Promise<void> {
+function buildSkipped(c: any, status: "skip" | "unavailable", notes: string): ExecResult {
+	const { head, tree } = headTreeNow();
+	return {
+		id: c.id,
+		status,
+		started_at: new Date().toISOString(),
+		finished_at: new Date().toISOString(),
+		duration_ms: 0,
+		exit_code: null,
+		signal: null,
+		timeout: false,
+		stdout_sha256: "",
+		stderr_sha256: "",
+		head_oid: head,
+		tree_oid: tree,
+		environment_sha256: envSha(),
+		failure_classification: null,
+		notes,
+	};
+}
+
+async function writeDetachedBundle(commands: any[], label: string): Promise<void> {
 	const resultsPath = join(ROOT, RESULTS_JSON);
-	if (!existsSync(resultsPath)) {
-		throw new Error(`${resultsPath} not found; run a normal pass first.`);
-	}
+	if (!existsSync(resultsPath)) return;
 	const results = JSON.parse(readFileSync(resultsPath, "utf8"));
 	const executed: any[] = results.executed_commands ?? [];
-	const skipped: any[] = results.skipped_commands ?? [];
-
-	// Do NOT rewrite factory/inventories/verification-results.json on the
-	// finalization pass. That file is a stable historical record; the
-	// detached evidence bundle below is the authoritative final binding to
-	// HEAD/tree. Re-writing would create an OID-update cycle that prevents
-	// `git status` from settling at a clean post-finalize state.
 	const host = hostClass();
 
-	// Rebuild the detached evidence bundle.
 	const detachedDir = join(ROOT, DETACHED_DIR);
 	mkdirSync(detachedDir, { recursive: true });
 	const { head, tree } = headTreeNow();
 	const evidence = {
 		schema_version: 1,
 		act_id: "ACT-CLINEMM-FORK-BASELINE01",
+		pass_label: label,
 		head_oid: head,
 		tree_oid: tree,
 		generated_at: new Date().toISOString(),
@@ -511,16 +575,10 @@ async function finalizeEvidence(): Promise<void> {
 	writeFileSync(join(detachedDir, "hashes.sha256"), lines.join("\n") + "\n", "utf8");
 
 	// eslint-disable-next-line no-console
-	console.log(`Finalized ${RESULTS_JSON}`);
+	console.log(`Wrote ${DETACHED_DIR}/evidence.json (head_oid=${head} tree_oid=${tree})`);
 	// eslint-disable-next-line no-console
-	console.log(`Finalized ${DETACHED_DIR}/evidence.json`);
-	// eslint-disable-next-line no-console
-	console.log(`Finalized ${DETACHED_DIR}/hashes.sha256`);
-	// eslint-disable-next-line no-console
-	console.log(`head_oid=${head} tree_oid=${tree}`);
+	console.log(`Wrote ${DETACHED_DIR}/hashes.sha256`);
 }
-
-void shQuote;
 
 main().catch((err) => {
 	console.error(err);

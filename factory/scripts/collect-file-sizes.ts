@@ -98,6 +98,10 @@ function isGenerated(path: string): boolean {
 	for (const g of GENERATED_PATHS) {
 		if (path.startsWith(g) || path.includes(`/${g}/`) || path === g) return true;
 	}
+	// Convention: any file or directory with the `.generated.` infix.
+	if (/\.generated\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|proto|py|go|yaml|yml)$/i.test(path)) {
+		return true;
+	}
 	return false;
 }
 
