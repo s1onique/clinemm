@@ -11,7 +11,7 @@
  *   bun test factory/scripts/render-baseline-report.test.ts
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import {
 	mkdtempSync,
 	rmSync,
@@ -37,6 +37,7 @@ import {
 	type ClosureInput,
 	type EvidenceView,
 } from "./baseline-closure";
+import { NATIVE_PROBE_DEFINITIONS } from "./native-probes";
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -895,6 +896,8 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 				"commands/build.metadata.json",
 			]
 			: opts.expectedPayloadPaths;
+		// CORRECTION19: native-probes.json is a fixed payload; the contract
+		// check now expects it whenever it appears in either set.
 		const trackedInputChangeObserved = opts.trackedInputChangeObserved ?? false;
 		const unexpectedPathsAfter = opts.unexpectedPathsAfter ?? [];
 		const notes = opts.notes ?? "";
@@ -1241,6 +1244,31 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	const EXEC_SUBJECT = "1234abcd1234abcd1234abcd1234abcd1234abcd";
 	const HOST = "darwin-arm64";
 
+	// CORRECTION20: the fixture stages REAL bytes at the staged artifact
+	// path inside the bundle. Each probe declares artifact_exists=true
+	// and the recorded artifact_sha256 is the actual SHA-256 of the
+	// staged bytes. The `hashes.sha256` manifest then declares the
+	// staged artifact path with the same SHA-256. Tests that need an
+	// artifact_exists=false path keep the field honest (artifact_size=0,
+	// artifact_sha256=null) and never declare the artifact in
+	// hashes.sha256.
+	const FIXTURE_ARTIFACT_BYTES: Readonly<Record<string, Buffer>> = {
+		p1_better_sqlite3: Buffer.from(
+			"fixture p1 better-sqlite3 Mach-O 64-bit arm64 bundle\n",
+			"utf8",
+		),
+		p2_protobuf: Buffer.from("fixture p2 protobufjs module\n", "utf8"),
+		p3_ripgrep_darwin_arm64: Buffer.from(
+			"fixture p3 ripgrep Mach-O 64-bit arm64 executable\n",
+			"utf8",
+		),
+		p4_vscode_host: Buffer.from(
+			"fixture p4 vscode TypeScript declaration\n",
+			"utf8",
+		),
+		p5_cline_version: Buffer.from("fixture p5 cline JSON manifest\n", "utf8"),
+	};
+
 	function buildGoodInventory() {
 		return {
 			schema_version: 1,
@@ -1250,21 +1278,67 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			execution_head_oid: EXEC_HEAD,
 			execution_tree_oid: EXEC_TREE,
 			subject_tree_oid: EXEC_SUBJECT,
-			p1_better_sqlite3: probeRecord("p1_better_sqlite3", ["file", "/tmp/a.node"], "Mach-O 64-bit arm64 bundle"),
-			p2_protobuf: probeRecord("p2_protobuf", ["node", "-e", "require('protobufjs')"], "JavaScript ES module"),
-			p3_ripgrep_darwin_arm64: probeRecord("p3_ripgrep_darwin_arm64", ["rg", "--version"], "Mach-O 64-bit arm64 executable"),
-			p4_vscode_host: probeRecord("p4_vscode_host", ["node", "-e", "VSCODE_HOST_OK"], "TypeScript declaration"),
-			p5_cline_version: probeRecord("p5_cline_version", ["node", "apps/cli/bin/cline", "--version"], "JSON manifest"),
+			probes: {
+				p1_better_sqlite3: probeRecord("p1_better_sqlite3", NATIVE_PROBE_DEFINITIONS[0]!.argv, "Mach-O 64-bit arm64 bundle"),
+				p2_protobuf: probeRecord("p2_protobuf", NATIVE_PROBE_DEFINITIONS[1]!.argv, "JavaScript ES module"),
+				p3_ripgrep_darwin_arm64: probeRecord("p3_ripgrep_darwin_arm64", NATIVE_PROBE_DEFINITIONS[2]!.argv, "Mach-O 64-bit arm64 executable"),
+				p4_vscode_host: probeRecord("p4_vscode_host", NATIVE_PROBE_DEFINITIONS[3]!.argv, "TypeScript declaration"),
+				p5_cline_version: probeRecord("p5_cline_version", NATIVE_PROBE_DEFINITIONS[4]!.argv, "JSON manifest"),
+			},
 		};
 	}
 
+	// CORRECTION19: probe records must declare the same pattern_source
+	// as the catalogue's NATIVE_PROBE_DEFINITIONS entry. The previous
+	// fixture used the file format description as the pattern, which
+	// made the validator reject every probe as `format_match_pattern_source
+	// does not match the catalogue declaration`. The catalogue's actual
+	// patterns are: p1 -> SMOKE_OK, p2 -> ProtobufJs-ProtobufVersion,
+	// p3 -> ripgrep, p4 -> VSCODE_OK, p5 -> cline.
+	const CATALOGUE_PATTERN: Record<string, string> = {
+		p1_better_sqlite3: "SMOKE_OK",
+		p2_protobuf: "ProtobufJs-ProtobufVersion",
+		p3_ripgrep_darwin_arm64: "ripgrep",
+		p4_vscode_host: "VSCODE_OK",
+		p5_cline_version: "cline",
+	};
 	function probeRecord(id: string, argv: string[], fileFormat: string) {
-		const sha = "a".repeat(64);
+		const stdoutEmptySha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+		// CORRECTION19: derive all catalogue-determined fields directly from
+		// NATIVE_PROBE_DEFINITIONS so the test fixture cannot diverge from
+		// the catalogue on artifact_path / host_support / architecture_assert.
+		const def = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === id);
+		if (!def) throw new Error(`unknown probe id in test fixture: ${id}`);
+		// The success predicate expects a real probe run with stdout text.
+		// For p1 we emit SMOKE_OK/ARCH=/BIND= to satisfy the success
+		// predicate; for p2 we emit the version line; for p3/p4/p5 we emit
+		// the catalogue's expected match pattern. We synthesize minimal
+		// stdout/stderr text matching the success predicates so the
+		// catalogue-derivation status check passes.
+		let stdoutText = "";
+		if (id === "p1_better_sqlite3") {
+			stdoutText = "SMOKE_OK\nARCH=arm64\nBIND=v1";
+		} else if (id === "p2_protobuf") {
+			stdoutText = "ProtobufJs-ProtobufVersion 7.0.0";
+		} else if (id === "p3_ripgrep_darwin_arm64") {
+			stdoutText = "ripgrep 14.1.0\narch=arm64";
+		} else if (id === "p4_vscode_host") {
+			stdoutText = "VSCODE_OK /tmp/idx.d.ts\nVSCODE_COMMANDS=registerCommand\nVSCODE_WINDOW=showInformationMessage\nVSCODE_CONTEXT=ExtensionContext";
+		} else if (id === "p5_cline_version") {
+			stdoutText = "cline-version 3.0.0";
+		}
+		const stdoutSha = createHash("sha256").update(stdoutText, "utf8").digest("hex");
+		// CORRECTION20: the fixture backs `artifact_exists=true` with real
+		// staged bytes. The recorded artifact_sha256 / artifact_size
+		// come from those bytes, so the validator can recompute them.
+		const artifactBytes = FIXTURE_ARTIFACT_BYTES[id];
+		if (!artifactBytes) throw new Error(`missing fixture artifact bytes for probe ${id}`);
+		const artifactSha = createHash("sha256").update(artifactBytes).digest("hex");
 		return {
 			id,
-			path: `node_modules/${id}`,
+			path: def.artifact_path,
 			architecture: HOST,
-			sha256: sha,
+			sha256: artifactSha,
 			file_format: fileFormat,
 			status: "pass",
 			reason: "ok",
@@ -1272,13 +1346,13 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			exit_code: 0,
 			signal: null,
 			timeout: false,
-			stdout_text: "",
-			stdout_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			stdout_text: stdoutText,
+			stdout_sha256: stdoutSha,
 			stderr_text: "",
-			stderr_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			artifact_path: `node_modules/${id}`,
-			artifact_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-			artifact_size: 1024,
+			stderr_sha256: stdoutEmptySha,
+			artifact_path: def.artifact_path,
+			artifact_sha256: artifactSha,
+			artifact_size: artifactBytes.length,
 			artifact_exists: true,
 			observed_file_format: fileFormat,
 			observed_architecture: HOST,
@@ -1287,17 +1361,17 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			subject_tree_oid: EXEC_SUBJECT,
 			host_class: HOST,
 			host_supported: true,
-			host_support: [HOST],
+			host_support: [...def.host_support],
 			started_at: "2026-07-17T09:00:00.000Z",
 			finished_at: "2026-07-17T09:00:00.250Z",
 			duration_ms: 250,
-			working_directory: ".",
-			format_match_source: "stdout",
-			format_match_pattern_source: fileFormat,
-			format_match_pattern_flags: "",
-			architecture_assert: "host-class",
-			success_contract_version: 1,
-			invocation_id: "test-invocation-" + id,
+			working_directory: def.working_directory,
+			format_match_source: def.format_match.source,
+			format_match_pattern_source: CATALOGUE_PATTERN[id] ?? def.format_match.pattern_source,
+			format_match_pattern_flags: def.format_match.pattern_flags,
+			architecture_assert: def.architecture_assert,
+			success_contract_version: def.success_contract_version,
+			invocation_id: `test-invocation-${id}`,
 		};
 	}
 
@@ -1306,9 +1380,37 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		bundleDir = join(bundleRoot, ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01");
 		mkdirSync(bundleDir, { recursive: true });
 		inventoryPath = join(bundleDir, "native-probes.json");
+		// CORRECTION20: stage REAL bytes at each probe's artifact path
+		// inside the bundle. The validator reads these bytes and
+		// independently recomputes the SHA-256, so the fixture can no
+		// longer flip `artifact_exists=true` while keeping the recorded
+		// SHA-256 pinned to the empty-string hash.
+		const artifactLines: string[] = [];
+		for (const [probeId, bytes] of Object.entries(FIXTURE_ARTIFACT_BYTES)) {
+			const def = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
+			if (!def) throw new Error(`unknown probe id in fixture: ${probeId}`);
+			const stagedArtifactAbs = join(bundleDir, ...def.artifact_path.split("/"));
+			mkdirSync(join(stagedArtifactAbs, ".."), { recursive: true });
+			writeFileSync(stagedArtifactAbs, bytes);
+			artifactLines.push(`${sha256Hex(bytes)}  ${def.artifact_path}`);
+		}
+		artifactLines.forEach((line) => {
+			/* keep array non-empty even when probe ids are not iterated above */
+		});
+		// Stage the artifact lines so `beforeEach` can rebuild the
+		// manifest with the matching SHA-256 entries.
+		(globalThis as any).__factory_probe_artifact_lines = artifactLines;
+	});
+
+	// CORRECTION20: every test must start from the canonical good
+	// fixture. Several tests tamper with `inventoryPath`, the
+	// `hashes.sha256` manifest, or staged artifact bytes; without this
+	// beforeEach the --randomize flag can interleave tests so a tamper
+	// leaks into the next test's assertions. Rebuild the good inventory
+	// + manifest from scratch on each test.
+	beforeEach(() => {
 		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		// Write the manifest entry for `native-probes.json` matching the
-		// staged bytes.
+		const artifactLines: string[] = (globalThis as any).__factory_probe_artifact_lines ?? [];
 		const bytes = readFileSync(inventoryPath);
 		const hash = sha256Hex(bytes);
 		const otherFiles = ["evidence.json", "verification-results.json"];
@@ -1317,7 +1419,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			.join("\n");
 		writeFileSync(
 			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${otherLines}\n`,
+			`${hash}  native-probes.json\n${artifactLines.join("\n")}\n${otherLines}\n`,
 		);
 	});
 
@@ -1361,6 +1463,12 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("identity mismatch (HEAD drift) → complete=false with identity-mismatch", () => {
+		// CORRECTION20: the inventory at this point is whatever the
+		// previous test left behind. Re-stage the canonical good
+		// inventory so the identity mismatch the test expects is the
+		// canonical one (EXEC_HEAD vs "f"*40), not a residual mismatch
+		// introduced by a tampered probe record a previous test left.
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
 		const view = loadNativeProbesFromEvidence({
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
@@ -1374,8 +1482,9 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("architecture mismatch (probe observed wrong arch) → complete=false with architecture-mismatch", () => {
+		const original = readFileSync(inventoryPath);
 		const inv = buildGoodInventory();
-		inv.p1_better_sqlite3.observed_architecture = "linux-x64";
+		inv.probes.p1_better_sqlite3.observed_architecture = "linux-x64";
 		const tamperedPath = join(bundleDir, "native-probes.json");
 		writeFileSync(tamperedPath, JSON.stringify(inv, null, "\t") + "\n");
 		const bytes = readFileSync(tamperedPath);
@@ -1394,6 +1503,17 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		expect(view.complete).toBe(false);
 		expect(view.architectureMismatches).toContain("p1_better_sqlite3");
 		expect(view.diagnostics.some((d) => d.kind === "architecture-mismatch")).toBe(true);
+		// CORRECTION19: restore the staged inventory so subsequent tests
+		// see the canonical good fixture. Without this restore the
+		// architecture-mismatch tamper leaks into the next test.
+		writeFileSync(inventoryPath, original);
+		// Also restore the manifest hash for native-probes.json.
+		const goodBytes = readFileSync(inventoryPath);
+		const goodHash = sha256Hex(goodBytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${goodHash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
 	});
 
 	it("missing manifest entry → complete=false with missing-inventory diagnostic", () => {
@@ -1435,8 +1555,9 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("empty argv → complete=false with argv-mismatch", () => {
+		const original = readFileSync(inventoryPath);
 		const inv = buildGoodInventory();
-		inv.p1_better_sqlite3.argv = [];
+		inv.probes.p1_better_sqlite3.argv = [];
 		const tamperedPath = join(bundleDir, "native-probes.json");
 		writeFileSync(tamperedPath, JSON.stringify(inv, null, "\t") + "\n");
 		const bytes = readFileSync(tamperedPath);
@@ -1455,5 +1576,16 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		expect(view.complete).toBe(false);
 		expect(view.argvMismatches).toContain("p1_better_sqlite3");
 		expect(view.diagnostics.some((d) => d.kind === "argv-mismatch")).toBe(true);
+		// CORRECTION20: restore the staged inventory so subsequent tests
+		// see the canonical good fixture. Without this restore, --randomize
+		// can interleave tests so this one runs before "happy path" and
+		// the empty argv tamper leaks into the next test's assertions.
+		writeFileSync(inventoryPath, original);
+		const goodBytes = readFileSync(inventoryPath);
+		const goodHash = sha256Hex(goodBytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${goodHash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
 	});
 });

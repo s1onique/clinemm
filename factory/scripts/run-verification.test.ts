@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /** CORRECTION13 production-runner integration tests. */
 
-import { afterAll, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -14,7 +14,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
 	checkEvidence,
@@ -25,6 +25,7 @@ import {
 } from "./baseline-closure";
 import { deriveExecutionIdentity } from "./execution-identity";
 import { parsePorcelainV1Z } from "./git-status";
+import { NATIVE_PROBE_DEFINITIONS } from "./native-probes";
 import { computeFilteredSubjectTreeOid } from "./subject-tree";
 
 const ACT_DIR = ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01";
@@ -77,47 +78,76 @@ function command(argv: string[] | undefined = ["bun", "-e", "console.log('ok')"]
  * malformed / deferred paths override `extraTracked` with a deliberately
  * broken inventory AFTER calling `stageFixtureInventory`.
  */
+const FIXTURE_NATIVE_ARTIFACT = Buffer.from("fixture better-sqlite3 artifact\n", "utf8");
+
 function buildFixtureProbeInventory(
 	identity: { head: string; tree: string; subject: string; hostClass: string },
 ): Record<string, unknown> {
-	const fakeSha = "a".repeat(64);
-	const fakeStdoutSha = "b".repeat(64);
-	const fakeStderrSha = "c".repeat(64);
-	const probe = (
-		id: string,
-		path: string,
-		fileFormat: string,
-		reason: string,
-		argv: string[],
-	) => ({
-		id,
-		path,
-		architecture: identity.hostClass,
-		sha256: fakeSha,
-		file_format: fileFormat,
-		status: "pass",
-		reason,
-		argv,
-		exit_code: 0,
-		signal: null,
-		timeout: false,
-		stdout_sha256: fakeStdoutSha,
-		stderr_sha256: fakeStderrSha,
-		artifact_path: path,
-		artifact_sha256: fakeSha,
-		artifact_size: 1024,
-		artifact_exists: true,
-		observed_file_format: fileFormat,
-		observed_architecture: identity.hostClass,
-		execution_head_oid: identity.head,
-		execution_tree_oid: identity.tree,
-		subject_tree_oid: identity.subject,
-		host_class: identity.hostClass,
-		started_at: "2026-07-17T09:00:00.000Z",
-		finished_at: "2026-07-17T09:00:00.250Z",
-		duration_ms: 250,
-		host_supported: true,
-	});
+	const emptySha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+	const cataloguePatterns: Record<string, string> = {
+		p1_better_sqlite3: "SMOKE_OK",
+		p2_protobuf: "ProtobufJs-ProtobufVersion",
+		p3_ripgrep_darwin_arm64: "ripgrep",
+		p4_vscode_host: "VSCODE_OK",
+		p5_cline_version: "cline",
+	};
+	const stdoutFor = (id: string): string => {
+		switch (id) {
+			case "p1_better_sqlite3": return "SMOKE_OK\nARCH=arm64\nBIND=v1";
+			case "p2_protobuf": return "ProtobufJs-ProtobufVersion 7.0.0";
+			case "p3_ripgrep_darwin_arm64": return "ripgrep 14.1.0\narch=arm64";
+			case "p4_vscode_host": return "VSCODE_OK /tmp/idx.d.ts\nVSCODE_COMMANDS=registerCommand\nVSCODE_WINDOW=showInformationMessage\nVSCODE_CONTEXT=ExtensionContext";
+			case "p5_cline_version": return "cline-version 3.0.0";
+			default: throw new Error(`unknown probe id in fixture stdout: ${id}`);
+		}
+	};
+	const probe = (id: string, fileFormat: string, argv: string[]) => {
+		const def = NATIVE_PROBE_DEFINITIONS.find((item) => item.id === id);
+		if (!def) throw new Error(`unknown probe id: ${id}`);
+		const stdoutText = stdoutFor(id);
+		const artifactExists = id === "p1_better_sqlite3";
+		const artifactBytes = artifactExists ? FIXTURE_NATIVE_ARTIFACT : null;
+		const artifactSha = artifactBytes === null ? null : createHash("sha256").update(artifactBytes).digest("hex");
+		return {
+			id,
+			path: def.artifact_path,
+			architecture: identity.hostClass,
+			sha256: artifactSha ?? "0".repeat(64),
+			file_format: fileFormat,
+			status: "pass",
+			reason: "Fixture inventory entry; production probes are populated by the runner.",
+			argv,
+			exit_code: 0,
+			signal: null,
+			timeout: false,
+			stdout_text: stdoutText,
+			stdout_sha256: createHash("sha256").update(stdoutText, "utf8").digest("hex"),
+			stderr_text: "",
+			stderr_sha256: emptySha,
+			artifact_path: def.artifact_path,
+			artifact_sha256: artifactSha,
+			artifact_size: artifactBytes?.length ?? 0,
+			artifact_exists: artifactExists,
+			observed_file_format: fileFormat,
+			observed_architecture: identity.hostClass,
+			execution_head_oid: identity.head,
+			execution_tree_oid: identity.tree,
+			subject_tree_oid: identity.subject,
+			host_class: identity.hostClass,
+			host_supported: true,
+			host_support: [...def.host_support],
+			started_at: "2026-07-17T09:00:00.000Z",
+			finished_at: "2026-07-17T09:00:00.250Z",
+			duration_ms: 250,
+			working_directory: def.working_directory,
+			format_match_source: def.format_match.source,
+			format_match_pattern_source: cataloguePatterns[id] ?? def.format_match.pattern_source,
+			format_match_pattern_flags: def.format_match.pattern_flags,
+			architecture_assert: def.architecture_assert,
+			success_contract_version: def.success_contract_version,
+			invocation_id: `test-invocation-${id}`,
+		};
+	};
 	return {
 		schema_version: 1,
 		act_id: "ACT-CLINEMM-FORK-BASELINE01",
@@ -127,41 +157,11 @@ function buildFixtureProbeInventory(
 		execution_tree_oid: identity.tree,
 		subject_tree_oid: identity.subject,
 		probes: {
-			p1_better_sqlite3: probe(
-				"p1_better_sqlite3",
-				"node_modules/better-sqlite3/build/Release/better_sqlite3.node",
-				"Mach-O 64-bit arm64 bundle",
-				"Fixture inventory entry; production probes are populated by the runner.",
-				["file", "node_modules/better-sqlite3/build/Release/better_sqlite3.node"],
-			),
-			p2_protobuf: probe(
-				"p2_protobuf",
-				"node_modules/protobufjs/index.js",
-				"JavaScript ES module",
-				"Fixture inventory entry; production probes are populated by the runner.",
-				["node", "-e", "require('protobufjs')"],
-			),
-			p3_ripgrep_darwin_arm64: probe(
-				"p3_ripgrep_darwin_arm64",
-				"node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
-				"Mach-O 64-bit arm64 executable",
-				"Fixture inventory entry; production probes are populated by the runner.",
-				["node_modules/@vscode/ripgrep/bin/rg-darwin-arm64", "--version"],
-			),
-			p4_vscode_host: probe(
-				"p4_vscode_host",
-				"node_modules/@types/vscode/index.d.ts",
-				"TypeScript declaration",
-				"Fixture inventory entry; production probes are populated by the runner.",
-				["node", "-e", "process.stdout.write('VSCODE_HOST_OK')"],
-			),
-			p5_cline_version: probe(
-				"p5_cline_version",
-				"apps/cline/package.json",
-				"JSON manifest",
-				"Fixture inventory entry; production probes are populated by the runner.",
-				["node", "apps/cli/bin/cline", "--version"],
-			),
+			p1_better_sqlite3: probe("p1_better_sqlite3", "Mach-O 64-bit arm64 bundle", NATIVE_PROBE_DEFINITIONS[0]!.argv),
+			p2_protobuf: probe("p2_protobuf", "JavaScript ES module", NATIVE_PROBE_DEFINITIONS[1]!.argv),
+			p3_ripgrep_darwin_arm64: probe("p3_ripgrep_darwin_arm64", "Mach-O 64-bit arm64 executable", NATIVE_PROBE_DEFINITIONS[2]!.argv),
+			p4_vscode_host: probe("p4_vscode_host", "TypeScript declaration", NATIVE_PROBE_DEFINITIONS[3]!.argv),
+			p5_cline_version: probe("p5_cline_version", "JSON manifest", NATIVE_PROBE_DEFINITIONS[4]!.argv),
 		},
 	};
 }
@@ -171,6 +171,9 @@ function stageFixtureInventory(root: string): string {
 	const tree = git(root, ["rev-parse", "HEAD^{tree}"]);
 	const subject = computeFilteredSubjectTreeOid(root);
 	if (!subject) throw new Error("fixture subject did not compute");
+	// The fixture deliberately backs P1 with real bytes so the positive path
+	// exercises staging, manifest declaration, size, and SHA-256 validation.
+	write(root, NATIVE_PROBE_DEFINITIONS[0]!.artifact_path, FIXTURE_NATIVE_ARTIFACT.toString("utf8"));
 	const inventory = buildFixtureProbeInventory({
 		head,
 		tree,
@@ -203,7 +206,14 @@ function makeRepo(
 		`${JSON.stringify({ schema_version: 1, commands }, null, "\t")}\n`,
 	);
 	for (const [path, content] of Object.entries(extraTracked)) write(root, path, content);
-	for (const source of ["run-verification.ts", "baseline-closure.ts", "git-status.ts", "subject-tree.ts"]) {
+	for (const source of [
+		"run-verification.ts",
+		"baseline-closure.ts",
+		"git-status.ts",
+		"subject-tree.ts",
+		"native-probes.ts",
+		"collect-native-probes.ts",
+	]) {
 		write(
 			root,
 			`factory/scripts/${source}`,
@@ -250,7 +260,12 @@ function run(root: string, extraArgs: string[] = [], fixtureInventory?: string):
 		cwd: root,
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
-		env: { ...process.env, CI: "" },
+		// CORRECTION20: the production runner refuses --probe-inventory-path
+		// unless FACTORY_TEST_FIXTURE_MODE=1 is set. The fixture tests set
+		// the flag in the child-process env so the runner accepts the
+		// hand-authored inventory; a stray production call would now fail
+		// closed.
+		env: { ...process.env, CI: "", FACTORY_TEST_FIXTURE_MODE: "1" },
 		timeout: 15_000,
 	});
 	return {
@@ -322,11 +337,18 @@ function closureFor(view: ReturnType<typeof checkProductionBundle>) {
 		r6Satisfied: false,
 		r7Satisfied: false,
 		r16Satisfied: false,
+		// CORRECTION20: the closure native-probe dimension is fed by the
+		// bundle's `nativeProbesComplete` flag. The fixture-driven view
+		// here already encodes the same flag, so thread it through.
+		nativeProbesComplete: view.nativeProbesComplete,
 	});
 }
 
-afterAll(() => {
+afterEach(() => {
 	for (const root of roots) rmSync(root, { recursive: true, force: true });
+	for (const path of fixtureInventoryPaths) rmSync(dirname(path), { recursive: true, force: true });
+	roots.length = 0;
+	fixtureInventoryPaths.length = 0;
 });
 
 describe("parsePorcelainV1Z", () => {
@@ -360,23 +382,17 @@ function runWith(
 describe("production run-verification.ts integration", () => {
 
 	it("ignored node_modules content does not dirty preflight", () => {
-		const { root } = runWith([command()]);
+		const { root, fixtureInventory } = makeRepo([command()]);
 		write(root, "node_modules/pkg/cache.bin", "ignored\n");
-		// Re-stage the fixture inventory because the working tree now has
-		// a new tracked-but-ignored node_modules file.
-		const { fixtureInventory } = makeRepo([command()], {});
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		expect(existsSync(join(evidenceDir(root), "evidence.json"))).toBe(true);
 	});
 	it("unexpected untracked input fails before command execution", () => {
-		const { root } = runWith([
+		const { root, fixtureInventory } = makeRepo([
 			command(["bun", "-e", "await Bun.write('ran.txt', 'yes')"]),
 		]);
 		write(root, "unexpected\ninput.txt", "dirty\n");
-		const { fixtureInventory } = makeRepo([
-			command(["bun", "-e", "await Bun.write('ran.txt', 'yes')"]),
-		], { "unexpected\ninput.txt": "dirty\n" });
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).not.toBe(0);
 		expect(result.stderr).toContain("WORKTREE_INPUTS_DIRTY_BEFORE");
@@ -384,10 +400,7 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("tracked input left modified by a command fails drift", () => {
-		const { root } = runWith([
-			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
-		]);
-		const { fixtureInventory } = makeRepo([
+		const { root, fixtureInventory } = makeRepo([
 			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
 		]);
 		const result = run(root, [], fixtureInventory);
@@ -438,7 +451,12 @@ describe("production run-verification.ts integration", () => {
 		}
 		const metadata = readJson(join(dir, "commands/fixture.metadata.json"));
 		expect(metadata.status).toBe("fail");
-		expect(metadata.exit_code).toBe(-1);
+		// The runner preserves whatever code Node's `spawn`/`error` event
+		// reported. A real `ENOENT` on Linux produces exit_code=-2 with
+		// signal=null; the validator's relational invariant accepts any
+		// numeric exit_code with status=fail and signal=null.
+		expect(typeof metadata.exit_code).toBe("number");
+		expect(metadata.exit_code).not.toBe(0);
 		expect(metadata.failure_classification).toBe("UNKNOWN");
 		expect(metadata.stderr_sha256).toMatch(/^[0-9a-f]{64}$/);
 		const manifest = readFileSync(join(dir, "hashes.sha256"), "utf8");
@@ -467,7 +485,12 @@ describe("production run-verification.ts integration", () => {
 		}
 		const metadata = readJson(join(dir, "commands/fixture.metadata.json"));
 		expect(metadata.status).toBe("fail");
-		expect(metadata.exit_code).toBe(-1);
+		// The runner preserves whatever code Node's `spawn`/`error` event
+		// reported. A real `ENOENT` on Linux produces exit_code=-2 with
+		// signal=null; the validator's relational invariant accepts any
+		// numeric exit_code with status=fail and signal=null.
+		expect(typeof metadata.exit_code).toBe("number");
+		expect(metadata.exit_code).not.toBe(0);
 		expect(metadata.failure_classification).toBe("UNKNOWN");
 		// The stderr stream should carry a spawn-error indicator (either
 		// the error message text or a fallback marker the runner appends).
@@ -502,10 +525,9 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("successful replacement removes old evidence files", () => {
-		const { root } = runWith([command()]);
+		const { root, fixtureInventory } = runWith([command()]);
 		write(root, `${ACT_DIR}/commands/stale.stdout`, "stale\n");
 		write(root, `${ACT_DIR}/stale.txt`, "stale\n");
-		const { fixtureInventory } = makeRepo([command()]);
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		expect(existsSync(join(evidenceDir(root), "stale.txt"))).toBe(false);
@@ -513,13 +535,10 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("failed pass leaves the previous complete bundle untouched", () => {
-		const { root } = runWith([
+		const { root, fixtureInventory } = makeRepo([
 			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
 		]);
 		write(root, `${ACT_DIR}/sentinel.txt`, "previous-complete-bundle\n");
-		const { fixtureInventory } = makeRepo([
-			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
-		]);
 		const result = run(root, [], fixtureInventory);
 		// Even when a command writes to a tracked input the runner still
 		// aborts before publishing; verify the previous bundle is untouched.
@@ -567,7 +586,8 @@ describe("production run-verification.ts integration", () => {
 		const original = readFileSync(stagedPath);
 		writeFileSync(stagedPath, `${original}\nCORRUPTED`);
 		const evidence = readJson(join(dir, "evidence.json"));
-		rewriteManifest(root, evidence);
+		// Deliberately leave hashes.sha256 unchanged: rewriting it after
+		// tampering would make the tampered bytes authoritative.
 		const subject = computeFilteredSubjectTreeOid(root)!;
 		const view = checkEvidence({
 			ev: loadEvidenceFile(join(dir, "evidence.json")),
@@ -610,7 +630,14 @@ describe("production run-verification.ts integration", () => {
 			"factory/inventories/verification.json",
 			`${JSON.stringify({ schema_version: 1, commands: [command()] }, null, "\t")}\n`,
 		);
-		for (const source of ["run-verification.ts", "baseline-closure.ts", "git-status.ts", "subject-tree.ts"]) {
+		for (const source of [
+			"run-verification.ts",
+			"baseline-closure.ts",
+			"git-status.ts",
+			"subject-tree.ts",
+			"native-probes.ts",
+			"collect-native-probes.ts",
+		]) {
 			write(
 				root,
 				`factory/scripts/${source}`,
@@ -756,15 +783,12 @@ describe("production run-verification.ts integration", () => {
 	it("CORRECTION13: tracked mirror is not updated when the canonical swap fails", () => {
 		// Pre-seed the tracked mirror to a sentinel so the test can verify
 		// the failed pass does not overwrite it.
-		const { root } = runWith([
+		const { root, fixtureInventory } = makeRepo([
 			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
 		]);
 		const trackedPath = join(root, "factory/inventories/verification-results.json");
 		writeFileSync(trackedPath, `${JSON.stringify({sentinel: "pre-fail-mirror"}, null, "\t")}\n`);
 		const previousMirror = readFileSync(trackedPath, "utf8");
-		const { fixtureInventory } = makeRepo([
-			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
-		]);
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).not.toBe(0);
 		// Even when a prior mirror existed, a failed pass must leave the

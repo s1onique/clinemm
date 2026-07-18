@@ -39,6 +39,7 @@ import {
 	loadEvidenceFile,
 	loadNativeProbesFromEvidence,
 	NATIVE_PROBES_BUNDLE_PATH,
+	NATIVE_PROBES_INVENTORY_PATH,
 	resolveEvidencePayloadPath,
 	type ExecutionIdentityDerivation,
 } from "./baseline-closure";
@@ -48,6 +49,7 @@ import {
 	type NativeProbesInventory,
 } from "./collect-native-probes";
 import { parsePorcelainV1Z } from "./git-status";
+import { NATIVE_PROBE_DEFINITIONS } from "./native-probes";
 import { computeFilteredSubjectTreeOid, SUBJECT_TREE_EXCLUDES } from "./subject-tree";
 
 const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01";
@@ -230,6 +232,26 @@ function repoRoot(): string {
 	return (result.stdout ?? "").trim();
 }
 
+/**
+ * CORRECTION20: the `--probe-inventory-path <file>` argument is a
+ * TEST-ONLY escape hatch. Production runners always execute real probes
+ * via `collectNativeProbesInventory`. To make sure no production
+ * invocation can accidentally consume a hand-authored fixture
+ * inventory, the runner requires the `FACTORY_TEST_FIXTURE_MODE=1`
+ * environment flag whenever this argument is present; otherwise the
+ * runner refuses the argument and exits with a hard error. The fixture
+ * tests set the flag in their child-process env so this guard never
+ * trips in CI, but a stray production call (where the env var is not
+ * set) now fails closed. The constant is declared BEFORE the
+ * `parseArgs` callsite so `fixtureModeEnabled()` does not hit a
+ * temporal-dead-zone ReferenceError when the runner first loads.
+ */
+const FACTORY_TEST_FIXTURE_MODE_ENV = "FACTORY_TEST_FIXTURE_MODE";
+
+function fixtureModeEnabled(): boolean {
+	return process.env[FACTORY_TEST_FIXTURE_MODE_ENV] === "1";
+}
+
 const ROOT = repoRoot();
 const CANONICAL_EVIDENCE_DIR = join(ROOT, DETACHED_DIR);
 const ARGS = parseArgs(process.argv.slice(2));
@@ -251,6 +273,11 @@ function parseArgs(argv: string[]): RunnerArgs {
 	const onlyFilter = valueAfter("--only");
 	const skipText = valueAfter("--skip");
 	const probeInventoryPath = valueAfter("--probe-inventory-path");
+	if (probeInventoryPath !== null && !fixtureModeEnabled()) {
+		throw new Error(
+			`--probe-inventory-path is a test-fixture escape hatch; the runner refuses it unless ${FACTORY_TEST_FIXTURE_MODE_ENV}=1 is set in the environment. Production runs always go through collectNativeProbesInventory().`,
+		);
+	}
 	return {
 		finalize: argv.includes("--finalize-evidence"),
 		onlyFilter,
@@ -624,6 +651,13 @@ async function executeCommand(
 	}
 
 	const finishedAt = new Date();
+	// A spawn failure never sees a real signal because the process never
+	// existed. Normalize the recorded signal to null so the validator's
+	// relational invariant (`signal` null + status fail + exit_code=-1)
+	// is well-formed.
+	if (outcome.spawnError !== null) {
+		outcome.signal = null;
+	}
 	const status: ExecResult["status"] =
 		outcome.spawnError === null && !outcome.timedOut && outcome.code === 0 ? "pass" : "fail";
 	const classification =
@@ -963,6 +997,19 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 		atomicWriteFile(stagedResultPath, JSON.stringify(resultDocument, null, "\t") + "\n");
 		console.log(`Staged ${stagingDir}/verification-results.json executed=${executed.length} skipped=${skipped.length}`);
 
+		// CORRECTION20: probe execution (the staged native-probes.json and
+		// any artifact payloads) runs BEFORE the authoritative postflight
+		// sample. The postflight still gates whether the pass publishes;
+		// probe execution is observable in the runner's stdout but cannot
+		// pollute the postflight sample because the probe collector is
+		// read-only against the worktree (the staged copies live inside
+		// the stagingDir, never the repository root).
+		const {
+			bundleRel: nativeProbesBundleRel,
+			artifactPayloadRels,
+			inventory: probeInventory,
+		} = await stageNativeProbesIntoBundle(stagingDir);
+
 		const postflight = worktreeInputsClean();
 		if (!postflight.clean) {
 			throw new Error(`WORKTREE_INPUTS_DIRTY_AFTER: ${postflight.unexpected.join(", ")}`);
@@ -973,14 +1020,6 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			throw new Error("EXECUTION_IDENTITY_INVALID: postflight head/tree object relationship failed");
 		}
 
-		// CORRECTION16: stage the native-probe inventory into the bundle
-		// BEFORE writing the manifest so the staged copy's SHA-256 is
-		// captured in `hashes.sha256`. The verifier reads the bundle copy
-		// and cross-checks the hash, so editing the tracked mirror after
-		// the fact can never change the verdict.
-		const { bundleRel: nativeProbesBundleRel } =
-			await stageNativeProbesIntoBundle(stagingDir);
-
 		writeDetachedBundle({
 			label,
 			stagingDir,
@@ -989,15 +1028,20 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			postflight,
 			resultDocument,
 			nativeProbesBundleRel,
+			artifactPayloadRels,
 		});
 		replaceCanonicalBundle(stagingDir);
-		// CORRECTION13: refresh the tracked mirror only after the canonical
-		// swap succeeded. The bundle is now self-contained; the tracked file
-		// is informational and must not be the authority.
+		// CORRECTION13 + CORRECTION20: refresh the tracked mirror only
+		// after the canonical swap succeeded. The bundle is now
+		// self-contained; the tracked file is informational and must not
+		// be the authority. A failed pass cannot poison the tracked
+		// mirror because this write happens after `replaceCanonicalBundle`
+		// returns successfully.
 		atomicWriteFile(
 			join(ROOT, RESULTS_JSON),
 			JSON.stringify(resultDocument, null, "\t") + "\n",
 		);
+		refreshTrackedNativeProbesMirror(probeInventory);
 		console.log(`Published ${DETACHED_DIR} from one validated staging bundle`);
 	} finally {
 		// If publication succeeded this path no longer exists. Otherwise a
@@ -1024,7 +1068,7 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 async function stageNativeProbesIntoBundle(
 	stagingDir: string,
 	probeInventoryPath: string | null = ARGS.probeInventoryPath,
-): Promise<{ bundleRel: string; bundleAbs: string }> {
+): Promise<{ bundleRel: string; bundleAbs: string; artifactPayloadRels: string[]; inventory: NativeProbesInventory }> {
 	let inventory: NativeProbesInventory;
 	if (probeInventoryPath !== null) {
 		const text = readFileSync(probeInventoryPath, "utf8");
@@ -1035,8 +1079,35 @@ async function stageNativeProbesIntoBundle(
 	const bundleRel = NATIVE_PROBES_BUNDLE_PATH;
 	const bundleAbs = join(stagingDir, ...bundleRel.split("/"));
 	writeInventory(inventory, bundleAbs);
-	// Refresh the tracked mirror only after the bundle copy succeeded. A
-	// failed bundle write cannot poison the tracked mirror.
+	const artifactPayloadRels: string[] = [];
+	for (const definition of NATIVE_PROBE_DEFINITIONS) {
+		const probe = inventory.probes[definition.id];
+		if (probe?.artifact_exists !== true) continue;
+		const source = resolve(ROOT, ...definition.artifact_path.split("/"));
+		if (!existsSync(source) || !lstatSync(source).isFile() || lstatSync(source).isSymbolicLink()) {
+			throw new Error(`NATIVE_PROBE_ARTIFACT_MISSING: ${definition.id}: ${definition.artifact_path}`);
+		}
+		const stagedArtifact = join(stagingDir, ...definition.artifact_path.split("/"));
+		atomicWriteFile(stagedArtifact, readFileSync(source));
+		artifactPayloadRels.push(definition.artifact_path);
+	}
+	// CORRECTION20: the tracked mirror is NOT refreshed here. The tracked
+	// file at `factory/inventories/native-probes.json` is informational
+	// only; the authoritative copy is the staged bundle. Refreshing the
+	// mirror inside this function would mean a partial / failed staging
+	// pass leaves the mirror out of sync with the canonical bundle. The
+	// caller (`runPass`) refreshes the mirror after `replaceCanonicalBundle`
+	// succeeds, so a failed pass cannot poison the tracked file.
+	return { bundleRel, bundleAbs, artifactPayloadRels, inventory };
+}
+
+/**
+ * Refresh the tracked native-probes mirror from a staged inventory that has
+ * already been promoted into the canonical bundle. The tracked file is
+ * informational; the canonical bundle remains the source of truth. Failures
+ * here are logged but do not undo the canonical publish.
+ */
+function refreshTrackedNativeProbesMirror(inventory: NativeProbesInventory): void {
 	const trackedMirror = join(ROOT, NATIVE_PROBES_INVENTORY_PATH);
 	try {
 		writeInventory(inventory, trackedMirror);
@@ -1047,7 +1118,6 @@ async function stageNativeProbesIntoBundle(
 			}`,
 		);
 	}
-	return { bundleRel, bundleAbs };
 }
 
 function writeDetachedBundle(args: {
@@ -1058,8 +1128,18 @@ function writeDetachedBundle(args: {
 	postflight: CleanlinessSample;
 	resultDocument: PassResultDocument;
 	nativeProbesBundleRel: string;
+	artifactPayloadRels: string[];
 }): void {
-	const { label, stagingDir, identity, preflight, postflight, resultDocument, nativeProbesBundleRel } = args;
+	const {
+		label,
+		stagingDir,
+		identity,
+		preflight,
+		postflight,
+		resultDocument,
+		nativeProbesBundleRel,
+		artifactPayloadRels,
+	} = args;
 	const executed = resultDocument.executed_commands;
 	for (const row of executed) {
 		for (const rel of [row.stdout_path, row.stderr_path, row.metadata_path]) {
@@ -1082,7 +1162,12 @@ function writeDetachedBundle(args: {
 		row.stderr_path,
 		row.metadata_path,
 	]);
-	expectedEvidencePayloadPaths.unshift("evidence.json", "verification-results.json", nativeProbesBundleRel);
+	expectedEvidencePayloadPaths.unshift(
+		"evidence.json",
+		"verification-results.json",
+		nativeProbesBundleRel,
+		...artifactPayloadRels,
+	);
 
 	const executionIdentityValid = verifyExecutionIdentityShape(identity.head, identity.tree);
 	const evidence = {
@@ -1178,6 +1263,11 @@ function writeDetachedBundle(args: {
 				missingFiles: localView.missingFiles,
 				unexpectedFiles: localView.unexpectedFiles,
 				commandRecordMismatches: localView.commandRecordMismatches,
+				malformedEvidenceCommandRows: localView.malformedEvidenceCommandRows,
+				malformedExecutedCommandRows: localView.malformedExecutedCommandRows,
+				rowRelationalInvariantViolations: localView.rowRelationalInvariantViolations,
+				bundledResultExtraCommands: localView.bundledResultExtraCommands,
+				bundledResultMissingCommands: localView.bundledResultMissingCommands,
 			})}`,
 		);
 	}

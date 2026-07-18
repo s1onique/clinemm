@@ -115,7 +115,8 @@ export type NativeProbeDiagnosticKind =
 	| "architecture-mismatch"
 	| "identity-mismatch"
 	| "argv-mismatch"
-	| "host-class-mismatch";
+	| "host-class-mismatch"
+	| "predicate-mismatch";
 
 export interface NativeProbeDiagnostic {
 	probeId: NativeProbeId;
@@ -170,9 +171,14 @@ export const NATIVE_PROBE_IDS: ReadonlyArray<NativeProbeId> = [
  * the renderer and runner surface the structured diagnostics so reviewers
  * can see which dimension failed.
  */
+export type NativeProbeViewRecord = Pick<
+	NativeProbe,
+	"id" | "path" | "architecture" | "sha256" | "file_format" | "status" | "reason"
+>;
+
 export interface NativeProbesView {
 	complete: boolean;
-	probes: Record<NativeProbeId, NativeProbe | null>;
+	probes: Record<NativeProbeId, NativeProbeViewRecord | null>;
 	diagnostics: NativeProbeDiagnostic[];
 	// CORRECTION16: where the inventory was loaded from (bundle-relative
 	// path under the evidence directory or absolute path outside the bundle).
@@ -421,7 +427,19 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 	}
 	if (typeof value.duration_ms !== "number" || value.duration_ms < 0) pushField("duration_ms");
 	if (typeof value.timeout !== "boolean") pushField("timeout");
-	if (typeof value.exit_code !== "number" && !(role === "evidence" && value.exit_code === null)) {
+	// A spawn failure records exit_code=-1 and a non-null signal-marker
+	// string the runner appends to stderr. Treat that pairing as
+	// well-formed for fail rows.
+	const isRecordedSpawnFailure =
+		role === "executed" &&
+		value.status === "fail" &&
+		value.exit_code === -1 &&
+		typeof value.signal === "string" && value.signal.length === 0;
+	if (
+		typeof value.exit_code !== "number" &&
+		!(role === "evidence" && value.exit_code === null) &&
+		!isRecordedSpawnFailure
+	) {
 		pushField("exit_code");
 	}
 	if (typeof value.signal !== "string" && value.signal !== null) pushField("signal");
@@ -473,6 +491,12 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 		if (value.status === "pass") {
 			if (!fcIsNull) pushField("failure_classification");
 			if (value.exit_code !== 0) pushField("exit_code");
+			// CORRECTION20: the production relational invariant for pass rows
+			// is `(status=pass ⇒ signal=null)`. A signal marker that is the
+			// empty string would only ever be produced by a runner accident
+			// — the fixture in `run-verification.test.ts` now normalizes
+			// spawn-failure signals back to null — so accept only the
+			// canonical null form here.
 			if (value.signal !== null) pushField("signal");
 			if (isTimeout) pushField("timeout");
 		} else if (value.status === "fail") {
@@ -480,6 +504,7 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 			if (isTimeout && !fcIsTimeout) pushField("failure_classification");
 			if (!fcIsString) pushField("failure_classification");
 		} else if (value.status === "skip" || value.status === "unavailable") {
+			if (value.signal !== null) pushField("signal");
 			if (typeof value.failure_classification !== "undefined" && !fcIsNull) {
 				pushField("failure_classification");
 			}
@@ -1112,7 +1137,24 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	}
 
 	if (expectedEvidencePayloadPaths !== null) {
-		const derivedExpected = ["evidence.json", "verification-results.json", ...commandPayloadPaths];
+		// CORRECTION19: CORRECTION16+ evidence has a mandatory native-probe
+		// payload. The expected set is derived from the evidence schema and the
+		// canonical inventory contents, never from the manifest itself.
+		const evidenceSchemaVersion =
+			typeof evObj.schema_version === "number" ? evObj.schema_version : 0;
+		const nativeProbesRequired = evidenceSchemaVersion >= 5;
+		const nativeProbeArtifactPaths = nativeProbesRequired
+			? deriveNativeProbeArtifactPayloadPaths(evDirAbs)
+			: [];
+		const derivedExpected = nativeProbesRequired
+			? [
+					"evidence.json",
+					"verification-results.json",
+					NATIVE_PROBES_BUNDLE_PATH,
+					...nativeProbeArtifactPaths,
+					...commandPayloadPaths,
+				]
+			: ["evidence.json", "verification-results.json", ...commandPayloadPaths];
 		const expectedSet = new Set(expectedEvidencePayloadPaths);
 		const derivedSet = new Set(derivedExpected);
 		const declaredSet = new Set(parsed.declared.keys());
@@ -1236,6 +1278,30 @@ export function resolveEvidencePayloadPath(
 		return { ok: false, abs: null, reason: "outside-evidence-dir" };
 	}
 	return { ok: true, abs, reason: null };
+}
+
+function deriveNativeProbeArtifactPayloadPaths(evDirAbs: string): string[] {
+	const inventoryPath = join(evDirAbs, ...NATIVE_PROBES_BUNDLE_PATH.split("/"));
+	if (!existsSync(inventoryPath)) return [];
+	try {
+		const parsed = JSON.parse(readFileSync(inventoryPath, "utf8"));
+		if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+		const record = parsed as Record<string, unknown>;
+		if (record.schema_version !== 1 || record.probes === null || typeof record.probes !== "object" || Array.isArray(record.probes)) {
+			return [];
+		}
+		const probes = record.probes as Record<string, unknown>;
+		const paths: string[] = [];
+		for (const definition of NATIVE_PROBE_DEFINITIONS) {
+			const probe = probes[definition.id];
+			if (probe !== null && typeof probe === "object" && !Array.isArray(probe) && (probe as Record<string, unknown>).artifact_exists === true) {
+				paths.push(definition.artifact_path);
+			}
+		}
+		return paths;
+	} catch {
+		return [];
+	}
 }
 
 function scanUnexpected(
@@ -1538,6 +1604,7 @@ function validateProbeRecord(
 	stagedStdout: string | null,
 	stagedStderr: string | null,
 	hostClass: string | null,
+	artifactManifestHash: string | null,
 ): { probe: NativeProbe | null; failures: ValidationFailure[] } {
 	const failures: ValidationFailure[] = [];
 	if (raw === undefined) {
@@ -1694,9 +1761,23 @@ function validateProbeRecord(
 	// Hash recompute from embedded text. The collector stamps
 	// stdout_sha256 / stderr_sha256 / artifact_sha256; the verifier
 	// independently recomputes each from the embedded payload bytes.
-	if (stagedArtifactBytes !== null) {
-		const recordedArtifactSha = out.artifact_sha256 as string | null;
-		if (recordedArtifactSha !== null) {
+	const recordedArtifactSha = out.artifact_sha256 as string | null;
+	if (out.artifact_exists === true) {
+		if (stagedArtifactBytes === null) {
+			failures.push({
+				probeId,
+				field: "artifact_exists",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` declares artifact_exists=true but no staged artifact payload exists`,
+			});
+		} else if (recordedArtifactSha === null) {
+			failures.push({
+				probeId,
+				field: "artifact_sha256",
+				kind: "wrong-type",
+				message: `native-probe \`${probeId}\` artifact_exists=true requires a non-null artifact_sha256`,
+			});
+		} else {
 			const observedArtifactSha = createHash("sha256").update(stagedArtifactBytes).digest("hex");
 			if (observedArtifactSha !== recordedArtifactSha) {
 				failures.push({
@@ -1706,6 +1787,57 @@ function validateProbeRecord(
 					message: `native-probe \`${probeId}\` field \`artifact_sha256\` does not match recomputed SHA-256 of staged bytes (declared=${recordedArtifactSha.slice(0, 12)}…, observed=${observedArtifactSha.slice(0, 12)}…)`,
 				});
 			}
+		}
+		if (artifactManifestHash === null) {
+			failures.push({
+				probeId,
+				field: "artifact_sha256",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` artifact payload is not declared in hashes.sha256`,
+			});
+		} else if (stagedArtifactBytes !== null) {
+			const observedArtifactSha = createHash("sha256").update(stagedArtifactBytes).digest("hex");
+			if (artifactManifestHash !== observedArtifactSha) {
+				failures.push({
+					probeId,
+					field: "artifact_sha256",
+					kind: "wrong-type",
+					message: `native-probe \`${probeId}\` artifact manifest hash does not match staged bytes`,
+				});
+			}
+		}
+	} else {
+		if (stagedArtifactBytes !== null) {
+			failures.push({
+				probeId,
+				field: "artifact_exists",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` declares artifact_exists=false but a staged artifact payload exists`,
+			});
+		}
+		if (out.artifact_size !== 0) {
+			failures.push({
+				probeId,
+				field: "artifact_size",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` artifact_exists=false requires artifact_size=0`,
+			});
+		}
+		if (recordedArtifactSha !== null) {
+			failures.push({
+				probeId,
+				field: "artifact_sha256",
+				kind: "wrong-type",
+				message: `native-probe \`${probeId}\` artifact_exists=false requires artifact_sha256=null`,
+			});
+		}
+		if (artifactManifestHash !== null) {
+			failures.push({
+				probeId,
+				field: "artifact_exists",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` artifact_exists=false must not declare an artifact payload in hashes.sha256`,
+			});
 		}
 	}
 	const stdoutText = stagedStdout ?? "";
@@ -1845,24 +1977,8 @@ function validateProbeRecord(
 		}
 	}
 
-	// Architecture enforcement: when the catalogue declares
-	// architecture_assert == "host-class", the recorded
-	// observed_architecture must equal the host_class.
-	if (stagedArtifactBytes === null && out.artifact_exists === true) {
-		failures.push({
-			probeId,
-			field: "artifact_exists",
-			kind: "wrong-shape",
-			message: `native-probe \`${probeId}\` declares artifact_exists=true but the staged artifact is missing; the validator cannot recompute the artifact hash from real bytes`,
-		});
-	} else if (stagedArtifactBytes !== null && out.artifact_exists === false) {
-		failures.push({
-			probeId,
-			field: "artifact_exists",
-			kind: "wrong-shape",
-			message: `native-probe \`${probeId}\` declares artifact_exists=false but the staged artifact is present; the recorded hash must match the bytes`,
-		});
-	}
+	// When an artifact is present, its declared size must equal the staged
+	// payload length. The absent branch above already requires size zero.
 	if (stagedArtifactBytes !== null && out.artifact_size !== undefined && stagedArtifactBytes.length !== out.artifact_size) {
 		failures.push({
 			probeId,
@@ -1936,8 +2052,8 @@ function arraysEqual(a: string[], b: string[]): boolean {
 	return true;
 }
 
-function emptyProbes(): Record<NativeProbeId, NativeProbe | null> {
-	const probes = {} as Record<NativeProbeId, NativeProbe | null>;
+function emptyProbes(): Record<NativeProbeId, NativeProbeViewRecord | null> {
+	const probes = {} as Record<NativeProbeId, NativeProbeViewRecord | null>;
 	for (const probeId of NATIVE_PROBE_IDS) probes[probeId] = null;
 	return probes;
 }
@@ -2031,36 +2147,74 @@ export function loadNativeProbesInventory(inventoryPath: string): NativeProbesVi
 		};
 	}
 	const record = parsed as Record<string, unknown>;
+	const nestedRecord =
+		record.probes !== null &&
+		typeof record.probes === "object" &&
+		!Array.isArray(record.probes)
+			? (record.probes as Record<string, unknown>)
+			: null;
+	// The tracked reader is informational: it understands the current nested
+	// mirror and retains a flat fallback only for historical migration data.
+	// The authoritative bundle reader below never uses this fallback.
+	// CORRECTION19: legacy CORRECTION15 inventory shape only carries
+	// the seven legacy fields (id, path, architecture, sha256,
+	// file_format, status, reason). The legacy validator below
+	// enforces only those fields; status=pass with a valid
+	// sha256 is the only condition that yields complete=true.
+	// The CORRECTION16 strict validator is reserved for
+	// `loadNativeProbesFromEvidence` and reads from the bundle.
 	let complete = true;
-	const stagedBytes = readFileSync(inventoryPath);
 	for (const probeId of NATIVE_PROBE_IDS) {
-		let trackedArtifact: Buffer | null = null;
-		try {
-			const def3 = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
-			if (def3) {
-				const af = join(inventoryPath, "..", ...def3.artifact_path.split("/"));
-				if (existsSync(af)) trackedArtifact = readFileSync(af);
-			}
-		} catch (_) { /* leave trackedArtifact = null */ }
-		const trackedStdout = "";
-		const trackedStderr = "";
-		const { probe: probe, failures } = validateProbeRecord(
-			probeId,
-			record[probeId],
-			trackedArtifact,
-			trackedStdout,
-			trackedStderr,
-			null,
-		);
-		for (const f of failures) {
-			diagnostics.push({
-				probeId: f.probeId as any,
-				kind: f.kind as any,
-				message: f.message,
-			});
+		const raw = nestedRecord === null ? record[probeId] : nestedRecord[probeId];
+		if (raw === undefined) {
+			diagnostics.push({ probeId, kind: "missing-inventory", message: `native-probe key \`${probeId}\` is absent from the tracked inventory` });
 			complete = false;
+			continue;
 		}
-		probes[probeId] = probe === undefined ? null : probe as NativeProbe;
+		if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+			diagnostics.push({ probeId, kind: "invalid-shape", message: `native-probe entry \`${probeId}\` must be a JSON object` });
+			complete = false;
+			continue;
+		}
+		const v = raw as Record<string, unknown>;
+		let shapeOk = true;
+		for (const field of ["id", "path", "architecture", "sha256", "file_format", "reason"]) {
+			if (typeof v[field] !== "string" || (v[field] as string).length === 0) {
+				diagnostics.push({ probeId, kind: "invalid-shape", message: `native-probe \`${probeId}\` missing or empty legacy field \`${field}\`` });
+				shapeOk = false;
+			}
+		}
+		if (typeof v.sha256 === "string" && !new RegExp("^[0-9a-f]{64}$").test(v.sha256 as string)) {
+			diagnostics.push({ probeId, kind: "invalid-shape", message: `native-probe \`${probeId}\` sha256 is not a 64-character lowercase hex string` });
+			shapeOk = false;
+		}
+		const status = v.status;
+		if (status === "pass") {
+			// pass is the only condition that yields complete=true
+		} else if (status === "deferred") {
+			diagnostics.push({ probeId, kind: "deferred", message: `native-probe \`${probeId}\` status=deferred; runner deferred this probe to a future pass` });
+			complete = false;
+		} else if (status === "fail") {
+			diagnostics.push({ probeId, kind: "non-pass", message: `native-probe \`${probeId}\` status=fail; reason=${typeof v.reason === "string" ? v.reason : "<no reason recorded>"}` });
+			complete = false;
+		} else {
+			diagnostics.push({ probeId, kind: "invalid-shape", message: `native-probe \`${probeId}\` status is not one of pass|fail|deferred (got \`${JSON.stringify(status)}\`)` });
+			shapeOk = false;
+		}
+		if (!shapeOk) complete = false;
+		if (shapeOk && status === "pass") {
+			probes[probeId] = {
+				id: probeId,
+				path: v.path as string,
+				architecture: v.architecture as string,
+				sha256: v.sha256 as string,
+				file_format: v.file_format as string,
+				status: "pass",
+				reason: v.reason as string,
+			};
+		} else {
+			probes[probeId] = null;
+		}
 	}
 	return {
 		complete,
@@ -2138,13 +2292,30 @@ export function loadNativeProbesFromEvidence(
 		};
 	}
 	if (declaredHash === null) {
-		for (const probeId of NATIVE_PROBE_IDS) {
-			diagnostics.push({
+		// CORRECTION20: short-circuit when native-probes.json is not declared
+		// in the manifest. Per-probe validation cannot run meaningfully when
+		// the bundle refuses to acknowledge the inventory exists; emitting
+		// additional wrong-shape diagnostics would dilute the surface with
+		// noise about artifact manifests the renderer already knows are
+		// unreachable. The renderer surfaces exactly one
+		// `missing-inventory` diagnostic per probe id.
+		return {
+			complete: false,
+			probes,
+			diagnostics: NATIVE_PROBE_IDS.map((probeId) => ({
 				probeId,
-				kind: "missing-inventory",
+				kind: "missing-inventory" as const,
 				message: `native-probes.json is not declared in the bundle's hashes.sha256`,
-			});
-		}
+			})),
+			source: "bundle",
+			declaredHash,
+			observedHash,
+			hashMismatches: [],
+			architectureMismatches: [],
+			identityMismatches: [],
+			argvMismatches: [],
+			hostClassMismatches: [],
+		};
 	}
 	if (declaredHash !== null && observedHash !== null && declaredHash !== observedHash) {
 		// Short-circuit on hash mismatch. The recorded probe entries
@@ -2221,8 +2392,46 @@ export function loadNativeProbesFromEvidence(
 		};
 	}
 	const record = parsed as Record<string, unknown>;
+	// CORRECTION19: the authoritative bundle schema is canonical and nested.
+	// A schema_version and a `probes` object are mandatory; flat hand-authored
+	// probe keys are never eligible for closure validation.
+	const schemaVersion = record.schema_version;
+	const nestedProbes =
+		record.probes !== null &&
+		typeof record.probes === "object" &&
+		!Array.isArray(record.probes)
+			? (record.probes as Record<string, unknown>)
+			: null;
+	if (schemaVersion !== 1 || nestedProbes === null) {
+		const message =
+			schemaVersion !== 1
+				? `native-probes.json requires schema_version=1, got ${JSON.stringify(schemaVersion)}`
+				: "native-probes.json requires canonical nested object `probes`";
+		return {
+			complete: false,
+			probes,
+			diagnostics: NATIVE_PROBE_IDS.map((probeId) => ({
+				probeId,
+				kind: "invalid-shape" as const,
+				message,
+			})),
+			source: "bundle",
+			declaredHash,
+			observedHash,
+			hashMismatches,
+			architectureMismatches,
+			identityMismatches,
+			argvMismatches,
+			hostClassMismatches,
+		};
+	}
+	const lookupProbe = (probeId: NativeProbeId): unknown => nestedProbes[probeId];
+	const lookupProbeText = (probeId: NativeProbeId, field: string): string => {
+		const entry = lookupProbe(probeId) as any;
+		return typeof entry?.[field] === "string" ? entry[field] : "";
+	};
 	const inventoryHostClass = typeof record.host_class === "string" ? record.host_class : null;
-	const stagedBytes = readFileSync(bundlePath);
+	const parsedManifest = parseManifest(manifestText);
 	let complete = inventoryHostClass !== null
 		&& declaredHash !== null && declaredHash === observedHash;
 	for (const probeId of NATIVE_PROBE_IDS) {
@@ -2237,52 +2446,85 @@ export function loadNativeProbesFromEvidence(
 				if (existsSync(af)) stagedArtifact = readFileSync(af);
 			}
 		} catch (_) { /* leave stagedArtifact = null */ }
-		const stdoutForHash = typeof (record[probeId] as any)?.stdout_text === "string" ? (record[probeId] as any).stdout_text : "";
-		const stderrForHash = typeof (record[probeId] as any)?.stderr_text === "string" ? (record[probeId] as any).stderr_text : "";
+		const stdoutForHash = lookupProbeText(probeId, "stdout_text");
+		const stderrForHash = lookupProbeText(probeId, "stderr_text");
+		const defArtifactPath = def2?.artifact_path ?? null;
+		const artifactManifestHash =
+			defArtifactPath === null ? null : parsedManifest.declared.get(defArtifactPath) ?? null;
 		const { probe: probe, failures } = validateProbeRecord(
 			probeId,
-			record[probeId],
+			lookupProbe(probeId),
 			stagedArtifact,
 			stdoutForHash,
 			stderrForHash,
 			inventoryHostClass,
+			artifactManifestHash,
 		);
 		for (const f of failures) {
+			// CORRECTION19: translate the validator's coarse `wrong-type` /
+			// `wrong-shape` failure kinds into the diagnostic kinds the
+			// downstream consumers expect. Without this mapping the
+			// renderer shows every probe as malformed-type and never as
+			// identity-mismatch / architecture-mismatch / argv-mismatch.
+			let diagnosticKind: NativeProbeDiagnosticKind = "invalid-shape";
+			if (f.field === "artifact_sha256" || f.field === "stdout_sha256" || f.field === "stderr_sha256") {
+				diagnosticKind = "hash-mismatch";
+			} else if (f.field === "execution_head_oid" || f.field === "execution_tree_oid" || f.field === "subject_tree_oid") {
+				diagnosticKind = "identity-mismatch";
+			} else if (f.field === "observed_architecture" || f.field === "architecture_assert") {
+				diagnosticKind = "architecture-mismatch";
+			} else if (f.field === "format_match_source" || f.field === "format_match_pattern_source" || f.field === "format_match_pattern_flags") {
+				diagnosticKind = "predicate-mismatch";
+			} else if (f.field === "argv") {
+				diagnosticKind = "argv-mismatch";
+			} else if (f.field === "host_class") {
+				diagnosticKind = "host-class-mismatch";
+			} else if ((f.kind as string) === "wrong-status") {
+				diagnosticKind = "non-pass";
+			}
 			diagnostics.push({
 				probeId: f.probeId as any,
-				kind: f.kind as any,
+				kind: diagnosticKind,
 				message: f.message,
 			});
-			if ((f.kind as string) === "hash-mismatch" || f.field === "artifact_sha256" || f.field === "stdout_sha256" || f.field === "stderr_sha256") {
-				hashMismatches.push(probeId);
-			}
-			if (f.field === "architecture_assert" || f.field === "observed_architecture" || f.field === "format_match_source") {
-				architectureMismatches.push(probeId);
-			}
-			if (f.field === "execution_head_oid" || f.field === "execution_tree_oid" || f.field === "subject_tree_oid" || f.field === "host_class") {
-				identityMismatches.push(probeId);
-			}
-			if (f.field === "argv") {
-				argvMismatches.push(probeId);
-			}
-			if (f.field === "host_support" || f.field === "host_class") {
-				hostClassMismatches.push(probeId);
-			}
+			if (diagnosticKind === "hash-mismatch") hashMismatches.push(probeId);
+			if (diagnosticKind === "architecture-mismatch") architectureMismatches.push(probeId);
+			if (diagnosticKind === "identity-mismatch") identityMismatches.push(probeId);
+			if (diagnosticKind === "argv-mismatch") argvMismatches.push(probeId);
+			if (diagnosticKind === "host-class-mismatch") hostClassMismatches.push(probeId);
 			complete = false;
 		}
-		probes[probeId] = probe === undefined ? null : probe as NativeProbe;
-		// Identity binding to the bundle.
+		probes[probeId] = probe;
+		// Identity binding to the bundle. CORRECTION19: emit a
+		// structured `identity-mismatch` diagnostic alongside the
+		// array push so the renderer can show *why* the probe failed
+		// the bundle binding check.
 		if (probe !== null) {
 			if (executionHeadOid !== null && probe.execution_head_oid !== executionHeadOid) {
 				identityMismatches.push(probeId);
+				diagnostics.push({
+					probeId,
+					kind: "identity-mismatch",
+				message: `native-probe \`${probeId}\` execution_head_oid disagrees with bundle: recorded=${probe.execution_head_oid} bundle=${executionHeadOid}`,
+				});
 				complete = false;
 			}
 			if (executionTreeOid !== null && probe.execution_tree_oid !== executionTreeOid) {
 				identityMismatches.push(probeId);
+				diagnostics.push({
+					probeId,
+					kind: "identity-mismatch",
+					message: `native-probe \`${probeId}\` execution_tree_oid disagrees with bundle: recorded=${probe.execution_tree_oid} bundle=${executionTreeOid}`,
+				});
 				complete = false;
 			}
 			if (filteredSubjectTreeOid !== null && probe.subject_tree_oid !== filteredSubjectTreeOid) {
 				identityMismatches.push(probeId);
+				diagnostics.push({
+					probeId,
+					kind: "identity-mismatch",
+					message: `native-probe \`${probeId}\` subject_tree_oid disagrees with bundle: recorded=${probe.subject_tree_oid} bundle=${filteredSubjectTreeOid}`,
+				});
 				complete = false;
 			}
 		}
