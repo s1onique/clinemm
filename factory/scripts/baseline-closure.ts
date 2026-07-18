@@ -202,7 +202,10 @@ export interface MachODerivation {
  * probe declares `architecture_assert: "host-class"`.
  */
 export function deriveMachOArchitecture(bytes: Buffer): MachODerivation {
-	if (bytes.length < 4) {
+	// CORRECTION21 review fix: guard against the full 8-byte header. A
+	// four-byte valid magic without the cputype field would otherwise
+	// throw ERR_OUT_OF_RANGE inside `bytes.readUInt32*(4)`.
+	if (bytes.length < 8) {
 		return { arch: null, cputype: null, bitness: null, byteOrder: null };
 	}
 	// Apple defines MH_* as big-endian constants; MH_CIGAM* are the
