@@ -391,6 +391,12 @@ export const NATIVE_PROBE_DEFINITIONS: ReadonlyArray<NativeProbeDefinition> = [
 		success: p3Success,
 	},
 	{
+		// CORRECTION22 (deferred): P4 must boot a real VS Code Extension
+		// Development Host via @vscode/test-electron and assert the Cline
+		// extension activates (commands registerCommand, etc.). The current
+		// argv only checks for canonical API names inside the .d.ts file,
+		// which proves the types are installed but says nothing about the
+		// actual runtime surface.
 		id: "p4_vscode_host",
 		label: "P4 VS Code extension-host API surface (precondition)",
 		host_support: ["darwin-arm64", "linux-x64", "windows-x64"],
@@ -422,6 +428,12 @@ export const NATIVE_PROBE_DEFINITIONS: ReadonlyArray<NativeProbeDefinition> = [
 		success: p4Success,
 	},
 	{
+		// CORRECTION22 (deferred): P5 must execute the compiled standalone
+		// CLI binary for the binding host (e.g. dist-standalone/darwin-arm64/
+		// cline-core) and verify the version / help output. The current argv
+		// invokes `node apps/cli/bin/cline`, which is a Node wrapper, not the
+		// compiled binary — it does not prove the standalone artefact is
+		// production-ready on the binding host.
 		id: "p5_cline_version",
 		label: "P5 cline CLI --version (smoke)",
 		host_support: ["darwin-arm64", "linux-x64", "windows-x64"],
