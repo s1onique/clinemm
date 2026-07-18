@@ -81,6 +81,62 @@ export interface BundledNativeProbe extends NativeProbe {
 	stderr_path: string;
 	metadata_path: string;
 }
+/**
+ * CORRECTION21 (µC-2) pure canonicalization helper. The function takes a
+ * collected `NativeProbe` and returns a `BundledNativeProbe` together
+ * with the two UTF-8 byte buffers the runner must stage on disk. It
+ * is exported separately so the writer contract can be tested without
+ * copying the entire runner into a temporary repository. Hash
+ * consistency is guaranteed: the returned SHA-256 fields are computed
+ * from the exact returned buffers, so a self-attesting caller cannot
+ * lie about contents. The function does not perform filesystem I/O;
+ * the runner is responsible for writing the buffers to the bundle and
+ * assigning the paths from `canonicalStreamPaths(id)`.
+ *
+ * Failure behaviour: a missing or non-string `stdout_text` /
+ * `stderr_text` throws `NATIVE_PROBE_STDOUT_MISSING` or
+ * `NATIVE_PROBE_STDERR_MISSING` respectively. A missing record (the
+ * caller passes `null` or `undefined`) throws
+ * `NATIVE_PROBE_RECORD_MISSING`. The returned `BundledNativeProbe`
+ * is a fresh object the writer can use directly.
+ */
+export function canonicalizeProbeForBundle(
+	id: NativeProbeId,
+	probe: NativeProbe,
+): {
+	record: BundledNativeProbe;
+	stdoutBytes: Buffer;
+	stderrBytes: Buffer;
+} {
+	if (probe === null || probe === undefined) {
+		throw new Error(
+			`NATIVE_PROBE_RECORD_MISSING:${id}: the canonical stream writer requires all five probe records; the input was null or undefined.`,
+		);
+	}
+	if (typeof probe.stdout_text !== "string") {
+		throw new Error(
+			`NATIVE_PROBE_STDOUT_MISSING:${id}: the canonical stream writer requires a string stdout_text on the probe record; the input had type ${typeof probe.stdout_text}.`,
+		);
+	}
+	if (typeof probe.stderr_text !== "string") {
+		throw new Error(
+			`NATIVE_PROBE_STDERR_MISSING:${id}: the canonical stream writer requires a string stderr_text on the probe record; the input had type ${typeof probe.stderr_text}.`,
+		);
+	}
+	const stdoutBytes = Buffer.from(probe.stdout_text, "utf8");
+	const stderrBytes = Buffer.from(probe.stderr_text, "utf8");
+	const paths = canonicalStreamPaths(id);
+	const record: BundledNativeProbe = {
+		...probe,
+		stream_layout_version: NATIVE_PROBE_STREAM_LAYOUT_VERSION,
+		stdout_path: paths.stdout_path,
+		stderr_path: paths.stderr_path,
+		metadata_path: paths.metadata_path,
+		stdout_sha256: createHash("sha256").update(stdoutBytes).digest("hex"),
+		stderr_sha256: createHash("sha256").update(stderrBytes).digest("hex"),
+	};
+	return { record, stdoutBytes, stderrBytes };
+}
 
 export const NATIVE_PROBE_IDS: ReadonlyArray<NativeProbeId> = [
 	"p1_better_sqlite3",
