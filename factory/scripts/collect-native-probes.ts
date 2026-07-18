@@ -37,9 +37,11 @@ import { dirname, join, resolve } from "node:path";
 
 import {
 	hostClassOf,
+	newInvocationId,
 	NATIVE_PROBE_DEFINITIONS,
 	NATIVE_PROBE_IDS,
 	probeDefinitionFor,
+	type NativeProbe,
 	type NativeProbeDefinition,
 	type NativeProbeId,
 	type ProbeSuccessContext,
@@ -47,49 +49,6 @@ import {
 import { computeFilteredSubjectTreeOid } from "./subject-tree";
 
 const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01";
-
-export interface ProbeExecutionRecord {
-	id: NativeProbeId;
-	label: string;
-	host_class: string;
-	artifact_path: string;
-	working_directory: string;
-	argv: string[];
-	format_match: { source: "stdout" | "stderr" | "file"; pattern: string };
-	started_at: string;
-	finished_at: string;
-	duration_ms: number;
-	exit_code: number | null;
-	signal: NodeJS.Signals | null;
-	timeout: boolean;
-	stdout_sha256: string;
-	stderr_sha256: string;
-	stdout_text: string;
-	stderr_text: string;
-	artifact_sha256: string | null;
-	artifact_size: number;
-	artifact_exists: boolean;
-	observed_file_format: string | null;
-	observed_architecture: string | null;
-	execution_head_oid: string;
-	execution_tree_oid: string;
-	subject_tree_oid: string;
-	host_supported: boolean;
-	host_support: ReadonlyArray<string>;
-	status: "pass" | "fail";
-	reason: string;
-}
-
-export interface NativeProbesInventory {
-	schema_version: 1;
-	act_id: typeof ACT_ID;
-	host_class: string;
-	collected_at: string;
-	execution_head_oid: string;
-	execution_tree_oid: string;
-	subject_tree_oid: string;
-	probes: Record<NativeProbeId, ProbeExecutionRecord>;
-}
 
 const OID_PATTERN = /^[0-9a-f]{40}$/;
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -265,7 +224,7 @@ async function executeProbe(
 	hostClass: string,
 	identity: { head: string; tree: string; subject: string | null },
 	timeoutMs: number,
-): Promise<ProbeExecutionRecord> {
+): Promise<NativeProbe> {
 	const startedAt = new Date();
 	const artifact = statArtifact(root, def.artifact_path);
 	const hostSupported = def.host_support.includes(hostClass);
@@ -332,37 +291,56 @@ async function executeProbe(
 		}
 	}
 
-	return {
+	// CORRECTION17: every field is mandatory. The legacy fields
+	// (path, architecture, sha256, file_format) are populated from
+	// the new fields so a single canonical record satisfies both the
+	// legacy renderer and the CORRECTION17 bundle-bound verifier.
+	// The format_match regex is serialized as { source, pattern_source,
+	// pattern_flags } so the record round-trips through JSON without
+	// losing fidelity.
+	const invocationId = newInvocationId();
+	const probeRecord: NativeProbe = {
 		id: def.id,
-		label: def.label,
-		host_class: hostClass,
+		// Legacy fields (P1-P5 CORRECTION15 schema).
+		path: def.artifact_path,
+		architecture: hostClass,
+		sha256: artifact.sha256 ?? "0".repeat(64),
+		file_format: observedFileFormat ?? "(no output captured)",
+		status,
+		reason,
+		// Extended execution-record fields (P1-P5 CORRECTION17 schema).
 		artifact_path: def.artifact_path,
-		working_directory: def.working_directory,
-		argv,
-		format_match: def.format_match,
-		started_at: startedAt.toISOString(),
-		finished_at: finishedAt.toISOString(),
-		duration_ms: finishedAt.getTime() - startedAt.getTime(),
-		exit_code: ctx.exit_code,
-		signal: outcome.signal,
-		timeout: outcome.timedOut,
-		stdout_sha256: sha256(stdoutBuf),
-		stderr_sha256: sha256(stderrBuf),
-		stdout_text: stdoutText,
-		stderr_text: stderrText,
 		artifact_sha256: artifact.sha256,
 		artifact_size: artifact.size,
 		artifact_exists: artifact.exists,
+		argv,
+		exit_code: ctx.exit_code,
+		signal: outcome.signal,
+		timeout: outcome.timedOut,
+		stdout_text: stdoutText,
+		stdout_sha256: sha256(stdoutBuf),
+		stderr_text: stderrText,
+		stderr_sha256: sha256(stderrBuf),
 		observed_file_format: observedFileFormat,
 		observed_architecture: observedArchitecture,
 		execution_head_oid: identity.head,
 		execution_tree_oid: identity.tree,
 		subject_tree_oid: identity.subject ?? "(subject-tree-computation-failed)",
+		host_class: hostClass,
 		host_supported: hostSupported,
 		host_support: def.host_support,
-		status,
-		reason,
+		started_at: startedAt.toISOString(),
+		finished_at: finishedAt.toISOString(),
+		duration_ms: finishedAt.getTime() - startedAt.getTime(),
+		working_directory: def.working_directory,
+		format_match_source: def.format_match.source,
+		format_match_pattern_source: def.format_match.pattern_source,
+		format_match_pattern_flags: def.format_match.pattern_flags,
+		architecture_assert: def.architecture_assert,
+		success_contract_version: def.success_contract_version,
+		invocation_id: invocationId,
 	};
+	return probeRecord;
 }
 
 function existsArtifact(root: string, repoRel: string): boolean {
@@ -382,6 +360,19 @@ function fileFallbackScript(path: string): string {
  * schema inherited from CORRECTION15) so the loader and renderer can
  * look up probes by name without re-walking an array.
  */
+export interface NativeProbesInventory {
+	schema_version: 1;
+	act_id: string;
+	host_class: string;
+	collected_at: string;
+	execution_head_oid: string;
+	execution_tree_oid: string;
+	subject_tree_oid: string;
+	schema_version_native_probe: 1;
+	top_level_inventory: true;
+	probes: Record<NativeProbeId, NativeProbe>;
+}
+
 export async function collectNativeProbesInventory(opts: {
 	root?: string;
 	timeoutMs?: number;
@@ -392,7 +383,11 @@ export async function collectNativeProbesInventory(opts: {
 	const collectedAt = opts.collectedAt ?? new Date().toISOString();
 	const identity = captureIdentity(root);
 	const hostClass = hostClassOf(process.platform, process.arch);
-	const inventory: Record<string, unknown> = {
+	const probes: Record<NativeProbeId, NativeProbe> = {} as Record<NativeProbeId, NativeProbe>;
+	for (const def of NATIVE_PROBE_DEFINITIONS) {
+		probes[def.id] = await executeProbe(def, root, hostClass, identity, timeoutMs);
+	}
+	return {
 		schema_version: 1,
 		act_id: ACT_ID,
 		host_class: hostClass,
@@ -400,11 +395,10 @@ export async function collectNativeProbesInventory(opts: {
 		execution_head_oid: identity.head,
 		execution_tree_oid: identity.tree,
 		subject_tree_oid: identity.subject ?? "(subject-tree-computation-failed)",
+		schema_version_native_probe: 1,
+		top_level_inventory: true,
+		probes,
 	};
-	for (const def of NATIVE_PROBE_DEFINITIONS) {
-		inventory[def.id] = await executeProbe(def, root, hostClass, identity, timeoutMs);
-	}
-	return inventory as unknown as NativeProbesInventory;
 }
 
 /**
@@ -430,8 +424,8 @@ if (import.meta.main) {
 		const inv = await collectNativeProbesInventory();
 		const out = join(repoRoot(), "factory/inventories/native-probes.json");
 		writeInventory(inv, out);
-		const probes = NATIVE_PROBE_IDS.map((id) => inv[id]).filter(
-			(p): p is { status: "pass" | "fail" } => p !== undefined,
+		const probes = NATIVE_PROBE_IDS.map((id) => inv.probes[id]).filter(
+			(p): p is NonNullable<typeof p> => p !== undefined,
 		);
 		const passed = probes.filter((p) => p.status === "pass").length;
 		const failed = probes.filter((p) => p.status !== "pass").length;
