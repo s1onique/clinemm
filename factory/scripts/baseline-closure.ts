@@ -1373,7 +1373,7 @@ function collectDuplicateIds(items: any[]): DuplicatePath[] {
 	return dupes;
 }
 
-// ---------- CORRECTION15/CORRECTION16/CORRECTION17 native-probe inventory loader --------
+// ---------- CORRECTION15/CORRECTION16/CORRECTION17/CORRECTION19 native-probe inventory loader --------
 
 import {
 	compileFormatMatch,
@@ -1415,6 +1415,8 @@ const PROBE_REQUIRED_STRING_FIELDS = [
 	"status",
 	"reason",
 	"artifact_path",
+	"stdout_text",
+	"stderr_text",
 	"observed_file_format",
 	"observed_architecture",
 	"execution_head_oid",
@@ -1467,6 +1469,7 @@ const PROBE_REQUIRED_STRING_FIELD_TYPES: Record<string, string> = {
 const PROBE_REQUIRED_NUMBER_FIELDS = [
 	"artifact_size",
 	"duration_ms",
+	"success_contract_version",
 ] as const;
 
 const PROBE_REQUIRED_NUMBER_FIELD_TYPES: Record<string, string> = {
@@ -1527,7 +1530,13 @@ interface ValidationFailure {
 function validateProbeRecord(
 	probeId: NativeProbeId,
 	raw: unknown,
-	stagedBytes: Buffer | null,
+	// staged bytes of the actual probe artifact, not the inventory
+	// JSON. CORRECTION18: the verifier recomputes artifact_sha256,
+	// stdout_sha256, and stderr_sha256 from the real recorded
+	// captures so a fixture can no longer self-attest hashes.
+	stagedArtifactBytes: Buffer | null,
+	stagedStdout: string | null,
+	stagedStderr: string | null,
 	hostClass: string | null,
 ): { probe: NativeProbe | null; failures: ValidationFailure[] } {
 	const failures: ValidationFailure[] = [];
@@ -1685,10 +1694,10 @@ function validateProbeRecord(
 	// Hash recompute from embedded text. The collector stamps
 	// stdout_sha256 / stderr_sha256 / artifact_sha256; the verifier
 	// independently recomputes each from the embedded payload bytes.
-	if (stagedBytes !== null) {
+	if (stagedArtifactBytes !== null) {
 		const recordedArtifactSha = out.artifact_sha256 as string | null;
 		if (recordedArtifactSha !== null) {
-			const observedArtifactSha = createHash("sha256").update(stagedBytes).digest("hex");
+			const observedArtifactSha = createHash("sha256").update(stagedArtifactBytes).digest("hex");
 			if (observedArtifactSha !== recordedArtifactSha) {
 				failures.push({
 					probeId,
@@ -1699,7 +1708,7 @@ function validateProbeRecord(
 			}
 		}
 	}
-	const stdoutText = typeof out.stdout_text === "string" ? out.stdout_text : "";
+	const stdoutText = stagedStdout ?? "";
 	const recordedStdoutSha = out.stdout_sha256 as string | null;
 	if (recordedStdoutSha !== null) {
 		const observedStdoutSha = createHash("sha256").update(Buffer.from(stdoutText, "utf8")).digest("hex");
@@ -1712,7 +1721,7 @@ function validateProbeRecord(
 			});
 		}
 	}
-	const stderrText = typeof out.stderr_text === "string" ? out.stderr_text : "";
+	const stderrText = stagedStderr ?? "";
 	const recordedStderrSha = out.stderr_sha256 as string | null;
 	if (recordedStderrSha !== null) {
 		const observedStderrSha = createHash("sha256").update(Buffer.from(stderrText, "utf8")).digest("hex");
@@ -1788,6 +1797,22 @@ function validateProbeRecord(
 			pattern_source: out.format_match_pattern_source as string,
 			pattern_flags: out.format_match_pattern_flags as string,
 		};
+		if (recordedSpec.pattern_source !== def.format_match.pattern_source) {
+			failures.push({
+				probeId,
+				field: "format_match_pattern_source",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` field \`format_match_pattern_source\` does not match the catalogue declaration: recorded=\"${recordedSpec.pattern_source}\" declared=\"${def.format_match.pattern_source}\"`,
+			});
+		}
+		if (recordedSpec.pattern_flags !== def.format_match.pattern_flags) {
+			failures.push({
+				probeId,
+				field: "format_match_pattern_flags",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` field \`format_match_pattern_flags\` does not match the catalogue declaration: recorded=\"${recordedSpec.pattern_flags}\" declared=\"${def.format_match.pattern_flags}\"`,
+			});
+		}
 		if (recordedSpec.source !== def.format_match.source) {
 			failures.push({
 				probeId,
@@ -1820,6 +1845,75 @@ function validateProbeRecord(
 		}
 	}
 
+	// Architecture enforcement: when the catalogue declares
+	// architecture_assert == "host-class", the recorded
+	// observed_architecture must equal the host_class.
+	if (stagedArtifactBytes === null && out.artifact_exists === true) {
+		failures.push({
+			probeId,
+			field: "artifact_exists",
+			kind: "wrong-shape",
+			message: `native-probe \`${probeId}\` declares artifact_exists=true but the staged artifact is missing; the validator cannot recompute the artifact hash from real bytes`,
+		});
+	} else if (stagedArtifactBytes !== null && out.artifact_exists === false) {
+		failures.push({
+			probeId,
+			field: "artifact_exists",
+			kind: "wrong-shape",
+			message: `native-probe \`${probeId}\` declares artifact_exists=false but the staged artifact is present; the recorded hash must match the bytes`,
+		});
+	}
+	if (stagedArtifactBytes !== null && out.artifact_size !== undefined && stagedArtifactBytes.length !== out.artifact_size) {
+		failures.push({
+			probeId,
+			field: "artifact_size",
+			kind: "wrong-shape",
+			message: `native-probe \`${probeId}\` artifact_size (\`${out.artifact_size}\`) does not match staged bytes length (${stagedArtifactBytes.length})`,
+		});
+	}
+	if (def) {
+		// CORRECTION19: derive status and reason from the catalogue's
+		// success predicate. The recorded status must match.
+		const probeContext = {
+			argv: Array.isArray(out.argv) ? out.argv.filter((x) => typeof x === "string") as string[] : [],
+			exit_code: typeof out.exit_code === "number" ? out.exit_code : null,
+			signal: typeof out.signal === "string" ? (out.signal as NodeJS.Signals) : null,
+			timeout: out.timeout === true,
+			stdout: typeof out.stdout_text === "string" ? out.stdout_text : "",
+			stderr: typeof out.stderr_text === "string" ? out.stderr_text : "",
+			artifactExists: out.artifact_exists === true,
+			artifactSize: typeof out.artifact_size === "number" ? out.artifact_size : 0,
+			artifactSha256: typeof out.artifact_sha256 === "string" ? out.artifact_sha256 : null,
+		};
+		const derivedReason = probeContext.timeout ? "probe timed out" : def.success(probeContext);
+		const derivedStatus = derivedReason === null ? "pass" : "fail";
+		if (out.status !== derivedStatus) {
+			failures.push({
+				probeId,
+				field: "status",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` recorded status=${out.status} does not match derived status=${derivedStatus} from the catalogue success predicate`,
+			});
+		}
+	}
+if (out.architecture_assert === "host-class" && hostClass !== null) {
+		const observed = out.observed_architecture;
+		if (observed === null) {
+			failures.push({
+				probeId,
+				field: "observed_architecture",
+				kind: "wrong-type",
+				message: `native-probe \`${probeId}\` declared architecture_assert=\"host-class\" but recorded_observed_architecture is null`,
+			});
+		} else if (observed !== hostClass) {
+			failures.push({
+				probeId,
+				field: "observed_architecture",
+				kind: "wrong-type",
+				message: `native-probe \`${probeId}\` observed_architecture does not match host_class: recorded=\"${observed}\" bundle=\"${hostClass}\"`,
+			});
+		}
+	}
 	// Architecture / identity / host-class binding (only when the
 	// host_class is supplied, which it always is for production runs).
 	if (hostClass !== null) {
@@ -1940,7 +2034,24 @@ export function loadNativeProbesInventory(inventoryPath: string): NativeProbesVi
 	let complete = true;
 	const stagedBytes = readFileSync(inventoryPath);
 	for (const probeId of NATIVE_PROBE_IDS) {
-		const { probe, failures } = validateProbeRecord(probeId, record[probeId], stagedBytes, null);
+		let trackedArtifact: Buffer | null = null;
+		try {
+			const def3 = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
+			if (def3) {
+				const af = join(inventoryPath, "..", ...def3.artifact_path.split("/"));
+				if (existsSync(af)) trackedArtifact = readFileSync(af);
+			}
+		} catch (_) { /* leave trackedArtifact = null */ }
+		const trackedStdout = "";
+		const trackedStderr = "";
+		const { probe: probe, failures } = validateProbeRecord(
+			probeId,
+			record[probeId],
+			trackedArtifact,
+			trackedStdout,
+			trackedStderr,
+			null,
+		);
 		for (const f of failures) {
 			diagnostics.push({
 				probeId: f.probeId as any,
@@ -1949,7 +2060,7 @@ export function loadNativeProbesInventory(inventoryPath: string): NativeProbesVi
 			});
 			complete = false;
 		}
-		probes[probeId] = probe;
+		probes[probeId] = probe === undefined ? null : probe as NativeProbe;
 	}
 	return {
 		complete,
@@ -2115,7 +2226,27 @@ export function loadNativeProbesFromEvidence(
 	let complete = inventoryHostClass !== null
 		&& declaredHash !== null && declaredHash === observedHash;
 	for (const probeId of NATIVE_PROBE_IDS) {
-		const { probe, failures } = validateProbeRecord(probeId, record[probeId], stagedBytes, inventoryHostClass);
+		// CORRECTION18: pass the actual probe artifact bytes (or
+		// empty bytes for the no-artifact case) and the recorded
+		// stdout/stderr text, not the inventory JSON.
+		const def2 = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
+		let stagedArtifact: Buffer | null = null;
+		try {
+			if (def2) {
+				const af = join(evDirAbs, ...def2.artifact_path.split("/"));
+				if (existsSync(af)) stagedArtifact = readFileSync(af);
+			}
+		} catch (_) { /* leave stagedArtifact = null */ }
+		const stdoutForHash = typeof (record[probeId] as any)?.stdout_text === "string" ? (record[probeId] as any).stdout_text : "";
+		const stderrForHash = typeof (record[probeId] as any)?.stderr_text === "string" ? (record[probeId] as any).stderr_text : "";
+		const { probe: probe, failures } = validateProbeRecord(
+			probeId,
+			record[probeId],
+			stagedArtifact,
+			stdoutForHash,
+			stderrForHash,
+			inventoryHostClass,
+		);
 		for (const f of failures) {
 			diagnostics.push({
 				probeId: f.probeId as any,
@@ -2139,7 +2270,7 @@ export function loadNativeProbesFromEvidence(
 			}
 			complete = false;
 		}
-		probes[probeId] = probe;
+		probes[probeId] = probe === undefined ? null : probe as NativeProbe;
 		// Identity binding to the bundle.
 		if (probe !== null) {
 			if (executionHeadOid !== null && probe.execution_head_oid !== executionHeadOid) {
