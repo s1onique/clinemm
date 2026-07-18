@@ -202,23 +202,30 @@ export interface MachODerivation {
  * probe declares `architecture_assert: "host-class"`.
  */
 export function deriveMachOArchitecture(bytes: Buffer): MachODerivation {
-	if (bytes.length < 8) {
+	if (bytes.length < 4) {
 		return { arch: null, cputype: null, bitness: null, byteOrder: null };
 	}
+	// Apple defines MH_* as big-endian constants; MH_CIGAM* are the
+	// byte-swapped counterparts used on little-endian hosts. Reading the
+	// first four bytes as big-endian gives the natural magic for a
+	// big-endian file and the byte-swapped (CIGAM) magic for a
+	// little-endian file. The previous implementation cross-compared
+	// `magicLe === MACHO_MAGIC_LE_64`, which can never match because a
+	// little-endian file's little-endian read returns the natural magic
+	// (0xfeedfacf), not the swapped magic (0xcffaedfe).
 	const magicBe = bytes.readUInt32BE(0);
-	const magicLe = bytes.readUInt32LE(0);
 	let bitness: 32 | 64 | null = null;
 	let byteOrder: "be" | "le" | null = null;
 	if (magicBe === MACHO_MAGIC_BE_32) {
 		bitness = 32;
 		byteOrder = "be";
-	} else if (magicLe === MACHO_MAGIC_LE_32) {
+	} else if (magicBe === MACHO_MAGIC_LE_32) {
 		bitness = 32;
 		byteOrder = "le";
 	} else if (magicBe === MACHO_MAGIC_BE_64) {
 		bitness = 64;
 		byteOrder = "be";
-	} else if (magicLe === MACHO_MAGIC_LE_64) {
+	} else if (magicBe === MACHO_MAGIC_LE_64) {
 		bitness = 64;
 		byteOrder = "le";
 	} else {
