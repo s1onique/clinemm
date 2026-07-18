@@ -30,6 +30,8 @@ import {
 	isEvidenceOk,
 	parseManifest,
 	loadEvidenceFile,
+	loadNativeProbesInventory,
+	loadNativeProbesFromEvidence,
 	resolveEvidencePayloadPath,
 	CONTROL_FILES,
 	type ClosureInput,
@@ -1142,5 +1144,306 @@ describe("verdict ↔ conjunction invariants", () => {
 				mandatoryPass: 18,
 			}).verdict,
 		).toBe("FAIL");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// CORRECTION16 — native-probe inventory loaders (legacy + bundle-bound)
+// ---------------------------------------------------------------------------
+
+describe("loadNativeProbesInventory (CORRECTION15 legacy shape, fail-closed)", () => {
+	let tmpDir: string;
+	beforeAll(() => {
+		tmpDir = mkdtempSync(join(tmpdir(), "factory-probes-c15-"));
+	});
+	afterAll(() => {
+		rmSync(tmpDir, { recursive: true, force: true });
+	});
+
+	function writeLegacyInventory(status: string, sha: string) {
+		const path = join(tmpDir, `inv-${status}-${sha.slice(0, 6)}.json`);
+		const probe = (id: string, fileFormat: string) => ({
+			id,
+			path: `node_modules/${id}`,
+			architecture: "darwin-arm64",
+			sha256: sha,
+			file_format: fileFormat,
+			status,
+			reason: status === "pass" ? "ok" : `not pass: ${status}`,
+		});
+		const payload = {
+			schema_version: 1,
+			act_id: "ACT-CLINEMM-FORK-BASELINE01",
+			host_class: "darwin-arm64",
+			collected_at: "2026-07-17T09:00:00.000Z",
+			p1_better_sqlite3: probe("p1_better_sqlite3", "Mach-O 64-bit arm64 bundle"),
+			p2_protobuf: probe("p2_protobuf", "JavaScript ES module"),
+			p3_ripgrep_darwin_arm64: probe("p3_ripgrep_darwin_arm64", "Mach-O 64-bit arm64 executable"),
+			p4_vscode_host: probe("p4_vscode_host", "TypeScript declaration"),
+			p5_cline_version: probe("p5_cline_version", "JSON manifest"),
+		};
+		writeFileSync(path, JSON.stringify(payload, null, "\t") + "\n");
+		return path;
+	}
+
+	it("missing inventory → complete=false, all probes have missing-inventory diagnostic", () => {
+		const view = loadNativeProbesInventory(join(tmpDir, "does-not-exist.json"));
+		expect(view.complete).toBe(false);
+		expect(view.source).toBe("tracked");
+		expect(view.diagnostics.length).toBe(5);
+		expect(view.diagnostics.every((d) => d.kind === "missing-inventory")).toBe(true);
+	});
+
+	it("status=pass → complete=true", () => {
+		const path = writeLegacyInventory("pass", "a".repeat(64));
+		const view = loadNativeProbesInventory(path);
+		expect(view.complete).toBe(true);
+		expect(view.source).toBe("tracked");
+		expect(view.probes.p1_better_sqlite3?.status).toBe("pass");
+	});
+
+	it("status=deferred → complete=false with deferred diagnostic", () => {
+		const path = writeLegacyInventory("deferred", "a".repeat(64));
+		const view = loadNativeProbesInventory(path);
+		expect(view.complete).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "deferred")).toBe(true);
+	});
+
+	it("status=fail → complete=false with non-pass diagnostic", () => {
+		const path = writeLegacyInventory("fail", "a".repeat(64));
+		const view = loadNativeProbesInventory(path);
+		expect(view.complete).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "non-pass")).toBe(true);
+	});
+
+	it("invalid sha256 → complete=false with invalid-shape diagnostic", () => {
+		const path = writeLegacyInventory("pass", "not-a-sha");
+		const view = loadNativeProbesInventory(path);
+		expect(view.complete).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "invalid-shape")).toBe(true);
+	});
+
+	it("malformed JSON → complete=false with malformed-json diagnostic", () => {
+		const path = join(tmpDir, "bad.json");
+		writeFileSync(path, "this is not json");
+		const view = loadNativeProbesInventory(path);
+		expect(view.complete).toBe(false);
+		expect(view.diagnostics.every((d) => d.kind === "malformed-json")).toBe(true);
+	});
+});
+
+describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound verifier)", () => {
+	let bundleRoot: string;
+	let bundleDir: string;
+	let inventoryPath: string;
+	const EXEC_HEAD = "0123456789abcdef0123456789abcdef01234567";
+	const EXEC_TREE = "89abcdef0123456789abcdef0123456789abcdef";
+	const EXEC_SUBJECT = "1234abcd1234abcd1234abcd1234abcd1234abcd";
+	const HOST = "darwin-arm64";
+
+	function buildGoodInventory() {
+		return {
+			schema_version: 1,
+			act_id: "ACT-CLINEMM-FORK-BASELINE01",
+			host_class: HOST,
+			collected_at: "2026-07-17T09:00:00.000Z",
+			execution_head_oid: EXEC_HEAD,
+			execution_tree_oid: EXEC_TREE,
+			subject_tree_oid: EXEC_SUBJECT,
+			p1_better_sqlite3: probeRecord("p1_better_sqlite3", ["file", "/tmp/a.node"], "Mach-O 64-bit arm64 bundle"),
+			p2_protobuf: probeRecord("p2_protobuf", ["node", "-e", "require('protobufjs')"], "JavaScript ES module"),
+			p3_ripgrep_darwin_arm64: probeRecord("p3_ripgrep_darwin_arm64", ["rg", "--version"], "Mach-O 64-bit arm64 executable"),
+			p4_vscode_host: probeRecord("p4_vscode_host", ["node", "-e", "VSCODE_HOST_OK"], "TypeScript declaration"),
+			p5_cline_version: probeRecord("p5_cline_version", ["node", "apps/cli/bin/cline", "--version"], "JSON manifest"),
+		};
+	}
+
+	function probeRecord(id: string, argv: string[], fileFormat: string) {
+		const sha = "a".repeat(64);
+		return {
+			id,
+			path: `node_modules/${id}`,
+			architecture: HOST,
+			sha256: sha,
+			file_format: fileFormat,
+			status: "pass",
+			reason: "ok",
+			argv,
+			exit_code: 0,
+			signal: null,
+			timeout: false,
+			stdout_sha256: "b".repeat(64),
+			stderr_sha256: "c".repeat(64),
+			artifact_path: `node_modules/${id}`,
+			artifact_sha256: sha,
+			artifact_size: 1024,
+			artifact_exists: true,
+			observed_file_format: fileFormat,
+			observed_architecture: HOST,
+			execution_head_oid: EXEC_HEAD,
+			execution_tree_oid: EXEC_TREE,
+			subject_tree_oid: EXEC_SUBJECT,
+			host_class: HOST,
+			started_at: "2026-07-17T09:00:00.000Z",
+			finished_at: "2026-07-17T09:00:00.250Z",
+			duration_ms: 250,
+			host_supported: true,
+		};
+	}
+
+	beforeAll(() => {
+		bundleRoot = mkdtempSync(join(tmpdir(), "factory-probes-c16-"));
+		bundleDir = join(bundleRoot, ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01");
+		mkdirSync(bundleDir, { recursive: true });
+		inventoryPath = join(bundleDir, "native-probes.json");
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		// Write the manifest entry for `native-probes.json` matching the
+		// staged bytes.
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		const otherFiles = ["evidence.json", "verification-results.json"];
+		const otherLines = otherFiles
+			.map((rel) => `${"0".repeat(64)}  ${rel}`)
+			.join("\n");
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${otherLines}\n`,
+		);
+	});
+
+	afterAll(() => {
+		rmSync(bundleRoot, { recursive: true, force: true });
+	});
+
+	it("happy path: complete=true and source=bundle", () => {
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.source).toBe("bundle");
+		expect(view.complete).toBe(true);
+		expect(view.declaredHash).toBe(sha256Hex(readFileSync(inventoryPath)));
+		expect(view.observedHash).toBe(view.declaredHash);
+		expect(view.hashMismatches).toEqual([]);
+		expect(view.identityMismatches).toEqual([]);
+		expect(view.architectureMismatches).toEqual([]);
+		expect(view.hostClassMismatches).toEqual([]);
+		expect(view.argvMismatches).toEqual([]);
+	});
+
+	it("tampered staged copy → complete=false with hash-mismatch diagnostic", () => {
+		const original = readFileSync(inventoryPath);
+		writeFileSync(inventoryPath, `${original}\nTAMPERED`);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.complete).toBe(false);
+		expect(view.hashMismatches.length).toBe(5);
+		expect(view.diagnostics.every((d) => d.kind === "hash-mismatch")).toBe(true);
+		writeFileSync(inventoryPath, original); // restore
+	});
+
+	it("identity mismatch (HEAD drift) → complete=false with identity-mismatch", () => {
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: "f".repeat(40),
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.complete).toBe(false);
+		expect(view.identityMismatches.length).toBe(5);
+		expect(view.diagnostics.some((d) => d.kind === "identity-mismatch")).toBe(true);
+	});
+
+	it("architecture mismatch (probe observed wrong arch) → complete=false with architecture-mismatch", () => {
+		const inv = buildGoodInventory();
+		inv.p1_better_sqlite3.observed_architecture = "linux-x64";
+		const tamperedPath = join(bundleDir, "native-probes.json");
+		writeFileSync(tamperedPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(tamperedPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.complete).toBe(false);
+		expect(view.architectureMismatches).toContain("p1_better_sqlite3");
+		expect(view.diagnostics.some((d) => d.kind === "architecture-mismatch")).toBe(true);
+	});
+
+	it("missing manifest entry → complete=false with missing-inventory diagnostic", () => {
+		// Wipe the manifest and re-test.
+		writeFileSync(join(bundleDir, "hashes.sha256"), "");
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.complete).toBe(false);
+		expect(view.declaredHash).toBeNull();
+		expect(view.diagnostics.every((d) => d.kind === "missing-inventory")).toBe(true);
+		// Restore the manifest for the rest of the suite.
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+	});
+
+	it("missing bundle inventory file → complete=false, source=missing", () => {
+		const original = readFileSync(inventoryPath);
+		rmSync(inventoryPath);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.source).toBe("missing");
+		expect(view.complete).toBe(false);
+		expect(view.diagnostics.every((d) => d.kind === "missing-inventory")).toBe(true);
+		writeFileSync(inventoryPath, original);
+	});
+
+	it("empty argv → complete=false with argv-mismatch", () => {
+		const inv = buildGoodInventory();
+		inv.p1_better_sqlite3.argv = [];
+		const tamperedPath = join(bundleDir, "native-probes.json");
+		writeFileSync(tamperedPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(tamperedPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.complete).toBe(false);
+		expect(view.argvMismatches).toContain("p1_better_sqlite3");
+		expect(view.diagnostics.some((d) => d.kind === "argv-mismatch")).toBe(true);
 	});
 });

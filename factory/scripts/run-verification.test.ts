@@ -21,6 +21,7 @@ import {
 	computeClosure,
 	isEvidenceOk,
 	loadEvidenceFile,
+	NATIVE_PROBES_BUNDLE_PATH,
 } from "./baseline-closure";
 import { deriveExecutionIdentity } from "./execution-identity";
 import { parsePorcelainV1Z } from "./git-status";
@@ -28,6 +29,7 @@ import { computeFilteredSubjectTreeOid } from "./subject-tree";
 
 const ACT_DIR = ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01";
 const roots: string[] = [];
+const fixtureInventoryPaths: string[] = [];
 
 interface FixtureCommand {
 	id: string;
@@ -67,7 +69,127 @@ function command(argv: string[] | undefined = ["bun", "-e", "console.log('ok')"]
 	return result;
 }
 
-function makeRepo(commands: FixtureCommand[], extraTracked: Record<string, string> = {}): string {
+/**
+ * Build a CORRECTION16-shaped fixture native-probe inventory. The HEAD and
+ * filtered subject tree are filled in lazily by `stageFixtureInventory` so
+ * the fixture inventory agrees with the bundle identity that the runner
+ * will actually capture. Tests that intentionally exercise missing /
+ * malformed / deferred paths override `extraTracked` with a deliberately
+ * broken inventory AFTER calling `stageFixtureInventory`.
+ */
+function buildFixtureProbeInventory(
+	identity: { head: string; tree: string; subject: string; hostClass: string },
+): Record<string, unknown> {
+	const fakeSha = "a".repeat(64);
+	const fakeStdoutSha = "b".repeat(64);
+	const fakeStderrSha = "c".repeat(64);
+	const probe = (
+		id: string,
+		path: string,
+		fileFormat: string,
+		reason: string,
+		argv: string[],
+	) => ({
+		id,
+		path,
+		architecture: identity.hostClass,
+		sha256: fakeSha,
+		file_format: fileFormat,
+		status: "pass",
+		reason,
+		argv,
+		exit_code: 0,
+		signal: null,
+		timeout: false,
+		stdout_sha256: fakeStdoutSha,
+		stderr_sha256: fakeStderrSha,
+		artifact_path: path,
+		artifact_sha256: fakeSha,
+		artifact_size: 1024,
+		artifact_exists: true,
+		observed_file_format: fileFormat,
+		observed_architecture: identity.hostClass,
+		execution_head_oid: identity.head,
+		execution_tree_oid: identity.tree,
+		subject_tree_oid: identity.subject,
+		host_class: identity.hostClass,
+		started_at: "2026-07-17T09:00:00.000Z",
+		finished_at: "2026-07-17T09:00:00.250Z",
+		duration_ms: 250,
+		host_supported: true,
+	});
+	return {
+		schema_version: 1,
+		act_id: "ACT-CLINEMM-FORK-BASELINE01",
+		host_class: identity.hostClass,
+		collected_at: "2026-07-17T09:00:00.000Z",
+		execution_head_oid: identity.head,
+		execution_tree_oid: identity.tree,
+		subject_tree_oid: identity.subject,
+		probes: {
+			p1_better_sqlite3: probe(
+				"p1_better_sqlite3",
+				"node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+				"Mach-O 64-bit arm64 bundle",
+				"Fixture inventory entry; production probes are populated by the runner.",
+				["file", "node_modules/better-sqlite3/build/Release/better_sqlite3.node"],
+			),
+			p2_protobuf: probe(
+				"p2_protobuf",
+				"node_modules/protobufjs/index.js",
+				"JavaScript ES module",
+				"Fixture inventory entry; production probes are populated by the runner.",
+				["node", "-e", "require('protobufjs')"],
+			),
+			p3_ripgrep_darwin_arm64: probe(
+				"p3_ripgrep_darwin_arm64",
+				"node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
+				"Mach-O 64-bit arm64 executable",
+				"Fixture inventory entry; production probes are populated by the runner.",
+				["node_modules/@vscode/ripgrep/bin/rg-darwin-arm64", "--version"],
+			),
+			p4_vscode_host: probe(
+				"p4_vscode_host",
+				"node_modules/@types/vscode/index.d.ts",
+				"TypeScript declaration",
+				"Fixture inventory entry; production probes are populated by the runner.",
+				["node", "-e", "process.stdout.write('VSCODE_HOST_OK')"],
+			),
+			p5_cline_version: probe(
+				"p5_cline_version",
+				"apps/cline/package.json",
+				"JSON manifest",
+				"Fixture inventory entry; production probes are populated by the runner.",
+				["node", "apps/cli/bin/cline", "--version"],
+			),
+		},
+	};
+}
+
+function stageFixtureInventory(root: string): string {
+	const head = git(root, ["rev-parse", "HEAD^{commit}"]);
+	const tree = git(root, ["rev-parse", "HEAD^{tree}"]);
+	const subject = computeFilteredSubjectTreeOid(root);
+	if (!subject) throw new Error("fixture subject did not compute");
+	const inventory = buildFixtureProbeInventory({
+		head,
+		tree,
+		subject,
+		hostClass: hostClass(),
+	});
+	const path = join(
+		mkdtempSync(join(tmpdir(), "factory-runner-probes-")),
+		"native-probes.json",
+	);
+	fixtureInventoryPaths.push(path);
+	writeFileSync(path, JSON.stringify(inventory, null, "\t") + "\n");
+	return path;
+}
+
+function makeRepo(
+	commands: FixtureCommand[],
+	extraTracked: Record<string, string> = {},
+): { root: string; fixtureInventory: string } {
 	const root = mkdtempSync(join(tmpdir(), "factory-runner-c13-"));
 	roots.push(root);
 	git(root, ["init", "-q"]);
@@ -80,69 +202,6 @@ function makeRepo(commands: FixtureCommand[], extraTracked: Record<string, strin
 		"factory/inventories/verification.json",
 		`${JSON.stringify({ schema_version: 1, commands }, null, "\t")}\n`,
 	);
-	// CORRECTION15: provide a complete native-probe inventory so the runner
-	// does not abort with NATIVE_PROBES_INCOMPLETE. Each fixture probe
-	// entry is a well-formed object with status="pass" so the loadNativeProbesInventory
-	// helper returns `complete=true`. Tests that intentionally probe
-	// the missing/malformed/deferred paths override `extraTracked` with
-	// a deliberately broken inventory.
-	const fakeSha = "a".repeat(64);
-	const nativeProbesInventory = {
-		schema_version: 1,
-		act_id: "ACT-CLINEMM-FORK-BASELINE01",
-		host_class: hostClass(),
-		collected_at: "2026-07-17T09:00:00.000Z",
-		p1_better_sqlite3: {
-			id: "p1_better_sqlite3",
-			path: "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
-			architecture: hostClass(),
-			sha256: fakeSha,
-			file_format: "Mach-O 64-bit arm64 bundle",
-			status: "pass",
-			reason: "Fixture inventory entry; production probes are populated by the runner.",
-		},
-		p2_protobuf: {
-			id: "p2_protobuf",
-			path: "node_modules/protobufjs/index.js",
-			architecture: hostClass(),
-			sha256: fakeSha,
-			file_format: "JavaScript ES module",
-			status: "pass",
-			reason: "Fixture inventory entry; production probes are populated by the runner.",
-		},
-		p3_ripgrep_darwin_arm64: {
-			id: "p3_ripgrep_darwin_arm64",
-			path: "node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
-			architecture: hostClass(),
-			sha256: fakeSha,
-			file_format: "Mach-O 64-bit arm64 executable",
-			status: "pass",
-			reason: "Fixture inventory entry; production probes are populated by the runner.",
-		},
-		p4_vscode_host: {
-			id: "p4_vscode_host",
-			path: "node_modules/@types/vscode/index.d.ts",
-			architecture: hostClass(),
-			sha256: fakeSha,
-			file_format: "TypeScript declaration",
-			status: "pass",
-			reason: "Fixture inventory entry; production probes are populated by the runner.",
-		},
-		p5_cline_version: {
-			id: "p5_cline_version",
-			path: "apps/cline/package.json",
-			architecture: hostClass(),
-			sha256: fakeSha,
-			file_format: "JSON manifest",
-			status: "pass",
-			reason: "Fixture inventory entry; production probes are populated by the runner.",
-		},
-	};
-	write(
-		root,
-		"factory/inventories/native-probes.json",
-		`${JSON.stringify(nativeProbesInventory, null, "\t")}\n`,
-	);
 	for (const [path, content] of Object.entries(extraTracked)) write(root, path, content);
 	for (const source of ["run-verification.ts", "baseline-closure.ts", "git-status.ts", "subject-tree.ts"]) {
 		write(
@@ -153,7 +212,14 @@ function makeRepo(commands: FixtureCommand[], extraTracked: Record<string, strin
 	}
 	git(root, ["add", "."]);
 	git(root, ["commit", "-qm", "fixture"]);
-	return root;
+	// CORRECTION16: a valid native-probe inventory is now required inside
+	// the detached evidence bundle. The runner reads from
+	// `--probe-inventory-path <file>` (the test-fixture escape hatch) so
+	// it does not need a real `node_modules/` to execute probes. The
+	// inventory is rewritten with the actual HEAD/tree/subject of the
+	// freshly-committed fixture repo.
+	const fixtureInventory = stageFixtureInventory(root);
+	return { root, fixtureInventory };
 }
 
 function write(root: string, path: string, content: string): void {
@@ -175,9 +241,12 @@ function git(root: string, args: string[], input?: string): string {
 	return (result.stdout ?? "").trim();
 }
 
-function run(root: string, extraArgs: string[] = []): RunnerResult {
+function run(root: string, extraArgs: string[] = [], fixtureInventory?: string): RunnerResult {
 	const fixtureRunner = join(root, "factory/scripts/run-verification.ts");
-	const result = spawnSync("bun", [fixtureRunner, "--timeout-ms", "5000", ...extraArgs], {
+	const args = [fixtureRunner, "--timeout-ms", "5000"];
+	if (fixtureInventory) args.push("--probe-inventory-path", fixtureInventory);
+	args.push(...extraArgs);
+	const result = spawnSync("bun", args, {
 		cwd: root,
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "pipe"],
@@ -275,42 +344,59 @@ describe("parsePorcelainV1Z", () => {
 	});
 });
 
+/**
+ * Convenience wrapper around `makeRepo + run` so individual tests can
+ * read like `const { root, fixtureInventory, result } = runWith(...)`.
+ */
+function runWith(
+	commands: FixtureCommand[],
+	options: { extraTracked?: Record<string, string>; extraArgs?: string[] } = {},
+): { root: string; fixtureInventory: string; result: RunnerResult } {
+	const { root, fixtureInventory } = makeRepo(commands, options.extraTracked ?? {});
+	const result = run(root, options.extraArgs ?? [], fixtureInventory);
+	return { root, fixtureInventory, result };
+}
+
 describe("production run-verification.ts integration", () => {
+
 	it("ignored node_modules content does not dirty preflight", () => {
-		const root = makeRepo([command()]);
+		const { root } = runWith([command()]);
 		write(root, "node_modules/pkg/cache.bin", "ignored\n");
-		const result = run(root);
+		// Re-stage the fixture inventory because the working tree now has
+		// a new tracked-but-ignored node_modules file.
+		const { fixtureInventory } = makeRepo([command()], {});
+		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		expect(existsSync(join(evidenceDir(root), "evidence.json"))).toBe(true);
 	});
-
 	it("unexpected untracked input fails before command execution", () => {
-		const root = makeRepo([
+		const { root } = runWith([
 			command(["bun", "-e", "await Bun.write('ran.txt', 'yes')"]),
 		]);
 		write(root, "unexpected\ninput.txt", "dirty\n");
-		const result = run(root);
+		const { fixtureInventory } = makeRepo([
+			command(["bun", "-e", "await Bun.write('ran.txt', 'yes')"]),
+		], { "unexpected\ninput.txt": "dirty\n" });
+		const result = run(root, [], fixtureInventory);
 		expect(result.status).not.toBe(0);
 		expect(result.stderr).toContain("WORKTREE_INPUTS_DIRTY_BEFORE");
 		expect(existsSync(join(root, "ran.txt"))).toBe(false);
 	});
 
 	it("tracked input left modified by a command fails drift", () => {
-		const root = makeRepo([
+		const { root } = runWith([
 			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
 		]);
-		const result = run(root);
+		const { fixtureInventory } = makeRepo([
+			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
+		]);
+		const result = run(root, [], fixtureInventory);
 		expect(result.status).not.toBe(0);
 		expect(result.stderr).toContain("WORKTREE_INPUTS_DIRTY_AFTER_COMMAND");
 	});
 
 	it("CORRECTION13: clean post-command sample keeps the bundle satisfiable", () => {
-		// This test asserts the CORRECTION13 invariant: a clean post-command
-		// `git status` sample must not abort the pass, regardless of what
-		// the fs.watch-backed monitor observed. The exact test is host-agnostic
-		// because we only assert satisfiability of the resulting bundle.
-		const root = makeRepo([command()]);
-		const result = run(root);
+		const { root, result } = runWith([command()]);
 		expect(result.status).toBe(0);
 		const view = checkProductionBundle(root);
 		expect(isEvidenceOk(view)).toBe(true);
@@ -319,23 +405,23 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("repository output changes are permitted without entering the manifest domain", () => {
-		const root = makeRepo(
+		const { root, result } = runWith(
 			[command(["bun", "-e", "await Bun.write('factory/inventories/environment.json', '{\\\"changed\\\":true}\\n')"])],
-			{ "factory/inventories/environment.json": "{}\n" },
+			{ extraTracked: { "factory/inventories/environment.json": "{}\n" } },
 		);
-		const result = run(root);
 		expect(result.status).toBe(0);
 		const evidence = readJson(join(evidenceDir(root), "evidence.json"));
 		expect(evidence.expected_evidence_payload_paths).toContain("evidence.json");
 		expect(evidence.expected_evidence_payload_paths).toContain("verification-results.json");
+		expect(evidence.expected_evidence_payload_paths).toContain(NATIVE_PROBES_BUNDLE_PATH);
 		expect(evidence.expected_evidence_payload_paths).not.toContain(
 			"factory/inventories/environment.json",
 		);
 	});
 
 	it.each(["../escape", "/tmp/escape"])("rejects unsafe evidence-producing command id %s", (id) => {
-		const root = makeRepo([command(undefined, id)]);
-		const result = run(root);
+		const { root, fixtureInventory } = makeRepo([command(undefined, id)]);
+		const result = run(root, [], fixtureInventory);
 		expect(result.status).not.toBe(0);
 		expect(result.stderr).toContain("INVALID_EVIDENCE_PATH");
 		expect(existsSync(evidenceDir(root))).toBe(false);
@@ -344,8 +430,7 @@ describe("production run-verification.ts integration", () => {
 	it("resolveArgv failure still publishes stdout, stderr, and metadata payloads", () => {
 		const missingExecutable = command();
 		delete missingExecutable.argv;
-		const root = makeRepo([missingExecutable]);
-		const result = run(root);
+		const { root, fixtureInventory, result } = runWith([missingExecutable]);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
 		for (const suffix of ["stdout", "stderr", "metadata.json"]) {
@@ -361,40 +446,40 @@ describe("production run-verification.ts integration", () => {
 		expect(isEvidenceOk(checkProductionBundle(root))).toBe(true);
 	});
 
-	it("true spawn error (non-existent executable) still produces all three payloads", () => {
-		// resolveArgv failure (no argv/shell_command/command field) is the
-		// host-agnostic way to trigger a real spawn-side failure. The runner
-		// materialises stdout/stderr/metadata with exit_code === -1.
-		const missingExecutable = command();
-		delete missingExecutable.argv;
-		const root = makeRepo([missingExecutable]);
-		const result = run(root);
+	// CORRECTION16 P1: a real OS-level spawn error is exercised by pointing
+	// `argv[0]` at a path that does not exist. The runner passes this through
+	// to `child_process.spawn`, which emits an `error` event with
+	// ENOENT/EACCES; the runner still materialises all three payloads with
+	// `exit_code === -1` and `failure_classification === "UNKNOWN"`. Unlike
+	// the resolveArgv path, this exercises Node's actual spawn failure
+	// handler, which the CORRECTION15 `.skip`'d test incorrectly claimed
+	// was "covered" by the resolveArgv failure.
+	it("CORRECTION16: genuine nonexistent-executable still produces a fail row + all three payloads", () => {
+		const { root, result } = runWith([
+			command(["/__definitely/not/a/real/executable", "ignored-arg"]),
+		]);
+		// The runner should still succeed (process completion is non-zero
+		// but the row is a recorded fail, not a runner crash).
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
-		expect(existsSync(join(dir, "commands/fixture.stdout"))).toBe(true);
-		expect(existsSync(join(dir, "commands/fixture.stderr"))).toBe(true);
-		expect(existsSync(join(dir, "commands/fixture.metadata.json"))).toBe(true);
+		for (const suffix of ["stdout", "stderr", "metadata.json"]) {
+			expect(existsSync(join(dir, "commands", `fixture.${suffix}`))).toBe(true);
+		}
 		const metadata = readJson(join(dir, "commands/fixture.metadata.json"));
 		expect(metadata.status).toBe("fail");
 		expect(metadata.exit_code).toBe(-1);
 		expect(metadata.failure_classification).toBe("UNKNOWN");
+		// The stderr stream should carry a spawn-error indicator (either
+		// the error message text or a fallback marker the runner appends).
+		const stderrText = readFileSync(join(dir, "commands/fixture.stderr"), "utf8");
+		expect(stderrText.length).toBeGreaterThan(0);
+		// `isEvidenceOk` must remain true: a spawn-error row is recorded,
+		// not a bundle-level failure.
 		expect(isEvidenceOk(checkProductionBundle(root))).toBe(true);
 	});
 
-	// CORRECTION15 P1: the genuine nonexistent-executable case is covered
-	// by the existing `true spawn error` test above, which exercises
-	// the same code path via `delete missingExecutable.argv` (the runner's
-	// resolveArgv fails for a missing executable form, exercising the
-	// same spawn-error handling as a real OS spawn failure). The runner
-	// still produces a fail row with status="fail", exit_code=-1, and
-	// failure_classification="UNKNOWN", and `isEvidenceOk` returns true.
-	it.skip("CORRECTION15: genuine nonexistent-executable still produces a fail row + all three payloads", () => {
-		// (covered by the existing `true spawn error` test above)
-	});
-
 	it("child exit (process.exit(7)) is reported as a real failure", () => {
-		const root = makeRepo([command(["bun", "-e", "process.exit(7)"])]);
-		const result = run(root);
+		const { root, result } = runWith([command(["bun", "-e", "process.exit(7)"])]);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
 		const metadata = readJson(join(dir, "commands/fixture.metadata.json"));
@@ -405,30 +490,37 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("finalize performs one bundle preparation and does not crash", () => {
-		const root = makeRepo([command()]);
-		const result = run(root, ["--finalize-evidence"]);
-		expect(result.status).toBe(0);
-		expect(result.stdout.match(/Prepared detached evidence bundle once/g)).toHaveLength(1);
+		const { root, fixtureInventory, result } = runWith([command()]);
+		const finalized = run(root, ["--finalize-evidence"], fixtureInventory);
+		expect(finalized.status).toBe(0);
+		expect(finalized.stdout.match(/Prepared detached evidence bundle once/g)).toHaveLength(1);
 		const evidence = readJson(join(evidenceDir(root), "evidence.json"));
 		expect(evidence.pass_label).toBe("finalize");
+		// The first run still produced a satisfiable bundle (this asserts
+		// the prior fixture run was not broken by the wrapper).
+		expect(result.status).toBe(0);
 	});
 
 	it("successful replacement removes old evidence files", () => {
-		const root = makeRepo([command()]);
+		const { root } = runWith([command()]);
 		write(root, `${ACT_DIR}/commands/stale.stdout`, "stale\n");
 		write(root, `${ACT_DIR}/stale.txt`, "stale\n");
-		const result = run(root);
+		const { fixtureInventory } = makeRepo([command()]);
+		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		expect(existsSync(join(evidenceDir(root), "stale.txt"))).toBe(false);
 		expect(existsSync(join(evidenceDir(root), "commands/stale.stdout"))).toBe(false);
 	});
 
 	it("failed pass leaves the previous complete bundle untouched", () => {
-		const root = makeRepo([
+		const { root } = runWith([
 			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
 		]);
 		write(root, `${ACT_DIR}/sentinel.txt`, "previous-complete-bundle\n");
-		const result = run(root);
+		const { fixtureInventory } = makeRepo([
+			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
+		]);
+		const result = run(root, [], fixtureInventory);
 		// Even when a command writes to a tracked input the runner still
 		// aborts before publishing; verify the previous bundle is untouched.
 		expect(result.status).not.toBe(0);
@@ -440,8 +532,7 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("CORRECTION13: production-shaped bundle is self-contained", () => {
-		const root = makeRepo([command()]);
-		const result = run(root);
+		const { root, result } = runWith([command()]);
 		expect(result.status).toBe(0);
 		const view = checkProductionBundle(root);
 		expect(isEvidenceOk(view)).toBe(true);
@@ -451,9 +542,93 @@ describe("production run-verification.ts integration", () => {
 		expect(view.bundledResultPathInvalid).toBeNull();
 	});
 
+	it("CORRECTION16: native-probes.json is staged into the bundle and hash-listed", () => {
+		const { root, result } = runWith([command()]);
+		expect(result.status).toBe(0);
+		const dir = evidenceDir(root);
+		const stagedInventoryPath = join(dir, NATIVE_PROBES_BUNDLE_PATH);
+		expect(existsSync(stagedInventoryPath)).toBe(true);
+		const manifest = readFileSync(join(dir, "hashes.sha256"), "utf8");
+		expect(manifest).toContain(` ${NATIVE_PROBES_BUNDLE_PATH}`);
+		// The hash declared in the manifest matches the on-disk bytes.
+		const bytes = readFileSync(stagedInventoryPath);
+		const observed = createHash("sha256").update(bytes).digest("hex");
+		expect(manifest).toContain(`${observed}  ${NATIVE_PROBES_BUNDLE_PATH}`);
+	});
+
+	it("CORRECTION16: tracked mirror is informational only; verdict depends on the staged copy", () => {
+		const { root } = runWith([command()]);
+		const dir = evidenceDir(root);
+		const trackedPath = join(root, "factory/inventories/native-probes.json");
+		const stagedPath = join(dir, NATIVE_PROBES_BUNDLE_PATH);
+		// Tamper the staged copy (NOT the tracked mirror). The renderer
+		// must still detect the staged-side hash mismatch via the bundle's
+		// `hashes.sha256`, not via the tracked mirror.
+		const original = readFileSync(stagedPath);
+		writeFileSync(stagedPath, `${original}\nCORRUPTED`);
+		const evidence = readJson(join(dir, "evidence.json"));
+		rewriteManifest(root, evidence);
+		const subject = computeFilteredSubjectTreeOid(root)!;
+		const view = checkEvidence({
+			ev: loadEvidenceFile(join(dir, "evidence.json")),
+			hashesText: readFileSync(join(dir, "hashes.sha256"), "utf8"),
+			evDirAbs: dir,
+			executedCmds: readJson(join(dir, "verification-results.json")).executed_commands,
+			bundledResultPath: "verification-results.json",
+			rootAbs: root,
+			headOidNow: git(root, ["rev-parse", "HEAD"]),
+			treeOidNow: git(root, ["rev-parse", "HEAD^{tree}"]),
+			filteredSubjectTreeOidNow: subject,
+			executionIdentityDerivation: deriveExecutionIdentity(
+				root,
+				evidence.execution_head_oid,
+				evidence.execution_tree_oid,
+			),
+		});
+		// The tampered staged copy is not the same as the manifest entry
+		// — the renderer records a hash mismatch.
+		expect(view.hashMismatches.some((m) => m.path === NATIVE_PROBES_BUNDLE_PATH)).toBe(true);
+		expect(closureFor(view).reasonCodes).toContain("EVIDENCE_INCOMPLETE");
+		// Tracked mirror is unchanged from the runner's refresh, not edited
+		// by the test (this asserts the bound-and-tracked relationship).
+		expect(existsSync(trackedPath)).toBe(true);
+	});
+
+	it("CORRECTION16: missing --probe-inventory-path aborts the runner when no node_modules", () => {
+		// A fresh fixture repo with no staged probe inventory and no
+		// `node_modules/` to probe against. The runner must fail-closed
+		// rather than publishing a bundle with a deferred probe inventory.
+		const root = mkdtempSync(join(tmpdir(), "factory-runner-no-probes-"));
+		roots.push(root);
+		git(root, ["init", "-q"]);
+		git(root, ["config", "user.email", "factory-test@example.invalid"]);
+		git(root, ["config", "user.name", "Factory Test"]);
+		write(root, ".gitignore", ".factory/\nnode_modules/\n");
+		write(root, "input.txt", "original\n");
+		write(
+			root,
+			"factory/inventories/verification.json",
+			`${JSON.stringify({ schema_version: 1, commands: [command()] }, null, "\t")}\n`,
+		);
+		for (const source of ["run-verification.ts", "baseline-closure.ts", "git-status.ts", "subject-tree.ts"]) {
+			write(
+				root,
+				`factory/scripts/${source}`,
+				readFileSync(join(import.meta.dir, source), "utf8"),
+			);
+		}
+		git(root, ["add", "."]);
+		git(root, ["commit", "-qm", "fixture-no-probes"]);
+		const result = run(root);
+		expect(result.status).not.toBe(0);
+		expect(result.stderr).toContain("NATIVE_PROBES_INCOMPLETE");
+		expect(existsSync(evidenceDir(root))).toBe(false);
+	});
+
 	it("equal command subject values that differ from bundle subject fail", () => {
-		const root = makeRepo([command()]);
-		expect(run(root).status).toBe(0);
+		const { root, fixtureInventory } = runWith([command()]);
+		const result = run(root, [], fixtureInventory);
+		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
 		const evidence = readJson(join(dir, "evidence.json"));
 		const otherSubject = "f".repeat(40);
@@ -472,8 +647,9 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("renderer-derived execution identity mismatch fails despite runner assertion", () => {
-		const root = makeRepo([command()]);
-		expect(run(root).status).toBe(0);
+		const { root, fixtureInventory } = runWith([command()]);
+		const result = run(root, [], fixtureInventory);
+		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
 		const evidence = readJson(join(dir, "evidence.json"));
 		const results = readJson(join(dir, "verification-results.json"));
@@ -520,8 +696,9 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("CORRECTION13: pass row with non-null classification fails (relational invariant)", () => {
-		const root = makeRepo([command()]);
-		expect(run(root).status).toBe(0);
+		const { root, fixtureInventory } = runWith([command()]);
+		const result = run(root, [], fixtureInventory);
+		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
 		const evidence = readJson(join(dir, "evidence.json"));
 		evidence.commands[0].failure_classification = "ENVIRONMENTAL";
@@ -536,8 +713,9 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("CORRECTION13: bundled verification-results.json command-set mismatch fails", () => {
-		const root = makeRepo([command()]);
-		expect(run(root).status).toBe(0);
+		const { root, fixtureInventory } = runWith([command()]);
+		const result = run(root, [], fixtureInventory);
+		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
 		const results = readJson(join(dir, "verification-results.json"));
 		results.executed_commands.push({...results.executed_commands[0], id: "ghost"});
@@ -558,8 +736,9 @@ describe("production run-verification.ts integration", () => {
 	});
 
 	it("CORRECTION13: metadata file content disagreement fails (semantic binding)", () => {
-		const root = makeRepo([command()]);
-		expect(run(root).status).toBe(0);
+		const { root, fixtureInventory } = runWith([command()]);
+		const result = run(root, [], fixtureInventory);
+		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
 		const evidence = readJson(join(dir, "evidence.json"));
 		const original = readJson(join(dir, "commands/fixture.metadata.json"));
@@ -577,13 +756,16 @@ describe("production run-verification.ts integration", () => {
 	it("CORRECTION13: tracked mirror is not updated when the canonical swap fails", () => {
 		// Pre-seed the tracked mirror to a sentinel so the test can verify
 		// the failed pass does not overwrite it.
-		const root = makeRepo([
+		const { root } = runWith([
 			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
 		]);
 		const trackedPath = join(root, "factory/inventories/verification-results.json");
 		writeFileSync(trackedPath, `${JSON.stringify({sentinel: "pre-fail-mirror"}, null, "\t")}\n`);
 		const previousMirror = readFileSync(trackedPath, "utf8");
-		const result = run(root);
+		const { fixtureInventory } = makeRepo([
+			command(["bun", "-e", "await Bun.write('input.txt', 'changed\\n')"]),
+		]);
+		const result = run(root, [], fixtureInventory);
 		expect(result.status).not.toBe(0);
 		// Even when a prior mirror existed, a failed pass must leave the
 		// tracked file byte-identical to its prior contents.

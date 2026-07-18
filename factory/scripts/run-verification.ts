@@ -37,11 +37,16 @@ import {
 	checkEvidence,
 	isEvidenceOk,
 	loadEvidenceFile,
-	loadNativeProbesInventory,
-	NATIVE_PROBES_INVENTORY_PATH,
+	loadNativeProbesFromEvidence,
+	NATIVE_PROBES_BUNDLE_PATH,
 	resolveEvidencePayloadPath,
 	type ExecutionIdentityDerivation,
 } from "./baseline-closure";
+import {
+	collectNativeProbesInventory,
+	writeInventory,
+	type NativeProbesInventory,
+} from "./collect-native-probes";
 import { parsePorcelainV1Z } from "./git-status";
 import { computeFilteredSubjectTreeOid, SUBJECT_TREE_EXCLUDES } from "./subject-tree";
 
@@ -83,6 +88,7 @@ interface RunnerArgs {
 	onlyFilter: string | null;
 	skipFilter: Set<string> | null;
 	timeoutMs: number;
+	probeInventoryPath: string | null;
 }
 
 interface VerificationCommand {
@@ -244,11 +250,13 @@ function parseArgs(argv: string[]): RunnerArgs {
 	}
 	const onlyFilter = valueAfter("--only");
 	const skipText = valueAfter("--skip");
+	const probeInventoryPath = valueAfter("--probe-inventory-path");
 	return {
 		finalize: argv.includes("--finalize-evidence"),
 		onlyFilter,
 		skipFilter: skipText === null ? null : new Set(skipText.split(",").filter(Boolean)),
 		timeoutMs,
+		probeInventoryPath,
 	};
 }
 
@@ -965,6 +973,14 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			throw new Error("EXECUTION_IDENTITY_INVALID: postflight head/tree object relationship failed");
 		}
 
+		// CORRECTION16: stage the native-probe inventory into the bundle
+		// BEFORE writing the manifest so the staged copy's SHA-256 is
+		// captured in `hashes.sha256`. The verifier reads the bundle copy
+		// and cross-checks the hash, so editing the tracked mirror after
+		// the fact can never change the verdict.
+		const { bundleRel: nativeProbesBundleRel } =
+			await stageNativeProbesIntoBundle(stagingDir);
+
 		writeDetachedBundle({
 			label,
 			stagingDir,
@@ -972,6 +988,7 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			preflight,
 			postflight,
 			resultDocument,
+			nativeProbesBundleRel,
 		});
 		replaceCanonicalBundle(stagingDir);
 		// CORRECTION13: refresh the tracked mirror only after the canonical
@@ -989,6 +1006,50 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 	}
 }
 
+/**
+ * Stage the native-probe inventory into the detached bundle and refresh the
+ * tracked mirror. CORRECTION16: the staged copy is the authoritative source;
+ * the tracked mirror at `factory/inventories/native-probes.json` is
+ * informational only.
+ *
+ * Returns the bundle-relative payload path (`native-probes.json`) so the
+ * manifest pass can hash-list it like any other evidence payload.
+ *
+ * The optional `probeInventoryPath` argument (driven by `--probe-inventory-path`)
+ * is a test-fixture escape hatch: when set, the runner loads the inventory
+ * from that file instead of executing probes. The fixture path is intended
+ * for use by `run-verification.test.ts` only; production runs always go
+ * through `collectNativeProbesInventory()`.
+ */
+async function stageNativeProbesIntoBundle(
+	stagingDir: string,
+	probeInventoryPath: string | null = ARGS.probeInventoryPath,
+): Promise<{ bundleRel: string; bundleAbs: string }> {
+	let inventory: NativeProbesInventory;
+	if (probeInventoryPath !== null) {
+		const text = readFileSync(probeInventoryPath, "utf8");
+		inventory = JSON.parse(text) as NativeProbesInventory;
+	} else {
+		inventory = await collectNativeProbesInventory({ root: ROOT, timeoutMs: 30_000 });
+	}
+	const bundleRel = NATIVE_PROBES_BUNDLE_PATH;
+	const bundleAbs = join(stagingDir, ...bundleRel.split("/"));
+	writeInventory(inventory, bundleAbs);
+	// Refresh the tracked mirror only after the bundle copy succeeded. A
+	// failed bundle write cannot poison the tracked mirror.
+	const trackedMirror = join(ROOT, NATIVE_PROBES_INVENTORY_PATH);
+	try {
+		writeInventory(inventory, trackedMirror);
+	} catch (error) {
+		console.warn(
+			`[runner] could not refresh tracked native-probes mirror: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+		);
+	}
+	return { bundleRel, bundleAbs };
+}
+
 function writeDetachedBundle(args: {
 	label: string;
 	stagingDir: string;
@@ -996,8 +1057,9 @@ function writeDetachedBundle(args: {
 	preflight: CleanlinessSample;
 	postflight: CleanlinessSample;
 	resultDocument: PassResultDocument;
+	nativeProbesBundleRel: string;
 }): void {
-	const { label, stagingDir, identity, preflight, postflight, resultDocument } = args;
+	const { label, stagingDir, identity, preflight, postflight, resultDocument, nativeProbesBundleRel } = args;
 	const executed = resultDocument.executed_commands;
 	for (const row of executed) {
 		for (const rel of [row.stdout_path, row.stderr_path, row.metadata_path]) {
@@ -1011,16 +1073,20 @@ function writeDetachedBundle(args: {
 
 	// CORRECTION13: verification-results.json is a first-class payload
 	// inside the bundle; the renderer also reads it from staging.
+	// CORRECTION16: native-probes.json is staged into the bundle before
+	// the manifest is written so its SHA-256 is hash-listed in
+	// `hashes.sha256` and the renderer can verify the inventory is
+	// cryptographically bound to the bundle.
 	const expectedEvidencePayloadPaths = executed.flatMap((row) => [
 		row.stdout_path,
 		row.stderr_path,
 		row.metadata_path,
 	]);
-	expectedEvidencePayloadPaths.unshift("evidence.json", "verification-results.json");
+	expectedEvidencePayloadPaths.unshift("evidence.json", "verification-results.json", nativeProbesBundleRel);
 
 	const executionIdentityValid = verifyExecutionIdentityShape(identity.head, identity.tree);
 	const evidence = {
-		schema_version: 4,
+		schema_version: 5,
 		act_id: ACT_ID,
 		pass_label: label,
 		subject_tree_oid: identity.subject,
@@ -1065,13 +1131,24 @@ function writeDetachedBundle(args: {
 	});
 	atomicWriteFile(join(stagingDir, "hashes.sha256"), `${manifestLines.join("\n")}\n`);
 
-	// CORRECTION15: load the native-probe inventory and fail-closed the
-	// self-check on a missing/malformed/deferred/unknown/failed probe.
-	const nativeProbes = loadNativeProbesInventory(join(ROOT, NATIVE_PROBES_INVENTORY_PATH));
+	// CORRECTION16: the native-probe inventory is verified from the bundle,
+	// not from the tracked mirror. The verifier cross-checks the staged
+	// inventory's hash against `hashes.sha256`, its execution identity
+	// against the bundle identity, and every probe's recorded
+	// `observed_architecture` / `host_class` / argv shape. Fail-closed:
+	// any diagnostic makes `complete` false and the runner throws.
+	const nativeProbes = loadNativeProbesFromEvidence({
+		evDirAbs: stagingDir,
+		manifestText: readFileSync(join(stagingDir, "hashes.sha256"), "utf8"),
+		executionHeadOid: identity.head,
+		executionTreeOid: identity.tree,
+		filteredSubjectTreeOid: identity.subject,
+	});
 	if (!nativeProbes.complete) {
+		const first = nativeProbes.diagnostics[0];
 		throw new Error(
 			`NATIVE_PROBES_INCOMPLETE: ${nativeProbes.diagnostics.length} diagnostic(s); ` +
-				`first: ${nativeProbes.diagnostics[0]?.message ?? "(no diagnostic)"}`,
+				`first: ${first ? `${first.probeId}/${first.kind}: ${first.message}` : "(no diagnostic)"}`,
 		);
 	}
 
@@ -1104,7 +1181,9 @@ function writeDetachedBundle(args: {
 			})}`,
 		);
 	}
-	console.log(`Prepared detached evidence bundle once (${manifestLines.length} payloads)`);
+	console.log(
+		`Prepared detached evidence bundle once (${manifestLines.length} payloads, native probes complete)`,
+	);
 }
 
 async function main(): Promise<void> {

@@ -37,7 +37,8 @@ import {
 	checkEvidence,
 	computeClosure,
 	loadEvidenceFile,
-	loadNativeProbesInventory,
+	loadNativeProbesFromEvidence,
+	NATIVE_PROBES_BUNDLE_PATH,
 	NATIVE_PROBES_INVENTORY_PATH,
 	NATIVE_PROBE_IDS,
 	type EvidenceView,
@@ -60,6 +61,20 @@ const ROOT = spawnSync("git", ["rev-parse", "--show-toplevel"], {
 }).stdout.trim();
 const OUT = join(ROOT, "docs/factory/baseline-report.md");
 const OUT_TMP = OUT + ".tmp";
+
+const PROBE_DIAGNOSTIC_LABEL: Record<string, string> = {
+	"missing-inventory": "ABSENT",
+	"malformed-json": "MALFORMED",
+	"missing-key": "MISSING-KEY",
+	"invalid-shape": "INVALID-SHAPE",
+	deferred: "DEFERRED",
+	"non-pass": "FAIL",
+	"hash-mismatch": "HASH-MISMATCH",
+	"identity-mismatch": "IDENTITY-MISMATCH",
+	"architecture-mismatch": "ARCH-MISMATCH",
+	"host-class-mismatch": "HOST-MISMATCH",
+	"argv-mismatch": "ARGV-MISMATCH",
+};
 
 // ---------- main entry (only runs when invoked directly) --------------------
 
@@ -167,9 +182,28 @@ function main(): void {
 		.map((e: any) => e.id);
 	const failureClassCounts = countByKey(failCmds, "failure_classification");
 
-	// CORRECTION15: load the native-probe inventory before computing closure
-	// so the fail-closed probe dimension is wired into the verdict.
-	const nativeProbes = loadNativeProbesInventory(join(ROOT, NATIVE_PROBES_INVENTORY_PATH));
+	// CORRECTION16: load the native-probe inventory from the detached
+	// evidence bundle, NOT from the tracked mirror. The bundle copy is
+	// hash-listed in `hashes.sha256` so its declared hash must match the
+	// on-disk bytes; the verifier cross-checks the staged inventory's
+	// execution identity against the bundle identity and every probe's
+	// `observed_architecture` / `host_class` / argv shape.
+	const nativeProbes = loadNativeProbesFromEvidence({
+		evDirAbs: EVIDENCE_DIR,
+		manifestText: EVIDENCE_HASHES,
+		executionHeadOid:
+			typeof EVIDENCE_VALUE?.execution_head_oid === "string"
+				? EVIDENCE_VALUE.execution_head_oid
+				: HEAD_OID_NOW,
+		executionTreeOid:
+			typeof EVIDENCE_VALUE?.execution_tree_oid === "string"
+				? EVIDENCE_VALUE.execution_tree_oid
+				: TREE_OID_NOW,
+		filteredSubjectTreeOid:
+			typeof EVIDENCE_VALUE?.subject_tree_oid === "string"
+				? EVIDENCE_VALUE.subject_tree_oid
+				: FILTERED_SUBJECT_TREE_OID_NOW,
+	});
 
 	const evidenceView: EvidenceView = checkEvidence({
 		ev: EVIDENCE_LOAD,
@@ -593,12 +627,6 @@ function csvRowCount(s: string): number {
 	return n;
 }
 
-// CORRECTION15: render the native-probe inventory using the structured
-// loadNativeProbesInventory view. Each diagnostic maps to one of
-// "missing-inventory", "malformed-json", "missing-key", "invalid-shape",
-// "deferred", or "non-pass"; the renderer surfaces them so reviewers can
-// distinguish "we did not probe" from "we probed and the artifact is
-// missing" from "we probed and the artifact failed".
 function renderProbes(view: ReturnType<typeof loadNativeProbesInventory>): string {
 	const labels: Record<string, string> = {
 		p1_better_sqlite3: "P1 better-sqlite3",
@@ -613,16 +641,7 @@ function renderProbes(view: ReturnType<typeof loadNativeProbesInventory>): strin
 		if (probe === null) {
 			const diagnostic = view.diagnostics.find((d) => d.probeId === probeId);
 			if (diagnostic) {
-				const status =
-					diagnostic.kind === "deferred"
-						? "DEFERRED"
-						: diagnostic.kind === "non-pass"
-							? "FAIL"
-							: diagnostic.kind === "missing-inventory" || diagnostic.kind === "malformed-json"
-								? "ABSENT"
-								: diagnostic.kind === "missing-key"
-									? "MISSING-KEY"
-									: "INVALID-SHAPE";
+				const status = PROBE_DIAGNOSTIC_LABEL[diagnostic.kind] ?? "UNKNOWN";
 				return `| ${label} | (no probe) | ${status} | ${diagnostic.message.slice(0, 80)} |`;
 			}
 			return `| ${label} | (no probe) | UNKNOWN | (no diagnostic recorded) |`;
@@ -635,6 +654,16 @@ function renderProbes(view: ReturnType<typeof loadNativeProbesInventory>): strin
 		...NATIVE_PROBE_IDS.map((id) => renderRow(id)),
 	].join("\n");
 }
+
+// CORRECTION16: render the bundle-bound native-probe inventory using the
+// structured `loadNativeProbesFromEvidence` view. Each diagnostic maps to
+// one of the kinds below; the renderer surfaces them so reviewers can
+// distinguish "we did not probe" (missing-inventory / malformed-json /
+// missing-key / invalid-shape) from "we probed and the artifact is
+// missing or stale" (deferred / non-pass / hash-mismatch) from
+// "we probed and the recorded probe disagrees with the bundle"
+// (identity-mismatch / argv-mismatch / host-class-mismatch /
+// architecture-mismatch).
 
 function evidenceRow(
 	view: EvidenceView,

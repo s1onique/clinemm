@@ -824,6 +824,58 @@
 			],
 			"result": "not-run",
 			"reason": null
+		},
+		{
+			"id": "factory-tests",
+			"name": "Factory unit/integration tests (bun test factory/scripts/*)",
+			"scope": "factory",
+			"working_directory": ".",
+			"command": "bun test factory/scripts/render-baseline-report.test.ts factory/scripts/run-verification.test.ts",
+			"class": "mandatory",
+			"source": {
+				"path": "factory/scripts/render-baseline-report.test.ts",
+				"locator": "describe(\"computeClosure \u2014 fail-closed policy\")"
+			},
+			"host_support": [
+				"darwin-arm64",
+				"linux-x64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"factory/.factory-evidence/.last-pass.json"
+			],
+			"result": "not-run",
+			"reason": null
+		},
+		{
+			"id": "factory-strict-typecheck",
+			"name": "Strict TypeScript typecheck of factory scripts",
+			"scope": "factory",
+			"working_directory": ".",
+			"command": "bunx tsc --noEmit --strict --target es2022 --moduleResolution node --module esnext --allowSyntheticDefaultImports --esModuleInterop --skipLibCheck factory/scripts/baseline-closure.ts factory/scripts/run-verification.ts factory/scripts/render-baseline-report.ts factory/scripts/collect-native-probes.ts factory/scripts/native-probes.ts",
+			"class": "mandatory",
+			"source": {
+				"path": "factory/scripts/baseline-closure.ts",
+				"locator": "CORRECTION16 native-probe inventory loader"
+			},
+			"host_support": [
+				"darwin-arm64",
+				"linux-x64",
+				"windows-x64"
+			],
+			"requires_network": false,
+			"requires_gui": false,
+			"requires_credentials": [],
+			"mutates_tracked_files": false,
+			"expected_outputs": [
+				"factory/scripts/.tsc-strict.log"
+			],
+			"result": "not-run",
+			"reason": null
 		}
 	]
 }
