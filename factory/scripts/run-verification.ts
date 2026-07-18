@@ -1113,7 +1113,7 @@ async function stageNativeProbesIntoBundle(
 	// aggregate `native-probes.json` and the per-probe `metadata.json`
 	// are written, so the two are guaranteed to agree.
 	const streamPayloadRels: string[] = [];
-	const canonicalProbes: Record<string, unknown> = {};
+	const canonicalProbes = {} as Record<typeof NATIVE_PROBE_IDS[number], unknown>;
 	for (const definition of NATIVE_PROBE_DEFINITIONS) {
 		const probe = inventory.probes[definition.id];
 		if (!probe) {
@@ -1121,20 +1121,39 @@ async function stageNativeProbesIntoBundle(
 				`NATIVE_PROBE_RECORD_MISSING:${definition.id}: the canonical stream writer requires all five probe records; the inventory did not include one for ${definition.id}.`,
 			);
 		}
+		// CORRECTION21 (µC-2 P0) missing stream text is rejected. An
+		// empty string is a valid captured empty stream; a missing or
+		// non-string field is rejected so a partial fixture cannot
+		// silently pass as a valid empty stream.
+		if (typeof probe.stdout_text !== "string") {
+			throw new Error(
+				`NATIVE_PROBE_STDOUT_MISSING:${definition.id}: the canonical stream writer requires a string stdout_text on the probe record; the inventory did not include one.`,
+			);
+		}
+		if (typeof probe.stderr_text !== "string") {
+			throw new Error(
+				`NATIVE_PROBE_STDERR_MISSING:${definition.id}: the canonical stream writer requires a string stderr_text on the probe record; the inventory did not include one.`,
+			);
+		}
 		const paths = canonicalStreamPaths(definition.id);
 		const stdoutAbs = join(stagingDir, ...paths.stdout_path.split("/"));
 		const stderrAbs = join(stagingDir, ...paths.stderr_path.split("/"));
 		const metadataAbs = join(stagingDir, ...paths.metadata_path.split("/"));
 		mkdirSync(dirname(stdoutAbs), { recursive: true });
-		const stdoutBytes = Buffer.from(probe.stdout_text ?? "", "utf8");
-		const stderrBytes = Buffer.from(probe.stderr_text ?? "", "utf8");
+		const stdoutBytes = Buffer.from(probe.stdout_text, "utf8");
+		const stderrBytes = Buffer.from(probe.stderr_text, "utf8");
 		atomicWriteFile(stdoutAbs, stdoutBytes);
 		atomicWriteFile(stderrAbs, stderrBytes);
 		const stdoutSha = sha256(stdoutBytes);
 		const stderrSha = sha256(stderrBytes);
 		// The canonical record: every field the loader will read for the
 		// new schema, derived from the actual bytes staged on disk.
-		const canonicalProbe = {
+		// Note: hash consistency between staged bytes and the declared
+		// SHA is guaranteed; production execution provenance (the
+		// separate probe_source stamp) is what establishes whether the
+		// bytes came from real probes. Hash consistency alone is not
+		// authenticity.
+		canonicalProbes[definition.id] = {
 			...probe,
 			stream_layout_version: 1,
 			stdout_path: paths.stdout_path,
@@ -1143,9 +1162,8 @@ async function stageNativeProbesIntoBundle(
 			stdout_sha256: stdoutSha,
 			stderr_sha256: stderrSha,
 		};
-		atomicWriteFile(metadataAbs, JSON.stringify(canonicalProbe, null, "\t") + "\n");
+		atomicWriteFile(metadataAbs, JSON.stringify(canonicalProbes[definition.id], null, "\t") + "\n");
 		streamPayloadRels.push(paths.stdout_path, paths.stderr_path, paths.metadata_path);
-		canonicalProbes[definition.id] = canonicalProbe;
 	}
 	// Re-serialize the aggregate inventory with the canonical records
 	// so the loader and the per-probe metadata.json agree.
