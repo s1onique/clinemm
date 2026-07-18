@@ -1348,8 +1348,13 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		const artifactBytes = FIXTURE_ARTIFACT_BYTES[id];
 		if (!artifactBytes) throw new Error(`missing fixture artifact bytes for probe ${id}`);
 		const artifactSha = createHash("sha256").update(artifactBytes).digest("hex");
-		return {
-			id,
+		const stderrText = "";
+		// CORRECTION21 (µC-2/µC-3): build the bundled record via the
+		// canonical helper so stream_layout_version, stdout_path,
+		// stderr_path, metadata_path, and the manifest hash
+		// declarations are all derived from a single source of truth.
+		const collected: NativeProbe = {
+			id: id as NativeProbeId,
 			path: def.artifact_path,
 			architecture: HOST,
 			sha256: artifactSha,
@@ -1362,7 +1367,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			timeout: false,
 			stdout_text: stdoutText,
 			stdout_sha256: stdoutSha,
-			stderr_text: "",
+			stderr_text,
 			stderr_sha256: stdoutEmptySha,
 			artifact_path: def.artifact_path,
 			artifact_sha256: artifactSha,
@@ -1387,7 +1392,9 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			success_contract_version: def.success_contract_version,
 			invocation_id: `test-invocation-${id}`,
 		};
+		return canonicalizeProbeForBundle(id as NativeProbeId, collected).record;
 	}
+
 
 	// CORRECTION21: the staged-artifact manifest entries are a local
 	// fixture object instead of a globalThis stash. The previous

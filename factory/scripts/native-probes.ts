@@ -57,6 +57,8 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export type NativeProbeId =
 	| "p1_better_sqlite3"
@@ -66,6 +68,82 @@ export type NativeProbeId =
 	| "p5_cline_version";
 
 export const NATIVE_PROBE_STREAM_LAYOUT_VERSION = 1 as const;
+
+// ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 ---------------
+
+/**
+ * µC-3 strict JSON value type used by `stableStringify`. The encoder
+ * rejects any value that JSON cannot represent safely (undefined,
+ * function, symbol, bigint, NaN, ±Infinity, cyclic structures) so the
+ * serialized byte sequence is always re-parseable and lossless.
+ */
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue =
+	| JsonPrimitive
+	| JsonValue[]
+	| { [key: string]: JsonValue };
+
+export class StableStringifyError extends Error {
+	constructor(reason: string) {
+		super(`STABLE_STRINGIFY_ERROR:${reason}`);
+		this.name = "StableStringifyError";
+	}
+}
+
+/**
+ * Set of `Seen` objects used to detect cycles deterministically.
+ */
+function isFiniteNumber(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Accept a `JsonValue` only after explicit validation. Pass an
+ * already-parsed JSON value (`unknown` from `JSON.parse`) — it is the
+ * caller's responsibility to type-check first.
+ *
+ * Throws `StableStringifyError` for:
+ *   - undefined (JSON converts to null; we refuse to silently map)
+ *   - function, symbol (cannot be represented)
+ *   - bigint (lossy JSON.stringify("...") maps to a number; we refuse)
+ *   - NaN, +Infinity, -Infinity (lossy JSON conversion)
+ *   - cyclic structures
+ */
+function assertJsonValue(value: unknown, seen: WeakSet<object>): void {
+	if (value === null) return;
+	const t = typeof value;
+	if (t === "string" || t === "boolean") return;
+	if (t === "number") {
+		if (!isFiniteNumber(value)) {
+			throw new StableStringifyError(`non-finite number rejected: ${JSON.stringify(value)}`);
+		}
+		return;
+	}
+	if (t === "undefined") {
+		throw new StableStringifyError("undefined rejected");
+	}
+	if (t === "bigint") {
+		throw new StableStringifyError(`bigint rejected: ${String(value)}`);
+	}
+	if (t === "function" || t === "symbol") {
+		throw new StableStringifyError(`${t} rejected`);
+	}
+	if (seen.has(value as object)) {
+		throw new StableStringifyError("cyclic structure rejected");
+	}
+	seen.add(value as object);
+	if (Array.isArray(value)) {
+		for (const item of value) assertJsonValue(item, seen);
+		return;
+	}
+	const proto = Object.getPrototypeOf(value);
+	if (proto !== Object.prototype && proto !== null) {
+		throw new StableStringifyError("non-plain object rejected");
+	}
+	for (const key of Object.keys(value as Record<string, unknown>)) {
+		assertJsonValue((value as Record<string, unknown>)[key], seen);
+	}
+}
 
 /**
  * CORRECTION21 (µC-2) bundled probe shape: what the writer
@@ -92,7 +170,23 @@ export interface BundledNativeProbe extends NativeProbe {
 export type PartialBundledNativeProbeMap = Partial<Record<NativeProbeId, BundledNativeProbe>>;
 
 /**
- * CORRECTION21 (µC-2) deterministic, sorted-key JSON encoder.
+ * CORRECTION21 (µC-2 → µC-3) deterministic, sorted-key JSON encoder.
+ *
+ * Strict mode is the default for the µC-3 metadata serialization
+ * boundary: the encoder rejects values JSON cannot represent safely
+ * (undefined, function, symbol, bigint, NaN, ±Infinity, cyclic
+ * structures, non-plain objects). The writer and reader share this
+ * exact rule so `native-probes/<id>.metadata.json` and the aggregate
+ * `native-probes.json.probes[id]` parse to a JSON value that is
+ * stableStringify-equal under the same encoder.
+ *
+ * Behaviour:
+ *   parsed JSON input       → always accepted (caller's job to typecheck)
+ *   non-JSON runtime input  → deterministic structured failure
+ *   cycles                  → deterministic structured failure
+ *
+ * The encoder does NOT return invalid strings such as `"undefined"`.
+ *
  * Inlined here (rather than imported from `baseline-closure.ts`) to
  * keep the dependency graph acyclic: `baseline-closure.ts` already
  * imports from this module. The encoder produces a single canonical
@@ -106,7 +200,10 @@ export type PartialBundledNativeProbeMap = Partial<Record<NativeProbeId, Bundled
  * single-source-of-truth for the writer and reader.
  */
 export function stableStringify(value: unknown): string {
-	if (value === null || typeof value !== "object") return JSON.stringify(value);
+	assertJsonValue(value, new WeakSet());
+	if (value === null || typeof value !== "object") {
+		return JSON.stringify(value);
+	}
 	if (Array.isArray(value)) {
 		return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
 	}
@@ -666,3 +763,268 @@ export function hostClassOf(platform: string, arch: string): string {
 	if (platform === "win32" && arch === "arm64") return "windows-arm64";
 	return `${platform}-${arch}`;
 }
+
+// ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 parser ---------
+
+const SHA256_REGEX = /^[0-9a-f]{64}$/;
+
+/**
+ * µC-3 result of `parseBundledNativeProbe`. The reader never throws —
+ * every failure mode is captured in the returned `diagnostics` array
+ * with the failing field, expected and observed values. The helper is
+ * pure: no filesystem I/O, no mutation.
+ */
+export interface ProbeParseDiagnostic {
+	field: string;
+	reason: string;
+	expected: string;
+	observed: string;
+}
+
+export interface ProbeParseResult {
+	ok: boolean;
+	record: BundledNativeProbe | null;
+	diagnostics: ProbeParseDiagnostic[];
+}
+
+/**
+ * µC-3 fail-closed parser for `BundledNativeProbe`. The reader calls
+ * this for every probe entry inside the aggregate `native-probes.json`
+ * and uses the returned record to:
+ *   1. validate the canonical paths asserted by the recorded record,
+ *   2. derive the on-disk evidence payloads to load,
+ *   3. compare the staged metadata file's JSON value with the
+ *      aggregate record's JSON value under `stableStringify`.
+ *
+ * Validation rules (all required, all fail-closed):
+ *   - the value is a JSON object;
+ *   - `record.id === probeId`;
+ *   - `stream_layout_version === NATIVE_PROBE_STREAM_LAYOUT_VERSION`
+ *     (an unknown / unsupported version is rejected — legacy records
+ *     are NOT silently upgraded in memory);
+ *   - `stdout_path`, `stderr_path`, `metadata_path` are the canonical
+ *     `canonicalStreamPaths(probeId)` paths;
+ *   - `stdout_sha256`, `stderr_sha256` are 64-character lowercase
+ *     hexadecimal strings.
+ */
+export function parseBundledNativeProbe(
+	probeId: NativeProbeId,
+	raw: unknown,
+): ProbeParseResult {
+	const diagnostics: ProbeParseDiagnostic[] = [];
+	const paths = canonicalStreamPaths(probeId);
+	if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+		diagnostics.push({
+			field: "<root>",
+			reason: "wrong-shape",
+			expected: "object",
+			observed: raw === null ? "null" : Array.isArray(raw) ? "array" : typeof raw,
+		});
+		return { ok: false, record: null, diagnostics };
+	}
+	const v = raw as Record<string, unknown>;
+	const observed = (field: string): string => JSON.stringify(v[field]);
+	const push = (field: string, reason: string, expected: string, value: string): void => {
+		diagnostics.push({ field, reason, expected, observed: value });
+	};
+	if (v.id !== probeId) {
+		push(
+			"id",
+			"mismatch",
+			JSON.stringify(probeId),
+			typeof v.id === "string" ? JSON.stringify(v.id) : typeof v.id,
+		);
+	}
+	if (v.stream_layout_version !== NATIVE_PROBE_STREAM_LAYOUT_VERSION) {
+		push(
+			"stream_layout_version",
+			"stream-layout-unsupported",
+			`${NATIVE_PROBE_STREAM_LAYOUT_VERSION}`,
+			observed("stream_layout_version"),
+		);
+	}
+	if (v.stdout_path !== paths.stdout_path) {
+		push(
+			"stdout_path",
+			"stream-path-mismatch",
+			JSON.stringify(paths.stdout_path),
+			observed("stdout_path"),
+		);
+	}
+	if (v.stderr_path !== paths.stderr_path) {
+		push(
+			"stderr_path",
+			"stream-path-mismatch",
+			JSON.stringify(paths.stderr_path),
+			observed("stderr_path"),
+		);
+	}
+	if (v.metadata_path !== paths.metadata_path) {
+		push(
+			"metadata_path",
+			"stream-path-mismatch",
+			JSON.stringify(paths.metadata_path),
+			observed("metadata_path"),
+		);
+	}
+	const stdoutSha = v.stdout_sha256;
+	if (typeof stdoutSha !== "string" || !SHA256_REGEX.test(stdoutSha)) {
+		push(
+			"stdout_sha256",
+			"wrong-shape",
+			"64-character lowercase hexadecimal",
+			typeof stdoutSha === "string" ? `<${stdoutSha.length}>` : `<${typeof stdoutSha}>`,
+		);
+	}
+	const stderrSha = v.stderr_sha256;
+	if (typeof stderrSha !== "string" || !SHA256_REGEX.test(stderrSha)) {
+		push(
+			"stderr_sha256",
+			"wrong-shape",
+			"64-character lowercase hexadecimal",
+			typeof stderrSha === "string" ? `<${stderrSha.length}>` : `<${typeof stderrSha}>`,
+		);
+	}
+	if (diagnostics.length > 0) {
+		return { ok: false, record: null, diagnostics };
+	}
+	return {
+		ok: true,
+		record: v as unknown as BundledNativeProbe,
+		diagnostics: [],
+	};
+}
+
+// ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 loader ---------
+
+/**
+ * µC-3 result of `loadEvidencePayload`. The loader never throws —
+ * every failure mode (missing file, traversal, symlink, non-regular,
+ * hash mismatch, manifest-undeclared) is captured as a structured
+ * diagnostic.
+ */
+export interface PayloadLoadDiagnostic {
+	path: string;
+	reason:
+		| "missing"
+		| "absolute"
+		| "traversal"
+		| "outside-evidence-dir"
+		| "symlink"
+		| "not-regular-file"
+		| "manifest-undeclared"
+		| "hash-mismatch";
+	expected: string;
+	observed: string;
+}
+
+export interface PayloadLoadResult {
+	ok: boolean;
+	bytes: Buffer | null;
+	diagnostics: PayloadLoadDiagnostic[];
+}
+
+/**
+ * µC-3 contained payload loader. The reader uses this for:
+ *   - stdout (`native-probes/<id>.stdout`)
+ *   - stderr (`native-probes/<id>.stderr`)
+ *   - per-probe metadata (`native-probes/<id>.metadata.json`)
+ *   - probe artifact payloads
+ *
+ * The loader rejects:
+ *   - absolute paths,
+ *   - `..` traversal,
+ *   - paths that escape the evidence directory after `realpathSync()`,
+ *   - symlinks (the evidence contract forbids them; the bundle is
+ *     produced by the writer which never creates symlinks),
+ *   - non-regular files,
+ *   - manifest-undeclared paths,
+ *   - hash mismatches against `hashes.sha256`.
+ *
+ * The bytes returned are read verbatim from disk. Node's hashing API
+ * accepts `Buffer` input directly, so the verifier hashes the exact
+ * bytes that were written.
+ */
+export function loadEvidencePayload(
+	evidenceDir: string,
+	relativePath: string,
+	manifestHashes: Map<string, string>,
+): PayloadLoadResult {
+	const make = (
+		reason: PayloadLoadDiagnostic["reason"],
+		expected: string,
+		observed: string,
+	): PayloadLoadResult => ({
+		ok: false,
+		bytes: null,
+		diagnostics: [{ path: relativePath, reason, expected, observed }],
+	});
+	if (typeof relativePath !== "string" || relativePath.length === 0) {
+		return make("missing", "non-empty relative path", JSON.stringify(relativePath));
+	}
+	if (isAbsolute(relativePath)) {
+		return make("absolute", "relative path within the evidence directory", relativePath);
+	}
+	const normalizedEvDir = resolve(evidenceDir);
+	const declared = manifestHashes.get(relativePath);
+	if (declared === undefined) {
+		return make("manifest-undeclared", "declared in hashes.sha256", "absent");
+	}
+	const abs = resolve(normalizedEvDir, relativePath);
+	const relToEvDir = normalizeRelative(relative(normalizedEvDir, abs));
+	if (
+		relToEvDir === "" ||
+		relToEvDir === ".." ||
+		relToEvDir.startsWith(`..${sep}`) ||
+		isAbsolute(relToEvDir)
+	) {
+		return make("traversal", `contained under ${normalizedEvDir}`, abs);
+	}
+	if (!existsSync(abs)) {
+		return make("missing", "regular file on disk", abs);
+	}
+	let lst;
+	try {
+		lst = lstatSync(abs);
+	} catch {
+		return make("missing", "regular file on disk", abs);
+	}
+	if (lst.isSymbolicLink()) {
+		return make("symlink", "regular file (no symlink)", abs);
+	}
+	if (!lst.isFile()) {
+		return make("not-regular-file", "regular file", abs);
+	}
+	// Resolve through realpath to defend against TOCTOU swaps into a path
+	// outside the evidence directory (e.g. via hard-link back-into $TMPDIR).
+	let realAbs: string;
+	try {
+		realAbs = realpathSync(abs);
+	} catch {
+		return make("missing", "real path resolvable", abs);
+	}
+	const realRel = normalizeRelative(relative(normalizedEvDir, realAbs));
+	if (
+		realRel === "" ||
+		realRel === ".." ||
+		realRel.startsWith(`..${sep}`) ||
+		isAbsolute(realRel)
+	) {
+		return make("outside-evidence-dir", `contained under ${normalizedEvDir}`, realAbs);
+	}
+	const bytes = readFileSync(abs);
+	const observedHash = createHash("sha256").update(bytes).digest("hex");
+	if (observedHash !== declared) {
+		return make(
+			"hash-mismatch",
+			declared.slice(0, 12),
+			`${observedHash.slice(0, 12)} (${bytes.length} bytes)`,
+		);
+	}
+	return { ok: true, bytes, diagnostics: [] };
+}
+
+function normalizeRelative(path: string): string {
+	return path.split(sep).join("/");
+}
+
