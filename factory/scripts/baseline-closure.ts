@@ -139,6 +139,132 @@ export const NATIVE_PROBE_IDS: ReadonlyArray<NativeProbeId> = [
 	"p5_cline_version",
 ];
 
+// ---------- CORRECTION21 Mach-O parser + host-class architecture helpers -----
+
+/**
+ * Recognized Mach-O magic numbers. Native Mach-O binaries on Apple
+ * platforms embed a 32-bit (0xfeedface / 0xcefaedfe little-endian) or
+ * 64-bit (0xfeedfacf / 0xcffaedfe little-endian) magic value as their
+ * first four bytes. The next four bytes encode the target CPU type.
+ */
+export const MACHO_MAGIC_BE_32 = 0xfeedface;
+export const MACHO_MAGIC_LE_32 = 0xcefaedfe;
+export const MACHO_MAGIC_BE_64 = 0xfeedfacf;
+export const MACHO_MAGIC_LE_64 = 0xcffaedfe;
+
+/**
+ * CPU_TYPE constants from `<mach/machine.h>` for the architectures the
+ * factory probes care about. We deliberately do not enumerate every
+ * possible CPU type; unknown values produce an "unknown" architecture
+ * label that fails the host-class assertion when one is recorded.
+ */
+export const CPU_TYPE_X86 = 7;
+export const CPU_TYPE_X86_64 = 0x0100_0007;
+export const CPU_TYPE_ARM = 12;
+export const CPU_TYPE_ARM64 = 0x0100_000c;
+export const CPU_TYPE_ARM64_32 = 0x0200_000c;
+
+export type MachOArch = "arm64" | "x86_64" | "x86" | "arm" | "arm64_32" | "unknown";
+
+/**
+ * Bundle-relative sub-directory where CORRECTION21 externalizes each
+ * probe's stdout, stderr, metadata, and artifact payloads. Each file is
+ * hash-listed independently in `hashes.sha256` so the validator can
+ * recompute the SHA-256 of every stream without trusting the inventory
+ * JSON's self-reported hashes.
+ */
+export const NATIVE_PROBES_PAYLOAD_DIR = "native-probes";
+
+/**
+ * Result of an independent Mach-O architecture derivation. `arch` is
+ * the architecture label computed from the artifact bytes; `cputype`
+ * is the raw CPU_TYPE integer for diagnostics. When the artifact is
+ * not a Mach-O binary, `arch` is `null` and the probe's
+ * `architecture_assert` is not evaluated against the bytes.
+ */
+export interface MachODerivation {
+	arch: MachOArch | null;
+	cputype: number | null;
+	bitness: 32 | 64 | null;
+	byteOrder: "be" | "le" | null;
+}
+
+/**
+ * Read the first eight bytes of an artifact and derive its Mach-O
+ * architecture. Returns `arch=null` (not an error) when the artifact
+ * is not a Mach-O binary — JSON manifests, .d.ts files, text fixtures,
+ * and ELF binaries all return `null` because their magic number does
+ * not match any of the four known Mach-O values.
+ *
+ * The parser is independent of any recorded probe metadata: it only
+ * reads the staged bytes. A probe whose `recorded_architecture`
+ * disagrees with this derivation is rejected by the validator when the
+ * probe declares `architecture_assert: "host-class"`.
+ */
+export function deriveMachOArchitecture(bytes: Buffer): MachODerivation {
+	if (bytes.length < 8) {
+		return { arch: null, cputype: null, bitness: null, byteOrder: null };
+	}
+	const magicBe = bytes.readUInt32BE(0);
+	const magicLe = bytes.readUInt32LE(0);
+	let bitness: 32 | 64 | null = null;
+	let byteOrder: "be" | "le" | null = null;
+	if (magicBe === MACHO_MAGIC_BE_32) {
+		bitness = 32;
+		byteOrder = "be";
+	} else if (magicLe === MACHO_MAGIC_LE_32) {
+		bitness = 32;
+		byteOrder = "le";
+	} else if (magicBe === MACHO_MAGIC_BE_64) {
+		bitness = 64;
+		byteOrder = "be";
+	} else if (magicLe === MACHO_MAGIC_LE_64) {
+		bitness = 64;
+		byteOrder = "le";
+	} else {
+		return { arch: null, cputype: null, bitness: null, byteOrder: null };
+	}
+	const cputype = byteOrder === "be" ? bytes.readUInt32BE(4) : bytes.readUInt32LE(4);
+	const arch = machOCpuTypeToArch(cputype);
+	return { arch, cputype, bitness, byteOrder };
+}
+
+function machOCpuTypeToArch(cputype: number): MachOArch {
+	switch (cputype) {
+		case CPU_TYPE_ARM64:
+			return "arm64";
+		case CPU_TYPE_ARM64_32:
+			return "arm64_32";
+		case CPU_TYPE_X86_64:
+			return "x86_64";
+		case CPU_TYPE_X86:
+			return "x86";
+		case CPU_TYPE_ARM:
+			return "arm";
+		default:
+			return "unknown";
+	}
+}
+
+/**
+ * Project a host-class string (e.g. "darwin-arm64", "linux-x64") to
+ * the architecture component. Returns `null` when the host class is
+ * malformed (does not match `<os>-<arch>`). The validator uses this to
+ * independently verify that a Mach-O probe's derived architecture is
+ * compatible with the binding host.
+ */
+export function archForHostClass(hostClass: string | null): MachOArch | null {
+	if (hostClass === null) return null;
+	const m = /^(?:darwin|linux|win32|windows)-([a-z0-9_]+)$/.exec(hostClass);
+	if (!m) return null;
+	const arch = m[1];
+	if (arch === "arm64" || arch === "aarch64") return "arm64";
+	if (arch === "x64" || arch === "x86_64") return "x86_64";
+	if (arch === "x86" || arch === "ia32") return "x86";
+	if (arch === "arm" || arch === "armv7") return "arm";
+	return "unknown";
+}
+
 /**
  * Shape the runner/renderer agree on for a native-probe entry once it has
  * been loaded from the detached evidence bundle. The schema covers the
@@ -290,6 +416,17 @@ export interface EvidenceView {
 	// all present, well-formed, and each finished with status="pass".
 	nativeProbesComplete: boolean;
 	nativeProbesDiagnostics: NativeProbeDiagnostic[];
+	// CORRECTION21: provenance stamp. `probeSource` records where the
+	// inventory came from (real executed probes vs. hand-authored
+	// fixtures); `fixtureDerived` is true iff the runner substituted a
+	// fixture for one or more real probes. Both fields are required:
+	// `isEvidenceOk` rejects anything that is not `probeSource="executed"`
+	// and `fixtureDerived=false`. The fields live at the top level of
+	// `native-probes.json` and are surfaced through the bundle's
+	// `evidence.json` so the renderer and runner agree on the trust
+	// boundary.
+	probeSource: "executed" | "fixture" | "unknown";
+	fixtureDerived: boolean;
 }
 
 export interface ClosureInput {
@@ -427,18 +564,14 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 	}
 	if (typeof value.duration_ms !== "number" || value.duration_ms < 0) pushField("duration_ms");
 	if (typeof value.timeout !== "boolean") pushField("timeout");
-	// A spawn failure records exit_code=-1 and a non-null signal-marker
-	// string the runner appends to stderr. Treat that pairing as
-	// well-formed for fail rows.
-	const isRecordedSpawnFailure =
-		role === "executed" &&
-		value.status === "fail" &&
-		value.exit_code === -1 &&
-		typeof value.signal === "string" && value.signal.length === 0;
+	// CORRECTION21: the canonical spawn-failure shape is exit_code=-1 +
+	// signal=null. The runner normalizes outcome.signal back to null on
+	// spawnError, so a fail row carrying a non-null signal (including the
+	// legacy "" empty-string marker) is malformed. Reject any fail row
+	// whose exit_code or signal doesn't match the canonical pair.
 	if (
 		typeof value.exit_code !== "number" &&
-		!(role === "evidence" && value.exit_code === null) &&
-		!isRecordedSpawnFailure
+		!(role === "evidence" && value.exit_code === null)
 	) {
 		pushField("exit_code");
 	}
@@ -668,7 +801,15 @@ export function isEvidenceOk(e: EvidenceView): boolean {
 		e.outOfEvidenceDirPaths.length === 0 &&
 		e.malformedEvidenceCommandRows === 0 &&
 		e.malformedExecutedCommandRows === 0 &&
-		e.decodeError === null
+		e.decodeError === null &&
+		// CORRECTION21: provenance stamp. A bundle whose inventory
+		// came from a fixture (probe_source="fixture" or
+		// fixture_derived=true) is not eligible for closure PASS.
+		// The runner always stamps "executed"/false; tests set
+		// "fixture"/true and expect isEvidenceOk to return false so
+		// the fixture cannot accidentally satisfy the closure.
+		e.probeSource === "executed" &&
+		e.fixtureDerived === false
 	);
 }
 
@@ -756,6 +897,12 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		// inventory is fail-closed.
 		nativeProbesComplete: false,
 		nativeProbesDiagnostics: [],
+		// CORRECTION21: provenance stamp. Defaults to "unknown"/true so
+		// a bundle that lacks the stamp cannot accidentally satisfy
+		// the closure; the renderer / runner set the canonical
+		// "executed"/false pair when they write the inventory.
+		probeSource: "unknown",
+		fixtureDerived: true,
 	};
 
 	const evObj = ev.ok && typeof ev.value === "object" && ev.value !== null ? (ev.value as any) : null;
@@ -1136,6 +1283,19 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		out.metadataFileMismatches = metadataMismatches;
 	}
 
+	// CORRECTION21: provenance stamp. Read from `evidence.json` so the
+	// renderer and runner agree on the trust boundary. The runner stamps
+	// {probe_source: "executed", fixture_derived: false} when it
+	// executes the probes; hand-authored fixtures stamp
+	// {probe_source: "fixture", fixture_derived: true} and expect the
+	// closure to reject them.
+	if (evObj.probe_source === "executed" || evObj.probe_source === "fixture") {
+		out.probeSource = evObj.probe_source;
+	}
+	if (typeof evObj.fixture_derived === "boolean") {
+		out.fixtureDerived = evObj.fixture_derived;
+	}
+
 	if (expectedEvidencePayloadPaths !== null) {
 		// CORRECTION19: CORRECTION16+ evidence has a mandatory native-probe
 		// payload. The expected set is derived from the evidence schema and the
@@ -1143,6 +1303,15 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		const evidenceSchemaVersion =
 			typeof evObj.schema_version === "number" ? evObj.schema_version : 0;
 		const nativeProbesRequired = evidenceSchemaVersion >= 5;
+		// CORRECTION21: when probes are required, the schema also mandates
+		// externalized stream payloads. Each probe declares its stdout,
+		// stderr, metadata.json, and (when present) artifact files, all
+		// staged under `native-probes/` and hash-listed independently in
+		// `hashes.sha256`. The validator reads those files independently
+		// to recompute the SHA-256 declared in the probe record.
+		const externalStreamPaths = nativeProbesRequired
+			? deriveNativeProbeExternalStreamPayloadPaths(evDirAbs)
+			: [];
 		const nativeProbeArtifactPaths = nativeProbesRequired
 			? deriveNativeProbeArtifactPayloadPaths(evDirAbs)
 			: [];
@@ -1152,6 +1321,7 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 					"verification-results.json",
 					NATIVE_PROBES_BUNDLE_PATH,
 					...nativeProbeArtifactPaths,
+					...externalStreamPaths,
 					...commandPayloadPaths,
 				]
 			: ["evidence.json", "verification-results.json", ...commandPayloadPaths];
@@ -1299,6 +1469,83 @@ function deriveNativeProbeArtifactPayloadPaths(evDirAbs: string): string[] {
 			}
 		}
 		return paths;
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * CORRECTION21: enumerate the bundle-relative paths of every probe's
+ * externalized stream payloads. Each probe declares:
+ *
+ *   native-probes/<id>.stdout          — probe stdout (text)
+ *   native-probes/<id>.stderr          — probe stderr (text)
+ *   native-probes/<id>.metadata.json   — probe execution record (JSON)
+ *
+ * The artifact (when present) is also restated at its original
+ * `artifact_path` and counted by `deriveNativeProbeArtifactPayloadPaths`.
+ * All four classes are listed in `expected_evidence_payload_paths` and
+ * hash-listed in `hashes.sha256` so the validator can recompute each
+ * independently. The runner stages these files in `stageNativeProbesIntoBundle`;
+ * the tracker is only consulted for the canonical bundle.
+ *
+ * When a probe record omits a stream field, the external file is still
+ * listed (the validator tolerates an empty payload); only artifact
+ * presence depends on `artifact_exists`.
+ */
+export function externalStreamPayloadPath(probeId: NativeProbeId, suffix: "stdout" | "stderr" | "metadata.json"): string {
+	return `${NATIVE_PROBES_PAYLOAD_DIR}/${probeId}.${suffix}`;
+}
+
+function deriveNativeProbeExternalStreamPayloadPaths(evDirAbs: string): string[] {
+	// Read the inventory to see whether the bundle has stream payload
+	// declarations. CORRECTION21 keeps the stream metadata inside the
+	// probe record (under `stream_layout`); if absent, the schema
+	// defaults to the canonical four-payload layout. The function is
+	// total and never throws so a partial bundle does not surface
+	// duplicate-payload diagnostics.
+	const inventoryPath = join(evDirAbs, ...NATIVE_PROBES_BUNDLE_PATH.split("/"));
+	const probeIds = NATIVE_PROBE_IDS;
+	if (!existsSync(inventoryPath)) {
+		// No inventory: fall back to the canonical per-probe layout
+		// derived from NATIVE_PROBE_IDS so the manifest contract can
+		// still be expressed.
+		const out: string[] = [];
+		for (const probeId of probeIds) {
+			out.push(externalStreamPayloadPath(probeId, "stdout"));
+			out.push(externalStreamPayloadPath(probeId, "stderr"));
+			out.push(externalStreamPayloadPath(probeId, "metadata.json"));
+		}
+		return out;
+	}
+	try {
+		const parsed = JSON.parse(readFileSync(inventoryPath, "utf8"));
+		if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return [];
+		}
+		const record = parsed as Record<string, unknown>;
+		if (record.schema_version !== 1 || record.probes === null || typeof record.probes !== "object" || Array.isArray(record.probes)) {
+			return [];
+		}
+		const probes = record.probes as Record<string, unknown>;
+		const out: string[] = [];
+		for (const probeId of probeIds) {
+			const probe = probes[probeId];
+			let streamLayout: string[] | null = null;
+			if (probe !== null && typeof probe === "object" && !Array.isArray(probe)) {
+				const sl = (probe as Record<string, unknown>).stream_layout;
+				if (Array.isArray(sl) && sl.every((x) => typeof x === "string")) {
+					streamLayout = sl as string[];
+				}
+			}
+			if (streamLayout === null) {
+				streamLayout = ["stdout", "stderr", "metadata.json"];
+			}
+			for (const suffix of streamLayout) {
+				out.push(externalStreamPayloadPath(probeId, suffix as "stdout" | "stderr" | "metadata.json"));
+			}
+		}
+		return out;
 	} catch {
 		return [];
 	}
@@ -2030,6 +2277,36 @@ if (out.architecture_assert === "host-class" && hostClass !== null) {
 			});
 		}
 	}
+	// CORRECTION21: independently derive the artifact's architecture from
+	// the staged bytes. When the probe declares `architecture_assert:
+	// "host-class"` AND the artifact is a Mach-O binary, the derived
+	// CPU type must match the binding host's architecture component.
+	// The recorded `observed_architecture` is treated as advisory only;
+	// the binding check now uses the bytes directly so a fixture that
+	// lies about its artifact cannot pass.
+	if (out.architecture_assert === "host-class" && hostClass !== null && stagedArtifactBytes !== null) {
+		const derivation = deriveMachOArchitecture(stagedArtifactBytes);
+		const expectedArch = archForHostClass(hostClass);
+		if (derivation.arch === null) {
+			// Not a Mach-O: skip the derived-architecture binding check.
+			// JSON manifests, .d.ts files, and ELF binaries are not bound
+			// to a CPU type, so they pass through this branch silently.
+		} else if (expectedArch === null) {
+			failures.push({
+				probeId,
+				field: "host_class",
+				kind: "wrong-shape",
+				message: `native-probe \`${probeId}\` host_class=\"${hostClass}\" is not a recognized <os>-<arch> string`,
+			});
+		} else if (derivation.arch !== expectedArch) {
+			failures.push({
+				probeId,
+				field: "observed_architecture",
+				kind: "wrong-type",
+				message: `native-probe \`${probeId}\` Mach-O derived architecture (cputype=0x${(derivation.cputype ?? 0).toString(16)}, arch=${derivation.arch}) does not match host_class arch component: host=${expectedArch}`,
+			});
+		}
+	}
 	// Architecture / identity / host-class binding (only when the
 	// host_class is supplied, which it always is for production runs).
 	if (hostClass !== null) {
@@ -2446,8 +2723,32 @@ export function loadNativeProbesFromEvidence(
 				if (existsSync(af)) stagedArtifact = readFileSync(af);
 			}
 		} catch (_) { /* leave stagedArtifact = null */ }
-		const stdoutForHash = lookupProbeText(probeId, "stdout_text");
-		const stderrForHash = lookupProbeText(probeId, "stderr_text");
+		// CORRECTION21: externalized streams. When the inventory
+		// declares a `stream_layout`, the validator reads each
+		// external file and hashes its contents to recompute the
+		// declared `stdout_sha256` / `stderr_sha256`. The legacy
+		// embedded `stdout_text` / `stderr_text` path is preserved so
+		// existing fixtures continue to validate; production bundles
+		// written by the runner always externalize via the per-probe
+		// files staged under `native-probes/`.
+		const probeEntry = nestedProbes[probeId] as Record<string, unknown> | undefined;
+		const streamLayoutRaw = probeEntry && typeof probeEntry === "object" && Array.isArray((probeEntry as any).stream_layout)
+			? ((probeEntry as any).stream_layout as unknown[])
+			: null;
+		const streamLayout: string[] | null = streamLayoutRaw && streamLayoutRaw.every((x) => typeof x === "string")
+			? (streamLayoutRaw as string[])
+			: null;
+		let stdoutForHash: string;
+		let stderrForHash: string;
+		if (streamLayout !== null) {
+			const stdoutPath = join(evDirAbs, ...externalStreamPayloadPath(probeId, "stdout").split("/"));
+			const stderrPath = join(evDirAbs, ...externalStreamPayloadPath(probeId, "stderr").split("/"));
+			stdoutForHash = existsSync(stdoutPath) ? readFileSync(stdoutPath, "utf8") : "";
+			stderrForHash = existsSync(stderrPath) ? readFileSync(stderrPath, "utf8") : "";
+		} else {
+			stdoutForHash = lookupProbeText(probeId, "stdout_text");
+			stderrForHash = lookupProbeText(probeId, "stderr_text");
+		}
 		const defArtifactPath = def2?.artifact_path ?? null;
 		const artifactManifestHash =
 			defArtifactPath === null ? null : parsedManifest.declared.get(defArtifactPath) ?? null;

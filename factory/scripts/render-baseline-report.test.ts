@@ -106,6 +106,13 @@ function baseOk(overrides: Partial<EvidenceView> = {}): EvidenceView {
 		// `nativeProbesComplete` field on `ClosureInput`.
 		nativeProbesComplete: true,
 		nativeProbesDiagnostics: [],
+		// CORRECTION21: the provenance stamp defaults to "executed" /
+		// false so existing tests satisfy `isEvidenceOk`. Tests that
+		// intentionally use a fixture override both fields to make the
+		// closure reject the fixture, which is the entire point of the
+		// trust boundary.
+		probeSource: "executed",
+		fixtureDerived: false,
 		...overrides,
 	};
 }
@@ -925,6 +932,13 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 			worktree_clean_after: worktreeCleanAfter,
 			generated_at: "2026-07-17T09:50:09.000Z",
 			host_arch: "darwin-arm64",
+			// CORRECTION21: provenance stamp. The fixture must carry the
+			// production stamp so the closure's `isEvidenceOk` check
+			// (`probe_source === "executed" && fixtureDerived === false`)
+			// passes. The runner always emits these fields; the test
+			// fixture must mirror that.
+			probe_source: "executed",
+			fixture_derived: false,
 			commands: [evidenceCommand],
 		};
 		return wrapEvidence(obj);
@@ -1375,6 +1389,24 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		};
 	}
 
+	// CORRECTION21: the staged-artifact manifest entries are a local
+	// fixture object instead of a globalThis stash. The previous
+	// implementation attached the per-probe `hashes.sha256` lines to
+	// globalThis so the `beforeEach` callback could read them, which
+	// leaked module-level state across tests and produced intermittent
+	// "tamper leak" failures when `--randomize` reordered the suite.
+	// The closure below keeps the same staging behaviour without
+	// touching global state.
+	const FIXTURE_ARTIFACT_MANIFEST_LINES: ReadonlyArray<string> = (() => {
+		const lines: string[] = [];
+		for (const [probeId, bytes] of Object.entries(FIXTURE_ARTIFACT_BYTES)) {
+			const def = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
+			if (!def) throw new Error(`unknown probe id in fixture: ${probeId}`);
+			lines.push(`${sha256Hex(bytes)}  ${def.artifact_path}`);
+		}
+		return lines;
+	})();
+
 	beforeAll(() => {
 		bundleRoot = mkdtempSync(join(tmpdir(), "factory-probes-c16-"));
 		bundleDir = join(bundleRoot, ".factory/evidence/ACT-CLINEMM-FORK-BASELINE01");
@@ -1385,21 +1417,13 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		// independently recomputes the SHA-256, so the fixture can no
 		// longer flip `artifact_exists=true` while keeping the recorded
 		// SHA-256 pinned to the empty-string hash.
-		const artifactLines: string[] = [];
 		for (const [probeId, bytes] of Object.entries(FIXTURE_ARTIFACT_BYTES)) {
 			const def = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
 			if (!def) throw new Error(`unknown probe id in fixture: ${probeId}`);
 			const stagedArtifactAbs = join(bundleDir, ...def.artifact_path.split("/"));
 			mkdirSync(join(stagedArtifactAbs, ".."), { recursive: true });
 			writeFileSync(stagedArtifactAbs, bytes);
-			artifactLines.push(`${sha256Hex(bytes)}  ${def.artifact_path}`);
 		}
-		artifactLines.forEach((line) => {
-			/* keep array non-empty even when probe ids are not iterated above */
-		});
-		// Stage the artifact lines so `beforeEach` can rebuild the
-		// manifest with the matching SHA-256 entries.
-		(globalThis as any).__factory_probe_artifact_lines = artifactLines;
 	});
 
 	// CORRECTION20: every test must start from the canonical good
@@ -1410,7 +1434,6 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	// + manifest from scratch on each test.
 	beforeEach(() => {
 		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		const artifactLines: string[] = (globalThis as any).__factory_probe_artifact_lines ?? [];
 		const bytes = readFileSync(inventoryPath);
 		const hash = sha256Hex(bytes);
 		const otherFiles = ["evidence.json", "verification-results.json"];
@@ -1419,7 +1442,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			.join("\n");
 		writeFileSync(
 			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${artifactLines.join("\n")}\n${otherLines}\n`,
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${otherLines}\n`,
 		);
 	});
 

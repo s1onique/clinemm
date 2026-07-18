@@ -1186,6 +1186,15 @@ function writeDetachedBundle(args: {
 		worktree_inputs_clean_after_unexpected: postflight.unexpected,
 		worktree_clean_before: preflight.clean,
 		worktree_clean_after: postflight.clean,
+		// CORRECTION21: provenance stamp. The runner stamps
+		// "executed"/false for production runs; the `--probe-inventory-path`
+		// escape hatch (gated by `FACTORY_TEST_FIXTURE_MODE=1`) forces the
+		// stamp to "fixture"/true so the closure refuses to satisfy
+		// `isEvidenceOk` for fixtures. The runner cannot accidentally
+		// satisfy the trust boundary by omitting the fields because the
+		// schema enforces them on every write.
+		probe_source: ARGS.probeInventoryPath === null ? "executed" : "fixture",
+		fixture_derived: ARGS.probeInventoryPath !== null,
 		expected_evidence_payload_paths: expectedEvidencePayloadPaths,
 		tree_oid: identity.tree,
 		head_oid: identity.head,
@@ -1251,7 +1260,20 @@ function writeDetachedBundle(args: {
 	});
 	localView.nativeProbesComplete = nativeProbes.complete;
 	localView.nativeProbesDiagnostics = nativeProbes.diagnostics;
-	if (!isEvidenceOk(localView)) {
+	// CORRECTION21: the runner's self-check accepts both the
+	// production stamp (`probe_source="executed"` + `fixture_derived=false`)
+	// and the fixture stamp (`probe_source="fixture"` + `fixture_derived=true`).
+	// `isEvidenceOk` rejects fixtures on purpose so the closure cannot
+	// satisfy on a fixture; the runner's structural self-check is a
+	// different concern (the bundle is internally consistent and the
+	// probe dimension is complete). Mask the provenance fields here so
+	// the structural check passes regardless of stamp; the closure
+	// still rejects the fixture at render time.
+	const fixtureInventoryInUse = ARGS.probeInventoryPath !== null;
+	const selfCheckView: typeof localView = fixtureInventoryInUse
+		? {...localView, probeSource: "executed", fixtureDerived: false}
+		: localView;
+	if (!isEvidenceOk(selfCheckView)) {
 		throw new Error(
 			`EVIDENCE_SELF_CHECK_FAILED: ${JSON.stringify({
 				executionIdentityValid: localView.executionIdentityValid,
