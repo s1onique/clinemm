@@ -56,7 +56,7 @@
  * different host.
  */
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 export type NativeProbeId =
 	| "p1_better_sqlite3"
@@ -81,24 +81,72 @@ export interface BundledNativeProbe extends NativeProbe {
 	stderr_path: string;
 	metadata_path: string;
 }
+
+/**
+ * CORRECTION21 (µC-2) typed partial map the runner fills while
+ * iterating the catalogue. The checked completeness helper
+ * `requireAllCanonicalProbes()` narrows it to a full
+ * `Record<NativeProbeId, BundledNativeProbe>` only after every
+ * canonical probe is present.
+ */
+export type PartialBundledNativeProbeMap = Partial<Record<NativeProbeId, BundledNativeProbe>>;
+
+/**
+ * CORRECTION21 (µC-2) deterministic, sorted-key JSON encoder.
+ * Inlined here (rather than imported from `baseline-closure.ts`) to
+ * keep the dependency graph acyclic: `baseline-closure.ts` already
+ * imports from this module. The encoder produces a single canonical
+ * byte sequence for any JSON value regardless of property insertion
+ * order, so writer and reader agree on metadata bytes by construction.
+ *
+ * This is byte-level canonicalization — a semantic equality check on
+ * the JSON value yields byte-equal output, but two semantically
+ * different values that happen to share a sorted serialisation will
+ * still hash differently. The deterministic rule is the
+ * single-source-of-truth for the writer and reader.
+ */
+export function stableStringify(value: unknown): string {
+	if (value === null || typeof value !== "object") return JSON.stringify(value);
+	if (Array.isArray(value)) {
+		return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+	}
+	const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+		a < b ? -1 : a > b ? 1 : 0,
+	);
+	return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+}
+
 /**
  * CORRECTION21 (µC-2) pure canonicalization helper. The function takes a
  * collected `NativeProbe` and returns a `BundledNativeProbe` together
- * with the two UTF-8 byte buffers the runner must stage on disk. It
+ * with the three UTF-8 byte buffers the runner must stage on disk. It
  * is exported separately so the writer contract can be tested without
- * copying the entire runner into a temporary repository. Hash
- * consistency is guaranteed: the returned SHA-256 fields are computed
- * from the exact returned buffers, so a self-attesting caller cannot
- * lie about contents. The function does not perform filesystem I/O;
- * the runner is responsible for writing the buffers to the bundle and
- * assigning the paths from `canonicalStreamPaths(id)`.
+ * copying the entire runner into a temporary repository.
+ *
+ * The exact guarantee is:
+ *
+ *   The helper guarantees consistency between the supplied text,
+ *   returned bytes and recorded hashes — given the supplied text
+ *   and a probe record, the produced `stdoutBytes` / `stderrBytes`
+ *   hash to the declared `stdout_sha256` / `stderr_sha256`, and the
+ *   staged `metadataBytes` is the canonical-record form (sorted-key
+ *   JSON) of the supplied data.
+ *
+ *   The helper does NOT prove that the supplied text or record came
+ *   from real probe execution. Evidence provenance (the upstream
+ *   collector's invocation id and the staged payload bytes) is what
+ *   establishes authenticity.
+ *
+ * The function does not perform filesystem I/O; the runner is
+ * responsible for writing the returned buffers to the bundle at the
+ * paths returned by `canonicalStreamPaths(id)`.
  *
  * Failure behaviour: a missing or non-string `stdout_text` /
  * `stderr_text` throws `NATIVE_PROBE_STDOUT_MISSING` or
  * `NATIVE_PROBE_STDERR_MISSING` respectively. A missing record (the
  * caller passes `null` or `undefined`) throws
  * `NATIVE_PROBE_RECORD_MISSING`. The returned `BundledNativeProbe`
- * is a fresh object the writer can use directly.
+ * is a fresh object the writer can store without mutating the input.
  */
 export function canonicalizeProbeForBundle(
 	id: NativeProbeId,
@@ -146,11 +194,40 @@ export function canonicalizeProbeForBundle(
 		stderr_sha256: createHash("sha256").update(stderrBytes).digest("hex"),
 	};
 	// One pure operation produces all three staged payloads. Hash
-	// consistency between the declared SHA-256 fields, the staged bytes
-	// and the serialized metadata is guaranteed because every value
-	// is derived from the same record.
-	const metadataBytes = Buffer.from(JSON.stringify(record) + "\n", "utf8");
+	// consistency between the declared SHA-256 fields, the staged
+	// bytes and the serialized metadata is guaranteed because every
+	// value is derived from the same record. Metadata is serialized
+	// with the deterministic sorted-key encoder (`stableStringify`)
+	// so the loader and the writer agree on a single canonical byte
+	// sequence regardless of property insertion order on the input.
+	const metadataBytes = Buffer.from(stableStringify(record) + "\n", "utf8");
 	return { record, stdoutBytes, stderrBytes, metadataBytes };
+}
+
+/**
+ * CORRECTION21 (µC-2) checked completeness helper. Narrows a partial
+ * bundled-probe map to the full `Record<NativeProbeId, BundledNativeProbe>`
+ * only after every canonical probe id is present. Throws
+ * `NATIVE_PROBE_INCOMPLETE` with the list of missing ids otherwise.
+ *
+ * This is the seam the runner uses to lift its loop result out of
+ * `PartialBundledNativeProbeMap` and into the typed, complete map
+ * the aggregate `native-probes.json` and the per-probe
+ * `metadata.json` payloads both share.
+ */
+export function requireAllCanonicalProbes(
+	partial: PartialBundledNativeProbeMap,
+): Record<NativeProbeId, BundledNativeProbe> {
+	const missing: NativeProbeId[] = [];
+	for (const id of NATIVE_PROBE_IDS) {
+		if (partial[id] === undefined) missing.push(id);
+	}
+	if (missing.length > 0) {
+		throw new Error(
+			`NATIVE_PROBE_INCOMPLETE:${missing.join(",")}: the canonical stream writer requires all five probe records; the partial map was missing ${missing.length}.`,
+		);
+	}
+	return partial as Record<NativeProbeId, BundledNativeProbe>;
 }
 
 export const NATIVE_PROBE_IDS: ReadonlyArray<NativeProbeId> = [
