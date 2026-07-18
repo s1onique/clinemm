@@ -67,6 +67,20 @@ export type NativeProbeId =
 
 export const NATIVE_PROBE_STREAM_LAYOUT_VERSION = 1 as const;
 
+/**
+ * CORRECTION21 (µC-2) bundled probe shape: what the writer produces.
+ * The collector (collect-native-probes.ts) produces a
+ * `CollectedNativeProbe` only; the bundling fields (the canonical
+ * stream paths and the layout version) are assigned by the runner's
+ * `stageNativeProbesIntoBundle()` and read by the loader (µC-3).
+ */
+export interface BundledNativeProbe extends NativeProbe {
+	stream_layout_version: typeof NATIVE_PROBE_STREAM_LAYOUT_VERSION;
+	stdout_path: string;
+	stderr_path: string;
+	metadata_path: string;
+}
+
 export const NATIVE_PROBE_IDS: ReadonlyArray<NativeProbeId> = [
 	"p1_better_sqlite3",
 	"p2_protobuf",
@@ -184,13 +198,6 @@ export interface NativeProbe {
 	architecture_assert: "host-class" | "none";
 	success_contract_version: number;
 	invocation_id: string;
-	// CORRECTION21 (µC-2) canonical stream-layout fields. These
-	// three path strings and the layout version are written by the
-	// runner's external-stream writer and read by the loader (µC-3).
-	stream_layout_version: typeof NATIVE_PROBE_STREAM_LAYOUT_VERSION;
-	stdout_path: string;
-	stderr_path: string;
-	metadata_path: string;
 }
 
 const HOST_DARWIN_ARM64 = "darwin-arm64";
