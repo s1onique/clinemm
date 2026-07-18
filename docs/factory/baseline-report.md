@@ -135,7 +135,7 @@ Reported identity values (render provenance is
 `evidence_recorded_*`):
 
 ```
-subject_tree_oid            (renderer-computed): e82d283310189b5b60b984217ae9c072f80f0e38
+subject_tree_oid            (renderer-computed): 3192469c0cb513776a0ad4d988b2eb32f6d0a0b7
 subject_tree_oid            (recorded in evidence): (not recorded)
 subject_tree_oid_before     (recorded in evidence): (not recorded)
 subject_tree_oid_after      (recorded in evidence): (not recorded)
@@ -144,8 +144,8 @@ execution_tree_oid          (recorded in evidence): (not recorded)
 execution_identity_valid    (recorded in evidence): (not recorded)
 worktree_inputs_clean_before (recorded in evidence): (not recorded)
 worktree_inputs_clean_after  (recorded in evidence): (not recorded)
-renderer_input_head_oid:                            21e72a0c5a88350c2cf798fc200082fb3ec7c195
-renderer_input_full_tree_oid:                       9fa558dceafa99f108e422825f2d9cfacd53577d
+renderer_input_head_oid:                            3c45fbe0e83697a54a37822b634bcb802923337c
+renderer_input_full_tree_oid:                       38ce9a5bcaedca36651a4f7725aebed4aba4dd22
 ```
 
 ## Upstream and fork identity (from `factory/inventories/repository.json`)
@@ -285,8 +285,8 @@ renderer_input_full_tree_oid:                       9fa558dceafa99f108e422825f2d
 
 | Field | Value |
 | --- | --- |
-| renderer_input_head_oid (provenance) | `21e72a0c5a88350c2cf798fc200082fb3ec7c195` |
-| renderer_input_full_tree_oid (provenance) | `9fa558dceafa99f108e422825f2d9cfacd53577d` |
+| renderer_input_head_oid (provenance) | `3c45fbe0e83697a54a37822b634bcb802923337c` |
+| renderer_input_full_tree_oid (provenance) | `38ce9a5bcaedca36651a4f7725aebed4aba4dd22` |
 | subject_tree_oid (CORRECTION08/10) | `(not recorded)` |
 | subject_tree_oid_before (CORRECTION11) | `(not recorded)` |
 | subject_tree_oid_after (CORRECTION11) | `(not recorded)` |
