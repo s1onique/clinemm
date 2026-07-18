@@ -333,7 +333,9 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 	) {
 		fields.push("failure_classification");
 	}
-	// CORRECTION13: relational status/classification/timeout invariants.
+	// CORRECTION14: relational status/classification/timeout/exit_code invariants.
+	// pass ⇔ exit_code === 0 AND signal === null AND timeout === false AND fc === null.
+	// fail ⇔ fc ∈ FAILURE_CLASSES and timeout ⇒ fc === "TIMEOUT".
 	if (typeof value.status === "string" && typeof value.failure_classification !== "undefined") {
 		const fc = value.failure_classification;
 		const isTimeout = value.timeout === true;
@@ -342,9 +344,9 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 		const fcIsString = typeof fc === "string" && FAILURE_CLASSES.has(fc);
 		if (value.status === "pass") {
 			if (!fcIsNull) fields.push("failure_classification");
-			if (value.exit_code !== null && value.exit_code !== 0) fields.push("exit_code");
+			if (value.exit_code !== 0) fields.push("exit_code");
 			if (value.signal !== null) fields.push("signal");
-			if (value.timeout === true) fields.push("timeout");
+			if (isTimeout) fields.push("timeout");
 		} else if (value.status === "fail") {
 			if (fcIsNull) fields.push("failure_classification");
 			if (isTimeout && !fcIsTimeout) fields.push("failure_classification");
@@ -421,7 +423,9 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 	if (input.evidence.bundledResultPathInvalid) {
 		reasonCodes.push("BUNDLED_RESULT_PATH_INVALID");
 	}
-	if (input.evidence.bundledResultCommandSetExact === false) {
+	// CORRECTION14: the self-contained bundle is mandatory. A null value
+	// (bundle check never ran) is treated the same as a false value.
+	if (input.evidence.bundledResultCommandSetExact !== true) {
 		reasonCodes.push("BUNDLED_RESULT_COMMAND_SET_MISMATCH");
 	}
 	if (input.evidence.rowRelationalInvariantViolations.length > 0) {
@@ -482,7 +486,7 @@ export function isEvidenceOk(e: EvidenceView): boolean {
 		e.perCommandDriftChecked &&
 		e.manifestContractHonored &&
 		e.bundledResultPathInvalid === null &&
-		e.bundledResultCommandSetExact !== false &&
+		e.bundledResultCommandSetExact === true &&
 		e.rowRelationalInvariantViolations.length === 0 &&
 		e.metadataFileMismatches.length === 0 &&
 		e.treeMatches &&
@@ -756,14 +760,11 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	out.duplicateExecutedCommandIds = dup.duplicateExecutedCommandIds;
 	out.commandRecordMismatches = dup.commandRecordMismatches;
 
-	// CORRECTION13: the command set is only "exact" when evidence and
+	// CORRECTION14: the command set is only "exact" when evidence and
 	// executed agree, no row is malformed, and the bundled
-	// verification-results.json (when present) also agrees with the
-	// executed IDs. Treat a null bundledResultCommandSetExact as
-	// "exact" — the bundled check did not run, e.g. when the bundled
-	// file was not present in the staged manifest.
+	// verification-results.json check explicitly returned `true`.
 	const bundledSetExact =
-		out.bundledResultCommandSetExact !== false;
+		out.bundledResultCommandSetExact === true;
 	out.commandSetExact =
 		missingExecs.length === 0 &&
 		extraInEvidence.length === 0 &&

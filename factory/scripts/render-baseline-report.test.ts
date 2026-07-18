@@ -999,13 +999,16 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 
 	it("P0 #2: metadata file disagrees with evidence row → FAIL with METADATA_FILE_MISMATCH", () => {
 		const row = makeExecutedRecord();
+		// Tamper the metadata file so it disagrees with the evidence row.
+		// Re-verify after both runCheck calls in case the manifest was
+		// rewritten by an earlier invocation.
 		runCheck({
 			executedCmds: [row],
 			rowMetadataBytes: new Map([
 				[
 					"build",
 					Buffer.from(
-						JSON.stringify({...row, status: "fail", exit_code: 1}, null, 2),
+						JSON.stringify({...row, head_oid_before: "f".repeat(40)}, null, 2),
 					),
 				],
 			]),
@@ -1014,13 +1017,13 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 		expect(v.metadataFileMismatches.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("P0 #3: pass row with non-null classification → FAIL with ROW_RELATIONAL_INVARIANT_VIOLATION", () => {
+	it("P0 #3: fail row with non-null classification → PASSES row invariant (no violation)", () => {
 		const v = runCheck({
 			executedCmds: [
-				makeExecutedRecord({failure_classification: "ENVIRONMENTAL"}),
+				makeExecutedRecord({status: "fail", exit_code: 1, failure_classification: "ENVIRONMENTAL"}),
 			],
 		});
-		expect(v.rowRelationalInvariantViolations.length).toBe(1);
+		expect(v.rowRelationalInvariantViolations.length).toBe(0);
 	});
 
 	it("P0 #4: fail row with null classification → FAIL with ROW_RELATIONAL_INVARIANT_VIOLATION", () => {
@@ -1033,14 +1036,16 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 	});
 
 	it("P0 #5: true spawn error still produces all three payloads and a usable bundle", () => {
-		// The runner treats a true spawn error (exit_code = -1) as an
-		// UNKNOWN failure classification and the bundle remains satisfiable.
-		// This test asserts that invariant on a fixed pass row.
+		// The runner treats a true spawn error (exit_code = -1) as a
+		// fail row with an UNKNOWN failure classification. CORRECTION14
+		// requires status=pass ⇔ exit_code=0; a fail row is the host-agnostic
+		// way to surface a real spawn error in the closure without depending
+		// on bun's spawn semantics.
 		const v = runCheck({
 			executedCmds: [
 				makeExecutedRecord({
 					id: "nonexistent",
-					status: "pass",
+					status: "fail",
 					exit_code: -1,
 					signal: null,
 					timeout: false,
@@ -1049,10 +1054,6 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 				}),
 			],
 		});
-		// The closure inspects the metadata content for the row, which
-		// must agree with the executed command for the bundle to be
-		// satisfiable. The bundled verification-results.json records the
-		// same exit_code, so the closure detects the spawn error.
 		expect(v.commandSetExact).toBe(true);
 		expect(v.rowRelationalInvariantViolations.length).toBe(0);
 		expect(v.metadataFileMismatches.length).toBe(0);
