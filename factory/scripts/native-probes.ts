@@ -102,15 +102,21 @@ export interface BundledNativeProbe extends NativeProbe {
  */
 export function canonicalizeProbeForBundle(
 	id: NativeProbeId,
-	probe: NativeProbe,
+	probe: NativeProbe | null | undefined,
 ): {
 	record: BundledNativeProbe;
 	stdoutBytes: Buffer;
 	stderrBytes: Buffer;
+	metadataBytes: Buffer;
 } {
 	if (probe === null || probe === undefined) {
 		throw new Error(
 			`NATIVE_PROBE_RECORD_MISSING:${id}: the canonical stream writer requires all five probe records; the input was null or undefined.`,
+		);
+	}
+	if (probe.id !== id) {
+		throw new Error(
+			`NATIVE_PROBE_ID_MISMATCH:${id}:record=${probe.id}: the canonical stream writer requires the argument id and the record id to match; refusing to silently overwrite the record id.`,
 		);
 	}
 	if (typeof probe.stdout_text !== "string") {
@@ -126,6 +132,10 @@ export function canonicalizeProbeForBundle(
 	const stdoutBytes = Buffer.from(probe.stdout_text, "utf8");
 	const stderrBytes = Buffer.from(probe.stderr_text, "utf8");
 	const paths = canonicalStreamPaths(id);
+	// The record preserves probe.id but the canonical stream paths and
+	// the layout version are authoritative: catalogue/path drift is
+	// rejected by the probe.id check above. The record is a fresh
+	// object the writer can store without mutating the input.
 	const record: BundledNativeProbe = {
 		...probe,
 		stream_layout_version: NATIVE_PROBE_STREAM_LAYOUT_VERSION,
@@ -135,7 +145,12 @@ export function canonicalizeProbeForBundle(
 		stdout_sha256: createHash("sha256").update(stdoutBytes).digest("hex"),
 		stderr_sha256: createHash("sha256").update(stderrBytes).digest("hex"),
 	};
-	return { record, stdoutBytes, stderrBytes };
+	// One pure operation produces all three staged payloads. Hash
+	// consistency between the declared SHA-256 fields, the staged bytes
+	// and the serialized metadata is guaranteed because every value
+	// is derived from the same record.
+	const metadataBytes = Buffer.from(JSON.stringify(record) + "\n", "utf8");
+	return { record, stdoutBytes, stderrBytes, metadataBytes };
 }
 
 export const NATIVE_PROBE_IDS: ReadonlyArray<NativeProbeId> = [
