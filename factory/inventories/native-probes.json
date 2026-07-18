@@ -1,51 +1,213 @@
 {
-  "schema_version": 1,
-  "act_id": "ACT-CLINEMM-FORK-BASELINE01",
-  "host_class": "darwin-arm64",
-  "collected_at": "2026-07-17T09:00:00.000Z",
-  "p1_better_sqlite3": {
-    "id": "p1_better_sqlite3",
-    "path": "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
-    "architecture": "darwin-arm64",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "file_format": "Mach-O 64-bit arm64 bundle",
-    "status": "deferred",
-    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
-  },
-  "p2_protobuf": {
-    "id": "p2_protobuf",
-    "path": "node_modules/protobufjs/index.js",
-    "architecture": "darwin-arm64",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "file_format": "JavaScript ES module",
-    "status": "deferred",
-    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
-  },
-  "p3_ripgrep_darwin_arm64": {
-    "id": "p3_ripgrep_darwin_arm64",
-    "path": "node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
-    "architecture": "darwin-arm64",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "file_format": "Mach-O 64-bit arm64 executable",
-    "status": "deferred",
-    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
-  },
-  "p4_vscode_host": {
-    "id": "p4_vscode_host",
-    "path": "node_modules/@types/vscode/index.d.ts",
-    "architecture": "darwin-arm64",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "file_format": "TypeScript declaration",
-    "status": "deferred",
-    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
-  },
-  "p5_cline_version": {
-    "id": "p5_cline_version",
-    "path": "apps/cline/package.json",
-    "architecture": "darwin-arm64",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "file_format": "JSON manifest",
-    "status": "deferred",
-    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
-  }
+	"schema_version": 1,
+	"act_id": "ACT-CLINEMM-FORK-BASELINE01",
+	"host_class": "darwin-arm64",
+	"collected_at": "2026-07-18T07:04:05.925Z",
+	"execution_head_oid": "ea4e6e68c8e88d72ccca1a8c5685d86777ca9719",
+	"execution_tree_oid": "263b9c16895ca691afce610124687c1623c36565",
+	"subject_tree_oid": "8930df2f1658ade875e8c3959218b3be011d077b",
+	"p1_better_sqlite3": {
+		"id": "p1_better_sqlite3",
+		"label": "P1 better-sqlite3 native .node binding",
+		"host_class": "darwin-arm64",
+		"artifact_path": "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+		"working_directory": ".",
+		"argv": [
+			"node",
+			"-e",
+			"const fs = require('fs'); const buf = fs.readFileSync(\"node_modules/better-sqlite3/build/Release/better_sqlite3.node\"); const cputype = buf.readUInt32LE(4); const magic = buf.readUInt32LE(0); const swap = (n) => ((n & 0xff000000) >>> 24) | ((n & 0x00ff0000) >>> 8) | ((n & 0x0000ff00) << 8) | ((n & 0x000000ff) << 24); const isLE = magic === 0xfeedface; const cpu = isLE ? cputype : swap(cputype); const arch = cpu === 0x0100000c ? 'arm64' : (cpu === 0x01000007 ? 'x86_64' : ('0x' + cpu.toString(16))); process.stdout.write('Mach-O 64-bit ' + arch + ' bundle');"
+		],
+		"format_match": {
+			"source": "stdout",
+			"pattern": {}
+		},
+		"started_at": "2026-07-18T07:04:06.020Z",
+		"finished_at": "2026-07-18T07:04:06.079Z",
+		"duration_ms": 59,
+		"exit_code": 1,
+		"signal": null,
+		"timeout": false,
+		"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"stderr_sha256": "63901a0c41d986d1d34f0dc511c1204fc7252acdd549958af196c43b64fd414b",
+		"stdout_text": "",
+		"stderr_text": "node:fs:556\n  return binding.open(\n                 ^\n\nError: ENOENT: no such file or directory, open 'node_modules/better-sqlite3/build/Release/better_sqlite3.node'\n    at Object.openSync (node:fs:556:18)\n    at Object.readFileSync (node:fs:440:35)\n    at [eval]:1:42\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:483:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:481:60)\n    at evalFunction (node:internal/process/execution:315:30)\n    at evalTypeScript (node:internal/process/execution:327:3)\n    at node:internal/main/eval_string:71:3 {\n  errno: -2,\n  code: 'ENOENT',\n  syscall: 'open',\n  path: 'node_modules/better-sqlite3/build/Release/better_sqlite3.node'\n}\n\nNode.js v26.0.0\n",
+		"artifact_sha256": null,
+		"artifact_size": 0,
+		"artifact_exists": false,
+		"observed_file_format": "node:fs:556",
+		"observed_architecture": null,
+		"execution_head_oid": "ea4e6e68c8e88d72ccca1a8c5685d86777ca9719",
+		"execution_tree_oid": "263b9c16895ca691afce610124687c1623c36565",
+		"subject_tree_oid": "8930df2f1658ade875e8c3959218b3be011d077b",
+		"host_supported": true,
+		"host_support": [
+			"darwin-arm64"
+		],
+		"status": "fail",
+		"reason": "artifact does not exist on disk"
+	},
+	"p2_protobuf": {
+		"id": "p2_protobuf",
+		"label": "P2 protobufjs runtime require",
+		"host_class": "darwin-arm64",
+		"artifact_path": "node_modules/protobufjs/index.js",
+		"working_directory": ".",
+		"argv": [
+			"node",
+			"-e",
+			"const p = require('protobufjs'); process.stdout.write('ProtobufJs-ProtobufVersion ' + p.common ? p.common.Version || 'unknown' : 'unknown');"
+		],
+		"format_match": {
+			"source": "stdout",
+			"pattern": {}
+		},
+		"started_at": "2026-07-18T07:04:06.079Z",
+		"finished_at": "2026-07-18T07:04:06.136Z",
+		"duration_ms": 57,
+		"exit_code": 1,
+		"signal": null,
+		"timeout": false,
+		"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"stderr_sha256": "5fe38c3fea069a3bdb8fe99af02b1b4a5cb87593c4590439ef5965820658b4d8",
+		"stdout_text": "",
+		"stderr_text": "node:internal/modules/cjs/loader:1478\n  throw err;\n  ^\n\nError: Cannot find module 'protobufjs'\nRequire stack:\n- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[eval]\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)\n    at Module._load (node:internal/modules/cjs/loader:1261:25)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.require (node:internal/modules/cjs/loader:1575:12)\n    at require (node:internal/modules/helpers:191:16)\n    at [eval]:1:11\n    at runScriptInThisContext (node:internal/vm:219:10) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [\n    '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[eval]'\n  ]\n}\n\nNode.js v26.0.0\n",
+		"artifact_sha256": null,
+		"artifact_size": 0,
+		"artifact_exists": false,
+		"observed_file_format": "node:internal/modules/cjs/loader:1478",
+		"observed_architecture": null,
+		"execution_head_oid": "ea4e6e68c8e88d72ccca1a8c5685d86777ca9719",
+		"execution_tree_oid": "263b9c16895ca691afce610124687c1623c36565",
+		"subject_tree_oid": "8930df2f1658ade875e8c3959218b3be011d077b",
+		"host_supported": true,
+		"host_support": [
+			"darwin-arm64",
+			"linux-x64",
+			"windows-x64"
+		],
+		"status": "fail",
+		"reason": "protobufjs entry does not exist"
+	},
+	"p3_ripgrep_darwin_arm64": {
+		"id": "p3_ripgrep_darwin_arm64",
+		"label": "P3 ripgrep darwin-arm64 executable",
+		"host_class": "darwin-arm64",
+		"artifact_path": "node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
+		"working_directory": ".",
+		"argv": [
+			"node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
+			"--version"
+		],
+		"format_match": {
+			"source": "stdout",
+			"pattern": {}
+		},
+		"started_at": "2026-07-18T07:04:06.136Z",
+		"finished_at": "2026-07-18T07:04:06.137Z",
+		"duration_ms": 1,
+		"exit_code": -1,
+		"timeout": false,
+		"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"stderr_sha256": "af646da24d4ec60c32c1654e1717758cbb538b6e4f13ec9fd9f4ee9173f9eadb",
+		"stdout_text": "",
+		"stderr_text": "spawn error: ENOENT: no such file or directory, posix_spawn 'node_modules/@vscode/ripgrep/bin/rg-darwin-arm64'\n",
+		"artifact_sha256": null,
+		"artifact_size": 0,
+		"artifact_exists": false,
+		"observed_file_format": "spawn error: ENOENT: no such file or directory, posix_spawn 'node_modules/@vscode/ripgrep/bin/rg-darwin-arm64'",
+		"observed_architecture": "darwin-arm64",
+		"execution_head_oid": "ea4e6e68c8e88d72ccca1a8c5685d86777ca9719",
+		"execution_tree_oid": "263b9c16895ca691afce610124687c1623c36565",
+		"subject_tree_oid": "8930df2f1658ade875e8c3959218b3be011d077b",
+		"host_supported": true,
+		"host_support": [
+			"darwin-arm64"
+		],
+		"status": "fail",
+		"reason": "spawn error: ENOENT: no such file or directory, posix_spawn 'node_modules/@vscode/ripgrep/bin/rg-darwin-arm64'"
+	},
+	"p4_vscode_host": {
+		"id": "p4_vscode_host",
+		"label": "P4 VS Code extension-host activation",
+		"host_class": "darwin-arm64",
+		"artifact_path": "node_modules/@types/vscode/index.d.ts",
+		"working_directory": ".",
+		"argv": [
+			"node",
+			"-e",
+			"const path = require('path'); process.stdout.write('VSCODE_HOST_OK ' + path.resolve('node_modules/@types/vscode/index.d.ts'));"
+		],
+		"format_match": {
+			"source": "stdout",
+			"pattern": {}
+		},
+		"started_at": "2026-07-18T07:04:06.137Z",
+		"finished_at": "2026-07-18T07:04:06.189Z",
+		"duration_ms": 52,
+		"exit_code": 0,
+		"signal": null,
+		"timeout": false,
+		"stdout_sha256": "c5b170205f1de33128c27c443b12c4f35c37c9a1943697615f9c17ace431ad3b",
+		"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"stdout_text": "VSCODE_HOST_OK /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/@types/vscode/index.d.ts",
+		"stderr_text": "",
+		"artifact_sha256": null,
+		"artifact_size": 0,
+		"artifact_exists": false,
+		"observed_file_format": "VSCODE_HOST_OK /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/@types/vscode/index.d.ts",
+		"observed_architecture": null,
+		"execution_head_oid": "ea4e6e68c8e88d72ccca1a8c5685d86777ca9719",
+		"execution_tree_oid": "263b9c16895ca691afce610124687c1623c36565",
+		"subject_tree_oid": "8930df2f1658ade875e8c3959218b3be011d077b",
+		"host_supported": true,
+		"host_support": [
+			"darwin-arm64",
+			"linux-x64",
+			"windows-x64"
+		],
+		"status": "fail",
+		"reason": "@types/vscode entry does not exist"
+	},
+	"p5_cline_version": {
+		"id": "p5_cline_version",
+		"label": "P5 cline CLI --version + --help",
+		"host_class": "darwin-arm64",
+		"artifact_path": "apps/cli/package.json",
+		"working_directory": ".",
+		"argv": [
+			"node",
+			"apps/cli/bin/cline",
+			"--version"
+		],
+		"format_match": {
+			"source": "stdout",
+			"pattern": {}
+		},
+		"started_at": "2026-07-18T07:04:06.189Z",
+		"finished_at": "2026-07-18T07:04:06.243Z",
+		"duration_ms": 54,
+		"exit_code": 1,
+		"signal": null,
+		"timeout": false,
+		"stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"stderr_sha256": "f95c8337148b04ce1d4288a6be1c8bebf034372de0f4dfda31a2ce424b552db5",
+		"stdout_text": "",
+		"stderr_text": "file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/cli/bin/cline:14\nconst childProcess = require(\"child_process\");\n                     ^\n\nReferenceError: require is not defined in ES module scope, you can use import instead\n    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/cli/bin/cline:14:22\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:642:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\n\nNode.js v26.0.0\n",
+		"artifact_sha256": "e41f2ee89227b7fcb84847a36f25aac3e889573a25dbf3a473a9144cc6ad576d",
+		"artifact_size": 2783,
+		"artifact_exists": true,
+		"observed_file_format": "file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/cli/bin/cline:14",
+		"observed_architecture": null,
+		"execution_head_oid": "ea4e6e68c8e88d72ccca1a8c5685d86777ca9719",
+		"execution_tree_oid": "263b9c16895ca691afce610124687c1623c36565",
+		"subject_tree_oid": "8930df2f1658ade875e8c3959218b3be011d077b",
+		"host_supported": true,
+		"host_support": [
+			"darwin-arm64",
+			"linux-x64",
+			"windows-x64"
+		],
+		"status": "fail",
+		"reason": "cline CLI probe exited with code=1"
+	}
 }

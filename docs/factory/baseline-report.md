@@ -144,8 +144,8 @@ execution_tree_oid          (recorded in evidence): (not recorded)
 execution_identity_valid    (recorded in evidence): (not recorded)
 worktree_inputs_clean_before (recorded in evidence): (not recorded)
 worktree_inputs_clean_after  (recorded in evidence): (not recorded)
-renderer_input_head_oid:                            3318cf43dbe895b8c433216225834889f5945bf1
-renderer_input_full_tree_oid:                       5ca527972b315e43a265a2c39625aa8dcc39a52f
+renderer_input_head_oid:                            ea4e6e68c8e88d72ccca1a8c5685d86777ca9719
+renderer_input_full_tree_oid:                       263b9c16895ca691afce610124687c1623c36565
 ```
 
 ## Upstream and fork identity (from `factory/inventories/repository.json`)
@@ -204,7 +204,7 @@ renderer_input_full_tree_oid:                       5ca527972b315e43a265a2c39625
 | -------------------- | -----: |
 | `affected-scope` | 4 |
 | `live-credentialed` | 3 |
-| `mandatory` | 18 |
+| `mandatory` | 20 |
 | `manual-interactive` | 2 |
 | `obsolete` | 1 |
 | `release-only` | 5 |
@@ -227,11 +227,11 @@ renderer_input_full_tree_oid:                       5ca527972b315e43a265a2c39625
 
 | Probe | Artifact | Status | Reason |
 | ----- | -------- | ------ | ------ |
-| P1 better-sqlite3 | (no probe) | DEFERRED | native-probe `p1_better_sqlite3` is deferred (status=deferred) |
-| P2 protobuf | (no probe) | DEFERRED | native-probe `p2_protobuf` is deferred (status=deferred) |
-| P3 ripgrep darwin-arm64 | (no probe) | DEFERRED | native-probe `p3_ripgrep_darwin_arm64` is deferred (status=deferred) |
-| P4 VS Code host | (no probe) | DEFERRED | native-probe `p4_vscode_host` is deferred (status=deferred) |
-| P5 cline --version | (no probe) | DEFERRED | native-probe `p5_cline_version` is deferred (status=deferred) |
+| P1 better-sqlite3 | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
+| P2 protobuf | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
+| P3 ripgrep darwin-arm64 | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
+| P4 VS Code host | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
+| P5 cline --version | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
 
 ## Structural baseline
 
@@ -285,8 +285,8 @@ renderer_input_full_tree_oid:                       5ca527972b315e43a265a2c39625
 
 | Field | Value |
 | --- | --- |
-| renderer_input_head_oid (provenance) | `3318cf43dbe895b8c433216225834889f5945bf1` |
-| renderer_input_full_tree_oid (provenance) | `5ca527972b315e43a265a2c39625aa8dcc39a52f` |
+| renderer_input_head_oid (provenance) | `ea4e6e68c8e88d72ccca1a8c5685d86777ca9719` |
+| renderer_input_full_tree_oid (provenance) | `263b9c16895ca691afce610124687c1623c36565` |
 | subject_tree_oid (CORRECTION08/10) | `(not recorded)` |
 | subject_tree_oid_before (CORRECTION11) | `(not recorded)` |
 | subject_tree_oid_after (CORRECTION11) | `(not recorded)` |
@@ -495,11 +495,11 @@ The executed-commands list and the evidence.commands list disagree. Re-run `bun 
 
 ### Native-probe inventory diagnostics (CORRECTION15)
 
-- `p1_better_sqlite3` — kind=`deferred`: native-probe `p1_better_sqlite3` is deferred (status=deferred)
-- `p2_protobuf` — kind=`deferred`: native-probe `p2_protobuf` is deferred (status=deferred)
-- `p3_ripgrep_darwin_arm64` — kind=`deferred`: native-probe `p3_ripgrep_darwin_arm64` is deferred (status=deferred)
-- `p4_vscode_host` — kind=`deferred`: native-probe `p4_vscode_host` is deferred (status=deferred)
-- `p5_cline_version` — kind=`deferred`: native-probe `p5_cline_version` is deferred (status=deferred)
+- `p1_better_sqlite3` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
+- `p2_protobuf` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
+- `p3_ripgrep_darwin_arm64` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
+- `p4_vscode_host` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
+- `p5_cline_version` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
 
 
 ## Production-code identity
