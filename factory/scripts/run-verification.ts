@@ -49,7 +49,7 @@ import {
 	type NativeProbesInventory,
 } from "./collect-native-probes";
 import { parsePorcelainV1Z } from "./git-status";
-import { NATIVE_PROBE_DEFINITIONS } from "./native-probes";
+import { canonicalStreamPaths, NATIVE_PROBE_DEFINITIONS } from "./native-probes";
 import { computeFilteredSubjectTreeOid, SUBJECT_TREE_EXCLUDES } from "./subject-tree";
 
 const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01";
@@ -1007,6 +1007,7 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 		const {
 			bundleRel: nativeProbesBundleRel,
 			artifactPayloadRels,
+			streamPayloadRels,
 			inventory: probeInventory,
 		} = await stageNativeProbesIntoBundle(stagingDir);
 
@@ -1029,6 +1030,7 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			resultDocument,
 			nativeProbesBundleRel,
 			artifactPayloadRels,
+			streamPayloadRels,
 		});
 		replaceCanonicalBundle(stagingDir);
 		// CORRECTION13 + CORRECTION20: refresh the tracked mirror only
@@ -1068,7 +1070,13 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 async function stageNativeProbesIntoBundle(
 	stagingDir: string,
 	probeInventoryPath: string | null = ARGS.probeInventoryPath,
-): Promise<{ bundleRel: string; bundleAbs: string; artifactPayloadRels: string[]; inventory: NativeProbesInventory }> {
+): Promise<{
+	bundleRel: string;
+	bundleAbs: string;
+	artifactPayloadRels: string[];
+	streamPayloadRels: string[];
+	inventory: NativeProbesInventory;
+}> {
 	let inventory: NativeProbesInventory;
 	if (probeInventoryPath !== null) {
 		const text = readFileSync(probeInventoryPath, "utf8");
@@ -1091,6 +1099,30 @@ async function stageNativeProbesIntoBundle(
 		atomicWriteFile(stagedArtifact, readFileSync(source));
 		artifactPayloadRels.push(definition.artifact_path);
 	}
+	// CORRECTION21 (µC-2) external-stream writer: for every canonical
+	// probe, write the per-probe stdout, stderr, and metadata.json
+	// payload into the bundle. The path is derived from the probe id
+	// only; caller-selected alternative paths are rejected. The hash
+	// recorded in `expected_evidence_payload_paths` and `hashes.sha256`
+	// is computed from the exact bytes written, so a self-attesting
+	// fixture cannot lie about the contents. Empty stdout/stderr still
+	// produces present zero-byte files.
+	const streamPayloadRels: string[] = [];
+	for (const definition of NATIVE_PROBE_DEFINITIONS) {
+		const probe = inventory.probes[definition.id];
+		if (!probe) continue;
+		const paths = canonicalStreamPaths(definition.id);
+		const stdoutAbs = join(stagingDir, ...paths.stdout_path.split("/"));
+		const stderrAbs = join(stagingDir, ...paths.stderr_path.split("/"));
+		const metadataAbs = join(stagingDir, ...paths.metadata_path.split("/"));
+		mkdirSync(dirname(stdoutAbs), { recursive: true });
+		const stdoutBytes = Buffer.from(probe.stdout_text ?? "", "utf8");
+		const stderrBytes = Buffer.from(probe.stderr_text ?? "", "utf8");
+		atomicWriteFile(stdoutAbs, stdoutBytes);
+		atomicWriteFile(stderrAbs, stderrBytes);
+		atomicWriteFile(metadataAbs, JSON.stringify(probe, null, "\t") + "\n");
+		streamPayloadRels.push(paths.stdout_path, paths.stderr_path, paths.metadata_path);
+	}
 	// CORRECTION20: the tracked mirror is NOT refreshed here. The tracked
 	// file at `factory/inventories/native-probes.json` is informational
 	// only; the authoritative copy is the staged bundle. Refreshing the
@@ -1098,7 +1130,7 @@ async function stageNativeProbesIntoBundle(
 	// pass leaves the mirror out of sync with the canonical bundle. The
 	// caller (`runPass`) refreshes the mirror after `replaceCanonicalBundle`
 	// succeeds, so a failed pass cannot poison the tracked file.
-	return { bundleRel, bundleAbs, artifactPayloadRels, inventory };
+	return { bundleRel, bundleAbs, artifactPayloadRels, streamPayloadRels, inventory };
 }
 
 /**
@@ -1129,6 +1161,7 @@ function writeDetachedBundle(args: {
 	resultDocument: PassResultDocument;
 	nativeProbesBundleRel: string;
 	artifactPayloadRels: string[];
+	streamPayloadRels: string[];
 }): void {
 	const {
 		label,
@@ -1139,6 +1172,7 @@ function writeDetachedBundle(args: {
 		resultDocument,
 		nativeProbesBundleRel,
 		artifactPayloadRels,
+		streamPayloadRels,
 	} = args;
 	const executed = resultDocument.executed_commands;
 	for (const row of executed) {
@@ -1167,6 +1201,7 @@ function writeDetachedBundle(args: {
 		"verification-results.json",
 		nativeProbesBundleRel,
 		...artifactPayloadRels,
+		...streamPayloadRels,
 	);
 
 	const executionIdentityValid = verifyExecutionIdentityShape(identity.head, identity.tree);

@@ -459,6 +459,34 @@ export function newInvocationId(): string {
 	);
 }
 
+/**
+ * CORRECTION21 (µC-2) canonical stream layout.
+ *
+ * For every probe id, the three external payloads live at the
+ * fixed repository-relative paths:
+ *
+ *   native-probes/<id>.stdout
+ *   native-probes/<id>.stderr
+ *   native-probes/<id>.metadata.json
+ *
+ * The trio is the single source of truth shared between the runner
+ * (writer) and the validator (reader). Caller-selected alternative
+ * paths are rejected; the loader only accepts the canonical layout.
+ */
+export interface CanonicalStreamPaths {
+	stdout_path: string;
+	stderr_path: string;
+	metadata_path: string;
+}
+
+export function canonicalStreamPaths(id: NativeProbeId): CanonicalStreamPaths {
+	return {
+		stdout_path: `native-probes/${id}.stdout`,
+		stderr_path: `native-probes/${id}.stderr`,
+		metadata_path: `native-probes/${id}.metadata.json`,
+	};
+}
+
 export function probeDefinitionFor(id: NativeProbeId): NativeProbeDefinition {
 	const def = NATIVE_PROBE_DEFINITIONS.find((p) => p.id === id);
 	if (!def) throw new Error(`unknown native-probe id: ${id}`);
