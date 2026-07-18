@@ -2,10 +2,10 @@
 	"schema_version": 1,
 	"act_id": "ACT-CLINEMM-FORK-BASELINE01",
 	"host_class": "darwin-arm64",
-	"collected_at": "2026-07-18T09:02:27.176Z",
-	"execution_head_oid": "5cb5643707b047900694b2f1249e173a62de98f3",
-	"execution_tree_oid": "2bec8a79c45ea267229e54d0c54ce09001af7ad7",
-	"subject_tree_oid": "c0bd341157878f7bfd5ef67a21cd3459327a761d",
+	"collected_at": "2026-07-18T14:01:02.130Z",
+	"execution_head_oid": "16f0977ee243049c00bba9788f8897885b73fde0",
+	"execution_tree_oid": "923a038153a218975f56fcfcd1b471b7da966aee",
+	"subject_tree_oid": "d0aa988b7fc1644b09c9b4510adff301ca80fec8",
 	"schema_version_native_probe": 1,
 	"top_level_inventory": true,
 	"probes": {
@@ -35,9 +35,9 @@
 			"stderr_sha256": "44be079fef238240ed9f78d0d41139c3defa262ee305a85ee5f907836be454c7",
 			"observed_file_format": "node:internal/modules/cjs/loader:1478",
 			"observed_architecture": null,
-			"execution_head_oid": "5cb5643707b047900694b2f1249e173a62de98f3",
-			"execution_tree_oid": "2bec8a79c45ea267229e54d0c54ce09001af7ad7",
-			"subject_tree_oid": "c0bd341157878f7bfd5ef67a21cd3459327a761d",
+			"execution_head_oid": "16f0977ee243049c00bba9788f8897885b73fde0",
+			"execution_tree_oid": "923a038153a218975f56fcfcd1b471b7da966aee",
+			"subject_tree_oid": "d0aa988b7fc1644b09c9b4510adff301ca80fec8",
 			"host_class": "darwin-arm64",
 			"host_supported": true,
 			"host_support": [
@@ -45,16 +45,16 @@
 				"linux-x64",
 				"windows-x64"
 			],
-			"started_at": "2026-07-18T09:02:27.318Z",
-			"finished_at": "2026-07-18T09:02:27.390Z",
-			"duration_ms": 72,
+			"started_at": "2026-07-18T14:01:02.251Z",
+			"finished_at": "2026-07-18T14:01:02.440Z",
+			"duration_ms": 189,
 			"working_directory": ".",
 			"format_match_source": "stdout",
 			"format_match_pattern_source": "SMOKE_OK",
 			"format_match_pattern_flags": "",
 			"architecture_assert": "host-class",
 			"success_contract_version": 1,
-			"invocation_id": "0mrq521q6-ab58bb044e59"
+			"invocation_id": "0mrqfq12g-4e0f741a6b46"
 		},
 		"p2_protobuf": {
 			"id": "p2_protobuf",
@@ -82,9 +82,9 @@
 			"stderr_sha256": "4a85b112a2fa151e1306ed1bf35c155b1d6e05ac458cdc9177375bed9e9f6d48",
 			"observed_file_format": "node:internal/modules/cjs/loader:1478",
 			"observed_architecture": null,
-			"execution_head_oid": "5cb5643707b047900694b2f1249e173a62de98f3",
-			"execution_tree_oid": "2bec8a79c45ea267229e54d0c54ce09001af7ad7",
-			"subject_tree_oid": "c0bd341157878f7bfd5ef67a21cd3459327a761d",
+			"execution_head_oid": "16f0977ee243049c00bba9788f8897885b73fde0",
+			"execution_tree_oid": "923a038153a218975f56fcfcd1b471b7da966aee",
+			"subject_tree_oid": "d0aa988b7fc1644b09c9b4510adff301ca80fec8",
 			"host_class": "darwin-arm64",
 			"host_supported": true,
 			"host_support": [
@@ -92,16 +92,16 @@
 				"linux-x64",
 				"windows-x64"
 			],
-			"started_at": "2026-07-18T09:02:27.391Z",
-			"finished_at": "2026-07-18T09:02:27.453Z",
-			"duration_ms": 62,
+			"started_at": "2026-07-18T14:01:02.442Z",
+			"finished_at": "2026-07-18T14:01:02.498Z",
+			"duration_ms": 56,
 			"working_directory": ".",
 			"format_match_source": "stdout",
 			"format_match_pattern_source": "ProtobufJs-ProtobufVersion",
 			"format_match_pattern_flags": "",
 			"architecture_assert": "none",
 			"success_contract_version": 1,
-			"invocation_id": "0mrq521rx-2ab37d84aba4"
+			"invocation_id": "0mrqfq142-2a3ac1aac2bf"
 		},
 		"p3_ripgrep_darwin_arm64": {
 			"id": "p3_ripgrep_darwin_arm64",
@@ -129,24 +129,24 @@
 			"stderr_sha256": "cf8c33d2ae760f37b8a0bd5046c3f1d02745cb3f5b3036837310618e828e95ba",
 			"observed_file_format": "rg missing",
 			"observed_architecture": null,
-			"execution_head_oid": "5cb5643707b047900694b2f1249e173a62de98f3",
-			"execution_tree_oid": "2bec8a79c45ea267229e54d0c54ce09001af7ad7",
-			"subject_tree_oid": "c0bd341157878f7bfd5ef67a21cd3459327a761d",
+			"execution_head_oid": "16f0977ee243049c00bba9788f8897885b73fde0",
+			"execution_tree_oid": "923a038153a218975f56fcfcd1b471b7da966aee",
+			"subject_tree_oid": "d0aa988b7fc1644b09c9b4510adff301ca80fec8",
 			"host_class": "darwin-arm64",
 			"host_supported": true,
 			"host_support": [
 				"darwin-arm64"
 			],
-			"started_at": "2026-07-18T09:02:27.453Z",
-			"finished_at": "2026-07-18T09:02:27.513Z",
-			"duration_ms": 60,
+			"started_at": "2026-07-18T14:01:02.498Z",
+			"finished_at": "2026-07-18T14:01:02.555Z",
+			"duration_ms": 57,
 			"working_directory": ".",
 			"format_match_source": "stdout",
 			"format_match_pattern_source": "ripgrep",
 			"format_match_pattern_flags": "",
 			"architecture_assert": "host-class",
 			"success_contract_version": 1,
-			"invocation_id": "0mrq521tl-7ee89c863ac8"
+			"invocation_id": "0mrqfq15n-183c5989d5ed"
 		},
 		"p4_vscode_host": {
 			"id": "p4_vscode_host",
@@ -174,9 +174,9 @@
 			"stderr_sha256": "8313e76be934852bec12be2002cef56071639fd9f054baaf344c76beb7eab048",
 			"observed_file_format": "node:internal/modules/cjs/loader:1478",
 			"observed_architecture": null,
-			"execution_head_oid": "5cb5643707b047900694b2f1249e173a62de98f3",
-			"execution_tree_oid": "2bec8a79c45ea267229e54d0c54ce09001af7ad7",
-			"subject_tree_oid": "c0bd341157878f7bfd5ef67a21cd3459327a761d",
+			"execution_head_oid": "16f0977ee243049c00bba9788f8897885b73fde0",
+			"execution_tree_oid": "923a038153a218975f56fcfcd1b471b7da966aee",
+			"subject_tree_oid": "d0aa988b7fc1644b09c9b4510adff301ca80fec8",
 			"host_class": "darwin-arm64",
 			"host_supported": true,
 			"host_support": [
@@ -184,16 +184,16 @@
 				"linux-x64",
 				"windows-x64"
 			],
-			"started_at": "2026-07-18T09:02:27.513Z",
-			"finished_at": "2026-07-18T09:02:27.575Z",
-			"duration_ms": 62,
+			"started_at": "2026-07-18T14:01:02.555Z",
+			"finished_at": "2026-07-18T14:01:02.611Z",
+			"duration_ms": 56,
 			"working_directory": ".",
 			"format_match_source": "stdout",
 			"format_match_pattern_source": "VSCODE_OK",
 			"format_match_pattern_flags": "",
 			"architecture_assert": "none",
 			"success_contract_version": 1,
-			"invocation_id": "0mrq521vb-905f356593ab"
+			"invocation_id": "0mrqfq177-2534e4a9059f"
 		},
 		"p5_cline_version": {
 			"id": "p5_cline_version",
@@ -221,9 +221,9 @@
 			"stderr_sha256": "f95c8337148b04ce1d4288a6be1c8bebf034372de0f4dfda31a2ce424b552db5",
 			"observed_file_format": "file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/cli/bin/cline:14",
 			"observed_architecture": null,
-			"execution_head_oid": "5cb5643707b047900694b2f1249e173a62de98f3",
-			"execution_tree_oid": "2bec8a79c45ea267229e54d0c54ce09001af7ad7",
-			"subject_tree_oid": "c0bd341157878f7bfd5ef67a21cd3459327a761d",
+			"execution_head_oid": "16f0977ee243049c00bba9788f8897885b73fde0",
+			"execution_tree_oid": "923a038153a218975f56fcfcd1b471b7da966aee",
+			"subject_tree_oid": "d0aa988b7fc1644b09c9b4510adff301ca80fec8",
 			"host_class": "darwin-arm64",
 			"host_supported": true,
 			"host_support": [
@@ -231,16 +231,16 @@
 				"linux-x64",
 				"windows-x64"
 			],
-			"started_at": "2026-07-18T09:02:27.576Z",
-			"finished_at": "2026-07-18T09:02:27.642Z",
-			"duration_ms": 66,
+			"started_at": "2026-07-18T14:01:02.611Z",
+			"finished_at": "2026-07-18T14:01:02.667Z",
+			"duration_ms": 56,
 			"working_directory": ".",
 			"format_match_source": "stdout",
 			"format_match_pattern_source": "cline",
 			"format_match_pattern_flags": "",
 			"architecture_assert": "none",
 			"success_contract_version": 1,
-			"invocation_id": "0mrq521x6-751c918261a1"
+			"invocation_id": "0mrqfq18r-d6cc3dc2eeee"
 		}
 	}
 }
