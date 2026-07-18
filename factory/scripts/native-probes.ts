@@ -68,11 +68,12 @@ export type NativeProbeId =
 export const NATIVE_PROBE_STREAM_LAYOUT_VERSION = 1 as const;
 
 /**
- * CORRECTION21 (µC-2) bundled probe shape: what the writer produces.
- * The collector (collect-native-probes.ts) produces a
- * `CollectedNativeProbe` only; the bundling fields (the canonical
- * stream paths and the layout version) are assigned by the runner's
- * `stageNativeProbesIntoBundle()` and read by the loader (µC-3).
+ * CORRECTION21 (µC-2) bundled probe shape: what the writer
+ * produces. `NativeProbe` is the **collected** shape (what the
+ * collector and the fixture builder produce); `BundledNativeProbe`
+ * adds the bundling-only fields the runner assigns in
+ * `stageNativeProbesIntoBundle()` (canonical stream paths and the
+ * layout version) and the loader (µC-3) will validate.
  */
 export interface BundledNativeProbe extends NativeProbe {
 	stream_layout_version: typeof NATIVE_PROBE_STREAM_LAYOUT_VERSION;
