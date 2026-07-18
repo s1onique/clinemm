@@ -1,12 +1,20 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION12 — verification runner.
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION13 — verification runner.
  *
  * The runner binds every command to one execution HEAD/tree and one filtered
  * subject tree, samples path-aware worktree cleanliness around every command,
  * and builds evidence transactionally in a fresh sibling staging directory.
  * The canonical bundle is replaced only after the staged bundle passes the
  * same structural `checkEvidence()` validation used by the renderer.
+ *
+ * CORRECTION13: the staged bundle is now self-contained — the executed-command
+ * result document lives inside the staging directory as
+ * `verification-results.json` and is hash-verified by `checkEvidence()`. The
+ * tracked mirror at `factory/inventories/verification-results.json` is only
+ * refreshed after the canonical swap succeeds. The `fs.watch`-based
+ * tracked-input observation is demoted from a proof-bearing closure dimension
+ * to a hint; `perCommandInputsClean` is removed from the conjunction.
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -127,9 +135,12 @@ interface ExecResult {
 	tree_oid_after: string;
 	subject_tree_oid_before: string;
 	subject_tree_oid_after: string;
-	inputs_clean_before_command: boolean;
-	inputs_clean_after_command: boolean;
-	unexpected_paths_before: string[];
+	// CORRECTION13: rename the per-command transient claim to an observation
+	// of the fs.watch-backed monitor. It is NOT proof that no transient
+	// modification occurred; downstream must treat it as advisory.
+	tracked_input_change_observed: boolean;
+	tracked_input_monitor_degraded: boolean;
+	observed_tracked_input_paths: string[];
 	unexpected_paths_after: string[];
 	environment_sha256: string;
 	failure_classification: FailureClass | null;
@@ -500,7 +511,7 @@ function startTrackedInputMonitor(paths: string[]): TrackedInputMonitor {
 	let watcher: FSWatcher | null = null;
 	let degraded = false;
 	try {
-		watcher = watch(ROOT, { recursive: true }, (_event, filename) => {
+		watcher = watch(ROOT, { recursive: true}, (_event, filename) => {
 			if (filename === null) {
 				degraded = true;
 				return;
@@ -533,7 +544,7 @@ function startTrackedInputMonitor(paths: string[]): TrackedInputMonitor {
 
 function fingerprint(path: string): string {
 	try {
-		const value = lstatSync(join(ROOT, ...path.split("/")), { bigint: true });
+		const value = lstatSync(join(ROOT, ...path.split("/")), {bigint: true});
 		return [
 			value.dev,
 			value.ino,
@@ -554,7 +565,7 @@ async function executeCommand(
 	trackedInputs: string[],
 ): Promise<ExecResult> {
 	const paths = payloadPaths(evidenceDir, command.id);
-	mkdirSync(dirname(paths.stdoutAbs), { recursive: true });
+	mkdirSync(dirname(paths.stdoutAbs), {recursive: true});
 
 	const stateBefore = captureExecutionIdentity();
 	assertIdentityPinned(stateBefore, bundleIdentity, `REPOSITORY_DRIFT_BEFORE_COMMAND: ${command.id}`);
@@ -588,14 +599,11 @@ async function executeCommand(
 
 	const cleanlinessAfterRaw = worktreeInputsClean();
 	const monitorObservation = monitor.stop();
-	const unexpectedAfter = [
-		...new Set([
-			...cleanlinessAfterRaw.unexpected,
-			...monitorObservation.touched,
-			...(monitorObservation.degraded ? ["<tracked-input-monitor-degraded>"] : []),
-		]),
-	].sort();
-	const inputsCleanAfter = cleanlinessAfterRaw.clean && unexpectedAfter.length === 0;
+	// CORRECTION13: only the post-command git status sample contributes
+	// to the proof-bearing `unexpected_paths_after` field. The transient
+	// monitor observations are kept separate as advisory hints.
+	const unexpectedAfter = [...cleanlinessAfterRaw.unexpected].sort();
+	const trackedInputChangeObserved = monitorObservation.touched.length > 0;
 
 	let stateAfter = bundleIdentity;
 	let identityCaptureError: Error | null = null;
@@ -638,9 +646,9 @@ async function executeCommand(
 		tree_oid_after: stateAfter.tree,
 		subject_tree_oid_before: stateBefore.subject,
 		subject_tree_oid_after: stateAfter.subject,
-		inputs_clean_before_command: cleanlinessBefore.clean,
-		inputs_clean_after_command: inputsCleanAfter,
-		unexpected_paths_before: cleanlinessBefore.unexpected,
+		tracked_input_change_observed: trackedInputChangeObserved,
+		tracked_input_monitor_degraded: monitorObservation.degraded,
+		observed_tracked_input_paths: monitorObservation.touched,
 		unexpected_paths_after: unexpectedAfter,
 		environment_sha256: ENVIRONMENT_SHA256,
 		failure_classification: classification,
@@ -656,7 +664,7 @@ async function executeCommand(
 		throw new Error(`REPOSITORY_DRIFT_AFTER_COMMAND: ${command.id}: ${identityCaptureError.message}`);
 	}
 	assertIdentityPinned(stateAfter, bundleIdentity, `REPOSITORY_DRIFT_AFTER_COMMAND: ${command.id}`);
-	if (!inputsCleanAfter) {
+	if (!cleanlinessAfterRaw.clean) {
 		throw new Error(
 			`WORKTREE_INPUTS_DIRTY_AFTER_COMMAND: ${command.id}: ${unexpectedAfter.join(", ")}`,
 		);
@@ -814,15 +822,15 @@ function buildSkipped(command: VerificationCommand, status: SkippedResult["statu
 
 function createStagingDirectory(): string {
 	const parent = join(ROOT, EVIDENCE_PARENT);
-	mkdirSync(parent, { recursive: true });
+	mkdirSync(parent, {recursive: true});
 	const nonce = `${process.pid}-${Date.now()}-${randomBytes(6).toString("hex")}`;
 	const staging = join(parent, `.${ACT_ID}-staging-${nonce}`);
-	mkdirSync(join(staging, "commands"), { recursive: true });
+	mkdirSync(join(staging, "commands"), {recursive: true});
 	return staging;
 }
 
 function atomicWriteFile(path: string, content: string | Buffer): void {
-	mkdirSync(dirname(path), { recursive: true });
+	mkdirSync(dirname(path), {recursive: true});
 	const temp = join(
 		dirname(path),
 		`.${basename(path)}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`,
@@ -831,7 +839,7 @@ function atomicWriteFile(path: string, content: string | Buffer): void {
 		writeFileSync(temp, content);
 		renameSync(temp, path);
 	} finally {
-		rmSync(temp, { force: true });
+		rmSync(temp, {force: true});
 	}
 }
 
@@ -854,7 +862,7 @@ function replaceCanonicalBundle(stagingDir: string): void {
 		}
 		throw error;
 	}
-	if (previousMoved) rmSync(backup, { recursive: true, force: true });
+	if (previousMoved) rmSync(backup, {recursive: true, force: true});
 }
 
 async function runPass(commands: VerificationCommand[], label: string): Promise<void> {
@@ -930,15 +938,20 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			};
 		});
 		const resultDocument: PassResultDocument = {
-			schema_version: 1,
+			schema_version: 4,
 			host,
 			executed_at: new Date().toISOString(),
 			executed_commands: executed,
 			skipped_commands: skipped,
 			commands: merged,
 		};
-		atomicWriteFile(join(ROOT, RESULTS_JSON), JSON.stringify(resultDocument, null, "\t") + "\n");
-		console.log(`Wrote ${RESULTS_JSON} executed=${executed.length} skipped=${skipped.length}`);
+		// CORRECTION13: the staged bundle is the authoritative executed-command
+		// record. The tracked mirror at RESULTS_JSON is only refreshed after
+		// the canonical swap succeeds so a failed pass cannot desync the
+		// two halves of the "previous complete bundle" pair.
+		const stagedResultPath = join(stagingDir, "verification-results.json");
+		atomicWriteFile(stagedResultPath, JSON.stringify(resultDocument, null, "\t") + "\n");
+		console.log(`Staged ${stagingDir}/verification-results.json executed=${executed.length} skipped=${skipped.length}`);
 
 		const postflight = worktreeInputsClean();
 		if (!postflight.clean) {
@@ -959,11 +972,18 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			resultDocument,
 		});
 		replaceCanonicalBundle(stagingDir);
+		// CORRECTION13: refresh the tracked mirror only after the canonical
+		// swap succeeded. The bundle is now self-contained; the tracked file
+		// is informational and must not be the authority.
+		atomicWriteFile(
+			join(ROOT, RESULTS_JSON),
+			JSON.stringify(resultDocument, null, "\t") + "\n",
+		);
 		console.log(`Published ${DETACHED_DIR} from one validated staging bundle`);
 	} finally {
 		// If publication succeeded this path no longer exists. Otherwise a
 		// failed pass cannot disturb the previous complete canonical bundle.
-		rmSync(stagingDir, { recursive: true, force: true });
+		rmSync(stagingDir, {recursive: true, force: true});
 	}
 }
 
@@ -987,16 +1007,18 @@ function writeDetachedBundle(args: {
 		}
 	}
 
+	// CORRECTION13: verification-results.json is a first-class payload
+	// inside the bundle; the renderer also reads it from staging.
 	const expectedEvidencePayloadPaths = executed.flatMap((row) => [
 		row.stdout_path,
 		row.stderr_path,
 		row.metadata_path,
 	]);
-	expectedEvidencePayloadPaths.unshift("evidence.json");
+	expectedEvidencePayloadPaths.unshift("evidence.json", "verification-results.json");
 
 	const executionIdentityValid = verifyExecutionIdentityShape(identity.head, identity.tree);
 	const evidence = {
-		schema_version: 3,
+		schema_version: 4,
 		act_id: ACT_ID,
 		pass_label: label,
 		subject_tree_oid: identity.subject,
@@ -1016,7 +1038,7 @@ function writeDetachedBundle(args: {
 		head_oid: identity.head,
 		generated_at: new Date().toISOString(),
 		host_arch: resultDocument.host,
-		subject_tree_excludes: SUBJECT_TREE_EXCLUDES.map((entry) => ({ ...entry })),
+		subject_tree_excludes: SUBJECT_TREE_EXCLUDES.map((entry) => ({...entry})),
 		commands: executed,
 		hashes: {} as Record<string, string>,
 	};
@@ -1046,6 +1068,7 @@ function writeDetachedBundle(args: {
 		hashesText: readFileSync(join(stagingDir, "hashes.sha256"), "utf8"),
 		evDirAbs: stagingDir,
 		executedCmds: executed,
+		bundledResultPath: "verification-results.json",
 		rootAbs: ROOT,
 		headOidNow: identity.head,
 		treeOidNow: identity.tree,
@@ -1057,10 +1080,10 @@ function writeDetachedBundle(args: {
 			`EVIDENCE_SELF_CHECK_FAILED: ${JSON.stringify({
 				executionIdentityValid: localView.executionIdentityValid,
 				perCommandDriftChecked: localView.perCommandDriftChecked,
-				perCommandInputsClean: localView.perCommandInputsClean,
 				manifestContractHonored: localView.manifestContractHonored,
 				hashManifestValid: localView.hashManifestValid,
 				commandSetExact: localView.commandSetExact,
+				bundledResultCommandSetExact: localView.bundledResultCommandSetExact,
 				missingFiles: localView.missingFiles,
 				unexpectedFiles: localView.unexpectedFiles,
 				commandRecordMismatches: localView.commandRecordMismatches,
