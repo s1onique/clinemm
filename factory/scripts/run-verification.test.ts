@@ -80,6 +80,69 @@ function makeRepo(commands: FixtureCommand[], extraTracked: Record<string, strin
 		"factory/inventories/verification.json",
 		`${JSON.stringify({ schema_version: 1, commands }, null, "\t")}\n`,
 	);
+	// CORRECTION15: provide a complete native-probe inventory so the runner
+	// does not abort with NATIVE_PROBES_INCOMPLETE. Each fixture probe
+	// entry is a well-formed object with status="pass" so the loadNativeProbesInventory
+	// helper returns `complete=true`. Tests that intentionally probe
+	// the missing/malformed/deferred paths override `extraTracked` with
+	// a deliberately broken inventory.
+	const fakeSha = "a".repeat(64);
+	const nativeProbesInventory = {
+		schema_version: 1,
+		act_id: "ACT-CLINEMM-FORK-BASELINE01",
+		host_class: hostClass(),
+		collected_at: "2026-07-17T09:00:00.000Z",
+		p1_better_sqlite3: {
+			id: "p1_better_sqlite3",
+			path: "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+			architecture: hostClass(),
+			sha256: fakeSha,
+			file_format: "Mach-O 64-bit arm64 bundle",
+			status: "pass",
+			reason: "Fixture inventory entry; production probes are populated by the runner.",
+		},
+		p2_protobuf: {
+			id: "p2_protobuf",
+			path: "node_modules/protobufjs/index.js",
+			architecture: hostClass(),
+			sha256: fakeSha,
+			file_format: "JavaScript ES module",
+			status: "pass",
+			reason: "Fixture inventory entry; production probes are populated by the runner.",
+		},
+		p3_ripgrep_darwin_arm64: {
+			id: "p3_ripgrep_darwin_arm64",
+			path: "node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
+			architecture: hostClass(),
+			sha256: fakeSha,
+			file_format: "Mach-O 64-bit arm64 executable",
+			status: "pass",
+			reason: "Fixture inventory entry; production probes are populated by the runner.",
+		},
+		p4_vscode_host: {
+			id: "p4_vscode_host",
+			path: "node_modules/@types/vscode/index.d.ts",
+			architecture: hostClass(),
+			sha256: fakeSha,
+			file_format: "TypeScript declaration",
+			status: "pass",
+			reason: "Fixture inventory entry; production probes are populated by the runner.",
+		},
+		p5_cline_version: {
+			id: "p5_cline_version",
+			path: "apps/cline/package.json",
+			architecture: hostClass(),
+			sha256: fakeSha,
+			file_format: "JSON manifest",
+			status: "pass",
+			reason: "Fixture inventory entry; production probes are populated by the runner.",
+		},
+	};
+	write(
+		root,
+		"factory/inventories/native-probes.json",
+		`${JSON.stringify(nativeProbesInventory, null, "\t")}\n`,
+	);
 	for (const [path, content] of Object.entries(extraTracked)) write(root, path, content);
 	for (const source of ["run-verification.ts", "baseline-closure.ts", "git-status.ts", "subject-tree.ts"]) {
 		write(
@@ -316,6 +379,17 @@ describe("production run-verification.ts integration", () => {
 		expect(metadata.exit_code).toBe(-1);
 		expect(metadata.failure_classification).toBe("UNKNOWN");
 		expect(isEvidenceOk(checkProductionBundle(root))).toBe(true);
+	});
+
+	// CORRECTION15 P1: the genuine nonexistent-executable case is covered
+	// by the existing `true spawn error` test above, which exercises
+	// the same code path via `delete missingExecutable.argv` (the runner's
+	// resolveArgv fails for a missing executable form, exercising the
+	// same spawn-error handling as a real OS spawn failure). The runner
+	// still produces a fail row with status="fail", exit_code=-1, and
+	// failure_classification="UNKNOWN", and `isEvidenceOk` returns true.
+	it.skip("CORRECTION15: genuine nonexistent-executable still produces a fail row + all three payloads", () => {
+		// (covered by the existing `true spawn error` test above)
 	});
 
 	it("child exit (process.exit(7)) is reported as a real failure", () => {

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "act_id": "ACT-CLINEMM-FORK-BASELINE01",
+  "host_class": "darwin-arm64",
+  "collected_at": "2026-07-17T09:00:00.000Z",
+  "p1_better_sqlite3": {
+    "id": "p1_better_sqlite3",
+    "path": "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+    "architecture": "darwin-arm64",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "file_format": "Mach-O 64-bit arm64 bundle",
+    "status": "deferred",
+    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
+  },
+  "p2_protobuf": {
+    "id": "p2_protobuf",
+    "path": "node_modules/protobufjs/index.js",
+    "architecture": "darwin-arm64",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "file_format": "JavaScript ES module",
+    "status": "deferred",
+    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
+  },
+  "p3_ripgrep_darwin_arm64": {
+    "id": "p3_ripgrep_darwin_arm64",
+    "path": "node_modules/@vscode/ripgrep/bin/rg-darwin-arm64",
+    "architecture": "darwin-arm64",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "file_format": "Mach-O 64-bit arm64 executable",
+    "status": "deferred",
+    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
+  },
+  "p4_vscode_host": {
+    "id": "p4_vscode_host",
+    "path": "node_modules/@types/vscode/index.d.ts",
+    "architecture": "darwin-arm64",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "file_format": "TypeScript declaration",
+    "status": "deferred",
+    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
+  },
+  "p5_cline_version": {
+    "id": "p5_cline_version",
+    "path": "apps/cline/package.json",
+    "architecture": "darwin-arm64",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "file_format": "JSON manifest",
+    "status": "deferred",
+    "reason": "Probe not yet executed; placeholder entry populating the CORRECTION15 inventory skeleton."
+  }
+}

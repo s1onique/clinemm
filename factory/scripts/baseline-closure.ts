@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * ACT-CLINEMM-FORK-BASELINE01-CORRECTION13 — Closure logic (pure).
+ * ACT-CLINEMM-FORK-BASELINE01-CORRECTION15 — Closure logic (pure).
  *
  * The renderer (`render-baseline-report.ts`) imports the helpers from this
  * module so the verdict logic is independently testable. Importing this
@@ -8,9 +8,12 @@
  * file, or spawn git. The renderer's main entry performs I/O and calls into
  * `computeClosure` / `checkEvidence`.
  *
- * Policy (CORRECTION13, fail-closed + non-self-referential subject-tree +
+ * Policy (CORRECTION15, fail-closed + non-self-referential subject-tree +
  * independently-derived execution identity + per-command live cleanliness +
- * relational status/classification invariants + bundled self-contained bundle):
+ * relational status/classification invariants + bundled self-contained bundle
+ * + bundled-result-verification-before-aggregate-exactness +
+ * pass-only-closure-arithmetic + fail-closed native-probe dimension +
+ * deduplicated row diagnostics):
  *
  *   FAIL      evidence is missing, malformed, stale-bound, hash-invalid,
  *             multi-tree, command-set-mismatched, symlinked,
@@ -18,14 +21,19 @@
  *             split between subject and execution identity, captured
  *             with drift between/within commands, recorded with malformed
  *             paths, or holding a status/classification invariant
- *             violation; OR there are UNKNOWN-classified failures with no
- *             investigation note.
+ *             violation; OR the bundled verification-results.json command-
+ *             set check never explicitly returned `true`; OR the native
+ *             probe inventory P1–P5 is missing, malformed, deferred,
+ *             unknown, or contains any failed probe; OR there are
+ *             UNKNOWN-classified failures with no investigation note.
  *   PARTIAL   evidence is internally valid and command-set-exact (incl. per-
- *             record equality), the UNKNOWN policy is satisfied, but at
- *             least one declared baseline requirement (R4/R5/R6/R7/R16)
- *             remains open.
- *   PASS      every requirement is satisfied and all mandatory commands
- *             pass on the binding host.
+ *             record equality), the bundled-result check returned `true`,
+ *             the native-probe dimension is complete, the UNKNOWN policy is
+ *             satisfied, but at least one declared baseline requirement
+ *             (R4/R5/R6/R7/R16) remains open.
+ *   PASS      every requirement is satisfied, the bundled-result check
+ *             returned `true`, the native-probe dimension is complete, and
+ *             all mandatory commands pass on the binding host.
  *
  * CORRECTION13 collapses the per-command tracked-input assertion from
  * `perCommandInputsClean` (a proof-bearing closure dimension) into a hint
@@ -36,6 +44,13 @@
  * metadata payload, and `verification-results.json` inside the bundle so
  * `checkEvidence()` can hash-verify the executed-command record without
  * consulting the tracked mirror.
+ *
+ * CORRECTION15 ordering fix: the bundled-result command-set check MUST run
+ * before `commandSetExact` is computed; otherwise the aggregate is
+ * unsatisfiable. CORRECTION15 also makes the native-probe inventory a
+ * fail-closed closure dimension (P1–P5), counts only `status === "pass"` as
+ * a pass (skip / unavailable are tracked separately), and deduplicates
+ * row diagnostics with a `Set<string>` before returning them.
  */
 
 import { existsSync, readFileSync, readdirSync, lstatSync } from "node:fs";
@@ -75,7 +90,66 @@ export type ReasonCode =
 	| "R7_UNSATISFIED"
 	| "R16_UNSATISFIED"
 	| "MANDATORY_NOT_ALL_PASS"
-	| "AFFECTED_SCOPE_NOT_ALL_PASS";
+	| "AFFECTED_SCOPE_NOT_ALL_PASS"
+	| "NATIVE_PROBES_INCOMPLETE";
+
+/**
+ * CORRECTION15 native-probe diagnostic. Each entry describes one structured
+ * failure mode: an absent inventory, a malformed JSON payload, a missing
+ * probe key, an invalid probe shape, a deferred probe, or a probe that
+ * finished with anything other than status="pass". The renderer surfaces
+ * these in the report so reviewers can distinguish "we did not probe" from
+ * "we probed and the artifact is missing".
+ */
+export interface NativeProbeDiagnostic {
+	probeId: NativeProbeId;
+	kind:
+		| "missing-inventory"
+		| "malformed-json"
+		| "missing-key"
+		| "invalid-shape"
+		| "deferred"
+		| "non-pass";
+	message: string;
+}
+
+export type NativeProbeId =
+	| "p1_better_sqlite3"
+	| "p2_protobuf"
+	| "p3_ripgrep_darwin_arm64"
+	| "p4_vscode_host"
+	| "p5_cline_version";
+
+export const NATIVE_PROBE_IDS: ReadonlyArray<NativeProbeId> = [
+	"p1_better_sqlite3",
+	"p2_protobuf",
+	"p3_ripgrep_darwin_arm64",
+	"p4_vscode_host",
+	"p5_cline_version",
+];
+
+export interface NativeProbe {
+	id: NativeProbeId;
+	path: string;
+	architecture: string;
+	sha256: string;
+	file_format: string;
+	status: "pass";
+	reason: string;
+}
+
+/**
+ * Result of loading and validating the native-probe inventory. `complete` is
+ * true only when every required probe key is present, well-formed, and has
+ * status "pass". Any absent, malformed, deferred, unknown, or failed probe
+ * makes `complete` false; the renderer and runner surface the structured
+ * diagnostics so reviewers can see which dimension failed.
+ */
+export interface NativeProbesView {
+	complete: boolean;
+	probes: Record<NativeProbeId, NativeProbe | null>;
+	diagnostics: NativeProbeDiagnostic[];
+}
 
 export interface PathDiagnostic {
 	path: string;
@@ -164,6 +238,10 @@ export interface EvidenceView {
 	malformedEvidenceCommandRows: number;
 	malformedExecutedCommandRows: number;
 	decodeError: string | null;
+	// CORRECTION15: fail-closed native-probe dimension. true iff P1–P5 are
+	// all present, well-formed, and each finished with status="pass".
+	nativeProbesComplete: boolean;
+	nativeProbesDiagnostics: NativeProbeDiagnostic[];
 }
 
 export interface ClosureInput {
@@ -181,6 +259,7 @@ export interface ClosureInput {
 	r6Satisfied: boolean;
 	r7Satisfied: boolean;
 	r16Satisfied: boolean;
+	nativeProbesComplete: boolean;
 }
 
 export interface ClosureResult {
@@ -252,9 +331,16 @@ function stableStringify(value: unknown): string {
 function validateCommandRecord(row: unknown, role: "evidence" | "executed"): RowDiagnostic | null {
 	if (row === null || typeof row !== "object") return { id: "(row)", fields: ["<not-an-object>"], role };
 	const value = row as Record<string, unknown>;
-	const fields: string[] = [];
+	// CORRECTION15: collect field names into a Set so structural and relational
+	// checks can both append the same name without producing duplicate entries
+	// in the final diagnostic. The sorted array preserves stable ordering for
+	// the renderer.
+	const fieldSet = new Set<string>();
+	const pushField = (name: string): void => {
+		fieldSet.add(name);
+	};
 	if (typeof value.id !== "string" || value.id.length === 0 || !SAFE_PATH_SEGMENT.test(value.id)) {
-		fields.push("id");
+		pushField("id");
 	}
 	const expectedFields = [
 		"status",
@@ -281,7 +367,7 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 		"failure_classification",
 	] as const;
 	for (const field of expectedFields) {
-		if (!(field in value)) fields.push(field);
+		if (!(field in value)) pushField(field);
 	}
 	if (
 		value.status !== "pass" &&
@@ -289,19 +375,19 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 		value.status !== "skip" &&
 		value.status !== "unavailable"
 	) {
-		fields.push("status");
+		pushField("status");
 	}
-	if (typeof value.duration_ms !== "number" || value.duration_ms < 0) fields.push("duration_ms");
-	if (typeof value.timeout !== "boolean") fields.push("timeout");
+	if (typeof value.duration_ms !== "number" || value.duration_ms < 0) pushField("duration_ms");
+	if (typeof value.timeout !== "boolean") pushField("timeout");
 	if (typeof value.exit_code !== "number" && !(role === "evidence" && value.exit_code === null)) {
-		fields.push("exit_code");
+		pushField("exit_code");
 	}
-	if (typeof value.signal !== "string" && value.signal !== null) fields.push("signal");
+	if (typeof value.signal !== "string" && value.signal !== null) pushField("signal");
 	if (typeof value.started_at !== "string" || !ISO8601_PATTERN.test(value.started_at as string)) {
-		fields.push("started_at");
+		pushField("started_at");
 	}
 	if (typeof value.finished_at !== "string" || !ISO8601_PATTERN.test(value.finished_at as string)) {
-		fields.push("finished_at");
+		pushField("finished_at");
 	}
 	for (const idField of [
 		"head_oid",
@@ -314,24 +400,24 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 		"subject_tree_oid_after",
 	]) {
 		if (typeof value[idField] !== "string" || !OID_PATTERN.test(value[idField] as string)) {
-			fields.push(idField);
+			pushField(idField);
 		}
 	}
 	for (const hashField of ["stdout_sha256", "stderr_sha256", "environment_sha256"]) {
 		if (typeof value[hashField] !== "string" || !SHA256_PATTERN.test(value[hashField] as string)) {
-			fields.push(hashField);
+			pushField(hashField);
 		}
 	}
 	for (const pathField of ["stdout_path", "stderr_path", "metadata_path"]) {
 		const raw = value[pathField];
-		if (typeof raw !== "string" || !isOpaquePath(raw)) fields.push(pathField);
+		if (typeof raw !== "string" || !isOpaquePath(raw)) pushField(pathField);
 	}
 	if (
 		value.failure_classification !== null &&
 		(typeof value.failure_classification !== "string" ||
 			!FAILURE_CLASSES.has(value.failure_classification))
 	) {
-		fields.push("failure_classification");
+		pushField("failure_classification");
 	}
 	// CORRECTION14: relational status/classification/timeout/exit_code invariants.
 	// pass ⇔ exit_code === 0 AND signal === null AND timeout === false AND fc === null.
@@ -343,25 +429,29 @@ function validateCommandRecord(row: unknown, role: "evidence" | "executed"): Row
 		const fcIsTimeout = fc === "TIMEOUT";
 		const fcIsString = typeof fc === "string" && FAILURE_CLASSES.has(fc);
 		if (value.status === "pass") {
-			if (!fcIsNull) fields.push("failure_classification");
-			if (value.exit_code !== 0) fields.push("exit_code");
-			if (value.signal !== null) fields.push("signal");
-			if (isTimeout) fields.push("timeout");
+			if (!fcIsNull) pushField("failure_classification");
+			if (value.exit_code !== 0) pushField("exit_code");
+			if (value.signal !== null) pushField("signal");
+			if (isTimeout) pushField("timeout");
 		} else if (value.status === "fail") {
-			if (fcIsNull) fields.push("failure_classification");
-			if (isTimeout && !fcIsTimeout) fields.push("failure_classification");
-			if (!fcIsString) fields.push("failure_classification");
+			if (fcIsNull) pushField("failure_classification");
+			if (isTimeout && !fcIsTimeout) pushField("failure_classification");
+			if (!fcIsString) pushField("failure_classification");
 		} else if (value.status === "skip" || value.status === "unavailable") {
 			if (typeof value.failure_classification !== "undefined" && !fcIsNull) {
-				fields.push("failure_classification");
+				pushField("failure_classification");
 			}
 		}
 		if (isTimeout && !fcIsTimeout && value.status === "fail") {
-			fields.push("failure_classification");
+			pushField("failure_classification");
 		}
 	}
-	if (fields.length === 0) return null;
-	return { id: typeof value.id === "string" ? value.id : "(row)", fields, role };
+	if (fieldSet.size === 0) return null;
+	return {
+		id: typeof value.id === "string" ? value.id : "(row)",
+		fields: [...fieldSet].sort(),
+		role,
+	};
 }
 
 // ---------- closure decision ------------------------------------------------
@@ -434,6 +524,11 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 	if (input.evidence.metadataFileMismatches.length > 0) {
 		reasonCodes.push("METADATA_FILE_MISMATCH");
 	}
+	// CORRECTION15: the native-probe inventory P1–P5 is a fail-closed closure
+	// dimension. A missing, malformed, deferred, unknown, or failed probe
+	// blocks PASS; the diagnostic is exposed through the evidence view so
+	// reviewers can identify which probe failed.
+	if (!input.nativeProbesComplete) reasonCodes.push("NATIVE_PROBES_INCOMPLETE");
 	if (hasUnknown) reasonCodes.push("UNKNOWN_FAILURES_PRESENT");
 	if (!r4) reasonCodes.push("R4_UNSATISFIED");
 	if (!r5) reasonCodes.push("R5_UNSATISFIED");
@@ -448,7 +543,7 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 		verdict = "FAIL";
 	} else if (hasUnknown) {
 		verdict = "FAIL";
-	} else if (r4 && r5 && r6 && r7 && r16 && allMandatoryPass && allAffectedPass) {
+	} else if (r4 && r5 && r6 && r7 && r16 && allMandatoryPass && allAffectedPass && input.nativeProbesComplete) {
 		verdict = "PASS";
 	} else {
 		verdict = "PARTIAL";
@@ -588,6 +683,12 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		malformedEvidenceCommandRows: 0,
 		malformedExecutedCommandRows: 0,
 		decodeError: ev.error,
+		// CORRECTION15: the native-probe dimension is computed in the
+		// helper and only updates these two fields when the caller
+		// supplies a probes inventory. Default to incomplete so a missing
+		// inventory is fail-closed.
+		nativeProbesComplete: false,
+		nativeProbesDiagnostics: [],
 	};
 
 	const evObj = ev.ok && typeof ev.value === "object" && ev.value !== null ? (ev.value as any) : null;
@@ -760,11 +861,51 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 	out.duplicateExecutedCommandIds = dup.duplicateExecutedCommandIds;
 	out.commandRecordMismatches = dup.commandRecordMismatches;
 
-	// CORRECTION14: the command set is only "exact" when evidence and
-	// executed agree, no row is malformed, and the bundled
-	// verification-results.json check explicitly returned `true`.
-	const bundledSetExact =
-		out.bundledResultCommandSetExact === true;
+	// CORRECTION13: self-contained bundle — verify the bundled executed-
+	// command record hash-matches a manifest entry, parses, and contains
+	// the same set of command IDs as evidence/executed. CORRECTION15:
+	// this MUST run BEFORE the commandSetExact aggregate is computed;
+	// otherwise the aggregate is unsatisfiable because bundledResult-
+	// CommandSetExact is still null when it is read.
+	if (bundledResultPath) {
+		const resolved = resolveEvidencePayloadPath(evDirAbs, rootAbs, bundledResultPath);
+		if (!resolved.ok) {
+			out.bundledResultPathInvalid = {path: bundledResultPath, reason: resolved.reason};
+		} else {
+			let parsedBundle: { executed_commands?: any[]; commands?: any[] } | null = null;
+			try {
+				const text = readFileSync(resolved.abs as string, "utf8");
+				parsedBundle = JSON.parse(text) as { executed_commands?: any[]; commands?: any[] };
+			} catch (error) {
+				out.bundledResultPathInvalid = {
+					path: bundledResultPath,
+					reason: `<json-parse-error:${error instanceof Error ? error.message : String(error)}>`,
+				};
+			}
+			if (parsedBundle) {
+				const rows = parsedBundle.executed_commands ?? parsedBundle.commands ?? [];
+				const bundledIds = new Set<string>();
+				for (const row of rows) {
+					if (row && typeof row === "object" && typeof (row as any).id === "string") {
+						bundledIds.add((row as any).id);
+					}
+				}
+				const extra: string[] = [];
+				const missing: string[] = [];
+				for (const id of bundledIds) if (!executedIds.has(id)) extra.push(id);
+				for (const id of executedIds) if (!bundledIds.has(id)) missing.push(id);
+				out.bundledResultCommandSetExact = extra.length === 0 && missing.length === 0;
+				out.bundledResultExtraCommands = extra;
+				out.bundledResultMissingCommands = missing;
+			}
+		}
+	}
+
+	// CORRECTION15: commandSetExact is computed AFTER the bundled-result
+	// verification above so the bundled check has had a chance to assign
+	// a concrete true/false value. CORRECTION14 previously computed this
+	// first and read `out.bundledResultCommandSetExact` while it was still
+	// `null`, which made every fresh bundle unsatisfiable.
 	out.commandSetExact =
 		missingExecs.length === 0 &&
 		extraInEvidence.length === 0 &&
@@ -773,7 +914,7 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		out.commandRecordMismatches.length === 0 &&
 		out.malformedEvidenceCommandRows === 0 &&
 		out.malformedExecutedCommandRows === 0 &&
-		bundledSetExact;
+		out.bundledResultCommandSetExact === true;
 
 	const execTree = executionTrees.size === 1 ? Array.from(executionTrees)[0] : null;
 	out.executionTreeBound =
@@ -840,43 +981,6 @@ export function checkEvidence(args: CheckEvidenceArgs): EvidenceView {
 		out.hashMismatches.length === 0 &&
 		out.rejectedManifestPaths.length === 0 &&
 		out.outOfEvidenceDirPaths.length === 0;
-
-	// CORRECTION13: self-contained bundle — verify the bundled executed-
-	// command record hash-matches a manifest entry, parses, and contains
-	// the same set of command IDs as evidence/executed.
-	if (bundledResultPath) {
-		const resolved = resolveEvidencePayloadPath(evDirAbs, rootAbs, bundledResultPath);
-		if (!resolved.ok) {
-			out.bundledResultPathInvalid = {path: bundledResultPath, reason: resolved.reason};
-		} else {
-			let parsedBundle: { executed_commands?: any[]; commands?: any[] } | null = null;
-			try {
-				const text = readFileSync(resolved.abs as string, "utf8");
-				parsedBundle = JSON.parse(text) as { executed_commands?: any[]; commands?: any[] };
-			} catch (error) {
-				out.bundledResultPathInvalid = {
-					path: bundledResultPath,
-					reason: `<json-parse-error:${error instanceof Error ? error.message : String(error)}>`,
-				};
-			}
-			if (parsedBundle) {
-				const rows = parsedBundle.executed_commands ?? parsedBundle.commands ?? [];
-				const bundledIds = new Set<string>();
-				for (const row of rows) {
-					if (row && typeof row === "object" && typeof (row as any).id === "string") {
-						bundledIds.add((row as any).id);
-					}
-				}
-				const extra: string[] = [];
-				const missing: string[] = [];
-				for (const id of bundledIds) if (!executedIds.has(id)) extra.push(id);
-				for (const id of executedIds) if (!bundledIds.has(id)) missing.push(id);
-				out.bundledResultCommandSetExact = extra.length === 0 && missing.length === 0;
-				out.bundledResultExtraCommands = extra;
-				out.bundledResultMissingCommands = missing;
-			}
-		}
-	}
 
 	// CORRECTION13: parse every metadata file and require normalized
 	// equality with the corresponding evidence.commands row.
@@ -1225,4 +1329,157 @@ function collectDuplicateIds(items: any[]): DuplicatePath[] {
 		if (occurrences > 1) dupes.push({ path: id, occurrences });
 	}
 	return dupes;
+}
+
+// ---------- CORRECTION15 native-probe inventory loader ---------------------
+
+/**
+ * Default location of the native-probe inventory inside the repository.
+ * The renderer and runner both read from this path; tests can pass an
+ * explicit inventory through `checkEvidence` to override.
+ */
+export const NATIVE_PROBES_INVENTORY_PATH = "factory/inventories/native-probes.json";
+
+const PROBE_REQUIRED_STRING_FIELDS = [
+	"id",
+	"path",
+	"architecture",
+	"sha256",
+	"file_format",
+	"reason",
+] as const;
+
+/**
+ * Load and structurally validate the native-probe inventory. The inventory
+ * is a JSON object with one entry per probe key in `NATIVE_PROBE_IDS`. Each
+ * entry must be a well-formed object with the required string fields and a
+ * status of exactly "pass". Anything else produces a structured diagnostic
+ * and leaves the probe marked as null in the returned view.
+ *
+ * The helper is fail-closed: a missing inventory, malformed JSON, missing
+ * key, invalid shape, deferred status, unknown status, or non-pass status
+ * all leave `complete` false. The renderer surfaces the structured
+ * diagnostics so reviewers can distinguish "we did not probe" from "we
+ * probed and the artifact is missing".
+ */
+export function loadNativeProbesInventory(inventoryPath: string): NativeProbesView {
+	const probes = {} as Record<NativeProbeId, NativeProbe | null>;
+	for (const probeId of NATIVE_PROBE_IDS) probes[probeId] = null;
+	const diagnostics: NativeProbeDiagnostic[] = [];
+
+	if (!existsSync(inventoryPath)) {
+		for (const probeId of NATIVE_PROBE_IDS) {
+			diagnostics.push({
+				probeId,
+				kind: "missing-inventory",
+				message: `native-probe inventory not found at ${inventoryPath}`,
+			});
+		}
+		return { complete: false, probes, diagnostics };
+	}
+
+	let parsed: unknown;
+	try {
+		const text = readFileSync(inventoryPath, "utf8");
+		parsed = JSON.parse(text);
+	} catch (error) {
+		for (const probeId of NATIVE_PROBE_IDS) {
+			diagnostics.push({
+				probeId,
+				kind: "malformed-json",
+				message: `native-probe inventory JSON could not be parsed: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			});
+		}
+		return { complete: false, probes, diagnostics };
+	}
+
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		for (const probeId of NATIVE_PROBE_IDS) {
+			diagnostics.push({
+				probeId,
+				kind: "malformed-json",
+				message: "native-probe inventory root must be a JSON object",
+			});
+		}
+		return { complete: false, probes, diagnostics };
+	}
+	const record = parsed as Record<string, unknown>;
+
+	let complete = true;
+	for (const probeId of NATIVE_PROBE_IDS) {
+		const entry = record[probeId];
+		if (entry === undefined) {
+			complete = false;
+			diagnostics.push({
+				probeId,
+				kind: "missing-key",
+				message: `native-probe key \`${probeId}\` is absent from the inventory`,
+			});
+			continue;
+		}
+		if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+			complete = false;
+			diagnostics.push({
+				probeId,
+				kind: "invalid-shape",
+				message: `native-probe entry for \`${probeId}\` must be an object`,
+			});
+			continue;
+		}
+		const probeValue = entry as Record<string, unknown>;
+		const missingField = PROBE_REQUIRED_STRING_FIELDS.find(
+			(field) => typeof probeValue[field] !== "string",
+		);
+		if (missingField) {
+			complete = false;
+			diagnostics.push({
+				probeId,
+				kind: "invalid-shape",
+				message: `native-probe entry for \`${probeId}\` is missing string field \`${missingField}\``,
+			});
+			continue;
+		}
+		const sha = probeValue.sha256 as string;
+		if (!SHA256_PATTERN.test(sha)) {
+			complete = false;
+			diagnostics.push({
+				probeId,
+				kind: "invalid-shape",
+				message: `native-probe entry for \`${probeId}\` has an invalid sha256`,
+			});
+			continue;
+		}
+		const status = probeValue.status;
+		if (status === "deferred" || status === "unknown") {
+			complete = false;
+			diagnostics.push({
+				probeId,
+				kind: "deferred",
+				message: `native-probe \`${probeId}\` is deferred (status=${status})`,
+			});
+			continue;
+		}
+		if (status !== "pass") {
+			complete = false;
+			diagnostics.push({
+				probeId,
+				kind: "non-pass",
+				message: `native-probe \`${probeId}\` reported status=${JSON.stringify(status)}`,
+			});
+			continue;
+		}
+		probes[probeId] = {
+			id: probeId,
+			path: probeValue.path as string,
+			architecture: probeValue.architecture as string,
+			sha256: sha,
+			file_format: probeValue.file_format as string,
+			status: "pass",
+			reason: probeValue.reason as string,
+		};
+	}
+
+	return { complete, probes, diagnostics };
 }

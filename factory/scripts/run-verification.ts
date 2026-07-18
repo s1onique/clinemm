@@ -37,6 +37,8 @@ import {
 	checkEvidence,
 	isEvidenceOk,
 	loadEvidenceFile,
+	loadNativeProbesInventory,
+	NATIVE_PROBES_INVENTORY_PATH,
 	resolveEvidencePayloadPath,
 	type ExecutionIdentityDerivation,
 } from "./baseline-closure";
@@ -1063,6 +1065,16 @@ function writeDetachedBundle(args: {
 	});
 	atomicWriteFile(join(stagingDir, "hashes.sha256"), `${manifestLines.join("\n")}\n`);
 
+	// CORRECTION15: load the native-probe inventory and fail-closed the
+	// self-check on a missing/malformed/deferred/unknown/failed probe.
+	const nativeProbes = loadNativeProbesInventory(join(ROOT, NATIVE_PROBES_INVENTORY_PATH));
+	if (!nativeProbes.complete) {
+		throw new Error(
+			`NATIVE_PROBES_INCOMPLETE: ${nativeProbes.diagnostics.length} diagnostic(s); ` +
+				`first: ${nativeProbes.diagnostics[0]?.message ?? "(no diagnostic)"}`,
+		);
+	}
+
 	const localView = checkEvidence({
 		ev: loadEvidenceFile(join(stagingDir, "evidence.json")),
 		hashesText: readFileSync(join(stagingDir, "hashes.sha256"), "utf8"),
@@ -1075,6 +1087,8 @@ function writeDetachedBundle(args: {
 		filteredSubjectTreeOidNow: identity.subject,
 		executionIdentityDerivation: deriveExecutionIdentityForLocalCheck(identity.head, identity.tree),
 	});
+	localView.nativeProbesComplete = nativeProbes.complete;
+	localView.nativeProbesDiagnostics = nativeProbes.diagnostics;
 	if (!isEvidenceOk(localView)) {
 		throw new Error(
 			`EVIDENCE_SELF_CHECK_FAILED: ${JSON.stringify({

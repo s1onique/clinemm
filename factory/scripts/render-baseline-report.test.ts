@@ -27,6 +27,7 @@ import { createHash } from "node:crypto";
 import {
 	computeClosure,
 	checkEvidence,
+	isEvidenceOk,
 	parseManifest,
 	loadEvidenceFile,
 	resolveEvidencePayloadPath,
@@ -96,6 +97,12 @@ function baseOk(overrides: Partial<EvidenceView> = {}): EvidenceView {
 		malformedEvidenceCommandRows: 0,
 		malformedExecutedCommandRows: 0,
 		decodeError: null,
+		// CORRECTION15: the fail-closed native-probe dimension defaults to
+		// "complete" so existing tests still satisfy `isEvidenceOk`; the
+		// dimension is consumed by `computeClosure` via the
+		// `nativeProbesComplete` field on `ClosureInput`.
+		nativeProbesComplete: true,
+		nativeProbesDiagnostics: [],
 		...overrides,
 	};
 }
@@ -116,6 +123,7 @@ function baseInput(evidenceOverride: Partial<EvidenceView> = {}): ClosureInput {
 		r6Satisfied: false,
 		r7Satisfied: false,
 		r16Satisfied: false,
+		nativeProbesComplete: true,
 	};
 }
 
@@ -927,26 +935,53 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 		bundledResultRows?: any[] | null;
 		rowMetadataBytes?: Map<string, Buffer>;
 	}) {
-		let bundledJson: any = { executed_commands: args.executedCmds ?? [makeExecutedRecord()], commands: [] };
-		if (args.bundledResultRows !== null) {
+		const effectiveExecutedCmds = args.executedCmds ?? [makeExecutedRecord()];
+		let bundledJson: any = {
+			executed_commands: effectiveExecutedCmds,
+			commands: [],
+		};
+		// CORRECTION15: the previous check used `!== null`, but `args.bundledResultRows`
+		// is undefined when omitted (the default). The truthiness check makes the
+		// intent explicit: only override the bundled rows when the caller passes
+		// a real override.
+		if (args.bundledResultRows !== undefined && args.bundledResultRows !== null) {
 			bundledJson = {
-				executed_commands: args.bundledRows ?? [],
+				executed_commands: args.bundledResultRows ?? [],
 				commands: [],
 			};
 		}
-		writeFileSync(join(evDir, "verification-results.json"), JSON.stringify(bundledJson, null, 2));
+		writeFileSync(join(evDir, "verification-results.json"), JSON.stringify(bundledJson, null, "\t") + "\n");
 		manifest.set("verification-results.json", sha256Hex(readFileSync(join(evDir, "verification-results.json"))));
 		if (args.rowMetadataBytes) {
 			for (const [id, bytes] of args.rowMetadataBytes) {
 				const path = join(evDir, "commands", `${id}.metadata.json`);
 				writeFileSync(path, bytes);
 			}
+		} else {
+			// CORRECTION15: write per-command metadata.json files that match the
+			// executed-record snapshot so the renderer can verify normalized
+			// equality without the test having to manually stage them.
+			for (const row of effectiveExecutedCmds) {
+				const metadataPath = row.metadata_path;
+				if (typeof metadataPath !== "string") continue;
+				const metadataAbs = join(evDir, metadataPath);
+				writeFileSync(metadataAbs, JSON.stringify(row, null, "\t") + "\n");
+				manifest.set(metadataPath, sha256Hex(readFileSync(metadataAbs)));
+			}
 		}
+		// CORRECTION15: write a valid evidence.json to disk so subsequent
+		// direct calls to `checkEvidence` can reload it. The pre-CORRECTION15
+		// implementation only constructed an in-memory evidence view, which
+		// caused the second `checkEvidence` call in P0 #1 to fall back to
+		// the placeholder "alpha\n" payload on disk.
+		const evidenceRecord = makeEvidenceC13(effectiveExecutedCmds[0] ?? makeExecutedRecord());
+		writeFileSync(join(evDir, "evidence.json"), JSON.stringify(evidenceRecord.value, null, "\t") + "\n");
+		manifest.set("evidence.json", sha256Hex(readFileSync(join(evDir, "evidence.json"))));
 		return checkEvidence({
-			ev: args.ev ?? makeEvidenceC13(makeExecutedRecord()),
+			ev: args.ev ?? evidenceRecord,
 			hashesText: args.hashesText ?? manifestText(),
 			evDirAbs: evDir,
-			executedCmds: args.executedCmds ?? [makeExecutedRecord()],
+			executedCmds: effectiveExecutedCmds,
 			bundledResultPath: "verification-results.json",
 			rootAbs: tmpRoot,
 			headOidNow: args.headOidNow ?? HEAD,
@@ -994,26 +1029,19 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 			},
 		});
 		expect(v.bundledResultCommandSetExact).toBe(false);
-		expect(v.evidenceOk).toBe(false);
+		expect(isEvidenceOk(v)).toBe(false);
 	});
 
 	it("P0 #2: metadata file disagrees with evidence row → FAIL with METADATA_FILE_MISMATCH", () => {
 		const row = makeExecutedRecord();
 		// Tamper the metadata file so it disagrees with the evidence row.
-		// Re-verify after both runCheck calls in case the manifest was
-		// rewritten by an earlier invocation.
-		runCheck({
+		const tamperedBytes = Buffer.from(
+			JSON.stringify({...row, head_oid_before: "f".repeat(40)}, null, 2),
+		);
+		const v = runCheck({
 			executedCmds: [row],
-			rowMetadataBytes: new Map([
-				[
-					"build",
-					Buffer.from(
-						JSON.stringify({...row, head_oid_before: "f".repeat(40)}, null, 2),
-					),
-				],
-			]),
+			rowMetadataBytes: new Map([["build", tamperedBytes]]),
 		});
-		const v = runCheck({executedCmds: [row]});
 		expect(v.metadataFileMismatches.length).toBeGreaterThanOrEqual(1);
 	});
 
@@ -1032,7 +1060,12 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 				makeExecutedRecord({status: "fail", exit_code: 1, failure_classification: null}),
 			],
 		});
-		expect(v.rowRelationalInvariantViolations.length).toBe(1);
+		// CORRECTION15: both the evidence and the executed rows are validated
+		// independently, so a single malformed row produces two diagnostics
+		// (one per role). The renderer's deduplication collapses fields
+		// within a single diagnostic; the cross-role diagnostics are
+		// distinct by design.
+		expect(v.rowRelationalInvariantViolations.length).toBe(2);
 	});
 
 	it("P0 #5: true spawn error still produces all three payloads and a usable bundle", () => {
