@@ -365,15 +365,26 @@ function deriveExecutionIdentityForLocalCheck(head: string, tree: string): Execu
 	};
 }
 
-function isExpectedRepositoryOutput(path: string): boolean {
-	return EXPECTED_REPOSITORY_OUTPUT_PATHS.includes(normalizeGitPath(path));
+function isExpectedRepositoryOutput(path: string, extraAllowedPrefixes: ReadonlyArray<string> = []): boolean {
+	// CORRECTION21 (µC-1) postflight path policy: tolerate only the
+	// active staging-directory prefix and the canonical evidence-directory
+	// prefix. Do NOT blanket-ignore `.factory/`: an unrelated untracked
+	// file under `.factory/unexpected/` must still dirty postflight.
+	const normalized = normalizeGitPath(path);
+	for (const prefix of extraAllowedPrefixes) {
+		const np = normalizeGitPath(prefix);
+		if (normalized === np || normalized.startsWith(np + "/")) {
+			return true;
+		}
+	}
+	return EXPECTED_REPOSITORY_OUTPUT_PATHS.includes(normalized);
 }
 
 /**
  * Uses the machine-readable NUL protocol and intentionally does not pass
  * `--ignored`: ignored files are outside ordinary worktree cleanliness.
  */
-export function worktreeInputsClean(): CleanlinessSample {
+export function worktreeInputsClean(extraAllowedPrefixes: ReadonlyArray<string> = []): CleanlinessSample {
 	const result = spawnSync(
 		"git",
 		[
@@ -398,7 +409,7 @@ export function worktreeInputsClean(): CleanlinessSample {
 		const unexpected = new Set<string>();
 		for (const entry of parsePorcelainV1Z(result.stdout ?? Buffer.alloc(0))) {
 			for (const path of [entry.path, entry.originalPath]) {
-				if (path !== null && !isExpectedRepositoryOutput(path)) {
+				if (path !== null && !isExpectedRepositoryOutput(path, extraAllowedPrefixes)) {
 					unexpected.add(normalizeGitPath(path));
 				}
 			}
@@ -916,7 +927,7 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 		if (!verifyExecutionIdentityShape(identityBefore.head, identityBefore.tree)) {
 			throw new Error("EXECUTION_IDENTITY_INVALID: runner could not verify head/tree object relationship");
 		}
-		const preflight = worktreeInputsClean();
+		const preflight = worktreeInputsClean([stagingDir]);
 		if (!preflight.clean) {
 			throw new Error(`WORKTREE_INPUTS_DIRTY_BEFORE: ${preflight.unexpected.join(", ")}`);
 		}
@@ -1010,7 +1021,7 @@ async function runPass(commands: VerificationCommand[], label: string): Promise<
 			inventory: probeInventory,
 		} = await stageNativeProbesIntoBundle(stagingDir);
 
-		const postflight = worktreeInputsClean();
+		const postflight = worktreeInputsClean([stagingDir]);
 		if (!postflight.clean) {
 			throw new Error(`WORKTREE_INPUTS_DIRTY_AFTER: ${postflight.unexpected.join(", ")}`);
 		}
