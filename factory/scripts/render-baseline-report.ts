@@ -33,17 +33,20 @@ import { readFileSync, writeFileSync, existsSync, renameSync, statSync } from "n
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
+// CORRECTION21 (µC-3 review): the renderer imports `NativeProbesView`
+// as a TYPE only (no `loadNativeProbesInventory` value). The tracked
+// mirror is informational-only; the renderer must consult the bundle
+// reader for the authoritative dimension set.
 import {
 	checkEvidence,
 	computeClosure,
 	loadEvidenceFile,
 	loadNativeProbesFromEvidence,
 	NATIVE_PROBES_BUNDLE_PATH,
-	NATIVE_PROBES_INVENTORY_PATH,
 	NATIVE_PROBE_IDS,
 	type EvidenceView,
-	type NativeProbe,
 	type NativeProbeDiagnostic,
+	type NativeProbesView,
 	type ReasonCode,
 } from "./baseline-closure";
 import { deriveExecutionIdentity } from "./execution-identity";
@@ -203,6 +206,12 @@ function main(): void {
 			typeof EVIDENCE_VALUE?.subject_tree_oid === "string"
 				? EVIDENCE_VALUE.subject_tree_oid
 				: FILTERED_SUBJECT_TREE_OID_NOW,
+		bundleHostClass:
+			typeof ENV?.bun_architecture === "string"
+				? ENV.bun_architecture
+				: typeof ENV?.architecture === "string"
+					? ENV.architecture
+					: null,
 	});
 
 	const evidenceView: EvidenceView = checkEvidence({
@@ -627,7 +636,10 @@ function csvRowCount(s: string): number {
 	return n;
 }
 
-function renderProbes(view: ReturnType<typeof loadNativeProbesInventory>): string {
+// CORRECTION21 (µC-3 review): parameterised by NativeProbesView directly
+// (no ReturnType<> indirection on the no-longer-imported
+// loadNativeProbesInventory).
+function renderProbes(view: NativeProbesView): string {
 	const labels: Record<string, string> = {
 		p1_better_sqlite3: "P1 better-sqlite3",
 		p2_protobuf: "P2 protobuf",
@@ -665,12 +677,15 @@ function renderProbes(view: ReturnType<typeof loadNativeProbesInventory>): strin
 // (identity-mismatch / argv-mismatch / host-class-mismatch /
 // architecture-mismatch).
 
+// CORRECTION21 (µC-3 review): nativeProbes parameter is typed as
+// `NativeProbesView` (no ReturnType<> indirection on the no-longer-
+// imported `loadNativeProbesInventory`).
 function evidenceRow(
 	view: EvidenceView,
 	ev: any,
 	headNow: string,
 	treeNow: string,
-	nativeProbes: ReturnType<typeof loadNativeProbesInventory>,
+	nativeProbes: NativeProbesView,
 ): string {
 	if (view.decodeError !== null && view.decodeError !== undefined) {
 		return [

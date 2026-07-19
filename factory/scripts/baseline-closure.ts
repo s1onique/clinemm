@@ -2361,20 +2361,32 @@ export function loadNativeProbesFromEvidence(
 	let artifactBytesValid = true;
 	for (const { probeId, record } of allParserResults) {
 		if (record.artifact_exists !== true) {
-			// Probes that legitimately have no artifact byte (e.g. machine
-			// probe argv-only) are not required to back `artifact_exists`.
-			// The reader accepts the absence as long as the recorded
-			// artifact_sha256 is `null` and artifact_size is 0; any other
-			// combination is also recorded below.
+			// CORRECTION21 (µC-3 review): the absence relation is
+			// symmetric with the presence relation. artifact_exists=false
+			// requires ALL of:
+			//   - artifact_sha256 === null
+			//   - artifact_size === 0
+			//   - artifact path absent from hashes.sha256 manifest
+			//   - artifact path absent from the bundle's filesystem
+			// Any combination that violates these (e.g. a record denies
+			// the artifact but the bundle still carries a stage) is an
+			// artifact-mismatch diagnostic.
+			const absentFromManifest = !parsedManifest.declared.has(record.artifact_path);
+			const absentFromDisk = !existsSync(
+				join(evDirAbs, ...record.artifact_path.split("/")),
+			);
 			if (
 				record.artifact_sha256 !== null ||
-				record.artifact_size !== 0
+				record.artifact_size !== 0 ||
+				!absentFromManifest ||
+				!absentFromDisk
 			) {
 				artifactBytesValid = false;
 				initial.diagnostics.push({
 					probeId,
 					kind: "artifact-mismatch",
-					message: `native-probe \`${probeId}\` artifact_exists=false but recorded artifact_sha256=${JSON.stringify(record.artifact_sha256)} / artifact_size=${record.artifact_size} disagrees (must be null/0)`,
+					field: "artifact_absence",
+					message: `native-probe \`${probeId}\` artifact_exists=false but the absence relation is incomplete (sha=${JSON.stringify(record.artifact_sha256)}, size=${record.artifact_size}, declared_in_manifest=${!absentFromManifest}, on_disk=${!absentFromDisk})`,
 				});
 			}
 			continue;
@@ -2414,6 +2426,27 @@ export function loadNativeProbesFromEvidence(
 		// arch=null, which is silently accepted on those probes.
 		const def = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
 		if (def && def.architecture_assert === "host-class") {
+			// CORRECTION21 (µC-3 review): the recorded observed_architecture
+			// must agree with the host_class-derived arch (when both are
+			// present). A non-null recorded observed_architecture that
+			// disagrees with the host's expected architecture is an
+			// architecture-mismatch on its own, independent of whether the
+			// artifact bytes derive to a Mach-O cputype.
+			const expectedArch = archForHostClass(record.host_class);
+			if (
+				typeof record.observed_architecture === "string" &&
+				expectedArch !== null &&
+				record.observed_architecture !== expectedArch
+			) {
+				artifactBytesValid = false;
+				initial.architectureMismatches.push(probeId);
+				initial.diagnostics.push({
+					probeId,
+					kind: "architecture-mismatch",
+					field: "observed_architecture",
+					message: `native-probe \`${probeId}\` recorded observed_architecture=${JSON.stringify(record.observed_architecture)} disagrees with host_class-derived arch=${expectedArch}`,
+				});
+			}
 			const reloaded = loadEvidencePayload(
 				evDirAbs,
 				record.artifact_path,
@@ -2421,13 +2454,13 @@ export function loadNativeProbesFromEvidence(
 			);
 			if (reloaded.ok && reloaded.bytes !== null) {
 				const derived = deriveMachOArchitecture(reloaded.bytes);
-				const expectedArch = archForHostClass(record.host_class);
 				if (derived.arch !== null && expectedArch !== null && derived.arch !== expectedArch) {
 					artifactBytesValid = false;
 					initial.architectureMismatches.push(probeId);
 					initial.diagnostics.push({
 						probeId,
 						kind: "architecture-mismatch",
+						field: "mach_o_cputype",
 						message: `native-probe \`${probeId}\` recorded host_class=${JSON.stringify(record.host_class)} (arch=${expectedArch}) but Mach-O cputype derives to ${derived.arch}`,
 					});
 				}
@@ -2601,34 +2634,72 @@ export function loadNativeProbesFromEvidence(
 	dimensions.derivedReasonMatchesRecorded = derivedReasonMatchesRecorded;
 	dimensions.allProbesPassed = allProbesPassed;
 
-	// ---- 10. identity binding (head/tree/subject) ----------------------
+>	// ---- 10. identity binding (head/tree/subject) ----------------------
+	//
+	// CORRECTION21 (µC-3 review) — "not evaluated" must not equal "true".
+	// The reader only knows how to verify a binding when BOTH the
+	// expected (bundle) and the recorded (per-probe) values are
+	// present. If either is null the comparison cannot be evaluated
+	// and recordedIdentityMatchesBundle short-circuits to false. The
+	// previous design reported true on null and let the bundle slip
+	// past even when the runner never recorded the per-probe OIDs.
 
 	let recordedIdentityMatchesBundle = true;
+	if (
+		executionHeadOid === null ||
+		executionTreeOid === null ||
+		filteredSubjectTreeOid === null
+	) {
+		recordedIdentityMatchesBundle = false;
+		for (const probeId of NATIVE_PROBE_IDS) {
+			initial.diagnostics.push({
+				probeId,
+				kind: "identity-mismatch",
+				field: "execution_identity",
+				message: `native-probe \`${probeId}\` recorded identity cannot be evaluated: bundle execution head/tree/subject oid is null (head=${executionHeadOid ?? "null"}, tree=${executionTreeOid ?? "null"}, subject=${filteredSubjectTreeOid ?? "null"})`,
+			});
+		}
+	}
 	for (const { probeId, record } of allParserResults) {
-		if (executionHeadOid !== null && record.execution_head_oid !== executionHeadOid) {
+		if (
+			recordedIdentityMatchesBundle &&
+			executionHeadOid !== null &&
+			record.execution_head_oid !== executionHeadOid
+		) {
 			recordedIdentityMatchesBundle = false;
 			initial.identityMismatches.push(probeId);
 			initial.diagnostics.push({
 				probeId,
 				kind: "identity-mismatch",
+				field: "execution_head_oid",
 				message: `native-probe \`${probeId}\` execution_head_oid disagrees with bundle: recorded=${record.execution_head_oid} bundle=${executionHeadOid}`,
 			});
 		}
-		if (executionTreeOid !== null && record.execution_tree_oid !== executionTreeOid) {
+		if (
+			recordedIdentityMatchesBundle &&
+			executionTreeOid !== null &&
+			record.execution_tree_oid !== executionTreeOid
+		) {
 			recordedIdentityMatchesBundle = false;
 			initial.identityMismatches.push(probeId);
 			initial.diagnostics.push({
 				probeId,
 				kind: "identity-mismatch",
+				field: "execution_tree_oid",
 				message: `native-probe \`${probeId}\` execution_tree_oid disagrees with bundle: recorded=${record.execution_tree_oid} bundle=${executionTreeOid}`,
 			});
 		}
-		if (filteredSubjectTreeOid !== null && record.subject_tree_oid !== filteredSubjectTreeOid) {
+		if (
+			recordedIdentityMatchesBundle &&
+			filteredSubjectTreeOid !== null &&
+			record.subject_tree_oid !== filteredSubjectTreeOid
+		) {
 			recordedIdentityMatchesBundle = false;
 			initial.identityMismatches.push(probeId);
 			initial.diagnostics.push({
 				probeId,
 				kind: "identity-mismatch",
+				field: "subject_tree_oid",
 				message: `native-probe \`${probeId}\` subject_tree_oid disagrees with bundle: recorded=${record.subject_tree_oid} bundle=${filteredSubjectTreeOid}`,
 			});
 		}
@@ -2785,13 +2856,21 @@ export function loadNativeProbesInventory(inventoryPath: string): NativeProbesVi
 			shapeOk = false;
 		}
 		if (!shapeOk) continue;
+		// CORRECTION21 (µC-3 review): preserve the recorded status verbatim
+		// rather than silently rewriting every record to "pass". The
+		// tracked mirror is informational but its diagnostics must be
+		// honest about which probes actually executed successfully. Only
+		// "pass" / "fail" / "deferred" are accepted; anything else is
+		// already captured as `invalid-shape` above.
+		const mirrorStatus: "pass" | "fail" =
+			typeof v.status === "string" && v.status === "pass" ? "pass" : "fail";
 		initial.probes[probeId] = {
 			id: probeId,
 			path: v.path as string,
 			architecture: v.architecture as string,
 			sha256: v.sha256 as string,
 			file_format: v.file_format as string,
-			status: "pass",
+			status: mirrorStatus,
 			reason: v.reason as string,
 		};
 	}
