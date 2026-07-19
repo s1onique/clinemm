@@ -36,16 +36,22 @@
 
 import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
 	canonicalStreamPaths,
 	canonicalizeProbeForBundle,
 	NATIVE_PROBE_IDS,
 	NATIVE_PROBE_STREAM_LAYOUT_VERSION,
+	observeEvidencePathForAbsence,
+	parseBundledNativeProbe,
 	type NativeProbe,
 	type NativeProbeId,
 	PartialBundledNativeProbeMap,
 	requireAllCanonicalProbes,
+	resolveContainedEvidencePathForAbsence,
 	stableStringify,
 } from "./native-probes";
 
@@ -82,6 +88,7 @@ function makeProbe(id: NativeProbeId, overrides: Partial<NativeProbe> = {}): Nat
 		exit_code: 0,
 		signal: null,
 		timeout: false,
+		timeout_ms: 60_000,
 		stdout_text: `stdout-${id}\n`,
 		stdout_sha256: "0".repeat(64),
 		stderr_text: `stderr-${id}\n`,
@@ -355,5 +362,134 @@ describe("stableStringify — deterministic metadata serialization", () => {
 		const a = {a: 1, b: 2};
 		const b = {a: 2, b: 1};
 		expect(stableStringify(a)).not.toBe(stableStringify(b));
+	});
+
+	it("accepts shared acyclic references", () => {
+		const shared = {value: 7};
+		expect(stableStringify({left: shared, right: shared})).toBe(
+			'{"left":{"value":7},"right":{"value":7}}',
+		);
+	});
+
+	it("still rejects a true ancestor cycle", () => {
+		const cyclic: {self?: unknown} = {};
+		cyclic.self = cyclic;
+		expect(() => stableStringify(cyclic)).toThrow(/cyclic structure rejected/);
+	});
+});
+
+describe("parseBundledNativeProbe — structured outcome contract", () => {
+	function rawRecord(): Record<string, unknown> {
+		return {
+			...canonicalizeProbeForBundle(
+				"p1_better_sqlite3",
+				makeProbe("p1_better_sqlite3"),
+			).record,
+		};
+	}
+
+	it("rejects a missing failure_kind instead of defaulting to pass", () => {
+		const raw = rawRecord();
+		delete raw.failure_kind;
+		const parsed = parseBundledNativeProbe("p1_better_sqlite3", raw);
+		expect(parsed.ok).toBe(false);
+		expect(parsed.record).toBeNull();
+		expect(parsed.diagnostics.some((d) => d.field === "failure_kind")).toBe(true);
+	});
+
+	it("rejects an invalid failure_kind instead of defaulting to pass", () => {
+		const raw = rawRecord();
+		raw.failure_kind = "not-a-canonical-kind";
+		const parsed = parseBundledNativeProbe("p1_better_sqlite3", raw);
+		expect(parsed.ok).toBe(false);
+		expect(parsed.diagnostics.some((d) => d.field === "failure_kind")).toBe(true);
+	});
+
+	it("rejects a missing failure_message", () => {
+		const raw = rawRecord();
+		delete raw.failure_message;
+		const parsed = parseBundledNativeProbe("p1_better_sqlite3", raw);
+		expect(parsed.ok).toBe(false);
+		expect(parsed.diagnostics.some((d) => d.field === "failure_message")).toBe(true);
+	});
+
+	it("rejects inconsistent failure kind/status relationships", () => {
+		const raw = rawRecord();
+		raw.failure_kind = "timeout";
+		raw.status = "pass";
+		raw.timeout = true;
+		const parsed = parseBundledNativeProbe("p1_better_sqlite3", raw);
+		expect(parsed.ok).toBe(false);
+		expect(
+			parsed.diagnostics.some(
+				(d) => d.field === "status" && d.reason === "relational-invariant",
+			),
+		).toBe(true);
+	});
+
+	it.each([
+		{kind: "pass", patch: {timeout: true}, field: "timeout"},
+		{kind: "pass", patch: {host_supported: false}, field: "host_supported"},
+		{kind: "pass", patch: {failure_message: "unexpected"}, field: "failure_message"},
+		{kind: "host_unsupported", patch: {status: "fail", host_supported: true}, field: "host_supported"},
+		{kind: "spawn_error", patch: {status: "fail", failure_message: ""}, field: "failure_message"},
+		{kind: "timeout", patch: {status: "fail", timeout: false}, field: "timeout"},
+		{kind: "predicate_error", patch: {status: "fail", failure_message: ""}, field: "failure_message"},
+	] as const)("rejects $kind relational drift on $field", ({kind, patch, field}) => {
+		const raw = Object.assign(rawRecord(), {failure_kind: kind}, patch);
+		const parsed = parseBundledNativeProbe("p1_better_sqlite3", raw);
+		expect(parsed.ok).toBe(false);
+		expect(
+			parsed.diagnostics.some(
+				(d) => d.field === field && d.reason === "relational-invariant",
+			),
+		).toBe(true);
+	});
+
+	it("requires a positive timeout_ms on every record", () => {
+		const raw = rawRecord();
+		delete raw.timeout_ms;
+		const parsed = parseBundledNativeProbe("p1_better_sqlite3", raw);
+		expect(parsed.ok).toBe(false);
+		expect(parsed.diagnostics.some((d) => d.field === "timeout_ms")).toBe(true);
+	});
+});
+
+describe("artifact absence — symlink and filesystem-error safety", () => {
+	it("rejects an intermediate symlink before probing the final name", () => {
+		const parent = mkdtempSync(join(tmpdir(), "native-probe-absence-"));
+		try {
+			const evidenceRoot = join(parent, "evidence");
+			const outside = join(parent, "outside");
+			mkdirSync(evidenceRoot);
+			mkdirSync(outside);
+			symlinkSync(outside, join(evidenceRoot, "link"), "dir");
+			const result = resolveContainedEvidencePathForAbsence(
+				evidenceRoot,
+				"link/passwd",
+			);
+			expect(result.ok).toBe(false);
+			expect(result.reason).toBe("intermediate-symlink");
+		} finally {
+			rmSync(parent, {recursive: true, force: true});
+		}
+	});
+
+	it.each(["EACCES", "ELOOP"] as const)(
+		"treats %s as an observation failure, never as absence",
+		(code) => {
+			const observation = observeEvidencePathForAbsence("/contained/candidate", () => {
+				throw Object.assign(new Error(code), {code});
+			});
+			expect(observation.absent).toBe(false);
+			expect(observation.diagnostic).toBe(`filesystem-observation-failed:${code}`);
+		},
+	);
+
+	it.each(["ENOENT", "ENOTDIR"] as const)("accepts %s as proof of absence", (code) => {
+		const observation = observeEvidencePathForAbsence("/contained/candidate", () => {
+			throw Object.assign(new Error(code), {code});
+		});
+		expect(observation).toEqual({absent: true, diagnostic: null});
 	});
 });

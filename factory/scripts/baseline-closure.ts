@@ -55,14 +55,13 @@ import {
 } from "node:path";
 
 import {
-	canonicalRecordedProbeReason,
 	canonicalStreamPaths,
 	compileFormatMatch,
 	deriveNativeProbeOutcome,
 	loadEvidencePayload,
-	NATIVE_PROBE_DEFAULT_TIMEOUT_MS,
 	NATIVE_PROBE_DEFINITIONS,
 	NATIVE_PROBE_STREAM_LAYOUT_VERSION,
+	observeEvidencePathForAbsence,
 	parseBundledNativeProbe,
 	requireAllCanonicalProbes,
 	resolveContainedEvidencePathForAbsence,
@@ -2516,25 +2515,11 @@ export function loadNativeProbesFromEvidence(
 					evDirAbs,
 					record.artifact_path,
 				);
-				if (!resolved.ok) {
+				if (!resolved.ok || resolved.abs === null) {
 					absenceDiagnostic = resolved.reason ?? "outside-evidence-dir";
 				} else {
-					let observedOnDisk: import("node:fs").Stats | null = null;
-					try {
-						const observed = lstatSync(resolved.abs as string, {
-							throwIfNoEntry: false,
-						});
-						// `lstatSync({ throwIfNoEntry: false })` can
-						// return `undefined` for a missing entry on some
-						// platforms; the absence check is satisfied when
-						// the call yields `null`/`undefined` (no inode).
-						observedOnDisk = observed ?? null;
-					} catch {
-						observedOnDisk = null;
-					}
-					if (observedOnDisk !== null) {
-						absenceDiagnostic = "artifact-present-on-disk";
-					}
+					const observation = observeEvidencePathForAbsence(resolved.abs);
+					absenceDiagnostic = observation.diagnostic;
 				}
 			}
 			const absenceComplete =
@@ -2717,9 +2702,9 @@ export function loadNativeProbesFromEvidence(
 		//                  matching the catalogue support set by accident)
 		//   hostClass    ← record.host_class
 		//   timedOut     ← record.timeout === true
-		//   timeoutMs    ← NATIVE_PROBE_DEFAULT_TIMEOUT_MS (writer and
-		//                  reader share this constant; drift surfaces
-		//                  as a `reason-mismatch` diagnostic)
+		//   timeoutMs    ← record.timeout_ms. The timeout budget is part of
+		//                  every record, so direct collector callers and the
+		//                  reader consume one self-contained authority.
 		//   spawnError   ← rebuilt from `record.failure_kind`. For
 		//                  "spawn_error" the writer persisted the
 		//                  original `Error.message` in `failure_message`
@@ -2739,11 +2724,7 @@ export function loadNativeProbesFromEvidence(
 		};
 		let spawnError: Error | null = null;
 		if (record.failure_kind === "spawn_error") {
-			const message =
-				typeof record.failure_message === "string" && record.failure_message.length > 0
-					? record.failure_message
-					: "<no failure_message recorded>";
-			spawnError = new Error(message);
+			spawnError = new Error(record.failure_message);
 		}
 		const derived = deriveNativeProbeOutcome({
 			definition: def,
@@ -2751,18 +2732,20 @@ export function loadNativeProbesFromEvidence(
 			hostClass: record.host_class,
 			spawnError,
 			timedOut: record.timeout === true,
-			timeoutMs: NATIVE_PROBE_DEFAULT_TIMEOUT_MS,
+			timeoutMs: record.timeout_ms,
 			context,
 		});
-		if (derived.predicateThrew) {
+		if (
+			record.failure_kind !== derived.failureKind ||
+			record.failure_message !== derived.failureMessage
+		) {
 			derivedOutcomesMatch = false;
 			allProbesPassed = false;
 			initial.diagnostics.push({
 				probeId,
-				kind: "predicate-error",
-				message: `native-probe \`${probeId}\` catalogue success predicate threw: ${derived.derivedReason}`,
+				kind: "derived-outcome-mismatch",
+				message: `native-probe \`${probeId}\` recorded structured outcome kind=${JSON.stringify(record.failure_kind)} message=${JSON.stringify(record.failure_message)} does not match derived kind=${JSON.stringify(derived.failureKind)} message=${JSON.stringify(derived.failureMessage)}`,
 			});
-			continue;
 		}
 		if (record.status !== derived.status) {
 			derivedOutcomesMatch = false;
@@ -2774,8 +2757,16 @@ export function loadNativeProbesFromEvidence(
 			});
 			continue;
 		}
+		if (derived.predicateThrew) {
+			allProbesPassed = false;
+			initial.diagnostics.push({
+				probeId,
+				kind: "predicate-error",
+				message: `native-probe \`${probeId}\` catalogue success predicate threw: ${derived.derivedReason}`,
+			});
+		}
 		// P0.9: bind derived reason as well as status. The reader and writer
-		// share the canonical pass-row text via `canonicalRecordedProbeReason`
+		// share the canonical pass-row text from the outcome helper
 		// so equality is mechanical rather than a policy decision. For
 		// fail rows, the recorded `reason` text MUST equal the derived
 		// recordedReason the helper produced from the same inputs.

@@ -53,7 +53,6 @@ import { computeFilteredSubjectTreeOid } from "./subject-tree";
 const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01";
 
 const OID_PATTERN = /^[0-9a-f]{40}$/;
-const DEFAULT_TIMEOUT_MS = 60_000;
 const REDACT_PATTERNS: RegExp[] = [
 	/AKIA[0-9A-Z]{16}/g,
 	/sk-[A-Za-z0-9_-]{20,}/g,
@@ -288,50 +287,12 @@ async function executeProbe(
 	});
 	const status = outcome2.status;
 	const reason = outcome2.recordedReason;
-	const derivedReason = outcome2.derivedReason;
 
-	// µC-3 round 3 — structured failure kind. The writer records the
-	// failure mode the shared precedence chain selected so the reader
-	// can deterministically reconstruct `deriveNativeProbeOutcome()`
-	// inputs without reverse-engineering prose from `reason`. The
-	// companion `failure_message` carries the original `Error.message`
-	// for `"spawn_error"` (so the reader can rebuild a structurally
-	// identical Error) and the verbatim predicate-throw message for
-	// `"predicate_error"`. For every other kind it is the empty string.
-	let failureKind: NativeProbe["failure_kind"];
-	let failureMessage: string;
-	if (!hostSupported) {
-		failureKind = "host_unsupported";
-		failureMessage = "";
-	} else if (outcome.spawnError !== null) {
-		failureKind = "spawn_error";
-		failureMessage = outcome.spawnError.message;
-	} else if (outcome.timedOut) {
-		failureKind = "timeout";
-		failureMessage = "";
-	} else if (outcome2.predicateThrew) {
-		failureKind = "predicate_error";
-		failureMessage = derivedReason ?? "";
-	} else if (derivedReason !== null) {
-		failureKind = "predicate_failure";
-		failureMessage = derivedReason;
-	} else {
-		failureKind = "pass";
-		failureMessage = "";
-	}
-	// µC-3 round 3 — provenance the canonical timeout used to derive
-	// the recorded `reason` text. The collector's default
-	// (`DEFAULT_TIMEOUT_MS`) and the shared canonical
-	// (`NATIVE_PROBE_DEFAULT_TIMEOUT_MS`) both pin to 60_000; the
-	// runner explicitly forwards the canonical value when invoking
-	// the collector so a future divergence (e.g. a caller passes a
-	// different timeout for a long-running probe) does not silently
-	// produce text the reader will reject. The recorded `reason`
-	// carries the canonical duration so the reader's
-	// `deriveNativeProbeOutcome()` reproduces the exact text from
-	// the structured fields, never from prose.
-	const canonicalTimeoutMs = NATIVE_PROBE_DEFAULT_TIMEOUT_MS;
-	void canonicalTimeoutMs;
+	// The shared outcome helper owns both the precedence chain and its
+	// structured representation. The collector does not duplicate a
+	// second failure-kind switch that could drift from reader semantics.
+	const failureKind = outcome2.failureKind;
+	const failureMessage = outcome2.failureMessage;
 
 	// CORRECTION17: every field is mandatory. The legacy fields
 	// (path, architecture, sha256, file_format) are populated from
@@ -359,6 +320,7 @@ async function executeProbe(
 		exit_code: ctx.exit_code,
 		signal: outcome.signal,
 		timeout: outcome.timedOut,
+		timeout_ms: timeoutMs,
 		stdout_text: stdoutText,
 		stdout_sha256: sha256(stdoutBuf),
 		stderr_text: stderrText,
@@ -423,7 +385,12 @@ export async function collectNativeProbesInventory(opts: {
 	collectedAt?: string;
 } = {}): Promise<NativeProbesInventory> {
 	const root = opts.root ?? repoRoot();
-	const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+	const timeoutMs = opts.timeoutMs ?? NATIVE_PROBE_DEFAULT_TIMEOUT_MS;
+	if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+		throw new Error(
+			`NATIVE_PROBE_TIMEOUT_INVALID: timeoutMs must be a positive integer; observed=${JSON.stringify(timeoutMs)}`,
+		);
+	}
 	const collectedAt = opts.collectedAt ?? new Date().toISOString();
 	const identity = captureIdentity(root);
 	const hostClass = hostClassOf(process.platform, process.arch);

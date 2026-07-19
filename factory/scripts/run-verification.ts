@@ -1088,11 +1088,11 @@ async function stageNativeProbesIntoBundle(
 		const text = readFileSync(probeInventoryPath, "utf8");
 		inventory = JSON.parse(text) as NativeProbesInventory;
 	} else {
-		// CORRECTION21 (µC-3 round 3): the runner uses the canonical
-		// `NATIVE_PROBE_DEFAULT_TIMEOUT_MS` so the writer and reader
-		// share the exact same timeout budget. Any drift here would
-		// surface as a `reason-mismatch` diagnostic on the
-		// "probe timed out after Xms" derived text.
+		// CORRECTION21 (µC-3 round 4): production uses the canonical
+		// default budget. The collector persists this value as timeout_ms
+		// in every record; the reader consumes that persisted authority, so
+		// direct collector callers with another valid budget remain
+		// self-contained and reason drift is still detectable.
 		inventory = await collectNativeProbesInventory({
 			root: ROOT,
 			timeoutMs: NATIVE_PROBE_DEFAULT_TIMEOUT_MS,

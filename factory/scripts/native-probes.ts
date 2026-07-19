@@ -27,6 +27,7 @@
  *   exit_code                — observed process exit status
  *   signal                   — observed terminating signal (null on normal exit)
  *   timeout                  — observed timeout flag
+ *   timeout_ms               — timeout budget used for this execution
  *   stdout_text              — captured stdout (may be empty)
  *   stdout_sha256            — SHA-256 of stdout_text
  *   stderr_text              — captured stderr (may be empty)
@@ -49,6 +50,8 @@
  *   architecture_assert      — "host-class" | "none" (probes asserting architecture)
  *   success_contract_version — 1 (incremented if the success predicate changes)
  *   invocation_id            — ULID-shaped unique id for the run
+ *   failure_kind             — canonical structured outcome kind
+ *   failure_message          — structured spawn/predicate error message
  *
  * Each definition is host-aware: the probe executable, working directory,
  * success predicate, and observation strategy are explicitly declared so
@@ -109,7 +112,7 @@ function isFiniteNumber(value: unknown): value is number {
  *   - NaN, +Infinity, -Infinity (lossy JSON conversion)
  *   - cyclic structures
  */
-function assertJsonValue(value: unknown, seen: WeakSet<object>): void {
+function assertJsonValue(value: unknown, ancestors: WeakSet<object>): void {
 	if (value === null) return;
 	const t = typeof value;
 	if (t === "string" || t === "boolean") return;
@@ -128,20 +131,29 @@ function assertJsonValue(value: unknown, seen: WeakSet<object>): void {
 	if (t === "function" || t === "symbol") {
 		throw new StableStringifyError(`${t} rejected`);
 	}
-	if (seen.has(value as object)) {
+	const objectValue = value as object;
+	if (ancestors.has(objectValue)) {
 		throw new StableStringifyError("cyclic structure rejected");
 	}
-	seen.add(value as object);
-	if (Array.isArray(value)) {
-		for (const item of value) assertJsonValue(item, seen);
-		return;
-	}
-	const proto = Object.getPrototypeOf(value);
-	if (proto !== Object.prototype && proto !== null) {
-		throw new StableStringifyError("non-plain object rejected");
-	}
-	for (const key of Object.keys(value as Record<string, unknown>)) {
-		assertJsonValue((value as Record<string, unknown>)[key], seen);
+	ancestors.add(objectValue);
+	try {
+		if (Array.isArray(value)) {
+			for (const item of value) assertJsonValue(item, ancestors);
+			return;
+		}
+		const proto = Object.getPrototypeOf(value);
+		if (proto !== Object.prototype && proto !== null) {
+			throw new StableStringifyError("non-plain object rejected");
+		}
+		for (const key of Object.keys(value as Record<string, unknown>)) {
+			assertJsonValue((value as Record<string, unknown>)[key], ancestors);
+		}
+	} finally {
+		// This is a recursion-stack set, not a global "seen" set. A shared
+		// acyclic object may legitimately occur in more than one branch;
+		// only an object already present in the current ancestor chain is a
+		// cycle.
+		ancestors.delete(objectValue);
 	}
 }
 
@@ -404,6 +416,25 @@ export function compileFormatMatch(spec: FormatMatchSpec): RegExp {
  * CORRECTION15) and extended (CORRECTION16/17) fields are present, so a
  * single canonical record satisfies both the renderer and the loader.
  */
+export type NativeProbeFailureKind =
+	| "pass"
+	| "host_unsupported"
+	| "spawn_error"
+	| "timeout"
+	| "predicate_error"
+	| "predicate_failure";
+
+export function isNativeProbeFailureKind(value: unknown): value is NativeProbeFailureKind {
+	return (
+		value === "pass" ||
+		value === "host_unsupported" ||
+		value === "spawn_error" ||
+		value === "timeout" ||
+		value === "predicate_error" ||
+		value === "predicate_failure"
+	);
+}
+
 export interface NativeProbe {
 	id: NativeProbeId;
 	// Legacy fields (P1-P5 CORRECTION15 schema).
@@ -422,6 +453,8 @@ export interface NativeProbe {
 	exit_code: number | null;
 	signal: NodeJS.Signals | null;
 	timeout: boolean;
+	/** Timeout budget used by the collector for this execution record. */
+	timeout_ms: number;
 	stdout_text: string;
 	stdout_sha256: string;
 	stderr_text: string;
@@ -445,7 +478,7 @@ export interface NativeProbe {
 	success_contract_version: number;
 	invocation_id: string;
 	/**
-	 * CORRECTION21 (µC-3 round 3 review) — structured failure kind. The
+	 * CORRECTION21 (µC-3 round 4) — structured failure kind. The
 	 * writer (collect-native-probes.ts) records the failure mode the
 	 * shared precedence chain selected. The reader uses this field to
 	 * deterministically reconstruct `deriveNativeProbeOutcome()` inputs
@@ -456,15 +489,9 @@ export interface NativeProbe {
 	 * for every other kind the reader derives the canonical message
 	 * text purely from the structured fields.
 	 */
-	failure_kind:
-		| "pass"
-		| "host_unsupported"
-		| "spawn_error"
-		| "timeout"
-		| "predicate_error"
-		| "predicate_failure";
+	failure_kind: NativeProbeFailureKind;
 	/**
-	 * CORRECTION21 (µC-3 round 3 review) — companion to `failure_kind`.
+	 * CORRECTION21 (µC-3 round 4) — companion to `failure_kind`.
 	 * Only meaningful for `"spawn_error"` (carries the original
 	 * `Error.message` so the reader can construct a structurally
 	 * identical `Error`) and `"predicate_error"` (carries the predicate
@@ -475,9 +502,10 @@ export interface NativeProbe {
 }
 
 /**
- * CORRECTION21 (µC-3 round 3 review) — canonical timeout budget. The
- * writer and reader share this constant so a timeout derivation produces
- * the exact same canonical message text on both sides.
+ * CORRECTION21 (µC-3 round 4) — production's default timeout budget.
+ * The collector persists the effective budget in each record's
+ * `timeout_ms`; the reader consumes that field rather than assuming this
+ * default, so records from direct callers remain self-contained.
  */
 export const NATIVE_PROBE_DEFAULT_TIMEOUT_MS = 60_000 as const;
 
@@ -883,31 +911,59 @@ export interface DeriveNativeProbeOutcome {
 	status: "pass" | "fail";
 	derivedReason: string | null;
 	recordedReason: string;
+	failureKind: NativeProbeFailureKind;
+	failureMessage: string;
 	predicateThrew: boolean;
+}
+
+function nonEmptyFailureMessage(message: string, fallback: string): string {
+	return message.length > 0 ? message : fallback;
 }
 
 export function deriveNativeProbeOutcome(
 	input: DeriveNativeProbeOutcomeInput,
 ): DeriveNativeProbeOutcome {
 	let derivedReason: string | null;
+	let failureKind: NativeProbeFailureKind;
+	let failureMessage = "";
 	let predicateThrew = false;
 	if (!input.hostSupported) {
+		failureKind = "host_unsupported";
 		derivedReason = `host=${input.hostClass} is not in host_support=${input.definition.host_support.join(",")}`;
 	} else if (input.spawnError !== null) {
-		derivedReason = `spawn error: ${input.spawnError.message}`;
+		failureKind = "spawn_error";
+		failureMessage = nonEmptyFailureMessage(
+			input.spawnError.message,
+			"<empty spawn error message>",
+		);
+		derivedReason = `spawn error: ${failureMessage}`;
 	} else if (input.timedOut) {
+		failureKind = "timeout";
 		derivedReason = `probe timed out after ${input.timeoutMs}ms`;
 	} else {
 		try {
 			derivedReason = input.definition.success(input.context);
+			failureKind = derivedReason === null ? "pass" : "predicate_failure";
 		} catch (error) {
 			predicateThrew = true;
-			derivedReason = `predicate threw: ${error instanceof Error ? error.message : String(error)}`;
+			failureKind = "predicate_error";
+			failureMessage = nonEmptyFailureMessage(
+				error instanceof Error ? error.message : String(error),
+				"<empty predicate error message>",
+			);
+			derivedReason = `predicate threw: ${failureMessage}`;
 		}
 	}
-	const status: "pass" | "fail" = derivedReason === null ? "pass" : "fail";
+	const status: "pass" | "fail" = failureKind === "pass" ? "pass" : "fail";
 	const recordedReason = canonicalRecordedProbeReason(derivedReason, input.definition);
-	return { status, derivedReason, recordedReason, predicateThrew };
+	return {
+		status,
+		derivedReason,
+		recordedReason,
+		failureKind,
+		failureMessage,
+		predicateThrew,
+	};
 }
 
 // ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 parser ---------
@@ -983,8 +1039,12 @@ export interface ProbeParseResult {
  *     string or null, `observed_architecture` string or null);
  *   - timing fields have valid types
  *     (`exit_code` number or null, `signal` string or null, `timeout`
- *     boolean, `started_at`/`finished_at` strings, `duration_ms`
- *     non-negative number, `working_directory` string).
+ *     boolean, positive-integer `timeout_ms`, `started_at`/`finished_at`
+ *     strings, non-negative `duration_ms`, `working_directory` string);
+ *   - `failure_kind` is a canonical enum and `failure_message` is a
+ *     string;
+ *   - failure-kind/status/timeout/host/message relations are internally
+ *     consistent (no fallback-to-pass normalization).
  *
  * Catalogue equality (argv, host_support, format_match,
  * architecture_assert, success_contract_version) is checked
@@ -1244,6 +1304,33 @@ export function parseBundledNativeProbe(
 	if (typeof v.timeout !== "boolean") {
 		push("timeout", "wrong-shape", "boolean", observed("timeout"));
 	}
+	if (
+		typeof v.timeout_ms !== "number" ||
+		!Number.isInteger(v.timeout_ms) ||
+		(v.timeout_ms as number) < 1
+	) {
+		push("timeout_ms", "wrong-shape", "positive integer", observed("timeout_ms"));
+	}
+
+	// Structured failure fields are mandatory. Never synthesize a
+	// successful shape from malformed or absent evidence.
+	const failureKind = isNativeProbeFailureKind(v.failure_kind)
+		? v.failure_kind
+		: null;
+	if (failureKind === null) {
+		push(
+			"failure_kind",
+			"wrong-shape",
+			'"pass" | "host_unsupported" | "spawn_error" | "timeout" | "predicate_error" | "predicate_failure"',
+			observed("failure_kind"),
+		);
+	}
+	const failureMessage =
+		typeof v.failure_message === "string" ? v.failure_message : null;
+	if (failureMessage === null) {
+		push("failure_message", "wrong-shape", "string", observed("failure_message"));
+	}
+
 	if (typeof v.started_at !== "string" || v.started_at.length === 0) {
 		push("started_at", "wrong-shape", "non-empty string", observed("started_at"));
 	}
@@ -1265,26 +1352,55 @@ export function parseBundledNativeProbe(
 			observed("working_directory"),
 		);
 	}
-	if (diagnostics.length > 0) {
+
+	// Relational outcome invariants. Shape-valid fields can still form an
+	// impossible execution record; those contradictions are parser errors,
+	// not values for the downstream reader to normalize.
+	if (failureKind !== null && failureMessage !== null) {
+		const relation = (field: string, expected: string): void => {
+			push(field, "relational-invariant", expected, observed(field));
+		};
+		if (failureKind === "pass") {
+			if (v.status !== "pass") relation("status", '"pass" when failure_kind="pass"');
+			if (v.timeout !== false) relation("timeout", 'false when failure_kind="pass"');
+			if (v.host_supported !== true) {
+				relation("host_supported", 'true when failure_kind="pass"');
+			}
+			if (failureMessage !== "") {
+				relation("failure_message", 'empty string when failure_kind="pass"');
+			}
+		} else if (v.status !== "fail") {
+			relation("status", '"fail" when failure_kind is not "pass"');
+		}
+
+		if (failureKind === "host_unsupported" && v.host_supported !== false) {
+			relation("host_supported", 'false when failure_kind="host_unsupported"');
+		}
+		if (failureKind === "spawn_error" && failureMessage.length === 0) {
+			relation("failure_message", 'non-empty string when failure_kind="spawn_error"');
+		}
+		if (failureKind === "timeout" && v.timeout !== true) {
+			relation("timeout", 'true when failure_kind="timeout"');
+		}
+		if (failureKind === "predicate_error" && failureMessage.length === 0) {
+			relation("failure_message", 'non-empty string when failure_kind="predicate_error"');
+		}
+		if (
+			(failureKind === "host_unsupported" ||
+				failureKind === "timeout" ||
+				failureKind === "predicate_failure") &&
+			failureMessage !== ""
+		) {
+			relation(
+				"failure_message",
+				`empty string when failure_kind=${JSON.stringify(failureKind)}`,
+			);
+		}
+	}
+
+	if (diagnostics.length > 0 || failureKind === null || failureMessage === null) {
 		return { ok: false, record: null, diagnostics };
 	}
-	// µC-3 round 3 — the parser copies the µC-3 structured failure
-	// fields (`failure_kind` / `failure_message`) so the parsed
-	// record is byte-equal under `stableStringify` to the per-probe
-	// metadata.json. Without these, the metadata semantic-equality
-	// check would spuriously fail with `metadata-record-mismatch`
-	// even when the bundle is internally consistent.
-	const failureKind: BundledNativeProbe["failure_kind"] =
-		v.failure_kind === "pass" ||
-		v.failure_kind === "host_unsupported" ||
-		v.failure_kind === "spawn_error" ||
-		v.failure_kind === "timeout" ||
-		v.failure_kind === "predicate_error" ||
-		v.failure_kind === "predicate_failure"
-			? v.failure_kind
-			: "pass";
-	const failureMessage =
-		typeof v.failure_message === "string" ? v.failure_message : "";
 	// The TypeScript assertion below used to be `v as unknown as
 	// BundledNativeProbe` — an unsafe cast that let the parser
 	// silently hand the reader an arbitrary JSON object. µC-3
@@ -1312,6 +1428,7 @@ export function parseBundledNativeProbe(
 		exit_code: (v.exit_code as number | null) ?? null,
 		signal: (v.signal as NodeJS.Signals | null) ?? null,
 		timeout: v.timeout as boolean,
+		timeout_ms: v.timeout_ms as number,
 		stdout_text: v.stdout_text as string,
 		stdout_sha256: v.stdout_sha256 as string,
 		stderr_text: v.stderr_text as string,
@@ -1496,34 +1613,42 @@ export function loadEvidencePayload(
 	return { ok: true, bytes, diagnostics: [] };
 }
 
-// ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 round 3 -------
+// ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 round 4 -------
 
 /**
- * µC-3 round 3 — contained absence resolver.
+ * µC-3 round 4 — contained absence resolver.
  *
- * The reader uses this helper to PROVE that a recorded
- * `artifact_exists=false` claim reflects physical absence at the
- * recorded `artifact_path`. The resolver:
- *
- *   - rejects absolute paths,
- *   - rejects `..` traversal,
- *   - rejects paths that escape the canonical evidence directory,
- *   - returns the lexical absolute path so the caller can perform an
- *     `lstatSync(..., { throwIfNoEntry: false })` filesystem probe.
- *
- * Unlike `loadEvidencePayload`, the absence resolver does NOT
- * require manifest membership. The previous `loadEvidencePayload`
- * check returned `manifest-undeclared` BEFORE inspecting the
- * filesystem, so a bundle containing an undeclared artifact file
- * would silently pass the absence claim as long as the manifest did
- * not list the path. This resolver closes that gap: containment is
- * enforced, manifest membership is irrelevant, and the caller
- * independently observes whether the path is absent on disk.
+ * Absence is a filesystem claim, so lexical containment alone is not
+ * enough: `inside/link/file` can escape when `link` is an intermediate
+ * symlink. The resolver canonicalizes the evidence root, rejects lexical
+ * traversal, and walks every existing parent with `lstatSync`. Any parent
+ * symlink or non-absence filesystem error fails closed before the caller
+ * probes the final name.
  */
+export type ResolveContainedAbsenceFailure =
+	| "absolute"
+	| "traversal"
+	| "outside-evidence-dir"
+	| "non-canonical-root"
+	| "intermediate-symlink"
+	| `filesystem-observation-failed:${string}`;
+
 export interface ResolveContainedAbsenceResult {
 	ok: boolean;
 	abs: string | null;
-	reason: "absolute" | "traversal" | "outside-evidence-dir" | "non-canonical-root" | null;
+	reason: ResolveContainedAbsenceFailure | null;
+}
+
+export function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+	return (
+		error instanceof Error &&
+		"code" in error &&
+		typeof (error as NodeJS.ErrnoException).code === "string"
+	);
+}
+
+function filesystemObservationFailure(error: unknown): `filesystem-observation-failed:${string}` {
+	return `filesystem-observation-failed:${isNodeError(error) ? error.code : "UNKNOWN"}`;
 }
 
 export function resolveContainedEvidencePathForAbsence(
@@ -1536,6 +1661,10 @@ export function resolveContainedEvidencePathForAbsence(
 	if (isAbsolute(relativePath)) {
 		return { ok: false, abs: null, reason: "absolute" };
 	}
+	if (relativePath.split(/[\\/]/).includes("..")) {
+		return { ok: false, abs: null, reason: "traversal" };
+	}
+
 	let realRoot: string;
 	try {
 		realRoot = realpathSync(resolve(evDirAbs));
@@ -1552,7 +1681,58 @@ export function resolveContainedEvidencePathForAbsence(
 	) {
 		return { ok: false, abs: null, reason: "outside-evidence-dir" };
 	}
+
+	let current = realRoot;
+	const parentComponents = lexicalRel.split("/").slice(0, -1);
+	for (const component of parentComponents) {
+		current = resolve(current, component);
+		try {
+			const parent = lstatSync(current);
+			if (parent.isSymbolicLink()) {
+				return { ok: false, abs: null, reason: "intermediate-symlink" };
+			}
+			if (!parent.isDirectory()) {
+				// The final path is necessarily absent through this non-directory
+				// parent. The final observation reports ENOTDIR explicitly.
+				break;
+			}
+		} catch (error) {
+			if (isNodeError(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
+				// Once a parent is missing, no deeper component can exist or be
+				// a symlink. The final observation remains authoritative.
+				break;
+			}
+			return { ok: false, abs: null, reason: filesystemObservationFailure(error) };
+		}
+	}
 	return { ok: true, abs: lexicalAbs, reason: null };
+}
+
+export interface EvidencePathAbsenceObservation {
+	absent: boolean;
+	diagnostic: "artifact-present-on-disk" | `filesystem-observation-failed:${string}` | null;
+}
+
+/**
+ * Observe the final contained path. Only ENOENT and ENOTDIR prove absence;
+ * permission failures, symlink loops, I/O errors, and unknown exceptions
+ * mean that absence could not be established and therefore fail closed.
+ * The optional lstat operation is a narrow test seam for deterministic
+ * system-error classification tests.
+ */
+export function observeEvidencePathForAbsence(
+	absolutePath: string,
+	lstat: (path: string) => unknown = (path) => lstatSync(path),
+): EvidencePathAbsenceObservation {
+	try {
+		lstat(absolutePath);
+		return { absent: false, diagnostic: "artifact-present-on-disk" };
+	} catch (error) {
+		if (isNodeError(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
+			return { absent: true, diagnostic: null };
+		}
+		return { absent: false, diagnostic: filesystemObservationFailure(error) };
+	}
 }
 
 function normalizeRelative(path: string): string {

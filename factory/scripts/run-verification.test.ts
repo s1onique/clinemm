@@ -56,6 +56,20 @@ interface RunnerResult {
 	stderr: string;
 }
 
+type FixtureJsonRow = Record<string, unknown>;
+
+interface FixtureEvidenceJson extends Record<string, unknown> {
+	expected_evidence_payload_paths: string[];
+	host_arch: string;
+	execution_head_oid: string;
+	execution_tree_oid: string;
+	commands: FixtureJsonRow[];
+}
+
+interface FixtureVerificationResultsJson extends Record<string, unknown> {
+	executed_commands: FixtureJsonRow[];
+}
+
 function hostClass(): string {
 	if (process.platform === "darwin" && process.arch === "arm64") return "darwin-arm64";
 	if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
@@ -130,6 +144,7 @@ function buildFixtureProbeInventory(
 			exit_code: 0,
 			signal: null,
 			timeout: false,
+			timeout_ms: 60_000,
 			stdout_text: stdoutText,
 			stdout_sha256: stdoutSha,
 			stderr_text: "",
@@ -372,11 +387,75 @@ function readJson(path: string): unknown {
 	return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function requireJsonObject(value: unknown, source: string): Record<string, unknown> {
+	if (value === null || typeof value !== "object" || Array.isArray(value)) {
+		throw new Error(`${source} must contain a JSON object`);
+	}
+	return value as Record<string, unknown>;
+}
+
+function requireStringField(
+	value: Record<string, unknown>,
+	field: string,
+	source: string,
+): string {
+	const observed = value[field];
+	if (typeof observed !== "string") {
+		throw new Error(`${source}.${field} must be a string`);
+	}
+	return observed;
+}
+
+function requireObjectArray(
+	value: Record<string, unknown>,
+	field: string,
+	source: string,
+): FixtureJsonRow[] {
+	const observed = value[field];
+	if (!Array.isArray(observed)) {
+		throw new Error(`${source}.${field} must be an array`);
+	}
+	return observed.map((entry, index) =>
+		requireJsonObject(entry, `${source}.${field}[${index}]`),
+	);
+}
+
+function readJsonObject(path: string): Record<string, unknown> {
+	return requireJsonObject(readJson(path), path);
+}
+
+function readFixtureEvidence(path: string): FixtureEvidenceJson {
+	const value = readJsonObject(path);
+	const expectedPaths = value.expected_evidence_payload_paths;
+	if (
+		!Array.isArray(expectedPaths) ||
+		!expectedPaths.every((entry) => typeof entry === "string")
+	) {
+		throw new Error(`${path}.expected_evidence_payload_paths must be a string array`);
+	}
+	return {
+		...value,
+		expected_evidence_payload_paths: expectedPaths,
+		host_arch: requireStringField(value, "host_arch", path),
+		execution_head_oid: requireStringField(value, "execution_head_oid", path),
+		execution_tree_oid: requireStringField(value, "execution_tree_oid", path),
+		commands: requireObjectArray(value, "commands", path),
+	};
+}
+
+function readFixtureVerificationResults(path: string): FixtureVerificationResultsJson {
+	const value = readJsonObject(path);
+	return {
+		...value,
+		executed_commands: requireObjectArray(value, "executed_commands", path),
+	};
+}
+
 function sha256(bytes: Buffer | string): string {
 	return createHash("sha256").update(bytes).digest("hex");
 }
 
-function rewriteManifest(root: string, evidence: any): void {
+function rewriteManifest(root: string, evidence: FixtureEvidenceJson): void {
 	const dir = evidenceDir(root);
 	writeFileSync(join(dir, "evidence.json"), `${JSON.stringify(evidence, null, "\t")}\n`);
 	const lines = evidence.expected_evidence_payload_paths.map((path: string) => {
@@ -401,10 +480,10 @@ function rewriteManifest(root: string, evidence: any): void {
  *     isEvidenceStructurallyValid(view) === true
  *     isEvidenceOk(view) === false   (correctly)
  */
-function checkProductionBundle(root: string, executedOverride?: any[]) {
+function checkProductionBundle(root: string, executedOverride?: FixtureJsonRow[]) {
 	const dir = evidenceDir(root);
-	const evidence = readJson(join(dir, "evidence.json")) as any;
-	const results = readJson(join(dir, "verification-results.json")) as any;
+	const evidence = readFixtureEvidence(join(dir, "evidence.json"));
+	const results = readFixtureVerificationResults(join(dir, "verification-results.json"));
 	const subject = computeFilteredSubjectTreeOid(root);
 	if (!subject) throw new Error("fixture subject did not compute");
 	const view = checkEvidence({
@@ -559,7 +638,7 @@ describe("production run-verification.ts integration", () => {
 			{ extraTracked: { "factory/inventories/environment.json": "{}\n" } },
 		);
 		expect(result.status).toBe(0);
-		const evidence = readJson(join(evidenceDir(root), "evidence.json")) as any;
+		const evidence = readFixtureEvidence(join(evidenceDir(root), "evidence.json"));
 		expect(evidence.expected_evidence_payload_paths).toContain("evidence.json");
 		expect(evidence.expected_evidence_payload_paths).toContain("verification-results.json");
 		expect(evidence.expected_evidence_payload_paths).toContain(NATIVE_PROBES_BUNDLE_PATH);
@@ -585,7 +664,7 @@ describe("production run-verification.ts integration", () => {
 		for (const suffix of ["stdout", "stderr", "metadata.json"]) {
 			expect(existsSync(join(dir, "commands", `fixture.${suffix}`))).toBe(true);
 		}
-		const metadata = readJson(join(dir, "commands/fixture.metadata.json")) as any;
+		const metadata = readJsonObject(join(dir, "commands/fixture.metadata.json"));
 		expect(metadata.status).toBe("fail");
 		// The runner preserves whatever code Node's `spawn`/`error` event
 		// reported. A real `ENOENT` on Linux produces exit_code=-2 with
@@ -623,7 +702,7 @@ describe("production run-verification.ts integration", () => {
 		for (const suffix of ["stdout", "stderr", "metadata.json"]) {
 			expect(existsSync(join(dir, "commands", `fixture.${suffix}`))).toBe(true);
 		}
-		const metadata = readJson(join(dir, "commands/fixture.metadata.json")) as any;
+		const metadata = readJsonObject(join(dir, "commands/fixture.metadata.json"));
 		expect(metadata.status).toBe("fail");
 		// The runner preserves whatever code Node's `spawn`/`error` event
 		// reported. A real `ENOENT` on Linux produces exit_code=-2 with
@@ -646,7 +725,7 @@ describe("production run-verification.ts integration", () => {
 		const { root, result } = runWith([command(["bun", "-e", "process.exit(7)"])]);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
-		const metadata = readJson(join(dir, "commands/fixture.metadata.json")) as any;
+		const metadata = readJsonObject(join(dir, "commands/fixture.metadata.json"));
 		expect(metadata.exit_code).toBe(7);
 		expect(metadata.status).toBe("fail");
 		expect(metadata.failure_classification).toBe("UNKNOWN");
@@ -659,7 +738,7 @@ describe("production run-verification.ts integration", () => {
 		const finalized = run(root, ["--finalize-evidence"], fixtureInventory);
 		expect(finalized.status).toBe(0);
 		expect(finalized.stdout.match(/Prepared detached evidence bundle once/g)).toHaveLength(1);
-		const evidence = readJson(join(evidenceDir(root), "evidence.json")) as any;
+		const evidence = readFixtureEvidence(join(evidenceDir(root), "evidence.json"));
 		expect(evidence.pass_label).toBe("finalize");
 		// The first run still produced a satisfiable bundle (this asserts
 		// the prior fixture run was not broken by the wrapper).
@@ -742,7 +821,7 @@ describe("production run-verification.ts integration", () => {
 		// `hashes.sha256`, not via the tracked mirror.
 		const original = readFileSync(stagedPath);
 		writeFileSync(stagedPath, `${original}\nCORRUPTED`);
-		const evidence = readJson(join(dir, "evidence.json")) as any;
+		const evidence = readFixtureEvidence(join(dir, "evidence.json"));
 		// Deliberately leave hashes.sha256 unchanged: rewriting it after
 		// tampering would make the tampered bytes authoritative.
 		const subject = computeFilteredSubjectTreeOid(root)!;
@@ -750,7 +829,9 @@ describe("production run-verification.ts integration", () => {
 			ev: loadEvidenceFile(join(dir, "evidence.json")),
 			hashesText: readFileSync(join(dir, "hashes.sha256"), "utf8"),
 			evDirAbs: dir,
-			executedCmds: (readJson(join(dir, "verification-results.json")) as any).executed_commands,
+			executedCmds: readFixtureVerificationResults(
+				join(dir, "verification-results.json"),
+			).executed_commands,
 			bundledResultPath: "verification-results.json",
 			rootAbs: root,
 			headOidNow: git(root, ["rev-parse", "HEAD"]),
@@ -814,12 +895,12 @@ describe("production run-verification.ts integration", () => {
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
-		const evidence = readJson(join(dir, "evidence.json")) as any;
+		const evidence = readFixtureEvidence(join(dir, "evidence.json"));
 		const otherSubject = "f".repeat(40);
 		evidence.commands[0].subject_tree_oid_before = otherSubject;
 		evidence.commands[0].subject_tree_oid_after = otherSubject;
 		rewriteManifest(root, evidence);
-		const results = readJson(join(dir, "verification-results.json")) as any;
+		const results = readFixtureVerificationResults(join(dir, "verification-results.json"));
 		results.executed_commands[0].subject_tree_oid_before = otherSubject;
 		results.executed_commands[0].subject_tree_oid_after = otherSubject;
 		writeFileSync(join(dir, "verification-results.json"), JSON.stringify(results, null, "\t") + "\n");
@@ -835,8 +916,8 @@ describe("production run-verification.ts integration", () => {
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
-		const evidence = readJson(join(dir, "evidence.json")) as any;
-		const results = readJson(join(dir, "verification-results.json")) as any;
+		const evidence = readFixtureEvidence(join(dir, "evidence.json"));
+		const results = readFixtureVerificationResults(join(dir, "verification-results.json"));
 		const otherTree = git(root, ["mktree"], "");
 		evidence.execution_tree_oid = otherTree;
 		evidence.tree_oid = otherTree;
@@ -884,11 +965,11 @@ describe("production run-verification.ts integration", () => {
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
-		const evidence = readJson(join(dir, "evidence.json")) as any;
+		const evidence = readFixtureEvidence(join(dir, "evidence.json"));
 		evidence.commands[0].failure_classification = "ENVIRONMENTAL";
 		// Rehash the manifest with the tampered evidence.json.
 		rewriteManifest(root, evidence);
-		const results = readJson(join(dir, "verification-results.json")) as any;
+		const results = readFixtureVerificationResults(join(dir, "verification-results.json"));
 		results.executed_commands[0].failure_classification = "ENVIRONMENTAL";
 		writeFileSync(join(dir, "verification-results.json"), JSON.stringify(results, null, "\t") + "\n");
 		const view = checkProductionBundle(root, results.executed_commands);
@@ -901,14 +982,14 @@ describe("production run-verification.ts integration", () => {
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
-		const results = readJson(join(dir, "verification-results.json")) as any;
+		const results = readFixtureVerificationResults(join(dir, "verification-results.json"));
 		results.executed_commands.push({...results.executed_commands[0], id: "ghost"});
 		// The bundled verification-results.json must be re-hashed into the
 		// manifest after the change for the renderer to detect the mismatch
 		// (the metadata file inside the bundle has changed).
 		const resultPath = "verification-results.json";
 		const newHash = sha256(readFileSync(join(dir, ...resultPath.split("/"))));
-		rewriteManifest(root, readJson(join(dir, "evidence.json")) as any);
+		rewriteManifest(root, readFixtureEvidence(join(dir, "evidence.json")));
 		const manifestText = readFileSync(join(dir, "hashes.sha256"), "utf8");
 		writeFileSync(
 			join(dir, "hashes.sha256"),
@@ -924,8 +1005,8 @@ describe("production run-verification.ts integration", () => {
 		const result = run(root, [], fixtureInventory);
 		expect(result.status).toBe(0);
 		const dir = evidenceDir(root);
-		const evidence = readJson(join(dir, "evidence.json")) as any;
-		const original = readJson(join(dir, "commands/fixture.metadata.json")) as any;
+		const evidence = readFixtureEvidence(join(dir, "evidence.json"));
+		const original = readJsonObject(join(dir, "commands/fixture.metadata.json"));
 		writeFileSync(
 			join(dir, "commands/fixture.metadata.json"),
 			JSON.stringify({...original, status: "fail", exit_code: 1}, null, "\t") + "\n",

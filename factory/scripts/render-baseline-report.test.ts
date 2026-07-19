@@ -1407,6 +1407,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			exit_code: 0,
 			signal: null,
 			timeout: false,
+			timeout_ms: 60_000,
 			stdout_text: stdoutText,
 			stdout_sha256: stdoutSha,
 			stderr_text: stderrText,
@@ -1989,6 +1990,39 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		});
 		expect(view.derivedReasonMatchesRecorded).toBe(false);
 		expect(view.diagnostics.some((d) => d.kind === "reason-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("µC-3 round 4: timeout_ms drift is detected from the persisted timeout authority", () => {
+		const inv = buildGoodInventory();
+		const record = inv.probes.p1_better_sqlite3;
+		record.status = "fail";
+		record.timeout = true;
+		record.failure_kind = "timeout";
+		record.failure_message = "";
+		record.reason = "probe timed out after 60000ms";
+		// The structured timeout budget drifts while the old prose remains.
+		// The reader must consume timeout_ms=30000 and reject the 60000ms
+		// reason rather than silently substituting a process-wide constant.
+		record.timeout_ms = 30_000;
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const { manifest } = buildGoodBundle(inv);
+		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
+		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.derivedOutcomesMatch).toBe(true);
+		expect(view.derivedReasonMatchesRecorded).toBe(false);
+		expect(
+			view.diagnostics.some(
+				(d) => d.kind === "reason-mismatch" && d.message.includes("30000ms"),
+			),
+		).toBe(true);
 		expect(view.complete).toBe(false);
 	});
 
