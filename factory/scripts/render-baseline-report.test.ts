@@ -37,7 +37,14 @@ import {
 	type ClosureInput,
 	type EvidenceView,
 } from "./baseline-closure";
-import { NATIVE_PROBE_DEFINITIONS } from "./native-probes";
+import {
+	NATIVE_PROBE_DEFINITIONS,
+	NATIVE_PROBE_IDS,
+	canonicalizeProbeForBundle,
+	stableStringify,
+	type NativeProbe,
+	type NativeProbeId,
+} from "./native-probes";
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -1211,12 +1218,28 @@ describe("loadNativeProbesInventory (CORRECTION15 legacy shape, fail-closed)", (
 		expect(view.diagnostics.every((d) => d.kind === "missing-inventory")).toBe(true);
 	});
 
-	it("status=pass → complete=true", () => {
+	// P0.7: tracked inventory is PERMANENTLY informational. `complete`
+	// must be false so the closure cannot mistake a tracked-mirror
+	// read for an authoritative one, regardless of how clean the
+	// legacy CORRECTION15 fields are.
+	it("status=pass → complete=false (P0.7 — tracked mirror is informational only)", () => {
 		const path = writeLegacyInventory("pass", "a".repeat(64));
 		const view = loadNativeProbesInventory(path);
-		expect(view.complete).toBe(true);
+		expect(view.complete).toBe(false);
 		expect(view.source).toBe("tracked");
+		expect(view.diagnostics.length).toBe(0);
 		expect(view.probes.p1_better_sqlite3?.status).toBe("pass");
+		// Every µC-3 dimension stays false.
+		expect(view.streamLayoutValid).toBe(false);
+		expect(view.catalogueMatches).toBe(false);
+		expect(view.hostClassMatchesBundle).toBe(false);
+		expect(view.artifactBytesValid).toBe(false);
+		expect(view.recordedIdentityMatchesBundle).toBe(false);
+		expect(view.derivedOutcomesMatch).toBe(false);
+		expect(view.allProbesPassed).toBe(false);
+		expect(view.externalStreamsComplete).toBe(false);
+		expect(view.externalStreamHashesValid).toBe(false);
+		expect(view.metadataRecordsEqual).toBe(false);
 	});
 
 	it("status=deferred → complete=false with deferred diagnostic", () => {
@@ -1353,6 +1376,10 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		// canonical helper so stream_layout_version, stdout_path,
 		// stderr_path, metadata_path, and the manifest hash
 		// declarations are all derived from a single source of truth.
+		// P0.9: the reader enforces derived-reason binding. For pass rows,
+		// the recorded reason must be either the empty string or the
+		// canonical "probe satisfied <label>" text; anything else (e.g.
+		// the legacy "ok" stub) is a `reason-mismatch` diagnostic.
 		const collected: NativeProbe = {
 			id: id as NativeProbeId,
 			path: def.artifact_path,
@@ -1360,14 +1387,14 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			sha256: artifactSha,
 			file_format: fileFormat,
 			status: "pass",
-			reason: "ok",
+			reason: "",
 			argv,
 			exit_code: 0,
 			signal: null,
 			timeout: false,
 			stdout_text: stdoutText,
 			stdout_sha256: stdoutSha,
-			stderr_text,
+			stderr_text: stderrText,
 			stderr_sha256: stdoutEmptySha,
 			artifact_path: def.artifact_path,
 			artifact_sha256: artifactSha,
@@ -1439,18 +1466,65 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	// beforeEach the --randomize flag can interleave tests so a tamper
 	// leaks into the next test's assertions. Rebuild the good inventory
 	// + manifest from scratch on each test.
+	//
+	// µC-3 (P0.12): stage the canonical stdout / stderr / metadata
+	// payloads for every probe, and declare them in `hashes.sha256` so
+	// the bundle-bound reader can verify the external streams and the
+	// per-probe metadata semantic equality. The text comes from
+	// `buildGoodBundle()` (which calls `probeRecord()` per id) so the
+	// bytes match the synthesized stdout / stderr in the inventory.
+	function buildGoodBundle(): { inventory: any; manifest: string } {
+		const inventory = buildGoodInventory();
+		const manifestLines: string[] = [];
+		const out = join(bundleDir, "hashes.sha256.tmp");
+		for (const probeId of NATIVE_PROBE_IDS) {
+			const rec = inventory.probes[probeId] as any;
+			const stdoutAbs = join(bundleDir, ...rec.stdout_path.split("/"));
+			const stderrAbs = join(bundleDir, ...rec.stderr_path.split("/"));
+			const metadataAbs = join(bundleDir, ...rec.metadata_path.split("/"));
+			mkdirSync(join(stdoutAbs, ".."), { recursive: true });
+			mkdirSync(join(stderrAbs, ".."), { recursive: true });
+			mkdirSync(join(metadataAbs, ".."), { recursive: true });
+			// Recompute the bytes from the recorded text + hash so the
+			// fixture stays byte-exact against the inventory fields.
+			const stdoutBytes = Buffer.from(rec.stdout_text, "utf8");
+			const stderrBytes = Buffer.from(rec.stderr_text, "utf8");
+			// The metadata file is the canonical stableStringify of the
+			// record followed by a single LF, matching what the runner
+			// stages via `canonicalizeProbeForBundle`.
+			const metadataBytes = Buffer.from(stableStringify(rec) + "\n", "utf8");
+			writeFileSync(stdoutAbs, stdoutBytes);
+			writeFileSync(stderrAbs, stderrBytes);
+			writeFileSync(metadataAbs, metadataBytes);
+			manifestLines.push(`${sha256Hex(stdoutBytes)}  ${rec.stdout_path}`);
+			manifestLines.push(`${sha256Hex(stderrBytes)}  ${rec.stderr_path}`);
+			manifestLines.push(`${sha256Hex(metadataBytes)}  ${rec.metadata_path}`);
+		}
+		const invBytes = Buffer.from(JSON.stringify(inventory, null, "\t") + "\n", "utf8");
+		const invHash = sha256Hex(invBytes);
+		const otherLines = ["evidence.json", "verification-results.json"]
+			.map((rel) => `${"0".repeat(64)}  ${rel}`);
+		const manifest = [invHash + "  native-probes.json", ...FIXTURE_ARTIFACT_MANIFEST_LINES, ...manifestLines, ...otherLines].join("\n") + "\n";
+		return { inventory, manifest };
+	}
+	// Cheap inline stableStringify that mirrors `native-probes.ts`. We
+	// avoid importing the helper to keep the test self-contained.
+	function stableStringifyLocal(value: any): string {
+		if (value === null) return "null";
+		if (Array.isArray(value)) {
+			return "[" + value.map((entry) => stableStringifyLocal(entry)).join(",") + "]";
+		}
+		if (typeof value === "object") {
+			const keys = Object.keys(value).sort();
+			return "{" + keys.map((k) => JSON.stringify(k) + ":" + stableStringifyLocal(value[k])).join(",") + "}";
+		}
+		return JSON.stringify(value);
+	}
+
 	beforeEach(() => {
-		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		const bytes = readFileSync(inventoryPath);
-		const hash = sha256Hex(bytes);
-		const otherFiles = ["evidence.json", "verification-results.json"];
-		const otherLines = otherFiles
-			.map((rel) => `${"0".repeat(64)}  ${rel}`)
-			.join("\n");
-		writeFileSync(
-			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${otherLines}\n`,
-		);
+		const { inventory, manifest } = buildGoodBundle();
+		writeFileSync(inventoryPath, JSON.stringify(inventory, null, "\t") + "\n");
+		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
 	});
 
 	afterAll(() => {
@@ -1588,14 +1662,12 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		const original = readFileSync(inventoryPath);
 		const inv = buildGoodInventory();
 		inv.probes.p1_better_sqlite3.argv = [];
-		const tamperedPath = join(bundleDir, "native-probes.json");
-		writeFileSync(tamperedPath, JSON.stringify(inv, null, "\t") + "\n");
-		const bytes = readFileSync(tamperedPath);
-		const hash = sha256Hex(bytes);
-		writeFileSync(
-			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
-		);
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		// Re-stage the bundle so the new inventory hash is in the
+		// manifest; the external stream files are unchanged so they
+		// remain on disk and continue to match their hashes.
+		const { manifest } = buildGoodBundle();
+		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
 		const view = loadNativeProbesFromEvidence({
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
@@ -1611,11 +1683,303 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		// can interleave tests so this one runs before "happy path" and
 		// the empty argv tamper leaks into the next test's assertions.
 		writeFileSync(inventoryPath, original);
-		const goodBytes = readFileSync(inventoryPath);
-		const goodHash = sha256Hex(goodBytes);
+		const { manifest: goodManifest } = buildGoodBundle();
+		writeFileSync(join(bundleDir, "hashes.sha256"), goodManifest);
+	});
+
+	// -------------------------------------------------------------------------
+	// P0.12 — reader corpus: positive + negative coverage of every new
+	// dimension added by the µC-3 review. The cases pin the fail-closed
+	// behaviour for catalogue equality, host-class binding, artifact
+	// bytes/size/manifest, identity binding, derived-reason binding, and
+	// success-predicate exception capture.
+	// -------------------------------------------------------------------------
+
+	it("P0 #1: layout-version drift on one record flips streamLayoutValid", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.stream_layout_version = 999;
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
 		writeFileSync(
 			join(bundleDir, "hashes.sha256"),
-			`${goodHash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.streamLayoutValid).toBe(false);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #2: argv drift emits catalogue-mismatch + flips catalogueMatches", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		const argv = [...inv.probes.p1_better_sqlite3.argv];
+		argv[argv.length - 1] = "tampered";
+		inv.probes.p1_better_sqlite3.argv = argv;
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.catalogueMatches).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "catalogue-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #3: host_support drift emits catalogue-mismatch + flips catalogueMatches", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.host_support = ["darwin-arm64"];
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.catalogueMatches).toBe(false);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #4: success_contract_version drift emits catalogue-mismatch", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.success_contract_version = 999;
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.catalogueMatches).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "catalogue-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #5: artifact_exists=true but artifact path missing from manifest → artifact-mismatch", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		// Manifest drops the p1 artifact entry — but the record still
+		// declares artifact_exists=true. The reader must reject the
+		// absence with artifact-mismatch.
+		const partialManifestLines = FIXTURE_ARTIFACT_MANIFEST_LINES.filter(
+			(line) => !line.includes("p1_better_sqlite3/package.json"),
+		);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${partialManifestLines.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.artifactBytesValid).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "artifact-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #6: artifact size drift (recorded vs on-disk) emits artifact-mismatch", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.artifact_size = 9999;
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.artifactBytesValid).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "artifact-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #7: recorded host_class drift emits host-class-mismatch + flips hostClassMatchesBundle", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.host_class = "linux-x64";
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.hostClassMatchesBundle).toBe(false);
+		expect(view.hostClassMismatches).toContain("p1_better_sqlite3");
+		expect(view.diagnostics.some((d) => d.kind === "host-class-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #8: recorded execution_head_oid drift emits identity-mismatch + flips recordedIdentityMatchesBundle", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.execution_head_oid = "f".repeat(40);
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.recordedIdentityMatchesBundle).toBe(false);
+		expect(view.identityMismatches).toContain("p1_better_sqlite3");
+		expect(view.diagnostics.some((d) => d.kind === "identity-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #9: stdout_text drift from the external stream bytes → embedded-stream-mismatch", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		// The stdout_sha256 stays bound to the recorded bytes, but we
+		// also rewrite stdout_text to disagree with the SHA. The reader's
+		// per-record hash check (already declared-and-matching) covers
+		// stdout_sha256; the embedded-stream check then flips because
+		// the textual mirror no longer UTF-8 byte-equals the on-disk bytes.
+		inv.probes.p1_better_sqlite3.stdout_text = "DRIFTED stdout contents";
+		// Recompute stdout_sha256 to actually match the recorded bytes;
+		// the stage has not changed. The mismatch is in the embedded
+		// stdout_text mirror only.
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.embeddedStreamsConsistent).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "embedded-stream-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #10: recorded stdout_sha256 disagrees with on-disk bytes → stream-record-hash-mismatch", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.stdout_sha256 = "0".repeat(64);
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.externalStreamHashesValid).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "stream-record-hash-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #11: P0.9 — recorded reason mismatch on a pass row → reason-mismatch + derivedReasonMatchesRecorded=false", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		inv.probes.p1_better_sqlite3.reason = "this is not the canonical pass text";
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.derivedReasonMatchesRecorded).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "reason-mismatch")).toBe(true);
+		expect(view.complete).toBe(false);
+	});
+
+	it("P0 #12: P0.6 — missing stdout_text (non-string) is invalid-shape", () => {
+		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
+		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		delete inv.probes.p1_better_sqlite3.stdout_text;
+		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
+		const bytes = readFileSync(inventoryPath);
+		const hash = sha256Hex(bytes);
+		writeFileSync(
+			join(bundleDir, "hashes.sha256"),
+			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+		);
+		const view = loadNativeProbesFromEvidence({
+			evDirAbs: bundleDir,
+			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
+			executionHeadOid: EXEC_HEAD,
+			executionTreeOid: EXEC_TREE,
+			filteredSubjectTreeOid: EXEC_SUBJECT,
+		});
+		expect(view.complete).toBe(false);
+		expect(view.diagnostics.some((d) => d.kind === "invalid-shape" && d.field === "stdout_text")).toBe(true);
 	});
 });

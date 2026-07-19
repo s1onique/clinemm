@@ -36,6 +36,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 
 import {
+	canonicalRecordedProbeReason,
 	hostClassOf,
 	newInvocationId,
 	NATIVE_PROBE_DEFINITIONS,
@@ -271,25 +272,27 @@ async function executeProbe(
 
 	let status: "pass" | "fail";
 	let reason: string;
+	let derivedReason: string | null;
 	if (!hostSupported) {
-		status = "fail";
-		reason = `host=${hostClass} is not in host_support=${def.host_support.join(",")}`;
+		derivedReason = `host=${hostClass} is not in host_support=${def.host_support.join(",")}`;
 	} else if (outcome.spawnError !== null) {
-		status = "fail";
-		reason = `spawn error: ${outcome.spawnError.message}`;
+		derivedReason = `spawn error: ${outcome.spawnError.message}`;
 	} else if (outcome.timedOut) {
-		status = "fail";
-		reason = `probe timed out after ${timeoutMs}ms`;
+		derivedReason = `probe timed out after ${timeoutMs}ms`;
 	} else {
-		const verdict = def.success(ctx);
-		if (verdict === null) {
-			status = "pass";
-			reason = `probe satisfied ${def.label}`;
-		} else {
-			status = "fail";
-			reason = verdict;
-		}
+		derivedReason = def.success(ctx);
 	}
+	if (derivedReason === null) {
+		status = "pass";
+	} else {
+		status = "fail";
+	}
+	// CORRECTION21 (µC-3 review): the writer records the SAME text the
+	// reader derives through `canonicalRecordedProbeReason(...)`. Both
+	// sides share that helper so equality is mechanical rather than a
+	// policy decision; the reader no longer accepts both the empty
+	// string and the runner's ad-hoc text.
+	reason = canonicalRecordedProbeReason(derivedReason, def);
 
 	// CORRECTION17: every field is mandatory. The legacy fields
 	// (path, architecture, sha256, file_format) are populated from

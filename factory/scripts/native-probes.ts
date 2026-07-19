@@ -764,9 +764,41 @@ export function hostClassOf(platform: string, arch: string): string {
 	return `${platform}-${arch}`;
 }
 
+/**
+ * CORRECTION21 (µC-3 review) — canonical pass-row reason text.
+ *
+ * The writer (`collect-native-probes.ts`) and the reader
+ * (`baseline-closure.ts`) MUST agree on the exact string the runner
+ * records for a passing probe. Using the same helper on both sides
+ * removes the previous reader policy of accepting either the empty
+ * string or the runner's ad-hoc text. The contract is one function:
+ *
+ *   derivedReason === null  →  recorded reason =
+ *       canonicalRecordedProbeReason(derivedReason, definition)
+ *     === "probe satisfied <label>"
+ *
+ *   derivedReason !== null  →  recorded reason = derivedReason (the
+ *     fail reason text the predicate produced).
+ *
+ * The reader uses the same helper to build the expected recorded
+ * reason from the derived outcome, so equality is mechanical rather
+ * than a policy decision.
+ */
+export function canonicalRecordedProbeReason(
+	derivedReason: string | null,
+	definition: NativeProbeDefinition,
+): string {
+	if (derivedReason === null) {
+		return `probe satisfied ${definition.label}`;
+	}
+	return derivedReason;
+}
+
 // ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 parser ---------
 
 const SHA256_REGEX = /^[0-9a-f]{64}$/;
+/** Lowercase 40-character hex Git OID. */
+const OID_REGEX = /^[0-9a-f]{40}$/;
 
 /**
  * µC-3 result of `parseBundledNativeProbe`. The reader never throws —
@@ -792,8 +824,10 @@ export interface ProbeParseResult {
  * this for every probe entry inside the aggregate `native-probes.json`
  * and uses the returned record to:
  *   1. validate the canonical paths asserted by the recorded record,
- *   2. derive the on-disk evidence payloads to load,
- *   3. compare the staged metadata file's JSON value with the
+ *   2. validate the structural shape of the embedded record
+ *      (argv, status, identity OIDs, embedded stream types, etc.),
+ *   3. derive the on-disk evidence payloads to load,
+ *   4. compare the staged metadata file's JSON value with the
  *      aggregate record's JSON value under `stableStringify`.
  *
  * Validation rules (all required, all fail-closed):
@@ -805,7 +839,42 @@ export interface ProbeParseResult {
  *   - `stdout_path`, `stderr_path`, `metadata_path` are the canonical
  *     `canonicalStreamPaths(probeId)` paths;
  *   - `stdout_sha256`, `stderr_sha256` are 64-character lowercase
- *     hexadecimal strings.
+ *     hexadecimal strings;
+ *   - `argv` is a non-empty array of strings;
+ *   - `stdout_text`, `stderr_text` are strings (P0.6: missing embedded
+ *     fields fail closed — the writer requires both, and the reader
+ *     refuses to assume they can be recovered from external bytes);
+ *   - `execution_head_oid`, `execution_tree_oid`, `subject_tree_oid`
+ *     are 40-character lowercase hexadecimal strings;
+ *   - `host_class` is a non-empty string;
+ *   - `host_supported` is a boolean;
+ *   - `host_support` is an array of strings;
+ *   - `status` is exactly `"pass"` or `"fail"`;
+ *   - `reason` is a string;
+ *   - `architecture_assert` is `"host-class"` or `"none"`;
+ *   - `path`, `architecture`, `file_format` are non-empty strings;
+ *   - `sha256` is a 64-character lowercase hex string;
+ *   - `format_match_source` is one of `"stdout" | "stderr" | "file"`;
+ *   - `format_match_pattern_source` / `format_match_pattern_flags`
+ *     are strings;
+ *   - `success_contract_version` is a positive integer;
+ *   - `invocation_id` is a non-empty string;
+ *   - `artifact_*` fields have valid types
+ *     (`artifact_path` string, `artifact_size` non-negative number,
+ *     `artifact_exists` boolean, `artifact_sha256` either a 64-char
+ *     hex string or null);
+ *   - `observed_*` fields have valid types (`observed_file_format`
+ *     string or null, `observed_architecture` string or null);
+ *   - timing fields have valid types
+ *     (`exit_code` number or null, `signal` string or null, `timeout`
+ *     boolean, `started_at`/`finished_at` strings, `duration_ms`
+ *     non-negative number, `working_directory` string).
+ *
+ * Catalogue equality (argv, host_support, format_match,
+ * architecture_assert, success_contract_version) is checked
+ * independently by the reader at a later phase so the parser stays
+ * purely structural and the catalogue-bound diagnostic kinds stay
+ * distinguishable from the parse diagnostics here.
  */
 export function parseBundledNativeProbe(
 	probeId: NativeProbeId,
@@ -885,14 +954,258 @@ export function parseBundledNativeProbe(
 			typeof stderrSha === "string" ? `<${stderrSha.length}>` : `<${typeof stderrSha}>`,
 		);
 	}
+	// argv: non-empty array of strings.
+	if (
+		!Array.isArray(v.argv) ||
+		v.argv.length === 0 ||
+		!v.argv.every((entry) => typeof entry === "string")
+	) {
+		push("argv", "wrong-shape", "non-empty array of strings", observed("argv"));
+	}
+	// stdout_text / stderr_text: must be strings (P0.6).
+	if (typeof v.stdout_text !== "string") {
+		push("stdout_text", "wrong-shape", "string", observed("stdout_text"));
+	}
+	if (typeof v.stderr_text !== "string") {
+		push("stderr_text", "wrong-shape", "string", observed("stderr_text"));
+	}
+	// status enum.
+	if (v.status !== "pass" && v.status !== "fail") {
+		push("status", "wrong-shape", "\"pass\" or \"fail\"", observed("status"));
+	}
+	if (typeof v.reason !== "string") {
+		push("reason", "wrong-shape", "string", observed("reason"));
+	}
+	// Identity OIDs (40-char lowercase hex).
+	for (const oidField of ["execution_head_oid", "execution_tree_oid", "subject_tree_oid"] as const) {
+		const oidValue = v[oidField];
+		if (typeof oidValue !== "string" || !OID_REGEX.test(oidValue)) {
+			push(oidField, "wrong-shape", "40-character lowercase hex OID", observed(oidField));
+		}
+	}
+	// host_class / host_support / host_supported.
+	if (typeof v.host_class !== "string" || v.host_class.length === 0) {
+		push("host_class", "wrong-shape", "non-empty string", observed("host_class"));
+	}
+	if (typeof v.host_supported !== "boolean") {
+		push("host_supported", "wrong-shape", "boolean", observed("host_supported"));
+	}
+	if (
+		!Array.isArray(v.host_support) ||
+		!v.host_support.every((entry) => typeof entry === "string")
+	) {
+		push("host_support", "wrong-shape", "array of strings", observed("host_support"));
+	}
+	// architecture_assert enum.
+	if (v.architecture_assert !== "host-class" && v.architecture_assert !== "none") {
+		push(
+			"architecture_assert",
+			"wrong-shape",
+			"\"host-class\" or \"none\"",
+			observed("architecture_assert"),
+		);
+	}
+	// Legacy + observed shape.
+	if (typeof v.path !== "string" || v.path.length === 0) {
+		push("path", "wrong-shape", "non-empty string", observed("path"));
+	}
+	if (typeof v.architecture !== "string" || v.architecture.length === 0) {
+		push("architecture", "wrong-shape", "non-empty string", observed("architecture"));
+	}
+	if (typeof v.file_format !== "string" || v.file_format.length === 0) {
+		push("file_format", "wrong-shape", "non-empty string", observed("file_format"));
+	}
+	if (typeof v.sha256 !== "string" || !SHA256_REGEX.test(v.sha256 as string)) {
+		push(
+			"sha256",
+			"wrong-shape",
+			"64-character lowercase hexadecimal",
+			typeof v.sha256 === "string" ? `<${v.sha256.length}>` : `<${typeof v.sha256}>`,
+		);
+	}
+	// format_match serialization.
+	if (
+		v.format_match_source !== "stdout" &&
+		v.format_match_source !== "stderr" &&
+		v.format_match_source !== "file"
+	) {
+		push(
+			"format_match_source",
+			"wrong-shape",
+			"\"stdout\" | \"stderr\" | \"file\"",
+			observed("format_match_source"),
+		);
+	}
+	if (typeof v.format_match_pattern_source !== "string") {
+		push(
+			"format_match_pattern_source",
+			"wrong-shape",
+			"string",
+			observed("format_match_pattern_source"),
+		);
+	}
+	if (typeof v.format_match_pattern_flags !== "string") {
+		push(
+			"format_match_pattern_flags",
+			"wrong-shape",
+			"string",
+			observed("format_match_pattern_flags"),
+		);
+	}
+	// success_contract_version + invocation_id.
+	if (
+		typeof v.success_contract_version !== "number" ||
+		!Number.isInteger(v.success_contract_version) ||
+		(v.success_contract_version as number) < 1
+	) {
+		push(
+			"success_contract_version",
+			"wrong-shape",
+			"positive integer",
+			observed("success_contract_version"),
+		);
+	}
+	if (typeof v.invocation_id !== "string" || v.invocation_id.length === 0) {
+		push("invocation_id", "wrong-shape", "non-empty string", observed("invocation_id"));
+	}
+	// Artifact fields.
+	if (typeof v.artifact_path !== "string" || v.artifact_path.length === 0) {
+		push(
+			"artifact_path",
+			"wrong-shape",
+			"non-empty string",
+			observed("artifact_path"),
+		);
+	}
+	if (
+		typeof v.artifact_size !== "number" ||
+		!Number.isInteger(v.artifact_size) ||
+		(v.artifact_size as number) < 0
+	) {
+		push("artifact_size", "wrong-shape", "non-negative integer", observed("artifact_size"));
+	}
+	if (typeof v.artifact_exists !== "boolean") {
+		push("artifact_exists", "wrong-shape", "boolean", observed("artifact_exists"));
+	}
+	if (
+		v.artifact_sha256 !== null &&
+		(typeof v.artifact_sha256 !== "string" || !SHA256_REGEX.test(v.artifact_sha256 as string))
+	) {
+		push(
+			"artifact_sha256",
+			"wrong-shape",
+			"64-character lowercase hex or null",
+			observed("artifact_sha256"),
+		);
+	}
+	// Observed / timing fields.
+	if (v.observed_file_format !== null && typeof v.observed_file_format !== "string") {
+		push(
+			"observed_file_format",
+			"wrong-shape",
+			"string or null",
+			observed("observed_file_format"),
+		);
+	}
+	if (v.observed_architecture !== null && typeof v.observed_architecture !== "string") {
+		push(
+			"observed_architecture",
+			"wrong-shape",
+			"string or null",
+			observed("observed_architecture"),
+		);
+	}
+	if (
+		v.exit_code !== null &&
+		(typeof v.exit_code !== "number" || !Number.isInteger(v.exit_code))
+	) {
+		push("exit_code", "wrong-shape", "integer or null", observed("exit_code"));
+	}
+	if (v.signal !== null && typeof v.signal !== "string") {
+		push("signal", "wrong-shape", "string or null", observed("signal"));
+	}
+	if (typeof v.timeout !== "boolean") {
+		push("timeout", "wrong-shape", "boolean", observed("timeout"));
+	}
+	if (typeof v.started_at !== "string" || v.started_at.length === 0) {
+		push("started_at", "wrong-shape", "non-empty string", observed("started_at"));
+	}
+	if (typeof v.finished_at !== "string" || v.finished_at.length === 0) {
+		push("finished_at", "wrong-shape", "non-empty string", observed("finished_at"));
+	}
+	if (
+		typeof v.duration_ms !== "number" ||
+		!Number.isInteger(v.duration_ms) ||
+		(v.duration_ms as number) < 0
+	) {
+		push("duration_ms", "wrong-shape", "non-negative integer", observed("duration_ms"));
+	}
+	if (typeof v.working_directory !== "string" || v.working_directory.length === 0) {
+		push(
+			"working_directory",
+			"wrong-shape",
+			"non-empty string",
+			observed("working_directory"),
+		);
+	}
 	if (diagnostics.length > 0) {
 		return { ok: false, record: null, diagnostics };
 	}
-	return {
-		ok: true,
-		record: v as unknown as BundledNativeProbe,
-		diagnostics: [],
+	// The TypeScript assertion below used to be `v as unknown as
+	// BundledNativeProbe` — an unsafe cast that let the parser
+	// silently hand the reader an arbitrary JSON object. µC-3
+	// replaces the cast with an explicit field-by-field construction
+	// so any field the parser forgot to validate cannot reach the
+	// downstream reader. Catalogue-bound relational checks
+	// (working_directory / artifact_path / format_match against the
+	// catalogue, etc.) are performed by the reader at a later phase
+	// so the parser stays purely structural and the catalogue-bound
+	// diagnostic kinds stay distinguishable from these parse
+	// diagnostics.
+	const record: BundledNativeProbe = {
+		id: v.id as NativeProbeId,
+		path: v.path as string,
+		architecture: v.architecture as string,
+		sha256: v.sha256 as string,
+		file_format: v.file_format as string,
+		status: v.status as "pass" | "fail",
+		reason: v.reason as string,
+		artifact_path: v.artifact_path as string,
+		artifact_sha256: (v.artifact_sha256 as string | null) ?? null,
+		artifact_size: v.artifact_size as number,
+		artifact_exists: v.artifact_exists as boolean,
+		argv: v.argv as string[],
+		exit_code: (v.exit_code as number | null) ?? null,
+		signal: (v.signal as NodeJS.Signals | null) ?? null,
+		timeout: v.timeout as boolean,
+		stdout_text: v.stdout_text as string,
+		stdout_sha256: v.stdout_sha256 as string,
+		stderr_text: v.stderr_text as string,
+		stderr_sha256: v.stderr_sha256 as string,
+		observed_file_format: (v.observed_file_format as string | null) ?? null,
+		observed_architecture: (v.observed_architecture as string | null) ?? null,
+		execution_head_oid: v.execution_head_oid as string,
+		execution_tree_oid: v.execution_tree_oid as string,
+		subject_tree_oid: v.subject_tree_oid as string,
+		host_class: v.host_class as string,
+		host_supported: v.host_supported as boolean,
+		host_support: v.host_support as ReadonlyArray<string>,
+		started_at: v.started_at as string,
+		finished_at: v.finished_at as string,
+		duration_ms: v.duration_ms as number,
+		working_directory: v.working_directory as string,
+		format_match_source: v.format_match_source as "stdout" | "stderr" | "file",
+		format_match_pattern_source: v.format_match_pattern_source as string,
+		format_match_pattern_flags: v.format_match_pattern_flags as string,
+		architecture_assert: v.architecture_assert as "host-class" | "none",
+		success_contract_version: v.success_contract_version as number,
+		invocation_id: v.invocation_id as string,
+		stream_layout_version: NATIVE_PROBE_STREAM_LAYOUT_VERSION,
+		stdout_path: paths.stdout_path,
+		stderr_path: paths.stderr_path,
+		metadata_path: paths.metadata_path,
 	};
+	return { ok: true, record, diagnostics: [] };
 }
 
 // ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 loader ---------
@@ -965,54 +1278,77 @@ export function loadEvidencePayload(
 	if (isAbsolute(relativePath)) {
 		return make("absolute", "relative path within the evidence directory", relativePath);
 	}
-	const normalizedEvDir = resolve(evidenceDir);
+	// Step 1: canonicalize the EVIDENCE ROOT so both sides of the
+	// containment comparison agree on the same namespace. On macOS a
+	// lexical /var path may resolve to /private/var; if the root were
+	// left as the unresolved lexical path, comparing it to a resolved
+	// child would falsely report an escape.
+	const lexicalRoot = resolve(evidenceDir);
+	let realRoot: string;
+	try {
+		realRoot = realpathSync(lexicalRoot);
+	} catch {
+		// Root does not resolve (missing / non-traversable) — refuse
+		// everything; the loader cannot prove containment.
+		return make("outside-evidence-dir", `contained under ${lexicalRoot}`, lexicalRoot);
+	}
 	const declared = manifestHashes.get(relativePath);
 	if (declared === undefined) {
 		return make("manifest-undeclared", "declared in hashes.sha256", "absent");
 	}
-	const abs = resolve(normalizedEvDir, relativePath);
-	const relToEvDir = normalizeRelative(relative(normalizedEvDir, abs));
+	// Step 2: lexical containment of the requested path against the
+	// unresolved root. This is a syntactic check on user input and
+	// cannot be fooled by symlinks under the bundle (the lstat check
+	// below rejects them).
+	const lexicalAbs = resolve(lexicalRoot, relativePath);
+	const lexicalRel = normalizeRelative(relative(lexicalRoot, lexicalAbs));
 	if (
-		relToEvDir === "" ||
-		relToEvDir === ".." ||
-		relToEvDir.startsWith(`..${sep}`) ||
-		isAbsolute(relToEvDir)
+		lexicalRel === "" ||
+		lexicalRel === ".." ||
+		lexicalRel.startsWith(`..${sep}`) ||
+		isAbsolute(lexicalRel)
 	) {
-		return make("traversal", `contained under ${normalizedEvDir}`, abs);
+		return make("traversal", `contained under ${lexicalRoot}`, lexicalAbs);
 	}
-	if (!existsSync(abs)) {
-		return make("missing", "regular file on disk", abs);
+	if (!existsSync(lexicalAbs)) {
+		return make("missing", "regular file on disk", lexicalAbs);
 	}
 	let lst;
 	try {
-		lst = lstatSync(abs);
+		lst = lstatSync(lexicalAbs);
 	} catch {
-		return make("missing", "regular file on disk", abs);
+		return make("missing", "regular file on disk", lexicalAbs);
 	}
 	if (lst.isSymbolicLink()) {
-		return make("symlink", "regular file (no symlink)", abs);
+		return make("symlink", "regular file (no symlink)", lexicalAbs);
 	}
 	if (!lst.isFile()) {
-		return make("not-regular-file", "regular file", abs);
+		return make("not-regular-file", "regular file", lexicalAbs);
 	}
-	// Resolve through realpath to defend against TOCTOU swaps into a path
-	// outside the evidence directory (e.g. via hard-link back-into $TMPDIR).
+	// Step 3: canonicalize both sides before the namespace-equality
+	// check so /var/... vs /private/var/... resolve to the same root.
+	// The reader thereby verifies that the loaded file lives inside the
+	// canonical evidence directory (defending against TOCTOU swaps
+	// that mount a co-hosting inode over the staged path). Note: this
+	// proves containment under a canonical root; it does NOT prove the
+	// file's inode is uniquely owned by the bundle (a hard link to a
+	// separately-owned file would pass the namespace check).
 	let realAbs: string;
 	try {
-		realAbs = realpathSync(abs);
+		realAbs = realpathSync(lexicalAbs);
 	} catch {
-		return make("missing", "real path resolvable", abs);
+		return make("missing", "real path resolvable", lexicalAbs);
 	}
-	const realRel = normalizeRelative(relative(normalizedEvDir, realAbs));
+	const realRel = normalizeRelative(relative(realRoot, realAbs));
 	if (
 		realRel === "" ||
 		realRel === ".." ||
 		realRel.startsWith(`..${sep}`) ||
 		isAbsolute(realRel)
 	) {
-		return make("outside-evidence-dir", `contained under ${normalizedEvDir}`, realAbs);
+		return make("outside-evidence-dir", `contained under ${realRoot}`, realAbs);
 	}
-	const bytes = readFileSync(abs);
+	const bytes = readFileSync(lexicalAbs);
 	const observedHash = createHash("sha256").update(bytes).digest("hex");
 	if (observedHash !== declared) {
 		return make(
