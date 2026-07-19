@@ -207,11 +207,9 @@ function main(): void {
 				? EVIDENCE_VALUE.subject_tree_oid
 				: FILTERED_SUBJECT_TREE_OID_NOW,
 		bundleHostClass:
-			typeof ENV?.bun_architecture === "string"
-				? ENV.bun_architecture
-				: typeof ENV?.architecture === "string"
-					? ENV.architecture
-					: null,
+			typeof EVIDENCE_VALUE?.host_arch === "string" && EVIDENCE_VALUE.host_arch.length > 0
+				? EVIDENCE_VALUE.host_arch
+				: null,
 	});
 
 	const evidenceView: EvidenceView = checkEvidence({

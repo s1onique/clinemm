@@ -1,0 +1,180 @@
+{
+  "act": "ACT-CLINEMM-FORK-BASELINE01-CORRECTION21",
+  "round": "µC-3 round 3",
+  "verdict": "PARTIAL",
+  "metrics": {
+    "strict_typecheck": "PASS",
+    "git_diff_check": "PASS",
+    "focused_suite_render_baseline_report_test_ts": {
+      "total": 93,
+      "pass": 93,
+      "fail": 0,
+      "verdict": "GREEN"
+    },
+    "focused_suite_native_probes_test_ts": {
+      "total": 22,
+      "pass": 22,
+      "fail": 0,
+      "verdict": "GREEN"
+    },
+    "focused_suite_subject_tree_test_ts": {
+      "total": 16,
+      "pass": 16,
+      "fail": 0,
+      "verdict": "GREEN"
+    },
+    "integration_suite_run_verification_test_ts": {
+      "total": 26,
+      "pass": 10,
+      "fail": 16,
+      "verdict": "RED — production tests still expect a fixture that
+        writes stream/metadata payloads alongside the native-probes.json.
+        The runner now requires those payloads to be present in the manifest
+        before the native-probes dimension can be satisfied. The original
+        CORRECTION21 (round 2) marked this gap as a non-isolated corpus;
+        this round did not regenerate those fixtures because doing so is a
+        separate fixture-regen workstream. The renderer closure still
+        FAILs as expected; this is a known coupling between the runner and
+        the fixture, not a regression in the reader."
+    },
+    "all_factory_scripts_tests": {
+      "total": 157,
+      "pass": 141,
+      "fail": 16,
+      "verdict": "PARTIAL — all focused suites green, only the runner-fixture
+        integration tests are red"
+    }
+  },
+  "p0_corrections_applied": [
+    "Removed the literal \">\" character at baseline-closure.ts:2637 that
+      produced a TypeScript syntax error. The reader now compiles.",
+    "Made LoadNativeProbesFromEvidenceArgs.bundleHostClass optional so the
+      reader no longer requires every call site to thread a host-class
+      value. Call sites that need an independent authority (the happy
+      path and the run-verification integration path) pass
+      bundleHostClass explicitly; missing-authority tests pass null.",
+    "Source bundleHostClass from the detached evidence authority
+      (evidence.json.host_arch) in both the renderer and the runner
+      instead of from the legacy tracked environment.json. This makes
+      host-class binding independently anchored.",
+    "Replaced the ad-hoc reader policy of accepting either the empty
+      string or the canonical pass text with the shared
+      canonicalRecordedProbeReason() helper imported from
+      native-probes.ts. The writer and the reader now derive the
+      expected recorded reason from the same source.",
+    "Removed the short-circuit inside the host-class and identity-binding
+      loops so that every probe is reported independently. The previous
+      design stopped emitting diagnostics after the first mismatch
+      and produced incomplete mismatch-id lists.",
+    "Added recordsStructurallyValid to the final completion conjunction.
+      The dimension was computed and exposed but never declared as a
+      closure precondition.",
+    "Populated argvMismatches and emitted an argv-mismatch diagnostic
+      when the recorded argv disagrees with the catalogue argv. The
+      field was declared in the view shape but never populated.",
+    "Emitted the field=stdout_text attribute on parser diagnostics so
+      tests can assert invalid-shape and field=stdout_text together.",
+    "Loosened parseBundledNativeProbe to accept empty argv (previously
+      rejected as wrong-shape). Empty argv is now surfaced as an
+      argv-mismatch by the catalogue check, matching the test corpus.",
+    "Made the test fixture's probeRecord helper use
+      canonicalRecordedProbeReason() and archForHostClass(HOST) for the
+      recorded reason and observed_architecture fields. The reader's
+      strict equality checks now agree with the fixture's emitted
+      values.",
+    "Refactored buildGoodBundle() in render-baseline-report.test.ts to
+      accept an optional providedInventory argument. Tests now mutate
+      the inventory and pass the mutated value to buildGoodBundle(), so
+      the manifest hash reflects the mutated bytes (was: manifest hash
+      reflected the GOOD inventory, causing hash-mismatch diagnostics to
+      pre-empt the test's intended dimension).",
+    "Updated the loadNativeProbesFromEvidence P0 tests to use
+      buildGoodBundle(inv) for the same reason, and re-stage only the
+      mutated payload (P0 #9 stdout_text drift) so the embedded-stream
+      dimension is exercised rather than being shadowed by an artifact
+      hash mismatch.",
+    "Fixed the render-baseline-report.ts call to source bundleHostClass
+      from EVIDENCE_VALUE.host_arch with a non-empty guard.",
+    "Fixed the run-verification.ts call to source bundleHostClass from
+      evidence.host_arch with a non-empty guard.",
+    "Fixed pre-existing TypeScript errors in collect-environment.ts
+      (safe() called with one arg) and verify-baseline.ts (csvFiles
+      inferred as (string|string[])[])."
+  ],
+  "remaining_p0_blockers": [
+    "observed_architecture=null is still fail-open: the reader accepts
+      null recorded observed_architecture when host_class matches and
+      architecture_assert='host-class'. The reviewer requires non-null.
+      Test fixture is fixed; reader code-path remains.",
+    "Artifact absence uses existsSync(join(evDirAbs, ...)) rather than
+      the containment-safe loadEvidencePayload helper. A ../../escape
+      in the recorded artifact_path would probe outside the evidence dir
+      before the catalogue-mismatch check rejects it.",
+    "Native-probe.json root is no longer loaded via loadEvidencePayload
+      from a resolver perspective; the reader still uses
+      createHash().update(readFileSync(bundlePath)). A symlink at the
+      bundle path is not detected by the current loadEvidencePayload
+      call and could mislead the hash check.",
+    "Writer and reader still derive failure reasons through two
+      different precedence chains. The collector's failure derivation
+      uses timeout/catalogue/spawn-error precedence while the reader's
+      derivedReasonMatchesRecorded only checks the catalogue case plus
+      timeout-as-static-string. A shared pure function is needed.",
+    "Native-probe.json host_class recorded under architecture_assert='none'
+      probes is not separately captured. Only architecture_assert='host-class'
+      probes have a host_class binding check; others silently pass.",
+    "Run-verification production integration tests still fail because
+      their staged fixture inventory does not emit stream/metadata
+      payloads or include them in hashes.sha256. The reader now
+      requires those entries before accepting the bundle. Regenerating
+      the fixture is a separate workstream."
+  ],
+  "remaining_named_dimensions": {
+    "darwin_root_canonicalization": "CLOSED (realpath applied)",
+    "field_by_field_parser_construction": "CLOSED (records constructed
+      field-by-field by parseBundledNativeProbe)",
+    "catalogue_equality": "CLOSED for argv, host_support, format_match,
+      architecture_assert, success_contract_version, working_directory,
+      artifact_path",
+    "artifact_absence_relation": "PARTIAL — path resolution still uses
+      existsSync/join rather than loadEvidencePayload containment",
+    "independent_host_interface": "ADDED — bundleHostClass argument wired
+      into LoadNativeProbesFromEvidenceArgs",
+    "independent_host_call_site": "WIRED at renderer and runner; tests
+      pass HOST explicitly",
+    "canonical_reason_writer": "CLOSED — writer and reader share the
+      canonicalRecordedProbeReason helper",
+    "canonical_reason_reader": "CLOSED",
+    "explicit_dimensions": "IMPROVED — recordsStructurallyValid included
+      in completion; argvMismatches populated; identity/host-class
+      diagnostics run independently",
+    "negative_corpus": "PARTIAL — render-baseline-report.test.ts is fully
+      green (93/93). run-verification.test.ts is still 10/26 because
+      the runner-fixture integration does not stage stream/metadata
+      payloads."
+  },
+  "gate": {
+    "uC3_status": "PARTIAL — reader/writer shared helper, host-class
+      authority, identity-diagnostic completeness, recordsStructurallyValid
+      completion, syntax error, and test fixture cleanup all closed.
+      Runner-fixture regeneration is the remaining open workstream.",
+    "correction21_status": "PARTIAL",
+    "checkpoint2_ready": false,
+    "correction22_ready": false,
+    "next_actions": [
+      "Regenerate run-verification.test.ts fixtures so the staged
+        native-probes.json includes the canonical stream/metadata
+        payloads and their hashes.sha256 lines.",
+      "Replace existsSync(join(evDirAbs, ...)) with
+        loadEvidencePayload(evDirAbs, artifact_path, manifestHashes)
+        for the artifact-absence relation so the path is containment-
+        checked before the filesystem probe.",
+      "Tighten the reader to require non-null observed_architecture
+        when architecture_assert='host-class'.",
+      "Hoist a shared pure deriveReasonAndStatus(probe, def, timeout,
+        spawnError) helper from collect-native-probes.ts into
+        native-probes.ts so writer and reader agree on the precedence
+        order."
+    ]
+  }
+}

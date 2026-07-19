@@ -33,6 +33,7 @@ import {
 	loadNativeProbesInventory,
 	loadNativeProbesFromEvidence,
 	resolveEvidencePayloadPath,
+	archForHostClass,
 	CONTROL_FILES,
 	type ClosureInput,
 	type EvidenceView,
@@ -41,6 +42,7 @@ import {
 	NATIVE_PROBE_DEFINITIONS,
 	NATIVE_PROBE_IDS,
 	canonicalizeProbeForBundle,
+	canonicalRecordedProbeReason,
 	stableStringify,
 	type NativeProbe,
 	type NativeProbeId,
@@ -1372,14 +1374,17 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		if (!artifactBytes) throw new Error(`missing fixture artifact bytes for probe ${id}`);
 		const artifactSha = createHash("sha256").update(artifactBytes).digest("hex");
 		const stderrText = "";
-		// CORRECTION21 (µC-2/µC-3): build the bundled record via the
-		// canonical helper so stream_layout_version, stdout_path,
-		// stderr_path, metadata_path, and the manifest hash
-		// declarations are all derived from a single source of truth.
-		// P0.9: the reader enforces derived-reason binding. For pass rows,
-		// the recorded reason must be either the empty string or the
-		// canonical "probe satisfied <label>" text; anything else (e.g.
-		// the legacy "ok" stub) is a `reason-mismatch` diagnostic.
+		// CORRECTION21 (µC-3 review): the fixture backs the recorded
+		// reason with the canonical pass text via
+		// `canonicalRecordedProbeReason`, matching what the runner
+		// (writer) records on a successful probe. The reader uses the
+		// same helper so equality is mechanical rather than a policy
+		// decision.
+		const recordedReason = canonicalRecordedProbeReason(null, def);
+		// CORRECTION21 (µC-3 review): the recorded `observed_architecture`
+		// must equal `archForHostClass(record.host_class)` (the arch
+		// derived from the host_class, not the host_class string).
+		const observedArch = archForHostClass(HOST) ?? HOST;
 		const collected: NativeProbe = {
 			id: id as NativeProbeId,
 			path: def.artifact_path,
@@ -1387,7 +1392,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			sha256: artifactSha,
 			file_format: fileFormat,
 			status: "pass",
-			reason: "",
+			reason: recordedReason,
 			argv,
 			exit_code: 0,
 			signal: null,
@@ -1401,7 +1406,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			artifact_size: artifactBytes.length,
 			artifact_exists: true,
 			observed_file_format: fileFormat,
-			observed_architecture: HOST,
+			observed_architecture: observedArch,
 			execution_head_oid: EXEC_HEAD,
 			execution_tree_oid: EXEC_TREE,
 			subject_tree_oid: EXEC_SUBJECT,
@@ -1473,8 +1478,8 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	// per-probe metadata semantic equality. The text comes from
 	// `buildGoodBundle()` (which calls `probeRecord()` per id) so the
 	// bytes match the synthesized stdout / stderr in the inventory.
-	function buildGoodBundle(): { inventory: any; manifest: string } {
-		const inventory = buildGoodInventory();
+	function buildGoodBundle(providedInventory?: any): { inventory: any; manifest: string } {
+		const inventory = providedInventory ?? buildGoodInventory();
 		const manifestLines: string[] = [];
 		const out = join(bundleDir, "hashes.sha256.tmp");
 		for (const probeId of NATIVE_PROBE_IDS) {
@@ -1487,8 +1492,10 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			mkdirSync(join(metadataAbs, ".."), { recursive: true });
 			// Recompute the bytes from the recorded text + hash so the
 			// fixture stays byte-exact against the inventory fields.
-			const stdoutBytes = Buffer.from(rec.stdout_text, "utf8");
-			const stderrBytes = Buffer.from(rec.stderr_text, "utf8");
+			const stdoutText = typeof rec.stdout_text === "string" ? rec.stdout_text : "";
+			const stderrText = typeof rec.stderr_text === "string" ? rec.stderr_text : "";
+			const stdoutBytes = Buffer.from(stdoutText, "utf8");
+			const stderrBytes = Buffer.from(stderrText, "utf8");
 			// The metadata file is the canonical stableStringify of the
 			// record followed by a single LF, matching what the runner
 			// stages via `canonicalizeProbeForBundle`.
@@ -1533,6 +1540,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 
 	it("happy path: complete=true and source=bundle", () => {
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1554,6 +1562,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		const original = readFileSync(inventoryPath);
 		writeFileSync(inventoryPath, `${original}\nTAMPERED`);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1574,6 +1583,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		// introduced by a tampered probe record a previous test left.
 		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: "f".repeat(40),
@@ -1591,13 +1601,11 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		inv.probes.p1_better_sqlite3.observed_architecture = "linux-x64";
 		const tamperedPath = join(bundleDir, "native-probes.json");
 		writeFileSync(tamperedPath, JSON.stringify(inv, null, "\t") + "\n");
-		const bytes = readFileSync(tamperedPath);
-		const hash = sha256Hex(bytes);
-		writeFileSync(
-			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
-		);
+		// Re-stage the bundle so the new inventory hash is in the manifest
+		const { manifest } = buildGoodBundle(inv);
+		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1624,6 +1632,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		// Wipe the manifest and re-test.
 		writeFileSync(join(bundleDir, "hashes.sha256"), "");
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1646,6 +1655,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		const original = readFileSync(inventoryPath);
 		rmSync(inventoryPath);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1666,9 +1676,10 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 		// Re-stage the bundle so the new inventory hash is in the
 		// manifest; the external stream files are unchanged so they
 		// remain on disk and continue to match their hashes.
-		const { manifest } = buildGoodBundle();
+		const { manifest } = buildGoodBundle(inv);
 		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1707,6 +1718,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1731,6 +1743,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1754,6 +1767,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1776,6 +1790,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1788,20 +1803,25 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("P0 #5: artifact_exists=true but artifact path missing from manifest → artifact-mismatch", () => {
-		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		const bytes = readFileSync(inventoryPath);
-		const hash = sha256Hex(bytes);
-		// Manifest drops the p1 artifact entry — but the record still
-		// declares artifact_exists=true. The reader must reject the
-		// absence with artifact-mismatch.
-		const partialManifestLines = FIXTURE_ARTIFACT_MANIFEST_LINES.filter(
-			(line) => !line.includes("p1_better_sqlite3/package.json"),
+		// Stage a good bundle so the staged artifact file is on disk with
+		// the canonical SHA-256. Then mutate the manifest to drop the
+		// p1 artifact entry — but the record still declares
+		// artifact_exists=true. The reader must reject the absence with
+		// artifact-mismatch.
+		const { manifest: goodManifest } = buildGoodBundle();
+		// The fixture stages p1 at `node_modules/better-sqlite3/package.json`
+		// (the artefact directory mirrors the upstream package name, not
+		// the probe id). Filter that line out.
+		const partialManifestLines = goodManifest.split("\n").filter(
+			(line) => !line.includes("better-sqlite3/package.json"),
 		);
-		writeFileSync(
-			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${partialManifestLines.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
-		);
+		// Keep the inventory hash from the good manifest (native-probes.json
+		// line), since the inventory itself is not mutated.
+		const invHashLine = goodManifest.split("\n").find((l) => l.endsWith("native-probes.json")) ?? "";
+		writeFileSync(join(bundleDir, "hashes.sha256"), [invHashLine, ...partialManifestLines.filter((l) => !l.endsWith("native-probes.json"))].join("\n"));
+		// (debug logging removed)
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1825,6 +1845,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1848,6 +1869,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1872,6 +1894,7 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1885,25 +1908,26 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("P0 #9: stdout_text drift from the external stream bytes → embedded-stream-mismatch", () => {
-		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
-		// The stdout_sha256 stays bound to the recorded bytes, but we
-		// also rewrite stdout_text to disagree with the SHA. The reader's
-		// per-record hash check (already declared-and-matching) covers
-		// stdout_sha256; the embedded-stream check then flips because
-		// the textual mirror no longer UTF-8 byte-equals the on-disk bytes.
+		// Stage the good bundle first so stdout/stderr/metadata files are
+		// on disk with the canonical content.
+		const { manifest: goodManifest } = buildGoodBundle();
+		writeFileSync(join(bundleDir, "hashes.sha256"), goodManifest);
+		// Now mutate the inventory's stdout_text to drift from the
+		// staged bytes. stdout_sha256 stays bound to the on-disk bytes
+		// (which the test does NOT recompute), so the per-record hash
+		// check stays satisfied and the embedded-stream check is the
+		// dimension that flips.
+		const inv = buildGoodInventory();
 		inv.probes.p1_better_sqlite3.stdout_text = "DRIFTED stdout contents";
-		// Recompute stdout_sha256 to actually match the recorded bytes;
-		// the stage has not changed. The mismatch is in the embedded
-		// stdout_text mirror only.
 		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
-		const bytes = readFileSync(inventoryPath);
-		const hash = sha256Hex(bytes);
+		const invBytes = readFileSync(inventoryPath);
+		const invHash = sha256Hex(invBytes);
 		writeFileSync(
 			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
+			`${invHash}  native-probes.json\n${goodManifest.split("\n").slice(1).join("\n")}`,
 		);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1916,17 +1940,13 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("P0 #10: recorded stdout_sha256 disagrees with on-disk bytes → stream-record-hash-mismatch", () => {
-		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		const inv = buildGoodInventory();
 		inv.probes.p1_better_sqlite3.stdout_sha256 = "0".repeat(64);
 		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
-		const bytes = readFileSync(inventoryPath);
-		const hash = sha256Hex(bytes);
-		writeFileSync(
-			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
-		);
+		const { manifest } = buildGoodBundle(inv);
+		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1939,17 +1959,13 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("P0 #11: P0.9 — recorded reason mismatch on a pass row → reason-mismatch + derivedReasonMatchesRecorded=false", () => {
-		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
+		const inv = buildGoodInventory();
 		inv.probes.p1_better_sqlite3.reason = "this is not the canonical pass text";
 		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
-		const bytes = readFileSync(inventoryPath);
-		const hash = sha256Hex(bytes);
-		writeFileSync(
-			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
-		);
+		const { manifest } = buildGoodBundle(inv);
+		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,
@@ -1962,17 +1978,13 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 	});
 
 	it("P0 #12: P0.6 — missing stdout_text (non-string) is invalid-shape", () => {
-		writeFileSync(inventoryPath, JSON.stringify(buildGoodInventory(), null, "\t") + "\n");
-		const inv = JSON.parse(readFileSync(inventoryPath, "utf8")) as any;
-		delete inv.probes.p1_better_sqlite3.stdout_text;
+		const inv = buildGoodInventory();
+		delete (inv.probes.p1_better_sqlite3 as any).stdout_text;
 		writeFileSync(inventoryPath, JSON.stringify(inv, null, "\t") + "\n");
-		const bytes = readFileSync(inventoryPath);
-		const hash = sha256Hex(bytes);
-		writeFileSync(
-			join(bundleDir, "hashes.sha256"),
-			`${hash}  native-probes.json\n${FIXTURE_ARTIFACT_MANIFEST_LINES.join("\n")}\n${"0".repeat(64)}  evidence.json\n${"0".repeat(64)}  verification-results.json\n`,
-		);
+		const { manifest } = buildGoodBundle(inv);
+		writeFileSync(join(bundleDir, "hashes.sha256"), manifest);
 		const view = loadNativeProbesFromEvidence({
+			bundleHostClass: HOST,
 			evDirAbs: bundleDir,
 			manifestText: readFileSync(join(bundleDir, "hashes.sha256"), "utf8"),
 			executionHeadOid: EXEC_HEAD,

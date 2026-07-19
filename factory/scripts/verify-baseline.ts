@@ -101,7 +101,7 @@ function checkAbsenceOfAbsolutePaths(): void {
 		}
 	}
 	// CSV: scan only the header columns that should never contain absolute paths.
-	const csvFiles = [
+	const csvFiles: ReadonlyArray<[string, ReadonlyArray<string>]> = [
 		["factory/baselines/file-size.csv", ["path"]],
 		["factory/inventories/network-listener-candidates.csv", ["candidate_id", "path", "line", "workspace"]],
 		["factory/inventories/privileged-sink-candidates.csv", ["candidate_id", "path", "line", "workspace"]],

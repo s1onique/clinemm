@@ -954,13 +954,14 @@ export function parseBundledNativeProbe(
 			typeof stderrSha === "string" ? `<${stderrSha.length}>` : `<${typeof stderrSha}>`,
 		);
 	}
-	// argv: non-empty array of strings.
+	// argv: array of strings (may be empty; empty argv is reported as a
+	// catalogue-mismatch / argv-mismatch by the reader rather than as a
+	// parser shape failure).
 	if (
 		!Array.isArray(v.argv) ||
-		v.argv.length === 0 ||
 		!v.argv.every((entry) => typeof entry === "string")
 	) {
-		push("argv", "wrong-shape", "non-empty array of strings", observed("argv"));
+		push("argv", "wrong-shape", "array of strings", observed("argv"));
 	}
 	// stdout_text / stderr_text: must be strings (P0.6).
 	if (typeof v.stdout_text !== "string") {

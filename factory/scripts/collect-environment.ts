@@ -144,7 +144,7 @@ function ciIndicator(): boolean {
 function main(): void {
 	const timestamp = new Date().toISOString();
 	const unameM = safe("uname", ["-m"]);
-	const sw = safe("sw_vers");
+	const sw = safe("sw_vers", []);
 	const swLines = sw.split("\n").map((l) => l.trim());
 	const osName = swLines.find((l) => l.startsWith("ProductName"))?.split("\t").pop() ?? "unknown";
 	const osVersion = swLines.find((l) => l.startsWith("ProductVersion"))?.split("\t").pop() ?? "unknown";

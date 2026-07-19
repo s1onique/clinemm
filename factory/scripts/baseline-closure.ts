@@ -1649,7 +1649,7 @@ export interface LoadNativeProbesFromEvidenceArgs {
 	 * evidence.json has no authority and the dimension will short-
 	 * circuit to false.
 	 */
-	bundleHostClass: string | null;
+	bundleHostClass?: string | null;
 }
 
 // ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 reader -------
@@ -1751,6 +1751,7 @@ function probeParseToDiagnostic(
 	return {
 		probeId,
 		kind,
+		field: d.field,
 		message: `native-probe \`${probeId}\` field \`${d.field}\`: expected ${d.expected}, observed ${d.observed}`,
 	};
 }
@@ -2143,6 +2144,20 @@ export function loadNativeProbesFromEvidence(
 				field: "catalogue",
 				message: `native-probe \`${probeId}\` catalogue drift: ${message}`,
 			});
+			// CORRECTION21 (µC-3 review): surface per-field mismatch IDs
+			// so reviewers can drill into exactly which catalogue fields
+			// disagree. argv drift specifically is what the test fixture
+			// asserts against argvMismatches and the argv-mismatch
+			// diagnostic kind.
+			if (record.argv.length !== def.argv.length || !record.argv.every((e, i) => e === def.argv[i])) {
+				initial.argvMismatches.push(probeId);
+				initial.diagnostics.push({
+					probeId,
+					kind: "argv-mismatch",
+					field: "argv",
+					message: `native-probe \`${probeId}\` recorded argv=${JSON.stringify(record.argv)} does not match catalogue argv=${JSON.stringify(def.argv)}`,
+				});
+			}
 		}
 	}
 	dimensions.catalogueMatches = catalogueMatches;
@@ -2197,8 +2212,8 @@ export function loadNativeProbesFromEvidence(
 	}
 	for (const { probeId, record } of allParserResults) {
 		if (
-			hostClassMatchesBundle &&
 			typeof bundleHostClass === "string" &&
+			bundleHostClass.length > 0 &&
 			record.host_class !== bundleHostClass
 		) {
 			hostClassMatchesBundle = false;
@@ -2568,32 +2583,20 @@ export function loadNativeProbesFromEvidence(
 			});
 			continue;
 		}
-		// P0.9: bind derived reason as well as status. For fail rows, the
-		// recorded `reason` text MUST equal the derived reason text the
-		// catalogue predicate produced. For pass rows, the recorded reason
-		// can be either null or the canonical "probe satisfied <label>"
-		// depending on the runner's choice; the reader accepts either form.
+		// P0.9: bind derived reason as well as status. The reader and writer
+		// share the canonical pass-row text via `canonicalRecordedProbeReason`
+		// so equality is mechanical rather than a policy decision. For
+		// fail rows, the recorded `reason` text MUST equal the derived
+		// reason text the catalogue predicate produced.
 		const recordedReason = typeof record.reason === "string" ? record.reason : "";
-		if (derivedStatus === "fail") {
-			if (recordedReason !== derivedReason) {
-				derivedReasonMatchesRecorded = false;
-				initial.diagnostics.push({
-					probeId,
-					kind: "reason-mismatch",
-					message: `native-probe \`${probeId}\` recorded reason=${JSON.stringify(recordedReason)} does not match derived reason=${JSON.stringify(derivedReason)}`,
-				});
-			}
-		} else {
-			// Pass row: accept either empty reason or the canonical
-			// "probe satisfied <label>" text the runner records.
-			if (recordedReason !== "" && recordedReason !== `probe satisfied ${def.label}`) {
-				derivedReasonMatchesRecorded = false;
-				initial.diagnostics.push({
-					probeId,
-					kind: "reason-mismatch",
-					message: `native-probe \`${probeId}\` recorded reason=${JSON.stringify(recordedReason)} does not match the canonical pass text "probe satisfied ${def.label}"`,
-				});
-			}
+		const expectedRecordedReason = canonicalRecordedProbeReason(derivedReason, def);
+		if (recordedReason !== expectedRecordedReason) {
+			derivedReasonMatchesRecorded = false;
+			initial.diagnostics.push({
+				probeId,
+				kind: "reason-mismatch",
+				message: `native-probe \`${probeId}\` recorded reason=${JSON.stringify(recordedReason)} does not match canonical reason=${JSON.stringify(expectedRecordedReason)}`,
+			});
 		}
 		if (record.status !== "pass") {
 			allProbesPassed = false;
@@ -2634,7 +2637,7 @@ export function loadNativeProbesFromEvidence(
 	dimensions.derivedReasonMatchesRecorded = derivedReasonMatchesRecorded;
 	dimensions.allProbesPassed = allProbesPassed;
 
->	// ---- 10. identity binding (head/tree/subject) ----------------------
+	// ---- 10. identity binding (head/tree/subject) ----------------------
 	//
 	// CORRECTION21 (µC-3 review) — "not evaluated" must not equal "true".
 	// The reader only knows how to verify a binding when BOTH the
@@ -2662,7 +2665,6 @@ export function loadNativeProbesFromEvidence(
 	}
 	for (const { probeId, record } of allParserResults) {
 		if (
-			recordedIdentityMatchesBundle &&
 			executionHeadOid !== null &&
 			record.execution_head_oid !== executionHeadOid
 		) {
@@ -2676,7 +2678,6 @@ export function loadNativeProbesFromEvidence(
 			});
 		}
 		if (
-			recordedIdentityMatchesBundle &&
 			executionTreeOid !== null &&
 			record.execution_tree_oid !== executionTreeOid
 		) {
@@ -2690,7 +2691,6 @@ export function loadNativeProbesFromEvidence(
 			});
 		}
 		if (
-			recordedIdentityMatchesBundle &&
 			filteredSubjectTreeOid !== null &&
 			record.subject_tree_oid !== filteredSubjectTreeOid
 		) {
@@ -2718,6 +2718,7 @@ export function loadNativeProbesFromEvidence(
 		return (
 			dimensions.streamLayoutValid &&
 			dimensions.streamPathsCanonical &&
+			dimensions.recordsStructurallyValid &&
 			dimensions.externalStreamsComplete &&
 			dimensions.externalStreamHashesValid &&
 			dimensions.embeddedStreamsConsistent &&

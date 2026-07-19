@@ -1301,6 +1301,10 @@ function writeDetachedBundle(args: {
 	// `observed_architecture` / `host_class` / argv shape. Fail-closed:
 	// any diagnostic makes `complete` false and the runner throws.
 	const nativeProbes = loadNativeProbesFromEvidence({
+		bundleHostClass:
+			typeof evidence.host_arch === "string" && evidence.host_arch.length > 0
+				? evidence.host_arch
+				: null,
 		evDirAbs: stagingDir,
 		manifestText: readFileSync(join(stagingDir, "hashes.sha256"), "utf8"),
 		executionHeadOid: identity.head,
