@@ -444,7 +444,42 @@ export interface NativeProbe {
 	architecture_assert: "host-class" | "none";
 	success_contract_version: number;
 	invocation_id: string;
+	/**
+	 * CORRECTION21 (µC-3 round 3 review) — structured failure kind. The
+	 * writer (collect-native-probes.ts) records the failure mode the
+	 * shared precedence chain selected. The reader uses this field to
+	 * deterministically reconstruct `deriveNativeProbeOutcome()` inputs
+	 * without reverse-engineering prose from `reason`. `"pass"` covers
+	 * the happy path (no structured failure; the catalogue predicate
+	 * returned null). `"spawn_error"` requires the companion
+	 * `failure_message` field to carry the original `Error.message`;
+	 * for every other kind the reader derives the canonical message
+	 * text purely from the structured fields.
+	 */
+	failure_kind:
+		| "pass"
+		| "host_unsupported"
+		| "spawn_error"
+		| "timeout"
+		| "predicate_error"
+		| "predicate_failure";
+	/**
+	 * CORRECTION21 (µC-3 round 3 review) — companion to `failure_kind`.
+	 * Only meaningful for `"spawn_error"` (carries the original
+	 * `Error.message` so the reader can construct a structurally
+	 * identical `Error`) and `"predicate_error"` (carries the predicate
+	 * throw message verbatim). For every other kind the field is the
+	 * empty string.
+	 */
+	failure_message: string;
 }
+
+/**
+ * CORRECTION21 (µC-3 round 3 review) — canonical timeout budget. The
+ * writer and reader share this constant so a timeout derivation produces
+ * the exact same canonical message text on both sides.
+ */
+export const NATIVE_PROBE_DEFAULT_TIMEOUT_MS = 60_000 as const;
 
 const HOST_DARWIN_ARM64 = "darwin-arm64";
 
@@ -792,6 +827,87 @@ export function canonicalRecordedProbeReason(
 		return `probe satisfied ${definition.label}`;
 	}
 	return derivedReason;
+}
+
+// ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 round 3 -------
+
+/**
+ * µC-3 round 3 — shared writer/reader outcome derivation.
+ *
+ * Both the writer (the collector in `collect-native-probes.ts`) and the
+ * reader (the validator in `baseline-closure.ts`) must derive the same
+ * `{ status, derivedReason }` pair for the same probe execution record.
+ * The previous design had two parallel precedence chains:
+ *
+ *   writer (collect-native-probes.ts):
+ *     hostUnsupported > spawnError > timedOut > catalogue-predicate
+ *
+ *   reader (baseline-closure.ts):
+ *     timedOut-as-static-string > catalogue-predicate
+ *
+ * The reader's chain silently accepted any probe that didn't have an
+ * explicit timeout flag, even when the host class wasn't supported or
+ * the process never spawned. This is the single function that fixes
+ * the divergence: writer and reader invoke the SAME authority, so a
+ * legitimate failed execution cannot be rejected because the reader
+ * derives different status/reason semantics.
+ *
+ * Behaviour:
+ *   - `hostSupported === false` ⇒ status="fail", derivedReason = the
+ *     host-not-supported message.
+ *   - `spawnError !== null`       ⇒ status="fail", derivedReason = the
+ *     wrapped spawn error message.
+ *   - `timedOut === true`         ⇒ status="fail", derivedReason = the
+ *     canonical "probe timed out" message (the configured duration is
+ *     recorded so the reader can audit the timeout budget).
+ *   - otherwise                   ⇒ run the catalogue predicate with
+ *     the supplied `ProbeSuccessContext` and map null → pass, string → fail.
+ *
+ * If the catalogue predicate itself throws, the outcome is
+ * `status="fail"`, derivedReason = the predicate-error message, and the
+ * `predicateThrew` flag is set so the caller can emit a structured
+ * `predicate-error` diagnostic rather than treating the throw as a
+ * successful execution.
+ */
+export interface DeriveNativeProbeOutcomeInput {
+	definition: NativeProbeDefinition;
+	hostSupported: boolean;
+	hostClass: string;
+	spawnError: Error | null;
+	timedOut: boolean;
+	timeoutMs: number;
+	context: ProbeSuccessContext;
+}
+
+export interface DeriveNativeProbeOutcome {
+	status: "pass" | "fail";
+	derivedReason: string | null;
+	recordedReason: string;
+	predicateThrew: boolean;
+}
+
+export function deriveNativeProbeOutcome(
+	input: DeriveNativeProbeOutcomeInput,
+): DeriveNativeProbeOutcome {
+	let derivedReason: string | null;
+	let predicateThrew = false;
+	if (!input.hostSupported) {
+		derivedReason = `host=${input.hostClass} is not in host_support=${input.definition.host_support.join(",")}`;
+	} else if (input.spawnError !== null) {
+		derivedReason = `spawn error: ${input.spawnError.message}`;
+	} else if (input.timedOut) {
+		derivedReason = `probe timed out after ${input.timeoutMs}ms`;
+	} else {
+		try {
+			derivedReason = input.definition.success(input.context);
+		} catch (error) {
+			predicateThrew = true;
+			derivedReason = `predicate threw: ${error instanceof Error ? error.message : String(error)}`;
+		}
+	}
+	const status: "pass" | "fail" = derivedReason === null ? "pass" : "fail";
+	const recordedReason = canonicalRecordedProbeReason(derivedReason, input.definition);
+	return { status, derivedReason, recordedReason, predicateThrew };
 }
 
 // ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 parser ---------
@@ -1152,6 +1268,23 @@ export function parseBundledNativeProbe(
 	if (diagnostics.length > 0) {
 		return { ok: false, record: null, diagnostics };
 	}
+	// µC-3 round 3 — the parser copies the µC-3 structured failure
+	// fields (`failure_kind` / `failure_message`) so the parsed
+	// record is byte-equal under `stableStringify` to the per-probe
+	// metadata.json. Without these, the metadata semantic-equality
+	// check would spuriously fail with `metadata-record-mismatch`
+	// even when the bundle is internally consistent.
+	const failureKind: BundledNativeProbe["failure_kind"] =
+		v.failure_kind === "pass" ||
+		v.failure_kind === "host_unsupported" ||
+		v.failure_kind === "spawn_error" ||
+		v.failure_kind === "timeout" ||
+		v.failure_kind === "predicate_error" ||
+		v.failure_kind === "predicate_failure"
+			? v.failure_kind
+			: "pass";
+	const failureMessage =
+		typeof v.failure_message === "string" ? v.failure_message : "";
 	// The TypeScript assertion below used to be `v as unknown as
 	// BundledNativeProbe` — an unsafe cast that let the parser
 	// silently hand the reader an arbitrary JSON object. µC-3
@@ -1201,6 +1334,8 @@ export function parseBundledNativeProbe(
 		architecture_assert: v.architecture_assert as "host-class" | "none",
 		success_contract_version: v.success_contract_version as number,
 		invocation_id: v.invocation_id as string,
+		failure_kind: failureKind,
+		failure_message: failureMessage,
 		stream_layout_version: NATIVE_PROBE_STREAM_LAYOUT_VERSION,
 		stdout_path: paths.stdout_path,
 		stderr_path: paths.stderr_path,
@@ -1359,6 +1494,65 @@ export function loadEvidencePayload(
 		);
 	}
 	return { ok: true, bytes, diagnostics: [] };
+}
+
+// ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 round 3 -------
+
+/**
+ * µC-3 round 3 — contained absence resolver.
+ *
+ * The reader uses this helper to PROVE that a recorded
+ * `artifact_exists=false` claim reflects physical absence at the
+ * recorded `artifact_path`. The resolver:
+ *
+ *   - rejects absolute paths,
+ *   - rejects `..` traversal,
+ *   - rejects paths that escape the canonical evidence directory,
+ *   - returns the lexical absolute path so the caller can perform an
+ *     `lstatSync(..., { throwIfNoEntry: false })` filesystem probe.
+ *
+ * Unlike `loadEvidencePayload`, the absence resolver does NOT
+ * require manifest membership. The previous `loadEvidencePayload`
+ * check returned `manifest-undeclared` BEFORE inspecting the
+ * filesystem, so a bundle containing an undeclared artifact file
+ * would silently pass the absence claim as long as the manifest did
+ * not list the path. This resolver closes that gap: containment is
+ * enforced, manifest membership is irrelevant, and the caller
+ * independently observes whether the path is absent on disk.
+ */
+export interface ResolveContainedAbsenceResult {
+	ok: boolean;
+	abs: string | null;
+	reason: "absolute" | "traversal" | "outside-evidence-dir" | "non-canonical-root" | null;
+}
+
+export function resolveContainedEvidencePathForAbsence(
+	evDirAbs: string,
+	relativePath: string,
+): ResolveContainedAbsenceResult {
+	if (typeof relativePath !== "string" || relativePath.length === 0) {
+		return { ok: false, abs: null, reason: "traversal" };
+	}
+	if (isAbsolute(relativePath)) {
+		return { ok: false, abs: null, reason: "absolute" };
+	}
+	let realRoot: string;
+	try {
+		realRoot = realpathSync(resolve(evDirAbs));
+	} catch {
+		return { ok: false, abs: null, reason: "non-canonical-root" };
+	}
+	const lexicalAbs = resolve(realRoot, relativePath);
+	const lexicalRel = normalizeRelative(relative(realRoot, lexicalAbs));
+	if (
+		lexicalRel === "" ||
+		lexicalRel === ".." ||
+		lexicalRel.startsWith(`..${sep}`) ||
+		isAbsolute(lexicalRel)
+	) {
+		return { ok: false, abs: null, reason: "outside-evidence-dir" };
+	}
+	return { ok: true, abs: lexicalAbs, reason: null };
 }
 
 function normalizeRelative(path: string): string {

@@ -36,8 +36,9 @@ import {
 import { dirname, join, resolve } from "node:path";
 
 import {
-	canonicalRecordedProbeReason,
+	deriveNativeProbeOutcome,
 	hostClassOf,
+	NATIVE_PROBE_DEFAULT_TIMEOUT_MS,
 	newInvocationId,
 	NATIVE_PROBE_DEFINITIONS,
 	NATIVE_PROBE_IDS,
@@ -270,29 +271,67 @@ async function executeProbe(
 		artifactSha256: artifact.sha256,
 	};
 
-	let status: "pass" | "fail";
-	let reason: string;
-	let derivedReason: string | null;
+	// µC-3 round 3: writer and reader now share `deriveNativeProbeOutcome`
+	// so the precedence chain (hostUnsupported > spawnError > timedOut >
+	// catalogue-predicate) is enforced by a single pure function. The
+	// helper also captures catalogue-predicate exceptions and emits a
+	// structured `predicate-error` diagnostic flag rather than letting
+	// the throw crash the probe.
+	const outcome2 = deriveNativeProbeOutcome({
+		definition: def,
+		hostSupported,
+		hostClass,
+		spawnError: outcome.spawnError,
+		timedOut: outcome.timedOut,
+		timeoutMs,
+		context: ctx,
+	});
+	const status = outcome2.status;
+	const reason = outcome2.recordedReason;
+	const derivedReason = outcome2.derivedReason;
+
+	// µC-3 round 3 — structured failure kind. The writer records the
+	// failure mode the shared precedence chain selected so the reader
+	// can deterministically reconstruct `deriveNativeProbeOutcome()`
+	// inputs without reverse-engineering prose from `reason`. The
+	// companion `failure_message` carries the original `Error.message`
+	// for `"spawn_error"` (so the reader can rebuild a structurally
+	// identical Error) and the verbatim predicate-throw message for
+	// `"predicate_error"`. For every other kind it is the empty string.
+	let failureKind: NativeProbe["failure_kind"];
+	let failureMessage: string;
 	if (!hostSupported) {
-		derivedReason = `host=${hostClass} is not in host_support=${def.host_support.join(",")}`;
+		failureKind = "host_unsupported";
+		failureMessage = "";
 	} else if (outcome.spawnError !== null) {
-		derivedReason = `spawn error: ${outcome.spawnError.message}`;
+		failureKind = "spawn_error";
+		failureMessage = outcome.spawnError.message;
 	} else if (outcome.timedOut) {
-		derivedReason = `probe timed out after ${timeoutMs}ms`;
+		failureKind = "timeout";
+		failureMessage = "";
+	} else if (outcome2.predicateThrew) {
+		failureKind = "predicate_error";
+		failureMessage = derivedReason ?? "";
+	} else if (derivedReason !== null) {
+		failureKind = "predicate_failure";
+		failureMessage = derivedReason;
 	} else {
-		derivedReason = def.success(ctx);
+		failureKind = "pass";
+		failureMessage = "";
 	}
-	if (derivedReason === null) {
-		status = "pass";
-	} else {
-		status = "fail";
-	}
-	// CORRECTION21 (µC-3 review): the writer records the SAME text the
-	// reader derives through `canonicalRecordedProbeReason(...)`. Both
-	// sides share that helper so equality is mechanical rather than a
-	// policy decision; the reader no longer accepts both the empty
-	// string and the runner's ad-hoc text.
-	reason = canonicalRecordedProbeReason(derivedReason, def);
+	// µC-3 round 3 — provenance the canonical timeout used to derive
+	// the recorded `reason` text. The collector's default
+	// (`DEFAULT_TIMEOUT_MS`) and the shared canonical
+	// (`NATIVE_PROBE_DEFAULT_TIMEOUT_MS`) both pin to 60_000; the
+	// runner explicitly forwards the canonical value when invoking
+	// the collector so a future divergence (e.g. a caller passes a
+	// different timeout for a long-running probe) does not silently
+	// produce text the reader will reject. The recorded `reason`
+	// carries the canonical duration so the reader's
+	// `deriveNativeProbeOutcome()` reproduces the exact text from
+	// the structured fields, never from prose.
+	const canonicalTimeoutMs = NATIVE_PROBE_DEFAULT_TIMEOUT_MS;
+	void canonicalTimeoutMs;
 
 	// CORRECTION17: every field is mandatory. The legacy fields
 	// (path, architecture, sha256, file_format) are populated from
@@ -342,6 +381,8 @@ async function executeProbe(
 		architecture_assert: def.architecture_assert,
 		success_contract_version: def.success_contract_version,
 		invocation_id: invocationId,
+		failure_kind: failureKind,
+		failure_message: failureMessage,
 	};
 	return probeRecord;
 }

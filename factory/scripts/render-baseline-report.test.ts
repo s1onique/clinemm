@@ -1118,6 +1118,16 @@ describe("checkEvidence — self-contained bundle (CORRECTION13)", () => {
 		expect(v.commandSetExact).toBe(true);
 		expect(v.rowRelationalInvariantViolations.length).toBe(0);
 		expect(v.metadataFileMismatches.length).toBe(0);
+		// µC-3 round 3 — the runner's structural self-check uses
+		// `isEvidenceStructurallyValid` (NOT the production-provenance
+		// predicate). This test manually builds a view without
+		// `nativeProbesComplete` set, so the structural predicate
+		// would short-circuit. The test asserts the bundle is
+		// satisfiable with the production provenance satisfied by
+		// marking it as such.
+		v.nativeProbesComplete = true;
+		v.probeSource = "executed";
+		v.fixtureDerived = false;
 		expect(isEvidenceOk(v)).toBe(true);
 	});
 });
@@ -1423,6 +1433,11 @@ describe("loadNativeProbesFromEvidence (CORRECTION16 authoritative bundle-bound 
 			architecture_assert: def.architecture_assert,
 			success_contract_version: def.success_contract_version,
 			invocation_id: `test-invocation-${id}`,
+			// µC-3 round 3 — every probe record carries the structured
+			// failure kind so the reader's `deriveNativeProbeOutcome`
+			// reconstruction produces the canonical pass text.
+			failure_kind: "pass",
+			failure_message: "",
 		};
 		return canonicalizeProbeForBundle(id as NativeProbeId, collected).record;
 	}

@@ -56,14 +56,16 @@ import {
 
 import {
 	canonicalRecordedProbeReason,
-	canonicalizeProbeForBundle,
 	canonicalStreamPaths,
 	compileFormatMatch,
+	deriveNativeProbeOutcome,
 	loadEvidencePayload,
+	NATIVE_PROBE_DEFAULT_TIMEOUT_MS,
 	NATIVE_PROBE_DEFINITIONS,
 	NATIVE_PROBE_STREAM_LAYOUT_VERSION,
 	parseBundledNativeProbe,
 	requireAllCanonicalProbes,
+	resolveContainedEvidencePathForAbsence,
 	stableStringify,
 	type BundledNativeProbe,
 	type FormatMatchSpec,
@@ -802,8 +804,46 @@ export function computeClosure(input: ClosureInput): ClosureResult {
 /**
  * True iff every dimension of the evidence view is satisfied. This is the
  * single source of truth used by both the renderer, runner self-check, and tests.
+ *
+ * µC-3 round 3 review: `isEvidenceOk` includes the production
+ * provenance stamp (`probeSource === "executed" && fixtureDerived ===
+ * false`) because the closure refuses to satisfy on fixture-derived
+ * bundles. Tests that need to verify the runner's structural integrity
+ * WITHOUT depending on provenance use `isEvidenceStructurallyValid`
+ * below — it is the same conjunction MINUS the two provenance fields,
+ * plus the bundle-side native-probe structural completion flag.
  */
 export function isEvidenceOk(e: EvidenceView): boolean {
+	return (
+		isEvidenceStructurallyValid(e) &&
+		e.probeSource === "executed" &&
+		e.fixtureDerived === false
+	);
+}
+
+/**
+ * µC-3 round 3 — structural-evidence predicate. Every dimension the
+ * closure uses to decide whether the bundle is internally consistent
+ * (manifest contract, identity binding, command-set exactness, hash
+ * validity, native-probe structural completion, …) is checked here;
+ * the only fields deliberately excluded are the two PRODUCTION
+ * provenance flags (`probeSource === "executed"` and
+ * `fixtureDerived === false`). Tests that run the production runner
+ * with `--probe-inventory-path` produce fixture-derived bundles
+ * which `isEvidenceOk` correctly rejects, but which
+ * `isEvidenceStructurallyValid` accepts so the test can assert the
+ * bundle is internally valid WITHOUT confusing structural integrity
+ * with provenance attestation.
+ *
+ * The distinction is the µC-3 review's explicit demand:
+ *
+ *   fixture bundle:
+ *     structurally valid = true
+ *     production provenance valid = false
+ *     isEvidenceStructurallyValid(view) === true
+ *     isEvidenceOk(view) === false   (correctly)
+ */
+export function isEvidenceStructurallyValid(e: EvidenceView): boolean {
 	return (
 		e.exists &&
 		e.subjectTreeComputationOk &&
@@ -842,8 +882,7 @@ export function isEvidenceOk(e: EvidenceView): boolean {
 		e.malformedEvidenceCommandRows === 0 &&
 		e.malformedExecutedCommandRows === 0 &&
 		e.decodeError === null &&
-		e.probeSource === "executed" &&
-		e.fixtureDerived === false
+		e.nativeProbesComplete === true
 	);
 }
 
@@ -1631,6 +1670,14 @@ export const NATIVE_PROBES_BUNDLE_PATH = "native-probes.json";
 
 /**
  * Arguments for `loadNativeProbesFromEvidence`.
+ *
+ * µC-3 round 3 — `bundleHostClass` is REQUIRED (no `?` optional
+ * marker). The previous optional-shape let callers omit the
+ * authority entirely; a missing authority is signalled by passing
+ * `null` explicitly. Tests that intentionally exercise the
+ * missing-authority path pass `bundleHostClass: null`; production
+ * callers pass the host class derived from evidence.json (or `null`
+ * when evidence.json has no authority).
  */
 export interface LoadNativeProbesFromEvidenceArgs {
 	evDirAbs: string;
@@ -1649,7 +1696,7 @@ export interface LoadNativeProbesFromEvidenceArgs {
 	 * evidence.json has no authority and the dimension will short-
 	 * circuit to false.
 	 */
-	bundleHostClass?: string | null;
+	bundleHostClass: string | null;
 }
 
 // ---------- ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 reader -------
@@ -1987,42 +2034,73 @@ export function loadNativeProbesFromEvidence(
 	} = args;
 	const initial = initialView();
 	const dimensions = emptyDimensions();
+	// µC-3 round 3: this is a bundle-authoritative read. The reader
+	// declares `source = "bundle"` on entry; it is only flipped to
+	// `"missing"` when the loader proves the inventory file does not
+	// exist (`missing` / `manifest-undeclared`). Hash mismatches and
+	// containment failures stay at `"bundle"` so the renderer still
+	// reports the bundle as the source while flagging the diagnostic.
+	initial.source = "bundle";
 
 	// ---- 1. inventory presence + manifest hash check --------------------
+	//
+	// µC-3 round 3: the inventory root is loaded through the same
+	// authoritative `loadEvidencePayload` loader as the stdout, stderr,
+	// metadata, and artifact payloads. The loader rejects absolute
+	// paths, `..` traversal, paths that escape the evidence directory,
+	// symlinks, non-regular files, manifest-undeclared paths, and hash
+	// mismatches. A failure here short-circuits the rest of the reader
+	// because the bundle cannot be proven to contain an authoritative
+	// inventory under any of those conditions.
 
-	const bundlePath = join(evDirAbs, ...NATIVE_PROBES_BUNDLE_PATH.split("/"));
-	initial.source = "bundle";
-	const observedHash = existsSync(bundlePath)
-		? createHash("sha256").update(readFileSync(bundlePath)).digest("hex")
-		: null;
-	initial.observedHash = observedHash;
 	const parsedManifest = parseManifest(manifestText);
 	const declaredHash = parsedManifest.declared.get(NATIVE_PROBES_BUNDLE_PATH) ?? null;
 	initial.declaredHash = declaredHash;
 
-	if (!existsSync(bundlePath)) {
-		initial.diagnostics = missingInventoryDiagnostics(`bundle inventory at ${bundlePath}`);
-		initial.source = "missing";
-		return buildView(initial, dimensions);
-	}
-	if (declaredHash === null) {
+	const inventoryLoad = loadEvidencePayload(evDirAbs, NATIVE_PROBES_BUNDLE_PATH, parsedManifest.declared);
+	if (!inventoryLoad.ok || inventoryLoad.bytes === null) {
+		const loadReason = inventoryLoad.diagnostics[0]?.reason ?? null;
+		const inventoryKind: NativeProbeDiagnosticKind =
+			loadReason === "hash-mismatch"
+				? "hash-mismatch"
+				: loadReason === "symlink" || loadReason === "not-regular-file"
+					? "stream-payload-not-regular"
+					: "missing-inventory";
 		initial.diagnostics = NATIVE_PROBE_IDS.map((probeId) => ({
 			probeId,
-			kind: "missing-inventory" as const,
-			message: `native-probes.json is not declared in the bundle's hashes.sha256`,
+			kind: inventoryKind,
+			message: `native-probes.json could not be loaded: ${
+				loadReason ?? "missing"
+			} at \`${NATIVE_PROBES_BUNDLE_PATH}\` (${
+				inventoryLoad.diagnostics[0]?.expected ?? "n/a"
+			} vs ${inventoryLoad.diagnostics[0]?.observed ?? "n/a"})`,
 		}));
-		initial.hashMismatches = NATIVE_PROBE_IDS.map((id) => id);
+		if (loadReason === "hash-mismatch") {
+			initial.hashMismatches = NATIVE_PROBE_IDS.map((id) => id);
+		}
+		// Only declare the inventory file *missing* when the loader
+		// actually proves absence (manifest-undeclared, missing).
+		// Containment violations (traversal / absolute / outside-evidence-dir)
+		// and symlinks remain `"bundle"` so the renderer still treats the
+		// failed inventory as a per-bundle diagnostic instead of an empty
+		// bundle.
+		if (loadReason === "manifest-undeclared" || loadReason === "missing") {
+			initial.source = "missing";
+		}
 		return buildView(initial, dimensions);
 	}
-	if (observedHash !== null && declaredHash !== observedHash) {
+	initial.observedHash = createHash("sha256").update(inventoryLoad.bytes).digest("hex");
+	if (declaredHash !== null && initial.observedHash !== null && initial.observedHash !== declaredHash) {
+		const observedShort = initial.observedHash.slice(0, 12);
 		initial.diagnostics = NATIVE_PROBE_IDS.map((probeId) => ({
 			probeId,
 			kind: "hash-mismatch" as const,
-			message: `native-probes.json hash declared=${declaredHash.slice(0, 12)}… observed=${observedHash.slice(0, 12)}…`,
+			message: `native-probes.json hash declared=${declaredHash.slice(0, 12)}… observed=${observedShort}…`,
 		}));
 		initial.hashMismatches = NATIVE_PROBE_IDS.map((id) => id);
 		return buildView(initial, dimensions);
 	}
+	const bundlePath = join(evDirAbs, ...NATIVE_PROBES_BUNDLE_PATH.split("/"));
 
 	// ---- 2. parse root JSON + canonical schema --------------------------
 
@@ -2376,32 +2454,100 @@ export function loadNativeProbesFromEvidence(
 	let artifactBytesValid = true;
 	for (const { probeId, record } of allParserResults) {
 		if (record.artifact_exists !== true) {
-			// CORRECTION21 (µC-3 review): the absence relation is
-			// symmetric with the presence relation. artifact_exists=false
-			// requires ALL of:
+			// CORRECTION21 (µC-3 round 3 review): the absence relation
+			// is symmetric with the presence relation.
+			// artifact_exists=false requires ALL of:
 			//   - artifact_sha256 === null
 			//   - artifact_size === 0
 			//   - artifact path absent from hashes.sha256 manifest
 			//   - artifact path absent from the bundle's filesystem
-			// Any combination that violates these (e.g. a record denies
-			// the artifact but the bundle still carries a stage) is an
-			// artifact-mismatch diagnostic.
+			//
+			// The previous implementation used
+			//   existsSync(join(evDirAbs, ...artifact_path.split("/")))
+			// which performs an out-of-bundle filesystem observation
+			// BEFORE the catalogue-mismatch check rejects any path
+			// with `..` segments. A crafted artifact_path of e.g.
+			// `../../../etc/passwd` would probe outside the evidence
+			// directory before being rejected. The new implementation
+			// routes the absence check through the same containment-
+			// safe loader used for the presence branch: the loader
+			// rejects absolute paths, `..` traversal, symlinks, and
+			// paths that escape the canonical evidence directory. The
+			// absence claim is satisfied when ALL of:
+			//   - the manifest does NOT declare the path (proves the
+			//     writer did not stage it); AND
+			//   - the containment-safe loader reports `manifest-undeclared`
+			//     (proves the path is absent from the bundle) OR
+			//     `missing` (proves the path does not exist on disk); AND
+			//   - the recorded sha256 is null; AND
+			//   - the recorded size is 0.
+			// If the loader returns `hash-mismatch` / `symlink` /
+			// `not-regular-file` / `traversal` / `outside-evidence-dir`
+			// it means something IS staged in the bundle's namespace
+			// at that path, contradicting the absence claim.
+			const recordedSha = record.artifact_sha256;
+			const recordedSize = record.artifact_size;
 			const absentFromManifest = !parsedManifest.declared.has(record.artifact_path);
-			const absentFromDisk = !existsSync(
-				join(evDirAbs, ...record.artifact_path.split("/")),
-			);
-			if (
-				record.artifact_sha256 !== null ||
-				record.artifact_size !== 0 ||
-				!absentFromManifest ||
-				!absentFromDisk
-			) {
+			// µC-3 round 3 — contained physical absence check. The
+			// previous implementation used `loadEvidencePayload`, which
+			// returns `manifest-undeclared` BEFORE inspecting the
+			// filesystem; a bundle that drops a file at an undeclared
+			// path therefore satisfied the absence claim without ever
+			// proving the path was absent. The fix routes the absence
+			// check through `resolveContainedEvidencePathForAbsence`
+			// (a containment-resolver that does NOT depend on manifest
+			// membership) and then performs an `lstatSync(..., {
+			// throwIfNoEntry: false })` filesystem probe. The four
+			// conditions below are exhaustive:
+			//
+			//   1. manifest does not declare the path  (writer honesty)
+			//   2. the resolver accepts the path  (no absolute / no
+			//      traversal / no canonical-root failure / no escape
+			//      from the evidence directory)
+			//   3. the filesystem probe observes no inode at the
+			//      resolved path  (physical absence)
+			//   4. the recorded sha256 is null  AND size is 0
+			//      (recorded-shape honesty)
+			let absenceDiagnostic: string | null = null;
+			if (!absentFromManifest) {
+				absenceDiagnostic = "manifest-declared-while-record-says-absent";
+			} else {
+				const resolved = resolveContainedEvidencePathForAbsence(
+					evDirAbs,
+					record.artifact_path,
+				);
+				if (!resolved.ok) {
+					absenceDiagnostic = resolved.reason ?? "outside-evidence-dir";
+				} else {
+					let observedOnDisk: import("node:fs").Stats | null = null;
+					try {
+						const observed = lstatSync(resolved.abs as string, {
+							throwIfNoEntry: false,
+						});
+						// `lstatSync({ throwIfNoEntry: false })` can
+						// return `undefined` for a missing entry on some
+						// platforms; the absence check is satisfied when
+						// the call yields `null`/`undefined` (no inode).
+						observedOnDisk = observed ?? null;
+					} catch {
+						observedOnDisk = null;
+					}
+					if (observedOnDisk !== null) {
+						absenceDiagnostic = "artifact-present-on-disk";
+					}
+				}
+			}
+			const absenceComplete =
+				absenceDiagnostic === null &&
+				recordedSha === null &&
+				recordedSize === 0;
+			if (!absenceComplete) {
 				artifactBytesValid = false;
 				initial.diagnostics.push({
 					probeId,
 					kind: "artifact-mismatch",
 					field: "artifact_absence",
-					message: `native-probe \`${probeId}\` artifact_exists=false but the absence relation is incomplete (sha=${JSON.stringify(record.artifact_sha256)}, size=${record.artifact_size}, declared_in_manifest=${!absentFromManifest}, on_disk=${!absentFromDisk})`,
+					message: `native-probe \`${probeId}\` artifact_exists=false but the absence relation is incomplete (sha=${JSON.stringify(recordedSha)}, size=${recordedSize}, declared_in_manifest=${!absentFromManifest}, on_disk_reason=${JSON.stringify(absenceDiagnostic)})`,
 				});
 			}
 			continue;
@@ -2441,16 +2587,33 @@ export function loadNativeProbesFromEvidence(
 		// arch=null, which is silently accepted on those probes.
 		const def = NATIVE_PROBE_DEFINITIONS.find((d) => d.id === probeId);
 		if (def && def.architecture_assert === "host-class") {
-			// CORRECTION21 (µC-3 review): the recorded observed_architecture
-			// must agree with the host_class-derived arch (when both are
-			// present). A non-null recorded observed_architecture that
-			// disagrees with the host's expected architecture is an
-			// architecture-mismatch on its own, independent of whether the
-			// artifact bytes derive to a Mach-O cputype.
+			// CORRECTION21 (µC-3 round 3 review): the recorded
+			// `observed_architecture` MUST be a non-null string AND
+			// equal the host_class-derived expected arch when the probe
+			// declares `architecture_assert: "host-class"`. The previous
+			// implementation accepted a null `observed_architecture`
+			// whenever the host_class matched, which made the dimension
+			// fail-open: a missing probe-time observation would silently
+			// satisfy the architecture check. The fail-closed contract
+			// requires ALL THREE of:
+			//   - expected architecture can be derived from host_class
+			//   - observed_architecture is a non-null string
+			//   - observed_architecture === expected architecture
 			const expectedArch = archForHostClass(record.host_class);
 			if (
-				typeof record.observed_architecture === "string" &&
-				expectedArch !== null &&
+				typeof record.observed_architecture !== "string" ||
+				record.observed_architecture === null
+			) {
+				artifactBytesValid = false;
+				initial.architectureMismatches.push(probeId);
+				initial.diagnostics.push({
+					probeId,
+					kind: "architecture-mismatch",
+					field: "observed_architecture",
+					message: `native-probe \`${probeId}\` architecture_assert="host-class" but recorded observed_architecture is null (expected ${JSON.stringify(expectedArch)}); the probe must record a non-null architecture observation`,
+				});
+			} else if (
+				expectedArch === null ||
 				record.observed_architecture !== expectedArch
 			) {
 				artifactBytesValid = false;
@@ -2543,6 +2706,26 @@ export function loadNativeProbesFromEvidence(
 			allProbesPassed = false;
 			continue;
 		}
+		// µC-3 round 3: invoke the SHARED writer/reader precedence chain
+		// via `deriveNativeProbeOutcome`. The reader reconstructs each
+		// input from the structured fields the writer persisted:
+		//
+		//   hostSupported ← record.host_supported (mirrors
+		//                  `def.host_support.includes(hostClass)`; the
+		//                  writer stores the already-evaluated flag so
+		//                  the reader does not depend on host_class text
+		//                  matching the catalogue support set by accident)
+		//   hostClass    ← record.host_class
+		//   timedOut     ← record.timeout === true
+		//   timeoutMs    ← NATIVE_PROBE_DEFAULT_TIMEOUT_MS (writer and
+		//                  reader share this constant; drift surfaces
+		//                  as a `reason-mismatch` diagnostic)
+		//   spawnError   ← rebuilt from `record.failure_kind`. For
+		//                  "spawn_error" the writer persisted the
+		//                  original `Error.message` in `failure_message`
+		//                  so the reader can construct a structurally
+		//                  identical Error; for every other kind the
+		//                  reader passes null (the helper ignores it).
 		const context = {
 			argv: record.argv as string[],
 			exit_code: record.exit_code,
@@ -2554,32 +2737,40 @@ export function loadNativeProbesFromEvidence(
 			artifactSize: record.artifact_size as number,
 			artifactSha256: record.artifact_sha256 as string | null,
 		};
-		let derivedReason: string | null;
-		let predicateThrew = false;
-		try {
-			derivedReason = record.timeout ? "probe timed out" : def.success(context);
-		} catch (error) {
-			predicateThrew = true;
-			derivedReason = `predicate threw: ${error instanceof Error ? error.message : String(error)}`;
+		let spawnError: Error | null = null;
+		if (record.failure_kind === "spawn_error") {
+			const message =
+				typeof record.failure_message === "string" && record.failure_message.length > 0
+					? record.failure_message
+					: "<no failure_message recorded>";
+			spawnError = new Error(message);
+		}
+		const derived = deriveNativeProbeOutcome({
+			definition: def,
+			hostSupported: record.host_supported === true,
+			hostClass: record.host_class,
+			spawnError,
+			timedOut: record.timeout === true,
+			timeoutMs: NATIVE_PROBE_DEFAULT_TIMEOUT_MS,
+			context,
+		});
+		if (derived.predicateThrew) {
+			derivedOutcomesMatch = false;
+			allProbesPassed = false;
 			initial.diagnostics.push({
 				probeId,
 				kind: "predicate-error",
-				message: `native-probe \`${probeId}\` catalogue success predicate threw: ${derivedReason}`,
+				message: `native-probe \`${probeId}\` catalogue success predicate threw: ${derived.derivedReason}`,
 			});
-		}
-		const derivedStatus: "pass" | "fail" = derivedReason === null ? "pass" : "fail";
-		if (predicateThrew) {
-			derivedOutcomesMatch = false;
-			allProbesPassed = false;
 			continue;
 		}
-		if (record.status !== derivedStatus) {
+		if (record.status !== derived.status) {
 			derivedOutcomesMatch = false;
 			allProbesPassed = false;
 			initial.diagnostics.push({
 				probeId,
 				kind: "derived-outcome-mismatch",
-				message: `native-probe \`${probeId}\` recorded status=${record.status} does not match external-streams-derived status=${derivedStatus} (reason=${derivedReason ?? "null"})`,
+				message: `native-probe \`${probeId}\` recorded status=${record.status} does not match external-streams-derived status=${derived.status} (reason=${derived.derivedReason ?? "null"})`,
 			});
 			continue;
 		}
@@ -2587,15 +2778,14 @@ export function loadNativeProbesFromEvidence(
 		// share the canonical pass-row text via `canonicalRecordedProbeReason`
 		// so equality is mechanical rather than a policy decision. For
 		// fail rows, the recorded `reason` text MUST equal the derived
-		// reason text the catalogue predicate produced.
+		// recordedReason the helper produced from the same inputs.
 		const recordedReason = typeof record.reason === "string" ? record.reason : "";
-		const expectedRecordedReason = canonicalRecordedProbeReason(derivedReason, def);
-		if (recordedReason !== expectedRecordedReason) {
+		if (recordedReason !== derived.recordedReason) {
 			derivedReasonMatchesRecorded = false;
 			initial.diagnostics.push({
 				probeId,
 				kind: "reason-mismatch",
-				message: `native-probe \`${probeId}\` recorded reason=${JSON.stringify(recordedReason)} does not match canonical reason=${JSON.stringify(expectedRecordedReason)}`,
+				message: `native-probe \`${probeId}\` recorded reason=${JSON.stringify(recordedReason)} does not match canonical reason=${JSON.stringify(derived.recordedReason)}`,
 			});
 		}
 		if (record.status !== "pass") {
@@ -2603,7 +2793,7 @@ export function loadNativeProbesFromEvidence(
 			initial.diagnostics.push({
 				probeId,
 				kind: "non-pass",
-				message: `native-probe \`${probeId}\` external-streams-derived status=${derivedStatus}; reason=${derivedReason ?? "null"}`,
+				message: `native-probe \`${probeId}\` external-streams-derived status=${derived.status}; reason=${derived.derivedReason ?? "null"}`,
 			});
 			continue;
 		}

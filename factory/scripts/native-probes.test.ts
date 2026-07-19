@@ -104,6 +104,11 @@ function makeProbe(id: NativeProbeId, overrides: Partial<NativeProbe> = {}): Nat
 		architecture_assert: "host-class",
 		success_contract_version: 1,
 		invocation_id: "20260101-fixture",
+		// µC-3 round 3 — the structured failure kind and companion
+		// message the parser copies to the bundled record so the
+		// metadata semantic-equality check stays byte-equal.
+		failure_kind: "pass",
+		failure_message: "",
 	};
 	return {...base, ...overrides};
 }

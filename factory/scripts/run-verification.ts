@@ -51,6 +51,7 @@ import {
 import { parsePorcelainV1Z } from "./git-status";
 import {
 	canonicalizeProbeForBundle,
+	NATIVE_PROBE_DEFAULT_TIMEOUT_MS,
 	NATIVE_PROBE_DEFINITIONS,
 	PartialBundledNativeProbeMap,
 	requireAllCanonicalProbes,
@@ -1087,7 +1088,15 @@ async function stageNativeProbesIntoBundle(
 		const text = readFileSync(probeInventoryPath, "utf8");
 		inventory = JSON.parse(text) as NativeProbesInventory;
 	} else {
-		inventory = await collectNativeProbesInventory({ root: ROOT, timeoutMs: 30_000 });
+		// CORRECTION21 (µC-3 round 3): the runner uses the canonical
+		// `NATIVE_PROBE_DEFAULT_TIMEOUT_MS` so the writer and reader
+		// share the exact same timeout budget. Any drift here would
+		// surface as a `reason-mismatch` diagnostic on the
+		// "probe timed out after Xms" derived text.
+		inventory = await collectNativeProbesInventory({
+			root: ROOT,
+			timeoutMs: NATIVE_PROBE_DEFAULT_TIMEOUT_MS,
+		});
 	}
 	const bundleRel = NATIVE_PROBES_BUNDLE_PATH;
 	const bundleAbs = join(stagingDir, ...bundleRel.split("/"));
