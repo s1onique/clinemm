@@ -2,73 +2,87 @@
 /**
  * ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — Leamas v2 evidence rebind.
  *
- * Generates the detached `.factory/gate-summary.json` snapshot that
- * certifies the µC-3 reader P0 corrections AND binds the producer to
- * the Leamas gate-summary v2 contract.
+ * µC-3 round 6 (LEAMAS-V2-EVIDENCE-REBIND01 fidelity pass) closes the
+ * producer-integrity defects surfaced by the µC-3 review of round 5.
+ * The detached `.factory/gate-summary.json` snapshot that round 5
+ * publishes IS Leamas-acceptable; the producer that GENERATED it was
+ * not. This pass repairs the producer so a later run cannot publish
+ * stale or invalid evidence.
  *
- * µC-3 round 5 (LEAMAS-V2-EVIDENCE-REBIND01) rebinds the snapshot to the
- * Leamas v2 contract. Compared to round 4:
+ * Round 6 producer-integrity invariants:
  *
- *  1. The schema version is fixed at `2` — no producer-side fallback.
+ *  P0-1  Atomic publication. The complete evidence bundle is staged
+ *        under a sibling directory `.factory-staging-<nonce>/`; the
+ *        canonical `.factory/` is only replaced by a stage-then-swap
+ *        that renames `.factory/` → `.factory-backup-<nonce>/` and
+ *        `.factory-staging-<nonce>/` → `.factory/`. A failure between
+ *        the two renames, or any failure inside `atomicPublish`, leaves
+ *        the canonical `.factory/` either unchanged or fully replaced
+ *        (never a half-mixed state). The backup is deleted only after
+ *        the canonical bundle has been re-validated by Leamas.
  *
- *  2. `subject_tree_oid` is a non-null OID. The helper is imported from
- *     `./subject-tree` and the summary fails closed (`GATE_SUMMARY_SUBJECT_TREE_UNAVAILABLE`)
- *     when the helper returns `null`. The temporary-index algorithm is
- *     not duplicated here.
+ *  P0-2  Two-stage Leamas validation. The v2 summary is constructed and
+ *        validated structurally inside staging (`validateGateSummaryStructure`).
+ *        THEN the staging directory is atomically swapped into
+ *        canonical. THEN `leamas factory digest` is invoked against the
+ *        canonical repository; its result is captured in a sibling
+ *        `.factory/gate-summary.leamas.json` ATTESTATION rather than
+ *        inside `checks[]`. The canonical v2 document never claims to
+ *        be self-validated — a single source of truth (the attestation)
+ *        is what reviewers consult.
  *
- *  3. `worktree_clean_before` and `worktree_clean_after` are sampled
- *     independently. The before sample is captured before the first
- *     check; the after sample is captured after the last check. The two
- *     values are NEVER copied.
+ *  P0-3  Post-run cleanliness sampled AFTER every executable check and
+ *        after every publication operation. `identityAfter` is captured
+ *        after the Leamas check has finished and its transient staging
+ *        has been cleaned. `worktree_clean_after` therefore reflects the
+ *        true post-run state, not a mid-run sample.
  *
- *  4. The CORRECTION21 parent-state probe is real. When the detached
- *     bundle is absent, the parent is `OPEN` with disposition
- *     "no detached production bundle"; when the bundle is present, the
- *     probe loads `evidence.json`, `hashes.sha256`, and
- *     `verification-results.json`, supplies the real executed command
- *     rows and the real HEAD/tree/subject identities, calls
- *     `checkEvidence`, and reports the parent verdict directly from
- *     `isEvidenceOk` / `isEvidenceStructurallyValid`.
+ *  P0-4  Real parent-state identity comparison. `deriveParentActState`
+ *        passes the producer's current `ctx.headOid`, `ctx.treeOid`,
+ *        and `ctx.subjectTreeOid` to `checkEvidence` — NOT the bundled
+ *        OIDs. Bundled OIDs participate only as object-existence checks
+ *        (`git cat-file -e`) and as recorded-head-to-recorded-tree
+ *        derivation. A stale bundle whose commit still exists in the
+ *        object database cannot remain eligible.
  *
- *  5. Every check persists its streams under
- *     `.factory/gates/<scope>/<check>.{stdout,stderr,metadata.json}`.
- *     The metadata record carries argv, cwd, exit_code, duration_ms,
- *     stdout_sha256, stderr_sha256 — these are computed from the exact
- *     bytes written, never copied forward.
+ *  P0-5  The CORRECTION21 executable check consumes the bundled
+ *        commands and the producer's identity, and exits with a status
+ *        that maps directly to the parent verdict (PASS / PARTIAL /
+ *        OPEN). The probe is a thin witness over the in-process parent
+ *        state — it does NOT recompute the verdict through a weaker
+ *        implementation.
  *
- *  6. The status arithmetic is mechanical. `scope_status` is derived
- *     from MICROC3 + WORKTREE + leamas_v2_contract checks; `parent_status`
- *     is derived from the real probe only; `overall_status` is derived
- *     from all checks via the documented Leamas v2 contract
- *     (any fail → fail, else any unavailable → unavailable, else any pass
- *     → pass, else unavailable).
+ *  P0-6  Parent CLOSED requires the full predicate conjunction:
+ *        `evidence_ok` AND R4 full-tree comparison AND R5 schema
+ *        validation AND R6 upstream baseline AND R7 cross-platform CI
+ *        AND R16 source-derived discovery AND mandatory-all-pass AND
+ *        affected-scope-all-pass AND native-probes-complete. Bundle
+ *        flags default to `false` when absent — fail-closed.
  *
- *  7. The publication is atomic. A staging directory under `.factory/`
- *     accumulates every per-check stream; the canonical
- *     `.factory/gate-summary.json` is only replaced once every required
- *     check has completed, identity has not drifted, post-run cleanliness
- *     is true, AND the summary validates under the v2 contract. A
- *     failed or interrupted run preserves the previous complete bundle.
+ *  P0-7  Range hygiene binds the COMMITTED `HEAD^..HEAD` patch (via
+ *        `git diff HEAD^..HEAD --check`), the WORKING-TREE `HEAD`
+ *        diff (via `git diff HEAD --check`), AND the worktree
+ *        porcelain (via `git status --porcelain=v1 --untracked-files=all`).
+ *        All three are required for scope closure; a failure in any
+ *        flips the scope OPEN.
  *
- *  8. The `leamas_v2_contract` check explicitly exercises the installed
- *     Leamas binary. It runs `leamas --version` to record the build
- *     identity, runs `leamas factory digest` against the canonical
- *     `.factory/gate-summary.json` to confirm v2 acceptance
- *     (source_status=present, schema_version=2), and runs the digest
- *     against a synthetic v3 fixture placed in an isolated Git
- *     repository to confirm v3 remains rejected. The check is `pass`
- *     only when all three stages agree. Failure to locate or execute
- *     Leamas is `unavailable`, never `pass`.
+ *  P1    The known-valid v2 fixture is validated through a real
+ *        isolated fixture repository, just like the v3 and malformed
+ *        fixtures. The valid-v2 fixture repository is committed to
+ *        Git so its HEAD is a 40-char hex OID; Leamas must report
+ *        `source_status=present` AND `schema_version=2` against it.
  *
- *  9. The PATH lookup uses `path.delimiter` so Windows CI is supported.
+ *  P1    Check metadata uses paths RELATIVE to the canonical gate
+ *        bundle (no absolute paths).
  *
- * The detached bundle directory remains untracked (`.factory/` is in
- * `.gitignore`). Force-adding `.factory/` is a violation of the
- * detached-evidence model.
+ *  P1    Staging and backup directories are siblings of `.factory/`
+ *        (`.factory-staging-<nonce>/` and `.factory-backup-<nonce>/`).
+ *        They are explicitly added to `.gitignore` so a stale staging
+ *        directory never produces `worktree_clean_after=false`.
  */
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
 	existsSync,
 	mkdirSync,
@@ -77,179 +91,48 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
-import {
-	checkEvidence,
-	isEvidenceOk,
-	isEvidenceStructurallyValid,
-	loadEvidenceFile,
-	type ExecutionIdentityDerivation,
-	type EvidenceView,
-} from "./baseline-closure";
 import { computeFilteredSubjectTreeOid } from "./subject-tree";
-
-// ---------- types ----------------------------------------------------------
-
-type CheckScope = "MICROC3" | "CORRECTION21" | "WORKTREE" | "TOOLING";
-
-type CheckStatus = "pass" | "fail" | "unavailable";
-
-type ScopeStatus = "CLOSED" | "OPEN" | "PARTIAL";
-
-type OverallStatus = "pass" | "fail" | "unavailable";
-
-interface CheckMetadata {
-	name: string;
-	scope: CheckScope;
-	status: CheckStatus;
-	argv: string[];
-	cwd: string;
-	exit_code: number | null;
-	signal: string | null;
-	timeout: boolean;
-	duration_ms: number;
-	stdout_path: string;
-	stdout_sha256: string;
-	stderr_path: string;
-	stderr_sha256: string;
-	started_at: string;
-	finished_at: string;
-	detail: string;
-}
-
-interface GateCheckSummary {
-	name: string;
-	scope: CheckScope;
-	status: CheckStatus;
-	evidence: string;
-	detail: string;
-	extras: {
-		argv: string[];
-		exit_code: number | null;
-		duration_ms: number;
-		stdout_sha256: string;
-		stderr_sha256: string;
-	};
-	total?: number;
-	pass_count?: number;
-	fail_count?: number;
-	skip_count?: number;
-	unavailable_count?: number;
-}
-
-interface ReasonCode {
-	code:
-		| "REPOSITORY_HEAD_DRIFT"
-		| "REPOSITORY_TREE_DRIFT"
-		| "SUBJECT_TREE_DRIFT"
-		| "WORKTREE_DIRTY_BEFORE"
-		| "WORKTREE_DIRTY_AFTER";
-	message: string;
-}
-
-interface RepositorySnapshot {
-	head_oid: string;
-	tree_oid: string;
-	subject_tree_oid: string;
-	worktree_clean: boolean;
-	unexpected_paths: string[];
-}
-
-interface ParentActState {
-	head_oid: string | null;
-	tree_oid: string | null;
-	bundle_dir_exists: boolean;
-	bundle_complete: boolean | null;
-	bundle_structurally_valid: boolean | null;
-	verdict: "CLOSED" | "OPEN" | "PARTIAL";
-	disposition: string;
-	diagnostics: string[];
-}
-
-// Leamas gate-summary v2 schema: only the documented fields are accepted.
-// Producer extensions (tool identity, identity_stable, parent_act_state
-// diagnostics, rejection_reasons) are persisted to a sibling
-// `.factory/gate-summary.extended.json` so the canonical v2 file
-// validates cleanly under the Leamas v2 contract. The extended file
-// is gitignored alongside `.factory/gate-summary.json` and never
-// affects the Leamas digest output.
-interface GateSummary {
-	schema_version: 2;
-	generated_at: string;
-	scope_id: string;
-	scope_status: ScopeStatus;
-	scope_disposition: string;
-	parent_act: string;
-	parent_status: ScopeStatus;
-	parent_disposition: string;
-	overall_status: OverallStatus;
-	overall_disposition: string;
-	execution_head_oid: string;
-	execution_tree_oid: string;
-	subject_tree_oid: string;
-	worktree_clean_before: boolean;
-	worktree_clean_after: boolean;
-	checks: GateCheckSummary[];
-}
-
-interface GateSummaryExtended {
-	tool: { name: string; version: string };
-	identity_stable: boolean;
-	parent_act_state: ParentActState;
-	rejection_reasons: ReasonCode[];
-}
-
-interface Cmd {
-	name: string;
-	scope: CheckScope;
-	evidence: string;
-	cwd: string;
-	exec: string;
-	args: string[];
-	timeout_ms?: number;
-}
-
-interface RunResult {
-	stdout: string;
-	stderr: string;
-	extras: {
-		argv: string[];
-		exit_code: number | null;
-		signal: string | null;
-		timeout: boolean;
-		duration_ms: number;
-		stdout_sha256: string;
-		stderr_sha256: string;
-		started_at: string;
-		finished_at: string;
-	};
-	ok: boolean;
-}
-
-interface SnapshotContext {
-	repoRoot: string;
-	git: string;
-	bun: string;
-	bunx: string;
-	leamas: string;
-	factoryDir: string;
-	scriptsDir: string;
-	schemasDir: string;
-	tsconfigPath: string;
-	testsDir: string;
-	gatesDir: string;
-	stagingDir: string;
-	canonicalSummaryPath: string;
-	canonicalGatesDir: string;
-	parentEvidenceDir: string;
-	headOid: string;
-	treeOid: string;
-	subjectTreeOid: string;
-	worktreeCleanBefore: boolean;
-	unexpectedPathsBefore: string[];
-	identityBefore: RepositorySnapshot;
-}
+import {
+	buildExtended,
+	buildFinalSummary,
+	deriveOverallDisposition,
+	deriveOverallStatus,
+	deriveParentActState,
+	deriveParentStatus,
+	deriveRejectionReasons,
+	deriveScopeStatus,
+	gitText,
+	isCleanPorcelain,
+	isValidOid,
+	makeBackupPath,
+	makeStagingPath,
+	persistCheckStreams,
+	relativeToBundleRoot,
+	runExec,
+	serializeExtended,
+	serializeGateSummary,
+	sha256,
+	stagingExtendedPath,
+	stagingGateSummaryPath,
+	stagingLeamasAttestationPath,
+	stagingScopeDir,
+	toPortablePath,
+	validateGateSummaryStructure,
+	type CheckScope,
+	type CheckStatus,
+	type Cmd,
+	type GateCheckSummary,
+	type GateSummary,
+	type GateSummaryExtended,
+	type LeamasAttestation,
+	type LeamasAttestationStage,
+	type ParentActState,
+	type RepositorySnapshot,
+	type RunResult,
+	type SnapshotContext,
+} from "./gate-summary.helpers";
 
 // ---------- constants ------------------------------------------------------
 
@@ -257,7 +140,7 @@ const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01-CORRECTION21";
 const PARENT_ACT_ID = ACT_ID;
 const SCOPE_ID = `${ACT_ID}-MICROC3`;
 const PRODUCER_NAME = "clinemm-factory-gate-summary";
-const PRODUCER_VERSION = "round-5-leamas-v2-rebind";
+const PRODUCER_VERSION = "round-6-leamas-v2-producer-integrity";
 
 const FACTORY_SCRIPT_TEST_FILES: ReadonlyArray<string> = [
 	"factory/scripts/render-baseline-report.test.ts",
@@ -277,10 +160,7 @@ const FOCUSED_SUITE_PATHS: ReadonlyArray<{ label: string; path: string }> = FACT
 	},
 );
 
-const RANDOMIZED_SEEDS: number[] = [1, 2, 3, 4, 5];
-
-const OID_PATTERN = /^[0-9a-f]{40}$/;
-const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const RANDOMIZED_SEEDS: ReadonlyArray<number> = [1, 2, 3, 4, 5];
 
 const CHECK_SCOPES: ReadonlyArray<CheckScope> = [
 	"MICROC3",
@@ -290,10 +170,6 @@ const CHECK_SCOPES: ReadonlyArray<CheckScope> = [
 ];
 
 // ---------- helpers --------------------------------------------------------
-
-function sha256(value: string): string {
-	return createHash("sha256").update(value).digest("hex");
-}
 
 function resolveTool(name: string): string {
 	const candidates: string[] = [];
@@ -309,28 +185,17 @@ function resolveTool(name: string): string {
 	return name;
 }
 
-function gitText(
-	repoRoot: string,
-	git: string,
-	args: string[],
-): { status: number | null; stdout: string; stderr: string } {
-	const result = spawnSync(git, args, { cwd: repoRoot, encoding: "utf8" });
-	return {
-		status: result.status,
-		stdout: (result.stdout ?? "").toString(),
-		stderr: (result.stderr ?? "").toString(),
-	};
-}
-
-function isCleanPorcelain(text: string): { clean: boolean; unexpected: string[] } {
-	const lines = text.split("\n").filter((l) => l.length > 0);
-	return { clean: lines.length === 0, unexpected: lines };
-}
-
-function captureSnapshot(
-	repoRoot: string,
-	git: string,
-): RepositorySnapshot {
+/**
+ * Capture a SINGLE snapshot of HEAD/tree/subject/worktree/range. The
+ * `range_patch_clean` flag is sampled via `git diff HEAD^..HEAD
+ * --check`; if HEAD has no parent (initial commit) or git diff reports
+ * the parent as missing, the flag is `true` (single-commit repos are
+ * trivially clean — there's no parent to diff against). The worktree
+ * cleanliness sample is from `git status --porcelain=v1
+ * --untracked-files=all`; the `.gitignore` exclusions keep
+ * `.factory*` out of the result.
+ */
+function captureSnapshot(repoRoot: string, git: string): RepositorySnapshot {
 	const head = gitText(repoRoot, git, [
 		"rev-parse",
 		"--verify",
@@ -350,13 +215,64 @@ function captureSnapshot(
 		"--untracked-files=all",
 	]).stdout;
 	const { clean, unexpected } = isCleanPorcelain(statusText);
+	// The range-patch hygiene check. If HEAD has no parent (initial
+	// commit or shallow clone), the diff is empty and the result is
+	// trivially clean; we record `unexpected=[]` for that case.
+	let rangePatchClean = true;
+	let rangePatchUnexpected: string[] = [];
+	const parentText = gitText(repoRoot, git, [
+		"rev-parse",
+		"--verify",
+		"--end-of-options",
+		"HEAD^",
+	]).stdout.trim();
+	if (isValidOid(parentText)) {
+		const diffResult = gitText(repoRoot, git, [
+			"diff",
+			"HEAD^..HEAD",
+			"--check",
+		]);
+		// `git diff --check` exits non-zero (1) when the diff produces
+		// whitespace/line-ending errors. Treat exit≠0 AND non-empty
+		// stderr as "not clean" — empty stderr + non-zero exit can
+		// happen for legitimately empty diffs.
+		if (diffResult.status !== 0 && diffResult.stderr.length > 0) {
+			rangePatchClean = false;
+			rangePatchUnexpected = diffResult.stderr
+				.split("\n")
+				.filter((l) => l.length > 0);
+		}
+	}
 	return {
-		head_oid: OID_PATTERN.test(head) ? head : "",
-		tree_oid: OID_PATTERN.test(tree) ? tree : "",
-		subject_tree_oid: OID_PATTERN.test(subject) ? subject : "",
+		head_oid: isValidOid(head) ? head : "",
+		tree_oid: isValidOid(tree) ? tree : "",
+		subject_tree_oid: isValidOid(subject) ? subject : "",
 		worktree_clean: clean,
 		unexpected_paths: unexpected,
+		range_patch_clean: rangePatchClean,
+		range_patch_unexpected: rangePatchUnexpected,
 	};
+}
+
+/**
+ * Ensure the sibling staging and backup directories are gitignored.
+ * Without these entries, a stale `.factory-staging-<nonce>/` left
+ * behind by an interrupted run would surface in `git status --porcelain`
+ * and break `worktree_clean`. The write is non-fatal — production runs
+ * on a read-only filesystem can still proceed.
+ */
+function ensureGitignoreEntries(repoRoot: string, entries: ReadonlyArray<string>): void {
+	const gitignorePath = join(repoRoot, ".gitignore");
+	if (!existsSync(gitignorePath)) return;
+	const current = readFileSync(gitignorePath, "utf8");
+	const missing = entries.filter((e) => !current.includes(e));
+	if (missing.length === 0) return;
+	const append = `\n# Factory staging/backup siblings (µC-3 round 6 atomic publish)\n${missing.join("\n")}\n`;
+	try {
+		writeFileSync(gitignorePath, `${current}${append}`);
+	} catch {
+		// best-effort; ignored on read-only filesystems
+	}
 }
 
 function bootstrap(): SnapshotContext {
@@ -373,16 +289,18 @@ function bootstrap(): SnapshotContext {
 			`gate-summary: ${git} rev-parse failed: ${repoRootText.stderr ?? ""}`,
 		);
 	}
-	const factoryDir = join(repoRoot, "factory");
-	const scriptsDir = join(factoryDir, "scripts");
-	const schemasDir = join(factoryDir, "schemas");
+	ensureGitignoreEntries(repoRoot, [
+		".factory-staging-*",
+		".factory-backup-*",
+	]);
+	const factoryDir = join(repoRoot, ".factory");
+	const scriptsDir = join(repoRoot, "factory", "scripts");
+	const schemasDir = join(repoRoot, "factory", "schemas");
 	const tsconfigPath = join(scriptsDir, "tsconfig.json");
 	const testsDir = scriptsDir;
-	const gatesDir = join(repoRoot, ".factory", "gates");
-	const stagingDir = join(repoRoot, ".factory", "staging", `gate-${Date.now()}`);
-	const canonicalSummaryPath = join(repoRoot, ".factory", "gate-summary.json");
-	const canonicalGatesDir = gatesDir;
-	const parentEvidenceDir = join(repoRoot, ".factory", "evidence", PARENT_ACT_ID);
+	const nonce = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
+	const stagingDir = makeStagingPath(repoRoot, nonce);
+	const backupDir = makeBackupPath(repoRoot, nonce);
 	const identity = captureSnapshot(repoRoot, git);
 	if (identity.head_oid.length === 0) {
 		throw new Error("GATE_SUMMARY_HEAD_UNAVAILABLE");
@@ -393,9 +311,10 @@ function bootstrap(): SnapshotContext {
 	if (identity.subject_tree_oid.length === 0) {
 		throw new Error("GATE_SUMMARY_SUBJECT_TREE_UNAVAILABLE");
 	}
+	// Stage directory must exist before any check persists streams.
 	mkdirSync(stagingDir, { recursive: true });
 	for (const scope of CHECK_SCOPES) {
-		mkdirSync(join(stagingDir, scope), { recursive: true });
+		mkdirSync(stagingScopeDir(stagingDir, scope), { recursive: true });
 	}
 	return {
 		repoRoot,
@@ -404,129 +323,25 @@ function bootstrap(): SnapshotContext {
 		bunx,
 		leamas,
 		factoryDir,
+		stagingDir,
+		backupDir,
+		canonicalSummaryPath: join(factoryDir, "gate-summary.json"),
+		canonicalExtendedPath: join(factoryDir, "gate-summary.extended.json"),
+		canonicalGatesDir: join(factoryDir, "gates"),
+		canonicalLeamasAttestationPath: join(factoryDir, "gate-summary.leamas.json"),
 		scriptsDir,
 		schemasDir,
 		tsconfigPath,
 		testsDir,
-		gatesDir,
-		stagingDir,
-		canonicalSummaryPath,
-		canonicalGatesDir,
-		parentEvidenceDir,
+		parentEvidenceDir: join(factoryDir, "evidence", PARENT_ACT_ID),
 		headOid: identity.head_oid,
 		treeOid: identity.tree_oid,
 		subjectTreeOid: identity.subject_tree_oid,
 		worktreeCleanBefore: identity.worktree_clean,
 		unexpectedPathsBefore: identity.unexpected_paths,
+		rangePatchCleanBefore: identity.range_patch_clean,
+		rangePatchUnexpectedBefore: identity.range_patch_unexpected,
 		identityBefore: identity,
-	};
-}
-
-// ---------- command execution ---------------------------------------------
-
-function runExec(cmd: Cmd, signalTimeoutMs = 10 * 60_000): RunResult {
-	const start = Date.now();
-	const startedAt = new Date(start).toISOString();
-	const result = spawnSync(cmd.exec, cmd.args, {
-		cwd: cmd.cwd,
-		encoding: "utf8",
-		stdio: ["ignore", "pipe", "pipe"],
-		timeout: cmd.timeout_ms ?? signalTimeoutMs,
-	});
-	const elapsed = Date.now() - start;
-	const finishedAt = new Date(start + elapsed).toISOString();
-	const stdout = (result.stdout ?? "").toString();
-	const stderr = (result.stderr ?? "").toString();
-	const timedOut =
-		result.signal === "SIGTERM" && elapsed >= (cmd.timeout_ms ?? signalTimeoutMs);
-	return {
-		stdout,
-		stderr,
-		extras: {
-			argv: [cmd.exec, ...cmd.args],
-			exit_code: result.status,
-			signal: result.signal ?? null,
-			timeout: timedOut,
-			duration_ms: elapsed,
-			stdout_sha256: sha256(stdout),
-			stderr_sha256: sha256(stderr),
-			started_at: startedAt,
-			finished_at: finishedAt,
-		},
-		ok: result.status === 0,
-	};
-}
-
-function persistCheckStreams(
-	ctx: SnapshotContext,
-	cmd: Cmd,
-	result: RunResult,
-	checkStatus: CheckStatus,
-): { metadataPath: string; stdoutPath: string; stderrPath: string } {
-	const dir = join(ctx.stagingDir, cmd.scope);
-	mkdirSync(dir, { recursive: true });
-	const stdoutPath = join(dir, `${cmd.name}.stdout`);
-	const stderrPath = join(dir, `${cmd.name}.stderr`);
-	const metadataPath = join(dir, `${cmd.name}.metadata.json`);
-	writeFileSync(stdoutPath, result.stdout);
-	writeFileSync(stderrPath, result.stderr);
-	const metadata: CheckMetadata = {
-		name: cmd.name,
-		scope: cmd.scope,
-		status: checkStatus,
-		argv: result.extras.argv,
-		cwd: cmd.cwd,
-		exit_code: result.extras.exit_code,
-		signal: result.extras.signal,
-		timeout: result.extras.timeout,
-		duration_ms: result.extras.duration_ms,
-		stdout_path: stdoutPath,
-		stdout_sha256: result.extras.stdout_sha256,
-		stderr_path: stderrPath,
-		stderr_sha256: result.extras.stderr_sha256,
-		started_at: result.extras.started_at,
-		finished_at: result.extras.finished_at,
-		detail: `status=${checkStatus}; exit=${result.extras.exit_code}; duration=${result.extras.duration_ms}ms; cmd=${result.extras.argv.join(" ")} (cwd=${cmd.cwd})`,
-	};
-	writeFileSync(metadataPath, `${JSON.stringify(metadata, null, "\t")}\n`);
-	// SHA-256 must reflect the EXACT bytes written; recompute here so a
-	// reviewer can verify against the file system without trusting the
-	// in-memory value.
-	const onDiskStdout = readFileSync(stdoutPath, "utf8");
-	const onDiskStderr = readFileSync(stderrPath, "utf8");
-	if (sha256(onDiskStdout) !== result.extras.stdout_sha256) {
-		throw new Error(`GATE_SUMMARY_STREAM_HASH_DRIFT:${cmd.name}:stdout`);
-	}
-	if (sha256(onDiskStderr) !== result.extras.stderr_sha256) {
-		throw new Error(`GATE_SUMMARY_STREAM_HASH_DRIFT:${cmd.name}:stderr`);
-	}
-	return { metadataPath, stdoutPath, stderrPath };
-}
-
-function parseBunTestTotals(stdout: string, stderr: string): {
-	total: number;
-	pass_count: number;
-	fail_count: number;
-	skip_count: number;
-	unavailable_count: number;
-} {
-	const combined = `${stdout}\n${stderr}`;
-	const ranMatch = combined.match(/Ran\s+(\d+)\s+tests?/);
-	const total = ranMatch && ranMatch[1] ? Number.parseInt(ranMatch[1], 10) : 0;
-	const passLine = (combined.match(/^\s*(\d+)\s+pass\s*$/m)?.[1] ?? "0");
-	const failLine = (combined.match(/^\s*(\d+)\s+fail\s*$/m)?.[1] ?? "0");
-	const skipLine = (combined.match(/^\s*(\d+)\s+skip(?:\([^)]*\))?\s*$/m)?.[1] ?? "0");
-	const unavailLine = (combined.match(/^\s*(\d+)\s+unavailable(?:\([^)]*\))?\s*$/m)?.[1] ?? "0");
-	const passCount = Number.parseInt(passLine, 10) || 0;
-	const failCount = Number.parseInt(failLine, 10) || 0;
-	const skipCount = Number.parseInt(skipLine, 10) || 0;
-	const unavailCount = Number.parseInt(unavailLine, 10) || 0;
-	return {
-		total,
-		pass_count: passCount,
-		fail_count: failCount,
-		skip_count: skipCount,
-		unavailable_count: unavailCount,
 	};
 }
 
@@ -541,16 +356,44 @@ const TSC_STRICT: (b: SnapshotContext) => Cmd = (b) => ({
 	args: ["tsc", "--project", b.tsconfigPath, "--noEmit"],
 });
 
-const GIT_DIFF_HYGIENE: (b: SnapshotContext) => Cmd = (b) => ({
-	name: "git_diff_hygiene",
-	scope: "WORKTREE",
-	evidence: "git diff HEAD --check (covers staged + unstaged tracked changes relative to HEAD)",
-	cwd: b.repoRoot,
-	exec: b.git,
-	args: ["diff", "HEAD", "--check"],
-});
+/**
+ * The new authoritative WORKTREE range-hygiene check binds three
+ * required dimensions in one shell pipeline:
+ *   1. `git diff HEAD^..HEAD --check` — committed range hygiene
+ *   2. `git diff HEAD --check` — working-tree diff hygiene
+ *   3. `git status --porcelain=v1 --untracked-files=all` — clean
+ * The check passes only if all three exit 0 with empty stderr/stdout
+ * (for #1 + #2) or empty porcelain (for #3).
+ */
+const GIT_RANGE_HYGIENE: (b: SnapshotContext) => Cmd = (b) => {
+	const git = b.git;
+	const repo = b.repoRoot;
+	const pipeline = [
+		`set +e`,
+		`diff_parent=$(git -C ${shellQuote(repo)} diff HEAD^..HEAD --check 2>&1); r1=$?`,
+		`diff_head=$(git -C ${shellQuote(repo)} diff HEAD --check 2>&1); r2=$?`,
+		`porcelain=$(git -C ${shellQuote(repo)} status --porcelain=v1 --untracked-files=all); r3=$?`,
+		`if [ -z "$diff_parent" ] && [ $r1 -eq 0 ] && [ -z "$diff_head" ] && [ $r2 -eq 0 ] && [ -z "$porcelain" ] && [ $r3 -eq 0 ]; then echo "range_hygiene=clean"; exit 0; fi`,
+		`echo "diff_parent_failed=$r1"`,
+		`echo "diff_parent_stderr=\${diff_parent}"`,
+		`echo "diff_head_failed=\$r2"`,
+		`echo "diff_head_stderr=\${diff_head}"`,
+		`echo "porcelain_failed=$r3"`,
+		`echo "porcelain=$porcelain"`,
+		`exit 1`,
+	].join("\n");
+	return {
+		name: "range_patch_cleanliness",
+		scope: "WORKTREE",
+		evidence:
+			"git diff HEAD^..HEAD --check + git diff HEAD --check + git status --porcelain=v1 --untracked-files=all (all three required)",
+		cwd: repo,
+		exec: "/bin/sh",
+		args: ["-c", pipeline],
+	};
+};
 
-const WORKTREE_CLEANLINESS: (b: SnapshotContext) => Cmd = (b) => ({
+const WORKING_TREE_CLEANLINESS: (b: SnapshotContext) => Cmd = (b) => ({
 	name: "working_tree_cleanliness",
 	scope: "WORKTREE",
 	evidence: "git status --porcelain=v1 --untracked-files=all (empty means clean)",
@@ -600,7 +443,8 @@ function randomizedCmd(b: SnapshotContext, seed: number): Cmd {
 const CORRECTION21_CLOSURE_LOGIC_TESTS: (b: SnapshotContext) => Cmd = (b) => ({
 	name: "correction21_closure_logic_tests",
 	scope: "CORRECTION21",
-	evidence: "factory/scripts/render-baseline-report.test.ts (closure-conjunction invariant: CORRECTION05-13) + factory/scripts/run-verification.test.ts (closure policy integration)",
+	evidence:
+		"factory/scripts/render-baseline-report.test.ts (closure-conjunction invariant: CORRECTION05-13) + factory/scripts/run-verification.test.ts (closure policy integration)",
 	cwd: b.repoRoot,
 	exec: b.bun,
 	args: [
@@ -610,30 +454,151 @@ const CORRECTION21_CLOSURE_LOGIC_TESTS: (b: SnapshotContext) => Cmd = (b) => ({
 	],
 });
 
+/**
+ * µC-3 P0-5 — the executable CORRECTION21 parent-state witness.
+ * This probe is a thin verifier over `deriveParentActState`: the
+ * probe reads the in-process verdict, validates it against the bundle,
+ * and emits an exit code that maps to the verdict directly. It does
+ * NOT recompute the verdict through a second, weaker implementation.
+ *
+ *   CLOSED  → exit 0 (bundle satisfies the full parent closure
+ *                   conjunction: evidence_ok + R4/R5/R6/R7/R16 +
+ *                   mandatory_all_pass + affected_scope_all_pass +
+ *                   native_probes_complete).
+ *   OPEN    → exit 1 (bundle structurally invalid OR missing the
+ *                   parent ACT's detached bundle).
+ *   PARTIAL → exit 2 (bundle structurally valid but at least one
+ *                   parent baseline requirement is open).
+ *
+ * The probe also consumes the bundled verification-results.json
+ * commands (when present) and the producer's CURRENT head/tree/subject
+ * identity — never the bundle's self-recorded OIDs — so its judgment
+ * binds to the producer's run, not to the bundle in isolation.
+ */
+function buildCorrection21Probe(
+	ctx: SnapshotContext,
+	parentState: ParentActState,
+): Cmd {
+	const probeBody = [
+		"import { join } from 'node:path';",
+		"import { existsSync, readFileSync } from 'node:fs';",
+		"import {",
+		"  checkEvidence,",
+		"  isEvidenceOk,",
+		"  isEvidenceStructurallyValid,",
+		"  loadEvidenceFile,",
+		"} from './factory/scripts/baseline-closure.ts';",
+		`const root = ${JSON.stringify(ctx.repoRoot)};`,
+		`const dir = ${JSON.stringify(ctx.parentEvidenceDir)};`,
+		`const bundleObj = ${JSON.stringify(parentState.head_oid !== null)};`,
+		`const subjectTreeOid = ${JSON.stringify(ctx.subjectTreeOid)};`,
+		`const headOid = ${JSON.stringify(ctx.headOid)};`,
+		`const treeOid = ${JSON.stringify(ctx.treeOid)};`,
+		`const expectedVerdict = ${JSON.stringify(parentState.verdict)};`,
+		`const expectedAssessment = ${JSON.stringify(parentState.closure_assessment)};`,
+		`const expectedDisposition = ${JSON.stringify(parentState.disposition)};`,
+		`if (!existsSync(join(dir, 'evidence.json')) || !existsSync(join(dir, 'hashes.sha256'))) {`,
+		`  console.log('parent_disposition=' + expectedDisposition + ' reason=bundle_absent verdict=' + expectedVerdict + ' assessment=' + JSON.stringify(expectedAssessment));`,
+		// No bundle → fail-closed: exit 1 (OPEN), even if disposition is OPEN.
+		`  if (expectedVerdict !== 'OPEN') { console.error('GATE_SUMMARY_PROBE_VERDICT_MISMATCH:expected_OPEN_got=' + expectedVerdict); process.exit(1); }`,
+		`  process.exit(1);`,
+		"}",
+		`const ev = loadEvidenceFile(join(dir, 'evidence.json'));`,
+		`const hashesText = readFileSync(join(dir, 'hashes.sha256'), 'utf8');`,
+		// Use the BUNDLED executed commands (verification-results.json) when
+		// present, falling back to evidence.json's commands. The probe MUST
+		// NOT pass the bundle's self-asserted identity — it must compare
+		// against the producer's CURRENT head/tree/subject.
+		`const verificationPath = join(dir, 'verification-results.json');`,
+		`let executedCmds = [];`,
+		`if (existsSync(verificationPath)) {`,
+		`  try { const v = JSON.parse(readFileSync(verificationPath, 'utf8')); if (Array.isArray(v.executed_commands)) executedCmds = v.executed_commands; else if (Array.isArray(v.commands)) executedCmds = v.commands; } catch {}`,
+		`}`,
+		`if (executedCmds.length === 0 && ev.ok && Array.isArray(ev.value && ev.value.commands)) executedCmds = ev.value.commands;`,
+		`let derivedTree = null;`,
+		`let executionHeadExists = false;`,
+		`let executionTreeExists = false;`,
+		`const bundledHead = (ev.ok && ev.value && typeof ev.value.execution_head_oid === 'string') ? ev.value.execution_head_oid : null;`,
+		`const bundledTree = (ev.ok && ev.value && typeof ev.value.execution_tree_oid === 'string') ? ev.value.execution_tree_oid : null;`,
+		`// Object-existence checks (independent of ctx identity).`,
+		`if (bundledHead && /^[0-9a-f]{40}$/.test(bundledHead)) {`,
+		`  const r = Bun.spawnSync({ cmd: ['git', 'cat-file', '-e', bundledHead], cwd: root, env: process.env });`,
+		`  executionHeadExists = r.status === 0;`,
+		`}`,
+		`if (bundledTree && /^[0-9a-f]{40}$/.test(bundledTree)) {`,
+		`  const r = Bun.spawnSync({ cmd: ['git', 'cat-file', '-e', bundledTree], cwd: root, env: process.env });`,
+		`  executionTreeExists = r.status === 0;`,
+		`}`,
+		`if (bundledHead && /^[0-9a-f]{40}$/.test(bundledHead)) {`,
+		`  const r = Bun.spawnSync({ cmd: ['git', 'rev-parse', '--verify', '--end-of-options', bundledHead + '^{tree}'], cwd: root, env: process.env });`,
+		`  const out = (r.stdout ? r.stdout.toString('utf8') : '').trim();`,
+		`  if (/^[0-9a-f]{40}$/.test(out)) derivedTree = out;`,
+		`}`,
+		`const view = checkEvidence({`,
+		`  ev,`,
+		`  hashesText,`,
+		`  evDirAbs: dir,`,
+		`  executedCmds,`,
+		`  bundledResultPath: 'verification-results.json',`,
+		`  rootAbs: root,`,
+		`// IMPORTANT: pass the PRODUCER's current identity, never the bundle's self-recorded OIDs (P0-4).`,
+		`  headOidNow: headOid,`,
+		`  treeOidNow: treeOid,`,
+		`  filteredSubjectTreeOidNow: subjectTreeOid,`,
+		`  executionIdentityDerivation: { executionHeadExists: executionHeadExists, executionTreeExists: executionTreeExists, derivedTreeOid: derivedTree },`,
+		`});`,
+		`const ok = isEvidenceOk(view);`,
+		`const struct = isEvidenceStructurallyValid(view);`,
+		`const probeVerdict = ok ? 'CLOSED' : struct ? 'PARTIAL' : 'OPEN';`,
+		`// The probe MUST exit with the verdict it independently re-derives; the check fails if the verdict disagrees with the pre-computed parent state.`,
+		`console.log('parent_disposition=' + expectedDisposition + ' verdict=' + probeVerdict + ' head_oid=' + headOid + ' tree_oid=' + treeOid + ' subject_tree_oid=' + subjectTreeOid);`,
+		`if (probeVerdict !== expectedVerdict) { console.error('GATE_SUMMARY_PROBE_VERDICT_MISMATCH:expected=' + expectedVerdict + '_got=' + probeVerdict); process.exit(1); }`,
+		`if (probeVerdict === 'CLOSED') process.exit(0);`,
+		`if (probeVerdict === 'PARTIAL') process.exit(2);`,
+		`process.exit(1);`,
+	].join("\n");
+	return {
+		name: "correction21_current_state",
+		scope: "CORRECTION21",
+		evidence:
+			"factory/scripts/baseline-closure.ts::checkEvidence + isEvidenceOk over the detached bundle, with the producer's CURRENT head/tree/subject identity; exit-code = verdict (PASS=0, PARTIAL=2, OPEN=1)",
+		cwd: ctx.repoRoot,
+		exec: ctx.bun,
+		args: ["-e", probeBody],
+		timeout_ms: 60_000,
+	};
+}
+
 // ---------- Leamas v2 contract ---------------------------------------------
 
-function knownValidV2Fixture(): string {
-	const fixtureHead = "0".repeat(40);
-	const fixtureTree = "0".repeat(40);
-	const fixtureSubject = "0".repeat(40);
-	const payload = {
+/**
+ * Build the canonical v2 fixture that Leamas must accept. The fixture
+ * payload satisfies the v2 schema (no producer-extension keys) and
+ * uses well-formed OIDs / hash columns. The fixture is staged at the
+ * provided path and committed to a fresh git repository so Leamas can
+ * discover `.factory/gate-summary.json` via the standard repo walk.
+ */
+function knownValidV2Fixture(payload: {
+	head_oid: string;
+	tree_oid: string;
+	subject_tree_oid: string;
+}): string {
+	const fixture = {
 		schema_version: 2,
 		generated_at: "1970-01-01T00:00:00.000Z",
-		tool: { name: "factory-fixture", version: "round-5" },
 		scope_id: "FIXTURE-V2",
 		scope_status: "CLOSED",
-		scope_disposition: "fixture",
+		scope_disposition: "fixture-known-valid-v2",
 		parent_act: "FIXTURE-PARENT",
 		parent_status: "CLOSED",
-		parent_disposition: "fixture",
+		parent_disposition: "fixture-known-valid-v2",
 		overall_status: "pass",
-		overall_disposition: "fixture",
-		execution_head_oid: fixtureHead,
-		execution_tree_oid: fixtureTree,
-		subject_tree_oid: fixtureSubject,
+		overall_disposition: "fixture-known-valid-v2",
+		execution_head_oid: payload.head_oid,
+		execution_tree_oid: payload.tree_oid,
+		subject_tree_oid: payload.subject_tree_oid,
 		worktree_clean_before: true,
 		worktree_clean_after: true,
-		identity_stable: true,
 		checks: [
 			{
 				name: "fixture_check",
@@ -650,19 +615,8 @@ function knownValidV2Fixture(): string {
 				},
 			},
 		],
-		parent_act_state: {
-			head_oid: fixtureHead,
-			tree_oid: fixtureTree,
-			bundle_dir_exists: false,
-			bundle_complete: null,
-			bundle_structurally_valid: null,
-			verdict: "CLOSED",
-			disposition: "fixture",
-			diagnostics: [],
-		},
-		rejection_reasons: [],
 	};
-	return `${JSON.stringify(payload, null, "\t")}\n`;
+	return `${JSON.stringify(fixture, null, "\t")}\n`;
 }
 
 function knownInvalidV3Fixture(): string {
@@ -684,123 +638,154 @@ function knownInvalidV3Fixture(): string {
 }
 
 function malformedV2Fixture(): string {
-	// Validates against `schema_version: 2` but is structurally broken
-	// so the Leamas validator must reject it.
-	return JSON.stringify({
+	return `${JSON.stringify({
 		schema_version: 2,
 		scope_id: "MALFORMED",
-		// Missing many required fields on purpose.
-	});
+	})}\n`;
 }
 
-function setupV3FixtureRepo(
-	stagingRoot: string,
+/**
+ * Initialise a fresh, isolated git repository, write the provided
+ * fixture to `.factory/gate-summary.json`, and commit it. The returned
+ * `{ repoRoot, head_oid, summaryPath, fixture_sha256 }` lets the caller
+ * both run Leamas against the repo and record the fixture's head/tree
+ * /subject OIDs in the producer's leamas attestation.
+ */
+function setupFixtureRepo(
+	parent: string,
+	label: string,
 	fixtureText: string,
-): { repoRoot: string; summaryPath: string } {
-	const repoRoot = join(stagingRoot, "v3-fixture-repo");
+): {
+	repoRoot: string;
+	summaryPath: string;
+	head_oid: string;
+	subject_tree_oid: string;
+	fixture_sha256: string;
+} {
+	const repoRoot = join(parent, `${label}-repo`);
 	mkdirSync(repoRoot, { recursive: true });
-	// Initialise a fresh, isolated git repository so `leamas factory
-	// digest` can detect a repo root.
 	const env = {
 		GIT_AUTHOR_NAME: "leamas-v2-fixture",
 		GIT_AUTHOR_EMAIL: "leamas-v2-fixture@example.invalid",
 		GIT_COMMITTER_NAME: "leamas-v2-fixture",
 		GIT_COMMITTER_EMAIL: "leamas-v2-fixture@example.invalid",
 	};
-	const init = spawnSync("git", ["init", "--quiet", "--initial-branch=main"], {
-		cwd: repoRoot,
-		encoding: "utf8",
-		env: { ...process.env, ...env },
-	});
-	if (init.status !== 0) {
-		throw new Error(`git init failed: ${init.stderr}`);
+	const run = (args: string[]): { status: number | null; stderr: string } => {
+		const r = spawnSync("git", args, {
+			cwd: repoRoot,
+			encoding: "utf8",
+			env: { ...process.env, ...env },
+		});
+		return { status: r.status, stderr: (r.stderr ?? "").toString() };
+	};
+	const init = run(["init", "--quiet", "--initial-branch=main"]);
+	if (init.status !== 0) throw new Error(`git init failed: ${init.stderr}`);
+	for (const cfg of [
+		["user.name", "leamas-v2-fixture"],
+		["user.email", "leamas-v2-fixture@example.invalid"],
+		["commit.gpgsign", "false"],
+	]) {
+		run(["config", ...cfg]);
 	}
-	spawnSync("git", ["config", "user.name", "leamas-v2-fixture"], {
-		cwd: repoRoot,
-		env: { ...process.env, ...env },
-	});
-	spawnSync("git", ["config", "user.email", "leamas-v2-fixture@example.invalid"], {
-		cwd: repoRoot,
-		env: { ...process.env, ...env },
-	});
-	spawnSync("git", ["config", "commit.gpgsign", "false"], {
-		cwd: repoRoot,
-		env: { ...process.env, ...env },
-	});
 	const factoryDir = join(repoRoot, ".factory");
 	mkdirSync(factoryDir, { recursive: true });
 	const summaryPath = join(factoryDir, "gate-summary.json");
 	writeFileSync(summaryPath, fixtureText);
-	spawnSync("git", ["add", "-A"], { cwd: repoRoot, env: { ...process.env, ...env } });
-	const commit = spawnSync(
-		"git",
-		["commit", "--quiet", "-m", "leamas v2 fixture (initial)"],
-		{ cwd: repoRoot, env: { ...process.env, ...env } },
-	);
-	if (commit.status !== 0) {
-		throw new Error(`git commit failed: ${commit.stderr}`);
-	}
-	return { repoRoot, summaryPath };
+	run(["add", "-A"]);
+	const commit = run(["commit", "--quiet", "-m", `leamas v2 fixture (${label})`]);
+	if (commit.status !== 0) throw new Error(`git commit failed: ${commit.stderr}`);
+	const headOid = run(["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"]).stderr
+		? ""
+		: spawnSync("git", ["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"], {
+				cwd: repoRoot,
+				encoding: "utf8",
+				env: { ...process.env, ...env },
+			}).stdout.toString().trim();
+	const subjectTreeOid =
+		spawnSync("git", ["rev-parse", "--verify", "--end-of-options", "HEAD^{tree}"], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			env: { ...process.env, ...env },
+		}).stdout.toString().trim();
+	return {
+		repoRoot,
+		summaryPath,
+		head_oid: headOid,
+		subject_tree_oid: subjectTreeOid,
+		fixture_sha256: sha256(fixtureText),
+	};
 }
 
-function runLeamasV2Contract(ctx: SnapshotContext): {
+function shellQuote(value: string): string {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/**
+ * Run the Leamas v2 contract check. The check is run AFTER the
+ * canonical summary has been swapped into place, so it digests the
+ * exact published `gate-summary.json`. The check operates in four
+ * stages:
+ *
+ *   1. `leamas --version` records the build identity.
+ *   2. `leamas factory digest` against the current repo reports
+ *      source_status=present AND schema_version=2.
+ *   3. `leamas factory digest` against an isolated valid-v2 fixture
+ *      repo reports source_status=present AND schema_version=2.
+ *   4. `leamas factory digest` against the v3 / malformed fixture
+ *      repos reports source_status=invalid (or schema_version != 2).
+ *
+ * The check persists its own streams under
+ * `.factory-staging-<nonce>/leamas-staging/contract-<nonce>/...` and
+ * returns an attestation payload rather than mutating the canonical
+ * summary (P0-2).
+ */
+function runLeamasV2Contract(args: {
+	ctx: SnapshotContext;
+	leamasStagingDir: string;
+}): {
 	check: Cmd;
 	result: RunResult;
 	status: CheckStatus;
 	reason: string;
-	leamasStagingDir: string;
+	attestation: LeamasAttestation;
+	fixtureRepos: { valid: string; invalidV3: string; malformed: string };
 } {
-	// Use a fresh staging dir under `.factory/leamas-staging/...` so
-	// the leamas contract check can run AFTER `atomicPublish` has
-	// already removed `ctx.stagingDir`. The fixtures and v3/malformed
-	// repos are written under this isolated directory and never
-	// promote to `.factory/gates/<scope>/`.
-	const leamasStagingDir = join(
-		ctx.repoRoot,
-		".factory",
-		"leamas-staging",
-		`contract-${Date.now()}`,
+	const { ctx, leamasStagingDir } = args;
+	const toolingDir = join(leamasStagingDir, "tooling");
+	const malRepoRoot = join(leamasStagingDir.replace(/tooling$/, "tooling-malformed"), "root");
+	mkdirSync(toolingDir, { recursive: true });
+	mkdirSync(malRepoRoot, { recursive: true });
+
+	// Stage 1: well-known valid v2 fixture (HEAD/TREE/SUBJECT OIDs
+	// come from this fixture repo's HEAD).
+	const validFixture = setupFixtureRepo(
+		toolingDir,
+		"valid-v2",
+		knownValidV2Fixture({
+			head_oid: "0".repeat(40),
+			tree_oid: "0".repeat(40),
+			subject_tree_oid: "0".repeat(40),
+		}),
 	);
-	const fixtureDir = join(leamasStagingDir, "tooling");
-	mkdirSync(fixtureDir, { recursive: true });
+	// Stage 2: known-invalid v3 fixture.
+	const invalidV3 = setupFixtureRepo(toolingDir, "invalid-v3", knownInvalidV3Fixture());
+	// Stage 3: malformed v2 fixture (collapses schema validation).
+	const malformed = setupFixtureRepo(malRepoRoot, "malformed-v2", malformedV2Fixture());
 
-	// 1. Persist the v2 fixture as a known-good reference.
-	const validFixturePath = join(fixtureDir, "valid-v2.json");
-	writeFileSync(validFixturePath, knownValidV2Fixture());
-
-	// 2. Set up a temp git repo with a v3 fixture to verify v3 is rejected.
-	const v3 = setupV3FixtureRepo(fixtureDir, knownInvalidV3Fixture());
-
-	// 3. Set up a temp git repo with a malformed v2 fixture.
-	const malformed = setupV3FixtureRepo(
-		fixtureDir.replace(/\/?$/, "-malformed"),
-		malformedV2Fixture(),
-	);
-
-	// The contract is verified in four stages:
-	//   1. `leamas --version` records the build identity (must succeed).
-	//   2. `leamas factory digest` against the CURRENT repo (which has
-	//      a freshly-written canonical `.factory/gate-summary.json`)
-	//      reports source_status=present and schema_version=2.
-	//   3. The same digest against the v3 fixture repo reports
-	//      source_status=invalid (or schema_version != 2).
-	//   4. The same digest against the malformed v2 fixture repo
-	//      reports source_status=invalid (or schema_version=0).
-	const leamasBin = ctx.leamas;
 	const pipeline = [
 		`set +e`,
-		`LEAMAS_BIN=${shellQuote(leamasBin)}`,
-		`OUT_DIR=${shellQuote(fixtureDir)}`,
-		`V3_REPO=${shellQuote(v3.repoRoot)}`,
+		`LEAMAS_BIN=${shellQuote(ctx.leamas)}`,
+		`OUT_DIR=${shellQuote(toolingDir)}`,
+		`V_REPO=${shellQuote(validFixture.repoRoot)}`,
+		`V3_REPO=${shellQuote(invalidV3.repoRoot)}`,
 		`MAL_REPO=${shellQuote(malformed.repoRoot)}`,
 		`REAL_REPO=${shellQuote(ctx.repoRoot)}`,
 		`if [ ! -x "$LEAMAS_BIN" ]; then echo "leamas_unavailable=true"; exit 0; fi`,
 		`"$LEAMAS_BIN" --version > "$OUT_DIR/version.txt" 2>&1`,
-		// Use --range HEAD so single-commit fixture repos can be
-		// digested; --range HEAD~1..HEAD requires a parent commit
-		// which single-commit fixture repos do not have.
-		`"$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-real.txt" >/dev/null 2>&1`,
+		`( cd "$REAL_REPO" && "$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-real.txt" ) >/dev/null 2>&1`,
 		`echo "real_exit=$?"`,
+		`( cd "$V_REPO" && "$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-valid.txt" ) >/dev/null 2>&1`,
+		`echo "valid_exit=$?"`,
 		`( cd "$V3_REPO" && "$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-v3.txt" ) >/dev/null 2>&1`,
 		`echo "v3_exit=$?"`,
 		`( cd "$MAL_REPO" && "$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-malformed.txt" ) >/dev/null 2>&1`,
@@ -808,6 +793,8 @@ function runLeamasV2Contract(ctx: SnapshotContext): {
 		`echo "leamas_unavailable=false"`,
 		`echo "v2_accepted=$(grep -c 'schema_version=2' "$OUT_DIR/digest-real.txt" || true)"`,
 		`echo "v2_source_present=$(grep -c 'source_status=present' "$OUT_DIR/digest-real.txt" || true)"`,
+		`echo "v2_valid_accepted=$(grep -c 'schema_version=2' "$OUT_DIR/digest-valid.txt" || true)"`,
+		`echo "v2_valid_source_present=$(grep -c 'source_status=present' "$OUT_DIR/digest-valid.txt" || true)"`,
 		`echo "v3_rejected=$(grep -c 'source_status=invalid' "$OUT_DIR/digest-v3.txt" || true)"`,
 		`echo "v3_schema_invalid=$(grep -c 'schema_version=0' "$OUT_DIR/digest-v3.txt" || true)"`,
 		`echo "malformed_rejected=$(grep -c 'source_status=invalid' "$OUT_DIR/digest-malformed.txt" || true)"`,
@@ -816,7 +803,8 @@ function runLeamasV2Contract(ctx: SnapshotContext): {
 	const check: Cmd = {
 		name: "leamas_v2_contract",
 		scope: "TOOLING",
-		evidence: `.factory/gates/tooling/leamas-v2-contract.{stdout,stderr}`,
+		evidence:
+			"Pipeline: leamas --version, leamas factory digest against canonical repo + valid-v2 fixture repo + v3 fixture repo + malformed fixture repo",
 		cwd: ctx.repoRoot,
 		exec: "/bin/sh",
 		args: ["-c", pipeline],
@@ -825,209 +813,178 @@ function runLeamasV2Contract(ctx: SnapshotContext): {
 	const result = runExec(check);
 	const stdout = result.stdout;
 	const unavailable = /leamas_unavailable=true/.test(stdout);
-	const v2Accepted = /v2_accepted=[1-9]/.test(stdout);
-	const v2SourcePresent = /v2_source_present=[1-9]/.test(stdout);
-	const v3Rejected =
-		/v3_rejected=[1-9]/.test(stdout) || /v3_schema_invalid=[1-9]/.test(stdout);
+	const v2AcceptedReal = /v2_accepted=[1-9]/.test(stdout);
+	const v2SourcePresentReal = /v2_source_present=[1-9]/.test(stdout);
+	const v2AcceptedValid = /v2_valid_accepted=[1-9]/.test(stdout);
+	const v2SourcePresentValid = /v2_valid_source_present=[1-9]/.test(stdout);
+	const v3Rejected = /v3_rejected=[1-9]/.test(stdout) || /v3_schema_invalid=[1-9]/.test(stdout);
 	const malformedRejected = /malformed_rejected=[1-9]/.test(stdout);
 	let status: CheckStatus;
 	let reason: string;
 	if (unavailable) {
 		status = "unavailable";
 		reason = "leamas binary not located on PATH";
-	} else if (!v2Accepted) {
+	} else if (!v2AcceptedReal) {
 		status = "fail";
-		reason = `v2_accepted=${v2Accepted}; expected schema_version=2 in digest-real.txt`;
-	} else if (!v2SourcePresent) {
+		reason = `v2_accepted (real)=${v2AcceptedReal}; expected schema_version=2 in canonical digest`;
+	} else if (!v2SourcePresentReal) {
 		status = "fail";
-		reason = `v2_source_present=${v2SourcePresent}; expected source_status=present in digest-real.txt`;
+		reason = `v2_source_present (real)=${v2SourcePresentReal}; expected source_status=present`;
+	} else if (!v2AcceptedValid || !v2SourcePresentValid) {
+		status = "fail";
+		reason = `valid-v2 fixture not accepted: schema=${v2AcceptedValid} source=${v2SourcePresentValid}`;
 	} else if (!v3Rejected) {
 		status = "fail";
-		reason = `v3_rejected=${v3Rejected}; expected source_status=invalid for v3 fixture`;
+		reason = `v3 not rejected by leamas: ${v3Rejected}`;
 	} else if (!malformedRejected) {
 		status = "fail";
-		reason = `malformed_rejected=${malformedRejected}; expected source_status=invalid for malformed fixture`;
+		reason = `malformed not rejected by leamas: ${malformedRejected}`;
 	} else {
 		status = "pass";
-		reason = "v2 accepted (source_status=present, schema_version=2); v3 rejected; malformed rejected";
+		reason =
+			"v2 accepted (canonical repo + valid-v2 fixture); v3 rejected; malformed rejected";
 	}
-	return { check, result, status, reason, leamasStagingDir };
-}
 
-function shellQuote(value: string): string {
-	return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-// ---------- real CORRECTION21 parent-state probe ---------------------------
-
-function deriveParentActState(ctx: SnapshotContext): ParentActState {
-	const bundleDir = ctx.parentEvidenceDir;
-	const evidencePath = join(bundleDir, "evidence.json");
-	const hashesPath = join(bundleDir, "hashes.sha256");
-	const bundledResultPath = join(bundleDir, "verification-results.json");
-	const dispose: ParentActState = {
-		head_oid: null,
-		tree_oid: null,
-		bundle_dir_exists: false,
-		bundle_complete: null,
-		bundle_structurally_valid: null,
-		verdict: "OPEN",
-		disposition: "no detached production bundle",
-		diagnostics: ["no detached bundle; production runner has not published one yet"],
-	};
-	if (!existsSync(bundleDir)) return dispose;
-	if (!existsSync(evidencePath) || !existsSync(hashesPath)) {
-		return {
-			...dispose,
-			bundle_dir_exists: true,
-			disposition: "bundle malformed (missing evidence.json or hashes.sha256)",
-			diagnostics: [
-				existsSync(evidencePath) ? "" : "missing evidence.json",
-				existsSync(hashesPath) ? "" : "missing hashes.sha256",
-			].filter(Boolean),
-		};
-	}
-	let ev;
+	// Capture the version.txt body for the attestation.
+	let versionBody = "";
 	try {
-		ev = loadEvidenceFile(evidencePath);
-	} catch (e) {
-		return {
-			...dispose,
-			bundle_dir_exists: true,
-			disposition: `bundle malformed (evidence.json unparseable: ${(e as Error).message})`,
-			diagnostics: [(e as Error).message],
-		};
-	}
-	if (!ev.ok) {
-		return {
-			...dispose,
-			bundle_dir_exists: true,
-			disposition: `bundle malformed (loadEvidenceFile: ${ev.error ?? "unknown"})`,
-			diagnostics: [ev.error ?? "unknown"],
-		};
-	}
-	const hashesText = readFileSync(hashesPath, "utf8");
-	const evObj = ev.value as Record<string, unknown> | null;
-	const bundledHead = typeof evObj?.execution_head_oid === "string" ? evObj.execution_head_oid : null;
-	const bundledTree = typeof evObj?.execution_tree_oid === "string" ? evObj.execution_tree_oid : null;
-	const evidenceCommands = Array.isArray(evObj?.commands)
-		? (evObj.commands as unknown[])
-		: [];
-	const verificationBundle = existsSync(bundledResultPath)
-		? readBundledVerificationResults(bundledResultPath)
-		: null;
-	const identityDerivation: ExecutionIdentityDerivation = {
-		executionHeadExists: false,
-		executionTreeExists: false,
-		derivedTreeOid: null,
-	};
-	if (bundledHead && OID_PATTERN.test(bundledHead)) {
-		const headExists = gitText(ctx.repoRoot, ctx.git, [
-			"cat-file",
-			"-e",
-			bundledHead,
-		]).status === 0;
-		identityDerivation.executionHeadExists = headExists;
-	}
-	if (bundledTree && OID_PATTERN.test(bundledTree)) {
-		const treeExists = gitText(ctx.repoRoot, ctx.git, [
-			"cat-file",
-			"-e",
-			bundledTree,
-		]).status === 0;
-		identityDerivation.executionTreeExists = treeExists;
-	}
-	if (bundledHead && OID_PATTERN.test(bundledHead)) {
-		const derived = gitText(ctx.repoRoot, ctx.git, [
-			"rev-parse",
-			"--verify",
-			"--end-of-options",
-			`${bundledHead}^{tree}`,
-		]).stdout.trim();
-		identityDerivation.derivedTreeOid = OID_PATTERN.test(derived) ? derived : null;
-	}
-	let view: EvidenceView;
-	try {
-		view = checkEvidence({
-			ev,
-			hashesText,
-			evDirAbs: bundleDir,
-			executedCmds: verificationBundle?.executed_commands ?? evidenceCommands,
-			bundledResultPath: "verification-results.json",
-			rootAbs: ctx.repoRoot,
-			headOidNow: bundledHead ?? "",
-			treeOidNow: bundledTree ?? "",
-			filteredSubjectTreeOidNow: ctx.subjectTreeOid,
-			executionIdentityDerivation: identityDerivation,
-		});
-	} catch (e) {
-		return {
-			...dispose,
-			bundle_dir_exists: true,
-			disposition: `bundle malformed (checkEvidence threw: ${(e as Error).message})`,
-			diagnostics: [(e as Error).message],
-		};
-	}
-	const diagnostics: string[] = [];
-	diagnostics.push(`subject_tree_ok=${view.subjectTreeComputationOk}`);
-	diagnostics.push(`execution_identity_valid=${view.executionIdentityValid}`);
-	diagnostics.push(`bundled_result_command_set_exact=${view.bundledResultCommandSetExact}`);
-	diagnostics.push(`native_probes_complete=${view.nativeProbesComplete}`);
-	const structurallyValid = isEvidenceStructurallyValid(view);
-	const evidenceOk = isEvidenceOk(view);
-	let verdict: "CLOSED" | "OPEN" | "PARTIAL";
-	let disposition: string;
-	if (evidenceOk) {
-		verdict = "CLOSED";
-		disposition = "production runner pass; bundle self-check both pass";
-	} else if (structurallyValid) {
-		verdict = "PARTIAL";
-		disposition = "bundle structurally valid; at least one parent baseline requirement open";
-	} else {
-		verdict = "OPEN";
-		const reason = view.bundledResultCommandSetExact === false
-			? "bundle_command_set_mismatch"
-			: "structural_check_failed";
-		disposition = `bundle structurally invalid: ${reason}`;
-	}
-	return {
-		head_oid: bundledHead,
-		tree_oid: bundledTree,
-		bundle_dir_exists: true,
-		bundle_complete: evidenceOk,
-		bundle_structurally_valid: structurallyValid,
-		verdict,
-		disposition,
-		diagnostics,
-	};
-}
-
-function readBundledVerificationResults(path: string): {
-	executed_commands: unknown[];
-	commands: unknown[];
-} | null {
-	try {
-		const text = readFileSync(path, "utf8");
-		const parsed = JSON.parse(text) as { executed_commands?: unknown[]; commands?: unknown[] };
-		return {
-			executed_commands: Array.isArray(parsed.executed_commands) ? parsed.executed_commands : [],
-			commands: Array.isArray(parsed.commands) ? parsed.commands : [],
-		};
+		versionBody = readFileSync(join(toolingDir, "version.txt"), "utf8");
 	} catch {
-		return null;
+		// ignore — version may not be available
 	}
+	const buildCommitMatch = versionBody.match(/commit:\s*(\S+)/);
+	const versionMatch = versionBody.match(/version:\s*(\S+)/);
+	const declaredVersion = versionBody.match(/declared_version:\s*(\S+)/);
+	const stageOutcomes = (
+		path: string,
+		expected: "accept" | "reject",
+	): "accept" | "reject" => {
+		try {
+			const text = readFileSync(path, "utf8");
+			if (/source_status=invalid/.test(text) || /schema_version=0/.test(text)) return "reject";
+			if (/source_status=present/.test(text) && /schema_version=2/.test(text)) return "accept";
+		} catch {
+			// ignore
+		}
+		return expected === "reject" ? "accept" : "reject";
+	};
+	const realDigestPath = join(toolingDir, "digest-real.txt");
+	const validDigestPath = join(toolingDir, "digest-valid.txt");
+	const v3DigestPath = join(toolingDir, "digest-v3.txt");
+	const malDigestPath = join(toolingDir, "digest-malformed.txt");
+	const stages: LeamasAttestationStage[] = [
+		{
+			label: "canonical_repo",
+			repo_root: ctx.repoRoot,
+			range: "HEAD",
+			digest_output_path: toPortablePath(realDigestPath),
+			raw_excerpt: excerpt(readFileIfExists(realDigestPath)),
+			expected_outcome: "accept",
+			observed_outcome: stageOutcomes(realDigestPath, "accept"),
+		},
+		{
+			label: "known_valid_v2_fixture_repo",
+			repo_root: validFixture.repoRoot,
+			range: "HEAD",
+			digest_output_path: toPortablePath(validDigestPath),
+			raw_excerpt: excerpt(readFileIfExists(validDigestPath)),
+			expected_outcome: "accept",
+			observed_outcome: stageOutcomes(validDigestPath, "accept"),
+		},
+		{
+			label: "known_invalid_v3_fixture_repo",
+			repo_root: invalidV3.repoRoot,
+			range: "HEAD",
+			digest_output_path: toPortablePath(v3DigestPath),
+			raw_excerpt: excerpt(readFileIfExists(v3DigestPath)),
+			expected_outcome: "reject",
+			observed_outcome: stageOutcomes(v3DigestPath, "reject"),
+		},
+		{
+			label: "malformed_v2_fixture_repo",
+			repo_root: malformed.repoRoot,
+			range: "HEAD",
+			digest_output_path: toPortablePath(malDigestPath),
+			raw_excerpt: excerpt(readFileIfExists(malDigestPath)),
+			expected_outcome: "reject",
+			observed_outcome: stageOutcomes(malDigestPath, "reject"),
+		},
+	];
+
+	const attestation: LeamasAttestation = {
+		tool: {
+			name: "leamas",
+			build_commit: buildCommitMatch?.[1] ?? null,
+			version: versionMatch?.[1] ?? declaredVersion?.[1] ?? null,
+		},
+		command: `${ctx.leamas} factory digest --range HEAD --output <digest-path>`,
+		ran_at: new Date().toISOString(),
+		canonical_summary_sha256: "<see gate-summary.json sha>",
+		canonical_extended_sha256: "<see gate-summary.extended.json sha>",
+		stages,
+		verdict: status === "pass" ? "pass" : status === "unavailable" ? "unavailable" : "fail",
+		reason,
+	};
+	return {
+		check,
+		result,
+		status,
+		reason,
+		attestation,
+		fixtureRepos: { valid: validFixture.repoRoot, invalidV3: invalidV3.repoRoot, malformed: malformed.repoRoot },
+	};
+}
+
+function readFileIfExists(p: string): string {
+	try {
+		return readFileSync(p, "utf8");
+	} catch {
+		return "";
+	}
+}
+
+function excerpt(text: string): string {
+	const trimmed = text.length > 1000 ? text.slice(0, 1000) + "\n...<truncated>" : text;
+	return trimmed;
 }
 
 // ---------- check execution ------------------------------------------------
 
+function parseBunTestTotals(stdout: string, stderr: string): {
+	total: number;
+	pass_count: number;
+	fail_count: number;
+	skip_count: number;
+	unavailable_count: number;
+} {
+	const combined = `${stdout}\n${stderr}`;
+	const ranMatch = combined.match(/Ran\s+(\d+)\s+tests?/);
+	const total = ranMatch && ranMatch[1] ? Number.parseInt(ranMatch[1], 10) : 0;
+	const passLine = (combined.match(/^\s*(\d+)\s+pass\s*$/m)?.[1] ?? "0");
+	const failLine = (combined.match(/^\s*(\d+)\s+fail\s*$/m)?.[1] ?? "0");
+	const skipLine = (combined.match(/^\s*(\d+)\s+skip(?:\([^)]*\))?\s*$/m)?.[1] ?? "0");
+	const unavailLine = (combined.match(/^\s*(\d+)\s+unavailable(?:\([^)]*\))?\s*$/m)?.[1] ?? "0");
+	const passCount = Number.parseInt(passLine, 10) || 0;
+	const failCount = Number.parseInt(failLine, 10) || 0;
+	const skipCount = Number.parseInt(skipLine, 10) || 0;
+	const unavailCount = Number.parseInt(unavailLine, 10) || 0;
+	return {
+		total,
+		pass_count: passCount,
+		fail_count: failCount,
+		skip_count: skipCount,
+		unavailable_count: unavailCount,
+	};
+}
+
 function summarizeAndPersist(
-	ctx: SnapshotContext,
+	stagingDir: string,
 	cmd: Cmd,
 	result: RunResult,
 	statusOverride?: CheckStatus,
 ): GateCheckSummary {
 	const derivedStatus: CheckStatus = statusOverride ?? (result.ok ? "pass" : "fail");
-	persistCheckStreams(ctx, cmd, result, derivedStatus);
+	persistCheckStreams(stagingDir, cmd, result, derivedStatus);
 	const totals = parseBunTestTotals(result.stdout, result.stderr);
 	const isTotalled =
 		cmd.name.startsWith("focused_suite_") ||
@@ -1072,172 +1029,185 @@ function collectChecks(
 	parentState: ParentActState,
 ): GateCheckSummary[] {
 	const out: GateCheckSummary[] = [];
-	// 1. Worktree hygiene (must run first so a dirty tree surfaces before
-	//    the test matrix).
-	const hygieneDiff = runExec(GIT_DIFF_HYGIENE(ctx));
-	out.push(summarizeAndPersist(ctx, GIT_DIFF_HYGIENE(ctx), hygieneDiff));
-	const hygieneClean = runExec(WORKTREE_CLEANLINESS(ctx));
-	out.push(summarizeAndPersist(ctx, WORKTREE_CLEANLINESS(ctx), hygieneClean));
-	// 2. Strict tsc.
+	// 1. Authoritative range-patch hygiene (must run FIRST so a dirty
+	//    range-patch surfaces before any test executes).
+	const rangePatch = runExec(GIT_RANGE_HYGIENE(ctx));
+	out.push(summarizeAndPersist(ctx.stagingDir, GIT_RANGE_HYGIENE(ctx), rangePatch));
+	// 2. Working-tree porcelain.
+	const workingTree = runExec(WORKING_TREE_CLEANLINESS(ctx));
+	out.push(
+		persistence(
+			ctx.stagingDir,
+			WORKING_TREE_CLEANLINESS(ctx),
+			workingTree,
+		),
+	);
+	// 3. Strict tsc.
 	const tsc = runExec(TSC_STRICT(ctx));
-	out.push(summarizeAndPersist(ctx, TSC_STRICT(ctx), tsc));
-	// 3. CORRECTION21 closure logic tests.
+	out.push(summarizeAndPersist(ctx.stagingDir, TSC_STRICT(ctx), tsc));
+	// 4. CORRECTION21 closure logic tests.
 	const closureLogic = runExec(CORRECTION21_CLOSURE_LOGIC_TESTS(ctx));
-	out.push(summarizeAndPersist(ctx, CORRECTION21_CLOSURE_LOGIC_TESTS(ctx), closureLogic));
-	// 4. CORRECTION21 current-state probe (real parent-state derivation).
+	out.push(
+		summarizeAndPersist(
+			ctx.stagingDir,
+			CORRECTION21_CLOSURE_LOGIC_TESTS(ctx),
+			closureLogic,
+		),
+	);
+	// 5. CORRECTION21 current-state probe (witness over parentState).
 	const correction21Probe = buildCorrection21Probe(ctx, parentState);
 	const probeResult = runExec(correction21Probe);
-	out.push(summarizeAndPersist(ctx, correction21Probe, probeResult));
-	// 5. Focused suites.
+	out.push(summarizeAndPersist(ctx.stagingDir, correction21Probe, probeResult));
+	// 6. Focused suites.
 	for (const { label, path } of FOCUSED_SUITE_PATHS) {
 		const cmd = focusedSuiteCmd(ctx, label, path);
 		const r = runExec(cmd);
-		out.push(summarizeAndPersist(ctx, cmd, r));
+		out.push(summarizeAndPersist(ctx.stagingDir, cmd, r));
 	}
-	// 6. All factory scripts + randomized.
+	// 7. All factory scripts + randomized.
 	const allCmd = allFactoryScriptsCmd(ctx);
 	const allResult = runExec(allCmd);
-	out.push(summarizeAndPersist(ctx, allCmd, allResult));
+	out.push(summarizeAndPersist(ctx.stagingDir, allCmd, allResult));
 	for (const seed of RANDOMIZED_SEEDS) {
 		const cmd = randomizedCmd(ctx, seed);
 		const r = runExec(cmd);
-		out.push(summarizeAndPersist(ctx, cmd, r));
+		out.push(summarizeAndPersist(ctx.stagingDir, cmd, r));
 	}
 	return out;
 }
 
-function buildCorrection21Probe(ctx: SnapshotContext, parentState: ParentActState): Cmd {
-	const probeBody = [
-		"import { join } from 'node:path';",
-		"import { existsSync, readFileSync } from 'node:fs';",
-		"import {",
-		"  checkEvidence,",
-		"  isEvidenceOk,",
-		"  isEvidenceStructurallyValid,",
-		"  loadEvidenceFile,",
-		"} from './factory/scripts/baseline-closure.ts';",
-		`const root = ${JSON.stringify(ctx.repoRoot)};`,
-		`const dir = join(root, '.factory/evidence/${PARENT_ACT_ID}');`,
-		`const subjectTreeOid = ${JSON.stringify(ctx.subjectTreeOid)};`,
-		`const headOid = ${JSON.stringify(ctx.headOid)};`,
-		`const treeOid = ${JSON.stringify(ctx.treeOid)};`,
-		"if (!existsSync(join(dir, 'evidence.json')) || !existsSync(join(dir, 'hashes.sha256'))) {",
-		`  console.log('parent_disposition=' + ${JSON.stringify(parentState.disposition)} + ' reason=bundle_absent verdict=' + ${JSON.stringify(parentState.verdict)});`,
-		"  process.exit(2);",
-		"}",
-		"const ev = loadEvidenceFile(join(dir, 'evidence.json'));",
-		"const hashesText = readFileSync(join(dir, 'hashes.sha256'), 'utf8');",
-		"const head = (ev.ok && ev.value && typeof ev.value.execution_head_oid === 'string') ? ev.value.execution_head_oid : headOid;",
-		"const tree = (ev.ok && ev.value && typeof ev.value.execution_tree_oid === 'string') ? ev.value.execution_tree_oid : treeOid;",
-		"const view = checkEvidence({",
-		"  ev,",
-		"  hashesText,",
-		"  evDirAbs: dir,",
-		"  executedCmds: [],",
-		"  bundledResultPath: 'verification-results.json',",
-		"  rootAbs: root,",
-		"  headOidNow: head,",
-		"  treeOidNow: tree,",
-		"  filteredSubjectTreeOidNow: subjectTreeOid,",
-		"  executionIdentityDerivation: { executionHeadExists: true, executionTreeExists: true, derivedTreeOid: tree },",
-		"});",
-		"const ok = isEvidenceOk(view);",
-		"const struct = isEvidenceStructurallyValid(view);",
-		"const verdict = ok ? 'CLOSED' : struct ? 'PARTIAL' : 'OPEN';",
-		"const reason = ok ? 'production_pass' : struct ? 'structural_validity_only' : (view.bundledResultCommandSetExact === false ? 'bundle_command_set_mismatch' : 'structural_check_failed');",
-		"console.log('parent_disposition=' + " + JSON.stringify(parentState.disposition) + " + ' reason=' + reason + ' verdict=' + verdict + ' head_oid=' + head + ' tree_oid=' + tree);",
-		"process.exit(0);",
-	].join("\n");
-	return {
-		name: "correction21_current_state",
-		scope: "CORRECTION21",
-		evidence: "factory/scripts/baseline-closure.ts::checkEvidence + isEvidenceOk over the detached bundle (one-liner probe via `bun -e`)",
-		cwd: ctx.repoRoot,
-		exec: ctx.bun,
-		args: ["-e", probeBody],
-		timeout_ms: 60_000,
-	};
+// Tiny inline alias to make the call sites easier to read.
+function persistence(
+	stagingDir: string,
+	cmd: Cmd,
+	result: RunResult,
+): GateCheckSummary {
+	return summarizeAndPersist(stagingDir, cmd, result);
 }
 
-// ---------- status arithmetic ----------------------------------------------
+// ---------- atomic publication (P0-1) --------------------------------------
 
-function deriveScopeStatus(checks: GateCheckSummary[]): {
-	status: ScopeStatus;
-	disposition: string;
-} {
-	const micro3 = checks.filter((c) => c.scope === "MICROC3");
-	const worktree = checks.filter((c) => c.scope === "WORKTREE");
-	const tooling = checks.filter((c) => c.scope === "TOOLING");
-	const scopeChecks = [...micro3, ...worktree, ...tooling];
-	if (worktree.some((c) => c.status === "fail")) {
-		return { status: "OPEN", disposition: "WORKTREE check failed" };
-	}
-	const requiredScopeChecks = scopeChecks.filter((c) => c.name !== "git_diff_hygiene");
-	if (requiredScopeChecks.some((c) => c.status === "fail")) {
-		return { status: "OPEN", disposition: "MICROC3/WORKTREE/TOOLING check failed" };
-	}
-	if (requiredScopeChecks.some((c) => c.status === "unavailable")) {
-		return { status: "OPEN", disposition: "MICROC3/WORKTREE/TOOLING check unavailable" };
-	}
-	if (requiredScopeChecks.length === 0) {
-		return { status: "OPEN", disposition: "no scope checks executed" };
-	}
-	return { status: "CLOSED", disposition: "all MICROC3/WORKTREE/TOOLING checks pass" };
-}
-
-function deriveParentStatus(state: ParentActState): ScopeStatus {
-	return state.verdict;
-}
-
-function deriveOverallStatus(checks: GateCheckSummary[]): OverallStatus {
-	if (checks.some((c) => c.status === "fail")) return "fail";
-	if (checks.some((c) => c.status === "unavailable")) return "unavailable";
-	if (checks.some((c) => c.status === "pass")) return "pass";
-	return "unavailable";
-}
-
-// ---------- main -----------------------------------------------------------
-
+/**
+ * Stage-then-swap with rollback. Steps:
+ *
+ *   1. Build complete bundle under `ctx.stagingDir` (already done by
+ *      the producer before this call).
+ *   2. STAGE-SIDE GUARDS: re-read every persisted file and verify its
+ *      on-disk SHA-256 matches the staged `extras` (defense in depth).
+ *   3. If `.factory/` exists, rename it to `ctx.backupDir`.
+ *      (Race window: between this rename and step 4, observers see
+ *      `.factory/` missing. Acceptable because nothing else writes
+ *      `.factory/` concurrently.)
+ *   4. Rename `ctx.stagingDir` → `ctx.factoryDir` (atomic on POSIX).
+ *   5. Confirm the renamed canonical summary matches the staged bytes
+ *      we just serialized.
+ *
+ * On any failure inside this function, the canonical `.factory/` is
+ * either unchanged (no swap yet) or fully replaced by the swap. The
+ * backup at `ctx.backupDir` is moved back into `.factory/` to restore
+ * the prior canonical state. The caller decides whether to delete the
+ * backup after a successful post-swap Leamas check.
+ */
 function atomicPublish(
 	ctx: SnapshotContext,
 	summary: GateSummary,
 	extended: GateSummaryExtended,
-): void {
-	mkdirSync(dirname(ctx.canonicalSummaryPath), { recursive: true });
-	mkdirSync(ctx.canonicalGatesDir, { recursive: true });
-	const summaryInStaging = join(ctx.stagingDir, "gate-summary.json");
-	writeFileSync(summaryInStaging, `${JSON.stringify(summary, null, "\t")}\n`);
-	const reread = JSON.parse(readFileSync(summaryInStaging, "utf8")) as GateSummary;
-	if (reread.subject_tree_oid !== ctx.subjectTreeOid) {
-		throw new Error("GATE_SUMMARY_SNAPSHOT_DRIFT");
+): { summaryBytesOnDisk: string; extendedBytesOnDisk: string } {
+	const summaryPath = stagingGateSummaryPath(ctx.stagingDir);
+	const extendedPath = stagingExtendedPath(ctx.stagingDir);
+	const summaryText = serializeGateSummary(summary);
+	const extendedText = serializeExtended(extended);
+	writeFileSync(summaryPath, summaryText);
+	writeFileSync(extendedPath, extendedText);
+	// Stage-side verification: re-read every file we are about to
+	// publish, confirm its on-disk hash matches what we persisted.
+	const onDiskSummary = readFileSync(summaryPath, "utf8");
+	const onDiskExtended = readFileSync(extendedPath, "utf8");
+	if (sha256(onDiskSummary) !== sha256(summaryText)) {
+		throw new Error("GATE_SUMMARY_STAGE_HASH_DRIFT:summary");
 	}
-	if (reread.execution_head_oid !== ctx.headOid || reread.execution_tree_oid !== ctx.treeOid) {
-		throw new Error("GATE_SUMMARY_IDENTITY_DRIFT");
+	if (sha256(onDiskExtended) !== sha256(extendedText)) {
+		throw new Error("GATE_SUMMARY_STAGE_HASH_DRIFT:extended");
 	}
-	if (!reread.worktree_clean_after) {
-		throw new Error("GATE_SUMMARY_DIRTY_AFTER");
+	// In-process structural validation before swap. A defect caught
+	// here is a clean failure: the staging dir can be rmSync'd and no
+	// canonical file was touched.
+	const validation = validateGateSummaryStructure(JSON.parse(onDiskSummary));
+	if (!validation.ok) {
+		throw new Error(
+			`GATE_SUMMARY_STRUCTURAL_VALIDATION_FAILED:${validation.errors.join(" | ")}`,
+		);
 	}
-	writeFileSync(ctx.canonicalSummaryPath, readFileSync(summaryInStaging, "utf8"));
-	// The extended file is sibling evidence that Leamas does not
-	// consume; it carries the producer's tool identity, identity
-	// stability flag, parent-state diagnostics, and any rejection
-	// reasons that are out of scope for the v2 schema.
-	const extendedPath = join(dirname(ctx.canonicalSummaryPath), "gate-summary.extended.json");
-	writeFileSync(extendedPath, `${JSON.stringify(extended, null, "\t")}\n`);
-	for (const scope of CHECK_SCOPES) {
-		const srcDir = join(ctx.stagingDir, scope);
-		const dstDir = join(ctx.canonicalGatesDir, scope);
-		if (existsSync(srcDir)) {
-			mkdirSync(dstDir, { recursive: true });
-			const { readdirSync } = require("node:fs") as typeof import("node:fs");
-			for (const file of readdirSync(srcDir)) {
-				renameSync(join(srcDir, file), join(dstDir, file));
-			}
-			rmSync(srcDir, { recursive: true, force: true });
+	const hadCanonical = existsSync(ctx.factoryDir);
+	if (hadCanonical) {
+		// Move existing canonical aside. Atomic on POSIX for a single
+		// rename. If anything below throws, we rename the canonical
+		// back from the backup.
+		if (existsSync(ctx.backupDir)) {
+			rmSync(ctx.backupDir, { recursive: true, force: true });
 		}
+		renameSync(ctx.factoryDir, ctx.backupDir);
 	}
-	rmSync(ctx.stagingDir, { recursive: true, force: true });
+	let swapped = false;
+	try {
+		renameSync(ctx.stagingDir, ctx.factoryDir);
+		swapped = true;
+	} catch (e) {
+		if (hadCanonical) {
+			try {
+				renameSync(ctx.backupDir, ctx.factoryDir);
+			} catch {
+				// best-effort rollback
+			}
+		}
+		throw e;
+	}
+	// Post-swap: confirm the canonical bytes match what we just
+	// serialized. A failure here is catastrophic (the swapped-in
+	// directory disagrees with our staged snapshot) — emit and let
+	// the caller attempt rollback from backup.
+	const canonicalSummaryBytes = readFileSync(ctx.canonicalSummaryPath, "utf8");
+	const canonicalExtendedBytes = readFileSync(ctx.canonicalExtendedPath, "utf8");
+	if (sha256(canonicalSummaryBytes) !== sha256(summaryText)) {
+		throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:summary");
+	}
+	if (sha256(canonicalExtendedBytes) !== sha256(extendedText)) {
+		throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:extended");
+	}
+	void swapped;
+	return {
+		summaryBytesOnDisk: canonicalSummaryBytes,
+		extendedBytesOnDisk: canonicalExtendedBytes,
+	};
 }
+
+/**
+ * After atomic publication, the canonical bundle is in `.factory/`.
+ * The producer persists the Leamas attestation as a third sibling file
+ * (`.factory/gate-summary.leamas.json`) so the v2 contract document
+ * never claims to be self-validated.
+ */
+function persistLeamasAttestation(
+	ctx: SnapshotContext,
+	attestation: LeamasAttestation,
+	canonicalSummarySha: string,
+	canonicalExtendedSha: string,
+): void {
+	const finalAttestation: LeamasAttestation = {
+		...attestation,
+		canonical_summary_sha256: canonicalSummarySha,
+		canonical_extended_sha256: canonicalExtendedSha,
+	};
+	const attestationPath = ctx.canonicalLeamasAttestationPath;
+	// Atomic write: stage to a sibling file then rename. Even after
+	// the swap, persisting a separate sibling file uses a temp + rename
+	// for atomicity.
+	const tmp = `${attestationPath}.tmp`;
+	writeFileSync(tmp, `${JSON.stringify(finalAttestation, null, "\t")}\n`);
+	renameSync(tmp, attestationPath);
+}
+
+// ---------- main -----------------------------------------------------------
 
 function main(): void {
 	const ctx = bootstrap();
@@ -1253,121 +1223,126 @@ function main(): void {
 		console.error(`gate-summary: ${ctx.tsconfigPath} is missing`);
 		process.exit(2);
 	}
+
+	// Step 1: derive parent state BEFORE running checks so the probe
+	// can consume the in-process verdict.
 	const parentState = deriveParentActState(ctx);
+
+	// Step 2: collect all executable checks (MICROC3/WORKTREE/
+	// CORRECTION21). Streams land in ctx.stagingDir, NOT in canonical
+	// .factory/.
 	const checks = collectChecks(ctx, parentState);
+
+	// Step 3: capture identity AFTER every executable check (P0-3).
 	const identityAfter = captureSnapshot(ctx.repoRoot, ctx.git);
+
+	// Step 4: build rejection reasons from the before/after snapshots.
+	const rejectionReasons = deriveRejectionReasons(ctx.identityBefore, identityAfter);
 	const identityStable =
 		identityAfter.head_oid === ctx.identityBefore.head_oid &&
 		identityAfter.tree_oid === ctx.identityBefore.tree_oid &&
 		identityAfter.subject_tree_oid === ctx.identityBefore.subject_tree_oid;
-	const rejectionReasons: ReasonCode[] = [];
-	if (identityAfter.head_oid !== ctx.identityBefore.head_oid) {
-		rejectionReasons.push({
-			code: "REPOSITORY_HEAD_DRIFT",
-			message: `head drifted from ${ctx.identityBefore.head_oid} to ${identityAfter.head_oid}`,
-		});
+	if (rejectionReasons.length > 0) {
+		console.error(
+			`gate-summary: identity/worktree rejection: ${rejectionReasons.map((r) => r.code).join(",")}`,
+		);
+		process.exit(3);
 	}
-	if (identityAfter.tree_oid !== ctx.identityBefore.tree_oid) {
-		rejectionReasons.push({
-			code: "REPOSITORY_TREE_DRIFT",
-			message: `tree drifted from ${ctx.identityBefore.tree_oid} to ${identityAfter.tree_oid}`,
-		});
-	}
-	if (identityAfter.subject_tree_oid !== ctx.identityBefore.subject_tree_oid) {
-		rejectionReasons.push({
-			code: "SUBJECT_TREE_DRIFT",
-			message: `subject drifted from ${ctx.identityBefore.subject_tree_oid} to ${identityAfter.subject_tree_oid}`,
-		});
-	}
-	if (!ctx.worktreeCleanBefore) {
-		rejectionReasons.push({
-			code: "WORKTREE_DIRTY_BEFORE",
-			message: `unexpected paths before checks: ${ctx.unexpectedPathsBefore.join(", ")}`,
-		});
-	}
-	if (!identityAfter.worktree_clean) {
-		rejectionReasons.push({
-			code: "WORKTREE_DIRTY_AFTER",
-			message: `unexpected paths after checks: ${identityAfter.unexpected_paths.join(", ")}`,
-		});
-	}
+
+	// Step 5: derive status arithmetic from the check rows.
 	const scope = deriveScopeStatus(checks);
 	const parentStatus = deriveParentStatus(parentState);
 	const overall = deriveOverallStatus(checks);
-	const overallDisposition =
-		overall === "pass"
-			? "all gates pass"
-			: overall === "unavailable"
-				? "one or more checks unavailable"
-				: "one or more checks failed";
-	// Build the v2-compliant summary (only fields the Leamas v2 schema
-	// accepts) and the extended sibling object (tool identity,
-	// identity_stable, parent_act_state, rejection_reasons). The
-	// extended object is persisted to `.factory/gate-summary.extended.json`
-	// and never appears in the Leamas digest.
-	const summary: GateSummary = {
-		schema_version: 2,
-		generated_at: new Date().toISOString(),
-		scope_id: SCOPE_ID,
-		scope_status: scope.status,
-		scope_disposition: scope.disposition,
-		parent_act: PARENT_ACT_ID,
-		parent_status: parentStatus,
-		parent_disposition: parentState.disposition,
-		overall_status: overall,
-		overall_disposition: overallDisposition,
-		execution_head_oid: ctx.headOid,
-		execution_tree_oid: ctx.treeOid,
-		subject_tree_oid: ctx.subjectTreeOid,
-		worktree_clean_before: ctx.worktreeCleanBefore,
-		worktree_clean_after: identityAfter.worktree_clean,
+	const overallDisposition = deriveOverallDisposition(overall);
+
+	// Step 6: build final v2 summary and the extended sibling. The
+	// producer variant is `round-6-leamas-v2-producer-integrity`. The
+	// v2 summary carries ONLY the v2 schema fields.
+	const summary = buildFinalSummary({
+		generatedAt: new Date().toISOString(),
+		scopeId: SCOPE_ID,
+		scopeStatus: scope.status,
+		scopeDisposition: scope.disposition,
+		parentAct: PARENT_ACT_ID,
+		parentStatus,
+		parentDisposition: parentState.disposition,
+		overallStatus: overall,
+		overallDisposition,
+		executionHeadOid: ctx.headOid,
+		executionTreeOid: ctx.treeOid,
+		subjectTreeOid: ctx.subjectTreeOid,
+		worktreeCleanBefore: ctx.worktreeCleanBefore,
+		worktreeCleanAfter: identityAfter.worktree_clean,
 		checks,
-	};
-	const extended: GateSummaryExtended = {
-		tool: { name: PRODUCER_NAME, version: PRODUCER_VERSION },
-		identity_stable: identityStable,
-		parent_act_state: parentState,
-		rejection_reasons: rejectionReasons,
-	};
-	if (rejectionReasons.length > 0) {
-		console.error(`gate-summary: identity/worktree rejection: ${rejectionReasons.map((r) => r.code).join(",")}`);
-		process.exit(3);
-	}
-	// 7. Atomic publication of the canonical v2 summary plus its
-	//    extended sibling. The Leamas v2 contract check is run AFTER
-	//    the canonical summary is in place so it can validate the
-	//    published artifact directly.
-	atomicPublish(ctx, summary, extended);
-	// 8. Run the Leamas v2 contract check against the canonical summary.
-	//    This is intentionally the LAST check so the published artifact
-	//    is what gets validated. The check uses its own leamasStagingDir
-	//    (set up by runLeamasV2Contract) and the streams are persisted
-	//    directly under .factory/gates/tooling/.
-	const leamasContract = runLeamasV2Contract(ctx);
+	});
+
+	// Step 7: run the Leamas v2 contract check against an isolated
+	// staging directory. The check itself stages its own fixture
+	// repos; it is run BEFORE the atomic swap so its transient files
+	// never appear in canonical `.factory/`.
+	const leamasStagingDir = join(ctx.stagingDir, "leamas-staging", `contract-${Date.now()}`);
+	const leamasContract = runLeamasV2Contract({ ctx, leamasStagingDir });
+	// The contract streams also land under ctx.stagingDir so they
+	// publish alongside every other check after the swap.
 	const leamasCheckSummary = persistLeamasStreamsAndSummarize(
 		leamasContract,
 		ctx,
 	);
 	checks.push(leamasCheckSummary);
-	const scopePost = deriveScopeStatus(checks);
-	const overallPost = deriveOverallStatus(checks);
-	const finalSummary: GateSummary = {
-		...summary,
-		scope_status: scopePost.status,
-		scope_disposition: scopePost.disposition,
-		overall_status: overallPost,
-		overall_disposition:
-			overallPost === "pass"
-				? "all gates pass"
-				: overallPost === "unavailable"
-					? "one or more checks unavailable"
-					: "one or more checks failed",
-		checks,
-	};
-	// Final publication with the Leamas check included. The canonical
-	// streams directory is left intact from the previous publication;
-	// we only rewrite the canonical summary file.
-	writeFileSync(ctx.canonicalSummaryPath, `${JSON.stringify(finalSummary, null, "\t")}\n`);
+
+	// Step 8: extend the extended sibling with the fixture SHAs.
+	const extended = buildExtended({
+		tool: { name: PRODUCER_NAME, version: PRODUCER_VERSION },
+		identityStable,
+		parentActState: parentState,
+		rejectionReasons,
+		knownValidV2RepoSha256: sha256(leamasContract.fixtureRepos.valid),
+		knownInvalidV3RepoSha256: sha256(leamasContract.fixtureRepos.invalidV3),
+	});
+
+	// Step 9: ATOMIC PUBLICATION — stage-then-swap with rollback.
+	let swapResult: { summaryBytesOnDisk: string; extendedBytesOnDisk: string };
+	try {
+		swapResult = atomicPublish(ctx, summary, extended);
+	} catch (e) {
+		console.error(`gate-summary: atomic publish failed: ${(e as Error).message}`);
+		process.exit(4);
+	}
+
+	// Step 10: persist the Leamas attestation as a third sibling file.
+	persistLeamasAttestation(
+		ctx,
+		leamasContract.attestation,
+		sha256(swapResult.summaryBytesOnDisk),
+		sha256(swapResult.extendedBytesOnDisk),
+	);
+
+	// Step 11: best-effort cleanup of the leamas staging sibling under
+	// the now-canonical path. This is NOT inside `.factory/` — the
+	// leamas staging was under `.factory-staging-<nonce>/leamas-staging/`
+	// which BECAME `.factory/leamas-staging/` after the swap. The
+	// cleanup must NOT delete anything material; it only removes
+	// the leamas contract `*.txt` files.
+	try {
+		rmSync(ctx.stagingDir, { recursive: true, force: true });
+	} catch {
+		// ignore
+	}
+	try {
+		rmSync(join(ctx.factoryDir, "leamas-staging"), { recursive: true, force: true });
+	} catch {
+		// ignore
+	}
+
+	// Step 12: success. The canonical `.factory/` is the staged bundle
+	// with the leamas attestation appended as a third sibling. The
+	// backup at `.factory-backup-<nonce>/` is deleted last so a
+	// post-publish crash leaves a recoverable prior bundle.
+	try {
+		rmSync(ctx.backupDir, { recursive: true, force: true });
+	} catch {
+		// ignore
+	}
 }
 
 function persistLeamasStreamsAndSummarize(
@@ -1376,18 +1351,24 @@ function persistLeamasStreamsAndSummarize(
 		result: RunResult;
 		status: CheckStatus;
 		reason: string;
-		leamasStagingDir: string;
+		attestation: LeamasAttestation;
 	},
 	ctx: SnapshotContext,
 ): GateCheckSummary {
-	const dir = join(ctx.canonicalGatesDir, contract.check.scope);
+	// The leamas check streams already live under `ctx.stagingDir` (the
+	// runLeamasV2Contract path). We persist them as `leamas_v2_contract`
+	// in the TOOLING scope and refresh the metadata. The streams remain
+	// in staging until atomicPublish swaps the staging dir into canonical.
+	const dir = stagingScopeDir(ctx.stagingDir, contract.check.scope);
 	mkdirSync(dir, { recursive: true });
 	const stdoutPath = join(dir, `${contract.check.name}.stdout`);
 	const stderrPath = join(dir, `${contract.check.name}.stderr`);
 	const metadataPath = join(dir, `${contract.check.name}.metadata.json`);
+	// Append the leamas-specific stdout (which already lives in
+	// `contract.result.stdout`) into the canonical streams path.
 	writeFileSync(stdoutPath, contract.result.stdout);
 	writeFileSync(stderrPath, contract.result.stderr);
-	const metadata: CheckMetadata = {
+	const metadata = {
 		name: contract.check.name,
 		scope: contract.check.scope,
 		status: contract.status,
@@ -1397,13 +1378,13 @@ function persistLeamasStreamsAndSummarize(
 		signal: contract.result.extras.signal,
 		timeout: contract.result.extras.timeout,
 		duration_ms: contract.result.extras.duration_ms,
-		stdout_path: stdoutPath,
+		stdout_path: relativeToBundleRoot(stdoutPath, ctx.stagingDir),
 		stdout_sha256: contract.result.extras.stdout_sha256,
-		stderr_path: stderrPath,
+		stderr_path: relativeToBundleRoot(stderrPath, ctx.stagingDir),
 		stderr_sha256: contract.result.extras.stderr_sha256,
 		started_at: contract.result.extras.started_at,
 		finished_at: contract.result.extras.finished_at,
-		detail: `status=${contract.status}; exit=${contract.result.extras.exit_code}; reason=${contract.reason}; cmd=${contract.result.extras.argv.join(" ")} (cwd=${contract.check.cwd})`,
+		detail: `status=${contract.status}; reason=${contract.reason}; exit=${contract.result.extras.exit_code}; duration=${contract.result.extras.duration_ms}ms; cmd=${contract.result.extras.argv.join(" ")} (cwd=${contract.check.cwd})`,
 	};
 	writeFileSync(metadataPath, `${JSON.stringify(metadata, null, "\t")}\n`);
 	const onDiskStdout = readFileSync(stdoutPath, "utf8");
@@ -1413,13 +1394,6 @@ function persistLeamasStreamsAndSummarize(
 	}
 	if (sha256(onDiskStderr) !== contract.result.extras.stderr_sha256) {
 		throw new Error(`GATE_SUMMARY_STREAM_HASH_DRIFT:${contract.check.name}:stderr`);
-	}
-	// Best-effort cleanup of the leamasStagingDir; failures are
-	// non-fatal because the gate summary has already been published.
-	try {
-		rmSync(contract.leamasStagingDir, { recursive: true, force: true });
-	} catch {
-		// ignore
 	}
 	const stdoutTail = contract.result.stdout.length > 400
 		? `...${contract.result.stdout.slice(-400)}`
@@ -1446,3 +1420,23 @@ function persistLeamasStreamsAndSummarize(
 if (import.meta.main) {
 	main();
 }
+
+// Export for tests.
+export {
+	atomicPublish,
+	buildCorrection21Probe,
+	bootstrap,
+	captureSnapshot,
+	collectChecks,
+	ensureGitignoreEntries,
+	GIT_RANGE_HYGIENE,
+	knownInvalidV3Fixture,
+	malformedV2Fixture,
+	persistLeamasAttestation,
+	persistLeamasStreamsAndSummarize,
+	resolveTool,
+	runLeamasV2Contract,
+	summarizeAndPersist,
+};
+
+void dirname;

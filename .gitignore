@@ -95,3 +95,7 @@ apps/examples/desktop-app/webview/next-env.d.ts
 
 # Factory-detached evidence (ACT-CLINEMM-FORK-BASELINE01)
 .factory/
+
+# Factory staging/backup siblings (µC-3 round 6 atomic publish)
+.factory-staging-*
+.factory-backup-*
