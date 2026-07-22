@@ -786,11 +786,14 @@ function runLeamasV2Contract(ctx: SnapshotContext): {
 		`REAL_REPO=${shellQuote(ctx.repoRoot)}`,
 		`if [ ! -x "$LEAMAS_BIN" ]; then echo "leamas_unavailable=true"; exit 0; fi`,
 		`"$LEAMAS_BIN" --version > "$OUT_DIR/version.txt" 2>&1`,
-		`"$LEAMAS_BIN" factory digest --range HEAD~1..HEAD --output "$OUT_DIR/digest-real.txt" >/dev/null 2>&1`,
+		// Use --range HEAD so single-commit fixture repos can be
+		// digested; --range HEAD~1..HEAD requires a parent commit
+		// which single-commit fixture repos do not have.
+		`"$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-real.txt" >/dev/null 2>&1`,
 		`echo "real_exit=$?"`,
-		`( cd "$V3_REPO" && "$LEAMAS_BIN" factory digest --range HEAD~1..HEAD --output "$OUT_DIR/digest-v3.txt" ) >/dev/null 2>&1`,
+		`( cd "$V3_REPO" && "$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-v3.txt" ) >/dev/null 2>&1`,
 		`echo "v3_exit=$?"`,
-		`( cd "$MAL_REPO" && "$LEAMAS_BIN" factory digest --range HEAD~1..HEAD --output "$OUT_DIR/digest-malformed.txt" ) >/dev/null 2>&1`,
+		`( cd "$MAL_REPO" && "$LEAMAS_BIN" factory digest --range HEAD --output "$OUT_DIR/digest-malformed.txt" ) >/dev/null 2>&1`,
 		`echo "mal_exit=$?"`,
 		`echo "leamas_unavailable=false"`,
 		`echo "v2_accepted=$(grep -c 'schema_version=2' "$OUT_DIR/digest-real.txt" || true)"`,
