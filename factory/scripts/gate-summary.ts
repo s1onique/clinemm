@@ -167,10 +167,16 @@ interface ParentActState {
 	diagnostics: string[];
 }
 
+// Leamas gate-summary v2 schema: only the documented fields are accepted.
+// Producer extensions (tool identity, identity_stable, parent_act_state
+// diagnostics, rejection_reasons) are persisted to a sibling
+// `.factory/gate-summary.extended.json` so the canonical v2 file
+// validates cleanly under the Leamas v2 contract. The extended file
+// is gitignored alongside `.factory/gate-summary.json` and never
+// affects the Leamas digest output.
 interface GateSummary {
 	schema_version: 2;
 	generated_at: string;
-	tool: { name: string; version: string };
 	scope_id: string;
 	scope_status: ScopeStatus;
 	scope_disposition: string;
@@ -184,8 +190,12 @@ interface GateSummary {
 	subject_tree_oid: string;
 	worktree_clean_before: boolean;
 	worktree_clean_after: boolean;
-	identity_stable: boolean;
 	checks: GateCheckSummary[];
+}
+
+interface GateSummaryExtended {
+	tool: { name: string; version: string };
+	identity_stable: boolean;
 	parent_act_state: ParentActState;
 	rejection_reasons: ReasonCode[];
 }
@@ -1188,7 +1198,11 @@ function deriveOverallStatus(checks: GateCheckSummary[]): OverallStatus {
 
 // ---------- main -----------------------------------------------------------
 
-function atomicPublish(ctx: SnapshotContext, summary: GateSummary): void {
+function atomicPublish(
+	ctx: SnapshotContext,
+	summary: GateSummary,
+	extended: GateSummaryExtended,
+): void {
 	mkdirSync(dirname(ctx.canonicalSummaryPath), { recursive: true });
 	mkdirSync(ctx.canonicalGatesDir, { recursive: true });
 	const summaryInStaging = join(ctx.stagingDir, "gate-summary.json");
@@ -1200,13 +1214,16 @@ function atomicPublish(ctx: SnapshotContext, summary: GateSummary): void {
 	if (reread.execution_head_oid !== ctx.headOid || reread.execution_tree_oid !== ctx.treeOid) {
 		throw new Error("GATE_SUMMARY_IDENTITY_DRIFT");
 	}
-	if (!reread.identity_stable) {
-		throw new Error("GATE_SUMMARY_IDENTITY_UNSTABLE");
-	}
 	if (!reread.worktree_clean_after) {
 		throw new Error("GATE_SUMMARY_DIRTY_AFTER");
 	}
 	writeFileSync(ctx.canonicalSummaryPath, readFileSync(summaryInStaging, "utf8"));
+	// The extended file is sibling evidence that Leamas does not
+	// consume; it carries the producer's tool identity, identity
+	// stability flag, parent-state diagnostics, and any rejection
+	// reasons that are out of scope for the v2 schema.
+	const extendedPath = join(dirname(ctx.canonicalSummaryPath), "gate-summary.extended.json");
+	writeFileSync(extendedPath, `${JSON.stringify(extended, null, "\t")}\n`);
 	for (const scope of CHECK_SCOPES) {
 		const srcDir = join(ctx.stagingDir, scope);
 		const dstDir = join(ctx.canonicalGatesDir, scope);
@@ -1283,10 +1300,14 @@ function main(): void {
 			: overall === "unavailable"
 				? "one or more checks unavailable"
 				: "one or more checks failed";
+	// Build the v2-compliant summary (only fields the Leamas v2 schema
+	// accepts) and the extended sibling object (tool identity,
+	// identity_stable, parent_act_state, rejection_reasons). The
+	// extended object is persisted to `.factory/gate-summary.extended.json`
+	// and never appears in the Leamas digest.
 	const summary: GateSummary = {
 		schema_version: 2,
 		generated_at: new Date().toISOString(),
-		tool: { name: PRODUCER_NAME, version: PRODUCER_VERSION },
 		scope_id: SCOPE_ID,
 		scope_status: scope.status,
 		scope_disposition: scope.disposition,
@@ -1300,8 +1321,11 @@ function main(): void {
 		subject_tree_oid: ctx.subjectTreeOid,
 		worktree_clean_before: ctx.worktreeCleanBefore,
 		worktree_clean_after: identityAfter.worktree_clean,
-		identity_stable: identityStable,
 		checks,
+	};
+	const extended: GateSummaryExtended = {
+		tool: { name: PRODUCER_NAME, version: PRODUCER_VERSION },
+		identity_stable: identityStable,
 		parent_act_state: parentState,
 		rejection_reasons: rejectionReasons,
 	};
@@ -1309,10 +1333,11 @@ function main(): void {
 		console.error(`gate-summary: identity/worktree rejection: ${rejectionReasons.map((r) => r.code).join(",")}`);
 		process.exit(3);
 	}
-	// 7. Atomic publication of the canonical summary. The Leamas v2
-	//    contract check is run AFTER the canonical summary is in place
-	//    so it can validate the published artifact directly.
-	atomicPublish(ctx, summary);
+	// 7. Atomic publication of the canonical v2 summary plus its
+	//    extended sibling. The Leamas v2 contract check is run AFTER
+	//    the canonical summary is in place so it can validate the
+	//    published artifact directly.
+	atomicPublish(ctx, summary, extended);
 	// 8. Run the Leamas v2 contract check against the canonical summary.
 	//    This is intentionally the LAST check so the published artifact
 	//    is what gets validated. The check uses its own leamasStagingDir
