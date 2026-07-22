@@ -738,8 +738,20 @@ function runLeamasV2Contract(ctx: SnapshotContext): {
 	result: RunResult;
 	status: CheckStatus;
 	reason: string;
+	leamasStagingDir: string;
 } {
-	const fixtureDir = join(ctx.stagingDir, "tooling");
+	// Use a fresh staging dir under `.factory/leamas-staging/...` so
+	// the leamas contract check can run AFTER `atomicPublish` has
+	// already removed `ctx.stagingDir`. The fixtures and v3/malformed
+	// repos are written under this isolated directory and never
+	// promote to `.factory/gates/<scope>/`.
+	const leamasStagingDir = join(
+		ctx.repoRoot,
+		".factory",
+		"leamas-staging",
+		`contract-${Date.now()}`,
+	);
+	const fixtureDir = join(leamasStagingDir, "tooling");
 	mkdirSync(fixtureDir, { recursive: true });
 
 	// 1. Persist the v2 fixture as a known-good reference.
@@ -826,7 +838,7 @@ function runLeamasV2Contract(ctx: SnapshotContext): {
 		status = "pass";
 		reason = "v2 accepted (source_status=present, schema_version=2); v3 rejected; malformed rejected";
 	}
-	return { check, result, status, reason };
+	return { check, result, status, reason, leamasStagingDir };
 }
 
 function shellQuote(value: string): string {
@@ -1300,17 +1312,15 @@ function main(): void {
 	atomicPublish(ctx, summary);
 	// 8. Run the Leamas v2 contract check against the canonical summary.
 	//    This is intentionally the LAST check so the published artifact
-	//    is what gets validated. The check is added to the in-memory
-	//    summary only (its streams are persisted under the staging dir
-	//    which was removed by `atomicPublish`).
+	//    is what gets validated. The check uses its own leamasStagingDir
+	//    (set up by runLeamasV2Contract) and the streams are persisted
+	//    directly under .factory/gates/tooling/.
 	const leamasContract = runLeamasV2Contract(ctx);
-	const leamasCheck = summarizeAndPersist(
+	const leamasCheckSummary = persistLeamasStreamsAndSummarize(
+		leamasContract,
 		ctx,
-		leamasContract.check,
-		leamasContract.result,
-		leamasContract.status,
 	);
-	checks.push(leamasCheck);
+	checks.push(leamasCheckSummary);
 	const scopePost = deriveScopeStatus(checks);
 	const overallPost = deriveOverallStatus(checks);
 	const finalSummary: GateSummary = {
@@ -1330,6 +1340,79 @@ function main(): void {
 	// streams directory is left intact from the previous publication;
 	// we only rewrite the canonical summary file.
 	writeFileSync(ctx.canonicalSummaryPath, `${JSON.stringify(finalSummary, null, "\t")}\n`);
+}
+
+function persistLeamasStreamsAndSummarize(
+	contract: {
+		check: Cmd;
+		result: RunResult;
+		status: CheckStatus;
+		reason: string;
+		leamasStagingDir: string;
+	},
+	ctx: SnapshotContext,
+): GateCheckSummary {
+	const dir = join(ctx.canonicalGatesDir, contract.check.scope);
+	mkdirSync(dir, { recursive: true });
+	const stdoutPath = join(dir, `${contract.check.name}.stdout`);
+	const stderrPath = join(dir, `${contract.check.name}.stderr`);
+	const metadataPath = join(dir, `${contract.check.name}.metadata.json`);
+	writeFileSync(stdoutPath, contract.result.stdout);
+	writeFileSync(stderrPath, contract.result.stderr);
+	const metadata: CheckMetadata = {
+		name: contract.check.name,
+		scope: contract.check.scope,
+		status: contract.status,
+		argv: contract.result.extras.argv,
+		cwd: contract.check.cwd,
+		exit_code: contract.result.extras.exit_code,
+		signal: contract.result.extras.signal,
+		timeout: contract.result.extras.timeout,
+		duration_ms: contract.result.extras.duration_ms,
+		stdout_path: stdoutPath,
+		stdout_sha256: contract.result.extras.stdout_sha256,
+		stderr_path: stderrPath,
+		stderr_sha256: contract.result.extras.stderr_sha256,
+		started_at: contract.result.extras.started_at,
+		finished_at: contract.result.extras.finished_at,
+		detail: `status=${contract.status}; exit=${contract.result.extras.exit_code}; reason=${contract.reason}; cmd=${contract.result.extras.argv.join(" ")} (cwd=${contract.check.cwd})`,
+	};
+	writeFileSync(metadataPath, `${JSON.stringify(metadata, null, "\t")}\n`);
+	const onDiskStdout = readFileSync(stdoutPath, "utf8");
+	const onDiskStderr = readFileSync(stderrPath, "utf8");
+	if (sha256(onDiskStdout) !== contract.result.extras.stdout_sha256) {
+		throw new Error(`GATE_SUMMARY_STREAM_HASH_DRIFT:${contract.check.name}:stdout`);
+	}
+	if (sha256(onDiskStderr) !== contract.result.extras.stderr_sha256) {
+		throw new Error(`GATE_SUMMARY_STREAM_HASH_DRIFT:${contract.check.name}:stderr`);
+	}
+	// Best-effort cleanup of the leamasStagingDir; failures are
+	// non-fatal because the gate summary has already been published.
+	try {
+		rmSync(contract.leamasStagingDir, { recursive: true, force: true });
+	} catch {
+		// ignore
+	}
+	const stdoutTail = contract.result.stdout.length > 400
+		? `...${contract.result.stdout.slice(-400)}`
+		: contract.result.stdout;
+	const stderrTail = contract.result.stderr.length > 400
+		? `...${contract.result.stderr.slice(-400)}`
+		: contract.result.stderr;
+	return {
+		name: contract.check.name,
+		scope: contract.check.scope,
+		status: contract.status,
+		evidence: contract.check.evidence,
+		detail: `status=${contract.status}; reason=${contract.reason}; exit=${contract.result.extras.exit_code}; duration=${contract.result.extras.duration_ms}ms; cmd=${contract.result.extras.argv.join(" ")} (cwd=${contract.check.cwd}); stdout_tail=${stdoutTail}; stderr_tail=${stderrTail}`,
+		extras: {
+			argv: contract.result.extras.argv,
+			exit_code: contract.result.extras.exit_code,
+			duration_ms: contract.result.extras.duration_ms,
+			stdout_sha256: contract.result.extras.stdout_sha256,
+			stderr_sha256: contract.result.extras.stderr_sha256,
+		},
+	};
 }
 
 if (import.meta.main) {
