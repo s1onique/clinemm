@@ -147,6 +147,7 @@ import { delimiter, dirname, join } from "node:path";
 
 import { computeFilteredSubjectTreeOid } from "./subject-tree";
 import {
+	assessParentClosure,
 	buildExtended,
 	buildFinalSummary,
 	deriveOverallDisposition,
@@ -158,6 +159,8 @@ import {
 	durablePayload,
 	gitText,
 	isCleanPorcelain,
+	isEvidenceOk,
+	isEvidenceStructurallyValid,
 	isValidOid,
 	makeBackupPath,
 	makeStagingPath,
@@ -178,6 +181,8 @@ import {
 	toPortablePath,
 	validateGateSummaryStructure,
 	assertUniqueCheckNames,
+	defaultAtomicPublishOps,
+	type AtomicPublishOps,
 	type CheckScope,
 	type CheckStatus,
 	type Cmd,
@@ -1322,6 +1327,7 @@ function atomicPublish(
 	summary: GateSummary,
 	extended: GateSummaryExtended,
 	attestation: LeamasAttestation,
+	ops: AtomicPublishOps = defaultAtomicPublishOps,
 ): {
 	summaryBytesOnDisk: string;
 	extendedBytesOnDisk: string;
@@ -1336,13 +1342,13 @@ function atomicPublish(
 	const summaryText = serializeGateSummary(summary);
 	const extendedText = serializeExtended(extended);
 	const attestationText = serializeLeamasAttestation(attestation);
-	writeFileSync(summaryPath, summaryText);
-	writeFileSync(extendedPath, extendedText);
-	writeFileSync(attestationPath, attestationText);
+	ops.writeFile(summaryPath, summaryText);
+	ops.writeFile(extendedPath, extendedText);
+	ops.writeFile(attestationPath, attestationText);
 
-	const onDiskSummary = readFileSync(summaryPath, "utf8");
-	const onDiskExtended = readFileSync(extendedPath, "utf8");
-	const onDiskAttestation = readFileSync(attestationPath, "utf8");
+	const onDiskSummary = ops.readFile(summaryPath);
+	const onDiskExtended = ops.readFile(extendedPath);
+	const onDiskAttestation = ops.readFile(attestationPath);
 	if (sha256(onDiskSummary) !== sha256(summaryText)) {
 		throw new Error("GATE_SUMMARY_STAGE_HASH_DRIFT:summary");
 	}
@@ -1361,30 +1367,27 @@ function atomicPublish(
 	const hadCanonical = existsSync(ctx.factoryDir);
 	if (hadCanonical) {
 		if (existsSync(ctx.backupDir)) {
-			rmSync(ctx.backupDir, { recursive: true, force: true });
+			ops.rmSync(ctx.backupDir, { recursive: true, force: true });
 		}
-		renameSync(ctx.factoryDir, ctx.backupDir);
+		ops.renameSync(ctx.factoryDir, ctx.backupDir);
 	}
 	let swapped = false;
 	try {
-		renameSync(ctx.stagingDir, ctx.factoryDir);
+		ops.renameSync(ctx.stagingDir, ctx.factoryDir);
 		swapped = true;
 	} catch (e) {
 		if (hadCanonical) {
 			try {
-				renameSync(ctx.backupDir, ctx.factoryDir);
+				ops.renameSync(ctx.backupDir, ctx.factoryDir);
 			} catch {
 				// best-effort rollback
 			}
 		}
 		throw e;
 	}
-	const canonicalSummaryBytes = readFileSync(ctx.canonicalSummaryPath, "utf8");
-	const canonicalExtendedBytes = readFileSync(ctx.canonicalExtendedPath, "utf8");
-	const canonicalAttestationBytes = readFileSync(
-		ctx.canonicalLeamasAttestationPath,
-		"utf8",
-	);
+	const canonicalSummaryBytes = ops.readFile(ctx.canonicalSummaryPath);
+	const canonicalExtendedBytes = ops.readFile(ctx.canonicalExtendedPath);
+	const canonicalAttestationBytes = ops.readFile(ctx.canonicalLeamasAttestationPath);
 	if (sha256(canonicalSummaryBytes) !== sha256(summaryText)) {
 		throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:summary");
 	}

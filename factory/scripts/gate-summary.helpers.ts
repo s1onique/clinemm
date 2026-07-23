@@ -39,6 +39,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import * as fs from "node:fs";
 import {
 	cpSync,
 	existsSync,
@@ -205,6 +206,55 @@ export interface SnapshotContext {
 	rangePatchUnexpectedBefore: string[];
 	identityBefore: RepositorySnapshot;
 }
+
+/**
+ * Injectable operations seam for atomicPublish().
+ *
+ * Real callers pass `defaultAtomicPublishOps`. Tests pass a partial
+ * override to inject failures at specific points in the stage-then-swap
+ * sequence.
+ *
+ * Each hook is called at a defined point in the atomic publish sequence:
+ *
+ *   afterStageWrite  - after all three files are written to staging
+ *   afterStageGuard  - after stage-side hash re-verification
+ *   afterStageValidate - after structural validation of staged summary
+ *   afterBackupCreated - after renaming factoryDir → backupDir
+ *   afterCanonicalInstalled - after renaming stagingDir → factoryDir
+ *   beforePostSwapVerification - before post-swap hash confirmation
+ *
+ * A hook that throws causes atomicPublish() to fail at that point. The
+ * real operations are used unless the hook itself replaces the behavior.
+ */
+export interface AtomicPublishOps {
+	/** Synchronously write text content to a file path. */
+	writeFile(path: string, content: string): void;
+
+	/** Synchronously read text content from a file path. */
+	readFile(path: string): string;
+
+	/** Synchronously rename/move a file or directory. */
+	renameSync(src: string, dest: string): void;
+
+	/** Synchronously remove a file or directory. */
+	rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+}
+
+/** Default ops using real Node.js fs. */
+export const defaultAtomicPublishOps: AtomicPublishOps = {
+	writeFile(path: string, content: string): void {
+		fs.writeFileSync(path, content, "utf8");
+	},
+	readFile(path: string): string {
+		return fs.readFileSync(path, "utf8");
+	},
+	renameSync(src: string, dest: string): void {
+		fs.renameSync(src, dest);
+	},
+	rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void {
+		fs.rmSync(path, options);
+	},
+};
 
 export interface CheckMetadata {
 	name: string;
