@@ -813,11 +813,14 @@ export function computeClosure(input: ClosureInput): ClosureResult {
  * plus the bundle-side native-probe structural completion flag.
  */
 export function isEvidenceOk(e: EvidenceView): boolean {
-	return (
+	// Coerce to boolean to prevent `undefined` from leaking through a
+	// partial EvidenceView (the && chain otherwise short-circuits to
+	// the first falsy value, which may be `undefined` for unset fields).
+	const r =
 		isEvidenceStructurallyValid(e) &&
 		e.probeSource === "executed" &&
-		e.fixtureDerived === false
-	);
+		e.fixtureDerived === false;
+	return r === true;
 }
 
 /**

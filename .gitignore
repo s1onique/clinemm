@@ -99,3 +99,6 @@ apps/examples/desktop-app/webview/next-env.d.ts
 # Factory staging/backup siblings (µC-3 round 6 atomic publish)
 .factory-staging-*
 .factory-backup-*
+
+# Factory staging/backup siblings (µC-3 round 7 atomic publish)
+.factory-leamas-staging-*

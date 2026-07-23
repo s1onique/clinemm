@@ -28,11 +28,13 @@ import { delimiter, dirname, isAbsolute, join, relative } from "node:path";
 
 import {
 	checkEvidence,
+	isEvidenceOk,
 	type EvidenceView,
 	type ExecutionIdentityDerivation,
 	isEvidenceStructurallyValid,
 	loadEvidenceFile,
 } from "./baseline-closure";
+export { isEvidenceOk };
 
 // ---------- types ----------------------------------------------------------
 
@@ -268,6 +270,7 @@ export interface GateSummaryExtended {
 	rejection_reasons: ReasonCode[];
 	known_valid_v2_repo_sha256: string;
 	known_invalid_v3_repo_sha256: string;
+	candidate_repo_sha256?: string;
 }
 
 // ---------- helpers --------------------------------------------------------
@@ -586,15 +589,10 @@ export function buildParentClosureInput(
 	view: EvidenceView,
 	bundleObj: Record<string, unknown> | null,
 ): ParentClosureInput {
-	// Coerce the conjunction to a boolean so a partial / undefined
-	// `EvidenceView` cannot leak into the parent closure input as
-	// `undefined`. Fail-closed.
-	const structurallyValid = isEvidenceStructurallyValid(view) === true;
-	const evidenceOk: boolean =
-		view.exists === true &&
-		structurallyValid &&
-		view.probeSource === "executed" &&
-		view.fixtureDerived === false;
+	// P0-5: use `isEvidenceOk(view)` so the parent closure boundary
+	// is anchored to the SAME evidence conjunction the renderer/test
+	// suite already uses. Inlining the dimensions here would diverge.
+	const evidenceOk: boolean = isEvidenceOk(view);
 	const obj = bundleObj ?? {};
 	const getBool = (key: string): boolean => {
 		const v = obj[key];
@@ -890,6 +888,14 @@ export function serializeExtended(extended: GateSummaryExtended): string {
 	return `${JSON.stringify(extended, null, "\t")}\n`;
 }
 
+/**
+ * Serialize a `LeamasAttestation` to its canonical disk form. Lives in
+ * `.factory/gate-summary.leamas.json` after atomic publication.
+ */
+export function serializeLeamasAttestation(attestation: LeamasAttestation): string {
+	return `${JSON.stringify(attestation, null, "\t")}\n`;
+}
+
 
 
 
@@ -948,15 +954,18 @@ export function buildFinalSummary(args: {
  * these are part of the v2 schema and all of them must be absent from
  * the canonical v2 file Leamas ingests.
  */
-export function buildExtended(args: {
+export interface ExtendedArgs {
 	tool: { name: string; version: string };
 	identityStable: boolean;
 	parentActState: ParentActState;
 	rejectionReasons: ReasonCode[];
 	knownValidV2RepoSha256: string;
 	knownInvalidV3RepoSha256: string;
-}): GateSummaryExtended {
-	return {
+	candidateRepoSha256?: string;
+}
+
+export function buildExtended(args: ExtendedArgs): GateSummaryExtended {
+	const out: GateSummaryExtended = {
 		tool: args.tool,
 		identity_stable: args.identityStable,
 		parent_act_state: args.parentActState,
@@ -964,6 +973,10 @@ export function buildExtended(args: {
 		known_valid_v2_repo_sha256: args.knownValidV2RepoSha256,
 		known_invalid_v3_repo_sha256: args.knownInvalidV3RepoSha256,
 	};
+	if (args.candidateRepoSha256) {
+		out.candidate_repo_sha256 = args.candidateRepoSha256;
+	}
+	return out;
 }
 
 /**

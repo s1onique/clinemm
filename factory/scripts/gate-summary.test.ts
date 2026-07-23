@@ -55,11 +55,13 @@ import {
 	isParentClosed,
 	serializeExtended,
 	serializeGateSummary,
+	serializeLeamasAttestation,
 	stagingExtendedPath,
 	stagingGateSummaryPath,
 	stagingScopeDir,
 	validateGateSummaryStructure,
 	type GateCheckSummary,
+	type LeamasAttestation,
 	type ParentClosureInput,
 	type ParentActState,
 	type RepositorySnapshot,
@@ -71,10 +73,11 @@ import {
 	collectChecks,
 	ensureGitignoreEntries,
 	GIT_RANGE_HYGIENE,
-	knownInvalidV3Fixture,
-	malformedV2Fixture,
+	knownInvalidV3FixtureText,
+	malformedV2FixtureText,
 	resolveTool,
-	runLeamasV2Contract,
+	runCandidateLeamasValidation,
+	setupFixtureRepoAt,
 } from "./gate-summary";
 import { computeFilteredSubjectTreeOid } from "./subject-tree";
 
@@ -190,6 +193,35 @@ function mkCtx(overrides: Partial<SnapshotContext> = {}): SnapshotContext {
 		rangePatchUnexpectedBefore: [],
 		identityBefore: identity,
 		...overrides,
+	};
+}
+
+/**
+ * Test helper to build a placeholder attestation. Real attestation bytes
+ * are produced by `runCandidateLeamasValidation`; the test surface
+ * only needs an object that satisfies the type contract so
+ * `atomicPublish` can include it in the staging bundle.
+ */
+function buildTestAttestation(): LeamasAttestation {
+	return {
+		tool: { name: "test-leamas", build_commit: null, version: null },
+		command: "leamas factory digest --range HEAD --output <digest-path>",
+		ran_at: new Date().toISOString(),
+		canonical_summary_sha256: "<see gate-summary.json sha>",
+		canonical_extended_sha256: "<see gate-summary.extended.json sha>",
+		stages: [
+			{
+				label: "candidate_repo",
+				repo_root: "/tmp/dummy",
+				range: "HEAD",
+				digest_output_path: "/tmp/dummy",
+				raw_excerpt: "",
+				expected_outcome: "accept",
+				observed_outcome: "accept",
+			},
+		],
+		verdict: "pass",
+		reason: "test",
 	};
 }
 
@@ -760,13 +792,13 @@ describe("H5 — Leamas v2 contract", () => {
 	});
 
 	it("known-invalid v3 fixture is rejected by validateGateSummaryStructure", () => {
-		const payload = JSON.parse(knownInvalidV3Fixture());
+		const payload = JSON.parse(knownInvalidV3FixtureText());
 		const validation = validateGateSummaryStructure(payload);
 		expect(validation.ok).toBe(false);
 	});
 
 	it("malformed v2 fixture is rejected by validateGateSummaryStructure", () => {
-		const payload = JSON.parse(malformedV2Fixture());
+		const payload = JSON.parse(malformedV2FixtureText());
 		const validation = validateGateSummaryStructure(payload);
 		expect(validation.ok).toBe(false);
 	});
@@ -777,19 +809,47 @@ describe("H5 — Leamas v2 contract", () => {
 			// check is `unavailable` in that case.
 			return;
 		}
-		const stagingDir = join(ctx.stagingDir, "leamas-staging", `contract-${Date.now()}`);
-		const result = runLeamasV2Contract({ ctx, leamasStagingDir: stagingDir });
+		const leamasStagingDir = join(ctx.stagingDir, "leamas-staging", `contract-${Date.now()}`);
+		const candidateStagingDir = join(ctx.stagingDir, "candidate-isolated");
+		mkdirSync(candidateStagingDir, { recursive: true });
+		const interimSummaryText = serializeGateSummary(
+			buildFinalSummary({
+				generatedAt: "1970-01-01T00:00:00.000Z",
+				scopeId: "TEST-SCOPE",
+				scopeStatus: "CLOSED",
+				scopeDisposition: "test",
+				parentAct: "TEST-PARENT",
+				parentStatus: "CLOSED",
+				parentDisposition: "test",
+				overallStatus: "pass",
+				overallDisposition: "test",
+				executionHeadOid: zeroOid(),
+				executionTreeOid: zeroOid(),
+				subjectTreeOid: zeroOid(),
+				worktreeCleanBefore: true,
+				worktreeCleanAfter: true,
+				checks: [],
+			}),
+		);
+		const result = runCandidateLeamasValidation({
+			ctx,
+			leamasStagingDir,
+			candidateStagingDir,
+			candidateSummaryText: interimSummaryText,
+			candidateHeadOid: ctx.headOid,
+			candidateSubjectTreeOid: ctx.subjectTreeOid,
+		});
 		// The attestation is well-formed regardless of status.
 		expect(result.attestation.stages).toHaveLength(4);
-		expect(result.attestation.stages.find((s) => s.label === "canonical_repo")).toBeDefined();
+		expect(result.attestation.stages.find((s: { label: string }) => s.label === "candidate_repo")).toBeDefined();
 		expect(
-			result.attestation.stages.find((s) => s.label === "known_valid_v2_fixture_repo"),
+			result.attestation.stages.find((s: { label: string }) => s.label === "known_valid_v2_fixture_repo"),
 		).toBeDefined();
 		expect(
-			result.attestation.stages.find((s) => s.label === "known_invalid_v3_fixture_repo"),
+			result.attestation.stages.find((s: { label: string }) => s.label === "known_invalid_v3_fixture_repo"),
 		).toBeDefined();
 		expect(
-			result.attestation.stages.find((s) => s.label === "malformed_v2_fixture_repo"),
+			result.attestation.stages.find((s: { label: string }) => s.label === "malformed_v2_fixture_repo"),
 		).toBeDefined();
 		// If Leamas accepts every fixture, status is pass.
 		if (result.status === "pass") {
@@ -797,8 +857,17 @@ describe("H5 — Leamas v2 contract", () => {
 				expect(stage.observed_outcome).toBe(stage.expected_outcome);
 			}
 		}
-		// Clean up the staging dir regardless of pass/fail.
-		rmSync(stagingDir, { recursive: true, force: true });
+		// Clean up the staging dirs regardless of pass/fail.
+		try { rmSync(leamasStagingDir, { recursive: true, force: true }); } catch { /* ignore */ }
+		try { rmSync(candidateStagingDir, { recursive: true, force: true }); } catch { /* ignore */ }
+		for (const repo of [
+			result.fixtureRepos.candidate,
+			result.fixtureRepos.valid,
+			result.fixtureRepos.invalidV3,
+			result.fixtureRepos.malformed,
+		]) {
+			try { rmSync(repo, { recursive: true, force: true }); } catch { /* ignore */ }
+		}
 	});
 });
 
@@ -851,7 +920,12 @@ describe("H6 — atomic publication", () => {
 			knownValidV2RepoSha256: zeroOid(),
 			knownInvalidV3RepoSha256: zeroOid(),
 		});
-		const result = atomicPublish(ctx, summary, extended);
+		const result = atomicPublish(
+			ctx,
+			summary,
+			extended,
+			buildTestAttestation()
+		);
 		// The canonical files now exist at the expected paths.
 		expect(existsSync(ctx.canonicalSummaryPath)).toBe(true);
 		expect(existsSync(ctx.canonicalExtendedPath)).toBe(true);
@@ -908,14 +982,14 @@ describe("H6 — atomic publication", () => {
 				knownInvalidV3RepoSha256: zeroOid(),
 			}),
 		});
-		const first = atomicPublish(ctx, mk().summary, mk().extended);
+		const first = atomicPublish(ctx, mk().summary, mk().extended, buildTestAttestation());
 		expect(first.summaryBytesOnDisk).toBe(serializeGateSummary(mk().summary));
 		// Recreate the staging dir to simulate a second producer run.
 		mkdirSync(ctx.stagingDir, { recursive: true });
 		for (const scope of ["MICROC3", "CORRECTION21", "WORKTREE", "TOOLING"]) {
 			mkdirSync(join(ctx.stagingDir, "gates", scope), { recursive: true });
 		}
-		const second = atomicPublish(ctx, mk().summary, mk().extended);
+		const second = atomicPublish(ctx, mk().summary, mk().extended, buildTestAttestation());
 		expect(second.summaryBytesOnDisk).toBe(serializeGateSummary(mk().summary));
 	});
 });
