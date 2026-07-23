@@ -1,0 +1,56 @@
+{
+  "act_id": "ACT-CLINEMM-MAIN-INTEGRATION-AND-CLOSURE-PROTOCOL-V1-DOGFOOD01",
+  "verdict": "PASS",
+  "lifecycle": "VERIFIED",
+  "verified_at": "2026-07-23T14:13:04Z",
+  "integration": {
+    "mode": "fast-forward",
+    "main_base_oid": "c564045d8135c0c1c330b21d47b68b74917ce614",
+    "feature_tip_oid": "56fd526e1923f2546fa0aeb53a0dc6e7501e5061",
+    "integration_commit_oid": "56fd526e1923f2546fa0aeb53a0dc6e7501e5061"
+  },
+  "subject": {
+    "commit_oid": "2b515fce0ca8eb4f803aa4f02c3b35fcf27e204c",
+    "tree_oid": "6d9d40acdb7a25cbba8e6ec64c88fb3619360df0"
+  },
+  "plan_freeze": {
+    "commit": "2b515fce0ca8eb4f803aa4f02c3b35fcf27e204c",
+    "path": "docs/closure-plans/ACT-CLINEMM-MAIN-INTEGRATION-AND-CLOSURE-PROTOCOL-V1-DOGFOOD01.json",
+    "blob_oid": "369d4faa8d9d3d6b648f017d13ddb24959d3cbb2",
+    "sha256": "b57d53a222f250b729b4486eb5e7a53e2fa3c417a975646f010acff5e6e3dedc"
+  },
+  "runner": {
+    "binary_path": "/usr/local/bin/leamas",
+    "version": "0.1.0+dev.3352229d5e02.20260723T134256Z",
+    "commit": "3352229d5e02",
+    "build_time": "2026-07-23T13:42:56Z",
+    "sha256": "2aa8ab9139ffdf354b777593786f47e1b484eb7eb3ff8fb145ce6ce4c2eb632a",
+    "binding": "trusted_clean"
+  },
+  "checks": {
+    "full_factory_suite": "PASS",
+    "randomized_suites": "PASS (seeds 1-5)",
+    "strict_typescript": "PASS",
+    "range_hygiene": "PASS",
+    "worktree_clean": "PASS",
+    "gate_summary_schema_v2": "PASS",
+    "bounded_scope": "CLOSED",
+    "parent_baseline": "OPEN",
+    "leamas_attestation": "PASS"
+  },
+  "gate_summary": {
+    "scope_status": "CLOSED",
+    "parent_status": "OPEN",
+    "overall_status": "fail",
+    "parent_disposition": "no detached production bundle",
+    "worktree_clean_before": true,
+    "worktree_clean_after": true
+  },
+  "leamas_attestation": {
+    "verdict": "pass",
+    "candidate_summary_sha256": "2d86a492dc6c69e85a76f380459beb38c9a4527fcdb3e0c865c2dd2df225a1a7",
+    "candidate_validation_exit_code": 0
+  },
+  "closure_commit_oid": null,
+  "closure_tree_oid": null
+}
