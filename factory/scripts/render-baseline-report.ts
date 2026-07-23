@@ -1365,6 +1365,26 @@ function leamasAttestationRow(attestationPath: string): string {
 	if (rendererAtCommitMatches === "false") {
 		verdictFlags.push("REJECT committed_bytes_do_not_match");
 	}
+	// P0-2 — the renderer-derived at-commit hash MUST also equal
+	// the SHA-256 of the persisted candidate-summary payload that
+	// was published into the canonical bundle. A persisted
+	// candidate payload that is internally hash-consistent but
+	// unrelated to the bytes Git actually committed (e.g. a stale
+	// candidate payload re-published into a fresh canonical
+	// bundle) would otherwise slip past `source_vs_commit_hash_
+	// mismatch` and `committed_bytes_do_not_match`. Compare all
+	// three of {on-disk payload, renderer at-commit,
+	// attestation claimed at-commit} so any false or unevaluated
+	// relation surfaces as a REJECT.
+	const payloadMatchesCommittedSummary =
+		onDiskPayloadHash !== null &&
+		atCommitBytesHash !== null &&
+		onDiskPayloadHash === atCommitBytesHash &&
+		onDiskPayloadHash === computed.candidate_summary_sha256 &&
+		onDiskPayloadHash === computed.candidate_summary_sha256_at_commit;
+	if (!payloadMatchesCommittedSummary) {
+		verdictFlags.push("REJECT payload_does_not_match_committed_summary");
+	}
 	if (rendererCommitTreeMatches === "false") {
 		verdictFlags.push("REJECT commit_tree_mismatch");
 	}

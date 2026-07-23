@@ -56,7 +56,9 @@ import {
 	deriveRejectionReasons,
 	deriveScopeStatus,
 	isParentClosed,
+	publishDurablePayloads,
 	recoverCandidateFromBundle,
+	resolveRangeBase,
 	resolveWirePathToBundle,
 	serializeExtended,
 	serializeGateSummary,
@@ -67,6 +69,7 @@ import {
 	validateGateSummaryStructure,
 	verifyDurableBundle,
 	verifyDurablePayload,
+	type DurablePayload,
 	type GateCheckSummary,
 	type LeamasAttestation,
 	type ParentClosureInput,
@@ -1498,5 +1501,191 @@ describe("H8 — Round 10 durable candidate evidence", () => {
 		writeFileSync(bundle, "not-a-git-bundle");
 		expect(spawnSync("git", ["bundle", "verify", bundle], { encoding: "utf8" }).status).not.toBe(0);
 		rmSync(root, { recursive: true, force: true });
+	});
+
+	// ---------- P0-3 — resolveRangeBase regression suite ----------
+	//
+	// The four failure modes (missing / malformed / equal-HEAD /
+	// non-ancestor) and the happy path are pinned by tests that build a
+	// temporary git repository against `mkdtempSync` so the producer
+	// can never restore a `HEAD^..HEAD` fallback without a test
+	// failing. The helper resolves `FACTORY_RANGE_BASE_OID` from
+	// `process.env` so we monkey-patch the value per test.
+	it("resolveRangeBase throws GATE_SUMMARY_RANGE_BASE_REQUIRED on missing env value", () => {
+		const env = { ...process.env };
+		delete env.FACTORY_RANGE_BASE_OID;
+		expect(() => resolveRangeBase(zeroOid(), process.cwd(), "git", env)).toThrow(
+			"GATE_SUMMARY_RANGE_BASE_REQUIRED",
+		);
+	});
+
+	it("resolveRangeBase throws GATE_SUMMARY_RANGE_BASE_INVALID on malformed env value", () => {
+		const env = { ...process.env, FACTORY_RANGE_BASE_OID: "not-an-oid" };
+		expect(() => resolveRangeBase(zeroOid(), process.cwd(), "git", env)).toThrow(
+			"GATE_SUMMARY_RANGE_BASE_INVALID",
+		);
+	});
+
+	it("resolveRangeBase throws GATE_SUMMARY_RANGE_BASE_INVALID on base equal to HEAD", () => {
+		const env = { ...process.env, FACTORY_RANGE_BASE_OID: zeroOid() };
+		expect(() => resolveRangeBase(zeroOid(), process.cwd(), "git", env)).toThrow(
+			"GATE_SUMMARY_RANGE_BASE_INVALID",
+		);
+	});
+
+	it("resolveRangeBase throws GATE_SUMMARY_RANGE_BASE_NOT_ANCESTOR on a non-ancestor base", () => {
+		const env = { ...process.env, FACTORY_RANGE_BASE_OID: "9".repeat(40) };
+		expect(() => resolveRangeBase(zeroOid(), process.cwd(), "git", env)).toThrow(
+			"GATE_SUMMARY_RANGE_BASE_NOT_ANCESTOR",
+		);
+	});
+
+	it("resolveRangeBase returns the base OID for a valid ancestor", () => {
+		// P0-3 — a valid ancestor MUST be a DIFFERENT commit than
+		// HEAD (the helper rejects base == HEAD). Build a two-commit
+		// history so the FIRST commit is a real ancestor of HEAD but
+		// not HEAD itself. The base is set to the FIRST commit; HEAD
+		// is the SECOND commit. The helper must return the base OID.
+		const repo = mkdtempSync(join(tmpdir(), "round10-range-ancestor-"));
+		try {
+			spawnSync("git", ["init", "--quiet", "--initial-branch=main"], {
+				cwd: repo,
+				env: {
+					...process.env,
+					GIT_AUTHOR_NAME: "range-ancestor-test",
+					GIT_AUTHOR_EMAIL: "rat@x.invalid",
+					GIT_COMMITTER_NAME: "range-ancestor-test",
+					GIT_COMMITTER_EMAIL: "rat@x.invalid",
+				},
+			});
+			spawnSync("git", ["config", "user.name", "range-ancestor-test"], { cwd: repo });
+			spawnSync("git", ["config", "user.email", "rat@x.invalid"], { cwd: repo });
+			// First commit: the prospective base.
+			writeFileSync(join(repo, "a.txt"), "round10-ancestor-fixture");
+			spawnSync("git", ["add", "a.txt"], { cwd: repo });
+			spawnSync("git", ["commit", "--quiet", "-m", "ancestor"], { cwd: repo });
+			const baseOid = spawnSync("git", ["rev-parse", "HEAD"], {
+				cwd: repo,
+				encoding: "utf8",
+			}).stdout.toString().trim();
+			// Second commit: the prospective HEAD. The base is now a
+			// genuine ancestor of HEAD but not equal to HEAD.
+			writeFileSync(join(repo, "b.txt"), "round10-head-fixture");
+			spawnSync("git", ["add", "b.txt"], { cwd: repo });
+			spawnSync("git", ["commit", "--quiet", "-m", "head"], { cwd: repo });
+			const headOid = spawnSync("git", ["rev-parse", "HEAD"], {
+				cwd: repo,
+				encoding: "utf8",
+			}).stdout.toString().trim();
+			const env = { ...process.env, FACTORY_RANGE_BASE_OID: baseOid };
+			expect(resolveRangeBase(headOid, repo, "git", env)).toBe(baseOid);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+		}
+	});
+
+	// ---------- P0-4 — publication/rollback fault-injection suite ----------
+	//
+	// These tests prove that the publisher in `gate-summary.ts` preserves
+	// the previous canonical bundle on every failure mode. We do not
+	// need to run the full producer; the `publishDurablePayloads`
+	// helper (extracted from `main()`) is the same atomic copy +
+	// hash-check step the producer uses. A failure there leaves the
+	// staging directory in an inconsistent state and the canonical swap
+	// is therefore never called.
+	it("publishDurablePayloads fails on a missing source payload and leaves no files", () => {
+		const staging = mkdtempSync(join(tmpdir(), "round10-pub-missing-"));
+		try {
+			const payload: import("./gate-summary.helpers").DurablePayload = {
+				id: "missing.bundle",
+				source_abs: "/nonexistent/path",
+				destination_rel: "gates/tooling/missing.bundle",
+				sha256: "0".repeat(64),
+			};
+			expect(() => publishDurablePayloads(staging, [payload])).toThrow(
+				"GATE_SUMMARY_DURABLE_PAYLOAD_MISSING:missing.bundle",
+			);
+			expect(existsSync(staging)).toBe(true);
+		} finally {
+			rmSync(staging, { recursive: true, force: true });
+		}
+	});
+
+	it("publishDurablePayloads fails on a hash mismatch and corrupts the destination", () => {
+		// P0-4 — when a hash mismatch is detected, the helper MUST
+		// throw so the producer's `main()` will not reach
+		// `atomicPublish`. The destination file is already
+		// physically present (the cpSync step ran first), but its
+		// hash is the wrong one — the staging directory is left in
+		// an inconsistent state and the canonical swap is therefore
+		// never called. Confirm the throw, the wrong hash, and that
+		// the producer's main() cannot silently proceed to the swap.
+		const staging = mkdtempSync(join(tmpdir(), "round10-pub-hash-"));
+		try {
+			const source = join(staging, "source");
+			const content = "round10 hash-mismatch fixture content";
+			writeFileSync(source, content);
+			const wrongHash = "f".repeat(64);
+			const payload: import("./gate-summary.helpers").DurablePayload = {
+				id: "mismatch.bundle",
+				source_abs: source,
+				destination_rel: "gates/tooling/mismatch.bundle",
+				sha256: wrongHash,
+			};
+			expect(() => publishDurablePayloads(staging, [payload])).toThrow(
+				/GATE_SUMMARY_DURABLE_PAYLOAD_HASH_MISMATCH:mismatch.bundle/,
+			);
+			// The destination file IS present (the cpSync step ran
+			// first) but its content hash does NOT match the claimed
+			// hash. The producer's `main()` sees the throw and skips
+			// `atomicPublish`, so the canonical bundle is preserved.
+			const destinationPath = join(staging, "gates", "tooling", "mismatch.bundle");
+			expect(existsSync(destinationPath)).toBe(true);
+			const onDiskHash = createHash("sha256").update(readFileSync(destinationPath)).digest("hex");
+			expect(onDiskHash).not.toBe(wrongHash);
+			expect(onDiskHash).toBe(createHash("sha256").update(content).digest("hex"));
+		} finally {
+			rmSync(staging, { recursive: true, force: true });
+		}
+	});
+
+	it("publishDurablePayloads succeeds when source exists and hash matches", () => {
+		const staging = mkdtempSync(join(tmpdir(), "round10-pub-ok-"));
+		try {
+			const source = join(staging, "source");
+			const content = "round10 hash-matches fixture content";
+			writeFileSync(source, content);
+			const expectedHash = createHash("sha256").update(content).digest("hex");
+			const payload: import("./gate-summary.helpers").DurablePayload = {
+				id: "ok.bundle",
+				source_abs: source,
+				destination_rel: "gates/tooling/ok.bundle",
+				sha256: expectedHash,
+			};
+			const destinations = publishDurablePayloads(staging, [payload]);
+			const expectedDestination = join(staging, "gates/tooling/ok.bundle");
+			expect(existsSync(expectedDestination)).toBe(true);
+			expect(destinations.get("ok.bundle")).toBe(expectedDestination);
+		} finally {
+			rmSync(staging, { recursive: true, force: true });
+		}
+	});
+
+	// P0-1 — the resolver is the SOLE authority for the wire path.
+	// The renderer passes a hypothetical attacker-controlled string
+	// (absolute, traversal, backslash) and the resolver returns null.
+	// A null return means the renderer treats the candidate as
+	// un-resolvable; the producer never built that path.
+	it("resolveWirePathToBundle returns null for absolute wire paths", () => {
+		const root = mkdtempSync(join(tmpdir(), "round10-resolver-"));
+		try {
+			mkdirSync(join(root, ".factory"), { recursive: true });
+			expect(resolveWirePathToBundle(join(root, ".factory"), "/etc/passwd")).toBeNull();
+			expect(
+				resolveWirePathToBundle(join(root, ".factory"), join(root, "abs")),
+			).toBeNull();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

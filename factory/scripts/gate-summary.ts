@@ -162,7 +162,9 @@ import {
 	makeBackupPath,
 	makeStagingPath,
 	persistCheckStreams,
+	publishDurablePayloads,
 	relativeToBundleRoot,
+	resolveRangeBase,
 	runExec,
 	serializeExtended,
 	serializeGateSummary,
@@ -408,14 +410,12 @@ function bootstrap(): SnapshotContext {
 		// contributes in this run, and is the basis for
 		// `range_patch_cleanliness`. Recording the explicit OID
 		// avoids `HEAD^..HEAD`, which only proves the last commit.
-		baselineOid: (() => {
-			const requested = process.env.FACTORY_RANGE_BASE_OID?.trim();
-			if (!requested) throw new Error("GATE_SUMMARY_RANGE_BASE_REQUIRED");
-			if (!isValidOid(requested) || requested === identity.head_oid) throw new Error("GATE_SUMMARY_RANGE_BASE_INVALID");
-			const ancestor = gitText(repoRoot, git, ["merge-base", "--is-ancestor", requested, identity.head_oid]);
-			if (ancestor.status !== 0) throw new Error("GATE_SUMMARY_RANGE_BASE_NOT_ANCESTOR");
-			return requested;
-		})(),
+		//
+		// P0-3 — the resolution logic is exported as
+		// `resolveRangeBase()` so the H8 suite can regression-bind
+		// every failure mode (missing / malformed / equal-HEAD /
+		// non-ancestor / valid ancestor).
+		baselineOid: resolveRangeBase(identity.head_oid, repoRoot, git),
 		headOid: identity.head_oid,
 		treeOid: identity.tree_oid,
 		subjectTreeOid: identity.subject_tree_oid,
@@ -1106,9 +1106,16 @@ function runCandidateLeamasValidation(args: {
 		candidate_repo_head_oid: candidate.head_oid,
 		candidate_repo_commit_tree_oid: candidate.commit_tree_oid,
 		candidate_repo_subject_tree_oid: candidate.subject_tree_oid,
-		candidate_repo_bundle_path: "gates/tooling/candidate-repo.bundle",
+		// P0-1 — `destination_rel` from the durable-payload descriptor
+		// is the SOLE authority for the attestation's wire paths.
+		// `id` is a diagnostic identifier only and MUST NOT be used
+		// to derive a destination. The publisher writes the byte
+		// stream at `stagingDir / payload.destination_rel`; the
+		// attestation must advertise the SAME path or the renderer
+		// re-derivation will fail.
+		candidate_repo_bundle_path: candidateBundlePayload.destination_rel,
 		candidate_repo_bundle_sha256: candidateBundleSha256,
-		candidate_summary_payload_path: "gates/tooling/candidate-summary.json",
+		candidate_summary_payload_path: candidateSummaryPayload.destination_rel,
 		candidate_summary_payload_sha256: candidatePayloadSha256,
 		// Historical alias for round 8 readers — same boolean as
 		// `leamas_accepted_interim_candidate`. Round 9 also reports
@@ -1500,24 +1507,21 @@ function main(): void {
 		leamasContract.candidateBundlePayload,
 		leamasContract.candidateSummaryPayload,
 	];
-	for (const payload of durablePayloads) {
-		if (!existsSync(payload.source_abs)) {
-			throw new Error(`GATE_SUMMARY_DURABLE_PAYLOAD_MISSING:${payload.id}`);
-		}
-		const destination = join(durableToolingDir, payload.id);
-		cpSync(payload.source_abs, destination);
-		const onDiskHash = sha256Buffer(readFileSync(destination));
-		if (onDiskHash !== payload.sha256) {
-			throw new Error(
-				`GATE_SUMMARY_DURABLE_PAYLOAD_HASH_MISMATCH:${payload.id}:expected=${payload.sha256}:actual=${onDiskHash}`,
-			);
-		}
-	}
-	// The desination paths inside the canonical bundle are published at
-	// `payload.destination_rel`. The atomic publish swap will rename the
-	// staging dir to `.factory/`, leaving the durable payloads at the
-	// exact paths the attestation's wire-path field advertises.
-	void durablePayloads;
+	// P0-1 — delegate the copy / hash-check / atomic-publish step
+	// to the typed helper so the publisher, the attestation, and the
+	// tests all consume the SAME `DurablePayload` descriptors. The
+	// destination of each payload is determined solely by
+	// `payload.destination_rel` joined with `stagingDir`; `id` is
+	// a diagnostic identifier only and does not contribute to the
+	// destination path. A throw from this helper leaves the staging
+	// directory in an inconsistent state and the canonical swap must
+	// NOT be called — the old canonical bundle therefore remains
+	// intact.
+	const payloadDestinations = publishDurablePayloads(
+		ctx.stagingDir,
+		durablePayloads,
+	);
+	void payloadDestinations;
 
 	// Step 5b — capture identity AFTER every executable check
 	// operation has run, INCLUDING the Leamas candidate validation

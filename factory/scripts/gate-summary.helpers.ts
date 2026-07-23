@@ -40,6 +40,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+	cpSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
@@ -1247,23 +1248,152 @@ export interface DurablePayload {
 }
 
 /**
- * Build a `DurablePayload` with every field the producers / verifiers
- * depend on. Callers MUST set `sha256` to the hash of the bytes that
- * land on disk; the publisher refuses to publish a payload whose
- * post-swap hash disagrees with this field.
+ * µC-3 round 10 — invariants enforced by the `DurablePayload` factory.
+ * An invalid descriptor is a programming error and the factory throws
+ * on construction so the validator, publisher, attestation, and tests
+ * cannot accidentally consume a malformed record.
+ *
+ *   - `id` is a simple POSIX-friendly identifier (no `/`, no `\`, no
+ *     traversal `..`, no leading `.`, no empty segments).
+ *   - `destination_rel` is a POSIX-relative path (no leading `/`, no
+ *     `\` separators, no `.` or `..` segments).
+ *   - `sha256` is exactly 64 lowercase hex characters.
+ *   - `source_abs` is an absolute path.
  */
+const SIMPLE_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
 export function durablePayload(args: {
 	id: string;
 	source_abs: string;
 	destination_rel: string;
 	sha256: string;
 }): DurablePayload {
+	if (!SIMPLE_ID_PATTERN.test(args.id)) {
+		throw new Error(
+			`GATE_SUMMARY_DURABLE_PAYLOAD_BAD_ID:${args.id}`,
+		);
+	}
+	if (!isAbsolute(args.source_abs)) {
+		throw new Error(
+			`GATE_SUMMARY_DURABLE_PAYLOAD_SOURCE_NOT_ABSOLUTE:${args.source_abs}`,
+		);
+	}
+	if (args.destination_rel.length === 0) {
+		throw new Error("GATE_SUMMARY_DURABLE_PAYLOAD_EMPTY_DESTINATION");
+	}
+	if (args.destination_rel.startsWith("/")) {
+		throw new Error(
+			`GATE_SUMMARY_DURABLE_PAYLOAD_ABSOLUTE_DESTINATION:${args.destination_rel}`,
+		);
+	}
+	if (args.destination_rel.includes("\\")) {
+		throw new Error(
+			`GATE_SUMMARY_DURABLE_PAYLOAD_BACKSLASH_DESTINATION:${args.destination_rel}`,
+		);
+	}
+	for (const seg of args.destination_rel.split("/")) {
+		if (seg === "" || seg === "." || seg === "..") {
+			throw new Error(
+				`GATE_SUMMARY_DURABLE_PAYLOAD_BAD_DESTINATION:${args.destination_rel}`,
+			);
+		}
+	}
+	if (!SHA256_PATTERN.test(args.sha256)) {
+		throw new Error(
+			`GATE_SUMMARY_DURABLE_PAYLOAD_BAD_SHA256:${args.sha256}`,
+		);
+	}
 	return {
 		id: args.id,
 		source_abs: args.source_abs,
 		destination_rel: args.destination_rel,
 		sha256: args.sha256,
 	};
+}
+
+/**
+ * µC-3 round 10 — resolve the immutable range-base OID from the
+ * explicit `FACTORY_RANGE_BASE_OID` environment variable. The helper
+ * throws on:
+ *
+ *   - missing / empty value (`GATE_SUMMARY_RANGE_BASE_REQUIRED`)
+ *   - malformed 40-char hex OID (`GATE_SUMMARY_RANGE_BASE_INVALID`)
+ *   - base equal to the current HEAD (`GATE_SUMMARY_RANGE_BASE_INVALID`)
+ *   - base that is not an ancestor of HEAD
+ *     (`GATE_SUMMARY_RANGE_BASE_NOT_ANCESTOR`)
+ *
+ * The helper is exported so the H8 suite can regression-bind every
+ * failure mode in tests against a temporary empty repository.
+ */
+export function resolveRangeBase(
+	headOid: string,
+	repoRoot: string,
+	git: string,
+	env: NodeJS.ProcessEnv = process.env,
+): string {
+	const requested = env.FACTORY_RANGE_BASE_OID?.trim();
+	if (!requested) {
+		throw new Error("GATE_SUMMARY_RANGE_BASE_REQUIRED");
+	}
+	if (!isValidOid(requested) || requested === headOid) {
+		throw new Error("GATE_SUMMARY_RANGE_BASE_INVALID");
+	}
+	const ancestor = gitText(repoRoot, git, [
+		"merge-base",
+		"--is-ancestor",
+		requested,
+		headOid,
+	]);
+	if (ancestor.status !== 0) {
+		throw new Error("GATE_SUMMARY_RANGE_BASE_NOT_ANCESTOR");
+	}
+	return requested;
+}
+
+/**
+ * µC-3 round 10 — stage durable payloads into the canonical bundle
+ * staging directory. The destination of each payload is determined
+ * solely by `payload.destination_rel` (joined with `stagingDir`); `id`
+ * is a diagnostic identifier only and does not contribute to the
+ * destination path. A throw from this helper leaves the staging
+ * directory in an inconsistent state and the canonical swap must NOT
+ * be called — the old canonical bundle therefore remains intact.
+ *
+ * Returns a map keyed by `payload.id` whose value is the absolute
+ * destination path the publisher wrote to, so the test / attestation
+ * surface can confirm the attestation's `candidate_repo_bundle_path`
+ * / `candidate_summary_payload_path` actually match the published
+ * location.
+ */
+export function publishDurablePayloads(
+	stagingDir: string,
+	payloads: ReadonlyArray<DurablePayload>,
+): Map<string, string> {
+	const destinations = new Map<string, string>();
+	for (const payload of payloads) {
+		if (!existsSync(payload.source_abs)) {
+			throw new Error(
+				`GATE_SUMMARY_DURABLE_PAYLOAD_MISSING:${payload.id}`,
+			);
+		}
+		if (!isAbsolute(payload.source_abs)) {
+			throw new Error(
+				`GATE_SUMMARY_DURABLE_PAYLOAD_SOURCE_NOT_ABSOLUTE:${payload.id}`,
+			);
+		}
+		const destination = join(stagingDir, payload.destination_rel);
+		mkdirSync(dirname(destination), { recursive: true });
+		cpSync(payload.source_abs, destination);
+		const onDiskHash = sha256Buffer(readFileSync(destination));
+		if (onDiskHash !== payload.sha256) {
+			throw new Error(
+				`GATE_SUMMARY_DURABLE_PAYLOAD_HASH_MISMATCH:${payload.id}:expected=${payload.sha256}:actual=${onDiskHash}`,
+			);
+		}
+		destinations.set(payload.id, destination);
+	}
+	return destinations;
 }
 
 // ---------- wire-path resolver (round 10) ----------------------------------
