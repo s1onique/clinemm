@@ -14,16 +14,16 @@
 ACT-CLINEMM-FORK-BASELINE01 is FAIL.
 ```
 
-Reason codes: `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `EXECUTION_IDENTITY_MISSING`, `EXECUTION_IDENTITY_MALFORMED`, `MANIFEST_PATH_OUTSIDE_EVIDENCE`, `BUNDLED_RESULT_PATH_INVALID`, `BUNDLED_RESULT_COMMAND_SET_MISMATCH`, `ROW_RELATIONAL_INVARIANT_VIOLATION`, `NATIVE_PROBES_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
+Reason codes: `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `EXECUTION_IDENTITY_MISSING`, `EXECUTION_IDENTITY_MALFORMED`, `MANIFEST_PATH_OUTSIDE_EVIDENCE`, `BUNDLED_RESULT_COMMAND_SET_MISMATCH`, `NATIVE_PROBES_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
 
-
+> **Evidence decoding failed:** `missing`. Closure proceeds with a structural `EVIDENCE_INCOMPLETE` failure; the report's `Detached evidence` section documents this.
 
 Closure is **FAIL** under the CORRECTION15 fail-closed policy.
 
-**Reason codes:** `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `EXECUTION_IDENTITY_MISSING`, `EXECUTION_IDENTITY_MALFORMED`, `MANIFEST_PATH_OUTSIDE_EVIDENCE`, `BUNDLED_RESULT_PATH_INVALID`, `BUNDLED_RESULT_COMMAND_SET_MISMATCH`, `ROW_RELATIONAL_INVARIANT_VIOLATION`, `NATIVE_PROBES_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
+**Reason codes:** `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `EXECUTION_IDENTITY_MISSING`, `EXECUTION_IDENTITY_MALFORMED`, `MANIFEST_PATH_OUTSIDE_EVIDENCE`, `BUNDLED_RESULT_COMMAND_SET_MISMATCH`, `NATIVE_PROBES_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`
 
 Detached evidence does not satisfy the integrity dimensions:
-- exists: `true`
+- exists: `false`
 - subject binding holds: `false`
 - subject tree contract: `false`
 - subject stable across matrix: `false`
@@ -34,21 +34,21 @@ Detached evidence does not satisfy the integrity dimensions:
 - execution_tree_oid well-formed: `false`
 - worktree_inputs_clean_before: `null`
 - worktree_inputs_clean_after: `null`
-- per-command identity pinned: `true`
+- per-command identity pinned: `false`
 - manifest contract honored: `false`
 - hash manifest valid: `false`
 - command-set exact: `false`
 - bundled verification-results.json self-contained: `false`
-- row relational invariants: `false`
+- row relational invariants: `true`
 - metadata file normalized equality: `true`
 - native probes complete (CORRECTION15): `false`
 - execution trees (must be exactly 1): `0` value(s) []
 - execution tree bound: `false`
-- decode error: `null`
-- malformed evidence rows: `20`
-- malformed executed rows: `20`
-- missing files: `41`
-- unexpected files: `61`
+- decode error: `missing`
+- malformed evidence rows: `0`
+- malformed executed rows: `0`
+- missing files: `0`
+- unexpected files: `0`
 - hash mismatches: `0`
 - malformed lines: `0`
 - duplicate paths: `0`
@@ -135,7 +135,7 @@ Reported identity values (render provenance is
 `evidence_recorded_*`):
 
 ```
-subject_tree_oid            (renderer-computed): 3192469c0cb513776a0ad4d988b2eb32f6d0a0b7
+subject_tree_oid            (renderer-computed): c5976461f74d3236bed24544220f76105101a033
 subject_tree_oid            (recorded in evidence): (not recorded)
 subject_tree_oid_before     (recorded in evidence): (not recorded)
 subject_tree_oid_after      (recorded in evidence): (not recorded)
@@ -144,8 +144,8 @@ execution_tree_oid          (recorded in evidence): (not recorded)
 execution_identity_valid    (recorded in evidence): (not recorded)
 worktree_inputs_clean_before (recorded in evidence): (not recorded)
 worktree_inputs_clean_after  (recorded in evidence): (not recorded)
-renderer_input_head_oid:                            51ab3d4b8e482566e02330d0d7988689408357b5
-renderer_input_full_tree_oid:                       519f614b1fc4cbd554a29f3feb6eb0ab4849ec6f
+renderer_input_head_oid:                            3c6dee8229b2e24ddcca8b30aeb773aacb92964e
+renderer_input_full_tree_oid:                       a03831ba07e84f211ec4e87367319de8ab3ae3bf
 ```
 
 ## Upstream and fork identity (from `factory/inventories/repository.json`)
@@ -227,11 +227,11 @@ renderer_input_full_tree_oid:                       519f614b1fc4cbd554a29f3feb6e
 
 | Probe | Artifact | Status | Reason |
 | ----- | -------- | ------ | ------ |
-| P1 better-sqlite3 | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
-| P2 protobuf | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
-| P3 ripgrep darwin-arm64 | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
-| P4 VS Code host | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
-| P5 cline --version | (no probe) | ABSENT | bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/. |
+| P1 better-sqlite3 | (no probe) | ABSENT | native-probes.json could not be loaded: outside-evidence-dir at `native-probes.j |
+| P2 protobuf | (no probe) | ABSENT | native-probes.json could not be loaded: outside-evidence-dir at `native-probes.j |
+| P3 ripgrep darwin-arm64 | (no probe) | ABSENT | native-probes.json could not be loaded: outside-evidence-dir at `native-probes.j |
+| P4 VS Code host | (no probe) | ABSENT | native-probes.json could not be loaded: outside-evidence-dir at `native-probes.j |
+| P5 cline --version | (no probe) | ABSENT | native-probes.json could not be loaded: outside-evidence-dir at `native-probes.j |
 
 ## Structural baseline
 
@@ -283,224 +283,65 @@ renderer_input_full_tree_oid:                       519f614b1fc4cbd554a29f3feb6e
 > (a missing, malformed, deferred, unknown, or failed probe blocks
 > PASS). Row diagnostics are deduplicated with a `Set<string>`.
 
+_evidence.json failed to decode._ `missing`
+
+Subsequent dimensions below are computed against an empty record. The runner must produce a valid `evidence.json` for the bundle to become satisfiable.
+
+## Leamas attestation (from `.factory/gate-summary.leamas.json`)
+
 | Field | Value |
 | --- | --- |
-| renderer_input_head_oid (provenance) | `51ab3d4b8e482566e02330d0d7988689408357b5` |
-| renderer_input_full_tree_oid (provenance) | `519f614b1fc4cbd554a29f3feb6eb0ab4849ec6f` |
-| subject_tree_oid (CORRECTION08/10) | `(not recorded)` |
-| subject_tree_oid_before (CORRECTION11) | `(not recorded)` |
-| subject_tree_oid_after (CORRECTION11) | `(not recorded)` |
-| subject tree contract | legacy (CORRECTION07 fallback) |
-| subject stable across matrix (CORRECTION11) | false |
-| execution_head_oid (CORRECTION10) | `(not recorded)` |
-| execution_tree_oid (CORRECTION10) | `(not recorded)` |
-| execution_head_oid well-formed | false |
-| execution_tree_oid well-formed | false |
-| execution_head_exists (renderer-derived, CORRECTION12) | false |
-| execution_tree_exists (renderer-derived, CORRECTION12) | false |
-| derived execution tree (renderer-derived, CORRECTION12) | `(not resolved)` |
-| runner execution identity assertion | (not recorded) |
-| runner/renderer identity agreement (CORRECTION12) | false |
-| execution_identity_valid (renderer authority, CORRECTION12) | false |
-| per-command identity pinned (CORRECTION12) | true |
-| worktree_inputs_clean_before (CORRECTION11 tri-state) | (not recorded) |
-| worktree_inputs_clean_after (CORRECTION11 tri-state) | (not recorded) |
-| evidence payload manifest complete (CORRECTION14) | false |
-| bundled verification-results.json self-contained (CORRECTION14) | no |
-| row relational invariants (CORRECTION14) | 40 violations |
-| metadata file normalized equality (CORRECTION14) | ok |
-| tree binding holds (subject) | false |
-| execution tree bound (CORRECTION10) | false |
-| hash manifest valid | false |
-| command-set exact | false |
-| native probes complete (CORRECTION15) | no (5 diagnostic(s)) |
-| execution trees | — |
-| integrity-dim summary | missing=41, unexpected=61, malformed_ev_rows=20, malformed_exec_rows=20, command_set_mismatch=true, execution_trees=0, bundled_result_path=invalid, row_relational_violations=true, subject_tree_contract=legacy, execution_identity=missing, subject_drift=true, native_probes_incomplete=5 |
-| mismatches | subject tree: bundle binding does not match current worktree filtered tree; subject tree changed during the matrix (before/after differ); bundled verification-results.json is invalid: <json-parse-error:ENOENT: no such file or directory, open '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/verification-results.json'>; 40 command rows violate a status/classification invariant; evidence payload paths and manifest are not the same exact file set; native-probe inventory P1–P5 is incomplete: 5 diagnostic(s) |
+| source_path | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/gate-summary.leamas.json` |
+| source_status | `present` |
+| tool.name | `leamas` |
+| tool.version | `0.1.0+dev.dff6f8470001.20260722T193304Z` |
+| tool.build_commit | `dff6f8470001` |
+| ran_at | `2026-07-23T04:53:57.602Z` |
+| verdict | `pass` |
+| candidate_summary_sha256 | `69fbc372e60fb6aef7243d744c074c0b70d031bf6e0a038d69aaa37152fa8d5c` |
+| candidate_summary_sha256_at_commit | `69fbc372e60fb6aef7243d744c074c0b70d031bf6e0a038d69aaa37152fa8d5c` |
+| candidate_summary_sha256_source_matches_commit (claimed) | `true` |
+| candidate_summary_sha256_source_matches_commit (renderer check) | `true` |
+| committed_bytes_sha256 (renderer-derived, git show) | `(unresolved)` |
+| committed_bytes_hash_matches_attestation | `false` |
+| candidate_repo_head_oid (claimed) | `0603598325f819ca626298af16ff1017d186f11d` |
+| candidate_repo_head_oid (renderer check) | `false` |
+| candidate_repo_commit_tree_oid (claimed) | `578c7699444c59c39423ce35e2ba7f41b3f3f416` |
+| candidate_repo_commit_tree_oid (renderer check) | `false` |
+| candidate_repo_subject_tree_oid | `578c7699444c59c39423ce35e2ba7f41b3f3f416` |
+| canonical_summary_sha256 | `31febad1ad3c6ec17d4150de8e8ca2e8daf76b6be08dcea1eaee707520a1ef23` |
+| canonical_extended_sha256 | `b6df78b9411a2f2ab3c605047a45316346643acfe6bfce9929f8f0dff5615da1` |
+| leamas_accepted_interim_candidate | `true` |
+| leamas_validated_candidate (legacy alias) | `true` |
+| interim_aliases_agree | `true` |
+| candidate_repo_root (from stages[0]) | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-staging-mrx1a7rm-4bc881f6/candidate-isolated/repo` |
+| integrity_status | REJECT REJECT committed_bytes_do_not_match; REJECT commit_tree_mismatch; REJECT head_mismatch |
 
-### Missing files (declared in manifest, absent on disk)
+### Stages
 
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/evidence.json` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/build-sdk.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cli-build.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-build-webview.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/cline-hub-tests.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/install-root-frozen.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-check.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-e2e.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-types.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/root-unit.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/sdk-cli-hub-tests.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-analyze-unused.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-build.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-compile-standalone.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-download-ripgrep.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-e2e.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-protos.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-quality.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-unit.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-vitest.stderr` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stdout` (reason: missing)
-- `.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/commands/vscode-webview.stderr` (reason: missing)
+| Label | Repo root | Range | Outcome (expected / observed) |
+| --- | --- | --- | --- |
+| `candidate_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-staging-mrx1a7rm-4bc881f6/candidate-isolated/repo` | `HEAD` | accept / accept |
+| `known_valid_v2_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrx1a7rm-4bc881f6/tooling/valid-v2/repo` | `HEAD` | accept / accept |
+| `known_invalid_v3_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrx1a7rm-4bc881f6/tooling/invalid-v3/repo` | `HEAD` | reject / reject |
+| `malformed_v2_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrx1a7rm-4bc881f6/tooling/malformed-v2/repo` | `HEAD` | reject / reject |
 
-### Unexpected files (on disk, not in manifest)
 
-- `evidence.json` (reason: unexpected)
-- `commands/vscode-unit.metadata.json` (reason: unexpected)
-- `commands/vscode-download-ripgrep.metadata.json` (reason: unexpected)
-- `commands/sdk-cli-hub-tests.stdout` (reason: unexpected)
-- `commands/install-root-frozen.stderr` (reason: unexpected)
-- `commands/build-sdk.stdout` (reason: unexpected)
-- `commands/vscode-build.metadata.json` (reason: unexpected)
-- `commands/cline-hub-build-webview.stdout` (reason: unexpected)
-- `commands/vscode-webview.metadata.json` (reason: unexpected)
-- `commands/cline-hub-tests.stderr` (reason: unexpected)
-- `commands/root-check.metadata.json` (reason: unexpected)
-- `commands/vscode-unit.stdout` (reason: unexpected)
-- `commands/root-check.stdout` (reason: unexpected)
-- `commands/vscode-webview.stderr` (reason: unexpected)
-- `commands/vscode-e2e.stderr` (reason: unexpected)
-- `commands/vscode-analyze-unused.stderr` (reason: unexpected)
-- `commands/cli-build.metadata.json` (reason: unexpected)
-- `commands/root-unit.stderr` (reason: unexpected)
-- `commands/vscode-vitest.stdout` (reason: unexpected)
-- `commands/vscode-vitest.stderr` (reason: unexpected)
-- `commands/root-unit.stdout` (reason: unexpected)
-- `commands/build-sdk.metadata.json` (reason: unexpected)
-- `commands/cline-hub-build-webview.metadata.json` (reason: unexpected)
-- `commands/vscode-webview.stdout` (reason: unexpected)
-- `commands/vscode-unit.stderr` (reason: unexpected)
-- `commands/vscode-compile-standalone.metadata.json` (reason: unexpected)
-- `commands/root-check.stderr` (reason: unexpected)
-- `commands/vscode-analyze-unused.stdout` (reason: unexpected)
-- `commands/vscode-quality.metadata.json` (reason: unexpected)
-- `commands/vscode-e2e.stdout` (reason: unexpected)
-- `commands/vscode-analyze-unused.metadata.json` (reason: unexpected)
-- `commands/cline-hub-build-webview.stderr` (reason: unexpected)
-- `commands/cline-hub-tests.metadata.json` (reason: unexpected)
-- `commands/cline-hub-tests.stdout` (reason: unexpected)
-- `commands/root-e2e.metadata.json` (reason: unexpected)
-- `commands/build-sdk.stderr` (reason: unexpected)
-- `commands/sdk-cli-hub-tests.stderr` (reason: unexpected)
-- `commands/install-root-frozen.stdout` (reason: unexpected)
-- `commands/sdk-cli-hub-tests.metadata.json` (reason: unexpected)
-- `commands/vscode-protos.metadata.json` (reason: unexpected)
-- `commands/root-types.stdout` (reason: unexpected)
-- `commands/vscode-vitest.metadata.json` (reason: unexpected)
-- `commands/root-unit.metadata.json` (reason: unexpected)
-- `commands/install-root-frozen.metadata.json` (reason: unexpected)
-- `commands/vscode-e2e.metadata.json` (reason: unexpected)
-- `commands/vscode-build.stdout` (reason: unexpected)
-- `commands/vscode-quality.stdout` (reason: unexpected)
-- `commands/cli-build.stderr` (reason: unexpected)
-- `commands/vscode-protos.stdout` (reason: unexpected)
-- `commands/root-e2e.stdout` (reason: unexpected)
-- `commands/vscode-download-ripgrep.stderr` (reason: unexpected)
-- `commands/vscode-compile-standalone.stderr` (reason: unexpected)
-- `commands/root-e2e.stderr` (reason: unexpected)
-- `commands/vscode-protos.stderr` (reason: unexpected)
-- `commands/vscode-compile-standalone.stdout` (reason: unexpected)
-- `commands/vscode-download-ripgrep.stdout` (reason: unexpected)
-- `commands/root-types.metadata.json` (reason: unexpected)
-- `commands/vscode-build.stderr` (reason: unexpected)
-- `commands/cli-build.stdout` (reason: unexpected)
-- `commands/vscode-quality.stderr` (reason: unexpected)
-- `commands/root-types.stderr` (reason: unexpected)
-
-### Malformed evidence command rows
-
-20 evidence row(s) failed structural validation. Rebuild `evidence.json` to make the bundle satisfiable.
-
-### Malformed executed command rows
-
-20 executed row(s) failed structural validation.
-
-### Row relational invariant violations (CORRECTION15 deduplicated)
-
-- `build-sdk` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `cli-build` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `cline-hub-build-webview` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `cline-hub-tests` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `install-root-frozen` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-check` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-e2e` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-types` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-unit` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `sdk-cli-hub-tests` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-analyze-unused` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-build` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-compile-standalone` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-download-ripgrep` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-e2e` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-protos` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-quality` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-unit` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-vitest` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-webview` (evidence) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `build-sdk` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `cli-build` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `cline-hub-build-webview` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `cline-hub-tests` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `install-root-frozen` (executed) — fields: `exit_code, head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-check` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-e2e` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-types` (executed) — fields: `exit_code, head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `root-unit` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `sdk-cli-hub-tests` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-analyze-unused` (executed) — fields: `exit_code, head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-build` (executed) — fields: `exit_code, head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-compile-standalone` (executed) — fields: `exit_code, head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-download-ripgrep` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-e2e` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-protos` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-quality` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-unit` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-vitest` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-- `vscode-webview` (executed) — fields: `head_oid_after, head_oid_before, metadata_path, stderr_path, stdout_path, subject_tree_oid_after, subject_tree_oid_before, tree_oid_after, tree_oid_before`
-
-### Subject tree drift
-
-`subject_tree_oid_before` ≠ `subject_tree_oid_after` (or both do not equal the recorded `subject_tree_oid`). The runner detected a change in the subject tree during the matrix. This blocks ACT closure under `SUBJECT_DRIFT`.
-
-### Bundled verification-results.json invalid
-
-The bundled `verification-results.json` could not be read: `<json-parse-error:ENOENT: no such file or directory, open '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/verification-results.json'>`. The bundle is no longer self-contained.
-
-### Manifest path contract violated
-
-The bundle's `expected_evidence_payload_paths` is not the exact evidence-directory-relative file set derived from evidence.json, the bundled verification-results.json, and every command's stdout/stderr/metadata paths, or the manifest declares a different set. Repository output paths are never valid in this domain.
-
-### Command-set mismatch
-
-The executed-commands list and the evidence.commands list disagree. Re-run `bun factory/scripts/run-verification.ts` to rebuild the bundle.
-
-### Native-probe inventory diagnostics (CORRECTION15)
-
-- `p1_better_sqlite3` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
-- `p2_protobuf` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
-- `p3_ripgrep_darwin_arm64` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
-- `p4_vscode_host` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
-- `p5_cline_version` — kind=`missing-inventory`: bundle inventory at /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-FORK-BASELINE01/native-probes.json: native-probe inventory was not found
-
+> **µC-3 round 9 attestation-integrity pass:** the following invariants
+> are independently re-checked from the on-disk attestation:
+> `candidate_summary_sha256_at_commit` is the SHA-256 of the bytes
+> returned by `git show HEAD:.factory/gate-summary.json` from the
+> isolated candidate repo (NOT `slice(0,0)` of leamas stdout);
+> `candidate_repo_commit_tree_oid` is `git rev-parse HEAD^{tree}` of
+> the candidate repo (NOT the producer's filtered subject tree);
+> `candidate_summary_sha256_source_matches_commit` is the literal
+> equality between source and committed bytes hashes;
+> `leamas_accepted_interim_candidate` is the truthful replacement
+> for the misleadingly-named `leamas_validated_candidate`;
+> `candidate_repo_head_oid` / `candidate_repo_commit_tree_oid` /
+> `candidate_repo_subject_tree_oid` are three distinct fields. A
+> failure on any of these surfaces as a `REJECT` row above and
+> blocks parent CLOSED.
 
 ## Production-code identity
 
@@ -518,7 +359,7 @@ open and is transferred to the next ACT.
 
 ## Closure decision (mechanical)
 
-Closure is **FAIL** — fail-closed policy: evidence is invalid (stale subject tree, missing execution identity, invalid execution identity shape, dirty worktree, drift during the matrix, manifest path contract violated, hash-invalid manifest, outside-evidence-dir payload, malformed JSON/rows, symlink, multi-tree, command-set mismatch, relational invariant violation, metadata file mismatch, bundled verification-results invalid, native-probe inventory P1–P5 incomplete) or UNKNOWN-classified failures are present. The next correction must fix the underlying evidence, not relabel the report. Reason codes: `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `EXECUTION_IDENTITY_MISSING`, `EXECUTION_IDENTITY_MALFORMED`, `MANIFEST_PATH_OUTSIDE_EVIDENCE`, `BUNDLED_RESULT_PATH_INVALID`, `BUNDLED_RESULT_COMMAND_SET_MISMATCH`, `ROW_RELATIONAL_INVARIANT_VIOLATION`, `NATIVE_PROBES_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`.
+Closure is **FAIL** — fail-closed policy: evidence is invalid (stale subject tree, missing execution identity, invalid execution identity shape, dirty worktree, drift during the matrix, manifest path contract violated, hash-invalid manifest, outside-evidence-dir payload, malformed JSON/rows, symlink, multi-tree, command-set mismatch, relational invariant violation, metadata file mismatch, bundled verification-results invalid, native-probe inventory P1–P5 incomplete) or UNKNOWN-classified failures are present. The next correction must fix the underlying evidence, not relabel the report. Reason codes: `EVIDENCE_INCOMPLETE`, `SUBJECT_TREE_CONTRACT_MISSING`, `EXECUTION_IDENTITY_MISSING`, `EXECUTION_IDENTITY_MALFORMED`, `MANIFEST_PATH_OUTSIDE_EVIDENCE`, `BUNDLED_RESULT_COMMAND_SET_MISMATCH`, `NATIVE_PROBES_INCOMPLETE`, `R4_UNSATISFIED`, `R5_UNSATISFIED`, `R6_UNSATISFIED`, `R7_UNSATISFIED`, `R16_UNSATISFIED`, `MANDATORY_NOT_ALL_PASS`, `AFFECTED_SCOPE_NOT_ALL_PASS`.
 
 ## Successor ACT readiness
 
