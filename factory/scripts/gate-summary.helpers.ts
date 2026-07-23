@@ -258,7 +258,7 @@ export interface LeamasAttestation {
 	// Hash-equality invariant. MUST be `true` for the attestation to
 	// be considered valid; otherwise the document validates a stale
 	// candidate and the producer fails closed.
-	candidate_summary_matches_canonical: boolean;
+	leamas_validated_candidate: boolean;
 	// Exit code of the candidate-repo \`leamas factory digest\` process.
 	candidate_validation_exit_code: number | null;
 	stages: LeamasAttestationStage[];

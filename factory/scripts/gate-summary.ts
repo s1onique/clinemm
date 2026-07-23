@@ -911,7 +911,7 @@ function runCandidateLeamasValidation(args: {
 		candidate_repo_tree_oid: candidate.subject_tree_oid,
 		// The producer fills this in from the equality check; on the
 		// staging side it is always `false` until main() reassigns.
-		candidate_summary_matches_canonical: false,
+		leamas_validated_candidate: false,
 		candidate_validation_exit_code: result.extras.exit_code,
 		stages,
 		verdict: status === "pass" ? "pass" : status === "unavailable" ? "unavailable" : "fail",
@@ -1335,16 +1335,19 @@ function main(): void {
 		canonical_summary_sha256: sha256(finalSummaryText),
 		candidate_repo_head_oid: leamasContract.candidateRepoHeadOid,
 		candidate_repo_tree_oid: leamasContract.candidateRepoTreeOid,
-		candidate_summary_matches_canonical:
-			sha256(finalSummaryText) === leamasContract.candidateSummarySha256,
+		// Semantic pass/fail of the leamas contract against the
+		// candidate (interim) bytes. The final summary deterministically
+		// differs from the candidate by the appended leamas row, so we
+		// DO NOT compare finalSummaryText to candidateSummarySha256.
+		leamas_validated_candidate: leamasContract.status === "pass",
 		candidate_validation_exit_code: leamasContract.result.extras.exit_code,
 		canonical_extended_sha256: "<set after extended build>",
 	};
-	if (!attestation.candidate_summary_matches_canonical) {
+	if (!attestation.leamas_validated_candidate) {
 		// Fail closed: the document validates a stale candidate and is
 		// unsafe to publish. Surface a clear error so the operator knows
 		// why the summary was never written.
-		throw new Error("GATE_SUMMARY_LEAMAS_CANDIDATE_HASH_MISMATCH");
+		throw new Error("GATE_SUMMARY_LEAMAS_CANDIDATE_REJECTED");
 	}
 	const extended = buildExtended({
 		tool: { name: PRODUCER_NAME, version: PRODUCER_VERSION },

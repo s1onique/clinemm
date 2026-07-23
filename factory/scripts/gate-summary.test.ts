@@ -213,7 +213,7 @@ function buildTestAttestation(): LeamasAttestation {
 		canonical_extended_sha256: "0".repeat(64),
 		candidate_repo_head_oid: "0".repeat(40),
 		candidate_repo_tree_oid: "0".repeat(40),
-		candidate_summary_matches_canonical: true,
+		leamas_validated_candidate: true,
 		candidate_validation_exit_code: 0,
 		stages: [
 			{
