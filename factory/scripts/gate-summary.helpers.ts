@@ -68,7 +68,7 @@ import {
 	isEvidenceStructurallyValid,
 	loadEvidenceFile,
 } from "./baseline-closure";
-export { isEvidenceOk };
+export { isEvidenceOk, isEvidenceStructurallyValid };
 
 // ---------- types ----------------------------------------------------------
 
@@ -216,12 +216,12 @@ export interface SnapshotContext {
  *
  * Each hook is called at a defined point in the atomic publish sequence:
  *
- *   afterStageWrite  - after all three files are written to staging
- *   afterStageGuard  - after stage-side hash re-verification
- *   afterStageValidate - after structural validation of staged summary
- *   afterBackupCreated - after renaming factoryDir → backupDir
- *   afterCanonicalInstalled - after renaming stagingDir → factoryDir
- *   beforePostSwapVerification - before post-swap hash confirmation
+ *   afterStageWrite            - after all three files are written to staging
+ *   afterStageGuard            - after stage-side hash re-verification
+ *   afterStageValidate         - after structural validation of staged summary
+ *   afterBackupCreated         - after renaming factoryDir → backupDir
+ *   afterCanonicalInstalled    - after renaming stagingDir → factoryDir
+ *   beforePostSwapVerification - before post-swap hash confirmation (injection point)
  *
  * A hook that throws causes atomicPublish() to fail at that point. The
  * real operations are used unless the hook itself replaces the behavior.
@@ -238,6 +238,26 @@ export interface AtomicPublishOps {
 
 	/** Synchronously remove a file or directory. */
 	rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
+
+	/**
+	 * Called after renaming factoryDir → backupDir.
+	 * Throw to simulate a backup-creation failure.
+	 */
+	afterBackupCreated?(): void;
+
+	/**
+	 * Called after renaming stagingDir → factoryDir (canonical installed).
+	 * Throw to simulate a post-install failure; rollback will fire.
+	 */
+	afterCanonicalInstalled?(): void;
+
+	/**
+	 * Called before post-swap hash verification begins.
+	 * Use this to mutate the installed canonical files so the
+	 * post-swap verification step fails and triggers rollback.
+	 * Throw, or throw after mutating, to exercise the rollback path.
+	 */
+	beforePostSwapVerification?(): void;
 }
 
 /** Default ops using real Node.js fs. */

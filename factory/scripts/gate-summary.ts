@@ -1318,9 +1318,16 @@ function collectChecks(
  *      `.factory/` concurrently.)
  *   5. Rename `ctx.stagingDir` → `ctx.factoryDir`. After this,
  *      observers see the new bundle.
- *   6. Post-swap confirmation: the canonical bytes match what we
- *      serialized. A failure here triggers a rollback (rename backup
- *      back to `.factory/`).
+ *   6. Call `beforePostSwapVerification` hook (allows mutation of the
+ *      installed canonical files; rollback fires on any throw).
+ *   7. Post-swap confirmation: re-read the canonical bytes and verify
+ *      each SHA-256 matches the in-memory representation. A failure
+ *      triggers rollback (restore from backup).
+ *
+ * The ENTIRE install-and-verify sequence (steps 4-7) is wrapped in a
+ * single try/catch so that rollback fires on ANY failure between
+ * backup creation and successful verification. The backup is kept intact
+ * until all three canonical files have been hash-verified.
  */
 function atomicPublish(
 	ctx: SnapshotContext,
@@ -1364,48 +1371,122 @@ function atomicPublish(
 			`GATE_SUMMARY_STRUCTURAL_VALIDATION_FAILED:${validation.errors.join(" | ")}`,
 		);
 	}
-	const hadCanonical = existsSync(ctx.factoryDir);
-	if (hadCanonical) {
-		if (existsSync(ctx.backupDir)) {
+
+	// ── Steps 4-7: single rollback boundary ─────────────────────────────
+	//
+	// Two flags track what succeeded so the catch handler knows exactly
+	// what to undo:
+	//   backupCreated       — factoryDir was renamed to backupDir
+	//   canonicalInstalled  — stagingDir was renamed to factoryDir
+	//
+	// The outer try/catch covers EVERYTHING after structural validation:
+	// the backup rename, the canonical install, the hook, and the
+	// post-swap hash checks. Any throw fires the same recovery path.
+
+	let backupCreated = false;
+	let canonicalInstalled = false;
+	let originalError: unknown;
+
+	try {
+		// Step 4 — create the backup (only when a previous canonical exists)
+		const hadCanonical = existsSync(ctx.factoryDir);
+		if (hadCanonical) {
+			if (existsSync(ctx.backupDir)) {
+				ops.rmSync(ctx.backupDir, { recursive: true, force: true });
+			}
+			ops.renameSync(ctx.factoryDir, ctx.backupDir);
+			backupCreated = true;
+			// allow test to intercept post-backup state
+			ops.afterBackupCreated?.();
+		}
+
+		// Step 5 — install the new canonical
+		ops.renameSync(ctx.stagingDir, ctx.factoryDir);
+		canonicalInstalled = true;
+		// allow test to mutate the installed canonical before verification
+		ops.afterCanonicalInstalled?.();
+
+		// Step 6 — mutation hook (test injects a fault here to exercise rollback)
+		ops.beforePostSwapVerification?.();
+
+		// Step 7 — verify the installed canonical bytes match what we serialized
+		const canonicalSummaryBytes = ops.readFile(ctx.canonicalSummaryPath);
+		const canonicalExtendedBytes = ops.readFile(ctx.canonicalExtendedPath);
+		const canonicalAttestationBytes = ops.readFile(ctx.canonicalLeamasAttestationPath);
+
+		if (sha256(canonicalSummaryBytes) !== sha256(summaryText)) {
+			throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:summary");
+		}
+		if (sha256(canonicalExtendedBytes) !== sha256(extendedText)) {
+			throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:extended");
+		}
+		if (sha256(canonicalAttestationBytes) !== sha256(attestationText)) {
+			throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:attestation");
+		}
+
+		// All three files verified — safe to discard the backup
+		if (backupCreated) {
 			ops.rmSync(ctx.backupDir, { recursive: true, force: true });
 		}
-		ops.renameSync(ctx.factoryDir, ctx.backupDir);
-	}
-	let swapped = false;
-	try {
-		ops.renameSync(ctx.stagingDir, ctx.factoryDir);
-		swapped = true;
-	} catch (e) {
-		if (hadCanonical) {
-			try {
-				ops.renameSync(ctx.backupDir, ctx.factoryDir);
-			} catch {
-				// best-effort rollback
+
+		return {
+			summaryBytesOnDisk: canonicalSummaryBytes,
+			extendedBytesOnDisk: canonicalExtendedBytes,
+			attestationBytesOnDisk: canonicalAttestationBytes,
+			canonicalSummarySha256: sha256(canonicalSummaryBytes),
+			canonicalExtendedSha256: sha256(canonicalExtendedBytes),
+			canonicalAttestationSha256: sha256(canonicalAttestationBytes),
+		};
+	} catch (_e) {
+		originalError = _e;
+
+		// ── Rollback ─────────────────────────────────────────────────────
+		//
+		// Recovery protocol (attempted in order):
+		//   1. If a canonical was installed, remove it so the directory slot
+		//      is free for the backup rename.
+		//   2. If a backup was created, rename it back to factoryDir.
+		// Both steps are guarded; either may fail (e.g. partial rename,
+		// OS-level I/O error). The rollback error is collected separately.
+		//
+		// If rollback itself fails, the GATE_SUMMARY_ROLLBACK_FAILED
+		// diagnostic is thrown with both errors surfaced in the cause chain.
+		// If rollback succeeds, the original installation error is re-thrown.
+
+		let rollbackError: unknown;
+		try {
+			if (canonicalInstalled && existsSync(ctx.factoryDir)) {
+				ops.rmSync(ctx.factoryDir, { recursive: true, force: true });
 			}
+			if (backupCreated) {
+				ops.renameSync(ctx.backupDir, ctx.factoryDir);
+			}
+		} catch (_re) {
+			rollbackError = _re;
 		}
-		throw e;
+
+		if (rollbackError !== undefined) {
+			// Rollback failed — surface a distinct diagnostic so the operator
+			// can distinguish "installation failed" from "installation failed
+			// AND recovery failed". The backup path is included so manual
+			// recovery is still possible.
+			throw Object.assign(
+				new Error("GATE_SUMMARY_ROLLBACK_FAILED", { cause: {
+					originalError,
+					rollbackError,
+					backupPath: ctx.backupDir,
+					canonicalPath: ctx.factoryDir,
+					canonicalInstalled,
+					backupCreated,
+				} }),
+				{ rollbackError, backupPath: ctx.backupDir, canonicalPath: ctx.factoryDir },
+			);
+		}
+
+		// Rollback succeeded — the original installation error is re-thrown
+		// so the caller can handle it normally.
+		throw originalError;
 	}
-	const canonicalSummaryBytes = ops.readFile(ctx.canonicalSummaryPath);
-	const canonicalExtendedBytes = ops.readFile(ctx.canonicalExtendedPath);
-	const canonicalAttestationBytes = ops.readFile(ctx.canonicalLeamasAttestationPath);
-	if (sha256(canonicalSummaryBytes) !== sha256(summaryText)) {
-		throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:summary");
-	}
-	if (sha256(canonicalExtendedBytes) !== sha256(extendedText)) {
-		throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:extended");
-	}
-	if (sha256(canonicalAttestationBytes) !== sha256(attestationText)) {
-		throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:attestation");
-	}
-	void swapped;
-	return {
-		summaryBytesOnDisk: canonicalSummaryBytes,
-		extendedBytesOnDisk: canonicalExtendedBytes,
-		attestationBytesOnDisk: canonicalAttestationBytes,
-		canonicalSummarySha256: sha256(canonicalSummaryBytes),
-		canonicalExtendedSha256: sha256(canonicalExtendedBytes),
-		canonicalAttestationSha256: sha256(canonicalAttestationBytes),
-	};
 }
 
 // ---------- main (P0-1, P0-2, P0-3, P0-4) ---------------------------------
