@@ -4,10 +4,5 @@
   "baseline": {
     "commit_oid": "c564045d8135c0c1c330b21d47b68b74917ce614",
     "tree_oid": "2a1d9c0e4cef65151afc286343d92ca0f6b68039"
-  },
-  "runner_binding": "trusted_clean",
-  "closure": {
-    "commit_oid": "87c35e18e0f60bf262ebb687359954ab11c9045d",
-    "tree_oid": "dcc4b26fb8989450459946a153e6daf0ecbbff69"
   }
 }
