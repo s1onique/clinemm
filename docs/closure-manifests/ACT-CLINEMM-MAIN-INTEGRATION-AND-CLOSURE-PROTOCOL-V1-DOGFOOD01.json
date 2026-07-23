@@ -51,6 +51,6 @@
     "candidate_summary_sha256": "2d86a492dc6c69e85a76f380459beb38c9a4527fcdb3e0c865c2dd2df225a1a7",
     "candidate_validation_exit_code": 0
   },
-  "closure_commit_oid": null,
-  "closure_tree_oid": null
+  "closure_commit_oid": "19e340b0bcb90452170a4a54a576ea870476cfdc",
+  "closure_tree_oid": "8ab51fef5100bf876c9c8c15226e97d4dbc4d898"
 }
