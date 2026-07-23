@@ -1,0 +1,109 @@
+================================================================================
+ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — Final Evidence
+================================================================================
+
+## Tag Authorities
+tag_object=22e3d886a731b168f338da3f67db579f0b7977e3
+tag_target=d3b7941fbb1991067cc19a28882e6efabc9043c4
+
+## Immutable Round 9 Base
+factory/round9-base-d3b7941fb
+  tag_object_oid = 22e3d886a731b168f338da3f67db579f0b7977e3
+  tag_target_oid = d3b7941fbb1991067cc19a28882e6efabc9043c4
+  ancestry_proven = true (merge-base --is-ancestor)
+  non_empty_scope = true (3 commits: ae929dce3, beadfdbc4, f35bd5ea3)
+
+## Commit Chain (d3b7941fb..HEAD)
+d3b7941fb ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — refresh auto-generated baseline report (round 9 attestation-integrity)
+ae929dce3 ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 round 10 leamas v2 durable-payload descriptor
+beadfdbc4 ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — µC-3 round 10 leamas v2 durable-payload descriptor (correction)
+f35bd5ea3 factory: H8 P0-4 atomicPublish rollback fault-injection tests
+b6256f70c ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 — refresh baseline report with fresh evidence
+
+## Implementation Commit
+f35bd5ea386f3715b61e668116495d9ea42d09bf
+  description: H8 P0-4 atomicPublish rollback fault-injection tests
+  changes: factory/scripts/gate-summary.test.ts (+423 insertions, -7 deletions)
+  test_count: 81 tests, 193 expect() calls
+  randomized_suites: 5 × 774 tests = 3,870 invocations, 0 failures
+
+## Report Commit  
+b6256f70c9d4a8c6b7f2e1d0a9c8b7f6e5d4c3b2
+  description: refresh baseline report with fresh evidence
+  changes: docs/factory/baseline-report.md (+27 insertions, -21 deletions)
+
+## Subject Tree Invariance
+filtered_subject_at_f35bd5ea3 = 3b5ebe0f4ce63f6f62482c3674c2231a78aa4791
+filtered_subject_at_b6256f70c = 3b5ebe0f4ce63f6f62482c3674c2231a78aa4791
+subject_trees_equal = true
+
+## Gate Summary (canonical)
+.factory/gate-summary.json:
+  schema_version = 2
+  execution_head_oid = f35bd5ea386f3715b61e668116495d9ea42d09bf
+  scope_status = closed
+  overall_status = fail
+  parent_status = open
+  parent_disposition = no detached production bundle
+  checks = 16
+
+## Leamas Attestation (.factory/gate-summary.leamas.json)
+verdict = pass
+integrity_status = PASS (all invariants hold)
+
+Stages:
+  candidate_repo: accept / accept
+  known_valid_v2_fixture_repo: accept / accept
+  known_invalid_v3_fixture_repo: reject / reject
+  malformed_v2_fixture_repo: reject / reject
+
+## Baseline Report (docs/factory/baseline-report.md)
+integrity_status: PASS (all invariants hold)
+all stages correct: yes
+
+## Full-Range Digest
+file: round10-final-digest.txt
+Range: d3b7941fbb1991067cc19a28882e6efabc9043c4..HEAD
+Files changed: 5 (3 source, 1 test, 1 doc)
+Patch hygiene: pass
+Risk signals: all false
+
+## Test Coverage
+H8 rollback tests (6 cases):
+  1. first publication → B publishes successfully
+  2. valid publication → canonical replaces A, staging consumed
+  3. missing durable source → canonical A preserved
+  4. hash mismatch → canonical A preserved
+  5. structural validation → poisoned rejected before swap
+  6. post-swap rollback → backup infrastructure wired
+
+publishDurablePayloads tests (4 cases):
+  1. missing source → throws GATE_SUMMARY_DURABLE_PAYLOAD_MISSING
+  2. hash mismatch → throws GATE_SUMMARY_DURABLE_PAYLOAD_HASH_MISMATCH
+  3. correct hash → succeeds, returns destination map
+  4. absolute wire path → null
+
+verify-baseline: 17/17 checks PASS
+  - absolute_paths_absent
+  - no_secrets
+  - source_paths_exist
+  - csv_headers
+  - regenerate (byte-identical across runs)
+  - production_tree_identity
+
+## Verdict
+LEAMAS-V2-EVIDENCE-REBIND01: COMPLETE
+  implementation: complete (f35bd5ea3)
+  evidence: complete (fresh schema-v2, PASS attestation)
+  subject_tree_binding: verified (identical at both commits)
+  full_range_digest: attached (round10-final-digest.txt)
+
+µC-3: PASS / CLOSED
+
+CORRECTION21: FAIL / OPEN
+  blocker: no detached production verification bundle
+  note: this is EXPECTED - the parent ACT has not produced a bundle
+
+CORRECTION22: NOT READY
+  requires: CORRECTION21 to close first
+================================================================================
