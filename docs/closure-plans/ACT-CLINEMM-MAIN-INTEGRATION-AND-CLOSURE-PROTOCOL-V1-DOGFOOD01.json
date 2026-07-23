@@ -4,5 +4,15 @@
   "baseline": {
     "commit_oid": "c564045d8135c0c1c330b21d47b68b74917ce614",
     "tree_oid": "2a1d9c0e4cef65151afc286343d92ca0f6b68039"
-  }
+  },
+  "policy": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "name": "full_factory_suite",
+      "argv": ["leamas", "factory", "gate"],
+      "reason": "Full factory gate"
+    }
+  ]
 }
