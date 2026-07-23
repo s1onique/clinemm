@@ -1,47 +1,13 @@
 {
   "contract_version": 1,
   "act_id": "ACT-CLINEMM-MAIN-INTEGRATION-AND-CLOSURE-PROTOCOL-V1-DOGFOOD01",
-  "repository": "ClineMM",
-  "subject": {
-    "commit_oid": "56fd526e1923f2546fa0aeb53a0dc6e7501e5061",
-    "tree_oid": "192195c2af6bad0711bc6abbed153cb590d96c16"
-  },
-  "integration": {
-    "main_base_oid": "c564045d8135c0c1c330b21d47b68b74917ce614",
-    "main_base_tree_oid": "2a1d9c0e4cef65151afc286343d92ca0f6b68039",
-    "feature_tip_oid": "56fd526e1923f2546fa0aeb53a0dc6e7501e5061",
-    "feature_tip_tree_oid": "192195c2af6bad0711bc6abbed153cb590d96c16",
-    "integration_mode": "fast-forward",
-    "integration_commit_oid": "56fd526e1923f2546fa0aeb53a0dc6e7501e5061",
-    "integration_tree_oid": "192195c2af6bad0711bc6abbed153cb590d96c16"
-  },
-  "execution": {
-    "mode": "serial_fail_fast"
+  "baseline": {
+    "commit_oid": "c564045d8135c0c1c330b21d47b68b74917ce614",
+    "tree_oid": "2a1d9c0e4cef65151afc286343d92ca0f6b68039"
   },
   "runner_binding": "trusted_clean",
-  "expected_state": {
-    "dogfood_scope": "CLOSED",
-    "parent_baseline": "OPEN",
-    "overall_parent_state": "FAIL_OR_OPEN"
-  },
-  "evidence": {
-    "detached": true,
-    "tracked_full_digest": false
-  },
-  "profile": "clinemm-act-v1",
-  "policy_profile": "clinemm-act-v1",
-  "required_checks": [
-    "main_contains_feature_tip",
-    "origin_main_contains_integration_commit",
-    "subject_commit_tree_are_exact",
-    "full_factory_suite_passes",
-    "randomized_factory_suites_pass",
-    "strict_typescript_passes",
-    "range_hygiene_passes",
-    "tracked_worktree_clean_before_and_after",
-    "gate_summary_schema_v2",
-    "bounded_scope_closed",
-    "parent_remains_open",
-    "leamas_attestation_integrity_pass"
-  ]
+  "closure": {
+    "commit_oid": "87c35e18e0f60bf262ebb687359954ab11c9045d",
+    "tree_oid": "dcc4b26fb8989450459946a153e6daf0ecbbff69"
+  }
 }
