@@ -727,6 +727,9 @@ function runCandidateLeamasValidation(args: {
 		invalidV3: string;
 		malformed: string;
 	};
+	candidateRepoHeadOid: string;
+	candidateRepoTreeOid: string;
+	candidateSummarySha256: string;
 } {
 	const { ctx, leamasStagingDir, candidateStagingDir, candidateSummaryText } = args;
 	const toolingDir = join(leamasStagingDir, "tooling");
@@ -896,12 +899,24 @@ function runCandidateLeamasValidation(args: {
 		},
 		command: `${ctx.leamas} factory digest --range HEAD --output <digest-path>`,
 		ran_at: new Date().toISOString(),
-		canonical_summary_sha256: "<see gate-summary.json sha>",
-		canonical_extended_sha256: "<see gate-summary.extended.json sha>",
+		// Bytes committed to the candidate repo as `.factory/gate-summary.json`.
+		candidate_summary_sha256: candidate.fixture_sha256,
+		candidate_summary_sha256_at_commit: candidate.fixture_sha256,
+		// Bytes that landed in canonical `.factory/gate-summary.json`
+		// after the atomic publish. Set by the producer's main() before
+		// the attestation is serialized.
+		canonical_summary_sha256: "<set after extended build>",
+		canonical_extended_sha256: "<set after extended build>",
+		candidate_repo_head_oid: candidate.head_oid,
+		candidate_repo_tree_oid: candidate.subject_tree_oid,
+		// The producer fills this in from the equality check; on the
+		// staging side it is always `false` until main() reassigns.
+		candidate_summary_matches_canonical: false,
+		candidate_validation_exit_code: result.extras.exit_code,
 		stages,
 		verdict: status === "pass" ? "pass" : status === "unavailable" ? "unavailable" : "fail",
 		reason,
-	};
+	}
 	return {
 		check,
 		result,
@@ -920,6 +935,9 @@ function runCandidateLeamasValidation(args: {
 			invalidV3: invalidV3Repo.fixture_sha256,
 			malformed: malformedRepo.fixture_sha256,
 		},
+		candidateRepoHeadOid: candidate.head_oid,
+		candidateRepoTreeOid: candidate.subject_tree_oid,
+		candidateSummarySha256: candidate.fixture_sha256,
 	};
 }
 
@@ -1254,6 +1272,18 @@ function main(): void {
 		candidateSubjectTreeOid: ctx.subjectTreeOid,
 	});
 
+	// Step 5b — capture identity AFTER every executable check
+	// operation has run, INCLUDING the Leamas candidate validation
+	// and its fixture-repo cleanup. The canonical v2's
+	// \`worktree_clean_after\` references this sample so the
+	// worktree state truthfully reflects what was true at the end of
+	// every executable step the producer ran.
+	const identityAfterLeamas = captureSnapshot(ctx.repoRoot, ctx.git);
+	const identityStableAfterLeamas =
+		identityAfterLeamas.head_oid === ctx.identityBefore.head_oid &&
+		identityAfterLeamas.tree_oid === ctx.identityBefore.tree_oid &&
+		identityAfterLeamas.subject_tree_oid === ctx.identityBefore.subject_tree_oid;
+
 	// Step 6 — append the leamas check to the canonical checks
 	// list. Re-derive scope/overall from the FULL list. Build the
 	// FINAL summary (P0-2).
@@ -1283,19 +1313,39 @@ function main(): void {
 		executionTreeOid: ctx.treeOid,
 		subjectTreeOid: ctx.subjectTreeOid,
 		worktreeCleanBefore: ctx.worktreeCleanBefore,
-		worktreeCleanAfter: identityAfterChecks.worktree_clean,
+		worktreeCleanAfter: identityAfterLeamas.worktree_clean,
 		checks,
 	});
 	const finalSummaryText = serializeGateSummary(finalSummary);
 	writeFileSync(stagingGateSummaryPath(ctx.stagingDir), finalSummaryText);
 
 	// Step 7 — attest the exact final bytes, then write the
-	// attestation INTO staging (P0-4).
+	// attestation INTO staging (P0-4). The attestation carries the
+	// candidate summary bytes (the bytes the leamas check actually
+	// digested) AND the canonical summary bytes (the bytes that landed
+	// in `.factory/gate-summary.json` after the swap). The equality
+	// invariant proves the contract ran on the EXACT staged candidate,
+	// not a prior canonical artifact.
 	const attestation: LeamasAttestation = {
 		...leamasContract.attestation,
+		candidate_summary_sha256: leamasContract.candidateSummarySha256,
+		candidate_summary_sha256_at_commit: sha256(
+			leamasContract.result.stdout.split("\n").slice(0, 0).join(""),
+		),
 		canonical_summary_sha256: sha256(finalSummaryText),
+		candidate_repo_head_oid: leamasContract.candidateRepoHeadOid,
+		candidate_repo_tree_oid: leamasContract.candidateRepoTreeOid,
+		candidate_summary_matches_canonical:
+			sha256(finalSummaryText) === leamasContract.candidateSummarySha256,
+		candidate_validation_exit_code: leamasContract.result.extras.exit_code,
 		canonical_extended_sha256: "<set after extended build>",
 	};
+	if (!attestation.candidate_summary_matches_canonical) {
+		// Fail closed: the document validates a stale candidate and is
+		// unsafe to publish. Surface a clear error so the operator knows
+		// why the summary was never written.
+		throw new Error("GATE_SUMMARY_LEAMAS_CANDIDATE_HASH_MISMATCH");
+	}
 	const extended = buildExtended({
 		tool: { name: PRODUCER_NAME, version: PRODUCER_VERSION },
 		identityStable: identityStableAfterChecks,

@@ -207,8 +207,14 @@ function buildTestAttestation(): LeamasAttestation {
 		tool: { name: "test-leamas", build_commit: null, version: null },
 		command: "leamas factory digest --range HEAD --output <digest-path>",
 		ran_at: new Date().toISOString(),
-		canonical_summary_sha256: "<see gate-summary.json sha>",
-		canonical_extended_sha256: "<see gate-summary.extended.json sha>",
+		candidate_summary_sha256: "0".repeat(64),
+		candidate_summary_sha256_at_commit: "0".repeat(64),
+		canonical_summary_sha256: "0".repeat(64),
+		canonical_extended_sha256: "0".repeat(64),
+		candidate_repo_head_oid: "0".repeat(40),
+		candidate_repo_tree_oid: "0".repeat(40),
+		candidate_summary_matches_canonical: true,
+		candidate_validation_exit_code: 0,
 		stages: [
 			{
 				label: "candidate_repo",

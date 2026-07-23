@@ -246,8 +246,21 @@ export interface LeamasAttestation {
 	tool: { name: string; build_commit: string | null; version: string | null };
 	command: string;
 	ran_at: string;
+	// Bytes committed to the candidate repo as `.factory/gate-summary.json`.
+	candidate_summary_sha256: string;
+	candidate_summary_sha256_at_commit: string;
+	// Bytes that landed in canonical `.factory/gate-summary.json`.
 	canonical_summary_sha256: string;
 	canonical_extended_sha256: string;
+	// Bytes the candidate was committed with in the isolated repo.
+	candidate_repo_head_oid: string;
+	candidate_repo_tree_oid: string;
+	// Hash-equality invariant. MUST be `true` for the attestation to
+	// be considered valid; otherwise the document validates a stale
+	// candidate and the producer fails closed.
+	candidate_summary_matches_canonical: boolean;
+	// Exit code of the candidate-repo \`leamas factory digest\` process.
+	candidate_validation_exit_code: number | null;
 	stages: LeamasAttestationStage[];
 	verdict: "pass" | "fail" | "unavailable";
 	reason: string;
