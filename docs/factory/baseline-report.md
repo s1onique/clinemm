@@ -382,4 +382,3 @@ Closure is **FAIL** — fail-closed policy: evidence is invalid (stale subject t
 9. The detached evidence bundle is rebuilt against the closing commit **using the CORRECTION15 contract**: self-contained bundle with bundled `verification-results.json`, verified-executed closure arithmetic, strict pass invariants (status=pass ⇔ exit_code=0), pass-only arithmetic (skip / unavailable are tracked separately), relational status/classification invariants, deduplicated row diagnostics, transactional staging, fail-closed native-probe dimension, and renderer-derived Git identity. The `fs.watch`-based tracked-input monitor is an advisory hint only. Until then, the production evidence bundle is correctly reported as `FAIL`.
 
 Current blockers: pass=2/17 mandatory, fail=15, UNKNOWN=[], verdict=FAIL.
-

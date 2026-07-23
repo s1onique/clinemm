@@ -1738,4 +1738,3 @@ export function observeEvidencePathForAbsence(
 function normalizeRelative(path: string): string {
 	return path.split(sep).join("/");
 }
-
