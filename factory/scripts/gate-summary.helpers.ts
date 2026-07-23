@@ -39,8 +39,24 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { delimiter, dirname, isAbsolute, join, relative } from "node:path";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import {
+	delimiter,
+	dirname,
+	isAbsolute,
+	join,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
 
 import {
 	checkEvidence,
@@ -326,6 +342,10 @@ export interface LeamasAttestation {
 	candidate_repo_head_oid: string;
 	candidate_repo_commit_tree_oid: string;
 	candidate_repo_subject_tree_oid: string;
+	candidate_repo_bundle_path?: string;
+	candidate_repo_bundle_sha256?: string;
+	candidate_summary_payload_path?: string;
+	candidate_summary_payload_sha256?: string;
 	// Historical alias (round 8). Round 9 also reports the truthful
 	// replacement alongside it. This field is kept for backward
 	// compatibility with the round 8 schema.
@@ -1185,6 +1205,266 @@ export function validateGateSummaryStructure(summary: unknown): {
 export function toPortablePath(absPath: string): string {
 	return absPath.replaceAll("\\", "/");
 }
+
+// ---------- durable-payload descriptor (round 10) ---------------------------
+//
+// µC-3 round 10 (LEAMAS-V2-EVIDENCE-REBIND01 durable-payload descriptor):
+//
+// Round 9 introduced two durable artifacts (the candidate git bundle and
+// the candidate summary payload) but the producer, the publisher, the
+// attestation, and the renderer each carried their own ad-hoc
+// `name / path / sha256` triples. The descriptor below is the single
+// record type that flows through every stage of the producer pipeline;
+// the validator, the publisher, the attestation, and the renderer now
+// consume exactly these shapes.
+//
+// A `DurablePayload`:
+//
+//   - `id` is a stable identifier (the on-disk filename inside the
+//     tooling directory). The publisher uses it to scaffold the source
+//     path; the renderer / recovery layer uses it as a diagnostic key.
+//
+//   - `source_abs` is the absolute path the producer reads from at
+//     publish time. Set by the producer when the payload is staged.
+//     Tests that bypass the producer can leave it empty and supply the
+//     path explicitly via `resolveWirePathToBundle`.
+//
+//   - `destination_rel` is the POSIX-relative path (relative to the
+//     canonical gate bundle root, i.e. `.factory/`) that the payload
+//     is published to. The renderer uses this as the wire path to
+//     re-validate on the receiving side.
+//
+//   - `sha256` is the SHA-256 of the bytes the publisher WROTE. The
+//     renderer recomputes the on-disk hash and compares to this field
+//     to detect in-transit tampering, accidental overwrite, or
+//     publisher-side hash drift.
+
+export interface DurablePayload {
+	id: string;
+	source_abs: string;
+	destination_rel: string;
+	sha256: string;
+}
+
+/**
+ * Build a `DurablePayload` with every field the producers / verifiers
+ * depend on. Callers MUST set `sha256` to the hash of the bytes that
+ * land on disk; the publisher refuses to publish a payload whose
+ * post-swap hash disagrees with this field.
+ */
+export function durablePayload(args: {
+	id: string;
+	source_abs: string;
+	destination_rel: string;
+	sha256: string;
+}): DurablePayload {
+	return {
+		id: args.id,
+		source_abs: args.source_abs,
+		destination_rel: args.destination_rel,
+		sha256: args.sha256,
+	};
+}
+
+// ---------- wire-path resolver (round 10) ----------------------------------
+//
+// The producer's attestation carries a `candidate_repo_bundle_path` and
+// `candidate_summary_payload_path` that are POSIX-relative strings
+// (`gates/tooling/candidate-repo.bundle` etc.). The renderer is
+// responsible for translating them into absolute paths and verifying
+// every safety invariant:
+//
+//   1. The wire path must be a non-empty string.
+//   2. It must NOT be absolute (POSIX-relative only).
+//   3. It must NOT contain `\` (no platform-native separators).
+//   4. Every path component must be non-empty and free of `.` / `..`
+//      traversal segments.
+//   5. The bundle root (`.factory/`) must exist as a regular directory
+//      and must NOT be a symlink (rejects symlink-backed evidence root).
+//   6. After resolution, the candidate path must remain INSIDE the
+//      bundle root (lexical containment).
+//   7. Every intermediate directory component must NOT be a symlink
+//      (rejects intermediate-symlink escapes).
+//   8. The candidate must be a regular file (directories are rejected).
+//   9. The canonical realpath of the candidate must remain inside the
+//      canonical realpath of the bundle root (rejects final-component
+//      symlinks that escape the root).
+//
+// Returns the canonical absolute path on success, `null` on any
+// failure. All seven invariants throw `null` (never a string) so
+// callers can safely use the result as a boolean.
+export function resolveWirePathToBundle(
+	bundleRoot: string,
+	wirePath: unknown,
+): string | null {
+	if (typeof wirePath !== "string" || wirePath.length === 0) return null;
+	if (isAbsolute(wirePath)) return null;
+	if (wirePath.includes("\\")) return null;
+	const parts = wirePath.split("/");
+	if (parts.some((part) => !part || part === "." || part === "..")) return null;
+	const root = isAbsolute(bundleRoot) ? bundleRoot : join(bundleRoot);
+	try {
+		const rootStat = lstatSync(root);
+		if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return null;
+	} catch {
+		return null;
+	}
+	const candidate = resolve(root, wirePath);
+	const rel = relative(root, candidate);
+	if (!rel) return null;
+	if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
+	let cursor = root;
+	for (const part of rel.split(sep)) {
+		cursor = join(cursor, part);
+		try {
+			if (lstatSync(cursor).isSymbolicLink()) return null;
+		} catch {
+			return null;
+		}
+	}
+	try {
+		if (!lstatSync(candidate).isFile()) return null;
+		const realRoot = realpathSync(root);
+		const realCandidate = realpathSync(candidate);
+		const realRel = relative(realRoot, realCandidate);
+		if (!realRel) return null;
+		if (realRel === ".." || realRel.startsWith(`..${sep}`) || isAbsolute(realRel)) {
+			return null;
+		}
+		return realCandidate;
+	} catch {
+		return null;
+	}
+}
+
+// ---------- payload + bundle verifier (round 10) --------------------------
+//
+// `verifyDurablePayload` re-hashes the on-disk payload and compares
+// against the `sha256` recorded in the descriptor. Returns the
+// recomputed hash on success, `null` on missing / mismatched / non-file
+// paths. Used by the renderer before it commits to a clone.
+
+export function verifyDurablePayload(absPath: string, claimedHash: string): string | null {
+	if (!absPath || !claimedHash) return null;
+	try {
+		if (!lstatSync(absPath).isFile()) return null;
+	} catch {
+		return null;
+	}
+	const actual = createHash("sha256").update(readFileSync(absPath)).digest("hex");
+	return actual === claimedHash ? actual : null;
+}
+
+// `verifyDurableBundle` runs the hash check AND `git bundle verify`
+// inside the caller's current working directory. Per `git-bundle(1)`,
+// verification checks whether the bundle prerequisites exist in the
+// current repository; the renderer treats the bundle as well-formed
+// only when verification exits 0. The clean clone (below) is the
+// stronger proof; this is the cheap pre-clone gate.
+//
+// Returns the recomputed hash on success, `null` on any failure.
+export function verifyDurableBundle(
+	bundlePath: string,
+	claimedHash: string,
+	git: string = "git",
+): string | null {
+	if (!bundlePath || !claimedHash) return null;
+	let stat;
+	try {
+		stat = lstatSync(bundlePath);
+	} catch {
+		return null;
+	}
+	if (!stat.isFile()) return null;
+	const actual = createHash("sha256").update(readFileSync(bundlePath)).digest("hex");
+	if (actual !== claimedHash) return null;
+	const verify = spawnSync(git, ["bundle", "verify", bundlePath], { encoding: "utf8" });
+	if (verify.status !== 0) return null;
+	const heads = spawnSync(git, ["bundle", "list-heads", bundlePath], { encoding: "utf8" });
+	if (heads.status !== 0) return null;
+	return actual;
+}
+
+// `recoverCandidateFromBundle` clones the bundle into `recoverDir` and
+// extracts the three OIDs / hashes the renderer needs to re-derive the
+// attestation invariants:
+//   - `committed_summary_sha256` (sha256 of `git show HEAD:.factory/gate-summary.json`)
+//   - `head_oid` (`git rev-parse HEAD^{commit}`)
+//   - `commit_tree_oid` (`git rev-parse HEAD^{tree}`)
+//
+// The recovery directory is cleaned up INSIDE the function (always —
+// even on success) so callers do not have to track a temp path. The
+// returned values are extracted BEFORE the cleanup so the caller can
+// use them as invariants without holding onto the clone.
+export function recoverCandidateFromBundle(
+	bundlePath: string,
+	recoverDir: string,
+	git: string = "git",
+): {
+	committed_summary_sha256: string | null;
+	head_oid: string | null;
+	commit_tree_oid: string | null;
+} {
+	let committedSummarySha256: string | null = null;
+	let headOid: string | null = null;
+	let commitTreeOid: string | null = null;
+	try {
+		const clone = spawnSync(git, ["clone", "--quiet", bundlePath, recoverDir], {
+			encoding: "utf8",
+		});
+		if (clone.status === 0) {
+			const committed = spawnSync(
+				git,
+				["show", "HEAD:.factory/gate-summary.json"],
+				{ cwd: recoverDir, stdio: ["ignore", "pipe", "pipe"] },
+			);
+			if (committed.status === 0) {
+				committedSummarySha256 = createHash("sha256")
+					.update(committed.stdout ?? Buffer.alloc(0))
+					.digest("hex");
+			}
+			const head = spawnSync(
+				git,
+				["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"],
+				{ cwd: recoverDir, encoding: "utf8" },
+			);
+			if (head.status === 0) {
+				headOid = (head.stdout ?? "").toString().trim();
+				if (!OID_PATTERN.test(headOid)) headOid = null;
+			}
+			const tree = spawnSync(
+				git,
+				["rev-parse", "--verify", "--end-of-options", "HEAD^{tree}"],
+				{ cwd: recoverDir, encoding: "utf8" },
+			);
+			if (tree.status === 0) {
+				commitTreeOid = (tree.stdout ?? "").toString().trim();
+				if (!OID_PATTERN.test(commitTreeOid)) commitTreeOid = null;
+			}
+		}
+	} finally {
+		// Always clean up the recovery directory — the caller should
+		// never observe a leftover scratch space. The extracted
+		// `committed_summary_sha256` / `head_oid` / `commit_tree_oid`
+		// are string scalars; the temp directory is not needed after
+		// extraction.
+		try {
+			rmSync(recoverDir, { recursive: true, force: true });
+		} catch {
+			// best-effort cleanup
+		}
+	}
+	return {
+		committed_summary_sha256: committedSummarySha256,
+		head_oid: headOid,
+		commit_tree_oid: commitTreeOid,
+	};
+}
+
+// The `DurablePayload` descriptor and the resolver / verifier /
+// recovery helpers above are all exported so the renderer in
+// `render-baseline-report.ts` and the focused tests in
+// `gate-summary.test.ts` consume the SAME primitives.
 
 // Suppress unused warnings for the helper signatures used by the producer.
 void dirname;

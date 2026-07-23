@@ -29,12 +29,15 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import {
 	existsSync,
 	mkdtempSync,
 	mkdirSync,
+	realpathSync,
 	rmSync,
 	readFileSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,6 +56,8 @@ import {
 	deriveRejectionReasons,
 	deriveScopeStatus,
 	isParentClosed,
+	recoverCandidateFromBundle,
+	resolveWirePathToBundle,
 	serializeExtended,
 	serializeGateSummary,
 	serializeLeamasAttestation,
@@ -60,6 +65,8 @@ import {
 	stagingGateSummaryPath,
 	stagingScopeDir,
 	validateGateSummaryStructure,
+	verifyDurableBundle,
+	verifyDurablePayload,
 	type GateCheckSummary,
 	type LeamasAttestation,
 	type ParentClosureInput,
@@ -1242,3 +1249,254 @@ describe("H7 — attestation invariants (round 9)", () => {
 // suppress unused warning from the runExec import above
 void collectChecks;
 void GIT_RANGE_HYGIENE;
+
+describe("H8 — Round 10 durable candidate evidence", () => {
+	// Path-rejection matrix. The resolver MUST reject every catastrophic
+	// wire path. Building a real `.factory` root is required because
+	// `resolveWirePathToBundle` reads its kind via `lstatSync`.
+	function setupFactoryRoot(): { root: string; cleanup: () => void } {
+		const root = mkdtempSync(join(tmpdir(), "round10-factory-"));
+		mkdirSync(join(root, ".factory"), { recursive: true });
+		const cleanup = () => rmSync(root, { recursive: true, force: true });
+		return { root, cleanup };
+	}
+
+	it("rejects absolute wire paths", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			expect(resolveWirePathToBundle(root, "/etc/passwd")).toBeNull();
+			expect(resolveWirePathToBundle(root, "/tmp/whatever")).toBeNull();
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects empty wire paths", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			expect(resolveWirePathToBundle(root, "")).toBeNull();
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects dot / traversal segments", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			expect(resolveWirePathToBundle(root, ".")).toBeNull();
+			expect(resolveWirePathToBundle(root, "..")).toBeNull();
+			expect(resolveWirePathToBundle(root, "./foo")).toBeNull();
+			expect(resolveWirePathToBundle(root, "../foo")).toBeNull();
+			expect(resolveWirePathToBundle(root, "gates/../../outside")).toBeNull();
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects backslash wire paths", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			expect(resolveWirePathToBundle(root, "gates\\tooling\\bundle")).toBeNull();
+			expect(resolveWirePathToBundle(root, "gates\\..\\outside")).toBeNull();
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects non-string types", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			expect(resolveWirePathToBundle(root, undefined)).toBeNull();
+			expect(resolveWirePathToBundle(root, null)).toBeNull();
+			expect(resolveWirePathToBundle(root, 42)).toBeNull();
+			expect(resolveWirePathToBundle(root, {})).toBeNull();
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects a symlink-backed .factory root", () => {
+		const tmp = mkdtempSync(join(tmpdir(), "round10-symlink-root-"));
+		try {
+			const real = join(tmp, "real");
+			const link = join(tmp, "link");
+			mkdirSync(join(real, ".factory"), { recursive: true });
+			// Make the link point at the real `.factory` directory.
+			symlinkSync(join(real, ".factory"), link);
+			// Restore the canonical path: the resolver MUST reject this
+			// because the bundle root itself is a symlink.
+			expect(resolveWirePathToBundle(link, "gates/tooling/candidate-repo.bundle")).toBeNull();
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects intermediate-symlink escapes", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			const outsideDir = mkdtempSync(join(tmpdir(), "round10-outside-"));
+			mkdirSync(join(root, "gates", "tooling"), { recursive: true });
+			try {
+				// Place a regular file inside the bundle root, then
+				// replace one of the intermediate directories with a
+				// symlink that escapes the root.
+				const target = join(root, "gates", "tooling", "candidate-repo.bundle");
+				writeFileSync(target, "fake-bundle");
+				symlinkSync(outsideDir, join(root, "gates", "escape"), "dir");
+				// Wire path that traverses the symlink MUST be rejected.
+				expect(resolveWirePathToBundle(root, "gates/escape/foo")).toBeNull();
+				// Wire path that does NOT traverse the symlink is fine.
+				expect(resolveWirePathToBundle(root, "gates/tooling/candidate-repo.bundle")).toBe(realpathSync(target));
+			} finally {
+				rmSync(outsideDir, { recursive: true, force: true });
+			}
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("accepts a regular file inside the bundle root", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			mkdirSync(join(root, "gates", "tooling"), { recursive: true });
+			const target = join(root, "gates", "tooling", "candidate-repo.bundle");
+			writeFileSync(target, "fake-bundle");
+			const resolved = resolveWirePathToBundle(root, "gates/tooling/candidate-repo.bundle");
+			// macOS resolves /var -> /private/var; compare the canonical
+			// realpath so the test is portable across platforms.
+			expect(resolved).toBe(realpathSync(target));
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects a directory path (non-file) with a regular wire path", () => {
+		const { root, cleanup } = setupFactoryRoot();
+		try {
+			mkdirSync(join(root, "gates", "tooling"), { recursive: true });
+			// `gates/tooling` is a directory, not a file. The resolver
+			// MUST reject it.
+			expect(resolveWirePathToBundle(root, "gates/tooling")).toBeNull();
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects an absent bundle root", () => {
+		const tmp = mkdtempSync(join(tmpdir(), "round10-no-factory-"));
+		try {
+			// No `.factory` here — the resolver must reject with `null`.
+			expect(resolveWirePathToBundle(tmp, "gates/tooling/candidate-repo.bundle")).toBeNull();
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
+	it("verifyDurablePayload returns the recomputed hash on a match and null on mismatch", () => {
+		const root = mkdtempSync(join(tmpdir(), "round10-payload-"));
+		try {
+			const payload = join(root, "payload.json");
+			writeFileSync(payload, "{\"a\":1}");
+			const claimed = createHash("sha256").update(readFileSync(payload)).digest("hex");
+			// Match: the recomputed hash is returned.
+			expect(verifyDurablePayload(payload, claimed)).toBe(claimed);
+			// Mismatch: null is returned.
+			expect(verifyDurablePayload(payload, "0".repeat(64))).toBeNull();
+			// Missing file: null.
+			expect(verifyDurablePayload(join(root, "absent.json"), claimed)).toBeNull();
+			// Empty claimed hash: null.
+			expect(verifyDurablePayload(payload, "")).toBeNull();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("verifyDurableBundle rejects a tampered bundle and accepts a fresh one", async () => {
+		const { setupFixtureRepoAt } = await import("./gate-summary");
+		const root = mkdtempSync(join(tmpdir(), "round10-bundle-verify-"));
+		try {
+			const source = join(root, "src");
+			const out = join(root, "src.bundle");
+			setupFixtureRepoAt(source, "round10-payload\n");
+			const r = spawnSync("git", ["-C", source, "bundle", "create", out, "HEAD"], { encoding: "utf8" });
+			expect(r.status).toBe(0);
+			const claimed = createHash("sha256").update(readFileSync(out)).digest("hex");
+			// Fresh bundle: hash + bundle verify returns the hash.
+			expect(verifyDurableBundle(out, claimed)).toBe(claimed);
+			// Tampered bundle: hash mismatches → null.
+			writeFileSync(out, "tampered");
+			expect(verifyDurableBundle(out, claimed)).toBeNull();
+			// Replace with a non-file payload (a directory) → null.
+			rmSync(out, { force: true });
+			mkdirSync(out);
+			expect(verifyDurableBundle(out, claimed)).toBeNull();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("recoverCandidateFromBundle extracts the committed bytes hash and HEAD/tree", async () => {
+		const { setupFixtureRepoAt } = await import("./gate-summary");
+		const root = mkdtempSync(join(tmpdir(), "round10-recover-"));
+		try {
+			const source = join(root, "src");
+			const bundle = join(root, "src.bundle");
+			const payloadText = "round10-committed-payload\n";
+			setupFixtureRepoAt(source, payloadText);
+			const r = spawnSync("git", ["-C", source, "bundle", "create", bundle, "HEAD"], { encoding: "utf8" });
+			expect(r.status).toBe(0);
+			const recoverDir = join(root, "recover");
+			const recovered = recoverCandidateFromBundle(bundle, recoverDir);
+			expect(recovered.committed_summary_sha256).toBe(
+				createHash("sha256").update(payloadText).digest("hex"),
+			);
+			expect(recovered.head_oid).toMatch(/^[0-9a-f]{40}$/);
+			expect(recovered.commit_tree_oid).toMatch(/^[0-9a-f]{40}$/);
+			// Recovery MUST clean up the scratch directory even on
+			// success.
+			expect(existsSync(recoverDir)).toBe(false);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("recoverCandidateFromBundle returns nulls and cleans up on a failed clone", () => {
+		const root = mkdtempSync(join(tmpdir(), "round10-recover-fail-"));
+		try {
+			// Write a non-bundle file so `git clone` exits non-zero.
+			const bundle = join(root, "fake.bundle");
+			writeFileSync(bundle, "definitely not a git bundle");
+			const recoverDir = join(root, "recover");
+			const recovered = recoverCandidateFromBundle(bundle, recoverDir);
+			expect(recovered.committed_summary_sha256).toBeNull();
+			expect(recovered.head_oid).toBeNull();
+			expect(recovered.commit_tree_oid).toBeNull();
+			// The scratch directory MUST be removed even when the clone
+			// failed.
+			expect(existsSync(recoverDir)).toBe(false);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("persists a self-contained candidate bundle that survives source deletion", async () => {
+		const { setupFixtureRepoAt } = await import("./gate-summary");
+		const root = mkdtempSync(join(tmpdir(), "round10-bundle-"));
+		const source = join(root, "candidate");
+		const out = join(root, "candidate.bundle");
+		setupFixtureRepoAt(source, "round10-payload\n");
+		const r = spawnSync("git", ["-C", source, "bundle", "create", out, "HEAD"], { encoding: "utf8" });
+		expect(r.status).toBe(0);
+		rmSync(source, { recursive: true, force: true });
+		expect(spawnSync("git", ["bundle", "verify", out], { encoding: "utf8" }).status).toBe(0);
+		rmSync(root, { recursive: true, force: true });
+	});
+
+	it("rejects a tampered candidate bundle", () => {
+		const root = mkdtempSync(join(tmpdir(), "round10-tamper-"));
+		const bundle = join(root, "candidate.bundle");
+		writeFileSync(bundle, "not-a-git-bundle");
+		expect(spawnSync("git", ["bundle", "verify", bundle], { encoding: "utf8" }).status).not.toBe(0);
+		rmSync(root, { recursive: true, force: true });
+	});
+});

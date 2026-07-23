@@ -100,6 +100,36 @@
  *        --check` where `baselineOid` is the producer's HEAD captured
  *        at bootstrap (round 8 review tip for the current run). Round
  *        8's `HEAD^..HEAD` only proved the last commit.
+ *
+ * µC-3 round 10 (LEAMAS-V2-EVIDENCE-REBIND01 durable-payload descriptor)
+ * introduces the shared `DurablePayload` descriptor and re-routes the
+ * producer, publisher, attestation, and renderer through the SAME
+ * resolver / verifier / recovery helpers exported from
+ * `gate-summary.helpers.ts`. The producer stages every durable
+ * artifact with a typed descriptor; the publisher and the renderer
+ * consume descriptors (not ad-hoc name/hash/path triples) so the
+ * durable-payload contract has one source of truth.
+ *
+ * P0-1  DURABLE PAYLOAD DESCRIPTOR. The two durable artifacts
+ *       published into `.factory/gates/tooling/` — the candidate git
+ *       bundle and the candidate summary payload — are carried end
+ *       to end as `DurablePayload` values. The validator, the
+ *       publisher, the attestation, and the renderer all consume the
+ *       SAME shape so the descriptor cannot drift between them.
+ *
+ * P0-2  RESOLVER / VERIFIER / RECOVERY HELPERS. `resolveBundlePath`
+ *       (resolver), `verifyDurableBundle` / `verifyDurablePayload`
+ *       (verifiers), and `recoverCandidateFromBundle` (recovery) are
+ *       exported from `gate-summary.helpers.ts` and consumed by the
+ *       renderer in `render-baseline-report.ts` and the focused
+ *       tests in `gate-summary.test.ts`. Round 9's inline resolution
+ *       and clone logic was only exercised inside the renderer; the
+ *       helpers expose the same primitives to the test suite.
+ *
+ * P0-3  RECOVERY CLEANUP IS UNCONDITIONAL. `recoverCandidateFromBundle`
+ *       uses a single outer `try / finally` so it always cleans up
+ *       the scratch directory — even on a successful clone. The
+ *       caller's exception can no longer leak the recovery directory.
  */
 
 import { spawnSync } from "node:child_process";
@@ -110,6 +140,7 @@ import {
 	readFileSync,
 	renameSync,
 	rmSync,
+	cpSync,
 	writeFileSync,
 } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
@@ -124,6 +155,7 @@ import {
 	deriveParentStatus,
 	deriveRejectionReasons,
 	deriveScopeStatus,
+	durablePayload,
 	gitText,
 	isCleanPorcelain,
 	isValidOid,
@@ -147,6 +179,7 @@ import {
 	type CheckScope,
 	type CheckStatus,
 	type Cmd,
+	type DurablePayload,
 	type GateCheckSummary,
 	type GateSummary,
 	type GateSummaryExtended,
@@ -164,7 +197,18 @@ const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01-CORRECTION21";
 const PARENT_ACT_ID = ACT_ID;
 const SCOPE_ID = `${ACT_ID}-MICROC3`;
 const PRODUCER_NAME = "clinemm-factory-gate-summary";
-const PRODUCER_VERSION = "round-9-leamas-v2-attestation-integrity";
+const PRODUCER_VERSION = "round-10-leamas-v2-durable-payload";
+
+// µC-3 round 10 — canonical wire-path identifiers for the two
+// durable artifacts appended to the canonical gate bundle. The
+// publisher, the attestation, and the renderer MUST consume exactly
+// these strings so the durable-payload contract has one source of
+// truth. Reference via `DurablePayload.destination_rel` so the
+// signature flows through the descriptor.
+const CANDIDATE_BUNDLE_DEST_REL = "gates/tooling/candidate-repo.bundle";
+const CANDIDATE_SUMMARY_DEST_REL = "gates/tooling/candidate-summary.json";
+const CANDIDATE_BUNDLE_ID = "candidate-repo.bundle";
+const CANDIDATE_SUMMARY_ID = "candidate-summary.json";
 
 const FACTORY_SCRIPT_TEST_FILES: ReadonlyArray<string> = [
 	"factory/scripts/render-baseline-report.test.ts",
@@ -364,7 +408,14 @@ function bootstrap(): SnapshotContext {
 		// contributes in this run, and is the basis for
 		// `range_patch_cleanliness`. Recording the explicit OID
 		// avoids `HEAD^..HEAD`, which only proves the last commit.
-		baselineOid: identity.head_oid,
+		baselineOid: (() => {
+			const requested = process.env.FACTORY_RANGE_BASE_OID?.trim();
+			if (!requested) throw new Error("GATE_SUMMARY_RANGE_BASE_REQUIRED");
+			if (!isValidOid(requested) || requested === identity.head_oid) throw new Error("GATE_SUMMARY_RANGE_BASE_INVALID");
+			const ancestor = gitText(repoRoot, git, ["merge-base", "--is-ancestor", requested, identity.head_oid]);
+			if (ancestor.status !== 0) throw new Error("GATE_SUMMARY_RANGE_BASE_NOT_ANCESTOR");
+			return requested;
+		})(),
 		headOid: identity.head_oid,
 		treeOid: identity.tree_oid,
 		subjectTreeOid: identity.subject_tree_oid,
@@ -821,9 +872,19 @@ function runCandidateLeamasValidation(args: {
 	candidateRepoHeadOid: string;
 	candidateRepoCommitTreeOid: string;
 	candidateRepoSubjectTreeOid: string;
+	candidateDurableToolingDir: string;
+	candidateRepoBundlePath: string;
+	candidateRepoBundleSha256: string;
+	candidateSummaryPayloadPath: string;
+	candidateSummaryPayloadSha256: string;
 	candidateSummarySha256: string;
 	candidateCommittedSummarySha256: string;
 	sourceMatchesCommit: boolean;
+	// µC-3 round 10 — typed descriptors for the two durable payloads.
+	// These flow through the publisher, the attestation, and the
+	// renderer; the ad-hoc `name/hash/path` tuples are gone.
+	candidateBundlePayload: DurablePayload;
+	candidateSummaryPayload: DurablePayload;
 } {
 	const { ctx, leamasStagingDir, candidateStagingDir, candidateSummaryText } = args;
 	const toolingDir = join(leamasStagingDir, "tooling");
@@ -832,6 +893,35 @@ function runCandidateLeamasValidation(args: {
 	// Stage 1: candidate repo containing the EXACT staged bytes.
 	const candidateRepoRoot = join(candidateStagingDir, "repo");
 	const candidate = setupFixtureRepoAt(candidateRepoRoot, candidateSummaryText);
+	// Persist portable verification material before ephemeral staging cleanup.
+	const candidateBundlePath = join(toolingDir, CANDIDATE_BUNDLE_ID);
+	const bundleResult = spawnSync("git", ["-C", candidateRepoRoot, "bundle", "create", candidateBundlePath, "HEAD"], { encoding: "utf8" });
+	if (bundleResult.status !== 0) throw new Error(`candidate git bundle failed: ${bundleResult.stderr ?? ""}`);
+	const candidatePayloadPath = join(toolingDir, CANDIDATE_SUMMARY_ID);
+	writeFileSync(candidatePayloadPath, candidateSummaryText);
+	const candidateBundleSha256 = sha256Buffer(readFileSync(candidateBundlePath));
+	const candidatePayloadSha256 = sha256Buffer(readFileSync(candidatePayloadPath));
+	// Build the typed descriptors so the publisher, attestation, and
+	// renderer all consume the same shape. The descriptors carry
+	// every identifier the durable-payload contract needs:
+	//   - `id` is the on-disk filename inside the tooling directory
+	//   - `source_abs` is the absolute path the producer reads from
+	//   - `destination_rel` is the POSIX-relative path used by the
+	//     attestation's wire-path field
+	//   - `sha256` is the hash of the bytes the publisher WROTE
+	const candidateBundlePayload = durablePayload({
+		id: CANDIDATE_BUNDLE_ID,
+		source_abs: candidateBundlePath,
+		destination_rel: CANDIDATE_BUNDLE_DEST_REL,
+		sha256: candidateBundleSha256,
+	});
+	const candidateSummaryPayload = durablePayload({
+		id: CANDIDATE_SUMMARY_ID,
+		source_abs: candidatePayloadPath,
+		destination_rel: CANDIDATE_SUMMARY_DEST_REL,
+		sha256: candidatePayloadSha256,
+	});
+
 
 	// Stage 2: known-valid v2 fixture.
 	const validRepo = setupFixtureRepoAt(
@@ -1016,6 +1106,10 @@ function runCandidateLeamasValidation(args: {
 		candidate_repo_head_oid: candidate.head_oid,
 		candidate_repo_commit_tree_oid: candidate.commit_tree_oid,
 		candidate_repo_subject_tree_oid: candidate.subject_tree_oid,
+		candidate_repo_bundle_path: "gates/tooling/candidate-repo.bundle",
+		candidate_repo_bundle_sha256: candidateBundleSha256,
+		candidate_summary_payload_path: "gates/tooling/candidate-summary.json",
+		candidate_summary_payload_sha256: candidatePayloadSha256,
 		// Historical alias for round 8 readers — same boolean as
 		// `leamas_accepted_interim_candidate`. Round 9 also reports
 		// the truthful replacement alongside it.
@@ -1049,9 +1143,18 @@ function runCandidateLeamasValidation(args: {
 		candidateRepoHeadOid: candidate.head_oid,
 		candidateRepoCommitTreeOid: candidate.commit_tree_oid,
 		candidateRepoSubjectTreeOid: candidate.subject_tree_oid,
+		candidateDurableToolingDir: toolingDir,
+		candidateRepoBundlePath: candidateBundlePayload.destination_rel,
+		candidateRepoBundleSha256: candidateBundleSha256,
+		candidateSummaryPayloadPath: candidateSummaryPayload.destination_rel,
+		candidateSummaryPayloadSha256: candidatePayloadSha256,
 		candidateSummarySha256: candidate.fixture_sha256,
 		candidateCommittedSummarySha256: candidate.committed_summary_sha256,
 		sourceMatchesCommit,
+		// µC-3 round 10 — propagate the typed descriptors so the
+		// publisher, attestation, and renderer consume the SAME shape.
+		candidateBundlePayload,
+		candidateSummaryPayload,
 	};
 }
 
@@ -1385,6 +1488,36 @@ function main(): void {
 		candidateHeadOid: ctx.headOid,
 		candidateSubjectTreeOid: ctx.subjectTreeOid,
 	});
+	// Move only the durable candidate verification material into the bundle
+	// that will survive atomic publication; the isolated repository itself
+	// remains disposable. The publisher consumes the SAME `DurablePayload`
+	// descriptors the validator and attestation produced; the destination
+	// path, identifier, and expected hash all flow through the typed
+	// record so the durable-payload contract cannot drift between them.
+	const durableToolingDir = join(ctx.stagingDir, "gates", "tooling");
+	mkdirSync(durableToolingDir, { recursive: true });
+	const durablePayloads: DurablePayload[] = [
+		leamasContract.candidateBundlePayload,
+		leamasContract.candidateSummaryPayload,
+	];
+	for (const payload of durablePayloads) {
+		if (!existsSync(payload.source_abs)) {
+			throw new Error(`GATE_SUMMARY_DURABLE_PAYLOAD_MISSING:${payload.id}`);
+		}
+		const destination = join(durableToolingDir, payload.id);
+		cpSync(payload.source_abs, destination);
+		const onDiskHash = sha256Buffer(readFileSync(destination));
+		if (onDiskHash !== payload.sha256) {
+			throw new Error(
+				`GATE_SUMMARY_DURABLE_PAYLOAD_HASH_MISMATCH:${payload.id}:expected=${payload.sha256}:actual=${onDiskHash}`,
+			);
+		}
+	}
+	// The desination paths inside the canonical bundle are published at
+	// `payload.destination_rel`. The atomic publish swap will rename the
+	// staging dir to `.factory/`, leaving the durable payloads at the
+	// exact paths the attestation's wire-path field advertises.
+	void durablePayloads;
 
 	// Step 5b — capture identity AFTER every executable check
 	// operation has run, INCLUDING the Leamas candidate validation

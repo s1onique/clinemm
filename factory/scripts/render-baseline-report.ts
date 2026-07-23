@@ -56,6 +56,15 @@ import {
 	SUBJECT_TREE_EXCLUDES,
 	type ExcludedPath,
 } from "./subject-tree";
+// µC-3 round 10 — the renderer consumes the SAME resolver / verifier /
+// recovery helpers the producer publishes. The round-9 inline resolver
+// and inline clone loop are gone.
+import {
+	recoverCandidateFromBundle,
+	resolveWirePathToBundle,
+	verifyDurableBundle,
+	verifyDurablePayload,
+} from "./gate-summary.helpers";
 
 // ---------- constants --------------------------------------------------------
 
@@ -1208,10 +1217,60 @@ function leamasAttestationRow(attestationPath: string): string {
 		return `_Leamas attestation at \`${attestationPath}\` is not a JSON object._`;
 	}
 
-	const candidateRepoRoot =
-		typeof attestation.stages?.[0]?.repo_root === "string"
-			? (attestation.stages[0].repo_root as string)
+	// µC-3 round 10 — use the SAME resolver / verifier / recovery helpers
+	// the producer publishes. Round 9 extracted the candidate repo root
+	// from `stages[0].repo_root` (the ephemeral staging path); round 10
+	// resolves the durable wire path from the attestation and recovers
+	// the candidate into a private scratch directory.
+	const bundleRoot = join(ROOT, ".factory");
+	const candidateBundlePath = resolveWirePathToBundle(
+		bundleRoot,
+		attestation.candidate_repo_bundle_path,
+	);
+	const candidatePayloadPath = resolveWirePathToBundle(
+		bundleRoot,
+		attestation.candidate_summary_payload_path,
+	);
+	const claimedBundleHash =
+		typeof attestation.candidate_repo_bundle_sha256 === "string"
+			? attestation.candidate_repo_bundle_sha256
 			: null;
+	const claimedPayloadHash =
+		typeof attestation.candidate_summary_payload_sha256 === "string"
+			? attestation.candidate_summary_payload_sha256
+			: null;
+	const onDiskBundleHash = candidateBundlePath
+		? verifyDurableBundle(candidateBundlePath, claimedBundleHash ?? "")
+		: null;
+	const onDiskPayloadHash = candidatePayloadPath
+		? verifyDurablePayload(candidatePayloadPath, claimedPayloadHash ?? "")
+		: null;
+
+	// Helper `recoverCandidateFromBundle` owns its cleanup. The renderer
+	// never holds the scratch directory; even if the caller's claim
+	// disagrees with the on-disk bytes, recovery completes (returning
+	// nulls) and the scratch directory is removed.
+	let atCommitBytesHash: string | null = null;
+	let candidateHead: string | null = null;
+	let candidateCommitTree: string | null = null;
+	if (onDiskBundleHash && onDiskPayloadHash && candidateBundlePath) {
+		const recoverDir = join(ROOT, `.factory-leamas-renderer-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		const recovered = recoverCandidateFromBundle(candidateBundlePath, recoverDir);
+		atCommitBytesHash = recovered.committed_summary_sha256;
+		candidateHead = recovered.head_oid;
+		candidateCommitTree = recovered.commit_tree_oid;
+	}
+
+	// `candidateRepoRoot` is the canonical realpath returned by the
+	// resolver. The renderer surfaces it as the recovered repo root; the
+	// underlying clone is already cleaned up by the helper.
+	const candidateRepoRoot = candidateBundlePath;
+	void candidatePayloadPath;
+	void claimedBundleHash;
+	void claimedPayloadHash;
+	void onDiskBundleHash;
+	void onDiskPayloadHash;
+
 
 	const computed: Record<string, string | null> = {
 		candidate_summary_sha256: typeof attestation.candidate_summary_sha256 === "string"
@@ -1249,42 +1308,12 @@ function leamasAttestationRow(attestationPath: string): string {
 		verdict: typeof attestation.verdict === "string" ? (attestation.verdict as string) : null,
 	};
 
-	// Renderer-side re-derivation of invariants where possible.
+	// Renderer-side re-derivation of invariants where possible. The
+	// `atCommitBytesHash` / `candidateHead` / `candidateCommitTree`
+	// values are populated by `recoverCandidateFromBundle` above; the
+	// `rendererDerived` block ONLY adds the diagnostic rows that the
+	// mark produced this round 10 commit.
 	const rendererDerived: string[] = [];
-	let atCommitBytesHash: string | null = null;
-	let candidateHead: string | null = null;
-	let candidateCommitTree: string | null = null;
-	if (candidateRepoRoot) {
-		try {
-			const atCommitResult = spawnSync(
-				"git",
-				["show", "HEAD:.factory/gate-summary.json"],
-				{ cwd: candidateRepoRoot, stdio: ["ignore", "pipe", "pipe"] },
-			);
-			if (atCommitResult.status === 0) {
-				const buf = atCommitResult.stdout ?? Buffer.alloc(0);
-				atCommitBytesHash = createHash("sha256").update(buf).digest("hex");
-			}
-			const headResult = spawnSync(
-				"git",
-				["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"],
-				{ cwd: candidateRepoRoot, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
-			);
-			if (headResult.status === 0) {
-				candidateHead = (headResult.stdout ?? "").toString().trim();
-			}
-			const treeResult = spawnSync(
-				"git",
-				["rev-parse", "--verify", "--end-of-options", "HEAD^{tree}"],
-				{ cwd: candidateRepoRoot, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
-			);
-			if (treeResult.status === 0) {
-				candidateCommitTree = (treeResult.stdout ?? "").toString().trim();
-			}
-		} catch {
-			// renderer-side re-derivation is best-effort
-		}
-	}
 	if (atCommitBytesHash) {
 		rendererDerived.push(`at_commit_bytes_sha256_renderer=${atCommitBytesHash}`);
 	}
@@ -1294,6 +1323,10 @@ function leamasAttestationRow(attestationPath: string): string {
 	if (candidateCommitTree) {
 		rendererDerived.push(`candidate_repo_commit_tree_oid_renderer=${candidateCommitTree}`);
 	}
+	// Note: the original round-9 inline `git show` / `git rev-parse` loop
+	// is gone. The helper handles the clone and the renderer trusts its
+	// values; any caller-side assertion still runs through the helper.
+
 
 	const sourceHash = computed.candidate_summary_sha256;
 	const commitHash = computed.candidate_summary_sha256_at_commit;
