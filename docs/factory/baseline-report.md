@@ -135,7 +135,7 @@ Reported identity values (render provenance is
 `evidence_recorded_*`):
 
 ```
-subject_tree_oid            (renderer-computed): c5976461f74d3236bed24544220f76105101a033
+subject_tree_oid            (renderer-computed): 3b5ebe0f4ce63f6f62482c3674c2231a78aa4791
 subject_tree_oid            (recorded in evidence): (not recorded)
 subject_tree_oid_before     (recorded in evidence): (not recorded)
 subject_tree_oid_after      (recorded in evidence): (not recorded)
@@ -144,8 +144,8 @@ execution_tree_oid          (recorded in evidence): (not recorded)
 execution_identity_valid    (recorded in evidence): (not recorded)
 worktree_inputs_clean_before (recorded in evidence): (not recorded)
 worktree_inputs_clean_after  (recorded in evidence): (not recorded)
-renderer_input_head_oid:                            3c6dee8229b2e24ddcca8b30aeb773aacb92964e
-renderer_input_full_tree_oid:                       a03831ba07e84f211ec4e87367319de8ab3ae3bf
+renderer_input_head_oid:                            f35bd5ea386f3715b61e668116495d9ea42d09bf
+renderer_input_full_tree_oid:                       79755c5925c45b7a38990492908f4f23e51d1b57
 ```
 
 ## Upstream and fork identity (from `factory/inventories/repository.json`)
@@ -296,35 +296,41 @@ Subsequent dimensions below are computed against an empty record. The runner mus
 | tool.name | `leamas` |
 | tool.version | `0.1.0+dev.dff6f8470001.20260722T193304Z` |
 | tool.build_commit | `dff6f8470001` |
-| ran_at | `2026-07-23T04:53:57.602Z` |
+| ran_at | `2026-07-23T12:36:27.296Z` |
 | verdict | `pass` |
-| candidate_summary_sha256 | `69fbc372e60fb6aef7243d744c074c0b70d031bf6e0a038d69aaa37152fa8d5c` |
-| candidate_summary_sha256_at_commit | `69fbc372e60fb6aef7243d744c074c0b70d031bf6e0a038d69aaa37152fa8d5c` |
+| candidate_summary_sha256 | `75e1bd292c5ff90832586c5858424848f2cd0f8c22bae133da4be0aab8aedede` |
+| candidate_summary_sha256_at_commit | `75e1bd292c5ff90832586c5858424848f2cd0f8c22bae133da4be0aab8aedede` |
 | candidate_summary_sha256_source_matches_commit (claimed) | `true` |
 | candidate_summary_sha256_source_matches_commit (renderer check) | `true` |
-| committed_bytes_sha256 (renderer-derived, git show) | `(unresolved)` |
-| committed_bytes_hash_matches_attestation | `false` |
-| candidate_repo_head_oid (claimed) | `0603598325f819ca626298af16ff1017d186f11d` |
-| candidate_repo_head_oid (renderer check) | `false` |
-| candidate_repo_commit_tree_oid (claimed) | `578c7699444c59c39423ce35e2ba7f41b3f3f416` |
-| candidate_repo_commit_tree_oid (renderer check) | `false` |
-| candidate_repo_subject_tree_oid | `578c7699444c59c39423ce35e2ba7f41b3f3f416` |
-| canonical_summary_sha256 | `31febad1ad3c6ec17d4150de8e8ca2e8daf76b6be08dcea1eaee707520a1ef23` |
-| canonical_extended_sha256 | `b6df78b9411a2f2ab3c605047a45316346643acfe6bfce9929f8f0dff5615da1` |
+| committed_bytes_sha256 (renderer-derived, git show) | `75e1bd292c5ff90832586c5858424848f2cd0f8c22bae133da4be0aab8aedede` |
+| committed_bytes_hash_matches_attestation | `true` |
+| candidate_repo_head_oid (claimed) | `dd6ed2944eca8b3b9c04d4977d1ff1a7f8390d12` |
+| candidate_repo_head_oid (renderer check) | `true` |
+| candidate_repo_commit_tree_oid (claimed) | `7fffc862b6a9bf008599a4af54acd5d6c6e76a07` |
+| candidate_repo_commit_tree_oid (renderer check) | `true` |
+| candidate_repo_subject_tree_oid | `7fffc862b6a9bf008599a4af54acd5d6c6e76a07` |
+| canonical_summary_sha256 | `b31e30b3c6dc08d2174b2632b03bd86b61571a051c523d87b5108218ead1f2c1` |
+| canonical_extended_sha256 | `2bd1b92cade8546b6f202f8f84fbdc40c476de08524214670ded83f82710e203` |
 | leamas_accepted_interim_candidate | `true` |
 | leamas_validated_candidate (legacy alias) | `true` |
 | interim_aliases_agree | `true` |
-| candidate_repo_root (from stages[0]) | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-staging-mrx1a7rm-4bc881f6/candidate-isolated/repo` |
-| integrity_status | REJECT REJECT committed_bytes_do_not_match; REJECT commit_tree_mismatch; REJECT head_mismatch |
+| candidate_repo_root (from stages[0]) | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/gates/TOOLING/candidate-repo.bundle` |
+| integrity_status | PASS (all invariants hold) |
 
 ### Stages
 
 | Label | Repo root | Range | Outcome (expected / observed) |
 | --- | --- | --- | --- |
-| `candidate_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-staging-mrx1a7rm-4bc881f6/candidate-isolated/repo` | `HEAD` | accept / accept |
-| `known_valid_v2_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrx1a7rm-4bc881f6/tooling/valid-v2/repo` | `HEAD` | accept / accept |
-| `known_invalid_v3_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrx1a7rm-4bc881f6/tooling/invalid-v3/repo` | `HEAD` | reject / reject |
-| `malformed_v2_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrx1a7rm-4bc881f6/tooling/malformed-v2/repo` | `HEAD` | reject / reject |
+| `candidate_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-staging-mrxht3mi-9b324cf1/candidate-isolated/repo` | `HEAD` | accept / accept |
+| `known_valid_v2_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrxht3mi-9b324cf1/tooling/valid-v2/repo` | `HEAD` | accept / accept |
+| `known_invalid_v3_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrxht3mi-9b324cf1/tooling/invalid-v3/repo` | `HEAD` | reject / reject |
+| `malformed_v2_fixture_repo` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory-leamas-staging-mrxht3mi-9b324cf1/tooling/malformed-v2/repo` | `HEAD` | reject / reject |
+
+### Renderer-derived checks
+
+- `at_commit_bytes_sha256_renderer=75e1bd292c5ff90832586c5858424848f2cd0f8c22bae133da4be0aab8aedede`
+- `candidate_repo_head_oid_renderer=dd6ed2944eca8b3b9c04d4977d1ff1a7f8390d12`
+- `candidate_repo_commit_tree_oid_renderer=7fffc862b6a9bf008599a4af54acd5d6c6e76a07`
 
 
 > **µC-3 round 9 attestation-integrity pass:** the following invariants
