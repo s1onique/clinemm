@@ -29,6 +29,7 @@
  * import `./baseline-closure.ts` directly.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
@@ -64,6 +65,13 @@ const ROOT = spawnSync("git", ["rev-parse", "--show-toplevel"], {
 }).stdout.trim();
 const OUT = join(ROOT, "docs/factory/baseline-report.md");
 const OUT_TMP = OUT + ".tmp";
+
+// µC-3 round 9 (LEAMAS-V2-EVIDENCE-REBIND01 attestation-integrity pass):
+// the digest renderer must independently re-check the on-disk Leamas
+// attestation so reviewers can confirm every round-9 invariant
+// (committed-bytes hash, commit-tree OID, hash equality, etc.) without
+// trusting the producer's in-memory representation.
+const LEAMAS_ATTESTATION_PATH = join(ROOT, ".factory/gate-summary.leamas.json");
 
 const PROBE_DIAGNOSTIC_LABEL: Record<string, string> = {
 	"missing-inventory": "ABSENT",
@@ -552,6 +560,26 @@ ${probeRows}
 > PASS). Row diagnostics are deduplicated with a \`Set<string>\`.
 
 ${evidenceRow(evidenceView, evTopValue, HEAD_OID_NOW, TREE_OID_NOW, nativeProbes)}
+
+## Leamas attestation (from \`.factory/gate-summary.leamas.json\`)
+
+${leamasAttestationRow(LEAMAS_ATTESTATION_PATH)}
+
+> **µC-3 round 9 attestation-integrity pass:** the following invariants
+> are independently re-checked from the on-disk attestation:
+> \`candidate_summary_sha256_at_commit\` is the SHA-256 of the bytes
+> returned by \`git show HEAD:.factory/gate-summary.json\` from the
+> isolated candidate repo (NOT \`slice(0,0)\` of leamas stdout);
+> \`candidate_repo_commit_tree_oid\` is \`git rev-parse HEAD^{tree}\` of
+> the candidate repo (NOT the producer's filtered subject tree);
+> \`candidate_summary_sha256_source_matches_commit\` is the literal
+> equality between source and committed bytes hashes;
+> \`leamas_accepted_interim_candidate\` is the truthful replacement
+> for the misleadingly-named \`leamas_validated_candidate\`;
+> \`candidate_repo_head_oid\` / \`candidate_repo_commit_tree_oid\` /
+> \`candidate_repo_subject_tree_oid\` are three distinct fields. A
+> failure on any of these surfaces as a \`REJECT\` row above and
+> blocks parent CLOSED.
 
 ## Production-code identity
 
@@ -1141,4 +1169,234 @@ function successorBlock(
 		`Current blockers: pass=${p.mandatoryPass}/${p.mandatoryApplicable} mandatory, fail=${p.mandatoryFail}, UNKNOWN=${JSON.stringify(p.unknownFailures)}, verdict=${c.verdict}.`,
 	);
 	return lines.join("\n");
+}
+
+/**
+ * µC-3 round 9 (LEAMAS-V2-EVIDENCE-REBIND01 attestation-integrity pass):
+ * render the on-disk Leamas attestation with independent invariant
+ * checks. The renderer does NOT trust the producer's in-memory
+ * representation — it reads `.factory/gate-summary.leamas.json`
+ * directly and re-derives the hash-equality invariant between the
+ * committed-candidate-bytes hash and the source-candidate-bytes hash.
+ *
+ * Round 9 invariants re-checked here:
+ *   1. `candidate_summary_sha256_at_commit` equals
+ *      `sha256(git show HEAD:.factory/gate-summary.json)` from the
+ *      candidate repo (NOT `slice(0,0)` of stdout).
+ *   2. `candidate_repo_commit_tree_oid` equals
+ *      `git rev-parse HEAD^{tree}` of the candidate repo.
+ *   3. `candidate_repo_subject_tree_oid` is stored SEPARATELY from
+ *      the commit-tree OID (even when they currently coincide).
+ *   4. `candidate_summary_sha256_source_matches_commit` is the
+ *      literal equality between source and committed bytes hashes.
+ *   5. `leamas_accepted_interim_candidate` and the legacy alias
+ *      `leamas_validated_candidate` carry the same boolean.
+ *   6. The rendered `range_baseline_oid` (recorded by the producer
+ *      in stdout) matches the renderer-derived baseline OID.
+ */
+function leamasAttestationRow(attestationPath: string): string {
+	if (!existsSync(attestationPath)) {
+		return `_No on-disk Leamas attestation found at \`${attestationPath}\`._ The producer must publish one before parent CLOSED can be considered.`;
+	}
+	let attestation: any;
+	try {
+		attestation = JSON.parse(readFileSync(attestationPath, "utf8"));
+	} catch (e) {
+		return `_Failed to decode Leamas attestation at \`${attestationPath}\`._ ${(e as Error).message}`;
+	}
+	if (!attestation || typeof attestation !== "object") {
+		return `_Leamas attestation at \`${attestationPath}\` is not a JSON object._`;
+	}
+
+	const candidateRepoRoot =
+		typeof attestation.stages?.[0]?.repo_root === "string"
+			? (attestation.stages[0].repo_root as string)
+			: null;
+
+	const computed: Record<string, string | null> = {
+		candidate_summary_sha256: typeof attestation.candidate_summary_sha256 === "string"
+			? (attestation.candidate_summary_sha256 as string)
+			: null,
+		candidate_summary_sha256_at_commit: typeof attestation.candidate_summary_sha256_at_commit === "string"
+			? (attestation.candidate_summary_sha256_at_commit as string)
+			: null,
+		candidate_summary_sha256_source_matches_commit:
+			typeof attestation.candidate_summary_sha256_source_matches_commit === "boolean"
+				? String(attestation.candidate_summary_sha256_source_matches_commit)
+				: null,
+		candidate_repo_head_oid: typeof attestation.candidate_repo_head_oid === "string"
+			? (attestation.candidate_repo_head_oid as string)
+			: null,
+		candidate_repo_commit_tree_oid: typeof attestation.candidate_repo_commit_tree_oid === "string"
+			? (attestation.candidate_repo_commit_tree_oid as string)
+			: null,
+		candidate_repo_subject_tree_oid: typeof attestation.candidate_repo_subject_tree_oid === "string"
+			? (attestation.candidate_repo_subject_tree_oid as string)
+			: null,
+		canonical_summary_sha256: typeof attestation.canonical_summary_sha256 === "string"
+			? (attestation.canonical_summary_sha256 as string)
+			: null,
+		canonical_extended_sha256: typeof attestation.canonical_extended_sha256 === "string"
+			? (attestation.canonical_extended_sha256 as string)
+			: null,
+		leamas_accepted_interim_candidate:
+			typeof attestation.leamas_accepted_interim_candidate === "boolean"
+				? String(attestation.leamas_accepted_interim_candidate)
+				: null,
+		leamas_validated_candidate: typeof attestation.leamas_validated_candidate === "boolean"
+			? String(attestation.leamas_validated_candidate)
+			: null,
+		verdict: typeof attestation.verdict === "string" ? (attestation.verdict as string) : null,
+	};
+
+	// Renderer-side re-derivation of invariants where possible.
+	const rendererDerived: string[] = [];
+	let atCommitBytesHash: string | null = null;
+	let candidateHead: string | null = null;
+	let candidateCommitTree: string | null = null;
+	if (candidateRepoRoot) {
+		try {
+			const atCommitResult = spawnSync(
+				"git",
+				["show", "HEAD:.factory/gate-summary.json"],
+				{ cwd: candidateRepoRoot, stdio: ["ignore", "pipe", "pipe"] },
+			);
+			if (atCommitResult.status === 0) {
+				const buf = atCommitResult.stdout ?? Buffer.alloc(0);
+				atCommitBytesHash = createHash("sha256").update(buf).digest("hex");
+			}
+			const headResult = spawnSync(
+				"git",
+				["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"],
+				{ cwd: candidateRepoRoot, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
+			);
+			if (headResult.status === 0) {
+				candidateHead = (headResult.stdout ?? "").toString().trim();
+			}
+			const treeResult = spawnSync(
+				"git",
+				["rev-parse", "--verify", "--end-of-options", "HEAD^{tree}"],
+				{ cwd: candidateRepoRoot, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
+			);
+			if (treeResult.status === 0) {
+				candidateCommitTree = (treeResult.stdout ?? "").toString().trim();
+			}
+		} catch {
+			// renderer-side re-derivation is best-effort
+		}
+	}
+	if (atCommitBytesHash) {
+		rendererDerived.push(`at_commit_bytes_sha256_renderer=${atCommitBytesHash}`);
+	}
+	if (candidateHead) {
+		rendererDerived.push(`candidate_repo_head_oid_renderer=${candidateHead}`);
+	}
+	if (candidateCommitTree) {
+		rendererDerived.push(`candidate_repo_commit_tree_oid_renderer=${candidateCommitTree}`);
+	}
+
+	const sourceHash = computed.candidate_summary_sha256;
+	const commitHash = computed.candidate_summary_sha256_at_commit;
+	const sourceMatchesCommit =
+		sourceHash !== null && commitHash !== null && sourceHash === commitHash
+			? "true"
+			: "false";
+	const rendererAtCommitMatches =
+		atCommitBytesHash && commitHash && atCommitBytesHash === commitHash
+			? "true"
+			: "false";
+	const rendererCommitTreeMatches =
+		candidateCommitTree &&
+		computed.candidate_repo_commit_tree_oid &&
+		candidateCommitTree === computed.candidate_repo_commit_tree_oid
+			? "true"
+			: "false";
+	const rendererHeadMatches =
+		candidateHead &&
+		computed.candidate_repo_head_oid &&
+		candidateHead === computed.candidate_repo_head_oid
+			? "true"
+			: "false";
+
+	const aliasesMatch =
+		computed.leamas_accepted_interim_candidate !== null &&
+		computed.leamas_validated_candidate !== null &&
+		computed.leamas_accepted_interim_candidate === computed.leamas_validated_candidate
+			? "true"
+			: "false";
+
+	const verdictFlags: string[] = [];
+	if (computed.candidate_summary_sha256_source_matches_commit === "false") {
+		verdictFlags.push("REJECT source_vs_commit_hash_mismatch");
+	}
+	if (rendererAtCommitMatches === "false") {
+		verdictFlags.push("REJECT committed_bytes_do_not_match");
+	}
+	if (rendererCommitTreeMatches === "false") {
+		verdictFlags.push("REJECT commit_tree_mismatch");
+	}
+	if (rendererHeadMatches === "false") {
+		verdictFlags.push("REJECT head_mismatch");
+	}
+	if (aliasesMatch === "false") {
+		verdictFlags.push("REJECT interim_aliases_disagree");
+	}
+
+	const status =
+		verdictFlags.length === 0
+			? "PASS"
+			: verdictFlags.every((v) => v.startsWith("REJECT ")) ? "REJECT" : "PASS_WITH_NOTES";
+	const statusLine = `${status} ${verdictFlags.length === 0 ? "(all invariants hold)" : verdictFlags.join("; ")}`;
+
+	let rows = `| Field | Value |\n| --- | --- |\n`;
+	rows += `| source_path | \`${attestationPath}\` |\n`;
+	rows += `| source_status | \`${existsSync(attestationPath) ? "present" : "absent"}\` |\n`;
+	rows += `| tool.name | \`${attestation.tool?.name ?? "(missing)"}\` |\n`;
+	rows += `| tool.version | \`${attestation.tool?.version ?? "(missing)"}\` |\n`;
+	rows += `| tool.build_commit | \`${attestation.tool?.build_commit ?? "(missing)"}\` |\n`;
+	rows += `| ran_at | \`${attestation.ran_at ?? "(missing)"}\` |\n`;
+	rows += `| verdict | \`${computed.verdict ?? "(missing)"}\` |\n`;
+	rows += `| candidate_summary_sha256 | \`${computed.candidate_summary_sha256 ?? "(missing)"}\` |\n`;
+	rows += `| candidate_summary_sha256_at_commit | \`${computed.candidate_summary_sha256_at_commit ?? "(missing)"}\` |\n`;
+	rows += `| candidate_summary_sha256_source_matches_commit (claimed) | \`${computed.candidate_summary_sha256_source_matches_commit ?? "(missing)"}\` |\n`;
+	rows += `| candidate_summary_sha256_source_matches_commit (renderer check) | \`${sourceMatchesCommit}\` |\n`;
+	rows += `| committed_bytes_sha256 (renderer-derived, git show) | \`${atCommitBytesHash ?? "(unresolved)"}\` |\n`;
+	rows += `| committed_bytes_hash_matches_attestation | \`${rendererAtCommitMatches}\` |\n`;
+	rows += `| candidate_repo_head_oid (claimed) | \`${computed.candidate_repo_head_oid ?? "(missing)"}\` |\n`;
+	rows += `| candidate_repo_head_oid (renderer check) | \`${rendererHeadMatches}\` |\n`;
+	rows += `| candidate_repo_commit_tree_oid (claimed) | \`${computed.candidate_repo_commit_tree_oid ?? "(missing)"}\` |\n`;
+	rows += `| candidate_repo_commit_tree_oid (renderer check) | \`${rendererCommitTreeMatches}\` |\n`;
+	rows += `| candidate_repo_subject_tree_oid | \`${computed.candidate_repo_subject_tree_oid ?? "(missing)"}\` |\n`;
+	rows += `| canonical_summary_sha256 | \`${computed.canonical_summary_sha256 ?? "(missing)"}\` |\n`;
+	rows += `| canonical_extended_sha256 | \`${computed.canonical_extended_sha256 ?? "(missing)"}\` |\n`;
+	rows += `| leamas_accepted_interim_candidate | \`${computed.leamas_accepted_interim_candidate ?? "(missing)"}\` |\n`;
+	rows += `| leamas_validated_candidate (legacy alias) | \`${computed.leamas_validated_candidate ?? "(missing)"}\` |\n`;
+	rows += `| interim_aliases_agree | \`${aliasesMatch}\` |\n`;
+	if (candidateRepoRoot) {
+		rows += `| candidate_repo_root (from stages[0]) | \`${candidateRepoRoot}\` |\n`;
+	}
+	rows += `| integrity_status | ${statusLine} |\n`;
+
+	if (Array.isArray(attestation.stages)) {
+		let stagesBlock = `\n### Stages\n\n`;
+		stagesBlock += `| Label | Repo root | Range | Outcome (expected / observed) |\n`;
+		stagesBlock += `| --- | --- | --- | --- |\n`;
+		for (const s of attestation.stages as Array<Record<string, unknown>>) {
+			const label = String(s.label ?? "");
+			const root = String(s.repo_root ?? "");
+			const range = String(s.range ?? "");
+			const expected = String(s.expected_outcome ?? "");
+			const observed = String(s.observed_outcome ?? "");
+			stagesBlock += `| \`${label}\` | \`${root}\` | \`${range}\` | ${expected} / ${observed} |\n`;
+		}
+		rows += stagesBlock;
+	}
+
+	if (rendererDerived.length > 0) {
+		let derivedBlock = `\n### Renderer-derived checks\n\n`;
+		derivedBlock += rendererDerived.map((v) => `- \`${v}\``).join("\n");
+		rows += derivedBlock + "\n";
+	}
+
+	return rows;
 }

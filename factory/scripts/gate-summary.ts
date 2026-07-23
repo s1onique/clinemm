@@ -54,6 +54,52 @@
  *
  *  P1    Fixture hashes use the per-fixture `fixture_sha256` returned by
  *        `setupFixtureRepo` — not `sha256(<repoPath>)`.
+ *
+ * µC-3 round 9 (LEAMAS-V2-EVIDENCE-REBIND01 attestation-integrity pass)
+ * closes the four attestation defects the round 8 review surfaced:
+ *
+ *  P0-1  AT-COMMIT SHA-256 BINDS THE ACTUAL CANDIDATE BYTES.
+ *        `candidate_summary_sha256_at_commit` is the SHA-256 of the
+ *        bytes `git show HEAD:.factory/gate-summary.json` returns from
+ *        the isolated candidate repo. The round 8 implementation
+ *        derived it from `slice(0,0)` of an unrelated buffer, which
+ *        deterministically hashed the empty string. The new code
+ *        reads the committed bytes via `spawnSync('git', ['show',
+ *        'HEAD:.factory/gate-summary.json'], ...)` and hashes that
+ *        buffer.
+ *
+ *  P0-2  CANDIDATE COMMIT-TREE OID IS NOT THE FILTERED SUBJECT TREE.
+ *        `candidate_repo_commit_tree_oid` is the OID `git rev-parse
+ *        HEAD^{tree}` returns from the candidate repo. The round 8
+ *        implementation copied `candidate.subject_tree_oid` (the
+ *        producer's filtered subject tree) under a misleadingly-named
+ *        field. Round 9 keeps the commit tree and the filtered subject
+ *        tree under separate, truthfully-named fields.
+ *
+ *  P0-3  THE INTERIM/FINAL DISTINCTION IS NAMED TRUTHFULLY.
+ *        `leamas_validated_candidate` (round 8) was a status boolean
+ *        that round 8's comment falsely called a hash-equality
+ *        invariant. Round 9 adds the truthful replacement
+ *        `leamas_accepted_interim_candidate` and a real hash-equality
+ *        invariant `candidate_summary_sha256_source_matches_commit`
+ *        that asserts `candidate_summary_sha256 ==
+ *        candidate_summary_sha256_at_commit`. The legacy field is
+ *        retained only as a backward-compat alias.
+ *
+ *  P0-4  POST-LEAMAS IDENTITY STABILITY IS ENFORCED.
+ *        `main()` records the snapshot taken AFTER `runCandidateLeamasValidation`
+ *        returns and uses it as the authoritative
+ *        `identityStableAfterLeamas` for the extended sibling file and
+ *        the rejection-reason derivation. A Leamas invocation that
+ *        changed HEAD/tree/subject throws
+ *        `GATE_SUMMARY_REPOSITORY_DRIFT_AFTER_LEAMAS` before the
+ *        canonical swap.
+ *
+ *  P0-5  RANGE HYGIENE USES THE EXPLICIT BASELINE OID.
+ *        `GIT_RANGE_HYGIENE` checks `git diff <baselineOid>..HEAD
+ *        --check` where `baselineOid` is the producer's HEAD captured
+ *        at bootstrap (round 8 review tip for the current run). Round
+ *        8's `HEAD^..HEAD` only proved the last commit.
  */
 
 import { spawnSync } from "node:child_process";
@@ -90,6 +136,7 @@ import {
 	serializeGateSummary,
 	serializeLeamasAttestation,
 	sha256,
+	sha256Buffer,
 	stagingExtendedPath,
 	stagingGateSummaryPath,
 	stagingLeamasAttestationPath,
@@ -117,7 +164,7 @@ const ACT_ID = "ACT-CLINEMM-FORK-BASELINE01-CORRECTION21";
 const PARENT_ACT_ID = ACT_ID;
 const SCOPE_ID = `${ACT_ID}-MICROC3`;
 const PRODUCER_NAME = "clinemm-factory-gate-summary";
-const PRODUCER_VERSION = "round-7-leamas-v2-exact-candidate";
+const PRODUCER_VERSION = "round-9-leamas-v2-attestation-integrity";
 
 const FACTORY_SCRIPT_TEST_FILES: ReadonlyArray<string> = [
 	"factory/scripts/render-baseline-report.test.ts",
@@ -311,6 +358,13 @@ function bootstrap(): SnapshotContext {
 		tsconfigPath,
 		testsDir,
 		parentEvidenceDir: join(factoryDir, "evidence", PARENT_ACT_ID),
+		// P0-5 — the baseline OID is the producer's HEAD BEFORE any
+		// of its own commits are made. The range
+		// `<baselineOid>..HEAD` covers every commit the producer
+		// contributes in this run, and is the basis for
+		// `range_patch_cleanliness`. Recording the explicit OID
+		// avoids `HEAD^..HEAD`, which only proves the last commit.
+		baselineOid: identity.head_oid,
 		headOid: identity.head_oid,
 		treeOid: identity.tree_oid,
 		subjectTreeOid: identity.subject_tree_oid,
@@ -397,16 +451,25 @@ const CORRECTION21_CLOSURE_LOGIC_TESTS: (b: SnapshotContext) => Cmd = (b) => ({
 // Range hygiene: requires commit-range + working-tree diff + porcelain
 // to ALL be empty. Implemented as a shell pipeline that returns 0 only
 // when every component is clean.
+//
+// P0-5 — the commit-range diff uses `<baselineOid>..HEAD` where
+// `baselineOid` is the producer's HEAD BEFORE any of its own commits
+// are made (captured in `bootstrap`). `HEAD^..HEAD` would only prove
+// the last commit, which is too narrow for a multi-commit ACT range.
+// The pipeline records `range_baseline_oid=<baselineOid>` so the
+// digest renderer can independently verify the exact range.
 const GIT_RANGE_HYGIENE: (b: SnapshotContext) => Cmd = (b) => {
 	const repo = b.repoRoot;
+	const baselineOid = b.baselineOid;
 	const pipeline = [
 		`set +e`,
-		`diff_parent=$(git -C ${shellQuote(repo)} diff HEAD^..HEAD --check 2>&1); r1=$?`,
+		`echo "range_baseline_oid=${baselineOid}"`,
+		`diff_baseline=$(git -C ${shellQuote(repo)} diff ${shellQuote(baselineOid)}..HEAD --check 2>&1); r1=$?`,
 		`diff_head=$(git -C ${shellQuote(repo)} diff HEAD --check 2>&1); r2=$?`,
 		`porcelain=$(git -C ${shellQuote(repo)} status --porcelain=v1 --untracked-files=all); r3=$?`,
-		`if [ -z "$diff_parent" ] && [ $r1 -eq 0 ] && [ -z "$diff_head" ] && [ $r2 -eq 0 ] && [ -z "$porcelain" ] && [ $r3 -eq 0 ]; then echo "range_hygiene=clean"; exit 0; fi`,
-		`echo "diff_parent_failed=$r1"`,
-		`echo "diff_parent_diag=$diff_parent"`,
+		`if [ -z "$diff_baseline" ] && [ $r1 -eq 0 ] && [ -z "$diff_head" ] && [ $r2 -eq 0 ] && [ -z "$porcelain" ] && [ $r3 -eq 0 ]; then echo "range_hygiene=clean"; exit 0; fi`,
+		`echo "diff_baseline_failed=$r1"`,
+		`echo "diff_baseline_diag=$diff_baseline"`,
 		`echo "diff_head_failed=$r2"`,
 		`echo "diff_head_diag=$diff_head"`,
 		`echo "porcelain_failed=$r3"`,
@@ -417,7 +480,7 @@ const GIT_RANGE_HYGIENE: (b: SnapshotContext) => Cmd = (b) => {
 		name: "range_patch_cleanliness",
 		scope: "WORKTREE",
 		evidence:
-			"git diff HEAD^..HEAD --check + git diff HEAD --check + git status --porcelain=v1 --untracked-files=all (all three required)",
+			`git diff ${baselineOid}..HEAD --check + git diff HEAD --check + git status --porcelain=v1 --untracked-files=all (all three required; baseline recorded in detail)`,
 		cwd: repo,
 		exec: "/bin/sh",
 		args: ["-c", pipeline],
@@ -614,8 +677,10 @@ function setupFixtureRepoAt(
 ): {
 	repoRoot: string;
 	head_oid: string;
+	commit_tree_oid: string;
 	subject_tree_oid: string;
 	fixture_sha256: string;
+	committed_summary_sha256: string;
 } {
 	mkdirSync(repoRoot, { recursive: true });
 	const env = {
@@ -658,17 +723,43 @@ function setupFixtureRepoAt(
 			encoding: "utf8",
 			env: { ...process.env, ...env },
 		}).stdout.toString().trim();
-	const treeOid =
+	const commitTreeOid =
 		spawnSync("git", ["rev-parse", "--verify", "--end-of-options", "HEAD^{tree}"], {
 			cwd: repoRoot,
 			encoding: "utf8",
 			env: { ...process.env, ...env },
 		}).stdout.toString().trim();
+	// P0-1 — read the bytes Git actually committed via
+	// `git show HEAD:.factory/gate-summary.json` and hash the buffer.
+	// The round-8 derivation (`slice(0,0)` of stdout) always hashed
+	// the empty string. Round-9 reads the real committed bytes.
+	const committedBytesResult = spawnSync(
+		"git",
+		["show", "HEAD:.factory/gate-summary.json"],
+		{
+			cwd: repoRoot,
+			env: { ...process.env, ...env },
+		},
+	);
+	if (committedBytesResult.status !== 0) {
+		throw new Error(
+			`git show HEAD:.factory/gate-summary.json failed: ${(committedBytesResult.stderr ?? Buffer.alloc(0)).toString()}`,
+		);
+	}
+	const committedBytes: Buffer = committedBytesResult.stdout ?? Buffer.alloc(0);
+	const committedSummarySha = sha256Buffer(committedBytes);
 	return {
 		repoRoot,
 		head_oid: headOid,
-		subject_tree_oid: treeOid,
+		// P0-2 — `commit_tree_oid` is the actual commit tree, distinct
+		// from `subject_tree_oid`. The two coincide for the isolated
+		// candidate repo (no filter applied) but the field names are
+		// preserved so the attestation contract is honest about which
+		// tree the producer is binding to.
+		commit_tree_oid: commitTreeOid,
+		subject_tree_oid: commitTreeOid,
 		fixture_sha256: sha256(fixtureText),
+		committed_summary_sha256: committedSummarySha,
 	};
 }
 
@@ -728,8 +819,11 @@ function runCandidateLeamasValidation(args: {
 		malformed: string;
 	};
 	candidateRepoHeadOid: string;
-	candidateRepoTreeOid: string;
+	candidateRepoCommitTreeOid: string;
+	candidateRepoSubjectTreeOid: string;
 	candidateSummarySha256: string;
+	candidateCommittedSummarySha256: string;
+	sourceMatchesCommit: boolean;
 } {
 	const { ctx, leamasStagingDir, candidateStagingDir, candidateSummaryText } = args;
 	const toolingDir = join(leamasStagingDir, "tooling");
@@ -891,6 +985,14 @@ function runCandidateLeamasValidation(args: {
 			observed_outcome: stageOutcome(malformedDigest, "reject"),
 		},
 	];
+	// P0-3 — `leamas_accepted_interim_candidate` records ONLY that
+	// Leamas accepted the interim candidate bytes. The legacy
+	// `leamas_validated_candidate` alias is retained for backward
+	// compatibility with round-8 readers but is the SAME boolean.
+	// P0-1 / P0-2 — the SHA-256 and OID pairs are bound to the actual
+	// committed bytes / tree, not the source bytes / subject tree.
+	const sourceMatchesCommit =
+		candidate.fixture_sha256 === candidate.committed_summary_sha256;
 	const attestation: LeamasAttestation = {
 		tool: {
 			name: "leamas",
@@ -899,19 +1001,28 @@ function runCandidateLeamasValidation(args: {
 		},
 		command: `${ctx.leamas} factory digest --range HEAD --output <digest-path>`,
 		ran_at: new Date().toISOString(),
-		// Bytes committed to the candidate repo as `.factory/gate-summary.json`.
+		// SHA-256 of the source bytes (`sha256(candidateSummaryText)`).
 		candidate_summary_sha256: candidate.fixture_sha256,
-		candidate_summary_sha256_at_commit: candidate.fixture_sha256,
+		// SHA-256 of the bytes actually committed
+		// (`sha256(git show HEAD:.factory/gate-summary.json)`).
+		candidate_summary_sha256_at_commit: candidate.committed_summary_sha256,
+		// Hash-equality invariant: source bytes hash == committed bytes hash.
+		candidate_summary_sha256_source_matches_commit: sourceMatchesCommit,
 		// Bytes that landed in canonical `.factory/gate-summary.json`
 		// after the atomic publish. Set by the producer's main() before
 		// the attestation is serialized.
 		canonical_summary_sha256: "<set after extended build>",
 		canonical_extended_sha256: "<set after extended build>",
 		candidate_repo_head_oid: candidate.head_oid,
-		candidate_repo_tree_oid: candidate.subject_tree_oid,
-		// The producer fills this in from the equality check; on the
-		// staging side it is always `false` until main() reassigns.
-		leamas_validated_candidate: false,
+		candidate_repo_commit_tree_oid: candidate.commit_tree_oid,
+		candidate_repo_subject_tree_oid: candidate.subject_tree_oid,
+		// Historical alias for round 8 readers — same boolean as
+		// `leamas_accepted_interim_candidate`. Round 9 also reports
+		// the truthful replacement alongside it.
+		leamas_validated_candidate: status === "pass",
+		// Truthful replacement: Leamas accepted the interim candidate.
+		// This is NOT a hash-equality invariant.
+		leamas_accepted_interim_candidate: status === "pass",
 		candidate_validation_exit_code: result.extras.exit_code,
 		stages,
 		verdict: status === "pass" ? "pass" : status === "unavailable" ? "unavailable" : "fail",
@@ -936,8 +1047,11 @@ function runCandidateLeamasValidation(args: {
 			malformed: malformedRepo.fixture_sha256,
 		},
 		candidateRepoHeadOid: candidate.head_oid,
-		candidateRepoTreeOid: candidate.subject_tree_oid,
+		candidateRepoCommitTreeOid: candidate.commit_tree_oid,
+		candidateRepoSubjectTreeOid: candidate.subject_tree_oid,
 		candidateSummarySha256: candidate.fixture_sha256,
+		candidateCommittedSummarySha256: candidate.committed_summary_sha256,
+		sourceMatchesCommit,
 	};
 }
 
@@ -1275,7 +1389,7 @@ function main(): void {
 	// Step 5b — capture identity AFTER every executable check
 	// operation has run, INCLUDING the Leamas candidate validation
 	// and its fixture-repo cleanup. The canonical v2's
-	// \`worktree_clean_after\` references this sample so the
+	// `worktree_clean_after` references this sample so the
 	// worktree state truthfully reflects what was true at the end of
 	// every executable step the producer ran.
 	const identityAfterLeamas = captureSnapshot(ctx.repoRoot, ctx.git);
@@ -1283,6 +1397,20 @@ function main(): void {
 		identityAfterLeamas.head_oid === ctx.identityBefore.head_oid &&
 		identityAfterLeamas.tree_oid === ctx.identityBefore.tree_oid &&
 		identityAfterLeamas.subject_tree_oid === ctx.identityBefore.subject_tree_oid;
+	// P0-4 — derive rejection reasons from the POST-Leamas sample so
+	// the extended file can surface HEAD/tree/subject drift that
+	// happened INSIDE the Leamas invocation (which is invisible to
+	// the post-checks-only sample).
+	const finalRejectionReasons = deriveRejectionReasons(
+		ctx.identityBefore,
+		identityAfterLeamas,
+	);
+	if (!identityStableAfterLeamas || finalRejectionReasons.length > 0) {
+		console.error(
+			`gate-summary: post-Leamas drift: stable=${identityStableAfterLeamas} reasons=${finalRejectionReasons.map((r) => r.code).join(",")}`,
+		);
+		throw new Error("GATE_SUMMARY_REPOSITORY_DRIFT_AFTER_LEAMAS");
+	}
 
 	// Step 6 — append the leamas check to the canonical checks
 	// list. Re-derive scope/overall from the FULL list. Build the
@@ -1319,41 +1447,56 @@ function main(): void {
 	const finalSummaryText = serializeGateSummary(finalSummary);
 	writeFileSync(stagingGateSummaryPath(ctx.stagingDir), finalSummaryText);
 
-	// Step 7 — attest the exact final bytes, then write the
-	// attestation INTO staging (P0-4). The attestation carries the
-	// candidate summary bytes (the bytes the leamas check actually
-	// digested) AND the canonical summary bytes (the bytes that landed
-	// in `.factory/gate-summary.json` after the swap). The equality
-	// invariant proves the contract ran on the EXACT staged candidate,
-	// not a prior canonical artifact.
+	// Step 7 — build the canonical attestation. The attestation
+	// spreads the candidate validation output and overrides the
+	// fields main() knows truthfully:
+	//
+	//   - candidate_summary_sha256_at_commit — replaced with
+	//     `leamasContract.candidateCommittedSummarySha256` (the bytes
+	//     `git show HEAD:.factory/gate-summary.json` returned from
+	//     the candidate repo), NOT `slice(0,0)` of stdout (round 8).
+	//   - canonical_summary_sha256 — set from `sha256(finalSummaryText)`,
+	//     the bytes that will land in canonical after the swap.
+	//   - candidate_repo_*_oid — bound to the actual candidate commit
+	//     tree, not the producer's filtered subject tree (round 8).
 	const attestation: LeamasAttestation = {
 		...leamasContract.attestation,
 		candidate_summary_sha256: leamasContract.candidateSummarySha256,
-		candidate_summary_sha256_at_commit: sha256(
-			leamasContract.result.stdout.split("\n").slice(0, 0).join(""),
-		),
+		candidate_summary_sha256_at_commit:
+			leamasContract.candidateCommittedSummarySha256,
 		canonical_summary_sha256: sha256(finalSummaryText),
 		candidate_repo_head_oid: leamasContract.candidateRepoHeadOid,
-		candidate_repo_tree_oid: leamasContract.candidateRepoTreeOid,
-		// Semantic pass/fail of the leamas contract against the
-		// candidate (interim) bytes. The final summary deterministically
-		// differs from the candidate by the appended leamas row, so we
-		// DO NOT compare finalSummaryText to candidateSummarySha256.
-		leamas_validated_candidate: leamasContract.status === "pass",
+		candidate_repo_commit_tree_oid: leamasContract.candidateRepoCommitTreeOid,
+		candidate_repo_subject_tree_oid: leamasContract.candidateRepoSubjectTreeOid,
 		candidate_validation_exit_code: leamasContract.result.extras.exit_code,
 		canonical_extended_sha256: "<set after extended build>",
 	};
-	if (!attestation.leamas_validated_candidate) {
+	if (!attestation.leamas_accepted_interim_candidate) {
 		// Fail closed: the document validates a stale candidate and is
 		// unsafe to publish. Surface a clear error so the operator knows
 		// why the summary was never written.
 		throw new Error("GATE_SUMMARY_LEAMAS_CANDIDATE_REJECTED");
 	}
+	if (!attestation.candidate_summary_sha256_source_matches_commit) {
+		// P0-1 — the source bytes and the bytes Git actually committed
+		// disagree. The producer's intended bytes did not survive the
+		// round-trip through the isolated candidate repo, so the
+		// attestation cannot honestly claim `committed == source`.
+		throw new Error("GATE_SUMMARY_LEAMAS_COMMIT_HASH_MISMATCH");
+	}
 	const extended = buildExtended({
 		tool: { name: PRODUCER_NAME, version: PRODUCER_VERSION },
-		identityStable: identityStableAfterChecks,
+		// P0-4 — use the POST-Leamas identity snapshot. Round 8 used
+		// `identityStableAfterChecks` and never propagated
+		// `identityStableAfterLeamas` into the extended file or
+		// rejection reasons, so Leamas-induced HEAD drift remained
+		// unreported.
+		identityStable: identityStableAfterLeamas,
 		parentActState: parentState,
-		rejectionReasons,
+		// P0-4 — derive from the POST-Leamas sample so any
+		// HEAD/tree/subject drift introduced by the Leamas invocation
+		// is surfaced alongside the gate-summary.
+		rejectionReasons: finalRejectionReasons,
 		knownValidV2RepoSha256: leamasContract.fixtureSha256s.valid,
 		knownInvalidV3RepoSha256: leamasContract.fixtureSha256s.invalidV3,
 		// P1 — fixture hashes use the per-fixture `fixture_sha256`

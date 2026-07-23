@@ -19,6 +19,22 @@
  *  - check metadata uses paths RELATIVE to the gate bundle root
  *    (`gates/<scope>/<check>.stdout`) instead of absolute filesystem
  *    paths.
+ *
+ * µC-3 round 9 (LEAMAS-V2-EVIDENCE-REBIND01 attestation-integrity pass)
+ * adds three invariants the round 8 patch left implicit or broken:
+ *  - `candidate_summary_sha256_at_commit` is the SHA-256 of the bytes
+ *    `git show HEAD:.factory/gate-summary.json` returns, NOT a re-hash
+ *    of the source bytes;
+ *  - `candidate_repo_commit_tree_oid` is `git rev-parse HEAD^{tree}`
+ *    of the isolated candidate repo, NOT the producer's filtered
+ *    subject tree;
+ *  - `leamas_accepted_interim_candidate` is the truthful replacement
+ *    for the misleadingly-named `leamas_validated_candidate`; the
+ *    latter is kept only as a backward-compat alias.
+ *
+ *  The explicit baseline OID on `SnapshotContext` lets the
+ *  `range_patch_cleanliness` check prove the full multi-commit ACT
+ *  range with `<baselineOid>..HEAD` rather than `HEAD^..HEAD`.
  */
 
 import { spawnSync } from "node:child_process";
@@ -154,6 +170,15 @@ export interface SnapshotContext {
 	tsconfigPath: string;
 	testsDir: string;
 	parentEvidenceDir: string;
+	/**
+	 * Baseline OID captured at producer bootstrap. This is the producer's
+	 * HEAD BEFORE any of its commits are made. The range
+	 * `<baselineOid>..HEAD` covers every commit the producer contributed
+	 * in this run, and is the basis for `range_patch_cleanliness`.
+	 * Recording the explicit OID avoids `HEAD^..HEAD`, which only proves
+	 * the last commit and is too narrow for a multi-commit ACT range.
+	 */
+	baselineOid: string;
 	headOid: string;
 	treeOid: string;
 	subjectTreeOid: string;
@@ -241,24 +266,74 @@ export interface GateSummary {
  * The Leamas attestation does NOT live inside the canonical v2 summary
  * (the document does not validate itself recursively). It is a sibling
  * under `.factory/gate-summary.leamas.json` after atomic publication.
+ *
+ * µC-3 round 9 (LEAMAS-V2-EVIDENCE-REBIND01 attestation-integrity pass)
+ * enforces four explicit invariants that round 8 left implicit or
+ * broken:
+ *
+ *   - `candidate_summary_sha256_at_commit` is the SHA-256 of the bytes
+ *     returned by `git show HEAD:.factory/gate-summary.json` from the
+ *     isolated candidate repo. It is NOT a re-hash of the source
+ *     bytes; round 8's `slice(0,0)` produced the empty-string hash.
+ *
+ *   - `candidate_repo_commit_tree_oid` is the actual commit-tree OID
+ *     of the candidate repo (`git rev-parse HEAD^{tree}`). It is NOT
+ *     the filtered subject tree from the producer's working repo.
+ *     Round 8 silently substituted the filtered subject for the
+ *     commit tree.
+ *
+ *   - `candidate_summary_sha256_source_matches_commit` is the literal
+ *     equality `candidate_summary_sha256 ==
+ *     candidate_summary_sha256_at_commit`. It is the ONLY
+ *     hash-equality invariant; the field is required to be `true` for
+ *     the attestation to publish.
+ *
+ *   - `leamas_accepted_interim_candidate` records only that Leamas
+ *     accepted the INTERIM (pre-leamas-row) candidate bytes. It is
+ *     NOT a hash-equality invariant; round 8's comment falsely
+ *     claimed so. The interim bytes differ from the final canonical
+ *     bytes because the final summary deterministically appends the
+ *     leamas row.
  */
 export interface LeamasAttestation {
 	tool: { name: string; build_commit: string | null; version: string | null };
 	command: string;
 	ran_at: string;
-	// Bytes committed to the candidate repo as `.factory/gate-summary.json`.
+	// SHA-256 of the candidate bytes the producer computed locally
+	// (`sha256(candidateSummaryText)`). This is what the producer
+	// INTENDED to commit.
 	candidate_summary_sha256: string;
+	// SHA-256 of the bytes actually committed to the candidate repo's
+	// `.factory/gate-summary.json` (computed via
+	// `git show HEAD:.factory/gate-summary.json`). This is what Git
+	// ACTUALLY stored.
 	candidate_summary_sha256_at_commit: string;
+	// Literal equality check: SHA-256 of the source bytes equals
+	// SHA-256 of the bytes returned by `git show
+	// HEAD:.factory/gate-summary.json`. MUST be `true` for the
+	// attestation to publish.
+	candidate_summary_sha256_source_matches_commit: boolean;
 	// Bytes that landed in canonical `.factory/gate-summary.json`.
 	canonical_summary_sha256: string;
 	canonical_extended_sha256: string;
-	// Bytes the candidate was committed with in the isolated repo.
+	// OIDs of the isolated candidate repo, taken from `git rev-parse`.
+	// `candidate_repo_head_oid`           = `HEAD^{commit}`
+	// `candidate_repo_commit_tree_oid`    = `HEAD^{tree}` (commit tree)
+	// `candidate_repo_subject_tree_oid`   = the filtered subject tree.
+	//   In the isolated candidate repo the subject tree IS the commit
+	//   tree because no producer filter is applied, but the field is
+	//   kept separate to match the production-repo contract.
 	candidate_repo_head_oid: string;
-	candidate_repo_tree_oid: string;
-	// Hash-equality invariant. MUST be `true` for the attestation to
-	// be considered valid; otherwise the document validates a stale
-	// candidate and the producer fails closed.
+	candidate_repo_commit_tree_oid: string;
+	candidate_repo_subject_tree_oid: string;
+	// Historical alias (round 8). Round 9 also reports the truthful
+	// replacement alongside it. This field is kept for backward
+	// compatibility with the round 8 schema.
 	leamas_validated_candidate: boolean;
+	// Truthful replacement (round 9) — records ONLY that Leamas
+	// accepted the interim candidate bytes. NOT a hash-equality
+	// invariant.
+	leamas_accepted_interim_candidate: boolean;
 	// Exit code of the candidate-repo \`leamas factory digest\` process.
 	candidate_validation_exit_code: number | null;
 	stages: LeamasAttestationStage[];
@@ -290,6 +365,16 @@ export interface GateSummaryExtended {
 
 export function sha256(value: string): string {
 	return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * SHA-256 over a raw byte buffer. Used to hash the bytes
+ * `git show HEAD:.factory/gate-summary.json` returns so the
+ * `candidate_summary_sha256_at_commit` field is bound to what Git
+ * ACTUALLY stored, not what the producer intended to store.
+ */
+export function sha256Buffer(buf: Buffer): string {
+	return createHash("sha256").update(buf).digest("hex");
 }
 
 export function gitText(
