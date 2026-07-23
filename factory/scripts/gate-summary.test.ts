@@ -1105,11 +1105,11 @@ describe("H6b — atomic publish rollback fault injection", () => {
 		mkdirSync(ctx.factoryDir, { recursive: true });
 		writeFileSync(join(ctx.factoryDir, "gate-summary.json"), "{}");
 
-		// The backup rename (factoryDir → backupDir) throws.
-		// All other operations (staging write, staging hash checks, staging rename)
-		// delegate to real fs so the atomicPublish code path runs correctly.
-		// The throw prevents `canonicalInstalled = true`, so the catch block
-		// does NOT attempt a rollback (nothing was moved).
+		// The backup rename (factoryDir → backupDir) throws. The throw
+		// happens BEFORE the staging→factory rename, so `canonicalInstalled`
+		// is NEVER set and the rollback does NOT attempt any rename.
+		// The original canonical stays at factoryDir; the staging dir
+		// is NOT consumed.
 		const badOps: AtomicPublishOps = {
 			...defaultAtomicPublishOps,
 			renameSync: (src, _dst) => {
@@ -1121,10 +1121,8 @@ describe("H6b — atomic publish rollback fault injection", () => {
 		expect(() =>
 			atomicPublish(ctx, mkSummary(), buildExtended({ tool: { name: "test", version: "v1" }, identityStable: true, parentActState: mkParentState({ verdict: "OPEN" }), rejectionReasons: [], knownValidV2RepoSha256: zeroOid(), knownInvalidV3RepoSha256: zeroOid() }), buildTestAttestation(), badOps),
 		).toThrow("backup rename failed");
-		// The staging→factory rename succeeded (delegated), so the original
-		// canonical was NOT consumed — it is still at factoryDir.
-		// Note: `canonicalInstalled` was NOT set because the backup rename
-		// threw before the staging rename completed.
+		// The original canonical was NOT consumed — it is still at factoryDir
+		// (the staging→factory rename was never reached).
 		expect(existsSync(ctx.factoryDir)).toBe(true);
 		// Backup dir is empty (nothing was successfully moved into it).
 		expect(existsSync(ctx.backupDir)).toBe(false);
@@ -1162,10 +1160,11 @@ describe("H6b — atomic publish rollback fault injection", () => {
 		expect(existsSync(ctx.stagingDir)).toBe(true);
 	});
 
-	it("T5: rollback rename throws → GATE_SUMMARY_ROLLBACK_FAILED with full diagnostic", () => {
+	it("T5: rollback rename throws → GATE_SUMMARY_ROLLBACK_FAILED with full cause-chain diagnostic", () => {
 		// Pre-seed canonical A. The staging→factory rename and the backup rename
 		// succeed (delegated). The rollback rename (backup→factory) throws.
-		// The rollback failure is surfaced as GATE_SUMMARY_ROLLBACK_FAILED.
+		// The rollback failure is surfaced as GATE_SUMMARY_ROLLBACK_FAILED with
+		// the original cause embedded in the error message.
 		mkdirSync(ctx.factoryDir, { recursive: true });
 		writeFileSync(join(ctx.factoryDir, "gate-summary.json"), '{"id":"canonical-a"}');
 
@@ -1187,9 +1186,21 @@ describe("H6b — atomic publish rollback fault injection", () => {
 			},
 		};
 
-		expect(() =>
-			atomicPublish(ctx, mkSummary(), buildExtended({ tool: { name: "test", version: "v1" }, identityStable: true, parentActState: mkParentState({ verdict: "OPEN" }), rejectionReasons: [], knownValidV2RepoSha256: zeroOid(), knownInvalidV3RepoSha256: zeroOid() }), buildTestAttestation(), badOps),
-		).toThrow("GATE_SUMMARY_ROLLBACK_FAILED");
+		let caughtError: Error | undefined;
+		try {
+			atomicPublish(ctx, mkSummary(), buildExtended({ tool: { name: "test", version: "v1" }, identityStable: true, parentActState: mkParentState({ verdict: "OPEN" }), rejectionReasons: [], knownValidV2RepoSha256: zeroOid(), knownInvalidV3RepoSha256: zeroOid() }), buildTestAttestation(), badOps);
+		} catch (e) {
+			caughtError = e as Error;
+		}
+		expect(caughtError).toBeDefined();
+		expect(caughtError!.message).toContain("GATE_SUMMARY_ROLLBACK_FAILED");
+		// T5: The cause object contains both the post-swap error
+		// ("post-install failure") and the rollback error ("rollback rename failed").
+		// The top-level message is "GATE_SUMMARY_ROLLBACK_FAILED"; the cause chain
+		// is inspected via the `cause` property.
+		const cause = caughtError!.cause as { originalError?: { message?: string }; rollbackError?: { message?: string } };
+		expect(cause.originalError?.message).toContain("post-install failure");
+		expect(cause.rollbackError?.message).toContain("rollback rename failed");
 
 		// Backup remains intact (backup→factory rename threw, backup not restored).
 		// The canonical directory may be in an undefined state (rmSync succeeded
@@ -1199,12 +1210,18 @@ describe("H6b — atomic publish rollback fault injection", () => {
 		expect(existsSync(ctx.backupDir)).toBe(true);
 	});
 
-	it("T6: beforePostSwapVerification mutates canonical → rollback restores canonical A", () => {
-		// Pre-seed canonical A with three files.
+	it("T6: beforePostSwapVerification mutates canonical → rollback restores canonical A (full nested bundle)", () => {
+		// Pre-seed canonical A with three files plus a nested gate directory structure.
 		mkdirSync(ctx.factoryDir, { recursive: true });
 		writeFileSync(join(ctx.factoryDir, "gate-summary.json"), '{"id":"canonical-a"}');
 		writeFileSync(join(ctx.factoryDir, "gate-summary.extended.json"), '{"tool":"a"}');
 		writeFileSync(join(ctx.factoryDir, "gate-summary.leamas.json"), '{"verdict":"a"}');
+		mkdirSync(join(ctx.factoryDir, "gates", "MICROC3"), { recursive: true });
+		writeFileSync(join(ctx.factoryDir, "gates", "MICROC3", "strict_typecheck.stdout"), "pass\n");
+		writeFileSync(join(ctx.factoryDir, "gates", "MICROC3", "strict_typecheck.stderr"), "");
+		mkdirSync(join(ctx.factoryDir, "gates", "TOOLING"), { recursive: true });
+		writeFileSync(join(ctx.factoryDir, "gates", "TOOLING", "leamas_v2_contract.stdout"), "verdict=pass\n");
+		writeFileSync(join(ctx.factoryDir, "gates", "TOOLING", "leamas_v2_contract.stderr"), "");
 
 		// All filesystem operations delegate to real fs.
 		// The beforePostSwapVerification hook is called after the canonical is
@@ -1224,15 +1241,64 @@ describe("H6b — atomic publish rollback fault injection", () => {
 			atomicPublish(ctx, mkSummary(), buildExtended({ tool: { name: "test", version: "v1" }, identityStable: true, parentActState: mkParentState({ verdict: "OPEN" }), rejectionReasons: [], knownValidV2RepoSha256: zeroOid(), knownInvalidV3RepoSha256: zeroOid() }), buildTestAttestation(), badOps),
 		).toThrow("GATE_SUMMARY_POST_SWAP_HASH_DRIFT");
 
-		// Rollback succeeded — all three canonical files restored from backup.
+		// Rollback succeeded — top-level files restored.
 		expect(existsSync(ctx.factoryDir)).toBe(true);
 		expect(readFileSync(join(ctx.factoryDir, "gate-summary.json"), "utf8")).toBe('{"id":"canonical-a"}');
 		expect(readFileSync(join(ctx.factoryDir, "gate-summary.extended.json"), "utf8")).toBe('{"tool":"a"}');
 		expect(readFileSync(join(ctx.factoryDir, "gate-summary.leamas.json"), "utf8")).toBe('{"verdict":"a"}');
+		// Nested gate directory structure fully restored (T4/T6: full bundle, not just top-level).
+		expect(existsSync(join(ctx.factoryDir, "gates", "MICROC3"))).toBe(true);
+		expect(existsSync(join(ctx.factoryDir, "gates", "MICROC3", "strict_typecheck.stdout"))).toBe(true);
+		expect(readFileSync(join(ctx.factoryDir, "gates", "MICROC3", "strict_typecheck.stdout"), "utf8")).toBe("pass\n");
+		expect(existsSync(join(ctx.factoryDir, "gates", "TOOLING"))).toBe(true);
+		expect(readFileSync(join(ctx.factoryDir, "gates", "TOOLING", "leamas_v2_contract.stdout"), "utf8")).toBe("verdict=pass\n");
 		// Backup was consumed by the rollback.
 		expect(existsSync(ctx.backupDir)).toBe(false);
 		// Staging was NOT consumed (it was installed as canonical but then rolled back).
 		expect(existsSync(ctx.stagingDir)).toBe(false);
+	});
+
+	it("T7: backup rmSync cleanup failure is best-effort — canonical path still succeeds", () => {
+		// Pre-seed canonical A so the backup path runs (backup is created).
+		mkdirSync(ctx.factoryDir, { recursive: true });
+		writeFileSync(join(ctx.factoryDir, "gate-summary.json"), '{"id":"canonical-a"}');
+
+		// Track which rmSync call we're on. The FINAL cleanup rmSync (after all
+		// hash-verifications pass) is what we want to fail. The PRE-RENAME cleanup
+		// rmSync (inside the `if (hadCanonical)` block) must succeed, otherwise
+		// renameSync never runs and the test is meaningless.
+		let rmSyncCallCount = 0;
+		const badOps: AtomicPublishOps = {
+			...defaultAtomicPublishOps,
+			rmSync: (path, _opts) => {
+				rmSyncCallCount++;
+				// Only the FINAL cleanup rmSync (after publication, outside the
+				// rollback boundary) should fail. The pre-rename cleanup must
+				// succeed or the renameSync is never reached.
+				// The final cleanup is identifiable by path: it targets ctx.backupDir
+				// and occurs after the rollback boundary (after successful publication).
+				if (path === ctx.backupDir && rmSyncCallCount > 1) {
+					// This is the final cleanup call — fail it.
+					throw new Error("backup rmSync failed");
+				}
+				// All other rmSync calls (pre-rename cleanup, rollback rmSync of
+				// canonical) delegate to the real fs.
+				return defaultAtomicPublishOps.rmSync(path, _opts);
+			},
+		};
+
+		// Should NOT throw — backup cleanup failure is best-effort.
+		let caught: Error | undefined;
+		try {
+			atomicPublish(ctx, mkSummary(), buildExtended({ tool: { name: "test", version: "v1" }, identityStable: true, parentActState: mkParentState({ verdict: "OPEN" }), rejectionReasons: [], knownValidV2RepoSha256: zeroOid(), knownInvalidV3RepoSha256: zeroOid() }), buildTestAttestation(), badOps);
+		} catch (e) {
+			caught = e as Error;
+		}
+		expect(caught).toBeUndefined();
+
+		// Canonical B is correctly published despite backup cleanup failure.
+		expect(existsSync(ctx.canonicalSummaryPath)).toBe(true);
+		expect(existsSync(ctx.canonicalExtendedPath)).toBe(true);
 	});
 
 });

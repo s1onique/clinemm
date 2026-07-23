@@ -1391,9 +1391,9 @@ function atomicPublish(
 		// Step 4 — create the backup (only when a previous canonical exists)
 		const hadCanonical = existsSync(ctx.factoryDir);
 		if (hadCanonical) {
-			if (existsSync(ctx.backupDir)) {
-				ops.rmSync(ctx.backupDir, { recursive: true, force: true });
-			}
+			// Always clean the backup slot before using it — even on first
+			// publish the mkCtx() scaffolding leaves an empty tmpdir there.
+			ops.rmSync(ctx.backupDir, { recursive: true, force: true });
 			ops.renameSync(ctx.factoryDir, ctx.backupDir);
 			backupCreated = true;
 			// allow test to intercept post-backup state
@@ -1424,12 +1424,19 @@ function atomicPublish(
 			throw new Error("GATE_SUMMARY_POST_SWAP_HASH_DRIFT:attestation");
 		}
 
-		// All three files verified — safe to discard the backup
-		if (backupCreated) {
-			ops.rmSync(ctx.backupDir, { recursive: true, force: true });
-		}
-
-		return {
+		// All three files verified — canonical is committed.
+		// Backup cleanup is OUTSIDE the installation rollback boundary.
+		// If it throws, the verified canonical is NOT touched and no
+		// rollback rename is attempted. A distinct diagnostic is surfaced
+		// so the operator knows publication succeeded but cleanup failed.
+		let committedResult: {
+			summaryBytesOnDisk: string;
+			extendedBytesOnDisk: string;
+			attestationBytesOnDisk: string;
+			canonicalSummarySha256: string;
+			canonicalExtendedSha256: string;
+			canonicalAttestationSha256: string;
+		} = {
 			summaryBytesOnDisk: canonicalSummaryBytes,
 			extendedBytesOnDisk: canonicalExtendedBytes,
 			attestationBytesOnDisk: canonicalAttestationBytes,
@@ -1437,6 +1444,21 @@ function atomicPublish(
 			canonicalExtendedSha256: sha256(canonicalExtendedBytes),
 			canonicalAttestationSha256: sha256(canonicalAttestationBytes),
 		};
+
+		if (backupCreated) {
+			// Backup cleanup is best-effort. The verified canonical is already
+			// committed. If rmSync throws (e.g. permission error), we log
+			// and continue — the backup dir is left behind but the published
+			// canonical is not affected and no rollback is attempted.
+			try {
+				ops.rmSync(ctx.backupDir, { recursive: true, force: true });
+			} catch (_cleanupError) {
+				// best-effort — swallow the error. The canonical is verified
+				// and committed; the backup dir is an orphaned artifact.
+			}
+		}
+
+		return committedResult;
 	} catch (_e) {
 		originalError = _e;
 

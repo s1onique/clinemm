@@ -216,9 +216,6 @@ export interface SnapshotContext {
  *
  * Each hook is called at a defined point in the atomic publish sequence:
  *
- *   afterStageWrite            - after all three files are written to staging
- *   afterStageGuard            - after stage-side hash re-verification
- *   afterStageValidate         - after structural validation of staged summary
  *   afterBackupCreated         - after renaming factoryDir → backupDir
  *   afterCanonicalInstalled    - after renaming stagingDir → factoryDir
  *   beforePostSwapVerification - before post-swap hash confirmation (injection point)
