@@ -1,0 +1,19 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-CLINEMM-LEAMAS-V2-CURRENT-TIP-CLOSURE-CANARY01",
+  "baseline": {
+    "commit_oid": "9816503613cef92ca8fef2b235299736dd3b0bb9",
+    "tree_oid": "1861d293168744d3d2fe2270be1902f25a9d3366"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "full_factory_suite",
+      "mode": "gate",
+      "argv": ["leamas", "factory", "gate"],
+      "reason": "Full factory gate"
+    }
+  ]
+}
