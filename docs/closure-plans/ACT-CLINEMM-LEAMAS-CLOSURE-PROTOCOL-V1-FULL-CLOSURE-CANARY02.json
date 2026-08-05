@@ -1,0 +1,165 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-CLINEMM-LEAMAS-CLOSURE-PROTOCOL-V1-FULL-CLOSURE-CANARY02",
+  "artifacts": [
+    {
+      "id": "closure_plan",
+      "max_bytes": 65536,
+      "media_type": "application/json",
+      "path": "docs/closure-plans/ACT-CLINEMM-LEAMAS-CLOSURE-PROTOCOL-V1-FULL-CLOSURE-CANARY02.json",
+      "required": true,
+      "role": "generated_output"
+    },
+    {
+      "id": "closure_manifest",
+      "max_bytes": 65536,
+      "media_type": "application/json",
+      "path": "docs/closure-manifests/ACT-CLINEMM-LEAMAS-CLOSURE-PROTOCOL-V1-FULL-CLOSURE-CANARY02.json",
+      "required": true,
+      "role": "generated_output"
+    },
+    {
+      "id": "closure_report",
+      "max_bytes": 65536,
+      "media_type": "text/markdown",
+      "path": "docs/close-reports/ACT-CLINEMM-LEAMAS-CLOSURE-PROTOCOL-V1-FULL-CLOSURE-CANARY02.md",
+      "required": true,
+      "role": "generated_output"
+    }
+  ],
+  "baseline": {
+    "commit_oid": "7df73e92d08e994778fd4c43d2208c141b39f61c",
+    "tree_oid": "29510f390ac5863b17c80de468c05732d56f2cc5"
+  },
+  "checks": [
+    {
+      "id": "subject_commit_is_git_object",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git cat-file -e 56fd526e1923f2546fa0aeb53a0dc6e7501e5061^{commit}"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_tree_is_git_object",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git cat-file -e 192195c2af6bad0711bc6abbed153cb590d96c16^{tree}"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_ancestor_of_head",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git merge-base --is-ancestor 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 HEAD"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_summary_describes_fix",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git log -1 --format=%s 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 | grep -qE '^fix:.*(newline|trailing|remove)'"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_touches_expected_files",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "set -e; FILES=$(git show --name-only --format= 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 | grep -v '^$' | sort); EXPECTED=$(printf 'docs/factory/baseline-report.md\\nfactory/scripts/native-probes.ts\\n'); test \"$FILES\" = \"$EXPECTED\""
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_parent_had_extra_trailing_newline",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "set -e; PARENT_TAIL=$(git show 7df73e92d08e994778fd4c43d2208c141b39f61c:factory/scripts/native-probes.ts | tail -c 4 | xxd -p); test \"$PARENT_TAIL\" = \"0a7d0a0a\""
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_removed_extra_trailing_newline",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "set -e; SUBJECT_TAIL=$(git show 56fd526e1923f2546fa0aeb53a0dc6e7501e5061:factory/scripts/native-probes.ts | tail -c 4 | xxd -p); test \"$SUBJECT_TAIL\" != \"0a7d0a0a\""
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "git_diff_check_passes_on_subject",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git diff --check 7df73e92d08e994778fd4c43d2208c141b39f61c..56fd526e1923f2546fa0aeb53a0dc6e7501e5061"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "worktree_clean_at_run",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "test -z \"$(git status --short)\""
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_diff_stats_show_two_files",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "set -e; STATS=$(git diff --stat 7df73e92d08e994778fd4c43d2208c141b39f61c..56fd526e1923f2546fa0aeb53a0dc6e7501e5061 | tail -1); test \"$STATS\" = ' 2 files changed, 2 insertions(+), 4 deletions(-)'"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    }
+  ],
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  }
+}
