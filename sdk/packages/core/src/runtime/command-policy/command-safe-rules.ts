@@ -2,11 +2,13 @@
  * Host-Owned Safe-Command Rule Engine
  *
  * ACT-CLINEMM-TOOL-COMMAND-APPROVAL-AUTHORITY01-CORRECTION02
+ * ACT-CLINEMM-TOOL-COMMAND-APPROVAL-AUTHORITY01-CORRECTION03
  *
  * A bounded, explicit positive-matcher for `safe-only` host mode.
  *
  * PRINCIPLES:
- *   - ALLOW requires positive host evidence.
+ *   - ALLOW requires positive host evidence that the COMPLETE invocation
+ *     matches a finite, explicitly reviewed rule.
  *   - Absence of danger never implies ALLOW.
  *   - A whole-executable-family allowlist (e.g. "all `git` is safe") is
  *     FORBIDDEN. Only constrained command shapes match.
@@ -15,19 +17,27 @@
  *     overrides them (which we do not provide here).
  *   - Rules are evaluated on the rendered command surface; the rule engine
  *     does NOT execute shell parsing.
+ *   - NO GENERIC OPTION WILDCARDS. Every permitted option is enumerated in
+ *     a finite positive list derived from a security review of the option's
+ *     documented semantics. Generic `--[a-z-]+`-style patterns are forbidden
+ *     because they implicitly trust unknown options.
  *
- * INITIAL RULE SET:
- *   Derived from observational git workflows and read-only commands. Each
- *   rule is a positive regex match on the rendered command surface.
+ *     The previous `--[a-z-]+` branch in `git diff` matched `--ext-diff` and
+ *     `--textconv`, both of which can invoke external helpers per Git's
+ *     documented diff machinery (see git-diff(1) and gitattributes(5)).
+ *     CORRECTION03 removed that wildcard and the analog in `git log`.
  *
- *   pwd
- *   git status [...]
- *   git diff [...]
- *   git log [...]
+ * REVIEW STANDARD (each option must satisfy this before being allowed):
+ *   - Can this option cause execution of an external program (helper,
+ *     textconv, external diff driver)?
+ *   - Can this option write outside the normal stdout/stderr channel
+ *     (e.g. --output=<path>)?
+ *   - Can this option broaden the comparison scope outside the working
+ *     repository (e.g. --no-index)?
+ *   - Does the option have any other authority-broadening effect?
  *
- * The set is intentionally small. Adding a rule MUST be a deliberate
- * decision; new rules are added by appending to DEFAULT_COMMAND_HOST_ALLOW_RULES
- * (and a corresponding unit test).
+ *   If ANY answer is yes, the option is REJECTED and the rule engine
+ *   returns ASK for any invocation that includes it.
  */
 
 import { renderNormalizedCommand } from "./command-model-hints";
@@ -64,37 +74,85 @@ export const OPAQUE_SHELL_TOKENS: ReadonlyArray<string> = [
 /**
  * The default host-proven safe rules.
  *
- * Each rule MUST be anchored (^...$ or \b...\b) so the match is positive
- * and constrained. Each rule corresponds to a single observable command
- * shape the host has positive evidence is safe.
+ * Each rule is anchored so the match is positive and constrained.
+ * Each option in each rule's pattern is individually reviewed against
+ * the standard described at the top of this file. Adding a new option
+ * to any rule MUST be a deliberate decision accompanied by a test that
+ * documents the option's safety review.
  */
 export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	source: string;
 	pattern: RegExp;
 }> = [
+	// pwd with optional POSIX -L / -P (logical / physical working directory).
+	// Both are pure read-only reporting.
 	{ source: "host_safe_pwd", pattern: /^\s*pwd(?:\s+(?:-[LP]))?\s*$/u },
 	{
 		source: "host_safe_git_status",
-		// git status with optional read-only flags. Explicitly forbids --porcelain
-		// to keep "raw" mode (rare and usually diagnostic) out of the safe path.
+		// git status reporting modes. All options here are pure output-format
+		// selection; none invoke external helpers or write to disk.
+		//   --short / -s           condensed output
+		//   --branch / -b          include branch info
+		//   --porcelain[=N]        machine-readable (v1=v1, v2=v2); N in {1,2}
+		//   -u[=<mode>]            untracked-file mode; mode in {no,normal,all}
 		pattern:
-			/^\s*git\s+status(?:\s+(?:--short|--branch|--porcelain(?:=\d)?|-s|-b|-u(?:=[a-z]+)?))*\s*$/u,
+			/^\s*git\s+status(?:\s+(?:--short|-s|--branch|-b|--porcelain(?:=[12])?|-u(?:=(?:no|normal|all))?))*$/u,
 	},
 	{
 		source: "host_safe_git_diff",
-		// git diff with optional read-only flags. Forbids --no-color manipulation,
-		// --output, --output-* redirections, and any path argument starting with -
-		// (we treat it as a flag, not a path). The host does NOT verify that paths
-		// exist or are in the workspace; the rule asserts the command SHAPE is
-		// observational.
+		// git diff output-format selection. Every allowed option is explicitly
+		// enumerated and reviewed against the standard above. NO WILDCARDS.
+		//
+		// Review summary per option:
+		//   --stat / --numstat / --shortstat
+		//                          diff statistics; observational.
+		//   --name-only / --name-status
+		//                          affected-path lists; observational.
+		//   --cached / --staged    diff against index instead of working tree;
+		//                          read-only.
+		//   --no-color             disable color output; visual only.
+		//   --color=<word>         word in {always,auto,never}; visual only.
+		//
+		// Explicitly REJECTED (test fixtures below):
+		//   --ext-diff             invokes external diff driver.
+		//   --textconv             runs textconv filters (external programs).
+		//   --output, --output=    writes to a file outside stdout.
+		//   --no-index             compares arbitrary filesystem paths outside
+		//                          the working tree; broader authority.
+		//   any unknown --foo      not in the allow list; ASK.
 		pattern:
-			/^\s*git\s+diff(?:\s+(?:--no-color|--color=[a-z]+|--stat|--numstat|--shortstat|--name-only|--name-status|--cached|--staged|--[a-z-]+))*$/u,
+			/^\s*git\s+diff(?:\s+(?:--stat|--numstat|--shortstat|--name-only|--name-status|--cached|--staged|--no-color|--color=(?:always|auto|never)))*\s*$/u,
 	},
 	{
 		source: "host_safe_git_log",
-		// git log with read-only flags. Caps -n to positive integers.
+		// git log output-format selection. Every allowed option is explicitly
+		// enumerated and reviewed against the standard above. NO WILDCARDS.
+		//
+		// Review summary per option:
+		//   -n <N>                 limit to N commits; N is a positive integer.
+		//   --oneline              condensed format (composes --pretty=oneline
+		//                          --abbrev-commit); observational.
+		//   --stat                 include diffstat per commit; observational
+		//                          (operates on already-converted content; does
+		//                          not itself invoke external helpers).
+		//   --no-color             disable color output; visual only.
+		//   --pretty=<fmt>         fmt drawn from a finite reviewed set:
+		//                            oneline, short, medium, full, fuller,
+		//                            reference, email, raw, tformat.
+		//                          Plus a curated set of format specifiers.
+		//   -<N>                   short numeric form of -n <N>.
+		//
+		// Explicitly REJECTED (test fixtures below):
+		//   --ext-diff             invokes external diff driver.
+		//   --textconv             runs textconv filters (external programs).
+		//   --output, --output=    writes to a file outside stdout.
+		//   --pretty=<custom>      custom format strings (e.g. %H) — not in the
+		//                          reviewed finite set; ASK. Users wanting
+		//                          custom formats should explicitly authorize
+		//                          via a YOLO/all-mode session.
+		//   any unknown --foo      not in the allow list; ASK.
 		pattern:
-			/^\s*git\s+log(?:\s+(?:-n\s+\d+|--oneline|--stat|--no-color|--pretty=[a-z%]+|-[0-9]+))*\s*$/u,
+			/^\s*git\s+log(?:\s+(?:-n\s+\d+|--oneline|--stat|--no-color|--pretty=(?:oneline|short|medium|full|fuller|reference|email|raw|tformat)|--format=(?:oneline|short|medium|full|fuller|reference|email|raw|tformat)|-[0-9]+))*$/u,
 	},
 ];
 
