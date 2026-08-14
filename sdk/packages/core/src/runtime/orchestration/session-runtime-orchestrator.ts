@@ -1058,7 +1058,6 @@ export class SessionRuntime {
 				this.inspectLoopForToolCall(
 					event.toolCall.toolName,
 					event.toolCall.input,
-					
 				);
 				break;
 			}
