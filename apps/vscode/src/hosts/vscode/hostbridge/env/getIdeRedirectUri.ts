@@ -1,5 +1,6 @@
 import { EmptyRequest, String } from "@shared/proto/cline/common"
 import * as vscode from "vscode"
+import { ExtensionRegistryInfo } from "@/registry"
 
 export async function getIdeRedirectUri(_: EmptyRequest): Promise<String> {
 	if (vscode.env.uiKind === vscode.UIKind.Web) {
@@ -9,5 +10,9 @@ export async function getIdeRedirectUri(_: EmptyRequest): Promise<String> {
 		return { value: "" }
 	}
 	const uriScheme = vscode.env.uriScheme || "vscode"
-	return { value: `${uriScheme}://saoudrizwan.claude-dev` }
+	// Build the OAuth redirect URI from the runtime extension identity (publisher + name)
+	// so it tracks the actual extension ID registered with the host. The hardcoded
+	// "saoudrizwan.claude-dev" upstream identity breaks the moment the fork changes
+	// its publisher/name (which the ClineMM dogfood intentionally does).
+	return { value: `${uriScheme}://${ExtensionRegistryInfo.id}` }
 }

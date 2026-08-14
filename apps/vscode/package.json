@@ -1,22 +1,22 @@
 {
-	"name": "claude-dev",
-	"displayName": "Cline",
-	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
+	"name": "clinemm",
+	"displayName": "ClineMM",
+	"description": "ClineMM — a Cline fork for daily local dogfood (MiniMax M3 by default). Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
 	"version": "4.1.9",
 	"icon": "assets/icons/icon.png",
 	"engines": {
 		"vscode": "^1.101.0"
 	},
 	"author": {
-		"name": "Cline Bot Inc."
+		"name": "s1onique"
 	},
 	"license": "Apache-2.0",
-	"publisher": "saoudrizwan",
+	"publisher": "s1onique",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cline/cline"
+		"url": "https://github.com/s1onique/clinemm"
 	},
-	"homepage": "https://cline.bot",
+	"homepage": "https://github.com/s1onique/clinemm",
 	"categories": [
 		"AI",
 		"Chat",
@@ -110,17 +110,17 @@
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "claude-dev-ActivityBar",
-					"title": "Cline",
+					"id": "clinemm-ActivityBar",
+					"title": "ClineMM",
 					"icon": "assets/icons/icon.svg"
 				}
 			]
 		},
 		"views": {
-			"claude-dev-ActivityBar": [
+			"clinemm-ActivityBar": [
 				{
 					"type": "webview",
-					"id": "claude-dev.SidebarProvider",
+					"id": "clinemm.SidebarProvider",
 					"name": "",
 					"icon": "assets/icons/icon.svg"
 				}
@@ -257,27 +257,27 @@
 				{
 					"command": "cline.plusButtonClicked",
 					"group": "navigation@1",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == clinemm.SidebarProvider"
 				},
 				{
 					"command": "cline.marketplaceButtonClicked",
 					"group": "navigation@2",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == clinemm.SidebarProvider"
 				},
 				{
 					"command": "cline.historyButtonClicked",
 					"group": "navigation@3",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == clinemm.SidebarProvider"
 				},
 				{
 					"command": "cline.accountButtonClicked",
 					"group": "navigation@5",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == clinemm.SidebarProvider"
 				},
 				{
 					"command": "cline.settingsButtonClicked",
 					"group": "navigation@6",
-					"when": "view == claude-dev.SidebarProvider"
+					"when": "view == clinemm.SidebarProvider"
 				}
 			],
 			"editor/context": [

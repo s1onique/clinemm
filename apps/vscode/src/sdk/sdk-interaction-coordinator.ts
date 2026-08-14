@@ -71,6 +71,19 @@ export interface SdkInteractionCoordinatorOptions {
 	 * looking at the actual change. Must not throw; failures fall back to a plain ask.
 	 */
 	onToolApprovalAsk?: (request: ToolApprovalRequest) => Promise<void>
+	/**
+	 * Returns the workspace cwd that tool paths should be relativized against
+	 * for display in the chat view. Unlike SdkDiffEditCoordinator.getCwd (which is
+	 * async and returns a fresh lookup), the interaction coordinator uses a
+	 * synchronously-cached snapshot (`SdkController.lastKnownWorkspaceRoot`) that
+	 * may be `undefined` until the first workspace event arrives.
+	 *
+	 * Added here as part of ACT-CLINEMM-VSCODIUM-DOGFOOD-PACKAGE01 because upstream
+	 * PR #12900 ("fix(vscode): show cwd-relative tool paths in the chat view")
+	 * passed `getCwd` at the call site on 2026-08-04 without updating this interface,
+	 * leaving the option list drift and breaking `bun run package` typecheck.
+	 */
+	getCwd?: () => string | undefined
 }
 
 /**
@@ -90,8 +103,7 @@ export function buildMistakeLimitAdvisoryText(input: {
 	const latest = input.latest?.trim()
 	const header = `The agent encountered repeated protocol errors (${counter}).`
 	const cause = `Latest: ${latest || `${input.reason} at iteration`}`
-	const hint =
-		"You can continue and provide feedback, or dismiss and let the agent continue without changes."
+	const hint = "You can continue and provide feedback, or dismiss and let the agent continue without changes."
 	return `${header}\n\n${cause}\n\n${hint}`
 }
 
@@ -103,8 +115,7 @@ export function buildMistakeLimitAdvisoryText(input: {
  * and telemetry distinguish "user pushed past the limit with guidance"
  * from "user dismissed the advisory".
  */
-type MistakeLimitDecision =
-	| (ConsecutiveMistakeLimitDecision & { kind: "advisory" | "user-resolved" })
+type MistakeLimitDecision = ConsecutiveMistakeLimitDecision & { kind: "advisory" | "user-resolved" }
 
 export class SdkInteractionCoordinator {
 	private pendingAskResolve: ((answer: string) => void) | undefined
@@ -120,9 +131,7 @@ export class SdkInteractionCoordinator {
 
 	constructor(private readonly options: SdkInteractionCoordinatorOptions) {}
 
-	async handleConsecutiveMistakeLimitReached(
-		context: ConsecutiveMistakeLimitContext,
-	): Promise<MistakeLimitDecision> {
+	async handleConsecutiveMistakeLimitReached(context: ConsecutiveMistakeLimitContext): Promise<MistakeLimitDecision> {
 		const detail = context.details?.trim()
 		const latest = detail ? `${context.reason}: ${detail}` : `${context.reason} at iteration ${context.iteration}`
 		const askMessage: ClineMessage = {

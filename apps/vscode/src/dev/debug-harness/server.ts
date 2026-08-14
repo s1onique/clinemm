@@ -1245,8 +1245,10 @@ class DebugHarness {
 	}): Promise<any> {
 		if (!this.app) throw new Error("VSCode not running")
 
-		// Build the URI
-		const extensionId = "saoudrizwan.claude-dev"
+		// Build the URI. ClineMM fork uses s1onique.clinemm; the upstream harness hardcoded
+		// saoudrizwan.claude-dev and would deliver the OAuth callback to the wrong extension
+		// (or to no installed extension at all) when dogfooding the fork.
+		const extensionId = "s1onique.clinemm"
 		const scheme = "vscode"
 		const searchParams = new URLSearchParams()
 		if (params.code) searchParams.set("code", params.code)

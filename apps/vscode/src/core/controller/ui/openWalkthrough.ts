@@ -14,10 +14,11 @@ import type { Controller } from "../index"
  */
 export async function openWalkthrough(_controller: Controller, _request: EmptyRequest): Promise<Empty> {
 	try {
-		await vscode.commands.executeCommand(
-			"workbench.action.openWalkthrough",
-			`saoudrizwan.${ExtensionRegistryInfo.name}#ClineWalkthrough`,
-		)
+		// Build the walkthrough ID from the runtime extension identity (publisher + name)
+		// so it tracks the actual extension ID registered with the host. The hardcoded
+		// "saoudrizwan.${name}" upstream form would otherwise break under the ClineMM fork
+		// identity (s1onique.clinemm).
+		await vscode.commands.executeCommand("workbench.action.openWalkthrough", `${ExtensionRegistryInfo.id}#ClineWalkthrough`)
 		telemetryService.captureButtonClick("webview_openWalkthrough")
 		return Empty.create({})
 	} catch (error) {

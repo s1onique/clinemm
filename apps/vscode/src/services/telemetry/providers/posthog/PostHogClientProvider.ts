@@ -68,9 +68,17 @@ export class PostHogClientProvider {
 			if (frames?.length) {
 				for (let j = 0; j < frames.length; j++) {
 					const fileName = frames[j]?.filename
-					// The extension filename will include "saoudrizwan"
-					// The CLI filename will include "cline"
-					if (fileName?.includes("saoudrizwan") || fileName?.includes("cline")) {
+					// The extension filename will include the upstream publisher "saoudrizwan"
+					// (or the ClineMM fork publisher "s1onique"), the package name
+					// ("claude-dev" / "clinemm"), or the generic "cline" string used by the CLI
+					// and any other host that re-uses the cline.* command prefix.
+					if (
+						fileName?.includes("saoudrizwan") ||
+						fileName?.includes("s1onique") ||
+						fileName?.includes("claude-dev") ||
+						fileName?.includes("clinemm") ||
+						fileName?.includes("cline")
+					) {
 						return event
 					}
 				}

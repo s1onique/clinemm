@@ -77,7 +77,11 @@ describe("Auth Callback URL", () => {
 		})
 
 		it("should encode vscode:// callback URLs correctly", () => {
-			const desktopCallback = "vscode://saoudrizwan.claude-dev/openrouter"
+			// ClineMM fork uses s1onique.clinemm as its extension ID; the redirect URI
+			// scheme is whatever the host VS Code-compatible editor reports
+			// (vscode://, vscodium://, codium://, etc.), so the only thing that matters here
+			// is that round-tripping the callback URL preserves the full URI intact.
+			const desktopCallback = "vscode://s1onique.clinemm/openrouter"
 
 			const authUrl = new URL("https://openrouter.ai/auth")
 			authUrl.searchParams.set("callback_url", desktopCallback)

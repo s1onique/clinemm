@@ -15,7 +15,6 @@ import {
 	BellIcon,
 	ChevronDownIcon,
 	ChevronRightIcon,
-	CircleXIcon,
 	FileCode2Icon,
 	FilePlus2Icon,
 	FoldVerticalIcon,
@@ -310,7 +309,7 @@ export const ChatRowContent = memo(
 				// is non-blocking.
 				case "mistake_limit_reached":
 					return [
-						<span className="codicon codicon-info text-foreground mb-[-1.5px]" aria-hidden="true" />,
+						<span aria-hidden="true" className="codicon codicon-info text-foreground mb-[-1.5px]" />,
 						<span className="text-foreground font-bold">Advisory: repeated protocol errors</span>,
 					]
 				case "command":

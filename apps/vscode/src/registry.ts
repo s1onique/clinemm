@@ -1,7 +1,15 @@
+// ClineMM fork: keep the canonical "cline.*" command prefix so existing keybindings,
+// menu items, and command-palette entries continue to match regardless of whether
+// the fork's npm package name is "clinemm" (dogfood build) or "claude-dev"
+// (upstream-compatible rebuild). The upstream comment below is still accurate for
+// nightly builds with arbitrary package names.
 import { name, publisher, version } from "../package.json"
 import { HostProvider } from "./hosts/host-provider"
 
-const prefix = name === "claude-dev" ? "cline" : name
+const CLINEMM_DEFAULT_PACKAGE_NAME = "clinemm"
+const CLINE_DEFAULT_PACKAGE_NAME = "claude-dev"
+
+const prefix = name === CLINEMM_DEFAULT_PACKAGE_NAME || name === CLINE_DEFAULT_PACKAGE_NAME ? "cline" : name
 
 /**
  * List of commands with the name of the extension they are registered under.
