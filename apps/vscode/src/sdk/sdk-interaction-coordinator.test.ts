@@ -503,6 +503,13 @@ describe("SdkInteractionCoordinator", () => {
 
 		// Three consecutive limits. None of them force the user into a new
 		// task. None of them produce `action: "stop"`.
+		//
+		// Each iteration appends exactly one ask message: the dismiss path
+		// (noButtonClicked, no prompt) intentionally does NOT emit a
+		// user_feedback message (see resolvePendingMistakeLimit in the
+		// coordinator). The wait condition therefore mirrors that contract
+		// \u2014 `i + 1` ask rows \u2014 rather than expecting stray user_feedback
+		// rows that the contract never produces.
 		for (let i = 0; i < 3; i++) {
 			const decisionPromise = coordinator.handleConsecutiveMistakeLimitReached({
 				iteration: i + 1,
@@ -511,13 +518,20 @@ describe("SdkInteractionCoordinator", () => {
 				reason: "tool_execution_failed",
 				details: `vendor-a/model-x attempt ${i + 1}`,
 			})
-			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages().length).toBeGreaterThan(i * 2))
-			// Simulate the user dismissing — the loop must not be terminated.
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages().length).toBeGreaterThan(i))
+			// Simulate the user dismissing \u2014 the loop must not be terminated.
 			expect(coordinator.resolvePendingMistakeLimit(undefined, "noButtonClicked")).toBe(true)
 			await expect(decisionPromise).resolves.toEqual({
 				action: "continue",
 				guidance: undefined,
 				kind: "advisory",
+			})
+			// Dismissal-without-prompt is a pure advisory: no user_feedback
+			// row is appended, so the only NEW message in this iteration is
+			// the ask.
+			expect(task.messageStateHandler.getClineMessages()[i]).toMatchObject({
+				type: "ask",
+				ask: "mistake_limit_reached",
 			})
 		}
 	})

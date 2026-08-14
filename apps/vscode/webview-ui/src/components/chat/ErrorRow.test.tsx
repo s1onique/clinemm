@@ -93,11 +93,17 @@ describe("ErrorRow", () => {
 		const mistakeMessage = { ...mockMessage, text: advisoryText }
 		render(<ErrorRow errorType="mistake_limit_reached" message={mistakeMessage} />)
 
-		// Body text is rendered verbatim (informational).
-		expect(screen.getByText(advisoryText)).toBeInTheDocument()
-		// The advisory uses neutral/info styling — no destructive error
+		// Advisory container is present and the body text is rendered
+		// somewhere within it. We assert against the container's textContent
+		// instead of getByText so the matcher is robust to whitespace
+		// normalization (newlines in the advisory text) and to the
+		// header/footer paragraphs that bracket the body.
+		const advisory = screen.getByTestId("mistake-limit-advisory")
+		expect(advisory).toBeInTheDocument()
+		expect(advisory.textContent ?? "").toContain("The agent encountered repeated protocol errors (3/3).")
+		expect(advisory.textContent ?? "").toContain("Latest: bad arguments")
+		// The advisory uses neutral/info styling \u2014 no destructive error
 		// header, no Start New Task CTA, no vendor recommendation.
-		expect(screen.getByTestId("mistake-limit-advisory")).toBeInTheDocument()
 		expect(screen.queryByText(/Start New Task/i)).not.toBeInTheDocument()
 		expect(screen.queryByText(/Mistake limit reached/i)).not.toBeInTheDocument()
 		expect(screen.queryByText(/Claude/i)).not.toBeInTheDocument()
