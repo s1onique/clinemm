@@ -15,6 +15,7 @@ import {
 	autoUpdateOnStartup,
 	getPreferredKanbanInstaller,
 } from "./commands/update";
+import { buildCliToolPolicies } from "./runtime/command-policy-host";
 import { CLI_DEFAULT_CHECKPOINT_CONFIG } from "./runtime/defaults";
 import type { TuiStartupTarget } from "./tui/types";
 import { getCliBuildInfo } from "./utils/common";
@@ -892,11 +893,9 @@ export async function runCli(): Promise<void> {
 		persistedGlobalSettings,
 		defaultToolAutoApprove,
 	);
-	const toolPolicies: Record<string, ToolPolicy> = {
-		"*": {
-			autoApprove: effectiveToolAutoApprove,
-		},
-	};
+	const toolPolicies: Record<string, ToolPolicy> = buildCliToolPolicies({
+		wildcardAutoApprove: effectiveToolAutoApprove,
+	});
 	const effectiveMode = resolveStartupMode(args, persistedGlobalSettings);
 	const effectiveCompactionMode = resolveStartupCompactionMode(
 		args,

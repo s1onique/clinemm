@@ -1,10 +1,11 @@
-import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import {
 	type CommandDecision,
 	type CommandHostAuthorization,
 	commandHostAuthorization,
+	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	evaluateCommandPolicy,
-} from "@shared/command-policy"
+} from "@cline/core"
+import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { McpHub } from "@/services/mcp/McpHub"
 
 /**
@@ -16,11 +17,11 @@ import type { McpHub } from "@/services/mcp/McpHub"
  * settings and either silently approves or shows the approval UI. This keeps
  * active sessions in sync when the user toggles auto-approval mid-task.
  *
- * ACT-CLINEMM-TOOL-COMMAND-APPROVAL-AUTHORITY01-CORRECTION01:
- * This module does NOT pretend to know shell command safety. The host
- * has at most a binary "user enabled execute_safe_commands" toggle.
- * The corrected command policy treats this as "safe-only" mode and
- * does NOT auto-approve commands based on executable name.
+ * ACT-CLINEMM-TOOL-COMMAND-APPROVAL-AUTHORITY01-CORRECTION02:
+ * The command policy lives in `@cline/core/runtime/command-policy`. This
+ * module adapts the VS Code `AutoApprovalSettings` shape into the canonical
+ * `CommandHostAuthorization` form and routes command-tool decisions through
+ * the same `evaluateCommandPolicy()` used by the CLI.
  *
  * CRITICAL: Command tools are subject to host command policy evaluation.
  * The `requires_approval` model hint is advisory only - it can escalate
@@ -98,10 +99,15 @@ export function getCommandHostAuthorization(
 ): CommandHostAuthorization {
 	if (isCommandTool(toolName)) {
 		// Host has at most a binary "execute_safe_commands" toggle.
-		// The corrected architecture treats this as "safe-only" mode,
-		// which does NOT auto-approve by executable name.
+		// The corrected architecture treats this as "safe-only" mode.
+		// In safe-only mode the host ALLOWS only commands that match a
+		// constrained, positive rule (see DEFAULT_COMMAND_HOST_ALLOW_RULES).
+		// It does NOT auto-approve by executable name.
 		if (settings.actions.executeSafeCommands) {
-			return commandHostAuthorization({ mode: "safe-only" })
+			return commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			})
 		}
 		return commandHostAuthorization({ mode: "manual" })
 	}

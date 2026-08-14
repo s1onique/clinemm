@@ -141,6 +141,32 @@ export { PATCH_MARKERS, PatchActionType } from "../../../../sdk/packages/core/sr
 export { createEditorExecutor } from "../../../../sdk/packages/core/src/extensions/tools/executors/editor"
 export type { EditFileInput } from "../../../../sdk/packages/core/src/extensions/tools/schemas"
 export type { ApplyPatchExecutor, EditorExecutor, ToolExecutors } from "../../../../sdk/packages/core/src/extensions/tools/types"
+export {
+	type CommandDecision,
+	type CommandDecisionKind,
+	type CommandDecisionSource,
+	type CommandHostAllowRule,
+	type CommandHostAuthorization,
+	type CommandHostMode,
+	type CommandModelHint,
+	type CommandModelHints,
+	commandHostAuthorization,
+	DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	type EvaluateCommandPolicyInput,
+	type EvaluateCommandPolicyResult,
+	evaluateCommandPolicy,
+	findSafeRuleMatch,
+	isMoreRestrictive,
+	isOpaqueShellRendered,
+	maxRestrictive,
+	type NormalizationResult,
+	type NormalizedCommand,
+	type NormalizedCommands,
+	type NormalizedFailure,
+	OPAQUE_SHELL_TOKENS,
+	parseCommandModelHints,
+	renderNormalizedCommand,
+} from "../../../../sdk/packages/core/src/runtime/command-policy"
 export { projectSessionMessagesForDisplay } from "../../../../sdk/packages/core/src/session/display-messages"
 
 // Real file-read executor (dependency-light: node:fs/node:path + @cline/shared/storage)
