@@ -4,6 +4,7 @@
 // Controller but delegates session lifecycle (initTask, askResponse,
 // cancelTask, …) to the Cline SDK (@cline/core) and bridges SDK events to
 // the webview's gRPC streams.
+
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import {
@@ -20,6 +21,7 @@ import {
 	type UserInstructionConfigService,
 } from "@cline/core"
 import { formatDisplayUserInput, type RemoteConfig, type RemoteConfigBundle } from "@cline/shared"
+import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import type { ApiConfiguration } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
 import { CLINE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/ClineAccount"
@@ -90,7 +92,7 @@ import { SdkTaskHistory, sessionHistoryRecordToHistoryItem } from "./sdk-task-hi
 import { SdkTaskStartCoordinator } from "./sdk-task-start-coordinator"
 import { createVscodeSdkTelemetryHandle, type VscodeSdkTelemetryHandle } from "./sdk-telemetry"
 import { SdkTerminalExecutionModeCoordinator } from "./sdk-terminal-execution-mode-coordinator"
-import { isToolAutoApproved } from "./sdk-tool-policies"
+import { evaluateCommandToolApproval, getCommandHostAuthorization, isCommandTool, isToolAutoApproved } from "./sdk-tool-policies"
 import {
 	extractSdkUserText,
 	findSdkUserMessageIndexByOrdinal,
@@ -351,7 +353,19 @@ export class Controller {
 			},
 			shouldAutoApproveTool: (request) => {
 				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
-				return autoApprovalSettings ? isToolAutoApproved(request.toolName, autoApprovalSettings, this.mcpHub) : false
+
+				// For command tools, apply host command policy evaluation.
+				// The model requires_approval hint is advisory only - it can escalate
+				// but never downgrade host authority.
+				if (isCommandTool(request.toolName)) {
+					const effectiveSettings = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
+					const hostAuthorization = getCommandHostAuthorization(request.toolName, effectiveSettings, this.mcpHub)
+					const { approved } = evaluateCommandToolApproval(request.input, hostAuthorization)
+					return approved
+				}
+
+				// For non-command tools, the legacy auto-approve boolean applies.
+				return !!autoApprovalSettings && isToolAutoApproved(request.toolName, autoApprovalSettings, this.mcpHub)
 			},
 			getCwd: () => this.lastKnownWorkspaceRoot,
 		})

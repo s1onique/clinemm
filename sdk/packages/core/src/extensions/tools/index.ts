@@ -103,6 +103,7 @@ export {
 	type WebFetchRequest,
 	WebFetchRequestSchema,
 } from "./schemas";
+export { normalizeRunCommandsInput } from "./helpers";
 export { TEAM_TOOL_NAMES } from "./team/team-tools";
 // Types
 export type {

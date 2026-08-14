@@ -914,6 +914,7 @@ export {
 	getCoreDefaultEnabledToolIds,
 	getCoreHeadlessToolNames,
 	MAX_COMMAND_OUTPUT_CHARS,
+	normalizeRunCommandsInput,
 	PATCH_MARKERS,
 	PatchActionType,
 	type PatchFileChange,
