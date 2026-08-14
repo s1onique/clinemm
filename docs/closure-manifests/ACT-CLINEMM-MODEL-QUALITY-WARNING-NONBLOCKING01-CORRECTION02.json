@@ -1,0 +1,372 @@
+{
+  "closure_protocol_version": "2",
+  "plan_contract_version": 1,
+  "subject_commit": "48aef90afe48232c6d80cc029ab9f7ffb30e00df",
+  "subject_tree": "b96310a792f70f607ada970fe0fe0596ee72b808",
+  "freeze_commit": "dca291e7f824cf2a7a09b6e87dd23526abcdafbe",
+  "freeze_tree": "ff74720f553b8326d777d95c363002a44cd05249",
+  "plan_path": "docs/closure-plans/ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01-CORRECTION02.json",
+  "plan_blob": "2eed8f45e01ef147ab3ee1ffe906fa3b185639c9",
+  "plan_sha256": "7a59f8b5f067c649c70bb0d593fd884bd0e0b8ae6bdf499262da4533d4d663d1",
+  "execution_tree": "b96310a792f70f607ada970fe0fe0596ee72b808",
+  "check_results": [
+    {
+      "id": "subject_commit_is_git_object",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 10,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "subject_commit_is_git_object.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "subject_commit_is_git_object.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "subject_tree_is_git_object",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 10,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "subject_tree_is_git_object.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "subject_tree_is_git_object.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "subject_ancestor_of_head",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 11,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "subject_ancestor_of_head.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "subject_ancestor_of_head.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "subject_summary_describes_test_correction",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 12,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "subject_summary_describes_test_correction.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "subject_summary_describes_test_correction.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "subject_touches_only_test_files",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 13,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "subject_touches_only_test_files.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "subject_touches_only_test_files.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "subject_does_not_modify_production",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 13,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "subject_does_not_modify_production.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "subject_does_not_modify_production.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "git_diff_check_passes_on_subject",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 11,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "git_diff_check_passes_on_subject.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "git_diff_check_passes_on_subject.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "worktree_clean_at_run",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 149,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "worktree_clean_at_run.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "worktree_clean_at_run.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "subject_diff_stats_show_two_test_files",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 13,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "subject_diff_stats_show_two_test_files.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "subject_diff_stats_show_two_test_files.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "sdk_interaction_coordinator_test_passes",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 20532,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "sdk_interaction_coordinator_test_passes.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e62108b5d4ee515e38629b6c420b9fd40e7c0a39f7a42d59ea0fcac2568166eb",
+          "byte_count": 9,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "sdk_interaction_coordinator_test_passes.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "error_row_test_passes",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 64,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "error_row_test_passes.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "f7b953d4286d4e1b619c87fc3349fd4b5fe8e6a09d70a6bc0236222a3f160225",
+          "byte_count": 131,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "error_row_test_passes.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "button_config_test_passes",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 57,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "button_config_test_passes.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "7b1946e46b492c91cd8a15ae508e86233320411015682bf04e7d43dd851ae25a",
+          "byte_count": 134,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "button_config_test_passes.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "mistake_tracker_test_passes",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 249,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "mistake_tracker_test_passes.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "674410ea6e0cf5bc02281a27f1b19cb781157fbc04b110f224f9dff4c3f571db",
+          "byte_count": 36,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "mistake_tracker_test_passes.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    },
+    {
+      "id": "session_runtime_orchestrator_test_passes",
+      "mode": "run",
+      "outcome": "pass",
+      "exit_code": 0,
+      "duration_ms": 249,
+      "execution_classification": "completed",
+      "cleanup_status": "pass",
+      "evidence": [
+        {
+          "logical_name": "session_runtime_orchestrator_test_passes.stdout",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "674410ea6e0cf5bc02281a27f1b19cb781157fbc04b110f224f9dff4c3f571db",
+          "byte_count": 36,
+          "availability": "detached"
+        },
+        {
+          "logical_name": "session_runtime_orchestrator_test_passes.stderr",
+          "media_type": "text/plain; charset=utf-8",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "byte_count": 0,
+          "availability": "detached"
+        }
+      ]
+    }
+  ],
+  "leamas_binary_identity": {
+    "path": "/usr/local/bin/leamas",
+    "sha256": "993aab9efd13f137a9a0c87d153384fa2dcc11d79e0c2c24a53bcc203e5bd293",
+    "vcs_revision": "869d27664a9d3ba0bfb280ed1f9569c9ce2c5b3e",
+    "vcs_modified": false,
+    "leamas_version": "0.1.0+dev.869d27664a9d.20260814T065817Z"
+  },
+  "caller_head": "dca291e7f824cf2a7a09b6e87dd23526abcdafbe"
+}
