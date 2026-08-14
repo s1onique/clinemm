@@ -376,6 +376,22 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 					)
 					break
 
+				// ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: Dismiss is
+				// the advisory-secondary action. It sends `noButtonClicked` for
+				// the mistake_limit_reached ask; the SdkInteractionCoordinator
+				// translates that into `action: "continue"` (advisory) — the
+				// session is NOT cleared and the task remains resumable.
+				case "dismiss":
+					if (clineAsk === "mistake_limit_reached") {
+						await TaskServiceClient.askResponse(
+							AskResponseRequest.create({
+								responseType: "noButtonClicked",
+							}),
+						)
+					}
+					clearInputState()
+					break
+
 				case "new_task":
 					if (clineAsk === "new_task") {
 						await TaskServiceClient.newTask(

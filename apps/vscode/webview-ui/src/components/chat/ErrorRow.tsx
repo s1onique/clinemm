@@ -27,8 +27,31 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 
 	const renderErrorContent = () => {
 		switch (errorType) {
-			case "error":
+			// ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01:
+			// `mistake_limit_reached` is an advisory, not a hard error. The
+			// row uses neutral/info styling — no destructive error color, no
+			// retry-or-start-new-task framing. The user is shown the
+			// protocol-progress notice in a non-alarming tone.
 			case "mistake_limit_reached":
+				return (
+					<div
+						data-testid="mistake-limit-advisory"
+						className="flex flex-col gap-2 p-3 rounded border border-neutral-500/30 bg-quote text-foreground text-sm"
+					>
+						<div className="flex items-center gap-2 font-semibold">
+							<span className="codicon codicon-info" aria-hidden="true" />
+							<span>Advisory: repeated protocol errors</span>
+						</div>
+						<p className="m-0 whitespace-pre-wrap text-description">
+							{message.text}
+						</p>
+						<p className="m-0 text-xs text-description">
+							This notice is informational. The task can continue, be paused, or be resumed from the
+							latest state — it is not blocked on this message.
+						</p>
+					</div>
+				)
+			case "error":
 				// Handle API request errors with special error parsing
 				if (rawApiError) {
 					// FIXME: ClineError parsing should not be applied to non-Cline providers, but it seems we're using clineErrorMessage below in the default error display

@@ -10,6 +10,7 @@ export type ButtonActionType =
 	| "proceed" // Send messageResponse or yesButtonClicked
 	| "proceed_while_running" // Detach the running foreground terminal command
 	| "new_task" // Start a new task
+	| "dismiss" // Dismiss the advisory without forcing a new task (non-terminal)
 	| "cancel" // Cancel streaming
 	| "utility" // Execute utility function (condense, report_bug)
 	| "retry" // Retry the last action
@@ -29,6 +30,12 @@ export interface ButtonConfig {
 /**
  * Centralized button state configurations based on task lifecycle
  * This is the single source of truth for both button display and actions
+ *
+ * ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: `mistake_limit_reached`
+ * is an advisory, NOT a hard error. It must not expose "Start New Task"
+ * as a button (that path destroys resumability), and it must not be in
+ * the error phase set — the UI phase is `awaiting_followup`, the same as
+ * a regular follow-up question. Use `Dismiss` for the secondary action.
  */
 export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	// Error recovery states - user must take action
@@ -40,13 +47,15 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 		primaryAction: "retry",
 		secondaryAction: "new_task",
 	},
+	// ACT-CLINEMM: advisory, not error. Continue + Dismiss — neither forces
+	// a new task and neither aborts the runtime. The session stays resumable.
 	mistake_limit_reached: {
 		sendingDisabled: false,
 		enableButtons: true,
-		primaryText: "Proceed Anyways",
-		secondaryText: "Start New Task",
+		primaryText: "Continue",
+		secondaryText: "Dismiss",
 		primaryAction: "proceed",
-		secondaryAction: "new_task",
+		secondaryAction: "dismiss",
 	},
 
 	// Tool approval states - most common during task execution
@@ -219,7 +228,12 @@ export const BUTTON_CONFIGS: Record<string, ButtonConfig> = {
 	},
 }
 
-const errorTypes = ["api_req_failed", "mistake_limit_reached"]
+// ACT-CLINEMM: `mistake_limit_reached` is advisory, not a hard error. The
+// error phase button set is reserved for `api_req_failed` (genuine
+// transport-level failure where the user can Retry or escalate to a new
+// task). Mistake-limit advisories route through `awaiting_followup` so the
+// input is enabled and no error styling is forced.
+const errorTypes = ["api_req_failed"]
 
 /**
  * Determines button configuration based on message type and state
@@ -251,6 +265,9 @@ export function getButtonConfig(message: ClineMessage | undefined, _mode: Mode =
 			// Error recovery states
 			case "api_req_failed":
 				return BUTTON_CONFIGS.api_req_failed
+			// ACT-CLINEMM: mistake_limit_reached is advisory, but its ask is
+			// still routed here when surfaced via legacy message-tail paths.
+			// Same Continue/Dismiss buttons as the TurnState-driven path.
 			case "mistake_limit_reached":
 				return BUTTON_CONFIGS.mistake_limit_reached
 
@@ -371,6 +388,13 @@ export function getButtonConfigForMessages(messages: ClineMessage[], mode: Mode 
  *
  * The button SET is chosen by phase; the LABEL/variant for approvals (Save vs Approve, command
  * vs tool vs MCP vs subagents) comes from the anchored message (turnState.anchorTs).
+ *
+ * ACT-CLINEMM: `mistake_limit_reached` is no longer treated as an error.
+ * The SdkInteractionCoordinator emits the advisory with phase
+ * `awaiting_followup`, so the input is enabled and the message text drives
+ * the buttons via `getButtonConfig(message)`. The previous `error` branch
+ * that routed mistake_limit into Retry/Start New Task is removed because
+ * that branch forced a hard gate.
  */
 export function buttonsForPhase(
 	turnState: TurnState,
@@ -390,15 +414,15 @@ export function buttonsForPhase(
 		case "resumable":
 			return BUTTON_CONFIGS.resume_task
 		case "error":
-			// The anchored message distinguishes mistake_limit (Proceed/New Task) from a failed
-			// API request (Retry/New Task). Default to the retry config.
-			if (anchoredMessage?.type === "ask" && anchoredMessage.ask === "mistake_limit_reached") {
-				return BUTTON_CONFIGS.mistake_limit_reached
-			}
+			// Only api_req_failed (genuine transport failure) reaches this branch.
+			// mistake_limit_reached is emitted under `awaiting_followup` so the
+			// advisory surfaces as a non-blocking input prompt with Continue +
+			// Dismiss instead of an error-styled Retry + Start New Task.
 			return BUTTON_CONFIGS.api_req_failed
 		case "awaiting_followup":
-			// followup / plan_mode_respond — input enabled, no approve/reject buttons. (If the
-			// anchored message is a recognized ask, defer to its config for correct labels.)
+			// followup / plan_mode_respond / mistake_limit_reached — input
+			// enabled, no approve/reject buttons. (If the anchored message is a
+			// recognized ask, defer to its config for correct labels.)
 			return anchoredMessage ? getButtonConfig(anchoredMessage, "act") : BUTTON_CONFIGS.followup
 		case "awaiting_approval":
 			// Approve/Reject (or Run Command / Save / etc.) — driven by the anchored ask so the

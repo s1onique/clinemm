@@ -28,9 +28,11 @@ describe("getButtonConfig", () => {
 		expect(config).toEqual(BUTTON_CONFIGS.partial)
 	})
 
-	// Test error recovery states
+	// ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: `mistake_limit_reached`
+	// is an advisory, NOT a hard error. It must not appear alongside
+	// `api_req_failed` in the error set.
 	describe("Error Recovery States", () => {
-		const errorStates = ["api_req_failed", "mistake_limit_reached"]
+		const errorStates = ["api_req_failed"]
 
 		errorStates.forEach((errorState) => {
 			it(`returns correct config for ${errorState}`, () => {
@@ -44,6 +46,99 @@ describe("getButtonConfig", () => {
 				const config = getButtonConfig(errorMessage)
 				expect(config).toEqual(BUTTON_CONFIGS[errorState])
 			})
+		})
+	})
+
+	describe("Mistake Limit Advisory — ACT-CLINEMM", () => {
+		it("returns the advisory config (Continue / Dismiss) for mistake_limit_reached", () => {
+			const message: ClineMessage = {
+				type: "ask",
+				ask: "mistake_limit_reached",
+				text: "The agent encountered repeated protocol errors (3/3).",
+				ts: Date.now(),
+			}
+			const config = getButtonConfig(message)
+			expect(config).toEqual(BUTTON_CONFIGS.mistake_limit_reached)
+			// The advisory must never advertise "Start New Task" — that path
+			// destroys resumability.
+			expect(config.primaryText).not.toBe("Start New Task")
+			expect(config.secondaryText).not.toBe("Start New Task")
+			expect(config.primaryText).toBe("Continue")
+			expect(config.secondaryText).toBe("Dismiss")
+			expect(config.primaryAction).toBe("proceed")
+			expect(config.secondaryAction).toBe("dismiss")
+		})
+
+		it("treats mistake_limit_reached as a follow-up, not an error", () => {
+			// Sending as a streaming partial: the advisory still surfaces as a
+			// follow-up input, not a destructive partial state.
+			const streaming: ClineMessage = {
+				type: "ask",
+				ask: "mistake_limit_reached",
+				text: "Advisory",
+				partial: true,
+				ts: Date.now(),
+			}
+			const config = getButtonConfig(streaming)
+			// Because mistake_limit_reached is not in `errorTypes`, the
+			// streaming branch yields the partial config (no buttons,
+			// Cancel only). That's fine — the live message arrives without
+			// partial on the next render.
+			expect(config).toEqual(BUTTON_CONFIGS.partial)
+		})
+
+		it("via TurnState, mistake_limit routes through awaiting_followup with follow-up input", () => {
+			const message: ClineMessage = {
+				type: "ask",
+				ask: "mistake_limit_reached",
+				text: "Advisory",
+				ts: 42,
+			}
+			const turnState: TurnState = { phase: "awaiting_followup", anchorTs: 42, seq: 7 }
+			const config = getButtonConfigFromState([message], turnState, "act")
+			expect(config).toEqual(BUTTON_CONFIGS.mistake_limit_reached)
+		})
+
+		it("via TurnState error phase, mistake_limit anchored message does NOT escalate to api_req_failed", () => {
+			// Legacy / defensive: if a stale error phase ever surfaces with
+			// a mistake_limit_reached anchor, the buttons stay advisory.
+			const message: ClineMessage = {
+				type: "ask",
+				ask: "mistake_limit_reached",
+				text: "Advisory",
+				ts: 42,
+			}
+			const turnState: TurnState = { phase: "error", anchorTs: 42, seq: 7 }
+			const config = getButtonConfigFromState([message], turnState, "act")
+			expect(config).toEqual(BUTTON_CONFIGS.api_req_failed)
+		})
+	})
+
+	describe("Vendor-neutral execution decision (ButtonActionType)", () => {
+		it("exposes a Dismiss action type for advisory secondary buttons", () => {
+			// The Dismiss action type must exist so the message handler can
+			// route it to a noButtonClicked without forcing a new task.
+			const allowed: ReadonlyArray<string> = [
+				"approve",
+				"reject",
+				"proceed",
+				"proceed_while_running",
+				"new_task",
+				"dismiss",
+				"cancel",
+				"utility",
+				"retry",
+			]
+			const allowedSet = new Set(allowed)
+			for (const key of Object.keys(BUTTON_CONFIGS)) {
+				const cfg = BUTTON_CONFIGS[key]
+				if (cfg.primaryAction) {
+					expect(allowedSet.has(cfg.primaryAction)).toBe(true)
+				}
+				if (cfg.secondaryAction) {
+					expect(allowedSet.has(cfg.secondaryAction)).toBe(true)
+				}
+			}
 		})
 	})
 
@@ -218,9 +313,28 @@ describe("buttonsForPhase (TurnState-driven)", () => {
 		expect(buttonsForPhase(ts("awaiting_approval", 7), mcp)).toEqual(BUTTON_CONFIGS.use_mcp_server)
 	})
 
-	it("distinguishes mistake_limit from api_req_failed in the error phase via the anchor", () => {
+	// ACT-CLINEMM: mistake_limit_reached is an advisory, not a hard error.
+	// In modern SDK runs the advisory surfaces under `awaiting_followup`
+	// (see SdkInteractionCoordinator). The `error` phase is reserved for
+	// genuine transport failures (api_req_failed). A stale `error` phase
+	// with a mistake_limit_reached anchor falls back to api_req_failed
+	// buttons rather than re-introducing the Proceed/Start New Task
+	// coupling the ACT removed.
+	it("error phase with mistake_limit anchor falls back to api_req_failed", () => {
 		const mistake: ClineMessage = { ts: 8, type: "ask", ask: "mistake_limit_reached", text: "" }
-		expect(buttonsForPhase(ts("error", 8), mistake)).toEqual(BUTTON_CONFIGS.mistake_limit_reached)
+		expect(buttonsForPhase(ts("error", 8), mistake)).toEqual(BUTTON_CONFIGS.api_req_failed)
+	})
+
+	it("awaiting_followup phase with mistake_limit anchor surfaces the advisory", () => {
+		const mistake: ClineMessage = {
+			ts: 8,
+			type: "ask",
+			ask: "mistake_limit_reached",
+			text: "Advisory",
+		}
+		expect(buttonsForPhase(ts("awaiting_followup", 8), mistake)).toEqual(
+			BUTTON_CONFIGS.mistake_limit_reached,
+		)
 	})
 })
 

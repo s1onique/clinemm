@@ -300,10 +300,16 @@ export const ChatRowContent = memo(
 						<span className="codicon codicon-error text-error mb-[-1.5px]" />,
 						<span className="text-error font-bold">Error</span>,
 					]
+				// ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: the
+				// `mistake_limit_reached` ask is an advisory, not an error.
+				// The chat row header must NOT use destructive styling
+				// (text-error, error icon). Use a neutral info icon and
+				// informational wording so the user understands the notice
+				// is non-blocking.
 				case "mistake_limit_reached":
 					return [
-						<CircleXIcon className="text-error size-2" />,
-						<span className="text-error font-bold">Cline is having trouble...</span>,
+						<span className="codicon codicon-info text-foreground mb-[-1.5px]" aria-hidden="true" />,
+						<span className="text-foreground font-bold">Advisory: repeated protocol errors</span>,
 					]
 				case "command":
 					return [

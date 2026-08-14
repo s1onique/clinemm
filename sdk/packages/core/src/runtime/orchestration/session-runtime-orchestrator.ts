@@ -1058,7 +1058,7 @@ export class SessionRuntime {
 				this.inspectLoopForToolCall(
 					event.toolCall.toolName,
 					event.toolCall.input,
-					event.iteration,
+					
 				);
 				break;
 			}
@@ -1197,45 +1197,51 @@ export class SessionRuntime {
 
 	/**
 	 * Feed the `LoopDetectionTracker` with a tool-call and react to
-	 * the returned verdict. Parity with pre-Step-9 agent.ts L917-954:
+	 * the returned verdict.
+	 *
+	 * ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: the hard-escalation
+	 * path used to funnel through `MistakeTracker.record` (which used to
+	 * default to `action: "stop"`). Now that the MistakeTracker's default
+	 * is `action: "continue"` (advisory, not terminal), the loop-detector
+	 * is a separate, real terminal signal and aborts the runtime directly.
 	 *
 	 *   - `"soft"`  → append a recovery notice telling the model to
 	 *                 change approach;
-	 *   - `"hard"`  → feed `MistakeTracker.record` with
-	 *                 `forceAtLimit:true`. When the tracker returns
-	 *                 `action: "stop"`, append the stop notice and
-	 *                 abort the active runtime.
+	 *   - `"hard"`  → append a stop notice and abort the runtime. This is
+	 *                 a stuck-loop condition, not a model-quality verdict
+	 *                 — it must remain terminal so the user can intervene.
 	 */
 	private inspectLoopForToolCall(
 		toolName: string,
 		input: unknown,
-		iteration: number,
 	): void {
 		if (this.trackerAbortInFlight || this.loopDetectionDisabled) {
-			return;
+			return
 		}
-		const verdict = this.loopTracker.inspect({ name: toolName, input });
+		const verdict = this.loopTracker.inspect({ name: toolName, input })
 		if (verdict.kind === "ok") {
-			return;
+			return
 		}
 		if (verdict.kind === "soft") {
 			if (verdict.message) {
 				this.conversation.appendMessage({
 					role: "user",
 					content: [{ type: "text", text: verdict.message }],
-				});
+				})
 			}
-			return;
+			return
 		}
-		// Hard escalation.
-		this.enqueueMistakeRecord({
-			iteration,
-			reason: "tool_execution_failed",
-			forceAtLimit: true,
-			details:
-				verdict.message ??
-				`Detected repeated tool calls to \`${toolName}\`; stopping to avoid a loop.`,
-		});
+		// Hard escalation — genuine terminal condition (stuck loop). Bypass
+		// the MistakeTracker (which is now advisory-by-default) and abort
+		// the runtime directly so the user can intervene.
+		this.trackerAbortInFlight = true
+		const message =
+			verdict.message ?? `Detected repeated tool calls to \`${toolName}\`; stopping to avoid a loop.`
+		this.conversation.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: message }],
+		})
+		this.activeRuntime?.abort(message)
 	}
 
 	/**

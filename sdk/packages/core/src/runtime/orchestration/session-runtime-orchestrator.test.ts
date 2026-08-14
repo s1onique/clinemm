@@ -2129,7 +2129,12 @@ function failedStructuredToolTurnEvents(): AgentRuntimeEvent[] {
 }
 
 describe("SessionRuntime.run — tracker wiring (P1 #3)", () => {
-	it("aborts after maxConsecutiveMistakes failed-tool turns", async () => {
+	// ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: a tracker wiring
+	// that defaults to `action: "stop"` was making mistake recovery a hard
+	// gate, terminating the runtime purely on a count of recoverable
+	// protocol errors. The new default is `action: "continue"` — the
+	// orchestrator must NOT abort the runtime on the no-callback default.
+	it("does NOT abort after maxConsecutiveMistakes failed-tool turns when no callback is configured", async () => {
 		const { deps, abortCalls } = makeScriptedRuntime({
 			events: failedToolTurnEvents(),
 		});
@@ -2138,10 +2143,30 @@ describe("SessionRuntime.run — tracker wiring (P1 #3)", () => {
 			deps,
 		);
 		await session.run("one");
-		// First failed turn — counter 1 < 2, no abort yet.
+		// First failed turn — counter 1 < 2, no abort.
 		expect(abortCalls).toHaveLength(0);
 		await session.continue("two");
-		// Second failed turn — counter reaches 2, tracker calls abort.
+		// Second failed turn — counter reaches 2. ACT-CLINEMM: this is a
+		// recoverable protocol-progress symptom, NOT a terminal verdict.
+		// The runtime must stay alive so the loop can continue.
+		expect(abortCalls).toHaveLength(0);
+	});
+
+	it("aborts ONLY when an explicit onLimitReached callback returns stop", async () => {
+		const { deps, abortCalls } = makeScriptedRuntime({
+			events: failedToolTurnEvents(),
+		});
+		const session = new SessionRuntime(
+			makeAgentConfig({
+				execution: { maxConsecutiveMistakes: 2 },
+				onConsecutiveMistakeLimitReached: () => ({ action: "stop", reason: "explicit operator stop" }),
+			}),
+			deps,
+		);
+		await session.run("one");
+		expect(abortCalls).toHaveLength(0);
+		await session.continue("two");
+		// An explicit `stop` decision IS honored. Terminal stop is opt-in.
 		expect(abortCalls.length).toBeGreaterThanOrEqual(1);
 	});
 
@@ -2227,9 +2252,11 @@ describe("SessionRuntime.run — tracker wiring (P1 #3)", () => {
 		expect(limitEvents()).toHaveLength(0);
 
 		await session.continue("two");
-		// Second failed turn hits the limit: exactly one event, even though
-		// no `onConsecutiveMistakeLimitReached` callback is configured (the
-		// tracker falls back to the default stop decision).
+		// Second failed turn hits the limit: exactly one telemetry event is
+		// captured. The tracker itself records the limit hit regardless of
+		// whether `onConsecutiveMistakeLimitReached` is configured
+		// (ACT-CLINEMM: the no-callback default is `action: "continue"`,
+		// not stop, but telemetry still fires).
 		const events = limitEvents();
 		expect(events).toHaveLength(1);
 		expect(events[0].properties).toMatchObject({

@@ -84,11 +84,37 @@ describe("ErrorRow", () => {
 		expect(screen.getByText("Test error message")).toBeInTheDocument()
 	})
 
-	it("renders mistake limit reached error", () => {
-		const mistakeMessage = { ...mockMessage, text: "Mistake limit reached" }
+	// ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: mistake_limit_reached
+	// is rendered as an advisory, NOT as a destructive error. The styling
+	// must be neutral and the text must NOT advise a specific vendor or
+	// model.
+	it("renders mistake_limit_reached as a non-blocking advisory", () => {
+		const advisoryText = "The agent encountered repeated protocol errors (3/3).\n\nLatest: bad arguments"
+		const mistakeMessage = { ...mockMessage, text: advisoryText }
 		render(<ErrorRow errorType="mistake_limit_reached" message={mistakeMessage} />)
 
-		expect(screen.getByText("Mistake limit reached")).toBeInTheDocument()
+		// Body text is rendered verbatim (informational).
+		expect(screen.getByText(advisoryText)).toBeInTheDocument()
+		// The advisory uses neutral/info styling — no destructive error
+		// header, no Start New Task CTA, no vendor recommendation.
+		expect(screen.getByTestId("mistake-limit-advisory")).toBeInTheDocument()
+		expect(screen.queryByText(/Start New Task/i)).not.toBeInTheDocument()
+		expect(screen.queryByText(/Mistake limit reached/i)).not.toBeInTheDocument()
+		expect(screen.queryByText(/Claude/i)).not.toBeInTheDocument()
+		expect(screen.queryByText(/Sonnet/i)).not.toBeInTheDocument()
+	})
+
+	it("mistake_limit_reached advisory does not use error-styled header", () => {
+		const mistakeMessage = {
+			...mockMessage,
+			text: "The agent encountered repeated protocol errors (3/3).",
+		}
+		render(<ErrorRow errorType="mistake_limit_reached" message={mistakeMessage} />)
+
+		// The container is NOT styled as a destructive error.
+		const advisory = screen.getByTestId("mistake-limit-advisory")
+		expect(advisory.className).not.toMatch(/text-error/)
+		expect(advisory.className).not.toMatch(/border-error/)
 	})
 
 	it("renders diff error", () => {

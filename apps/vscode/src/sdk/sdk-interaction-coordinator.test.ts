@@ -1,7 +1,7 @@
 import type { AgentEvent } from "@cline/shared"
 import { describe, expect, it, vi } from "vitest"
 import { MessageTranslatorState, translateSessionEvent } from "./message-translator"
-import { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
+import { buildMistakeLimitAdvisoryText, SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { createTaskProxy } from "./task-proxy"
 import { DEFAULT_TOOL_APPROVAL_DENIAL_REASON, EDIT_TOOL_APPROVAL_DENIAL_REASON } from "./tool-approval-denial"
@@ -358,7 +358,15 @@ describe("SdkInteractionCoordinator", () => {
 		])
 	})
 
-	it("emits mistake_limit_reached and resolves proceed as SDK recovery guidance", async () => {
+	// ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: mistake_limit_reached
+	// is an advisory, not a hard error. The remaining tests in this describe
+	// lock in the new contract:
+	//   - the ask message is emitted under phase `awaiting_followup`
+	//   - Continue (with guidance) returns { action: "continue", kind: "user-resolved" }
+	//   - Dismiss (noButtonClicked) returns { action: "continue", kind: "advisory" }
+	//   - clearPending resolves the pending advisory as continue, not stop
+
+	it("emits mistake_limit_reached as awaiting_followup advisory and resolves continue with guidance", async () => {
 		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
 		const setTurnPhase = vi.fn()
 		const coordinator = new SdkInteractionCoordinator({
@@ -377,17 +385,22 @@ describe("SdkInteractionCoordinator", () => {
 		})
 		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
 
-		expect(task.messageStateHandler.getClineMessages()[0]).toMatchObject({
+		const ask = task.messageStateHandler.getClineMessages()[0]
+		expect(ask).toMatchObject({
 			type: "ask",
 			ask: "mistake_limit_reached",
 			partial: false,
 		})
-		expect(setTurnPhase).toHaveBeenCalledWith("error", task.messageStateHandler.getClineMessages()[0].ts)
+		// The advisory is a follow-up, not an error — input stays enabled.
+		expect(setTurnPhase).toHaveBeenCalledWith("awaiting_followup", ask.ts)
+		expect(ask.text).toContain("protocol errors")
+		expect(ask.text).not.toMatch(/claude|sonnet|opus|anthropic/i)
 
-		expect(coordinator.resolvePendingMistakeLimit("try smaller steps", "yesButtonClicked")).toBe(true)
+		expect(coordinator.resolvePendingMistakeLimit("try smaller steps", "messageResponse")).toBe(true)
 		await expect(decisionPromise).resolves.toEqual({
 			action: "continue",
 			guidance: "mistake_limit_reached: try smaller steps",
+			kind: "user-resolved",
 		})
 		expect(task.messageStateHandler.getClineMessages()).toMatchObject([
 			{ type: "ask", ask: "mistake_limit_reached" },
@@ -396,7 +409,7 @@ describe("SdkInteractionCoordinator", () => {
 		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming")
 	})
 
-	it("resolves mistake-limit no-button responses as stop decisions", async () => {
+	it("resolves mistake-limit dismiss (noButtonClicked) as advisory continue, NOT stop", async () => {
 		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
 		const setTurnPhase = vi.fn()
 		const coordinator = new SdkInteractionCoordinator({
@@ -416,15 +429,17 @@ describe("SdkInteractionCoordinator", () => {
 
 		expect(coordinator.resolvePendingMistakeLimit(undefined, "noButtonClicked")).toBe(true)
 
+		// Resumability invariant: dismiss is advisory, the task stays alive.
 		await expect(decisionPromise).resolves.toEqual({
-			action: "stop",
-			reason: "stopped after mistake_limit_reached prompt",
+			action: "continue",
+			guidance: undefined,
+			kind: "advisory",
 		})
 		expect(task.messageStateHandler.getClineMessages()).toMatchObject([{ type: "ask", ask: "mistake_limit_reached" }])
 		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming")
 	})
 
-	it("clears pending mistake-limit prompts as stop decisions", async () => {
+	it("resolves mistake-limit Continue (yesButtonClicked, no prompt) as advisory continue", async () => {
 		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
 		const coordinator = new SdkInteractionCoordinator({
 			messages: new SdkMessageCoordinator({ getTask: () => task }),
@@ -440,10 +455,87 @@ describe("SdkInteractionCoordinator", () => {
 		})
 		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
 
+		expect(coordinator.resolvePendingMistakeLimit(undefined, "yesButtonClicked")).toBe(true)
+		await expect(decisionPromise).resolves.toEqual({
+			action: "continue",
+			guidance: undefined,
+			kind: "advisory",
+		})
+	})
+
+	it("clears pending mistake-limit prompts as advisory continue (session cancel is handled elsewhere)", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		})
+
+		const decisionPromise = coordinator.handleConsecutiveMistakeLimitReached({
+			iteration: 4,
+			consecutiveMistakes: 3,
+			maxConsecutiveMistakes: 3,
+			reason: "tool_execution_failed",
+		})
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+
+		// clearPending may be triggered by session teardown (cancelTask,
+		// clearTask, mode change). The MistakeTracker await must resolve
+		// with `continue` so the orchestrator doesn't try to abort the
+		// runtime twice. The session teardown is the legitimate stop.
 		coordinator.clearPending("Task cleared")
 
-		await expect(decisionPromise).resolves.toEqual({ action: "stop", reason: "Task cleared" })
+		await expect(decisionPromise).resolves.toEqual({
+			action: "continue",
+			guidance: undefined,
+			kind: "advisory",
+		})
 		expect(coordinator.resolvePendingMistakeLimit(undefined, "yesButtonClicked")).toBe(false)
+	})
+
+	it("mistake_limit_reached remains resumable across repeated triggers (no forced new task)", async () => {
+		const task = createTaskProxy("session-123", vi.fn(), vi.fn())
+		const coordinator = new SdkInteractionCoordinator({
+			messages: new SdkMessageCoordinator({ getTask: () => task }),
+			getSessionId: () => "session-123",
+			postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		})
+
+		// Three consecutive limits. None of them force the user into a new
+		// task. None of them produce `action: "stop"`.
+		for (let i = 0; i < 3; i++) {
+			const decisionPromise = coordinator.handleConsecutiveMistakeLimitReached({
+				iteration: i + 1,
+				consecutiveMistakes: 3,
+				maxConsecutiveMistakes: 3,
+				reason: "tool_execution_failed",
+				details: `vendor-a/model-x attempt ${i + 1}`,
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages().length).toBeGreaterThan(i * 2))
+			// Simulate the user dismissing — the loop must not be terminated.
+			expect(coordinator.resolvePendingMistakeLimit(undefined, "noButtonClicked")).toBe(true)
+			await expect(decisionPromise).resolves.toEqual({
+				action: "continue",
+				guidance: undefined,
+				kind: "advisory",
+			})
+		}
+	})
+
+	it("advisory text uses neutral wording regardless of model identifier", () => {
+		const models = ["vendor-a/model-x", "vendor-b/model-y", "local/model-z", "claude-sonnet-4-5", "qwen", "deepseek"]
+		for (const id of models) {
+			const text = buildMistakeLimitAdvisoryText({
+				consecutiveMistakes: 3,
+				maxConsecutiveMistakes: 3,
+				reason: "tool_execution_failed",
+				latest: `${id}: bad arguments`,
+			})
+			expect(text).toContain("protocol errors")
+			// The model id is fine to appear in the `latest` details (debug
+			// context); but the header must not name a brand.
+			expect(text).not.toMatch(/Use|please use|try|suggest|recommend/i)
+		}
 	})
 
 	it("clears pending tool approvals as rejected", async () => {

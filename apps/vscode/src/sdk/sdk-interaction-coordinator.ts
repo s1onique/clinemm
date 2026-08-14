@@ -7,6 +7,35 @@ import { buildToolApprovalAskMessage } from "./message-translator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { buildToolApprovalDenialReason } from "./tool-approval-denial"
 
+/**
+ * =============================================================================
+ * ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01 — Advisory boundary
+ * =============================================================================
+ *
+ * Historical contract: `mistake_limit_reached` was treated as a hard error
+ * with two UI buttons — "Proceed Anyways" / "Start New Task" — where
+ * "Start New Task" called `clearTask()` and destroyed the session, while
+ * `clearPending(reason)` returned `{ action: "stop" }` which aborted the
+ * runtime through the orchestrator. Either path ended the user's task.
+ *
+ * New contract: `mistake_limit_reached` is an *advisory*, not an error.
+ *   - `mistake_limit_reached` no longer appears in the error phase set.
+ *   - The user can "Continue" or "Dismiss" — neither forces a new task
+ *     and neither aborts the runtime.
+ *   - `clearPending` for the mistake-limit prompt resolves with
+ *     `action: "continue"` so a session teardown triggered elsewhere
+ *     (cancel, mode change) does not hang awaiting a never-arriving
+ *     mistake decision; the session-level cancel is the legitimate stop.
+ *   - The default continue decision is tagged `kind: "advisory"` for
+ *     telemetry.
+ *   - Wording is neutral about model identity: the message describes a
+ *     protocol-progress symptom, not a brand verdict.
+ *
+ * Genuine terminal failures still terminate (see SdkController.cancelTask,
+ * explicit api_req_failed retry exhaustion, etc.) — the advisory boundary
+ * only removes the model-quality → abort coupling.
+ */
+
 export interface ToolApprovalRequest {
 	agentId: string
 	conversationId: string
@@ -44,10 +73,43 @@ export interface SdkInteractionCoordinatorOptions {
 	onToolApprovalAsk?: (request: ToolApprovalRequest) => Promise<void>
 }
 
+/**
+ * Build the warning text shown when the consecutive-mistake advisory fires.
+ *
+ * ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: wording must be neutral
+ * about model identity and must describe a protocol-progress symptom.
+ * `latest` is the most recent mistake details (already trimmed upstream).
+ */
+export function buildMistakeLimitAdvisoryText(input: {
+	consecutiveMistakes: number
+	maxConsecutiveMistakes: number
+	reason: ConsecutiveMistakeLimitContext["reason"]
+	latest?: string
+}): string {
+	const counter = `${input.consecutiveMistakes}/${input.maxConsecutiveMistakes}`
+	const latest = input.latest?.trim()
+	const header = `The agent encountered repeated protocol errors (${counter}).`
+	const cause = `Latest: ${latest || `${input.reason} at iteration`}`
+	const hint =
+		"You can continue and provide feedback, or dismiss and let the agent continue without changes."
+	return `${header}\n\n${cause}\n\n${hint}`
+}
+
+/**
+ * The decision this coordinator emits to the SDK MistakeTracker for
+ * `mistake_limit_reached`. We never emit `action: "stop"` here — that
+ * decision belongs to session-level cancel flows, not the per-turn
+ * protocol-progress advisory. The discriminator lets the orchestrator
+ * and telemetry distinguish "user pushed past the limit with guidance"
+ * from "user dismissed the advisory".
+ */
+type MistakeLimitDecision =
+	| (ConsecutiveMistakeLimitDecision & { kind: "advisory" | "user-resolved" })
+
 export class SdkInteractionCoordinator {
 	private pendingAskResolve: ((answer: string) => void) | undefined
 	private pendingToolApprovalResolve: ((result: { approved: boolean; reason?: string }) => void) | undefined
-	private pendingMistakeLimitResolve: ((decision: ConsecutiveMistakeLimitDecision) => void) | undefined
+	private pendingMistakeLimitResolve: ((decision: MistakeLimitDecision) => void) | undefined
 	private pendingToolApprovalMessage:
 		| {
 				toolCallId: string
@@ -60,14 +122,20 @@ export class SdkInteractionCoordinator {
 
 	async handleConsecutiveMistakeLimitReached(
 		context: ConsecutiveMistakeLimitContext,
-	): Promise<ConsecutiveMistakeLimitDecision> {
+	): Promise<MistakeLimitDecision> {
 		const detail = context.details?.trim()
 		const latest = detail ? `${context.reason}: ${detail}` : `${context.reason} at iteration ${context.iteration}`
 		const askMessage: ClineMessage = {
 			ts: this.nextMessageTs(),
 			type: "ask",
 			ask: "mistake_limit_reached",
-			text: `Cline ran into repeated tool errors (${context.consecutiveMistakes}/${context.maxConsecutiveMistakes}).\n\nLatest: ${latest}`,
+			// Neutral wording — see ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01.
+			text: buildMistakeLimitAdvisoryText({
+				consecutiveMistakes: context.consecutiveMistakes,
+				maxConsecutiveMistakes: context.maxConsecutiveMistakes,
+				reason: context.reason,
+				latest,
+			}),
 			partial: false,
 		}
 
@@ -75,10 +143,13 @@ export class SdkInteractionCoordinator {
 			type: "status",
 			payload: { sessionId: this.options.getSessionId(), status: "running" },
 		})
-		this.options.setTurnPhase?.("error", askMessage.ts)
+		// Advisory is a follow-up for the user to weigh in, not a hard error.
+		// `awaiting_followup` puts the input enabled and keeps the session
+		// resumable (cf. buttonConfig.buttonsForPhase "awaiting_followup").
+		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts)
 		await this.options.postStateToWebview()
 
-		return new Promise<ConsecutiveMistakeLimitDecision>((resolve) => {
+		return new Promise<MistakeLimitDecision>((resolve) => {
 			this.pendingMistakeLimitResolve = resolve
 		})
 	}
@@ -232,6 +303,26 @@ export class SdkInteractionCoordinator {
 		return true
 	}
 
+	/**
+	 * Resolve a pending `mistake_limit_reached` advisory.
+	 *
+	 * ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: this method MUST NOT
+	 * return `{ action: "stop" }`. Mistake recovery is a protocol-progress
+	 * concern, not a terminal verdict. The session stays resumable through
+	 * every response shape:
+	 *
+	 *   - `noButtonClicked` (Dismiss): continue with empty guidance. The
+	 *     advisory is acknowledged; the loop carries on with the model the
+	 *     user chose.
+	 *   - `yesButtonClicked` (Continue with no prompt): continue with
+	 *     empty guidance.
+	 *   - `messageResponse`: continue, forwarding the user's freeform
+	 *     guidance as `mistake_limit_reached: <text>` so the next iteration
+	 *     can act on it. This is the only shape that pushes guidance into
+	 *     the conversation.
+	 *
+	 * Returns `false` when no advisory is pending (caller no-op).
+	 */
 	resolvePendingMistakeLimit(prompt: string | undefined, responseType: ClineAskResponse | undefined): boolean {
 		if (!this.pendingMistakeLimitResolve) {
 			return false
@@ -240,11 +331,6 @@ export class SdkInteractionCoordinator {
 		const resolve = this.pendingMistakeLimitResolve
 		this.pendingMistakeLimitResolve = undefined
 		this.options.setTurnPhase?.("streaming")
-
-		if (responseType === "noButtonClicked") {
-			resolve({ action: "stop", reason: "stopped after mistake_limit_reached prompt" })
-			return true
-		}
 
 		const trimmedPrompt = prompt?.trim()
 		if (trimmedPrompt) {
@@ -261,18 +347,36 @@ export class SdkInteractionCoordinator {
 			})
 		}
 
-		const guidance = trimmedPrompt
-			? `mistake_limit_reached: ${trimmedPrompt}`
-			: "mistake_limit_reached: retry with a different approach, validate tool parameters before calls, and avoid repeating failed steps."
-
-		resolve({ action: "continue", guidance })
+		const guidance = trimmedPrompt ? `mistake_limit_reached: ${trimmedPrompt}` : undefined
+		// No guidance → pure dismissal (advisory); user-provided text → user-resolved.
+		resolve({
+			action: "continue",
+			guidance,
+			kind: guidance ? "user-resolved" : "advisory",
+		} as MistakeLimitDecision)
 		return true
 	}
 
+	/**
+	 * Cancel any pending prompts.
+	 *
+	 * ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01: the mistake_limit
+	 * prompt is advisory, so `clearPending` resolves it with `continue`,
+	 * not `stop`. The session-level teardown that triggered `clearPending`
+	 * (cancelTask, clearTask, mode change) is the legitimate stop signal —
+	 * it propagates through `endActiveSession` and tears down the runtime
+	 * directly. Resolving the pending advisory here just unblocks the
+	 * MistakeTracker's await so it doesn't hang on a never-arriving
+	 * decision.
+	 */
 	clearPending(reason: string): void {
 		this.pendingAskResolve = undefined
 		if (this.pendingMistakeLimitResolve) {
-			this.pendingMistakeLimitResolve({ action: "stop", reason })
+			this.pendingMistakeLimitResolve({
+				action: "continue",
+				guidance: undefined,
+				kind: "advisory",
+			} as MistakeLimitDecision)
 			this.pendingMistakeLimitResolve = undefined
 		}
 		const pendingMessage = this.pendingToolApprovalMessage
