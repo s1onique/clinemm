@@ -3,7 +3,7 @@
   "act_id": "ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01-CORRECTION02",
   "baseline": {
     "commit_oid": "c561a636d960c50b355c85db7e6af485ed472e79",
-    "tree_oid": "0a00000000000000000000000000000000000000"
+    "tree_oid": "59984e5524c575aeb37828b22fdc755fcf17ef8c"
   },
   "execution": {
     "mode": "serial_fail_fast"
