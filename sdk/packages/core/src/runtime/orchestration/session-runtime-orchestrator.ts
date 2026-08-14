@@ -39,6 +39,7 @@ import {
 	type ContributionRegistry,
 	createContributionRegistry,
 	type ITelemetryService,
+	isLikelyAuthError,
 	type LegacyAgentUsage,
 	type LoopDetectionConfig,
 	type Message,
@@ -52,8 +53,10 @@ import {
 	createAgentModelFromConfig,
 	resolveKnownModelsFromConfig,
 } from "../../services/llms/handler-factory";
-import { captureMistakeLimitReached } from "../../services/telemetry/core-events";
-import { CLINE_INTERNAL_TELEMETRY_METADATA_KEY } from "../../services/telemetry/tool-context";
+import {
+	captureAuthRunRetry,
+	captureMistakeLimitReached,
+} from "../../services/telemetry/core-events";
 import {
 	getMessageBuilderOptionsFromEnv,
 	MessageBuilder,
@@ -72,6 +75,30 @@ import {
 import { LoopDetectionTracker } from "../safety/loop-detection";
 import { MistakeTracker } from "../safety/mistake-tracker";
 import { RuntimeEventAdapter } from "./runtime-event-adapter";
+
+export const SESSION_RUN_IN_PROGRESS_ERROR_CODE = "session_run_in_progress";
+
+/**
+ * A session was asked to shut down while one of its runs was still in flight and
+ * no abort had been requested.
+ *
+ * Carries a code so callers can recognise it structurally after it crosses the
+ * hub's JSON boundary, where an `Error` arrives as a bare message. Connectors use
+ * it to tell "this thread's session is unusable" apart from a genuine run failure,
+ * and to recover by starting a fresh session instead of wedging the thread.
+ */
+export class SessionRunInProgressError extends Error {
+	readonly code = SESSION_RUN_IN_PROGRESS_ERROR_CODE;
+
+	constructor(readonly agentId?: string) {
+		super(
+			`SessionRuntime.shutdown called while a run is in progress${
+				agentId ? ` (agentId=${agentId})` : ""
+			}`,
+		);
+		this.name = "SessionRunInProgressError";
+	}
+}
 
 function formatToolResultError(output: unknown): string {
 	if (typeof output === "string") {
@@ -625,9 +652,7 @@ export class SessionRuntime {
 	async shutdown(_reason?: string, _timeoutMs?: number): Promise<void> {
 		if (this.running) {
 			if (!this.abortRequested || !this.activeRunPromise) {
-				throw new Error(
-					`SessionRuntime.shutdown called while a run is in progress (agentId=${this.agentId})`,
-				);
+				throw new SessionRunInProgressError(this.agentId);
 			}
 			await this.activeRunPromise;
 		}
@@ -691,13 +716,44 @@ export class SessionRuntime {
 		isContinue: boolean;
 	}): Promise<AgentResult> {
 		let activePromise!: Promise<AgentResult>;
-		activePromise = this.executeRunInternal(input).finally(() => {
+		activePromise = this.executeRunWithAuthRetry(input).finally(() => {
 			if (this.activeRunPromise === activePromise) {
 				this.activeRunPromise = null;
 			}
 		});
 		this.activeRunPromise = activePromise;
 		return activePromise;
+	}
+
+	/**
+	 * Retry a run once when it failed with an auth-like error and the host
+	 * refreshed credentials via `config.onAuthError`. The failed attempt's
+	 * trail is already persisted to the conversation store, so the retry
+	 * continues from where the stream died instead of replaying the run.
+	 */
+	private async executeRunWithAuthRetry(input: {
+		userMessage?: string;
+		userImages?: string[];
+		userFiles?: string[];
+		isContinue: boolean;
+	}): Promise<AgentResult> {
+		const result = await this.executeRunInternal(input);
+		if (
+			result.finishReason !== "error" ||
+			!this.config.onAuthError ||
+			!isLikelyAuthError(result.text)
+		) {
+			return result;
+		}
+		const refreshed = await this.config.onAuthError().catch(() => false);
+		if (!refreshed) {
+			return result;
+		}
+		const retryResult = await this.executeRunInternal({ isContinue: true });
+		captureAuthRunRetry(this.telemetry, this.config.providerId, {
+			recovered: retryResult.finishReason !== "error",
+		});
+		return retryResult;
 	}
 
 	private async executeRunInternal(input: {
@@ -813,7 +869,6 @@ export class SessionRuntime {
 				modelSupportsImages:
 					modelInfo?.capabilities?.includes("images") ?? true,
 				...this.config.toolContextMetadata,
-				[CLINE_INTERNAL_TELEMETRY_METADATA_KEY]: this.telemetry,
 			},
 			hooks: this.createRuntimeHooks(),
 			prepareTurn: this.createRuntimePrepareTurn(modelInfo, tools),
@@ -987,6 +1042,7 @@ export class SessionRuntime {
 					provider: this.config.providerId,
 					info: modelInfo,
 				},
+				overflowRecovery: context.overflowRecovery,
 				emitStatusNotice: context.emitStatusNotice,
 			});
 			if (!result) {
@@ -1049,6 +1105,9 @@ export class SessionRuntime {
 			case "tool-started": {
 				this.toolStartedAt.set(event.toolCall.toolCallId, new Date());
 				this.toolInputs.set(event.toolCall.toolCallId, event.toolCall.input);
+				if (event.toolCall.execution) {
+					break;
+				}
 				// Loop-detection inspection: identical consecutive
 				// tool-call signatures trip the tracker. On "soft"
 				// verdict we append a recovery notice; on "hard"
@@ -1082,6 +1141,7 @@ export class SessionRuntime {
 				const record: ToolCallRecord = {
 					id: event.toolCall.toolCallId,
 					name: event.toolCall.toolName,
+					execution: event.toolCall.execution,
 					input,
 					output:
 						resultPart?.type === "tool-result" ? resultPart.output : undefined,
@@ -1094,6 +1154,9 @@ export class SessionRuntime {
 					endedAt,
 				};
 				this.currentRunToolCalls.push(record);
+				if (event.toolCall.execution) {
+					break;
+				}
 				// Per-turn success/failure bookkeeping for MistakeTracker.
 				if (isError) {
 					this.currentTurnFailedTools += 1;

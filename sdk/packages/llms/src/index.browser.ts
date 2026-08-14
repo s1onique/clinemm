@@ -1,3 +1,4 @@
+export { CLINE_DEFAULT_MODEL_ID } from "@cline/shared";
 export type {
 	ModelCollection,
 	ModelIdAliasRule,
@@ -32,6 +33,11 @@ export {
 	shouldShowProviderUsageCost,
 } from "./providers/billing";
 export {
+	type ModelToolSupportInput,
+	providerManifestSupportsModelTool,
+	supportsModelTool,
+} from "./providers/model-tools";
+export {
 	type OpenAICodexRequestHeaderContext,
 	type ProviderRequestHeaderClientContext,
 	type ProviderRequestHeaderLayers,
@@ -43,12 +49,17 @@ export type {
 	ProviderId,
 } from "./providers.browser";
 export {
+	ClineFreeModelLimitError,
 	ClineNotSubscribedError,
 	ClineOrgIndividualInferenceSubscriptionError,
 	ClinePassLimitError,
+	extractClineFreeModelLimitResetTime,
 	getClineNotSubscribedMessage,
 	getClineOrgIndividualInferenceSubscriptionMessage,
 	getClinePassSubscriptionUrl,
+	isClineFreeModelLimitError,
+	isClineFreeModelLimitMessage,
+	isClineModelNotFoundMessage,
 	isClineNotSubscribedError,
 	isClineNotSubscribedMessage,
 	isClineOrgIndividualInferenceSubscriptionError,

@@ -6,6 +6,7 @@ import {
 	type AgentConfig,
 	type AgentEvent,
 	type AgentResult,
+	type BasicLogger,
 	captureSdkError,
 	createSessionId,
 	type ITelemetryService,
@@ -50,12 +51,14 @@ import {
 	sumUsageTotals,
 } from "../../services/usage";
 import { enrichPromptWithMentions } from "../../services/workspace";
+import { resolveStartSessionWorkspace } from "../../services/workspace/chat-workspace";
 import {
 	type GitWorkspaceState,
 	hasCurrentSessionGitMetadata,
 	readGitWorkspaceState,
 	withSessionGitMetadata,
 } from "../../services/workspace/workspace-manifest";
+import { withSessionHistoryOriginMetadata } from "../../session/history-origin";
 import {
 	projectSessionCompactionState,
 	type SessionCompactionState,
@@ -116,6 +119,7 @@ import {
 import { loadUserFileContent } from "./local/user-files";
 import type {
 	PendingPromptsServiceApi,
+	ResolvedStartSessionInput,
 	RestoreSessionInput,
 	RestoreSessionResult,
 	RuntimeHost,
@@ -209,6 +213,7 @@ export interface LocalRuntimeHostOptions {
 	providerSettingsManager?: ProviderSettingsManager;
 	oauthTokenManager?: RuntimeOAuthTokenManager;
 	telemetry?: ITelemetryService;
+	logger?: BasicLogger;
 	/**
 	 * Default custom `fetch` implementation threaded into every
 	 * `ProviderConfig.fetch` built during local session bootstrap. Used by
@@ -229,6 +234,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 	private readonly providerSettingsManager: ProviderSettingsManager;
 	private readonly oauthTokenManager: RuntimeOAuthTokenManager;
 	private readonly defaultTelemetry?: ITelemetryService;
+	private readonly defaultLogger?: BasicLogger;
 	private readonly defaultFetch?: typeof fetch;
 	private readonly events = new RuntimeHostEventBus();
 	private readonly sessions = new Map<string, ActiveSession>();
@@ -266,6 +272,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 				telemetry: options.telemetry,
 			});
 		this.defaultTelemetry = options.telemetry;
+		this.defaultLogger = options.logger;
 		this.defaultTelemetry?.setDistinctId(distinctId);
 		this.defaultFetch = options.fetch;
 
@@ -286,12 +293,36 @@ export class LocalRuntimeHost implements RuntimeHost {
 			aggregateUsageBySession: this.aggregateUsageBySession,
 			emit: (event) => this.emit(event),
 			persistMessages: (sid, messages, systemPrompt) => {
+				// Fire-and-forget: an unobserved rejection here would surface as
+				// an unhandledRejection, which is fatal in the hub daemon.
 				void this.invoke<void>(
 					"persistSessionMessages",
 					sid,
 					messages,
 					systemPrompt,
-				);
+				).catch((error) => {
+					const session = this.sessions.get(sid);
+					const logger = session?.config.logger ?? this.defaultLogger;
+					logger?.error?.(
+						"Failed to persist session messages from agent event",
+						{
+							sessionId: sid,
+							error,
+						},
+					);
+					captureSdkError(session?.config.telemetry ?? this.defaultTelemetry, {
+						component: "core",
+						operation: "session.persist_messages_on_agent_event",
+						error,
+						severity: "warn",
+						handled: true,
+						context: {
+							sessionId: sid,
+							providerId: session?.config.providerId,
+							modelId: session?.config.modelId,
+						},
+					});
+				});
 			},
 			enqueuePendingPrompt: (sid, entry) =>
 				this.pendingPromptsController.enqueue(sid, entry),
@@ -301,8 +332,8 @@ export class LocalRuntimeHost implements RuntimeHost {
 	}
 
 	private async applyInitialOAuthCredentials(
-		input: StartSessionInput,
-	): Promise<StartSessionInput> {
+		input: ResolvedStartSessionInput,
+	): Promise<ResolvedStartSessionInput> {
 		if (input.config.apiKey?.trim()) {
 			return input;
 		}
@@ -326,11 +357,46 @@ export class LocalRuntimeHost implements RuntimeHost {
 	// ── Public API ──────────────────────────────────────────────────────
 
 	async startSession(input: StartSessionInput): Promise<StartSessionResult> {
-		const source = input.source ?? SessionSource.CLI;
-		const startedAt = nowIso();
 		const requestedSessionId = input.config.sessionId?.trim() ?? "";
 		const sessionId = requestedSessionId || createSessionId();
-		const startInput: StartSessionInput =
+		const isReadOnlyResumeStart =
+			requestedSessionId.length > 0 &&
+			(input.initialMessages?.length ?? 0) > 0 &&
+			!input.prompt?.trim();
+		const hasRequestedWorkspace = Boolean(
+			input.config.cwd?.trim() || input.config.workspaceRoot?.trim(),
+		);
+		const existingResumeManifest =
+			isReadOnlyResumeStart && !hasRequestedWorkspace
+				? await this.invokeOptionalValue<SessionManifest>(
+						"readSessionManifest",
+						sessionId,
+					)
+				: undefined;
+		const config = existingResumeManifest
+			? {
+					...input.config,
+					cwd: existingResumeManifest.cwd,
+					workspaceRoot: existingResumeManifest.workspace_root,
+				}
+			: await resolveStartSessionWorkspace(input.config);
+		return await this.startResolvedSession(
+			{ ...input, config },
+			sessionId,
+			requestedSessionId.length > 0,
+			existingResumeManifest,
+		);
+	}
+
+	private async startResolvedSession(
+		input: ResolvedStartSessionInput,
+		sessionId: string,
+		wasSessionIdRequested: boolean,
+		existingResumeManifest?: SessionManifest,
+	): Promise<StartSessionResult> {
+		const source = input.source ?? SessionSource.CLI;
+		const startedAt = nowIso();
+		const startInput: ResolvedStartSessionInput =
 			await this.applyInitialOAuthCredentials(input);
 		const initialMessages = startInput.initialMessages ?? [];
 		const initialUsage =
@@ -375,14 +441,16 @@ export class LocalRuntimeHost implements RuntimeHost {
 		let resumedArtifacts: RootSessionArtifacts | undefined;
 		let resumedCompactionState: SessionCompactionState | undefined;
 		const isReadOnlyResumeStart =
-			requestedSessionId.length > 0 &&
+			wasSessionIdRequested &&
 			initialMessages.length > 0 &&
 			!startInput.prompt?.trim();
 		if (isReadOnlyResumeStart) {
-			const existingManifest = await this.invokeOptionalValue<SessionManifest>(
-				"readSessionManifest",
-				sessionId,
-			);
+			const existingManifest =
+				existingResumeManifest ??
+				(await this.invokeOptionalValue<SessionManifest>(
+					"readSessionManifest",
+					sessionId,
+				));
 			if (existingManifest) {
 				manifest = existingManifest;
 				resumedArtifacts = {
@@ -420,6 +488,10 @@ export class LocalRuntimeHost implements RuntimeHost {
 			inputLocalConfig?.extensionContext?.logger ?? inputLocalConfig?.logger;
 		const pluginEventFallbackAutomation =
 			inputLocalConfig?.extensionContext?.automation;
+		const pluginEventFallbackTelemetry =
+			inputLocalConfig?.extensionContext?.telemetry ??
+			inputLocalConfig?.telemetry ??
+			this.defaultTelemetry;
 		let bootstrap!: Awaited<ReturnType<typeof prepareLocalRuntimeBootstrap>>;
 		const subAgentDeps = {
 			getSession: (sid: string) => this.sessions.get(sid),
@@ -438,6 +510,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 			sessionId,
 			providerSettingsManager: this.providerSettingsManager,
 			defaultTelemetry: this.defaultTelemetry,
+			defaultLogger: this.defaultLogger,
 			defaultCapabilities: capabilities,
 			defaultToolPolicies: this.defaultToolPolicies,
 			defaultFetch: this.defaultFetch,
@@ -454,6 +527,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 					sessionId,
 					event,
 					pluginEventFallbackAutomation,
+					pluginEventFallbackTelemetry,
 				);
 			},
 			onTeamEvent: (event: TeamEvent) => {
@@ -481,9 +555,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 				await this.persistSessionMetadata(sessionId, () => metadata);
 			},
 		});
-		const initialSessionMetadata = withSessionGitMetadata(
-			startInput.sessionMetadata ?? resumedArtifacts?.manifest.metadata,
-			bootstrap.gitState,
+		const initialSessionMetadata = withSessionHistoryOriginMetadata(
+			withSessionGitMetadata(
+				{
+					...(resumedArtifacts?.manifest.metadata ?? {}),
+					...(startInput.sessionMetadata ?? {}),
+				},
+				bootstrap.gitState,
+			),
+			{
+				mode: startInput.mode,
+				version: bootstrap.config.extensionContext?.client?.version,
+			},
 		);
 		if (!resumedArtifacts) manifest.metadata = initialSessionMetadata;
 		const runtime = await this.runtimeBuilder.build(
@@ -495,6 +578,27 @@ export class LocalRuntimeHost implements RuntimeHost {
 			configWithProvider.teamName = runtime.teamRuntime.getTeamName();
 		}
 
+		// Auth-retry hook for every agent in the session (lead, teammates,
+		// subagents): refresh OAuth credentials and propagate the new key to
+		// all connections, then let the runtime retry the failed run. Without
+		// this, a token that expires while the lead is blocked (e.g. in
+		// team_await_runs) kills teammate runs with a raw provider 401.
+		const onAuthError = async (): Promise<boolean> => {
+			const liveSession = this.sessions.get(sessionId);
+			if (!liveSession || !isOAuthProvider(liveSession.config.providerId)) {
+				return false;
+			}
+			try {
+				await this.syncOAuthCredentials(liveSession, { forceRefresh: true });
+				return true;
+			} catch {
+				return false;
+			}
+		};
+		runtime.delegatedAgentConfigProvider?.updateConnectionDefaults({
+			onAuthError,
+		});
+
 		const tools = [...runtime.tools, ...(configWithProvider.extraTools ?? [])];
 		const extensions = runtime.extensions ?? bootstrap.extensions;
 		const explicitInitialCompactionState = startInput.initialCompactionState;
@@ -502,60 +606,68 @@ export class LocalRuntimeHost implements RuntimeHost {
 		const compact = createContextCompactionPrepareTurn(configWithProvider);
 		const rawInitialCompactionState =
 			explicitInitialCompactionState ?? resumedCompactionState;
-		const initialCompactionState =
-			compact && rawInitialCompactionState
-				? {
-						...rawInitialCompactionState,
-						conversation_id:
-							rawInitialCompactionState.conversation_id?.trim() || sessionId,
-					}
-				: undefined;
-		const prepareTurn = compact
-			? createCompactionStateAwarePrepareTurn({
-					compact,
-					getState: () => activeSessionRef?.compactionState,
-					saveState: async (state) => {
-						const activeSession = activeSessionRef;
-						if (!activeSession) return;
-						const stateForSession = {
-							...state,
-							conversation_id: activeSession.sessionId,
-						};
-						try {
-							const result = await this.persistActiveSessionCompactionState(
-								activeSession,
-								stateForSession,
-							);
-							if (!result.updated) {
-								configWithProvider.logger?.debug?.(
-									"Skipped stale session compaction state",
-									{
-										sessionId: activeSession.sessionId,
-										sourceMessageCount: stateForSession.source_message_count,
-									},
-								);
-							}
-						} catch (error) {
-							configWithProvider.logger?.error?.(
-								"Failed to persist session compaction state",
-								{ sessionId: activeSession.sessionId, error },
-							);
-							captureSdkError(configWithProvider.telemetry, {
-								component: "core",
-								operation: "session.persist_compaction_state",
-								severity: "warn",
-								handled: true,
-								error,
-								context: {
-									sessionId: activeSession.sessionId,
-									providerId: configWithProvider.providerId,
-									modelId: configWithProvider.modelId,
-								},
-							});
-						}
-					},
-				})
+		// A compaction sidecar must keep projecting into the working context even
+		// when auto-compaction is disabled (`compact` undefined): manual /compact
+		// persists a sidecar and promises the next turn will use it. The
+		// state-aware prepareTurn handles `compact: undefined` by projecting the
+		// existing state without re-compacting, and no-ops when no state exists.
+		const initialCompactionState = rawInitialCompactionState
+			? {
+					...rawInitialCompactionState,
+					conversation_id:
+						rawInitialCompactionState.conversation_id?.trim() || sessionId,
+				}
 			: undefined;
+		const prepareTurn = createCompactionStateAwarePrepareTurn({
+			compact,
+			getState: () => activeSessionRef?.compactionState,
+			saveState: async (state, sourceMessages) => {
+				const activeSession = activeSessionRef;
+				if (!activeSession) return;
+				const stateForSession = {
+					...state,
+					conversation_id: activeSession.sessionId,
+				};
+				try {
+					// Validate against the exact messages the state's hash was
+					// computed from. Mid-turn, `agent.getMessages()` (the
+					// conversation store) can legally differ from the runtime's
+					// working transcript, so validating against the store would
+					// spuriously reject the write.
+					const result = await this.persistActiveSessionCompactionState(
+						activeSession,
+						stateForSession,
+						sourceMessages,
+					);
+					if (!result.updated) {
+						configWithProvider.logger?.debug?.(
+							"Skipped stale session compaction state",
+							{
+								sessionId: activeSession.sessionId,
+								sourceMessageCount: stateForSession.source_message_count,
+							},
+						);
+					}
+				} catch (error) {
+					configWithProvider.logger?.error?.(
+						"Failed to persist session compaction state",
+						{ sessionId: activeSession.sessionId, error },
+					);
+					captureSdkError(configWithProvider.telemetry, {
+						component: "core",
+						operation: "session.persist_compaction_state",
+						severity: "warn",
+						handled: true,
+						error,
+						context: {
+							sessionId: activeSession.sessionId,
+							providerId: configWithProvider.providerId,
+							modelId: configWithProvider.modelId,
+						},
+					});
+				}
+			},
+		});
 
 		const agentConfig = {
 			sessionId,
@@ -564,6 +676,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 			apiKey: providerConfig.apiKey,
 			baseUrl: providerConfig.baseUrl,
 			headers: providerConfig.headers,
+			onAuthError,
 			knownModels: providerConfig.knownModels,
 			providerConfig,
 			thinking: configWithProvider.thinking,
@@ -577,6 +690,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 			execution: configWithProvider.execution,
 			prepareTurn,
 			tools,
+			modelTools: runtime.modelTools,
 			hooks: bootstrap.hooks,
 			extensions,
 			hookErrorMode: configWithProvider.hookErrorMode,
@@ -678,7 +792,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 		emitSessionCreationTelemetry(
 			configWithProvider,
 			sessionId,
-			requestedSessionId.length > 0,
+			wasSessionIdRequested,
 			workspacePath,
 			rootAgentIdentity,
 		);
@@ -752,28 +866,41 @@ export class LocalRuntimeHost implements RuntimeHost {
 		if (resumedArtifacts) {
 			await this.refreshActiveSessionGitMetadata(active, bootstrap.gitState);
 		}
-		this.emitStatus(sessionId, "running");
+		// Sessions seeded with history (mode-switch restarts, forks, missing-
+		// session recovery) must be durable immediately. Lazy persistence
+		// otherwise keeps the seed memory-only until the first completed turn,
+		// so losing the resident session before then (hub restart/crash) would
+		// rebuild it from an empty disk file and silently wipe the
+		// conversation. Brand-new empty sessions stay lazy.
 		if (initialMessages.length > 0 && !resumedArtifacts) {
-			await this.ensureSessionPersisted(active);
-			await this.invoke<void>(
-				"persistSessionMessages",
-				active.sessionId,
-				initialMessages,
-				active.config.systemPrompt,
-			);
-			if (active.compactionState) {
-				const result = await this.persistActiveSessionCompactionState(
-					active,
-					active.compactionState,
+			try {
+				await this.ensureSessionPersisted(active);
+				await this.invoke<void>(
+					"persistSessionMessages",
+					sessionId,
+					initialMessages,
+					active.config.systemPrompt,
 				);
-				if (!result.updated) {
-					active.compactionState = undefined;
-				}
-			}
-			if (!startInput.prompt?.trim()) {
-				await this.updateStatus(active, "completed", 0);
+			} catch (error) {
+				active.config.logger?.error?.(
+					"Failed to persist seeded session messages at start",
+					{ sessionId, error },
+				);
+				captureSdkError(active.config.telemetry, {
+					component: "core",
+					operation: "session.persist_seeded_messages",
+					error,
+					severity: "warn",
+					handled: true,
+					context: {
+						sessionId,
+						providerId: active.config.providerId,
+						modelId: active.config.modelId,
+					},
+				});
 			}
 		}
+		this.emitStatus(sessionId, "running");
 
 		let result: AgentResult | undefined;
 		try {
@@ -850,6 +977,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 			},
 			startSession: (startInput) => this.startSession(startInput),
 			getStartedSessionId: (startResult) => startResult.sessionId,
+			cleanupStartedSession: async (startResult) => {
+				if (!(await this.deleteSession(startResult.sessionId))) {
+					throw new Error(
+						`Failed to clean up restored session ${startResult.sessionId}`,
+					);
+				}
+			},
 			readRestoredSession: (sessionId) => this.getSession(sessionId),
 		});
 	}
@@ -892,15 +1026,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 			} else {
 				await this.completeInteractiveTurn(session, result.finishReason);
 			}
-			if (
-				result.finishReason === "error" ||
-				result.finishReason === "aborted"
-			) {
-				return result;
+			// Drain after "aborted" finishes too: both internal stops (loop
+			// detector / mistake limit) and user-initiated aborts keep the
+			// queue intact, so without a drain here the user-queued prompts
+			// would be stranded forever. "error" finishes deliberately do NOT
+			// drain — auto-running queued prompts into a failing provider
+			// would consume them; they stay queued and drain on the next
+			// enqueue/update or successful turn.
+			if (result.finishReason !== "error") {
+				queueMicrotask(() => {
+					void this.pendingPromptsController.drain(input.sessionId);
+				});
 			}
-			queueMicrotask(() => {
-				void this.pendingPromptsController.drain(input.sessionId);
-			});
 			return result;
 		} catch (error) {
 			if (session.interactive && session.aborting) {
@@ -940,8 +1077,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 			event: "session.aborted",
 			properties: { sessionId },
 		});
+		// Aborting a user-initiated turn leaves pendingPrompts untouched:
+		// clearing here would silently destroy prompts the user already typed
+		// and queued — they drain once the abort completes. Aborting a
+		// queue-initiated turn (drainingPendingPrompts) is the opposite
+		// gesture: the user is cancelling the queued work itself, so drop the
+		// remainder — otherwise every Escape would consume one queued prompt
+		// and start a fresh provider call, and the session could never be
+		// brought to a full stop.
 		session.aborting = true;
-		this.pendingPromptsController.clearAborted(session);
+		if (session.drainingPendingPrompts) {
+			this.pendingPromptsController.discardQueue(session);
+		}
 		session.agent.abort(reason);
 	}
 
@@ -1212,7 +1359,25 @@ export class LocalRuntimeHost implements RuntimeHost {
 			return { updated: false };
 		}
 		return await this.enqueueCompactionStateWrite(session, async () => {
-			if (isIncomingCompactionStateStale(state, session.compactionState)) {
+			const currentState = session.compactionState;
+			const currentStateStillProjects =
+				currentState !== undefined &&
+				projectSessionCompactionState(
+					currentState,
+					sourceMessages ?? session.agent.getMessages(),
+				) !== undefined;
+			// The count-based stale guard exists to stop an old write from
+			// clobbering a newer one, which only makes sense while the stored
+			// state is still valid. An unprojectable state (e.g. invalidated by
+			// message-identity churn on resume, or a hash-format change) must
+			// not permanently block its replacement, so fall back to comparing
+			// timestamps and let the newer state win.
+			if (
+				currentState &&
+				(currentStateStillProjects
+					? isIncomingCompactionStateStale(state, currentState)
+					: Date.parse(state.updated_at) < Date.parse(currentState.updated_at))
+			) {
 				return { updated: false };
 			}
 			await this.invoke<void>(
@@ -1245,9 +1410,29 @@ export class LocalRuntimeHost implements RuntimeHost {
 		}
 	}
 
+	async readLiveSessionMessages(
+		sessionId: string,
+	): Promise<LlmsProviders.MessageWithMetadata[]> {
+		const target = sessionId.trim();
+		if (!target) return [];
+		// Resident sessions are authoritative: disk persistence lags at
+		// assistant-message/turn boundaries and abort() does not flush, so a
+		// mid-turn read of the persisted file would silently drop the
+		// in-flight exchange (e.g. hosts that abort a turn and immediately
+		// re-read messages to rebuild the session for a plan/act mode switch).
+		const live = this.sessions.get(target);
+		if (live) {
+			const messages = live.agent.getMessages();
+			if (messages.length > 0) {
+				return messages;
+			}
+		}
+		return this.readSessionMessages(target);
+	}
+
 	async readSessionMessages(
 		sessionId: string,
-	): Promise<LlmsProviders.Message[]> {
+	): Promise<LlmsProviders.MessageWithMetadata[]> {
 		const target = sessionId.trim();
 		if (!target) return [];
 		const row = await this.getRow(target);
@@ -1440,6 +1625,26 @@ export class LocalRuntimeHost implements RuntimeHost {
 			session.pendingPrompt = prompt;
 		}
 		await this.ensureSessionPersisted(session);
+		// A seeded session (fork, checkpoint restore, missing-session
+		// recovery) materializes at start, before any prompt exists, so its
+		// row is created promptless. Backfill it with the first user prompt,
+		// which restores the behavior rows had when materialization happened
+		// here: the persistence service derives the title from this prompt
+		// when the session is untitled, and leaves any user-set title alone.
+		if (!session.pendingPrompt) {
+			session.pendingPrompt = prompt;
+			try {
+				await this.invokeOptionalValue("updateSession", {
+					sessionId: session.sessionId,
+					prompt,
+				});
+			} catch (error) {
+				session.config.logger?.log?.(
+					"Failed to backfill seeded session prompt",
+					{ severity: "warn", sessionId: session.sessionId, error },
+				);
+			}
+		}
 		await this.refreshActiveSessionGitMetadata(session);
 		await this.syncOAuthCredentials(session);
 		await this.markTurnRunning(session);
@@ -1509,6 +1714,40 @@ export class LocalRuntimeHost implements RuntimeHost {
 		const usage = createInitialAccumulatedUsage();
 		session.persistedMessages = messages;
 		session.started = session.started || messages.length > 0;
+		// Flush the transcript now: persistence otherwise lags at
+		// assistant-message/turn boundaries, so without this an aborted turn
+		// (including the user's prompt) exists only in memory. If the session
+		// later has to be rebuilt from disk (hub restart, session eviction),
+		// the recovery would silently drop the aborted exchange — or, for a
+		// session seeded with in-memory history, the entire conversation.
+		if (messages.length > 0) {
+			try {
+				await this.ensureSessionPersisted(session);
+				await this.invoke<void>(
+					"persistSessionMessages",
+					session.sessionId,
+					messages,
+					session.config.systemPrompt,
+				);
+			} catch (error) {
+				session.config.logger?.error?.(
+					"Failed to persist session messages after abort",
+					{ sessionId: session.sessionId, error },
+				);
+				captureSdkError(session.config.telemetry, {
+					component: "core",
+					operation: "session.persist_messages_after_abort",
+					error,
+					severity: "warn",
+					handled: true,
+					context: {
+						sessionId: session.sessionId,
+						providerId: session.config.providerId,
+						modelId: session.config.modelId,
+					},
+				});
+			}
+		}
 		this.eventBridge.dispatchAgentEvent(session.sessionId, session.config, {
 			type: "done",
 			reason: "aborted",
@@ -1517,6 +1756,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 			usage,
 		});
 		await this.completeInteractiveTurn(session, "aborted");
+		// The abort is fully settled (aborting flag reset above), so prompts
+		// the user queued behind the stopped turn can run now. This mirrors
+		// the drain in runTurn() for turns that resolve with an "aborted"
+		// finish; this path handles turns that end by throwing instead.
+		queueMicrotask(() => {
+			void this.pendingPromptsController.drain(session.sessionId);
+		});
 		return {
 			text: "",
 			usage,
@@ -1630,12 +1876,21 @@ export class LocalRuntimeHost implements RuntimeHost {
 					modelId: session.config.modelId,
 				},
 			});
-			await this.invoke<void>(
-				"persistSessionMessages",
-				session.sessionId,
-				session.agent.getMessages(),
-				session.config.systemPrompt,
-			);
+			try {
+				await this.invoke<void>(
+					"persistSessionMessages",
+					session.sessionId,
+					session.agent.getMessages(),
+					session.config.systemPrompt,
+				);
+			} catch (persistError) {
+				// Never let a failed transcript flush mask the error that
+				// actually killed the turn; that one is what callers must see.
+				session.config.logger?.error?.(
+					"Failed to persist session messages after turn error",
+					{ sessionId: session.sessionId, error: persistError },
+				);
+			}
 			throw error;
 		} finally {
 			session.turnUsageBaseline = undefined;
@@ -1755,6 +2010,15 @@ export class LocalRuntimeHost implements RuntimeHost {
 			metadata: session.sessionMetadata,
 			startedAt: session.startedAt,
 		})) as RootSessionArtifacts;
+		if (session.compactionState) {
+			const result = await this.persistActiveSessionCompactionState(
+				session,
+				session.compactionState,
+			);
+			if (!result.updated) {
+				session.compactionState = undefined;
+			}
+		}
 	}
 
 	private async markTurnRunning(session: ActiveSession): Promise<void> {
@@ -1885,6 +2149,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 		}
 		notifyTeamRunWaiters(session);
 
+		// Drain an in-flight run before tearing anything down. `stopSession` aborts
+		// first for exactly this reason; callers that arrive here another way — hub
+		// `dispose()` on a restart, most notably — otherwise hit two failures at
+		// once: the runtime refuses to shut down while a run is in progress, and the
+		// plugin sandbox is SIGTERMed with tool calls still pending, so those calls
+		// reject with "plugin-sandbox process exited". A connector turn awaiting the
+		// run sees whichever surfaced first instead of an answer.
+		if (!session.aborting && !session.agent.canStartRun()) {
+			session.aborting = true;
+			session.agent.abort(new Error(input.shutdownReason));
+		}
+
 		const cleanupErrors: unknown[] = [];
 		const recordCleanupError = (stage: string, error: unknown) => {
 			cleanupErrors.push(error);
@@ -1918,11 +2194,11 @@ export class LocalRuntimeHost implements RuntimeHost {
 			} catch (error) {
 				recordCleanupError("update_status", error);
 			}
-			try {
-				await session.agent.shutdown(input.shutdownReason);
-			} catch (error) {
-				recordCleanupError("agent_shutdown", error);
-			}
+		}
+		try {
+			await session.agent.shutdown(input.shutdownReason);
+		} catch (error) {
+			recordCleanupError("agent_shutdown", error);
 		}
 		try {
 			await Promise.resolve(session.runtime.shutdown(input.shutdownReason));
@@ -1977,6 +2253,19 @@ export class LocalRuntimeHost implements RuntimeHost {
 			});
 		};
 
+		// Drain an in-flight run before tearing anything down, the same way
+		// stopSession does for its non-interactive path.
+		//
+		// Without this, releasing a session that is mid-run fails twice over: the
+		// runtime refuses to shut down ("a run is in progress") and that error is
+		// rethrown below, and the plugin sandbox is SIGTERMed while tool calls are
+		// still pending, so those calls reject with "plugin-sandbox process exited".
+		// A connector turn awaiting the run sees whichever surfaced first instead of
+		// an answer — which is what a hub restart looked like from Slack.
+		if (!session.aborting && !session.agent.canStartRun()) {
+			session.aborting = true;
+			session.agent.abort(new Error(reason));
+		}
 		try {
 			await session.agent.shutdown(reason);
 		} catch (error) {

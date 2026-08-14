@@ -1,3 +1,4 @@
+export { CLINE_DEFAULT_MODEL_ID } from "@cline/shared";
 export type {
 	ModelCollection,
 	ModelIdAliasRule,
@@ -59,11 +60,14 @@ export type {
 export {
 	BUILT_IN_PROVIDER,
 	BUILT_IN_PROVIDER_IDS,
+	ClineFreeModelLimitError,
 	ClineNotSubscribedError,
 	ClineOrgIndividualInferenceSubscriptionError,
 	ClinePassLimitError,
+	classifyProviderError,
 	createHandler,
 	createHandlerAsync,
+	extractClineFreeModelLimitResetTime,
 	extractClinePassLimitMessage,
 	getClineNotSubscribedMessage,
 	getClineOrgIndividualInferenceSubscriptionMessage,
@@ -72,17 +76,23 @@ export {
 	getRegisteredHandlerAsync,
 	hasRegisteredHandler,
 	isBuiltInProviderId,
+	isClineFreeModelLimitError,
+	isClineFreeModelLimitMessage,
+	isClineModelNotFoundMessage,
 	isClineNotSubscribedError,
 	isClineNotSubscribedMessage,
 	isClineOrgIndividualInferenceSubscriptionError,
 	isClineOrgIndividualInferenceSubscriptionMessage,
 	isClinePassLimitError,
 	isClinePassLimitMessage,
+	isProviderApiLine,
 	isRegisteredHandlerAsync,
 	normalizeProviderId,
 	OLLAMA_DEFAULT_CONTEXT_WINDOW,
+	type ProviderApiLine,
 	registerAsyncHandler,
 	registerHandler,
+	resolveProviderApiLineBaseUrl,
 } from "./providers";
 export {
 	type ProviderUsageCostDisplay,
@@ -91,6 +101,11 @@ export {
 } from "./providers/billing";
 export type * from "./providers/gateway";
 export { createGateway, DefaultGateway } from "./providers/gateway";
+export {
+	type ModelToolSupportInput,
+	providerManifestSupportsModelTool,
+	supportsModelTool,
+} from "./providers/model-tools";
 export { resolveProviderModelCatalogKeys } from "./providers/provider-keys";
 export {
 	type OpenAICodexRequestHeaderContext,
@@ -99,4 +114,12 @@ export {
 	type ResolveProviderRequestHeadersInput,
 	resolveProviderRequestHeaders,
 } from "./providers/request-headers";
+export {
+	type ClineProvider,
+	type ClineProviderOptions,
+	type ClineWebSearchInput,
+	type ClineWebSearchOptions,
+	type ClineWebSearchResult,
+	createCline,
+} from "./providers/vendors/cline";
 export { disposeLangfuseTelemetry } from "./services/langfuse-telemetry";

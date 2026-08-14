@@ -1,10 +1,13 @@
 import type {
 	AgentToolContext,
+	BasicLogger,
 	ClineCore,
-	HubServer,
+	ITelemetryService,
+	ManagedHubBuildMismatchEvent,
 	NodeHubClient,
 	ToolApprovalResult,
 } from "@cline/core";
+import type { MessageWithMetadata } from "@cline/llms";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -31,6 +34,7 @@ export type ChatSessionCommandRequest = {
 	prompt?: string;
 	promptId?: string;
 	checkpointRunCount?: number;
+	forkBeforeRunCount?: number;
 	delivery?: "queue" | "steer";
 	config?: JsonRecord;
 	attachments?: ChatTurnAttachments;
@@ -41,19 +45,27 @@ export type PromptInQueue = {
 	prompt: string;
 	steer: boolean;
 	attachmentCount?: number;
+	userImages?: string[];
 };
 
 export type LiveSession = {
 	config: JsonRecord;
-	messages: unknown[];
+	messages: MessageWithMetadata[];
 	promptsInQueue: PromptInQueue[];
 	busy: boolean;
 	startedAt: number;
 	endedAt?: number;
 	status: string;
+	transitioningProvider?: boolean;
 	prompt?: string;
 	title?: string;
 	attachedViaHub?: boolean;
+	/** Materialized attachment files for prompts still waiting in the queue. */
+	queuedAttachmentFiles?: Map<string, string[]>;
+	/** Last prompt id announced via chat_queued_prompt_start, to dedupe emits. */
+	lastQueuedPromptStartId?: string;
+	/** Materialized attachment files whose prompt was submitted; deleted when the turn ends. */
+	consumedAttachmentFiles?: Map<string, string[]>;
 };
 
 export type ToolApprovalRequestItem = {
@@ -98,15 +110,22 @@ export type SidecarWebSocketClient = {
 
 export type SidecarContext = {
 	liveSessions: Map<string, LiveSession>;
+	restoringWorkspacePaths: Set<string>;
 	streamIndices: Map<string, number>;
 	wsClients: Set<SidecarWebSocketClient>;
 	pendingApprovals: Map<string, PendingToolApproval>;
 	pendingQuestions: Map<string, PendingAskQuestion>;
 	sessionManager: ClineCore | null;
 	hubClient: NodeHubClient | null;
-	hubServer: HubServer | null;
 	workspaceRoot: string;
+	logger?: BasicLogger;
+	telemetry?: ITelemetryService;
 	unsubscribeSessionEvents: (() => void) | null;
+	/**
+	 * Latest managed Hub build mismatch, broadcast as `hub_build_mismatch` and
+	 * replayed to webviews that connect after the event fired.
+	 */
+	hubBuildMismatch: ManagedHubBuildMismatchEvent | null;
 };
 export type BunRuntimeApi = {
 	serve: (options: unknown) => { port: number; stop?: () => void };

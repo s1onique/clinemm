@@ -1,4 +1,4 @@
-import { setCompactionStrategyGlobally } from "@cline/core"
+import { setCompactionStrategyGlobally, setModelToolEnabledGlobally } from "@cline/core"
 import { Empty } from "@shared/proto/cline/common"
 import { PlanActMode, McpDisplayMode as ProtoMcpDisplayMode, UpdateSettingsRequest } from "@shared/proto/cline/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
@@ -130,11 +130,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.handleTerminalExecutionModeChanged(previousMode, nextMode)
 		}
 
-		// Update max consecutive mistakes
-		if (request.maxConsecutiveMistakes !== undefined) {
-			controller.stateManager.setGlobalState("maxConsecutiveMistakes", Number(request.maxConsecutiveMistakes))
-		}
-
 		if (request.hooksEnabled !== undefined) {
 			const wasEnabled = controller.stateManager.getGlobalSettingsKey("hooksEnabled") ?? true
 			const isEnabled = !!request.hooksEnabled
@@ -143,14 +138,6 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 				telemetryService.captureFeatureToggle(controller.task.ulid, "hooks", isEnabled, controller.task.api.getModel().id)
 			}
 		}
-		// Update yolo mode setting
-		if (request.yoloModeToggled !== undefined) {
-			if (controller.task) {
-				telemetryService.captureYoloModeToggle(controller.task.ulid, request.yoloModeToggled)
-			}
-			controller.stateManager.setGlobalState("yoloModeToggled", request.yoloModeToggled)
-		}
-
 		// Update worktrees setting
 		if (request.worktreesEnabled !== undefined) {
 			controller.stateManager.setGlobalState("worktreesEnabled", request.worktreesEnabled)
@@ -180,18 +167,17 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("useAutoCondense", request.useAutoCondense)
 		}
 
+		// Update web search setting (stored in the SDK global settings file; applied when the next session is built)
+		if (request.webSearchEnabled !== undefined) {
+			setModelToolEnabledGlobally("web_search", !!request.webSearchEnabled)
+		}
+
 		if (request.compactionStrategy !== undefined) {
 			const strategy = request.compactionStrategy
 			if (strategy !== "basic" && strategy !== "agentic") {
 				throw new Error(`Invalid compaction strategy value: ${strategy}`)
 			}
 			setCompactionStrategyGlobally(strategy)
-		}
-
-		// Update custom prompt choice
-		if (request.customPrompt !== undefined) {
-			const value = request.customPrompt === "compact" ? "compact" : undefined
-			controller.stateManager.setGlobalState("customPrompt", value)
 		}
 
 		// Update browser settings
@@ -239,7 +225,10 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("defaultTerminalProfile", request.defaultTerminalProfile)
 			// Update the live terminal manager so new terminals use the new profile.
 			// Existing terminals are left open — they're keyed by effective shell
-			// and reused when compatible, or skipped when not.
+			// and reused when compatible, or skipped when not. No session rebuild
+			// is needed: the run_commands tool re-reads the profile each time a
+			// model request is built, so the description and execution both pick
+			// up the new shell at the next request boundary.
 			controller.terminalManager?.setDefaultTerminalProfile(request.defaultTerminalProfile)
 		}
 

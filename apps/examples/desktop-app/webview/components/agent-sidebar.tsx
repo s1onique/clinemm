@@ -1,29 +1,32 @@
 "use client";
 
 import {
+	Activity,
 	ArrowDownUp,
-	Blocks,
 	Bot,
 	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
 	CircleUserRound,
 	Clock3,
+	Code,
+	FileText,
 	Filter,
 	FolderTree,
 	GitFork,
-	Home,
 	Loader2,
-	MessageSquare,
 	PanelLeftOpen,
 	Pencil,
-	Pin,
+	Plug,
 	Plus,
 	Radio,
 	Search,
 	Server,
 	Settings,
 	SlidersHorizontal,
-	Store,
+	Star,
 	Trash2,
+	Wrench,
 } from "lucide-react";
 import {
 	type ReactNode,
@@ -33,6 +36,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { AppUpdateIndicator } from "@/components/app-update-indicator";
 import { ClineLogo } from "@/components/cline-logo";
 import {
 	AlertDialog,
@@ -54,8 +58,10 @@ import {
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuLabel,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -68,14 +74,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSidebar } from "@/components/ui/sidebar";
 import { normalizeTitle } from "@/components/utils";
 import {
+	CUSTOMIZATION_SECTIONS,
 	SETTINGS_SECTIONS,
 	type SettingsSection,
-} from "@/components/views/settings/settings-view";
+} from "@/components/views/settings/sections";
+import { useAccount } from "@/contexts/account-context";
 import type {
 	SessionThread,
 	UseSessionHistoryResult,
 } from "@/hooks/use-session-history";
 import { formatCostUsd, formatTokenCount } from "@/hooks/use-session-history";
+import { desktopClient } from "@/lib/desktop-client";
+import {
+	ALL_SESSION_SOURCES,
+	filterSessionsBySource,
+	getSessionSourceLabel,
+	getSessionSources,
+} from "@/lib/session-history";
 import {
 	groupThreadsByProject,
 	INITIAL_VISIBLE_THREAD_COUNT,
@@ -86,18 +101,47 @@ import { cn } from "@/lib/utils";
 type Thread = SessionThread;
 type AppView = "chat" | "sessions" | "settings";
 
-const filterOptions = ["All", "Running", "Recent", "Pinned"] as const;
+const filterOptions = ["All", "Running", "Schedules", "Favorites"] as const;
 type FilterOption = (typeof filterOptions)[number];
 type SidebarSortMode = "time" | "project";
+type DesktopProcessContext = {
+	appVersion?: unknown;
+	hub?: {
+		error?: unknown;
+		status?: unknown;
+		url?: unknown;
+	};
+};
+type HubStatus = {
+	connected: boolean;
+	error: string | null;
+	url: string | null;
+};
+
+function hubPort(url: string | null): string | null {
+	if (!url) {
+		return null;
+	}
+	try {
+		return new URL(url).port || null;
+	} catch {
+		return null;
+	}
+}
+
 const SETTINGS_SECTION_ICONS = {
 	General: SlidersHorizontal,
 	Models: Bot,
-	"MCP Servers": Server,
-	"MCP Marketplace": Store,
-	Customizations: Blocks,
 	Channels: Radio,
 	Schedules: Clock3,
 	Account: CircleUserRound,
+	Plugins: Plug,
+	Skills: Activity,
+	MCP: Server,
+	Hooks: Code,
+	Rules: FileText,
+	Agents: Bot,
+	Tools: Wrench,
 } satisfies Record<SettingsSection, typeof Settings>;
 
 function SettingsSectionNavigation({
@@ -109,12 +153,36 @@ function SettingsSectionNavigation({
 	collapsed: boolean;
 	onSelect: (section: SettingsSection) => void;
 }) {
+	const renderSectionButton = (section: SettingsSection) => {
+		const Icon = SETTINGS_SECTION_ICONS[section];
+		return (
+			<Button
+				aria-current={activeSection === section ? "page" : undefined}
+				aria-label={section}
+				className={cn(
+					"min-w-0 justify-start",
+					activeSection === section &&
+						"bg-surface-hover text-sidebar-foreground",
+					collapsed && "size-9 justify-center px-0",
+				)}
+				key={section}
+				onClick={() => onSelect(section)}
+				title={section}
+				type="button"
+				variant="sidebarItem"
+			>
+				<Icon className="size-4 shrink-0" />
+				{!collapsed ? <span className="truncate">{section}</span> : null}
+			</Button>
+		);
+	};
+
 	return (
 		<nav
 			aria-label="Settings sections"
 			className={cn(
-				"flex h-full min-h-0 flex-col gap-0.5 overflow-y-auto",
-				collapsed ? "w-full items-center" : "w-full",
+				"flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden",
+				collapsed ? "w-full items-start" : "w-full",
 			)}
 		>
 			{!collapsed ? (
@@ -122,36 +190,25 @@ function SettingsSectionNavigation({
 					Settings
 				</p>
 			) : null}
-			{SETTINGS_SECTIONS.map((section) => {
-				const Icon = SETTINGS_SECTION_ICONS[section];
-				return (
-					<Button
-						aria-current={activeSection === section ? "page" : undefined}
-						aria-label={section}
-						className={cn(
-							"min-w-0 justify-start",
-							activeSection === section &&
-								"bg-sidebar-accent text-sidebar-accent-foreground",
-							collapsed && "mx-auto size-9 justify-center px-0",
-						)}
-						key={section}
-						onClick={() => onSelect(section)}
-						title={section}
-						type="button"
-						variant="sidebarItem"
-					>
-						<Icon className="size-4 shrink-0" />
-						{!collapsed ? <span className="truncate">{section}</span> : null}
-					</Button>
-				);
-			})}
+			{SETTINGS_SECTIONS.map(renderSectionButton)}
+			{!collapsed ? (
+				<p className="px-2 pb-2 pt-4 text-sm font-medium text-muted-foreground">
+					Customizations
+				</p>
+			) : (
+				<div className="my-2 h-px w-6 shrink-0 bg-sidebar-border" />
+			)}
+			{CUSTOMIZATION_SECTIONS.map(renderSectionButton)}
 		</nav>
 	);
 }
 
 export function AgentSidebar({
-	isHomeActive,
+	canNavigateBack = false,
+	canNavigateForward = false,
 	onHome,
+	onNavigateBack,
+	onNavigateForward,
 	onNewThread,
 	onSettingsSectionChange,
 	setView,
@@ -160,8 +217,11 @@ export function AgentSidebar({
 	activeSessionId,
 	sessionHistory,
 }: {
-	isHomeActive: boolean;
+	canNavigateBack?: boolean;
+	canNavigateForward?: boolean;
 	onHome: () => void;
+	onNavigateBack?: () => void;
+	onNavigateForward?: () => void;
 	onNewThread?: () => void;
 	onSettingsSectionChange: (section: SettingsSection) => void;
 	setView: (view: AppView) => void;
@@ -172,6 +232,14 @@ export function AgentSidebar({
 }) {
 	const { isMobile, setOpen, setOpenMobile, state } = useSidebar();
 	const isCollapsed = !isMobile && state === "collapsed";
+	const { user, activeOrganization } = useAccount();
+	const { displayName, email } = user || {};
+	const username = displayName?.split(" ")?.[0] || email?.split("@")?.[0];
+	const accountName = username?.trim() || "Cline Desktop";
+	const accountScope = user
+		? (activeOrganization?.name ?? "Personal")
+		: undefined;
+	const accountInitial = accountName.charAt(0).toUpperCase();
 	const {
 		deleteThread: deleteHistoryThread,
 		forkThread: forkHistoryThread,
@@ -183,11 +251,13 @@ export function AgentSidebar({
 		openThread: openHistoryThread,
 		pendingAction,
 		renameThread,
+		setThreadPinned,
 		threads,
 		unreadSessionIds,
 	} = sessionHistory;
 	const activeThread = activeSessionId ?? "";
 	const [filter, setFilter] = useState<FilterOption>("All");
+	const [sourceFilter, setSourceFilter] = useState(ALL_SESSION_SOURCES);
 	const [sortMode, setSortMode] = useState<SidebarSortMode>("time");
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -205,6 +275,46 @@ export function AgentSidebar({
 	const [projectVisibleCounts, setProjectVisibleCounts] = useState<
 		Record<string, number>
 	>({});
+	const [appVersion, setAppVersion] = useState<string | null>(null);
+	const [hubStatus, setHubStatus] = useState<HubStatus | null>(null);
+
+	const loadProcessContext = useCallback(async () => {
+		try {
+			const context = await desktopClient.invoke<DesktopProcessContext>(
+				"get_process_context",
+			);
+			const version =
+				typeof context?.appVersion === "string"
+					? context.appVersion.trim()
+					: "";
+			setAppVersion(version || null);
+			const hubUrl =
+				typeof context?.hub?.url === "string"
+					? context.hub.url.trim() || null
+					: null;
+			setHubStatus({
+				connected: context?.hub?.status === "connected",
+				error:
+					typeof context?.hub?.error === "string"
+						? context.hub.error.trim() || null
+						: null,
+				url: hubUrl,
+			});
+		} catch (error) {
+			setHubStatus({
+				connected: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Unable to read Cline Hub status.",
+				url: null,
+			});
+		}
+	}, []);
+
+	useEffect(() => {
+		void loadProcessContext();
+	}, [loadProcessContext]);
 
 	useEffect(() => {
 		if (isCollapsed && searchOpen) {
@@ -212,8 +322,9 @@ export function AgentSidebar({
 		}
 	}, [isCollapsed, searchOpen]);
 
+	const sourceOptions = useMemo(() => getSessionSources(threads), [threads]);
 	const filteredThreads = useMemo(() => {
-		let filtered = threads;
+		let filtered = filterSessionsBySource(threads, sourceFilter);
 		if (searchQuery) {
 			const q = searchQuery.toLowerCase();
 			filtered = filtered.filter(
@@ -226,32 +337,30 @@ export function AgentSidebar({
 		switch (filter) {
 			case "Running":
 				return filtered.filter((t) => t.status === "running");
-			case "Recent":
-				return filtered.slice(0, 8);
-			case "Pinned":
+			case "Schedules":
+				return filtered.filter((t) => t.isScheduled);
+			case "Favorites":
 				return filtered.filter((t) => t.pinned);
 			default:
 				return filtered;
 		}
-	}, [filter, searchQuery, threads]);
+	}, [filter, searchQuery, sourceFilter, threads]);
 	const closeMobileSidebar = useCallback(() => {
 		if (isMobile) setOpenMobile(false);
 	}, [isMobile, setOpenMobile]);
 
 	const openThread = useCallback(
 		(threadId: string) => {
-			setView("chat");
 			openHistoryThread(threadId);
 			closeMobileSidebar();
 		},
-		[closeMobileSidebar, openHistoryThread, setView],
+		[closeMobileSidebar, openHistoryThread],
 	);
 
 	const openNewThread = useCallback(() => {
-		setView("chat");
 		onNewThread?.();
 		closeMobileSidebar();
-	}, [closeMobileSidebar, onNewThread, setView]);
+	}, [closeMobileSidebar, onNewThread]);
 	const openHome = useCallback(() => {
 		onHome();
 		closeMobileSidebar();
@@ -267,11 +376,16 @@ export function AgentSidebar({
 	const openSettingsSection = useCallback(
 		(section: SettingsSection) => {
 			onSettingsSectionChange(section);
-			setView("settings");
 			closeMobileSidebar();
 		},
-		[closeMobileSidebar, onSettingsSectionChange, setView],
+		[closeMobileSidebar, onSettingsSectionChange],
 	);
+	const navigateBack = useCallback(() => {
+		onNavigateBack?.();
+	}, [onNavigateBack]);
+	const navigateForward = useCallback(() => {
+		onNavigateForward?.();
+	}, [onNavigateForward]);
 
 	const startRenameThread = useCallback((thread: Thread) => {
 		setEditingSessionId(thread.id);
@@ -298,6 +412,13 @@ export function AgentSidebar({
 			await forkHistoryThread(thread.id);
 		},
 		[forkHistoryThread],
+	);
+
+	const toggleFavorite = useCallback(
+		async (thread: Thread) => {
+			await setThreadPinned(thread.id, !thread.pinned);
+		},
+		[setThreadPinned],
 	);
 
 	const requestDeleteThread = useCallback((thread: Thread) => {
@@ -357,7 +478,7 @@ export function AgentSidebar({
 			<DropdownMenuTrigger asChild>
 				<Button
 					aria-label="Filter sessions"
-					className="m-0! inline-flex size-8 items-center justify-center rounded-md p-0! text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+					className="m-0! inline-flex size-8 items-center justify-center rounded-md p-0! text-muted-foreground hover:bg-surface-hover hover:text-sidebar-foreground"
 					variant="ghost"
 					size="icon"
 				>
@@ -365,6 +486,7 @@ export function AgentSidebar({
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-36">
+				<DropdownMenuLabel>Session type</DropdownMenuLabel>
 				<DropdownMenuRadioGroup
 					onValueChange={(value) => {
 						setFilter(value as FilterOption);
@@ -379,6 +501,29 @@ export function AgentSidebar({
 						</DropdownMenuRadioItem>
 					))}
 				</DropdownMenuRadioGroup>
+				{sourceOptions.length > 0 ? (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuLabel>Source</DropdownMenuLabel>
+						<DropdownMenuRadioGroup
+							onValueChange={(value) => {
+								setSourceFilter(value);
+								setShowMoreCount(INITIAL_VISIBLE_THREAD_COUNT);
+								setProjectVisibleCounts({});
+							}}
+							value={sourceFilter}
+						>
+							<DropdownMenuRadioItem value={ALL_SESSION_SOURCES}>
+								All sources
+							</DropdownMenuRadioItem>
+							{sourceOptions.map((source) => (
+								<DropdownMenuRadioItem key={source} value={source}>
+									{getSessionSourceLabel(source)}
+								</DropdownMenuRadioItem>
+							))}
+						</DropdownMenuRadioGroup>
+					</>
+				) : null}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
@@ -387,7 +532,7 @@ export function AgentSidebar({
 			<DropdownMenuTrigger asChild>
 				<Button
 					aria-label={`Sort sessions: ${sortMode === "time" ? "Time" : "Project"}`}
-					className="m-0! inline-flex size-8 items-center justify-center rounded-md p-0! text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+					className="m-0! inline-flex size-8 items-center justify-center rounded-md p-0! text-muted-foreground hover:bg-surface-hover hover:text-sidebar-foreground"
 					size="icon"
 					title={sortMode === "time" ? "Sort by time" : "Sort by project"}
 					variant="ghost"
@@ -429,6 +574,7 @@ export function AgentSidebar({
 			onEditTitleChange={setEditingTitle}
 			onFork={() => void forkThread(thread)}
 			onRename={() => startRenameThread(thread)}
+			onToggleFavorite={() => void toggleFavorite(thread)}
 			pendingAction={
 				pendingAction?.sessionId === thread.id ? pendingAction.action : null
 			}
@@ -442,62 +588,132 @@ export function AgentSidebar({
 			<div className="flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
 				<div
 					className={cn(
-						"flex h-16 shrink-0 items-center px-4",
-						isCollapsed && "justify-center px-0",
+						"flex h-12 shrink-0 items-center justify-end gap-0.5 pr-2 pl-19",
+						isCollapsed && "px-0",
 					)}
+					data-tauri-drag-region
 				>
-					<button
-						aria-label="Cline home"
-						className="rounded-md p-1 text-sidebar-foreground transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-						onClick={openHome}
-						type="button"
-					>
-						<ClineLogo className="h-6 w-6" />
-					</button>
+					{!isCollapsed ? (
+						<>
+							<Button
+								aria-label="Previous page"
+								className="size-7 text-muted-foreground hover:bg-surface-hover"
+								disabled={!canNavigateBack}
+								onClick={navigateBack}
+								size="icon"
+								title="Previous page"
+								type="button"
+								variant="ghost"
+							>
+								<ChevronLeft className="size-4" />
+							</Button>
+							<Button
+								aria-label="Next page"
+								className="size-7 text-muted-foreground hover:text-sidebar-foreground"
+								disabled={!canNavigateForward}
+								onClick={navigateForward}
+								size="icon"
+								title="Next page"
+								type="button"
+								variant="ghost"
+							>
+								<ChevronRight className="size-4" />
+							</Button>
+						</>
+					) : null}
 				</div>
 
-				<div className={cn("shrink-0 px-3", isCollapsed && "px-1.5")}>
-					<Button
-						className={cn(
-							"min-w-0 justify-start",
-							view === "chat" &&
-								isHomeActive &&
-								"bg-sidebar-accent text-sidebar-accent-foreground",
-							isCollapsed && "mx-auto size-9 justify-center px-0",
-						)}
-						aria-label="Home"
-						onClick={openHome}
-						title="Home"
-						variant="sidebarItem"
-					>
-						<Home className="size-4" />
-						{!isCollapsed ? "Home" : null}
-					</Button>
+				<div
+					className={cn(
+						"flex h-10 shrink-0 items-center justify-between px-2",
+						isCollapsed && "px-1.5",
+					)}
+				>
+					<div className="flex min-w-0 items-center gap-0.5">
+						<HoverCard
+							closeDelay={100}
+							openDelay={0}
+							onOpenChange={(open) => {
+								if (open) {
+									void loadProcessContext();
+								}
+							}}
+						>
+							<HoverCardTrigger asChild>
+								<button
+									aria-label="Cline home"
+									className={cn(
+										"flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+										isCollapsed && "size-9",
+									)}
+									onClick={openHome}
+									title="Home"
+									type="button"
+								>
+									<ClineLogo className="size-5" />
+								</button>
+							</HoverCardTrigger>
+							<HoverCardContent
+								align="start"
+								className="w-64 p-3"
+								side="bottom"
+							>
+								<p className="text-sm font-medium">Cline Code</p>
+								<p className="mt-0.5 text-xs text-muted-foreground">
+									{appVersion ? `Version ${appVersion}` : "Version unavailable"}
+								</p>
+								<div className="mt-3 border-border border-t pt-3">
+									<div className="flex items-center gap-2 text-xs">
+										<span
+											aria-hidden="true"
+											className={cn(
+												"h-2 w-2 shrink-0 rounded-full",
+												hubStatus?.connected
+													? "bg-emerald-500"
+													: "bg-muted-foreground",
+											)}
+										/>
+										<span className="font-medium">
+											Cline Hub @{hubPort(hubStatus?.url ?? null) ?? "unknown"}
+										</span>
+									</div>
+									{hubStatus && !hubStatus.connected && (
+										<p className="mt-1 text-[11px] text-destructive">
+											{hubStatus.error ?? "Cline Hub is not connected."}
+										</p>
+									)}
+								</div>
+							</HoverCardContent>
+						</HoverCard>
+						{!isCollapsed ? <AppUpdateIndicator /> : null}
+					</div>
+					{!isCollapsed ? (
+						<Button
+							aria-label="New Session"
+							className="size-8 shrink-0 justify-center px-0"
+							onClick={openNewThread}
+							title="New Session"
+							type="button"
+							variant="sidebarItem"
+						>
+							<Plus className="size-4" />
+						</Button>
+					) : null}
 				</div>
 
 				{isCollapsed ? (
-					<div className="mt-2 flex min-h-0 flex-1 flex-col items-center gap-1 px-1.5">
+					<div className="mt-2 flex min-h-0 flex-1 flex-col items-start gap-1 px-1.5">
+						<AppUpdateIndicator className="mx-auto size-9" />
 						{view === "settings" ? (
 							<SettingsSectionNavigation
 								activeSection={settingsSection}
 								collapsed
 								onSelect={openSettingsSection}
 							/>
-						) : (
-							<Button
-								aria-label="New session"
-								className="mx-auto size-9 justify-center px-0"
-								onClick={openNewThread}
-								title="New session"
-								type="button"
-								variant="sidebarItem"
-							>
-								<MessageSquare className="size-4" />
-							</Button>
-						)}
+						) : null}
 						<Button
 							aria-label="Expand sidebar"
-							className="mx-auto size-9 justify-center px-0"
+							className="mt-auto size-9 justify-center px-0"
 							onClick={() => setOpen(true)}
 							title="Expand sidebar"
 							type="button"
@@ -516,11 +732,11 @@ export function AgentSidebar({
 					</div>
 				) : (
 					<>
-						<div className="mt-5 shrink-0 px-3">
+						<div className="mt-5 shrink-0 pl-4 pr-2">
 							<div className="flex h-8 items-center justify-between gap-2">
 								<button
 									className={cn(
-										"min-w-0 truncate text-sm font-medium text-muted-foreground transition-colors hover:text-sidebar-foreground",
+										"min-w-0 truncate text-sm font-medium text-muted-foreground",
 										view === "sessions" && "text-sidebar-foreground",
 									)}
 									onClick={openSessions}
@@ -531,7 +747,7 @@ export function AgentSidebar({
 								<div className="flex shrink-0 items-center gap-0.5">
 									<Button
 										aria-label="Search sessions"
-										className="m-0! size-8 p-0! text-muted-foreground hover:text-sidebar-foreground"
+										className="m-0! size-8 p-0! text-muted-foreground hover:bg-surface-hover"
 										onClick={() => setSearchOpen((current) => !current)}
 										size="icon"
 										title="Search sessions"
@@ -542,17 +758,6 @@ export function AgentSidebar({
 									</Button>
 									{sortMenu}
 									{filterMenu}
-									<Button
-										aria-label="New session"
-										className="m-0! size-8 p-0! text-muted-foreground hover:text-sidebar-foreground"
-										onClick={openNewThread}
-										size="icon"
-										title="New session"
-										type="button"
-										variant="ghost"
-									>
-										<Plus className="size-4" />
-									</Button>
 								</div>
 							</div>
 							{searchOpen ? (
@@ -571,7 +776,7 @@ export function AgentSidebar({
 
 						<div className="mt-1 min-h-0 w-full flex-1">
 							<ScrollArea className="h-full min-h-0 w-full min-w-0">
-								<div className="flex min-w-0 flex-col gap-0.5 pb-3 px-3">
+								<div className="flex min-w-0 flex-col gap-0.5 pb-3 px-2">
 									{isLoadingHistory && threads.length === 0 ? (
 										<div className="p-4 text-xs text-muted-foreground">
 											Loading session history...
@@ -596,7 +801,7 @@ export function AgentSidebar({
 																	.map(threadItem)}
 																{project.threads.length > visibleCount ? (
 																	<Button
-																		className="pl-2"
+																		className="pl-2!"
 																		onClick={() =>
 																			showMoreForProject(project.id)
 																		}
@@ -624,7 +829,11 @@ export function AgentSidebar({
 									)}
 									{sortMode === "time" && showTimeShowMore && (
 										<Button
-											className="pl-0"
+											// `pl-0!`: the default button size adds
+											// `has-[>svg]:px-3`, and that modifier beats a plain
+											// `pl-0` on specificity, so the icon child was
+											// re-indenting the row.
+											className="pl-0!"
 											disabled={isLoadingMore}
 											onClick={() => {
 												const nextCount =
@@ -641,10 +850,10 @@ export function AgentSidebar({
 													Loading...
 												</>
 											) : (
-												<>
+												<div className="ml-2 flex items-center gap-1">
 													Show more
 													<ChevronDown className="size-3" />
-												</>
+												</div>
 											)}
 										</Button>
 									)}
@@ -653,7 +862,7 @@ export function AgentSidebar({
 										!searchQuery &&
 										mayHaveMoreSessions && (
 											<Button
-												className="pl-0"
+												className="pl-0!"
 												disabled={isLoadingMore}
 												onClick={() => void loadOlderSessions()}
 												type="button"
@@ -678,38 +887,74 @@ export function AgentSidebar({
 					</>
 				)}
 
-				<div className="shrink-0 border-t border-sidebar-border/70 px-2 py-3">
-					<Button
-						aria-label="Settings"
-						type="button"
-						variant="sidebarItem"
-						className={cn(
-							"min-w-0 justify-start",
-							view === "settings" &&
-								"bg-sidebar-accent text-sidebar-accent-foreground",
-							isCollapsed && "mx-auto size-9 justify-center px-0",
-						)}
-						onClick={openSettings}
-						title="Settings"
-					>
-						<Settings className="size-4" />
-						{!isCollapsed ? "Settings" : null}
-					</Button>
-					{!isCollapsed ? (
-						<div className="mt-2 flex items-center gap-2 rounded-md px-3 py-2 text-sidebar-foreground">
-							<span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-								C
-							</span>
-							<span className="min-w-0">
-								<span className="block truncate text-sm font-medium">
-									Cline Desktop
+				<div
+					className={cn(
+						"shrink-0 border-t border-sidebar-border/70 py-3",
+						isCollapsed ? "px-1.5" : "px-2",
+					)}
+				>
+					{user && !isCollapsed ? (
+						<div className="flex min-w-0 items-center gap-2">
+							<button
+								aria-label="Account settings"
+								className={cn(
+									"flex min-w-0 flex-1 items-center gap-2.5 rounded-md p-2 text-left text-sidebar-foreground hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+									view === "settings" &&
+										settingsSection === "Account" &&
+										"bg-surface-hover text-sidebar-foreground",
+								)}
+								onClick={() => openSettingsSection("Account")}
+								title={user.email || undefined}
+								type="button"
+							>
+								<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+									{accountInitial}
 								</span>
-								<span className="block text-[11px] text-muted-foreground">
-									Local
+								<span className="flex min-w-0 flex-col leading-tight">
+									<span className="truncate text-sm font-medium">
+										{accountName}
+									</span>
+									{accountScope ? (
+										<span className="truncate text-[11px] text-muted-foreground">
+											{accountScope}
+										</span>
+									) : null}
 								</span>
-							</span>
+							</button>
+							<Button
+								aria-label="Settings"
+								className={cn(
+									"size-9 shrink-0 justify-center px-0",
+									view === "settings" &&
+										settingsSection !== "Account" &&
+										"bg-surface-hover text-sidebar-foreground",
+								)}
+								onClick={openSettings}
+								title="Settings"
+								type="button"
+								variant="sidebarItem"
+							>
+								<Settings className="size-4" />
+							</Button>
 						</div>
-					) : null}
+					) : (
+						<Button
+							aria-label="Settings"
+							className={cn(
+								"min-w-0 justify-start",
+								isCollapsed && "size-9 justify-center px-0",
+								view === "settings" &&
+									"bg-surface-hover text-sidebar-foreground",
+							)}
+							onClick={openSettings}
+							title="Settings"
+							type="button"
+							variant="sidebarItem"
+						>
+							<Settings className="size-4" />
+							{!isCollapsed ? "Settings" : null}
+						</Button>
+					)}
 				</div>
 			</div>
 			<AlertDialog
@@ -776,7 +1021,7 @@ function ProjectSection({
 		<div className="mb-1 min-w-0">
 			<button
 				aria-expanded={!collapsed}
-				className="flex h-8 w-full min-w-0 items-center gap-1.5 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+				className="flex h-8 w-full min-w-0 items-center gap-1.5 rounded-md px-1 text-left text-sm font-medium text-sidebar-foreground hover:bg-surface-hover-lighter focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
 				onClick={onToggle}
 				title={label}
 				type="button"
@@ -804,6 +1049,7 @@ function ThreadItem({
 	onCommitRename,
 	onEditTitleChange,
 	onRename,
+	onToggleFavorite,
 	onFork,
 	onDelete,
 	pendingAction,
@@ -818,16 +1064,15 @@ function ThreadItem({
 	onCommitRename: () => void;
 	onEditTitleChange: (title: string) => void;
 	onRename: () => void;
+	onToggleFavorite: () => void;
 	onFork: () => void;
 	onDelete: () => void;
 	pendingAction: "rename" | "fork" | "delete" | null;
 	unread: boolean;
 }) {
-	const tokenLabel = formatTokenCount(thread.inputTokens, thread.outputTokens);
-	const costLabel = formatCostUsd(thread.totalCostUsd);
 	const title = normalizeTitle(thread.title);
+	const overviewTitle = getSessionOverviewTitle(title);
 	const pending = pendingAction !== null;
-	const workspacePath = thread.workspacePath || thread.codebase;
 	const statusDotClass = pending
 		? "bg-yellow-400"
 		: thread.status === "running"
@@ -835,20 +1080,7 @@ function ThreadItem({
 			: unread
 				? "bg-blue-500"
 				: "";
-	const infoItems: Array<[string, string | null | undefined, string?]> = [
-		["ID", thread.id],
-		[
-			"Workspace",
-			workspaceDisplayName(workspacePath),
-			workspacePath || undefined,
-		],
-		["Status", thread.status],
-		["Updated", thread.time],
-		["Provider", thread.provider],
-		["Model", thread.model],
-		["Tokens", tokenLabel],
-		["Cost", costLabel],
-	].filter((item): item is [string, string, string?] => Boolean(item[1]));
+	const infoItems = getSessionOverviewItems(thread);
 
 	if (editing) {
 		return (
@@ -856,7 +1088,7 @@ function ThreadItem({
 				className={cn(
 					"grid h-8 w-full max-w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 overflow-hidden rounded-md px-2",
 					isActive
-						? "bg-sidebar-accent text-sidebar-accent-foreground"
+						? "bg-surface-hover text-sidebar-foreground"
 						: "text-sidebar-foreground/80",
 				)}
 			>
@@ -881,10 +1113,10 @@ function ThreadItem({
 					<HoverCardTrigger asChild>
 						<button
 							className={cn(
-								"group grid h-8 w-full max-w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden rounded-md px-2 text-left text-sm font-normal transition-colors",
+								"group grid h-8 w-full max-w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 overflow-hidden rounded-md px-2 text-left text-sm font-normal",
 								isActive
-									? "bg-sidebar-accent text-sidebar-accent-foreground"
-									: "text-sidebar-foreground/80 hover:bg-sidebar-accent/50",
+									? "bg-surface-hover text-sidebar-foreground"
+									: "text-sidebar-foreground/80 hover:bg-surface-hover",
 							)}
 							disabled={pending}
 							onClick={onClick}
@@ -895,7 +1127,10 @@ function ThreadItem({
 							</span>
 							<span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
 								{thread.pinned ? (
-									<Pin aria-label="Pinned" className="size-3" />
+									<Star
+										aria-label="Favorited"
+										className="size-3 fill-current"
+									/>
 								) : statusDotClass ? (
 									<span
 										aria-hidden="true"
@@ -915,13 +1150,15 @@ function ThreadItem({
 					sideOffset={8}
 				>
 					<div className="min-w-0 space-y-2">
-						<div className="truncate text-sm font-medium">{title}</div>
+						<div className="wrap-break-word text-sm font-medium">
+							{overviewTitle}
+						</div>
 						<div className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
 							{infoItems.map(([label, value, fullValue]) => (
 								<div className="contents" key={label}>
 									<span className="text-muted-foreground">{label}</span>
 									<span
-										className="min-w-0 truncate font-mono"
+										className="min-w-0 truncate font-mono font-thin text-foreground"
 										title={fullValue}
 									>
 										{value}
@@ -933,12 +1170,43 @@ function ThreadItem({
 				</HoverCardContent>
 			</HoverCard>
 			<SessionContextMenuContent
+				favorited={Boolean(thread.pinned)}
 				onDelete={onDelete}
 				onFork={onFork}
 				onRename={onRename}
+				onToggleFavorite={onToggleFavorite}
 				pendingAction={pendingAction}
 			/>
 		</ContextMenu>
+	);
+}
+
+export function getSessionOverviewTitle(title: string): string {
+	const firstLine = title.split(/\r?\n/, 1)[0] ?? "";
+	return normalizeTitle(firstLine);
+}
+
+export function getSessionOverviewItems(
+	thread: SessionThread,
+): Array<[string, string, string?]> {
+	const workspacePath = thread.workspacePath || thread.codebase;
+	const items: Array<[string, string | null | undefined, string?]> = [
+		[
+			"Workspace",
+			workspaceDisplayName(workspacePath),
+			workspacePath || undefined,
+		],
+		["Branch", thread.gitBranch],
+		["Provider", thread.provider],
+		["Model", thread.model],
+		["Tokens", formatTokenCount(thread.inputTokens, thread.outputTokens)],
+		["Cost", formatCostUsd(thread.totalCostUsd)],
+		["ID", thread.id],
+		["Source", thread.source],
+		["Updated", thread.time],
+	];
+	return items.filter((item): item is [string, string, string?] =>
+		Boolean(item[1]),
 	);
 }
 
@@ -995,12 +1263,16 @@ function EditableSessionTitle({
 }
 
 function SessionContextMenuContent({
+	favorited,
 	onRename,
+	onToggleFavorite,
 	onFork,
 	onDelete,
 	pendingAction,
 }: {
+	favorited: boolean;
 	onRename: () => void;
+	onToggleFavorite: () => void;
 	onFork: () => void;
 	onDelete: () => void;
 	pendingAction: "rename" | "fork" | "delete" | null;
@@ -1008,6 +1280,10 @@ function SessionContextMenuContent({
 	const pending = pendingAction !== null;
 	return (
 		<ContextMenuContent className="w-40">
+			<ContextMenuItem disabled={pending} onSelect={onToggleFavorite}>
+				<Star className={cn("size-4", favorited && "fill-current")} />
+				{favorited ? "Unfavorite" : "Favorite"}
+			</ContextMenuItem>
 			<ContextMenuItem disabled={pending} onSelect={onRename}>
 				{pendingAction === "rename" ? (
 					<Loader2 className="size-4 animate-spin" />

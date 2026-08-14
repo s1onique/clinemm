@@ -9,6 +9,8 @@ import {
 	ClineCore,
 	type ClineCoreListHistoryOptions,
 	type ClineCoreStartInput,
+	type CompareCheckpointInput,
+	type CompareCheckpointResult,
 	type CoreSessionEvent,
 	type EditorExecutor,
 	type HookEventPayload,
@@ -64,6 +66,11 @@ export interface VscodeSessionHostOptions {
 	 * delegating to the SDK's default patch application).
 	 */
 	applyPatchExecutor?: ApplyPatchExecutor
+	/**
+	 * Custom `read_files` executor (resolves relative paths against the workspace root
+	 * instead of the extension host's process.cwd(), which is usually "/").
+	 */
+	readFileExecutor?: ToolExecutors["readFile"]
 	/** Per-tool approval policies derived from the user's auto-approval settings. */
 	toolPolicies?: Record<string, ToolPolicy>
 	/** Shared SDK telemetry service owned by SdkController. */
@@ -106,6 +113,9 @@ export class VscodeSessionHost implements SdkSessionHost {
 		}
 		if (options.applyPatchExecutor) {
 			toolExecutors.applyPatch = options.applyPatchExecutor
+		}
+		if (options.readFileExecutor) {
+			toolExecutors.readFile = options.readFileExecutor
 		}
 		if (options.getTerminalManager) {
 			// Setting bash to undefined suppresses the SDK's createShellTool():
@@ -226,12 +236,20 @@ export class VscodeSessionHost implements SdkSessionHost {
 		return this.inner.readMessages(sessionId)
 	}
 
+	async readLiveMessages(sessionId: string) {
+		return this.inner.readLiveMessages(sessionId)
+	}
+
 	async updateSessionCompactionState(sessionId: string, state: SessionCompactionState): Promise<{ updated: boolean }> {
 		return this.inner.updateSessionCompactionState(sessionId, state)
 	}
 
 	async restore(input: RestoreInput): Promise<RestoreResult> {
 		return this.inner.restore(input)
+	}
+
+	async compareCheckpoint(input: CompareCheckpointInput): Promise<CompareCheckpointResult> {
+		return this.inner.compareCheckpoint(input)
 	}
 
 	async update(

@@ -29,6 +29,13 @@ function cloneManifest(
 	return {
 		...manifest,
 		models: manifest.models.map((model) => ({ ...model })),
+		modelToolCapabilities: manifest.modelToolCapabilities?.map(
+			(capability) => ({
+				...capability,
+				routes: capability.routes?.map((route) => ({ ...route })),
+				excludeRoutes: capability.excludeRoutes?.map((route) => ({ ...route })),
+			}),
+		),
 		capabilities: manifest.capabilities
 			? [...manifest.capabilities]
 			: undefined,
@@ -81,6 +88,29 @@ function mergeProviderMetadata(
 	};
 
 	return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+/**
+ * Resolve a regional base URL from merged provider options: `apiLine` is the
+ * caller-selected line ("china" | "international") and `apiLineBaseUrls` maps
+ * lines to endpoints (registered as a builtin default from the provider
+ * manifest). Explicit caller base URLs always win over this resolution.
+ */
+function resolveApiLineBaseUrl(
+	options: Record<string, unknown>,
+): string | undefined {
+	const apiLine = options.apiLine;
+	if (apiLine !== "china" && apiLine !== "international") {
+		return undefined;
+	}
+	const baseUrls = options.apiLineBaseUrls;
+	if (typeof baseUrls !== "object" || baseUrls === null) {
+		return undefined;
+	}
+	const baseUrl = (baseUrls as Record<string, unknown>)[apiLine];
+	return typeof baseUrl === "string" && baseUrl.trim().length > 0
+		? baseUrl
+		: undefined;
 }
 
 function createUnregisteredModel(
@@ -251,6 +281,10 @@ export class GatewayRegistry {
 			record.defaults?.metadata,
 			config?.metadata,
 		);
+		const options = {
+			...(record.defaults?.options ?? {}),
+			...(config?.options ?? {}),
+		};
 
 		return {
 			manifest,
@@ -260,17 +294,17 @@ export class GatewayRegistry {
 				apiKeyResolver:
 					config?.apiKeyResolver ?? record.defaults?.apiKeyResolver,
 				apiKeyEnv: config?.apiKeyEnv ?? record.defaults?.apiKeyEnv,
-				baseUrl: config?.baseUrl ?? record.defaults?.baseUrl,
+				baseUrl:
+					config?.baseUrl ??
+					resolveApiLineBaseUrl(options) ??
+					record.defaults?.baseUrl,
 				headers: {
 					...(record.defaults?.headers ?? {}),
 					...(config?.headers ?? {}),
 				},
 				timeoutMs: config?.timeoutMs ?? record.defaults?.timeoutMs,
 				fetch: config?.fetch ?? record.defaults?.fetch ?? this.fallbackFetch,
-				options: {
-					...(record.defaults?.options ?? {}),
-					...(config?.options ?? {}),
-				},
+				options,
 				metadata,
 			},
 			createProvider: record.createProvider,

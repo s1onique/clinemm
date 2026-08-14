@@ -1,6 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+import { Minus, Plus, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import {
+	DEFAULT_APP_FONT_SIZE,
+	isAppFontSize,
+	MAX_APP_FONT_SIZE,
+	MIN_APP_FONT_SIZE,
+	readStoredAppFontSize,
+	setStoredAppFontSize,
+	subscribeToAppFontSize,
+} from "@/lib/app-font-size";
+import {
+	APP_ICONS,
+	type AppIconId,
+	appIconAssetPath,
+	DEFAULT_APP_ICON,
+	readStoredAppIcon,
+	setStoredAppIcon,
+} from "@/lib/app-icon";
 import { desktopClient } from "@/lib/desktop-client";
+import { resetOnboarding } from "@/lib/onboarding";
+import {
+	invalidateProviderCatalogCache,
+	publishProviderModels,
+} from "@/lib/provider-model-catalog";
 import type {
 	Provider,
 	ProviderCatalogResponse,
@@ -8,43 +33,41 @@ import type {
 	ProviderSettingsUpdate,
 } from "@/lib/provider-schema";
 import {
+	type HubAccent,
 	type HubTheme,
+	readStoredHubAccent,
 	readStoredHubTheme,
 	readSystemHubTheme,
+	setStoredHubAccent,
 	setStoredHubTheme,
 } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import { PageFrame, PageHeader } from "../page-layout";
 import { AccountView } from "./account-view";
 import { AddProviderContent, type AddProviderPayload } from "./add-provider";
 import { ChannelsContent } from "./channels-view";
-import { CustomizationSectionView, RulesView } from "./extensions-view";
+import { CustomizationSectionView } from "./extensions-view";
 import { McpServersContent } from "./mcp-view";
 import {
 	ProviderDetailContent,
 	ProviderListContent,
 } from "./provider-list-view";
 import { RoutineSchedulesContent } from "./routine-view";
+import type { SettingsSection } from "./sections";
 import { toSettingsPatch } from "./settings-patch";
 
-// -----------------------------------------------------------
-// Settings nav categories
-// -----------------------------------------------------------
+// Nav categories live in ./sections so the always-mounted sidebar can import
+// them without pulling this module graph into the initial bundle.
+export {
+	CUSTOMIZATION_SECTIONS,
+	SETTINGS_SECTIONS,
+	type SettingsSection,
+} from "./sections";
 
-export const SETTINGS_SECTIONS = [
-	"General",
-	"Models",
-	"MCP Servers",
-	"MCP Marketplace",
-	"Customizations",
-	"Channels",
-	"Schedules",
-	"Account",
-] as const;
-
-export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 type GlobalSettingsResponse = {
 	telemetryOptOut: boolean;
 	autoUpdateEnabled: boolean;
+	tools?: Partial<Record<"web_search", { enabled: boolean }>>;
 };
 
 const PROVIDER_CATALOG_CACHE_TTL_MS = 60_000;
@@ -61,9 +84,11 @@ let providerCatalogCache: {
 export function SettingsView({
 	section,
 	onNavigateSection,
+	onOpenSession,
 }: {
 	section: SettingsSection;
 	onNavigateSection: (section: SettingsSection) => void;
+	onOpenSession?: (sessionId: string) => void | Promise<void>;
 }) {
 	const activeNav = section;
 	const [providers, setProviders] = useState<Provider[]>(
@@ -174,6 +199,10 @@ export function SettingsView({
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				window.alert(`Failed to save provider settings for ${id}: ${message}`);
+			} finally {
+				// Keep the shared short-lived catalog cache (composer model
+				// selector, onboarding) in sync with the just-saved settings.
+				invalidateProviderCatalogCache();
 			}
 		},
 		[],
@@ -244,6 +273,7 @@ export function SettingsView({
 							: provider,
 					),
 				);
+				publishProviderModels(id, payload.models);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				setModelsErrorByProvider((prev) => ({ ...prev, [id]: message }));
@@ -252,6 +282,26 @@ export function SettingsView({
 			}
 		},
 		[setProvidersWithCache],
+	);
+
+	const updateProviderModels = useCallback(
+		async (id: string, models: string[]) => {
+			setModelsLoadingByProvider((prev) => ({ ...prev, [id]: true }));
+			setModelsErrorByProvider((prev) => ({ ...prev, [id]: null }));
+			try {
+				await desktopClient.invoke("update_provider_models", {
+					provider: id,
+					models,
+				});
+				await loadProviderModels(id);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				setModelsErrorByProvider((prev) => ({ ...prev, [id]: message }));
+			} finally {
+				setModelsLoadingByProvider((prev) => ({ ...prev, [id]: false }));
+			}
+		},
+		[loadProviderModels],
 	);
 
 	const selectedProvider = selectedProviderId
@@ -281,6 +331,10 @@ export function SettingsView({
 						: provider,
 				),
 			);
+			// The shared catalog cache (composer selector, welcome setup notice)
+			// must learn about the new OAuth connection too, not just this
+			// view's local provider state.
+			invalidateProviderCatalogCache();
 			setSelectedProviderId(id);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -299,17 +353,11 @@ export function SettingsView({
 		if (!selectedProviderId) {
 			return;
 		}
-		const selected = providers.find(
-			(provider) => provider.id === selectedProviderId,
-		);
-		if (!selected || (selected.modelList?.length ?? 0) > 0) {
-			return;
-		}
 		const timeoutId = window.setTimeout(() => {
 			void loadProviderModels(selectedProviderId);
 		}, 0);
 		return () => window.clearTimeout(timeoutId);
-	}, [loadProviderModels, providers, selectedProviderId]);
+	}, [loadProviderModels, selectedProviderId]);
 
 	const backToProviderList = () => {
 		onNavigateSection("Models");
@@ -331,6 +379,7 @@ export function SettingsView({
 				models_source_url: payload.modelsSourceUrl,
 				capabilities: payload.capabilities,
 			});
+			invalidateProviderCatalogCache();
 			await loadProviderCatalog();
 			setAddingProvider(false);
 			setSelectedProviderId(payload.providerId);
@@ -377,6 +426,9 @@ export function SettingsView({
 					oauthLoginPending={oauthSigningProviderId === selectedProvider.id}
 					onBack={backToProviderList}
 					onLoadModels={() => void loadProviderModels(selectedProvider.id)}
+					onUpdateModels={(models) =>
+						void updateProviderModels(selectedProvider.id, models)
+					}
 					onOAuthLogin={
 						usesOAuth(selectedProvider)
 							? () => void runOAuthProviderLogin(selectedProvider.id)
@@ -400,16 +452,24 @@ export function SettingsView({
 	const content =
 		activeNav === "Models" ? (
 			providerContent
-		) : activeNav === "MCP Servers" ? (
+		) : activeNav === "Plugins" ? (
+			<CustomizationSectionView catalogPrimitive="plugin" section="Plugins" />
+		) : activeNav === "Skills" ? (
+			<CustomizationSectionView catalogPrimitive="skill" section="Skills" />
+		) : activeNav === "MCP" ? (
 			<McpServersContent />
-		) : activeNav === "MCP Marketplace" ? (
-			<CustomizationSectionView catalogPrimitive="mcp" section="MCP" />
-		) : activeNav === "Customizations" ? (
-			<RulesView />
+		) : activeNav === "Hooks" ? (
+			<CustomizationSectionView section="Hooks" />
+		) : activeNav === "Rules" ? (
+			<CustomizationSectionView section="Rules" />
+		) : activeNav === "Agents" ? (
+			<CustomizationSectionView section="Agents" />
+		) : activeNav === "Tools" ? (
+			<CustomizationSectionView section="Tools" />
 		) : activeNav === "Channels" ? (
 			<ChannelsContent />
 		) : activeNav === "Schedules" ? (
-			<RoutineSchedulesContent />
+			<RoutineSchedulesContent onOpenSession={onOpenSession} />
 		) : activeNav === "Account" ? (
 			<AccountView />
 		) : activeNav === "General" ? (
@@ -430,11 +490,39 @@ export function SettingsView({
 	);
 }
 
+/**
+ * Swatches shown in the accent picker. The swatch color is the accent's
+ * light-mode primary (see the [data-cline-accent] blocks in globals.css);
+ * violet reads the live brand token so it always matches the default theme.
+ */
+const ACCENT_OPTIONS: { id: HubAccent; label: string; swatch: string }[] = [
+	{ id: "violet", label: "Violet", swatch: "var(--brand-violet)" },
+	{ id: "graphite", label: "Graphite", swatch: "oklch(0.27 0.012 248)" },
+	{ id: "cyan", label: "Cyan", swatch: "oklch(0.6 0.12 222)" },
+	{ id: "pink", label: "Pink", swatch: "oklch(0.75 0.1 354)" },
+	{ id: "espresso", label: "Espresso", swatch: "oklch(0.36 0.035 35)" },
+	{ id: "ember", label: "Ember", swatch: "oklch(0.6 0.19 33)" },
+];
+
 function GeneralSettingsContent() {
 	const [theme, setTheme] = useState<HubTheme>(() => {
 		if (typeof window === "undefined") return "light";
 		return readStoredHubTheme() ?? readSystemHubTheme();
 	});
+	const [accent, setAccent] = useState<HubAccent>(() => {
+		if (typeof window === "undefined") return "violet";
+		return readStoredHubAccent();
+	});
+	const [fontSize, setFontSize] = useState(() => {
+		if (typeof window === "undefined") return DEFAULT_APP_FONT_SIZE;
+		return readStoredAppFontSize();
+	});
+	const [appIcon, setAppIcon] = useState<AppIconId>(() => {
+		if (typeof window === "undefined") return DEFAULT_APP_ICON;
+		return readStoredAppIcon();
+	});
+	const [appIconError, setAppIconError] = useState<string | null>(null);
+	const appIconRequestRef = useRef(0);
 	const [telemetryOptOut, setTelemetryOptOut] = useState(false);
 	const [telemetryLoading, setTelemetryLoading] = useState(true);
 	const [telemetrySaving, setTelemetrySaving] = useState(false);
@@ -443,25 +531,36 @@ function GeneralSettingsContent() {
 	const [autoUpdateLoading, setAutoUpdateLoading] = useState(true);
 	const [autoUpdateSaving, setAutoUpdateSaving] = useState(false);
 	const [autoUpdateError, setAutoUpdateError] = useState<string | null>(null);
+	const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+	const [webSearchLoading, setWebSearchLoading] = useState(true);
+	const [webSearchSaving, setWebSearchSaving] = useState(false);
+	const [webSearchError, setWebSearchError] = useState<string | null>(null);
+
+	useEffect(() => subscribeToAppFontSize(setFontSize), []);
 
 	const loadGlobalSettings = useCallback(async () => {
 		setTelemetryLoading(true);
 		setTelemetryError(null);
 		setAutoUpdateLoading(true);
 		setAutoUpdateError(null);
+		setWebSearchLoading(true);
+		setWebSearchError(null);
 		try {
 			const settings = await desktopClient.invoke<GlobalSettingsResponse>(
 				"get_global_settings",
 			);
 			setTelemetryOptOut(settings.telemetryOptOut);
 			setAutoUpdateEnabled(settings.autoUpdateEnabled);
+			setWebSearchEnabled(settings.tools?.web_search?.enabled === true);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			setTelemetryError(message);
 			setAutoUpdateError(message);
+			setWebSearchError(message);
 		} finally {
 			setTelemetryLoading(false);
 			setAutoUpdateLoading(false);
+			setWebSearchLoading(false);
 		}
 	}, []);
 
@@ -512,9 +611,70 @@ function GeneralSettingsContent() {
 		}
 	};
 
+	const updateWebSearchEnabled = async (nextValue: boolean) => {
+		const previousValue = webSearchEnabled;
+		setWebSearchEnabled(nextValue);
+		setWebSearchSaving(true);
+		setWebSearchError(null);
+		try {
+			const settings = await desktopClient.invoke<GlobalSettingsResponse>(
+				"set_web_search_enabled",
+				{ web_search_enabled: nextValue },
+			);
+			setWebSearchEnabled(settings.tools?.web_search?.enabled === true);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setWebSearchEnabled(previousValue);
+			setWebSearchError(message);
+		} finally {
+			setWebSearchSaving(false);
+		}
+	};
+
 	const updateTheme = (darkModeEnabled: boolean) => {
 		const nextTheme = darkModeEnabled ? "dark" : "light";
 		setTheme(setStoredHubTheme(nextTheme));
+	};
+
+	const updateAccent = (nextAccent: HubAccent) => {
+		setAccent(setStoredHubAccent(nextAccent));
+	};
+
+	const updateFontSizePreference = (nextFontSize: number) => {
+		if (isAppFontSize(nextFontSize)) {
+			setFontSize(setStoredAppFontSize(nextFontSize));
+		}
+	};
+
+	const updateFontSize = ([nextFontSize]: number[]) => {
+		updateFontSizePreference(nextFontSize);
+	};
+
+	const updateAppIcon = async (nextIcon: AppIconId) => {
+		const requestId = ++appIconRequestRef.current;
+		const previousIcon = appIcon;
+		setAppIcon(nextIcon);
+		setAppIconError(null);
+		try {
+			await setStoredAppIcon(nextIcon);
+		} catch (error) {
+			// A newer selection supersedes this request; rolling back now
+			// would clobber it.
+			if (appIconRequestRef.current !== requestId) {
+				return;
+			}
+			setAppIcon(previousIcon);
+			setAppIconError(error instanceof Error ? error.message : String(error));
+			// Storage was written before the native call failed; roll it back
+			// so the persisted choice matches what the dock actually shows.
+			await setStoredAppIcon(previousIcon).catch(() => {});
+		}
+	};
+
+	// resetOnboarding dispatches ONBOARDING_RESET_EVENT, which the app shell
+	// listens for to re-enter the first-run flow immediately.
+	const replayOnboarding = () => {
+		resetOnboarding();
 	};
 
 	return (
@@ -523,13 +683,11 @@ function GeneralSettingsContent() {
 				description="Manage desktop preferences for this browser and CLI environment."
 				title="Settings"
 			/>
-			<section className="max-w-[86rem]">
-				<div className="flex min-h-20 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
-					<div>
-						<p className="text-[17px] font-semibold text-foreground">
-							Dark mode
-						</p>
-						<p className="mt-1 text-[15px] text-muted-foreground">
+			<section className="max-w-344">
+				<div className="flex py-4 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">Dark mode</p>
+						<p className="text-sm text-muted-foreground">
 							Keep the desktop interface in dark mode on this browser.
 						</p>
 					</div>
@@ -539,33 +697,178 @@ function GeneralSettingsContent() {
 						onCheckedChange={updateTheme}
 					/>
 				</div>
-				<div className="flex min-h-20 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
-					<div>
-						<p className="text-[17px] font-semibold text-foreground">
-							Auto update
+				<div className="flex items-center justify-between gap-5 border-b py-4 max-[720px]:flex-col max-[720px]:items-stretch">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">Font size</p>
+						<p className="text-sm text-muted-foreground">
+							Adjust the size of text and interface elements throughout the app.
 						</p>
-						<p className="mt-1 text-[15px] text-muted-foreground">
-							Automatically install Cline CLI updates on startup.
+					</div>
+					<div className="flex w-64 shrink-0 items-center gap-3 max-[720px]:w-full">
+						<Button
+							aria-label="Decrease font size"
+							className="size-7"
+							disabled={fontSize === MIN_APP_FONT_SIZE}
+							onClick={() => updateFontSizePreference(fontSize - 1)}
+							size="icon"
+							type="button"
+							variant="outline"
+						>
+							<Minus />
+						</Button>
+						<Slider
+							aria-label="Font size"
+							aria-valuetext={`${fontSize} pixels`}
+							max={MAX_APP_FONT_SIZE}
+							min={MIN_APP_FONT_SIZE}
+							onValueChange={updateFontSize}
+							step={1}
+							value={[fontSize]}
+						/>
+						<Button
+							aria-label="Increase font size"
+							className="size-7"
+							disabled={fontSize === MAX_APP_FONT_SIZE}
+							onClick={() => updateFontSizePreference(fontSize + 1)}
+							size="icon"
+							type="button"
+							variant="outline"
+						>
+							<Plus />
+						</Button>
+						<output
+							aria-label="Selected font size"
+							className="w-10 shrink-0 text-right font-mono text-sm tabular-nums text-foreground"
+						>
+							{fontSize}px
+						</output>
+					</div>
+				</div>
+				<div className="flex py-4 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">
+							Accent color
 						</p>
-						{autoUpdateError ? (
+						<p className="text-sm text-muted-foreground">
+							Tint buttons, links, and highlights across the app.
+						</p>
+					</div>
+					<div className="flex shrink-0 items-center gap-2">
+						{ACCENT_OPTIONS.map((option) => (
+							<button
+								aria-label={option.label}
+								aria-pressed={accent === option.id}
+								className={cn(
+									"size-7 rounded-full border border-foreground/10 transition-transform hover:scale-110",
+									accent === option.id &&
+										"ring-2 ring-ring ring-offset-2 ring-offset-background",
+								)}
+								key={option.id}
+								onClick={() => updateAccent(option.id)}
+								style={{ backgroundColor: option.swatch }}
+								title={option.label}
+								type="button"
+							/>
+						))}
+					</div>
+				</div>
+				<div className="flex items-center justify-between gap-5 border-b py-4 max-[720px]:flex-col max-[720px]:items-stretch">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">App icon</p>
+						<p className="text-sm text-muted-foreground">
+							Pick the icon Cline shows in the Dock.
+						</p>
+						{appIconError ? (
 							<p className="mt-2 text-xs text-destructive" role="alert">
-								Failed to update auto update setting: {autoUpdateError}
+								Failed to change app icon: {appIconError}
+							</p>
+						) : null}
+					</div>
+					<div className="flex shrink-0 items-start gap-2.5">
+						{APP_ICONS.map((icon) => (
+							<button
+								aria-label={icon.label}
+								aria-pressed={appIcon === icon.id}
+								className="group flex flex-col items-center gap-2"
+								key={icon.id}
+								onClick={() => void updateAppIcon(icon.id)}
+								type="button"
+							>
+								<img
+									alt=""
+									className={cn(
+										"size-14 rounded-2xl transition-transform group-hover:scale-105",
+										appIcon === icon.id &&
+											"ring-2 ring-ring ring-offset-2 ring-offset-background",
+									)}
+									draggable={false}
+									height={112}
+									src={appIconAssetPath(icon.id)}
+									width={112}
+								/>
+								<span
+									className={cn(
+										"text-xs",
+										appIcon === icon.id
+											? "font-medium text-foreground"
+											: "text-muted-foreground",
+									)}
+								>
+									{icon.label}
+								</span>
+							</button>
+						))}
+					</div>
+				</div>
+				<div className="flex py-4 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">
+							Web search
+						</p>
+						<p className="text-sm text-muted-foreground">
+							Let the model search the web when the selected provider and model
+							support it. Applies to new sessions.
+						</p>
+						{webSearchError ? (
+							<p className="mt-2 text-xs text-destructive" role="alert">
+								Failed to update web search setting: {webSearchError}
 							</p>
 						) : null}
 					</div>
 					<Switch
-						aria-label="Auto update"
+						aria-label="Web search"
+						checked={webSearchEnabled}
+						disabled={webSearchLoading || webSearchSaving}
+						onCheckedChange={(checked) => void updateWebSearchEnabled(checked)}
+					/>
+				</div>
+				<div className="flex py-4 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">
+							Keep CLI up to date
+						</p>
+						<p className="text-sm text-muted-foreground">
+							Automatically update the cline terminal command, which shares your
+							sessions and settings with this app. The app itself updates
+							separately.
+						</p>
+						{autoUpdateError ? (
+							<p className="mt-2 text-xs text-destructive" role="alert">
+								Failed to update CLI auto-update setting: {autoUpdateError}
+							</p>
+						) : null}
+					</div>
+					<Switch
+						aria-label="Keep CLI up to date"
 						checked={autoUpdateEnabled}
 						disabled={autoUpdateLoading || autoUpdateSaving}
 						onCheckedChange={(checked) => void updateAutoUpdateEnabled(checked)}
 					/>
 				</div>
-				<div className="flex min-h-20 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
-					<div>
-						<p className="text-[17px] font-semibold text-foreground">
-							Telemetry
-						</p>
-						<p className="mt-1 text-[15px] text-muted-foreground">
+				<div className="flex py-4 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">Telemetry</p>
+						<p className="text-sm text-muted-foreground">
 							Enable error and usage reports to help improve Cline.
 						</p>
 						{telemetryError ? (
@@ -580,6 +883,27 @@ function GeneralSettingsContent() {
 						disabled={telemetryLoading || telemetrySaving}
 						onCheckedChange={(checked) => void updateTelemetryOptOut(!checked)}
 					/>
+				</div>
+				<div className="flex py-4 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
+					<div className="flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">
+							New user experience
+						</p>
+						<p className="text-sm text-muted-foreground">
+							Replay the first-run experience new users see when they open Cline
+							for the first time.
+						</p>
+					</div>
+					<Button
+						className="shrink-0"
+						onClick={replayOnboarding}
+						size="sm"
+						type="button"
+						variant="outline"
+					>
+						<RotateCcw className="size-3" />
+						Replay
+					</Button>
 				</div>
 			</section>
 		</PageFrame>
