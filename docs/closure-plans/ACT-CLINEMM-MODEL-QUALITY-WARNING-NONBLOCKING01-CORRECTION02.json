@@ -1,0 +1,213 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01-CORRECTION02",
+  "baseline": {
+    "commit_oid": "c561a636d960c50b355c85db7e6af485ed472e79",
+    "tree_oid": "0a00000000000000000000000000000000000000"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "checks": [
+    {
+      "id": "subject_commit_is_git_object",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git cat-file -e 48aef90afe48232c6d80cc029ab9f7ffb30e00df^{commit}"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_tree_is_git_object",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git cat-file -e b96310a792f70f607ada970fe0fe0596ee72b808^{tree}"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_ancestor_of_head",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git merge-base --is-ancestor 48aef90afe48232c6d80cc029ab9f7ffb30e00df HEAD"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_summary_describes_test_correction",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git log -1 --format=%s 48aef90afe48232c6d80cc029ab9f7ffb30e00df | grep -qE '^test:.*(advisory|model-quality|align)'"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_touches_only_test_files",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "set -e; FILES=$(git show --name-only --format= 48aef90afe48232c6d80cc029ab9f7ffb30e00df | grep -v '^$' | sort); EXPECTED=$(printf 'apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts\\napps/vscode/webview-ui/src/components/chat/ErrorRow.test.tsx'); test \"$FILES\" = \"$EXPECTED\""
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_does_not_modify_production",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "set -e; PROD=$(git diff --name-only c561a636d960c50b355c85db7e6af485ed472e79..48aef90afe48232c6d80cc029ab9f7ffb30e00df | grep -v '\\.test\\.ts$' | grep -v '\\.test\\.tsx$' || true); test -z \"$PROD\""
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "git_diff_check_passes_on_subject",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "git diff --check c561a636d960c50b355c85db7e6af485ed472e79..48aef90afe48232c6d80cc029ab9f7ffb30e00df"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "worktree_clean_at_run",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "test -z \"$(git status --short)\""
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "subject_diff_stats_show_two_test_files",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "set -e; STATS=$(git diff --shortstat c561a636d960c50b355c85db7e6af485ed472e79..48aef90afe48232c6d80cc029ab9f7ffb30e00df); echo \"$STATS\" | grep -q '2 files changed'"
+      ],
+      "environment": {},
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "sdk_interaction_coordinator_test_passes",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "cd apps/vscode && bunx vitest run src/sdk/sdk-interaction-coordinator.test.ts --config vitest.config.ts 2>&1 | tail -5"
+      ],
+      "environment": {},
+      "timeout_seconds": 120,
+      "working_directory": "."
+    },
+    {
+      "id": "error_row_test_passes",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "cd apps/vscode/webview-ui && bun run test -- ErrorRow.test.tsx 2>&1 | tail -5"
+      ],
+      "environment": {},
+      "timeout_seconds": 120,
+      "working_directory": "."
+    },
+    {
+      "id": "button_config_test_passes",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "cd apps/vscode/webview-ui && bun run test -- buttonConfig.test.ts 2>&1 | tail -5"
+      ],
+      "environment": {},
+      "timeout_seconds": 120,
+      "working_directory": "."
+    },
+    {
+      "id": "mistake_tracker_test_passes",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "cd sdk/packages/core && bunx vitest run src/runtime/safety/mistake-tracker.test.ts --config vitest.config.ts 2>&1 | tail -5"
+      ],
+      "environment": {},
+      "timeout_seconds": 120,
+      "working_directory": "."
+    },
+    {
+      "id": "session_runtime_orchestrator_test_passes",
+      "mode": "run",
+      "argv": [
+        "sh",
+        "-c",
+        "cd sdk/packages/core && bunx vitest run src/runtime/orchestration/session-runtime-orchestrator.test.ts --config vitest.config.ts 2>&1 | tail -5"
+      ],
+      "environment": {},
+      "timeout_seconds": 120,
+      "working_directory": "."
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "closure_plan",
+      "max_bytes": 65536,
+      "media_type": "application/json",
+      "path": "docs/closure-plans/ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01-CORRECTION02.json",
+      "required": true,
+      "role": "generated_output"
+    },
+    {
+      "id": "closure_manifest",
+      "max_bytes": 65536,
+      "media_type": "application/json",
+      "path": "docs/closure-manifests/ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01-CORRECTION02.json",
+      "required": true,
+      "role": "generated_output"
+    },
+    {
+      "id": "closure_report",
+      "max_bytes": 65536,
+      "media_type": "text/markdown",
+      "path": "docs/close-reports/ACT-CLINEMM-MODEL-QUALITY-WARNING-NONBLOCKING01-CORRECTION02.md",
+      "required": true,
+      "role": "generated_output"
+    }
+  ]
+}
