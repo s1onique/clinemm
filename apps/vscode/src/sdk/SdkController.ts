@@ -93,7 +93,6 @@ import { SdkTaskStartCoordinator } from "./sdk-task-start-coordinator"
 import { createVscodeSdkTelemetryHandle, type VscodeSdkTelemetryHandle } from "./sdk-telemetry"
 import { SdkTerminalExecutionModeCoordinator } from "./sdk-terminal-execution-mode-coordinator"
 import {
-	evaluateCancelCommandToolApproval,
 	evaluateCommandToolApprovalWithPlan,
 	getCommandHostAuthorization,
 	isCommandTool,
@@ -374,12 +373,6 @@ export class Controller {
 			// shouldAutoApproveTool wiring (v4.1.10). Command tools continue
 			// to route through the canonical policy lattice via
 			// evaluateCommandToolApproval below.
-			//
-			// ACT-CLINEMM-SESSION-AUTONOMY01:
-			// The non-command path now reads the EFFECTIVE settings
-			// (persisted + ephemeral session override). The override only
-			// projects ordinary categories — it never bypasses hard DENY,
-			// and it never mutates the persisted object.
 			shouldAutoApproveTool: (request) => {
 				if (isCommandTool(request.toolName)) {
 					// Command tools go through evaluateCommandToolApproval
@@ -388,10 +381,7 @@ export class Controller {
 					return false
 				}
 				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
-				const persisted = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
-				const sessionId = this.sessions.getActiveSession()?.sessionId
-				const override = this.sessionAutoApproval.getOverride(sessionId)
-				const effective = resolveEffectiveAutoApproval(persisted, override)
+				const effective = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
 				return isToolAutoApproved(request.toolName, effective, this.mcpHub)
 			},
 			// CORRECTION04 TOCTOU fix: read settings ONCE and produce one
