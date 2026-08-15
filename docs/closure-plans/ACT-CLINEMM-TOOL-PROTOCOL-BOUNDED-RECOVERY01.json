@@ -1,0 +1,190 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01",
+  "parent": null,
+  "verdict": "PARTIAL",
+  "verdict_basis": "SUBSTRATE_ONLY",
+  "baseline": {
+    "commit_oid": "c564045d8135c0c1c330b21d47b68b74917ce614",
+    "tree_oid": "2a1d9c0e4cef65151afc286343d92ca0f6b68039",
+    "replaced_by_act": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01"
+  },
+  "deliverables": {
+    "c1_0_substrate_contract": {
+      "status": "DONE",
+      "files": [
+        "sdk/packages/agents/src/runtime/recovery/policy.ts",
+        "sdk/packages/agents/src/runtime/recovery/tracker.ts",
+        "sdk/packages/agents/src/runtime/recovery/fingerprint.ts",
+        "sdk/packages/agents/src/runtime/recovery/index.ts"
+      ],
+      "description": "C1.0 substrate contract locked after CORRECTION.1, CORRECTION.2, and CORRECTION.3 passes. Substrate ownership is @cline/agents; cross-package contracts live in @cline/shared. Two distinct family latches: budgetExhausted (set on the third observation; gates isExactBlocked / isFamilyBlocked; visible state = warning) and circuitTripped (set only by recordBlockedAttempt; visible state = circuit_open). Pre-execution exact breaker is family-independent (isExactBlocked(attemptKey), markExactBlocked(attemptKey)). Post-execution family convergence via recordFailure(family, exactKey, fingerprint). recordBlockedAttempt(attemptKey) re-anchors activeFamily to the resolved owner and uses the SAME predicate as isExactBlocked (budgetExhausted && owns(attemptKey)). Model-facing notice is once-per-episode. Identity uses FNV-1a 32-bit diagnostic projection (browser-compatible, no node:crypto). The two-track privacy contract is enforced through typed-identity overloads (recordFailureIdentity, etc.) which store unbounded canonical control identities internally and project to diagnostic IDs on snapshot/event emission.",
+      "tests_passed": 54,
+      "contracts": [
+        "sdk/packages/shared/src/agents/recovery/types.ts"
+      ],
+      "substrate_owner": "@cline/agents",
+      "contract_owner": "@cline/shared",
+      "control_identity": "canonical package-private identity",
+      "diagnostic_identity": "opaque browser-compatible ID"
+    },
+    "unit_tests": {
+      "status": "DONE",
+      "files": [
+        "sdk/packages/agents/src/runtime/recovery/tracker.test.ts",
+        "sdk/packages/agents/src/runtime/recovery/fingerprint.test.ts",
+        "sdk/packages/agents/src/runtime/recovery/recovery-privacy.test.ts"
+      ],
+      "tests_passed": 54
+    },
+    "agent_runtime_integration": {
+      "status": "NOT_STARTED",
+      "description": "Wire RecoveryTracker into AgentRuntime tool execution loop"
+    },
+    "circuit_enforcement": {
+      "status": "NOT_STARTED",
+      "description": "Actually block repeated attempts at runtime"
+    },
+    "runtime_proofs": {
+      "status": "NOT_STARTED",
+      "description": "End-to-end proofs showing bounded provider requests"
+    },
+    "post_circuit_termination": {
+      "status": "NOT_STARTED",
+      "description": "Prevent blocked-result \u2192 model retries \u2192 blocked-result loop"
+    }
+  },
+  "proofs": {
+    "TRACKER_EXACT_REPEAT_BOUNDED": "PASS",
+    "TRACKER_CHANGED_INPUT_SAME_FAMILY_BOUNDED": "PASS",
+    "TRACKER_UNKNOWN_TOOL_BOUNDED": "PASS",
+    "TRACKER_CIRCUIT_IDEMPOTENT": "PASS",
+    "TRACKER_WARNING_TO_CIRCUIT_OPEN_ON_INTERCEPTION": "PASS",
+    "TRACKER_FAMILY_HOP_INTERCEPTION_REANCHORS_ACTIVE": "PASS",
+    "TRACKER_MULTI_FAMILY_ATTRIBUTION_USES_SAME_PREDICATE": "PASS",
+    "TRACKER_MARK_EXACT_BLOCKED_NO_FABRICATED_OWNERSHIP": "PASS",
+    "AGENT_RUNTIME_EXACT_REPEAT_BOUNDED": "UNPROVEN",
+    "AGENT_RUNTIME_CHANGED_INPUT_SAME_FAMILY_BOUNDED": "UNPROVEN",
+    "AGENT_RUNTIME_UNKNOWN_TOOL_BOUNDED": "UNPROVEN",
+    "PROVIDER_REQUEST_COUNT_BOUNDED": "UNPROVEN",
+    "POST_CIRCUIT_TERMINATION": "UNPROVEN"
+  },
+  "substrate_only_note": "Unit tests verify RecoveryTracker behavior in isolation. The C1.3 full state proof (single-family) and the family-hop interception proof (multi-family A\u2192B\u2192A) both simulate the correctly wired runtime algorithm. Runtime integration is required to prove actual bounded recovery against the upstream 870-request reproducer.",
+  "upstream_issue": "GitHub #11542 reports 870 provider requests from repeated tool-use loop before timeout",
+  "c1_0_fixes_applied": [
+    "Single source of circuit truth via two distinct family latches (`budgetExhausted`, `circuitTripped`). State, isFamilyBlocked, getBlockedFamilies, snapshot all read these same latches.",
+    "Multi-family episode retention \u2014 families map within an episode survives family hops.",
+    "State-transition event capture-before-mutate \u2014 idle\u2192recovering, recovering\u2192warning, warning\u2192circuit_open all fire reliably; same-state emits nothing.",
+    "Warning contract fixed \u2014 DEFAULT_RECOVERY_POLICY = { maxRepairAttempts: 2, warningThreshold: 2 }; visible state is `warning` while `budgetExhausted = true && circuitTripped = false`.",
+    "Strong deterministic fingerprint \u2014 FNV-1a 32-bit projected to 8-char lowercase hex (browser-compatible, no node:crypto dependency). Two-track identity: control identity (canonical) is package-private; diagnostic identity (8-char hex) is the only public surface. Substrate owner is @cline/agents; contract types live in @cline/shared.",
+    "Structured-classifier-first \u2014 extractStableFailureCode is a fallback (boundary-anchored tokens, prefers err.code over message scanning).",
+    "Invariant matrix contract \u2014 5-table it.each covering no episode, 1/2/3/4-failure walks under default policy.",
+    "CORRECTION.1: isExactBlocked(attemptKey) is family-independent; original failure does NOT globally block the exact key; repairAttempts = post-original-failure failures only; recordToolSuccess requires toolName match; C1.3-shaped integration fixture.",
+    "CORRECTION.2: added recordBlockedAttempt(attemptKey); renamed circuitOpened \u2192 budgetExhausted and added circuitTripped; circuitNoticeCount no longer increments on recordFailure.",
+    "CORRECTION.3: recordBlockedAttempt re-anchors activeFamily to the resolved owner BEFORE deriving canonical state. The block resolver (`blockedFamilyForAttemptKey`) uses the SAME predicate as isExactBlocked (`budgetExhausted && owns(attemptKey)`), so a key seen by multiple families is attributed to the exhausted owner only. The markExactBlocked fallback is dropped \u2014 blocks with no owning family are no-ops. Added `failureFamily` to RecoveryStateChangeEvent. Circuit notice policy documented as once-per-episode (model-facing notification budget, not per-family).",
+    "Stale comments fixed: top-level API reference is now `isExactBlocked(attemptKey)`; warning JSDoc rewritten to reflect 'budget consumed; next attempt must be intercepted at pre-execution'."
+  ],
+  "next_act": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01",
+  "next_act_scope": [
+    "C1.1 ToolRuntimeOutcome discriminated union: tool failures feed the tracker; control-plane outcomes structurally excluded",
+    "C1.2 Real AgentRuntime integration: instantiate tracker per active run/session",
+    "C1.3 Pre-execution exact breaker: isExactBlocked gate at tool dispatch (intent-time) \u2192 recordBlockedAttempt on interception \u2014 substrate proven, wiring remains",
+    "C1.4 Post-classification family breaker + second-stage termination: blocked-result -> warning -> circuit_open -> one response opportunity -> terminal",
+    "C1.5 Runtime truth: RecoverySnapshot event on canonical agents runtime stream; RecoveryExhaustedError / error.kind discriminated at low-level AgentRunResult only; AgentFinishReason widening deferred to COMPLETION-CHANGESET-UI-STATE-TRUTH01",
+    "C1.6 Bounded-request proofs: exact repeat, changed input / same family, family hopping, successful repair, unknown tool, malformed input, user reject excluded, DENY excluded, provider retry excluded, exact request bound, exact executor bound"
+  ],
+  "do_not_map_retries_note": "CLI --retries = broad consecutive mistake ceiling. maxRepairAttempts = narrow same-recovery-family convergence budget. Compose, do not alias.",
+  "public_api_delta_planned": {
+    "kind": "agent_finish_reason_widening",
+    "active_in_correction01": false,
+    "scheduled": "COMPLETION-CHANGESET-UI-STATE-TRUTH01",
+    "shapes": "low-level AgentRunResult.error.kind = 'recovery_exhausted' discriminator only; status remains 'completed | aborted | failed'.",
+    "backward_compatibility": {
+      "source_compatible_for_non_exhaustive_consumers": true,
+      "breaking_for_exhaustive_consumers_using_assertNever": true,
+      "versioned_serializers_may_require_bump": true
+    }
+  },
+  "checks": [
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/agents",
+        "test",
+        "src/runtime/recovery/"
+      ],
+      "reason": "C1.0 substrate tests at new location (39 tracker + 5 privacy + 13 fingerprint = 57 tests)"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/agents",
+        "typecheck"
+      ],
+      "reason": "TypeScript compilation"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/agents",
+        "build"
+      ],
+      "reason": "Build"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/shared",
+        "typecheck"
+      ],
+      "reason": "Shared contract types"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/shared",
+        "build"
+      ],
+      "reason": "Shared build (node + browser)"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/core",
+        "typecheck"
+      ],
+      "reason": "Core callers compile after recovery module deletion"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/core",
+        "test:unit",
+        "src/runtime/"
+      ],
+      "reason": "Core runtime tests (486 tests)"
+    }
+  ],
+  "correction_act": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01",
+  "correction_status": "STAGE_1_COMPLETE_PROCEEDING",
+  "notes": "Files originally listed under sdk/packages/core/src/runtime/recovery/ have been moved to sdk/packages/agents/src/runtime/recovery/ as part of ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01. The parent plan retained the SUBSTRATE_ONLY verdict because real AgentRuntime integration had not yet started; the correction ACT picks up at that integration point.",
+  "c1_0_post_correction_strict": [
+    "Privacy contract is unconditional: legacy string overloads (recordFailureControl, isExactBlockedControl, markExactBlockedControl, recordBlockedAttemptControl) are PRIVATE; the public API is the typed-identity overloads (recordFailureIdentity, isExactBlockedIdentity, markExactBlockedIdentity, recordBlockedAttemptIdentity).",
+    "Snapshot/event projection is unconditional: every emitted identifier passes through controlKeyToDiagnosticId / controlFamilyToDiagnosticId, so the public surface is always opaque hex regardless of which overload was used.",
+    "attemptDiagnosticId and familyDiagnosticId delegate to createAttemptIdentity / createFamilyIdentity; the canonical encoding convention is defined in exactly one place."
+  ]
+}

@@ -1,0 +1,265 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01",
+  "parent": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01",
+  "parent_verdict_basis_at_start": "SUBSTRATE_ONLY",
+  "verdict": "PARTIAL",
+  "verdict_basis": "STAGE_1_COMPLETE_PROCEEDING",
+  "baseline": {
+    "commit_oid": "28de596ec6d6c8463ace586010144f5aeee5de9a",
+    "tree_oid": "TBD"
+  },
+  "recon": {
+    "agent_runtime_file": "sdk/packages/agents/src/agent-runtime.ts",
+    "tool_dispatch_entry": "prepareToolExecution \u2192 executePreparedTool",
+    "tool_lookup_owner": "prepareToolExecution (line 1609)",
+    "tool_input_validation_owner": "prepareToolExecution (inputParseError / toolSource.executionMode)",
+    "approval_boundary": "requestToolApproval (line 1705)",
+    "tool_execution_owner": "executePreparedTool (line 1745)",
+    "tool_throw_boundary": "try/catch around tool.execute (lines 1768-1797)",
+    "tool_result_normalization_owner": "createMessage('tool', [{ type: 'tool-result', isError }])",
+    "model_feedback_owner": "execute() turn loop (line 687)",
+    "iteration_loop_owner": "execute() while (maxIterations)",
+    "run_termination_owner": "finishRun / catch in execute()",
+    "event_owner": "emit({type}) on AgentRuntimeEvent surface",
+    "max_iterations_owner": "config.maxIterations",
+    "mistake_tracker_owner": "sdk/packages/core/src/runtime/safety/mistake-tracker.ts",
+    "loop_detection_owner": "sdk/packages/core/src/runtime/safety/loop-detection.ts",
+    "parallel_tool_calls_supported": true,
+    "multiple_tool_calls_per_turn": true,
+    "tool_execution_sequential_or_parallel": "config.toolExecution ('sequential' default, 'parallel' opt-in)"
+  },
+  "dependency_direction": {
+    "cline_core_to_agents": true,
+    "cline_agents_to_core": false,
+    "recovery_primitive_package": "@cline/agents",
+    "recovery_contract_package": "@cline/shared",
+    "recovery_core_owner": "NONE",
+    "proven": true
+  },
+  "two_track_identity_architecture": {
+    "control_identity": {
+      "form": "full canonical (toolName + canonical-input) string",
+      "purpose": "authoritative equality basis for tracker Set.has / Map.get",
+      "collision_space": "unbounded (effectively no collisions)",
+      "use_sites": [
+        "RecoveryTracker internal Sets and Maps (verbatim storage)",
+        "passed by runtime as RecoveryTracker.recordFailureIdentity(family.controlFamily, attempt.controlKey, fp)",
+        "passed by runtime as RecoveryTracker.isExactBlockedIdentity(attempt.controlKey)",
+        "passed by runtime as RecoveryTracker.markExactBlockedIdentity(attempt.controlKey)"
+      ],
+      "must_not_leave_trackers_internal_state": true,
+      "must_not_appear_in_snapshots": true,
+      "must_not_appear_in_events": true
+    },
+    "diagnostic_identity": {
+      "form": "8-char lowercase FNV-1a hex of the canonical control identity",
+      "purpose": "stable opaque projection for telemetry, runtime events, host projections",
+      "collision_space": "32-bit (~4.3 \u00d7 10^9). NOT used for circuit decisions.",
+      "use_sites": [
+        "RecoverySnapshot.blockedExactKeys (8-char hex per element)",
+        "RecoverySnapshot.currentFailureFamily",
+        "RecoverySnapshot.blockedFamilies",
+        "RecoveryStateChangeEvent.failureFamily",
+        "ToolFailureFingerprint.failureFamily / failureFingerprint / inputFingerprint"
+      ],
+      "safe_for_telemetry": true,
+      "safe_for_runtime_events": true,
+      "safe_for_host_projections": true
+    },
+    "boundary_enforcement": {
+      "mechanism": "RecoveryTracker private controlKeyToDiagnostic / controlFamilyToDiagnostic Maps + unconditional projection via controlKeyToDiagnosticId / controlFamilyToDiagnosticId",
+      "populated_by": "typed-identity overloads (recordFailureIdentity, isExactBlockedIdentity, markExactBlockedIdentity, recordBlockedAttemptIdentity)",
+      "projection_point": "RecoveryTracker.snapshot(), RecoveryTracker.getBlockedFamilies(), RecoveryTracker.notifyWith(), recordBlockedAttemptControl() return value, recordToolSuccess() return value",
+      "rule": "Every emitted identifier is projected to 8-char FNV-1a hex. The legacy *Control methods are private so the runtime cannot bypass the typed identity contract from outside the package."
+    },
+    "public_api": {
+      "typed_identity_overloads_only": [
+        "RecoveryTracker.recordFailureIdentity(family: ToolFamilyIdentity, attempt: ToolAttemptIdentity, fp)",
+        "RecoveryTracker.isExactBlockedIdentity(attempt: ToolAttemptIdentity): boolean",
+        "RecoveryTracker.markExactBlockedIdentity(attempt: ToolAttemptIdentity): void",
+        "RecoveryTracker.recordBlockedAttemptIdentity(attempt: ToolAttemptIdentity)"
+      ],
+      "private_internal_mechanics": [
+        "RecoveryTracker.recordFailureControl(controlFamily, controlKey, fp)",
+        "RecoveryTracker.isExactBlockedControl(controlKey)",
+        "RecoveryTracker.markExactBlockedControl(controlKey)",
+        "RecoveryTracker.recordBlockedAttemptControl(controlKey)"
+      ]
+    }
+  },
+  "stages": {
+    "stage_0_recon": {
+      "status": "PASS"
+    },
+    "stage_1_package_move": {
+      "status": "PASS",
+      "details": [
+        "5 production files moved from sdk/packages/core/src/runtime/recovery/ \u2192 sdk/packages/agents/src/runtime/recovery/",
+        "Contract types moved to sdk/packages/shared/src/agents/recovery/types.ts (no Node builtins)",
+        "node:crypto SHA-256 replaced with FNV-1a 32-bit (browser-compatible)",
+        "Genuine two-track identity: ToolAttemptIdentity + ToolFamilyIdentity typed wrappers with both controlKey/controlFamily AND diagnosticId/diagnosticFamily",
+        "RecoveryTracker gained typed-identity overloads that populate projection maps; snapshot/event surfaces automatically project raw canonical labels to diagnostic IDs",
+        "Legacy string overloads retained and unchanged (54 C1.0 tests pass without modification)",
+        "Recovery module deleted from @cline/core; zero external consumers affected",
+        "Production-shaped privacy test (recovery-privacy.test.ts, 5 tests): drives warning \u2192 interception \u2192 circuit_open through typed-identity API, asserts every exposed field contains only 8-char hex and no canonical input",
+        "Privacy contract strengthened: legacy *Control methods are now private; the public API is the typed-identity overloads only. Snapshot/event projection is unconditional \u2014 every emitted identifier is hashed to 8-char hex regardless of which overload was used. attemptDiagnosticId / familyDiagnosticId delegate to createAttemptIdentity / createFamilyIdentity (single canonical encoder)."
+      ],
+      "tests_passed": 57,
+      "privacy_proof_passes": true
+    },
+    "stage_2_classification": {
+      "status": "NOT_STARTED",
+      "details": "ToolRuntimeOutcome discriminator + failure-classifier.ts with provenance-first authority at AgentRuntime.executePreparedTool boundary"
+    },
+    "stage_3_typed_exhaustion": {
+      "status": "NOT_STARTED",
+      "details": "RecoveryExhaustedError typed error with low-level AgentRunResult.error.kind discriminator"
+    },
+    "stage_4_runtime_integration": {
+      "status": "NOT_STARTED",
+      "details": "RuntimeRecovery bridge into AgentRuntime: pre-exec gate (use typed-identity overloads), post-exec classification (recordFailureIdentity), second-stage termination (catch in turn loop). Tool-result carries model-facing bounded_recovery_exhausted payload. Parallel-tool recovery semantics: TBD-proven in this stage before close."
+    },
+    "stage_5_runtime_truth": {
+      "status": "NOT_STARTED",
+      "details": "recovery-state-changed event propagation; statusToLegacyFinishReason widening DEFERRED to COMPLETION-CHANGESET-UI-STATE-TRUTH01"
+    },
+    "stage_6_runtime_proofs": {
+      "status": "NOT_STARTED",
+      "details": "13 fixtures + 4 mutation proofs"
+    },
+    "stage_7_predecessor_regression": {
+      "status": "NOT_STARTED"
+    },
+    "stage_8_commit": {
+      "status": "NOT_STARTED"
+    }
+  },
+  "stage_1_exit_gate_checklist": {
+    "implementation_moved_core_to_agents": true,
+    "contract_types_moved_to_shared": true,
+    "agents_imports_no_core": true,
+    "shared_imports_no_higher_cline": true,
+    "node_crypto_absent_from_recovery": true,
+    "canonical_identity_behavior_unchanged": true,
+    "raw_canonical_input_not_in_snapshot_or_events": true,
+    "all_54_c10_tests_pass_no_semantic_edits": true,
+    "fingerprint_10_tests_pass": true,
+    "agents_typecheck_passes": true,
+    "agents_node_build_passes": true,
+    "agents_browser_target_build_passes": true,
+    "core_callers_compile_after_relocation": true,
+    "genuine_two_track_identity_implemented": true,
+    "production_shaped_privacy_proof_passes": true,
+    "tracker_internal_sets_use_control_keys": true,
+    "snapshot_and_event_projection_use_diagnostic_ids": true,
+    "no_vacuous_privacy_test": true,
+    "typed_identity_overloads_are_public": true,
+    "legacy_string_overloads_are_private": true,
+    "snapshot_event_projection_is_unconditional": true,
+    "attempt_diagnostic_id_delegates_to_create_attempt_identity": true,
+    "family_diagnostic_id_delegates_to_create_family_identity": true
+  },
+  "privacy_discipline": {
+    "control_identity_internal_canonical": true,
+    "diagnostic_id_external": "8-char FNV-1a hex",
+    "raw_tool_input_in_snapshot": false,
+    "raw_tool_input_in_events": false,
+    "model_facing_notice_surface": "tool-result message (NOT status-notice event)",
+    "host_observability_surface": "AgentRuntimeEvent recovery-state-changed variant",
+    "metadata_classification_role": "projection only, NOT authority",
+    "boundary_mechanism": "tracker-internal projection maps; legacy string overloads pass-through (no privacy expectations)",
+    "collision_resistance": "32-bit collision resistance is for telemetry only; circuit decisions use unbounded canonical control identity"
+  },
+  "next_review_point": "Stage 2 \u2014 C1.1 ToolRuntimeOutcome classifier matrix",
+  "do_not_map_retries_note": "CLI --retries = broad consecutive mistake ceiling. maxRepairAttempts = narrow same-recovery-family convergence budget. Compose, do not alias.",
+  "checks": [
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/agents",
+        "test",
+        "src/runtime/recovery/"
+      ],
+      "reason": "C1.0 substrate tests at new location (39 tracker + 5 privacy + 13 fingerprint = 57 tests)"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/agents",
+        "test",
+        "src/"
+      ],
+      "reason": "Full @cline/agents suite (127 tests)"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/core",
+        "test:unit",
+        "src/runtime/"
+      ],
+      "reason": "Remaining @cline/core runtime tests (486 tests)"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/agents",
+        "typecheck"
+      ],
+      "reason": "Stage 1 typecheck"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/shared",
+        "typecheck"
+      ],
+      "reason": "Stage 1 shared types typecheck"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/core",
+        "typecheck"
+      ],
+      "reason": "Stage 1 core callers compile"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/agents",
+        "build"
+      ],
+      "reason": "Stage 1 build"
+    },
+    {
+      "argv": [
+        "bun",
+        "run",
+        "-F",
+        "@cline/shared",
+        "build"
+      ],
+      "reason": "Stage 1 shared builds (node + browser)"
+    }
+  ],
+  "c1_0_post_correction_strict": [
+    "Multi-family attribution test fixture verified: A and B vary only by stableCode, share toolName; sharedAttempt is constructed once and re-used across both recordFailureIdentity calls. Structural assertions (A.controlFamily !== B.controlFamily, sharedAttempt.controlKey === sharedAttemptAgain.controlKey) pin the fixture so a future regression that collapses the families or rebuilds the attempt identity cannot pass.",
+    "Public query API split documented: isFamilyBlocked() and activeFamily() are explicitly DEBUG / QUERY methods accepting/returning raw controlFamily because the runtime wiring layer needs them at the boundary; mutation/enforcement API is the typed-identity overloads only."
+  ]
+}

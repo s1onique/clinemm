@@ -55,3 +55,8 @@ export {
 	createAgent,
 	createAgentRuntime,
 } from "./agent-runtime";
+
+// Bounded tool/protocol recovery — runtime policy enforcement for
+// AgentRuntime. Contract types live in `@cline/shared`; the state machine
+// implementation lives in `@cline/agents/src/runtime/recovery/`.
+export * from "./runtime/recovery/index";
