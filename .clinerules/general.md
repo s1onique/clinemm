@@ -203,3 +203,75 @@ Other harness notes confirmed in practice:
   some fields; focus the inner shadow `input` then use real keystrokes (`ui.type` +
   `ui.press Tab`, or click the dropdown option) to make the value persist.
 
+## Preserve Declaration and Lifetime Semantics When Expanding Expressions
+
+When rewriting an expression-based initialization (e.g. `const x = a ?? (tmp = await create())`)
+into statement form to satisfy a lint rule (Biome's `noAssignInExpressions` is the usual trigger),
+explicitly preserve **every** variable the expression form provided:
+
+- the lhs's declaration + initialization,
+- any rhs side-effect variables (e.g. `tmp` / `tempHost`) and their ownership/cleanup,
+- type narrowing that the expression form produced for downstream uses.
+
+Then run the focused typecheck immediately after the refactor:
+
+```bash
+cd apps/vscode && bun run check-types
+```
+
+**Failure mode this prevents:**
+
+```
+expression refactor
+→ syntax/lint becomes cleaner
+→ a declaration (or ownership edge) accidentally disappears
+→ latent compile failure, often far from the edit site
+```
+
+**Concrete example:** turning
+
+```ts
+let tempHost: VscodeSessionHost | undefined
+const sessionHost =
+    activeSession?.sdkHost ??
+    (tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub }))
+try { /* use sessionHost */ } finally { await tempHost?.dispose(...) }
+```
+
+into a naive `if/else` block drops the `let sessionHost` declaration and TypeScript
+then reports `Cannot find name 'sessionHost'` at every use site. The correct
+expansion is:
+
+```ts
+let tempHost: VscodeSessionHost | undefined
+let sessionHost = activeSession?.sdkHost
+if (!sessionHost) {
+    tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub })
+    sessionHost = tempHost
+}
+try { /* use sessionHost */ } finally { await tempHost?.dispose(...) }
+```
+
+— the same variables, the same ownership: `tempHost` is only assigned in the
+branch that actually creates the host, so `finally { tempHost?.dispose(...) }`
+still disposes exactly that host (and never the live `activeSession.sdkHost`).
+
+## VSIX Packaging: `dist/` Must Exist at Repo Root Before `vsce package`
+
+`@vscode/vsce package --out <path>` resolves `--out` relative to the extension's
+package directory, then tries to `stat` the output file **before** writing it.
+If the directory doesn't exist, packaging fails with a confusing
+`ENOENT: no such file or directory, open '.../dist/...vsix'` even though
+`vscode:prepublish` (typecheck + lint + webview build + esbuild) all succeeded.
+
+`dist/` is already in `.gitignore` so this is not a `git status` problem — it's
+a missing-directory problem. Always run:
+
+```bash
+mkdir -p "$ROOT/dist"
+```
+
+before invoking `vsce package --out ...vsix` against a fresh checkout or after
+cleaning the build directory. The same applies to any path that includes the
+output filename passed via `--out`.
+
