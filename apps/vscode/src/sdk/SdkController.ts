@@ -392,7 +392,13 @@ export class Controller {
 				const sessionId = this.sessions.getActiveSession()?.sessionId
 				const override = this.sessionAutoApproval.getOverride(sessionId)
 				const effective = resolveEffectiveAutoApproval(persisted, override)
-				return isToolAutoApproved(request.toolName, effective, this.mcpHub)
+				// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: project the
+				// override into the MCP branch of isToolAutoApproved so a
+				// task-scoped "ALL" lifts the per-tool autoApprove gate for
+				// ordinary MCP tools (e.g. figma-desktop__get_metadata). The
+				// global useMcp toggle is already projected true via
+				// `effective`; the override now closes the per-tool gap.
+				return isToolAutoApproved(request.toolName, effective, this.mcpHub, override)
 			},
 			// CORRECTION04 TOCTOU fix: read settings ONCE and produce one
 			// atomic evaluation that carries both authority and execution constraints.

@@ -11,6 +11,7 @@ import {
 import type { CommandExecutionPlan } from "@cline/shared"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { McpHub } from "@/services/mcp/McpHub"
+import type { SessionAutoApprovalOverride } from "./session-auto-approval"
 
 /**
  * Build SDK `toolPolicies` for tools governed by Cline's auto-approval UI.
@@ -358,7 +359,12 @@ export function evaluateCommandToolApprovalWithPlan(
  * require the typed `CommandHostAuthorization` flow via
  * `getCommandHostAuthorization` + `evaluateCommandToolApproval`.
  */
-export function isToolAutoApproved(toolName: string, settings: AutoApprovalSettings, mcpHub?: McpHub): boolean {
+export function isToolAutoApproved(
+	toolName: string,
+	settings: AutoApprovalSettings,
+	mcpHub?: McpHub,
+	override: SessionAutoApprovalOverride = "none",
+): boolean {
 	if (isReadTool(toolName)) {
 		return !!settings.actions.readFiles
 	}
@@ -376,11 +382,27 @@ export function isToolAutoApproved(toolName: string, settings: AutoApprovalSetti
 
 	const mcpTool = parseMcpToolName(toolName)
 	if (mcpTool) {
-		if (!settings.actions.useMcp || !mcpHub) {
+		if (!mcpHub) {
 			return false
 		}
 		const server = mcpHub.getServers().find((entry) => entry.name === mcpTool.serverName)
 		const tool = server?.tools?.find((entry) => entry.name === mcpTool.toolName)
+		// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03:
+		// "ALL — this task" must project into ordinary MCP tool execution.
+		// When the session override is active, lift the global `useMcp`
+		// gate (resolveEffectiveAutoApproval already projects it true;
+		// we keep this structural so a future caller that forgets to
+		// pre-project cannot reintroduce ASK here) AND lift the
+		// per-server/per-tool `autoApprove` flag. The tool still has to
+		// exist on a known server — unknown server/tool pairs fall
+		// through to false (the closest thing to a hard-DENY for MCP
+		// today, and it must NOT be widened by the override).
+		if (override === "all") {
+			return !!tool
+		}
+		if (!settings.actions.useMcp) {
+			return false
+		}
 		return !!tool?.autoApprove
 	}
 

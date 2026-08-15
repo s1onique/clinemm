@@ -24,7 +24,13 @@
  */
 import { commandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } from "@cline/core"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
+import type { McpServer, McpTool } from "@shared/mcp"
 import { describe, expect, it, vi } from "vitest"
+
+// Minimal structural type for the McpHub surface the coordinator uses.
+// Avoids pulling the full McpHub class (which has heavy VS Code deps).
+type McpHubLike = { getServers(): McpServer[] }
+
 import { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { evaluateCommandToolApprovalWithPlan, getCommandHostAuthorization, isToolAutoApproved } from "./sdk-tool-policies"
@@ -451,5 +457,183 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator
 			})
 			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
 		})
+	})
+})
+
+// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03
+//
+// Real-coordinator proof: drive the production-shaped Figma MCP request
+// through the SdkInteractionCoordinator with a mock McpHub. The original
+// bug was that `⚡ ALL — this task` did NOT lift the per-tool
+// autoApprove gate for ordinary MCP tools (e.g. figma-desktop /
+// get_metadata). This block freezes that exact scenario as a regression.
+//
+// `approvalCallbackCount = 0` is the load-bearing assertion: the UI
+// approve/reject prompt must NOT be presented. With the bug present,
+// handleRequestToolApproval would mint an `ask: "use_mcp_server"`
+// message and await a user decision; with the fix, it resolves
+// immediately with `{ approved: true }` and no message is emitted.
+describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: real coordinator proof (Figma MCP)", () => {
+	function makeFigmaHub(): McpHubLike {
+		const server: McpServer = {
+			name: "figma-desktop",
+			config: "{}",
+			status: "connected",
+			tools: [
+				{
+					name: "get_metadata",
+					description: "Get Figma node metadata",
+					autoApprove: false, // ← per-tool NOT approved
+				} satisfies McpTool,
+			],
+		}
+		return {
+			getServers: () => [server],
+		}
+	}
+
+	// isToolAutoApproved takes the full McpHub type; the structural mock
+	// only implements getServers. Cast through the parameter type so the
+	// structural contract is what the test actually exercises.
+	type McpHubParam = Parameters<typeof isToolAutoApproved>[2]
+
+	function makeMcpCoordinator(opts: { sessionId: string; store: SessionAutoApprovalStore; mcpHub: McpHubLike }) {
+		const task = createTaskProxy(opts.sessionId, vi.fn(), vi.fn())
+		const messages = new SdkMessageCoordinator({ getTask: () => task })
+		const postStateToWebview = vi.fn().mockResolvedValue(undefined)
+
+		// Persisted: every AutoApprove category is off. The user has NOT
+		// flipped any MCP toggle. The session override is the ONLY signal.
+		const persistedSettings = {
+			...DEFAULT_AUTO_APPROVAL_SETTINGS,
+			actions: {
+				...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+				readFiles: false,
+				editFiles: false,
+				useBrowser: false,
+				useMcp: false,
+				executeSafeCommands: false,
+				executeAllCommands: false,
+			},
+		}
+
+		const coordinator = new SdkInteractionCoordinator({
+			messages,
+			getSessionId: () => opts.sessionId,
+			postStateToWebview,
+			recordApprovedToolMessage: vi.fn(),
+			shouldAutoApproveTool: (request) => {
+				const override = opts.store.getOverride(opts.sessionId)
+				const effective = resolveEffectiveAutoApproval(persistedSettings, override)
+				// Production wiring: the override parameter is the seam
+				// that closes the per-tool MCP gate (CORRECTION03).
+				return isToolAutoApproved(request.toolName, effective, opts.mcpHub as unknown as McpHubParam, override)
+			},
+			evaluateCommandToolApproval: () => undefined,
+		})
+
+		return { coordinator, task, persistedSettings }
+	}
+
+	it("figma-desktop/get_metadata + session ALL + persisted MCP=false => ALLOW, no approval UI", async () => {
+		const store = new SessionAutoApprovalStore()
+		store.setOverride("s-figma", "all")
+		const { coordinator, task } = makeMcpCoordinator({
+			sessionId: "s-figma",
+			store,
+			mcpHub: makeFigmaHub(),
+		})
+
+		const promise = coordinator.handleRequestToolApproval({
+			agentId: "agent",
+			conversationId: "c",
+			iteration: 1,
+			toolCallId: "tc-figma",
+			toolName: "figma-desktop__get_metadata",
+			input: { nodeId: "38:3072" },
+			policy: { autoApprove: false },
+		})
+
+		// APPROVAL_CALLBACK_COUNT = 0: no UI message emitted.
+		await expect(promise).resolves.toEqual({ approved: true })
+		expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+	})
+
+	it("figma-desktop/get_metadata + override=none + persisted MCP=false => ASK (regression baseline)", async () => {
+		const store = new SessionAutoApprovalStore()
+		const { coordinator, task } = makeMcpCoordinator({
+			sessionId: "s-figma",
+			store,
+			mcpHub: makeFigmaHub(),
+		})
+
+		const promise = coordinator.handleRequestToolApproval({
+			agentId: "agent",
+			conversationId: "c",
+			iteration: 1,
+			toolCallId: "tc-figma-ask",
+			toolName: "figma-desktop__get_metadata",
+			input: { nodeId: "38:3072" },
+			policy: { autoApprove: false },
+		})
+
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+		await expect(promise).resolves.toEqual({ approved: true })
+	})
+
+	it("pre-arm ALL → new session consumes ALL → Figma MCP ALLOW on first call", async () => {
+		const store = new SessionAutoApprovalStore()
+		// Pre-arm: no sessionId yet.
+		store.setOverride(undefined, "all")
+		expect(store.isArmed()).toBe(true)
+
+		const sessionId = "s-next-task"
+		// Authoritative consume (mirrors SdkSessionLifecycle.startNewSession).
+		store.consumePendingOverride(sessionId)
+		expect(store.isArmed()).toBe(false)
+		expect(store.getOverride(sessionId)).toBe("all")
+
+		const { coordinator, task } = makeMcpCoordinator({
+			sessionId,
+			store,
+			mcpHub: makeFigmaHub(),
+		})
+		const promise = coordinator.handleRequestToolApproval({
+			agentId: "agent",
+			conversationId: "c",
+			iteration: 1,
+			toolCallId: "tc-figma-prearm",
+			toolName: "figma-desktop__get_metadata",
+			input: { nodeId: "38:3072" },
+			policy: { autoApprove: false },
+		})
+		await expect(promise).resolves.toEqual({ approved: true })
+		expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+	})
+
+	it("task ends ⇒ persisted MCP behavior restored ⇒ Figma MCP back to ASK", async () => {
+		const store = new SessionAutoApprovalStore()
+		store.setOverride("s-figma", "all")
+		// Simulate clearTask choke-point: destroy only the bound override.
+		store.clearActiveOverride()
+
+		const { coordinator, task } = makeMcpCoordinator({
+			sessionId: "s-figma",
+			store,
+			mcpHub: makeFigmaHub(),
+		})
+		const promise = coordinator.handleRequestToolApproval({
+			agentId: "agent",
+			conversationId: "c",
+			iteration: 1,
+			toolCallId: "tc-figma-restored",
+			toolName: "figma-desktop__get_metadata",
+			input: { nodeId: "38:3072" },
+			policy: { autoApprove: false },
+		})
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+		await expect(promise).resolves.toEqual({ approved: true })
 	})
 })
