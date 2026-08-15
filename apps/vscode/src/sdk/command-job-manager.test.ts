@@ -529,6 +529,91 @@ describe("CommandJobManager", () => {
 			await manager.dispose()
 		}
 	})
+
+	it("cancel() returns the canonical terminal state (CORRECTION03 P1)", async () => {
+		// The earlier implementation synthesized `state: "cancelled"`
+		// before the canonical finalization completed. By the time
+		// `terminate()` returns now, the process tree has been
+		// observed gone AND the canonical terminal transition has
+		// fired finalize(), so job.state is the truthful terminal
+		// state. cancel() reads job.state directly.
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				command: longShell(60),
+				cwd: process.cwd(),
+				waitBudgetMs: 100,
+				executionDeadlineMs: 5_000,
+			})
+			expect(start.state).toBe("running")
+			const result = await manager.cancel({ jobId: start.jobId })
+			expect(result.ok).toBe(true)
+			if (result.ok) {
+				expect(result.state).toBe("cancelled")
+				expect(result.state).not.toBe("running")
+			}
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	it("terminates the OWNED process tree, not just the shell (CORRECTION03 P0)", async () => {
+		// Spawn a command that starts a child which ignores SIGTERM
+		// and sleeps long enough to outlive grace. The child writes
+		// its own PID into a file. After cancel, both the shell PID
+		// and the descendant PID must be dead. The previous
+		// implementation raced against the shell exit and skipped
+		// SIGKILL escalation whenever the shell cooperated — even
+		// with a SIGTERM-ignoring descendant in the same PG.
+		const { mkdtemp, readFile, rm } = await import("node:fs/promises")
+		const { tmpdir } = await import("node:os")
+		const { join } = await import("node:path")
+		const tempDir = await mkdtemp(join(tmpdir(), "tbce-mgr-"))
+		const childPidPath = join(tempDir, "child.pid")
+		const probeAlive = (pid: number): boolean => {
+			try {
+				process.kill(pid, 0)
+				return true
+			} catch (err: unknown) {
+				return (err as NodeJS.ErrnoException).code === "EPERM"
+			}
+		}
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				// Use structured command to avoid bash wrapping. Spawns
+				// /bin/sh -c '<script>' where <script> backgrounds a
+				// SIGTERM-ignoring child and waits for it. Both PIDs
+				// land in the same PG; cancel must kill both.
+				command: {
+					command: "/bin/sh",
+					args: ["-c", `/bin/sh -c 'echo $$ > ${childPidPath}; trap "" TERM; sleep 30' & wait`],
+				},
+				cwd: process.cwd(),
+				waitBudgetMs: 100,
+				executionDeadlineMs: 5_000,
+			})
+			expect(start.state).toBe("running")
+			await new Promise((r) => setTimeout(r, 200))
+			const childPidRaw = await readFile(childPidPath, "utf8")
+			const childPid = Number(childPidRaw.trim())
+			expect(childPid).toBeGreaterThan(0)
+			expect(probeAlive(childPid)).toBe(true)
+			const result = await manager.cancel({ jobId: start.jobId })
+			expect(result.ok).toBe(true)
+			if (result.ok) {
+				expect(result.state).toBe("cancelled")
+			}
+			await new Promise((r) => setTimeout(r, 200))
+			expect(probeAlive(childPid)).toBe(false)
+			if (start.process.pid !== undefined) {
+				expect(probeAlive(start.process.pid)).toBe(false)
+			}
+		} finally {
+			await rm(tempDir, { recursive: true, force: true })
+			await manager.dispose()
+		}
+	})
 })
 
 describe("CommandJobManager defaults", () => {

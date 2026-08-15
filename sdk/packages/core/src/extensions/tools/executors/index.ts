@@ -35,9 +35,10 @@ export {
 	CommandExitError,
 	createShellExecutor,
 	formatShellProcessOutput,
-	spawnSupervisableShellCommand,
 	type ShellExecutorOptions,
 	type SupervisableShellProcess,
+	spawnSupervisableShellCommand,
+	type TerminateTreeResult,
 } from "./bash";
 export { createEditorExecutor, type EditorExecutorOptions } from "./editor";
 export {

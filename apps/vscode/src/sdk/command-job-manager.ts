@@ -224,9 +224,17 @@ function snapshot(job: CommandJob): CommandJobSnapshot {
  * ACT-CLINEMM-TRUSTED-BOUNDED-COMMAND-EXECUTION01-CORRECTION02:
  * The previous per-stream cap allowed `2 × MAX_RESPONSE_OUTPUT_CHARS`
  * to leak into the model context. The function now allocates a single
- * total budget across both streams, with a deterministic truncate
- * order: stderr first (model context is usually dominated by stdout),
- * stdout only if it still exceeds the remaining budget.
+ * total budget across both streams, with a deterministic priority:
+ *
+ *   - stderr is preserved first (it is the diagnostic signal; loss
+ *     of stderr obscures failure modes),
+ *   - stdout gets the remainder of the stream budget,
+ *   - whatever overflows is dropped, with `outputTruncated=true`.
+ *
+ * ACT-CLINEMM-TRUSTED-BOUNDED-COMMAND-EXECUTION01-CORRECTION03
+ * (cleanup): the docblock no longer contradicts itself. The actual
+ * priority is stderr > stdout, which is what the allocation code
+ * implements.
  */
 function projectResponseSnapshot(snap: CommandJobSnapshot, maxResponseOutputChars: number): CommandJobSnapshot {
 	const stdoutRaw = snap.stdout
@@ -237,9 +245,10 @@ function projectResponseSnapshot(snap: CommandJobSnapshot, maxResponseOutputChar
 	// Reserve budget for the separator; the rest is split between
 	// stdout and stderr.
 	const streamTotal = Math.max(0, maxResponseOutputChars - separatorLength)
-	// Allocate stderr first (it's the smaller stream in our case), then
-	// stdout gets the remainder. This preserves run_commands' historical
-	// preference for stdout.
+	// Allocate stderr first (diagnostic priority). Then stdout gets
+	// whatever remains. This means a large stderr can shrink stdout
+	// to zero — the diagnostic signal is preserved at the cost of
+	// some stdout content. Documented contract.
 	const stderrCap = stderrRaw.length > 0 ? Math.min(stderrRaw.length, streamTotal) : 0
 	const stdoutCap = Math.max(0, streamTotal - stderrCap)
 
@@ -284,6 +293,16 @@ interface CommandJob {
 	 */
 	terminationPromise?: Promise<void>
 	finalized: boolean
+
+	/**
+	 * CORRECTION03: set when the process tree was not observed gone
+	 * after the grace + SIGKILL sequence. This is a diagnostic flag
+	 * indicating an exceptional condition (stuck kernel, setpgid()
+	 * escape, or sandbox-swallowed signals). The job is still
+	 * considered terminal from the manager's perspective; the flag
+	 * is observable through the snapshot for telemetry.
+	 */
+	treeEscapee?: boolean
 
 	/** Tracked so finalize() can clear them — no leftover listeners. */
 	deadlineTimer?: NodeJS.Timeout
@@ -480,41 +499,43 @@ export class CommandJobManager {
 	}
 
 	private async runTerminationSequence(job: CommandJob): Promise<void> {
-		// Step 1: SIGTERM (best-effort; on Windows we fall through).
-		try {
-			if (job.process.pid && process.platform !== "win32") {
-				process.kill(-job.process.pid, "SIGTERM")
-			}
-		} catch {
-			// Process may already be gone — the exit promise will resolve.
-		}
-		// Step 2: race the grace window against the process exit. If the
-		// child cooperates, stop here. Never issue SIGKILL to a PID that
-		// has already terminated — that's a classic process-
-		// supervision hazard (PID reuse, group-ID reuse).
-		let exited = false
-		const exitWatch = job.process.exit.then(
-			() => {
-				exited = true
-			},
-			() => {
-				exited = true
-			},
-		)
-		let graceTimer: NodeJS.Timeout | undefined
-		const graceTimeout = new Promise<void>((resolve) => {
-			graceTimer = setTimeout(resolve, TERM_GRACE_MS)
-			graceTimer.unref()
+		// CORRECTION03 P0: terminate the OWNED PROCESS TREE, not just
+		// the shell's exit promise. The previous implementation raced
+		// against `job.process.exit` and skipped the SIGKILL escalation
+		// whenever the shell cooperated — even if SIGTERM-ignoring
+		// descendants remained in the owned process group.
+		//
+		// The primitive handles PGID existence polling and SIGKILL
+		// escalation internally (see SupervisableShellProcess.terminateTree).
+		// The manager's job here is to:
+		//   1) ask the primitive to terminate the tree
+		//   2) await the canonical terminal transition so the caller
+		//      (cancel/deadline) can read job.state directly without
+		//      synthesizing it.
+		const treeResult = await job.process.terminateTree({
+			gracefulSignal: "SIGTERM",
+			graceMs: TERM_GRACE_MS,
 		})
-		await Promise.race([exitWatch, graceTimeout])
-		// Clear the side that lost the race so we don't keep a timer
-		// (graceTimer) or an unawaited promise (exitWatch) alive past
-		// this point. The other side has already done its work.
-		if (graceTimer) {
-			clearTimeout(graceTimer)
+		// After terminateTree resolves, the tree is observed gone OR
+		// the escalation completed. The shell's exit promise will
+		// resolve shortly (the shell was part of the tree). Await it
+		// so the caller can read job.state as the canonical terminal
+		// state — fixes P1 (synthesized state before finalization).
+		try {
+			await job.process.exit
+		} catch {
+			// Spawn failure or kill-induced exit; finalize() will have
+			// already handled classification.
 		}
-		if (!exited) {
-			await job.process.killTree()
+		// Surface the tree outcome through the job for telemetry/diagnostics.
+		if (!treeResult.treeTerminated) {
+			// The OS still reports the PG as existing after grace +
+			// SIGKILL. This is exceptional — typically a stuck kernel
+			// state, a process that called setpgid() to escape our
+			// group, or a sandbox that swallowed signals. Record it
+			// as a structured detail so the caller can diagnose; do
+			// not retry (no further escalation is safe here).
+			job.treeEscapee = true
 		}
 	}
 
@@ -605,6 +626,16 @@ export class CommandJobManager {
 	/**
 	 * Cancel a running job. Idempotent: re-cancelling a terminal or
 	 * already-cancelled job is a no-op.
+	 *
+	 * CORRECTION03 P1: by the time `terminate()` returns, the
+	 * process tree has been observed gone (grace + escalation),
+	 * `job.process.exit` has resolved, and `finalize()` has set
+	 * `job.state` to its canonical terminal value (e.g. "cancelled").
+	 * We return that value directly — no synthesis. The earlier
+	 * `job.state === "running" ? "cancelled" : job.state` formula
+	 * could briefly report "cancelled" while `job.state` was still
+	 * "running", since killTree() only sends the kill and does not
+	 * await the subsequent close event.
 	 */
 	async cancel(
 		options: CancelCommandJobOptions,
@@ -617,7 +648,7 @@ export class CommandJobManager {
 			return { ok: true, state: job.state }
 		}
 		await this.terminate(job, "cancel")
-		return { ok: true, state: job.state === "running" ? "cancelled" : job.state }
+		return { ok: true, state: job.state }
 	}
 
 	private lookup(jobId: string): CommandJob | undefined {

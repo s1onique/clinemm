@@ -140,15 +140,64 @@ function createRollingCollector(maxChars: number) {
  */
 export interface SupervisableShellProcess {
 	/** Resolves when the child exits; rejects on spawn failure. */
-	readonly exit: Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>;
+	readonly exit: Promise<{
+		exitCode: number | null;
+		signal: NodeJS.Signals | null;
+	}>;
 	/** Terminate the owned process tree. Idempotent. */
 	killTree(): Promise<void>;
+	/**
+	 * Send `gracefulSignal` to the OWNED PROCESS TREE (POSIX: the
+	 * process group whose leader is the spawned shell; Windows: the
+	 * shell + descendants reachable via `taskkill /T /F`), wait up
+	 * to `graceMs` for the entire tree to terminate, then escalate
+	 * to SIGKILL on the tree if any descendant is still alive.
+	 *
+	 * Resolves only after the entire owned tree is gone (or escalation
+	 * completed and a hard deadline elapsed). The result reports
+	 * whether escalation to a forceful signal was needed.
+	 *
+	 * The grace race watches PROCESS GROUP EXISTENCE, not just the
+	 * shell's exit promise. This is the CORRECTION03 invariant: a
+	 * child that exits but leaves a SIGTERM-ignoring descendant in
+	 * the owned process group MUST NOT suppress the SIGKILL escalation.
+	 *
+	 * Idempotent. Calling `terminateTree` while another is in flight
+	 * returns the existing promise.
+	 *
+	 * ACT-CLINEMM-TRUSTED-BOUNDED-COMMAND-EXECUTION01-CORRECTION03:
+	 * This primitive exists because the higher-level supervisor
+	 * previously raced against `exit` (the shell's exit promise) and
+	 * skipped the SIGKILL escalation whenever the shell cooperated,
+	 * even if descendants remained alive.
+	 */
+	terminateTree(opts: {
+		gracefulSignal: NodeJS.Signals;
+		graceMs: number;
+	}): Promise<TerminateTreeResult>;
 	/** Snapshot of retained stdout (truncated to maxOutputChars). */
 	stdoutSnapshot(): { text: string; totalChars: number; dropped: boolean };
 	/** Snapshot of retained stderr (truncated to maxOutputChars). */
 	stderrSnapshot(): { text: string; totalChars: number; dropped: boolean };
 	/** PID of the spawned child, or undefined if spawn failed. */
 	readonly pid: number | undefined;
+}
+
+/**
+ * Result of a `terminateTree` call.
+ *
+ * - `treeTerminated` is true when the entire owned process tree was
+ *   observed gone (POSIX: ESRCH on PGID probe; Windows: taskkill
+ *   completed) within `graceMs`.
+ * - `escalatedToKill` is true when the grace expired and a forceful
+ *   signal had to be issued to the tree.
+ *
+ * Both flags are observable to callers; the supervisor does not
+ * silently swallow tree state.
+ */
+export interface TerminateTreeResult {
+	treeTerminated: boolean;
+	escalatedToKill: boolean;
 }
 
 function buildShellProcess(
@@ -176,15 +225,19 @@ function buildShellProcess(
 	const stderr = createRollingCollector(maxOutputChars);
 	let killed = false;
 
-	let exitResolve!: (value: { exitCode: number | null; signal: NodeJS.Signals | null }) => void;
+	let exitResolve!: (value: {
+		exitCode: number | null;
+		signal: NodeJS.Signals | null;
+	}) => void;
 	let exitReject!: (error: Error) => void;
 
-	const exitPromise = new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>(
-		(resolve, reject) => {
-			exitResolve = resolve;
-			exitReject = reject;
-		},
-	);
+	const exitPromise = new Promise<{
+		exitCode: number | null;
+		signal: NodeJS.Signals | null;
+	}>((resolve, reject) => {
+		exitResolve = resolve;
+		exitReject = reject;
+	});
 
 	const killProcessTree = async (): Promise<void> => {
 		if (!childPid) return;
@@ -232,6 +285,123 @@ function buildShellProcess(
 		}
 	};
 
+	/**
+	 * POSIX: probe whether a process group with the given PGID still
+	 * exists. Uses `process.kill(-pgid, 0)` which returns:
+	 *   - no error   → group exists
+	 *   - ESRCH      → group does not exist (every member terminated)
+	 *   - EPERM      → group exists but we cannot signal it
+	 *
+	 * PGID-reuse safety: a PGID is freed only when ALL processes in
+	 * that group have terminated, by POSIX semantics. So observing
+	 * ESRCH on `-pgid` is a sound "tree is gone" signal for the
+	 * duration of our ownership window (the OS will not reassign a
+	 * freed PGID while any descendant remains).
+	 *
+	 * Note: this does not detect a descendant that has called
+	 * `setpgid()` to escape into a different process group. The
+	 * supervisor does not attempt to follow such a child — once a
+	 * child opts out of our group, the host cannot reclaim it
+	 * without explicit PID tracking, which is out of scope here.
+	 */
+	const probePgidExists = (pgid: number): boolean => {
+		try {
+			process.kill(-pgid, 0);
+			return true;
+		} catch (err: unknown) {
+			const code = (err as NodeJS.ErrnoException).code;
+			if (code === "ESRCH") return false;
+			// EPERM, EINVAL, etc.: treat as "still exists" so we
+			// don't prematurely stop waiting on the grace window.
+			return true;
+		}
+	};
+
+	/**
+	 * Send `signal` to the owned process group. No-op if the group is
+	 * already gone. Never throws.
+	 */
+	const signalGroup = (signal: NodeJS.Signals): void => {
+		if (!childPid) return;
+		try {
+			process.kill(-childPid, signal);
+		} catch {
+			// Group already gone, or we lack permission; both are
+			// best-effort for the graceful signal.
+		}
+	};
+
+	/**
+	 * Wait up to `graceMs` for the PG to vanish, polling every 50ms.
+	 * Resolves with `true` if the group was observed gone within the
+	 * window, `false` otherwise.
+	 */
+	const waitForGroupGone = async (
+		pgid: number,
+		graceMs: number,
+	): Promise<boolean> => {
+		const startMs = Date.now();
+		while (Date.now() - startMs < graceMs) {
+			if (!probePgidExists(pgid)) return true;
+			await new Promise((r) => setTimeout(r, 50));
+		}
+		return !probePgidExists(pgid);
+	};
+
+	let terminateInFlight: Promise<TerminateTreeResult> | undefined;
+	const terminateTree = async (opts: {
+		gracefulSignal: NodeJS.Signals;
+		graceMs: number;
+	}): Promise<TerminateTreeResult> => {
+		if (terminateInFlight) return terminateInFlight;
+		terminateInFlight = (async () => {
+			if (!childPid) {
+				return { treeTerminated: true, escalatedToKill: false };
+			}
+			// POSIX: race PGID existence against the grace window.
+			// Windows: defer to taskkill + wait via the existing path.
+			if (isWindows) {
+				// On Windows there is no portable PGID probe. Issue
+				// the graceful signal directly to the shell, then
+				// wait for the exit promise, then escalate via the
+				// existing killTree path. The shell's descendants
+				// will be torn down by the taskkill /T flag in
+				// killProcessTree.
+				try {
+					child.kill(opts.gracefulSignal);
+				} catch {
+					// Already gone.
+				}
+				const exited = await Promise.race([
+					exitPromise.then(
+						() => true,
+						() => true,
+					),
+					new Promise<boolean>((resolve) =>
+						setTimeout(() => resolve(false), opts.graceMs),
+					),
+				]);
+				if (exited) {
+					return { treeTerminated: true, escalatedToKill: false };
+				}
+				await killProcessTree();
+				return { treeTerminated: true, escalatedToKill: true };
+			}
+			// POSIX: send to the owned PG, not just the leader.
+			signalGroup(opts.gracefulSignal);
+			const treeTerminated = await waitForGroupGone(childPid, opts.graceMs);
+			if (treeTerminated) {
+				return { treeTerminated: true, escalatedToKill: false };
+			}
+			// Grace expired: escalate. SIGKILL on the PG, then wait
+			// again (up to graceMs) for the group to vanish.
+			signalGroup("SIGKILL");
+			const finalGone = await waitForGroupGone(childPid, opts.graceMs);
+			return { treeTerminated: finalGone, escalatedToKill: true };
+		})();
+		return terminateInFlight;
+	};
+
 	child.stdout?.on("data", (data: Buffer) => {
 		stdout.append(data);
 	});
@@ -266,6 +436,7 @@ function buildShellProcess(
 			killed = true;
 			await killProcessTree();
 		},
+		terminateTree,
 	};
 }
 
