@@ -109,8 +109,56 @@
       "privacy_proof_passes": true
     },
     "stage_2_classification": {
-      "status": "NOT_STARTED",
-      "details": "ToolRuntimeOutcome discriminator + failure-classifier.ts with provenance-first authority at AgentRuntime.executePreparedTool boundary"
+      "status": "FROZEN",
+      "frozen_at": "C1.1 boundary-model correction accepted",
+      "frozen_note": "Classifier contract is locked. Future bugs are now in the runtime adapter (how AgentRuntime constructs ToolOutcomeClassificationInput), not in the classifier itself. C1.2 proves adapter truth; C1.1 stays frozen.",
+      "classifier_owner": "sdk/packages/agents/src/runtime/recovery/failure-classifier.ts",
+      "helper_module": "sdk/packages/agents/src/runtime/recovery/failure-code.ts",
+      "classification_authority": "local typed ToolRuntimeOutcome",
+      "metadata_authority": false,
+      "unknown_code_policy": "familyEligible=false",
+      "control_plane_structural_exclusion": true,
+      "runtime_skipped_added": true,
+      "shared_enum_delta": "ControlPlaneOutcome gained runtime_skipped member",
+      "boundary_model": {
+        "input_provenances": [
+          "toolExists — registry lookup result",
+          "toolExecutionInvoked — whether tool.execute(...) was actually called",
+          "inputParseError — parse provenance (no prose scrape)",
+          "skipReason — free-form skip reason",
+          "executionError — verbatim throw",
+          "result.isError / result.exitCode — result-level failure",
+          "controlPlaneOutcome — explicit control-plane signal"
+        ],
+        "registry_miss_semantics": "toolExists=false fires Priority 2 regardless of toolExecutionInvoked; production-truthful fixture is toolExists=false ∧ toolExecutionInvoked=false",
+        "runtime_skip_semantics": "toolExecutionInvoked=false only reaches Priority 4 once toolExists=true has been proven at Priority 2"
+      },
+      "p0_corrections_applied": [
+        "parse-error provenance returns unknown/fallback/familyEligible=false when only prose is available (no schema:missing_required inference from text)",
+        "ENOENT handoff test now uses outcome.toolName and pins exact canonical control-family string",
+        "err.code policy documented honestly (any string code is structured; ENOENT/EACCES is a typed shortcut, not a conservative allowlist)",
+        "boundary model split: executionAttempted → toolExecutionInvoked; toolExists now drives Priority 2 alone",
+        "registry-miss fixture is now production-truthful: toolExists=false ∧ toolExecutionInvoked=false → tool_not_found (NOT runtime_skipped)",
+        "mutually exclusive invariant tests: unknown-tool / real-tool-skipped / real-tool-thrown"
+      ],
+      "p1_corrections_applied": [
+        "toolExecutionInvoked=false structurally emits control_plane / runtime_skipped (no longer a failure)",
+        "explicit user_rejected / host_policy_denied outrank runtime_skipped, isError=true regression pin added",
+        "low-level readErrorCode / classifyErrnoCode no longer re-exported from the classifier module (kept internal in failure-code.ts)"
+      ],
+      "factorization": "extracted readErrorCode / classifyErrnoCode / shape constructors into failure-code.ts (93 LOC) to reduce classifier from 487 to ~286 LOC",
+      "tests": {
+        "classifier": 44,
+        "recovery_total": 101,
+        "agents_total": 171,
+        "stage_1_unchanged": true,
+        "mutually_exclusive_fixtures": [
+          "unknown tool → tool_not_found (toolExists=false ∧ toolExecutionInvoked=false)",
+          "real tool skipped → runtime_skipped (toolExists=true ∧ toolExecutionInvoked=false)",
+          "real tool executed and threw → tool_execution_error (toolExists=true ∧ toolExecutionInvoked=true)"
+        ]
+      },
+      "details": "ToolRuntimeOutcome discriminator + failure-classifier.ts with provenance-first authority at AgentRuntime.executePreparedTool boundary. Pure, stateless, browser-safe. AgentRuntime integration NOT wired in this stage. Stage-1 57 tests still green. All P0/P1 corrections from C1.1 review applied; registry-miss and runtime-skip are now structurally distinct via the toolExists / toolExecutionInvoked boundary model."
     },
     "stage_3_typed_exhaustion": {
       "status": "NOT_STARTED",
@@ -168,10 +216,65 @@
     "model_facing_notice_surface": "tool-result message (NOT status-notice event)",
     "host_observability_surface": "AgentRuntimeEvent recovery-state-changed variant",
     "metadata_classification_role": "projection only, NOT authority",
-    "boundary_mechanism": "tracker-internal projection maps; legacy string overloads pass-through (no privacy expectations)",
+    "boundary_mechanism": "tracker-internal projection maps; legacy string overloads are now private with projection unconditionally hashing stored labels to 8-char hex on the public surface (no pass-through path)",
     "collision_resistance": "32-bit collision resistance is for telemetry only; circuit decisions use unbounded canonical control identity"
   },
-  "next_review_point": "Stage 2 \u2014 C1.1 ToolRuntimeOutcome classifier matrix",
+  "next_review_point": "Stage 4 \u2014 C1.2 REAL AgentRuntime integration",
+  "c1_2_entry_gate": {
+    "purpose": "C1.1 proves the classifier contract. C1.2 must prove the real AgentRuntime supplies truthful ToolOutcomeClassificationInput values. Three mechanical gates before any RecoveryTracker wiring.",
+    "gate_1_mechanical_invocation": {
+      "name": "toolExecutionInvoked must be a local boolean set by the actual call, not inferred from surrounding state",
+      "before": [
+        "inferring toolExecutionInvoked from `result exists / skipReason absent / prepared.tool exists` is unsafe"
+      ],
+      "after": [
+        "let toolExecutionInvoked = false",
+        "try { toolExecutionInvoked = true; result = await prepared.tool.execute(...) }",
+        "the classifier receives the actual execution truth"
+      ],
+      "table": {
+        "unknown tool": "false",
+        "input rejection": "false",
+        "policy / hook / approval skip": "false",
+        "executor throw": "true",
+        "executor success": "true"
+      }
+    },
+    "gate_2_no_exit_code_fabrication": {
+      "name": "Do not invent exitCode from result text",
+      "proven_by_c1_1": "classifier supports `result: { isError: true, exitCode: 127 }` but C1.1 deliberately did NOT prove current production AgentToolResult exposes a native exitCode field",
+      "required_proof_in_c1_2": "AGENT_TOOL_RESULT_EXIT_CODE_PROVENANCE = STRUCTURED_FIELD | NOT_AVAILABLE | FUTURE",
+      "if_structured_field": "map it to result.exitCode directly; family = run_commands:tool_execution_error:<code>",
+      "if_not_available": "do NOT parse \"exit code 127\" from output text; classify conservatively as unknown / fallback / familyEligible=false",
+      "rationale": "same anti-false-merge policy we applied to schema errors; never infer typed structure from prose"
+    },
+    "gate_3_explicit_control_plane_provenance": {
+      "name": "Surpass the generic runtime_skipped fallback when the runtime actually knows more",
+      "fallback_only_for": "known tool / not executed / no richer reason supplied",
+      "richer_paths_must_be_explicit": {
+        "host_policy_denied": "hard host DENY",
+        "user_rejected": "user NO response",
+        "approval_pending": "waiting for approval",
+        "runtime_aborted": "abort signal received"
+      },
+      "rationale": "do NOT route everything through runtime_skipped merely because it would technically keep it outside recovery; the distinction will matter later for runtime telemetry and debugging"
+    },
+    "real_adapter_fixture_matrix": {
+      "drives_through_real_seam": "AgentRuntime.prepareToolExecution / executePreparedTool",
+      "before_tracker_wiring": true,
+      "fixtures": [
+        { "real_runtime_scenario": "unknown tool", "expected_input": { "toolExists": false, "toolExecutionInvoked": false }, "expected_outcome": "tool_not_found" },
+        { "real_runtime_scenario": "parser failure", "expected_input": { "toolExists": true, "toolExecutionInvoked": false, "inputParseError": "..." }, "expected_outcome": "tool_input_invalid" },
+        { "real_runtime_scenario": "hook / policy generic skip", "expected_input": { "toolExists": true, "toolExecutionInvoked": false }, "expected_outcome": "runtime_skipped" },
+        { "real_runtime_scenario": "hard DENY", "expected_input": { "toolExists": true, "toolExecutionInvoked": false, "controlPlaneOutcome": "host_policy_denied" }, "expected_outcome": "host_policy_denied" },
+        { "real_runtime_scenario": "user reject", "expected_input": { "toolExists": true, "toolExecutionInvoked": false, "controlPlaneOutcome": "user_rejected" }, "expected_outcome": "user_rejected" },
+        { "real_runtime_scenario": "executor ENOENT", "expected_input": { "toolExists": true, "toolExecutionInvoked": true, "executionError": "{ code: 'ENOENT' }" }, "expected_outcome": "ENOENT (run_commands:tool_execution_error:ENOENT family)" },
+        { "real_runtime_scenario": "executor opaque throw", "expected_input": { "toolExists": true, "toolExecutionInvoked": true, "executionError": "{ message: 'no code' }" }, "expected_outcome": "unknown / fallback / familyEligible=false" },
+        { "real_runtime_scenario": "success", "expected_input": { "toolExists": true, "toolExecutionInvoked": true }, "expected_outcome": "success" }
+      ],
+      "only_after_passing_all": "C1.2 may connect outcomes to RecoveryTracker"
+    }
+  },
   "do_not_map_retries_note": "CLI --retries = broad consecutive mistake ceiling. maxRepairAttempts = narrow same-recovery-family convergence budget. Compose, do not alias.",
   "checks": [
     {

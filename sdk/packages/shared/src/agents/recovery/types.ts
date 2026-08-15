@@ -35,7 +35,15 @@ export type ControlPlaneOutcome =
 	| "provider_transport_error"
 	| "context_length_exceeded"
 	| "task_cancelled"
-	| "runtime_aborted";
+	| "runtime_aborted"
+	/**
+	 * The tool was never executed (prepare-tool short-circuit). Captures
+	 * policy-disabled, hook-skip, and any other path where the
+	 * boundary did not invoke `tool.execute(...)`. More-specific
+	 * outcomes (user_rejected, host_policy_denied, approval_pending)
+	 * still outrank this.
+	 */
+	| "runtime_skipped";
 
 export type ToolFailureReason = ToolFailureClass | ControlPlaneOutcome;
 

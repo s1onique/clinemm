@@ -3,10 +3,11 @@
  *
  *   @cline/agents
  *   └─ runtime/recovery/
- *      ├─ fingerprint.ts  (browser-compatible deterministic identity)
- *      ├─ policy.ts       (recovery policy configuration)
- *      ├─ tracker.ts      (state machine: idle/recovering/warning/circuit_open)
- *      └─ index.ts        (this file — public surface)
+ *      ├─ fingerprint.ts          (browser-compatible deterministic identity)
+ *      ├─ policy.ts               (recovery policy configuration)
+ *      ├─ tracker.ts              (state machine: idle/recovering/warning/circuit_open)
+ *      ├─ failure-classifier.ts   (provenance-first C1.1 classifier)
+ *      └─ index.ts                (this file — public surface)
  *
  * Contract types live in @cline/shared (no Node builtins).
  */
@@ -51,3 +52,11 @@ export {
 } from "./policy";
 
 export { RecoveryTracker } from "./tracker";
+
+export {
+	classifyToolRuntimeOutcome,
+	isRecoverableToolFailure,
+	toRecoveryClassification,
+	serializeStableFailureCode,
+	type ToolOutcomeClassificationInput,
+} from "./failure-classifier";
