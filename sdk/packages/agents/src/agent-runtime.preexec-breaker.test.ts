@@ -350,21 +350,80 @@ describe("AgentRuntime / C1.3 breaker matrix", () => {
 // ============================================================================
 
 describe("AgentRuntime / C1.3 unknown-tool & TBCE boundary", () => {
-	it("UNKNOWN_TOOL_BOUNDED: unknown-tool proposals never invoke a real executor", async () => {
+	it("UNKNOWN_TOOL_EXACT_REPEAT_BOUNDED: identical unknown-tool proposal is intercepted by the pre-exec breaker after 3 failures", async () => {
+		// 5 IDENTICAL proposals for a non-registered tool. The runtime
+		// must not actually invoke any real executor (the tool is
+		// unknown), but the C1.3 pre-exec breaker must still intercept
+		// the 4th and 5th proposals and route them as
+		// `control_plane / runtime_skipped` because the substrate has
+		// already seen 3 family-eligible failures for the same
+		// canonical-key attempt identity.
+		const proposals = [
+			{ toolCallId: "u-1", toolName: "ghost_tool", input: { x: 1 } },
+			{ toolCallId: "u-2", toolName: "ghost_tool", input: { x: 1 } },
+			{ toolCallId: "u-3", toolName: "ghost_tool", input: { x: 1 } },
+			{ toolCallId: "u-4", toolName: "ghost_tool", input: { x: 1 } },
+			{ toolCallId: "u-5", toolName: "ghost_tool", input: { x: 1 } },
+		];
+		const executorCalls = { count: 0 };
+		const { captured, recoverySnapshot } = await driveRepeatedProposals(
+			proposals,
+			[createEchoTool(executorCalls)],
+		);
+		// The unknown-tool path never enters a real executor (the tool
+		// is not registered); the `count` is here to assert the
+		// non-invocation regardless of breaker state.
+		expect(executorCalls.count).toBe(0);
+		// First three proposals: family-eligible failures, output of
+		// `failure / tool_not_found` (Priority 2 of the classifier).
+		for (const id of ["u-1", "u-2", "u-3"]) {
+			const out = expectCaptured(captured, id);
+			expect(out.kind).toBe("failure");
+		}
+		// Fourth and fifth proposals: the substrate's exhausted exact
+		// key now blocks the attempt at the pre-execution stage; the
+		// runtime must route these as `control_plane / runtime_skipped`
+		// (NOT `failure`).
+		const u4 = expectCaptured(captured, "u-4");
+		expect(u4.kind).toBe("control_plane");
+		if (u4.kind === "control_plane") {
+			expect(u4.outcome).toBe("runtime_skipped");
+		}
+		const u5 = expectCaptured(captured, "u-5");
+		expect(u5.kind).toBe("control_plane");
+		// Once the breaker trips, the visible state lands on
+		// `circuit_open` and the runtime's circuit notice count is
+		// exactly 1 (subsequent intercepts are no-ops at the tracker
+		// layer).
+		expect(recoverySnapshot.state).toBe("circuit_open");
+		expect(recoverySnapshot.circuitNoticeCount).toBe(1);
+	});
+
+	it("UNKNOWN_TOOL_CHANGED_INPUT_DOES_NOT_FAKE_EXECUTION: varying inputs never invoke a real executor", async () => {
+		// Different inputs each get distinct exact-key identities, so
+		// every proposal lands as `failure / tool_not_found` — the
+		// breaker never trips (no key is exhausted). This is the
+		// minimal non-execution guarantee for unknown tools; it does
+		// NOT exercise the exact-repeat breaker.
 		const proposals = Array.from({ length: 5 }, (_, i) => ({
-			toolCallId: `u-${i + 1}`,
+			toolCallId: `v-${i + 1}`,
 			toolName: "ghost_tool",
 			input: { i },
 		}));
 		const executorCalls = { count: 0 };
-		const { captured } = await driveRepeatedProposals(proposals, [
-			createEchoTool(executorCalls),
-		]);
+		const { captured, recoverySnapshot } = await driveRepeatedProposals(
+			proposals,
+			[createEchoTool(executorCalls)],
+		);
 		expect(executorCalls.count).toBe(0);
-		for (let i = 0; i < proposals.length; i += 1) {
-			const out = expectCaptured(captured, `u-${i + 1}`);
+		for (const id of ["v-1", "v-2", "v-3", "v-4", "v-5"]) {
+			const out = expectCaptured(captured, id);
 			expect(out.kind).toBe("failure");
 		}
+		// No exhaustion: state stays recoverable and the exact-only
+		// budget map is empty (unknown-tool failures are family-eligible
+		// via the C1.1 typed helper path, not exact-only).
+		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(0);
 	});
 
 	it("OPAQUE_EXACT_ONLY", async () => {
@@ -581,7 +640,15 @@ describe("AgentRuntime / C1.3 parallel breaker isolation", () => {
 // ============================================================================
 
 describe("AgentRuntime / C1.3 mandatory mutation tests", () => {
-	it("MUTATION_PREEXEC_CHECK_REMOVED_bites: structural link to isAttemptBlockedIdentity is present", async () => {
+	// STRUCTURAL_SMOKE: These grep-based tests are weak evidence
+	// by themselves (they can match a method definition rather than
+	// the breaker call site). The strong evidence is the empirical
+	// mutation tests below: bypassing the gate and moving it
+	// post-execution both bite the load-bearing test suite.
+	// STRUCTURAL_SMOKE is included only as a cheap regression
+	// sentinel so a future refactor cannot silently relocate the
+	// gate without an immediate test failure.
+	it("STRUCTURAL_SMOKE_PREEXEC_GATE_PRESENT: pre-execution gate calls isAttemptBlockedByRecovery / isExactBlockedIdentity / exactOnlyBudget", async () => {
 		const fs = await import("node:fs/promises");
 		const path = await import("node:path");
 		const file = path.join(import.meta.dirname, "agent-runtime.ts");
@@ -591,7 +658,7 @@ describe("AgentRuntime / C1.3 mandatory mutation tests", () => {
 		expect(raw).toMatch(/exactOnlyBudget\.get\(/);
 	});
 
-	it("MUTATION_CHECK_MOVED_POSTEXEC_bites: gate precedes the awaited tool.execute(...)", async () => {
+	it("STRUCTURAL_SMOKE_GATE_PRECEDES_EXECUTOR: gate call site precedes prepared.tool.execute(...) in source order", async () => {
 		const fs = await import("node:fs/promises");
 		const path = await import("node:path");
 		const file = path.join(import.meta.dirname, "agent-runtime.ts");

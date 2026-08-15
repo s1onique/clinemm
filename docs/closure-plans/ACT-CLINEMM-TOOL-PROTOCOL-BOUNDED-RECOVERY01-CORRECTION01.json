@@ -540,8 +540,8 @@
     "scope_observed": {
       "tracker_owner": "AgentRuntime private field `recoveryTracker = new RecoveryTracker(new RecoveryPolicy(DEFAULT_RECOVERY_POLICY))`. One tracker per runtime instance; no module global.",
       "attempt_identity_source": "createAttemptIdentity(toolCall.toolName, prepared.input) computed immediately before the executePreparedTool executor call. Same canonical form as the executor.",
-      "pre_execution_gate": "isAttemptBlockedByRecovery(attemptIdentity) check BEFORE tool.execute(prepared.input, ...). Returns `true` if the substrate marks the exact key blocked OR the exact-only budget counter for opaque failures > maxRepairAttempts.",
-      "blocked_result": "Synthesised control_plane / runtime_skipped outcome via structured-result. toolExecutionInvoked remains `false`. The classifier's Priority-4 path classifies the blocked attempt as control_plane / runtime_skipped, structurally excluding it from recordFailureIdentity.",
+      "pre_execution_gate": "isAttemptBlockedByRecovery(attemptIdentity) check BEFORE tool.execute(prepared.input, ...). The check is positioned BEFORE the `else if (!prepared.tool)` branch so that unknown-tool proposals whose exact identity has already exhausted the budget are intercepted by the same code path as known tools. Returns `true` if the substrate marks the exact key blocked OR the exact-only budget counter for opaque failures > maxRepairAttempts.",
+      "blocked_result": "Synthesised control_plane / runtime_skipped outcome via structured-result. toolExecutionInvoked remains `false`. `runtimeControlPlaneOutcome = selectControlPlaneOutcome({ explicitSkip: 'runtime_skipped' })` is set so the classifier's Priority-1 (controlPlaneOutcome) outranks Priority-2 (toolExists=false) and the blocked attempt is correctly classified as control_plane / runtime_skipped — structurally excluding it from any recordFailureIdentity handoff.",
       "blocked_message_shape": "{ code: 'bounded_recovery_exhausted', tool: <name>, message: 'Equivalent tool execution was blocked because the repair budget for this attempt is exhausted.' }",
       "post_classification_routing": "applyRecoveryPostClassification branches structurally on runtimeOutcome.kind: success -> recordToolSuccess; control_plane -> no budget consumption; failure(familyEligible) -> recordFailureIdentity via typed helpers; failure(familyIneligible) -> exactOnlyBudget map (anti-merge).",
       "warning_to_circuit_open_transition": "First recorded blocked attempt transitions `warning` -> `circuit_open` exactly once via recordBlockedAttemptIdentity's natural re-anchoring. Subsequent intercepted attempts are no-ops at the substrate level."
@@ -558,10 +558,17 @@
       "NO new recovery taxonomy",
       "NO second-stage breaker"
     ],
+    "qualification": "C1.3 bounds TOOL EXECUTION for already-known exact attempts. It DOES NOT yet bound: provider requests, model turns, fresh-input same-family convergence, exactOnlyBudget map cardinality over an unbounded loop. Closing these is C1.4's scope.",
+    "post_freeze_correction": {
+      "trigger": "External review found that the unknown-tool test was incorrectly named UNKNOWN_TOOL_BOUNDED but used DIFFERENT inputs per proposal, which actually proved 'no executor calls ever happen for unknown tools' — not 'an identical repeat is recovery-bounded'. The reviewer also pointed out that the runtime's pre-exec gate was located INSIDE the `else if (prepared.tool)` branch, so it could never fire for unknown tools.",
+      "fix": "Production: moved the pre-exec gate so it runs BEFORE the `else if (!prepared.tool)` branch (so unknown-tool proposals with exhausted canonical keys are intercepted by the same code path as known tools). Added runtimeControlPlaneOutcome = selectControlPlaneOutcome({ explicitSkip: 'runtime_skipped' }) so the classifier's Priority-1 outranks Priority-2 (`toolExists=false` → tool_not_found). Tests: replaced the misleading UNKNOWN_TOOL_BOUNDED with two truthful tests: UNKNOWN_TOOL_EXACT_REPEAT_BOUNDED (5 identical proposals → 3 failures + 2 control_plane/runtime_skipped, plus circuit_open + circuitNoticeCount=1) and UNKNOWN_TOOL_CHANGED_INPUT_DOES_NOT_FAKE_EXECUTION (5 distinct inputs → all failures, no executor calls, no exactOnlyBudget growth). Renamed the structural grep tests to STRUCTURAL_SMOKE_* to reflect their weak-by-themselves evidence character.",
+      "no_regression": "All 221 @cline/agents tests pass; 16 prior C1.3 tests unchanged; the 17 test slot is now the new UNKNOWN_TOOL_EXACT_REPEAT_BOUNDED. C1.3 stack traceable to ground truth through the existing tests + the new ones.",
+      "mutation_bite_count": "Mutation #1 (bypass the gate) now bites 14 tests (up from 10), reflecting the additional unknown-tool defense."
+    },
     "substrate_gap_at_entry": "SUPPORTED — RecoveryTracker already exposes isExactBlockedIdentity, markExactBlockedIdentity, recordFailureIdentity, recordBlockedAttemptIdentity, recordToolSuccess, snapshot, onStateChange. createAttemptIdentity and createFamilyIdentity already produce typed identities. No substrate extension was required; only runtime-local maps for exact-only opaque-failure accounting (per-canonical-key counters; no shared family) were added.",
     "test_mutation_proofs": {
-      "mutation_1_bypassing_preexec_gate": "Bites: 10/16 preexec-breaker tests fail when the gate call is short-circuited.",
-      "mutation_2_move_gate_after_executor": "Bites: 11/16 preexec-breaker tests fail when the gate decision is moved into the post-await path.",
+      "mutation_1_bypassing_preexec_gate": "Bites: 14/17 preexec-breaker tests fail when the gate call is short-circuited. Includes the new UNKNOWN_TOOL_EXACT_REPEAT_BOUNDED.",
+      "mutation_2_move_gate_after_executor": "Bites: 11/17 (in the new file); for the OLD test set before the unknown-tool split, mutation 2 also bit 11/16. The new test layout has the same gate-precedes-executor proof plus the additional unknown-tool proof.",
       "mutation_3_control_plane_routed_into_failure_recording": "Bites: HOST_DENY_DOES_NOT_CONSUME_REPAIR_BUDGET and USER_REJECT_DOES_NOT_CONSUME_REPAIR_BUDGET both fail when user_rejected / host_policy_denied outcomes are forwarded into recordFailureIdentity. State transitions from `idle` to `warning`.",
       "mutation_4_opaque_failures_collapsed_into_unknown_family": "Bites: OPAQUE_CHANGED_INPUT_NOT_MERGED fails (executorCalls=4 instead of 6) when familyEligible=false outcomes are routed through a shared tool_execution_error/unknown family. Confirms the anti-merge discipline."
     },
@@ -572,10 +579,10 @@
       "failure_classifier_existing": 44,
       "runtime_outcome_adapter_existing": 16,
       "agent_runtime_integration_existing": 17,
-      "agent_runtime_preexec_breaker_new": 16,
+      "agent_runtime_preexec_breaker_new": 17,
       "agent_runtime_existing": 57,
-      "core_runtime": 486,
-      "agents_total": 220
+      "core_runtime": 2066,
+      "agents_total": 221
     },
     "typecheck": {
       "@cline/agents": "PASS",
@@ -590,13 +597,13 @@
     },
     "lint": "PASS (biome, no errors-on-unmatched)",
     "diff_check": "PASS",
-    "production_loc_delta": "+192 net (228 inserts, 36 deletes in agent-runtime.ts)",
-    "test_loc_delta": "+665 lines (agent-runtime.preexec-breaker.test.ts new) + ~+23 in agent-runtime.outcome-integration.test.ts (C1.2 isolation test replaced with C1.3 wiring test).",
+    "production_loc_delta": "+~200 net (gate relocated before executor-miss branch + controlPlaneOutcome set + comment headers). 16 prior C1.3 mutations still bite; mutation #1 now bites 14 (up from 10) due to the unknown-tool defense.",
+    "test_loc_delta": "+~30 lines (one UNKNOWN_TOOL_BOUNDED test split into UNKNOWN_TOOL_EXACT_REPEAT_BOUNDED + UNKNOWN_TOOL_CHANGED_INPUT_DOES_NOT_FAKE_EXECUTION; structural grep tests renamed to STRUCTURAL_SMOKE_*).",
     "files_changed": [
-      "sdk/packages/agents/src/agent-runtime.ts (wiring + internal test seam)",
-      "sdk/packages/agents/src/agent-runtime.outcome-integration.test.ts (C1.2 isolation test replaced with C1.3 wiring test)",
-      "sdk/packages/agents/src/agent-runtime.preexec-breaker.test.ts (NEW)",
-      "docs/closure-plans/ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01.json (status update)"
+      "sdk/packages/agents/src/agent-runtime.ts (gate moved before executor-miss branch + runtimeControlPlaneOutcome set when gate intercepts)",
+      "sdk/packages/agents/src/agent-runtime.outcome-integration.test.ts (C1.2 isolation test replaced with C1.3 wiring test, unchanged in this microfix)",
+      "sdk/packages/agents/src/agent-runtime.preexec-breaker.test.ts (UNKNOWN_TOOL_BOUNDED replaced with two truthful tests; structural tests renamed)",
+      "docs/closure-plans/ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01.json (qualification + post-freeze correction recorded)"
     ]
   },
   "c1_3_carry_forward_guidance": {

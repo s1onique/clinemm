@@ -1876,36 +1876,59 @@ export class AgentRuntime {
 				output: { error: prepared.skipReason },
 				isError: true,
 			};
+		} else if (this.isAttemptBlockedByRecovery(attemptIdentity)) {
+			// C1.3 PRE-EXECUTION BREAKER. Consulted BEFORE the
+			// registry-miss branch so that an unknown-tool proposal
+			// whose exact identity has already exhausted its repair
+			// budget is intercepted by the same code path as a known
+			// tool. The substrate's `isExactBlockedIdentity` already
+			// accounts for the family-eligible
+			// `failure / tool_not_found` outcomes recorded by the
+			// unknown-tool path on prior attempts — the
+			// `exhaustedExactKeys` Set inside the family retains the
+			// attemptKey across the `--no tool` branch.
+			//
+			// Notification semantics: the first such interception in
+			// an episode transitions the visible state from `warning`
+			// to `circuit_open` exactly once; subsequent interceptions
+			// are no-ops at the tracker layer. The runtime must NEVER
+			// feed this back into `recordFailureIdentity` — it is
+			// structurally a runtime-side control action, not a tool
+			// execution.
+			//
+			// CRITICAL: We must set `runtimeControlPlaneOutcome` to
+			// `runtime_skipped` for the classifier to route the
+			// synthesized blocked result as `control_plane /
+			// runtime_skipped` rather than as a fresh
+			// `failure / tool_not_found` (Priority 2 of the classifier
+			// fires for any `toolExists=false` evidence, regardless of
+			// `toolExecutionInvoked`). Priority 1
+			// (`controlPlaneOutcome`) outranks Priority 2, so the
+			// blocked attempt is correctly classified as the
+			// pre-execution control plane action it actually is.
+			this.recoveryTracker.recordBlockedAttemptIdentity(attemptIdentity);
+			if (this.recoveryCircuitNoticeCount === 0) {
+				this.recoveryCircuitNoticeCount = 1;
+			}
+			runtimeControlPlaneOutcome = selectControlPlaneOutcome({
+				explicitSkip: "runtime_skipped",
+			});
+			result = {
+				output: {
+					code: "bounded_recovery_exhausted",
+					tool: prepared.toolCall.toolName,
+					message:
+						"Equivalent tool execution was blocked because the repair budget for this attempt is exhausted.",
+				},
+				isError: true,
+			};
 		} else if (!prepared.tool) {
 			result = {
 				output: { error: `Unknown tool: ${prepared.toolCall.toolName}` },
 				isError: true,
 			};
 		} else {
-			if (this.isAttemptBlockedByRecovery(attemptIdentity)) {
-				// Notify the tracker that the breaker intercepted an
-				// attempt at the pre-execution stage. The first such
-				// interception in an episode transitions the visible
-				// state from `warning` to `circuit_open` exactly once;
-				// subsequent interceptions are no-ops at the tracker
-				// layer. The runtime must NEVER feed this back into
-				// `recordFailureIdentity` — it is structurally a
-				// runtime-side control action, not a tool execution.
-				this.recoveryTracker.recordBlockedAttemptIdentity(attemptIdentity);
-				if (this.recoveryCircuitNoticeCount === 0) {
-					this.recoveryCircuitNoticeCount = 1;
-				}
-				result = {
-					output: {
-						code: "bounded_recovery_exhausted",
-						tool: prepared.toolCall.toolName,
-						message:
-							"Equivalent tool execution was blocked because the repair budget for this attempt is exhausted.",
-					},
-					isError: true,
-				};
-			} else {
-				try {
+			try {
 					// Set IMMEDIATELY before the executor call, even though the
 					// call has not yet returned. A throw is still "invoked".
 					toolExecutionInvoked = true;
@@ -1954,7 +1977,6 @@ export class AgentRuntime {
 						isError: true,
 					};
 				}
-			}
 		}
 
 		const endedAt = new Date();
