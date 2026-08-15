@@ -10,16 +10,19 @@ interface AutoApproveBarProps {
 }
 
 const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
-	const { autoApprovalSettings, sessionAutoApproval, sessionAutonomy, currentTaskItem } = useExtensionState()
+	const { autoApprovalSettings, sessionAutoApproval, sessionAutonomy, sessionAutoApprovalArmed, currentTaskItem } =
+		useExtensionState()
 
 	const [isModalVisible, setIsModalVisible] = useState(false)
 	const buttonRef = useRef<HTMLDivElement>(null)
 
-	// ACT-CLINEMM-SESSION-AUTONOMY01: surface the active session override
-	// in the bar summary so the user sees "ALL — this task" instead of
-	// the persisted category list while the projection is active.
+	// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
+	// Surface the active session override in the bar summary so the user sees
+	// "ALL — this task" or "Armed for next task" instead of the persisted
+	// category list while the projection is active.
 	const overrideSnapshot = sessionAutoApproval ?? sessionAutonomy
 	const isSessionAll = overrideSnapshot?.override === "all" && overrideSnapshot.sessionId === currentTaskItem?.id
+	const isArmed = sessionAutoApprovalArmed === "all" && !isSessionAll
 	const currentTaskSessionId = currentTaskItem?.id
 
 	const getEnabledActionsText = () => {
@@ -27,15 +30,23 @@ const AutoApproveBar = ({ style }: AutoApproveBarProps) => {
 			? "text-foreground truncate"
 			: "text-muted-foreground group-hover:text-foreground truncate"
 
-		// ACT-CLINEMM-SESSION-AUTONOMY01: when the session override is
-		// active for the current task, replace the persisted summary with
-		// the concise "ALL — this task" status. We do not mutate the
-		// persisted checkboxes visually; the toggle in the modal is the
-		// single source of truth for the override.
+		// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01: when the session
+		// override is active for the current task, replace the persisted
+		// summary with the concise "ALL — this task" status. When the
+		// pre-arm intent is set (no task yet), show "Armed for next task".
+		// We do not mutate the persisted checkboxes visually; the toggle
+		// in the modal is the single source of truth for the override.
 		if (isSessionAll) {
 			return (
 				<span className={baseClasses}>
 					<span aria-hidden="true">⚡</span> ALL — this task
+				</span>
+			)
+		}
+		if (isArmed) {
+			return (
+				<span className={baseClasses}>
+					<span aria-hidden="true">⚡</span> Armed for next task
 				</span>
 			)
 		}

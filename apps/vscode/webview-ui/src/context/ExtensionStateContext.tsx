@@ -326,6 +326,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		// Default is inactive; the host pushes the real snapshot.
 		sessionAutoApproval: { override: "none", sessionId: undefined },
 		sessionAutonomy: { override: "none", sessionId: undefined },
+		// CORRECTION01: one-shot pre-arm intent. Default inactive.
+		sessionAutoApprovalArmed: "none",
 		hooksEnabled: false,
 	})
 	const [expandTaskHeader, setExpandTaskHeader] = useState(true)

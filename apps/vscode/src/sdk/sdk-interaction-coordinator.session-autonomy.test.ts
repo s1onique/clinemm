@@ -1,16 +1,26 @@
 /**
- * ACT-CLINEMM-SESSION-AUTONOMY01
+ * ACT-CLINEMM-SESSION-AUTONOMY01 + ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01
  *
  * Integration tests proving the session auto-approval override wires
  * correctly through the SdkInteractionCoordinator, the canonical
  * command policy, and the isToolAutoApproved path.
  *
- * Strategy: the coordinator already accepts `shouldAutoApproveTool` and
- * `evaluateCommandToolApproval` callbacks from the host. We simulate the
- * SdkController's effective-profile computation by plumbing callbacks
- * that consult a `SessionAutoApprovalStore` instance directly. The
- * actual SdkController wiring is verified by type-checking the wiring
- * site (which we changed in this ACT).
+ * CORRECTION01: the tests now mirror the production wiring exactly:
+ *
+ *   - When override is "all", host authorization is composed with
+ *     BOTH `mode: "all"` AND `explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES`
+ *     (option B: skip human approval but retain hardened envelopes).
+ *     This makes `execution_plan_invalid` reachable on planner failure
+ *     even under session autonomy. The previous test used bare `mode:
+ *     "all"` (which short-circuits the policy at step 3) and then
+ *     substituted `safe-only` to exercise the planner — that
+ *     substitution was misleading and is replaced by a real
+ *     `mode: "all" + explicitAllowRules` test.
+ *   - When override is "all", the `requires_approval` model hint is
+ *     stripped before evaluation so model_escalation cannot reintroduce
+ *     ASK after the user explicitly opted into ALL.
+ *   - The store's pre-arm intent is consumed exactly once when the next
+ *     session id is queried.
  */
 import { commandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } from "@cline/core"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
@@ -18,7 +28,12 @@ import { describe, expect, it, vi } from "vitest"
 import { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { evaluateCommandToolApprovalWithPlan, getCommandHostAuthorization, isToolAutoApproved } from "./sdk-tool-policies"
-import { resolveEffectiveAutoApproval, SessionAutoApprovalStore } from "./session-auto-approval"
+import {
+	resolveEffectiveAutoApproval,
+	resolveSessionHostAuthorization,
+	SessionAutoApprovalStore,
+	stripRequiresApproval,
+} from "./session-auto-approval"
 import { createTaskProxy } from "./task-proxy"
 
 vi.mock("./webview-grpc-bridge", () => ({
@@ -59,21 +74,27 @@ function makeCoordinator(opts: { sessionId: string; store: SessionAutoApprovalSt
 		evaluateCommandToolApproval: (request) => {
 			const override = opts.store.getOverride(opts.sessionId)
 			const effective = resolveEffectiveAutoApproval(persistedSettings, override)
-			// Mirror SdkController: when override is "all", switch the
-			// command host mode to "all" so the canonical policy runs in
-			// the user-opted-in broad-execution mode.
+			// CORRECTION01: when override is "all", compose host authorization
+			// with mode:"all" AND explicitAllowRules so the canonical policy
+			// still consults allow rules first (option B). Strip
+			// requires_approval so model escalation cannot reintroduce ASK.
 			let hostAuthorization = getCommandHostAuthorization(request.toolName, effective)
+			let toolInput = request.input
 			if (override === "all") {
-				hostAuthorization = commandHostAuthorization({ mode: "all" })
+				const sessionHostAuth = resolveSessionHostAuthorization(override)
+				if (sessionHostAuth) {
+					hostAuthorization = sessionHostAuth
+				}
+				toolInput = stripRequiresApproval(request.input)
 			}
-			return evaluateCommandToolApprovalWithPlan(request.input, hostAuthorization)
+			return evaluateCommandToolApprovalWithPlan(toolInput, hostAuthorization)
 		},
 	})
 
 	return { coordinator, task, postStateToWebview, persistedSettings }
 }
 
-describe("ACT-CLINEMM-SESSION-AUTONOMY01: SdkInteractionCoordinator integration", () => {
+describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration", () => {
 	describe("non-command tools: override=none => old per-category behavior", () => {
 		it("Read disabled => approval UI opened", async () => {
 			const store = new SessionAutoApprovalStore()
@@ -231,22 +252,17 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01: SdkInteractionCoordinator integration"
 			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
 		})
 
-		it("override all + execution_plan_invalid => DENY", async () => {
-			// ACT §13: even with session override="all", an internal invariant
-			// violation (planner fails to produce a hardened plan for a
-			// command that requires one) must fail closed.
-			//
-			// We inject explicit safe-only allow rules so the classifier
-			// matches a safe git rule and attaches a safeExecutionProfile.
-			// Then we force the planner to return undefined; the
-			// CORRECTION04 fail-closed branch must return DENY.
-			//
-			// In 'all' mode the policy does not consult allow rules (it
-			// short-circuits to host_mode_all), so to exercise the
-			// execution_plan_invalid branch we use safe-only mode here.
-			// The point is the SAME invariant applies regardless of the
-			// host mode: a planner failure on a profile-required command
-			// is always DENY.
+		it("override all + execution_plan_invalid => DENY (real mode:all + allow rules)", async () => {
+			// CORRECTION01: with override="all", hostAuthorization is composed as
+			// { mode: "all", explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES }.
+			// The policy's per-command precedence therefore consults allow rules
+			// FIRST (step 2) before any mode-based logic (step 3). A command that
+			// matches a safe rule gets a safeExecutionProfile; the planner is then
+			// invoked; on planner failure the policy must DENY with
+			// execution_plan_invalid. This is a REAL mode:"all" test — no
+			// safe-only substitution. (The previous test used bare mode:"all"
+			// for the override then substituted safe-only for the planner branch,
+			// which did not actually prove the override path.)
 			const task = createTaskProxy("s-A", vi.fn(), vi.fn())
 			const messages = new SdkMessageCoordinator({ getTask: () => task })
 			const coordinator = new SdkInteractionCoordinator({
@@ -256,7 +272,7 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01: SdkInteractionCoordinator integration"
 				recordApprovedToolMessage: vi.fn(),
 				evaluateCommandToolApproval: (request) => {
 					const hostAuthorization = commandHostAuthorization({
-						mode: "safe-only",
+						mode: "all",
 						explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
 					})
 					return evaluateCommandToolApprovalWithPlan(request.input, hostAuthorization, {
@@ -294,6 +310,60 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01: SdkInteractionCoordinator integration"
 			const store = new SessionAutoApprovalStore()
 			store.setOverride("s-A", "all")
 			expect(store.getOverride("s-B")).toBe("none")
+		})
+	})
+
+	describe("CORRECTION01: model escalation is suppressed under session override=all", () => {
+		it("override all + requires_approval=true => ALLOW (not ASK)", async () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride("s-A", "all")
+			const { coordinator, task } = makeCoordinator({ sessionId: "s-A", store })
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "c",
+				iteration: 1,
+				toolCallId: "tc-no-escalate",
+				toolName: "run_commands",
+				input: { command: "rm -rf /", requires_approval: true },
+				policy: {},
+			})
+			await expect(promise).resolves.toMatchObject({
+				approved: true,
+				decision: { kind: "allow", source: "host_mode_all" },
+			})
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+	})
+
+	describe("CORRECTION01: pre-arm intent is consumed exactly once on next task", () => {
+		it("armed intent binds to the next task's session id and clears", async () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all") // arms
+			expect(store.isArmed()).toBe(true)
+			// First read for the new session consumes the arm and binds.
+			expect(store.getOverride("s-A")).toBe("all")
+			expect(store.isArmed()).toBe(false)
+			// Subsequent reads see the regular bound state.
+			expect(store.getOverride("s-A")).toBe("all")
+			expect(store.getOverride("s-B")).toBe("none")
+		})
+
+		it("clearSessionAutoApproval() destroys armed intent too", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all")
+			expect(store.isArmed()).toBe(true)
+			store.clearSessionAutoApproval()
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("s-A")).toBe("none")
+		})
+
+		it("setOverride('none') clears both bound and armed", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all") // arms
+			store.setOverride("s-X", "all") // also bind for some unrelated session
+			store.setOverride(undefined, "none")
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("s-X")).toBe("none")
 		})
 	})
 })
