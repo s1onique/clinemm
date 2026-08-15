@@ -110,8 +110,8 @@ use_browser:
 | MCP | YES | YES | YES | YES | ALREADY_PRESENT |
 | Browser/Web Fetch | YES | YES | YES | YES | ALREADY_PRESENT |
 | Web Search | YES | NO (added in v4.1.10) | YES | YES | ALREADY_PRESENT (ClineMM at v4.1.10 parity) |
-| Native Tool Calling | NO (no upstream state key) | NO | NO | NO | REMOVED_UPSTREAM (never a global Feature UI toggle) |
-| Parallel Tool Calling | NO (no upstream state key) | NO | NO | NO | REMOVED_UPSTREAM (never a global Feature UI toggle) |
+| Native Tool Calling | NO (no upstream state key) | NO | NO | NO | NOT_A_GLOBAL_FEATURE_SETTING (never existed as a global Feature UI toggle in any compared tag) |
+| Parallel Tool Calling | NO (no upstream state key) | NO | NO | NO | NOT_A_GLOBAL_FEATURE_SETTING (never existed as a global Feature UI toggle in any compared tag) |
 | Subagents | YES | partial | YES | YES | ALREADY_PRESENT |
 | Strict Plan Mode | YES | YES | YES | YES | ALREADY_PRESENT (ClineMM extends mode="yolo" for CLI schedules) |
 | Focus Chain | YES | partial | YES | YES | ALREADY_PRESENT |
@@ -123,6 +123,25 @@ use_browser:
 | Lazy Teammate Mode | NOT present | NOT present | NOT present | NOT present | REMOVED_UPSTREAM |
 | Feature Tips | YES (showFeatureTips) | YES | YES | YES | ALREADY_PRESENT |
 | Auto Compact | YES | YES | YES | YES | ALREADY_PRESENT |
+
+## Runtime Capability Status (independent of Feature UI)
+
+This table deliberately separates **UI setting status** (does a global toggle exist
+in the Feature Settings menu?) from **runtime capability status** (can the
+runtime actually do the thing, gated how?). Some capabilities were never exposed
+as a global toggle even though the runtime can do them — those rows below
+clarify the distinction so future settings archaeology does not mislabel them.
+
+| Capability | UI setting in any compared upstream tag? | Runtime can do it? | Where it's gated | ClineMM status |
+|---|---|---|---|---|
+| Parallel tool execution | NO (never a global Feature toggle in v4.1.8 / v4.1.10 / main) | YES (AgentRuntime.toolExecution `sequential \| parallel`) | Runtime-config / provider capability | Available; default sequential |
+| Native tool calling | NO (never a global Feature toggle in any compared tag) | YES (provider-specific; e.g. OpenAI native tools) | Provider config (e.g. `apiProvider.openAiNativeTools`) | Available; opted-in per provider |
+| MCP Display Mode | YES (plain/rich/markdown) | YES | `settings.actions.useMcp` + UI | ALREADY_PRESENT (matches upstream) |
+
+Future readers: when an entry says `NOT_A_GLOBAL_FEATURE_SETTING`, that means
+"there is no global toggle to port from upstream." It does **not** mean
+"the capability is unavailable." Default runtime behavior is whatever upstream
+specifies; ClineMM extends only where the narrow adapter logic requires it.
 
 ## YOLO Migration Parity (Phase 16)
 
@@ -155,14 +174,14 @@ without a corresponding upstream authority to inherit. Tracked as a follow-up AC
 
 ```
 PARALLEL_TOOL_CALLING:
-  current state: NO global toggle (no upstream state key)
-  default runtime: sequential (AgentRuntime.toolExecution)
-  disposition: REMOVED_UPSTREAM (never a global Feature UI toggle)
+  ui_status: NOT_A_GLOBAL_FEATURE_SETTING (no global toggle; never existed in any compared upstream tag)
+  runtime_status: AVAILABLE (AgentRuntime.toolExecution accepts sequential | parallel; default sequential)
+  provider_gating: provider-specific (no universal capability flag in any compared upstream tag)
 
 NATIVE_TOOL_CALLING:
-  current state: NO global toggle (no upstream state key)
-  provider gating: provider-specific (e.g. OpenAI native tools)
-  disposition: REMOVED_UPSTREAM (provider-config, not a Feature UI toggle)
+  ui_status: NOT_A_GLOBAL_FEATURE_SETTING (no global toggle; never existed in any compared upstream tag)
+  runtime_status: AVAILABLE (provider-specific; e.g. OpenAI native tools exposed via provider config)
+  provider_gating: provider-config, not a Feature UI toggle
 
 SUBAGENTS:
   state owner: subagentsEnabled (global boolean, default false)
@@ -220,10 +239,10 @@ called for non-command tools.
 
 | UPSTREAM_COMMIT_OR_TAG | PATH | CLINEMM_CHANGE | PORT_MODE | RATIONALE | LOCAL_DELTA |
 |------------------------|------|----------------|-----------|-----------|-------------|
-| v4.1.10 7e31fb9e0d... | apps/vscode/src/sdk/sdk-interaction-coordinator.ts | Restored shouldAutoApproveTool wiring for non-command tools | ADAPTED | ClineMM's CORRECTION04 split introduced the regression; restore upstream parity while preserving command-tool atomic evaluator | +9 lines |
-| v4.1.10 7e31fb9e0d... | apps/vscode/src/sdk/SdkController.ts | Restored shouldAutoApproveTool option wired to isToolAutoApproved | ADAPTED | upstream v4.1.10 line 352-355 wires this; ClineMM dropped it; restored | +18 lines |
-| v4.1.10 7e31fb9e0d... | apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts | Added 4 regression tests for non-command auto-approval | NEW | cover the P0 regression | +97 lines |
-| v4.1.10 7e31fb9e0d... | apps/vscode/src/sdk/sdk-tool-policies.test.ts | Added 6 isToolAutoApproved tests for read/edit/web | NEW | prove the resolver honors settings | +48 lines |
+| v4.1.10 3e0aac53... | apps/vscode/src/sdk/sdk-interaction-coordinator.ts | Restored shouldAutoApproveTool wiring for non-command tools | ADAPTED | ClineMM's CORRECTION04 split introduced the regression; restore upstream parity while preserving command-tool atomic evaluator | +9 lines |
+| v4.1.10 3e0aac53... | apps/vscode/src/sdk/SdkController.ts | Restored shouldAutoApproveTool option wired to isToolAutoApproved | ADAPTED | upstream v4.1.10 line 352-355 wires this; ClineMM dropped it; restored | +18 lines |
+| v4.1.10 3e0aac53... | apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts | Added 4 regression tests for non-command auto-approval | NEW | cover the P0 regression | +97 lines |
+| v4.1.10 3e0aac53... | apps/vscode/src/sdk/sdk-tool-policies.test.ts | Added 6 isToolAutoApproved tests for read/edit/web | NEW | prove the resolver honors settings | +48 lines |
 
 ## Files Changed
 
@@ -242,4 +261,3 @@ Two logical commits:
 
 2. `feat(settings): restore non-command auto-approval authority (P0 regression fix)`
    - The 4 source/test files
-
