@@ -3,8 +3,8 @@
   "act_id": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01",
   "parent": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01",
   "parent_verdict_basis_at_start": "SUBSTRATE_ONLY",
-  "verdict": "PASS",
-  "verdict_basis": "REAL_RUNTIME_CLASSIFICATION_PROVEN_BREAKER_PENDING",
+  "verdict": "PARTIAL",
+  "verdict_basis": "C1_2_PROVEN_C1_3_NEXT",
   "baseline": {
     "commit_oid": "28de596ec6d6c8463ace586010144f5aeee5de9a",
     "tree_oid": "TBD"
@@ -219,7 +219,7 @@
     "boundary_mechanism": "tracker-internal projection maps; legacy string overloads are now private with projection unconditionally hashing stored labels to 8-char hex on the public surface (no pass-through path)",
     "collision_resistance": "32-bit collision resistance is for telemetry only; circuit decisions use unbounded canonical control identity"
   },
-  "next_review_point": "Stage 4 — C1.2 REAL AgentRuntime integration",
+  "next_review_point": "Stage 5 — C1.3 EXACT PRE-EXEC BREAKER",
   "c1_2_integration_base": {
     "purpose": "Truthful integration base: frozen C1.1 + frozen TBCE.",
     "c1_1_commit": "d7d4a795a6558a2f3721620f59e4a69dde98a174",
@@ -240,8 +240,8 @@
   },
   "c1_2": {
     "title": "REAL AgentRuntime outcome integration",
-    "status": "PASS",
-    "verdict_basis": "REAL_RUNTIME_CLASSIFICATION_PROVEN_BREAKER_PENDING",
+    "status": "PASS_FROZEN",
+    "verdict_basis": "C1_2_REAL_RUNTIME_CLASSIFICATION_PROVEN_MUTATION_BREAKER_PENDING",
     "authority": {
       "classifier_authority": "classifyToolRuntimeOutcome (frozen C1.1)",
       "adapter_authority": "buildToolOutcomeClassificationInput (C1.2, new)",
@@ -323,7 +323,9 @@
       "diff_summary": "13 -> 14 tests (one extra: MUTATION_classifier_call_removed_bites). The other 13 were rewritten to assert against the captured production outcome instead of a replay-classification helper.",
       "agents_test_total": 201,
       "recovery_focused_total": 117
-    }
+    },
+    "verdict": "PASS",
+    "frozen_at_commit": "6cc699d07bb6f6c1da7b40ca8d5af5a4d8b8c34b"
   },
   "c1_2_entry_gate": {
     "purpose": "C1.1 proves the classifier contract. C1.2 must prove the real AgentRuntime supplies truthful ToolOutcomeClassificationInput values. Three mechanical gates before any RecoveryTracker wiring.",
@@ -530,5 +532,11 @@
   "c1_0_post_correction_strict": [
     "Multi-family attribution test fixture verified: A and B vary only by stableCode, share toolName; sharedAttempt is constructed once and re-used across both recordFailureIdentity calls. Structural assertions (A.controlFamily !== B.controlFamily, sharedAttempt.controlKey === sharedAttemptAgain.controlKey) pin the fixture so a future regression that collapses the families or rebuilds the attempt identity cannot pass.",
     "Public query API split documented: isFamilyBlocked() and activeFamily() are explicitly DEBUG / QUERY methods accepting/returning raw controlFamily because the runtime wiring layer needs them at the boundary; mutation/enforcement API is the typed-identity overloads only."
-  ]
+  ],
+  "c1_3_carry_forward_guidance": {
+    "observation_hook_role": "onToolRuntimeOutcome is an observation/proof seam. The C1.2 integration tests assert against its captured value to lock the production wiring.",
+    "breaker_control_plane_constraint": "C1.3 must NOT route RecoveryTracker through the public onToolRuntimeOutcome hook. Hooks in AgentRuntimeHooks are async observers and may not preserve the runtime invariant that the breaker must run before tool.execute(...) is re-entered. RecoveryTracker integration must use a private/runtime-owned call site inside executePreparedTool — colocated with the existing buildToolOutcomeClassificationInput(classifyToolRuntimeOutcome(...)) call.",
+    "reason": "If RecoveryTracker ran via the public hook, the breaker decision would happen AFTER tool.execute(...) completed for that same call, not BEFORE the next. The breaker is pre-execution, the hook is post-execution. They cannot share a single seam.",
+    "c1_3_unblocked": true
+  }
 }
