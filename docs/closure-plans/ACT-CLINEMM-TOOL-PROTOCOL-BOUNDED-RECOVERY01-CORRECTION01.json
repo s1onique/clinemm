@@ -4,7 +4,7 @@
   "parent": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01",
   "parent_verdict_basis_at_start": "SUBSTRATE_ONLY",
   "verdict": "PARTIAL",
-  "verdict_basis": "C1_2_PROVEN_C1_3_NEXT",
+  "verdict_basis": "C1_3_PREEXEC_BREAKER_PROVEN_C1_4_NEXT",
   "baseline": {
     "commit_oid": "28de596ec6d6c8463ace586010144f5aeee5de9a",
     "tree_oid": "TBD"
@@ -533,6 +533,72 @@
     "Multi-family attribution test fixture verified: A and B vary only by stableCode, share toolName; sharedAttempt is constructed once and re-used across both recordFailureIdentity calls. Structural assertions (A.controlFamily !== B.controlFamily, sharedAttempt.controlKey === sharedAttemptAgain.controlKey) pin the fixture so a future regression that collapses the families or rebuilds the attempt identity cannot pass.",
     "Public query API split documented: isFamilyBlocked() and activeFamily() are explicitly DEBUG / QUERY methods accepting/returning raw controlFamily because the runtime wiring layer needs them at the boundary; mutation/enforcement API is the typed-identity overloads only."
   ],
+  "c1_3": {
+    "title": "C1.3 exact pre-execution breaker wired into the real AgentRuntime",
+    "status": "PASS_FROZEN",
+    "verdict_basis": "C1_3_PREEXEC_BREAKER_PROVEN_C1_4_NEXT",
+    "scope_observed": {
+      "tracker_owner": "AgentRuntime private field `recoveryTracker = new RecoveryTracker(new RecoveryPolicy(DEFAULT_RECOVERY_POLICY))`. One tracker per runtime instance; no module global.",
+      "attempt_identity_source": "createAttemptIdentity(toolCall.toolName, prepared.input) computed immediately before the executePreparedTool executor call. Same canonical form as the executor.",
+      "pre_execution_gate": "isAttemptBlockedByRecovery(attemptIdentity) check BEFORE tool.execute(prepared.input, ...). Returns `true` if the substrate marks the exact key blocked OR the exact-only budget counter for opaque failures > maxRepairAttempts.",
+      "blocked_result": "Synthesised control_plane / runtime_skipped outcome via structured-result. toolExecutionInvoked remains `false`. The classifier's Priority-4 path classifies the blocked attempt as control_plane / runtime_skipped, structurally excluding it from recordFailureIdentity.",
+      "blocked_message_shape": "{ code: 'bounded_recovery_exhausted', tool: <name>, message: 'Equivalent tool execution was blocked because the repair budget for this attempt is exhausted.' }",
+      "post_classification_routing": "applyRecoveryPostClassification branches structurally on runtimeOutcome.kind: success -> recordToolSuccess; control_plane -> no budget consumption; failure(familyEligible) -> recordFailureIdentity via typed helpers; failure(familyIneligible) -> exactOnlyBudget map (anti-merge).",
+      "warning_to_circuit_open_transition": "First recorded blocked attempt transitions `warning` -> `circuit_open` exactly once via recordBlockedAttemptIdentity's natural re-anchoring. Subsequent intercepted attempts are no-ops at the substrate level."
+    },
+    "non_goals_observed": [
+      "NO model-loop termination",
+      "NO finishRun('recovery_exhausted') widening",
+      "NO AgentFinishReason widening",
+      "NO AgentRunResult discriminator widening",
+      "NO recovery-state UI surface",
+      "NO public hook widening",
+      "NO CLI --retries mapping changes",
+      "NO provider retry changes",
+      "NO new recovery taxonomy",
+      "NO second-stage breaker"
+    ],
+    "substrate_gap_at_entry": "SUPPORTED — RecoveryTracker already exposes isExactBlockedIdentity, markExactBlockedIdentity, recordFailureIdentity, recordBlockedAttemptIdentity, recordToolSuccess, snapshot, onStateChange. createAttemptIdentity and createFamilyIdentity already produce typed identities. No substrate extension was required; only runtime-local maps for exact-only opaque-failure accounting (per-canonical-key counters; no shared family) were added.",
+    "test_mutation_proofs": {
+      "mutation_1_bypassing_preexec_gate": "Bites: 10/16 preexec-breaker tests fail when the gate call is short-circuited.",
+      "mutation_2_move_gate_after_executor": "Bites: 11/16 preexec-breaker tests fail when the gate decision is moved into the post-await path.",
+      "mutation_3_control_plane_routed_into_failure_recording": "Bites: HOST_DENY_DOES_NOT_CONSUME_REPAIR_BUDGET and USER_REJECT_DOES_NOT_CONSUME_REPAIR_BUDGET both fail when user_rejected / host_policy_denied outcomes are forwarded into recordFailureIdentity. State transitions from `idle` to `warning`.",
+      "mutation_4_opaque_failures_collapsed_into_unknown_family": "Bites: OPAQUE_CHANGED_INPUT_NOT_MERGED fails (executorCalls=4 instead of 6) when familyEligible=false outcomes are routed through a shared tool_execution_error/unknown family. Confirms the anti-merge discipline."
+    },
+    "tests": {
+      "tracker_existing": 39,
+      "tracker_privacy_existing": 5,
+      "fingerprint_existing": 13,
+      "failure_classifier_existing": 44,
+      "runtime_outcome_adapter_existing": 16,
+      "agent_runtime_integration_existing": 17,
+      "agent_runtime_preexec_breaker_new": 16,
+      "agent_runtime_existing": 57,
+      "core_runtime": 486,
+      "agents_total": 220
+    },
+    "typecheck": {
+      "@cline/agents": "PASS",
+      "@cline/shared": "PASS",
+      "@cline/core": "PRE-EXISTING TBCE-INHERITED bash.supervised.test.ts ERRORS. NOT A C1.3 REGRESSION.",
+      "apps/vscode check-types": "PASS"
+    },
+    "build": {
+      "@cline/agents": "PASS",
+      "@cline/shared": "PASS",
+      "@cline/core": "PASS"
+    },
+    "lint": "PASS (biome, no errors-on-unmatched)",
+    "diff_check": "PASS",
+    "production_loc_delta": "+192 net (228 inserts, 36 deletes in agent-runtime.ts)",
+    "test_loc_delta": "+665 lines (agent-runtime.preexec-breaker.test.ts new) + ~+23 in agent-runtime.outcome-integration.test.ts (C1.2 isolation test replaced with C1.3 wiring test).",
+    "files_changed": [
+      "sdk/packages/agents/src/agent-runtime.ts (wiring + internal test seam)",
+      "sdk/packages/agents/src/agent-runtime.outcome-integration.test.ts (C1.2 isolation test replaced with C1.3 wiring test)",
+      "sdk/packages/agents/src/agent-runtime.preexec-breaker.test.ts (NEW)",
+      "docs/closure-plans/ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01.json (status update)"
+    ]
+  },
   "c1_3_carry_forward_guidance": {
     "observation_hook_role": "onToolRuntimeOutcome is an observation/proof seam. The C1.2 integration tests assert against its captured value to lock the production wiring.",
     "breaker_control_plane_constraint": "C1.3 must NOT route RecoveryTracker through the public onToolRuntimeOutcome hook. Hooks in AgentRuntimeHooks are async observers and may not preserve the runtime invariant that the breaker must run before tool.execute(...) is re-entered. RecoveryTracker integration must use a private/runtime-owned call site inside executePreparedTool — colocated with the existing buildToolOutcomeClassificationInput(classifyToolRuntimeOutcome(...)) call.",

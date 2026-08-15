@@ -508,50 +508,73 @@ describe("AgentRuntime / C1.2 runtime abort classification", () => {
 	});
 });
 
-// ---- regression: runtime does NOT consult RecoveryTracker (C1.2) ----
+// ---- regression: runtime breaker wiring (C1.3) -----------------------
 
-describe("AgentRuntime / C1.2 isolation", () => {
-	it("NO_RECOVERY_TRACKER_RUNTIME_IMPORT: agent-runtime.ts never references RecoveryTracker", async () => {
+describe("AgentRuntime / C1.3 breaker wiring", () => {
+	it("RECOVERY_TRACKER_RUNTIME_OWNED: agent-runtime.ts owns the RecoveryTracker instance (not module-global)", async () => {
 		const fs = await import("node:fs/promises");
 		const path = await import("node:path");
 		const file = path.join(import.meta.dirname, "agent-runtime.ts");
 		const raw = await fs.readFile(file, "utf8");
-		const stripped = raw
-			.split("\n")
-			.map((line) => {
-				const idx = line.indexOf("//");
-				if (idx === -1) return line;
-				let inStr: string | null = null;
-				let inTmpl = false;
-				for (let i = 0; i < line.length; i += 1) {
-					const ch = line[i];
-					if (inStr === null && !inTmpl && (ch === '"' || ch === "'")) {
-						inStr = ch;
-						continue;
-					}
-					if (inStr === '"' && ch === "\\" && i + 1 < line.length) {
-						i += 1;
-						continue;
-					}
-					if (inStr !== null && ch === inStr) {
-						inStr = null;
-						continue;
-					}
-					if (inStr === null && ch === "`") {
-						inTmpl = !inTmpl;
-					}
-				}
-				if (inStr !== null || inTmpl) return line;
-				return line.slice(0, idx);
-			})
-			.join("\n");
-		// Code-level references only — not docstrings or comments.
-		// (.). is a MemberExpression target; (*) is an import/path mention.
-		expect(stripped).not.toMatch(/(^|[^\w])RecoveryTracker\s*\(/);
-		expect(stripped).not.toMatch(/(^|[^\w])recordFailureIdentity\s*\(/);
-		expect(stripped).not.toMatch(/(^|[^\w])isExactBlockedIdentity\s*\(/);
-		expect(stripped).not.toMatch(/(^|[^\w])recordBlockedAttemptIdentity\s*\(/);
-		expect(stripped).not.toMatch(/(^|[^\w])isRecoverableToolFailure\s*\(/);
+		// C1.3 contract: RecoveryTracker is constructed on the
+		// AgentRuntime instance (private field). NOT a module-global
+		// singleton, NOT a static shared map, NOT UI-owned.
+		expect(raw).toMatch(/private\s+readonly\s+recoveryTracker\s*=\s*new\s+RecoveryTracker\(/);
+		// The same class must NOT define a static/global tracker.
+		expect(raw).not.toMatch(/static\s+recoveryTracker/);
+	});
+
+	it("BREAKER_DECISION_PRE_EXECUTOR_GATE: isExactBlockedIdentity(...) check appears BEFORE the awaited tool.execute(...) call in agent-runtime.ts", async () => {
+		const fs = await import("node:fs/promises");
+		const path = await import("node:path");
+		const file = path.join(import.meta.dirname, "agent-runtime.ts");
+		const raw = await fs.readFile(file, "utf8");
+		// The pre-execution gate MUST be evaluated before
+		// `tool.execute(...)` is awaited. This is the load-bearing
+		// invariant: mutation #2 (move the gate post-execute) must
+		// fail because the gate call precedes the executor call.
+		const gateIdx = raw.indexOf("isAttemptBlockedByRecovery(");
+		const executorIdx = raw.indexOf("prepared.tool.execute(prepared.input,");
+		// Both must exist in the file.
+		expect(gateIdx).toBeGreaterThan(-1);
+		expect(executorIdx).toBeGreaterThan(-1);
+		expect(gateIdx).toBeLessThan(executorIdx);
+	});
+
+	it("HOOK_NOT_USED_FOR_BREAKER: onToolRuntimeOutcome hook is NEVER the channel that drives the breaker", async () => {
+		const fs = await import("node:fs/promises");
+		const path = await import("node:path");
+		const file = path.join(import.meta.dirname, "agent-runtime.ts");
+		const raw = await fs.readFile(file, "utf8");
+		const stripComments = (s: string): string =>
+			s
+				.split("\n")
+				.map((line) => {
+					const idx = line.indexOf("//");
+					return idx === -1 ? line : line.slice(0, idx);
+				})
+				.join("\n");
+		const stripped = stripComments(raw);
+		// The breaker must NOT be wired through the hook. The hook
+		// body must only do observation; the breaker must use
+		// private/runtime-owned call sites colocated with the
+		// tool.execute(...) seam.
+		const hookFireIdx = stripped.indexOf("notifyToolRuntimeOutcome(");
+		const gateIdx = stripped.indexOf("isAttemptBlockedByRecovery(");
+		// Both must exist; the gate MUST come BEFORE the hook fire.
+		expect(gateIdx).toBeGreaterThan(-1);
+		expect(hookFireIdx).toBeGreaterThan(-1);
+		expect(gateIdx).toBeLessThan(hookFireIdx);
+	});
+
+	it("POST_CLASSIFICATION_ROUTING_PRESENT: classifyToolRuntimeOutcome(...) drives applyRecoveryPostClassification", async () => {
+		const fs = await import("node:fs/promises");
+		const path = await import("node:path");
+		const file = path.join(import.meta.dirname, "agent-runtime.ts");
+		const raw = await fs.readFile(file, "utf8");
+		expect(raw).toMatch(/classifyToolRuntimeOutcome\(/);
+		expect(raw).toMatch(/applyRecoveryPostClassification\(/);
+		expect(raw).toMatch(/recordFailureIdentity\(/);
 	});
 
 	// MANDATED MUTATION proof: deleting the production classifier call

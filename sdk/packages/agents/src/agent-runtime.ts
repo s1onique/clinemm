@@ -52,8 +52,16 @@ import { nanoid } from "nanoid";
 import {
 	buildToolOutcomeClassificationInput,
 	classifyToolRuntimeOutcome,
+	createAttemptIdentity,
+	createFamilyIdentity,
+	fingerprintToolFailure,
+	RecoveryPolicy,
+	RecoveryTracker,
+	DEFAULT_RECOVERY_POLICY,
 	type RuntimeOutcomeEvidence,
 	selectControlPlaneOutcome,
+	serializeStableFailureCode,
+	type ToolAttemptIdentity,
 } from "./runtime/recovery";
 
 const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
@@ -497,6 +505,30 @@ export class AgentRuntime {
 	private abortController?: AbortController;
 	private readonly telemetryProviderId?: string;
 	private readonly telemetryModelId?: string;
+	/**
+	 * C1.3: Runtime-owned bounded-recovery tracker. One instance per
+	 * `AgentRuntime` (which corresponds to one execution context). The
+	 * tracker is NEVER shared across runtimes, never module-global, and
+	 * never UI-owned. C1.3 only adds the pre-execution exact-block
+	 * wire-up; second-stage model-loop termination is deferred to C1.4.
+	 */
+	private readonly recoveryTracker = new RecoveryTracker(
+		new RecoveryPolicy(DEFAULT_RECOVERY_POLICY),
+	);
+	/**
+	 * C1.3 exact-only accounting for `familyEligible=false` failures.
+	 * The shared `RecoveryTracker` must not collapse opaque failures
+	 * across distinct canonical inputs into a single family (that would
+	 * violate the C1.1 anti-false-merge guarantee). We therefore count
+	 * them per exact canonical key in a tracker-local map here.
+	 *
+	 * The cap on each entry equals `DEFAULT_RECOVERY_POLICY.maxRepairAttempts`
+	 * + 1 (the original attempt). Budget exhaustion beyond the cap is
+	 * surfaced to the runtime via {@link isExactBlockedIdentity} so the
+	 * pre-execution gate sees it.
+	 */
+	private readonly exactOnlyBudget = new Map<string, number>();
+	private recoveryCircuitNoticeCount = 0;
 
 	constructor(config: AgentRuntimeConfig) {
 		this.telemetryProviderId =
@@ -1816,6 +1848,16 @@ export class AgentRuntime {
 		 * `RecoveryTracker`.
 		 */
 		let toolExecutionInvoked = false;
+		/**
+		 * C1.3 attempt identity computed pre-execution from
+		 * `prepared.input` — the same canonical form the executor
+		 * will receive. Typed identities are required by the
+		 * substrate's privacy contract.
+		 */
+		const attemptIdentity: ToolAttemptIdentity = createAttemptIdentity(
+			prepared.toolCall.toolName,
+			prepared.input,
+		);
 		/** C1.2: verbatim throw from `tool.execute(...)`, retained for the classifier. */
 		let thrownError: unknown;
 		/**
@@ -1840,11 +1882,34 @@ export class AgentRuntime {
 				isError: true,
 			};
 		} else {
-			try {
-				// Set IMMEDIATELY before the executor call, even though the
-				// call has not yet returned. A throw is still "invoked".
-				toolExecutionInvoked = true;
-				const output = await prepared.tool.execute(prepared.input, {
+			if (this.isAttemptBlockedByRecovery(attemptIdentity)) {
+				// Notify the tracker that the breaker intercepted an
+				// attempt at the pre-execution stage. The first such
+				// interception in an episode transitions the visible
+				// state from `warning` to `circuit_open` exactly once;
+				// subsequent interceptions are no-ops at the tracker
+				// layer. The runtime must NEVER feed this back into
+				// `recordFailureIdentity` — it is structurally a
+				// runtime-side control action, not a tool execution.
+				this.recoveryTracker.recordBlockedAttemptIdentity(attemptIdentity);
+				if (this.recoveryCircuitNoticeCount === 0) {
+					this.recoveryCircuitNoticeCount = 1;
+				}
+				result = {
+					output: {
+						code: "bounded_recovery_exhausted",
+						tool: prepared.toolCall.toolName,
+						message:
+							"Equivalent tool execution was blocked because the repair budget for this attempt is exhausted.",
+					},
+					isError: true,
+				};
+			} else {
+				try {
+					// Set IMMEDIATELY before the executor call, even though the
+					// call has not yet returned. A throw is still "invoked".
+					toolExecutionInvoked = true;
+					const output = await prepared.tool.execute(prepared.input, {
 					sessionId: this.config.sessionId,
 					agentId: this.state.agentId,
 					conversationId: this.config.conversationId,
@@ -1865,29 +1930,30 @@ export class AgentRuntime {
 					},
 				});
 				result = { output };
-			} catch (error) {
-				thrownError = error;
-				// C1.2: if the runtime's abort signal fired, classify as
-				// runtime_aborted rather than as a generic executor
-				// error. AbortError is the standard JS-DOM signal
-				// rejection; AgentRuntimeAbortError is the runtime's
-				// own. Either is structural evidence of a runtime-level
-				// abort, not a tool failure.
-				if (
-					this.abortController?.signal.aborted === true ||
-					error instanceof AgentRuntimeAbortError ||
-					(error instanceof Error && error.name === "AbortError")
-				) {
-					runtimeControlPlaneOutcome = selectControlPlaneOutcome({
-						runtimeAborted: true,
-					});
+				} catch (error) {
+					thrownError = error;
+					// C1.2: if the runtime's abort signal fired, classify as
+					// runtime_aborted rather than as a generic executor
+					// error. AbortError is the standard JS-DOM signal
+					// rejection; AgentRuntimeAbortError is the runtime's
+					// own. Either is structural evidence of a runtime-level
+					// abort, not a tool failure.
+					if (
+						this.abortController?.signal.aborted === true ||
+						error instanceof AgentRuntimeAbortError ||
+						(error instanceof Error && error.name === "AbortError")
+					) {
+						runtimeControlPlaneOutcome = selectControlPlaneOutcome({
+							runtimeAborted: true,
+						});
+					}
+					result = {
+						output: {
+							error: error instanceof Error ? error.message : String(error),
+						},
+						isError: true,
+					};
 				}
-				result = {
-					output: {
-						error: error instanceof Error ? error.message : String(error),
-					},
-					isError: true,
-				};
 			}
 		}
 
@@ -1934,9 +2000,6 @@ export class AgentRuntime {
 		// ---------------------------------------------------------------
 		// C1.2: produce a typed ToolRuntimeOutcome per tool call.
 		// Classification is per-call local (NEVER shared across calls).
-		// This ACT closes on the local outcome being available; the next
-		// ACT will route it through RecoveryTracker. We do NOT yet
-		// route / surface the outcome outside this function.
 		// ---------------------------------------------------------------
 		const inputParseError = (() => {
 			const meta = prepared.toolCall.metadata;
@@ -1960,11 +2023,22 @@ export class AgentRuntime {
 		const classificationInput = buildToolOutcomeClassificationInput(evidence);
 		const runtimeOutcome: ToolRuntimeOutcome =
 			classifyToolRuntimeOutcome(classificationInput);
+		// C1.3: route the classified outcome through the runtime-owned
+		// `RecoveryTracker` along the SAME per-call-local path. The
+		// branching is structural (per `runtimeOutcome.kind`), so it
+		// cannot confuse a `control_plane` outcome (which never
+		// consumes budget) with a `failure` outcome. The pre-execution
+		// block above routes its synthetic control-plane result through
+		// the same path — the runtime-owned tracker is consulted only
+		// at decision time, never through `onToolRuntimeOutcome`.
+		this.applyRecoveryPostClassification(
+			prepared.toolCall,
+			attemptIdentity,
+			runtimeOutcome,
+		);
 		// C1.2 observable seam: surface the production outcome through
-		// the `onToolRuntimeOutcome` hook. Read-only observation; no
-		// control plane; no RecoveryTracker routing yet. The hook
-		// must run AFTER the classifier call so production wiring is
-		// observable (mutation tests target this point).
+		// the `onToolRuntimeOutcome` hook. Read-only observation; the
+		// breaker decision has already been made at this point.
 		await this.notifyToolRuntimeOutcome(prepared.toolCall, runtimeOutcome);
 
 		return message;
@@ -1975,8 +2049,8 @@ export class AgentRuntime {
 	 * of the production outcome. Called once per tool call, after
 	 * the classifier has produced the `ToolRuntimeOutcome`. The hook
 	 * is read-only; the outcome is not mutated, routed, or
-	 * aggregated. Future ACTs (C1.3+) may consume this hook to drive
-	 * RecoveryTracker.
+	 * aggregated. The breaker decision is made BEFORE this hook and
+	 * never depends on subscriber ordering or content.
 	 */
 	private async notifyToolRuntimeOutcome(
 		toolCall: AgentToolCallPart,
@@ -1985,6 +2059,124 @@ export class AgentRuntime {
 		for (const hook of this.hooks.onToolRuntimeOutcome) {
 			await hook({ toolCall, outcome });
 		}
+	}
+
+	/**
+	 * C1.3 private pre-execution gate. Returns `true` when the
+	 * bounded-recovery tracker has marked this exact attempt identity
+	 * as blocked (post-execution family exhaustion + sibling
+	 * `markExactBlocked`/`recordBlockedAttempt` ancestry). Returns
+	 * `false` for any other path, including:
+	 *   - the first time an attempt is seen (no episode yet);
+	 *   - `markExactBlocked`-only paths with no exhaustion;
+	 *   - error paths that the substrate intentionally excludes
+	 *     from the breaker (e.g. registry miss, control-plane
+	 *     outcomes — those never reach this gate).
+	 *
+	 * Package-private to `AgentRuntime` — external callers MUST
+	 * drive the agent, not invoke the tracker.
+	 */
+	private isAttemptBlockedByRecovery(
+		attemptIdentity: ToolAttemptIdentity,
+	): boolean {
+		if (this.recoveryTracker.isExactBlockedIdentity(attemptIdentity)) {
+			return true;
+		}
+		// C1.3 exact-only accounting for opaque failures. Per-exact
+		// canonical key has its own budget; distinct opaque inputs
+		// are NOT merged (preserves the C1.1 anti-false-merge
+		// guarantee).
+		const exactCount = this.exactOnlyBudget.get(attemptIdentity.controlKey);
+		if (exactCount !== undefined && exactCount > DEFAULT_RECOVERY_POLICY.maxRepairAttempts) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * C1.3 private post-classification routing. Branches on
+	 * `runtimeOutcome.kind` structurally so that:
+	 *   - `success` ⇒ family-clearing reset through `recordToolSuccess`;
+	 *   - `control_plane` ⇒ NO budget consumption (host DENY, user
+	 *     reject, runtime abort, runtime_skipped — anything that did
+	 *     not run for control-plane reasons);
+	 *   - `failure` (familyEligible=true) ⇒ typed family handoff via
+	 *     the C1.1 `createFamilyIdentity` helper;
+	 *   - `failure` (familyEligible=false) ⇒ exact-only budget
+	 *     increment, never merged into a shared "unknown" family.
+	 *
+	 * Pre-execution block results (synthesised `control_plane /
+	 * runtime_skipped`) flow through this method without consuming
+	 * any budget, which is the structural guard requested in §10.
+	 */
+	private applyRecoveryPostClassification(
+		toolCall: AgentToolCallPart,
+		attemptIdentity: ToolAttemptIdentity,
+		outcome: ToolRuntimeOutcome,
+	): void {
+		if (outcome.kind === "success") {
+			this.recoveryTracker.recordToolSuccess(toolCall.toolName);
+			return;
+		}
+		if (outcome.kind === "control_plane") {
+			// Control-plane outcomes are structurally excluded from
+			// repair budget. Includes:
+			//   - the synthetic `runtime_skipped` produced by the
+			//     C1.3 pre-execution block;
+			//   - real `host_policy_denied`, `user_rejected`,
+			//     `runtime_aborted`, `approval_pending`, etc.
+			return;
+		}
+		// outcome.kind === "failure"
+		if (!outcome.familyEligible) {
+			// Exact-only budget for opaque failures. Distinct canonical
+			// inputs each get their own counter; the C1.1 anti-merge
+			// guarantee is preserved because we never collapse them
+			// into a shared family.
+			const key = attemptIdentity.controlKey;
+			const next = (this.exactOnlyBudget.get(key) ?? 0) + 1;
+			this.exactOnlyBudget.set(key, next);
+			return;
+		}
+		// Family-eligible failure: handoff through the C1.1 typed helpers.
+		const serializedStableCode = serializeStableFailureCode(outcome.stableCode);
+		const familyIdentity = createFamilyIdentity(
+			outcome.toolName,
+			outcome.failureClass,
+			serializedStableCode,
+		);
+		const fingerprint = fingerprintToolFailure(
+			outcome.toolName,
+			outcome.failureClass,
+			serializedStableCode,
+			this.state.iteration,
+			toolCall.toolCallId,
+			attemptIdentity.controlKey,
+		);
+		this.recoveryTracker.recordFailureIdentity(
+			familyIdentity,
+			attemptIdentity,
+			fingerprint,
+		);
+	}
+
+	/**
+	 * C1.3 internal test seam: returns a read-only snapshot of the
+	 * runtime-owned `RecoveryTracker` for tests that need to assert
+	 * on circuit state (e.g. that user-rejection episodes never
+	 * open the circuit). Intentionally underscore-prefixed and
+	 * not part of the public SDK surface.
+	 */
+	__recoverySnapshotForTests(): {
+		state: import("./runtime/recovery").RecoveryState;
+		circuitNoticeCount: number;
+		exactOnlyBudgetSize: number;
+	} {
+		return {
+			state: this.recoveryTracker.state,
+			circuitNoticeCount: this.recoveryCircuitNoticeCount,
+			exactOnlyBudgetSize: this.exactOnlyBudget.size,
+		};
 	}
 
 	private finishRun(
