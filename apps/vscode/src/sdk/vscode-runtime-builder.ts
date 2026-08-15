@@ -4,6 +4,8 @@ import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTermin
 import type { McpHub } from "@/services/mcp/McpHub"
 import { resolveMcpServerTimeoutMs } from "@/services/mcp/timeout"
 import { Logger } from "@/shared/services/Logger"
+import { CommandJobManager, DEFAULT_EXECUTION_DEADLINE_MS, DEFAULT_WAIT_BUDGET_MS } from "./command-job-manager"
+import { createCommandStatusTool } from "./command-status-tool"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { createVscodeRunCommandsTool, VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS } from "./vscode-run-commands-tool"
 
@@ -57,6 +59,14 @@ export interface VscodeExtraToolsOptions {
 	vscodeTerminalExecutionMode?: "vscodeTerminal" | "backgroundExec"
 	/** Registry of in-flight foreground executions for "Proceed While Running". */
 	foregroundCommands?: SdkForegroundCommandCoordinator
+	/**
+	 * Host-owned command-job manager. Required for `backgroundExec` mode —
+	 * it owns execution lifetime, exposes a stable job id, and powers the
+	 * `command_status` follow-up tool. The runtime builder reuses the
+	 * manager across session rebuilds (rebuilding the tool set does not
+	 * invalidate in-flight jobs).
+	 */
+	commandJobManager?: CommandJobManager
 }
 
 export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExtraToolsOptions): Promise<AgentTool[]> {
@@ -99,10 +109,19 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 				bashTimeoutMs: executionMode === "vscodeTerminal" ? VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS : undefined,
 				vscodeTerminalExecutionMode: executionMode,
 				foregroundCommands: options.foregroundCommands,
+				commandJobManager: options.commandJobManager,
+				backgroundWaitBudgetMs: DEFAULT_WAIT_BUDGET_MS,
+				backgroundExecutionDeadlineMs: DEFAULT_EXECUTION_DEADLINE_MS,
 			}),
 		)
+		// Expose the follow-up API only for the background path —
+		// foreground commands use the existing "Proceed While Running"
+		// button and don't need a separate status tool.
+		if (executionMode === "backgroundExec" && options.commandJobManager) {
+			tools.push(createCommandStatusTool(options.commandJobManager))
+		}
 		Logger.log(
-			`[VscodeRuntimeTools] Added custom run_commands tool (mode=${executionMode}, timeoutMs=${executionMode === "vscodeTerminal" ? VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS : "default"})`,
+			`[VscodeRuntimeTools] Added custom run_commands tool (mode=${executionMode}, timeoutMs=${executionMode === "vscodeTerminal" ? VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS : "supervised"})`,
 		)
 	}
 

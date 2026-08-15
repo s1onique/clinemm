@@ -34,7 +34,10 @@ export { PATCH_MARKERS, PatchActionType } from "./apply-patch-parser";
 export {
 	CommandExitError,
 	createShellExecutor,
+	formatShellProcessOutput,
+	spawnSupervisableShellCommand,
 	type ShellExecutorOptions,
+	type SupervisableShellProcess,
 } from "./bash";
 export { createEditorExecutor, type EditorExecutorOptions } from "./editor";
 export {

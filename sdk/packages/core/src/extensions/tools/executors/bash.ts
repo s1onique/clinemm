@@ -124,6 +124,151 @@ function createRollingCollector(maxChars: number) {
 	};
 }
 
+/**
+ * A long-lived shell process whose lifetime is owned by the caller.
+ *
+ * Unlike `createShellExecutor` — which kills the process when its internal
+ * timer fires — this primitive lets the caller decide when to terminate
+ * the child. The caller is responsible for any wait-budget race and any
+ * execution-deadline timer. The wait-budget race must NOT call
+ * `killTree()`; only the deadline (or an explicit cancel) may do so.
+ *
+ * Process-tree ownership mirrors the bash executor's
+ * (`spawn(..., { detached: !isWindows })`); `killTree()` terminates the
+ * entire group on POSIX (`process.kill(-pid, "SIGKILL")`) and uses
+ * `taskkill /T /F` on Windows.
+ */
+export interface SupervisableShellProcess {
+	/** Resolves when the child exits; rejects on spawn failure. */
+	readonly exit: Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>;
+	/** Terminate the owned process tree. Idempotent. */
+	killTree(): Promise<void>;
+	/** Snapshot of retained stdout (truncated to maxOutputChars). */
+	stdoutSnapshot(): { text: string; totalChars: number; dropped: boolean };
+	/** Snapshot of retained stderr (truncated to maxOutputChars). */
+	stderrSnapshot(): { text: string; totalChars: number; dropped: boolean };
+	/** PID of the spawned child, or undefined if spawn failed. */
+	readonly pid: number | undefined;
+}
+
+function buildShellProcess(
+	config: SpawnConfig,
+	maxOutputChars: number,
+	// Reserved for callers that need to expose stderr separately. The
+	// current callers always combine stdout/stderr at the snapshot
+	// boundary, so the per-stream collectors are exposed as-is but
+	// composed externally — the supervisable primitive keeps the
+	// "stdout and stderr, separately retained" invariant simple.
+	_combineOutput: boolean,
+): SupervisableShellProcess {
+	const isWindows = process.platform === "win32";
+
+	const child = spawn(config.executable, config.args, {
+		cwd: config.cwd,
+		env: { ...process.env, ...config.env },
+		stdio: ["pipe", "pipe", "pipe"],
+		detached: !isWindows,
+		windowsHide: true,
+	});
+	const childPid = child.pid;
+
+	const stdout = createRollingCollector(maxOutputChars);
+	const stderr = createRollingCollector(maxOutputChars);
+	let killed = false;
+
+	let exitResolve!: (value: { exitCode: number | null; signal: NodeJS.Signals | null }) => void;
+	let exitReject!: (error: Error) => void;
+
+	const exitPromise = new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>(
+		(resolve, reject) => {
+			exitResolve = resolve;
+			exitReject = reject;
+		},
+	);
+
+	const killProcessTree = async (): Promise<void> => {
+		if (!childPid) return;
+		if (isWindows) {
+			await new Promise<void>((done) => {
+				let finished = false;
+				let killer: ReturnType<typeof spawn>;
+				const finish = () => {
+					if (finished) return;
+					finished = true;
+					clearTimeout(watchdog);
+					done();
+				};
+				try {
+					killer = spawn(
+						"taskkill.exe",
+						["/PID", String(childPid), "/T", "/F"],
+						{ stdio: "ignore", shell: false, windowsHide: true },
+					);
+				} catch {
+					child.kill();
+					done();
+					return;
+				}
+				const watchdog = setTimeout(() => {
+					killer.kill();
+					child.kill();
+					finish();
+				}, 5_000);
+				killer.once("error", () => {
+					child.kill();
+					finish();
+				});
+				killer.once("close", (code) => {
+					if (code !== 0) child.kill();
+					finish();
+				});
+			});
+			return;
+		}
+		try {
+			process.kill(-childPid, "SIGKILL");
+		} catch {
+			child.kill("SIGKILL");
+		}
+	};
+
+	child.stdout?.on("data", (data: Buffer) => {
+		stdout.append(data);
+	});
+	child.stderr?.on("data", (data: Buffer) => {
+		stderr.append(data);
+	});
+
+	child.on("close", (code, signal) => {
+		exitResolve({ exitCode: code, signal });
+	});
+
+	child.on("error", (error) => {
+		if (killed) return;
+		exitReject(new Error(`Failed to execute command: ${error.message}`));
+	});
+
+	child.stdin?.on("error", () => {
+		// Mirror bash executor: input errors abort the process. The caller
+		// observes failure through `exit`.
+	});
+	child.stdin?.end(config.input, "utf8");
+
+	let treeKilled = false;
+	return {
+		exit: exitPromise,
+		pid: childPid,
+		stdoutSnapshot: () => stdout.snapshot(),
+		stderrSnapshot: () => stderr.snapshot(),
+		killTree: async () => {
+			if (treeKilled) return;
+			treeKilled = true;
+			killed = true;
+			await killProcessTree();
+		},
+	};
+}
+
 function spawnAndCollect(
 	config: SpawnConfig,
 	context: AgentToolContext,
@@ -348,5 +493,65 @@ export function createShellExecutor(
 			maxOutputChars,
 			combineOutput,
 		);
+	};
+}
+
+/**
+ * Spawn a shell process whose lifetime is owned by the caller.
+ *
+ * Use this when the host needs to separate the *wait* budget from the
+ * *execution* deadline. `createShellExecutor` couples the two: its
+ * internal setTimeout fires `killTree()` on its own. This primitive
+ * exposes `killTree()` so the caller can ignore the wait budget and only
+ * enforce the (larger) execution deadline.
+ */
+export function spawnSupervisableShellCommand(
+	config: SpawnConfig,
+	options: {
+		maxOutputChars?: number;
+		combineOutput?: boolean;
+	} = {},
+): SupervisableShellProcess {
+	const maxOutputChars = options.maxOutputChars ?? MAX_COMMAND_OUTPUT_CHARS;
+	const combineOutput = options.combineOutput ?? true;
+	return buildShellProcess(config, maxOutputChars, combineOutput);
+}
+
+/**
+ * Format a final shell-process snapshot into the same output shape that
+ * `createShellExecutor` returns: success → stdout; failure →
+ * `[Command exited with code N]\n<output>`.
+ */
+export function formatShellProcessOutput(
+	process: SupervisableShellProcess,
+	exitCode: number | null,
+	maxOutputChars: number,
+	combineOutput: boolean,
+): { ok: true; output: string } | { ok: false; output: string } {
+	const out = process.stdoutSnapshot();
+	const err = process.stderrSnapshot();
+	let output = combineOutput
+		? out.text + (err.text ? `\n[stderr]\n${err.text}` : "")
+		: out.text;
+	const dropped = out.dropped || (combineOutput && err.dropped);
+	if (dropped || output.length > maxOutputChars) {
+		const totalChars = combineOutput
+			? out.totalChars + err.totalChars
+			: out.totalChars;
+		output = truncateCommandOutput(output, {
+			maxChars: maxOutputChars,
+			totalChars,
+		});
+	}
+	if (exitCode === 0) {
+		return { ok: true, output };
+	}
+	const code = exitCode ?? 1;
+	return {
+		ok: false,
+		output:
+			output.length > 0
+				? `[Command exited with code ${code}]\n${output}`
+				: `[Command exited with code ${code}]`,
 	};
 }

@@ -138,6 +138,16 @@ export {
 	type PatchFileChange,
 } from "../../../../sdk/packages/core/src/extensions/tools/executors/apply-patch"
 export { PATCH_MARKERS, PatchActionType } from "../../../../sdk/packages/core/src/extensions/tools/executors/apply-patch-parser"
+// Supervised-command primitive — re-exported from the real SDK so that
+// production code paths (e.g. `command-job-manager.ts`) work correctly
+// under vitest, where `@cline/core` is aliased to this stub file. The
+// stub no longer overrides these: tests that need to mock process
+// spawning must do so explicitly via `vi.mock("@/sdk/...")`.
+export {
+	formatShellProcessOutput,
+	type SupervisableShellProcess,
+	spawnSupervisableShellCommand,
+} from "../../../../sdk/packages/core/src/extensions/tools/executors/bash"
 export { createEditorExecutor } from "../../../../sdk/packages/core/src/extensions/tools/executors/editor"
 export type { EditFileInput } from "../../../../sdk/packages/core/src/extensions/tools/schemas"
 export type { ApplyPatchExecutor, EditorExecutor, ToolExecutors } from "../../../../sdk/packages/core/src/extensions/tools/types"

@@ -38,6 +38,7 @@ import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTermin
 import { getDistinctId } from "@/services/logging/distinctId"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
+import { CommandJobManager } from "./command-job-manager"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import type { SdkSessionHost } from "./session-host"
 import { createVscodeExtraTools } from "./vscode-runtime-builder"
@@ -90,9 +91,17 @@ export interface VscodeSessionHostOptions {
 export class VscodeSessionHost implements SdkSessionHost {
 	readonly runtimeAddress: string | undefined
 	private readonly inner: ClineCore
+	/**
+	 * Host-owned command-job manager. Created once per VscodeSessionHost
+	 * instance and reused across session rebuilds (so an in-flight job
+	 * is still observable after the tool set is rebuilt for a mode
+	 * change). Disposed when this host is disposed — see dispose().
+	 */
+	private readonly commandJobManager: CommandJobManager
 
-	private constructor(inner: ClineCore) {
+	private constructor(inner: ClineCore, commandJobManager: CommandJobManager) {
 		this.inner = inner
+		this.commandJobManager = commandJobManager
 		this.runtimeAddress = inner.runtimeAddress
 	}
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void> {
@@ -104,6 +113,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 		// When a terminal manager is available, suppress the SDK's built-in run_commands
 		// tool by setting bash to undefined. Our custom run_commands (provided via
 		// extraTools) replaces it with foreground/background terminal support.
+		const commandJobManager = new CommandJobManager()
 		const toolExecutors: Partial<ToolExecutors> = {}
 		if (options.askQuestion) {
 			toolExecutors.askQuestion = options.askQuestion
@@ -147,6 +157,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 						getTerminalManager: options.getTerminalManager,
 						vscodeTerminalExecutionMode: getEffectiveTerminalExecutionMode(requestedTerminalExecutionMode),
 						foregroundCommands: options.foregroundCommands,
+						commandJobManager,
 					})
 					return {
 						...inputWithRemoteConfig,
@@ -165,7 +176,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 		if (options.getTerminalManager) {
 			Logger.log("[VscodeSessionHost] SDK run_commands suppressed; using custom foreground/background terminal tool")
 		}
-		return new VscodeSessionHost(inner)
+		return new VscodeSessionHost(inner, commandJobManager)
 	}
 
 	async start(input: StartSessionInput): Promise<StartSessionResult>
@@ -213,6 +224,13 @@ export class VscodeSessionHost implements SdkSessionHost {
 	}
 
 	async dispose(reason?: string): Promise<void> {
+		try {
+			await this.commandJobManager.dispose()
+		} catch (error) {
+			Logger.warn(
+				`[VscodeSessionHost] commandJobManager.dispose failed: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
 		return this.inner.dispose(reason)
 	}
 

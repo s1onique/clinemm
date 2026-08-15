@@ -42,11 +42,14 @@ export {
 	type DefaultExecutorsOptions,
 	type EditorExecutorOptions,
 	type FileReadExecutorOptions,
+	formatShellProcessOutput,
 	PATCH_MARKERS,
 	PatchActionType,
 	type PatchFileChange,
 	type SearchExecutorOptions,
 	type ShellExecutorOptions,
+	spawnSupervisableShellCommand,
+	type SupervisableShellProcess,
 	type WebFetchExecutorOptions,
 } from "./executors/index";
 export {

@@ -7,13 +7,16 @@
  *   - **Foreground (vscodeTerminal):** Uses VscodeTerminalManager for visible
  *     VS Code terminals with shell integration.
  *
- *   - **Background (backgroundExec):** Delegates to the SDK's createShellExecutor()
- *     for headless child_process.spawn execution.
+ *   - **Background (backgroundExec):** Host-owned supervised execution via
+ *     the `CommandJobManager`. The wait budget (how long the tool waits
+ *     before returning control to the model) is decoupled from the
+ *     execution deadline (how long the host keeps the command alive).
+ *     Long-running work stays alive past the wait budget and is queried
+ *     via the `command_status` tool. See command-job-manager.ts.
  */
 
 import {
 	CommandExitError,
-	createShellExecutor,
 	createShellTool,
 	MAX_COMMAND_OUTPUT_CHARS,
 	type ShellExecutor,
@@ -34,6 +37,12 @@ import {
 } from "@/integrations/terminal/types"
 import { Logger } from "@/shared/services/Logger"
 import { getShellForProfile } from "@/utils/shell"
+import {
+	CommandJobManager,
+	DEFAULT_EXECUTION_DEADLINE_MS,
+	DEFAULT_WAIT_BUDGET_MS,
+	MAX_RESPONSE_OUTPUT_BYTES,
+} from "./command-job-manager"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 
 // ---------------------------------------------------------------------------
@@ -76,6 +85,17 @@ export interface VscodeRunCommandsToolOptions {
 	 * kills the process tree.
 	 */
 	foregroundCommands?: SdkForegroundCommandCoordinator
+	/**
+	 * Host-owned command-job manager (only used by the background path).
+	 * Required when `vscodeTerminalExecutionMode === "backgroundExec"` —
+	 * it owns execution lifetime, separates the wait budget from the
+	 * execution deadline, and exposes a stable job id.
+	 */
+	commandJobManager?: CommandJobManager
+	/** Wait budget for the background path. Defaults to DEFAULT_WAIT_BUDGET_MS. */
+	backgroundWaitBudgetMs?: number
+	/** Execution deadline for the background path. Defaults to DEFAULT_EXECUTION_DEADLINE_MS. */
+	backgroundExecutionDeadlineMs?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -542,10 +562,6 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 	const { cwd, getTerminalManager } = options
 	const executionMode = options.vscodeTerminalExecutionMode ?? "vscodeTerminal"
 
-	// Lazy-init background executor — recreated when the snapshotted shell changes.
-	let bgExecutor: ShellExecutor | undefined
-	let bgExecutorShell: string | undefined
-
 	// Lazy-init terminal manager reference
 	let terminalManager: VscodeTerminalManager | undefined
 
@@ -557,27 +573,89 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 		const { profileId, shell } = state.snapshot
 
 		if (executionMode === "backgroundExec") {
-			// Background path — use SDK's createShellExecutor.
-			// Recreate the executor if the shell has changed
-			if (!bgExecutor || bgExecutorShell !== shell) {
-				bgExecutorShell = shell
-				bgExecutor = createShellExecutor({
-					shell,
-					// Set SHELL env to match the shell we're spawning so child
-					// processes see the correct value instead of the inherited parent's.
-					env: { SHELL: shell },
-				})
-				Logger.log(`[VscodeRunCommands] Background executor using shell: ${shell}`)
+			// Background path — host-owned supervised execution.
+			//
+			// WAIT_BUDGET_MS (default 15s) controls how long this tool
+			// invocation waits before returning control to the model.
+			// Expiry does NOT terminate the process — the tool returns
+			// RUNNING + jobId.
+			//
+			// EXECUTION_DEADLINE_MS (default 10 min) is the host-owned
+			// maximum lifetime. Expiry terminates the owned process tree
+			// and records DEADLINE_EXCEEDED. The model may follow up via
+			// the `command_status` tool.
+			//
+			// The job manager is required for this path; if the host did
+			// not provide one, we fail loudly (this branch is gated by the
+			// builder that supplies the manager).
+			const manager = options.commandJobManager
+			if (!manager) {
+				throw new Error("[VscodeRunCommands] backgroundExec mode requires commandJobManager")
 			}
-			// Record execution outcomes so background mode is comparable with
-			// foreground mode in the same task.terminal_execution event.
+			const waitBudgetMs = options.backgroundWaitBudgetMs ?? DEFAULT_WAIT_BUDGET_MS
+			const executionDeadlineMs = options.backgroundExecutionDeadlineMs ?? DEFAULT_EXECUTION_DEADLINE_MS
+
 			try {
-				const result = await bgExecutor(command, commandCwd || cwd, context)
+				const start = await manager.start(
+					{
+						command,
+						cwd: commandCwd || cwd,
+						shell,
+						// Set SHELL env to match the shell we're spawning so
+						// child processes see the correct value instead of
+						// the inherited parent's.
+						env: { SHELL: shell },
+						waitBudgetMs,
+						executionDeadlineMs,
+						maxOutputChars: MAX_RESPONSE_OUTPUT_BYTES,
+					},
+					context,
+				)
 				telemetryService.captureTerminalExecution(true, "vscode", "child_process", {
-					exitCode: 0,
+					...(start.exitCode !== undefined ? { exitCode: start.exitCode } : {}),
 					terminalExecutionMode: "backgroundExec",
 				})
-				return result
+				// RUNNING returns a structured snapshot so the model can
+				// observe status + jobId. Terminal results retain the
+				// existing stdout/exitCode shape for backward compatibility.
+				if (start.state === "running") {
+					const runningPayload = {
+						status: "running" as const,
+						jobId: start.jobId,
+						elapsedMs: start.elapsedMs,
+						deadlineRemainingMs: start.deadlineRemainingMs,
+						outputTruncated: start.outputTruncated,
+						stdout: start.stdout,
+					}
+					return JSON.stringify(runningPayload)
+				}
+				// Terminal path. Preserve existing CommandExitError so the
+				// SDK wrapper records the existing telemetry; for success,
+				// return stdout as before.
+				if (start.state === "exited" && start.exitCode === 0) {
+					return start.stdout
+				}
+				if (start.state === "deadline_exceeded") {
+					const text =
+						start.stdout.length > 0
+							? `[Command exceeded the host execution deadline]\n${start.stdout}`
+							: `[Command exceeded the host execution deadline]`
+					throw new CommandExitError(start.exitCode ?? 1, text)
+				}
+				if (start.state === "cancelled") {
+					const text = start.stdout.length > 0 ? `[Command was cancelled]\n${start.stdout}` : `[Command was cancelled]`
+					throw new CommandExitError(start.exitCode ?? 1, text)
+				}
+				if (start.state === "spawn_failed") {
+					throw new Error(start.signal ?? "Command failed to spawn")
+				}
+				// exited with non-zero — preserve CommandExitError shape.
+				throw new CommandExitError(
+					start.exitCode ?? 1,
+					start.stdout.length > 0
+						? `[Command exited with code ${start.exitCode ?? 1}]\n${start.stdout}`
+						: `[Command exited with code ${start.exitCode ?? 1}]`,
+				)
 			} catch (error) {
 				telemetryService.captureTerminalExecution(false, "vscode", "child_process", {
 					...(error instanceof CommandExitError && { exitCode: error.exitCode }),

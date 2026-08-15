@@ -158,6 +158,8 @@ describe("VscodeSessionHost telemetry wiring", () => {
 		expect(mockCreateVscodeExtraTools).toHaveBeenCalledWith({} as never, {
 			cwd: "/workspace",
 			getTerminalManager: undefined,
+			foregroundCommands: undefined,
+			commandJobManager: expect.objectContaining({ active: expect.anything() }),
 			vscodeTerminalExecutionMode: undefined,
 		})
 		expect(result.source).toBe("vscode")
