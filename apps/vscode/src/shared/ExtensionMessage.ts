@@ -5,6 +5,24 @@ import { RemoteConfigFields } from "@shared/storage/state-keys"
 import type { Environment } from "../config"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { ApiConfiguration } from "./api"
+
+/**
+ * ACT-CLINEMM-SESSION-AUTONOMY01:
+ * Runtime mirror of the host-owned session auto-approval override.
+ * The webview MUST NOT use this as the security authority — it is a
+ * read-only render target.
+ */
+export type SessionAutoApprovalOverride = "none" | "all"
+
+export interface SessionAutoApprovalState {
+	override: SessionAutoApprovalOverride
+	/**
+	 * The active SDK session id when the override is bound. Undefined
+	 * when inactive. The webview uses this to render "active for current task".
+	 */
+	sessionId?: string
+}
+
 import { BrowserSettings } from "./BrowserSettings"
 import { ClineFeatureSetting } from "./ClineFeatureSetting"
 import { BannerCardData } from "./cline/banner"
@@ -36,6 +54,17 @@ export const DEFAULT_PLATFORM = "unknown"
 
 export const COMMAND_CANCEL_TOKEN = "__cline_command_cancel__"
 export interface ExtensionState {
+	/**
+	 * ACT-CLINEMM-SESSION-AUTONOMY01:
+	 * Ephemeral session-scoped auto-approval override. Never persisted.
+	 * Lifecycle is owned by SdkController (cleared on clearTask/cancelTask).
+	 * The webview is a pure mirror of this state — the host is the security authority.
+	 */
+	sessionAutoApproval?: SessionAutoApprovalState
+	/**
+	 * Backwards-compatible alias used by some webview consumers; same payload.
+	 */
+	sessionAutonomy?: SessionAutoApprovalState
 	isNewUser: boolean
 	welcomeViewCompleted: boolean
 	onboardingModels: OnboardingModelGroup | undefined

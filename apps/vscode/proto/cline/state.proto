@@ -37,6 +37,12 @@ service StateService {
   rpc refreshRemoteConfig(EmptyRequest) returns (Empty);
   rpc testOtelConnection(EmptyRequest) returns (TestConnectionResult);
   rpc testPromptUploading(EmptyRequest) returns (TestConnectionResult);
+  // ACT-CLINEMM-SESSION-AUTONOMY01:
+  // Activate or deactivate the session-scoped auto-approval override.
+  // The override is ephemeral (not persisted), bound to the active SDK
+  // session id, and destroyed by clearTask/cancelTask. The override is a
+  // projection over AutoApprove; hard DENY / execution_plan_invalid still DENY.
+  rpc setSessionAutoApprovalOverride(SetSessionAutoApprovalOverrideRequest) returns (Empty);
 }
 
 message AutoApprovalActions {
@@ -487,4 +493,13 @@ message TestConnectionResult {
   bool success = 1;
   optional string message = 2;
   optional string error = 3;
+}
+
+// ACT-CLINEMM-SESSION-AUTONOMY01:
+// Webview -> host RPC to set the session-scoped auto-approval override.
+// `override = "none"` clears the override. `override = "all"` activates
+// it for the active SDK session id. Any value outside {"none","all"} is
+// rejected by the controller (treated as "none").
+message SetSessionAutoApprovalOverrideRequest {
+  string override = 1;
 }

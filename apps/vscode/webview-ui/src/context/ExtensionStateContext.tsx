@@ -321,6 +321,11 @@ export const ExtensionStateContextProvider: React.FC<{
 		primaryRootIndex: 0,
 		isMultiRootWorkspace: false,
 		multiRootSetting: { user: false, featureFlag: false },
+		// ACT-CLINEMM-SESSION-AUTONOMY01:
+		// Webview is a pure mirror of the host-owned session override state.
+		// Default is inactive; the host pushes the real snapshot.
+		sessionAutoApproval: { override: "none", sessionId: undefined },
+		sessionAutonomy: { override: "none", sessionId: undefined },
 		hooksEnabled: false,
 	})
 	const [expandTaskHeader, setExpandTaskHeader] = useState(true)
