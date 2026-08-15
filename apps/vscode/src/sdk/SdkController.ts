@@ -92,7 +92,13 @@ import { SdkTaskHistory, sessionHistoryRecordToHistoryItem } from "./sdk-task-hi
 import { SdkTaskStartCoordinator } from "./sdk-task-start-coordinator"
 import { createVscodeSdkTelemetryHandle, type VscodeSdkTelemetryHandle } from "./sdk-telemetry"
 import { SdkTerminalExecutionModeCoordinator } from "./sdk-terminal-execution-mode-coordinator"
-import { evaluateCommandToolApprovalWithPlan, getCommandHostAuthorization, isCommandTool } from "./sdk-tool-policies"
+import {
+	evaluateCancelCommandToolApproval,
+	evaluateCommandToolApprovalWithPlan,
+	getCommandHostAuthorization,
+	isCommandTool,
+	isToolAutoApproved,
+} from "./sdk-tool-policies"
 import {
 	extractSdkUserText,
 	findSdkUserMessageIndexByOrdinal,
@@ -422,6 +428,24 @@ export class Controller {
 						hostAuthorization = sessionHostAuth
 					}
 					toolInput = stripRequiresApproval(request.input)
+				}
+				// CORRECTION02: cancel_command is a job-control capability,
+				// not a shell command. It must NOT funnel through the
+				// canonical command-policy normalizer (which would return
+				// ASK on unparseable input regardless of host mode, even
+				// mode `all`). Dispatch to the dedicated job-control
+				// authority function, which respects the same host mode
+				// matrix as run_commands but evaluates the jobId input
+				// shape directly.
+				if (request.toolName === "cancel_command") {
+					const cancelResult = evaluateCancelCommandToolApproval(toolInput, hostAuthorization)
+					return {
+						approved: cancelResult.approved,
+						decision: cancelResult.decision,
+						// cancel_command has no execution plan — it is a
+						// control signal, not a shell command.
+						executionPlan: undefined,
+					}
 				}
 				const result = evaluateCommandToolApprovalWithPlan(toolInput, hostAuthorization)
 				return {

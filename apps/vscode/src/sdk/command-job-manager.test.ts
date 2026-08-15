@@ -415,6 +415,120 @@ describe("CommandJobManager", () => {
 			await manager.dispose()
 		}
 	})
+
+	it("applies a single TOTAL response cap across stdout+stderr (CORRECTION02 P0-2)", async () => {
+		// The previous per-stream cap allowed 2x per-stream bytes to leak
+		// into the model context. The new projection allocates a total
+		// budget across stdout + stderr + 10-char separator.
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				command: `/bin/sh -c "yes ooo | tr -d '\\n' | head -c 200000; yes eee | tr -d '\\n' | head -c 200000 1>&2"`,
+				cwd: process.cwd(),
+				waitBudgetMs: 5_000,
+				executionDeadlineMs: 5_000,
+				maxOutputChars: MAX_RESPONSE_OUTPUT_CHARS,
+			})
+			expect(start.state).toBe("exited")
+			expect(start.exitCode).toBe(0)
+			// Combined total must be <= MAX_RESPONSE_OUTPUT_CHARS (the cap).
+			const total = start.stdout.length + start.stderr.length
+			expect(total).toBeLessThanOrEqual(MAX_RESPONSE_OUTPUT_CHARS)
+			// Both streams should be sliced (the test streams each exceed the cap).
+			expect(start.stdout.length).toBeLessThanOrEqual(MAX_RESPONSE_OUTPUT_CHARS)
+			expect(start.stderr.length).toBeLessThanOrEqual(MAX_RESPONSE_OUTPUT_CHARS)
+			expect(start.outputTruncated).toBe(true)
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	it("deadline-then-cancel race: deadline wins as first-writer (CORRECTION02 P1-1)", async () => {
+		// The deadline fires terminate(job, "deadline"). During the grace
+		// window, a cancel arrives. The first-writer-wins latch must record
+		// "deadline", not "cancel", because the deadline initiated termination.
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				command: longShell(60),
+				cwd: process.cwd(),
+				waitBudgetMs: 100,
+				executionDeadlineMs: 400,
+			})
+			expect(start.state).toBe("running")
+			// Wait until the deadline has fired and begun the grace window.
+			await new Promise((r) => setTimeout(r, 450))
+			// Now send a cancel. The deadline latch must already be set.
+			await manager.cancel({ jobId: start.jobId })
+			await new Promise((r) => setTimeout(r, 200))
+			const terminal = await manager.status({ jobId: start.jobId, waitMs: 0 })
+			expect(terminal.ok).toBe(true)
+			if (terminal.ok) {
+				expect(terminal.snapshot.state).toBe("deadline_exceeded")
+			}
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	it("cancel-then-deadline race: cancel wins as first-writer (CORRECTION02 P1-1)", async () => {
+		// A cancel arrives first, then the deadline fires. The cancel must be
+		// the recorded reason because it initiated termination first.
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				command: longShell(60),
+				cwd: process.cwd(),
+				waitBudgetMs: 100,
+				executionDeadlineMs: 800,
+			})
+			expect(start.state).toBe("running")
+			// Send cancel first.
+			await manager.cancel({ jobId: start.jobId })
+			// Wait until the deadline (800ms) and grace window have elapsed.
+			await new Promise((r) => setTimeout(r, 800 + TERM_GRACE_MS + 500))
+			const terminal = await manager.status({ jobId: start.jobId, waitMs: 0 })
+			expect(terminal.ok).toBe(true)
+			if (terminal.ok) {
+				expect(terminal.snapshot.state).toBe("cancelled")
+			}
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	it("concurrent cancel() calls share the same terminationPromise (CORRECTION02 P1-1)", async () => {
+		// Two concurrent cancels must produce a single termination flow
+		// (one promise, one SIGTERM sequence) and resolve the same outcome.
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				command: longShell(60),
+				cwd: process.cwd(),
+				waitBudgetMs: 100,
+				executionDeadlineMs: 5_000,
+			})
+			expect(start.state).toBe("running")
+			const job = (manager as unknown as { active: Map<string, { terminationPromise?: Promise<void> }> }).active.get(
+				start.jobId,
+			)
+			expect(job).toBeDefined()
+			const a = manager.cancel({ jobId: start.jobId })
+			const b = manager.cancel({ jobId: start.jobId })
+			await Promise.all([a, b])
+			if (job) {
+				expect(job.terminationPromise).toBeDefined()
+			}
+			await new Promise((r) => setTimeout(r, TERM_GRACE_MS + 500))
+			const terminal = await manager.status({ jobId: start.jobId, waitMs: 0 })
+			expect(terminal.ok).toBe(true)
+			if (terminal.ok) {
+				expect(terminal.snapshot.state).toBe("cancelled")
+			}
+		} finally {
+			await manager.dispose()
+		}
+	})
 })
 
 describe("CommandJobManager defaults", () => {

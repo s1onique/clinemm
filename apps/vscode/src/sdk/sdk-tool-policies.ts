@@ -2,6 +2,7 @@ import {
 	buildCommandExecutionPlan,
 	type CommandDecision,
 	type CommandHostAuthorization,
+	type CommandHostMode,
 	commandHostAuthorization,
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	type EvaluatedCommand,
@@ -155,6 +156,117 @@ export function evaluateCommandToolApproval(
 	return {
 		approved: result.decision.kind === "allow",
 		decision: result.decision,
+	}
+}
+
+/**
+ * Validate that an input looks like a `cancel_command` invocation.
+ *
+ * Shape: `{ jobId: string, ... }`. Anything else is rejected with a
+ * DENY (the model cannot elicit mutation through a malformed input).
+ *
+ * ACT-CLINEMM-TRUSTED-BOUNDED-COMMAND-EXECUTION01-CORRECTION02:
+ * `cancel_command` is a job-control capability, not a shell command.
+ * It MUST NOT be routed through the canonical run_commands normalizer,
+ * because the canonical normalizer returns ASK on unparseable input
+ * regardless of host mode — including mode `all`. That would prevent
+ * even YOLO sessions from cancelling their own jobs.
+ */
+export function isCancelCommandInput(input: unknown): boolean {
+	if (input === null || typeof input !== "object") return false
+	const record = input as Record<string, unknown>
+	return typeof record.jobId === "string" && record.jobId.length > 0
+}
+
+/**
+ * Evaluate the authority decision for a `cancel_command` invocation.
+ *
+ * This is the dedicated job-control authority path. It does NOT route
+ * through `evaluateCommandPolicy` because cancel_command has no
+ * command-shaped input — it has a jobId. The matrix is:
+ *
+ *   - explicit hard host DENY rule (when/if cancellation is denied at
+ *     the host level)         → DENY (host_hard_deny)
+ *   - malformed input          → DENY (unknown_input)
+ *   - host mode `manual`       → ASK  (host_mode_manual)
+ *   - host mode `safe-only`    → ALLOW (host_mode_safe_only_rule)
+ *   - host mode `all`          → ALLOW (host_mode_all)
+ *
+ * Model escalation via `requires_approval` is intentionally ignored:
+ * cancel_command has no command field for the model to evaluate, and
+ * a model advisory hint cannot override the user's explicit authority.
+ *
+ * The result is observable: the same authority matrix that protects
+ * `run_commands` (manual=ASK, safe-only=ALLOW, all=ALLOW) without
+ * false-ASK for unparseable input.
+ */
+export function evaluateCancelCommandToolApproval(
+	toolInput: unknown,
+	hostAuthorization: CommandHostAuthorization,
+): { approved: boolean; decision: CommandDecision } {
+	// Input shape check first — malformed input is a hard DENY.
+	if (!isCancelCommandInput(toolInput)) {
+		return {
+			approved: false,
+			decision: {
+				kind: "deny",
+				reason: "cancel_command input must be a non-empty object with a string jobId",
+				source: "unknown_input",
+			},
+		}
+	}
+	// Hard host DENY. The current production deny rules are empty
+	// (no production deny source), but the branch is here so future
+	// hard-deny sources compose without re-architecting this function.
+	// The exact same explicitDenyRules pattern runs in the canonical
+	// shell-command policy; the only difference is which calls those
+	// rules are evaluated against.
+	const denyRules = hostAuthorization.explicitDenyRules ?? []
+	if (denyRules.length > 0) {
+		const probeInput = JSON.stringify(toolInput)
+		for (const rule of denyRules) {
+			if (rule.pattern.test(probeInput)) {
+				return {
+					approved: false,
+					decision: {
+						kind: "deny",
+						reason: `cancel denied by host rule ${rule.source}`,
+						source: "host_hard_deny",
+					},
+				}
+			}
+		}
+	}
+	// Authority matrix by host mode.
+	const mode: CommandHostMode = hostAuthorization.mode
+	if (mode === "all") {
+		return {
+			approved: true,
+			decision: {
+				kind: "allow",
+				reason: "host mode allows all command controls",
+				source: "host_mode_all",
+			},
+		}
+	}
+	if (mode === "safe-only") {
+		return {
+			approved: true,
+			decision: {
+				kind: "allow",
+				reason: "host mode safe-only permits cancelling a host-owned job",
+				source: "host_mode_safe_only_rule",
+			},
+		}
+	}
+	// manual mode (default): every cancel requires user confirmation.
+	return {
+		approved: false,
+		decision: {
+			kind: "ask",
+			reason: "host mode manual requires user confirmation to cancel a command",
+			source: "host_mode_manual",
+		},
 	}
 }
 

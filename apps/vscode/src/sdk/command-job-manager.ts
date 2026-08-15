@@ -209,15 +209,49 @@ function snapshot(job: CommandJob): CommandJobSnapshot {
  * Project an internal snapshot to a model-facing snapshot with the
  * response cap applied. Distinct from `snapshot()` so the retained
  * spool can be larger than any individual response.
+ *
+ * The cap is a TOTAL model-context budget — not a per-stream budget.
+ * The invariant is:
+ *
+ *   length(stdout) + length(separator) + length(stderr) <= totalCap
+ *
+ * where separator is the literal `\n[stderr]\n` (10 chars) used when
+ * the run_commands tool concatenates the two streams, and `length`
+ * either is just the stream itself when stderr is empty. This is the
+ * SUBJECT promise to the model: every response costs at most
+ * `MAX_RESPONSE_OUTPUT_CHARS` of context, period.
+ *
+ * ACT-CLINEMM-TRUSTED-BOUNDED-COMMAND-EXECUTION01-CORRECTION02:
+ * The previous per-stream cap allowed `2 × MAX_RESPONSE_OUTPUT_CHARS`
+ * to leak into the model context. The function now allocates a single
+ * total budget across both streams, with a deterministic truncate
+ * order: stderr first (model context is usually dominated by stdout),
+ * stdout only if it still exceeds the remaining budget.
  */
 function projectResponseSnapshot(snap: CommandJobSnapshot, maxResponseOutputChars: number): CommandJobSnapshot {
-	const stdoutTruncated = snap.stdout.length > maxResponseOutputChars
-	const stderrTruncated = snap.stderr.length > maxResponseOutputChars
+	const stdoutRaw = snap.stdout
+	const stderrRaw = snap.stderr
+	// Combined-text separator is 10 chars (`\n[stderr]\n`) when stderr
+	// is non-empty; zero when stderr is empty.
+	const separatorLength = stderrRaw.length > 0 ? 10 : 0
+	// Reserve budget for the separator; the rest is split between
+	// stdout and stderr.
+	const streamTotal = Math.max(0, maxResponseOutputChars - separatorLength)
+	// Allocate stderr first (it's the smaller stream in our case), then
+	// stdout gets the remainder. This preserves run_commands' historical
+	// preference for stdout.
+	const stderrCap = stderrRaw.length > 0 ? Math.min(stderrRaw.length, streamTotal) : 0
+	const stdoutCap = Math.max(0, streamTotal - stderrCap)
+
+	const truncatedStdout = stdoutRaw.length > stdoutCap
+	const truncatedStderr = stderrRaw.length > stderrCap
+	const truncatedCombined = stdoutRaw.length + stderrRaw.length > streamTotal
+
 	return {
 		...snap,
-		stdout: stdoutTruncated ? snap.stdout.slice(0, maxResponseOutputChars) : snap.stdout,
-		stderr: stderrTruncated ? snap.stderr.slice(0, maxResponseOutputChars) : snap.stderr,
-		outputTruncated: stdoutTruncated || stderrTruncated || snap.outputTruncated,
+		stdout: truncatedStdout ? stdoutRaw.slice(0, stdoutCap) : stdoutRaw,
+		stderr: truncatedStderr ? stderrRaw.slice(0, stderrCap) : stderrRaw,
+		outputTruncated: truncatedStdout || truncatedStderr || truncatedCombined || snap.outputTruncated,
 	}
 }
 
@@ -234,8 +268,21 @@ interface CommandJob {
 	exitCode?: number
 	signal?: string
 
-	/** Latched when the host initiates termination. Survives natural exit. */
+	/**
+	 * Latched when the host initiates termination. Survives natural exit.
+	 * First-writer-wins: a cancel that arrives after the deadline has
+	 * already initiated termination does NOT downgrade the recorded
+	 * reason. The terminal outcome reflects the host's first decision,
+	 * not the most recent call.
+	 */
 	terminationReason: TerminationReason
+	/**
+	 * The in-flight terminate() promise, set once by the first caller.
+	 * Subsequent callers receive this same promise instead of starting
+	 * a new SIGTERM sequence. Avoids racing two terminate() flows
+	 * against each other.
+	 */
+	terminationPromise?: Promise<void>
 	finalized: boolean
 
 	/** Tracked so finalize() can clear them — no leftover listeners. */
@@ -384,13 +431,20 @@ export class CommandJobManager {
 			// promise against a one-shot timer. Each status() call creates
 			// its own ad-hoc promise, so the cost is bounded by the
 			// active status callers — not by repeated polls.
+			// Critical: clear the timer reference so it does not stay
+			// registered for the full remaining duration when the exit
+			// wins the race.
+			let timer: NodeJS.Timeout | undefined
 			await Promise.race([
 				this.exitTransitions.get(job.id) ?? Promise.resolve(),
 				new Promise<void>((resolve) => {
-					const t = setTimeout(resolve, remaining)
-					t.unref()
+					timer = setTimeout(resolve, remaining)
+					timer.unref()
 				}),
 			])
+			if (timer) {
+				clearTimeout(timer)
+			}
 		}
 		return this.makeStartResult(job)
 	}
@@ -413,9 +467,19 @@ export class CommandJobManager {
 
 	private async terminate(job: CommandJob, reason: "deadline" | "cancel"): Promise<void> {
 		if (job.finalized || job.state !== "running") return
-		// Latch the reason first so a race between SIGTERM-induced
-		// natural exit and the grace timer still classifies correctly.
+		// FIRST-WRITER-WINS: if termination is already in flight, return
+		// the existing promise. The deadline-vs-cancel race produces a
+		// stable outcome from the first call, not the most recent.
+		if (job.terminationPromise) {
+			return job.terminationPromise
+		}
+		// Latch the reason and start the termination flow.
 		job.terminationReason = reason
+		job.terminationPromise = this.runTerminationSequence(job)
+		return job.terminationPromise
+	}
+
+	private async runTerminationSequence(job: CommandJob): Promise<void> {
 		// Step 1: SIGTERM (best-effort; on Windows we fall through).
 		try {
 			if (job.process.pid && process.platform !== "win32") {
@@ -424,9 +488,9 @@ export class CommandJobManager {
 		} catch {
 			// Process may already be gone — the exit promise will resolve.
 		}
-		// Step 2: race the grace window against the process exit. If
-		// the child cooperates, stop here. Never issue SIGKILL to a
-		// PID that has already terminated — that's a classic process-
+		// Step 2: race the grace window against the process exit. If the
+		// child cooperates, stop here. Never issue SIGKILL to a PID that
+		// has already terminated — that's a classic process-
 		// supervision hazard (PID reuse, group-ID reuse).
 		let exited = false
 		const exitWatch = job.process.exit.then(
@@ -443,6 +507,12 @@ export class CommandJobManager {
 			graceTimer.unref()
 		})
 		await Promise.race([exitWatch, graceTimeout])
+		// Clear the side that lost the race so we don't keep a timer
+		// (graceTimer) or an unawaited promise (exitWatch) alive past
+		// this point. The other side has already done its work.
+		if (graceTimer) {
+			clearTimeout(graceTimer)
+		}
 		if (!exited) {
 			await job.process.killTree()
 		}
@@ -517,13 +587,18 @@ export class CommandJobManager {
 
 		// Race the existing exitTransition promise against a one-shot
 		// timer. No mutable waiter list — the timer is local to this
-		// call and never registered on the job.
+		// call and never registered on the job. Clear the timer
+		// reference once the race resolves so it does not stay
+		// registered for the full waitMs duration when the exit wins.
 		let timer: NodeJS.Timeout | undefined
 		const timeout = new Promise<void>((resolve) => {
 			timer = setTimeout(resolve, waitMs)
 			timer.unref()
 		})
 		await Promise.race([this.exitTransitions.get(job.id) ?? Promise.resolve(), timeout])
+		if (timer) {
+			clearTimeout(timer)
+		}
 		return { ok: true, snapshot: projectResponseSnapshot(snapshot(job), job.maxResponseOutputChars) }
 	}
 

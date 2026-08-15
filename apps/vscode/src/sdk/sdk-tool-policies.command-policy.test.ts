@@ -14,9 +14,11 @@ import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { describe, expect, it } from "vitest"
 import {
 	buildToolPolicies,
+	evaluateCancelCommandToolApproval,
 	evaluateCommandToolApproval,
 	evaluateCommandToolApprovalWithPlan,
 	getCommandHostAuthorization,
+	isCancelCommandInput,
 	isCommandTool,
 } from "./sdk-tool-policies"
 
@@ -232,7 +234,7 @@ describe("CORRECTION04: mandatory safeExecutionProfile + planner failure = hard 
 	})
 })
 
-describe("CORRECTION01: cancel_command follows the same host authority as run_commands", () => {
+describe("CORRECTION01: cancel_command is registered as a command tool", () => {
 	it("cancel_command is treated as a command tool by isCommandTool", () => {
 		expect(isCommandTool("cancel_command")).toBe(true)
 		expect(isCommandTool("run_commands")).toBe(true)
@@ -261,5 +263,88 @@ describe("CORRECTION01: cancel_command follows the same host authority as run_co
 		const policies = buildToolPolicies(SAFE_ENABLED)
 		expect(policies.cancel_command).toBeDefined()
 		expect(policies.cancel_command?.autoApprove).toBe(false)
+	})
+})
+
+describe("CORRECTION02: cancel_command has dedicated job-control authority (NOT shell-command)", () => {
+	const jobIdInput = { jobId: "cmd_abc123" }
+
+	const manualAuth: CommandHostAuthorization = commandHostAuthorization({ mode: "manual" })
+	const safeOnlyAuth: CommandHostAuthorization = commandHostAuthorization({
+		mode: "safe-only",
+		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	})
+	const allAuth: CommandHostAuthorization = commandHostAuthorization({ mode: "all" })
+
+	it("mode=manual => ASK (host_mode_manual)", () => {
+		const result = evaluateCancelCommandToolApproval(jobIdInput, manualAuth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("ask")
+		expect(result.decision.source).toBe("host_mode_manual")
+	})
+
+	it("mode=safe-only => ALLOW (host_mode_safe_only_rule)", () => {
+		// THE key CORRECTION02 invariant: host-mode safe-only MUST
+		// auto-approve cancel_command. The previous routing through
+		// evaluateCommandPolicy returned ASK on every mode because
+		// {jobId} is not a command-shaped input.
+		const result = evaluateCancelCommandToolApproval(jobIdInput, safeOnlyAuth)
+		expect(result.approved).toBe(true)
+		expect(result.decision.kind).toBe("allow")
+		expect(result.decision.source).toBe("host_mode_safe_only_rule")
+	})
+
+	it("mode=all => ALLOW (host_mode_all)", () => {
+		// YOLO sessions must be able to cancel their own jobs.
+		const result = evaluateCancelCommandToolApproval(jobIdInput, allAuth)
+		expect(result.approved).toBe(true)
+		expect(result.decision.kind).toBe("allow")
+		expect(result.decision.source).toBe("host_mode_all")
+	})
+
+	it("explicit hard host DENY rule => DENY (host_hard_deny)", () => {
+		const denyAuth: CommandHostAuthorization = commandHostAuthorization({
+			mode: "all",
+			explicitDenyRules: [{ source: "test-block", pattern: /cmd_blocked/ }],
+		})
+		const result = evaluateCancelCommandToolApproval({ jobId: "cmd_blocked_xyz" }, denyAuth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("deny")
+		expect(result.decision.source).toBe("host_hard_deny")
+	})
+
+	it("malformed input => DENY (unknown_input)", () => {
+		// The model cannot elicit cancellation through a malformed input.
+		const result = evaluateCancelCommandToolApproval(null, allAuth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("deny")
+		expect(result.decision.source).toBe("unknown_input")
+
+		const empty = evaluateCancelCommandToolApproval({}, allAuth)
+		expect(empty.approved).toBe(false)
+		expect(empty.decision.source).toBe("unknown_input")
+
+		const noJobId = evaluateCancelCommandToolApproval({ foo: "bar" }, allAuth)
+		expect(noJobId.approved).toBe(false)
+		expect(noJobId.decision.source).toBe("unknown_input")
+	})
+
+	it("isCancelCommandInput gates the validation predicate", () => {
+		expect(isCancelCommandInput({ jobId: "cmd_x" })).toBe(true)
+		expect(isCancelCommandInput({ jobId: "" })).toBe(false)
+		expect(isCancelCommandInput({ jobId: 42 })).toBe(false)
+		expect(isCancelCommandInput(null)).toBe(false)
+		expect(isCancelCommandInput(undefined)).toBe(false)
+		expect(isCancelCommandInput("string")).toBe(false)
+	})
+
+	it("model escalation (requires_approval=true) does NOT downgrade authority", () => {
+		// Even if the model hints "I think this is dangerous", the
+		// explicit safe-only ALLOW must stand. cancel_command has no
+		// command field for the model to evaluate; the user's
+		// explicit authority is the only signal that matters.
+		const result = evaluateCancelCommandToolApproval({ jobId: "cmd_x", requires_approval: true }, safeOnlyAuth)
+		expect(result.approved).toBe(true)
+		expect(result.decision.kind).toBe("allow")
 	})
 })
