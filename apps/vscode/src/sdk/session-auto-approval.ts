@@ -1,7 +1,7 @@
 /**
  * Session-scoped auto-approval projection.
  *
- * ACT-CLINEMM-SESSION-AUTONOMY01 + ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01
+ * ACT-CLINEMM-SESSION-AUTONOMY01 + ...-CORRECTION01 + ...-CORRECTION02
  *
  * This module defines a thin, ephemeral projection over the canonical
  * AutoApprove authority. It is NOT a new approval authority — every
@@ -12,29 +12,53 @@
  *   2. isToolAutoApproved() for non-command tools, which reads the live
  *      persisted AutoApprovalSettings from StateManager.
  *
+ * CORRECTION02 lifecycle invariants (vs CORRECTION01):
+ *
+ *   - getOverride() is PURE — it returns the bound override for a given
+ *     session id without consuming any pre-arm intent. Pre-arm consumption
+ *     lives in consumePendingOverride(sessionId), which is called exactly
+ *     once at the authoritative session-id allocation site
+ *     (SdkSessionLifecycle.startNewSession) and nowhere else. CORRECTION01's
+ *     implementation made getOverride() consume state, which is brittle:
+ *     the first approval callback wins, and lifecycle order is no longer
+ *     explicit.
+ *
+ *   - clearTask/cancelTask call clearActiveOverride() (NOT the union
+ *     clearSessionAutoApproval()). A pre-armed intent for the next task
+ *     therefore survives cancellation of the current task, which is what
+ *     the user actually wants when they arm a follow-up task.
+ *
+ *   - resolveSessionHostAuthorization(baseAuth, override) composes OVER
+ *     baseAuth instead of manufacturing a fresh authorization. This makes
+ *     explicitDenyRules preservation structural rather than conventional.
+ *
+ *   - setOverride(undefined, "none") still clears both the bound override
+ *     AND the pre-arm intent — this is the UI toggle's "off" semantic,
+ *     distinct from the production lifecycle hooks.
+ *
  * What this module does:
  *
  *   - Defines a narrow "SessionAutoApprovalOverride" type ("none" | "all").
  *   - Hosts a single in-memory owner of that override, scoped to the
- *     active SDK session (the Cline task/session identity produced by
- *     SdkSessionLifecycle). It is intentionally NOT a global boolean,
+ *     active SDK session. It is intentionally NOT a global boolean,
  *     NOT in workspaceState, NOT in globalState, NOT in StateManager.
  *   - Exposes a pure resolver `resolveEffectiveAutoApproval(persisted, override)`
  *     that yields the effective AutoApprovalSettings used by the non-command
  *     `isToolAutoApproved()` path. It does not mutate its inputs.
- *   - Exposes `resolveSessionHostAuthorization(override)` for the command
- *     path: when the override is "all", commands enter the canonical command
- *     policy in `{ mode: "all", explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES }`
- *     so hardened envelopes are preserved (option B). Otherwise `undefined`
- *     is returned and the caller falls through to the existing
- *     `getCommandHostAuthorization(...)` flow unchanged.
+ *   - Exposes `resolveSessionHostAuthorization(baseAuth, override)` for the
+ *     command path: when the override is "all", the host authorization is
+ *     composed OVER baseAuth (preserving explicitDenyRules) with mode:"all"
+ *     + the base's explicitAllowRules (falling back to
+ *     DEFAULT_COMMAND_HOST_ALLOW_RULES only when the base has none).
+ *     Otherwise `undefined` is returned and the caller falls through to
+ *     the existing `getCommandHostAuthorization(...)` flow unchanged.
  *   - Exposes `stripRequiresApproval(input)` so that when the override is
  *     active, the canonical policy's `model_escalation` rule does not
  *     reintroduce ASK after the user explicitly opted into ALL.
  *
- * CORRECTION01 also adds a one-shot pre-arm intent: the user can flip the
- * toggle before any task exists. The intent is consumed exactly once when
- * the next task obtains its session id and becomes the bound override.
+ * CORRECTION01 added the pre-arm intent. CORRECTION02 made its lifecycle
+ * explicit (pure read + authoritative consume) and made the host-authority
+ * composition defensive against deny-rule regression.
  *
  * Hard invariants this module preserves:
  *
@@ -46,17 +70,20 @@
  *     object.
  *   - Hard DENY in the command policy still DENY (it is checked at step 1,
  *     before any mode-based logic, and the override does not change this).
+ *   - The composed host authorization preserves explicitDenyRules from the
+ *     base (structural guarantee; today empty in production but available
+ *     for future deny sources).
  *   - When the override is "all" the hostAuthorization is `{ mode: "all",
- *     explicitAllowRules: ... }` so the policy still consults allow rules
- *     first; `execution_plan_invalid` is reachable on planner failure.
- *   - Override lifetime is bound to the active SDK session. clearTask()
- *     cancels any in-flight task and destroys the override (and any armed
- *     intent). New tasks start with `none` unless the pre-arm intent was
- *     set; resuming the SAME taskId preserves it (because the SDK session
- *     id is reused across reinitExistingTaskFromId/showTaskWithId).
+ *     explicitAllowRules: base.explicitAllowRules ?? DEFAULT_..., ...base }`
+ *     so the policy still consults allow rules first; `execution_plan_invalid`
+ *     is reachable on planner failure.
+ *   - Override lifetime is bound to the active SDK session. clearTask() and
+ *     cancelTask() destroy only the bound override (clearActiveOverride);
+ *     a pre-armed intent survives cancellation of the current task and is
+ *     consumed exactly once by consumePendingOverride() when the next task
+ *     obtains its session id.
  */
-
-import { type CommandHostAuthorization, commandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } from "@cline/core"
+import { type CommandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } from "@cline/core"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import { Logger } from "@/shared/services/Logger"
 
@@ -145,40 +172,53 @@ export function resolveEffectiveHostMode(
 }
 
 /**
- * ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01
+ * ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION02
  *
  * Compose the CommandHostAuthorization to feed into the canonical policy
- * lattice when the session override is active. Two design decisions live
- * here:
+ * lattice when the session override is active. **Composes over** the
+ * existing `baseAuth` rather than manufacturing a fresh one, so:
  *
- *  1. Option B: "Approve all for this task" means "skip human approval but
- *     retain hardened envelopes when a command has a known safe execution
- *     profile." We forward the host allow rules alongside `mode: "all"`,
- *     so the policy's per-command precedence still consults
- *     `explicitAllowRules` first (and so `execution_plan_invalid` is
- *     reachable on planner failure). Only commands with no matching rule
- *     fall through to bare `host_mode_all`. This is materially different
- *     from bare `mode: "all"`, which short-circuits at step 3 of the
- *     precedence and skips the planner entirely.
+ *   - Any `explicitDenyRules` already configured on the host survive the
+ *     override (today: absent in production, but injected by tests and
+ *     available for future deny sources). CORRECTION01 dropped these;
+ *     CORRECTION02 preserves them by spreading.
+ *   - Any existing `explicitAllowRules` on the host are kept when set
+ *     (we only fall back to DEFAULT_COMMAND_HOST_ALLOW_RULES when the
+ *     host has none). This avoids accidentally widening a host that
+ *     already has a narrower curated rule set.
+ *
+ * Two semantic decisions still live here:
+ *
+ *  1. Option B (carried from CORRECTION01): we project the host
+ *     authorization to `mode: "all"` so the canonical policy's
+ *     per-command precedence still consults `explicitAllowRules`
+ *     first (and so `execution_plan_invalid` is reachable on planner
+ *     failure). Only commands with no matching rule fall through to
+ *     bare `host_mode_all`. This is materially different from a bare
+ *     `mode: "all"` authorization, which short-circuits at step 3 of
+ *     the precedence and skips the planner entirely.
  *
  *  2. Deny rules stay absolute — they are checked at step 1, before any
- *     mode-based logic. The override does not change this. We still emit
- *     the explicit deny rules the SDK host was already configured with so
- *     that nothing in the production lattice silently weakens under
- *     session autonomy.
+ *     mode-based logic. The override does not change this. By composing
+ *     over `baseAuth`, we make that guarantee structural: the call
+ *     site cannot accidentally drop the deny rules.
  *
- * Returns `undefined` when the override is inactive — callers should fall
- * through to the existing `getCommandHostAuthorization(...)` flow, which
- * already composes allow rules from persisted settings.
+ * Returns `undefined` when the override is inactive — callers fall through
+ * to the existing `getCommandHostAuthorization(...)` flow unchanged.
  */
-export function resolveSessionHostAuthorization(override: SessionAutoApprovalOverride): CommandHostAuthorization | undefined {
+export function resolveSessionHostAuthorization(
+	baseAuth: CommandHostAuthorization,
+	override: SessionAutoApprovalOverride,
+): CommandHostAuthorization | undefined {
 	if (override !== "all") {
 		return undefined
 	}
-	return commandHostAuthorization({
+	const allowRules = baseAuth.explicitAllowRules ?? DEFAULT_COMMAND_HOST_ALLOW_RULES
+	return {
+		...baseAuth,
 		mode: "all",
-		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
-	})
+		explicitAllowRules: allowRules,
+	}
 }
 
 /**
@@ -211,17 +251,25 @@ export function stripRequiresApproval(input: unknown): unknown {
  *
  * Why a class with explicit methods (not a bare module-global):
  *   - Bounded by the SdkController lifetime; we can prove no leak into a
- *     stale task because clearSessionAutoApproval() is called from the
- *     clearTask choke-point.
+ *     stale task because clearActiveOverride() is called from the
+ *     clearTask/cancelTask choke-points.
  *   - Discoverable: every mutation and read goes through these methods,
  *     so a code reviewer can prove the override cannot silently resurrect.
  *   - Testable: a fresh instance per test trivially isolates state.
  *
  * CORRECTION01: also owns the **ephemeral pre-arm intent**: a user can
- * flip the toggle before any task exists. The intent is consumed exactly
- * once when the next task obtains a session id, and is destroyed by the
- * same clearTask/cancelTask choke-points as the active override. There is
- * NO persistent YOLO state and NO leak across tasks.
+ * flip the toggle before any task exists.
+ *
+ * CORRECTION02: the lifecycle is now explicit:
+ *   - getOverride() is PURE — never consumes intent.
+ *   - consumePendingOverride(newSessionId) is the ONLY arm-consumer; it is
+ *     called exactly once at the authoritative session-id allocation site.
+ *   - clearActiveOverride() destroys only the bound override; the pre-arm
+ *     survives the cancellation of the current task (so an arm-then-cancel
+ *     workflow can still let the next task start in ALL mode).
+ *   - clearPendingArm() destroys only the pre-arm.
+ *   - clearSessionAutoApproval() is the legacy union of both; the
+ *     production lifecycle prefers the targeted methods above.
  *
  * Threading: all methods are synchronous; the SDK coordinator's approval
  * callback already runs on the extension-host main loop, so a snapshot
@@ -246,24 +294,53 @@ export class SessionAutoApprovalStore {
 	 * cleared) and returned for the requested sessionId — binding the
 	 * override to the new task on first read.
 	 */
+	/**
+	 * Read the override bound to `sessionId`. **Pure** — does not consume any
+	 * pre-arm intent. Lifecycle transitions that allocate a new session id
+	 * MUST call `consumePendingOverride(sessionId)` exactly once at the
+	 * authoritative allocation point (not here, since `getOverride` is called
+	 * on every approval request and we cannot tie lifecycle to queries).
+	 *
+	 * Returns "none" when:
+	 *   - sessionId is undefined
+	 *   - the bound override is for a different session (prevents stale-task leak)
+	 *   - the store is entirely inactive
+	 */
 	getOverride(sessionId: string | undefined): SessionAutoApprovalOverride {
 		if (!sessionId) {
 			return "none"
-		}
-		// Consume the one-shot pre-arm intent: this is the moment the new
-		// task obtains its session id. Bind the armed value to this session
-		// and clear the arm. After this read, ordinary bound logic applies.
-		if (this.armedOverride !== "none") {
-			this.current = this.armedOverride
-			this.currentSessionId = sessionId
-			Logger.log(`[SessionAutoApproval] pre-arm intent consumed → bound to sessionId=${sessionId}`)
-			this.armedOverride = "none"
-			return this.current
 		}
 		if (this.currentSessionId !== sessionId) {
 			return "none"
 		}
 		return this.current
+	}
+
+	/**
+	 * Consume any pending pre-arm intent and bind it to `sessionId`.
+	 *
+	 * This is the ONLY method that consumes the arm. Called from the
+	 * authoritative session-id-allocation site (SdkSessionLifecycle.startNewSession
+	 * after `startResult.sessionId` becomes the active session id) and from
+	 * the resume path (same id is reused, so this is a no-op when the arm is
+	 * empty).
+	 *
+	 * Returns `true` if an arm was consumed (and the override was bound),
+	 * `false` if no arm was set.
+	 *
+	 * `consumePendingOverride` MUST NOT be called twice for the same session
+	 * id with an arm in between — by design the arm is one-shot. Calling it
+	 * twice with no intervening arm is safe (returns false).
+	 */
+	consumePendingOverride(sessionId: string): boolean {
+		if (this.armedOverride === "none") {
+			return false
+		}
+		this.current = this.armedOverride
+		this.currentSessionId = sessionId
+		this.armedOverride = "none"
+		Logger.log(`[SessionAutoApproval] pre-arm intent consumed → bound to sessionId=${sessionId}`)
+		return true
 	}
 
 	/**
@@ -274,19 +351,21 @@ export class SessionAutoApprovalStore {
 	 * - `override === "all"` without a `sessionId`: arms a one-shot intent
 	 *   for the next task (no current binding change).
 	 * - `override === "none"`: clears the bound override AND any armed
-	 *   intent. (One button turn-off clears both, by design — the user's
-	 *   intent is "I don't want autonomy right now.")
+	 *   intent. (The UI toggle explicitly means "I don't want autonomy
+	 *   right now" — that covers both the current task and any pending
+	 *   next-task arm. clearTask/cancelTask, in contrast, only call
+	 *   `clearActiveOverride()` so a pre-arm survives the cancellation of
+	 *   the previous task.)
 	 */
 	setOverride(sessionId: string | undefined, override: SessionAutoApprovalOverride): void {
 		if (override === "none") {
-			const hadArm = this.armedOverride !== "none"
-			const hadBind = this.current !== "none" || this.currentSessionId !== undefined
-			this.current = "none"
-			this.currentSessionId = undefined
-			this.armedOverride = "none"
-			Logger.log(
-				`[SessionAutoApproval] override cleared (sessionId=${sessionId ?? "<none>"}; bound=${hadBind}, armed=${hadArm})`,
-			)
+			// UI toggle: explicit "off" clears both bound AND arm.
+			// Distinct from clearSessionAutoApproval() which is the union of
+			// the two clear-* methods below; calling the split methods keeps
+			// each one's log path honest.
+			this.clearActiveOverride()
+			this.clearPendingArm()
+			void sessionId // accepted for symmetry with setOverride(... , "all")
 			return
 		}
 		// override === "all"
@@ -303,22 +382,48 @@ export class SessionAutoApprovalStore {
 	}
 
 	/**
-	 * Destroy any active override AND any pre-arm intent. Called from the
-	 * task-clear choke-point (clearTask / cancelTask). This guarantees the
-	 * override does not leak into a subsequent task — including a subsequent
-	 * arm-then-task workflow that the user expected to consume the arm.
+	 * Destroy ONLY the bound override. Does NOT touch the pre-arm intent.
+	 * Called from the task-clear choke-point (clearTask) and from cancelTask.
+	 *
+	 * Cancellation of the currently-running task should NOT erase a pre-arm
+	 * intent that exists specifically for the not-yet-created next task — the
+	 * user may have explicitly armed the next task before cancelling this one.
+	 * Cancellation of the current task means "stop this one", not "abort my
+	 * plans for the next one".
 	 */
-	clearSessionAutoApproval(): void {
-		const hadArm = this.armedOverride !== "none"
+	clearActiveOverride(): void {
 		const hadBind = this.current !== "none" || this.currentSessionId !== undefined
-		if (hadArm || hadBind) {
+		if (hadBind) {
 			Logger.log(
-				`[SessionAutoApproval] override destroyed (was=${this.current}, sessionId=${this.currentSessionId ?? "<none>"}, armed=${this.armedOverride})`,
+				`[SessionAutoApproval] active override cleared (was=${this.current}, sessionId=${this.currentSessionId ?? "<none>"})`,
 			)
 		}
 		this.current = "none"
 		this.currentSessionId = undefined
+	}
+
+	/**
+	 * Destroy ONLY the pre-arm intent. Does NOT touch the bound override.
+	 * Called when the user explicitly disarms via the UI toggle without an
+	 * active task (setOverride(undefined, "none") also calls this).
+	 */
+	clearPendingArm(): void {
+		if (this.armedOverride !== "none") {
+			Logger.log(`[SessionAutoApproval] pending arm cleared (was=${this.armedOverride})`)
+		}
 		this.armedOverride = "none"
+	}
+
+	/**
+	 * Destroy the bound override AND the pre-arm intent. Legacy union of
+	 * clearActiveOverride() + clearPendingArm(); kept for callers that want
+	 * a full reset. The production lifecycle (clearTask/cancelTask) should
+	 * prefer clearActiveOverride() to preserve a separately-armed next-task
+	 * intent across the current task's cancellation.
+	 */
+	clearSessionAutoApproval(): void {
+		this.clearActiveOverride()
+		this.clearPendingArm()
 	}
 
 	/**

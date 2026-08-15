@@ -420,7 +420,9 @@ export class Controller {
 				let hostAuthorization = getCommandHostAuthorization(request.toolName, persisted, this.mcpHub)
 				let toolInput = request.input
 				if (override === "all") {
-					const sessionHostAuth = resolveSessionHostAuthorization(override)
+					// Compose over the base auth we just computed; this preserves
+					// explicitDenyRules (CORRECTION02 fix — see resolveSessionHostAuthorization).
+					const sessionHostAuth = resolveSessionHostAuthorization(hostAuthorization, override)
 					if (sessionHostAuth) {
 						hostAuthorization = sessionHostAuth
 					}
@@ -474,6 +476,9 @@ export class Controller {
 			// this.mode is assigned later in this constructor; the closure only
 			// runs at send time, long after construction completes.
 			consumeModeSwitchNotice: (sessionId) => this.mode.consumeModeSwitchNotice(sessionId),
+			// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION02: consume the user-armed
+			// pre-arm at the authoritative session-id allocation site.
+			consumePendingOverride: (sessionId) => this.sessionAutoApproval.consumePendingOverride(sessionId),
 			onSendComplete: async () => {
 				// Normal flows close their diff sessions inline; anything left here is orphaned.
 				void this.diffEdits.discardAllPreviews("turn complete")
@@ -1359,10 +1364,13 @@ export class Controller {
 		// turn land on the wrong side of the UI mode. (Full fence-before-abort epoch bump lands
 		// in S6; this sets the authoritative phase now.)
 		this.turnStateTracker.set("resumable")
-		// ACT-CLINEMM-SESSION-AUTONOMY01: task cancellation destroys the
-		// session-scoped auto-approval override. The next task must start
-		// from the user's persisted settings, not a stale "all".
-		this.sessionAutoApproval.clearSessionAutoApproval()
+		// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION02: cancellation of the
+		// currently-running task destroys only the bound override. A pre-armed
+		// intent for the next task SURVIVES this cancellation — the user may have
+		// explicitly armed a follow-up task before cancelling the current one.
+		// Cancellation of the current task means "stop this one", not "abort my
+		// plans for the next one".
+		this.sessionAutoApproval.clearActiveOverride()
 		await this.taskControl.cancelTask()
 	}
 
@@ -1421,12 +1429,15 @@ export class Controller {
 		this.pendingClineAuthRetryPrompt = undefined
 		// No active task — UI returns to idle (input enabled, no buttons/thinking).
 		this.turnStateTracker.set("idle")
-		// ACT-CLINEMM-SESSION-AUTONOMY01: clearTask is the universal
-		// choke-point that covers (a) the user clicking "New Task",
+		// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION02: clearTask is the
+		// universal choke-point that covers (a) the user clicking "New Task",
 		// (b) initTask calling clearTask() before starting a new session,
-		// (c) any controller-driven reset. Destroying the override here
-		// guarantees no override leaks into the next task.
-		this.sessionAutoApproval.clearSessionAutoApproval()
+		// (c) any controller-driven reset. It destroys ONLY the bound override;
+		// a pre-armed intent for the next task SURVIVES clearTask (it is
+		// consumed later by consumePendingOverride at the new session-id
+		// allocation site). This is the property the user expects when they
+		// arm a follow-up task before clearing the current one.
+		this.sessionAutoApproval.clearActiveOverride()
 		await this.taskControl.clearTask()
 		await this.postStateToWebview()
 	}

@@ -81,7 +81,7 @@ function makeCoordinator(opts: { sessionId: string; store: SessionAutoApprovalSt
 			let hostAuthorization = getCommandHostAuthorization(request.toolName, effective)
 			let toolInput = request.input
 			if (override === "all") {
-				const sessionHostAuth = resolveSessionHostAuthorization(override)
+				const sessionHostAuth = resolveSessionHostAuthorization(hostAuthorization, override)
 				if (sessionHostAuth) {
 					hostAuthorization = sessionHostAuth
 				}
@@ -335,35 +335,121 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator
 		})
 	})
 
-	describe("CORRECTION01: pre-arm intent is consumed exactly once on next task", () => {
-		it("armed intent binds to the next task's session id and clears", async () => {
+	describe("CORRECTION02: pre-arm intent + lifecycle separation", () => {
+		it("getOverride is PURE: it does NOT consume the arm across reads", async () => {
 			const store = new SessionAutoApprovalStore()
 			store.setOverride(undefined, "all") // arms
 			expect(store.isArmed()).toBe(true)
-			// First read for the new session consumes the arm and binds.
-			expect(store.getOverride("s-A")).toBe("all")
-			expect(store.isArmed()).toBe(false)
-			// Subsequent reads see the regular bound state.
-			expect(store.getOverride("s-A")).toBe("all")
+			// Repeated reads with no consumption must leave the arm intact.
+			expect(store.getOverride("s-A")).toBe("none")
+			expect(store.getOverride("s-A")).toBe("none")
 			expect(store.getOverride("s-B")).toBe("none")
+			expect(store.isArmed()).toBe(true)
 		})
 
-		it("clearSessionAutoApproval() destroys armed intent too", () => {
+		it("consumePendingOverride binds the arm to a session id and clears it", () => {
 			const store = new SessionAutoApprovalStore()
 			store.setOverride(undefined, "all")
-			expect(store.isArmed()).toBe(true)
+			const consumed = store.consumePendingOverride("s-A")
+			expect(consumed).toBe(true)
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("s-A")).toBe("all")
+			expect(store.getOverride("s-B")).toBe("none") // stale
+		})
+
+		it("consumePendingOverride is a no-op when no arm is set", () => {
+			const store = new SessionAutoApprovalStore()
+			expect(store.consumePendingOverride("s-A")).toBe(false)
+			expect(store.getOverride("s-A")).toBe("none")
+		})
+
+		it("clearActiveOverride destroys the bound override only (arm survives)", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride("s-A", "all") // bind directly
+			store.setOverride(undefined, "all") // also arm
+			store.clearActiveOverride()
+			expect(store.getOverride("s-A")).toBe("none")
+			expect(store.isArmed()).toBe(true) // arm survives!
+		})
+
+		it("clearPendingArm destroys the arm only (bind survives)", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride("s-A", "all") // bind directly
+			store.setOverride(undefined, "all") // also arm
+			store.clearPendingArm()
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("s-A")).toBe("all") // bind survives!
+		})
+
+		it("clearSessionAutoApproval destroys both (full reset)", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all")
+			store.consumePendingOverride("s-A")
 			store.clearSessionAutoApproval()
 			expect(store.isArmed()).toBe(false)
 			expect(store.getOverride("s-A")).toBe("none")
 		})
 
-		it("setOverride('none') clears both bound and armed", () => {
+		it("setOverride(undefined, 'none') clears both arm and bind (UI toggle off)", () => {
 			const store = new SessionAutoApprovalStore()
 			store.setOverride(undefined, "all") // arms
-			store.setOverride("s-X", "all") // also bind for some unrelated session
+			store.consumePendingOverride("s-X") // binds
 			store.setOverride(undefined, "none")
 			expect(store.isArmed()).toBe(false)
 			expect(store.getOverride("s-X")).toBe("none")
+		})
+	})
+
+	describe("CORRECTION02: composition over baseAuth preserves explicitDenyRules", () => {
+		// This is the P1 fix from the reviewer: a deny rule on the base
+		// authorization MUST survive session override=all. CORRECTION01
+		// manufactured a fresh authorization and silently dropped the
+		// deny rules; this test would fail CORRECTION01.
+		it("base explicitDenyRules survive session override=all in the composed auth", async () => {
+			const denyRule = { source: "production_deny", pattern: /^\s*rm\s+-rf/u }
+			const task = createTaskProxy("s-A", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const store = new SessionAutoApprovalStore()
+			store.setOverride("s-A", "all")
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "s-A",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: (request) => {
+					// The base auth has an explicit deny rule. Even after
+					// composing with the session override=all, the deny rule
+					// must remain in the composed authorization.
+					const baseAuth = commandHostAuthorization({
+						mode: "safe-only",
+						explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+						explicitDenyRules: [denyRule],
+					})
+					const override = store.getOverride("s-A")
+					const composed = resolveSessionHostAuthorization(baseAuth, override)
+					if (!composed) throw new Error("expected composed auth")
+					// Proven invariants on the composed auth:
+					expect(composed.explicitDenyRules).toBeDefined()
+					expect(composed.explicitDenyRules).toHaveLength(1)
+					expect(composed.explicitDenyRules![0]).toEqual(denyRule)
+					expect(composed.mode).toBe("all")
+					return evaluateCommandToolApprovalWithPlan(request.input, composed)
+				},
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "c",
+				iteration: 1,
+				toolCallId: "tc-deny-survives",
+				toolName: "run_commands",
+				input: { command: "rm -rf /tmp", requires_approval: false },
+				policy: {},
+			})
+			await expect(promise).resolves.toMatchObject({
+				approved: false,
+				reason: expect.stringMatching(/dangerous|deny/i),
+			})
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
 		})
 	})
 })
