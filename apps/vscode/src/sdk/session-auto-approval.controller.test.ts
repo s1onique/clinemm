@@ -48,33 +48,34 @@ vi.mock("./vscode-session-host", () => ({
 describe("SessionAutoApprovalStore + Controller choke-points", () => {
 	it("new SessionAutoApprovalStore starts inactive", () => {
 		const store = new SessionAutoApprovalStore()
-		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined })
+		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined, armed: "none" })
 	})
 
 	it("setOverride('all', sessionId) binds to that session", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride("sess-A", "all")
-		expect(store.snapshot()).toEqual({ override: "all", sessionId: "sess-A" })
+		expect(store.snapshot()).toEqual({ override: "all", sessionId: "sess-A", armed: "none" })
 	})
 
-	it("setOverride('all', undefined) is refused", () => {
+	it("CORRECTION01: setOverride('all', undefined) ARMS rather than refuses", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride(undefined, "all")
-		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined })
+		expect(store.isArmed()).toBe(true)
+		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined, armed: "all" })
 	})
 
 	it("setOverride('none') clears regardless of sessionId (UI deactivation)", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride("sess-A", "all")
 		store.setOverride("sess-A", "none")
-		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined })
+		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined, armed: "none" })
 	})
 
 	it("clearSessionAutoApproval destroys any active override (clearTask choke-point)", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride("sess-A", "all")
 		store.clearSessionAutoApproval()
-		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined })
+		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined, armed: "none" })
 	})
 
 	it("getOverride returns 'none' for stale sessionId (stale-task leak proof)", () => {

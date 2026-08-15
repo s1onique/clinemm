@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-SESSION-AUTONOMY01
+ * ACT-CLINEMM-SESSION-AUTONOMY01 + ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01
  *
  * Webview tests for the SessionAutoApprovalToggle component.
  *
@@ -10,6 +10,10 @@
  *     checkbox is off, even though host state has override="all".
  *   - First activation requires confirm; subsequent deactivation does not.
  *   - RPC is fired on confirm / direct toggle.
+ *
+ * CORRECTION01: also covers pre-arm - when no task exists, the toggle is
+ * enabled (not disabled), reads "Approve all for next task", and an armed
+ * intent renders the checkbox as on.
  */
 
 import type { SessionAutoApprovalOverride } from "@shared/ExtensionMessage"
@@ -26,10 +30,16 @@ vi.mock("@/services/grpc-client", () => ({
 	},
 }))
 
-function renderWithContext(opts: { override: SessionAutoApprovalOverride; sessionId?: string; currentTaskSessionId?: string }) {
+function renderWithContext(opts: {
+	override: SessionAutoApprovalOverride
+	sessionId?: string
+	currentTaskSessionId?: string
+	armed?: SessionAutoApprovalOverride
+}) {
 	const value = {
 		sessionAutoApproval: { override: opts.override, sessionId: opts.sessionId },
 		sessionAutonomy: { override: opts.override, sessionId: opts.sessionId },
+		sessionAutoApprovalArmed: opts.armed ?? "none",
 		currentTaskItem: opts.currentTaskSessionId ? { id: opts.currentTaskSessionId } : undefined,
 	} as unknown as Parameters<typeof ExtensionStateContext.Provider>[0]["value"]
 	return render(
@@ -39,11 +49,27 @@ function renderWithContext(opts: { override: SessionAutoApprovalOverride; sessio
 	)
 }
 
-describe("SessionAutoApprovalToggle", () => {
-	it("renders the toggle with default unchecked state when override=none", () => {
+function getCheckbox(): HTMLInputElement | null {
+	return screen.getByTestId("session-autonomy-toggle").querySelector("input[type=checkbox]") as HTMLInputElement | null
+}
+
+describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SessionAutoApprovalToggle", () => {
+	it("renders the toggle for an active task with override=none", () => {
 		renderWithContext({ override: "none", currentTaskSessionId: "task-A" })
 		expect(screen.getByTestId("session-autonomy-toggle")).toBeInTheDocument()
 		expect(screen.getByText(/Approve all for this task/i)).toBeInTheDocument()
+		expect(getCheckbox()?.checked).toBe(false)
+	})
+
+	it("CORRECTION01: renders the pre-arm toggle when no task exists", () => {
+		renderWithContext({ override: "none" })
+		expect(screen.getByText(/Approve all for next task/i)).toBeInTheDocument()
+		expect(getCheckbox()?.checked).toBe(false)
+	})
+
+	it("CORRECTION01: armed intent renders the checkbox as checked", () => {
+		renderWithContext({ override: "none", armed: "all" })
+		expect(getCheckbox()?.checked).toBe(true)
 	})
 
 	it("first activation requires explicit confirmation (no immediate RPC)", async () => {
@@ -53,6 +79,16 @@ describe("SessionAutoApprovalToggle", () => {
 		await user.click(screen.getByTestId("session-autonomy-toggle"))
 		expect(spy).not.toHaveBeenCalled()
 		expect(screen.getByText(/Approve ordinary actions automatically for this task/i)).toBeInTheDocument()
+	})
+
+	it("CORRECTION01: confirming arm intent shows 'Arm for next task' button label", async () => {
+		const user = userEvent.setup()
+		const spy = vi.mocked(StateServiceClient.setSessionAutoApprovalOverride)
+		renderWithContext({ override: "none" })
+		await user.click(screen.getByTestId("session-autonomy-toggle"))
+		expect(screen.getByRole("button", { name: /arm for next task/i })).toBeInTheDocument()
+		await user.click(screen.getByRole("button", { name: /arm for next task/i }))
+		expect(spy).toHaveBeenCalledWith({ override: "all" })
 	})
 
 	it("confirming enables the override (RPC fires with 'all')", async () => {
@@ -72,23 +108,27 @@ describe("SessionAutoApprovalToggle", () => {
 		expect(spy).toHaveBeenCalledWith({ override: "none" })
 	})
 
+	it("CORRECTION01: deactivating armed intent fires RPC with 'none'", async () => {
+		const user = userEvent.setup()
+		const spy = vi.mocked(StateServiceClient.setSessionAutoApprovalOverride)
+		renderWithContext({ override: "none", armed: "all" })
+		await user.click(screen.getByTestId("session-autonomy-toggle"))
+		expect(spy).toHaveBeenCalledWith({ override: "none" })
+	})
+
 	it("stale override (different sessionId) does NOT render the toggle as active", () => {
 		renderWithContext({
 			override: "all",
 			sessionId: "old-task",
 			currentTaskSessionId: "new-task",
 		})
-		// The host pushed override="all" for "old-task"; the current task is
-		// "new-task". The toggle should render unchecked for the new task.
-		const checkbox = screen
-			.getByTestId("session-autonomy-toggle")
-			.querySelector("input[type=checkbox]") as HTMLInputElement | null
-		expect(checkbox).not.toBeNull()
-		expect(checkbox?.checked).toBe(false)
+		expect(getCheckbox()?.checked).toBe(false)
 	})
 
-	it("disables the toggle when no current task session is known", () => {
-		renderWithContext({ override: "none" })
-		expect(screen.getByText(/start a task to enable/i)).toBeInTheDocument()
+	it("CORRECTION01: confirm copy mentions the truthful hard-DENY contract", async () => {
+		const user = userEvent.setup()
+		renderWithContext({ override: "none", currentTaskSessionId: "task-A" })
+		await user.click(screen.getByTestId("session-autonomy-toggle"))
+		expect(screen.getByText(/ClineMM command policy remains enforced/i)).toBeInTheDocument()
 	})
 })

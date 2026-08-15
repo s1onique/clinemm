@@ -23,6 +23,15 @@ export interface SessionAutoApprovalState {
 	sessionId?: string
 }
 
+/**
+ * CORRECTION01:
+ * Ephemeral pre-arm intent. When this is "all", the next task that
+ * obtains its session id will be bound to the override automatically
+ * (one-shot consumption). The webview renders "Armed for next task"
+ * when armed !== "none".
+ */
+export type SessionAutoApprovalArmedState = SessionAutoApprovalOverride
+
 import { BrowserSettings } from "./BrowserSettings"
 import { ClineFeatureSetting } from "./ClineFeatureSetting"
 import { BannerCardData } from "./cline/banner"
@@ -65,6 +74,13 @@ export interface ExtensionState {
 	 * Backwards-compatible alias used by some webview consumers; same payload.
 	 */
 	sessionAutonomy?: SessionAutoApprovalState
+	/**
+	 * ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01:
+	 * One-shot pre-arm intent. When this is "all", the next task starts
+	 * already bound to the session override (the arm is consumed at first
+	 * session id read). The webview uses this to render "Armed for next task".
+	 */
+	sessionAutoApprovalArmed?: SessionAutoApprovalArmedState
 	isNewUser: boolean
 	welcomeViewCompleted: boolean
 	onboardingModels: OnboardingModelGroup | undefined

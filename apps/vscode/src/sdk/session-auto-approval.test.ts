@@ -8,7 +8,13 @@
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { describe, expect, it } from "vitest"
-import { resolveEffectiveAutoApproval, resolveEffectiveHostMode, SessionAutoApprovalStore } from "./session-auto-approval"
+import {
+	resolveEffectiveAutoApproval,
+	resolveEffectiveHostMode,
+	resolveSessionHostAuthorization,
+	SessionAutoApprovalStore,
+	stripRequiresApproval,
+} from "./session-auto-approval"
 
 const MINIMAL_SETTINGS: AutoApprovalSettings = {
 	...DEFAULT_AUTO_APPROVAL_SETTINGS,
@@ -146,10 +152,15 @@ describe("SessionAutoApprovalStore", () => {
 		expect(store.getOverride("sess-B")).toBe("none")
 	})
 
-	it("setOverride('all', undefined) is refused (sessionId required)", () => {
+	it("CORRECTION01: setOverride('all', undefined) ARMS (does not refuse)", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride(undefined, "all")
-		expect(store.getOverride("any")).toBe("none")
+		expect(store.isArmed()).toBe(true)
+		// getOverride(anySessionId) consumes the arm and binds the override
+		// to that session. After that, isArmed is false and getOverride
+		// returns "all" for the same session id.
+		expect(store.getOverride("any")).toBe("all")
+		expect(store.isArmed()).toBe(false)
 	})
 
 	it("setOverride('none') clears the active override regardless of sessionId", () => {
@@ -169,12 +180,12 @@ describe("SessionAutoApprovalStore", () => {
 	it("snapshot returns the active override and sessionId", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride("sess-A", "all")
-		expect(store.snapshot()).toEqual({ override: "all", sessionId: "sess-A" })
+		expect(store.snapshot()).toEqual({ override: "all", sessionId: "sess-A", armed: "none" })
 	})
 
 	it("snapshot is inert when inactive", () => {
 		const store = new SessionAutoApprovalStore()
-		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined })
+		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined, armed: "none" })
 	})
 
 	// Stale-task-leak proof: a NEW task must NEVER inherit the previous
@@ -194,5 +205,91 @@ describe("SessionAutoApprovalStore", () => {
 		// Task B begins; even if it reused "sess-A" identity, the explicit
 		// clear from the clearTask choke-point makes the override "none".
 		expect(store.getOverride("sess-A")).toBe("none")
+	})
+	describe("CORRECTION01: pre-arm intent", () => {
+		it("setOverride(undefined, 'all') arms a one-shot intent", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all")
+			expect(store.isArmed()).toBe(true)
+			expect(store.snapshot().armed).toBe("all")
+		})
+
+		it("setOverride(sessionId, 'all') binds directly without arming", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride("sess-A", "all")
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("sess-A")).toBe("all")
+		})
+
+		it("first getOverride(newSessionId) consumes the arm and binds", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all")
+			const first = store.getOverride("sess-A")
+			expect(first).toBe("all")
+			expect(store.isArmed()).toBe(false)
+			const snap = store.snapshot()
+			expect(snap.override).toBe("all")
+			expect(snap.sessionId).toBe("sess-A")
+			expect(snap.armed).toBe("none")
+		})
+
+		it("subsequent getOverride on the same sessionId returns 'all' (no re-consume)", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all")
+			expect(store.getOverride("sess-A")).toBe("all")
+			expect(store.getOverride("sess-A")).toBe("all")
+		})
+
+		it("clearSessionAutoApproval destroys the arm too", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all")
+			store.clearSessionAutoApproval()
+			expect(store.isArmed()).toBe(false)
+			expect(store.snapshot().armed).toBe("none")
+			expect(store.getOverride("sess-A")).toBe("none")
+		})
+
+		it("setOverride(undefined, 'none') clears both arm and bind", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all") // arms
+			store.setOverride("sess-X", "all") // also bind
+			store.setOverride(undefined, "none")
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("sess-X")).toBe("none")
+		})
+	})
+
+	describe("CORRECTION01: stripRequiresApproval", () => {
+		it("strips requires_approval when present", () => {
+			const input = { command: "ls", requires_approval: true }
+			expect(stripRequiresApproval(input)).toEqual({ command: "ls" })
+		})
+
+		it("returns the same object when requires_approval is absent", () => {
+			const input = { command: "ls" }
+			expect(stripRequiresApproval(input)).toBe(input)
+		})
+
+		it("returns primitives unchanged", () => {
+			expect(stripRequiresApproval(null)).toBe(null)
+			expect(stripRequiresApproval(undefined)).toBe(undefined)
+			expect(stripRequiresApproval("foo")).toBe("foo")
+			expect(stripRequiresApproval(42)).toBe(42)
+		})
+	})
+
+	describe("CORRECTION01: resolveSessionHostAuthorization", () => {
+		it("returns undefined when override is 'none'", () => {
+			expect(resolveSessionHostAuthorization("none")).toBeUndefined()
+		})
+
+		it("returns mode:'all' + explicitAllowRules when override is 'all'", () => {
+			const auth = resolveSessionHostAuthorization("all")
+			expect(auth).toBeDefined()
+			expect(auth!.mode).toBe("all")
+			expect(auth!.explicitAllowRules).toBeDefined()
+			expect(Array.isArray(auth!.explicitAllowRules)).toBe(true)
+			expect(auth!.explicitAllowRules!.length).toBeGreaterThan(0)
+		})
 	})
 })

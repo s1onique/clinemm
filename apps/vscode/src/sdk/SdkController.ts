@@ -9,7 +9,6 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import {
 	type CompareCheckpointResult,
-	commandHostAuthorization,
 	createRestoredCheckpointMetadata,
 	createUserInstructionConfigService,
 	ensureChatWorkspace,
@@ -101,7 +100,13 @@ import {
 	isSyntheticSdkUserMessage,
 	type SdkUserMessage,
 } from "./sdk-user-message-mapping"
-import { resolveEffectiveAutoApproval, type SessionAutoApprovalOverride, SessionAutoApprovalStore } from "./session-auto-approval"
+import {
+	resolveEffectiveAutoApproval,
+	resolveSessionHostAuthorization,
+	type SessionAutoApprovalOverride,
+	SessionAutoApprovalStore,
+	stripRequiresApproval,
+} from "./session-auto-approval"
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
@@ -396,17 +401,27 @@ export class Controller {
 				const persisted = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
 				const sessionId = this.sessions.getActiveSession()?.sessionId
 				const override = this.sessionAutoApproval.getOverride(sessionId)
-				// ACT-CLINEMM-SESSION-AUTONOMY01:
+				// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01:
 				// When the ephemeral session override is "all", project the
-				// host authorization into mode="all" — the user has explicitly
-				// opted into broad execution for this task. We do NOT bypass
-				// the canonical policy lattice (evaluateCommandPolicy still
-				// runs); hard DENY / execution_plan_invalid still DENY.
+				// host authorization to { mode: "all", explicitAllowRules }.
+				// Option B: skip human approval but retain hardened envelopes
+				// whenever a command has a known safe execution profile. Only
+				// unmatched commands fall through to bare host_mode_all. This
+				// also makes execution_plan_invalid reachable on planner failure.
+				// Hard DENY at step 1 still wins.
+				// Model escalation (requires_approval=true) is suppressed via
+				// stripRequiresApproval so the user's explicit session authority
+				// is not silently downgraded by an advisory model hint.
 				let hostAuthorization = getCommandHostAuthorization(request.toolName, persisted, this.mcpHub)
+				let toolInput = request.input
 				if (override === "all") {
-					hostAuthorization = commandHostAuthorization({ mode: "all" })
+					const sessionHostAuth = resolveSessionHostAuthorization(override)
+					if (sessionHostAuth) {
+						hostAuthorization = sessionHostAuth
+					}
+					toolInput = stripRequiresApproval(request.input)
 				}
-				const result = evaluateCommandToolApprovalWithPlan(request.input, hostAuthorization)
+				const result = evaluateCommandToolApprovalWithPlan(toolInput, hostAuthorization)
 				return {
 					approved: result.approved,
 					decision: result.decision,
@@ -2262,17 +2277,19 @@ export class Controller {
 				queuedPrompts,
 				stateVersion: minter.nextSeq(),
 				epoch: minter.epoch,
-				// ACT-CLINEMM-SESSION-AUTONOMY01: ephemeral session override state.
-				// Both keys (preferred + alias) carry the same payload for downstream
-				// flexibility; either is consumed identically by the webview.
-				// The store is the host-owned authority; this is a read-only mirror.
-				sessionAutoApproval: (() => {
+				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
+				// ephemeral session override state. The store is the host-owned
+				// authority; this is a read-only mirror for the webview.
+				// Both legacy keys (sessionAutoApproval + sessionAutonomy) carry
+				// the bound-state payload; a third key carries the armed intent
+				// for the UI to render "Armed for next task".
+				...(() => {
 					const snap = this.sessionAutoApproval.snapshot()
-					return { override: snap.override, sessionId: snap.sessionId }
-				})(),
-				sessionAutonomy: (() => {
-					const snap = this.sessionAutoApproval.snapshot()
-					return { override: snap.override, sessionId: snap.sessionId }
+					return {
+						sessionAutoApproval: { override: snap.override, sessionId: snap.sessionId },
+						sessionAutonomy: { override: snap.override, sessionId: snap.sessionId },
+						sessionAutoApprovalArmed: snap.armed,
+					}
 				})(),
 			}
 		} catch (error) {
