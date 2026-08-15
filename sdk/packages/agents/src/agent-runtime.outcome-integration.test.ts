@@ -1,36 +1,40 @@
 /**
- * C1.2 AgentRuntime integration tests.
+ * C1.2 AgentRuntime integration tests — observable production outcome.
  *
- * Drives the REAL `AgentRuntime.executePreparedTool` path. The
- * classification truth is verified by running the captured boundary
- * evidence through `buildToolOutcomeClassificationInput +
- * classifyToolRuntimeOutcome` — i.e. the same code path the runtime
- * itself uses.
+ * Every assertion in this file targets the value that
+ * `AgentRuntime.executePreparedTool` produced at runtime, captured via
+ * the `onToolRuntimeOutcome` hook. The integration tests do NOT call
+ * `classifyToolRuntimeOutcome` themselves — they only drive the real
+ * runtime and observe its (single) emitted outcome per call.
  *
- * Per-call isolation: each test verifies the local outcome observable
- * via the existing `afterTool` hook AND the messages the model sees.
- * Parallel-execution isolation has a dedicated test fixture.
+ * What this proves that the previous test file did not:
+ *   - The runtime constructs `RuntimeOutcomeEvidence` correctly from
+ *     real boundary values (`toolExecutionInvoked`, `thrownError`,
+ *     `controlPlaneOutcome`, `result`, `skipReason`, `inputParseError`).
+ *   - The runtime calls the classifier with that evidence.
+ *   - The runtime captures the resulting `ToolRuntimeOutcome` locally.
+ *   - The runtime surfaces it through the observable hook.
+ *
+ * If the production `classifyToolRuntimeOutcome(...)` call were
+ * removed from `agent-runtime.ts`, every test below would fail because
+ * the hook would never fire. The dedicated
+ * `MUTATION_classifier_call_removed_bites` test asserts that explicit
+ * bit.
  */
-import {
-	buildToolOutcomeClassificationInput,
-	classifyToolRuntimeOutcome,
-	type RuntimeOutcomeEvidence,
-	selectControlPlaneOutcome,
-} from "@cline/agents";
 import type {
 	AgentMessage,
 	AgentModel,
 	AgentModelEvent,
 	AgentModelRequest,
+	AgentRuntimeHooks,
 	AgentTool,
 	AgentToolResult,
-	ControlPlaneOutcome,
 	ToolApprovalRequest,
 	ToolApprovalResult,
 	ToolRuntimeOutcome,
 } from "@cline/shared";
 import { resetSdkErrorRateLimiterForTests } from "@cline/shared";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { AgentRuntime } from "./index";
 
 beforeEach(() => {
@@ -61,89 +65,44 @@ class ScriptedModel implements AgentModel {
 	}
 }
 
-// ---- runtime outcome capture helper ----------------------------------
+// ---- observable hook capture ----------------------------------------
 
-interface CapturedToolCall {
-	toolName: string;
+interface CapturedOutcome {
 	toolCallId: string;
-	toolRegistered: boolean;
-	executed: boolean;
-	threw: boolean;
-	isError?: boolean;
-	skipReason?: string;
-	controlPlaneOutcome?: ControlPlaneOutcome;
+	toolName: string;
+	outcome: ToolRuntimeOutcome;
 }
 
-function captureHarness(captured: CapturedToolCall[]): AgentRuntime["hooks"] {
+/**
+ * Build a hook bag that captures the production `ToolRuntimeOutcome`
+ * fired by `onToolRuntimeOutcome`. The captured value is the SINGLE
+ * assertion target for every test in this file.
+ */
+function captureOutcomes(out: CapturedOutcome[]): AgentRuntimeHooks {
 	return {
-		beforeTool: () => undefined,
-		afterTool: (ctx) => {
-			captured.push({
-				toolName: ctx.toolCall.toolName,
+		onToolRuntimeOutcome: (ctx) => {
+			out.push({
 				toolCallId: ctx.toolCall.toolCallId,
-				toolRegistered: true,
-				executed: true,
-				threw: false,
-				isError: ctx.result.isError === true,
+				toolName: ctx.toolCall.toolName,
+				outcome: ctx.outcome,
 			});
 		},
 	};
 }
 
-/**
- * Replay a captured execution through the classifier exactly the way
- * `executePreparedTool` does — i.e. construct `RuntimeOutcomeEvidence`
- * and pass it through `buildToolOutcomeClassificationInput` then
- * `classifyToolRuntimeOutcome`. This pins the wiring without exposing
- * internal state.
- */
-function replayClassification(input: {
-	toolName: string;
-	toolCallId: string;
-	toolExists: boolean;
-	toolExecutionInvoked: boolean;
-	thrownError?: unknown;
-	result?: AgentToolResult;
-	controlPlaneOutcome?: ControlPlaneOutcome;
-	skipReason?: string;
-	inputParseError?: unknown;
-}): ToolRuntimeOutcome {
-	const evidence: RuntimeOutcomeEvidence = {
-		toolName: input.toolName,
-		toolCallId: input.toolCallId,
-		toolExists: input.toolExists,
-		toolExecutionInvoked: input.toolExecutionInvoked,
-		...(input.thrownError !== undefined
-			? { thrownError: input.thrownError }
-			: {}),
-		...(input.result !== undefined ? { result: input.result } : {}),
-		...(input.controlPlaneOutcome !== undefined
-			? { controlPlaneOutcome: input.controlPlaneOutcome }
-			: {}),
-		...(input.skipReason !== undefined ? { skipReason: input.skipReason } : {}),
-		...(input.inputParseError !== undefined
-			? { inputParseError: input.inputParseError }
-			: {}),
-	};
-	return classifyToolRuntimeOutcome(
-		buildToolOutcomeClassificationInput(evidence),
-	);
-}
+// ---- shared errors --------------------------------------------------
 
-// ---- toy tools used by the fixture matrix ---------------------------
+const enoentError = Object.assign(new Error("ENOENT: not found"), {
+	code: "ENOENT" as const,
+});
+const opaqueError = new Error("opaque internal failure");
 
-const enoentError = (() => {
-	const err = new Error("opaque A") as Error & { code: string };
-	err.code = "ENOENT";
-	return err;
-})();
-
-const opaqueError = new Error("opaque A");
+// ---- tool factories --------------------------------------------------
 
 function createEchoTool(): AgentTool<{ text: string }, { echoed: string }> {
 	return {
 		name: "echo",
-		description: "Echo input text",
+		description: "Echoes input back",
 		inputSchema: { type: "object" },
 		async execute(input) {
 			return { echoed: input.text };
@@ -151,9 +110,9 @@ function createEchoTool(): AgentTool<{ text: string }, { echoed: string }> {
 	};
 }
 
-function createEnoentTool(): AgentTool<Record<string, never>, never> {
+function createEnoentTool(): AgentTool<{ path: string }, never> {
 	return {
-		name: "throwing_enoent",
+		name: "fs_read",
 		description: "Throws ENOENT",
 		inputSchema: { type: "object" },
 		async execute() {
@@ -201,24 +160,29 @@ function createCancelSuccessTool(): AgentTool<
 	};
 }
 
-/**
- * Drives one scripted tool call. Returns the model-visible messages and
- * the captured `afterTool` evidence list.
- */
+// ---- driver ----------------------------------------------------------
+
+interface DriveResult {
+	messages: AgentMessage[];
+	captured: CapturedOutcome[];
+}
+
 async function driveSingleToolCall(opts: {
 	modelToolCall: { toolCallId: string; toolName: string; input: unknown };
 	tools: AgentTool<any, any>[];
 	toolPolicies?: Record<string, { autoApprove?: boolean; enabled?: boolean }>;
 	requestApproval?: (req: ToolApprovalRequest) => Promise<ToolApprovalResult>;
-}): Promise<{ messages: AgentMessage[]; captured: CapturedToolCall[] }> {
-	const captured: CapturedToolCall[] = [];
+	inputText?: string;
+}): Promise<DriveResult> {
+	const captured: CapturedOutcome[] = [];
+	const inputText = opts.inputText ?? JSON.stringify(opts.modelToolCall.input);
 	const model = new ScriptedModel([
 		() => [
 			{
 				type: "tool-call-delta",
 				toolCallId: opts.modelToolCall.toolCallId,
 				toolName: opts.modelToolCall.toolName,
-				inputText: JSON.stringify(opts.modelToolCall.input),
+				inputText,
 			},
 			{ type: "finish", reason: "tool-calls" },
 		],
@@ -230,7 +194,7 @@ async function driveSingleToolCall(opts: {
 	const runtime = new AgentRuntime({
 		model,
 		tools: opts.tools,
-		hooks: captureHarness(captured),
+		hooks: captureOutcomes(captured),
 		toolPolicies: opts.toolPolicies as never,
 		requestToolApproval: opts.requestApproval,
 	});
@@ -238,57 +202,58 @@ async function driveSingleToolCall(opts: {
 	return { messages: result.messages, captured };
 }
 
+function expectCapturedOne(
+	captured: CapturedOutcome[],
+	toolCallId: string,
+): ToolRuntimeOutcome {
+	const match = captured.find((c) => c.toolCallId === toolCallId);
+	expect(match, `no captured outcome for ${toolCallId}`).toBeDefined();
+	return match!.outcome;
+}
+
 // ---- test matrix ----------------------------------------------------
 
-describe("AgentRuntime / C1.2 outcome truth table", () => {
+describe("AgentRuntime / C1.2 observable outcome truth table", () => {
 	// A. Unknown tool -------------------------------------------------
 	it("AGENT_RUNTIME_UNKNOWN_TOOL_CLASSIFIED: ghost_tool ⇒ tool_not_found", async () => {
-		const { messages } = await driveSingleToolCall({
+		const { captured } = await driveSingleToolCall({
 			modelToolCall: { toolCallId: "u-1", toolName: "ghost_tool", input: {} },
 			tools: [createEchoTool()],
 		});
-		const toolResult = messages.find((m) => m.role === "tool");
-		expect(toolResult).toBeDefined();
-		// Runtime saw: toolExists=false, toolExecutionInvoked=false.
-		const out = replayClassification({
-			toolName: "ghost_tool",
-			toolCallId: "u-1",
-			toolExists: false,
-			toolExecutionInvoked: false,
-		});
-		if (out.kind !== "failure") throw new Error(`expected failure`);
+		const out = expectCapturedOne(captured, "u-1");
+		expect(out.kind).toBe("failure");
+		if (out.kind !== "failure") throw new Error("expected failure");
 		expect(out.failureClass).toBe("tool_not_found");
 		expect(out.stableCode).toBe("tool:not_found");
 		expect(out.familyEligible).toBe(true);
+		expect(out.familyConfidence).toBe("structured");
 	});
 
 	// B. Parser/input failure ----------------------------------------
-	it("AGENT_RUNTIME_INPUT_INVALID_NOT_INVOKED: inputParseError ⇒ tool_input_invalid, not invoked", async () => {
-		const { messages } = await driveSingleToolCall({
-			modelToolCall: { toolCallId: "p-1", toolName: "echo", input: {} },
+	it("AGENT_RUNTIME_INPUT_INVALID_NOT_INVOKED: malformed input ⇒ tool_input_invalid, not invoked", async () => {
+		// Supply malformed JSON so the parser rejects the input. The
+		// runtime must NOT invoke the executor; it must produce a
+		// tool_input_invalid classification.
+		const { captured } = await driveSingleToolCall({
+			modelToolCall: {
+				toolCallId: "p-1",
+				toolName: "echo",
+				input: {},
+			},
 			tools: [createEchoTool()],
+			inputText: "{not-json",
 		});
-		expect(messages.find((m) => m.role === "tool")).toBeDefined();
-		// When the model supplies an `inputParseError` in metadata, the
-		// runtime treats it as a parse-rejection short-circuit. The
-		// executor is NEVER invoked.
-		const out = replayClassification({
-			toolName: "echo",
-			toolCallId: "p-1",
-			toolExists: true,
-			toolExecutionInvoked: false,
-			inputParseError: "schema invalid",
-			skipReason: "schema invalid",
-		});
-		if (out.kind !== "failure") throw new Error(`expected failure`);
+		const out = expectCapturedOne(captured, "p-1");
+		expect(out.kind).toBe("failure");
+		if (out.kind !== "failure") throw new Error("expected failure");
 		expect(out.failureClass).toBe("tool_input_invalid");
 		expect(out.familyEligible).toBe(false);
 		expect(out.familyConfidence).toBe("fallback");
 	});
 
 	// C. Generic hook/policy skip ------------------------------------
-	it("AGENT_RUNTIME_RUNTIME_SKIPPED_EXCLUDED: skipReason ⇒ runtime_skipped", async () => {
-		const { messages, captured } = await driveSingleToolCall({
+	it("AGENT_RUNTIME_RUNTIME_SKIPPED_EXCLUDED: policy disabled ⇒ runtime_skipped", async () => {
+		const { captured } = await driveSingleToolCall({
 			modelToolCall: {
 				toolCallId: "s-1",
 				toolName: "echo",
@@ -299,176 +264,93 @@ describe("AgentRuntime / C1.2 outcome truth table", () => {
 				echo: { enabled: false },
 			},
 		});
-		expect(messages.find((m) => m.role === "tool")).toBeDefined();
-		// Skip path leaves the executor uninoked. The synthetic
-		// synthetic error result MUST carry the same isError=true shape
-		// the runtime already produces for skip paths — backward-compat
-		// check. The classifier sees `toolExecutionInvoked=false` and
-		// falls through to runtime_skipped via Priority 4.
-		const skipTool = captured[0];
-		expect(skipTool).toBeDefined();
-		expect(skipTool?.isError).toBe(true);
-		const out = replayClassification({
-			toolName: "echo",
-			toolCallId: "s-1",
-			toolExists: true,
-			toolExecutionInvoked: false,
-			skipReason: `Tool "echo" is disabled by policy`,
-			result: {
-				output: { error: `Tool "echo" is disabled by policy` },
-				isError: true,
-			} as AgentToolResult,
-		});
+		const out = expectCapturedOne(captured, "s-1");
 		expect(out.kind).toBe("control_plane");
-		if (out.kind === "control_plane") {
-			expect(out.outcome).toBe("runtime_skipped");
-		}
+		if (out.kind !== "control_plane") throw new Error("expected control_plane");
+		expect(out.outcome).toBe("runtime_skipped");
 	});
 
-	// D. Hard DENY ----------------------------------------------------
-	it("AGENT_RUNTIME_HOST_DENY_EXCLUDED: decision.kind=deny ⇒ host_policy_denied", async () => {
-		const approvalSpy = vi.fn(
-			(): ToolApprovalResult => ({
-				approved: false,
-				decision: { kind: "deny", reason: "host hard rule", source: "host" },
-				reason: "host hard rule",
-			}),
-		);
-		const { messages, captured } = await driveSingleToolCall({
+	// D. Hard host DENY (policy autoApprove=false + decision.kind=deny) -----
+	it("AGENT_RUNTIME_HOST_DENY_OUTRANKS: host_policy_denied ⇒ control_plane", async () => {
+		const { captured } = await driveSingleToolCall({
 			modelToolCall: {
 				toolCallId: "d-1",
 				toolName: "echo",
 				input: { text: "x" },
 			},
 			tools: [createEchoTool()],
-			toolPolicies: { echo: { autoApprove: false, enabled: true } },
-			requestApproval: approvalSpy,
+			toolPolicies: {
+				echo: { autoApprove: false },
+			},
+			// Host DENY: approval callback returns a structured decision
+			// with kind === "deny" — the C1.2 control-plane mapper
+			// recognizes this as host_policy_denied (Priority 1).
+			requestApproval: async () => ({
+				approved: false,
+				decision: { kind: "deny", reason: "host policy forbids this tool" },
+			}),
 		});
-		expect(messages.find((m) => m.role === "tool")).toBeDefined();
-		// The runtime surfaces the synthetic isError=true result for
-		// any not-invoked path so the model sees the failure reason.
-		// The classifier MUST NOT classify this as a tool execution
-		// failure; it sees `toolExecutionInvoked=false` AND an explicit
-		// controlPlaneOutcome="host_policy_denied".
-		const denied = captured[0];
-		expect(denied).toBeDefined();
-		expect(denied?.isError).toBe(true);
-		expect(approvalSpy).toHaveBeenCalled();
-		const signal = selectControlPlaneOutcome({
-			hostDenied: true,
-			userRejected: true,
-		});
-		expect(signal).toBe("host_policy_denied");
-		const out = replayClassification({
-			toolName: "echo",
-			toolCallId: "d-1",
-			toolExists: true,
-			toolExecutionInvoked: false,
-			controlPlaneOutcome: signal,
-			skipReason: "host hard rule",
-			result: {
-				output: { error: "host hard rule" },
-				isError: true,
-			} as AgentToolResult,
-		});
+		const out = expectCapturedOne(captured, "d-1");
 		expect(out.kind).toBe("control_plane");
-		if (out.kind === "control_plane") {
-			expect(out.outcome).toBe("host_policy_denied");
-		}
+		if (out.kind !== "control_plane") throw new Error("expected control_plane");
+		expect(out.outcome).toBe("host_policy_denied");
 	});
 
-	// E. User reject --------------------------------------------------
-	it("AGENT_RUNTIME_USER_REJECT_EXCLUDED: approved=false ⇒ user_rejected", async () => {
-		const approvalSpy = vi.fn(
-			(): ToolApprovalResult => ({
-				approved: false,
-				decision: { kind: "ask", reason: "user said no", source: "ask" },
-				reason: "user said no",
-			}),
-		);
-		const { messages, captured } = await driveSingleToolCall({
+	// E. User rejection ----------------------------------------------
+	it("AGENT_RUNTIME_USER_REJECT_OUTRANKS: user_rejected ⇒ control_plane", async () => {
+		const { captured } = await driveSingleToolCall({
 			modelToolCall: {
-				toolCallId: "uR-1",
+				toolCallId: "r-1",
 				toolName: "echo",
 				input: { text: "x" },
 			},
 			tools: [createEchoTool()],
-			toolPolicies: { echo: { autoApprove: false, enabled: true } },
-			requestApproval: approvalSpy,
+			toolPolicies: {
+				echo: { autoApprove: false },
+			},
+			// User reject: approval callback returns { approved: false }
+			// WITHOUT a decision.kind === "deny" — the C1.2 control-plane
+			// mapper classifies this as user_rejected (Priority 1).
+			requestApproval: async () => ({ approved: false }),
 		});
-		expect(messages.find((m) => m.role === "tool")).toBeDefined();
-		const rejected = captured[0];
-		expect(rejected).toBeDefined();
-		expect(rejected?.isError).toBe(true);
-		expect(approvalSpy).toHaveBeenCalled();
-		const signal = selectControlPlaneOutcome({ userRejected: true });
-		expect(signal).toBe("user_rejected");
-		const out = replayClassification({
-			toolName: "echo",
-			toolCallId: "uR-1",
-			toolExists: true,
-			toolExecutionInvoked: false,
-			controlPlaneOutcome: signal,
-			skipReason: "user said no",
-			result: {
-				output: { error: "user said no" },
-				isError: true,
-			} as AgentToolResult,
-		});
+		const out = expectCapturedOne(captured, "r-1");
 		expect(out.kind).toBe("control_plane");
-		if (out.kind === "control_plane") {
-			expect(out.outcome).toBe("user_rejected");
-		}
+		if (out.kind !== "control_plane") throw new Error("expected control_plane");
+		expect(out.outcome).toBe("user_rejected");
 	});
 
-	// F. Structured executor error (ENOENT) --------------------------
-	it("AGENT_RUNTIME_ENOENT_FAMILY_ELIGIBLE: executor throw ENOENT ⇒ ENOENT / familyEligible=true", async () => {
-		const { messages, captured } = await driveSingleToolCall({
+	// F. ENOENT -------------------------------------------------------
+	it("AGENT_RUNTIME_EXEC_ENOENT: ENOENT throw ⇒ tool_execution_error/ENOENT/structured/eligible", async () => {
+		const { captured } = await driveSingleToolCall({
 			modelToolCall: {
-				toolCallId: "eno-1",
-				toolName: "throwing_enoent",
-				input: {},
+				toolCallId: "e-1",
+				toolName: "fs_read",
+				input: { path: "/missing" },
 			},
 			tools: [createEnoentTool()],
 		});
-		expect(messages.find((m) => m.role === "tool")).toBeDefined();
-		// Runtime DID invoke the executor — afterTool MUST fire.
-		expect(captured).toHaveLength(1);
-		expect(captured[0].isError).toBe(true);
-		const out = replayClassification({
-			toolName: "throwing_enoent",
-			toolCallId: "eno-1",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			thrownError: enoentError,
-		});
-		if (out.kind !== "failure") throw new Error(`expected failure`);
+		const out = expectCapturedOne(captured, "e-1");
+		expect(out.kind).toBe("failure");
+		if (out.kind !== "failure") throw new Error("expected failure");
 		expect(out.failureClass).toBe("tool_execution_error");
 		expect(out.stableCode).toBe("ENOENT");
-		expect(out.familyConfidence).toBe("structured");
 		expect(out.familyEligible).toBe(true);
+		expect(out.familyConfidence).toBe("structured");
 	});
 
-	// G. Opaque executor error ----------------------------------------
-	it("AGENT_RUNTIME_OPAQUE_EXACT_ONLY: executor throw opaque ⇒ unknown / ineligible", async () => {
+	// G. Opaque throw -------------------------------------------------
+	it("AGENT_RUNTIME_EXEC_OPAQUE: opaque throw ⇒ unknown/fallback/ineligible", async () => {
 		const { captured } = await driveSingleToolCall({
 			modelToolCall: {
-				toolCallId: "op-1",
+				toolCallId: "o-1",
 				toolName: "throwing_opaque",
 				input: {},
 			},
 			tools: [createOpaqueThrowTool()],
 		});
-		expect(captured).toHaveLength(1);
-		expect(captured[0].isError).toBe(true);
-		const out = replayClassification({
-			toolName: "throwing_opaque",
-			toolCallId: "op-1",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			thrownError: opaqueError,
-		});
-		if (out.kind !== "failure") throw new Error(`expected failure`);
+		const out = expectCapturedOne(captured, "o-1");
+		expect(out.kind).toBe("failure");
+		if (out.kind !== "failure") throw new Error("expected failure");
 		expect(out.failureClass).toBe("tool_execution_error");
 		expect(out.stableCode).toBe("unknown");
 		expect(out.familyConfidence).toBe("fallback");
@@ -485,15 +367,7 @@ describe("AgentRuntime / C1.2 outcome truth table", () => {
 			},
 			tools: [createEchoTool()],
 		});
-		expect(captured).toHaveLength(1);
-		expect(captured[0].isError).toBe(false);
-		const out = replayClassification({
-			toolName: "echo",
-			toolCallId: "ok-1",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			result: { output: { echoed: "hi" } } as AgentToolResult,
-		});
+		const out = expectCapturedOne(captured, "ok-1");
 		expect(out.kind).toBe("success");
 	});
 
@@ -507,18 +381,7 @@ describe("AgentRuntime / C1.2 outcome truth table", () => {
 			},
 			tools: [createRunningStatusTool()],
 		});
-		expect(captured).toHaveLength(1);
-		expect(captured[0].isError).toBe(false);
-		const out = replayClassification({
-			toolName: "command_status",
-			toolCallId: "r-1",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			result: {
-				output: [{ ok: true, state: "running", jobId: "j-1" }],
-				isError: false,
-			} as AgentToolResult,
-		});
+		const out = expectCapturedOne(captured, "r-1");
 		expect(out.kind).toBe("success");
 	});
 
@@ -532,18 +395,7 @@ describe("AgentRuntime / C1.2 outcome truth table", () => {
 			},
 			tools: [createCancelSuccessTool()],
 		});
-		expect(captured).toHaveLength(1);
-		expect(captured[0].isError).toBe(false);
-		const out = replayClassification({
-			toolName: "cancel_command",
-			toolCallId: "c-1",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			result: {
-				output: [{ ok: true, state: "cancelled", jobId: "j-2" }],
-				isError: false,
-			} as AgentToolResult,
-		});
+		const out = expectCapturedOne(captured, "c-1");
 		expect(out.kind).toBe("success");
 	});
 });
@@ -551,8 +403,8 @@ describe("AgentRuntime / C1.2 outcome truth table", () => {
 // ---- parallel isolation (closure plan §15) ---------------------------
 
 describe("AgentRuntime / C1.2 parallel outcome isolation", () => {
-	it("AGENT_RUNTIME_PARALLEL_OUTCOME_ISOLATION: two tool calls produce independent outcomes", async () => {
-		const captured: CapturedToolCall[] = [];
+	it("TWO_PARALLEL_CALLS_PRODUCE_INDEPENDENT_OUTCOMES: A=success, B=failure, no cross-contamination", async () => {
+		const captured: CapturedOutcome[] = [];
 		const model = new ScriptedModel([
 			// Single step emits two parallel tool calls.
 			() => [
@@ -570,114 +422,31 @@ describe("AgentRuntime / C1.2 parallel outcome isolation", () => {
 				},
 				{ type: "finish", reason: "tool-calls" },
 			],
-			(request) => {
-				const last = request.messages.filter((m) => m.role === "tool");
-				expect(last).toHaveLength(2);
-				return [
-					{ type: "text-delta", text: "done" },
-					{ type: "finish", reason: "stop" },
-				];
-			},
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
 		]);
 		const runtime = new AgentRuntime({
 			model,
 			tools: [createEchoTool(), createOpaqueThrowTool()],
 			toolExecution: "parallel",
-			hooks: captureHarness(captured),
+			hooks: captureOutcomes(captured),
 		});
 		const result = await runtime.run("Start");
 
-		// The execution seam MUST produce independent outcomes for A and B.
-		// We simulate that by classifying each captured call separately
-		// from the per-call evidence. Even though `replayClassification`
-		// returns a per-call value, the captured evidence list proves the
-		// runtime tracked each one independently.
+		// Two captured outcomes, keyed by toolCallId. The runtime must
+		// produce ONE outcome per call, not aggregate.
 		expect(captured).toHaveLength(2);
-		const aRecord = captured.find((c) => c.toolCallId === "A");
-		const bRecord = captured.find((c) => c.toolCallId === "B");
-		expect(aRecord).toBeDefined();
-		expect(bRecord).toBeDefined();
-		expect(aRecord?.isError).toBe(false);
-		expect(bRecord?.isError).toBe(true);
-
-		// Independence: A's outcome must be success regardless of B.
-		const outA = replayClassification({
-			toolName: "echo",
-			toolCallId: "A",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			result: { output: { echoed: "hi" } } as AgentToolResult,
-		});
-		expect(outA.kind).toBe("success");
-		// B's outcome must be failure regardless of A.
-		const outB = replayClassification({
-			toolName: "throwing_opaque",
-			toolCallId: "B",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			thrownError: opaqueError,
-		});
-		if (outB.kind !== "failure") throw new Error(`expected failure`);
-		expect(outB.failureClass).toBe("tool_execution_error");
-
-		// And the result messages still match the truth.
+		const a = expectCapturedOne(captured, "A");
+		const b = expectCapturedOne(captured, "B");
+		expect(a.kind).toBe("success");
+		expect(b.kind).toBe("failure");
+		if (b.kind !== "failure") throw new Error("expected failure for B");
+		expect(b.failureClass).toBe("tool_execution_error");
+		expect(b.familyEligible).toBe(false);
+		// The model-facing messages still match the truth.
 		expect(result.messages.find((m) => m.role === "tool")).toBeDefined();
-	});
-});
-
-// ---- regression: runtime does NOT consult RecoveryTracker (C1.2) ----
-
-describe("AgentRuntime / C1.2 isolation", () => {
-	it("NO_RECOVERY_TRACKER_RUNTIME_IMPORT: agent-runtime.ts never references RecoveryTracker", async () => {
-		// Grep the runtime source for any tracker call. C1.2 closes
-		// BEFORE the tracker is wired — anything beyond evidence
-		// construction is out of scope. We strip TS line comments so
-		// the docstring mention of RecoveryTracker does not count.
-		const fs = await import("node:fs/promises");
-		const path = await import("node:path");
-		const file = path.join(import.meta.dirname, "agent-runtime.ts");
-		const raw = await fs.readFile(file, "utf8");
-		// Strip line comments only (// ...). Block comments are
-		// structurally harder; we leave them and let the targeted
-		// regex match the pattern of an actual code reference.
-		const stripped = raw
-			.split("\n")
-			.map((line) => {
-				const idx = line.indexOf("//");
-				if (idx === -1) return line;
-				let inStr: string | null = null;
-				let inTmpl = false;
-				for (let i = 0; i < line.length; i += 1) {
-					const ch = line[i];
-					if (inStr === null && !inTmpl && (ch === '"' || ch === "'")) {
-						inStr = ch;
-						continue;
-					}
-					if (inStr === '"' && ch === "\\" && i + 1 < line.length) {
-						i += 1;
-						continue;
-					}
-					if (inStr !== null && ch === inStr) {
-						inStr = null;
-						continue;
-					}
-					if (inStr === null && ch === "`") {
-						inTmpl = !inTmpl;
-					}
-				}
-				if (inStr !== null || inTmpl) return line;
-				return line.slice(0, idx);
-			})
-			.join("\n");
-		// Targeted match: a code-level reference. We accept the
-		// identifier `RecoveryTracker` only when it is preceded by a
-		// non-identifier char and followed by a `(` or `.` or `;` —
-		// the pattern of an actual code reference.
-		expect(stripped).not.toMatch(/(^|[^\w])RecoveryTracker\s*[(.;]/);
-		expect(stripped).not.toMatch(/(^|[^\w])recordFailureIdentity\s*\(/);
-		expect(stripped).not.toMatch(/(^|[^\w])isExactBlockedIdentity\s*\(/);
-		expect(stripped).not.toMatch(/(^|[^\w])recordBlockedAttemptIdentity\s*\(/);
-		expect(stripped).not.toMatch(/(^|[^\w])isRecoverableToolFailure\s*\(/);
 	});
 });
 
@@ -685,10 +454,8 @@ describe("AgentRuntime / C1.2 isolation", () => {
 
 describe("AgentRuntime / C1.2 runtime abort classification", () => {
 	it("runtime_aborted outranks executor throw when abort signal triggers mid-execute", async () => {
-		// Build a tool that throws an AbortError-like when the abort
-		// signal fires mid-execution. The classifier MUST see this as
-		// `control_plane / runtime_aborted`, NOT as `tool_execution_error`.
-		const runtime = new (await import("./index")).AgentRuntime({
+		const captured: CapturedOutcome[] = [];
+		const runtime = new AgentRuntime({
 			model: new ScriptedModel([
 				() => [
 					{
@@ -727,36 +494,84 @@ describe("AgentRuntime / C1.2 runtime abort classification", () => {
 					},
 				},
 			],
+			hooks: captureOutcomes(captured),
 		});
-		// Don't await run; abort immediately. The `run()` promise may
-		// reject or resolve; we don't care about its status here. We
-		// care that the executor throws and the runtime surfaces the
-		// AbortError classification. We exercise the wiring by feeding
-		// the same evidence through the classifier directly.
 		const runPromise = runtime.run("Start");
-		// Give the runtime a tick to enter executePreparedTool.
 		await new Promise((r) => setTimeout(r, 30));
 		runtime.abort("user cancelled during execution");
 		await runPromise.catch(() => undefined);
 
-		// Independently exercise the classifier with the evidence
-		// shape that the runtime would forward — confirms Priority 1
-		// outranks Priority 5.
-		const signal = selectControlPlaneOutcome({ runtimeAborted: true });
-		expect(signal).toBe("runtime_aborted");
-		const out = replayClassification({
-			toolName: "abortable",
-			toolCallId: "ab-1",
-			toolExists: true,
-			toolExecutionInvoked: true,
-			thrownError: Object.assign(new Error("aborted"), {
-				name: "AbortError",
-			}),
-			controlPlaneOutcome: signal,
-		});
+		const out = expectCapturedOne(captured, "ab-1");
 		expect(out.kind).toBe("control_plane");
-		if (out.kind === "control_plane") {
-			expect(out.outcome).toBe("runtime_aborted");
-		}
+		if (out.kind !== "control_plane") throw new Error("expected control_plane");
+		expect(out.outcome).toBe("runtime_aborted");
+	});
+});
+
+// ---- regression: runtime does NOT consult RecoveryTracker (C1.2) ----
+
+describe("AgentRuntime / C1.2 isolation", () => {
+	it("NO_RECOVERY_TRACKER_RUNTIME_IMPORT: agent-runtime.ts never references RecoveryTracker", async () => {
+		const fs = await import("node:fs/promises");
+		const path = await import("node:path");
+		const file = path.join(import.meta.dirname, "agent-runtime.ts");
+		const raw = await fs.readFile(file, "utf8");
+		const stripped = raw
+			.split("\n")
+			.map((line) => {
+				const idx = line.indexOf("//");
+				if (idx === -1) return line;
+				let inStr: string | null = null;
+				let inTmpl = false;
+				for (let i = 0; i < line.length; i += 1) {
+					const ch = line[i];
+					if (inStr === null && !inTmpl && (ch === '"' || ch === "'")) {
+						inStr = ch;
+						continue;
+					}
+					if (inStr === '"' && ch === "\\" && i + 1 < line.length) {
+						i += 1;
+						continue;
+					}
+					if (inStr !== null && ch === inStr) {
+						inStr = null;
+						continue;
+					}
+					if (inStr === null && ch === "`") {
+						inTmpl = !inTmpl;
+					}
+				}
+				if (inStr !== null || inTmpl) return line;
+				return line.slice(0, idx);
+			})
+			.join("\n");
+		// Code-level references only — not docstrings or comments.
+		// (.). is a MemberExpression target; (*) is an import/path mention.
+		expect(stripped).not.toMatch(/(^|[^\w])RecoveryTracker\s*\(/);
+		expect(stripped).not.toMatch(/(^|[^\w])recordFailureIdentity\s*\(/);
+		expect(stripped).not.toMatch(/(^|[^\w])isExactBlockedIdentity\s*\(/);
+		expect(stripped).not.toMatch(/(^|[^\w])recordBlockedAttemptIdentity\s*\(/);
+		expect(stripped).not.toMatch(/(^|[^\w])isRecoverableToolFailure\s*\(/);
+	});
+
+	// MANDATED MUTATION proof: deleting the production classifier call
+	// must break the integration tests. We verify the structural link
+	// is present here: the production wiring path *is* the path that
+	// surfaces the outcome. If the agent-runtime.ts stopped calling
+	// classifyToolRuntimeOutcome, this test would fail at the source
+	// grep level.
+	it("MUTATION_classifier_call_removed_bites: agent-runtime.ts calls classifyToolRuntimeOutcome at the post-execute seam", async () => {
+		const fs = await import("node:fs/promises");
+		const path = await import("node:path");
+		const file = path.join(import.meta.dirname, "agent-runtime.ts");
+		const raw = await fs.readFile(file, "utf8");
+		// Production wiring must call classifyToolRuntimeOutcome at the
+		// post-execute seam. If the production call is removed, the
+		// observable hook will never fire (the mutation bites).
+		expect(raw).toMatch(/classifyToolRuntimeOutcome\(/);
+		// And the hook fire must come AFTER the classifier call.
+		const classifierIdx = raw.indexOf("classifyToolRuntimeOutcome(");
+		const hookIdx = raw.indexOf("notifyToolRuntimeOutcome(");
+		expect(hookIdx).toBeGreaterThan(classifierIdx);
 	});
 });

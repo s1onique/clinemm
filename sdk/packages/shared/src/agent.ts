@@ -5,6 +5,7 @@
  *
  */
 
+import type { ToolRuntimeOutcome } from "./agents/recovery/types";
 import type { ModelInfo } from "./llms/model-info";
 import type {
 	ToolApprovalRequest,
@@ -389,6 +390,29 @@ export interface AgentAfterToolResult {
 	result?: AgentToolResult;
 }
 
+/**
+ * C1.2 observable seam: the production `ToolRuntimeOutcome` that
+ * `AgentRuntime.executePreparedTool` produced for a single tool call.
+ *
+ * This is the hook that proves the runtime wiring closed. The integration
+ * tests assert against the captured value here — NOT by replaying the
+ * classifier themselves.
+ *
+ * Intentionally narrow:
+ *   - Read-only observation. The hook does NOT take a return value,
+ *     does NOT mutate `outcome`, and does NOT route to RecoveryTracker.
+ *   - Per-call local. C1.2 deliberately does not aggregate across calls.
+ *   - No telemetry, no UI, no persistence surface introduced here.
+ *
+ * Future ACTs may route this outcome through RecoveryTracker / telemetry
+ * by adding a NEW hook or by consuming this hook from a higher layer —
+ * not by changing the signature of this observation hook.
+ */
+export interface AgentToolRuntimeOutcomeHookContext {
+	toolCall: AgentToolCallPart;
+	outcome: ToolRuntimeOutcome;
+}
+
 export interface AgentRunLifecycleContext {
 	snapshot: AgentRuntimeStateSnapshot;
 }
@@ -398,7 +422,7 @@ export interface AgentRunLifecycleContext {
 // =============================================================================
 
 /**
- * 7-callback hook bag consumed by `AgentRuntime`.
+ * 8-callback hook bag consumed by `AgentRuntime`.
  */
 export interface AgentRuntimeHooks {
 	beforeRun?: (
@@ -428,6 +452,15 @@ export interface AgentRuntimeHooks {
 		| AgentAfterToolResult
 		| undefined
 		| Promise<AgentAfterToolResult | undefined>;
+	/**
+	 * C1.2 observable seam. Fires once per tool call after the runtime
+	 * has produced a `ToolRuntimeOutcome` for that call. Read-only
+	 * observation; not a control plane. See
+	 * `AgentToolRuntimeOutcomeHookContext`.
+	 */
+	onToolRuntimeOutcome?: (
+		context: AgentToolRuntimeOutcomeHookContext,
+	) => void | Promise<void>;
 	onEvent?: (event: AgentRuntimeEvent) => void | Promise<void>;
 }
 

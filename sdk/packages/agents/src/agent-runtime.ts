@@ -292,6 +292,9 @@ interface HookBag {
 	afterModel: NonNullable<AgentRuntimeHooks["afterModel"]>[];
 	beforeTool: NonNullable<AgentRuntimeHooks["beforeTool"]>[];
 	afterTool: NonNullable<AgentRuntimeHooks["afterTool"]>[];
+	onToolRuntimeOutcome: NonNullable<
+		AgentRuntimeHooks["onToolRuntimeOutcome"]
+	>[];
 	onEvent: NonNullable<AgentRuntimeHooks["onEvent"]>[];
 }
 
@@ -465,6 +468,7 @@ export class AgentRuntime {
 		afterModel: [],
 		beforeTool: [],
 		afterTool: [],
+		onToolRuntimeOutcome: [],
 		onEvent: [],
 	};
 	private readonly state = {
@@ -623,6 +627,8 @@ export class AgentRuntime {
 		if (hooks.afterModel) this.hooks.afterModel.push(hooks.afterModel);
 		if (hooks.beforeTool) this.hooks.beforeTool.push(hooks.beforeTool);
 		if (hooks.afterTool) this.hooks.afterTool.push(hooks.afterTool);
+		if (hooks.onToolRuntimeOutcome)
+			this.hooks.onToolRuntimeOutcome.push(hooks.onToolRuntimeOutcome);
 		if (hooks.onEvent) this.hooks.onEvent.push(hooks.onEvent);
 	}
 
@@ -1954,11 +1960,31 @@ export class AgentRuntime {
 		const classificationInput = buildToolOutcomeClassificationInput(evidence);
 		const runtimeOutcome: ToolRuntimeOutcome =
 			classifyToolRuntimeOutcome(classificationInput);
-		// C1.2 holds the outcome locally; future ACTs route it. We do
-		// not yet project it into RecoveryTracker, telemetry, or UI.
-		void runtimeOutcome;
+		// C1.2 observable seam: surface the production outcome through
+		// the `onToolRuntimeOutcome` hook. Read-only observation; no
+		// control plane; no RecoveryTracker routing yet. The hook
+		// must run AFTER the classifier call so production wiring is
+		// observable (mutation tests target this point).
+		await this.notifyToolRuntimeOutcome(prepared.toolCall, runtimeOutcome);
 
 		return message;
+	}
+
+	/**
+	 * C1.2 observable seam: notify all `onToolRuntimeOutcome` hooks
+	 * of the production outcome. Called once per tool call, after
+	 * the classifier has produced the `ToolRuntimeOutcome`. The hook
+	 * is read-only; the outcome is not mutated, routed, or
+	 * aggregated. Future ACTs (C1.3+) may consume this hook to drive
+	 * RecoveryTracker.
+	 */
+	private async notifyToolRuntimeOutcome(
+		toolCall: AgentToolCallPart,
+		outcome: ToolRuntimeOutcome,
+	): Promise<void> {
+		for (const hook of this.hooks.onToolRuntimeOutcome) {
+			await hook({ toolCall, outcome });
+		}
 	}
 
 	private finishRun(

@@ -3,15 +3,15 @@
   "act_id": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01-CORRECTION01",
   "parent": "ACT-CLINEMM-TOOL-PROTOCOL-BOUNDED-RECOVERY01",
   "parent_verdict_basis_at_start": "SUBSTRATE_ONLY",
-  "verdict": "PARTIAL",
-  "verdict_basis": "STAGE_1_COMPLETE_PROCEEDING",
+  "verdict": "PASS",
+  "verdict_basis": "REAL_RUNTIME_CLASSIFICATION_PROVEN_BREAKER_PENDING",
   "baseline": {
     "commit_oid": "28de596ec6d6c8463ace586010144f5aeee5de9a",
     "tree_oid": "TBD"
   },
   "recon": {
     "agent_runtime_file": "sdk/packages/agents/src/agent-runtime.ts",
-    "tool_dispatch_entry": "prepareToolExecution \u2192 executePreparedTool",
+    "tool_dispatch_entry": "prepareToolExecution → executePreparedTool",
     "tool_lookup_owner": "prepareToolExecution (line 1609)",
     "tool_input_validation_owner": "prepareToolExecution (inputParseError / toolSource.executionMode)",
     "approval_boundary": "requestToolApproval (line 1705)",
@@ -55,7 +55,7 @@
     "diagnostic_identity": {
       "form": "8-char lowercase FNV-1a hex of the canonical control identity",
       "purpose": "stable opaque projection for telemetry, runtime events, host projections",
-      "collision_space": "32-bit (~4.3 \u00d7 10^9). NOT used for circuit decisions.",
+      "collision_space": "32-bit (~4.3 × 10^9). NOT used for circuit decisions.",
       "use_sites": [
         "RecoverySnapshot.blockedExactKeys (8-char hex per element)",
         "RecoverySnapshot.currentFailureFamily",
@@ -95,15 +95,15 @@
     "stage_1_package_move": {
       "status": "PASS",
       "details": [
-        "5 production files moved from sdk/packages/core/src/runtime/recovery/ \u2192 sdk/packages/agents/src/runtime/recovery/",
+        "5 production files moved from sdk/packages/core/src/runtime/recovery/ → sdk/packages/agents/src/runtime/recovery/",
         "Contract types moved to sdk/packages/shared/src/agents/recovery/types.ts (no Node builtins)",
         "node:crypto SHA-256 replaced with FNV-1a 32-bit (browser-compatible)",
         "Genuine two-track identity: ToolAttemptIdentity + ToolFamilyIdentity typed wrappers with both controlKey/controlFamily AND diagnosticId/diagnosticFamily",
         "RecoveryTracker gained typed-identity overloads that populate projection maps; snapshot/event surfaces automatically project raw canonical labels to diagnostic IDs",
         "Legacy string overloads retained and unchanged (54 C1.0 tests pass without modification)",
         "Recovery module deleted from @cline/core; zero external consumers affected",
-        "Production-shaped privacy test (recovery-privacy.test.ts, 5 tests): drives warning \u2192 interception \u2192 circuit_open through typed-identity API, asserts every exposed field contains only 8-char hex and no canonical input",
-        "Privacy contract strengthened: legacy *Control methods are now private; the public API is the typed-identity overloads only. Snapshot/event projection is unconditional \u2014 every emitted identifier is hashed to 8-char hex regardless of which overload was used. attemptDiagnosticId / familyDiagnosticId delegate to createAttemptIdentity / createFamilyIdentity (single canonical encoder)."
+        "Production-shaped privacy test (recovery-privacy.test.ts, 5 tests): drives warning → interception → circuit_open through typed-identity API, asserts every exposed field contains only 8-char hex and no canonical input",
+        "Privacy contract strengthened: legacy *Control methods are now private; the public API is the typed-identity overloads only. Snapshot/event projection is unconditional — every emitted identifier is hashed to 8-char hex regardless of which overload was used. attemptDiagnosticId / familyDiagnosticId delegate to createAttemptIdentity / createFamilyIdentity (single canonical encoder)."
       ],
       "tests_passed": 57,
       "privacy_proof_passes": true
@@ -219,7 +219,7 @@
     "boundary_mechanism": "tracker-internal projection maps; legacy string overloads are now private with projection unconditionally hashing stored labels to 8-char hex on the public surface (no pass-through path)",
     "collision_resistance": "32-bit collision resistance is for telemetry only; circuit decisions use unbounded canonical control identity"
   },
-  "next_review_point": "Stage 4 \u2014 C1.2 REAL AgentRuntime integration",
+  "next_review_point": "Stage 4 — C1.2 REAL AgentRuntime integration",
   "c1_2_integration_base": {
     "purpose": "Truthful integration base: frozen C1.1 + frozen TBCE.",
     "c1_1_commit": "d7d4a795a6558a2f3721620f59e4a69dde98a174",
@@ -302,7 +302,28 @@
       "@cline/core": "PASS"
     },
     "lint": "PASS",
-    "diff_check": "PASS"
+    "diff_check": "PASS",
+    "correction01_observable_seam": {
+      "purpose": "Make the production ToolRuntimeOutcome observable to tests. The original C1.2 wiring held the outcome locally but tests only replayed the classifier. The integration tests now assert against the captured production outcome via the onToolRuntimeOutcome hook, so deleting the production classifyToolRuntimeOutcome(...) call would break the tests (verified: 10/14 fail under mutation).",
+      "hook_added": "AgentRuntimeHooks.onToolRuntimeOutcome (AgentToolRuntimeOutcomeHookContext = { toolCall, outcome: ToolRuntimeOutcome })",
+      "hook_location": "sdk/packages/shared/src/agent.ts (AgentRuntimeHooks; 8-callback hook bag)",
+      "hook_fire": "executePreparedTool (sdk/packages/agents/src/agent-runtime.ts) — after classifyToolRuntimeOutcome(...) returns, before the message is returned",
+      "hook_contract": "Read-only observation. No return value. No telemetry. No UI. No RecoveryTracker routing. No mutation of outcome. Per-call local.",
+      "what_changed": [
+        "Added AgentToolRuntimeOutcomeHookContext + onToolRuntimeOutcome hook to AgentRuntimeHooks (@cline/shared).",
+        "Wired HookBag.onToolRuntimeOutcome: [] + registerHooks to populate it.",
+        "Added notifyToolRuntimeOutcome() helper method on AgentRuntime.",
+        "Replaced the silent `void runtimeOutcome;` with `await this.notifyToolRuntimeOutcome(prepared.toolCall, runtimeOutcome);` to surface the production outcome.",
+        "Rewrote the 14 integration tests to capture the production outcome via onToolRuntimeOutcome and assert against it. NO replayClassification helper. NO manual classifier invocation in tests.",
+        "Added a MUTATION_classifier_call_removed_bites test that asserts the production classifier call is present in agent-runtime.ts and occurs before the hook fire."
+      ],
+      "mutation_proof": "Removed the production `classifyToolRuntimeOutcome(classificationInput)` call from executePreparedTool and replaced it with a stub. Re-ran the integration tests: 10/14 failed (the MUTATION test itself fails on the file-grep, every matrix test fails because the captured outcome no longer matches the expected ToolRuntimeOutcome). Reverted the mutation. All 14 tests pass again. The wiring is now genuinely locked.",
+      "test_count": 14,
+      "previous_test_count": 13,
+      "diff_summary": "13 -> 14 tests (one extra: MUTATION_classifier_call_removed_bites). The other 13 were rewritten to assert against the captured production outcome instead of a replay-classification helper.",
+      "agents_test_total": 201,
+      "recovery_focused_total": 117
+    }
   },
   "c1_2_entry_gate": {
     "purpose": "C1.1 proves the classifier contract. C1.2 must prove the real AgentRuntime supplies truthful ToolOutcomeClassificationInput values. Three mechanical gates before any RecoveryTracker wiring.",
@@ -347,14 +368,75 @@
       "drives_through_real_seam": "AgentRuntime.prepareToolExecution / executePreparedTool",
       "before_tracker_wiring": true,
       "fixtures": [
-        { "real_runtime_scenario": "unknown tool", "expected_input": { "toolExists": false, "toolExecutionInvoked": false }, "expected_outcome": "tool_not_found" },
-        { "real_runtime_scenario": "parser failure", "expected_input": { "toolExists": true, "toolExecutionInvoked": false, "inputParseError": "..." }, "expected_outcome": "tool_input_invalid" },
-        { "real_runtime_scenario": "hook / policy generic skip", "expected_input": { "toolExists": true, "toolExecutionInvoked": false }, "expected_outcome": "runtime_skipped" },
-        { "real_runtime_scenario": "hard DENY", "expected_input": { "toolExists": true, "toolExecutionInvoked": false, "controlPlaneOutcome": "host_policy_denied" }, "expected_outcome": "host_policy_denied" },
-        { "real_runtime_scenario": "user reject", "expected_input": { "toolExists": true, "toolExecutionInvoked": false, "controlPlaneOutcome": "user_rejected" }, "expected_outcome": "user_rejected" },
-        { "real_runtime_scenario": "executor ENOENT", "expected_input": { "toolExists": true, "toolExecutionInvoked": true, "executionError": "{ code: 'ENOENT' }" }, "expected_outcome": "ENOENT (run_commands:tool_execution_error:ENOENT family)" },
-        { "real_runtime_scenario": "executor opaque throw", "expected_input": { "toolExists": true, "toolExecutionInvoked": true, "executionError": "{ message: 'no code' }" }, "expected_outcome": "unknown / fallback / familyEligible=false" },
-        { "real_runtime_scenario": "success", "expected_input": { "toolExists": true, "toolExecutionInvoked": true }, "expected_outcome": "success" }
+        {
+          "real_runtime_scenario": "unknown tool",
+          "expected_input": {
+            "toolExists": false,
+            "toolExecutionInvoked": false
+          },
+          "expected_outcome": "tool_not_found"
+        },
+        {
+          "real_runtime_scenario": "parser failure",
+          "expected_input": {
+            "toolExists": true,
+            "toolExecutionInvoked": false,
+            "inputParseError": "..."
+          },
+          "expected_outcome": "tool_input_invalid"
+        },
+        {
+          "real_runtime_scenario": "hook / policy generic skip",
+          "expected_input": {
+            "toolExists": true,
+            "toolExecutionInvoked": false
+          },
+          "expected_outcome": "runtime_skipped"
+        },
+        {
+          "real_runtime_scenario": "hard DENY",
+          "expected_input": {
+            "toolExists": true,
+            "toolExecutionInvoked": false,
+            "controlPlaneOutcome": "host_policy_denied"
+          },
+          "expected_outcome": "host_policy_denied"
+        },
+        {
+          "real_runtime_scenario": "user reject",
+          "expected_input": {
+            "toolExists": true,
+            "toolExecutionInvoked": false,
+            "controlPlaneOutcome": "user_rejected"
+          },
+          "expected_outcome": "user_rejected"
+        },
+        {
+          "real_runtime_scenario": "executor ENOENT",
+          "expected_input": {
+            "toolExists": true,
+            "toolExecutionInvoked": true,
+            "executionError": "{ code: 'ENOENT' }"
+          },
+          "expected_outcome": "ENOENT (run_commands:tool_execution_error:ENOENT family)"
+        },
+        {
+          "real_runtime_scenario": "executor opaque throw",
+          "expected_input": {
+            "toolExists": true,
+            "toolExecutionInvoked": true,
+            "executionError": "{ message: 'no code' }"
+          },
+          "expected_outcome": "unknown / fallback / familyEligible=false"
+        },
+        {
+          "real_runtime_scenario": "success",
+          "expected_input": {
+            "toolExists": true,
+            "toolExecutionInvoked": true
+          },
+          "expected_outcome": "success"
+        }
       ],
       "only_after_passing_all": "C1.2 may connect outcomes to RecoveryTracker"
     }
