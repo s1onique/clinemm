@@ -861,5 +861,103 @@ describe("SdkInteractionCoordinator", () => {
 			expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
 			await expect(promise).resolves.toEqual({ approved: true })
 		})
+
+		// ACT-CLINEMM-UPSTREAM-SETTINGS-AUTHORITY-PARITY01
+		// EDIT-AUTOAPPROVE-AUTHORITY-REGRESSION01: non-command tools (read/edit/browser)
+		// must honor the host shouldAutoApproveTool callback. Upstream v4.1.10 wires
+		// this to isToolAutoApproved; ClineMM must do the same so that the AutoApprove
+		// menu truthfully governs runtime authority.
+		it("non-command edit with shouldAutoApproveTool=true => auto-approved", async () => {
+			const task = createTaskProxy("session-nonc-edit", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-nonc-edit",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				shouldAutoApproveTool: () => true,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-nonc-edit",
+				toolName: "editor",
+				input: { path: "a.ts", old_text: "a", new_text: "b" },
+				policy: { autoApprove: false },
+			})
+			await expect(promise).resolves.toEqual({ approved: true })
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("non-command read with shouldAutoApproveTool=true => auto-approved", async () => {
+			const task = createTaskProxy("session-nonc-read", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-nonc-read",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				shouldAutoApproveTool: () => true,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-nonc-read",
+				toolName: "read_files",
+				input: { path: "README.md" },
+				policy: { autoApprove: false },
+			})
+			await expect(promise).resolves.toEqual({ approved: true })
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("non-command web fetch with shouldAutoApproveTool=true => auto-approved", async () => {
+			const task = createTaskProxy("session-nonc-web", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-nonc-web",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				shouldAutoApproveTool: () => true,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-nonc-web",
+				toolName: "fetch_web_content",
+				input: { url: "https://example.com" },
+				policy: { autoApprove: false },
+			})
+			await expect(promise).resolves.toEqual({ approved: true })
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("non-command edit with shouldAutoApproveTool=false => approval UI opened", async () => {
+			const task = createTaskProxy("session-nonc-edit-no", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-nonc-edit-no",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				shouldAutoApproveTool: () => false,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-nonc-edit-no",
+				toolName: "editor",
+				input: { path: "a.ts", old_text: "a", new_text: "b" },
+				policy: { autoApprove: false },
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+			await expect(promise).resolves.toEqual({ approved: true })
+		})
 	})
 })

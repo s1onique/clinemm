@@ -234,15 +234,23 @@ export class SdkInteractionCoordinator {
 		} else {
 			// No atomic evaluator (or non-command tool): use legacy behavior.
 			if (isCommand) {
-				// Command tool with no atomic evaluator: use shouldAutoApproveTool.
-				if (this.options.shouldAutoApproveTool?.(request) === true) {
+				// Command tool with no atomic evaluator: honor SDK policy
+				// `autoApprove` short-circuit and host shouldAutoApproveTool
+				// (which the host wires to the canonical command policy
+				// lattice when no atomic evaluator is provided).
+				if (request.policy.autoApprove === true || this.options.shouldAutoApproveTool?.(request) === true) {
 					Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
 					return { approved: true }
 				}
 			} else {
-				// Non-command tool: SDK's own policy auto-approve applies.
-				if (request.policy.autoApprove === true) {
-					Logger.log(`[SdkController] Auto-approving tool execution (SDK policy): tool=${request.toolName}`)
+				// ACT-CLINEMM-UPSTREAM-SETTINGS-AUTHORITY-PARITY01:
+				// Non-command tools (read/edit/browser/mcp) consult the host's
+				// shouldAutoApproveTool callback, which evaluates the live user
+				// auto-approval settings via isToolAutoApproved. The SDK policy
+				// `autoApprove` field is also honored as a short-circuit (matches
+				// upstream v4.1.10 wiring).
+				if (request.policy.autoApprove === true || this.options.shouldAutoApproveTool?.(request) === true) {
+					Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
 					return { approved: true }
 				}
 			}

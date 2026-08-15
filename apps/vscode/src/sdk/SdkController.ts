@@ -92,7 +92,12 @@ import { SdkTaskHistory, sessionHistoryRecordToHistoryItem } from "./sdk-task-hi
 import { SdkTaskStartCoordinator } from "./sdk-task-start-coordinator"
 import { createVscodeSdkTelemetryHandle, type VscodeSdkTelemetryHandle } from "./sdk-telemetry"
 import { SdkTerminalExecutionModeCoordinator } from "./sdk-terminal-execution-mode-coordinator"
-import { evaluateCommandToolApprovalWithPlan, getCommandHostAuthorization, isCommandTool } from "./sdk-tool-policies"
+import {
+	evaluateCommandToolApprovalWithPlan,
+	getCommandHostAuthorization,
+	isCommandTool,
+	isToolAutoApproved,
+} from "./sdk-tool-policies"
 import {
 	extractSdkUserText,
 	findSdkUserMessageIndexByOrdinal,
@@ -350,6 +355,23 @@ export class Controller {
 				// A denied edit's executor never runs, so close its diff preview here. Covers
 				// manual Reject and clearPending (task cancel/abort) in one place.
 				void this.diffEdits.discardPreview(toolCallId)
+			},
+			// ACT-CLINEMM-UPSTREAM-SETTINGS-AUTHORITY-PARITY01:
+			// Non-command tools (read/edit/browser/mcp) consult the live user
+			// settings via isToolAutoApproved, matching upstream's
+			// shouldAutoApproveTool wiring (v4.1.10). Command tools continue
+			// to route through the canonical policy lattice via
+			// evaluateCommandToolApproval below.
+			shouldAutoApproveTool: (request) => {
+				if (isCommandTool(request.toolName)) {
+					// Command tools go through evaluateCommandToolApproval
+					// (canonical policy lattice) below; this hook is the
+					// non-command fast path.
+					return false
+				}
+				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+				const effective = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
+				return isToolAutoApproved(request.toolName, effective, this.mcpHub)
 			},
 			// CORRECTION04 TOCTOU fix: read settings ONCE and produce one
 			// atomic evaluation that carries both authority and execution constraints.
