@@ -8,22 +8,41 @@
  *   - WAIT_BUDGET_MS: how long this tool invocation waits before
  *     returning control to the model. Expiry does NOT terminate the
  *     process — it returns a `RUNNING` snapshot with a stable jobId.
+ *     The wait budget is clamped DOWN to the execution deadline; it can
+ *     never extend the deadline.
  *
  *   - EXECUTION_DEADLINE_MS: maximum wall-clock lifetime the host
- *     permits the command. Expiry terminates the owned process tree
- *     and records `DEADLINE_EXCEEDED`.
+ *     permits the command. The deadline is host-authoritative: callers
+ *     cannot raise it. Expiry terminates the owned process tree and
+ *     records `DEADLINE_EXCEEDED`.
  *
- * Three invariants:
+ * Five invariants:
  *   1. RUNNING is not a failure.
  *   2. The host may stop waiting without stopping the command, but it
  *      must never stop owning it.
  *   3. Cancellation is idempotent — calling cancel on an already-terminal
  *      job is a no-op.
+ *   4. The deadline is host-authoritative; wait budget never extends it.
+ *   5. The terminal outcome reflects why the host initiated termination,
+ *      not what the child happened to do — if the host sent SIGTERM on
+ *      deadline, the outcome is `deadline_exceeded` even if the child
+ *      voluntarily exited 0 milliseconds later.
+ *
+ * Cancellation is exposed via the separate `cancel_command` tool
+ * (see command-status-tool.ts). Observation via `command_status` is
+ * read-only and does not require host command policy.
  */
 import { type StructuredCommandInput, type SupervisableShellProcess, spawnSupervisableShellCommand } from "@cline/core"
 import { type AgentToolContext, getDefaultShell, getShellInvocation } from "@cline/shared"
 
 export type CommandJobState = "running" | "exited" | "deadline_exceeded" | "cancelled" | "spawn_failed"
+
+/**
+ * Why the host initiated termination, if it did. Latched onto the job
+ * so the terminal outcome reflects host authority rather than the
+ * child's last will.
+ */
+export type TerminationReason = "natural" | "deadline" | "cancel"
 
 /** A snapshot of a job's observable state. Safe to copy across boundaries. */
 export interface CommandJobSnapshot {
@@ -53,9 +72,13 @@ export interface StartCommandJobOptions {
 	shell?: string
 	env?: Record<string, string>
 
-	/** How long to wait before returning control. Expiry ≠ termination. */
+	/** How long to wait before returning control. Expiry ≠ termination. Clamped DOWN to the effective deadline. */
 	waitBudgetMs: number
-	/** Maximum lifetime the host permits. Expiry terminates the process. */
+	/**
+	 * Requested execution deadline. The host clamps this DOWN to its
+	 * authoritative ceiling (the manager's `maxExecutionDeadlineMs`);
+	 * callers can never extend execution.
+	 */
 	executionDeadlineMs: number
 	/** Cap on per-call response output (chars). */
 	maxOutputChars?: number
@@ -69,6 +92,8 @@ export interface StartCommandJobResult {
 	elapsedMs: number
 	deadlineRemainingMs: number
 	stdout: string
+	/** Stderr for terminal results — combined into stdout for the model-facing result text. */
+	stderr: string
 	outputTruncated: boolean
 	process: SupervisableShellProcess
 	exitCode?: number
@@ -87,6 +112,29 @@ export interface CancelCommandJobOptions {
 	jobId: string
 }
 
+/** Constructor options for {@link CommandJobManager}. */
+export interface CommandJobManagerOptions {
+	/**
+	 * Maximum number of terminal jobs retained in memory. Bounded FIFO
+	 * eviction (not LRU — status access does not refresh recency). Older
+	 * jobs are evicted past the cap. Injectable so tests can prove
+	 * eviction deterministically.
+	 */
+	maxTerminalJobs?: number
+	/**
+	 * Host-authoritative ceiling on execution deadline. Caller-supplied
+	 * deadlines are clamped DOWN to this value. Defaults to
+	 * `DEFAULT_EXECUTION_DEADLINE_MS`.
+	 */
+	maxExecutionDeadlineMs?: number
+	/**
+	 * Maximum wait budget the caller may request. Defaults to
+	 * `DEFAULT_WAIT_BUDGET_MS`. Also clamped DOWN to
+	 * `effectiveExecutionDeadlineMs` for any given job.
+	 */
+	maxWaitBudgetMs?: number
+}
+
 /**
  * Default wait budget for run_commands. The tool call returns control
  * to the model after this much wall-clock time when the child is
@@ -98,20 +146,34 @@ export const DEFAULT_WAIT_BUDGET_MS = 15_000
 /**
  * Default execution deadline. The host terminates the owned process
  * tree after this much wall-clock time regardless of whether anyone is
- * observing it.
+ * observing it. Also the default host-authoritative ceiling for
+ * caller-supplied deadlines.
  */
 export const DEFAULT_EXECUTION_DEADLINE_MS = 600_000 // 10 min
 
-/** Maximum output returned in a single tool call (chars). */
-export const MAX_RESPONSE_OUTPUT_BYTES = 65_536
+/**
+ * Maximum response output per tool call (UTF-16 code units, "chars").
+ * The retained snapshot is bounded separately and may be larger;
+ * every model-facing response is projected through this cap.
+ *
+ * Note: this is consistent with upstream `createShellExecutor`'s
+ * `MAX_COMMAND_OUTPUT_CHARS` and the SDK's `truncateCommandOutput`.
+ * True UTF-8 byte accounting is a separate concern; treat this as a
+ * model-context budget.
+ */
+export const MAX_RESPONSE_OUTPUT_CHARS = 65_536
 
-/** Maximum output retained per job for follow-up status inspection (chars). */
-export const MAX_RETAINED_JOB_OUTPUT_BYTES = 4 * 1024 * 1024
+/**
+ * Maximum retained output per job for follow-up status inspection
+ * (UTF-16 code units). Applied per stream (stdout, stderr); total
+ * retained output per job can be up to ~2× this value.
+ */
+export const MAX_RETAINED_JOB_OUTPUT_CHARS = 4 * 1024 * 1024
 
 /** Hard cap on `command_status(jobId, waitMs)`. */
 export const MAX_STATUS_WAIT_MS = 30_000
 
-/** Bounded retention for terminal jobs (LRU eviction). */
+/** Bounded retention for terminal jobs (FIFO eviction; not LRU). */
 export const MAX_TERMINAL_JOBS = 128
 
 /** SIGTERM grace before SIGKILL. Matches the bash executor's `5_000` watchdog. */
@@ -143,23 +205,43 @@ function snapshot(job: CommandJob): CommandJobSnapshot {
 	}
 }
 
+/**
+ * Project an internal snapshot to a model-facing snapshot with the
+ * response cap applied. Distinct from `snapshot()` so the retained
+ * spool can be larger than any individual response.
+ */
+function projectResponseSnapshot(snap: CommandJobSnapshot, maxResponseOutputChars: number): CommandJobSnapshot {
+	const stdoutTruncated = snap.stdout.length > maxResponseOutputChars
+	const stderrTruncated = snap.stderr.length > maxResponseOutputChars
+	return {
+		...snap,
+		stdout: stdoutTruncated ? snap.stdout.slice(0, maxResponseOutputChars) : snap.stdout,
+		stderr: stderrTruncated ? snap.stderr.slice(0, maxResponseOutputChars) : snap.stderr,
+		outputTruncated: stdoutTruncated || stderrTruncated || snap.outputTruncated,
+	}
+}
+
 interface CommandJob {
 	id: string
 	state: CommandJobState
 	startedAtMs: number
 	deadlineAtMs: number
 	maxRetainedOutputChars: number
+	maxResponseOutputChars: number
 
 	process: SupervisableShellProcess
 
 	exitCode?: number
 	signal?: string
 
-	waiters: Array<(snap: CommandJobSnapshot) => void>
+	/** Latched when the host initiates termination. Survives natural exit. */
+	terminationReason: TerminationReason
 	finalized: boolean
 
-	cancelRequested: boolean
-	killIssued: boolean
+	/** Tracked so finalize() can clear them — no leftover listeners. */
+	deadlineTimer?: NodeJS.Timeout
+	abortListener?: () => void
+	abortSignal?: AbortSignal
 } /**
  * CommandJobManager — the single host owner of command execution
  * lifetime for the VS Code extension's `run_commands` background path.
@@ -175,11 +257,25 @@ export class CommandJobManager {
 	private readonly terminalOrder: string[] = []
 	private readonly exitTransitions = new Map<string, Promise<void>>()
 
+	private readonly maxTerminalJobs: number
+	private readonly maxExecutionDeadlineMs: number
+	private readonly maxWaitBudgetMs: number
+
+	constructor(options: CommandJobManagerOptions = {}) {
+		this.maxTerminalJobs = Math.max(1, options.maxTerminalJobs ?? MAX_TERMINAL_JOBS)
+		this.maxExecutionDeadlineMs = Math.max(0, options.maxExecutionDeadlineMs ?? DEFAULT_EXECUTION_DEADLINE_MS)
+		this.maxWaitBudgetMs = Math.max(0, options.maxWaitBudgetMs ?? DEFAULT_WAIT_BUDGET_MS)
+	}
+
 	async start(options: StartCommandJobOptions, context?: AgentToolContext): Promise<StartCommandJobResult> {
-		const waitBudgetMs = Math.max(0, options.waitBudgetMs)
-		const executionDeadlineMs = Math.max(waitBudgetMs, options.executionDeadlineMs)
-		const maxRetainedOutputChars = options.maxRetainedOutputChars ?? MAX_RETAINED_JOB_OUTPUT_BYTES
-		const maxResponseOutputChars = options.maxOutputChars ?? MAX_RESPONSE_OUTPUT_BYTES
+		// INVARIANT 4: the deadline is host-authoritative. The caller's
+		// requested deadline is clamped DOWN to the manager's ceiling.
+		const effectiveDeadlineMs = Math.min(Math.max(0, options.executionDeadlineMs), this.maxExecutionDeadlineMs)
+		// Wait budget is also clamped DOWN — to the manager's ceiling AND
+		// to the effective deadline. Waiting can never extend execution.
+		const effectiveWaitBudgetMs = Math.min(Math.max(0, options.waitBudgetMs), this.maxWaitBudgetMs, effectiveDeadlineMs)
+		const maxRetainedOutputChars = options.maxRetainedOutputChars ?? MAX_RETAINED_JOB_OUTPUT_CHARS
+		const maxResponseOutputChars = options.maxOutputChars ?? MAX_RESPONSE_OUTPUT_CHARS
 
 		const shell = options.shell ?? getDefaultShell(process.platform)
 		let executable: string
@@ -199,7 +295,7 @@ export class CommandJobManager {
 
 		const id = generateJobId()
 		const startedAtMs = Date.now()
-		const deadlineAtMs = startedAtMs + executionDeadlineMs
+		const deadlineAtMs = startedAtMs + effectiveDeadlineMs
 
 		const childProcess = spawnSupervisableShellCommand(
 			{
@@ -211,7 +307,7 @@ export class CommandJobManager {
 			},
 			{
 				// Retain enough for follow-up status checks; response
-				// truncation happens at the snapshot boundary.
+				// truncation happens at the snapshot projection.
 				maxOutputChars: maxRetainedOutputChars,
 				combineOutput: true,
 			},
@@ -223,27 +319,25 @@ export class CommandJobManager {
 			startedAtMs,
 			deadlineAtMs,
 			maxRetainedOutputChars,
+			maxResponseOutputChars,
 			process: childProcess,
-			waiters: [],
+			terminationReason: "natural",
 			finalized: false,
-			cancelRequested: false,
-			killIssued: false,
 		}
 		this.active.set(id, job)
 
-		// Track exit; finalize to the appropriate terminal state.
+		// Track exit; finalize using the latched terminationReason so
+		// host-initiated termination wins over the child's cooperation.
 		const exitTransition = childProcess.exit
 			.then((result: { exitCode: number | null; signal: NodeJS.Signals | null }) => {
 				if (job.finalized) return
-				if (job.cancelRequested) {
-					this.finalize(job, "cancelled", { exitCode: result.exitCode, signal: result.signal })
-					return
-				}
-				if (Date.now() >= job.deadlineAtMs && (result.exitCode === null || result.exitCode !== 0)) {
-					this.finalize(job, "deadline_exceeded", { exitCode: result.exitCode, signal: result.signal })
-					return
-				}
-				this.finalize(job, "exited", { exitCode: result.exitCode, signal: result.signal })
+				const state: CommandJobState =
+					job.terminationReason === "deadline"
+						? "deadline_exceeded"
+						: job.terminationReason === "cancel"
+							? "cancelled"
+							: "exited"
+				this.finalize(job, state, { exitCode: result.exitCode, signal: result.signal })
 			})
 			.catch((error: Error) => {
 				if (job.finalized) return
@@ -252,22 +346,24 @@ export class CommandJobManager {
 		this.exitTransitions.set(id, exitTransition)
 
 		// Deadline watchdog — the only timer allowed to call killTree.
-		const deadlineTimer = setTimeout(() => {
+		// Tracked on the job so finalize() can clear it.
+		job.deadlineTimer = setTimeout(() => {
 			if (job.finalized || job.state !== "running") return
 			void this.terminate(job, "deadline")
-		}, executionDeadlineMs)
-		deadlineTimer.unref()
+		}, effectiveDeadlineMs)
+		job.deadlineTimer.unref()
 
 		// Honor caller-supplied AbortSignal as a cancel, not a deadline.
 		if (context?.signal) {
-			const onAbort = () => {
+			job.abortSignal = context.signal
+			job.abortListener = () => {
 				if (job.finalized || job.state !== "running") return
 				void this.terminate(job, "cancel")
 			}
 			if (context.signal.aborted) {
-				onAbort()
+				job.abortListener()
 			} else {
-				context.signal.addEventListener("abort", onAbort, { once: true })
+				context.signal.addEventListener("abort", job.abortListener, { once: true })
 			}
 		}
 
@@ -277,17 +373,17 @@ export class CommandJobManager {
 		// `process.exit` synchronously after spawn and the finalize()
 		// callback runs before this Promise.race resolves, so the tool
 		// sees the terminal state without spurious RUNNING.
-		return this.awaitOrSnapshot(job, waitBudgetMs, maxResponseOutputChars)
+		return this.awaitOrSnapshot(job, effectiveWaitBudgetMs)
 	}
 
-	private async awaitOrSnapshot(
-		job: CommandJob,
-		waitBudgetMs: number,
-		maxResponseOutputChars: number,
-	): Promise<StartCommandJobResult> {
+	private async awaitOrSnapshot(job: CommandJob, waitBudgetMs: number): Promise<StartCommandJobResult> {
 		const remaining = Math.max(0, waitBudgetMs - (Date.now() - job.startedAtMs))
 		if (remaining > 0 && job.state === "running") {
 			// Wait for terminal transition or budget — whichever first.
+			// No mutable waiter list: race the existing exitTransition
+			// promise against a one-shot timer. Each status() call creates
+			// its own ad-hoc promise, so the cost is bounded by the
+			// active status callers — not by repeated polls.
 			await Promise.race([
 				this.exitTransitions.get(job.id) ?? Promise.resolve(),
 				new Promise<void>((resolve) => {
@@ -296,20 +392,19 @@ export class CommandJobManager {
 				}),
 			])
 		}
-		return this.makeStartResult(job, maxResponseOutputChars)
+		return this.makeStartResult(job)
 	}
 
-	private makeStartResult(job: CommandJob, maxResponseOutputChars: number): StartCommandJobResult {
-		const snap = snapshot(job)
-		const truncatedStdout =
-			snap.stdout.length > maxResponseOutputChars ? snap.stdout.slice(0, maxResponseOutputChars) : snap.stdout
+	private makeStartResult(job: CommandJob): StartCommandJobResult {
+		const snap = projectResponseSnapshot(snapshot(job), job.maxResponseOutputChars)
 		return {
 			jobId: job.id,
 			state: job.state,
 			elapsedMs: snap.elapsedMs,
 			deadlineRemainingMs: snap.deadlineRemainingMs,
-			stdout: truncatedStdout,
-			outputTruncated: snap.stdout.length > maxResponseOutputChars || snap.outputTruncated,
+			stdout: snap.stdout,
+			stderr: snap.stderr,
+			outputTruncated: snap.outputTruncated,
 			process: job.process,
 			...(snap.exitCode !== undefined ? { exitCode: snap.exitCode } : {}),
 			...(snap.signal !== undefined ? { signal: snap.signal } : {}),
@@ -318,23 +413,39 @@ export class CommandJobManager {
 
 	private async terminate(job: CommandJob, reason: "deadline" | "cancel"): Promise<void> {
 		if (job.finalized || job.state !== "running") return
-		if (reason === "cancel") {
-			job.cancelRequested = true
-		}
+		// Latch the reason first so a race between SIGTERM-induced
+		// natural exit and the grace timer still classifies correctly.
+		job.terminationReason = reason
 		// Step 1: SIGTERM (best-effort; on Windows we fall through).
 		try {
 			if (job.process.pid && process.platform !== "win32") {
 				process.kill(-job.process.pid, "SIGTERM")
 			}
 		} catch {
-			// Process may have exited; we'll fall through.
+			// Process may already be gone — the exit promise will resolve.
 		}
-		// Step 2: grace → SIGKILL via the supervisable primitive's
-		// killTree (which already targets the whole group / uses
-		// taskkill on Windows).
-		await new Promise<void>((done) => setTimeout(done, TERM_GRACE_MS).unref())
-		job.killIssued = true
-		await job.process.killTree()
+		// Step 2: race the grace window against the process exit. If
+		// the child cooperates, stop here. Never issue SIGKILL to a
+		// PID that has already terminated — that's a classic process-
+		// supervision hazard (PID reuse, group-ID reuse).
+		let exited = false
+		const exitWatch = job.process.exit.then(
+			() => {
+				exited = true
+			},
+			() => {
+				exited = true
+			},
+		)
+		let graceTimer: NodeJS.Timeout | undefined
+		const graceTimeout = new Promise<void>((resolve) => {
+			graceTimer = setTimeout(resolve, TERM_GRACE_MS)
+			graceTimer.unref()
+		})
+		await Promise.race([exitWatch, graceTimeout])
+		if (!exited) {
+			await job.process.killTree()
+		}
 	}
 
 	private finalize(
@@ -351,21 +462,28 @@ export class CommandJobManager {
 		if (typeof detail.signal === "string") {
 			job.signal = detail.signal
 		}
-		// Move from active → terminal (bounded LRU).
+		// INVARIANT (timer hygiene): clear any leftover watchdog / abort
+		// listener so high command volume doesn't accumulate timers.
+		if (job.deadlineTimer) {
+			clearTimeout(job.deadlineTimer)
+			job.deadlineTimer = undefined
+		}
+		if (job.abortListener && job.abortSignal) {
+			job.abortSignal.removeEventListener("abort", job.abortListener)
+			job.abortSignal = undefined
+			job.abortListener = undefined
+		}
+		// Move from active → terminal (bounded FIFO).
 		this.active.delete(job.id)
 		this.terminal.set(job.id, job)
 		this.terminalOrder.push(job.id)
-		while (this.terminalOrder.length > MAX_TERMINAL_JOBS) {
+		while (this.terminalOrder.length > this.maxTerminalJobs) {
 			const evictId = this.terminalOrder.shift()
 			if (evictId) {
 				this.terminal.delete(evictId)
 				this.exitTransitions.delete(evictId)
 			}
 		}
-		// Resolve any pending status waiters.
-		const snap = snapshot(job)
-		for (const waiter of job.waiters) waiter(snap)
-		job.waiters.length = 0
 	}
 
 	/**
@@ -374,6 +492,11 @@ export class CommandJobManager {
 	 *
 	 * Returns a structured error for unknown jobs (NOT a thrown exception
 	 * — the caller needs a deterministic shape to surface to the model).
+	 *
+	 * Polling pattern is bounded: each call creates its own ad-hoc timer
+	 * and races against the job's `exitTransitions` promise; the per-call
+	 * promise is dropped once the call returns. Repeated polling therefore
+	 * does NOT accumulate waiters on the job.
 	 */
 	async status(
 		options: StatusCommandJobOptions,
@@ -385,26 +508,23 @@ export class CommandJobManager {
 		const waitMs = Math.max(0, Math.min(options.waitMs, MAX_STATUS_WAIT_MS))
 
 		if (job.state !== "running") {
-			return { ok: true, snapshot: snapshot(job) }
+			return { ok: true, snapshot: projectResponseSnapshot(snapshot(job), job.maxResponseOutputChars) }
 		}
 
 		if (waitMs === 0) {
-			return { ok: true, snapshot: snapshot(job) }
+			return { ok: true, snapshot: projectResponseSnapshot(snapshot(job), job.maxResponseOutputChars) }
 		}
 
-		// Wait up to waitMs for terminal state.
-		const snap = await Promise.race<CommandJobSnapshot>([
-			new Promise<CommandJobSnapshot>((resolve) => {
-				job.waiters.push(resolve)
-			}),
-			new Promise<CommandJobSnapshot>((resolve) => {
-				const t = setTimeout(() => {
-					resolve(snapshot(job))
-				}, waitMs)
-				t.unref()
-			}),
-		])
-		return { ok: true, snapshot: snap }
+		// Race the existing exitTransition promise against a one-shot
+		// timer. No mutable waiter list — the timer is local to this
+		// call and never registered on the job.
+		let timer: NodeJS.Timeout | undefined
+		const timeout = new Promise<void>((resolve) => {
+			timer = setTimeout(resolve, waitMs)
+			timer.unref()
+		})
+		await Promise.race([this.exitTransitions.get(job.id) ?? Promise.resolve(), timeout])
+		return { ok: true, snapshot: projectResponseSnapshot(snapshot(job), job.maxResponseOutputChars) }
 	}
 
 	/**

@@ -41,7 +41,7 @@ import {
 	CommandJobManager,
 	DEFAULT_EXECUTION_DEADLINE_MS,
 	DEFAULT_WAIT_BUDGET_MS,
-	MAX_RESPONSE_OUTPUT_BYTES,
+	MAX_RESPONSE_OUTPUT_CHARS,
 } from "./command-job-manager"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 
@@ -607,7 +607,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 						env: { SHELL: shell },
 						waitBudgetMs,
 						executionDeadlineMs,
-						maxOutputChars: MAX_RESPONSE_OUTPUT_BYTES,
+						maxOutputChars: MAX_RESPONSE_OUTPUT_CHARS,
 					},
 					context,
 				)
@@ -615,6 +615,10 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					...(start.exitCode !== undefined ? { exitCode: start.exitCode } : {}),
 					terminalExecutionMode: "backgroundExec",
 				})
+				// Combine stderr into stdout for the model-facing terminal
+				// result so diagnostics written to stderr are not silently
+				// lost. Mirrors the bash executor's combineOutput behavior.
+				const combinedOutput = start.stderr.length > 0 ? `${start.stdout}\n[stderr]\n${start.stderr}` : start.stdout
 				// RUNNING returns a structured snapshot so the model can
 				// observe status + jobId. Terminal results retain the
 				// existing stdout/exitCode shape for backward compatibility.
@@ -633,17 +637,18 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// SDK wrapper records the existing telemetry; for success,
 				// return stdout as before.
 				if (start.state === "exited" && start.exitCode === 0) {
-					return start.stdout
+					return combinedOutput
 				}
 				if (start.state === "deadline_exceeded") {
 					const text =
-						start.stdout.length > 0
-							? `[Command exceeded the host execution deadline]\n${start.stdout}`
+						combinedOutput.length > 0
+							? `[Command exceeded the host execution deadline]\n${combinedOutput}`
 							: `[Command exceeded the host execution deadline]`
 					throw new CommandExitError(start.exitCode ?? 1, text)
 				}
 				if (start.state === "cancelled") {
-					const text = start.stdout.length > 0 ? `[Command was cancelled]\n${start.stdout}` : `[Command was cancelled]`
+					const text =
+						combinedOutput.length > 0 ? `[Command was cancelled]\n${combinedOutput}` : `[Command was cancelled]`
 					throw new CommandExitError(start.exitCode ?? 1, text)
 				}
 				if (start.state === "spawn_failed") {
@@ -652,8 +657,8 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// exited with non-zero — preserve CommandExitError shape.
 				throw new CommandExitError(
 					start.exitCode ?? 1,
-					start.stdout.length > 0
-						? `[Command exited with code ${start.exitCode ?? 1}]\n${start.stdout}`
+					combinedOutput.length > 0
+						? `[Command exited with code ${start.exitCode ?? 1}]\n${combinedOutput}`
 						: `[Command exited with code ${start.exitCode ?? 1}]`,
 				)
 			} catch (error) {

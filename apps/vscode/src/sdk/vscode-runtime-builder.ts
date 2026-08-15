@@ -5,7 +5,7 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import { resolveMcpServerTimeoutMs } from "@/services/mcp/timeout"
 import { Logger } from "@/shared/services/Logger"
 import { CommandJobManager, DEFAULT_EXECUTION_DEADLINE_MS, DEFAULT_WAIT_BUDGET_MS } from "./command-job-manager"
-import { createCommandStatusTool } from "./command-status-tool"
+import { createCancelCommandTool, createCommandStatusTool } from "./command-status-tool"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { createVscodeRunCommandsTool, VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS } from "./vscode-run-commands-tool"
 
@@ -118,7 +118,11 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 		// foreground commands use the existing "Proceed While Running"
 		// button and don't need a separate status tool.
 		if (executionMode === "backgroundExec" && options.commandJobManager) {
+			// Observation only — auto-approved; safe to expose.
 			tools.push(createCommandStatusTool(options.commandJobManager))
+			// Mutating — registered through the command-policy adapter
+			// in sdk-tool-policies.ts so ALLOW/ASK/DENY applies.
+			tools.push(createCancelCommandTool(options.commandJobManager))
 		}
 		Logger.log(
 			`[VscodeRuntimeTools] Added custom run_commands tool (mode=${executionMode}, timeoutMs=${executionMode === "vscodeTerminal" ? VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS : "supervised"})`,

@@ -13,9 +13,11 @@ import { type CommandHostAuthorization, commandHostAuthorization, DEFAULT_COMMAN
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { describe, expect, it } from "vitest"
 import {
+	buildToolPolicies,
 	evaluateCommandToolApproval,
 	evaluateCommandToolApprovalWithPlan,
 	getCommandHostAuthorization,
+	isCommandTool,
 } from "./sdk-tool-policies"
 
 const SAFE_ENABLED = {
@@ -227,5 +229,37 @@ describe("CORRECTION04: mandatory safeExecutionProfile + planner failure = hard 
 		expect(result.decision.kind).toBe("deny")
 		expect(result.decision.source).toBe("execution_plan_invalid")
 		expect(result.executionPlan).toBeUndefined()
+	})
+})
+
+describe("CORRECTION01: cancel_command follows the same host authority as run_commands", () => {
+	it("cancel_command is treated as a command tool by isCommandTool", () => {
+		expect(isCommandTool("cancel_command")).toBe(true)
+		expect(isCommandTool("run_commands")).toBe(true)
+		expect(isCommandTool("execute_command")).toBe(true)
+	})
+
+	it("executeSafeCommands=true returns safe-only authorization for cancel_command", () => {
+		const auth = getCommandHostAuthorization("cancel_command", SAFE_ENABLED)
+		expect(auth.mode).toBe("safe-only")
+		expect(auth.explicitAllowRules).toEqual(DEFAULT_COMMAND_HOST_ALLOW_RULES)
+	})
+
+	it("executeSafeCommands=false returns manual authorization for cancel_command", () => {
+		const manual = {
+			...DEFAULT_AUTO_APPROVAL_SETTINGS,
+			actions: {
+				...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+				executeSafeCommands: false,
+			},
+		}
+		const auth = getCommandHostAuthorization("cancel_command", manual)
+		expect(auth.mode).toBe("manual")
+	})
+
+	it("cancel_command is listed in buildToolPolicies so requestToolApproval fires", () => {
+		const policies = buildToolPolicies(SAFE_ENABLED)
+		expect(policies.cancel_command).toBeDefined()
+		expect(policies.cancel_command?.autoApprove).toBe(false)
 	})
 })

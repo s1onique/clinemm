@@ -44,7 +44,7 @@ export function buildToolPolicies(
 
 	set(["read_files", "read_file", "list_files", "list_code_definition_names", "search_codebase", "search_files"])
 	set(["editor", "replace_in_file", "write_to_file", "apply_patch", "delete_file"])
-	set(["run_commands", "execute_command"])
+	set(["run_commands", "execute_command", "cancel_command"])
 	set(["fetch_web_content", "web_fetch", "web_search"])
 
 	if (mcpHub) {
@@ -70,7 +70,7 @@ export function isEditTool(toolName: string): boolean {
 }
 
 export function isCommandTool(toolName: string): boolean {
-	return toolName === "run_commands" || toolName === "execute_command"
+	return toolName === "run_commands" || toolName === "execute_command" || toolName === "cancel_command"
 }
 
 function isBrowserTool(toolName: string): boolean {
@@ -101,11 +101,17 @@ export function getCommandHostAuthorization(
 	_mcpHub?: McpHub,
 ): CommandHostAuthorization {
 	if (isCommandTool(toolName)) {
-		// Host has at most a binary "execute_safe_commands" toggle.
-		// The corrected architecture treats this as "safe-only" mode.
-		// In safe-only mode the host ALLOWS only commands that match a
-		// constrained, positive rule (see DEFAULT_COMMAND_HOST_ALLOW_RULES).
-		// It does NOT auto-approve by executable name.
+		// `cancel_command` is mutating (terminates a process tree) but
+		// has no command-shaped input. It must follow the user's
+		// executeSafeCommands setting too: cancel is part of the
+		// command-execution authority boundary, so the same safe-only
+		// rules apply (the user must have opted in to auto-approve
+		// command execution for cancel to be auto-approved as well).
+		// In `manual` mode, cancel_command goes through the normal
+		// ASK path and surfaces as an unparseable command for the
+		// canonical policy, which the host treats as a confirmation
+		// prompt. The executeSafeCommands toggle is therefore the
+		// authoritative gate: off -> ASK; on -> ALLOW.
 		if (settings.actions.executeSafeCommands) {
 			return commandHostAuthorization({
 				mode: "safe-only",

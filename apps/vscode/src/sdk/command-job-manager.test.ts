@@ -11,8 +11,8 @@ import {
 	CommandJobManager,
 	DEFAULT_EXECUTION_DEADLINE_MS,
 	DEFAULT_WAIT_BUDGET_MS,
-	MAX_RESPONSE_OUTPUT_BYTES,
-	MAX_TERMINAL_JOBS,
+	MAX_RESPONSE_OUTPUT_CHARS,
+	MAX_RETAINED_JOB_OUTPUT_CHARS,
 	TERM_GRACE_MS,
 } from "./command-job-manager"
 
@@ -105,7 +105,7 @@ describe("CommandJobManager", () => {
 		}
 	})
 
-	it("terminates the owned process tree on deadline", async () => {
+	it("terminates the owned process tree on deadline with deterministic state", async () => {
 		const manager = new CommandJobManager()
 		try {
 			const start = await manager.start({
@@ -123,7 +123,10 @@ describe("CommandJobManager", () => {
 			const terminal = await manager.status({ jobId: start.jobId, waitMs: 0 })
 			expect(terminal.ok).toBe(true)
 			if (terminal.ok) {
-				expect(["deadline_exceeded", "cancelled"]).toContain(terminal.snapshot.state)
+				// INVARIANT 5: deadline-triggered termination must produce
+				// exactly deadline_exceeded — never cancelled, never
+				// exited, regardless of what the child does after SIGTERM.
+				expect(terminal.snapshot.state).toBe("deadline_exceeded")
 			}
 
 			// Subsequent status is idempotent.
@@ -159,8 +162,10 @@ describe("CommandJobManager", () => {
 			expect(a.ok).toBe(true)
 			expect(b.ok).toBe(true)
 			if (a.ok && b.ok) {
-				expect(["cancelled", "deadline_exceeded"]).toContain(a.state)
-				expect(["cancelled", "deadline_exceeded"]).toContain(b.state)
+				// INVARIANT 5: cancel-triggered termination must produce
+				// exactly cancelled — never deadline_exceeded.
+				expect(a.state).toBe("cancelled")
+				expect(b.state).toBe("cancelled")
 			}
 
 			await new Promise((r) => setTimeout(r, TERM_GRACE_MS + 1_000))
@@ -197,7 +202,7 @@ describe("CommandJobManager", () => {
 		}
 	})
 
-	it("truncates response output to MAX_RESPONSE_OUTPUT_BYTES and keeps the full retained snapshot", async () => {
+	it("truncates response output to MAX_RESPONSE_OUTPUT_CHARS and surfaces outputTruncated on every response", async () => {
 		const manager = new CommandJobManager()
 		try {
 			// Generate > 64 KiB of stdout via /bin/sh printf, which is
@@ -207,19 +212,26 @@ describe("CommandJobManager", () => {
 				cwd: process.cwd(),
 				waitBudgetMs: 5_000,
 				executionDeadlineMs: 5_000,
-				maxOutputChars: MAX_RESPONSE_OUTPUT_BYTES,
+				maxOutputChars: MAX_RESPONSE_OUTPUT_CHARS,
 			})
 			expect(start.state).toBe("exited")
 			expect(start.exitCode).toBe(0)
-			expect(start.stdout.length).toBeLessThanOrEqual(MAX_RESPONSE_OUTPUT_BYTES)
+			expect(start.stdout.length).toBeLessThanOrEqual(MAX_RESPONSE_OUTPUT_CHARS)
 			expect(start.outputTruncated).toBe(true)
 
-			// Full retained snapshot is still available via status.
+			// Every model-facing status response is also projected through
+			// the response cap. The retained spool stays larger; the
+			// process object exposes it via stdoutSnapshot() for callers
+			// that need the raw retained view.
 			const snap = await manager.status({ jobId: start.jobId, waitMs: 0 })
 			expect(snap.ok).toBe(true)
 			if (snap.ok) {
-				expect(snap.snapshot.stdout.length).toBeGreaterThan(MAX_RESPONSE_OUTPUT_BYTES)
+				expect(snap.snapshot.stdout.length).toBeLessThanOrEqual(MAX_RESPONSE_OUTPUT_CHARS)
+				expect(snap.snapshot.outputTruncated).toBe(true)
 			}
+			// The retained spool (raw, no projection) is larger.
+			const rawRetained = start.process.stdoutSnapshot()
+			expect(rawRetained.totalChars).toBeGreaterThan(MAX_RESPONSE_OUTPUT_CHARS)
 		} finally {
 			await manager.dispose()
 		}
@@ -272,15 +284,16 @@ describe("CommandJobManager", () => {
 		}
 	})
 
-	it("caps retained terminal jobs at MAX_TERMINAL_JOBS via LRU eviction", async () => {
-		const manager = new CommandJobManager()
+	it("caps retained terminal jobs via bounded FIFO eviction (injectable maxTerminalJobs)", async () => {
+		// Use the injectable cap so we can prove eviction in O(1) seconds
+		// rather than spawning 128 commands. The manager evicts the
+		// oldest by insertion order — NOT an LRU: status access does
+		// not refresh recency. Hence "FIFO" in the test name.
+		const cap = 3
+		const manager = new CommandJobManager({ maxTerminalJobs: cap })
 		try {
-			// Spawn 8 fast commands serially; we don't need 128 to
-			// prove the LRU cap because the bound is enforced on every
-			// terminal transition. 8 keeps the test under 1s.
-			const total = 8
 			const ids: string[] = []
-			for (let i = 0; i < total; i++) {
+			for (let i = 0; i < cap + 1; i++) {
 				const start = await manager.start({
 					command: "printf done",
 					cwd: process.cwd(),
@@ -289,12 +302,19 @@ describe("CommandJobManager", () => {
 				})
 				ids.push(start.jobId)
 			}
-			expect(manager.terminalCount).toBe(total)
-			// Now overflow the cap and verify LRU eviction by setting
-			// the bound lower (we cannot mutate the const, so this
-			// assertion proves the cap is finite rather than the exact
-			// number — the actual MAX_TERMINAL_JOBS is 128 by spec).
-			expect(manager.terminalCount).toBeLessThanOrEqual(MAX_TERMINAL_JOBS)
+			// The cap is enforced; we have exactly `cap` jobs retained.
+			expect(manager.terminalCount).toBe(cap)
+
+			// The oldest id (ids[0]) was evicted and returns unknown_job.
+			const evicted = await manager.status({ jobId: ids[0], waitMs: 0 })
+			expect(evicted.ok).toBe(false)
+			if (!evicted.ok) {
+				expect(evicted.code).toBe("unknown_job")
+			}
+
+			// The most-recent id is still queryable.
+			const newest = await manager.status({ jobId: ids[cap], waitMs: 0 })
+			expect(newest.ok).toBe(true)
 		} finally {
 			await manager.dispose()
 		}
@@ -317,6 +337,82 @@ describe("CommandJobManager", () => {
 		await new Promise((r) => setTimeout(r, TERM_GRACE_MS + 500))
 		if (isPosix && pid !== undefined) {
 			expect(isAlive(pid)).toBe(false)
+		}
+	})
+
+	it("clamps wait budget DOWN to the effective deadline (P0-4 invariant)", async () => {
+		// Caller requests a 60s wait on a 1s deadline. The wait budget
+		// must clamp DOWN to 1s — the deadline is host-authoritative.
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				command: longShell(60),
+				cwd: process.cwd(),
+				waitBudgetMs: 60_000,
+				executionDeadlineMs: 1_000,
+				maxRetainedOutputChars: MAX_RETAINED_JOB_OUTPUT_CHARS,
+			})
+			await new Promise((r) => setTimeout(r, 1_000 + TERM_GRACE_MS + 1_000))
+			const terminal = await manager.status({ jobId: start.jobId, waitMs: 0 })
+			expect(terminal.ok).toBe(true)
+			if (terminal.ok) {
+				expect(terminal.snapshot.state).toBe("deadline_exceeded")
+			}
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	it("status polling does NOT accumulate waiters (P0-2 invariant)", async () => {
+		const manager = new CommandJobManager()
+		try {
+			const start = await manager.start({
+				command: longShell(60),
+				cwd: process.cwd(),
+				waitBudgetMs: 100,
+				executionDeadlineMs: 5_000,
+			})
+			expect(start.state).toBe("running")
+
+			// Poll 10 times. Each status() call creates its own ad-hoc
+			// promise — no job-attached waiter list grows.
+			for (let i = 0; i < 10; i++) {
+				const snap = await manager.status({ jobId: start.jobId, waitMs: 50 })
+				expect(snap.ok).toBe(true)
+			}
+
+			await manager.cancel({ jobId: start.jobId })
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	it("clears deadline timer and abort listener on finalize (P1 hygiene)", async () => {
+		const manager = new CommandJobManager()
+		try {
+			const ac = new AbortController()
+			const start = await manager.start(
+				{
+					command: "printf quick-ok",
+					cwd: process.cwd(),
+					waitBudgetMs: 100,
+					executionDeadlineMs: 60_000,
+				},
+				{ signal: ac.signal } as unknown as Parameters<typeof manager.start>[1],
+			)
+			expect(start.state).toBe("exited")
+
+			// Inspect the internal job record.
+			const terminalJob = (
+				manager as unknown as { terminal: Map<string, { deadlineTimer?: NodeJS.Timeout; abortListener?: () => void }> }
+			).terminal.get(start.jobId)
+			expect(terminalJob).toBeDefined()
+			if (terminalJob) {
+				expect(terminalJob.deadlineTimer).toBeUndefined()
+				expect(terminalJob.abortListener).toBeUndefined()
+			}
+		} finally {
+			await manager.dispose()
 		}
 	})
 })
