@@ -26,10 +26,12 @@ import type {
 	AgentUsage,
 	AgentRuntimeConfig as BaseAgentRuntimeConfig,
 	CaptureTaskLifecycleEventInput,
+	ControlPlaneOutcome,
 	ProviderErrorClass,
 	TelemetryProperties,
 	ToolApprovalResult,
 	ToolPolicy,
+	ToolRuntimeOutcome,
 } from "@cline/shared";
 import {
 	captureAgentUnexpectedReasoningTokens,
@@ -47,6 +49,12 @@ import {
 	trimNonEmpty,
 } from "@cline/shared";
 import { nanoid } from "nanoid";
+import {
+	buildToolOutcomeClassificationInput,
+	classifyToolRuntimeOutcome,
+	type RuntimeOutcomeEvidence,
+	selectControlPlaneOutcome,
+} from "./runtime/recovery";
 
 const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
 	"Model reached the maximum output token limit before completing the turn";
@@ -264,6 +272,17 @@ interface PreparedToolExecution {
 	tool?: AgentTool;
 	input: unknown;
 	skipReason?: string;
+	/**
+	 * C1.2: typed control-plane signal observed at the boundary, if any.
+	 * Set by `prepareToolExecution` from STRUCTURAL evidence (host DENY
+	 * decision, user-rejected approval, policy-disabled tool,
+	 * abort/parser-error paths). For generic skips with no richer reason,
+	 * this is left undefined — the classifier falls through to
+	 * `runtime_skipped` via Priority 4 (`toolExecutionInvoked=false`).
+	 *
+	 * Outranks every other provenance in the C1.1 classifier.
+	 */
+	controlPlaneOutcome?: ControlPlaneOutcome;
 }
 
 interface HookBag {
@@ -1609,6 +1628,14 @@ export class AgentRuntime {
 		const tool = this.tools.get(toolCall.toolName);
 		let input = toolCall.input;
 		let skipReason: string | undefined;
+		/**
+		 * C1.2: typed control-plane signal. Set ONLY when the runtime has
+		 * STRUCTURAL evidence that the tool was not executed for a
+		 * typable control-plane reason. Generic skip paths leave this
+		 * undefined so the classifier falls through to `runtime_skipped`
+		 * via Priority 4.
+		 */
+		let controlPlaneOutcome: ControlPlaneOutcome | undefined;
 		const metadata =
 			toolCall.metadata &&
 			typeof toolCall.metadata === "object" &&
@@ -1616,8 +1643,9 @@ export class AgentRuntime {
 				? (toolCall.metadata as Record<string, unknown>)
 				: undefined;
 
-		if (typeof metadata?.inputParseError === "string") {
-			skipReason = metadata.inputParseError;
+		const parsedInputParseError = metadata?.inputParseError;
+		if (typeof parsedInputParseError === "string") {
+			skipReason = parsedInputParseError;
 		}
 
 		const toolSource =
@@ -1671,6 +1699,9 @@ export class AgentRuntime {
 				...policyOverride,
 			};
 			if (policy.enabled === false) {
+				// Policy-disabled: a known-tool non-execution. Use the
+				// generic skip path; classifier falls through to
+				// `runtime_skipped` via Priority 4.
 				skipReason = `Tool "${toolCall.toolName}" is disabled by policy`;
 			} else if (policy.autoApprove === false) {
 				const approval = await this.requestToolApproval(
@@ -1679,6 +1710,12 @@ export class AgentRuntime {
 					policy,
 				);
 				if (!approval.approved) {
+					// C1.2: classify the reason structurally. Host DENY
+					// wins over user reject per CORRECTION04 invariant.
+					controlPlaneOutcome = selectControlPlaneOutcome({
+						hostDenied: approval.decision?.kind === "deny",
+						userRejected: true,
+					});
 					skipReason =
 						approval.reason ?? `Tool "${toolCall.toolName}" was not approved`;
 				} else if (approval.executionPlan) {
@@ -1699,6 +1736,7 @@ export class AgentRuntime {
 			tool,
 			input,
 			skipReason,
+			controlPlaneOutcome,
 		};
 	}
 
@@ -1754,6 +1792,37 @@ export class AgentRuntime {
 		});
 
 		let result: AgentToolResult;
+		/**
+		 * C1.2 boundary gate: `toolExecutionInvoked` MUST be set
+		 * IMMEDIATELY before the actual `tool.execute(...)` call. It is
+		 * NEVER inferred from `result` presence / `skipReason` absence /
+		 * approval result / etc. — the closure plan truth table is
+		 * binding:
+		 *
+		 *   - !toolExists                 ⇒ false
+		 *   - inputParseError             ⇒ false
+		 *   - skipReason (any flavor)     ⇒ false
+		 *   - approval !approved          ⇒ false
+		 *   - tool.execute(...) called    ⇒ true
+		 *   - tool.execute(...) threw     ⇒ true (set immediately before)
+		 *
+		 * This is the only way to keep NEVER-EXECUTED actions out of
+		 * `RecoveryTracker`.
+		 */
+		let toolExecutionInvoked = false;
+		/** C1.2: verbatim throw from `tool.execute(...)`, retained for the classifier. */
+		let thrownError: unknown;
+		/**
+		 * C1.2: control-plane override discovered DURING execution.
+		 * Currently: `runtime_aborted` when the runtime's
+		 * `abortController.signal` triggered before/during the executor
+		 * call. The classifier's Priority 1 (control-plane) outranks
+		 * Priority 5 (executor-throw), so an abort that surfaces as an
+		 * `AbortError` is classified as `control_plane / runtime_aborted`
+		 * rather than as a tool execution error. The executor IS still
+		 * considered invoked.
+		 */
+		let runtimeControlPlaneOutcome: ControlPlaneOutcome | undefined;
 		if (prepared.skipReason) {
 			result = {
 				output: { error: prepared.skipReason },
@@ -1766,6 +1835,9 @@ export class AgentRuntime {
 			};
 		} else {
 			try {
+				// Set IMMEDIATELY before the executor call, even though the
+				// call has not yet returned. A throw is still "invoked".
+				toolExecutionInvoked = true;
 				const output = await prepared.tool.execute(prepared.input, {
 					sessionId: this.config.sessionId,
 					agentId: this.state.agentId,
@@ -1788,6 +1860,22 @@ export class AgentRuntime {
 				});
 				result = { output };
 			} catch (error) {
+				thrownError = error;
+				// C1.2: if the runtime's abort signal fired, classify as
+				// runtime_aborted rather than as a generic executor
+				// error. AbortError is the standard JS-DOM signal
+				// rejection; AgentRuntimeAbortError is the runtime's
+				// own. Either is structural evidence of a runtime-level
+				// abort, not a tool failure.
+				if (
+					this.abortController?.signal.aborted === true ||
+					error instanceof AgentRuntimeAbortError ||
+					(error instanceof Error && error.name === "AbortError")
+				) {
+					runtimeControlPlaneOutcome = selectControlPlaneOutcome({
+						runtimeAborted: true,
+					});
+				}
 				result = {
 					output: {
 						error: error instanceof Error ? error.message : String(error),
@@ -1836,6 +1924,39 @@ export class AgentRuntime {
 			toolCall: prepared.toolCall,
 			message,
 		});
+
+		// ---------------------------------------------------------------
+		// C1.2: produce a typed ToolRuntimeOutcome per tool call.
+		// Classification is per-call local (NEVER shared across calls).
+		// This ACT closes on the local outcome being available; the next
+		// ACT will route it through RecoveryTracker. We do NOT yet
+		// route / surface the outcome outside this function.
+		// ---------------------------------------------------------------
+		const inputParseError = (() => {
+			const meta = prepared.toolCall.metadata;
+			if (!meta || typeof meta !== "object" || Array.isArray(meta))
+				return undefined;
+			const parseErr = (meta as Record<string, unknown>).inputParseError;
+			return typeof parseErr === "string" ? parseErr : undefined;
+		})();
+		const evidence: RuntimeOutcomeEvidence = {
+			toolName: prepared.toolCall.toolName,
+			toolCallId: prepared.toolCall.toolCallId,
+			toolExists: prepared.tool !== undefined,
+			toolExecutionInvoked,
+			skipReason: prepared.skipReason,
+			thrownError,
+			result,
+			controlPlaneOutcome:
+				runtimeControlPlaneOutcome ?? prepared.controlPlaneOutcome,
+			...(inputParseError !== undefined ? { inputParseError } : {}),
+		};
+		const classificationInput = buildToolOutcomeClassificationInput(evidence);
+		const runtimeOutcome: ToolRuntimeOutcome =
+			classifyToolRuntimeOutcome(classificationInput);
+		// C1.2 holds the outcome locally; future ACTs route it. We do
+		// not yet project it into RecoveryTracker, telemetry, or UI.
+		void runtimeOutcome;
 
 		return message;
 	}

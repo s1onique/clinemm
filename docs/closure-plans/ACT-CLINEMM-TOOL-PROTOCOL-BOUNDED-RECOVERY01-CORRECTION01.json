@@ -220,6 +220,90 @@
     "collision_resistance": "32-bit collision resistance is for telemetry only; circuit decisions use unbounded canonical control identity"
   },
   "next_review_point": "Stage 4 \u2014 C1.2 REAL AgentRuntime integration",
+  "c1_2_integration_base": {
+    "purpose": "Truthful integration base: frozen C1.1 + frozen TBCE.",
+    "c1_1_commit": "d7d4a795a6558a2f3721620f59e4a69dde98a174",
+    "tbce_final": "b9fc81799182004bc1cb00dd0b073584dd9d9b6b",
+    "cherry_pick_sequence": [
+      "c02c6cd16 (session-autonomy: add task-scoped auto-approve-all)",
+      "b5339ff03 (session-autonomy: correct autonomy semantics)",
+      "948c4aad4 (session-autonomy: explicit lifecycle for pre-arm + composition over baseAuth)",
+      "2d3468a97 (TBCE: bounded supervised command execution)",
+      "b174a95ed (TBCE: command execution authority + boundedness)",
+      "064088354 (TBCE: cancel-command authority + total response cap)",
+      "b9fc81799 (TBCE: process-tree supervision + canonical cancel state)",
+      "23c1ed41a (settings-parity: restore non-command auto-approval)"
+    ],
+    "integration_base_repair_commit": "4f7f3a816c0e0e0eaedc896ab0eb1df746ed1da9",
+    "integration_base_repair_reason": "Auto-merge during cherry-pick rewound the session-autonomy non-command 'effective settings' compose. Restored verbatim.",
+    "inherited_tbce_typecheck_caveat": "@cline/core tsconfig has bash.supervised.test.ts type errors inherited from TBCE (b9fc81799). Tests pass, esbuild build passes. Not a C1.2 regression."
+  },
+  "c1_2": {
+    "title": "REAL AgentRuntime outcome integration",
+    "status": "PASS",
+    "verdict_basis": "REAL_RUNTIME_CLASSIFICATION_PROVEN_BREAKER_PENDING",
+    "authority": {
+      "classifier_authority": "classifyToolRuntimeOutcome (frozen C1.1)",
+      "adapter_authority": "buildToolOutcomeClassificationInput (C1.2, new)",
+      "classification_metadata": "projection only (none yet)",
+      "metadata_authority": false,
+      "recovery_tracker_routing": "NOT_CONNECTED"
+    },
+    "real_boundary": {
+      "agent_runtime_file": "sdk/packages/agents/src/agent-runtime.ts",
+      "adapter_file": "sdk/packages/agents/src/runtime/recovery/runtime-outcome-adapter.ts",
+      "tool_execution_invoked_owner": "executePreparedTool (set IMMEDIATELY before prepared.tool.execute(...))",
+      "classifier": "classifyToolRuntimeOutcome"
+    },
+    "agent_tool_result_exit_code_provenance": "NOT_AVAILABLE",
+    "exit_code_provenance_note": "AgentToolResult exposes no top-level exitCode. The TBCE run_commands boundary throws CommandExitError(.exitCode, message) on non-zero exits (and on terminalClosed/deadline_exceeded/cancelled/spawn_failed). CommandExitError carries exitCode but NOT err.code. The classifier reads err.code only; non-zero exits therefore classify as failure / tool_execution_error / unknown / fallback / familyEligible=false (opaque-throw path). No prose scraping. No silent taxonomy invention.",
+    "truth_table": {
+      "unknown_tool": "failure / tool_not_found / tool:not_found / structured / familyEligible=true (toolExists=false)",
+      "input_invalid": "failure / tool_input_invalid / unknown / fallback / familyEligible=false",
+      "runtime_skipped": "control_plane / runtime_skipped (Priority 4)",
+      "host_deny": "control_plane / host_policy_denied (Priority 1 via decision.kind=deny)",
+      "user_reject": "control_plane / user_rejected (Priority 1; approved=false without host DENY)",
+      "executor_enoent": "failure / tool_execution_error / ENOENT / structured / familyEligible=true",
+      "executor_opaque": "failure / tool_execution_error / unknown / fallback / familyEligible=false",
+      "success": "success",
+      "runtime_aborted_during_execute": "control_plane / runtime_aborted (Priority 1 wins over Priority 5)"
+    },
+    "tbce_mappings": {
+      "command_status_running": "success (tool protocol success; running is not tool_execution_error)",
+      "cancel_command_success": "success (the tool itself succeeded even though the controlled process was terminated)",
+      "deadline_boundary_shape": "NOT_STRUCTURED_AT_THE_BOUNDARY",
+      "deadline_boundary_detail": "run_commands (backgroundExec) maps start.state=deadline_exceeded to throw new CommandExitError(start.exitCode ?? 1, '[Command exceeded the host execution deadline]\\n...'). CommandExitError carries exitCode but not err.code. C1.2 classifies as failure / tool_execution_error / unknown / fallback / familyEligible=false. RESIDUE: future typed command-result improvement should expose deadline_exceeded as a distinct structured code at the boundary."
+    },
+    "parallel_isolation": "PASS",
+    "parallel_isolation_proof": "Two parallel tool calls (A=success, B=throw) each construct their own RuntimeOutcomeEvidence and feed their own classifyToolRuntimeOutcome call from inside their own executePreparedTool invocation. No AgentRuntime-level mutable shared state.",
+    "tests": {
+      "classifier": 44,
+      "adapter": 16,
+      "agent_runtime_integration": 13,
+      "agents_full": 200,
+      "recovery_focused": 117,
+      "bash_supervised": 7,
+      "command_job_manager": 20,
+      "tool_policies_command_policy": 38,
+      "session_auto_approval": 40,
+      "session_autonomy": 19,
+      "vscode_session_host": 6,
+      "tool_policies": 8
+    },
+    "typecheck": {
+      "@cline/agents": "PASS",
+      "@cline/shared": "PASS",
+      "@cline/core": "PRE-EXISTING TBCE-INHERITED bash.supervised.test.ts ERRORS. TESTS PASS. ESBUILD BUILD PASSES.",
+      "apps/vscode check-types": "PASS"
+    },
+    "build": {
+      "@cline/agents": "PASS",
+      "@cline/shared": "PASS",
+      "@cline/core": "PASS"
+    },
+    "lint": "PASS",
+    "diff_check": "PASS"
+  },
   "c1_2_entry_gate": {
     "purpose": "C1.1 proves the classifier contract. C1.2 must prove the real AgentRuntime supplies truthful ToolOutcomeClassificationInput values. Three mechanical gates before any RecoveryTracker wiring.",
     "gate_1_mechanical_invocation": {

@@ -3,60 +3,63 @@
  *
  *   @cline/agents
  *   └─ runtime/recovery/
- *      ├─ fingerprint.ts          (browser-compatible deterministic identity)
- *      ├─ policy.ts               (recovery policy configuration)
- *      ├─ tracker.ts              (state machine: idle/recovering/warning/circuit_open)
- *      ├─ failure-classifier.ts   (provenance-first C1.1 classifier)
- *      └─ index.ts                (this file — public surface)
+ *      ├─ fingerprint.ts             (browser-compatible deterministic identity)
+ *      ├─ policy.ts                  (recovery policy configuration)
+ *      ├─ tracker.ts                 (state machine: idle/recovering/warning/circuit_open)
+ *      ├─ failure-classifier.ts      (provenance-first C1.1 classifier)
+ *      ├─ runtime-outcome-adapter.ts (C1.2 boundary evidence → classifier input)
+ *      └─ index.ts                   (this file — public surface)
  *
  * Contract types live in @cline/shared (no Node builtins).
  */
 
 export type {
+	ControlPlaneOutcome,
+	RecoveryClassification,
+	RecoveryExhaustedDetails,
 	RecoverySnapshot,
 	RecoveryState,
 	RecoveryStateChangeEvent,
-	ToolFailureClass,
-	ControlPlaneOutcome,
 	StableFailureCode,
+	ToolFailureClass,
 	ToolFailureReason,
 	ToolRuntimeOutcome,
-	RecoveryClassification,
-	RecoveryExhaustedDetails,
 } from "@cline/shared";
 
 export { serializeFailureCode } from "@cline/shared";
-
-export {
-	fingerprintToolInput,
-	fingerprintToolFailure,
-	isSameFailureFamily,
-	isSameExactFailure,
-	familyDiagnosticId,
-	attemptDiagnosticId,
-	createAttemptIdentity,
-	createFamilyIdentity,
-	controlKeyToDiagnosticId,
-	controlFamilyToDiagnosticId,
-	type ToolCallFingerprint,
-	type ToolFailureFingerprint,
-	type ToolAttemptIdentity,
-	type ToolFamilyIdentity,
-} from "./fingerprint";
-
-export {
-	RecoveryPolicy,
-	computeRecoveryState,
-	DEFAULT_RECOVERY_POLICY,
-	type RecoveryPolicyConfig,
-} from "./policy";
-
-export { RecoveryTracker } from "./tracker";
-
 export {
 	classifyToolRuntimeOutcome,
 	isRecoverableToolFailure,
-	toRecoveryClassification,
 	serializeStableFailureCode,
 	type ToolOutcomeClassificationInput,
+	toRecoveryClassification,
 } from "./failure-classifier";
+export {
+	attemptDiagnosticId,
+	controlFamilyToDiagnosticId,
+	controlKeyToDiagnosticId,
+	createAttemptIdentity,
+	createFamilyIdentity,
+	familyDiagnosticId,
+	fingerprintToolFailure,
+	fingerprintToolInput,
+	isSameExactFailure,
+	isSameFailureFamily,
+	type ToolAttemptIdentity,
+	type ToolCallFingerprint,
+	type ToolFailureFingerprint,
+	type ToolFamilyIdentity,
+} from "./fingerprint";
+export {
+	computeRecoveryState,
+	DEFAULT_RECOVERY_POLICY,
+	RecoveryPolicy,
+	type RecoveryPolicyConfig,
+} from "./policy";
+export {
+	buildToolOutcomeClassificationInput,
+	type ControlPlaneSignal,
+	type RuntimeOutcomeEvidence,
+	selectControlPlaneOutcome,
+} from "./runtime-outcome-adapter";
+export { RecoveryTracker } from "./tracker";
