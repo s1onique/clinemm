@@ -4,6 +4,7 @@ import {
 	type CommandHostAuthorization,
 	commandHostAuthorization,
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	type EvaluatedCommand,
 	evaluateCommandPolicy,
 } from "@cline/core"
 import type { CommandExecutionPlan } from "@cline/shared"
@@ -179,7 +180,7 @@ export interface EvaluateCommandToolApprovalWithPlanOptions {
 	 * calls this instead of `buildCommandExecutionPlan`. Return `undefined`
 	 * to simulate a planner failure (e.g., cardinality mismatch).
 	 */
-	buildExecutionPlanOverride?: (toolInput: unknown, commands: readonly CommandPolicyMatch[]) => CommandExecutionPlan | undefined
+	buildExecutionPlanOverride?: (toolInput: unknown, commands: readonly EvaluatedCommand[]) => CommandExecutionPlan | undefined
 }
 
 export function evaluateCommandToolApprovalWithPlan(

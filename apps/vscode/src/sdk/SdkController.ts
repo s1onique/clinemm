@@ -1434,9 +1434,8 @@ export class Controller {
 		const sourceSessionId = activeSession?.sessionId ?? currentTask.taskId
 		let sdkMessages: SdkUserMessage[]
 		let tempHost: VscodeSessionHost | undefined
-		if (activeSession?.sdkHost) {
-			sessionHost = activeSession.sdkHost
-		} else {
+		let sessionHost = activeSession?.sdkHost
+		if (!sessionHost) {
 			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub })
 			sessionHost = tempHost
 		}
@@ -1660,9 +1659,8 @@ export class Controller {
 		// After a window reload the latest task is shown from history without a
 		// live session, so fall back to a temporary host for the comparison.
 		let tempHost: VscodeSessionHost | undefined
-		if (activeSession?.sdkHost) {
-			sessionHost = activeSession.sdkHost
-		} else {
+		let sessionHost = activeSession?.sdkHost
+		if (!sessionHost) {
 			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub })
 			sessionHost = tempHost
 		}
