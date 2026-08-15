@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react"
 import { useClickAway } from "react-use"
+import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useAutoApproveActions } from "@/hooks/useAutoApproveActions"
 import { getAsVar, VSC_TITLEBAR_INACTIVE_FOREGROUND } from "@/utils/vscStyles"
 import AutoApproveMenuItem from "./AutoApproveMenuItem"
+import { SessionAutoApprovalToggle } from "./SessionAutoApprovalToggle"
 import { ActionMetadata } from "./types"
 
 const breakpoint = 500
@@ -16,6 +18,7 @@ interface AutoApproveModalProps {
 
 const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVisible, buttonRef, ACTION_METADATA }) => {
 	const { isChecked, updateAction } = useAutoApproveActions()
+	const { currentTaskItem } = useExtensionState()
 	const modalRef = useRef<HTMLDivElement>(null)
 	const itemsContainerRef = useRef<HTMLDivElement>(null)
 	const [containerWidth, setContainerWidth] = useState(0)
@@ -102,6 +105,9 @@ const AutoApproveModal: React.FC<AutoApproveModalProps> = ({ isVisible, setIsVis
 						<AutoApproveMenuItem action={action} isChecked={isChecked} key={action.id} onToggle={updateAction} />
 					))}
 				</div>
+
+				{/* ACT-CLINEMM-SESSION-AUTONOMY01: session-scoped "Approve all for this task" toggle. */}
+				<SessionAutoApprovalToggle currentTaskSessionId={currentTaskItem?.id} />
 			</div>
 		</div>
 	)

@@ -9,6 +9,7 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import {
 	type CompareCheckpointResult,
+	commandHostAuthorization,
 	createRestoredCheckpointMetadata,
 	createUserInstructionConfigService,
 	ensureChatWorkspace,
@@ -100,6 +101,7 @@ import {
 	isSyntheticSdkUserMessage,
 	type SdkUserMessage,
 } from "./sdk-user-message-mapping"
+import { resolveEffectiveAutoApproval, type SessionAutoApprovalOverride, SessionAutoApprovalStore } from "./session-auto-approval"
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
@@ -184,6 +186,10 @@ export class Controller {
 	private taskControl: SdkTaskControlCoordinator
 	private taskStart: SdkTaskStartCoordinator
 	private compaction: SdkCompactionCoordinator
+	// ACT-CLINEMM-SESSION-AUTONOMY01:
+	// Single owner of the active-session auto-approval override ("none" | "all").
+	// NOT persisted; cleared by the task-clear choke-point (and by new-task init).
+	private sessionAutoApproval = new SessionAutoApprovalStore()
 	private sessionEvents: SdkSessionEventCoordinator
 	private sessionHistory: SdkSessionHistoryLoader
 	private readonly sdkTelemetry: VscodeSdkTelemetryHandle
@@ -351,6 +357,32 @@ export class Controller {
 				// manual Reject and clearPending (task cancel/abort) in one place.
 				void this.diffEdits.discardPreview(toolCallId)
 			},
+			// ACT-CLINEMM-UPSTREAM-SETTINGS-AUTHORITY-PARITY01:
+			// Non-command tools (read/edit/browser/mcp) consult the live user
+			// settings via isToolAutoApproved, matching upstream's
+			// shouldAutoApproveTool wiring (v4.1.10). Command tools continue
+			// to route through the canonical policy lattice via
+			// evaluateCommandToolApproval below.
+			//
+			// ACT-CLINEMM-SESSION-AUTONOMY01:
+			// The non-command path now reads the EFFECTIVE settings
+			// (persisted + ephemeral session override). The override only
+			// projects ordinary categories — it never bypasses hard DENY,
+			// and it never mutates the persisted object.
+			shouldAutoApproveTool: (request) => {
+				if (isCommandTool(request.toolName)) {
+					// Command tools go through evaluateCommandToolApproval
+					// (canonical policy lattice) below; this hook is the
+					// non-command fast path.
+					return false
+				}
+				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+				const persisted = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
+				const sessionId = this.sessions.getActiveSession()?.sessionId
+				const override = this.sessionAutoApproval.getOverride(sessionId)
+				const effective = resolveEffectiveAutoApproval(persisted, override)
+				return isToolAutoApproved(request.toolName, effective, this.mcpHub)
+			},
 			// CORRECTION04 TOCTOU fix: read settings ONCE and produce one
 			// atomic evaluation that carries both authority and execution constraints.
 			// This eliminates the race between shouldAutoApproveTool (authority)
@@ -361,8 +393,19 @@ export class Controller {
 				if (!isCommandTool(request.toolName)) {
 					return undefined // Non-command tools use coordinator's standard ToolPolicy path.
 				}
-				const effectiveSettings = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
-				const hostAuthorization = getCommandHostAuthorization(request.toolName, effectiveSettings, this.mcpHub)
+				const persisted = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
+				const sessionId = this.sessions.getActiveSession()?.sessionId
+				const override = this.sessionAutoApproval.getOverride(sessionId)
+				// ACT-CLINEMM-SESSION-AUTONOMY01:
+				// When the ephemeral session override is "all", project the
+				// host authorization into mode="all" — the user has explicitly
+				// opted into broad execution for this task. We do NOT bypass
+				// the canonical policy lattice (evaluateCommandPolicy still
+				// runs); hard DENY / execution_plan_invalid still DENY.
+				let hostAuthorization = getCommandHostAuthorization(request.toolName, persisted, this.mcpHub)
+				if (override === "all") {
+					hostAuthorization = commandHostAuthorization({ mode: "all" })
+				}
 				const result = evaluateCommandToolApprovalWithPlan(request.input, hostAuthorization)
 				return {
 					approved: result.approved,
@@ -1296,6 +1339,10 @@ export class Controller {
 		// turn land on the wrong side of the UI mode. (Full fence-before-abort epoch bump lands
 		// in S6; this sets the authoritative phase now.)
 		this.turnStateTracker.set("resumable")
+		// ACT-CLINEMM-SESSION-AUTONOMY01: task cancellation destroys the
+		// session-scoped auto-approval override. The next task must start
+		// from the user's persisted settings, not a stale "all".
+		this.sessionAutoApproval.clearSessionAutoApproval()
 		await this.taskControl.cancelTask()
 	}
 
@@ -1354,7 +1401,33 @@ export class Controller {
 		this.pendingClineAuthRetryPrompt = undefined
 		// No active task — UI returns to idle (input enabled, no buttons/thinking).
 		this.turnStateTracker.set("idle")
+		// ACT-CLINEMM-SESSION-AUTONOMY01: clearTask is the universal
+		// choke-point that covers (a) the user clicking "New Task",
+		// (b) initTask calling clearTask() before starting a new session,
+		// (c) any controller-driven reset. Destroying the override here
+		// guarantees no override leaks into the next task.
+		this.sessionAutoApproval.clearSessionAutoApproval()
 		await this.taskControl.clearTask()
+		await this.postStateToWebview()
+	}
+
+	/**
+	 * ACT-CLINEMM-SESSION-AUTONOMY01: Activate or deactivate the
+	 * session-scoped auto-approval override for the current task.
+	 *
+	 * The override is bound to the active SDK session id. Activating it
+	 * ("all") projects ordinary AutoApprove categories enabled AND routes
+	 * commands through the canonical policy lattice in `"all"` host mode.
+	 * Hard DENY / execution_plan_invalid still DENY (the override does
+	 * not bypass the policy).
+	 *
+	 * The override is EPHEMERAL — it never touches global settings and is
+	 * destroyed by clearTask/cancelTask. Activating without an active
+	 * session is a no-op (the toggle will be inert until a task starts).
+	 */
+	async setSessionAutoApprovalOverride(override: SessionAutoApprovalOverride): Promise<void> {
+		const sessionId = this.sessions.getActiveSession()?.sessionId
+		this.sessionAutoApproval.setOverride(sessionId, override)
 		await this.postStateToWebview()
 	}
 
@@ -2189,6 +2262,18 @@ export class Controller {
 				queuedPrompts,
 				stateVersion: minter.nextSeq(),
 				epoch: minter.epoch,
+				// ACT-CLINEMM-SESSION-AUTONOMY01: ephemeral session override state.
+				// Both keys (preferred + alias) carry the same payload for downstream
+				// flexibility; either is consumed identically by the webview.
+				// The store is the host-owned authority; this is a read-only mirror.
+				sessionAutoApproval: (() => {
+					const snap = this.sessionAutoApproval.snapshot()
+					return { override: snap.override, sessionId: snap.sessionId }
+				})(),
+				sessionAutonomy: (() => {
+					const snap = this.sessionAutoApproval.snapshot()
+					return { override: snap.override, sessionId: snap.sessionId }
+				})(),
 			}
 		} catch (error) {
 			Logger.error("[SdkController] Failed to get state for webview:", error)
