@@ -52,6 +52,15 @@ export interface SdkSessionLifecycleOptions {
 	 * message. Consumed exactly once; null when no switch is pending.
 	 */
 	consumeModeSwitchNotice?: (sessionId: string) => ModeSwitchNotice | null
+	/**
+	 * ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION02: bind the user-armed
+	 * session-autonomy pre-arm to the new SDK session id when this session
+	 * is allocated. This is the ONLY caller of consumePendingOverride and
+	 * the authoritative site where the arm becomes a bound override. The
+	 * store itself has a pure getOverride() — we do not consume the arm
+	 * from any query path. See SessionAutoApprovalStore for the contract.
+	 */
+	consumePendingOverride?: (sessionId: string) => void
 	onDidBecomeIdle?: () => void
 }
 
@@ -175,6 +184,12 @@ export class SdkSessionLifecycle {
 			startResult,
 			isRunning: true,
 		}
+
+		// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION02:
+		// consume any user-armed pre-arm intent and bind it to this
+		// brand-new session id. This is the authoritative consumption
+		// site; the store's getOverride() is pure and never consumes.
+		this.options.consumePendingOverride?.(startResult.sessionId)
 
 		return { startResult, sdkHost }
 	}

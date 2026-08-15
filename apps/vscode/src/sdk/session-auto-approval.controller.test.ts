@@ -71,9 +71,32 @@ describe("SessionAutoApprovalStore + Controller choke-points", () => {
 		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined, armed: "none" })
 	})
 
-	it("clearSessionAutoApproval destroys any active override (clearTask choke-point)", () => {
+	it("CORRECTION02: clearActiveOverride destroys only the bound override (arm survives)", () => {
+		// The bind and the arm are separate; if both are set, clearActiveOverride
+		// drops only the bind and leaves the arm intact (so the next task can still
+		// pick up the user's pre-armed intent).
 		const store = new SessionAutoApprovalStore()
-		store.setOverride("sess-A", "all")
+		store.setOverride("sess-A", "all") // bind directly
+		store.setOverride(undefined, "all") // also arm
+		store.clearActiveOverride()
+		expect(store.snapshot().override).toBe("none")
+		expect(store.snapshot().sessionId).toBe(undefined)
+		expect(store.isArmed()).toBe(true) // arm survives clearTask
+	})
+
+	it("CORRECTION02: clearPendingArm destroys only the arm (bound override survives)", () => {
+		const store = new SessionAutoApprovalStore()
+		store.setOverride("sess-A", "all") // bind directly
+		store.setOverride(undefined, "all") // also arm
+		store.clearPendingArm()
+		expect(store.isArmed()).toBe(false)
+		expect(store.getOverride("sess-A")).toBe("all") // bind survives
+	})
+
+	it("CORRECTION02: clearSessionAutoApproval is the full-reset union", () => {
+		const store = new SessionAutoApprovalStore()
+		store.setOverride(undefined, "all")
+		store.consumePendingOverride("sess-A")
 		store.clearSessionAutoApproval()
 		expect(store.snapshot()).toEqual({ override: "none", sessionId: undefined, armed: "none" })
 	})
@@ -82,8 +105,30 @@ describe("SessionAutoApprovalStore + Controller choke-points", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride("sess-A", "all")
 		expect(store.getOverride("sess-B")).toBe("none")
-		// After clearTask, even the original sessionId returns 'none'.
-		store.clearSessionAutoApproval()
+		// After clearActiveOverride (the production clearTask hook),
+		// even the original sessionId returns 'none'.
+		store.clearActiveOverride()
 		expect(store.getOverride("sess-A")).toBe("none")
+	})
+
+	it("CORRECTION02: getOverride is pure — does NOT consume the arm across reads", () => {
+		const store = new SessionAutoApprovalStore()
+		store.setOverride(undefined, "all")
+		// Multiple reads on the same session id all return "none" (no session bound yet),
+		// and the arm survives every read.
+		expect(store.getOverride("sess-A")).toBe("none")
+		expect(store.getOverride("sess-A")).toBe("none")
+		expect(store.getOverride("sess-B")).toBe("none")
+		expect(store.isArmed()).toBe(true)
+	})
+
+	it("CORRECTION02: consumePendingOverride is the one-shot consumer", () => {
+		const store = new SessionAutoApprovalStore()
+		store.setOverride(undefined, "all")
+		expect(store.consumePendingOverride("sess-A")).toBe(true)
+		expect(store.isArmed()).toBe(false)
+		// Subsequent consume calls return false (arm is gone).
+		expect(store.consumePendingOverride("sess-A")).toBe(false)
+		expect(store.consumePendingOverride("sess-B")).toBe(false)
 	})
 })

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { isAbortError, SdkSessionLifecycle } from "./sdk-session-lifecycle"
+import { SessionAutoApprovalStore } from "./session-auto-approval"
 
 type StartInput = Parameters<SdkSessionLifecycle["startNewSession"]>[0]
 type SendHost = Parameters<SdkSessionLifecycle["fireAndForgetSend"]>[0]
@@ -610,6 +611,57 @@ describe("SdkSessionLifecycle", () => {
 		await vi.waitFor(() => expect(send).toHaveBeenCalled())
 
 		expect(send).toHaveBeenCalledWith(expect.objectContaining({ prompt: "hello" }))
+	})
+
+	it("CORRECTION02: startNewSession invokes consumePendingOverride with the new session id", async () => {
+		const consumePendingOverride = vi.fn()
+		const sdkHost = makeSdkHost({ startResult: { sessionId: "session-NEW" } })
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle({ consumePendingOverride })
+
+		await lifecycle.startNewSession({} as any)
+
+		expect(consumePendingOverride).toHaveBeenCalledTimes(1)
+		expect(consumePendingOverride).toHaveBeenCalledWith("session-NEW")
+	})
+
+	it("CORRECTION02: when consumePendingOverride is absent the lifecycle still allocates normally", async () => {
+		// Regression: the new option is optional. Existing callers that do not
+		// pass consumePendingOverride must not see any change in behavior.
+		const sdkHost = makeSdkHost({ startResult: { sessionId: "session-X" } })
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const lifecycle = makeLifecycle() // no consumePendingOverride passed
+
+		const result = await lifecycle.startNewSession({} as any)
+
+		expect(result.startResult.sessionId).toBe("session-X")
+		expect(lifecycle.getActiveSession()?.sessionId).toBe("session-X")
+	})
+
+	it("CORRECTION02: end-to-end fixture — arm survives clearTask and binds to next session", async () => {
+		// This is the real initTask -> clearTask -> new-session lifecycle:
+		// 1. user arms ALL via the toggle before any task exists
+		// 2. the user submits a prompt; initTask runs and internally calls clearTask
+		// 3. clearTask MUST call clearActiveOverride() (not clearSessionAutoApproval) so the arm survives
+		// 4. the new session is allocated by startNewSession, which calls consumePendingOverride
+		// 5. the arm binds to the new session id; the user's pre-arm intent is honored
+		const store = new SessionAutoApprovalStore()
+		store.setOverride(undefined, "all") // (1) arm
+		expect(store.isArmed()).toBe(true)
+
+		// (2)+(3) clearTask lifecycle hook: clearActiveOverride only — preserve the arm
+		store.clearActiveOverride()
+		expect(store.isArmed()).toBe(true) // arm survives!
+
+		// (4) session-id allocation: consumePendingOverride binds the arm
+		const consumed = store.consumePendingOverride("sess-NEW")
+		expect(consumed).toBe(true)
+		expect(store.isArmed()).toBe(false)
+		expect(store.getOverride("sess-NEW")).toBe("all") // (5) bound to the new task
+
+		// (6) second task does NOT inherit the previous task's override
+		store.clearActiveOverride()
+		expect(store.getOverride("sess-NEW-2")).toBe("none")
 	})
 })
 

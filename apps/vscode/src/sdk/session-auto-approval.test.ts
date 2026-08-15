@@ -5,6 +5,7 @@
  * Pure resolvers + the SessionAutoApprovalStore owner class.
  */
 
+import { commandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } from "@cline/core"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { describe, expect, it } from "vitest"
@@ -152,15 +153,14 @@ describe("SessionAutoApprovalStore", () => {
 		expect(store.getOverride("sess-B")).toBe("none")
 	})
 
-	it("CORRECTION01: setOverride('all', undefined) ARMS (does not refuse)", () => {
+	it("CORRECTION02: setOverride('all', undefined) ARMS (does not refuse) and arm survives getOverride", () => {
 		const store = new SessionAutoApprovalStore()
 		store.setOverride(undefined, "all")
 		expect(store.isArmed()).toBe(true)
-		// getOverride(anySessionId) consumes the arm and binds the override
-		// to that session. After that, isArmed is false and getOverride
-		// returns "all" for the same session id.
-		expect(store.getOverride("any")).toBe("all")
-		expect(store.isArmed()).toBe(false)
+		// getOverride is PURE: it does NOT consume the arm. The arm survives
+		// every read until consumePendingOverride() is called explicitly.
+		expect(store.getOverride("any")).toBe("none")
+		expect(store.isArmed()).toBe(true)
 	})
 
 	it("setOverride('none') clears the active override regardless of sessionId", () => {
@@ -206,12 +206,15 @@ describe("SessionAutoApprovalStore", () => {
 		// clear from the clearTask choke-point makes the override "none".
 		expect(store.getOverride("sess-A")).toBe("none")
 	})
-	describe("CORRECTION01: pre-arm intent", () => {
-		it("setOverride(undefined, 'all') arms a one-shot intent", () => {
+	describe("CORRECTION02: pre-arm intent + lifecycle separation", () => {
+		it("setOverride(undefined, 'all') arms a one-shot intent (does not bind yet)", () => {
 			const store = new SessionAutoApprovalStore()
 			store.setOverride(undefined, "all")
 			expect(store.isArmed()).toBe(true)
 			expect(store.snapshot().armed).toBe("all")
+			// No session id yet — so getOverride(undefined) returns "none" without consuming.
+			expect(store.getOverride(undefined)).toBe("none")
+			expect(store.isArmed()).toBe(true) // still armed: getOverride is pure
 		})
 
 		it("setOverride(sessionId, 'all') binds directly without arming", () => {
@@ -221,38 +224,70 @@ describe("SessionAutoApprovalStore", () => {
 			expect(store.getOverride("sess-A")).toBe("all")
 		})
 
-		it("first getOverride(newSessionId) consumes the arm and binds", () => {
+		it("getOverride() is PURE: it does NOT consume the arm", () => {
 			const store = new SessionAutoApprovalStore()
 			store.setOverride(undefined, "all")
-			const first = store.getOverride("sess-A")
-			expect(first).toBe("all")
-			expect(store.isArmed()).toBe(false)
-			const snap = store.snapshot()
-			expect(snap.override).toBe("all")
-			expect(snap.sessionId).toBe("sess-A")
-			expect(snap.armed).toBe("none")
+			for (let i = 0; i < 5; i++) {
+				expect(store.getOverride("sess-A")).toBe("none")
+				expect(store.isArmed()).toBe(true)
+			}
 		})
 
-		it("subsequent getOverride on the same sessionId returns 'all' (no re-consume)", () => {
+		it("consumePendingOverride(newSessionId) binds the arm and clears it", () => {
 			const store = new SessionAutoApprovalStore()
 			store.setOverride(undefined, "all")
-			expect(store.getOverride("sess-A")).toBe("all")
+			const consumed = store.consumePendingOverride("sess-A")
+			expect(consumed).toBe(true)
+			expect(store.isArmed()).toBe(false)
+			// Now getOverride returns the bound value (pure read).
 			expect(store.getOverride("sess-A")).toBe("all")
 		})
 
-		it("clearSessionAutoApproval destroys the arm too", () => {
+		it("consumePendingOverride is a no-op when no arm is set", () => {
 			const store = new SessionAutoApprovalStore()
-			store.setOverride(undefined, "all")
-			store.clearSessionAutoApproval()
-			expect(store.isArmed()).toBe(false)
-			expect(store.snapshot().armed).toBe("none")
+			const consumed = store.consumePendingOverride("sess-A")
+			expect(consumed).toBe(false)
 			expect(store.getOverride("sess-A")).toBe("none")
 		})
 
-		it("setOverride(undefined, 'none') clears both arm and bind", () => {
+		it("consumePendingOverride is one-shot: second call returns false", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all")
+			expect(store.consumePendingOverride("sess-A")).toBe(true)
+			expect(store.consumePendingOverride("sess-B")).toBe(false) // arm is gone
+		})
+
+		it("clearActiveOverride destroys ONLY the bound override (arm survives)", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride("sess-A", "all") // bind directly
+			store.setOverride(undefined, "all") // also arm
+			store.clearActiveOverride()
+			expect(store.isArmed()).toBe(true) // arm survives!
+			expect(store.getOverride("sess-A")).toBe("none")
+		})
+
+		it("clearPendingArm destroys ONLY the arm (bound override survives)", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride("sess-A", "all") // bind directly
+			store.setOverride(undefined, "all") // also arm
+			store.clearPendingArm()
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("sess-A")).toBe("all") // bind survives
+		})
+
+		it("clearSessionAutoApproval destroys BOTH (legacy union; full reset)", () => {
 			const store = new SessionAutoApprovalStore()
 			store.setOverride(undefined, "all") // arms
-			store.setOverride("sess-X", "all") // also bind
+			store.consumePendingOverride("sess-A") // binds
+			store.clearSessionAutoApproval()
+			expect(store.isArmed()).toBe(false)
+			expect(store.getOverride("sess-A")).toBe("none")
+		})
+
+		it("setOverride(undefined, 'none') clears both arm and bind (UI toggle off)", () => {
+			const store = new SessionAutoApprovalStore()
+			store.setOverride(undefined, "all") // arms
+			store.consumePendingOverride("sess-X") // binds
 			store.setOverride(undefined, "none")
 			expect(store.isArmed()).toBe(false)
 			expect(store.getOverride("sess-X")).toBe("none")
@@ -278,18 +313,54 @@ describe("SessionAutoApprovalStore", () => {
 		})
 	})
 
-	describe("CORRECTION01: resolveSessionHostAuthorization", () => {
+	describe("CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth", () => {
 		it("returns undefined when override is 'none'", () => {
-			expect(resolveSessionHostAuthorization("none")).toBeUndefined()
+			const base = commandHostAuthorization({ mode: "manual" })
+			expect(resolveSessionHostAuthorization(base, "none")).toBeUndefined()
 		})
 
-		it("returns mode:'all' + explicitAllowRules when override is 'all'", () => {
-			const auth = resolveSessionHostAuthorization("all")
-			expect(auth).toBeDefined()
-			expect(auth!.mode).toBe("all")
-			expect(auth!.explicitAllowRules).toBeDefined()
-			expect(Array.isArray(auth!.explicitAllowRules)).toBe(true)
-			expect(auth!.explicitAllowRules!.length).toBeGreaterThan(0)
+		it("projects mode:'all' + preserves base explicitAllowRules", () => {
+			const base = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			})
+			const composed = resolveSessionHostAuthorization(base, "all")
+			expect(composed).toBeDefined()
+			expect(composed!.mode).toBe("all")
+			expect(composed!.explicitAllowRules).toBeDefined()
+			expect(Array.isArray(composed!.explicitAllowRules)).toBe(true)
+			expect(composed!.explicitAllowRules!.length).toBeGreaterThan(0)
+		})
+
+		it("CORRECTION02: preserves explicitDenyRules from the base (the lattice fix)", () => {
+			// Production has no deny rules today, but if any are configured
+			// (test or future deny source), the session override must NOT
+			// drop them. CORRECTION01 manufactured a fresh authorization and
+			// silently discarded deny rules; this test fails CORRECTION01.
+			const denyRule = { source: "production_deny", pattern: /^\s*rm\s+-rf/u }
+			const base = commandHostAuthorization({
+				mode: "manual",
+				explicitDenyRules: [denyRule],
+			})
+			const composed = resolveSessionHostAuthorization(base, "all")
+			expect(composed).toBeDefined()
+			expect(composed!.explicitDenyRules).toBeDefined()
+			expect(composed!.explicitDenyRules).toHaveLength(1)
+			expect(composed!.explicitDenyRules![0]).toEqual(denyRule)
+		})
+
+		it("falls back to DEFAULT_COMMAND_HOST_ALLOW_RULES only when base has none", () => {
+			const base = commandHostAuthorization({ mode: "manual" })
+			const composed = resolveSessionHostAuthorization(base, "all")
+			expect(composed!.explicitAllowRules).toBeDefined()
+			expect(composed!.explicitAllowRules!.length).toBeGreaterThan(0)
+		})
+
+		it("does NOT mutate the base authorization", () => {
+			const base = commandHostAuthorization({ mode: "manual" })
+			const baseSnapshot = JSON.stringify(base)
+			resolveSessionHostAuthorization(base, "all")
+			expect(JSON.stringify(base)).toBe(baseSnapshot)
 		})
 	})
 })
