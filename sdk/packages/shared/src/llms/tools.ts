@@ -84,6 +84,85 @@ export interface ToolApprovalRequest {
 export interface ToolApprovalResult {
 	approved: boolean;
 	reason?: string;
+	/**
+	 * Optional canonical decision from the host's command policy evaluator.
+	 *
+	 * When set, the coordinator MUST check `decision.kind` BEFORE
+	 * consulting `approved`. Specifically:
+	 *   - kind === "deny"  => return { approved: false }. Do NOT open
+	 *                          an overridable approval UI. Nothing executes.
+	 *   - kind === "ask"   => open the approval UI. On YES, re-emit
+	 *                          the same decision object (or preserve the
+	 *                          executionPlan). On NO, deny.
+	 *   - kind === "allow" => auto-approve (handled via approved=true).
+	 *
+	 * This field is set exclusively by hosts that use the canonical
+	 * command policy (evaluateCommandPolicy / evaluateCommandToolApproval).
+	 * Hosts that use the legacy boolean path should omit it.
+	 */
+	decision?: {
+		kind: "allow" | "ask" | "deny";
+		reason: string;
+		source: string;
+	};
+	/**
+	 * Optional execution plan returned by the approval callback.
+	 *
+	 * When set, the AgentRuntime MUST replace the tool input used for
+	 * execution with `executionPlan.transformedInput` before invoking the
+	 * tool. The runtime MUST NOT silently fall back to the original
+	 * (possibly unhardened) input. This is the structural enforcement
+	 * point for CORRECTION04: the classifier produces a hardened argv,
+	 * the approval callback adopts it, and the executor must run that
+	 * argv — never the raw model input.
+	 *
+	 * Hosts that do not need hardening (e.g. non-command tools) should
+	 * leave this undefined; the runtime will use the original input.
+	 */
+	executionPlan?: CommandExecutionPlan;
+}
+
+/**
+ * Command execution envelope produced by the canonical command policy
+ * (CORRECTION04). Provenance is retained so the executor can defensively
+ * verify that the plan agrees with the evaluated decisions.
+ */
+export interface CommandExecutionPlan {
+	/**
+	 * The hardened input that the executor must use. For run_commands
+	 * (and any other command-shaped tool) this is the same shape as the
+	 * original tool input, but with `command` / `commands` rewritten
+	 * under the per-command SafeExecutionProfile.
+	 */
+	transformedInput: unknown;
+	/**
+	 * Per-command provenance. Indexes align with the original normalized
+	 * command list. This is for telemetry / audit / debugging — the
+	 * executor MUST use `transformedInput` for execution, not the
+	 * entries here.
+	 */
+	commands: ReadonlyArray<CommandExecutionPlanEntry>;
+}
+
+export interface CommandExecutionPlanEntry {
+	commandIndex: number;
+	/**
+	 * The hardened command that will be executed. For a string command
+	 * this is the rewritten string; for a structured command this is
+	 * the rewritten `{command, args}` object.
+	 */
+	hardenedCommand: string | Record<string, unknown>;
+	/**
+	 * The source rule that matched this command (e.g. "host_safe_pwd"),
+	 * or undefined if the command was not matched by any safe rule.
+	 */
+	matchedRuleSource?: string;
+	/**
+	 * The SafeExecutionProfile source applied to this command (e.g.
+	 * "host_safe_git_diff_profile"), or undefined if no profile was
+	 * applied.
+	 */
+	profileSource?: string;
 }
 
 export const ToolCallRecordSchema = z.object({

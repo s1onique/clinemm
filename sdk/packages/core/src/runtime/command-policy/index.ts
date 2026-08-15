@@ -38,6 +38,7 @@ export {
 	commandHostAuthorization,
 	type EvaluateCommandPolicyInput,
 	type EvaluateCommandPolicyResult,
+	type EvaluatedCommand,
 	evaluateCommandPolicy,
 	isMoreRestrictive,
 	maxRestrictive,
@@ -53,3 +54,18 @@ export {
 	isOpaqueShellRendered,
 	OPAQUE_SHELL_TOKENS,
 } from "./command-safe-rules";
+
+export {
+	buildCommandExecutionPlan,
+} from "./command-execution-plan";
+
+export {
+	applySafeExecutionProfileToCommand,
+	getSafeExecutionProfileForSource,
+	SAFE_GIT_DIFF_PROFILE,
+	SAFE_GIT_LOG_PROFILE,
+	SAFE_GIT_STATUS_PROFILE,
+	SAFE_PWD_PROFILE,
+	type SafeExecutionProfile,
+	type SafeExecutionProfileKind,
+} from "./safe-execution-profile";

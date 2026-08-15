@@ -2,12 +2,13 @@
  * Command Approval Policy - Host Authority for Shell Command Execution
  *
  * ACT-CLINEMM-TOOL-COMMAND-APPROVAL-AUTHORITY01-CORRECTION02
+ * ACT-CLINEMM-TOOL-COMMAND-APPROVAL-AUTHORITY01-CORRECTION04
  *
  * Canonical location for the command-approval policy types. Consumed by
  * VS Code (`apps/vscode/src/sdk/...`), CLI (`apps/cli/src/runtime/...`), and
  * any future host via the `evaluateCommandPolicy()` entry point.
  *
- * PRIMARY INVARIANT:
+ * PRIMARY INVARIANT (authority lattice):
  *   effectiveDecision >= hostDecision
  *   where restrictiveness: ALLOW < ASK < DENY
  *
@@ -17,9 +18,20 @@
  * Therefore the host can only legitimately ALLOW when the user has explicitly
  * granted unrestricted command execution, OR when a positive, bounded host
  * rule matches a constrained command shape (see `command-safe-rules.ts`).
+ *
+ * CORRECTION04 (execution constraints):
+ *   Classification alone is insufficient. A safe-only ALLOW verdict
+ *   also produces a per-command `EvaluatedCommand` that carries the
+ *   `safeExecutionProfile` the host MUST apply. The lattice (ALLOW/ASK/DENY)
+ *   and the execution envelope (the profile) are independent axes:
+ *   model escalation raises the lattice but does NOT erase the profile.
+ *   Per-command, not per-decision: a multi-command input produces one
+ *   `EvaluatedCommand` per command, each with its own profile (or none).
  */
 
 import type { StructuredCommandInput } from "../../extensions/tools/schemas";
+import type { CommandModelHints } from "./command-model-hints";
+import type { SafeExecutionProfile } from "./safe-execution-profile";
 
 /**
  * The host's command mode is the authoritative source of auto-approval.
@@ -74,12 +86,43 @@ export type CommandDecisionSource =
 	| "host_mode_manual"
 	| "host_hard_deny"
 	| "model_escalation"
+	| "execution_plan_invalid"
 	| "unknown_input";
 
 export interface CommandDecision {
 	kind: CommandDecisionKind;
 	reason: string;
 	source: CommandDecisionSource;
+	/**
+	 * Optional convenience pointer to the matched safe rule source for
+	 * single-command ALLOW verdicts. For multi-command inputs use
+	 * `EvaluateCommandPolicyResult.commands[i].matchedRuleSource`.
+	 * Undefined for non-`host_mode_safe_only_rule` verdicts.
+	 */
+	matchedRuleSource?: string;
+}
+
+/**
+ * One normalized command with its matched-rule provenance and (for safe-only
+ * ALLOW) its safe execution profile. Produced per-command so a multi-command
+ * input like `[pwd, git diff]` yields two `EvaluatedCommand` entries — the
+ * pwd carries an empty profile (intrinsic), the git diff carries the
+ * canonical hardening. The executor applies each profile independently.
+ *
+ * The runtime's executor MUST consult `safeExecutionProfile` and apply it
+ * before invoking the tool. The executor MUST NOT execute the original
+ * `normalized` command when a profile is present (CORRECTION04 invariant).
+ *
+ * `matchedRuleSource` is set when this command was matched by a specific
+ * safe rule. `safeExecutionProfile` is the typed overlay that travels with
+ * the command; it is independent of the aggregate `CommandDecision.kind`
+ * (model escalation raises the kind but does not erase the profile).
+ */
+export interface EvaluatedCommand {
+	index: number;
+	normalized: NormalizedCommand;
+	matchedRuleSource?: string;
+	safeExecutionProfile?: SafeExecutionProfile;
 }
 
 /**
@@ -157,3 +200,23 @@ export interface NormalizedFailure {
 }
 
 export type NormalizationResult = NormalizedCommands | NormalizedFailure;
+
+/**
+ * Result of evaluating a `run_commands` tool input against the canonical
+ * command policy.
+ *
+ * `commands` is the per-command evaluation array. Each entry carries the
+ * normalized command plus its matched-rule source and (for safe-only
+ * ALLOW) the safe execution profile the executor MUST apply. The runtime
+ * must NOT execute any command whose `safeExecutionProfile` is non-empty
+ * without first applying that profile (CORRECTION04).
+ *
+ * The aggregate `decision` carries the lattice verdict (ALLOW/ASK/DENY)
+ * and is monotonic with respect to model escalation. Model escalation
+ * raises `decision.kind` but does NOT erase per-command profiles.
+ */
+export interface EvaluateCommandPolicyResult {
+	decision: CommandDecision;
+	commands: ReadonlyArray<EvaluatedCommand>;
+	modelHints: CommandModelHints;
+}

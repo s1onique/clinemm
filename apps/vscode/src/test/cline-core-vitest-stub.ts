@@ -142,6 +142,7 @@ export { createEditorExecutor } from "../../../../sdk/packages/core/src/extensio
 export type { EditFileInput } from "../../../../sdk/packages/core/src/extensions/tools/schemas"
 export type { ApplyPatchExecutor, EditorExecutor, ToolExecutors } from "../../../../sdk/packages/core/src/extensions/tools/types"
 export {
+	buildCommandExecutionPlan,
 	type CommandDecision,
 	type CommandDecisionKind,
 	type CommandDecisionSource,

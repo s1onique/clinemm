@@ -1,3 +1,4 @@
+import type { CommandExecutionPlan } from "@cline/core"
 import type { ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision } from "@cline/shared"
 import type { ClineAskQuestion, ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { ClineAskResponse } from "@shared/WebviewMessage"
@@ -5,6 +6,7 @@ import { Logger } from "@/shared/services/Logger"
 import { MessageIdMinter } from "./message-id-minter"
 import { buildToolApprovalAskMessage } from "./message-translator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
+import { isCommandTool } from "./sdk-tool-policies"
 import { buildToolApprovalDenialReason } from "./tool-approval-denial"
 
 /**
@@ -50,6 +52,39 @@ export interface SdkInteractionCoordinatorOptions {
 	messages: SdkMessageCoordinator
 	getSessionId: () => string
 	postStateToWebview: () => Promise<void>
+	/**
+	 * CORRECTION04 (TOCTOU fix): evaluate command-tool authority AND
+	 * execution constraints in a SINGLE atomic call. The host reads
+	 * settings ONCE and produces one immutable evaluation result that
+	 * carries both `approved` (authority) and `executionPlan` (constraints).
+	 *
+	 * This eliminates the TOCTOU between `shouldAutoApproveTool` (which
+	 * reads settings to decide authority) and `buildCommandExecutionPlan`
+	 * (which reads settings again to build the plan). Settings can change
+	 * between the two async evaluations across the approval UI.
+	 *
+	 * When this option is provided, `shouldAutoApproveTool` is IGNORED
+	 * for command tools — the coordinator uses only the atomic evaluator.
+	 */
+	/**
+	 * Evaluates command-tool authority and execution constraints atomically.
+	 *
+	 * CORRECTION04: this callback is invoked ONLY for command tools.
+	 * Non-command tools use the standard ToolPolicy.autoApprove path.
+	 *
+	 * Return value:
+	 *   - ALLOW  => { approved: true, decision.kind: "allow", executionPlan }
+	 *   - ASK    => { approved: false, decision.kind: "ask", executionPlan }
+	 *   - DENY   => { approved: false, decision.kind: "deny" }
+	 */
+	evaluateCommandToolApproval?: (request: ToolApprovalRequest) =>
+		| {
+				approved: boolean
+				decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
+				executionPlan?: CommandExecutionPlan
+		  }
+		| undefined
+	/** @deprecated Use `evaluateCommandToolApproval`. Ignored when that is set for command tools. */
 	shouldAutoApproveTool?: (request: ToolApprovalRequest) => boolean
 	recordApprovedToolMessage?: (toolCallId: string, messageTs: number) => void
 	recordDeniedToolApproval?: (toolCallId: string, toolName: string, reason: string) => void
@@ -119,13 +154,21 @@ type MistakeLimitDecision = ConsecutiveMistakeLimitDecision & { kind: "advisory"
 
 export class SdkInteractionCoordinator {
 	private pendingAskResolve: ((answer: string) => void) | undefined
-	private pendingToolApprovalResolve: ((result: { approved: boolean; reason?: string }) => void) | undefined
+	private pendingToolApprovalResolve:
+		| ((result: {
+				approved: boolean
+				reason?: string
+				decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
+		  }) => void)
+		| undefined
 	private pendingMistakeLimitResolve: ((decision: MistakeLimitDecision) => void) | undefined
 	private pendingToolApprovalMessage:
 		| {
 				toolCallId: string
 				messageTs: number
 				toolName: string
+				decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
+				executionPlan?: CommandExecutionPlan // CORRECTION04: atomic plan captured at entry
 		  }
 		| undefined
 
@@ -163,10 +206,46 @@ export class SdkInteractionCoordinator {
 		})
 	}
 
-	async handleRequestToolApproval(request: ToolApprovalRequest): Promise<{ approved: boolean; reason?: string }> {
-		if (request.policy.autoApprove === true || this.options.shouldAutoApproveTool?.(request) === true) {
-			Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
-			return { approved: true }
+	async handleRequestToolApproval(request: ToolApprovalRequest): Promise<{
+		approved: boolean
+		reason?: string
+		decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
+		executionPlan?: CommandExecutionPlan
+	}> {
+		// CORRECTION04 TOCTOU fix: evaluate authority AND constraints in ONE call.
+		// Call the atomic evaluator ONLY for command tools. Non-command tools
+		// use the standard ToolPolicy.autoApprove semantics unchanged.
+		const isCommand = isCommandTool(request.toolName)
+		const commandEval = isCommand ? this.options.evaluateCommandToolApproval?.(request) : undefined
+
+		if (commandEval !== undefined) {
+			// Command tool: use canonical lattice result.
+			// CORRECTION04 DENY preservation: if the canonical evaluator
+			// returned DENY, do NOT open an overridable approval UI.
+			if (commandEval.decision?.kind === "deny") {
+				Logger.log(`[SdkController] Hard DENY for tool=${request.toolName}; no approval UI`)
+				return { approved: false, reason: commandEval.decision.reason }
+			}
+			if (commandEval.approved) {
+				Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
+				return { approved: true, decision: commandEval.decision, executionPlan: commandEval.executionPlan }
+			}
+			// ASK: fall through to open approval UI.
+		} else {
+			// No atomic evaluator (or non-command tool): use legacy behavior.
+			if (isCommand) {
+				// Command tool with no atomic evaluator: use shouldAutoApproveTool.
+				if (this.options.shouldAutoApproveTool?.(request) === true) {
+					Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
+					return { approved: true }
+				}
+			} else {
+				// Non-command tool: SDK's own policy auto-approve applies.
+				if (request.policy.autoApprove === true) {
+					Logger.log(`[SdkController] Auto-approving tool execution (SDK policy): tool=${request.toolName}`)
+					return { approved: true }
+				}
+			}
 		}
 
 		// Open the edit diff preview before the Approve/Reject buttons render. This is the only
@@ -187,12 +266,14 @@ export class SdkInteractionCoordinator {
 		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts)
 		await this.options.postStateToWebview()
 
-		return new Promise<{ approved: boolean; reason?: string }>((resolve) => {
+		return new Promise<{ approved: boolean; reason?: string; executionPlan?: CommandExecutionPlan }>((resolve) => {
 			this.pendingToolApprovalResolve = resolve
 			this.pendingToolApprovalMessage = {
 				toolCallId: request.toolCallId,
 				messageTs: toolAskMessage.ts,
 				toolName: request.toolName,
+				decision: commandEval?.decision, // CORRECTION04 DENY: carries canonical decision through approval UI
+				executionPlan: commandEval?.executionPlan, // CORRECTION04: plan captured atomically at entry
 			}
 		})
 	}
@@ -275,9 +356,10 @@ export class SdkInteractionCoordinator {
 		if (!approved && pendingMessage) {
 			this.options.recordDeniedToolApproval?.(pendingMessage.toolCallId, pendingMessage.toolName, denialReason)
 		}
+		// CORRECTION04: re-emit the atomic plan from entry on user YES.
 		resolve({
 			approved,
-			...(approved ? {} : { reason: denialReason }),
+			...(approved ? { executionPlan: pendingMessage?.executionPlan } : { reason: denialReason }),
 		})
 		return true
 	}
@@ -332,7 +414,7 @@ export class SdkInteractionCoordinator {
 	 *
 	 * Returns `false` when no advisory is pending (caller no-op).
 	 */
-	resolvePendingMistakeLimit(prompt: string | undefined, responseType: ClineAskResponse | undefined): boolean {
+	resolvePendingMistakeLimit(prompt: string | undefined, _responseType: ClineAskResponse | undefined): boolean {
 		if (!this.pendingMistakeLimitResolve) {
 			return false
 		}

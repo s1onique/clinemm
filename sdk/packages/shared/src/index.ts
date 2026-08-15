@@ -237,6 +237,8 @@ export {
 	type TokenEstimatedRequest,
 } from "./llms/tokens";
 export type {
+	CommandExecutionPlan,
+	CommandExecutionPlanEntry,
 	ToolApprovalRequest,
 	ToolApprovalResult,
 	ToolCallRecord,

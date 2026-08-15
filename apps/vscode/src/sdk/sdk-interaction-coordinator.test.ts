@@ -667,4 +667,199 @@ describe("SdkInteractionCoordinator", () => {
 		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
 		await expect(approvalPromise).resolves.toEqual({ approved: true })
 	})
+
+	describe("CORRECTION04 DENY preservation: hard DENY must not reach approval UI", () => {
+		it("DENY => approval UI NOT opened; approved=false returned immediately", async () => {
+			const task = createTaskProxy("session-deny-1", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-deny-1",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: () => ({
+					approved: false,
+					decision: { kind: "deny", reason: "dangerous command", source: "host_hard_deny" },
+				}),
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-deny-1",
+				toolName: "run_commands",
+				input: { command: "rm -rf /", requires_approval: false },
+				policy: {},
+			})
+			// DENY resolves immediately with no approval UI.
+			await expect(promise).resolves.toEqual({ approved: false, reason: "dangerous command" })
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("DENY => approval UI NOT opened even if policy.autoApprove=true", async () => {
+			const task = createTaskProxy("session-deny-2", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-deny-2",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: () => ({
+					approved: false,
+					decision: { kind: "deny", reason: "dangerous command", source: "host_hard_deny" },
+				}),
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-deny-2",
+				toolName: "run_commands",
+				input: { command: "rm -rf /", requires_approval: false },
+				policy: { autoApprove: true },
+			})
+			// DENY from host must NOT be overridden by SDK policy.
+			await expect(promise).resolves.toEqual({ approved: false, reason: "dangerous command" })
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("ASK => approval UI opened; YES => execute with plan", async () => {
+			const executionPlan = { transformedInput: { command: "git diff" }, commands: [] }
+			const task = createTaskProxy("session-ask-1", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-ask-1",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: () => ({
+					approved: false,
+					decision: { kind: "ask", reason: "git diff requested", source: "host_mode_safe_only_fallthrough" },
+					executionPlan,
+				}),
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-ask-1",
+				toolName: "run_commands",
+				input: { command: "git diff", requires_approval: true },
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+			await expect(promise).resolves.toMatchObject({ approved: true, executionPlan })
+		})
+
+		it("ASK => approval UI opened; NO => rejected", async () => {
+			const task = createTaskProxy("session-ask-2", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-ask-2",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: () => ({
+					approved: false,
+					decision: { kind: "ask", reason: "git diff requested", source: "host_mode_safe_only_fallthrough" },
+					executionPlan: { transformedInput: { command: "git diff" }, commands: [] },
+				}),
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-ask-2",
+				toolName: "run_commands",
+				input: { command: "git diff", requires_approval: true },
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(promise).resolves.toMatchObject({ approved: false, reason: expect.stringContaining("denied") })
+		})
+
+		it("ALLOW => auto-approved immediately; no approval UI", async () => {
+			const executionPlan = { transformedInput: { command: "git status" }, commands: [] }
+			const task = createTaskProxy("session-allow-1", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-allow-1",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: () => ({
+					approved: true,
+					decision: { kind: "allow", reason: "safe command", source: "host_mode_safe_only_rule" },
+					executionPlan,
+				}),
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-allow-1",
+				toolName: "run_commands",
+				input: { command: "git status", requires_approval: false },
+				policy: {},
+			})
+			await expect(promise).resolves.toMatchObject({ approved: true, decision: { kind: "allow" }, executionPlan })
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+	})
+
+	describe("CORRECTION04 non-command regression: ToolPolicy.autoApprove must not be intercepted by atomic command evaluator", () => {
+		it("non-command tool with autoApprove=true => auto-approved without command evaluator", async () => {
+			const evaluateSpy = vi.fn()
+			const task = createTaskProxy("session-nonc-1", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-nonc-1",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: evaluateSpy,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-nonc-1",
+				toolName: "read_files",
+				input: { path: "README.md" },
+				policy: { autoApprove: true },
+			})
+			await expect(promise).resolves.toEqual({ approved: true })
+			expect(evaluateSpy).not.toHaveBeenCalled()
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("non-command tool with autoApprove=false => approval UI opened", async () => {
+			const task = createTaskProxy("session-nonc-2", vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => "session-nonc-2",
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval: () => ({
+					approved: false,
+					decision: { kind: "deny", reason: "should not reach", source: "test" },
+				}),
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation",
+				iteration: 1,
+				toolCallId: "tool-nonc-2",
+				toolName: "edit",
+				input: { path: "a.ts", old_text: "a", new_text: "b" },
+				policy: { autoApprove: false },
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
+			await expect(promise).resolves.toEqual({ approved: true })
+		})
+	})
 })

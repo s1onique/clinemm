@@ -1681,6 +1681,15 @@ export class AgentRuntime {
 				if (!approval.approved) {
 					skipReason =
 						approval.reason ?? `Tool "${toolCall.toolName}" was not approved`;
+				} else if (approval.executionPlan) {
+					// CORRECTION04: structurally enforce the execution-plan
+					// contract. The classifier produces a hardened argv via
+					// applySafeExecutionProfileToCommand(); the approval
+					// callback adopts it; the runtime MUST use the hardened
+					// input — never the raw model input. This is the only
+					// place that knows the safe argv, downstream is the
+					// shell executor. There is no fallback to raw input.
+					input = approval.executionPlan.transformedInput;
 				}
 			}
 		}

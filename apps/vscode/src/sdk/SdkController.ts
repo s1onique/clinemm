@@ -92,7 +92,7 @@ import { SdkTaskHistory, sessionHistoryRecordToHistoryItem } from "./sdk-task-hi
 import { SdkTaskStartCoordinator } from "./sdk-task-start-coordinator"
 import { createVscodeSdkTelemetryHandle, type VscodeSdkTelemetryHandle } from "./sdk-telemetry"
 import { SdkTerminalExecutionModeCoordinator } from "./sdk-terminal-execution-mode-coordinator"
-import { evaluateCommandToolApproval, getCommandHostAuthorization, isCommandTool, isToolAutoApproved } from "./sdk-tool-policies"
+import { evaluateCommandToolApprovalWithPlan, getCommandHostAuthorization, isCommandTool } from "./sdk-tool-policies"
 import {
 	extractSdkUserText,
 	findSdkUserMessageIndexByOrdinal,
@@ -351,21 +351,24 @@ export class Controller {
 				// manual Reject and clearPending (task cancel/abort) in one place.
 				void this.diffEdits.discardPreview(toolCallId)
 			},
-			shouldAutoApproveTool: (request) => {
+			// CORRECTION04 TOCTOU fix: read settings ONCE and produce one
+			// atomic evaluation that carries both authority and execution constraints.
+			// This eliminates the race between shouldAutoApproveTool (authority)
+			// and buildCommandExecutionPlan (constraints) across the approval UI.
+			evaluateCommandToolApproval: (request) => {
 				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
-
-				// For command tools, apply host command policy evaluation.
-				// The model requires_approval hint is advisory only - it can escalate
-				// but never downgrade host authority.
-				if (isCommandTool(request.toolName)) {
-					const effectiveSettings = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
-					const hostAuthorization = getCommandHostAuthorization(request.toolName, effectiveSettings, this.mcpHub)
-					const { approved } = evaluateCommandToolApproval(request.input, hostAuthorization)
-					return approved
+				// For command tools: atomic single-pass evaluation via canonical policy.
+				if (!isCommandTool(request.toolName)) {
+					return undefined // Non-command tools use coordinator's standard ToolPolicy path.
 				}
-
-				// For non-command tools, the legacy auto-approve boolean applies.
-				return !!autoApprovalSettings && isToolAutoApproved(request.toolName, autoApprovalSettings, this.mcpHub)
+				const effectiveSettings = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
+				const hostAuthorization = getCommandHostAuthorization(request.toolName, effectiveSettings, this.mcpHub)
+				const result = evaluateCommandToolApprovalWithPlan(request.input, hostAuthorization)
+				return {
+					approved: result.approved,
+					decision: result.decision,
+					executionPlan: result.executionPlan,
+				}
 			},
 			getCwd: () => this.lastKnownWorkspaceRoot,
 		})
@@ -1431,7 +1434,12 @@ export class Controller {
 		const sourceSessionId = activeSession?.sessionId ?? currentTask.taskId
 		let sdkMessages: SdkUserMessage[]
 		let tempHost: VscodeSessionHost | undefined
-		const sessionHost = activeSession?.sdkHost ?? (tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub }))
+		if (activeSession?.sdkHost) {
+			sessionHost = activeSession.sdkHost
+		} else {
+			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub })
+			sessionHost = tempHost
+		}
 		try {
 			sdkMessages = (await sessionHost.readMessages(sourceSessionId)) as SdkUserMessage[]
 			const sdkTargetIndex = findSdkUserMessageIndexByOrdinal(sdkMessages, userOrdinal)
@@ -1652,7 +1660,12 @@ export class Controller {
 		// After a window reload the latest task is shown from history without a
 		// live session, so fall back to a temporary host for the comparison.
 		let tempHost: VscodeSessionHost | undefined
-		const sessionHost = activeSession?.sdkHost ?? (tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub }))
+		if (activeSession?.sdkHost) {
+			sessionHost = activeSession.sdkHost
+		} else {
+			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub })
+			sessionHost = tempHost
+		}
 		try {
 			if (!sessionHost.compareCheckpoint) {
 				throw new Error("This session host does not support checkpoint comparison")

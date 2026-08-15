@@ -244,7 +244,7 @@ export async function runInteractive(
 		setInteractiveAutoApprove,
 		requestToolApproval,
 		resolveToolPolicy,
-		tuiToolApprover,
+		setToolApprover,
 		tuiAskQuestion,
 	} = createInteractiveApprovalController(config);
 
@@ -848,7 +848,7 @@ export async function runInteractive(
 			return await sessionRuntime.restoreCheckpoint(runCount, restoreWorkspace);
 		},
 		setToolApprover: (fn) => {
-			tuiToolApprover.current = fn;
+			setToolApprover(fn);
 		},
 		setAskQuestion: (fn) => {
 			tuiAskQuestion.current = fn;

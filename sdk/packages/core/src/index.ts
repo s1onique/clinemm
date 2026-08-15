@@ -117,6 +117,7 @@ export {
 	parseUserCommandEnvelope,
 	registerDisposable,
 	SDK_ERROR_TELEMETRY_EVENT,
+	type CommandExecutionPlan,
 	stripUtf8Bom,
 } from "@cline/shared";
 export * from "@cline/shared/storage";
@@ -436,6 +437,44 @@ export {
 } from "./remote-config/integration";
 export type { RuntimeCapabilities } from "./runtime/capabilities";
 export { normalizeRuntimeCapabilities } from "./runtime/capabilities";
+export {
+	type CommandDecision,
+	type CommandDecisionKind,
+	type CommandDecisionSource,
+	type CommandHostAllowRule,
+	type CommandHostAuthorization,
+	type CommandHostMode,
+	type CommandModelHint,
+	type CommandModelHints,
+	commandHostAuthorization,
+	DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	type EvaluateCommandPolicyInput,
+	type EvaluateCommandPolicyResult,
+	type EvaluatedCommand,
+	evaluateCommandPolicy,
+	findSafeRuleMatch,
+	isMoreRestrictive,
+	isOpaqueShellRendered,
+	maxRestrictive,
+	type NormalizationResult,
+	type NormalizedCommand,
+	type NormalizedCommands,
+	type NormalizedFailure,
+	OPAQUE_SHELL_TOKENS,
+	parseCommandModelHints,
+	renderNormalizedCommand,
+} from "./runtime/command-policy";
+export { buildCommandExecutionPlan } from "./runtime/command-policy/command-execution-plan";
+export {
+	applySafeExecutionProfileToCommand,
+	getSafeExecutionProfileForSource,
+	SAFE_GIT_DIFF_PROFILE,
+	SAFE_GIT_LOG_PROFILE,
+	SAFE_GIT_STATUS_PROFILE,
+	SAFE_PWD_PROFILE,
+	type SafeExecutionProfile,
+	type SafeExecutionProfileKind,
+} from "./runtime/command-policy/safe-execution-profile";
 export type {
 	ConnectionUpdate,
 	ConnectionUpdateInput,
@@ -505,32 +544,6 @@ export {
 	type DesktopToolApprovalOptions,
 	requestDesktopToolApproval,
 } from "./runtime/tools/tool-approval";
-export {
-	commandHostAuthorization,
-	type CommandDecision,
-	type CommandDecisionKind,
-	type CommandDecisionSource,
-	type CommandHostAllowRule,
-	type CommandHostAuthorization,
-	type CommandHostMode,
-	type CommandModelHint,
-	type CommandModelHints,
-	DEFAULT_COMMAND_HOST_ALLOW_RULES,
-	type EvaluateCommandPolicyInput,
-	type EvaluateCommandPolicyResult,
-	evaluateCommandPolicy,
-	findSafeRuleMatch,
-	isMoreRestrictive,
-	isOpaqueShellRendered,
-	maxRestrictive,
-	type NormalizedCommand,
-	type NormalizedCommands,
-	type NormalizedFailure,
-	type NormalizationResult,
-	OPAQUE_SHELL_TOKENS,
-	parseCommandModelHints,
-	renderNormalizedCommand,
-} from "./runtime/command-policy";
 export { listActiveConnectors } from "./services/connectors/active-connectors";
 export {
 	disableConnectorAutostart,
