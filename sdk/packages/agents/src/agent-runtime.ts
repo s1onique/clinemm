@@ -906,6 +906,26 @@ export class AgentRuntime {
 	}
 
 	/**
+	 * Build the snapshot used inside a `recovery-state-changed`
+	 * event. Identical to `snapshot()` for every field except
+	 * `messages`, which is replaced with an empty array. This is
+	 * the C1.6 privacy correction — raw user-supplied inputs
+	 * (potential secrets / file paths / JWT-like structures)
+	 * MUST NOT leak on the recovery-event surface, because
+	 * the recovery surface is what UIs and logs consume.
+	 *
+	 * Consumers who need the full message history should
+	 * call `snapshot()` separately; that path is unchanged.
+	 */
+	private buildRedactedRecoverySnapshot(): LiveAgentRuntimeStateSnapshot {
+		const full = this.snapshot();
+		return {
+			...full,
+			messages: [],
+		};
+	}
+
+	/**
 	 * C1.5 SOLE OWNER of `recovery-state-changed` emission.
 	 *
 	 * Neither `RecoveryTracker` nor the C1.3/C1.4 helpers construct public
@@ -941,9 +961,18 @@ export class AgentRuntime {
 			return;
 		}
 		try {
+			// C1.6 CORRECTION (parent verdict §33): the
+			// embedded snapshot MUST NOT carry raw conversation
+			// content that may contain user-supplied sentinels
+			// (fake API tokens, JWT-like structures, file
+			// paths, etc.). Only the recovery projection
+			// belongs on the public event surface — the full
+			// message history is reachable via `snapshot()`
+			// separately.
+			const sanitized = this.buildRedactedRecoverySnapshot();
 			await this.emit({
 				type: "recovery-state-changed",
-				snapshot: this.snapshot(),
+				snapshot: sanitized,
 				previousRecovery: before,
 			});
 		} catch {
@@ -3224,7 +3253,23 @@ export class AgentRuntime {
 			// to the live-public type, matching the production code
 			// path that constructs every emitted event via
 			// `this.snapshot()`.
-			listener(event as unknown as Parameters<AgentEventListener>[0]);
+			// C1.6 CORRECTION (parent verdict §25): a throwing
+			// subscriber MUST NOT prevent subsequent subscribers
+			// from receiving the same event. This is scoped to
+			// `recovery-state-changed` only — the parent verdict
+			// explicitly says "do not silently generalize this
+			// behavior to unrelated events." Other event types
+			// retain their pre-C1.6 throw-propagation behavior.
+			try {
+				listener(event as unknown as Parameters<AgentEventListener>[0]);
+			} catch (err) {
+				if (event.type === "recovery-state-changed") {
+					// Observation must not become control — same
+					// C1.5 invariant as the inline restore path.
+					continue;
+				}
+				throw err;
+			}
 		}
 		for (const hook of this.hooks.onEvent) {
 			await hook(event);
