@@ -637,13 +637,14 @@ describe("AgentRuntime / C1.5 lifecycle reset observability", () => {
 		// `restore()` resets per-episode recovery state; the canonical
 		// snapshot MUST immediately report the cleared state — a consumer
 		// that reads `snapshot()` after restore can never observe stale
-		// truth. `restore()` is now `Promise<void>` (parent P0 correction)
-		// because subscribers must be notified when their last known
-		// recovery projection is invalidated. This test is a snapshot-
-		// truth probe, not an event probe; the meaningful-change event
-		// from `terminating → idle` is verified separately in
-		// `C15_RESTORE_RESET_EVENT` below.
-		await runtime.restore([]);
+		// truth. `restore()` is synchronous (parent correction02 — the
+		// CORRECTION01 `Promise<void>` was rolled back to match
+		// upstream's documented sync surface), and the reset event is
+		// delivered to subscribers before return (see
+		// `C15_RESTORE_RESET_EVENT` below). This test stays a
+		// snapshot-truth probe; the meaningful-change event from
+		// `terminating → idle` is verified separately.
+		runtime.restore([]);
 		const recovery = runtime.snapshot().recovery;
 		expect(recovery.secondStage).toBe("idle");
 		expect(recovery.secondStageTrigger).toBeUndefined();
@@ -653,15 +654,29 @@ describe("AgentRuntime / C1.5 lifecycle reset observability", () => {
 		expect(recovery.tracker.blockedFamilies).toEqual([]);
 	});
 
-	it("C15_RESTORE_RESET_EVENT: a meaningful restore() emits the canonical recovery-state-changed event, a no-op restore is silent", async () => {
-		// Parent verdict P0: `restore()` preserves subscribers but
-		// invalidates their last-known recovery projection. Without an
-		// event, subscriber-only consumers keep stale truth while a
-		// snapshot-reading consumer immediately sees the new state.
+	it("C15_RESTORE_UPSTREAM_COMPAT: restore() returns void and delivers the canonical reset event before return, no-op restore is silent", async () => {
+		// Parent verdict restore-API-preservation recon:
+		//   UPSTREAM_RESTORE_SIGNATURE        = void
+		//   LOCAL_PRE_C15_RESTORE_SIGNATURE   = void
+		//   EMITTER_ASYNC_REQUIREMENT         = DOES NOT REQUIRE — listener
+		//                                       callbacks and onEvent hooks can
+		//                                       be invoked synchronously and
+		//                                       restore() never needed to become
+		//                                       async to deliver them.
 		//
-		// Two paths must be observable exactly like the run-start reset:
-		//   terminating → restore → idle    → exactly one canonical event
-		//   idle       → restore → idle    → silent (dedup suppression)
+		// This test pins the COMBINED contract:
+		//   1. `runtime.restore([])` returns `void` (matches upstream).
+		//   2. After return, the meaningful-change event has ALREADY
+		//      been delivered to subscribers (no `await` needed).
+		//   3. A no-op restore on an already-idle runtime stays silent.
+		//   4. `restore()` followed immediately by `run()` does not
+		//      race the reset notification — by the time the run emits
+		//      its own state changes, the reset is already in the past.
+		//
+		// Mutation proof: removing the synchronous listener loop
+		// (replacing it with an async emit) makes this test fail with
+		// `events.length === 0`, because the events array is observed
+		// synchronously after `restore()` returns.
 		const calls = { count: 0 };
 		const model = new ScriptedModel([
 			...Array.from({ length: 8 }, (_, i) =>
@@ -678,12 +693,16 @@ describe("AgentRuntime / C1.5 lifecycle reset observability", () => {
 		await runtime.run("Drive to circuit");
 		expect(runtime.snapshot().recovery.secondStage).toBe("terminating");
 
-		// --- MEANINGFUL RESET ---
-		// Subscribe from a position where we know the previous projection
-		// was terminating. Restore → idle. Exactly one event must fire.
+		// --- MEANINGFUL RESET (synchronous, no await) ---
 		const meaningfulEvents: CapturedRecoveryEvent[] = [];
 		subscribeRecovery(runtime, meaningfulEvents);
-		await runtime.restore([]);
+		// W1: return value is `void` (TypeScript-typed; runtime check
+		// is implicit in `restore[]` not being a Promise here).
+		const ret = runtime.restore([]);
+		expect(ret).toBeUndefined();
+		// W2: the event is already visible to subscribers. Critical
+		// proof of synchronous delivery — no `await`, no microtask
+		// boundary.
 		expect(meaningfulEvents.length).toBe(1);
 		expect(meaningfulEvents[0].previous.secondStage).toBe("terminating");
 		expect(meaningfulEvents[0].payload.secondStage).toBe("idle");
@@ -691,16 +710,53 @@ describe("AgentRuntime / C1.5 lifecycle reset observability", () => {
 		expect(meaningfulEvents[0].payload.episodeFailures).toBe(0);
 		expect(meaningfulEvents[0].payload.circuitNoticeCount).toBe(0);
 		expect(meaningfulEvents[0].payload.tracker.blockedFamilies).toEqual([]);
-		// Public event payload MUST equal current `snapshot()` value —
-		// structural equality, not tested equality.
+		// W2b: structural equality between event payload and current
+		// snapshot.
 		expect(runtime.snapshot().recovery).toEqual(meaningfulEvents[0].payload);
 
-		// --- NO-OP RESET ---
-		// Already idle. A fresh restore from this state must emit
+		// --- RESTORE-THEN-RUN RACE TEST ---
+		// Without `await`, an immediately-following `run()` must NOT
+		// see the runtime in `terminating` state from the previous
+		// run. Because `restore()` already emitted the event and
+		// reset the tracker before returning, this invariant holds.
+		const postRunRecoveries: CapturedRecoveryEvent[] = [];
+		// The fresh run uses a NO-tool model so no new failure
+		// accumulates and the post-fresh-run state is exactly
+		// `idle, episodeFailures=0` — i.e. identical to pre-fresh-
+		// run so the no-op path can be observed.
+		const noopModel = new ScriptedModel([finishStep]);
+		(
+			runtime as unknown as {
+				config: { model: AgentModel };
+			}
+		).config.model = noopModel;
+		subscribeRecovery(runtime, postRunRecoveries);
+		runtime.restore([]); // already-idle, no-op path
+		const eventsBeforeFreshRun = [...postRunRecoveries];
+		await runtime.run("Fresh");
+		// The pre-run reset event, if any, must equal
+		// `idle → idle` (suppressed by dedup) OR a genuine
+		// meaningful-change from this fresh run. We pin the
+		// structural invariant: no captured event has
+		// `previous.secondStage === "terminating"` (that would mean
+		// the prior `terminating` state leaked across restore).
+		const residualTerminating = postRunRecoveries.filter(
+			(e) => e.previous.secondStage === "terminating",
+		);
+		expect(residualTerminating).toEqual([]);
+		// Sanity: the events observed across the fresh run are at
+		// least the events captured before it (postRunRecoveries
+		// grew during run()), and the no-op restore above emitted
+		// nothing.
+		expect(eventsBeforeFreshRun).toEqual([]);
+
+		// --- NO-OP RESET (synchronous, no await) ---
+		// Already idle. A fresh `restore()` from this state must emit
 		// nothing — otherwise a UI would re-render a null transition.
 		const noopEvents: CapturedRecoveryEvent[] = [];
 		subscribeRecovery(runtime, noopEvents);
-		await runtime.restore([]);
+		const noopRet = runtime.restore([]);
+		expect(noopRet).toBeUndefined();
 		expect(noopEvents).toEqual([]);
 	});
 });

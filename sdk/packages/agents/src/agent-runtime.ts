@@ -757,7 +757,7 @@ export class AgentRuntime {
 	 * Useful for standalone callers that persist conversations externally and
 	 * want to re-seed the runtime from storage without recreating subscribers.
 	 */
-	async restore(messages: readonly AgentMessage[]): Promise<void> {
+	restore(messages: readonly AgentMessage[]): void {
 		this.abort("Agent state restored");
 		// Reset state that is not carried across restores. Keep `listeners`,
 		// tools, hooks, plugins, model, and agent identity so external event
@@ -788,16 +788,66 @@ export class AgentRuntime {
 		// continuing the previous one's family state.
 		//
 		// C1.5 CORRECTION (parent verdict P0): subscribers survive
-		// `restore()` by SDK contract, but their last known recovery
-		// projection becomes invalid the moment per-episode state
-		// is reset. Without an explicit emission, a subscriber-only
-		// consumer would keep stale recovery truth (e.g. "terminating")
-		// while a snapshot-reading consumer immediately sees "idle".
-		// Mirrors the run-start reset rule already proven in C1.5:
-		// meaningful change → one canonical event; no-op → silent.
+		// `restore()` by upstream contract, but their last known
+		// recovery projection becomes invalid the moment per-episode
+		// state is reset. Without an explicit emission, a subscriber-
+		// only consumer would keep stale recovery truth (e.g.
+		// "terminating") while a snapshot-reading consumer
+		// immediately sees "idle". Mirrors the run-start reset rule
+		// already proven in C1.5: meaningful change → one canonical
+		// event; no-op → silent.
+		//
+		// UPSTREAM-PARITY DELIVERY (parent verdict restore API
+		// preservation): upstream documents `restore()` as a
+		// synchronous-looking control method — no `await`, no Promise
+		// annotation, callers in our own runtime host invoke it
+		// without await (e.g. local-runtime-host.ts line 1245 +
+		// 2343). Changing the signature to `Promise<void>` would
+		// introduce a fork divergence that buys nothing for upstream
+		// callers and races any `restore()` immediately followed by
+		// `run()`. So instead of going through the async `emit()`,
+		// the reset event is delivered synchronously to subscribers
+		// and `onEvent` hooks BEFORE `restore()` returns. Any
+		// async completion of an `onEvent` hook is intentionally
+		// not awaited; their return type already allows `void |
+		// Promise<void>` so this is consistent with the hook
+		// contract. Listener throws are caught and swallowed — same
+		// rationale as `emitRecoveryStateChangeIfChanged`'s C1.5
+		// observation-vs-control invariant.
 		const recoveryBeforeRestore = this.snapshotRecoveryState();
 		this.resetRecoveryEpisode();
-		await this.emitRecoveryStateChangeIfChanged(recoveryBeforeRestore);
+		const after = this.snapshotRecoveryState();
+		if (!isSameRuntimeRecovery(recoveryBeforeRestore, after)) {
+			const event: AgentRuntimeEvent = {
+				type: "recovery-state-changed",
+				snapshot: this.snapshot(),
+				previousRecovery: recoveryBeforeRestore,
+			};
+			for (const listener of this.listeners) {
+				try {
+					listener(event as unknown as Parameters<AgentEventListener>[0]);
+				} catch {
+					// Observation must not become control — same C1.5
+					// invariant as the async emit path.
+				}
+			}
+			for (const hook of this.hooks.onEvent) {
+				try {
+					const ret = hook(event);
+					if (ret && typeof (ret as Promise<void>).then === "function") {
+						// Async hook: intentionally not awaited (see
+						// upstream-parity comment above). The promise
+						// rejection (if any) is not coupled to the
+						// synchronous `restore()` return; the runtime
+						// does not surface hook failures from this
+						// path.
+						(ret as Promise<void>).catch(() => {});
+					}
+				} catch {
+					// Sync hook throw: observed, not propagated.
+				}
+			}
+		}
 	}
 
 	/**

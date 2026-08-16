@@ -72,10 +72,9 @@ const ENOENT = Object.assign(new Error("ENOENT: missing"), {
 });
 const OPAQUE = new Error("opaque internal failure");
 
-function createEnoentTool(executorCalls: { count: number }): AgentTool<
-	{ path: string },
-	never
-> {
+function createEnoentTool(executorCalls: {
+	count: number;
+}): AgentTool<{ path: string }, never> {
 	return {
 		name: "fs_read",
 		description: "Throws ENOENT",
@@ -773,12 +772,15 @@ describe("AgentRuntime / C1.4 memory-state lifecycle", () => {
 		expect(beforeRestore.secondStage.kind).toBe("terminating");
 		expect(beforeRestore.state).toBe("circuit_open");
 
-		// C1.5 correction (parent verdict P0): `restore()` is now
-		// `Promise<void>` so it can emit the canonical reset event.
-		// The synchronous tracker reset still happens before the
-		// promise resolves, so the post-restore probe remains valid
-		// without an additional microtask flush.
-		await runtime.restore([]);
+		// C1.5 CORRECTION02 — upstream-parity restore() signature.
+		// Upstream documents `restore()` as a synchronous control
+		// method (no `await`, no Promise annotation). The local
+		// runtime-host already calls it sync; preserving that
+		// contract here avoids introducing a fork divergence.
+		// `restore()` delivers its reset event synchronously
+		// before return — see `agent-runtime.ts` for the
+		// upstream-parity comment block.
+		runtime.restore([]);
 		const afterRestore = (
 			runtime as unknown as {
 				__recoverySnapshotForTests(): RecoveryTestSnapshot;
