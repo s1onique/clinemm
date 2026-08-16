@@ -21,9 +21,12 @@
  *      `tool-started` runtime event.
  *   3. Recovery-budget-failure count — incremented by the positive
  *      delta clamp of `RecoverySnapshot.episodeFailures`. This is a
- *      bounded-recovery control-plane counter, not a total of all
+ *      bounded-recovery episode-budget metric, not a total of all
  *      recoverable tool failures; the wire name and tooltip reflect
- *      that.
+ *      that. (NB: deliberately NOT named "control-plane" — control
+ *      plane outcomes are a separate thing entirely: host DENY,
+ *      user_rejected, runtime_skipped, runtime_aborted. This metric
+ *      is a recovery-policy budget counter.)
  *
  * The tracker is a pure OBSERVER. It NEVER reads or modifies recovery
  * policy, tool-execution gating, or turn-phase transitions. It has no
@@ -82,31 +85,37 @@ const CONTINUATION_PHASES = new Set(["streaming", "awaiting_approval"])
 /**
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
  *
- * The single canonical recovery counter we fold into the UI metric.
- * `currentRepairAttempts` describes family-level pressure; it can be
- * non-zero even when no individual tool call failed in this episode
- * (a family may be in a long retry loop driven by transient
- * downstream errors that the model eventually succeeds on). Including
- * it in the same metric as `episodeFailures` would double-count
- * the same recovery fact.
+ * The chosen authority for the bounded-recovery episode-budget UI
+ * metric. Note that this is NOT the same as "every recoverable tool
+ * failure observed during this task" — `episodeFailures` only
+ * increments while the recovery second stage is `idle`. Once the
+ * second stage is `armed` or `terminating`, additional recoverable
+ * failures do not increment it (the bounded-continuation turn is
+ * consumed but not counted). The wire field is therefore
+ * `recoveryBudgetFailures` (see CORRECTION02).
  *
- * `circuitNoticeCount` is a bounded-recovery exhaustion notice — a
- * LATER consequence of the same failure that already incremented
- * `episodeFailures`, not an independent intervention.
+ * Why this single authority and not the other recovery counters:
  *
- * The only counter that uniquely captures "an additional recoverable
- * tool failure was observed during this task" is `episodeFailures`.
+ * - `currentRepairAttempts` describes family-level pressure; it can
+ *   be non-zero even when no individual tool call failed in this
+ *   episode (a family may be in a long retry loop driven by
+ *   transient downstream errors that the model eventually succeeds
+ *   on). Including it in the same metric as `episodeFailures` would
+ *   double-count the same recovery fact.
+ *
+ * - `circuitNoticeCount` is a bounded-recovery exhaustion notice — a
+ *   LATER consequence of the same failure that already incremented
+ *   `episodeFailures`, not an independent intervention.
  */
 function readEpisodeFailures(recovery: AgentRuntimeRecoverySnapshot): number {
 	return recovery.episodeFailures
 }
 
 /**
- * Monotone clamp on the single `episodeFailures` counter. A decrease
- * (episode reset on a new family) does not subtract; only forward
- * jumps accumulate. This preserves family-success resets as not
- * interventions, while keeping a task-lifetime cumulative count of
- * recoverable-failure observations.
+ * Monotone clamp on `episodeFailures`. A decrease (episode reset on a
+ * new family) does not subtract; only forward jumps accumulate. This
+ * keeps a task-lifetime cumulative count of the bounded-recovery
+ * episode-budget counter across the lifetime of the visible task.
  */
 function countRecoveryDelta(prev: number, next: number): number {
 	if (next > prev) {
@@ -256,9 +265,13 @@ export class TaskTelemetryTracker {
 	 * independent interventions.
 	 *
 	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
-	 * `episodeFailures` is itself a bounded-recovery control-plane
-	 * counter — it only increments while the recovery second stage is
+	 * `episodeFailures` is itself a bounded-recovery episode-budget
+	 * metric — it only increments while the recovery second stage is
 	 * `idle` and stops growing once it is `armed` or `terminating`.
+	 * (Deliberately described as an "episode-budget metric", NOT a
+	 * "control-plane metric": control-plane outcomes are
+	 * host-policy / user / runtime / aborted categorical outcomes,
+	 * which are explicitly excluded from this UI metric.)
 	 * The wire field is therefore renamed from `recoveryFailures` to
 	 * `recoveryBudgetFailures`, and the tooltip / metadata describe
 	 * it as "failures counted toward bounded-recovery episode limits"

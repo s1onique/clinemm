@@ -27,16 +27,44 @@ export class TurnStateTracker {
 	/**
 	 * Set the phase (and optional anchor message ts), advancing seq. No-op metadata if unchanged.
 	 *
-	 * Listeners are notified synchronously AFTER the snapshot is updated.
-	 * Subscribers MUST NOT mutate the tracker or rely on synchronous re-entrant
-	 * `set()` calls — observers are fire-and-forget projections.
+	 * Listeners are notified synchronously AFTER the snapshot is updated,
+	 * iterating over a snapshot of the listener array so a listener that
+	 * unsubscribes itself or another listener does not affect iteration.
+	 *
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION03:
+	 *
+	 * Observer isolation — this method MUST remain authoritative. A
+	 * throwing listener cannot:
+	 *   - prevent later listeners from running
+	 *   - cause `set()` itself to throw (which would unwind the
+	 *     production caller: `cancelTask`, `askResponse`,
+	 *     `initTask`, the turn coordinator, etc.)
+	 *   - leave the tracker's internal state in a partial half-applied
+	 *     position
+	 *
+	 * Throws are swallowed silently (this primitive deliberately does
+	 * not couple to a Logger service). Callers that need observability
+	 * over their own subscriber should wrap their callback in
+	 * try/catch before passing it to `subscribe()`. The
+	 * `TaskTelemetryTracker` observer is wrapped that way as well
+	 * (defense in depth).
+	 *
+	 * Subscribers MUST NOT mutate the tracker or rely on synchronous
+	 * re-entrant `set()` calls from within a listener — observers are
+	 * fire-and-forget projections.
 	 */
 	set(phase: TurnPhase, anchorTs?: number): void {
 		this.phase = phase
 		this.anchorTs = anchorTs
 		this.seq = this.minter.nextSeq()
-		for (const listener of this.listeners) {
-			listener(phase, anchorTs)
+		for (const listener of [...this.listeners]) {
+			try {
+				listener(phase, anchorTs)
+			} catch {
+				// Observation must not veto the authoritative transition.
+				// Subsequent listeners still run; the phase mutation has
+				// already been committed to the snapshot.
+			}
 		}
 	}
 
@@ -53,6 +81,11 @@ export class TurnStateTracker {
 	 * TaskTelemetryTracker uses this hook to freeze the elapsed clock
 	 * on `error` / `resumable` / `completed` transitions without
 	 * sprinkling `endTask()` calls through SdkController.
+	 *
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION03: observer
+	 * isolation (see `set()` JSDoc). Throws from a listener are
+	 * swallowed — this seam is observation-only and must never
+	 * influence the authoritative task-control path.
 	 */
 	subscribe(listener: TurnPhaseListener): () => void {
 		this.listeners.push(listener)

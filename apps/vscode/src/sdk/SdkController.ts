@@ -349,8 +349,20 @@ export class Controller {
 		// exactly once on `error` / `resumable` / `completed`. This is
 		// the single canonical seam — sprinkling `endTask()` calls
 		// through SdkController risks forgetting one terminal path.
+		//
+		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION03:
+		// DEFENSE-IN-DEPTH observer wrap. TurnStateTracker.set()
+		// isolates listener throws internally (they cannot veto the
+		// authoritative phase transition), but we ALSO wrap this
+		// subscriber so any future bug in observeTurnPhase or any
+		// caller-side hook added here stays contained. Telemetry must
+		// remain removable without affecting task execution.
 		this.taskTelemetryPhaseUnsub = this.turnStateTracker.subscribe((phase, anchorTs) => {
-			this.taskTelemetry.observeTurnPhase(phase, anchorTs)
+			try {
+				this.taskTelemetry.observeTurnPhase(phase, anchorTs)
+			} catch (error) {
+				Logger.error("[SdkController] TaskTelemetryTracker.observer threw; isolated.", error)
+			}
 		})
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative task telemetry
 		// (elapsed / tool / recovery counters). Lives across the controller

@@ -61,10 +61,21 @@ export function formatElapsed(durationMs: number): string {
 /**
  * Resolve the elapsed duration to display, given the canonical
  * `startedAt` / `endedAt` from `TaskHeaderTelemetry`. While the task
- * is live, `now - startedAt` ticks; once `endedAt` is set (terminal
- * task — `error` / `resumable` / `completed`), the value freezes at
- * `endedAt - startedAt`. The freeze is permanent: a later remount of
- * the webview does NOT advance the displayed elapsed (see THA28).
+ * is live, `now - startedAt` ticks.
+ *
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
+ *
+ * `endedAt` freezes the CURRENT stopped interval; once the host
+ * clears `endedAt` for a same-task continuation (a user reply on a
+ * `completed` task, a resume on a `resumable` task, a retry after
+ * `error`), the clock resumes ticking. The display function below
+ * is intentionally stateless and trusts whatever the host projects —
+ * if `endedAt` is set, the value freezes at `endedAt - startedAt`;
+ * if `endedAt` is undefined, the value ticks forward.
+ *
+ * A later remount of the webview does NOT advance the displayed
+ * elapsed while `endedAt` is set (see THA28 — terminal remount does
+ * not advance).
  */
 export function resolveElapsedDisplayMs(startedAt: number, endedAt: number | undefined, now: number): number {
 	if (!Number.isFinite(startedAt)) {
