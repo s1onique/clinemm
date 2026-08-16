@@ -17,6 +17,7 @@ import type {
 	AgentRunResult,
 	AgentRuntimeEvent,
 	AgentRuntimeHooks,
+	AgentRuntimeRecoverySnapshot,
 	AgentRuntimeStateSnapshot,
 	AgentStopControl,
 	AgentTool,
@@ -55,10 +56,12 @@ import {
 	controlFamilyToDiagnosticId,
 	createAttemptIdentity,
 	createFamilyIdentity,
+	DEFAULT_RECOVERY_POLICY,
 	fingerprintToolFailure,
+	isSameRuntimeRecovery,
+	projectRuntimeRecovery,
 	RecoveryPolicy,
 	RecoveryTracker,
-	DEFAULT_RECOVERY_POLICY,
 	type RuntimeOutcomeEvidence,
 	selectControlPlaneOutcome,
 	serializeStableFailureCode,
@@ -624,8 +627,7 @@ export class AgentRuntime {
 	 * outcome is its decision". Used only by Trigger B's
 	 * follow-on `armed → terminating` check; never read elsewhere.
 	 */
-	private secondStageBeforeRecord: "idle" | "armed" | "terminating" =
-		"idle";
+	private secondStageBeforeRecord: "idle" | "armed" | "terminating" = "idle";
 	/**
 	 * C1.4 episode-level non-convergence counter. Counts
 	 * RECOVERABLE failures (`outcome.kind === "failure"`,
@@ -664,6 +666,27 @@ export class AgentRuntime {
 	 * `onToolRuntimeOutcome` hook.
 	 */
 	private readonly pendingBatchOutcomes: ToolRuntimeOutcome[] = [];
+
+	/**
+	 * C1.5 PARALLEL EVENT ATOMICITY GUARD.
+	 *
+	 * While a parallel tool batch is in flight, per-tool recovery
+	 * mutations are still provisional: `executeToolCalls` reconciles the
+	 * batch afterwards using the typed `pendingBatchOutcomes` authority
+	 * and may overturn them (e.g. a sibling success transiently resets
+	 * `armed → idle`, then batch reconciliation restores `terminating`).
+	 *
+	 * Emitting those intermediates would make the public event sequence
+	 * depend on `Promise.all` completion order — the exact
+	 * scheduler-dependent flicker C1.5 forbids. So emission is suspended
+	 * for the duration of the batch and exactly one canonical event is
+	 * emitted at the batch boundary, if the projection changed across it.
+	 *
+	 * Sequential execution never sets this: there is no batch to
+	 * reconcile, so each mutation is immediately final and is emitted
+	 * as it happens.
+	 */
+	private recoveryEmissionSuspended = false;
 
 	constructor(config: AgentRuntimeConfig) {
 		this.telemetryProviderId =
@@ -756,7 +779,16 @@ export class AgentRuntime {
 		this.resetRecoveryEpisode();
 	}
 
-	snapshot(): AgentRuntimeStateSnapshot {
+	/**
+	 * C1.5: the return type narrows `AgentRuntimeStateSnapshot.recovery`
+	 * to be REQUIRED. The shared interface leaves it optional only for
+	 * hand-built partial fixtures; a snapshot produced by a live runtime
+	 * always carries the canonical projection, and callers of this method
+	 * can rely on that without a null check.
+	 */
+	snapshot(): AgentRuntimeStateSnapshot & {
+		recovery: AgentRuntimeRecoverySnapshot;
+	} {
 		return {
 			agentId: this.state.agentId,
 			agentRole: this.state.agentRole,
@@ -770,7 +802,97 @@ export class AgentRuntime {
 			usage: cloneUsage(this.state.usage),
 			lastError: this.state.lastError,
 			lastErrorClass: this.state.lastErrorClass,
+			recovery: this.snapshotRecoveryState(),
 		};
+	}
+
+	/**
+	 * C1.5 THE canonical recovery projection function.
+	 *
+	 * Every externally-observable recovery value in the SDK flows through
+	 * this one method:
+	 *
+	 *   - `AgentRuntime.snapshot().recovery`
+	 *   - every `AgentRuntimeEvent`'s `snapshot.recovery` (because every
+	 *     variant embeds the snapshot produced by `snapshot()` above)
+	 *   - the `recovery-state-changed` payload
+	 *   - `__recoverySnapshotForTests()`
+	 *
+	 * Consequently `event.snapshot.recovery` and
+	 * `runtime.snapshot().recovery` cannot disagree: they are produced by
+	 * the same call on the same authorities. There is no cached copy and
+	 * no second projection path that could drift.
+	 *
+	 * Reads ONLY runtime-owned authorities. Never reads `messages`, tool
+	 * results, or any conversation-derived value.
+	 */
+	private snapshotRecoveryState(): AgentRuntimeRecoverySnapshot {
+		return projectRuntimeRecovery({
+			trackerSnapshot: this.recoveryTracker.snapshot(),
+			secondStage: this.recoverySecondStage,
+			episodeFailures: this.recoveryEpisodeFailures,
+			maxEpisodeFailures: this.recoveryPolicy.maxRecoveryEpisodeFailures,
+			circuitNoticeCount: this.recoveryCircuitNoticeCount,
+		});
+	}
+
+	/**
+	 * C1.5 SOLE OWNER of `recovery-state-changed` emission.
+	 *
+	 * Neither `RecoveryTracker` nor the C1.3/C1.4 helpers construct public
+	 * events; they mutate runtime-owned authorities and the runtime
+	 * decides — from the projection alone — whether an externally
+	 * meaningful change occurred.
+	 *
+	 * Usage contract:
+	 *
+	 *     const before = this.snapshotRecoveryState();
+	 *     ...authoritative mutation...
+	 *     await this.emitRecoveryStateChangeIfChanged(before);
+	 *
+	 * Dedup: no event when {@link isSameRuntimeRecovery} holds. This is
+	 * what suppresses the no-op `idle → idle` reset at the start of every
+	 * run, and what collapses several internal writes that produce one
+	 * externally identical projection.
+	 *
+	 * @param before projection captured BEFORE the mutation.
+	 */
+	private async emitRecoveryStateChangeIfChanged(
+		before: AgentRuntimeRecoverySnapshot,
+	): Promise<void> {
+		// Suppress scheduler-dependent intermediates: while a parallel
+		// batch is in flight, per-tool mutations may still be overturned
+		// by batch reconciliation. Public truth is emitted once, at the
+		// batch boundary, by `executeToolCalls`.
+		if (this.recoveryEmissionSuspended) {
+			return;
+		}
+		const after = this.snapshotRecoveryState();
+		if (isSameRuntimeRecovery(before, after)) {
+			return;
+		}
+		try {
+			await this.emit({
+				type: "recovery-state-changed",
+				snapshot: this.snapshot(),
+				previousRecovery: before,
+			});
+		} catch {
+			// C1.5 OBSERVATION MUST NOT BECOME CONTROL.
+			//
+			// `emit()` invokes listeners without individual guards, so a
+			// single throwing subscriber would otherwise (a) skip every
+			// later subscriber and (b) unwind the runtime's recovery
+			// path — letting a mere observer suppress the breaker or the
+			// terminal latch.
+			//
+			// This mirrors the precedent already set by the C1.0 tracker
+			// (`notifyWith` swallows callback errors "to keep recovery
+			// control flow alive"). The scope is deliberately narrow: only
+			// the recovery announcement is guarded. Every other event type
+			// retains its existing propagation semantics, so no C1.0–C1.4
+			// behavior changes.
+		}
 	}
 
 	private async ensureInitialized(): Promise<void> {
@@ -877,11 +999,18 @@ export class AgentRuntime {
 		// the new run (the latch would refuse the very first
 		// model.stream() call). The test
 		// `C14_NEXT_RUN_LIFECYCLE_RESET` pins this invariant.
+		// C1.5: capture the projection before the lifecycle reset so a
+		// meaningful reset (e.g. a previous run ended `terminating`)
+		// becomes observable. A no-op reset (already `idle`) produces an
+		// identical projection and is therefore suppressed by the dedup
+		// rule — no pointless `idle → idle` event on every run.
+		const recoveryBeforeReset = this.snapshotRecoveryState();
 		this.resetRecoveryEpisode();
 
 		try {
 			await this.callBeforeRunHooks();
 			await this.emit({ type: "run-started", snapshot: this.snapshot() });
+			await this.emitRecoveryStateChangeIfChanged(recoveryBeforeReset);
 
 			for (const message of input ? normalizeInput(input) : []) {
 				this.state.messages.push(message);
@@ -1896,39 +2025,61 @@ export class AgentRuntime {
 			// not the control plane — it is observer-only
 			// and never feeds aggregation.
 			const batchStartKind = this.recoverySecondStage.kind;
+			// C1.5: capture the canonical projection at the batch
+			// boundary and suspend per-tool emission for the duration of
+			// the batch. Per-tool mutations inside `Promise.all` are
+			// provisional — reconciliation below may overturn them — so
+			// emitting them would make the public event sequence depend
+			// on completion order.
+			const recoveryBatchBefore = this.snapshotRecoveryState();
+			this.recoveryEmissionSuspended = true;
 			// Reset the per-batch buffer at the start of
 			// each parallel invocation. The buffer is
 			// runtime-owned and never visible externally.
 			this.pendingBatchOutcomes.length = 0;
-			const results = await Promise.all(
-				prepared.map((execution) => this.executePreparedTool(execution)),
-			);
-			if (
-				batchStartKind === "armed" &&
-				this.recoverySecondStage.kind !== "terminating" &&
-				this.batchContainsTypedFailure(this.pendingBatchOutcomes)
-			) {
-				// The trigger may have been cleared by an
-				// earlier sibling success's applyPost (which
-				// transitions armed → idle and discards the
-				// trigger). The batch-level decision is
-				// dominant: we set the trigger to
-				// `episode_exhausted` because the underlying
-				// arming cause was an episode-level non-
-				// convergence. (Other triggers are possible
-				// but episode_exhausted is the most general
-				// one; the C14_REAL_PARALLEL_OK_FIRST test
-				// pins this choice.)
-				this.recoverySecondStage = {
-					kind: "terminating",
-					trigger: "episode_exhausted",
-				};
-				this.state.lastError = "bounded_recovery_exhausted";
+			let results: AgentMessage[];
+			try {
+				results = await Promise.all(
+					prepared.map((execution) => this.executePreparedTool(execution)),
+				);
+				if (
+					batchStartKind === "armed" &&
+					this.recoverySecondStage.kind !== "terminating" &&
+					this.batchContainsTypedFailure(this.pendingBatchOutcomes)
+				) {
+					// The trigger may have been cleared by an
+					// earlier sibling success's applyPost (which
+					// transitions armed → idle and discards the
+					// trigger). The batch-level decision is
+					// dominant: we set the trigger to
+					// `episode_exhausted` because the underlying
+					// arming cause was an episode-level non-
+					// convergence. (Other triggers are possible
+					// but episode_exhausted is the most general
+					// one; the C14_REAL_PARALLEL_OK_FIRST test
+					// pins this choice.)
+					this.recoverySecondStage = {
+						kind: "terminating",
+						trigger: "episode_exhausted",
+					};
+					this.state.lastError = "bounded_recovery_exhausted";
+				}
+			} finally {
+				// C1.5 / C1.6 residue: clear the private typed-outcome
+				// buffer and lift the emission guard even when a tool
+				// executor, hook, or abort throws out of the batch.
+				// Without this, a throwing batch would leave
+				// `recoveryEmissionSuspended === true` and silence every
+				// subsequent recovery event for the run, and would leak
+				// stale outcomes into the next batch's reconciliation.
+				this.pendingBatchOutcomes.length = 0;
+				this.recoveryEmissionSuspended = false;
 			}
-			// Clear the buffer again before returning, so a
-			// subsequent single-tool iteration cannot read
-			// stale outcomes from the prior parallel batch.
-			this.pendingBatchOutcomes.length = 0;
+			// C1.5 PARALLEL EVENT ATOMICITY: exactly one canonical
+			// recovery event for the whole batch, describing the
+			// reconciled batch-level truth. FAIL_FIRST and OK_FIRST
+			// therefore produce identical public sequences.
+			await this.emitRecoveryStateChangeIfChanged(recoveryBatchBefore);
 			return results;
 		}
 
@@ -2171,6 +2322,13 @@ export class AgentRuntime {
 		prepared: PreparedToolExecution,
 	): Promise<AgentMessage> {
 		const startedAt = new Date();
+		// C1.5: capture the canonical projection BEFORE any recovery
+		// authority can be mutated by this tool call. Both mutation
+		// sites in this method — the C1.3 pre-execution exact block and
+		// the C1.4 post-classification transitions — are covered by this
+		// single pre/post pair, which is what keeps `recovery-state-changed`
+		// to at most ONE event per tool call.
+		const recoveryBefore = this.snapshotRecoveryState();
 		await this.emit({
 			type: "tool-started",
 			snapshot: this.snapshot(),
@@ -2293,10 +2451,10 @@ export class AgentRuntime {
 			};
 		} else {
 			try {
-					// Set IMMEDIATELY before the executor call, even though the
-					// call has not yet returned. A throw is still "invoked".
-					toolExecutionInvoked = true;
-					const output = await prepared.tool.execute(prepared.input, {
+				// Set IMMEDIATELY before the executor call, even though the
+				// call has not yet returned. A throw is still "invoked".
+				toolExecutionInvoked = true;
+				const output = await prepared.tool.execute(prepared.input, {
 					sessionId: this.config.sessionId,
 					agentId: this.state.agentId,
 					conversationId: this.config.conversationId,
@@ -2317,30 +2475,30 @@ export class AgentRuntime {
 					},
 				});
 				result = { output };
-				} catch (error) {
-					thrownError = error;
-					// C1.2: if the runtime's abort signal fired, classify as
-					// runtime_aborted rather than as a generic executor
-					// error. AbortError is the standard JS-DOM signal
-					// rejection; AgentRuntimeAbortError is the runtime's
-					// own. Either is structural evidence of a runtime-level
-					// abort, not a tool failure.
-					if (
-						this.abortController?.signal.aborted === true ||
-						error instanceof AgentRuntimeAbortError ||
-						(error instanceof Error && error.name === "AbortError")
-					) {
-						runtimeControlPlaneOutcome = selectControlPlaneOutcome({
-							runtimeAborted: true,
-						});
-					}
-					result = {
-						output: {
-							error: error instanceof Error ? error.message : String(error),
-						},
-						isError: true,
-					};
+			} catch (error) {
+				thrownError = error;
+				// C1.2: if the runtime's abort signal fired, classify as
+				// runtime_aborted rather than as a generic executor
+				// error. AbortError is the standard JS-DOM signal
+				// rejection; AgentRuntimeAbortError is the runtime's
+				// own. Either is structural evidence of a runtime-level
+				// abort, not a tool failure.
+				if (
+					this.abortController?.signal.aborted === true ||
+					error instanceof AgentRuntimeAbortError ||
+					(error instanceof Error && error.name === "AbortError")
+				) {
+					runtimeControlPlaneOutcome = selectControlPlaneOutcome({
+						runtimeAborted: true,
+					});
 				}
+				result = {
+					output: {
+						error: error instanceof Error ? error.message : String(error),
+					},
+					isError: true,
+				};
+			}
 		}
 
 		const endedAt = new Date();
@@ -2435,6 +2593,14 @@ export class AgentRuntime {
 			attemptIdentity,
 			runtimeOutcome,
 		);
+		// C1.5 ORDERING: the authoritative recovery mutation is now
+		// complete, so the projection describes the state that governs
+		// the next control decision. Emit BEFORE the observation hook so
+		// a subscriber that reads `runtime.snapshot()` inside
+		// `onToolRuntimeOutcome` already sees the state the event
+		// announced. Suppressed (and deferred to the batch boundary)
+		// while a parallel batch is in flight.
+		await this.emitRecoveryStateChangeIfChanged(recoveryBefore);
 		// C1.2 observable seam: surface the production outcome through
 		// the `onToolRuntimeOutcome` hook. Read-only observation; the
 		// breaker decision has already been made at this point.
@@ -2486,7 +2652,10 @@ export class AgentRuntime {
 		// are NOT merged (preserves the C1.1 anti-false-merge
 		// guarantee).
 		const exactCount = this.exactOnlyBudget.get(attemptIdentity.controlKey);
-		if (exactCount !== undefined && exactCount > DEFAULT_RECOVERY_POLICY.maxRepairAttempts) {
+		if (
+			exactCount !== undefined &&
+			exactCount > DEFAULT_RECOVERY_POLICY.maxRepairAttempts
+		) {
 			return true;
 		}
 		return false;
@@ -2800,9 +2969,7 @@ export class AgentRuntime {
 	 * `RecoveryTracker.recordBlockedAttemptControl`. Local helper
 	 * to keep the runtime self-contained.
 	 */
-	private familyControlDiagnostic(family: {
-		controlFamily: string;
-	}): string {
+	private familyControlDiagnostic(family: { controlFamily: string }): string {
 		return controlFamilyToDiagnosticId(family.controlFamily);
 	}
 
@@ -2812,6 +2979,23 @@ export class AgentRuntime {
 	 * on circuit state (e.g. that user-rejection episodes never
 	 * open the circuit). Intentionally underscore-prefixed and
 	 * not part of the public SDK surface.
+	 */
+	/**
+	 * C1.3 internal test seam, C1.5-redirected.
+	 *
+	 * Now derived from {@link snapshotRecoveryState} — the SAME canonical
+	 * projection that feeds `snapshot().recovery` and every
+	 * `recovery-state-changed` payload. The accessor therefore cannot
+	 * develop richer or conflicting semantics than the public surface.
+	 *
+	 * `exactOnlyBudgetSize` is the one exception: it reads the PRIVATE
+	 * C1.3 budget map directly because existing C1.3/C1.4 tests assert on
+	 * it. It is deliberately NOT part of the public projection — its
+	 * cardinality would leak how many distinct canonical inputs the model
+	 * attempted, and no consumer needs it.
+	 *
+	 * Intentionally underscore-prefixed and not part of the public SDK
+	 * surface.
 	 */
 	__recoverySnapshotForTests(): {
 		state: import("./runtime/recovery").RecoveryState;
@@ -2828,14 +3012,19 @@ export class AgentRuntime {
 		episodeFailures: number;
 		maxRecoveryEpisodeFailures: number;
 	} {
+		const projection = this.snapshotRecoveryState();
 		return {
-			state: this.recoveryTracker.state,
-			circuitNoticeCount: this.recoveryCircuitNoticeCount,
+			state: projection.state,
+			circuitNoticeCount: projection.circuitNoticeCount,
 			exactOnlyBudgetSize: this.exactOnlyBudget.size,
-			secondStage: { ...this.recoverySecondStage },
-			episodeFailures: this.recoveryEpisodeFailures,
-			maxRecoveryEpisodeFailures:
-				this.recoveryPolicy.maxRecoveryEpisodeFailures,
+			secondStage: {
+				kind: projection.secondStage,
+				...(projection.secondStageTrigger !== undefined
+					? { trigger: projection.secondStageTrigger }
+					: {}),
+			},
+			episodeFailures: projection.episodeFailures,
+			maxRecoveryEpisodeFailures: projection.maxEpisodeFailures,
 		};
 	}
 

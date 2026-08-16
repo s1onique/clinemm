@@ -5,7 +5,10 @@
  *
  */
 
-import type { ToolRuntimeOutcome } from "./agents/recovery/types";
+import type {
+	AgentRuntimeRecoverySnapshot,
+	ToolRuntimeOutcome,
+} from "./agents/recovery/types";
 import type { ModelInfo } from "./llms/model-info";
 import type {
 	ToolApprovalRequest,
@@ -156,6 +159,29 @@ export interface AgentRuntimeStateSnapshot {
 	lastError?: string;
 	/** Classification of `lastError` when it came from a provider stream. */
 	lastErrorClass?: ProviderErrorClass;
+	/**
+	 * C1.5 CANONICAL RECOVERY TRUTH.
+	 *
+	 * The bounded-recovery projection that governs the runtime's NEXT
+	 * control decision. Because every `AgentRuntimeEvent` variant embeds
+	 * this same `AgentRuntimeStateSnapshot` — produced by the one
+	 * `AgentRuntime.snapshot()` call — the event payload and
+	 * `runtime.snapshot().recovery` are the SAME value by construction.
+	 * There is no second authority that could drift.
+	 *
+	 * Consumers MUST read recovery state from here, never by parsing
+	 * conversation history, tool-result prose, or approval UI state.
+	 *
+	 * OPTIONALITY: `AgentRuntime.snapshot()` ALWAYS populates this field,
+	 * so every snapshot and every event emitted by a real runtime carries
+	 * it (pinned by `C15_EVENT_EQUALS_SNAPSHOT`). The field is optional
+	 * only so that hand-built partial snapshots — test fixtures and
+	 * synthetic host stubs that predate C1.5 — remain valid without
+	 * rewriting dozens of unrelated literals. Treat a missing value as
+	 * "this snapshot did not come from a runtime", never as "recovery is
+	 * idle".
+	 */
+	recovery?: AgentRuntimeRecoverySnapshot;
 }
 
 // =============================================================================
@@ -651,6 +677,32 @@ export type AgentRuntimeEvent =
 			error: Error;
 			/** Classification of the provider error that failed the run. */
 			errorClass?: ProviderErrorClass;
+	  }
+	/**
+	 * C1.5 canonical recovery state change.
+	 *
+	 * Emitted when the externally-observable recovery projection changes.
+	 * The authoritative payload is `snapshot.recovery` (identical to
+	 * `runtime.snapshot().recovery` at emission time, by construction —
+	 * both come from the same `snapshot()` call). `previousRecovery` is
+	 * supplied for convenience so a consumer can render a transition
+	 * without retaining its own copy of prior state; it is NEVER the
+	 * source of truth.
+	 *
+	 * Ordering guarantees:
+	 *   - Emitted AFTER the authoritative recovery mutation, so the
+	 *     payload always describes the state that governs the next
+	 *     control decision.
+	 *   - For the terminal latch, emitted BEFORE the run's terminal
+	 *     event, so a consumer never sees "aborted" before learning why.
+	 *   - For parallel tool batches, emitted at the BATCH BOUNDARY only;
+	 *     scheduler-dependent per-tool intermediates are suppressed.
+	 */
+	| {
+			type: "recovery-state-changed";
+			snapshot: AgentRuntimeStateSnapshot;
+			/** Projection immediately before the authoritative mutation. */
+			previousRecovery: AgentRuntimeRecoverySnapshot;
 	  };
 
 // =============================================================================

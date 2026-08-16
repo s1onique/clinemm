@@ -256,6 +256,28 @@ export class RuntimeEventAdapter {
 						iteration: event.snapshot.iteration,
 					},
 				];
+			case "recovery-state-changed":
+				// C1.5: no legacy `AgentEvent` translation.
+				//
+				// The legacy event stream is the CHAT/UI projection, and
+				// C1.5 explicitly stops before UI. Manufacturing a
+				// `notice` here would push recovery prose into the
+				// conversation and invite consumers to re-derive state by
+				// parsing it — precisely the anti-pattern this stage
+				// forbids.
+				//
+				// Recovery truth remains fully available to core
+				// consumers through the canonical runtime surfaces:
+				// `AgentRuntimeEvent` (subscribe) and
+				// `AgentRuntime.snapshot().recovery`. Note that every
+				// legacy-translated event already carries the current
+				// projection on `event.snapshot.recovery`, so no
+				// information is lost by returning nothing here.
+				//
+				// This case is explicit rather than folded into a
+				// `default`, so the `never` check below keeps mapping
+				// future event-union additions.
+				return [];
 			default: {
 				const _exhaustive: never = event;
 				return _exhaustive;

@@ -14,9 +14,12 @@
  */
 
 export type {
+	AgentRuntimeRecoverySnapshot,
 	ControlPlaneOutcome,
 	RecoveryClassification,
 	RecoveryExhaustedDetails,
+	RecoverySecondStage,
+	RecoverySecondStageTrigger,
 	RecoverySnapshot,
 	RecoveryState,
 	RecoveryStateChangeEvent,
@@ -62,4 +65,9 @@ export {
 	type RuntimeOutcomeEvidence,
 	selectControlPlaneOutcome,
 } from "./runtime-outcome-adapter";
+export {
+	isSameRuntimeRecovery,
+	projectRuntimeRecovery,
+	type RuntimeRecoveryProjectionInput,
+} from "./runtime-recovery-projection";
 export { RecoveryTracker } from "./tracker";
