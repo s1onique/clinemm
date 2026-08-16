@@ -34,6 +34,7 @@ import {
 	type AgentRuntimeEvent,
 	type AgentRuntimeHooks,
 	type AgentRuntimePrepareTurnContext,
+	type AgentRuntimeRecoverySnapshot,
 	type AgentTool,
 	type BasicLogger,
 	type ContributionRegistry,
@@ -335,6 +336,19 @@ export class SessionRuntime {
 	>;
 	private extensionsInitialized = false;
 	private readonly listeners = new Set<SessionEventListener>();
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: host-side observers that want
+	 * the canonical recovery projection on every externally-meaningful
+	 * transition. The host-only `TaskTelemetryTracker` subscribes here to
+	 * drive the Task Header's cumulative recovery counter; the runtime's
+	 * recovery-policy path never reads this stream (observation is not
+	 * control — see bounded-recovery's C1.5 discipline).
+	 *
+	 * `runtime-state-changed` events with `event.snapshot.recovery` are
+	 * forwarded here verbatim. The orchestrator does NOT mutate them;
+	 * subscribers receive a frozen snapshot.
+	 */
+	private readonly recoveryListeners = new Set<(sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void>();
 	private readonly createAgentRuntimeImpl: (
 		config: Parameters<typeof createAgentRuntime>[0],
 	) => AgentRuntime;
@@ -578,6 +592,28 @@ export class SessionRuntime {
 		this.listeners.add(listener);
 		return () => {
 			this.listeners.delete(listener);
+		};
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: subscribe to canonical
+	 * recovery-state transitions. The runtime emits a single
+	 * `recovery-state-changed` event per externally-meaningful change,
+	 * with the canonical `AgentRuntimeRecoverySnapshot` projected onto
+	 * `event.snapshot.recovery`. The session runtime forwards that
+	 * projection to every registered listener.
+	 *
+	 * This is a **side-channel** for host-side telemetry consumers
+	 * only. The runtime's recovery-policy path does NOT read this
+	 * stream (observation is not control). Subscribers MUST NOT
+	 * influence recovery behavior; they may only mirror state.
+	 *
+	 * Returns an unsubscribe function.
+	 */
+	subscribeRecoveryStateChange(listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void): () => void {
+		this.recoveryListeners.add(listener);
+		return () => {
+			this.recoveryListeners.delete(listener);
 		};
 	}
 
@@ -1211,6 +1247,26 @@ export class SessionRuntime {
 			}
 			default:
 				break;
+		}
+		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: forward
+		// `recovery-state-changed` to the host-side telemetry listeners.
+		// The runtime's own policy path does NOT consume this stream; the
+		// dispatch is observation-only and feeds the TaskHeader's
+		// cumulative recovery counter via the host-owned
+		// `TaskTelemetryTracker`.
+		if (event.type === "recovery-state-changed" && event.snapshot.recovery) {
+			const recovery = event.snapshot.recovery
+			const sessionId = this.config.sessionId ?? ""
+			for (const listener of this.recoveryListeners) {
+				try {
+					listener(sessionId, recovery)
+				} catch (error) {
+					this.logger?.error?.("SessionRuntime recovery listener threw", {
+						agentId: this.agentId,
+						error,
+					})
+				}
+			}
 		}
 		for (const legacy of this.eventAdapter.translate(event)) {
 			this.emitLegacyEvent(legacy);

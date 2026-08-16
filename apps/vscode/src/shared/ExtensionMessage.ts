@@ -104,6 +104,20 @@ export interface ExtensionState {
 	 */
 	turnState?: TurnState
 	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative runtime-derived task
+	 * metrics, owned by the host-side {@link TaskTelemetryTracker} and surfaced
+	 * to the Task Header as a read-only projection.
+	 *
+	 * Intentionally NOT a context/token/compaction surface — that accounting
+	 * stays isolated in `CONTEXT-ACCOUNTING-TRUTH01`. The webview renders
+	 * "—" for the strip when this field is undefined (no canonical authority
+	 * on the wire) rather than reconstructing telemetry from message prose.
+	 *
+	 * Lifetime: bound to a single task identity. Reset on new task. Cumulative
+	 * across the visible task's multiple turns/follow-ups.
+	 */
+	taskTelemetry?: TaskHeaderTelemetryStrip
+	/**
 	 * Follow-up prompts submitted while the active agent turn is still running.
 	 * These are owned by the SDK pending-prompt queue and are sent after the
 	 * current turn reaches a safe continuation point.
@@ -207,6 +221,43 @@ export interface TurnState {
 	anchorTs?: number
 	/** Monotonic; the webview keeps the highest-seq TurnState and ignores older ones. */
 	seq: number
+}
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative runtime-derived task
+ * metrics, owned by the host-side `TaskTelemetryTracker`.
+ *
+ * Fields:
+ * - `startedAt`  — wall-clock ms epoch when the visible task was created.
+ *                  Persisted in the `HistoryItem.ts` slot so a remount or
+ *                  webview reconnect resumes the same elapsed timeline.
+ * - `endedAt`    — wall-clock ms epoch when the visible task reached a
+ *                  terminal phase (`error` / `resumable` / `completed` /
+ *                  `awaiting_followup`); undefined while the task is live.
+ *                  The TaskHeader freezes its display at `endedAt` instead
+ *                  of continuing to grow after the task is over.
+ * - `toolCalls`  — number of canonical `tool-started` runtime events
+ *                  observed for this task. Each invocation is counted
+ *                  exactly once, including failed executions and parallel
+ *                  siblings. Control-plane DENY/REJECT/UNKNOWN_TOOL do
+ *                  not increment (the executor never ran).
+ * - `recoveryInterventions` — cumulative positive deltas of the
+ *                  `RecoverySnapshot.tracker.currentRepairAttempts`,
+ *                  `episodeFailures`, and `circuitNoticeCount`
+ *                  projections observed for this task, with a per-counter
+ *                  monotone clamp. This counts runtime-driven recovery
+ *                  transitions, never control-plane outcomes.
+ *
+ * The transport is intentionally minimal: NO state label (use
+ * `turnState.phase`), NO context/token/cost fields (out of scope for
+ * 01-A), NO `messages`-derived values. The webview renders "—" when
+ * this projection is absent.
+ */
+export interface TaskHeaderTelemetryStrip {
+	startedAt: number
+	endedAt?: number
+	toolCalls: number
+	recoveryInterventions: number
 }
 
 export interface QueuedPrompt {

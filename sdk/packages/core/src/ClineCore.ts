@@ -1,4 +1,4 @@
-import type { BasicLogger, ITelemetryService } from "@cline/shared";
+import type { AgentRuntimeRecoverySnapshot, BasicLogger, ITelemetryService } from "@cline/shared";
 import {
 	ClineCoreAutomationController,
 	createClineCoreAutomationExtensionContext,
@@ -638,6 +638,21 @@ export class ClineCore {
 		options?: RuntimeHostSubscribeOptions,
 	): () => void {
 		return this.host.subscribe(listener, options);
+	}
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: subscribe to canonical
+	 * recovery-state transitions for the active session. Returns a no-op
+	 * unsubscribe if the underlying host does not implement this hook
+	 * (legacy / hub modes without recovery-projection support). Callers
+	 * MUST treat the returned unsubscribe as idempotent.
+	 */
+	subscribeRecoveryStateChange(
+		listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void,
+	): () => void {
+		if (!this.host.subscribeRecoveryStateChange) {
+			return () => {}
+		}
+		return this.host.subscribeRecoveryStateChange(listener)
 	}
 	/**
 	 * Updates the AI model used by an active session.

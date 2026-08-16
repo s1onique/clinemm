@@ -116,6 +116,7 @@ import {
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
+import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
 import { TurnStateTracker } from "./turn-state-tracker"
 import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
@@ -197,6 +198,11 @@ export class Controller {
 	private taskControl: SdkTaskControlCoordinator
 	private taskStart: SdkTaskStartCoordinator
 	private compaction: SdkCompactionCoordinator
+	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: host-owned task telemetry
+	// accumulator (elapsed / tool / recovery counters). Survives webview
+	// remount; resets only on a NEW task identity.
+	private taskTelemetry: TaskTelemetryTracker
+	private taskTelemetryRecoveryUnsub: (() => void) | undefined
 	// ACT-CLINEMM-SESSION-AUTONOMY01:
 	// Single owner of the active-session auto-approval override ("none" | "all").
 	// NOT persisted; cleared by the task-clear choke-point (and by new-task init).
@@ -335,6 +341,10 @@ export class Controller {
 		void this.getWorkspaceRoot()
 		// Authoritative UI-mode tracker, sharing the one id/seq/epoch authority.
 		this.turnStateTracker = new TurnStateTracker(this.messageTranslatorState.getMinter())
+		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative task telemetry
+		// (elapsed / tool / recovery counters). Lives across the controller
+		// lifetime so webview reconnect / React remount does not reset.
+		this.taskTelemetry = new TaskTelemetryTracker()
 		this.messages = new SdkMessageCoordinator({
 			getTask: () => this.task,
 			// Stamp seq/epoch on every message flowing to the webview from the shared authority.
@@ -476,6 +486,15 @@ export class Controller {
 				this.sessionEvents.handleSessionEvent(event).catch((err) => {
 					Logger.error("[SdkController] Failed to handle session event:", err)
 				})
+			},
+			// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: feed canonical
+			// `tool-started` events (post chat-translation: `content_start(tool)`)
+			// into the cumulative tool-call counter. The runtime emits one
+			// `tool-started` per tool invocation that reached the executor;
+			// control-plane DENY/REJECT/UNKNOWN_TOOL never emit this event,
+			// so the counter naturally excludes them.
+			onToolStarted: () => {
+				this.taskTelemetry.recordToolStarted()
 			},
 			onDidBecomeIdle: () => this.handleSessionBecameIdle(),
 			getRemoteConfigIntegration: () => this.remoteConfigCoreIntegration,
@@ -1375,7 +1394,53 @@ export class Controller {
 		this.turnStateTracker.set("streaming")
 		// Clear the previous turn's completion signal so this turn's phase is computed fresh.
 		this.messageTranslatorState.clearTurnOutcome()
-		return this.taskStart.initTask(prompt, images, files, historyItem, taskSettings)
+		const sessionId = await this.taskStart.initTask(prompt, images, files, historyItem, taskSettings)
+		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: start (or re-start) the
+		// host-owned task-telemetry window for the new task identity, and
+		// (re-)subscribe to canonical recovery-state transitions for the
+		// newly-active session.
+		if (sessionId) {
+			// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: stamp the new task's
+			// start epoch from the canonical `HistoryItem.ts` slot written
+			// by `createHistoryItemFromSession` (also the persisted
+			// wall-clock that survives resume). Falls back to `Date.now()`
+			// if the history item is not yet present (the very first frame
+			// before the history write completes).
+			const historyItem = this.stateManager.getGlobalStateKey("taskHistory")?.find((item) => item.id === sessionId)
+			const persistedTs = historyItem?.ts
+			this.taskTelemetry.startTask(
+				sessionId,
+				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
+			)
+			this.attachRecoveryTelemetrySubscription(sessionId)
+		}
+		return sessionId
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: subscribe to canonical
+	 * recovery-state transitions for the active session and feed them
+	 * into the `TaskTelemetryTracker`. Idempotent: re-calling detaches
+	 * the previous subscription before attaching a new one (covers the
+	 * new-task case where `initTask` is invoked again).
+	 *
+	 * Observation-only: nothing on the recovery-policy path reads from
+	 * the telemetry counter.
+	 */
+	private attachRecoveryTelemetrySubscription(sessionId: string): void {
+		this.taskTelemetryRecoveryUnsub?.()
+		this.taskTelemetryRecoveryUnsub = undefined
+		const sdkHost = this.sessions.getActiveSession()?.sdkHost
+		if (!sdkHost?.subscribeRecoveryStateChange) {
+			return
+		}
+		this.taskTelemetryRecoveryUnsub = sdkHost.subscribeRecoveryStateChange((evtSessionId, recovery) => {
+			if (evtSessionId && evtSessionId !== sessionId) {
+				// Stale session — ignore.
+				return
+			}
+			this.taskTelemetry.observeRecovery(recovery)
+		})
 	}
 
 	async reinitExistingTaskFromId(taskId: string): Promise<void> {
@@ -1396,6 +1461,10 @@ export class Controller {
 		// Cancellation of the current task means "stop this one", not "abort my
 		// plans for the next one".
 		this.sessionAutoApproval.clearActiveOverride()
+		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: freeze the elapsed clock at
+		// the moment of cancellation so the header shows the task duration
+		// at interruption, not a perpetually-ticking value.
+		this.taskTelemetry.endTask()
 		await this.taskControl.cancelTask()
 	}
 
@@ -2315,6 +2384,12 @@ export class Controller {
 					: undefined,
 				taskHistory: processedTaskHistory,
 				turnState: this.turnStateTracker.get(),
+				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: project the host-owned
+				// task telemetry (elapsed / toolCalls / recoveryInterventions)
+				// to the webview. When the tracker has no active task, the
+				// field is undefined and the TaskHeader renders em-dash rather
+				// than fabricating values from chat prose.
+				taskTelemetry: this.taskTelemetry.get(),
 				queuedPrompts,
 				stateVersion: minter.nextSeq(),
 				epoch: minter.epoch,

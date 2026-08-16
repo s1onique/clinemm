@@ -34,6 +34,14 @@ export interface SdkSessionLifecycleOptions {
 	/** Custom `read_files` executor (resolves relative paths against the workspace root). */
 	readFileExecutor?: ReadFileExecutorHandler
 	onSessionEvent: (event: CoreSessionEvent) => void
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: per-tool-start hook. Fires
+	 * exactly once per canonical `tool-started` runtime event (post
+	 * chat-translation: `content_start(tool)`). Receives the SDK
+	 * `AgentContentStartEvent` for the tool. NOT called for tool
+	 * updates (`content_update`) or finishes (`content_end`).
+	 */
+	onToolStarted?: (event: import("@cline/shared").AgentContentStartEvent) => void
 	/** Lazy factory for the VscodeTerminalManager (foreground terminal support). */
 	getTerminalManager?: () => VscodeTerminalManager
 	/** Registry of in-flight foreground executions for "Proceed While Running". */
@@ -297,7 +305,20 @@ export class SdkSessionLifecycle {
 		if (this.sharedHostUnsubscribe) {
 			return
 		}
-		this.sharedHostUnsubscribe = this.createSafeUnsubscribe(sdkHost.subscribe(this.options.onSessionEvent), "shared-host")
+		const userHandler = this.options.onSessionEvent
+		const toolHandler = this.options.onToolStarted
+		const handler = toolHandler
+			? (event: CoreSessionEvent) => {
+					userHandler(event)
+					if (event.type === "agent_event") {
+						const agentEvent = event.payload.event
+						if (agentEvent.type === "content_start" && agentEvent.contentType === "tool") {
+							toolHandler(agentEvent as import("@cline/shared").AgentContentStartEvent)
+						}
+					}
+				}
+			: userHandler
+		this.sharedHostUnsubscribe = this.createSafeUnsubscribe(sdkHost.subscribe(handler), "shared-host")
 	}
 
 	/**

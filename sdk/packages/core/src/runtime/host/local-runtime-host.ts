@@ -6,6 +6,7 @@ import {
 	type AgentConfig,
 	type AgentEvent,
 	type AgentResult,
+	type AgentRuntimeRecoverySnapshot,
 	type BasicLogger,
 	captureSdkError,
 	createSessionId,
@@ -1464,6 +1465,36 @@ export class LocalRuntimeHost implements RuntimeHost {
 		options?: RuntimeHostSubscribeOptions,
 	): () => void {
 		return this.events.subscribe(listener, options);
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: fan out recovery-state
+	 * transitions from every active session to the listener. Each
+	 * session's `SessionRuntime.subscribeRecoveryStateChange` is the
+	 * underlying seam — listeners can identify the originating session
+	 * via the `sessionId` argument.
+	 *
+	 * Note: this returns a point-in-time fan-out of currently-active
+	 * sessions. The host (SdkController) re-subscribes whenever a new
+	 * task starts, so per-task recovery tracking stays correct without
+	 * a permanent listener registry here.
+	 */
+	subscribeRecoveryStateChange(
+		listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void,
+	): () => void {
+		const unsubscribers: Array<() => void> = []
+		for (const active of this.sessions.values()) {
+			unsubscribers.push(active.agent.subscribeRecoveryStateChange(listener))
+		}
+		return () => {
+			for (const unsub of unsubscribers) {
+				try {
+					unsub()
+				} catch {
+					// defensive: subscriber already detached
+				}
+			}
+		}
 	}
 
 	async updateSessionModel(sessionId: string, modelId: string): Promise<void> {

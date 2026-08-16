@@ -20,7 +20,7 @@ import type {
 	StartSessionInput,
 	StartSessionResult,
 } from "@cline/core"
-import type { AgentResult } from "@cline/shared"
+import type { AgentResult, AgentRuntimeRecoverySnapshot } from "@cline/shared"
 
 export interface SdkSessionHost {
 	readonly runtimeAddress: string | undefined
@@ -59,6 +59,18 @@ export interface SdkSessionHost {
 	pendingPrompts(action: "update", input: PendingPromptsUpdateInput): Promise<PendingPromptMutationResult>
 	pendingPrompts(action: "delete", input: PendingPromptsDeleteInput): Promise<PendingPromptMutationResult>
 	subscribe(listener: (event: CoreSessionEvent) => void): () => void
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: subscribe to canonical recovery
+	 * state transitions for the current task. The listener receives
+	 * `(sessionId, recovery)` once per externally-meaningful change. The
+	 * host uses this to feed the cumulative `recoveryInterventions` counter
+	 * exposed on the TaskHeader — it is an OBSERVER-ONLY stream; nothing
+	 * on the recovery-policy or runtime-control path reads from it.
+	 *
+	 * Optional. Implementations that don't ship recovery projections (e.g.
+	 * the standalone core for legacy host bridges) may omit this method.
+	 */
+	subscribeRecoveryStateChange?(listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void): () => void
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
 }
 

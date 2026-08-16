@@ -2,6 +2,7 @@ import type * as LlmsProviders from "@cline/llms";
 import type {
 	AgentMode,
 	AgentResult,
+	AgentRuntimeRecoverySnapshot,
 	RuntimeConfigExtensionKind,
 } from "@cline/shared";
 import type { HookEventPayload } from "../../hooks";
@@ -401,6 +402,20 @@ export interface RuntimeHost {
 	subscribe(
 		listener: (event: CoreSessionEvent) => void,
 		options?: RuntimeHostSubscribeOptions,
+	): () => void;
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: subscribe to canonical
+	 * recovery-state transitions for a session. Implementations forward
+	 * each `recovery-state-changed` runtime event to the listener with
+	 * the projected `AgentRuntimeRecoverySnapshot`. The sessionId
+	 * parameter lets hosts ignore events from stale sessions.
+	 *
+	 * Optional. Hosts without recovery-projection support (legacy host
+	 * bridges) may omit this method. Listeners are observation-only:
+	 * nothing on the recovery-policy path reads back from them.
+	 */
+	subscribeRecoveryStateChange?(
+		listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void,
 	): () => void;
 }
 

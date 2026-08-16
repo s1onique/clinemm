@@ -32,7 +32,13 @@ import {
 	type StartSessionResult,
 	type ToolExecutors,
 } from "@cline/core"
-import { type AgentToolContext, type ToolApprovalRequest, type ToolApprovalResult, type ToolPolicy } from "@cline/shared"
+import {
+	type AgentRuntimeRecoverySnapshot,
+	type AgentToolContext,
+	type ToolApprovalRequest,
+	type ToolApprovalResult,
+	type ToolPolicy,
+} from "@cline/shared"
 import { StateManager } from "@/core/storage/StateManager"
 import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import { getDistinctId } from "@/services/logging/distinctId"
@@ -304,5 +310,23 @@ export class VscodeSessionHost implements SdkSessionHost {
 
 	subscribe(listener: (event: CoreSessionEvent) => void): () => void {
 		return this.inner.subscribe(listener)
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: forward canonical
+	 * recovery-state transitions to host-side telemetry consumers (the
+	 * `TaskTelemetryTracker`). Observation-only: nothing on the
+	 * recovery-policy path reads this stream.
+	 */
+	subscribeRecoveryStateChange(listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void): () => void {
+		const inner = this.inner as ClineCore & {
+			subscribeRecoveryStateChange?: (
+				listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void,
+			) => () => void
+		}
+		if (!inner.subscribeRecoveryStateChange) {
+			return () => {}
+		}
+		return inner.subscribeRecoveryStateChange(listener)
 	}
 }
