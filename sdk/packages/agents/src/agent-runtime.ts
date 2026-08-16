@@ -52,6 +52,7 @@ import { nanoid } from "nanoid";
 import {
 	buildToolOutcomeClassificationInput,
 	classifyToolRuntimeOutcome,
+	controlFamilyToDiagnosticId,
 	createAttemptIdentity,
 	createFamilyIdentity,
 	fingerprintToolFailure,
@@ -512,9 +513,14 @@ export class AgentRuntime {
 	 * never UI-owned. C1.3 only adds the pre-execution exact-block
 	 * wire-up; second-stage model-loop termination is deferred to C1.4.
 	 */
-	private readonly recoveryTracker = new RecoveryTracker(
+	private recoveryTracker = new RecoveryTracker(
 		new RecoveryPolicy(DEFAULT_RECOVERY_POLICY),
 	);
+
+	/** C1.4: construct a fresh per-run `RecoveryTracker`. */
+	private createRecoveryTracker(): RecoveryTracker {
+		return new RecoveryTracker(new RecoveryPolicy(DEFAULT_RECOVERY_POLICY));
+	}
 	/**
 	 * C1.3 exact-only accounting for `familyEligible=false` failures.
 	 * The shared `RecoveryTracker` must not collapse opaque failures
@@ -529,6 +535,62 @@ export class AgentRuntime {
 	 */
 	private readonly exactOnlyBudget = new Map<string, number>();
 	private recoveryCircuitNoticeCount = 0;
+	/**
+	 * C1.4 second-stage continuation state. Private, runtime-owned,
+	 * per-run/per-episode; reset to `idle` when the run starts and
+	 * when `restore()` resets the runtime state. Acts as the
+	 * load-bearing terminal latch that bounds provider requests
+	 * after non-convergence: it does NOT accumulate across runs,
+	 * it does NOT live in `messages`, it is NEVER surfaced through
+	 * user-visible code paths.
+	 *
+	 * Lifecycle:
+	 *   - `idle`         — no recovery pressure observed since the
+	 *                      last successful material progression.
+	 *   - `armed`        — non-convergence proof has fired. The
+	 *                      runtime may issue EXACTLY ONE further
+	 *                      `model.stream(...)` request as the
+	 *                      model's bounded continuation
+	 *                      opportunity. While `armed`, the model
+	 *                      can either materially recover or fail
+	 *                      again; either outcome advances us to
+	 *                      `terminating` (and the latch prevents
+	 *                      any additional provider request).
+	 *   - `terminating`  — latch-set. Any subsequent attempt to
+	 *                      enter `streamRequest` raises a typed
+	 *                      `ControlledStopError("bounded_recovery_exhausted")`,
+	 *                      which the loop's existing error sink
+	 *                      maps truthfully to `AgentRunResult.status
+	 *                      === "aborted"` with `lastError` set
+	 *                      and a typed `result.error` field.
+	 *
+	 * Triggers (idempotent):
+	 *   - Trigger A (exact block): `isAttemptBlockedByRecovery`
+	 *     returns true in `executePreparedTool`.
+	 *   - Trigger B (family exhaustion without exact repeat):
+	 *     the family just classified appears in
+	 *     `recoveryTracker.getBlockedFamilies()` after
+	 *     `recordFailureIdentity`.
+	 *   - Trigger C (opaque exact-only cap): an opaque failure
+	 *     increments `exactOnlyBudget[controlKey]` past the
+	 *     policy cap (set after the failed increment that
+	 *     exceeds the budget).
+	 */
+	private recoverySecondStage: {
+		kind: "idle" | "armed" | "terminating";
+		trigger?: "exact_blocked" | "family_exhausted" | "exact_only_capped";
+	} = { kind: "idle" };
+	/**
+	 * C1.4 snapshot of `recoverySecondStage.kind` taken BEFORE
+	 * the per-execution `applyRecoveryPostClassification` work
+	 * mutates it. Lets the post-record failure branch distinguish
+	 * "this turn just armed the latch" (Trigger B/C just fired)
+	 * from "the continuation was already armed and this turn's
+	 * outcome is its decision". Used only by Trigger B's
+	 * follow-on `armed → terminating` check; never read elsewhere.
+	 */
+	private secondStageBeforeRecord: "idle" | "armed" | "terminating" =
+		"idle";
 
 	constructor(config: AgentRuntimeConfig) {
 		this.telemetryProviderId =
@@ -607,6 +669,21 @@ export class AgentRuntime {
 			...this.config,
 			initialMessages: cloneMessages(messages),
 		};
+		// C1.4: reset recovery bookkeeping that is scoped to a single
+		// run. The SDK contract for `restore()` explicitly preserves
+		// `tools / hooks / plugins / model / subscribers`, but per-
+		// episode state — the runtime-owned exact-only budget map
+		// and the second-stage continuation latch — must be cleared
+		// here. Otherwise a restored run inherits an unbounded
+		// `exactOnlyBudget` and a possibly-set terminal latch from
+		// the previous run, both of which would corrupt the
+		// recovery invariants. We also re-create the recoveryTracker
+		// so a restored run starts from a fresh episode rather than
+		// continuing the previous one's family state.
+		this.exactOnlyBudget.clear();
+		this.recoveryCircuitNoticeCount = 0;
+		this.recoverySecondStage = { kind: "idle" };
+		this.recoveryTracker = this.createRecoveryTracker();
 	}
 
 	snapshot(): AgentRuntimeStateSnapshot {
@@ -891,7 +968,35 @@ export class AgentRuntime {
 				outputText: textFromMessage(lastAssistantMessage),
 				messages: cloneMessages(this.state.messages),
 				usage: cloneUsage(this.state.usage),
-				error: status === "failed" ? normalized : undefined,
+				// C1.4: populate `result.error` for both
+				// `failed` AND for the C1.4 abort path so callers
+				// can distinguish a runtime-exhaustion stop
+				// (ControlledStopError with reason
+				// `bounded_recovery_exhausted`) from a true
+				// runtime failure AND from a user-controlled
+				// abort (e.g., from beforeRun/beforeModel
+				// hooks via `stop: true`). Without this, the
+				// public `AgentRunResult.error` would lose the
+				// truthful reason that the model-stream
+				// terminal latch synthesises.
+				//
+				// The existing C1.2 contract — that user-
+				// initiated aborts (beforeRun/beforeModel)
+				// produce `result.error === undefined` — is
+				// preserved by distinguishing on the
+				// ControlledStopError reason: only the
+				// C1.4-latch synthesised `bounded_recovery_exhausted`
+				// is surfaced as `error` here. User-initiated
+				// ControlledStopErrors (with arbitrary
+				// reason) keep the pre-C1.4 contract of
+				// `error: undefined` on `aborted`.
+				error:
+					normalized instanceof ControlledStopError &&
+					normalized.message === "bounded_recovery_exhausted"
+						? normalized
+						: status === "failed"
+							? normalized
+							: undefined,
 			};
 			this.config.logger?.log?.("Agent loop caught error", {
 				severity: status === "failed" ? "error" : "warn",
@@ -1379,6 +1484,47 @@ export class AgentRuntime {
 		request: AgentModelRequest,
 		getTaskLifecycleDurationMs: () => number | undefined,
 	): AsyncIterable<AgentModelEvent> {
+		// C1.4 MODEL-STREAM TERMINAL LATCH. The second-stage
+		// continuation state machine is consulted IMMEDIATELY
+		// before `model.stream(...)` is invoked. After the bounded
+		// continuation opportunity has been used (state ===
+		// "terminating"), the model-stream seam becomes a no-op
+		// that throws the same ControlledStopError the abort path
+		// uses. Truthfully reuse the existing abort-style
+		// termination: the outer loop's catch maps
+		// `ControlledStopError` to `state.status = "aborted"` with
+		// `lastError` and `result.error` populated for downstream
+		// observation. C1.5 may later widen the public surface if
+		// telemetry differentiation between user-aborted and
+		// recovery-exhausted becomes necessary; the C1.4 first
+		// version reuses the existing truthful outcome.
+		//
+		// Critical: the latch transitions from `armed` to
+		// `terminating` are decided INSIDE
+		// `applyRecoveryPostClassification`, NOT here at stream
+		// entry. The post-arm model request MUST be allowed to
+		// issue (it is the model's bounded continuation). Only
+		// AFTER its tool-call outcome is classified does the
+		// runtime decide whether the continuation was a
+		// meaningful recovery (success ⇒ reset to `idle`) or a
+		// non-convergent attempt (failure / pre-exec block ⇒
+		// `terminating`). Flipping the latch at stream entry
+		// would consume the continuation slot on a pre-exec block
+		// before the model could even propose a recovery — which
+		// is exactly the wrong direction.
+		if (this.recoverySecondStage.kind === "terminating") {
+			throw new ControlledStopError("bounded_recovery_exhausted");
+		}
+		// Surface the typed reason in `state.lastError` so any
+		// downstream observer of the snapshot — including the
+		// events emitted before this stream is opened — can see
+		// that the runtime is in the "armed" C1.4 latch state.
+		// The final `terminating` transition is performed by
+		// `applyRecoveryPostClassification` for non-success
+		// outcomes observed during the continuation turn.
+		if (this.recoverySecondStage.kind === "armed") {
+			this.state.lastError = "bounded_recovery_exhausted";
+		}
 		let stream: AsyncIterable<AgentModelEvent>;
 		let phase = "provider_request_started";
 		try {
@@ -1910,6 +2056,21 @@ export class AgentRuntime {
 			if (this.recoveryCircuitNoticeCount === 0) {
 				this.recoveryCircuitNoticeCount = 1;
 			}
+			// C1.4 Trigger A — exact pre-execution block arms the
+			// second-stage continuation state machine. Idempotent:
+			// subsequent interceptions of the same (or other)
+			// already-blocked attempts do NOT re-trigger. We only
+			// transition `idle → armed` here; the actual
+			// `armed → terminating` transition is performed by the
+			// loop once the bounded continuation opportunity is
+			// exhausted (or, in the case of immediate exhaustion,
+			// by the model-stream latch on next access).
+			if (this.recoverySecondStage.kind === "idle") {
+				this.recoverySecondStage = {
+					kind: "armed",
+					trigger: "exact_blocked",
+				};
+			}
 			runtimeControlPlaneOutcome = selectControlPlaneOutcome({
 				explicitSkip: "runtime_skipped",
 			});
@@ -2136,17 +2297,98 @@ export class AgentRuntime {
 		attemptIdentity: ToolAttemptIdentity,
 		outcome: ToolRuntimeOutcome,
 	): void {
+		// C1.4: snapshot the state so the failure branches can
+		// tell "this turn just armed" apart from "the
+		// continuation was already in flight and this is its
+		// outcome".
+		this.secondStageBeforeRecord = this.recoverySecondStage.kind;
 		if (outcome.kind === "success") {
+			// C1.4 success-reset contract: a successful tool
+			// execution clears the second-stage continuation
+			// pressure. The recoveryTracker.recordToolSuccess
+			// helper already resets per-family state (C1.1
+			// contract); here we additionally collapse the
+			// second-stage continuation state to `idle` so the
+			// next non-convergent failure is treated as a fresh
+			// episode arming.
+			//
+			// If the episode is already `terminating`, do NOT
+			// reset: the bounded continuation was used
+			// unsuccessfully and the latch must remain until the
+			// model-stream path encounters the terminal latch
+			// (the existing throwIfAborted → ControlledStopError
+			// → state="aborted" path delivers the truthful
+			// outcome). A success on the same call that triggered
+			// `terminating` is impossible by definition, so this
+			// branch only changes `armed → idle`.
+			if (this.recoverySecondStage.kind === "armed") {
+				this.recoverySecondStage = { kind: "idle" };
+			}
 			this.recoveryTracker.recordToolSuccess(toolCall.toolName);
 			return;
 		}
 		if (outcome.kind === "control_plane") {
-			// Control-plane outcomes are structurally excluded from
-			// repair budget. Includes:
+			// Control-plane outcomes are structurally excluded
+			// from repair budget. Includes:
 			//   - the synthetic `runtime_skipped` produced by the
 			//     C1.3 pre-execution block;
 			//   - real `host_policy_denied`, `user_rejected`,
 			//     `runtime_aborted`, `approval_pending`, etc.
+			//
+			// C1.4: this is the load-bearing transition.
+			//   - Genuine control-plane outcomes (host DENY, user
+			//     REJECT, runtime ABORT, approval PENDING) MUST
+			//     NEVER arm the second-stage continuation.
+			//   - Synthesised control-plane / runtime_skipped from
+			//     a C1.3 PRE-EXEC block however DOES count as a
+			//     non-convergent outcome during the bounded
+			//     continuation: the model proposed an attempt
+			//     that we already determined cannot run; the
+			//     continuation is therefore used
+			//     unsuccessfully. We detect the synthesised
+			//     pre-exec block via the `prepared.controlPlaneOutcome`
+			//     on the prepared toolCall (set by the pre-exec
+			//     breaker in `executePreparedTool`); for genuine
+			//     control-plane paths the prepared
+			//     .controlPlaneOutcome is the typed enum that
+			//     the classifier already saw (host DENY, etc.).
+			//
+			// Distinguishing them: only the synthetic
+			// pre-exec block emits `runtime_skipped` with
+			// `toolExecutionInvoked=false` AND the exact-key
+			// was specifically marked blocked this turn. We
+			// detect this through the recovery-tracker's
+			// blocked-family membership (the call we routed in
+			// `executePreparedTool`). When state===`armed` and
+			// the call was an exact-block pre-exec, flip to
+			// `terminating`. Otherwise stay armed (the genuine
+			// control-plane path does not consume the
+			// continuation slot).
+			//
+			// Implementation note: we already arm via Trigger A
+			// IN `executePreparedTool` (the exact-block branch).
+			// For the post-arm continuation turn, a pre-exec
+			// block there means the model proposed another
+			// blocked attempt — non-convergent — and the latch
+			// must fire to prevent further requests.
+			// CRITICAL: only flip the latch for synthesised pre-exec
+			// blocks on the continuation turn — not for genuine
+			// control-plane outcomes (host DENY, etc.). The
+			// synthesised pre-exec path is the C1.3 breaker
+			// intercepting an exact-key attempt; the genuine
+			// path is a host-level decision that has nothing
+			// to do with recovery.
+			if (
+				this.recoverySecondStage.kind === "armed" &&
+				this.secondStageBeforeRecord === "armed" &&
+				outcome.outcome === "runtime_skipped"
+			) {
+				this.recoverySecondStage = {
+					kind: "terminating",
+					trigger: this.recoverySecondStage.trigger,
+				};
+				this.state.lastError = "bounded_recovery_exhausted";
+			}
 			return;
 		}
 		// outcome.kind === "failure"
@@ -2158,6 +2400,42 @@ export class AgentRuntime {
 			const key = attemptIdentity.controlKey;
 			const next = (this.exactOnlyBudget.get(key) ?? 0) + 1;
 			this.exactOnlyBudget.set(key, next);
+			// C1.4 Trigger C — opaque exact-only cap. If a single
+			// canonical key's counter has exceeded the per-key
+			// budget, no further identical opaque attempts are
+			// useful; arm the second-stage continuation. The
+			// policy cap is `maxRepairAttempts + 1` to mirror
+			// the family-eligible exhaustion semantics: the
+			// original attempt plus `maxRepairAttempts` repairs.
+			if (
+				next > DEFAULT_RECOVERY_POLICY.maxRepairAttempts &&
+				this.recoverySecondStage.kind === "idle"
+			) {
+				this.recoverySecondStage = {
+					kind: "armed",
+					trigger: "exact_only_capped",
+				};
+			}
+			// C1.4 second-stage TERMINATING transition: any
+			// non-convergent outcome observed while the
+			// continuation is armed (state==="armed" BEFORE
+			// this turn's mutation) flips the latch. The latch
+			// is the load-bearing invariant: after this
+			// transition the next model-stream entry throws,
+			// terminating the run. A failure on the continuation
+			// turn is non-convergent by definition. We exclude
+			// the "this turn just armed" case (Trigger C) by
+			// comparing against `secondStageBeforeRecord`.
+			if (
+				this.recoverySecondStage.kind === "armed" &&
+				this.secondStageBeforeRecord === "armed"
+			) {
+				this.recoverySecondStage = {
+					kind: "terminating",
+					trigger: this.recoverySecondStage.trigger,
+				};
+				this.state.lastError = "bounded_recovery_exhausted";
+			}
 			return;
 		}
 		// Family-eligible failure: handoff through the C1.1 typed helpers.
@@ -2180,6 +2458,64 @@ export class AgentRuntime {
 			attemptIdentity,
 			fingerprint,
 		);
+		// C1.4 Trigger B — family exhaustion without an exact
+		// repeat. After `recordFailureIdentity` records this
+		// observation, check whether the family the runtime just
+		// handoffed to is now in `getBlockedFamilies()`. If so,
+		// the family budget is exhausted and a fresh-input same-
+		// family continuation should be armed. The family is
+		// resolved by the same canonical control-family used to
+		// key the tracker's family state; the next model stream
+		// (if it proposes a different path under the same family)
+		// will be the bounded continuation opportunity.
+		if (
+			this.recoverySecondStage.kind === "idle" &&
+			this.recoveryTracker
+				.getBlockedFamilies()
+				.includes(this.familyControlDiagnostic(familyIdentity))
+		) {
+			this.recoverySecondStage = {
+				kind: "armed",
+				trigger: "family_exhausted",
+			};
+		}
+		// C1.4 second-stage TERMINATING transition (family-
+		// eligible path). This block is reached AFTER
+		// `recordFailureIdentity` (which may have just armed
+		// via Trigger B). We must NOT immediately flip the
+		// freshly-armed state to terminating: the arm happened
+		// on this turn; the model's continuation is the NEXT
+		// turn's tool-call outcome. Use the truth that an
+		// armed-but-NOT-just-armed state implies the continuation
+		// is in flight. We achieve this by tracking the value
+		// of `recoverySecondStage` BEFORE the family-eligible
+		// recordFailureIdentity call: if it was already
+		// `armed` coming in, the post-execution observed here is
+		// the OUTCOME of the bounded continuation turn.
+		if (
+			this.recoverySecondStage.kind === "armed" &&
+			this.secondStageBeforeRecord === "armed"
+		) {
+			this.recoverySecondStage = {
+				kind: "terminating",
+				trigger: this.recoverySecondStage.trigger,
+			};
+			this.state.lastError = "bounded_recovery_exhausted";
+		}
+	}
+
+	/**
+	 * C1.4: project a typed `ToolFamilyIdentity` to the substrate's
+	 * diagnostic family the way `recordBlockedAttemptIdentity` and
+	 * `getBlockedFamilies()` do, so the runtime can compare them
+	 * by string equality. Mirrors the projection in
+	 * `RecoveryTracker.recordBlockedAttemptControl`. Local helper
+	 * to keep the runtime self-contained.
+	 */
+	private familyControlDiagnostic(family: {
+		controlFamily: string;
+	}): string {
+		return controlFamilyToDiagnosticId(family.controlFamily);
 	}
 
 	/**
@@ -2193,11 +2529,16 @@ export class AgentRuntime {
 		state: import("./runtime/recovery").RecoveryState;
 		circuitNoticeCount: number;
 		exactOnlyBudgetSize: number;
+		secondStage: {
+			kind: "idle" | "armed" | "terminating";
+			trigger?: "exact_blocked" | "family_exhausted" | "exact_only_capped";
+		};
 	} {
 		return {
 			state: this.recoveryTracker.state,
 			circuitNoticeCount: this.recoveryCircuitNoticeCount,
 			exactOnlyBudgetSize: this.exactOnlyBudget.size,
+			secondStage: { ...this.recoverySecondStage },
 		};
 	}
 

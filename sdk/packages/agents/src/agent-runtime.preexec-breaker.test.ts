@@ -207,12 +207,20 @@ function expectCaptured(
 describe("AgentRuntime / C1.3 exact pre-execution breaker", () => {
 	it("REAL_EXACT_REPEAT_ENOENT: same tool+input fails 3 times, 4th proposal executes zero times", async () => {
 		const executorCalls = { count: 0 };
-		const proposals = Array.from({ length: 6 }, (_, i) => ({
+		// C1.4 caveat: under the bounded continuation, we observe
+		// 4 proposals here (3 failures + 1 pre-exec block). The
+		// "arming" happens at p-4's pre-exec block (Trigger A),
+		// which also consumes the bounded continuation slot.
+		// The next model-stream entry sees
+		// state === "terminating" and aborts the run with the
+		// typed reason — so no further proposal (the would-be
+		// p-5) is ever delivered.
+		const proposals = Array.from({ length: 4 }, (_, i) => ({
 			toolCallId: `p-${i + 1}`,
 			toolName: "fs_read",
 			input: { path: "/missing" },
 		}));
-		const { captured, recoverySnapshot } = await driveRepeatedProposals(
+		const { captured, recoverySnapshot, result } = await driveRepeatedProposals(
 			proposals,
 			[createEnoentTool(executorCalls)],
 		);
@@ -223,17 +231,19 @@ describe("AgentRuntime / C1.3 exact pre-execution breaker", () => {
 			const out = expectCaptured(captured, `p-${i + 1}`);
 			expect(out.kind, `proposal ${i + 1} kind`).toBe("failure");
 		}
-		for (let i = 3; i < 6; i += 1) {
-			const out = expectCaptured(captured, `p-${i + 1}`);
-			expect(out.kind, `proposal ${i + 1} kind`).toBe("control_plane");
-			if (out.kind !== "control_plane") throw new Error("narrow");
-			expect(out.outcome).toBe("runtime_skipped");
-		}
+		const p4 = expectCaptured(captured, "p-4");
+		expect(p4.kind, "p-4 kind").toBe("control_plane");
+		if (p4.kind !== "control_plane") throw new Error("narrow");
+		expect(p4.outcome).toBe("runtime_skipped");
 		// The first intercepted attempt transitioned warning →
 		// circuit_open exactly once. Repeated interceptions stay at
 		// circuit_open with the same notice count.
 		expect(recoverySnapshot.state).toBe("circuit_open");
 		expect(recoverySnapshot.circuitNoticeCount).toBe(1);
+		// C1.4: after the bounded continuation, the run terminates
+		// truthfully as `aborted` with the typed reason.
+		expect(result.status).toBe("aborted");
+		expect(result.error?.message).toBe("bounded_recovery_exhausted");
 	});
 
 	it("EXECUTOR_COUNT_3: with default policy, executorCalls = 1 + maxRepairAttempts = 3", async () => {
@@ -260,7 +270,14 @@ describe("AgentRuntime / C1.3 exact pre-execution breaker", () => {
 
 	it("CIRCUIT_TRANSITION_ONCE: warning → circuit_open fires at most once even with repeated blocks", async () => {
 		const executorCalls = { count: 0 };
-		const proposals = Array.from({ length: 8 }, (_, i) => ({
+		// C1.4 caveat: under the bounded continuation, we
+		// observe EXACTLY ONE pre-exec block for the same exact
+		// attempt identity — the arming block at proposal 4.
+		// The bounded continuation is consumed at the same time
+		// the pre-exec block fires (Trigger A → idle→armed, then
+		// the next model-stream flips armed→terminating), so
+		// the next identical proposal never arrives.
+		const proposals = Array.from({ length: 4 }, (_, i) => ({
 			toolCallId: `s-${i + 1}`,
 			toolName: "fs_read",
 			input: { path: "/missing" },
@@ -274,7 +291,7 @@ describe("AgentRuntime / C1.3 exact pre-execution breaker", () => {
 				c.outcome.outcome === "runtime_skipped",
 		);
 		expect(blocked.length).toBe(
-			8 - (1 + DEFAULT_RECOVERY_POLICY.maxRepairAttempts),
+			4 - (1 + DEFAULT_RECOVERY_POLICY.maxRepairAttempts),
 		);
 		expect(executorCalls.count).toBe(1 + DEFAULT_RECOVERY_POLICY.maxRepairAttempts);
 	});
@@ -292,18 +309,34 @@ describe("AgentRuntime / C1.3 breaker matrix", () => {
 			{ toolCallId: "b", toolName: "fs_read", input: { path: "/x" } },
 			{ toolCallId: "c", toolName: "fs_read", input: { path: "/x" } },
 			{ toolCallId: "d", toolName: "fs_read", input: { path: "/y" } },
-			{ toolCallId: "e", toolName: "fs_read", input: { path: "/x" } },
 		];
-		const { captured } = await driveRepeatedProposals(proposals, [
-			createEnoentTool(executorCalls),
-		]);
+		// C1.4 caveat: after the family budget exhausts (after c),
+		// the second-stage continuation arms and the latch issues
+		// EXACTLY ONE additional model request as the bounded
+		// continuation. d IS that continuation — it is a fresh
+		// key under the same family, so the C1.3 pre-exec gate
+		// does NOT block it, and the executor is invoked. After d
+		// also fails the same family, the run terminates; no
+		// further proposal (the would-be `e`) is delivered because
+		// the next model-stream entry encounters the terminal
+		// latch. This proves the family-exhaustion-without-exact-
+		// repeat escape hatch from C1.3 is bounded under C1.4.
+		const { captured, recoverySnapshot, result } = await driveRepeatedProposals(
+			proposals,
+			[createEnoentTool(executorCalls)],
+		);
 		expect(executorCalls.count).toBe(4);
 		const d = expectCaptured(captured, "d");
 		expect(d.kind).toBe("failure");
-		const e = expectCaptured(captured, "e");
-		expect(e.kind).toBe("control_plane");
-		if (e.kind !== "control_plane") throw new Error("narrow");
-		expect(e.outcome).toBe("runtime_skipped");
+		// The bounded continuation was used unsuccessfully, so the
+		// second-stage state machine ends in `terminating`.
+		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
+		expect(recoverySnapshot.secondStage.trigger).toBe(
+			"family_exhausted",
+		);
+		// The run is truthfully terminated as `aborted`.
+		expect(result.status).toBe("aborted");
+		expect(result.error?.message).toBe("bounded_recovery_exhausted");
 	});
 
 	it("DIFFERENT_TOOL_DOES_NOT_COLLIDE", async () => {
@@ -327,21 +360,40 @@ describe("AgentRuntime / C1.3 breaker matrix", () => {
 				return { ok: true };
 			},
 		};
+		// C1.4 caveat: under the bounded continuation, after the
+		// tool_a family exhausts (a1..a3), the post-arm
+		// continuation IS the next model request — and we have
+		// no further model request that would propose b1 with a
+		// successful tool. The C1.3 collision-freedom property
+		// is still true at the substrate level (a different tool
+		// has its own family), but the runtime's run-level bound
+		// terminates before b1 can arrive. The "successful
+		// material progression resets the second-stage" property
+		// is covered by C1.4_D_SUCCESSFUL_REPAIR_RESETS in
+		// `agent-runtime.second-stage-recovery.test.ts`.
 		const proposals = [
 			{ toolCallId: "a1", toolName: "tool_a", input: { x: 1 } },
 			{ toolCallId: "a2", toolName: "tool_a", input: { x: 1 } },
 			{ toolCallId: "a3", toolName: "tool_a", input: { x: 1 } },
 			{ toolCallId: "a4", toolName: "tool_a", input: { x: 1 } },
-			{ toolCallId: "b1", toolName: "tool_b", input: { x: 1 } },
 		];
-		const { captured } = await driveRepeatedProposals(proposals, [
+		const { captured, recoverySnapshot } = await driveRepeatedProposals(proposals, [
 			toolA,
 			toolB,
 		]);
 		expect(aExec.count).toBe(3);
-		expect(bExec.count).toBe(1);
-		const b1 = expectCaptured(captured, "b1");
-		expect(b1.kind).toBe("success");
+		// tool_b was registered, but its proposal was never
+		// delivered because the runtime's bounded continuation
+		// terminated the run after a4's pre-exec block.
+		expect(bExec.count).toBe(0);
+		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
+		expect(recoverySnapshot.secondStage.trigger).toBe(
+			"family_exhausted",
+		);
+		const a4 = expectCaptured(captured, "a4");
+		expect(a4.kind).toBe("control_plane");
+		if (a4.kind !== "control_plane") throw new Error("narrow");
+		expect(a4.outcome).toBe("runtime_skipped");
 	});
 });
 
@@ -351,22 +403,23 @@ describe("AgentRuntime / C1.3 breaker matrix", () => {
 
 describe("AgentRuntime / C1.3 unknown-tool & TBCE boundary", () => {
 	it("UNKNOWN_TOOL_EXACT_REPEAT_BOUNDED: identical unknown-tool proposal is intercepted by the pre-exec breaker after 3 failures", async () => {
-		// 5 IDENTICAL proposals for a non-registered tool. The runtime
-		// must not actually invoke any real executor (the tool is
-		// unknown), but the C1.3 pre-exec breaker must still intercept
-		// the 4th and 5th proposals and route them as
-		// `control_plane / runtime_skipped` because the substrate has
-		// already seen 3 family-eligible failures for the same
-		// canonical-key attempt identity.
+		// C1.4 caveat: under the bounded continuation, the run
+		// terminates after the post-arm model stream, so the
+		// 5th identical proposal never arrives. We observe
+		// 3 failures + 1 pre-exec block. The C1.3 substrate
+		// continues to mark the exact key blocked at the
+		// pre-execution stage (Trigger A still fires here);
+		// the model-stream terminal latch (Trigger C of
+		// C1.4) is what interrupts the loop after the
+		// bounded continuation.
 		const proposals = [
 			{ toolCallId: "u-1", toolName: "ghost_tool", input: { x: 1 } },
 			{ toolCallId: "u-2", toolName: "ghost_tool", input: { x: 1 } },
 			{ toolCallId: "u-3", toolName: "ghost_tool", input: { x: 1 } },
 			{ toolCallId: "u-4", toolName: "ghost_tool", input: { x: 1 } },
-			{ toolCallId: "u-5", toolName: "ghost_tool", input: { x: 1 } },
 		];
 		const executorCalls = { count: 0 };
-		const { captured, recoverySnapshot } = await driveRepeatedProposals(
+		const { captured, recoverySnapshot, result } = await driveRepeatedProposals(
 			proposals,
 			[createEchoTool(executorCalls)],
 		);
@@ -380,32 +433,41 @@ describe("AgentRuntime / C1.3 unknown-tool & TBCE boundary", () => {
 			const out = expectCaptured(captured, id);
 			expect(out.kind).toBe("failure");
 		}
-		// Fourth and fifth proposals: the substrate's exhausted exact
-		// key now blocks the attempt at the pre-execution stage; the
-		// runtime must route these as `control_plane / runtime_skipped`
-		// (NOT `failure`).
+		// Fourth proposal: pre-exec block. The runtime's C1.4 latch
+		// has been armed (Trigger A) by this block, and after the
+		// model-stream entry the latch flips to terminating — so
+		// the run aborts before the would-be 5th proposal arrives.
 		const u4 = expectCaptured(captured, "u-4");
 		expect(u4.kind).toBe("control_plane");
 		if (u4.kind === "control_plane") {
 			expect(u4.outcome).toBe("runtime_skipped");
 		}
-		const u5 = expectCaptured(captured, "u-5");
-		expect(u5.kind).toBe("control_plane");
 		// Once the breaker trips, the visible state lands on
 		// `circuit_open` and the runtime's circuit notice count is
 		// exactly 1 (subsequent intercepts are no-ops at the tracker
 		// layer).
 		expect(recoverySnapshot.state).toBe("circuit_open");
 		expect(recoverySnapshot.circuitNoticeCount).toBe(1);
+		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
+		expect(result.status).toBe("aborted");
+		expect(result.error?.message).toBe("bounded_recovery_exhausted");
 	});
 
 	it("UNKNOWN_TOOL_CHANGED_INPUT_DOES_NOT_FAKE_EXECUTION: varying inputs never invoke a real executor", async () => {
-		// Different inputs each get distinct exact-key identities, so
-		// every proposal lands as `failure / tool_not_found` — the
-		// breaker never trips (no key is exhausted). This is the
-		// minimal non-execution guarantee for unknown tools; it does
-		// NOT exercise the exact-repeat breaker.
-		const proposals = Array.from({ length: 5 }, (_, i) => ({
+		// C1.4 caveat: although each input has a distinct
+		// exact-key identity, they all share the same
+		// family (`ghost_tool:tool_not_found:tool:not_found`).
+		// After v-1..v-3 fail (3rd obs), the family budget is
+		// exhausted and Trigger B arms the second-stage. v-4 is
+		// the post-arm continuation. v-4's pre-exec check
+		// does NOT block (new exact key) but the unknown-tool
+		// failure-path posts another observation that flips
+		// the armed state to terminating. The run aborts; v-5
+		// is never delivered. This proves the family-exhaustion
+		// escape hatch is bounded under C1.4 even when the
+		// model's only "evasion" is a fresh-key same-family
+		// attempt.
+		const proposals = Array.from({ length: 4 }, (_, i) => ({
 			toolCallId: `v-${i + 1}`,
 			toolName: "ghost_tool",
 			input: { i },
@@ -415,54 +477,110 @@ describe("AgentRuntime / C1.3 unknown-tool & TBCE boundary", () => {
 			proposals,
 			[createEchoTool(executorCalls)],
 		);
+		// The unknown-tool path never enters a real executor.
 		expect(executorCalls.count).toBe(0);
-		for (const id of ["v-1", "v-2", "v-3", "v-4", "v-5"]) {
+		for (const id of ["v-1", "v-2", "v-3"]) {
 			const out = expectCaptured(captured, id);
 			expect(out.kind).toBe("failure");
 		}
-		// No exhaustion: state stays recoverable and the exact-only
-		// budget map is empty (unknown-tool failures are family-eligible
-		// via the C1.1 typed helper path, not exact-only).
+		// v-4 is the post-arm continuation. It does not
+		// execute (unknown tool), so the captured kind here is
+		// `failure` (family-eligible failure), not control_plane.
+		// The second-stage flipping happens because the
+		// failure-path classified v-4 with state==="armed"
+		// BEFORE this turn.
+		const v4 = expectCaptured(captured, "v-4");
+		expect(v4.kind).toBe("failure");
+		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
+		expect(recoverySnapshot.secondStage.trigger).toBe(
+			"family_exhausted",
+		);
+		// No exact-only budget inflation: family-eligible
+		// route uses the substrate's recoveryTracker, not
+		// the runtime-owned map.
 		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(0);
 	});
 
 	it("OPAQUE_EXACT_ONLY", async () => {
 		const executorCalls = { count: 0 };
 		const tool = createOpaqueThrowTool(executorCalls);
+		// C1.4 caveat: under the bounded continuation, after
+		// o1..o3 fail and arm the second-stage via Trigger C
+		// (opaque exact-only cap), the post-arm continuation is
+		// the iteration-4 model request. The proposal there is
+		// o4 with the same key → C1.3 pre-exec blocker fires
+		// → applyPost sees the synthesised runtime_skipped
+		// outcome with state===armed → flip to terminating.
+		// The run aborts; o5 (a different canonical key)
+		// never arrives. This proves the C1.3 per-key
+		// accounting invariant is preserved under C1.4's
+		// bounded continuation and that the continuation is
+		// consumed exactly once regardless of what the model
+		// proposes.
 		const proposals = [
 			{ toolCallId: "o1", toolName: "opaque_thrower", input: { value: "x" } },
 			{ toolCallId: "o2", toolName: "opaque_thrower", input: { value: "x" } },
 			{ toolCallId: "o3", toolName: "opaque_thrower", input: { value: "x" } },
 			{ toolCallId: "o4", toolName: "opaque_thrower", input: { value: "x" } },
-			{ toolCallId: "o5", toolName: "opaque_thrower", input: { value: "y" } },
-			{ toolCallId: "o6", toolName: "opaque_thrower", input: { value: "x" } },
 		];
-		const { captured } = await driveRepeatedProposals(proposals, [tool]);
-		expect(executorCalls.count).toBe(4);
+		const { captured, recoverySnapshot } = await driveRepeatedProposals(
+			proposals,
+			[tool],
+		);
+		expect(executorCalls.count).toBe(3);
+		for (let i = 0; i < 3; i += 1) {
+			const out = expectCaptured(captured, `o${i + 1}`);
+			expect(out.kind).toBe("failure");
+		}
 		const o4 = expectCaptured(captured, "o4");
 		expect(o4.kind).toBe("control_plane");
-		const o5 = expectCaptured(captured, "o5");
-		expect(o5.kind).toBe("failure");
-		const o6 = expectCaptured(captured, "o6");
-		expect(o6.kind).toBe("control_plane");
+		if (o4.kind !== "control_plane") throw new Error("narrow");
+		expect(o4.outcome).toBe("runtime_skipped");
+		// Per-key exact-only accounting is intact: only one
+		// key (`{value:"x"}`) was tracked.
+		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(1);
+		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
+		expect(recoverySnapshot.secondStage.trigger).toBe(
+			"exact_only_capped",
+		);
 	});
 
 	it("OPAQUE_CHANGED_INPUT_NOT_MERGED", async () => {
 		const executorCalls = { count: 0 };
 		const tool = createOpaqueThrowTool(executorCalls);
+		// C1.4 caveat: under the bounded continuation, after
+		// alpha exhausts (p1..p3 fail, Trigger C arms because
+		// the exact-only counter for `{value:"alpha"}` reaches
+		// `> maxRepairAttempts`), the post-arm continuation
+		// is iteration 4's model request. The proposal there
+		// is p4 with the SAME key → pre-exec block → flip
+		// to terminating via the synthesised runtime_skipped
+		// outcome. Run aborts; p5 (the would-be beta) never
+		// arrives. The "independent budgets per canonical key"
+		// property — distinct failed inputs do not share a
+		// synthetic family — is the C1.1 anti-merge guarantee
+		// which C1.4 preserves by reusing the exact-only map.
 		const proposals = [
 			{ toolCallId: "p1", toolName: "opaque_thrower", input: { value: "alpha" } },
 			{ toolCallId: "p2", toolName: "opaque_thrower", input: { value: "alpha" } },
 			{ toolCallId: "p3", toolName: "opaque_thrower", input: { value: "alpha" } },
 			{ toolCallId: "p4", toolName: "opaque_thrower", input: { value: "alpha" } },
-			{ toolCallId: "p5", toolName: "opaque_thrower", input: { value: "beta" } },
-			{ toolCallId: "p6", toolName: "opaque_thrower", input: { value: "beta" } },
-			{ toolCallId: "p7", toolName: "opaque_thrower", input: { value: "beta" } },
-			{ toolCallId: "p8", toolName: "opaque_thrower", input: { value: "beta" } },
 		];
-		await driveRepeatedProposals(proposals, [tool]);
-		// alpha: 3 exec + 1 blocked; beta: 3 exec + 1 blocked.
-		expect(executorCalls.count).toBe(6);
+		const { recoverySnapshot, captured } = await driveRepeatedProposals(
+			proposals,
+			[tool],
+		);
+		// alpha: 3 exec + 1 pre-exec block.
+		expect(executorCalls.count).toBe(3);
+		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(1);
+		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
+		expect(recoverySnapshot.secondStage.trigger).toBe(
+			"exact_only_capped",
+		);
+		const p4 = expectCaptured(captured, "p4");
+		expect(p4.kind).toBe("control_plane");
+		if (p4.kind !== "control_plane") throw new Error("narrow");
+		expect(p4.outcome).toBe("runtime_skipped");
 	});
 });
 

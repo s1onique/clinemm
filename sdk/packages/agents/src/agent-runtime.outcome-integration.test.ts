@@ -519,7 +519,9 @@ describe("AgentRuntime / C1.3 breaker wiring", () => {
 		// C1.3 contract: RecoveryTracker is constructed on the
 		// AgentRuntime instance (private field). NOT a module-global
 		// singleton, NOT a static shared map, NOT UI-owned.
-		expect(raw).toMatch(/private\s+readonly\s+recoveryTracker\s*=\s*new\s+RecoveryTracker\(/);
+		// (C1.4 dropped the `readonly` modifier so `restore()` can
+		// reset the tracker; ownership remains per-instance.)
+		expect(raw).toMatch(/private\s+recoveryTracker\s*=\s*new\s+RecoveryTracker\(/);
 		// The same class must NOT define a static/global tracker.
 		expect(raw).not.toMatch(/static\s+recoveryTracker/);
 	});
