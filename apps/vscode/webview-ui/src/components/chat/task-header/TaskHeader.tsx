@@ -1,4 +1,4 @@
-import { ClineMessage } from "@shared/ExtensionMessage"
+import type { ClineMessage, TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
@@ -14,6 +14,7 @@ import NewTaskButton from "./buttons/NewTaskButton"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
 import ContextWindow from "./ContextWindow"
 import { highlightText } from "./Highlights"
+import TaskHeaderTelemetry from "./TaskHeaderTelemetry"
 import TaskWorkingDirectoryBadge from "./TaskWorkingDirectoryBadge"
 
 const IS_DEV = process.env.IS_DEV === "true"
@@ -28,6 +29,12 @@ interface TaskHeaderProps {
 	lastApiReqTotalTokens?: number
 	onClose: () => void
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
+	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: host-owned task telemetry
+	// (elapsed / tool / recovery) projected from the canonical
+	// `taskTelemetry` state field. Optional for backward compatibility
+	// with classic/legacy state — when absent the strip renders "—".
+	taskTelemetry?: TaskHeaderTelemetryStrip
+	turnState?: TurnState
 }
 
 const BUTTON_CLASS = "max-h-3 border-0 font-bold bg-transparent hover:opacity-100 text-foreground"
@@ -42,6 +49,8 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	lastApiReqTotalTokens,
 	onClose,
 	onSendMessage,
+	taskTelemetry: taskTelemetryProp,
+	turnState: turnStateProp,
 }) => {
 	const {
 		apiConfiguration,
@@ -52,7 +61,15 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		environment,
 		workspaceRoots,
 		platform,
+		turnState: turnStateFromContext,
+		taskTelemetry: taskTelemetryFromContext,
 	} = useExtensionState()
+
+	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: prefer the prop if provided
+	// (enables pure component testing), otherwise read the canonical
+	// host-owned projection from the extension state.
+	const turnState = turnStateProp ?? turnStateFromContext
+	const taskTelemetry = taskTelemetryProp ?? taskTelemetryFromContext
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
@@ -155,6 +172,14 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 								)}
 							</div>
 						)}
+					</div>
+					{/* ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: compact telemetry strip
+						(elapsed / state / tool count / recovery interventions).
+						Always visible in both collapsed and expanded states so the
+						user has a stable, faithful lifecycle surface. Renders "-"
+						when the host has no canonical telemetry on the wire. */}
+					<div className="flex items-center justify-between gap-2 mt-0.5">
+						<TaskHeaderTelemetry telemetry={taskTelemetry} turnState={turnState} />
 					</div>
 					<div className="flex items-center select-none grow min-w-0 gap-1 justify-between">
 						{!isTaskExpanded && (

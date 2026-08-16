@@ -59,6 +59,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		checkpointRestoreInput,
 		queuedPrompts,
 		turnState,
+		taskTelemetry,
 	} = useExtensionState()
 	const isProdHostedApp = userInfo?.apiBaseUrl === "https://app.cline.bot"
 	const shouldShowQuickWins = isProdHostedApp && (!taskHistory || taskHistory.length < QUICK_WINS_HISTORY_THRESHOLD)
@@ -389,6 +390,10 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 							supportsImages: selectedModelInfo.supportsImages || false,
 						}}
 						task={task}
+						// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: pass the canonical
+						// host-owned telemetry + TurnState through to TaskHeader.
+						taskTelemetry={taskTelemetry}
+						turnState={turnState}
 					/>
 				) : (
 					<WelcomeSection
