@@ -1,6 +1,15 @@
 /**
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A
  *
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+ *   - `awaiting_followup` is now `live: true` — the elapsed clock
+ *     keeps ticking while the agent is paused for user input
+ *     (the same visible task continues when the user replies).
+ *   - The "live" matrix matches the `TERMINAL_PHASES` set on the
+ *     host-side tracker (and its inverse): only `error`,
+ *     `resumable`, `completed` are terminal; everything else is
+ *     live OR idle.
+ *
  * Pure helpers for the Task Header telemetry strip:
  *   - `formatElapsed`: deterministic elapsed-time formatter
  *     (mm:ss / h:mm:ss / d hh:mm) with the canonical epoch as
@@ -53,7 +62,9 @@ export function formatElapsed(durationMs: number): string {
  * Resolve the elapsed duration to display, given the canonical
  * `startedAt` / `endedAt` from `TaskHeaderTelemetry`. While the task
  * is live, `now - startedAt` ticks; once `endedAt` is set (terminal
- * task), the value freezes at `endedAt - startedAt`.
+ * task — `error` / `resumable` / `completed`), the value freezes at
+ * `endedAt - startedAt`. The freeze is permanent: a later remount of
+ * the webview does NOT advance the displayed elapsed (see THA28).
  */
 export function resolveElapsedDisplayMs(startedAt: number, endedAt: number | undefined, now: number): number {
 	if (!Number.isFinite(startedAt)) {
@@ -71,7 +82,12 @@ export interface StateLabelProjection {
 	label: string
 	/** Single-character glyph for the state badge (no icons import). */
 	glyph: string
-	/** True when the task is actively doing something (timer should tick). */
+	/**
+	 * True when the elapsed clock should keep ticking. The clock
+	 * stops ticking ONLY when the task is genuinely terminal
+	 * (`error` / `resumable` / `completed`). `awaiting_followup`
+	 * keeps ticking — the same task continues when the user replies.
+	 */
 	live: boolean
 }
 
@@ -90,7 +106,10 @@ export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
 		case "awaiting_approval":
 			return { label: "Approval", glyph: "?", live: true }
 		case "awaiting_followup":
-			return { label: "Waiting", glyph: "…", live: false }
+			// CORRECTION01: same task continues — elapsed clock keeps
+			// ticking so the user sees "how long since the task was
+			// started", not "how long since the agent last produced".
+			return { label: "Waiting", glyph: "…", live: true }
 		case "completed":
 			return { label: "Complete", glyph: "✓", live: false }
 		case "error":

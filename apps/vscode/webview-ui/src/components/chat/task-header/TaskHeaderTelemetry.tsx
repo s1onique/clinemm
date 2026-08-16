@@ -1,6 +1,16 @@
 /**
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A
  *
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+ *  - `recoveryInterventions` is renamed to `recoveryFailures` on the
+ *    wire (single-counter authority: episodeFailures only).
+ *  - Tooltip is updated to "recoverable tool failures observed during
+ *    this task" (more truthful than "interventions").
+ *  - Tool-count tooltip is corrected to "Host DENY / user rejection /
+ *    pre-exec block / registry miss do not increment — no canonical
+ *    tool-start occurs" (UNKNOWN_TOOL is a registry miss, not a
+ *    control-plane outcome).
+ *
  * Compact Task Header telemetry strip. Reads the canonical
  * `taskTelemetry` (host-owned) and `turnState` (backend-owned) and
  * projects them as four compact values:
@@ -11,12 +21,16 @@
  *
  *   - Elapsed time: derived from `taskTelemetry.startedAt`. The
  *     webview's `setInterval(1000)` is PRESENTATION ONLY — never the
- *     authority. `endedAt` (if set) freezes the display.
+ *     authority. `endedAt` (if set) freezes the display at the
+ *     canonical terminal timestamp (see THA28: terminal remount does
+ *     not advance). `awaiting_followup` does NOT freeze — the same
+ *     task continues when the user replies.
  *   - State label: pure projection from `turnState.phase` (reuses
  *     `taskHeaderStateLabel`). NO message-tail inference.
  *   - Tool count: cumulative `taskTelemetry.toolCalls` (incremented
  *     exactly once per canonical `tool-started` runtime event).
- *   - Recovery count: cumulative `taskTelemetry.recoveryInterventions`.
+ *   - Recovery count: cumulative `taskTelemetry.recoveryFailures`
+ *     (positive deltas of `RecoverySnapshot.episodeFailures` only).
  *     HIDDEN at zero per ACT plan §29.
  *   - Missing telemetry: render "—" (em-dash) rather than fabricating
  *     values from `clineMessages`.
@@ -64,7 +78,7 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, tu
 
 	const elapsedMs = resolveElapsedDisplayMs(telemetry.startedAt, telemetry.endedAt, now)
 	const elapsedText = formatElapsed(elapsedMs)
-	const showRecovery = telemetry.recoveryInterventions > 0
+	const showRecovery = telemetry.recoveryFailures > 0
 
 	return (
 		<div
@@ -91,18 +105,18 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, tu
 				aria-label={`Tool calls: ${telemetry.toolCalls}`}
 				className="inline-flex items-center gap-1"
 				data-testid="task-header-tool-count"
-				title="Cumulative tool invocations for this task. Each canonical tool-started runtime event increments this by one.">
+				title="Cumulative tool invocations for this task. Host DENY, user rejection, pre-exec block, and registry miss do not increment — no canonical tool-start occurs for those paths.">
 				<WrenchIcon aria-hidden className="h-3 w-3" />
 				<span className="font-mono">{telemetry.toolCalls}</span>
 			</span>
 			{showRecovery ? (
 				<span
-					aria-label={`Recovery interventions: ${telemetry.recoveryInterventions}`}
+					aria-label={`Recoverable tool failures observed: ${telemetry.recoveryFailures}`}
 					className="inline-flex items-center gap-1"
 					data-testid="task-header-recovery-count"
-					title="Cumulative recovery repair/intervention transitions for this task. Control-plane DENY/REJECT outcomes are excluded.">
+					title="Cumulative recoverable tool failures observed during this task. Counts positive deltas of episodeFailures only (family pressure and circuit notices are overlapping consequences of the same failure).">
 					<span aria-hidden>↻</span>
-					<span className="font-mono">{telemetry.recoveryInterventions}</span>
+					<span className="font-mono">{telemetry.recoveryFailures}</span>
 				</span>
 			) : null}
 		</div>

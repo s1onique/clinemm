@@ -4,6 +4,11 @@
  * THA02 — formatElapsed, THA03 — terminal freeze,
  * THA05..THA12 — state label matrix, plus a few invariants for the
  * elapsed-time resolver.
+ *
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+ * THA08 inverted — `awaiting_followup` is now LIVE (same task
+ * continues when user replies). Terminal-freeze tests cover the
+ * error/resumable/completed set explicitly.
  */
 import type { TurnState } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
@@ -37,7 +42,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / formatElapsed", () => {
 	})
 })
 
-describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / resolveElapsedDisplayMs", () => {
+describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01 / resolveElapsedDisplayMs terminal-freeze", () => {
 	it("THA03: freezes at endedAt - startedAt even when now is far in the future", () => {
 		const startedAt = 1_700_000_000_000
 		const endedAt = startedAt + 90_000
@@ -45,9 +50,22 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / resolveElapsedDisplayMs", () =
 		expect(resolveElapsedDisplayMs(startedAt, endedAt, now)).toBe(90_000)
 	})
 
+	it("THA28: a remount one hour after terminal still shows the original elapsed", () => {
+		const startedAt = 1_700_000_000_000
+		const endedAt = startedAt + 90_000
+		const remountAt = endedAt + 3_600_000
+		expect(resolveElapsedDisplayMs(startedAt, endedAt, remountAt)).toBe(90_000)
+	})
+
 	it("THA02: ticks when no endedAt is set", () => {
 		const startedAt = 1_700_000_000_000
 		expect(resolveElapsedDisplayMs(startedAt, undefined, startedAt + 5_000)).toBe(5_000)
+	})
+
+	it("THA28b: awaiting_followup keeps ticking (no endedAt on the wire)", () => {
+		const startedAt = 1_700_000_000_000
+		expect(resolveElapsedDisplayMs(startedAt, undefined, startedAt + 5_000)).toBe(5_000)
+		expect(resolveElapsedDisplayMs(startedAt, undefined, startedAt + 60_000)).toBe(60_000)
 	})
 
 	it("ignores invalid endedAt (falls back to live tick)", () => {
@@ -77,16 +95,16 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / stateLabel", () => {
 	it("THA07: awaiting_approval → Approval (live)", () => {
 		expect(stateLabel("awaiting_approval")).toEqual({ label: "Approval", glyph: "?", live: true })
 	})
-	it("THA08: awaiting_followup → Waiting (non-live)", () => {
-		expect(stateLabel("awaiting_followup")).toEqual({ label: "Waiting", glyph: "…", live: false })
+	it("THA08 (CORRECTION01): awaiting_followup → Waiting (LIVE — same task continues)", () => {
+		expect(stateLabel("awaiting_followup")).toEqual({ label: "Waiting", glyph: "…", live: true })
 	})
-	it("THA09: completed → Complete (non-live)", () => {
+	it("THA09: completed → Complete (non-live, terminal)", () => {
 		expect(stateLabel("completed")).toEqual({ label: "Complete", glyph: "✓", live: false })
 	})
-	it("THA10: error → Error (non-live)", () => {
+	it("THA10: error → Error (non-live, terminal)", () => {
 		expect(stateLabel("error")).toEqual({ label: "Error", glyph: "!", live: false })
 	})
-	it("THA11: resumable → Paused (non-live)", () => {
+	it("THA11: resumable → Paused (non-live, terminal)", () => {
 		expect(stateLabel("resumable")).toEqual({ label: "Paused", glyph: "↻", live: false })
 	})
 	it("THA12: undefined → Unknown (non-live)", () => {

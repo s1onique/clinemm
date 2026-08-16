@@ -9,9 +9,8 @@
  *   1. Elapsed time — derived from `startedAt` (and frozen `endedAt`).
  *   2. Tool-call count — incremented exactly once per canonical
  *      `tool-started` runtime event.
- *   3. Recovery-intervention count — incremented by the positive-delta
- *      clamp of `RecoverySnapshot.tracker.currentRepairAttempts`,
- *      `episodeFailures`, and `circuitNoticeCount`.
+ *   3. Recovery-failure count — incremented by the positive-delta
+ *      clamp of `RecoverySnapshot.episodeFailures` only.
  *
  * The tracker is a pure OBSERVER. It NEVER reads or modifies recovery
  * policy, tool-execution gating, or turn-phase transitions. It has no
@@ -28,6 +27,16 @@
  *   - The tracker's `get()` is a pure snapshot — no allocation, no
  *     React coupling.
  *
+ * Terminal-phase freeze:
+ *
+ *   - `error` / `resumable` / `completed` transitions on the
+ *     `TurnStateTracker` call `endTask()` exactly once (the FIRST
+ *     terminal transition freezes the clock; later transitions are
+ *     idempotent). `awaiting_followup` does NOT freeze — the agent
+ *     is paused waiting for user input, but the same visible task
+ *     continues once the user replies, so the elapsed clock must keep
+ *     ticking to represent "task duration since creation".
+ *
  * Privacy: emits nothing more than bounded integers and timestamps.
  */
 import type { AgentRuntimeRecoverySnapshot } from "@cline/shared"
@@ -35,42 +44,45 @@ import type { TaskHeaderTelemetryStrip } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 
 /**
- * The three externally-meaningful counters we fold into the cumulative
- * recovery-interventions count. See `countRecoveryDelta`.
+ * Phases that freeze the elapsed clock. `awaiting_followup` is NOT in
+ * this set — the same task continues when the user replies.
  */
-interface RecoveryCounters {
-	currentRepairAttempts: number
-	episodeFailures: number
-	circuitNoticeCount: number
-}
+const TERMINAL_PHASES = new Set(["error", "resumable", "completed"])
 
-function readRecoveryCounters(recovery: AgentRuntimeRecoverySnapshot): RecoveryCounters {
-	return {
-		currentRepairAttempts: recovery.tracker.currentRepairAttempts,
-		episodeFailures: recovery.episodeFailures,
-		circuitNoticeCount: recovery.circuitNoticeCount,
-	}
+/**
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+ *
+ * The single canonical recovery counter we fold into the UI metric.
+ * `currentRepairAttempts` describes family-level pressure; it can be
+ * non-zero even when no individual tool call failed in this episode
+ * (a family may be in a long retry loop driven by transient
+ * downstream errors that the model eventually succeeds on). Including
+ * it in the same metric as `episodeFailures` would double-count
+ * the same recovery fact.
+ *
+ * `circuitNoticeCount` is a bounded-recovery exhaustion notice — a
+ * LATER consequence of the same failure that already incremented
+ * `episodeFailures`, not an independent intervention.
+ *
+ * The only counter that uniquely captures "an additional recoverable
+ * tool failure was observed during this task" is `episodeFailures`.
+ */
+function readEpisodeFailures(recovery: AgentRuntimeRecoverySnapshot): number {
+	return recovery.episodeFailures
 }
 
 /**
- * Sum the positive-delta across the three counters (a clamp, not a
- * sum: a counter that DECREASES does not subtract). This protects the
- * UI against transient counter resets that happen when a family
- * succeeds (`resetActiveFamily` zeroes `currentRepairAttempts`) — those
- * resets are NOT interventions to display, only the FORWARD jumps are.
+ * Monotone clamp on the single `episodeFailures` counter. A decrease
+ * (episode reset on a new family) does not subtract; only forward
+ * jumps accumulate. This preserves family-success resets as not
+ * interventions, while keeping a task-lifetime cumulative count of
+ * recoverable-failure observations.
  */
-function countRecoveryDelta(prev: RecoveryCounters, next: RecoveryCounters): number {
-	let delta = 0
-	if (next.currentRepairAttempts > prev.currentRepairAttempts) {
-		delta += next.currentRepairAttempts - prev.currentRepairAttempts
+function countRecoveryDelta(prev: number, next: number): number {
+	if (next > prev) {
+		return next - prev
 	}
-	if (next.episodeFailures > prev.episodeFailures) {
-		delta += next.episodeFailures - prev.episodeFailures
-	}
-	if (next.circuitNoticeCount > prev.circuitNoticeCount) {
-		delta += next.circuitNoticeCount - prev.circuitNoticeCount
-	}
-	return delta
+	return 0
 }
 
 export class TaskTelemetryTracker {
@@ -78,12 +90,8 @@ export class TaskTelemetryTracker {
 	private startedAt: number | undefined
 	private endedAt: number | undefined
 	private toolCalls = 0
-	private recoveryInterventions = 0
-	private prevRecovery: RecoveryCounters = {
-		currentRepairAttempts: 0,
-		episodeFailures: 0,
-		circuitNoticeCount: 0,
-	}
+	private recoveryFailures = 0
+	private prevEpisodeFailures = 0
 
 	/**
 	 * Start (or re-start) a task's telemetry window.
@@ -106,17 +114,20 @@ export class TaskTelemetryTracker {
 		this.startedAt = now
 		this.endedAt = undefined
 		this.toolCalls = 0
-		this.recoveryInterventions = 0
-		this.prevRecovery = {
-			currentRepairAttempts: 0,
-			episodeFailures: 0,
-			circuitNoticeCount: 0,
-		}
+		this.recoveryFailures = 0
+		this.prevEpisodeFailures = 0
 		return this.get()
 	}
 
 	/**
-	 * Freeze the task at a terminal phase. Idempotent.
+	 * Freeze the task at a terminal phase. Idempotent: the FIRST call
+	 * after `startTask` stamps `endedAt`; later calls are no-ops.
+	 *
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+	 * `cancelTask()` may still call this directly to ensure the clock
+	 * freezes at cancellation time even before the turn coordinator
+	 * transitions to `resumable` (defensive; the turn-state subscription
+	 * is the canonical observer).
 	 */
 	endTask(endedAt?: number): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId === undefined) {
@@ -129,6 +140,33 @@ export class TaskTelemetryTracker {
 	}
 
 	/**
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+	 *
+	 * Canonical terminal-phase observer. Called from the
+	 * `TurnStateTracker.subscribe` hook whenever the UI phase changes.
+	 * Only the terminal phases (`error` / `resumable` / `completed`)
+	 * freeze the elapsed clock; other phases (including
+	 * `awaiting_followup`) are ignored.
+	 *
+	 * The freeze is idempotent (the FIRST terminal call wins), so even
+	 * if `cancelTask()` has already called `endTask()` and then the
+	 * turn coordinator later sets `resumable`, the original
+	 * cancellation timestamp is preserved.
+	 */
+	observeTurnPhase(phase: string, anchorTs?: number): TaskHeaderTelemetryStrip | undefined {
+		if (!TERMINAL_PHASES.has(phase)) {
+			return this.get()
+		}
+		if (this.currentTaskId === undefined) {
+			return this.get()
+		}
+		if (this.endedAt === undefined) {
+			this.endedAt = anchorTs ?? Date.now()
+		}
+		return this.get()
+	}
+
+	/**
 	 * Clear all telemetry (called when no task is active).
 	 */
 	clear(): TaskHeaderTelemetryStrip | undefined {
@@ -136,12 +174,8 @@ export class TaskTelemetryTracker {
 		this.startedAt = undefined
 		this.endedAt = undefined
 		this.toolCalls = 0
-		this.recoveryInterventions = 0
-		this.prevRecovery = {
-			currentRepairAttempts: 0,
-			episodeFailures: 0,
-			circuitNoticeCount: 0,
-		}
+		this.recoveryFailures = 0
+		this.prevEpisodeFailures = 0
 		return this.get()
 	}
 
@@ -163,17 +197,22 @@ export class TaskTelemetryTracker {
 	/**
 	 * Observe a recovery snapshot from the runtime.
 	 *
-	 * Folds the positive deltas of the three externally-meaningful
-	 * counters into the cumulative `recoveryInterventions`.
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+	 * Only `episodeFailures` is folded into the cumulative counter.
+	 * `currentRepairAttempts` and `circuitNoticeCount` are tracked on
+	 * the runtime side but are NOT projected to the UI metric because
+	 * they describe overlapping consequences of the same recoverable
+	 * failure (family pressure / bounded-exhaustion notices), not
+	 * independent interventions.
 	 */
 	observeRecovery(recovery: AgentRuntimeRecoverySnapshot): TaskHeaderTelemetryStrip | undefined {
+		const next = readEpisodeFailures(recovery)
 		if (this.currentTaskId === undefined) {
-			this.prevRecovery = readRecoveryCounters(recovery)
+			this.prevEpisodeFailures = next
 			return this.get()
 		}
-		const next = readRecoveryCounters(recovery)
-		this.recoveryInterventions += countRecoveryDelta(this.prevRecovery, next)
-		this.prevRecovery = next
+		this.recoveryFailures += countRecoveryDelta(this.prevEpisodeFailures, next)
+		this.prevEpisodeFailures = next
 		return this.get()
 	}
 
@@ -189,7 +228,7 @@ export class TaskTelemetryTracker {
 			startedAt: this.startedAt,
 			...(this.endedAt !== undefined ? { endedAt: this.endedAt } : {}),
 			toolCalls: this.toolCalls,
-			recoveryInterventions: this.recoveryInterventions,
+			recoveryFailures: this.recoveryFailures,
 		}
 	}
 

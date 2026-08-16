@@ -39,4 +39,64 @@ describe("TurnStateTracker", () => {
 		tracker.set("completed")
 		expect(tracker.get().seq).toBeGreaterThan(a)
 	})
+
+	describe("subscribe (ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01)", () => {
+		it("notifies listeners on every set() call including no-op transitions", () => {
+			const tracker = new TurnStateTracker(new MessageIdMinter())
+			const phases: string[] = []
+			tracker.subscribe((phase) => {
+				phases.push(phase)
+			})
+			tracker.set("streaming")
+			tracker.set("streaming") // same phase — still notifies
+			tracker.set("completed")
+			expect(phases).toEqual(["streaming", "streaming", "completed"])
+		})
+
+		it("forwards anchorTs as the second argument", () => {
+			const tracker = new TurnStateTracker(new MessageIdMinter())
+			let lastAnchor: number | undefined
+			tracker.subscribe((_phase, anchorTs) => {
+				lastAnchor = anchorTs
+			})
+			tracker.set("awaiting_approval", 99)
+			expect(lastAnchor).toBe(99)
+			tracker.set("streaming") // no anchor provided
+			expect(lastAnchor).toBeUndefined()
+		})
+
+		it("unsubscribe detaches the listener; later set() calls do not notify", () => {
+			const tracker = new TurnStateTracker(new MessageIdMinter())
+			const phases: string[] = []
+			const unsub = tracker.subscribe((phase) => {
+				phases.push(phase)
+			})
+			tracker.set("streaming")
+			unsub()
+			tracker.set("completed")
+			expect(phases).toEqual(["streaming"])
+		})
+
+		it("multiple subscribers all receive the notification", () => {
+			const tracker = new TurnStateTracker(new MessageIdMinter())
+			let aCount = 0
+			let bCount = 0
+			tracker.subscribe(() => {
+				aCount++
+			})
+			tracker.subscribe(() => {
+				bCount++
+			})
+			tracker.set("completed")
+			expect(aCount).toBe(1)
+			expect(bCount).toBe(1)
+		})
+
+		it("unsubscribe is idempotent", () => {
+			const tracker = new TurnStateTracker(new MessageIdMinter())
+			const unsub = tracker.subscribe(() => {})
+			unsub()
+			unsub() // must not throw
+		})
+	})
 })

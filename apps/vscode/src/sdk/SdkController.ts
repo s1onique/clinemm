@@ -203,6 +203,7 @@ export class Controller {
 	// remount; resets only on a NEW task identity.
 	private taskTelemetry: TaskTelemetryTracker
 	private taskTelemetryRecoveryUnsub: (() => void) | undefined
+	private taskTelemetryPhaseUnsub: (() => void) | undefined
 	// ACT-CLINEMM-SESSION-AUTONOMY01:
 	// Single owner of the active-session auto-approval override ("none" | "all").
 	// NOT persisted; cleared by the task-clear choke-point (and by new-task init).
@@ -341,6 +342,16 @@ export class Controller {
 		void this.getWorkspaceRoot()
 		// Authoritative UI-mode tracker, sharing the one id/seq/epoch authority.
 		this.turnStateTracker = new TurnStateTracker(this.messageTranslatorState.getMinter())
+		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+		// Canonical terminal-phase observer: every transition the
+		// turn-state tracker publishes is forwarded to the telemetry
+		// tracker's `observeTurnPhase`, which freezes the elapsed clock
+		// exactly once on `error` / `resumable` / `completed`. This is
+		// the single canonical seam — sprinkling `endTask()` calls
+		// through SdkController risks forgetting one terminal path.
+		this.taskTelemetryPhaseUnsub = this.turnStateTracker.subscribe((phase, anchorTs) => {
+			this.taskTelemetry.observeTurnPhase(phase, anchorTs)
+		})
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative task telemetry
 		// (elapsed / tool / recovery counters). Lives across the controller
 		// lifetime so webview reconnect / React remount does not reset.
@@ -2384,15 +2395,14 @@ export class Controller {
 					: undefined,
 				taskHistory: processedTaskHistory,
 				turnState: this.turnStateTracker.get(),
-				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: project the host-owned
-				// task telemetry (elapsed / toolCalls / recoveryInterventions)
-				// to the webview. When the tracker has no active task, the
-				// field is undefined and the TaskHeader renders em-dash rather
-				// than fabricating values from chat prose.
-				taskTelemetry: this.taskTelemetry.get(),
-				queuedPrompts,
-				stateVersion: minter.nextSeq(),
-				epoch: minter.epoch,
+				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A + CORRECTION01: project
+				// the host-owned task telemetry (elapsed / toolCalls /
+				// recoveryFailures) to the webview. When the tracker has no
+				// active task, the field is undefined and the TaskHeader
+				// renders em-dash rather than fabricating values from chat
+				// prose. CORRECTION01 renamed the recovery counter from
+				// recoveryInterventions to recoveryFailures (single canonical
+				// authority: episodeFailures only).
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
 				// authority; this is a read-only mirror for the webview.
