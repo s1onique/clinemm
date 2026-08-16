@@ -19,6 +19,7 @@ import type {
 	AgentRuntimeEvent,
 	AgentRuntimeRecoverySnapshot,
 	AgentTool,
+	AgentToolRuntimeOutcomeHookContext,
 } from "@cline/shared";
 import { resetSdkErrorRateLimiterForTests } from "@cline/shared";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -308,49 +309,119 @@ describe("C1.6 / P2 OK_FIRST in parallel batch", () => {
 //      P3 — CONTROL-PLANE DENY + SUCCESS → NO RECOVERY PRESSURE
 // ============================================================================
 
-describe("C1.6 / P3 control-plane DENY + success", () => {
-	it("P3: a host DENY in a parallel batch does NOT arm the latch even when paired with success", async () => {
-		// Force the batch to contain a DENY outcome + a
-		// success outcome in a single parallel step.
+describe("C1.6 / P3 real host-DENY via approval seam", () => {
+	it("P3: real requestToolApproval → host_policy_denied produces typed control_plane outcome and does NOT arm the latch", async () => {
+		// Drive the REAL approval seam. The runtime routes
+		// host denials through the typed C1.1
+		// `controlPlaneOutcome` authority — this is the
+		// exact path the original P3 wanted to test, but
+		// the old fixture threw an arbitrary error which
+		// the classifier could not recognize as
+		// control-plane provenance.
 		const bar = barrier();
-		const denyTool: AgentTool<{ x: number }, never> = {
-			name: "deny_me",
-			description: "Always-denied",
+		const deniedTool: AgentTool<{ x: number }, never> = {
+			name: "needs_approval",
+			description: "Always needs approval",
 			inputSchema: { type: "object" },
 			async execute() {
-				const gate = bar.controllable<unknown>("deny");
-				await gate.arrive();
-				throw Object.assign(new Error("denied by host"), {
-					__controlPlane: "host_policy_denied",
-				});
+				// Will not run — host denies before execution.
+				throw new Error("executor should not run after host DENY");
 			},
 		};
 		const okT = controllableTool(bar, "ok", { kind: "success" });
 		okT.name = "ctl_ok";
 		const model = new ScriptedModel([
 			() => [
-				make("d1", "deny_me", { x: 1 }),
+				make("d1", "needs_approval", { x: 1 }),
 				make("o1", "ctl_ok", { x: 2 }),
 				{ type: "finish", reason: "tool-calls" },
 			],
 			finishStep,
 		]);
+		// Capture every typed ToolRuntimeOutcome the
+		// runtime emits. This is the production observer
+		// surface, not the model.
+		const outcomes: AgentToolRuntimeOutcomeHookContext[] = [];
 		const runtime = new AgentRuntime({
 			model,
-			tools: [denyTool, okT],
+			tools: [deniedTool, okT],
 			toolExecution: "parallel",
+			// Force the approval gate to actually run for
+			// every tool call. Default policy is
+			// autoApprove=true which skips approval
+			// entirely.
+			toolPolicies: { "*": { autoApprove: false } },
+			hooks: {
+				onToolRuntimeOutcome: (ctx) => {
+					outcomes.push(ctx);
+				},
+			},
+			requestToolApproval: async (req: { toolName: string }) => {
+				// Host policy denies only the
+				// `needs_approval` tool; the genuine
+				// `ctl_ok` tool is approved so the
+				// parallel batch contains a real
+				// success + a real control_plane
+				// outcome.
+				if (req.toolName === "needs_approval") {
+					return {
+						approved: false,
+						reason: "host_policy_denied",
+						// CRITICAL: `decision.kind === "deny"`
+						// is what flips the classifier to
+						// `hostDenied: true` and routes the
+						// outcome as
+						// `control_plane / host_policy_denied`
+						// rather than `failure`. Without
+						// this structured field, the
+						// runtime sees only a `user_rejected`
+						// user-rejection path.
+						decision: {
+							kind: "deny",
+							reason: "host_policy_denied",
+							source: "host_policy_evaluator",
+						},
+					};
+				}
+				return { approved: true };
+			},
 		});
 		const events: CapturedRecoveryEvent[] = [];
 		subscribeRecovery(runtime, events);
 		const runP = runtime.run("P3");
-		await waitForPending(bar, ["deny", "ok"], 1000);
-		bar.release("deny", undefined);
+		await waitForPending(bar, ["ok"], 1000);
 		bar.release("ok", undefined);
 		await runP;
-		// No recovery termination when the batch contains
-		// only control-plane outcomes (plus a genuine
-		// success).
-		expect(runtime.snapshot().recovery.secondStage).not.toBe("terminating");
+		// 1. The denied tool produced a typed control_plane
+		// outcome with the correct C1.1 reason — NOT a
+		// failure. This is the load-bearing assertion
+		// that the prior P3 fixture could not make.
+		const deniedOutcome = outcomes.find(
+			(o) => o.toolCall.toolName === "needs_approval",
+		);
+		expect(deniedOutcome).toBeDefined();
+		if (deniedOutcome) {
+			expect(deniedOutcome.outcome.kind).toBe("control_plane");
+			if (deniedOutcome.outcome.kind === "control_plane") {
+				expect(deniedOutcome.outcome.outcome).toBe(
+					"host_policy_denied",
+				);
+			}
+		}
+		// 2. The genuine success also produced its typed
+		// success outcome.
+		const okOutcome = outcomes.find(
+			(o) => o.toolCall.toolName === "ctl_ok",
+		);
+		expect(okOutcome).toBeDefined();
+		expect(okOutcome?.outcome.kind).toBe("success");
+		// 3. No recovery-state-changed event fires (no
+		// typed failure in the batch). The parallel
+		// reconciliation sees only control_plane +
+		// success and leaves recovery idle.
+		expect(events).toEqual([]);
+		expect(runtime.snapshot().recovery.secondStage).toBe("idle");
+		expect(runtime.snapshot().recovery.episodeFailures).toBe(0);
 	});
 });
 
@@ -359,7 +430,14 @@ describe("C1.6 / P3 control-plane DENY + success", () => {
 // ============================================================================
 
 describe("C1.6 / P4-P6 parallel batch composition", () => {
-	it("P5: two genuine failures in a parallel batch produce terminating exactly once", async () => {
+	// P5 (the second `it` here, named consistently) covers
+	// "two genuine failures in a parallel batch with the
+	// latch idle." P6 covers "two successes in a parallel
+	// batch with the latch idle." These are NOT the
+	// "recovery bounded continuation" matrix; that is P1
+	// and P2 above, where the latch is ARMED before the
+	// batch starts.
+	it("P5: two genuine failures in a parallel batch with idle latch → idle (no arm)", async () => {
 		const bar = barrier();
 		const f1 = controllableTool(bar, "f1", { kind: "throw", error: ENOENT });
 		f1.name = "ctl_f1";

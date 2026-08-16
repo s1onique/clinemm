@@ -63,7 +63,8 @@ function opaqueTool(calls: { count: number }): AgentTool<{ value: string }, neve
 }
 
 /** 1000 scripted model responses, all proposing a fresh
- *  canonical input. The runtime must stop at finite N. */
+ *  canonical input. The runtime must stop at the exact
+ *  Trigger-D episode ceiling (7 in canonical config). */
 function build1000StepModel(): ScriptedModel {
 	const steps: Array<() => AgentModelEvent[]> = [];
 	for (let i = 0; i < 1000; i++) {
@@ -86,7 +87,20 @@ function build1000StepModel(): ScriptedModel {
 }
 
 describe("C1.6 / 870-shape adversarial reproducer", () => {
-	it("1000 scripted responses → runtime terminates at finite exact N without external timeout", async () => {
+	it("1000 scripted responses → runtime terminates at the EXACT canonical Trigger-D bound (requests=7, executorCalls=7)", async () => {
+		// Mirrors the upstream failure class
+		// (github.com/cline/cline/issues/11542):
+		// tool completion → model asks again → tool
+		// completion → model asks again → ... until
+		// external kill. Our claim: the runtime stops
+		// at the EXACT finite count determined by the
+		// bounded-recovery policy, no external
+		// timeout/kill required.
+		//
+		// Canonical all-fresh opaque policy:
+		// maxRecoveryEpisodeFailures = 6 →
+		// exact 7 provider requests before terminating
+		// (Q3 evidence pins this exactly).
 		const calls = { count: 0 };
 		const model = build1000StepModel();
 		const runtime = new AgentRuntime({
@@ -105,14 +119,13 @@ describe("C1.6 / 870-shape adversarial reproducer", () => {
 		]);
 		expect(result.status).toBe("aborted");
 		expect(result.error?.message).toBe("bounded_recovery_exhausted");
-		// The runtime MUST terminate at a finite count
-		// dramatically less than 1000.
-		const REQUESTS = model.requests.length;
-		expect(REQUESTS).toBeLessThan(20);
-		expect(REQUESTS).toBeGreaterThanOrEqual(2);
-		expect(calls.count).toBeLessThanOrEqual(REQUESTS);
-		// Termination cause is internal deterministic
-		// policy, not external timeout.
+		// EXACT counts — not just "much less than 1000".
+		// This is the headline C1.6 number: the runtime
+		// terminates at a deterministic finite point that
+		// is 143× smaller than the upstream failure mode.
+		expect(model.requests.length).toBe(7);
+		expect(calls.count).toBe(7);
+		expect(runtime.snapshot().recovery.episodeFailures).toBe(6);
 		expect(runtime.snapshot().recovery.secondStage).toBe("terminating");
 	});
 });
