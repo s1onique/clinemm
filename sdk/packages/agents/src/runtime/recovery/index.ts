@@ -70,4 +70,9 @@ export {
 	projectRuntimeRecovery,
 	type RuntimeRecoveryProjectionInput,
 } from "./runtime-recovery-projection";
+export {
+	buildExecutionState,
+	isSameExecutionState,
+	type ExecutionStateSources,
+} from "./runtime-execution-state";
 export { RecoveryTracker } from "./tracker";

@@ -146,6 +146,63 @@ export type AgentRunStatus =
 	| "failed";
 
 /**
+ * RSMT01 RUN-LIFECYCLE EXECUTION STATE.
+ *
+ * The orthogonal activity/interaction projection that lives
+ * alongside `status: AgentRunStatus`. Lifecycle is the run
+ * phase (`idle` / `running` / `completed` / `aborted` /
+ * `failed`); this object captures the CURRENT progress markers
+ * a host or UI needs to render truthful task state:
+ *
+ *   - `modelStreaming` is true while the runtime is
+ *     inside `model.stream(...)` actively consuming
+ *     chunks. False during preparation, after the stream
+ *     settles, or between turns.
+ *   - `tooling` is true while at least one tool call is in
+ *     flight. Source: `state.pendingToolCalls.length > 0`.
+ *     Encoded as a derived boolean so consumers do not have
+ *     to keep two views in sync.
+ *   - `awaitingApproval` is true ONLY while
+ *     `requestToolApproval(...)` is in flight. Cleared
+ *     the moment the decision (approved / denied /
+ *     rejected) is observed. Host DENY is a completed
+ *     control decision, NOT an "awaiting user" state.
+ *
+ * INVARIANTS (frozen by RSMT01 and pinned by
+ * `agent-runtime.execution-state.test.ts`):
+ *
+ *   I1: terminal lifecycle => modelStreaming=false,
+ *       tooling=false, awaitingApproval=false.
+ *   I2: awaitingApproval=true => status === "running".
+ *   I3: no active run => all three boolean flags false.
+ *   I4: every emitted event payload carries
+ *       `event.snapshot.execution` BY CONSTRUCTION —
+ *       the snapshot is built once per event by
+ *       `AgentRuntime.snapshot()`.
+ *   I5: `restore()` (or `run()` re-entry) => all three
+ *       flags cleared. Prior activity cannot leak.
+ *   I6: `recovery` is a separate orthogonal projection;
+ *       this object does NOT add a `recovering` field.
+ *       (See `C1.5 / snapshot.recovery` for the recovery
+ *       surface.)
+ *
+ * CONSUMER RULE: UI and host layers MUST read from
+ * `snapshot.execution` and `snapshot.status`. They MUST
+ * NOT derive task state from message prose
+ * (`lastMessage.partial === true`,
+ * `lastMessage.say === "api_req_started"`,
+ * conversation history parsing, button visibility, or
+ * pending prompt state). The previous
+ * prose-derived inference is the upstream bug class
+ * this projection is designed to prevent.
+ */
+export interface AgentRuntimeExecutionState {
+	modelStreaming: boolean;
+	tooling: boolean;
+	awaitingApproval: boolean;
+}
+
+/**
  * C1.5 LIVE-RUNTIME REFINEMENT.
  *
  * `AgentRuntimeStateSnapshot` keeps `recovery?` so pre-C1.5 hand-built
@@ -164,6 +221,7 @@ export type AgentRunStatus =
  */
 export type LiveAgentRuntimeStateSnapshot = AgentRuntimeStateSnapshot & {
 	recovery: AgentRuntimeRecoverySnapshot;
+	execution: AgentRuntimeExecutionState;
 };
 
 /**
@@ -223,6 +281,20 @@ export interface AgentRuntimeStateSnapshot {
 	 * idle".
 	 */
 	recovery?: AgentRuntimeRecoverySnapshot;
+	/**
+	 * RSMT01 CANONICAL EXECUTION TRUTH.
+	 *
+	 * The activity/interaction projection. Mirrors the
+	 * `recovery?` optionality contract: every snapshot a live
+	 * runtime produces carries this field (pinned by
+	 * `RSMT01_EVENT_EQUALS_SNAPSHOT`). A missing value
+	 * means the snapshot did not come from a runtime —
+	 * never "execution is idle".
+	 *
+	 * See `AgentRuntimeExecutionState` for the invariant
+	 * contract and the consumer rule.
+	 */
+	execution?: AgentRuntimeExecutionState;
 }
 
 // =============================================================================

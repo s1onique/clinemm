@@ -53,6 +53,7 @@ import {
 } from "@cline/shared";
 import { nanoid } from "nanoid";
 import {
+	buildExecutionState,
 	buildToolOutcomeClassificationInput,
 	classifyToolRuntimeOutcome,
 	controlFamilyToDiagnosticId,
@@ -512,6 +513,30 @@ export class AgentRuntime {
 		 * telemetry leave this false, so their failures still get reported.
 		 */
 		lastErrorReported: false,
+		/**
+		 * RSMT01 EXECUTION-AUTHORITY FLAGS.
+		 *
+		 * SOURCE OF TRUTH for the `execution` projection's
+		 * `modelStreaming` and `awaitingApproval` fields.
+		 * `tooling` is derived from `pendingToolCalls.length > 0`
+		 * in the projection, so it lives only in the snapshot.
+		 *
+		 * Mutation rules (pinned by
+		 * `agent-runtime.execution-state.test.ts`):
+		 *
+		 *   - `executionModelStreaming` is set true
+		 *     immediately before the model-stream for-await
+		 *     loop in `generateAssistantMessage` and cleared in
+		 *     the same `finally` after the loop.
+		 *   - `executionAwaitingApproval` is set true
+		 *     immediately before the `await requestApproval(...)`
+		 *     call in `requestToolApproval` and cleared in
+		 *     the same `finally` after the await resolves.
+		 *   - Both flags are reset to `false` on `run()`
+		 *     start (next-run freshness).
+		 */
+		executionModelStreaming: false,
+		executionAwaitingApproval: false,
 	};
 	/** One automatic overflow-recovery attempt per run. */
 	private overflowRecoveryAttempted = false;
@@ -768,6 +793,12 @@ export class AgentRuntime {
 		this.state.pendingToolCalls = [];
 		this.state.usage = cloneUsage(DEFAULT_USAGE);
 		this.state.lastError = undefined;
+		// RSMT01 I5: restore() clears the execution
+		// authority flags. A prior run's
+		// modelStreaming / awaitingApproval MUST NOT
+		// leak across the restore boundary.
+		this.state.executionModelStreaming = false;
+		this.state.executionAwaitingApproval = false;
 		this.state.lastErrorClass = undefined;
 		this.state.lastErrorReported = false;
 		this.state.messages = cloneMessages(messages);
@@ -872,6 +903,21 @@ export class AgentRuntime {
 			lastError: this.state.lastError,
 			lastErrorClass: this.state.lastErrorClass,
 			recovery: this.snapshotRecoveryState(),
+			/**
+			 * RSMT01 CANONICAL EXECUTION TRUTH.
+			 *
+			 * The activity/interaction projection is built
+			 * by the same `snapshot()` call that produces
+			 * `recovery`, so every `event.snapshot.execution`
+			 * is structurally guaranteed to equal
+			 * `runtime.snapshot().execution` at the moment of
+			 * emission. Mirrors the C1.5 architecture.
+			 */
+			execution: buildExecutionState({
+				executionModelStreaming: this.state.executionModelStreaming,
+				executionAwaitingApproval: this.state.executionAwaitingApproval,
+				pendingToolCalls: this.state.pendingToolCalls,
+			}),
 		};
 	}
 
@@ -1085,6 +1131,13 @@ export class AgentRuntime {
 		this.state.lastError = undefined;
 		this.state.lastErrorClass = undefined;
 		this.state.lastErrorReported = false;
+		// RSMT01: next-run freshness. The execution
+		// authority flags MUST be cleared at the start of
+		// every run so a prior run's stale
+		// "modelStreaming" or "awaitingApproval" cannot
+		// leak across the run boundary. Pinned by RSM14.
+		this.state.executionModelStreaming = false;
+		this.state.executionAwaitingApproval = false;
 		this.state.usage = cloneUsage(DEFAULT_USAGE);
 		this.overflowRecoveryAttempted = false;
 
@@ -1525,6 +1578,15 @@ export class AgentRuntime {
 		let accumulatedText = "";
 		let accumulatedReasoning = "";
 
+		// RSMT01: raise modelStreaming BEFORE the for-await
+		// loop so observers that subscribe to snapshot()
+		// mid-stream see the truthful activity signal. The
+		// `finally` clears it on every exit path (normal
+		// completion, abort, throw), preserving invariant
+		// I1 (terminal ⇒ all flags false) and I3 (no active
+		// run ⇒ all flags false).
+		this.state.executionModelStreaming = true;
+		try {
 		for await (const event of stream) {
 			this.throwIfAborted();
 			switch (event.type) {
@@ -1717,6 +1779,14 @@ export class AgentRuntime {
 					break;
 				}
 			}
+		}
+
+		} finally {
+			// RSMT01: clear modelStreaming on every exit path
+			// (normal completion, abort, throw). Restores
+			// the I1 invariant for any terminal lifecycle
+			// that follows this turn.
+			this.state.executionModelStreaming = false;
 		}
 
 		for (const item of sequence) {
@@ -2388,6 +2458,14 @@ export class AgentRuntime {
 				reason: `Tool "${toolCall.toolName}" requires approval but no approval callback is configured`,
 			};
 		}
+		// RSMT01: raise awaitingApproval ONLY while the
+		// runtime is genuinely waiting on the host. The
+		// `finally` clears it on every exit path (resolve,
+		// reject, throw), preserving invariant I2
+		// (awaitingApproval ⇒ status === "running") and
+		// preventing a stale “awaiting” flag from leaking
+		// across turns or into terminal lifecycle.
+		this.state.executionAwaitingApproval = true;
 		try {
 			return await requestApproval({
 				sessionId:
@@ -2413,6 +2491,8 @@ export class AgentRuntime {
 					error instanceof Error ? error.message : String(error)
 				}`,
 			};
+		} finally {
+			this.state.executionAwaitingApproval = false;
 		}
 	}
 
@@ -3132,6 +3212,14 @@ export class AgentRuntime {
 		outputText?: string,
 	): AgentRunResult {
 		this.state.status = status;
+		// RSMT01 I1: terminal lifecycle ⇒ all flags false.
+		// `finishRun` is the bottom of every completed /
+		// aborted / failed path. Both flags are reset
+		// here so a stale modelStreaming or
+		// awaitingApproval cannot survive the terminal
+		// transition.
+		this.state.executionModelStreaming = false;
+		this.state.executionAwaitingApproval = false;
 		return {
 			agentId: this.state.agentId,
 			agentRole: this.state.agentRole,
