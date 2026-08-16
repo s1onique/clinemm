@@ -26,6 +26,7 @@ import type {
 	AgentToolResult,
 	AgentUsage,
 	AgentRuntimeConfig as BaseAgentRuntimeConfig,
+	AgentRuntimeExecutionState,
 	CaptureTaskLifecycleEventInput,
 	ControlPlaneOutcome,
 	LiveAgentRuntimeEvent,
@@ -53,7 +54,6 @@ import {
 } from "@cline/shared";
 import { nanoid } from "nanoid";
 import {
-	buildExecutionState,
 	buildToolOutcomeClassificationInput,
 	classifyToolRuntimeOutcome,
 	controlFamilyToDiagnosticId,
@@ -70,6 +70,10 @@ import {
 	serializeStableFailureCode,
 	type ToolAttemptIdentity,
 } from "./runtime/recovery";
+import {
+	buildExecutionState,
+	isSameExecutionState,
+} from "./runtime/state";
 
 const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
 	"Model reached the maximum output token limit before completing the turn";
@@ -1039,6 +1043,80 @@ export class AgentRuntime {
 		}
 	}
 
+	/**
+	 * RSMT01 SOLE OWNER of `execution-state-changed` emission.
+	 *
+	 * Mirrors `emitRecoveryStateChangeIfChanged`'s C1.5
+	 * design. The runtime owns the three execution
+	 * authority flags (`executionModelStreaming`,
+	 * `executionAwaitingApproval`, and the
+	 * `pendingToolCalls.length > 0` projection); this
+	 * helper captures the projection BEFORE the mutation
+	 * and decides whether an externally meaningful
+	 * change occurred.
+	 *
+	 * Usage contract:
+	 *
+	 *     const before = this.buildExecutionProjection();
+	 *     ...authoritative mutation...
+	 *     await this.emitExecutionStateChangeIfChanged(before);
+	 *
+	 * Dedup: no event when {@link isSameExecutionState}
+	 * holds. This collapses scheduler-dependent
+	 * intermediate deltas (per-tool completion that does
+	 * not change any of the three flags when siblings
+	 * are still in flight) and suppresses no-op
+	 * transitions.
+	 *
+	 * Ordering: emitted AFTER the authoritative mutation
+	 * and BEFORE the blocking await (for
+	 * `awaitingApproval`). Subscribers learn about the
+	 * new state before the runtime blocks.
+	 *
+	 * @param before projection captured BEFORE the mutation.
+	 */
+	private async emitExecutionStateChangeIfChanged(
+		before: AgentRuntimeExecutionState,
+	): Promise<void> {
+		const after = this.snapshot().execution;
+		if (!after) {
+			return;
+		}
+		if (isSameExecutionState(before, after)) {
+			return;
+		}
+		try {
+			await this.emit({
+				type: "execution-state-changed",
+				snapshot: this.snapshot(),
+				previousExecution: before,
+			});
+		} catch {
+			// RSMT01 OBSERVATION MUST NOT BECOME CONTROL.
+			//
+			// Mirrors `emitRecoveryStateChangeIfChanged`'s
+			// swallow: a throwing subscriber must not unwind
+			// the runtime's control flow or block later
+			// subscribers. The execution announcement is
+			// an observation; downstream consumers re-read
+			// `snapshot.execution` at their own cadence.
+		}
+	}
+
+	/**
+	 * RSMT01: snapshot the execution projection without
+	 * triggering a re-entrant `snapshot()` call. Used as
+	 * the `before` argument of
+	 * `emitExecutionStateChangeIfChanged`.
+	 */
+	private buildExecutionProjection(): AgentRuntimeExecutionState {
+		return buildExecutionState({
+			executionModelStreaming: this.state.executionModelStreaming,
+			executionAwaitingApproval: this.state.executionAwaitingApproval,
+			pendingToolCalls: this.state.pendingToolCalls,
+		});
+	}
+
 	private async ensureInitialized(): Promise<void> {
 		this.initialization ??= this.initialize();
 		await this.initialization;
@@ -1585,7 +1663,15 @@ export class AgentRuntime {
 		// completion, abort, throw), preserving invariant
 		// I1 (terminal ⇒ all flags false) and I3 (no active
 		// run ⇒ all flags false).
+		//
+		// RSMT01 EVENT OBSERVABILITY: capture the
+		// pre-raise projection and emit AFTER the raise
+		// so subscribers learn the new state BEFORE
+		// the runtime starts consuming chunks. The
+		// `finally` emits the cleared projection.
+		const streamBefore = this.buildExecutionProjection();
 		this.state.executionModelStreaming = true;
+		await this.emitExecutionStateChangeIfChanged(streamBefore);
 		try {
 		for await (const event of stream) {
 			this.throwIfAborted();
@@ -1786,7 +1872,14 @@ export class AgentRuntime {
 			// (normal completion, abort, throw). Restores
 			// the I1 invariant for any terminal lifecycle
 			// that follows this turn.
+			const modelStreamingWasTrue = this.state.executionModelStreaming;
 			this.state.executionModelStreaming = false;
+			if (modelStreamingWasTrue) {
+				// Emit only if the flag actually flipped
+				// from true to false (i.e. the run
+				// successfully entered streaming).
+				await this.emitExecutionStateChangeIfChanged(streamBefore);
+			}
 		}
 
 		for (const item of sequence) {
@@ -2465,9 +2558,14 @@ export class AgentRuntime {
 		// (awaitingApproval ⇒ status === "running") and
 		// preventing a stale “awaiting” flag from leaking
 		// across turns or into terminal lifecycle.
+		// RSMT01 EVENT OBSERVABILITY: capture the
+		// pre-raise projection so subscribers learn
+		// about the new awaitingApproval state
+		// BEFORE the runtime blocks on the await.
+		const approvalBefore = this.buildExecutionProjection();
 		this.state.executionAwaitingApproval = true;
 		try {
-			return await requestApproval({
+			const result = await requestApproval({
 				sessionId:
 					this.config.sessionId?.trim() ||
 					this.config.conversationId?.trim() ||
@@ -2484,6 +2582,7 @@ export class AgentRuntime {
 				input,
 				policy,
 			});
+			return result;
 		} catch (error) {
 			return {
 				approved: false,
@@ -2493,6 +2592,12 @@ export class AgentRuntime {
 			};
 		} finally {
 			this.state.executionAwaitingApproval = false;
+			// Emit AFTER the finally so the cleared
+			// state is observable to subscribers. The
+			// `approvalBefore` is the pre-raise
+			// projection; the post-finally snapshot
+			// will be `awaitingApproval=false`.
+			await this.emitExecutionStateChangeIfChanged(approvalBefore);
 		}
 	}
 

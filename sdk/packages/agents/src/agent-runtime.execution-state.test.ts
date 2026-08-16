@@ -466,6 +466,51 @@ describe("RSMT01 / RSM08 host DENY clears awaitingApproval", () => {
 	});
 });
 
+describe("RSMT01 / RSM-CORRECTION02 tooling/awaitingApproval overlap", () => {
+	it("while awaitingApproval is true, tooling is also true (broad Option A semantics)", async () => {
+		// CORRECTION02: the reviewer's P1. With
+		// `tooling` following the broad (Option A)
+		// semantics, a tool call that is parked at
+		// `requestToolApproval` is still a
+		// runtime-owned unresolved tool call. Both
+		// flags are true simultaneously. This is the
+		// intentionally documented overlap, not a
+		// drift.
+		const bar = barrier();
+		const approvalGate = bar.controllable<unknown>("approval");
+		const runtime = new AgentRuntime({
+			model: new MultiStepModel([
+				[
+					{
+						type: "tool-call-delta",
+						toolCallId: "a1",
+						toolName: "counter",
+						inputText: JSON.stringify({ x: 1 }),
+					},
+					{ type: "finish", reason: "tool-calls" },
+				],
+				finishStep(),
+			]),
+			tools: [passingTool("counter")],
+			toolPolicies: { "*": { autoApprove: false } },
+			requestToolApproval: async () => {
+				await approvalGate.arrive();
+				return { approved: true };
+			},
+		});
+		const runP = runtime.run("RSM-CORRECTION02");
+		await waitForPending(bar, ["approval"], 1000);
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		const exec = runtime.snapshot().execution;
+		expect(exec.awaitingApproval).toBe(true);
+		// Both flags are simultaneously true. This
+		// is the pinned broad-Option-A overlap.
+		expect(exec.tooling).toBe(true);
+		bar.release("approval", undefined);
+		await runP;
+	});
+});
+
 // ---------------------------------------------------------------------------
 // RSM09 — abort during model streaming
 // ---------------------------------------------------------------------------
@@ -713,8 +758,16 @@ describe("RSMT01 / RSM14b next-run freshness without restore", () => {
 // RSM15 — event snapshot equals runtime snapshot at the moment of emission
 // ---------------------------------------------------------------------------
 
-describe("RSMT01 / RSM15 event/snapshot equality", () => {
-	it("every event's snapshot.execution is defined and the final event matches the post-run snapshot", async () => {
+describe("RSMT01 / RSM15 event/snapshot equality (re-entrant)", () => {
+	it("every event's snapshot.execution equals runtime.snapshot().execution AT THE MOMENT OF EMISSION", async () => {
+		// CORRECTION02: the previous RSM15 only
+		// proved the FINAL event matched the
+		// post-run snapshot. The C1.5-style
+		// invariant is RE-ENTRANT — every emitted
+		// event's payload must describe the
+		// runtime state at the moment of
+		// emission. The subscription itself
+		// performs the equality check.
 		const runtime = new AgentRuntime({
 			model: new MultiStepModel([
 				[
@@ -730,16 +783,60 @@ describe("RSMT01 / RSM15 event/snapshot equality", () => {
 			]),
 			tools: [passingTool("counter")],
 		});
-		const events: AgentRuntimeExecutionState[] = [];
 		runtime.subscribe((event) => {
-			events.push(event.snapshot.execution);
+			// This is the actual invariant:
+			// every event payload's snapshot is
+			// equal to the runtime's CURRENT
+			// snapshot at emission time.
+			expect(event.snapshot.execution).toEqual(
+				runtime.snapshot().execution,
+			);
 		});
 		await runtime.run("RSM15");
-		for (const e of events) {
-			expect(e).toBeDefined();
-		}
-		expect(events[events.length - 1]).toEqual(
-			runtime.snapshot().execution,
-		);
+	});
+});
+
+describe("RSMT01 / RSM15b re-entrant equality during approval wait", () => {
+	it("event.snapshot.execution equals runtime.snapshot().execution while awaitingApproval is in flight", async () => {
+		// Stresses the awaitingApproval path,
+		// where the previous RSM15 (final-only
+		// comparison) could not have caught a
+		// per-event drift.
+		const bar = barrier();
+		const approvalGate = bar.controllable<unknown>("approval");
+		const runtime = new AgentRuntime({
+			model: new MultiStepModel([
+				[
+					{
+						type: "tool-call-delta",
+						toolCallId: "a1",
+						toolName: "counter",
+						inputText: JSON.stringify({ x: 1 }),
+					},
+					{ type: "finish", reason: "tool-calls" },
+				],
+				finishStep(),
+			]),
+			tools: [passingTool("counter")],
+			toolPolicies: { "*": { autoApprove: false } },
+			requestToolApproval: async () => {
+				await approvalGate.arrive();
+				return { approved: true };
+			},
+		});
+		runtime.subscribe((event) => {
+			expect(event.snapshot.execution).toEqual(
+				runtime.snapshot().execution,
+			);
+		});
+		const runP = runtime.run("RSM15b");
+		await waitForPending(bar, ["approval"], 1000);
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		// At this moment awaitingApproval MUST
+		// be true at the runtime and true on the
+		// last emitted event.
+		expect(runtime.snapshot().execution.awaitingApproval).toBe(true);
+		bar.release("approval", undefined);
+		await runP;
 	});
 });

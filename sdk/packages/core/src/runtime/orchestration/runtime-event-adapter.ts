@@ -278,7 +278,18 @@ export class RuntimeEventAdapter {
 				// `default`, so the `never` check below keeps mapping
 				// future event-union additions.
 				return [];
-			default: {
+				case "execution-state-changed":
+					// RSMT01: no legacy `AgentEvent` translation.
+					//
+					// Like `recovery-state-changed`, the
+					// execution transition is a runtime-state
+					// observation. Translating it to prose
+					// would invite consumers to re-derive
+					// state by parsing it — the very
+					// anti-pattern this projection is
+					// designed to prevent.
+					return [];
+				default: {
 				const _exhaustive: never = event;
 				return _exhaustive;
 			}

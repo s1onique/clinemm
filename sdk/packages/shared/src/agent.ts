@@ -158,10 +158,26 @@ export type AgentRunStatus =
  *     inside `model.stream(...)` actively consuming
  *     chunks. False during preparation, after the stream
  *     settles, or between turns.
- *   - `tooling` is true while at least one tool call is in
- *     flight. Source: `state.pendingToolCalls.length > 0`.
- *     Encoded as a derived boolean so consumers do not have
- *     to keep two views in sync.
+ *   - `tooling` follows the BROAD (Option A) semantics:
+ *     it is true whenever the runtime currently owns one
+ *     or more unresolved tool calls, regardless of
+ *     which sub-phase those calls are in. This includes
+ *     tool calls that are:
+ *       - parsed and pending approval,
+ *       - queued in a parallel batch (waiting for
+ *         siblings),
+ *       - denied before execution (skipReason set), or
+ *       - actively inside `tool.execute(...)`.
+ *     Source: `state.pendingToolCalls.length > 0`. It is
+ *     intentionally NOT a "is the executor currently
+ *     running" signal — the latter would require
+ *     additional per-batch executor-count state that
+ *     this ACT does not introduce.
+ *     Therefore during a host DENY or while waiting for
+ *     an approval decision, `tooling` may be true
+ *     together with `awaitingApproval` — this is the
+ *     intentionally documented overlap, pinned by
+ *     RSM-CORRECTION02.
  *   - `awaitingApproval` is true ONLY while
  *     `requestToolApproval(...)` is in flight. Cleared
  *     the moment the decision (approved / denied /
@@ -811,6 +827,21 @@ export type AgentRuntimeEvent =
 	 *   - For parallel tool batches, emitted at the BATCH BOUNDARY only;
 	 *     scheduler-dependent per-tool intermediates are suppressed.
 	 */
+	/**
+	 * RSMT01 execution transition.
+	 *
+	 * Emitted when the externally-observable execution
+	 * projection changes (any of `modelStreaming`,
+	 * `tooling`, `awaitingApproval` flips).
+	 * Authoritative payload is `snapshot.execution`.
+	 * Mirrors the C1.5 `recovery-state-changed` design.
+	 */
+	| {
+			type: "execution-state-changed";
+			snapshot: AgentRuntimeStateSnapshot;
+			/** Projection immediately before the authoritative mutation. */
+			previousExecution: AgentRuntimeExecutionState;
+	  }
 	| {
 			type: "recovery-state-changed";
 			snapshot: AgentRuntimeStateSnapshot;

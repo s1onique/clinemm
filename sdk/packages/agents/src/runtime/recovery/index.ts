@@ -70,9 +70,10 @@ export {
 	projectRuntimeRecovery,
 	type RuntimeRecoveryProjectionInput,
 } from "./runtime-recovery-projection";
-export {
-	buildExecutionState,
-	isSameExecutionState,
-	type ExecutionStateSources,
-} from "./runtime-execution-state";
+// RSMT01 CORRECTION02: `buildExecutionState` and friends
+// moved from `./runtime-execution-state` to
+// `runtime/state/execution-state.ts`. The recovery
+// barrel is intentionally recovery-only; importing
+// execution-state helpers from here is a layering
+// violation. Use `runtime/state` instead.
 export { RecoveryTracker } from "./tracker";
