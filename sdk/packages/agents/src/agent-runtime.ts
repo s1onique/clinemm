@@ -3434,6 +3434,39 @@ export class AgentRuntime {
 				});
 				break;
 		}
+		// Listeners that observe state-transition events MUST
+		// NOT be allowed to (a) veto runtime control flow or
+		// (b) prevent subsequent subscribers from receiving
+		// the same event. The C1.5 verdict established this
+		// invariant for the recovery projection. RSMT01
+		// CORRECTION03 extends it to the execution projection
+		// for the same architectural reason:
+		//
+		//   - `recovery-state-changed` is an OBSERVATION of
+		//     `snapshot.recovery`. A throwing listener there
+		//     must not become authority over the recovery
+		//     decision, and must not silence other listeners.
+		//   - `execution-state-changed` is an OBSERVATION of
+		//     `snapshot.execution`. The same rule applies
+		//     symmetrically: a throwing listener must not
+		//     become authority over the model/approval
+		//     progression, and must not silence other listeners.
+		//
+		// Per-listener isolation is the smallest correction
+		// consistent with the existing C1.5 emitter contract
+		// (see `emitRecoveryStateChangeIfChanged`). Generalizing
+		// this to ALL events would change the runtime's
+		// pre-existing throw-propagation behavior for
+		// unrelated event types; the reviewer's P0 explicitly
+		// asks for the narrow observation-event extension.
+		//
+		// Future event variants that satisfy the same
+		// "observation, not control" criterion should join
+		// this list rather than introducing their own
+		// per-emit try/catch.
+		const isObservationEvent =
+			event.type === "recovery-state-changed" ||
+			event.type === "execution-state-changed";
 		for (const listener of this.listeners) {
 			// C1.5 P1: `AgentEventListener` is typed as
 			// `(event: LiveAgentRuntimeEvent) => void`, which is a
@@ -3446,19 +3479,14 @@ export class AgentRuntime {
 			// to the live-public type, matching the production code
 			// path that constructs every emitted event via
 			// `this.snapshot()`.
-			// C1.6 CORRECTION (parent verdict §25): a throwing
-			// subscriber MUST NOT prevent subsequent subscribers
-			// from receiving the same event. This is scoped to
-			// `recovery-state-changed` only — the parent verdict
-			// explicitly says "do not silently generalize this
-			// behavior to unrelated events." Other event types
-			// retain their pre-C1.6 throw-propagation behavior.
 			try {
 				listener(event as unknown as Parameters<AgentEventListener>[0]);
 			} catch (err) {
-				if (event.type === "recovery-state-changed") {
-					// Observation must not become control — same
-					// C1.5 invariant as the inline restore path.
+				if (isObservationEvent) {
+					// Observation must not become control.
+					// Skip this listener, continue with the
+					// rest of `this.listeners` and the
+					// `onEvent` hooks.
 					continue;
 				}
 				throw err;

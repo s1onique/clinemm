@@ -511,6 +511,202 @@ describe("RSMT01 / RSM-CORRECTION02 tooling/awaitingApproval overlap", () => {
 	});
 });
 
+describe("RSMT01 / RSM16 throwing execution-state subscriber cannot veto runtime", () => {
+	it("RSM16A: a throwing execution-state-changed subscriber does not block model streaming or skip later subscribers", async () => {
+		// CORRECTION03: the reviewer's P0. A subscriber
+		// to `execution-state-changed` is a pure
+		// observer. Its throw MUST NOT (a) unwind the
+		// for-await control flow, (b) prevent the
+		// model stream from progressing, (c) prevent
+		// subsequent subscribers from receiving the
+		// same event.
+		//
+		// We register TWO subscribers: the first one
+		// throws on every `execution-state-changed`;
+		// the second one records that it was called.
+		// If the runtime's emit loop generalizes the
+		// C1.5 recovery-only swallow to all
+		// observation events, the second subscriber
+		// will see the event despite the first one
+		// throwing.
+		const calls: AgentRuntimeEvent["type"][] = [];
+		const runtime = new AgentRuntime({
+			model: new MultiStepModel([
+				[
+					{
+						type: "text-delta",
+						text: "hello ",
+					},
+					{
+						type: "text-delta",
+						text: "world",
+					},
+					{ type: "finish", reason: "stop" },
+				],
+			]),
+		});
+		let secondCalled = false;
+		runtime.subscribe((event) => {
+			calls.push(event.type);
+			if (event.type === "execution-state-changed") {
+				// Deliberately throw. The C1.5 policy
+				// scoped to recovery-state-changed
+				// already swallows this; the reviewer
+				// requires it be extended to
+				// execution-state-changed for the
+				// same architectural reason
+				// (observation must not become control).
+				throw new Error("first-subscriber-exploded");
+			}
+		});
+		runtime.subscribe((event) => {
+			if (event.type === "execution-state-changed") {
+				secondCalled = true;
+			}
+		});
+		const result = await runtime.run("RSM16A");
+		// The run must succeed despite the throwing subscriber.
+		expect(result.status).toBe("completed");
+		// The model stream must have progressed.
+		expect(result.outputText).toBe("hello world");
+		// The throw must not have unwound the stream.
+		expect(runtime.snapshot().execution).toEqual(ZERO_EXECUTION);
+		// At least one execution-state-changed must have fired.
+		expect(calls).toContain("execution-state-changed");
+		// AND the SECOND subscriber must have received the
+		// event despite the first one throwing.
+		expect(secondCalled).toBe(true);
+	});
+
+	it("RSM16B: a throwing execution-state-changed subscriber does not block approval progression", async () => {
+		// Same invariant on the awaitingApproval path.
+		// The approval callback MUST still be reached and
+		// resolved, and subsequent subscribers MUST still
+		// see the event.
+		const bar = barrier();
+		const approvalGate = bar.controllable<unknown>("approval");
+		const calls: AgentRuntimeEvent["type"][] = [];
+		let secondSawExecutionChange = false;
+		let approvalCallbackReached = false;
+		const runtime = new AgentRuntime({
+			model: new MultiStepModel([
+				[
+					{
+						type: "tool-call-delta",
+						toolCallId: "a1",
+						toolName: "counter",
+						inputText: JSON.stringify({ x: 1 }),
+					},
+					{ type: "finish", reason: "tool-calls" },
+				],
+				finishStep(),
+			]),
+			tools: [passingTool("counter")],
+			toolPolicies: { "*": { autoApprove: false } },
+			requestToolApproval: async () => {
+				approvalCallbackReached = true;
+				await approvalGate.arrive();
+				return { approved: true };
+			},
+		});
+		runtime.subscribe((event) => {
+			calls.push(event.type);
+			if (event.type === "execution-state-changed") {
+				throw new Error("first-subscriber-exploded");
+			}
+		});
+		runtime.subscribe((event) => {
+			if (event.type === "execution-state-changed") {
+				secondSawExecutionChange = true;
+			}
+		});
+		const runP = runtime.run("RSM16B");
+		await waitForPending(bar, ["approval"], 1000);
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		bar.release("approval", undefined);
+		const result = await runP;
+		// The run must have completed via the approval path.
+		expect(approvalCallbackReached).toBe(true);
+		expect(result.status).toBe("completed");
+		// The execution must be ZERO_EXECUTION at terminal.
+		expect(runtime.snapshot().execution).toEqual(ZERO_EXECUTION);
+		// The second subscriber must have seen the
+		// awaitingApproval flip to true (and the
+		// subsequent clear), despite the first one
+		// throwing.
+		expect(secondSawExecutionChange).toBe(true);
+	});
+});
+
+describe("RSMT01 / RSM17 tooling event-edge observability", () => {
+	it("RSM17A: the tool-started event carries snapshot.execution.tooling === true", async () => {
+		// CORRECTION03 P1: the event coverage table
+		// derived from source inspection alone. This
+		// test pins the truth of the `tooling` true
+		// edge at the existing tool-started event so
+		// future changes to the projection or the
+		// emitter cannot silently regress the
+		// `tooling` transition for a UI consumer that
+		// wires `tool-started` to a render signal.
+		let toolStartedExecution: AgentRuntimeExecutionState | undefined;
+		const runtime = new AgentRuntime({
+			model: new MultiStepModel([
+				[
+					{
+						type: "tool-call-delta",
+						toolCallId: "e1",
+						toolName: "counter",
+						inputText: JSON.stringify({ x: 1 }),
+					},
+					{ type: "finish", reason: "tool-calls" },
+				],
+				finishStep(),
+			]),
+			tools: [passingTool("counter")],
+		});
+		runtime.subscribe((event) => {
+			if (event.type === "tool-started") {
+				toolStartedExecution = event.snapshot.execution;
+			}
+		});
+		await runtime.run("RSM17A");
+		expect(toolStartedExecution).toBeDefined();
+		expect(toolStartedExecution!.tooling).toBe(true);
+	});
+
+	it("RSM17B: the turn-finished event carries snapshot.execution.tooling === false after a normal batch", async () => {
+		// The companion edge: after the parallel batch
+		// settles, tooling must be false. Pinned by
+		// `turn-finished` because that is the closest
+		// existing semantic event for the post-batch
+		// boundary in the public event surface.
+		let turnFinishedExecution: AgentRuntimeExecutionState | undefined;
+		const runtime = new AgentRuntime({
+			model: new MultiStepModel([
+				[
+					{
+						type: "tool-call-delta",
+						toolCallId: "e1",
+						toolName: "counter",
+						inputText: JSON.stringify({ x: 1 }),
+					},
+					{ type: "finish", reason: "tool-calls" },
+				],
+				finishStep(),
+			]),
+			tools: [passingTool("counter")],
+		});
+		runtime.subscribe((event) => {
+			if (event.type === "turn-finished") {
+				turnFinishedExecution = event.snapshot.execution;
+			}
+		});
+		await runtime.run("RSM17B");
+		expect(turnFinishedExecution).toBeDefined();
+		expect(turnFinishedExecution!.tooling).toBe(false);
+	});
+});
+
 // ---------------------------------------------------------------------------
 // RSM09 — abort during model streaming
 // ---------------------------------------------------------------------------

@@ -1,17 +1,32 @@
 /**
- * General runtime/state — public surface.
+ * General runtime/state — INTERNAL package barrel.
  *
  *   @cline/agents
  *   └─ runtime/state/
- *      ├─ execution-state.ts            (canonical AgentRuntimeExecutionState projection)
- *      └─ index.ts                      (this file — public surface)
+ *      ├─ execution-state.ts  (canonical AgentRuntimeExecutionState projection)
+ *      └─ index.ts            (this file — internal barrel)
  *
- * This directory is for runtime-owned state authorities
- * that are NOT specific to the bounded-recovery
- * subsystem. Recovery lives in `runtime/recovery/`; the
- * execution-state projection is general and lives here.
+ * SCOPE
+ * -----
+ * This directory holds the runtime-owned state
+ * authorities that are NOT specific to bounded
+ * recovery. Recovery lives in `runtime/recovery/`;
+ * the execution-state projection is general and
+ * lives here.
  *
- * Contract types live in @cline/shared (no Node builtins).
+ * These helpers are INTENTIONALLY package-internal.
+ * The only contract type intended for cross-package
+ * consumers is `AgentRuntimeExecutionState` itself,
+ * which is re-exported from `@cline/shared` and
+ * surfaces in the public API as
+ * `AgentRuntimeStateSnapshot.execution`. UI and host
+ * layers MUST read that field rather than
+ * constructing the projection themselves.
+ *
+ * If a future consumer outside this package needs
+ * the projection helper, promote the export
+ * deliberately rather than via a chain of barrel
+ * re-exports.
  */
 export type {
 	AgentRuntimeExecutionState,
