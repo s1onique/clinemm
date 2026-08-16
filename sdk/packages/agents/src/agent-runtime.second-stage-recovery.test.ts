@@ -136,7 +136,11 @@ function captureOutcomes(out: CapturedOutcome[]): AgentRuntimeHooks {
 
 interface SecondStage {
 	kind: "idle" | "armed" | "terminating";
-	trigger?: "exact_blocked" | "family_exhausted" | "exact_only_capped";
+	trigger?:
+		| "exact_blocked"
+		| "family_exhausted"
+		| "exact_only_capped"
+		| "episode_exhausted";
 }
 
 interface RecoveryTestSnapshot {
@@ -144,6 +148,8 @@ interface RecoveryTestSnapshot {
 	circuitNoticeCount: number;
 	exactOnlyBudgetSize: number;
 	secondStage: SecondStage;
+	episodeFailures: number;
+	maxRecoveryEpisodeFailures: number;
 }
 
 interface RunResult {
@@ -341,6 +347,59 @@ describe("AgentRuntime / C1.4 second-stage / opaque fresh-input", () => {
 		// Each canonical key has its own counter; both keys
 		// tracked independently. NO false family merge.
 		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(2);
+	});
+
+	it("C14_C_TRUE_OPAQUE_FRESH_OUTER_BOUND: ALL-DISTINCT canonical inputs under familyEligible=false → finite provider requests, finite exactOnlyBudget cardinality", async () => {
+		// This is the gap identified during C1.4 review:
+		// the previous C14_C only had 3 identical-key proposals
+		// which fires Trigger C (per-key cap). The dangerous
+		// scenario is: every canonical key is unique. Each
+		// opaque failure gets its own counter (C1.1 anti-merge),
+		// and NO single key ever reaches the cap — there is no
+		// per-key reason to arm. C1.4 must bound the run
+		// through an EPISODE-level ceiling (Trigger D) that
+		// counts genuinely recoverable failures across distinct
+		// keys.
+		const executorCalls = { count: 0 };
+		const N = 12; // well above the default episode cap of 6
+		const proposals = Array.from({ length: N }, (_, i) => ({
+			toolCallId: `fresh-${i + 1}`,
+			toolName: "opaque_thrower",
+			input: { value: `key-${i + 1}` },
+		}));
+		const { recoverySnapshot, result, requestCount } = await driveRun(
+			proposals,
+			[createOpaqueThrowTool(executorCalls)],
+		);
+		// Provider-request count must be FINITE and bounded by
+		// the episode-level ceiling. With maxRecoveryEpisodeFailures=6
+		// the runtime should arm after the 6th distinct-key failure
+		// and the 7th provider request consumes the bounded
+		// continuation; the run terminates there.
+		expect(requestCount).toBeLessThanOrEqual(
+			recoverySnapshot.maxRecoveryEpisodeFailures + 1,
+		);
+		// The run terminates truthfully as aborted, with the
+		// typed C1.4 reason surfaced on `result.error`.
+		expect(result.status).toBe("aborted");
+		expect(result.error?.message).toBe("bounded_recovery_exhausted");
+		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
+		// Trigger D was the source of the arm.
+		expect(recoverySnapshot.secondStage.trigger).toBe(
+			"episode_exhausted",
+		);
+		// exactOnlyBudget cardinality must be FINITE: at most
+		// `requestCount` distinct keys were ever recorded. With
+		// N=12 proposals but only ~7 stream calls, the
+		// cardinality must be strictly less than N.
+		expect(recoverySnapshot.exactOnlyBudgetSize).toBeLessThan(N);
+		expect(recoverySnapshot.exactOnlyBudgetSize).toBeLessThanOrEqual(
+			requestCount,
+		);
+		// Episode counter reached the cap exactly.
+		expect(recoverySnapshot.episodeFailures).toBe(
+			recoverySnapshot.maxRecoveryEpisodeFailures,
+		);
 	});
 });
 
@@ -881,5 +940,208 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 		// is "idle", run completes.
 		expect(snapshot.secondStage.kind).toBe("idle");
 		expect(result.status).toBe("completed");
+	});
+});
+
+// ============================================================================
+//      C14_PARALLEL_FAILURE_PLUS_UNRELATED_SUCCESS (deterministic precedence)
+// ============================================================================
+
+describe("AgentRuntime / C1.4 parallel precedence", () => {
+	it("C14_PARALLEL_FAILURE_BEATS_UNRELATED_SUCCESS: armed-continuation batch with one failure and one unrelated success MUST still terminate", async () => {
+		// C1.4 precedence rule: a genuine recoverable failure in
+		// the bounded continuation ALWAYS wins over an unrelated
+		// sibling success. Otherwise the model can sneak a
+		// material non-convergent failure past the latch by
+		// bundling it with a trivially successful tool.
+		//
+		// Script setup: 6 distinct-key failures exhaust the
+		// episode ceiling (Trigger D arms with
+		// `episode_exhausted`). Iter 7 (post-arm continuation)
+		// is a PARALLEL batch with one failure + one unrelated
+		// success. The run must terminate truthfully: the
+		// genuine failure on the continuation turn MUST flip
+		// the latch to terminating, and the sibling success
+		// must NOT be allowed to reset it back to idle.
+		const executorCalls = { count: 0 };
+		const executorOk = { count: 0 };
+		const failTool: AgentTool<{ x: number }, never> = {
+			name: "opaque_thrower",
+			description: "Fails opaque",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorCalls.count += 1;
+				throw OPAQUE;
+			},
+		};
+		const okTool: AgentTool<{ x: number }, { ok: true }> = {
+			name: "ok",
+			description: "Succeeds",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorOk.count += 1;
+				return { ok: true };
+			},
+		};
+		const captureAll: CapturedOutcome[] = [];
+		const make = (n: number) => ({
+			type: "tool-call-delta",
+			toolCallId: `a${n}`,
+			toolName: "opaque_thrower",
+			inputText: JSON.stringify({ x: n }),
+		});
+		const model = new ScriptedModel([
+			// iters 1..6: 6 distinct-key opaque failures.
+			// After the 6th, episode counter reaches cap (6)
+			// and Trigger D arms with `episode_exhausted`.
+			...Array.from({ length: 6 }, (_, i) => () => [
+				make(i + 1),
+				{ type: "finish", reason: "tool-calls" },
+			]),
+			// iter 7 (post-arm continuation): PARALLEL batch
+			// with one failure + one unrelated success.
+			() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_fail",
+					toolName: "opaque_thrower",
+					inputText: JSON.stringify({ x: 99 }),
+				},
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_ok",
+					toolName: "ok",
+					inputText: JSON.stringify({ x: 1 }),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [failTool, okTool],
+			hooks: captureOutcomes(captureAll),
+		});
+		const result = await runtime.run("Start");
+		const snapshot = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// 6 distinct-key failures ran (iter 1..6).
+		// The post-arm continuation's failure ran (iter 7
+		// p_fail). Total executor = 7.
+		expect(executorCalls.count).toBe(7);
+		// The unrelated success also ran (sequential default).
+		expect(executorOk.count).toBe(1);
+		// The latch fired truthfully: terminating.
+		expect(snapshot.secondStage.kind).toBe("terminating");
+		expect(snapshot.secondStage.trigger).toBe("episode_exhausted");
+		expect(result.status).toBe("aborted");
+		expect(result.error?.message).toBe("bounded_recovery_exhausted");
+	});
+});
+
+// ============================================================================
+//           C14_NEXT_RUN_LIFECYCLE_RESET (same-runtime reuse)
+// ============================================================================
+
+describe("AgentRuntime / C1.4 next-run lifecycle", () => {
+	it("C14_NEXT_RUN_LIFECYCLE_RESET: a completed/aborted run followed by another run() starts from a fresh episode", async () => {
+		// Recon: per the official SDK docs `restore()` resets
+		// runtime state, but a normal `run()` invocation on
+		// the same instance does NOT explicitly reset recovery
+		// state. If the runtime can be reused, we must either
+		// prove the second run starts from a fresh episode or
+		// document the constraint.
+		//
+		// This test exercises the second-run scenario: after
+		// the first run terminates with second-stage
+		// `terminating`, we call `run()` again and verify the
+		// recovery state was reset to `idle` for the new run.
+		const executorCalls = { count: 0 };
+		const proposals1 = Array.from({ length: 4 }, (_, i) => ({
+			toolCallId: `r1-${i + 1}`,
+			toolName: "fs_read",
+			input: { path: "/x" },
+		}));
+		const proposals2 = [
+			{ toolCallId: "r2-1", toolName: "fs_read", input: { path: "/y" } },
+		];
+		const captured: CapturedOutcome[] = [];
+		const steps: Array<
+			(req: AgentModelRequest) => Iterable<AgentModelEvent>
+		> = [];
+		for (const p of proposals1) {
+			steps.push(() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: p.toolCallId,
+					toolName: p.toolName,
+					inputText: JSON.stringify(p.input),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			]);
+		}
+		for (const p of proposals2) {
+			steps.push(() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: p.toolCallId,
+					toolName: p.toolName,
+					inputText: JSON.stringify(p.input),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			]);
+		}
+		steps.push(() => [
+			{ type: "text-delta", text: "done" },
+			{ type: "finish", reason: "stop" },
+		]);
+		const model = new ScriptedModel(steps);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [createEnoentTool(executorCalls)],
+			hooks: captureOutcomes(captured),
+		});
+		// First run: drives to termination.
+		const result1 = await runtime.run("first");
+		const snap1 = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		expect(result1.status).toBe("aborted");
+		expect(snap1.secondStage.kind).toBe("terminating");
+		// Second run: should start fresh. We invoke run()
+		// again on the same runtime instance WITHOUT calling
+		// restore() first — this proves the run-start path
+		// resets recovery state.
+		const result2 = await runtime.run("second");
+		const snap2 = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// The second run is one fresh failure (different
+		// key) followed by text-only completion. The
+		// recovery state must be reset to idle for the new
+		// episode.
+		expect(snap2.secondStage.kind).toBe("idle");
+		// The second run's first failure incremented the
+		// fresh counter to 1; the reset worked correctly.
+		expect(snap2.episodeFailures).toBe(1);
+		// fs_read ENOENT failures are family-eligible, so
+		// they go through `recordFailureIdentity` (not the
+		// exact-only budget). The substrate's recoveryTracker
+		// is fresh, so its circuit state is also fresh:
+		// NOT `circuit_open` (which would have leaked from
+		// the first run's latch).
+		expect(snap2.state).not.toBe("circuit_open");
+		// exactOnlyBudget is fresh too — 0 entries inherited
+		// from the first run.
+		expect(snap2.exactOnlyBudgetSize).toBe(0);
+		// The second run completes successfully (one
+		// failure was below the cap).
+		expect(result2.status).toBe("completed");
 	});
 });

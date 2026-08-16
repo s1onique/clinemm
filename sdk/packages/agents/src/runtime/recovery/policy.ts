@@ -39,6 +39,37 @@ export interface RecoveryPolicyConfig {
 	 * is allowed for testing but should not be done in production defaults.
 	 */
 	warningThreshold: number;
+
+	/**
+	 * C1.4 episode-level non-convergence ceiling. Counts genuinely
+	 * RECOVERABLE failures (i.e. `outcome.kind === "failure"`,
+	 * regardless of `familyEligible`) observed across the whole
+	 * recovery episode. Once `recoveryEpisodeFailures >=
+	 * maxRecoveryEpisodeFailures`, the runtime's second-stage
+	 * continuation latch arms (Trigger D — episode exhaustion).
+	 *
+	 * This is a SEPARATE policy dimension from `maxRepairAttempts`:
+	 *   - `maxRepairAttempts` bounds failures of ONE convergence
+	 *     family (i.e. the model is hammering the same broken path).
+	 *   - `maxRecoveryEpisodeFailures` bounds the total non-
+	 *     convergent observations across distinct families / distinct
+	 *     exact keys (i.e. the model is trying many distinct broken
+	 *     paths in a row).
+	 *
+	 * Default: 6. Rationale: with `maxRepairAttempts = 2`, a single
+	 * convergence family consumes `1 + 2 = 3` failures before
+	 * exhausting. The episode budget of 6 therefore tolerates
+	 * approximately two distinct convergence-family failures before
+	 * declaring non-convergence. This is enough patience for the
+	 * model to attempt one materially different approach (e.g.
+	 * switching from `fs_read` to `fs_list`) without permitting the
+	 * upstream runaway-loop pattern (870 provider requests in
+	 * cline/cline#11542). Smaller values may break legitimate
+	 * "try a different tool" behaviour; larger values weaken the
+	 * load-bearing invariant that "non-convergent provider
+	 * continuation is finite."
+	 */
+	maxRecoveryEpisodeFailures: number;
 }
 
 /**
@@ -55,6 +86,7 @@ export interface RecoveryPolicyConfig {
 export const DEFAULT_RECOVERY_POLICY: RecoveryPolicyConfig = {
 	maxRepairAttempts: 2,
 	warningThreshold: 2,
+	maxRecoveryEpisodeFailures: 6,
 };
 
 /**
@@ -135,6 +167,9 @@ export class RecoveryPolicy {
 		this.config = {
 			maxRepairAttempts: config.maxRepairAttempts ?? DEFAULT_RECOVERY_POLICY.maxRepairAttempts,
 			warningThreshold: config.warningThreshold ?? DEFAULT_RECOVERY_POLICY.warningThreshold,
+			maxRecoveryEpisodeFailures:
+				config.maxRecoveryEpisodeFailures ??
+				DEFAULT_RECOVERY_POLICY.maxRecoveryEpisodeFailures,
 		};
 	}
 
@@ -157,6 +192,15 @@ export class RecoveryPolicy {
 	 */
 	get warningThreshold(): number {
 		return this.config.warningThreshold;
+	}
+
+	/**
+	 * C1.4 episode-level non-convergence ceiling. See
+	 * `RecoveryPolicyConfig.maxRecoveryEpisodeFailures` for the
+	 * default rationale. Distinct from `maxRepairAttempts`.
+	 */
+	get maxRecoveryEpisodeFailures(): number {
+		return this.config.maxRecoveryEpisodeFailures;
 	}
 
 	/**

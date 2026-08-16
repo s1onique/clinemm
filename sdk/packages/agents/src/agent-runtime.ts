@@ -517,9 +517,40 @@ export class AgentRuntime {
 		new RecoveryPolicy(DEFAULT_RECOVERY_POLICY),
 	);
 
-	/** C1.4: construct a fresh per-run `RecoveryTracker`. */
-	private createRecoveryTracker(): RecoveryTracker {
-		return new RecoveryTracker(new RecoveryPolicy(DEFAULT_RECOVERY_POLICY));
+	/** C1.4: separate handle on the recovery policy so the
+	 * runtime can read episode-level limits without reaching
+	 * through the tracker. Reset together with the tracker
+	 * in `restore()` via `createRecoveryTracker`. */
+	private recoveryPolicy = new RecoveryPolicy(DEFAULT_RECOVERY_POLICY);
+
+	/** C1.4: construct a fresh per-run `RecoveryTracker`
+	 * (and a paired `RecoveryPolicy`) for `restore()`. */
+	private createRecoveryTracker(): {
+		tracker: RecoveryTracker;
+		policy: RecoveryPolicy;
+	} {
+		const policy = new RecoveryPolicy(DEFAULT_RECOVERY_POLICY);
+		return {
+			tracker: new RecoveryTracker(policy),
+			policy,
+		};
+	}
+
+	/**
+	 * C1.4: clear all per-run recovery bookkeeping. Called
+	 * from both `restore()` and the start of every `run()`
+	 * invocation. Required for the "next-run lifecycle reset"
+	 * invariant: a previous run's terminating latch must NOT
+	 * leak into the next run.
+	 */
+	private resetRecoveryEpisode(): void {
+		this.exactOnlyBudget.clear();
+		this.recoveryCircuitNoticeCount = 0;
+		this.recoverySecondStage = { kind: "idle" };
+		this.recoveryEpisodeFailures = 0;
+		const fresh = this.createRecoveryTracker();
+		this.recoveryTracker = fresh.tracker;
+		this.recoveryPolicy = fresh.policy;
 	}
 	/**
 	 * C1.3 exact-only accounting for `familyEligible=false` failures.
@@ -578,7 +609,11 @@ export class AgentRuntime {
 	 */
 	private recoverySecondStage: {
 		kind: "idle" | "armed" | "terminating";
-		trigger?: "exact_blocked" | "family_exhausted" | "exact_only_capped";
+		trigger?:
+			| "exact_blocked"
+			| "family_exhausted"
+			| "exact_only_capped"
+			| "episode_exhausted";
 	} = { kind: "idle" };
 	/**
 	 * C1.4 snapshot of `recoverySecondStage.kind` taken BEFORE
@@ -591,6 +626,19 @@ export class AgentRuntime {
 	 */
 	private secondStageBeforeRecord: "idle" | "armed" | "terminating" =
 		"idle";
+	/**
+	 * C1.4 episode-level non-convergence counter. Counts
+	 * RECOVERABLE failures (`outcome.kind === "failure"`,
+	 * regardless of `familyEligible`) observed during the
+	 * current recovery episode. Drives Trigger D (episode
+	 * exhaustion). Reset by the success path
+	 * (`recordToolSuccess`) per the recovery substrate's
+	 * existing semantics — a successful tool execution
+	 * terminates the current recovery episode and clears the
+	 * counter. Reset to 0 on `restore()` so a fresh episode
+	 * starts from a clean slate.
+	 */
+	private recoveryEpisodeFailures = 0;
 
 	constructor(config: AgentRuntimeConfig) {
 		this.telemetryProviderId =
@@ -680,10 +728,7 @@ export class AgentRuntime {
 		// recovery invariants. We also re-create the recoveryTracker
 		// so a restored run starts from a fresh episode rather than
 		// continuing the previous one's family state.
-		this.exactOnlyBudget.clear();
-		this.recoveryCircuitNoticeCount = 0;
-		this.recoverySecondStage = { kind: "idle" };
-		this.recoveryTracker = this.createRecoveryTracker();
+		this.resetRecoveryEpisode();
 	}
 
 	snapshot(): AgentRuntimeStateSnapshot {
@@ -797,6 +842,17 @@ export class AgentRuntime {
 		this.state.lastErrorReported = false;
 		this.state.usage = cloneUsage(DEFAULT_USAGE);
 		this.overflowRecoveryAttempted = false;
+
+		// C1.4: reset recovery bookkeeping that is scoped to a
+		// single run. The same logic applies here as in
+		// `restore()`: a fresh `run()` invocation on the same
+		// runtime instance MUST start from a clean episode.
+		// Otherwise a previous run that terminated with
+		// `secondStage.kind === "terminating"` would corrupt
+		// the new run (the latch would refuse the very first
+		// model.stream() call). The test
+		// `C14_NEXT_RUN_LIFECYCLE_RESET` pins this invariant.
+		this.resetRecoveryEpisode();
 
 		try {
 			await this.callBeforeRunHooks();
@@ -2305,7 +2361,8 @@ export class AgentRuntime {
 		if (outcome.kind === "success") {
 			// C1.4 success-reset contract: a successful tool
 			// execution clears the second-stage continuation
-			// pressure. The recoveryTracker.recordToolSuccess
+			// pressure AND resets the episode-level failure
+			// counter. The recoveryTracker.recordToolSuccess
 			// helper already resets per-family state (C1.1
 			// contract); here we additionally collapse the
 			// second-stage continuation state to `idle` so the
@@ -2324,6 +2381,12 @@ export class AgentRuntime {
 			if (this.recoverySecondStage.kind === "armed") {
 				this.recoverySecondStage = { kind: "idle" };
 			}
+			// Episode counter resets on success: a successful
+			// tool execution terminates the current recovery
+			// episode. The next non-convergent failure starts a
+			// fresh episode (and the next arm is counted as
+			// failure #1 of the new episode).
+			this.recoveryEpisodeFailures = 0;
 			this.recoveryTracker.recordToolSuccess(toolCall.toolName);
 			return;
 		}
@@ -2416,6 +2479,36 @@ export class AgentRuntime {
 					trigger: "exact_only_capped",
 				};
 			}
+			// C1.4 Trigger D — episode-level non-convergence
+			// ceiling (opaque path). Counts genuinely
+			// recoverable failures across the whole episode.
+			// The counter increments BEFORE any arm check so
+			// the just-recorded failure can trigger the
+			// episode-exhaustion arm on the same turn it
+			// crosses the cap. The "this turn just armed"
+			// guard (secondStageBeforeRecord !== "armed")
+			// prevents an immediate flip-to-terminating for
+			// trigger D arming.
+			//
+			// Do NOT increment when state is already
+			// `terminating`: the latch has already been set
+			// and this iteration is the bounded continuation
+			// being consumed. Counting it would inflate the
+			// counter past the cap and corrupt the
+			// "exact cap reached" invariant that the test
+			// suite pins.
+			if (this.recoverySecondStage.kind === "idle") {
+				this.recoveryEpisodeFailures += 1;
+				if (
+					this.recoveryEpisodeFailures >=
+					this.recoveryPolicy.maxRecoveryEpisodeFailures
+				) {
+					this.recoverySecondStage = {
+						kind: "armed",
+						trigger: "episode_exhausted",
+					};
+				}
+			}
 			// C1.4 second-stage TERMINATING transition: any
 			// non-convergent outcome observed while the
 			// continuation is armed (state==="armed" BEFORE
@@ -2424,7 +2517,7 @@ export class AgentRuntime {
 			// transition the next model-stream entry throws,
 			// terminating the run. A failure on the continuation
 			// turn is non-convergent by definition. We exclude
-			// the "this turn just armed" case (Trigger C) by
+			// the "this turn just armed" case (Trigger C/D) by
 			// comparing against `secondStageBeforeRecord`.
 			if (
 				this.recoverySecondStage.kind === "armed" &&
@@ -2479,10 +2572,32 @@ export class AgentRuntime {
 				trigger: "family_exhausted",
 			};
 		}
+		// C1.4 Trigger D — episode-level non-convergence
+		// ceiling (family-eligible path). Counts genuinely
+		// recoverable failures across distinct families and
+		// distinct exact keys. Increment BEFORE the arm
+		// check so the just-recorded observation can trigger
+		// the arm on the same turn it crosses the cap.
+		// Do NOT increment when state is already armed or
+		// terminating (this is the bounded continuation
+		// turn). The counter only grows during the
+		// pre-arm "idle" phase.
+		if (this.recoverySecondStage.kind === "idle") {
+			this.recoveryEpisodeFailures += 1;
+			if (
+				this.recoveryEpisodeFailures >=
+				this.recoveryPolicy.maxRecoveryEpisodeFailures
+			) {
+				this.recoverySecondStage = {
+					kind: "armed",
+					trigger: "episode_exhausted",
+				};
+			}
+		}
 		// C1.4 second-stage TERMINATING transition (family-
 		// eligible path). This block is reached AFTER
 		// `recordFailureIdentity` (which may have just armed
-		// via Trigger B). We must NOT immediately flip the
+		// via Trigger B/D). We must NOT immediately flip the
 		// freshly-armed state to terminating: the arm happened
 		// on this turn; the model's continuation is the NEXT
 		// turn's tool-call outcome. Use the truth that an
@@ -2531,14 +2646,23 @@ export class AgentRuntime {
 		exactOnlyBudgetSize: number;
 		secondStage: {
 			kind: "idle" | "armed" | "terminating";
-			trigger?: "exact_blocked" | "family_exhausted" | "exact_only_capped";
+			trigger?:
+				| "exact_blocked"
+				| "family_exhausted"
+				| "exact_only_capped"
+				| "episode_exhausted";
 		};
+		episodeFailures: number;
+		maxRecoveryEpisodeFailures: number;
 	} {
 		return {
 			state: this.recoveryTracker.state,
 			circuitNoticeCount: this.recoveryCircuitNoticeCount,
 			exactOnlyBudgetSize: this.exactOnlyBudget.size,
 			secondStage: { ...this.recoverySecondStage },
+			episodeFailures: this.recoveryEpisodeFailures,
+			maxRecoveryEpisodeFailures:
+				this.recoveryPolicy.maxRecoveryEpisodeFailures,
 		};
 	}
 
