@@ -1,16 +1,29 @@
 /**
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A
  *
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
+ *  - `recoveryFailures` renamed to `recoveryBudgetFailures` on the
+ *    wire (faithful to `episodeFailures`' actual bounded-recovery
+ *    semantics, not "all recoverable failures").
+ *  - Terminal freeze is now reopenable: `streaming` /
+ *    `awaiting_approval` on the same task clears `endedAt` so a
+ *    same-task follow-up resumes ticking. "First terminal wins"
+ *    means "first terminal within the current stopped interval".
+ *
  * Host-owned task telemetry accumulator.
  *
  * Tracks three cumulative metrics for the **visible task** (the one the
  * TaskHeader renders):
  *
- *   1. Elapsed time — derived from `startedAt` (and frozen `endedAt`).
+ *   1. Elapsed time — derived from `startedAt` (and frozen `endedAt`
+ *      during a stopped interval; cleared on same-task continuation).
  *   2. Tool-call count — incremented exactly once per canonical
  *      `tool-started` runtime event.
- *   3. Recovery-failure count — incremented by the positive-delta
- *      clamp of `RecoverySnapshot.episodeFailures` only.
+ *   3. Recovery-budget-failure count — incremented by the positive
+ *      delta clamp of `RecoverySnapshot.episodeFailures`. This is a
+ *      bounded-recovery control-plane counter, not a total of all
+ *      recoverable tool failures; the wire name and tooltip reflect
+ *      that.
  *
  * The tracker is a pure OBSERVER. It NEVER reads or modifies recovery
  * policy, tool-execution gating, or turn-phase transitions. It has no
@@ -27,15 +40,21 @@
  *   - The tracker's `get()` is a pure snapshot — no allocation, no
  *     React coupling.
  *
- * Terminal-phase freeze:
+ * Terminal-phase freeze (CORRECTION02 reopenable):
  *
  *   - `error` / `resumable` / `completed` transitions on the
- *     `TurnStateTracker` call `endTask()` exactly once (the FIRST
- *     terminal transition freezes the clock; later transitions are
- *     idempotent). `awaiting_followup` does NOT freeze — the agent
- *     is paused waiting for user input, but the same visible task
- *     continues once the user replies, so the elapsed clock must keep
- *     ticking to represent "task duration since creation".
+ *     `TurnStateTracker` call `observeTurnPhase` and freeze `endedAt`
+ *     at the FIRST occurrence within the current stopped interval
+ *     (idempotent).
+ *   - `streaming` / `awaiting_approval` transitions on the SAME task
+ *     clear `endedAt` so the clock resumes ticking. This covers
+ *     `askResponse()` follow-ups, `reinitExistingTaskFromId()`
+ *     resumes, and retry-after-error flows — all of which are
+ *     same-task continuations.
+ *   - `awaiting_followup` does NOT freeze — the agent is paused
+ *     waiting for user input, but the same visible task continues once
+ *     the user replies, so the elapsed clock keeps ticking to
+ *     represent "task duration since creation".
  *
  * Privacy: emits nothing more than bounded integers and timestamps.
  */
@@ -48,6 +67,17 @@ import { Logger } from "@/shared/services/Logger"
  * this set — the same task continues when the user replies.
  */
 const TERMINAL_PHASES = new Set(["error", "resumable", "completed"])
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
+ *
+ * Phases that REOPEN the elapsed clock on the same task. These are
+ * the active-task phases — when the agent is being driven again on
+ * the same task identity, the previously frozen `endedAt` is cleared
+ * so the clock resumes ticking while preserving `startedAt` and the
+ * cumulative counters.
+ */
+const CONTINUATION_PHASES = new Set(["streaming", "awaiting_approval"])
 
 /**
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
@@ -90,7 +120,7 @@ export class TaskTelemetryTracker {
 	private startedAt: number | undefined
 	private endedAt: number | undefined
 	private toolCalls = 0
-	private recoveryFailures = 0
+	private recoveryBudgetFailures = 0
 	private prevEpisodeFailures = 0
 
 	/**
@@ -114,7 +144,7 @@ export class TaskTelemetryTracker {
 		this.startedAt = now
 		this.endedAt = undefined
 		this.toolCalls = 0
-		this.recoveryFailures = 0
+		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
 		return this.get()
 	}
@@ -128,6 +158,12 @@ export class TaskTelemetryTracker {
 	 * freezes at cancellation time even before the turn coordinator
 	 * transitions to `resumable` (defensive; the turn-state subscription
 	 * is the canonical observer).
+	 *
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
+	 * this primitive is still correct for the cancel-fence path, but
+	 * for same-task continuation (user reply on a `completed` task)
+	 * the canonical seam is now `observeTurnPhase("streaming")`,
+	 * which clears `endedAt` instead of stamping it.
 	 */
 	endTask(endedAt?: number): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId === undefined) {
@@ -140,28 +176,42 @@ export class TaskTelemetryTracker {
 	}
 
 	/**
-	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
 	 *
-	 * Canonical terminal-phase observer. Called from the
+	 * Canonical turn-phase observer. Called from the
 	 * `TurnStateTracker.subscribe` hook whenever the UI phase changes.
-	 * Only the terminal phases (`error` / `resumable` / `completed`)
-	 * freeze the elapsed clock; other phases (including
-	 * `awaiting_followup`) are ignored.
 	 *
-	 * The freeze is idempotent (the FIRST terminal call wins), so even
-	 * if `cancelTask()` has already called `endTask()` and then the
-	 * turn coordinator later sets `resumable`, the original
-	 * cancellation timestamp is preserved.
+	 *  - Terminal phases (`error` / `resumable` / `completed`) freeze
+	 *    the elapsed clock at the FIRST occurrence within the current
+	 *    stopped interval (idempotent).
+	 *  - Active-task phases (`streaming` / `awaiting_approval`) clear
+	 *    `endedAt` to reopen the clock — the same visible task is
+	 *    being driven again (a user reply on a `completed` task, a
+	 *    resume on a `resumable` task, a retry on an `error` task).
+	 *    `startedAt` and the cumulative counters are preserved.
+	 *  - The other non-terminal phases (`idle` / `awaiting_followup`)
+	 *    leave `endedAt` alone. `idle` only appears when no task is
+	 *    active (the tracker is already cleared); `awaiting_followup`
+	 *    was deliberately not frozen in CORRECTION01 and likewise
+	 *    should not unfreeze.
+	 *
+	 * "First terminal wins" therefore means: first terminal
+	 * transition within the CURRENT stopped interval. A subsequent
+	 * active-task transition reopens the interval, and a further
+	 * terminal transition freezes again with the new anchorTs.
 	 */
 	observeTurnPhase(phase: string, anchorTs?: number): TaskHeaderTelemetryStrip | undefined {
-		if (!TERMINAL_PHASES.has(phase)) {
-			return this.get()
-		}
 		if (this.currentTaskId === undefined) {
 			return this.get()
 		}
-		if (this.endedAt === undefined) {
-			this.endedAt = anchorTs ?? Date.now()
+		if (TERMINAL_PHASES.has(phase)) {
+			if (this.endedAt === undefined) {
+				this.endedAt = anchorTs ?? Date.now()
+			}
+		} else if (CONTINUATION_PHASES.has(phase)) {
+			// Same-task continuation: unfreeze the elapsed clock while
+			// preserving startedAt and the cumulative counters.
+			this.endedAt = undefined
 		}
 		return this.get()
 	}
@@ -174,7 +224,7 @@ export class TaskTelemetryTracker {
 		this.startedAt = undefined
 		this.endedAt = undefined
 		this.toolCalls = 0
-		this.recoveryFailures = 0
+		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
 		return this.get()
 	}
@@ -204,6 +254,16 @@ export class TaskTelemetryTracker {
 	 * they describe overlapping consequences of the same recoverable
 	 * failure (family pressure / bounded-exhaustion notices), not
 	 * independent interventions.
+	 *
+	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
+	 * `episodeFailures` is itself a bounded-recovery control-plane
+	 * counter — it only increments while the recovery second stage is
+	 * `idle` and stops growing once it is `armed` or `terminating`.
+	 * The wire field is therefore renamed from `recoveryFailures` to
+	 * `recoveryBudgetFailures`, and the tooltip / metadata describe
+	 * it as "failures counted toward bounded-recovery episode limits"
+	 * rather than "recoverable tool failures observed", which would
+	 * overclaim what the counter actually represents.
 	 */
 	observeRecovery(recovery: AgentRuntimeRecoverySnapshot): TaskHeaderTelemetryStrip | undefined {
 		const next = readEpisodeFailures(recovery)
@@ -211,7 +271,7 @@ export class TaskTelemetryTracker {
 			this.prevEpisodeFailures = next
 			return this.get()
 		}
-		this.recoveryFailures += countRecoveryDelta(this.prevEpisodeFailures, next)
+		this.recoveryBudgetFailures += countRecoveryDelta(this.prevEpisodeFailures, next)
 		this.prevEpisodeFailures = next
 		return this.get()
 	}
@@ -228,7 +288,7 @@ export class TaskTelemetryTracker {
 			startedAt: this.startedAt,
 			...(this.endedAt !== undefined ? { endedAt: this.endedAt } : {}),
 			toolCalls: this.toolCalls,
-			recoveryFailures: this.recoveryFailures,
+			recoveryBudgetFailures: this.recoveryBudgetFailures,
 		}
 	}
 

@@ -1,9 +1,13 @@
 /**
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry component tests.
  *
- * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
- *   - `recoveryInterventions` renamed to `recoveryFailures`.
- *   - aria-label for recovery now reads "Recoverable tool failures observed".
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
+ *   - `recoveryInterventions` renamed to `recoveryBudgetFailures`
+ *     (CORRECTION01), and the aria-label corrected from
+ *     "Recoverable tool failures observed" to "Recovery budget
+ *     failures" (CORRECTION02 — the underlying counter is the
+ *     bounded-recovery control-plane metric, not all recoverable
+ *     tool failures).
  *   - Tooltip for tool count corrected.
  */
 import type { TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
@@ -19,7 +23,7 @@ function telemetry(partial: Partial<TaskHeaderTelemetryStrip> = {}): TaskHeaderT
 	return {
 		startedAt: 1_700_000_000_000,
 		toolCalls: 0,
-		recoveryFailures: 0,
+		recoveryBudgetFailures: 0,
 		...partial,
 	}
 }
@@ -45,12 +49,12 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 	})
 
 	it("THA19: hides recovery at zero", () => {
-		render(<TaskHeaderTelemetry telemetry={telemetry({ recoveryFailures: 0 })} turnState={ts("idle")} />)
+		render(<TaskHeaderTelemetry telemetry={telemetry({ recoveryBudgetFailures: 0 })} turnState={ts("idle")} />)
 		expect(screen.queryByTestId("task-header-recovery-count")).toBeNull()
 	})
 
-	it("renders recovery when recoveryFailures > 0", () => {
-		render(<TaskHeaderTelemetry telemetry={telemetry({ recoveryFailures: 2 })} turnState={ts("streaming")} />)
+	it("renders recovery when recoveryBudgetFailures > 0", () => {
+		render(<TaskHeaderTelemetry telemetry={telemetry({ recoveryBudgetFailures: 2 })} turnState={ts("streaming")} />)
 		expect(screen.getByTestId("task-header-recovery-count").textContent).toContain("2")
 	})
 
@@ -81,7 +85,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 	})
 
 	it("M4 killer: recovery count reflects the canonical counter", () => {
-		render(<TaskHeaderTelemetry telemetry={telemetry({ recoveryFailures: 7 })} turnState={ts("streaming")} />)
+		render(<TaskHeaderTelemetry telemetry={telemetry({ recoveryBudgetFailures: 7 })} turnState={ts("streaming")} />)
 		expect(screen.getByTestId("task-header-recovery-count").textContent).toContain("7")
 	})
 
@@ -94,12 +98,17 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		expect(elapsed).not.toMatch(/10:|0:10/)
 	})
 
-	it("renders accessible aria-labels for each counter (CORRECTION01)", () => {
-		render(<TaskHeaderTelemetry telemetry={telemetry({ toolCalls: 3, recoveryFailures: 1 })} turnState={ts("streaming")} />)
+	it("renders accessible aria-labels for each counter (CORRECTION02: recovery uses 'Recovery budget failures')", () => {
+		render(
+			<TaskHeaderTelemetry
+				telemetry={telemetry({ toolCalls: 3, recoveryBudgetFailures: 1 })}
+				turnState={ts("streaming")}
+			/>,
+		)
 		expect(screen.getByLabelText(/Elapsed task time/i)).toBeTruthy()
 		expect(screen.getByLabelText(/Task state: Working/i)).toBeTruthy()
 		expect(screen.getByLabelText(/Tool calls: 3/i)).toBeTruthy()
-		expect(screen.getByLabelText(/Recoverable tool failures observed: 1/i)).toBeTruthy()
+		expect(screen.getByLabelText(/Recovery budget failures: 1/i)).toBeTruthy()
 	})
 
 	it("M5 killer: same task identity across two renders preserves elapsed from the same epoch", () => {

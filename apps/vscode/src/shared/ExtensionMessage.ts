@@ -227,36 +227,67 @@ export interface TurnState {
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative runtime-derived task
  * metrics, owned by the host-side `TaskTelemetryTracker`.
  *
+ * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02:
+ *  - `recoveryFailures` renamed to `recoveryBudgetFailures` because
+ *    the underlying counter (`RecoverySnapshot.episodeFailures`) is
+ *    a bounded-recovery control-plane metric, not a total of all
+ *    recoverable tool failures. It only grows while the recovery
+ *    second stage is `idle`; once the second stage is `armed` or
+ *    `terminating`, additional failures do not increment it. The wire
+ *    field name and the tooltip are updated to match.
+ *  - `endedAt` semantics: the freeze is now REOPENABLE. It is set on
+ *    the first `error` / `resumable` / `completed` transition within
+ *    the current stopped interval, and CLEARED on a `streaming` /
+ *    `awaiting_approval` transition on the same task identity
+ *    (same-task follow-up via `askResponse`, resume via
+ *    `reinitExistingTaskFromId`, retry-after-error). `startedAt` and
+ *    the cumulative counters are preserved across reopenings.
+ *
  * Fields:
- * - `startedAt`  — wall-clock ms epoch when the visible task was created.
- *                  Persisted in the `HistoryItem.ts` slot so a remount or
- *                  webview reconnect resumes the same elapsed timeline.
- * - `endedAt`    — wall-clock ms epoch when the visible task reached a
- *                  terminal phase (`error` / `resumable` / `completed`).
- *                  Undefined while the task is live OR while the task is
- *                  paused for user input (`awaiting_followup` — the same
- *                  task continues when the user replies, so the elapsed
- *                  clock must keep ticking to represent "task duration
- *                  since creation"). The TaskHeader freezes its display
- *                  at `endedAt` instead of continuing to grow after the
- *                  task is over.
- * - `toolCalls`  — number of canonical `tool-started` runtime events
- *                  observed for this task. Each invocation is counted
- *                  exactly once, including failed executions and parallel
- *                  siblings. Host DENY / user rejection / pre-exec block /
- *                  registry miss do not increment — no canonical tool-start
- *                  occurs for those paths.
- * - `recoveryFailures` — cumulative positive deltas of the
- *                  `RecoverySnapshot.episodeFailures` counter (single
- *                  canonical authority). The TaskHeader renders this as
- *                  `↻ N` to mean "recoverable tool failures observed
- *                  during this task". `currentRepairAttempts` and
- *                  `circuitNoticeCount` are tracked on the runtime side
- *                  but intentionally NOT projected to the UI metric
- *                  because they describe overlapping consequences of the
- *                  same recoverable failure (family pressure /
- *                  bounded-exhaustion notices), not independent
- *                  interventions — summing them double-counted.
+ * - `startedAt`              — wall-clock ms epoch when the visible
+ *                              task was created. Persisted in the
+ *                              `HistoryItem.ts` slot so a remount or
+ *                              webview reconnect resumes the same
+ *                              elapsed timeline.
+ * - `endedAt`                — wall-clock ms epoch when the visible
+ *                              task reached the current stopped
+ *                              interval's terminal phase (`error` /
+ *                              `resumable` / `completed`). Undefined
+ *                              while the task is live OR while the
+ *                              task is paused for user input
+ *                              (`awaiting_followup` — the same task
+ *                              continues when the user replies, so the
+ *                              elapsed clock must keep ticking to
+ *                              represent "task duration since
+ *                              creation"). The TaskHeader freezes its
+ *                              display at `endedAt` instead of
+ *                              continuing to grow after the task is
+ *                              over; a subsequent same-task
+ *                              continuation reopens the clock.
+ * - `toolCalls`              — number of canonical `tool-started`
+ *                              runtime events observed for this task.
+ *                              Each invocation is counted exactly
+ *                              once, including failed executions and
+ *                              parallel siblings. Host DENY / user
+ *                              rejection / pre-exec block / registry
+ *                              miss do not increment — no canonical
+ *                              tool-start occurs for those paths.
+ * - `recoveryBudgetFailures` — cumulative positive deltas of the
+ *                              `RecoverySnapshot.episodeFailures`
+ *                              counter (single canonical authority).
+ *                              The TaskHeader renders this as `↻ N`
+ *                              to mean "failures counted toward
+ *                              bounded-recovery episode limits".
+ *                              `currentRepairAttempts` and
+ *                              `circuitNoticeCount` are tracked on the
+ *                              runtime side but intentionally NOT
+ *                              projected to the UI metric because
+ *                              they describe overlapping consequences
+ *                              of the same recoverable failure
+ *                              (family pressure / bounded-exhaustion
+ *                              notices), not independent
+ *                              interventions — summing them
+ *                              double-counted.
  *
  * The transport is intentionally minimal: NO state label (use
  * `turnState.phase`), NO context/token/cost fields (out of scope for
@@ -267,7 +298,7 @@ export interface TaskHeaderTelemetryStrip {
 	startedAt: number
 	endedAt?: number
 	toolCalls: number
-	recoveryFailures: number
+	recoveryBudgetFailures: number
 }
 
 export interface QueuedPrompt {

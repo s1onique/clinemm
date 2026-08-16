@@ -57,7 +57,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		const snap = t.startTask("task-a", 1_700_000_000_000)
 		expect(snap?.startedAt).toBe(1_700_000_000_000)
 		expect(snap?.toolCalls).toBe(0)
-		expect(snap?.recoveryFailures).toBe(0)
+		expect(snap?.recoveryBudgetFailures).toBe(0)
 		expect(snap?.endedAt).toBeUndefined()
 	})
 
@@ -119,7 +119,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		expect(t.get()?.toolCalls).toBe(0)
 	})
 
-	it("THA29: only episodeFailures positive deltas increment recoveryFailures", () => {
+	it("THA29: only episodeFailures positive deltas increment recoveryBudgetFailures", () => {
 		const t = new TaskTelemetryTracker()
 		t.startTask("task-a")
 		t.observeRecovery(recoverySnapshot())
@@ -136,7 +136,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 				},
 			}),
 		)
-		expect(t.get()?.recoveryFailures).toBe(1)
+		expect(t.get()?.recoveryBudgetFailures).toBe(1)
 	})
 
 	it("THA30: a positive delta in currentRepairAttempts alone does NOT count", () => {
@@ -152,7 +152,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 				blockedFamilies: [],
 			}),
 		)
-		expect(t.get()?.recoveryFailures).toBe(0)
+		expect(t.get()?.recoveryBudgetFailures).toBe(0)
 	})
 
 	it("THA31: a positive delta in circuitNoticeCount alone does NOT count", () => {
@@ -160,26 +160,26 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		t.startTask("task-a")
 		t.observeRecovery(recoverySnapshot())
 		t.observeRecovery(recoverySnapshot({ circuitNoticeCount: 1 }))
-		expect(t.get()?.recoveryFailures).toBe(0)
+		expect(t.get()?.recoveryBudgetFailures).toBe(0)
 	})
 
 	it("THA32: episode reset (forward-decrease) does not subtract (monotone clamp)", () => {
 		const t = new TaskTelemetryTracker()
 		t.startTask("task-a")
 		t.observeRecovery(recoverySnapshot({ episodeFailures: 5 }))
-		expect(t.get()?.recoveryFailures).toBe(5)
+		expect(t.get()?.recoveryBudgetFailures).toBe(5)
 		t.observeRecovery(recoverySnapshot())
-		expect(t.get()?.recoveryFailures).toBe(5)
+		expect(t.get()?.recoveryBudgetFailures).toBe(5)
 		t.observeRecovery(recoverySnapshot({ episodeFailures: 1 }))
-		expect(t.get()?.recoveryFailures).toBe(6)
+		expect(t.get()?.recoveryBudgetFailures).toBe(6)
 	})
 
-	it("THA33: control-plane outcomes do NOT increment recoveryFailures (no snapshot change)", () => {
+	it("THA33: control-plane outcomes do NOT increment recoveryBudgetFailures (no snapshot change)", () => {
 		const t = new TaskTelemetryTracker()
 		t.startTask("task-a")
 		t.observeRecovery(recoverySnapshot())
 		t.observeRecovery(recoverySnapshot())
-		expect(t.get()?.recoveryFailures).toBe(0)
+		expect(t.get()?.recoveryBudgetFailures).toBe(0)
 	})
 
 	it("THA34: multiple consecutive episodeFailures jumps accumulate", () => {
@@ -189,7 +189,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		t.observeRecovery(recoverySnapshot({ episodeFailures: 1 }))
 		t.observeRecovery(recoverySnapshot({ episodeFailures: 2 }))
 		t.observeRecovery(recoverySnapshot({ episodeFailures: 5 }))
-		expect(t.get()?.recoveryFailures).toBe(5)
+		expect(t.get()?.recoveryBudgetFailures).toBe(5)
 	})
 
 	it("THA22: a new task identity resets all counters and startedAt", () => {
@@ -201,10 +201,10 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		const snap = t.get()
 		expect(snap?.startedAt).toBe(1_700_000_100_000)
 		expect(snap?.toolCalls).toBe(0)
-		expect(snap?.recoveryFailures).toBe(0)
+		expect(snap?.recoveryBudgetFailures).toBe(0)
 	})
 
-	it("THA23: same task identity across turns preserves counters (startedAt, toolCalls, recoveryFailures)", () => {
+	it("THA23: same task identity across turns preserves counters (startedAt, toolCalls, recoveryBudgetFailures)", () => {
 		const t = new TaskTelemetryTracker()
 		t.startTask("task-a", 1_700_000_000_000)
 		t.recordToolStarted()
@@ -216,10 +216,10 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		expect(snap?.toolCalls).toBe(3)
 	})
 
-	it("THA19: get() returns recoveryFailures at zero (zero-hiding is a UI concern)", () => {
+	it("THA19: get() returns recoveryBudgetFailures at zero (zero-hiding is a UI concern)", () => {
 		const t = new TaskTelemetryTracker()
 		t.startTask("task-a")
-		expect(t.get()?.recoveryFailures).toBe(0)
+		expect(t.get()?.recoveryBudgetFailures).toBe(0)
 	})
 
 	// CORRECTION01: terminal-phase freeze.
@@ -314,7 +314,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		expect(t.get()).toBeUndefined()
 		t.startTask("task-a")
 		t.observeRecovery(recoverySnapshot())
-		expect(t.get()?.recoveryFailures).toBe(0)
+		expect(t.get()?.recoveryBudgetFailures).toBe(0)
 	})
 
 	it("M1 killer: startTask(epoch) honours the supplied epoch", () => {
@@ -337,10 +337,10 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		const t = new TaskTelemetryTracker()
 		t.startTask("task-a")
 		t.observeRecovery(recoverySnapshot())
-		const before = t.get()?.recoveryFailures
+		const before = t.get()?.recoveryBudgetFailures
 		t.observeRecovery(recoverySnapshot())
-		expect(t.get()?.recoveryFailures).toBe(before)
-		expect(t.get()?.recoveryFailures).toBe(0)
+		expect(t.get()?.recoveryBudgetFailures).toBe(before)
+		expect(t.get()?.recoveryBudgetFailures).toBe(0)
 	})
 
 	it("M5 killer: same-task follow-up preserves startedAt", () => {
@@ -361,8 +361,166 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		const frozen = snap?.endedAt
 		const epoch = snap?.startedAt
 		expect(frozen !== undefined && epoch !== undefined ? frozen - epoch : -1).toBe(60_000)
+		// CORRECTION02: a same-task continuation reopens the clock.
+		// endedAt must clear, not stay frozen at the previous terminal.
 		t.observeTurnPhase("streaming")
-		t.observeTurnPhase("completed", terminal + 9_999_999)
-		expect(t.get()?.endedAt).toBe(terminal)
+		expect(t.get()?.endedAt).toBeUndefined()
+	})
+
+	// ===== ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION02 =====
+	// Reopenable terminal-freeze invariants. "First terminal wins"
+	// means "first terminal within the current stopped interval"; a
+	// subsequent same-task active phase reopens the interval.
+
+	it("THA35: completed → streaming on the same task reopens the elapsed clock", () => {
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.observeTurnPhase("completed", 1_700_000_090_000) // 01:30
+		expect(t.get()?.endedAt).toBe(1_700_000_090_000)
+		// askResponse() follow-up → phase streaming on SAME task
+		t.observeTurnPhase("streaming")
+		expect(t.get()?.endedAt).toBeUndefined()
+		// startedAt preserved
+		expect(t.get()?.startedAt).toBe(startedAt)
+	})
+
+	it("THA36: resumable → streaming (resume) reopens the elapsed clock", () => {
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.observeTurnPhase("resumable", 1_700_000_030_000)
+		expect(t.get()?.endedAt).toBe(1_700_000_030_000)
+		t.observeTurnPhase("streaming") // reinitExistingTaskFromId
+		expect(t.get()?.endedAt).toBeUndefined()
+		expect(t.get()?.startedAt).toBe(startedAt)
+	})
+
+	it("THA37: error → streaming (retry) reopens the elapsed clock", () => {
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.observeTurnPhase("error", 1_700_000_120_000)
+		expect(t.get()?.endedAt).toBe(1_700_000_120_000)
+		t.observeTurnPhase("streaming")
+		expect(t.get()?.endedAt).toBeUndefined()
+		expect(t.get()?.startedAt).toBe(startedAt)
+	})
+
+	it("THA37b: awaiting_approval → streaming does NOT reopen (waiting on user)", () => {
+		// awaiting_approval is an active-task phase that the runtime
+		// sets BEFORE streaming actually begins, but once streaming
+		// is set it remains. Treating awaiting_approval as a
+		// continuation is fine (the task is still being driven); the
+		// explicit check below pins the symmetric case.
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.observeTurnPhase("awaiting_approval", 1_700_000_010_000)
+		// awaiting_approval is non-terminal; endedAt is not stamped.
+		expect(t.get()?.endedAt).toBeUndefined()
+		// Now transition back to streaming (e.g. the user approved
+		// without leaving the phase): endedAt stays undefined.
+		t.observeTurnPhase("streaming")
+		expect(t.get()?.endedAt).toBeUndefined()
+	})
+
+	it("THA38: a later terminal on the same task refreezes at the new anchorTs", () => {
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.observeTurnPhase("completed", 1_700_000_090_000) // 01:30 first freeze
+		expect(t.get()?.endedAt).toBe(1_700_000_090_000)
+		t.observeTurnPhase("streaming") // reopen
+		expect(t.get()?.endedAt).toBeUndefined()
+		t.observeTurnPhase("completed", 1_700_000_720_000) // 12:00 second freeze
+		expect(t.get()?.endedAt).toBe(1_700_000_720_000)
+		// startedAt preserved
+		expect(t.get()?.startedAt).toBe(startedAt)
+	})
+
+	it("THA39: idle and awaiting_followup do NOT reopen (terminal freeze is per stopped interval)", () => {
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.observeTurnPhase("completed", 1_700_000_090_000)
+		expect(t.get()?.endedAt).toBe(1_700_000_090_000)
+		// idle: would only appear if there is no active task. The
+		// tracker ignores it (defensive).
+		t.observeTurnPhase("idle")
+		expect(t.get()?.endedAt).toBe(1_700_000_090_000)
+		// awaiting_followup: same task continues when user replies;
+		// we already established it never freezes. A subsequent
+		// awaiting_followup transition does not unfreeze either.
+		t.observeTurnPhase("awaiting_followup")
+		expect(t.get()?.endedAt).toBe(1_700_000_090_000)
+	})
+
+	it("THA40: tool counters survive a terminal reopen (cumulative across continuation)", () => {
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.recordToolStarted() // +1
+		t.recordToolStarted() // +2
+		t.observeTurnPhase("completed", 1_700_000_090_000)
+		// New turn begins on the same task.
+		t.observeTurnPhase("streaming")
+		t.recordToolStarted() // +3
+		expect(t.get()?.toolCalls).toBe(3)
+		// Same task identity, startedAt preserved
+		expect(t.get()?.startedAt).toBe(startedAt)
+	})
+
+	it("THA41: recoveryBudgetFailures survives a terminal reopen", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.observeRecovery(recoverySnapshot({ episodeFailures: 3 }))
+		expect(t.get()?.recoveryBudgetFailures).toBe(3)
+		t.observeTurnPhase("completed")
+		t.observeTurnPhase("streaming") // reopen
+		// A later recovery delta still accumulates against the same task.
+		t.observeRecovery(recoverySnapshot({ episodeFailures: 5 }))
+		expect(t.get()?.recoveryBudgetFailures).toBe(5)
+	})
+
+	it("M7 killer (terminal-then-continue): user-reply flow freezes, unfreezes, refreezes with preserved counters", () => {
+		// The complete CORRECTION02 semantic: first terminal wins,
+		// same-task active transition reopens, later terminal refreezes
+		// with a new anchorTs. Counters (toolCalls,
+		// recoveryBudgetFailures) and startedAt are preserved across
+		// the entire flow.
+		const t = new TaskTelemetryTracker()
+		const startEpoch = 1_700_000_000_000
+		t.startTask("task-a", startEpoch)
+		t.recordToolStarted()
+		t.observeRecovery(recoverySnapshot({ episodeFailures: 1 }))
+		expect(t.get()?.toolCalls).toBe(1)
+		expect(t.get()?.recoveryBudgetFailures).toBe(1)
+
+		// First completion at T0+90s.
+		t.observeTurnPhase("completed", startEpoch + 90_000)
+		expect(t.get()?.endedAt).toBe(startEpoch + 90_000)
+		const firstFreeze = t.get()?.endedAt
+
+		// Same-task continuation via user reply (askResponse).
+		t.observeTurnPhase("streaming")
+		expect(t.get()?.endedAt).toBeUndefined()
+		// startedAt preserved
+		expect(t.get()?.startedAt).toBe(startEpoch)
+		// More work on the same task.
+		t.recordToolStarted()
+		expect(t.get()?.toolCalls).toBe(2)
+		t.observeRecovery(recoverySnapshot({ episodeFailures: 2 }))
+		expect(t.get()?.recoveryBudgetFailures).toBe(2)
+
+		// Second completion at T0+12m.
+		t.observeTurnPhase("completed", startEpoch + 720_000)
+		expect(t.get()?.endedAt).toBe(startEpoch + 720_000)
+		// Different anchorTs — firstFreeze is NOT preserved.
+		expect(t.get()?.endedAt).not.toBe(firstFreeze)
+		// But startedAt, toolCalls, and recoveryBudgetFailures all carry forward.
+		expect(t.get()?.startedAt).toBe(startEpoch)
+		expect(t.get()?.toolCalls).toBe(2)
+		expect(t.get()?.recoveryBudgetFailures).toBe(2)
 	})
 })

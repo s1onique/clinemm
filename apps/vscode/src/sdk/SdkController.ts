@@ -2395,14 +2395,17 @@ export class Controller {
 					: undefined,
 				taskHistory: processedTaskHistory,
 				turnState: this.turnStateTracker.get(),
-				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A + CORRECTION01: project
+				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A + CORRECTION02: project
 				// the host-owned task telemetry (elapsed / toolCalls /
-				// recoveryFailures) to the webview. When the tracker has no
-				// active task, the field is undefined and the TaskHeader
-				// renders em-dash rather than fabricating values from chat
-				// prose. CORRECTION01 renamed the recovery counter from
-				// recoveryInterventions to recoveryFailures (single canonical
-				// authority: episodeFailures only).
+				// recoveryBudgetFailures) to the webview. When the tracker
+				// has no active task, the field is undefined and the
+				// TaskHeader renders em-dash rather than fabricating values
+				// from chat prose. CORRECTION01 collapsed the three-counter
+				// additive recovery metric to a single canonical authority
+				// (episodeFailures). CORRECTION02 renamed the wire field to
+				// recoveryBudgetFailures to reflect the underlying
+				// bounded-recovery semantics (the counter only grows while
+				// the recovery second stage is idle).
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
 				// authority; this is a read-only mirror for the webview.
