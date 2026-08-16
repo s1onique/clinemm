@@ -640,6 +640,31 @@ export class AgentRuntime {
 	 */
 	private recoveryEpisodeFailures = 0;
 
+	/**
+	 * C1.4: per-parallel-batch typed-outcome buffer.
+	 * Populated by `executePreparedTool` immediately after
+	 * `classifyToolRuntimeOutcome` produces the typed
+	 * outcome, and consumed by `executeToolCalls` to
+	 * decide whether to fire the parallel-batch latch.
+	 *
+	 * Authority model: this is the SAME `ToolRuntimeOutcome`
+	 * authority used by the sequential recovery path in
+	 * `applyRecoveryPostClassification`. The previous
+	 * round's parallel guard keyed on `isError`, which
+	 * structurally conflates `failure / recoverable` with
+	 * `control_plane / host_policy_denied | user_rejected |
+	 * runtime_skipped | runtime_aborted`. This buffer
+	 * restores provenance-first authority at the batch
+	 * level.
+	 *
+	 * Lifetime: cleared at the top of every
+	 * `executeToolCalls` parallel invocation and again at
+	 * the bottom before returning. Never visible
+	 * externally; never read by the public
+	 * `onToolRuntimeOutcome` hook.
+	 */
+	private readonly pendingBatchOutcomes: ToolRuntimeOutcome[] = [];
+
 	constructor(config: AgentRuntimeConfig) {
 		this.telemetryProviderId =
 			trimNonEmpty(config.messageModelInfo?.provider) ??
@@ -1831,23 +1856,57 @@ export class AgentRuntime {
 			// C1.4: capture the second-stage state at batch
 			// START, before any sibling tool has run. After
 			// the parallel batch resolves, re-check the
-			// invariant: if state was `armed` at batch
-			// start AND any sibling resolved as a non-
-			// convergent failure, the latch MUST fire to
-			// `terminating`. This protects against
-			// non-deterministic completion order: a sibling
-			// success applied first could otherwise reset
-			// the latch to idle, masking the genuine
-			// non-convergent failure that follows. The test
-			// C14_REAL_PARALLEL_OK_FIRST pins this.
+			// invariant using the SAME typed-outcome
+			// authority as the sequential recovery path:
+			// if state was `armed` at batch start AND any
+			// sibling resolved with a typed
+			// `failure` outcome (per the C1.1
+			// `ToolRuntimeOutcome` authority model — NOT
+			// the coarse `AgentToolResult.isError` flag),
+			// the latch MUST fire to `terminating`. This
+			// protects against non-deterministic completion
+			// order: a sibling success applied first could
+			// otherwise reset the latch to idle, masking
+			// the genuine non-convergent failure that
+			// follows. The tests
+			// C14_REAL_PARALLEL_OK_FIRST and
+			// C14_REAL_PARALLEL_FAIL_FIRST pin this.
+			//
+			// CRITICAL: authority model. The previous round
+			// of this guard used
+			// `AgentToolResult.isError === true` as the
+			// recovery-failure predicate. That re-
+			// introduced the C1.1 anti-pattern: `isError`
+			// structurally conflates
+			// `failure / recoverable` with
+			// `control_plane / host_policy_denied |
+			// user_rejected | runtime_skipped |
+			// runtime_aborted`. A host-policy DENY of one
+			// sibling in a parallel batch must NEVER arm
+			// the second-stage continuation — that would
+			// violate the C1.4 control-plane-exclusion
+			// contract. The fix routes the guard through
+			// the private runtime-owned
+			// `pendingBatchOutcomes: ToolRuntimeOutcome[]`
+			// buffer, populated by `executePreparedTool`
+			// immediately after
+			// `classifyToolRuntimeOutcome` produces the
+			// typed outcome. The public
+			// `onToolRuntimeOutcome` observation hook is
+			// not the control plane — it is observer-only
+			// and never feeds aggregation.
 			const batchStartKind = this.recoverySecondStage.kind;
+			// Reset the per-batch buffer at the start of
+			// each parallel invocation. The buffer is
+			// runtime-owned and never visible externally.
+			this.pendingBatchOutcomes.length = 0;
 			const results = await Promise.all(
 				prepared.map((execution) => this.executePreparedTool(execution)),
 			);
 			if (
 				batchStartKind === "armed" &&
 				this.recoverySecondStage.kind !== "terminating" &&
-				results.some((message) => this.batchContainsNonConvergentFailure(message))
+				this.batchContainsTypedFailure(this.pendingBatchOutcomes)
 			) {
 				// The trigger may have been cleared by an
 				// earlier sibling success's applyPost (which
@@ -1866,6 +1925,10 @@ export class AgentRuntime {
 				};
 				this.state.lastError = "bounded_recovery_exhausted";
 			}
+			// Clear the buffer again before returning, so a
+			// subsequent single-tool iteration cannot read
+			// stale outcomes from the prior parallel batch.
+			this.pendingBatchOutcomes.length = 0;
 			return results;
 		}
 
@@ -1877,29 +1940,47 @@ export class AgentRuntime {
 	}
 
 	/**
-	 * C1.4 parallel-batch latch helper. Inspects a tool
-	 * result message and returns true if any part is a
-	 * non-convergent failure (the model used the bounded
-	 * continuation turn and it failed materially). Used by
-	 * `executeToolCalls` to defend against non-deterministic
-	 * completion order under `toolExecution === "parallel"`.
+	 * C1.4 parallel-batch latch helper. Inspects a
+	 * collection of typed `ToolRuntimeOutcome` records
+	 * (one per sibling in a parallel batch) and returns
+	 * true if any sibling resolved with a typed `failure`
+	 * outcome.
 	 *
-	 * "Non-convergent" here means: the tool actually ran
-	 * (`toolExecutionInvoked` is observable via the
-	 * non-error `isError=false` path is irrelevant; what
-	 * matters is whether the underlying executor emitted a
-	 * failure. We use `isError=true` as the proxy: every
-	 * tool result that has `isError=true` came from either a
-	 * structured failure outcome OR a thrown exception
-	 * inside `tool.execute(...)`. Both are non-convergent
-	 * observations against recovery.
+	 * Authority model (C1.1):
+	 *   outcome.kind === "failure"
+	 *     → recovery-relevant; consumes episode budget.
+	 *   outcome.kind === "success"
+	 *     → not relevant to the latch decision.
+	 *   outcome.kind === "control_plane"
+	 *     → NOT relevant. Includes:
+	 *       - real `host_policy_denied`
+	 *       - real `user_rejected`
+	 *       - real `runtime_aborted`
+	 *       - synthetic `runtime_skipped` (from C1.3 pre-exec)
+	 *     None of these consume the episode ceiling or
+	 *     arm the second-stage continuation.
+	 *
+	 * The previous round of this guard keyed on
+	 * `AgentToolResult.isError === true`, which
+	 * structurally conflates these categories. This
+	 * re-implementation is the architectural correction
+	 * requested in review.
+	 *
+	 * Pinned by:
+	 *   - C14_REAL_PARALLEL_OK_FIRST (real failure
+	 *     present → latch fires)
+	 *   - C14_REAL_PARALLEL_FAIL_FIRST (symmetric)
+	 *   - C14_PARALLEL_CONTROL_PLANE_DENY_NOT_FAILURE
+	 *     (host_policy_denied must NOT fire the latch)
+	 *   - C14_PARALLEL_RUNTIME_SKIPPED_NOT_FAILURE
+	 *     (synthetic runtime_skipped must NOT fire the
+	 *     latch)
 	 */
-	private batchContainsNonConvergentFailure(
-		message: AgentMessage | undefined,
+	private batchContainsTypedFailure(
+		outcomes: readonly ToolRuntimeOutcome[],
 	): boolean {
-		if (!message) return false;
-		for (const part of message.content) {
-			if (part.type === "tool-result" && part.isError) {
+		for (const outcome of outcomes) {
+			if (outcome.kind === "failure") {
 				return true;
 			}
 		}
@@ -2328,6 +2409,19 @@ export class AgentRuntime {
 		const classificationInput = buildToolOutcomeClassificationInput(evidence);
 		const runtimeOutcome: ToolRuntimeOutcome =
 			classifyToolRuntimeOutcome(classificationInput);
+		// C1.4: capture the typed outcome into the runtime-
+		// owned per-batch buffer BEFORE
+		// `applyRecoveryPostClassification` mutates
+		// `recoverySecondStage`. The buffer is the
+		// parallel-path equivalent of the typed-outcome
+		// authority used by the sequential recovery path:
+		// it preserves provenance (kind ∈ {failure,
+		// control_plane, success}) instead of the coarse
+		// `AgentToolResult.isError` proxy. Consumed by
+		// `executeToolCalls` after `Promise.all` resolves,
+		// then cleared. See the buffer's declaration
+		// comment for the C1.1 architectural rationale.
+		this.pendingBatchOutcomes.push(runtimeOutcome);
 		// C1.3: route the classified outcome through the runtime-owned
 		// `RecoveryTracker` along the SAME per-call-local path. The
 		// branching is structural (per `runtimeOutcome.kind`), so it

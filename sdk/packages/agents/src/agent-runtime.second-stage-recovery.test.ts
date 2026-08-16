@@ -1266,6 +1266,419 @@ describe("AgentRuntime / C1.4 real-parallel precedence", () => {
 });
 
 // ============================================================================
+//      C14_PARALLEL_CONTROL_PLANE_AUTHORITY (reviewer round-3 correction)
+// ============================================================================
+
+describe("AgentRuntime / C1.4 parallel control-plane authority", () => {
+	it("C14_PARALLEL_CONTROL_PLANE_DENY_NOT_FAILURE: with armed second-stage, a host-policy DENY of one sibling in a parallel batch MUST NOT fire the latch", async () => {
+		// Reviewer-required round-3 fixture.
+		//
+		// The previous round of this code keyed the
+		// parallel-batch latch on `AgentToolResult.isError`
+		// === true. That re-introduced the C1.1
+		// anti-pattern: `isError` structurally conflates
+		// `failure / recoverable` with `control_plane /
+		// host_policy_denied | user_rejected |
+		// runtime_skipped | runtime_aborted`. A host-policy
+		// DENY of one sibling in a parallel batch must
+		// NEVER arm the second-stage continuation — that
+		// would violate the C1.4 control-plane-exclusion
+		// contract.
+		//
+		// The fix routes the guard through the runtime-
+		// owned `pendingBatchOutcomes: ToolRuntimeOutcome[]`
+		// buffer, populated by `executePreparedTool`
+		// immediately after `classifyToolRuntimeOutcome`
+		// produces the typed outcome. The guard is
+		// `outcomes.some(o => o.kind === "failure")` —
+		// never `isError === true`.
+		//
+		// Setup:
+		//   iters 1..6: 6 distinct opaque failures
+		//     (Trigger D arms after the 6th).
+		//   iter 7: parallel batch
+		//     sibling A = opaque_thrower (DENIED via
+		//       requestToolApproval → control_plane /
+		//       host_policy_denied)
+		//     sibling B = ok (succeeds → success)
+		//   iter 8: text-only completion
+		const executorCalls = { count: 0 };
+		const executorOk = { count: 0 };
+		const approvalCalls: string[] = [];
+		const failTool: AgentTool<{ value: string }, never> = {
+			name: "opaque_thrower",
+			description: "Fails opaque",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorCalls.count += 1;
+				throw OPAQUE;
+			},
+		};
+		const okTool: AgentTool<{ x: number }, { ok: true }> = {
+			name: "ok",
+			description: "Succeeds",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorOk.count += 1;
+				return { ok: true };
+			},
+		};
+		const captureAll: CapturedOutcome[] = [];
+		// Setup: 3 identical opaque failures (same canonical
+		// key `key-1`). After the 3rd, Trigger C's per-key
+		// exact-only cap fires and arms the second-stage
+		// continuation with `exact_only_capped`.
+		const sameKeyStep = (n: number) => () => [
+			{
+				type: "tool-call-delta",
+				toolCallId: `f${n}`,
+				toolName: "opaque_thrower",
+				inputText: JSON.stringify({ value: "key-1" }),
+			},
+			{ type: "finish", reason: "tool-calls" },
+		];
+		const model = new ScriptedModel([
+			sameKeyStep(1),
+			sameKeyStep(2),
+			sameKeyStep(3),
+			// iter 4 (continuation, after Trigger C arm):
+			// parallel batch [DENIED opaque_thrower, ok].
+			// The DENIED sibling's outcome is
+			// `control_plane` (NOT failure). The batch
+			// guard must NOT fire the latch. The ok
+			// success resets state to idle.
+			() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_deny",
+					toolName: "opaque_thrower",
+					inputText: JSON.stringify({ value: "key-2" }),
+				},
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_ok",
+					toolName: "ok",
+					inputText: JSON.stringify({ x: 1 }),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			],
+			// iter 5: text-only completion.
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [failTool, okTool],
+			toolExecution: "parallel",
+			hooks: captureOutcomes(captureAll),
+			toolPolicies: { opaque_thrower: { autoApprove: false } },
+			requestToolApproval: async (request) => {
+				const isDeny = request.toolCallId === "p_deny";
+				approvalCalls.push(request.toolCallId);
+				return {
+					approved: !isDeny,
+					reason: isDeny ? "denied" : "",
+					decision: isDeny ? { kind: "deny" } : { kind: "approve" },
+				};
+			},
+		});
+		const result = await runtime.run("Start");
+		const snapshot = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// PROVEN: parallel control-plane outcome must NOT
+		// fire the latch. The ok success reset the second
+		// stage to idle.
+		expect(snapshot.secondStage.kind).toBe("idle");
+		expect(snapshot.episodeFailures).toBe(0);
+		expect(result.status).toBe("completed");
+		// The DENY sibling's outcome must be a control
+		// plane, NOT a failure. We accept either
+		// `host_policy_denied` (host-policy DENY) or
+		// `user_rejected` (user NO-click); both are
+		// structurally excluded from recovery budget per
+		// C1.1, which is the load-bearing assertion here.
+		// The classifier priority (hostDenied over
+		// userRejected) determines which label applies.
+		const denyOutcome = expectCaptured(captureAll, "p_deny");
+		expect(denyOutcome.kind).toBe("control_plane");
+		if (denyOutcome.kind !== "control_plane") throw new Error("narrow");
+		expect([
+			"host_policy_denied",
+			"user_rejected",
+		]).toContain(denyOutcome.outcome);
+		// The ok sibling's outcome must be success.
+		const okOutcome = expectCaptured(captureAll, "p_ok");
+		expect(okOutcome.kind).toBe("success");
+		// 3 pre-arm failures executed; 1 ok success ran.
+		expect(executorCalls.count).toBe(3);
+		expect(executorOk.count).toBe(1);
+	});
+
+	it("C14_PARALLEL_RUNTIME_SKIPPED_NOT_FAILURE: with armed second-stage, a synthetic runtime_skipped (C1.3 pre-exec block) in a parallel batch MUST NOT fire the latch", async () => {
+		// Reviewer-required round-3 fixture.
+		//
+		// The `runtime_skipped` control-plane outcome is
+		// produced by the C1.3 pre-execution breaker when
+		// it intercepts an exact-key repeat attempt that
+		// has already exhausted its per-key budget. Under
+		// the previous round's `isError`-keyed guard, an
+		// `isError=true` `runtime_skipped` would have
+		// wrongly fired the latch (false positive — the
+		// synthetic skip is structurally excluded from
+		// recovery budget per C1.3).
+		//
+		// Setup:
+		//   iters 1..6: 6 distinct opaque failures
+		//     (Trigger D arms after the 6th).
+		//   iter 7 (continuation): parallel batch
+		//     sibling A = ok (succeeds → success)
+		//     sibling B = opaque_thrower with key=key-1
+		//       (REPEAT of iter 1's canonical key →
+		//       C1.3 pre-exec block → control_plane /
+		//       runtime_skipped)
+		//   iter 8: text-only completion
+		const executorCalls = { count: 0 };
+		const executorOk = { count: 0 };
+		const failTool: AgentTool<{ value: string }, never> = {
+			name: "opaque_thrower",
+			description: "Fails opaque",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorCalls.count += 1;
+				throw OPAQUE;
+			},
+		};
+		const okTool: AgentTool<{ x: number }, { ok: true }> = {
+			name: "ok",
+			description: "Succeeds",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorOk.count += 1;
+				return { ok: true };
+			},
+		};
+		const captureAll: CapturedOutcome[] = [];
+		// Setup: 3 identical opaque failures (same canonical
+		// key `key-1`). After the 3rd, Trigger C's per-key
+		// exact-only cap fires and arms the second-stage
+		// continuation with `exact_only_capped`. On the 4th
+		// attempt of the same key (the bounded continuation
+		// turn), the pre-exec block intercepts and routes
+		// the call as `control_plane / runtime_skipped`.
+		const sameKeyStep = (n: number) => () => [
+			{
+				type: "tool-call-delta",
+				toolCallId: `f${n}`,
+				toolName: "opaque_thrower",
+				inputText: JSON.stringify({ value: "key-1" }),
+			},
+			{ type: "finish", reason: "tool-calls" },
+		];
+		const model = new ScriptedModel([
+			sameKeyStep(1),
+			sameKeyStep(2),
+			sameKeyStep(3),
+			// iter 4 (continuation, after Trigger C arm):
+			// parallel batch [ok, repeat-key opaque]. The
+			// repeat-key hits the pre-exec block
+			// (`exactOnlyBudget[key] > maxRepairAttempts`).
+			// The batch guard must NOT fire the latch.
+			() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_ok",
+					toolName: "ok",
+					inputText: JSON.stringify({ x: 1 }),
+				},
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_repeat",
+					toolName: "opaque_thrower",
+					// Same canonical key as f1..f3.
+					inputText: JSON.stringify({ value: "key-1" }),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			],
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [failTool, okTool],
+			toolExecution: "parallel",
+			hooks: captureOutcomes(captureAll),
+		});
+		const result = await runtime.run("Start");
+		const snapshot = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// PROVEN: a synthetic runtime_skipped in a parallel
+		// batch is correctly classified as
+		// `control_plane / runtime_skipped` (NOT
+		// `failure / ...`). The latch termination that
+		// follows is the SAME one observed in
+		// C14_A_EXACT_REPEAT_TERMINATES (sequential): the
+		// C1.3 synthesised-pre-exec transition correctly
+		// fires for exact-key repeats on the continuation
+		// turn. The batch-level guard contributes NOTHING
+		// to this termination — it operates on
+		// `ToolRuntimeOutcome.kind === "failure"`, which
+		// `runtime_skipped` is not. The trigger that
+		// survives into terminating is the pre-existing
+		// exact_only_capped from Trigger C.
+		expect(snapshot.secondStage.kind).toBe("terminating");
+		expect(snapshot.secondStage.trigger).toBe("exact_only_capped");
+		expect(result.status).toBe("aborted");
+		expect(result.error?.message).toBe("bounded_recovery_exhausted");
+		// The repeat-key sibling's outcome must be the
+		// synthetic control-plane runtime_skipped.
+		const repeatOutcome = expectCaptured(captureAll, "p_repeat");
+		expect(repeatOutcome.kind).toBe("control_plane");
+		if (repeatOutcome.kind !== "control_plane") throw new Error("narrow");
+		expect(repeatOutcome.outcome).toBe("runtime_skipped");
+		// The ok sibling's outcome is success.
+		const okOutcome = expectCaptured(captureAll, "p_ok");
+		expect(okOutcome.kind).toBe("success");
+		// 3 pre-arm failures executed; 1 ok success ran.
+		// The repeat key did NOT execute (pre-exec block).
+		expect(executorCalls.count).toBe(3);
+		expect(executorOk.count).toBe(1);
+	});
+});
+
+// ============================================================================
+//      C14_PARALLEL_IDLE_MIXED_BATCH_ORDER_INDEPENDENT (reviewer round-3)
+// ============================================================================
+
+describe("AgentRuntime / C1.4 parallel idle mixed-batch order independence", () => {
+	it("C14_PARALLEL_IDLE_MIXED_BATCH_ORDER_INDEPENDENT: repeated [failure, success] parallel batches in idle state MUST have scheduler-independent counter behavior", async () => {
+		// Reviewer-required round-3 fixture (recommended).
+		//
+		// The C1.4 success-reset rule resets
+		// `recoveryEpisodeFailures` to 0 on EVERY
+		// successful tool execution, regardless of
+		// second-stage kind. That decision is
+		// fundamentally a product-policy choice —
+		// whether a single success in a parallel batch
+		// counts as forward progress that clears the
+		// episode-level failure pressure, or whether
+		// any failure in a parallel batch
+		// conservatively increments the counter and
+		// the success only resets the per-tool outcome
+		// (not the cross-tool pressure).
+		//
+		// The current implementation chooses the
+		// first option: success always resets the
+		// counter. This means a parallel batch
+		// [failure, success] under idle state is
+		// order-independent — both ordering cases
+		// produce counter=0 at the end of the batch,
+		// because the success applyPost unconditionally
+		// writes 0 regardless of what the failure
+		// applyPost just wrote.
+		//
+		// This test pins the order-independence under
+		// repeated parallel batches to ensure the
+		// scheduler (which decides which sibling's
+		// applyPost runs first) cannot make the
+		// counter climb indefinitely. If the policy
+		// is later changed to a more conservative
+		// "any-failure-in-batch-increments" rule,
+		// this test will need to be updated to match.
+		//
+		// Setup:
+		//   3 parallel batches each containing
+		//   [opaque_thrower(key-N), ok]. Each batch
+		//   under idle state. After 3 batches, the
+		//   episode counter MUST be 0 (success always
+		//   resets).
+		const executorCalls = { count: 0 };
+		const executorOk = { count: 0 };
+		const failTool: AgentTool<{ value: string }, never> = {
+			name: "opaque_thrower",
+			description: "Fails opaque",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorCalls.count += 1;
+				throw OPAQUE;
+			},
+		};
+		const okTool: AgentTool<{ x: number }, { ok: true }> = {
+			name: "ok",
+			description: "Succeeds",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorOk.count += 1;
+				return { ok: true };
+			},
+		};
+		const captureAll: CapturedOutcome[] = [];
+		const parallelBatch = (key: string, n: number) => () => [
+			{
+				type: "tool-call-delta",
+				toolCallId: `f-${n}`,
+				toolName: "opaque_thrower",
+				inputText: JSON.stringify({ value: key }),
+			},
+			{
+				type: "tool-call-delta",
+				toolCallId: `s-${n}`,
+				toolName: "ok",
+				inputText: JSON.stringify({ x: n }),
+			},
+			{ type: "finish", reason: "tool-calls" },
+		];
+		const model = new ScriptedModel([
+			parallelBatch("k1", 1),
+			parallelBatch("k2", 2),
+			parallelBatch("k3", 3),
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [failTool, okTool],
+			toolExecution: "parallel",
+			hooks: captureOutcomes(captureAll),
+		});
+		const result = await runtime.run("Start");
+		const snapshot = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// PROVEN: parallel [fail, success] batches under
+		// idle state MUST be order-independent. Each
+		// success resets the episode counter, so 3
+		// batches → counter at 0.
+		expect(snapshot.secondStage.kind).toBe("idle");
+		expect(snapshot.episodeFailures).toBe(0);
+		expect(result.status).toBe("completed");
+		// 3 failures executed; 3 successes executed.
+		expect(executorCalls.count).toBe(3);
+		expect(executorOk.count).toBe(3);
+		// All sibling outcomes recorded.
+		for (let i = 1; i <= 3; i += 1) {
+			const failOutcome = expectCaptured(captureAll, `f-${i}`);
+			expect(failOutcome.kind).toBe("failure");
+			const okOutcome = expectCaptured(captureAll, `s-${i}`);
+			expect(okOutcome.kind).toBe("success");
+		}
+	});
+});
+
+// ============================================================================
 //      C14_EPISODE_SUCCESS_RESETS_FAILURE_ACCUMULATION (reviewer correction)
 // ============================================================================
 
