@@ -145,6 +145,47 @@ export type AgentRunStatus =
 	| "aborted"
 	| "failed";
 
+/**
+ * C1.5 LIVE-RUNTIME REFINEMENT.
+ *
+ * `AgentRuntimeStateSnapshot` keeps `recovery?` so pre-C1.5 hand-built
+ * fixtures stay valid without rewriting unrelated literals. But every
+ * snapshot a live runtime produces — including every event payload it
+ * emits — is structurally required to carry the canonical projection.
+ * Consumers reading from a real runtime can therefore treat the field
+ * as non-optional without an `undefined` check.
+ *
+ * P1 EXPRESSION: intersect the base types with a non-optional
+ * `recovery` wherever the guarantee actually holds. `AgentRuntime`
+ * exposes both refinements through its public subscribe/snapshot
+ * surface (see `agent-runtime.ts`); hand-built test stubs that
+ * construct bare events retain the base types so legacy fixtures do
+ * not have to migrate.
+ */
+export type LiveAgentRuntimeStateSnapshot = AgentRuntimeStateSnapshot & {
+	recovery: AgentRuntimeRecoverySnapshot;
+};
+
+/**
+ * Every variant of the runtime event union with its `snapshot` field
+ * narrowed to `LiveAgentRuntimeStateSnapshot`. A real
+ * `AgentRuntime.subscribe()` callback receives this shape, so
+ * `event.snapshot.recovery` is non-optional at the consumer's call
+ * site — without requiring hand-built test fixtures to add the field.
+ */
+export type LiveAgentRuntimeEvent = {
+	[K in AgentRuntimeEvent["type"]]: Extract<
+		AgentRuntimeEvent,
+		{ type: K }
+	> extends infer Variant
+		? Variant extends { snapshot: AgentRuntimeStateSnapshot }
+			? Omit<Variant, "snapshot"> & {
+					snapshot: LiveAgentRuntimeStateSnapshot;
+				}
+			: Variant
+		: never;
+}[AgentRuntimeEvent["type"]];
+
 export interface AgentRuntimeStateSnapshot {
 	agentId: string;
 	agentRole?: AgentRole;

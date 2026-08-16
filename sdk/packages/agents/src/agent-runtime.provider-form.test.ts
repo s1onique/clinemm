@@ -216,7 +216,7 @@ describe("AgentRuntime (provider-form config + Agent alias)", () => {
 			received.push(event.type);
 		});
 
-		agent.restore([
+		await agent.restore([
 			{
 				id: "msg_1",
 				role: "user",

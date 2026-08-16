@@ -371,7 +371,7 @@ describe("AgentRuntime / C1.5 public surface privacy", () => {
 		// The tool input embeds a sentinel secret and the thrown error
 		// embeds a sentinel path. Neither may appear anywhere in the
 		// serialized public recovery surface.
-		const SENTINEL_SECRET = "sk-live-DEADBEEF-do-not-leak";
+		const SENTINEL_SECRET = "C15_SENTINEL_API_KEY_DO_NOT_LEAK_7F3A";
 		const SENTINEL_PATH = "/secret/path/token.pem";
 		const leakTool: AgentTool<{ apiKey: string }, never> = {
 			name: "fs_read",
@@ -619,7 +619,7 @@ describe("AgentRuntime / C1.5 lifecycle reset observability", () => {
 		expect(events).toEqual([]);
 	});
 
-	it("C15_RESTORE_RESET_EVENT: restore() clears recovery state, observable on the next snapshot", async () => {
+	it("C15_RESTORE_SNAPSHOT_TRUTH: restore() clears recovery state, observable on the next snapshot", async () => {
 		const calls = { count: 0 };
 		const model = new ScriptedModel([
 			...Array.from({ length: 8 }, (_, i) =>
@@ -634,11 +634,16 @@ describe("AgentRuntime / C1.5 lifecycle reset observability", () => {
 		await runtime.run("Start");
 		expect(runtime.snapshot().recovery.secondStage).toBe("terminating");
 
-		// `restore()` is synchronous and deliberately does not emit (it
-		// discards the in-flight run), but the canonical snapshot MUST
-		// immediately report the cleared state — a consumer that reads
-		// `snapshot()` after restore can never observe stale truth.
-		runtime.restore([]);
+		// `restore()` resets per-episode recovery state; the canonical
+		// snapshot MUST immediately report the cleared state — a consumer
+		// that reads `snapshot()` after restore can never observe stale
+		// truth. `restore()` is now `Promise<void>` (parent P0 correction)
+		// because subscribers must be notified when their last known
+		// recovery projection is invalidated. This test is a snapshot-
+		// truth probe, not an event probe; the meaningful-change event
+		// from `terminating → idle` is verified separately in
+		// `C15_RESTORE_RESET_EVENT` below.
+		await runtime.restore([]);
 		const recovery = runtime.snapshot().recovery;
 		expect(recovery.secondStage).toBe("idle");
 		expect(recovery.secondStageTrigger).toBeUndefined();
@@ -646,6 +651,127 @@ describe("AgentRuntime / C1.5 lifecycle reset observability", () => {
 		expect(recovery.episodeFailures).toBe(0);
 		expect(recovery.circuitNoticeCount).toBe(0);
 		expect(recovery.tracker.blockedFamilies).toEqual([]);
+	});
+
+	it("C15_RESTORE_RESET_EVENT: a meaningful restore() emits the canonical recovery-state-changed event, a no-op restore is silent", async () => {
+		// Parent verdict P0: `restore()` preserves subscribers but
+		// invalidates their last-known recovery projection. Without an
+		// event, subscriber-only consumers keep stale truth while a
+		// snapshot-reading consumer immediately sees the new state.
+		//
+		// Two paths must be observable exactly like the run-start reset:
+		//   terminating → restore → idle    → exactly one canonical event
+		//   idle       → restore → idle    → silent (dedup suppression)
+		const calls = { count: 0 };
+		const model = new ScriptedModel([
+			...Array.from({ length: 8 }, (_, i) =>
+				toolCallStep(`a${i}`, "opaque_thrower", { value: `v${i}` }),
+			),
+			finishStep,
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [createOpaqueTool(calls)],
+		});
+
+		// Drive the runtime into a `terminating` latch.
+		await runtime.run("Drive to circuit");
+		expect(runtime.snapshot().recovery.secondStage).toBe("terminating");
+
+		// --- MEANINGFUL RESET ---
+		// Subscribe from a position where we know the previous projection
+		// was terminating. Restore → idle. Exactly one event must fire.
+		const meaningfulEvents: CapturedRecoveryEvent[] = [];
+		subscribeRecovery(runtime, meaningfulEvents);
+		await runtime.restore([]);
+		expect(meaningfulEvents.length).toBe(1);
+		expect(meaningfulEvents[0].previous.secondStage).toBe("terminating");
+		expect(meaningfulEvents[0].payload.secondStage).toBe("idle");
+		expect(meaningfulEvents[0].payload.state).toBe("idle");
+		expect(meaningfulEvents[0].payload.episodeFailures).toBe(0);
+		expect(meaningfulEvents[0].payload.circuitNoticeCount).toBe(0);
+		expect(meaningfulEvents[0].payload.tracker.blockedFamilies).toEqual([]);
+		// Public event payload MUST equal current `snapshot()` value —
+		// structural equality, not tested equality.
+		expect(runtime.snapshot().recovery).toEqual(meaningfulEvents[0].payload);
+
+		// --- NO-OP RESET ---
+		// Already idle. A fresh restore from this state must emit
+		// nothing — otherwise a UI would re-render a null transition.
+		const noopEvents: CapturedRecoveryEvent[] = [];
+		subscribeRecovery(runtime, noopEvents);
+		await runtime.restore([]);
+		expect(noopEvents).toEqual([]);
+	});
+});
+
+// ============================================================================
+//      C15 SUBSCRIBER / LIVE-TYPE GUARANTEES
+// ============================================================================
+
+describe("AgentRuntime / C1.5 subscribe surface compiles with the live recovery refinement", () => {
+	it("C15_LIVE_RECOVERY_TYPE_GUARANTEE: subscribe() callbacks receive event.snapshot.recovery as non-optional at compile time", async () => {
+		// C1.5 P1 — three live-runtime refine­ment witnesses at the
+		// subscribe boundary.
+		//
+		// The runtime value already proves `recovery` is present
+		// (`C15_EVENT_EQUALS_SNAPSHOT`). This test pins the matching
+		// type-level guarantee via three independent witnesses:
+		//
+		//   W1. `LiveAgentRuntimeEvent` is exported from the public
+		//       `@cline/shared` surface (compile-time witness —
+		//       captured by an inline `import()` type expression).
+		//   W2. `LiveAgentRuntimeStateSnapshot.recovery` is
+		//       structurally non-optional.
+		//   W3. The public subscribe callback receives the live event
+		//       shape via `AgentEventListener`'s `(event:
+		//       LiveAgentRuntimeEvent) => void` signature.
+		//
+		// Witnesses W1+W2 are anchored in production code
+		// (`agent-runtime.ts`) — removing the type or the
+		// refinement makes `bun run build:sdk` fail. Witness W3 is
+		// anchored in this test file's contextual-typing of
+		// `runtime.subscribe((event) => ...)` — TS infers `event`
+		// from `AgentEventListener`, so a regression that reverts
+		// the signature widens `event.snapshot.recovery` to
+		// `... | undefined`. If a future refactor breaks either
+		// branch, the production build OR the `AgentEventListener`
+		// declaration fails to typecheck.
+		const calls = { count: 0 };
+		const runtime = new AgentRuntime({
+			model: new ScriptedModel([
+				toolCallStep("t1", "fs_read", { path: "/a" }),
+				finishStep,
+			]),
+			tools: [createEnoentTool(calls)],
+		});
+
+		// W1: type witness via inline import — survives even if
+		// the `type` keyword was stripped from a future refactor.
+		type LiveWitness = import("@cline/shared").LiveAgentRuntimeEvent;
+		// W2: structural witness — proves `recovery` is required
+		// on the live variant. Compile-time guard: removing the
+		// refinement makes this assignment impossible.
+		const _nonOptionalRecovery: AgentRuntimeRecoverySnapshot =
+			null as unknown as LiveWitness["snapshot"]["recovery"];
+
+		const received: { secondStage: string }[] = [];
+		const unsubscribe: () => void = runtime.subscribe((event) => {
+			// W3: contextual typing. With the live refinement,
+			// `event.snapshot.recovery.secondStage` is reachable
+			// without an `?` or a non-null check. The plain
+			// property access is the witness — if the
+			// refinement were stripped, TS would emit
+			// `Object is possibly 'undefined'`.
+			const r = event.snapshot.recovery;
+			received.push({ secondStage: r.secondStage });
+		});
+		await runtime.run("Probe live type");
+		unsubscribe();
+		expect(received.length).toBeGreaterThan(0);
+		// Runtime assertion that the recovered projection is
+		// fully shaped (not undefined).
+		expect(received.every((r) => typeof r.secondStage === "string")).toBe(true);
 	});
 });
 

@@ -171,17 +171,16 @@ async function driveRun(
 	tools: AgentTool<any, any>[],
 ): Promise<RunResult> {
 	const captured: CapturedOutcome[] = [];
-	const steps: Array<
-		(req: AgentModelRequest) => Iterable<AgentModelEvent>
-	> = proposals.map((p) => () => [
-		{
-			type: "tool-call-delta",
-			toolCallId: p.toolCallId,
-			toolName: p.toolName,
-			inputText: JSON.stringify(p.input),
-		},
-		{ type: "finish", reason: "tool-calls" },
-	]);
+	const steps: Array<(req: AgentModelRequest) => Iterable<AgentModelEvent>> =
+		proposals.map((p) => () => [
+			{
+				type: "tool-call-delta",
+				toolCallId: p.toolCallId,
+				toolName: p.toolName,
+				inputText: JSON.stringify(p.input),
+			},
+			{ type: "finish", reason: "tool-calls" },
+		]);
 	steps.push(() => [
 		{ type: "text-delta", text: "done" },
 		{ type: "finish", reason: "stop" },
@@ -228,8 +227,10 @@ describe("AgentRuntime / C1.4 second-stage / exact-repeat scenario", () => {
 			toolName: "fs_read",
 			input: { path: "/missing" },
 		}));
-		const { captured, recoverySnapshot, result, requestCount } =
-			await driveRun(proposals, [createEnoentTool(executorCalls)]);
+		const { captured, recoverySnapshot, result, requestCount } = await driveRun(
+			proposals,
+			[createEnoentTool(executorCalls)],
+		);
 		expect(executorCalls.count).toBe(
 			1 + DEFAULT_RECOVERY_POLICY.maxRepairAttempts,
 		);
@@ -274,8 +275,10 @@ describe("AgentRuntime / C1.4 second-stage / changed-input same-family", () => {
 			{ toolCallId: "c", toolName: "fs_read", input: { path: "/c" } },
 			{ toolCallId: "d", toolName: "fs_read", input: { path: "/z" } },
 		];
-		const { captured, recoverySnapshot, result, requestCount } =
-			await driveRun(proposals, [createEnoentTool(executorCalls)]);
+		const { captured, recoverySnapshot, result, requestCount } = await driveRun(
+			proposals,
+			[createEnoentTool(executorCalls)],
+		);
 		expect(executorCalls.count).toBe(4);
 		expect(requestCount).toBe(4);
 		for (const id of ["a", "b", "c", "d"]) {
@@ -283,9 +286,7 @@ describe("AgentRuntime / C1.4 second-stage / changed-input same-family", () => {
 			expect(out.kind).toBe("failure");
 		}
 		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
-		expect(recoverySnapshot.secondStage.trigger).toBe(
-			"family_exhausted",
-		);
+		expect(recoverySnapshot.secondStage.trigger).toBe("family_exhausted");
 		expect(result.status).toBe("aborted");
 		expect(result.error?.message).toBe("bounded_recovery_exhausted");
 		// The family budget is exhausted (warning), but the
@@ -296,9 +297,7 @@ describe("AgentRuntime / C1.4 second-stage / changed-input same-family", () => {
 		// than "circuit_open". Both are truthful states of
 		// the recovery substrate; only the second-stage latch
 		// matters for the C1.4 termination invariant.
-		expect(["warning", "circuit_open"]).toContain(
-			recoverySnapshot.state,
-		);
+		expect(["warning", "circuit_open"]).toContain(recoverySnapshot.state);
 	});
 });
 
@@ -341,9 +340,7 @@ describe("AgentRuntime / C1.4 second-stage / opaque fresh-input", () => {
 			expect(out.kind).toBe("failure");
 		}
 		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
-		expect(recoverySnapshot.secondStage.trigger).toBe(
-			"exact_only_capped",
-		);
+		expect(recoverySnapshot.secondStage.trigger).toBe("exact_only_capped");
 		// Each canonical key has its own counter; both keys
 		// tracked independently. NO false family merge.
 		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(2);
@@ -407,9 +404,7 @@ describe("AgentRuntime / C1.4 second-stage / opaque fresh-input", () => {
 		expect(result.status).toBe("aborted");
 		expect(result.error?.message).toBe("bounded_recovery_exhausted");
 		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
-		expect(recoverySnapshot.secondStage.trigger).toBe(
-			"episode_exhausted",
-		);
+		expect(recoverySnapshot.secondStage.trigger).toBe("episode_exhausted");
 		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(7);
 		expect(recoverySnapshot.episodeFailures).toBe(
 			recoverySnapshot.maxRecoveryEpisodeFailures,
@@ -749,17 +744,16 @@ describe("AgentRuntime / C1.4 memory-state lifecycle", () => {
 			{ toolCallId: "c", toolName: "fs_read", input: { path: "/x" } },
 			{ toolCallId: "d", toolName: "fs_read", input: { path: "/x" } },
 		];
-		const steps1: Array<
-			(req: AgentModelRequest) => Iterable<AgentModelEvent>
-		> = proposals.map((p) => () => [
-			{
-				type: "tool-call-delta",
-				toolCallId: p.toolCallId,
-				toolName: p.toolName,
-				inputText: JSON.stringify(p.input),
-			},
-			{ type: "finish", reason: "tool-calls" },
-		]);
+		const steps1: Array<(req: AgentModelRequest) => Iterable<AgentModelEvent>> =
+			proposals.map((p) => () => [
+				{
+					type: "tool-call-delta",
+					toolCallId: p.toolCallId,
+					toolName: p.toolName,
+					inputText: JSON.stringify(p.input),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			]);
 		steps1.push(() => [
 			{ type: "text-delta", text: "done" },
 			{ type: "finish", reason: "stop" },
@@ -779,7 +773,12 @@ describe("AgentRuntime / C1.4 memory-state lifecycle", () => {
 		expect(beforeRestore.secondStage.kind).toBe("terminating");
 		expect(beforeRestore.state).toBe("circuit_open");
 
-		runtime.restore([]);
+		// C1.5 correction (parent verdict P0): `restore()` is now
+		// `Promise<void>` so it can emit the canonical reset event.
+		// The synchronous tracker reset still happens before the
+		// promise resolves, so the post-restore probe remains valid
+		// without an additional microtask flush.
+		await runtime.restore([]);
 		const afterRestore = (
 			runtime as unknown as {
 				__recoverySnapshotForTests(): RecoveryTestSnapshot;
@@ -819,10 +818,9 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 			toolName: "fs_read",
 			input: { path: "/missing" },
 		}));
-		const { requestCount, result } = await driveRun(
-			proposals,
-			[createEnoentTool(executorCalls)],
-		);
+		const { requestCount, result } = await driveRun(proposals, [
+			createEnoentTool(executorCalls),
+		]);
 		// Exact bound: 4 stream calls total. One per
 		// proposal; the 5th scripted "done" step is never
 		// reached because the latch fires first.
@@ -845,16 +843,13 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 			{ toolCallId: "c", toolName: "fs_read", input: { path: "/c" } },
 			{ toolCallId: "d", toolName: "fs_read", input: { path: "/d" } },
 		];
-		const { recoverySnapshot } = await driveRun(
-			proposals,
-			[createEnoentTool(executorCalls)],
-		);
+		const { recoverySnapshot } = await driveRun(proposals, [
+			createEnoentTool(executorCalls),
+		]);
 		// If Trigger B were removed, secondStage.kind would
 		// be "idle" (no arm). Production arm is required.
 		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
-		expect(recoverySnapshot.secondStage.trigger).toBe(
-			"family_exhausted",
-		);
+		expect(recoverySnapshot.secondStage.trigger).toBe("family_exhausted");
 	});
 
 	it("LOAD_BEARING_SENTINEL_INPUT_CHANGE_AS_PROGRESS_bites : distinct canonical inputs do NOT evade the family-exhaustion arm", async () => {
@@ -874,10 +869,9 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 			{ toolCallId: "i-3", toolName: "fs_read", input: { path: "/3" } },
 			{ toolCallId: "i-4", toolName: "fs_read", input: { path: "/4" } },
 		];
-		const { recoverySnapshot } = await driveRun(
-			proposals,
-			[createEnoentTool(executorCalls)],
-		);
+		const { recoverySnapshot } = await driveRun(proposals, [
+			createEnoentTool(executorCalls),
+		]);
 		// The bounded continuation is consumed by d (the
 		// post-arm turn); d fails; the latch fires.
 		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
@@ -1407,10 +1401,9 @@ describe("AgentRuntime / C1.4 parallel control-plane authority", () => {
 		const denyOutcome = expectCaptured(captureAll, "p_deny");
 		expect(denyOutcome.kind).toBe("control_plane");
 		if (denyOutcome.kind !== "control_plane") throw new Error("narrow");
-		expect([
-			"host_policy_denied",
-			"user_rejected",
-		]).toContain(denyOutcome.outcome);
+		expect(["host_policy_denied", "user_rejected"]).toContain(
+			denyOutcome.outcome,
+		);
 		// The ok sibling's outcome must be success.
 		const okOutcome = expectCaptured(captureAll, "p_ok");
 		expect(okOutcome.kind).toBe("success");
@@ -1804,9 +1797,8 @@ describe("AgentRuntime / C1.4 next-run lifecycle", () => {
 			{ toolCallId: "r2-1", toolName: "fs_read", input: { path: "/y" } },
 		];
 		const captured: CapturedOutcome[] = [];
-		const steps: Array<
-			(req: AgentModelRequest) => Iterable<AgentModelEvent>
-		> = [];
+		const steps: Array<(req: AgentModelRequest) => Iterable<AgentModelEvent>> =
+			[];
 		for (const p of proposals1) {
 			steps.push(() => [
 				{

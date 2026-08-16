@@ -28,6 +28,8 @@ import type {
 	AgentRuntimeConfig as BaseAgentRuntimeConfig,
 	CaptureTaskLifecycleEventInput,
 	ControlPlaneOutcome,
+	LiveAgentRuntimeEvent,
+	LiveAgentRuntimeStateSnapshot,
 	ProviderErrorClass,
 	TelemetryProperties,
 	ToolApprovalResult,
@@ -115,7 +117,15 @@ function createUID(prefix: string, length = 8): string {
 }
 
 export type AgentRunInput = string | AgentMessage | readonly AgentMessage[];
-export type AgentEventListener = (event: AgentRuntimeEvent) => void;
+/**
+ * C1.5 P1: the listener receives `LiveAgentRuntimeEvent`, where
+ * `event.snapshot.recovery` is non-optional. The internal `emit()`
+ * still calls listeners with the regular `AgentRuntimeEvent` — the
+ * narrowing is type-only: every emitted event's `snapshot` carries
+ * the canonical projection, so the runtime-to-listener contract
+ * satisfies the refined type without any data transformation.
+ */
+export type AgentEventListener = (event: LiveAgentRuntimeEvent) => void;
 
 /**
  * Advanced form: caller supplies a pre-built `AgentModel`. Used by
@@ -747,7 +757,7 @@ export class AgentRuntime {
 	 * Useful for standalone callers that persist conversations externally and
 	 * want to re-seed the runtime from storage without recreating subscribers.
 	 */
-	restore(messages: readonly AgentMessage[]): void {
+	async restore(messages: readonly AgentMessage[]): Promise<void> {
 		this.abort("Agent state restored");
 		// Reset state that is not carried across restores. Keep `listeners`,
 		// tools, hooks, plugins, model, and agent identity so external event
@@ -776,19 +786,28 @@ export class AgentRuntime {
 		// recovery invariants. We also re-create the recoveryTracker
 		// so a restored run starts from a fresh episode rather than
 		// continuing the previous one's family state.
+		//
+		// C1.5 CORRECTION (parent verdict P0): subscribers survive
+		// `restore()` by SDK contract, but their last known recovery
+		// projection becomes invalid the moment per-episode state
+		// is reset. Without an explicit emission, a subscriber-only
+		// consumer would keep stale recovery truth (e.g. "terminating")
+		// while a snapshot-reading consumer immediately sees "idle".
+		// Mirrors the run-start reset rule already proven in C1.5:
+		// meaningful change → one canonical event; no-op → silent.
+		const recoveryBeforeRestore = this.snapshotRecoveryState();
 		this.resetRecoveryEpisode();
+		await this.emitRecoveryStateChangeIfChanged(recoveryBeforeRestore);
 	}
 
 	/**
-	 * C1.5: the return type narrows `AgentRuntimeStateSnapshot.recovery`
-	 * to be REQUIRED. The shared interface leaves it optional only for
-	 * hand-built partial fixtures; a snapshot produced by a live runtime
-	 * always carries the canonical projection, and callers of this method
-	 * can rely on that without a null check.
+	 * C1.5: returns `LiveAgentRuntimeStateSnapshot` so the runtime's
+	 * public guarantee — `recovery` is always present on a live snapshot —
+	 * is encoded in the public TypeScript surface, not only in the doc
+	 * string. The base interface still allows `recovery` to be absent
+	 * so pre-C1.5 hand-built test fixtures stay valid.
 	 */
-	snapshot(): AgentRuntimeStateSnapshot & {
-		recovery: AgentRuntimeRecoverySnapshot;
-	} {
+	snapshot(): LiveAgentRuntimeStateSnapshot {
 		return {
 			agentId: this.state.agentId,
 			agentRole: this.state.agentRole,
@@ -3144,7 +3163,18 @@ export class AgentRuntime {
 				break;
 		}
 		for (const listener of this.listeners) {
-			listener(event);
+			// C1.5 P1: `AgentEventListener` is typed as
+			// `(event: LiveAgentRuntimeEvent) => void`, which is a
+			// NARROWED supertype of the internal `AgentRuntimeEvent`.
+			// The runtime-to-listener contract guarantees that every
+			// emitted event's snapshot carries the canonical recovery
+			// projection (pinned by `C15_EVENT_EQUALS_SNAPSHOT`), so
+			// the refinement is sound at this boundary. The cast is
+			// the single seam that converts the base internal type
+			// to the live-public type, matching the production code
+			// path that constructs every emitted event via
+			// `this.snapshot()`.
+			listener(event as unknown as Parameters<AgentEventListener>[0]);
 		}
 		for (const hook of this.hooks.onEvent) {
 			await hook(event);
