@@ -250,6 +250,36 @@ describe("C1.6 / P1 FAIL_FIRST in parallel batch", () => {
 			)
 			.filter((l) => l.includes("terminating"));
 		expect(labels).toContain("armed→terminating");
+		// CORRECTION01 / M8 atomicity: the public
+		// recovery-event sequence for a parallel batch
+		// must be atomic — exactly one `armed→terminating`
+		// event for the whole batch, regardless of
+		// completion order. Any per-tool intermediate
+		// (e.g. `idle→armed` from a sibling's
+		// applyRecoveryPostClassification, or
+		// `armed→idle` from a sibling success's reset)
+		// violates the parallel-path atomicity contract.
+		//
+		// The pre-batch `armingSteps` legitimately emit
+		// recovery events as the latch is armed. The
+		// atomicity invariant is about events that fire
+		// DURING the batch — those whose previous state
+		// was already `armed`. There must be exactly one
+		// such event: the final `armed→terminating`.
+		const inBatchEvents = events.filter(
+			(e) => e.previous.secondStage === "armed",
+		);
+		expect(inBatchEvents.length).toBe(1);
+		expect(inBatchEvents[0]?.payload.secondStage).toBe("terminating");
+		// No `armed→idle` reset events are allowed
+		// mid-batch — the success's applyRecoveryPostClassification
+		// must not be allowed to fire mid-flight.
+		const idleResets = events.filter(
+			(e) =>
+				e.previous.secondStage === "armed" &&
+				e.payload.secondStage === "idle",
+		);
+		expect(idleResets.length).toBe(0);
 	});
 });
 

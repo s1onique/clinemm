@@ -518,6 +518,48 @@ describe("C1.6 / events", () => {
 // ============================================================================
 
 describe("C1.6 / lifecycle reuse", () => {
+	it("run → terminating → (no restore) → run → fresh — run-start reset is the only reset", async () => {
+		// CORRECTION01 / M10 killer: prove the run-start
+		// reset (the `resetRecoveryEpisode()` call at the
+		// top of `run()`) is load-bearing for the
+		// "next-run lifecycle" invariant. The previous
+		// lifecycle test always called `restore()` between
+		// runs, which masked the run-start reset because
+		// `restore()` independently resets recovery state.
+		// This test omits `restore()` to exercise the
+		// run-start reset alone.
+		const failCalls = { count: 0 };
+		const okCalls = { count: 0 };
+		const runtime = new AgentRuntime({
+			model: new ScriptedModel([
+				toolCallStep("a1", "fs_read", { path: "/a" }),
+				toolCallStep("a2", "fs_read", { path: "/a" }),
+				toolCallStep("a3", "fs_read", { path: "/a" }),
+				toolCallStep("a4", "fs_read", { path: "/a" }),
+				finishStep,
+			]),
+			tools: [createEnoentTool(failCalls), createSuccessTool(okCalls)],
+		});
+		// Run #1: drive to terminating.
+		const r1 = await runtime.run("drive terminating");
+		expect(r1.status).toBe("aborted");
+		expect(r1.error?.message).toBe("bounded_recovery_exhausted");
+		expect(runtime.snapshot().recovery.secondStage).toBe("terminating");
+		// NO restore() between runs.
+		// Run #2: must run with a fresh recovery state
+		// (the run-start reset is the only mechanism)
+		// and complete normally.
+		(
+			runtime as unknown as { config: { model: AgentModel } }
+		).config.model = new ScriptedModel([finishStep]);
+		const r2 = await runtime.run("fresh");
+		expect(r2.status).toBe("completed");
+		// After run #2, recovery second-stage must be
+		// `idle` (a fresh state), NOT `terminating` (a
+		// leaked latch from run #1).
+		expect(runtime.snapshot().recovery.secondStage).toBe("idle");
+	});
+
 	it("run → terminating → restore → run → fresh — boundaries clean", async () => {
 		const failCalls = { count: 0 };
 		const okCalls = { count: 0 };

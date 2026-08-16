@@ -1,82 +1,126 @@
 #!/usr/bin/env python3
 """
-C1.6 actual mutation campaign — 12 surgical mutations against
-the source, each with APPLIED/KILLED/REVERTED/CLEAN evidence.
+C1.6 mutation campaign — 12 surgical mutations against the
+production source, each with APPLIED / KILLED / REVERTED
+/ CLEAN evidence.
 
-Run from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-recovery-c1.6:
-    bun run scripts/c16-mutations.py
+Run from the repo root:
+
+    bun sdk/packages/agents/scripts/c16-mutations.py
 
 Each mutation is a precise text replacement in
-sdk/packages/agents/src/agent-runtime.ts. After every
-mutation we rebuild the dist, run the targeted killer
-test, then revert via the backup.
+`sdk/packages/agents/src/agent-runtime.ts`. After every
+mutation we run the targeted killer test, then revert via
+the backup.
+
+CORRECTION01:
+    M6, M8, M10 originally MISSED because the
+    mutations OR the killer tests were wrong (not
+    redundant defenses). This rewrite fixes:
+      M6: genuine typed-outcome → coarse-isError
+          boundary regression, killer = real
+          host-DENY parallel test (P3)
+      M8: same suspension-disable mutation, but
+          killer = P1 with the new event-atomicity
+          assertion (exactly one armed→terminating
+          event in the batch)
+      M10: same run-start reset removal, but
+          killer = same-runtime second run WITHOUT
+          restore (the C1.4 lifecycle bug that
+          motivated the run-start reset)
 """
+from __future__ import annotations
+
+import re
 import subprocess
-import sys
 from pathlib import Path
 
-ROOT = Path("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-recovery-c1.6")
+# Repo-relative root: <-packages<-agents<-scripts<-mutations.py
+ROOT = Path(__file__).resolve().parents[4]
 SOURCE = ROOT / "sdk/packages/agents/src/agent-runtime.ts"
 BACKUP = Path("/tmp/c16-mut-backup.ts")
 
-REPORT = []
+REPORT: list[tuple] = []
 
-def sh(cmd, **kwargs):
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True, **kwargs)
 
-def run_killer(name):
-    r = sh(f"cd {ROOT} && bun run -F @cline/agents test -t '{name}' 2>&1")
+def sh(cmd: str, **kwargs) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=ROOT, **kwargs)
+
+
+def run_killer(name: str) -> str:
+    """Run a vitest test by name and return PASS/FAIL/UNKNOWN."""
+    r = sh(f"bun run -F @cline/agents test -t '{name}' 2>&1")
     out = r.stdout + r.stderr
-    import re
     last_test_line = ""
     for line in out.splitlines():
         if "Tests" in line:
             last_test_line = line
     if not last_test_line:
         return "UNKNOWN"
-    # Detect any "X failed" anywhere on the line
     m = re.search(r"(\d+)\s*failed", last_test_line)
     if m:
-        failed_count = int(m.group(1))
-        if failed_count >= 1:
-            return "FAIL"
-    # If we also see "passed" (even with skipped) we still
-    # know the failure count is what matters.
-    return "PASS"
+        return "FAIL" if int(m.group(1)) >= 1 else "PASS"
+    if "passed" in last_test_line:
+        return "PASS"
+    return "UNKNOWN"
 
-def apply(old, new):
+
+def apply(old: str, new: str) -> bool:
     src = SOURCE.read_text()
     if old not in src:
         return False
     SOURCE.write_text(src.replace(old, new, 1))
     return True
 
-def revert():
+
+def revert() -> None:
     SOURCE.write_text(BACKUP.read_text())
 
-def run_mutation(mid, change_desc, old, new, killer_test):
+
+def run_mutation(
+    mid: str,
+    change_desc: str,
+    old: str,
+    new: str,
+    killer_test: str,
+) -> None:
     if not BACKUP.exists():
         BACKUP.write_text(SOURCE.read_text())
     revert()  # ensure clean start
     applied = apply(old, new)
     if not applied:
-        REPORT.append((mid, change_desc, "NOT_APPLIED", "-", "-", "-", "-", "-"))
+        REPORT.append((mid, change_desc, "NOT_APPLIED", killer_test, "-", "-", "-", "-"))
         return
     result = run_killer(killer_test)
     fail_count = 1 if result == "FAIL" else 0
     pass_count = 0 if result == "FAIL" else 1
     status = "KILLED" if result == "FAIL" else ("MISSED" if result == "PASS" else "UNKNOWN")
     revert()
-    # verify reverted
     revert_status = "REVERTED_CLEAN"
     if SOURCE.read_text() != BACKUP.read_text():
         revert_status = "REVERT_FAILED"
-    REPORT.append((mid, change_desc, "APPLIED", killer_test, fail_count, pass_count, status, revert_status))
+    REPORT.append(
+        (
+            mid,
+            change_desc,
+            "APPLIED",
+            killer_test,
+            fail_count,
+            pass_count,
+            status,
+            revert_status,
+        )
+    )
 
+
+# ============================================================================
 # M1 — bypass exact pre-exec gate (C1.3)
-# The pre-exec gate is isAttemptBlockedByRecovery which
-# checks isExactBlockedIdentity. Returning false makes
-# every same-path proposal execute. Q1 expects calls=3.
+# The pre-exec gate is `isAttemptBlockedByRecovery` which
+# checks `isExactBlockedIdentity`. Making that branch
+# always false lets every same-path proposal execute,
+# so the 4th same-path fs_read proposal runs the executor
+# instead of being intercepted. Q1 expects calls=3.
+# ============================================================================
 run_mutation(
     "M1",
     "Bypass exact pre-exec gate: isAttemptBlockedByRecovery always returns false",
@@ -85,9 +129,12 @@ run_mutation(
     "Q1: X→ENOENT×3",
 )
 
+# ============================================================================
 # M2 — remove terminal model-stream latch
-# Without the throw, model.stream gets called repeatedly
-# after terminating. Q1/Q3 should see unbounded requests.
+# Without the throwing exit, `model.stream` would be
+# called repeatedly after the latch is `terminating`,
+# producing unbounded provider requests.
+# ============================================================================
 run_mutation(
     "M2",
     "Remove terminal model-stream latch: skip the throwing exit",
@@ -96,20 +143,27 @@ run_mutation(
     "Q3: opaque fresh inputs",
 )
 
-# M3 — remove Trigger B family-exhaustion arming
+# ============================================================================
+# M3 — remove Trigger B family-exhaustion arm
 # Without the family-blocked arm, fresh-input ENOENTs
-# never arm. Q2/Q5 should NOT terminate.
+# never arm via Trigger B. Q5 (true registry miss)
+# would fall through to Trigger D, terminating at 7
+# requests instead of 4.
+# ============================================================================
 run_mutation(
     "M3",
     "Remove Trigger B family-exhaustion arm",
     'if (\n\t\t\tthis.recoverySecondStage.kind === "idle" &&\n\t\t\tthis.recoveryTracker\n\t\t\t\t.getBlockedFamilies()\n\t\t\t\t.includes(this.familyControlDiagnostic(familyIdentity))\n\t\t) {\n\t\t\tthis.recoverySecondStage = {\n\t\t\t\tkind: "armed",\n\t\t\t\ttrigger: "family_exhausted",\n\t\t\t};\n\t\t}',
-    '/* M3: Trigger B arm removed */',
+    "/* M3: Trigger B arm removed */",
     "Q5: 12 fresh ghost",
 )
 
-# M4 — remove Trigger D episode-exhaustion arming (opaque path)
-# Without the episode ceiling, opaque failures never arm.
-# Q3 should NOT terminate; should run > 7 requests.
+# ============================================================================
+# M4 — remove Trigger D episode-exhaustion arm (opaque path)
+# Without the episode ceiling, opaque failures never arm
+# via Trigger D. Q3 (all-distinct opaque) would NOT
+# terminate; the model would be asked > 7 times.
+# ============================================================================
 run_mutation(
     "M4",
     "Remove Trigger D episode-exhaustion arm (opaque path)",
@@ -118,11 +172,14 @@ run_mutation(
     "Q3: opaque fresh inputs",
 )
 
-# M5 — collapse opaque failures into "unknown" family
+# ============================================================================
+# M5 — collapse opaque failures into shared family
 # Anti-false-merge: every opaque failure must keep its
-# distinct exact key. The exact-only path uses
-# `attemptIdentity.controlKey` as a map key.
-# Mutate to use a constant key — all opaque failures merge.
+# distinct exact key. Using a constant key merges all
+# distinct opaque failures into a single family, which
+# Q3 doesn't expect. Q3 expects 7 requests / 7 calls /
+# 6 episodeFailures; merging would change the count.
+# ============================================================================
 run_mutation(
     "M5",
     "Collapse opaque failures into shared 'unknown' family",
@@ -131,21 +188,32 @@ run_mutation(
     "Q3: opaque fresh inputs",
 )
 
-# M6 — restore isError-based parallel authority
-# Replace the typed-outcome check with the legacy
-# AgentToolResult.isError check.
+# ============================================================================
+# M6 — restore legacy isError-based classification
+# The C1.3 anti-pattern: a coarse `result.isError === true`
+# check conflated `failure / recoverable` with
+# `control_plane / host_policy_denied`. Replace the
+# typed `classifyToolRuntimeOutcome` with a stub that
+# returns `failure` whenever `result.isError` is true.
+# P3 (real host-DENY through the approval seam) must
+# fail because the host-DENY's result carries
+# `isError: true` and the stub misclassifies it.
+# ============================================================================
 run_mutation(
     "M6",
-    "Restore isError-based parallel authority (regression to C1.3 anti-pattern)",
-    "this.batchContainsTypedFailure(this.pendingBatchOutcomes)",
-    "this.pendingBatchOutcomes.some((o) => o.kind === 'failure') /* M6: legacy isError proxy */",
-    "P1: failure finishing first",
+    "Restore legacy isError-based classification (C1.3 anti-pattern)",
+    '\t\tconst runtimeOutcome: ToolRuntimeOutcome =\n\t\t\tclassifyToolRuntimeOutcome(classificationInput);',
+    '\t\tconst _typed: ToolRuntimeOutcome =\n\t\t\tclassifyToolRuntimeOutcome(classificationInput);\n\t\tconst runtimeOutcome: ToolRuntimeOutcome =\n\t\t\tresult && result.isError\n\t\t\t\t? {\n\t\t\t\t\t\tkind: "failure",\n\t\t\t\t\t\ttoolName: prepared.toolCall.toolName,\n\t\t\t\t\t\ttoolCallId: prepared.toolCall.toolCallId,\n\t\t\t\t\t\tfailureClass: "tool_execution_error",\n\t\t\t\t\t\tstableCode: { kind: "unknown", message: "mutation-m6" },\n\t\t\t\t\t\tfamilyConfidence: "fallback",\n\t\t\t\t\t\tfamilyEligible: false,\n\t\t\t\t\t}\n\t\t\t\t: _typed;  /* M6: legacy isError stub */',
+    "P3: real requestToolApproval",
 )
 
+# ============================================================================
 # M7 — remove parallel batch reconciliation
-# Drop the entire `if (batchStartKind === armed ...)`
-# reconciliation block. With armed latch and a failure in
-# the batch, the latch never flips to terminating.
+# Drop the post-batch `if (batchStartKind === armed &&`
+# block so a parallel batch with an already-armed latch
+# never flips to terminating. P2 (success-first in
+# parallel batch with armed latch) must fail.
+# ============================================================================
 run_mutation(
     "M7",
     "Remove parallel batch reconciliation: never flip latch to terminating from batch",
@@ -154,10 +222,15 @@ run_mutation(
     "P2: success finishing first",
 )
 
+# ============================================================================
 # M8 — emit per-tool parallel recovery transients
 # Drop the suspension: per-tool mutations during
-# Promise.all would emit recovery-state-changed
-# events that depend on completion order.
+# `Promise.all` would emit intermediate recovery events
+# that depend on completion order. P1 with the
+# atomicity assertion (exactly one in-batch recovery
+# event) must fail because sibling successes would
+# emit `armed→idle` resets mid-batch.
+# ============================================================================
 run_mutation(
     "M8",
     "Emit per-tool parallel recovery transients (drop suspension)",
@@ -166,9 +239,13 @@ run_mutation(
     "P1: failure finishing first",
 )
 
+# ============================================================================
 # M9 — expose raw control key
-# Add rawControlKey to the projected recovery snapshot.
-# The privacy test asserts it is absent.
+# Add a fake API-token sentinel to the projected
+# recovery snapshot. The privacy test scans the
+# recovery surface for the `FAKE-API-TOKEN-...` sentinel
+# string and asserts it MUST NOT appear.
+# ============================================================================
 run_mutation(
     "M9",
     "Expose raw control key in recovery snapshot",
@@ -177,28 +254,45 @@ run_mutation(
     "privacy: raw control",
 )
 
-# M10 — drop run reset
-# Without resetRecoveryEpisode() in run(), the second
-# run inherits the first run's terminating state.
+# ============================================================================
+# M10 — drop run-start reset
+# Without `resetRecoveryEpisode()` at the start of
+# `run()`, the second run on the same AgentRuntime
+# inherits the first run's `terminating` state. The
+# killer is the same-runtime second run WITHOUT
+# `restore()` between runs — the lifecycle invariant
+# that motivated the run-start reset in C1.4.
+# ============================================================================
 run_mutation(
     "M10",
-    "Drop run reset: omit resetRecoveryEpisode() at start of run()",
+    "Drop run-start reset: omit resetRecoveryEpisode() at start of run()",
     "\t\tconst recoveryBeforeReset = this.snapshotRecoveryState();\n\t\tthis.resetRecoveryEpisode();",
-    "\t\tconst recoveryBeforeReset = this.snapshotRecoveryState();\n\t\t/* M10: run reset removed */",
-    "run → terminating",
+    "\t\tconst recoveryBeforeReset = this.snapshotRecoveryState();\n\t\t/* M10: run-start reset removed */",
+    "(no restore)",
 )
 
+# ============================================================================
 # M11 — drop restore reset event
-# Comment out the synchronous listener loop in restore().
+# Comment out the synchronous listener loop in
+# `restore()`. The upstream-compat test asserts that
+# restoring into a fresh state fires a recovery
+# event visible to subscribers; without the loop the
+# event never fires.
+# ============================================================================
 run_mutation(
     "M11",
     "Drop restore reset event: no synchronous listener invocation in restore()",
-    '\t\tfor (const listener of this.listeners) {\n\t\t\t\ttry {\n\t\t\t\t\tlistener(event as unknown as Parameters<AgentEventListener>[0]);\n\t\t\t\t} catch {\n\t\t\t\t\t// Observation must not become control — same C1.5\n\t\t\t\t\t// invariant as the async emit path.\n\t\t\t\t}\n\t\t\t}',
-    '\t\t/* M11: restore listener loop removed */',
+    '\t\t\tfor (const listener of this.listeners) {\n\t\t\t\ttry {\n\t\t\t\t\tlistener(event as unknown as Parameters<AgentEventListener>[0]);\n\t\t\t\t} catch {\n\t\t\t\t\t// Observation must not become control — same C1.5\n\t\t\t\t\t// invariant as the async emit path.\n\t\t\t\t}\n\t\t\t}',
+    '\t\t\t/* M11: restore listener loop removed */',
     "C15_RESTORE_UPSTREAM_COMPAT",
 )
 
+# ============================================================================
 # M12 — make restore async again
+# `restore()` was synchronous in C1.5 for upstream
+# parity. Reintroducing async breaks the
+# `restore()` returns void contract.
+# ============================================================================
 run_mutation(
     "M12",
     "Make restore async again",
@@ -207,32 +301,30 @@ run_mutation(
     "C15_RESTORE_UPSTREAM_COMPAT",
 )
 
-# Final report
+
+# ============================================================================
+# Report
+# ============================================================================
 print()
-print("=" * 70)
-print("C1.6 MUTATION CAMPAIGN — ACTUAL RESULTS")
-print("=" * 70)
-print(f"{'ID':<5} {'APPLIED':<10} {'KILLER':<42} {'FAIL':<6} {'STATUS':<14} {'REVERT':<12}")
-print("-" * 90)
+print("=" * 80)
+print("C1.6 MUTATION CAMPAIGN — ACTUAL RESULTS (CORRECTION01)")
+print("=" * 80)
+print(f"{'ID':<5} {'APPLIED':<11} {'KILLER':<42} {'FAIL':<5} {'STATUS':<14} {'REVERT':<14}")
+print("-" * 95)
 for row in REPORT:
-    # row tuple: (mid, desc, applied, killer, fail_count, pass_count, status, revert_status)
-    mid = row[0]
-    desc = row[1]
-    applied = row[2]
-    killer = row[3]
-    fail_count = row[4]
-    pass_count = row[5]
-    status = row[6]
-    revert_status = row[7] if len(row) > 7 else ""
+    mid, desc, applied, killer, fail_count, pass_count, status, revert_status = row
     killer_disp = killer if applied == "NOT_APPLIED" else killer[:40]
-    print(f"{mid:<5} {applied:<10} {killer_disp:<42} {str(fail_count):<6} {status:<14} {revert_status:<12}")
+    print(
+        f"{mid:<5} {applied:<11} {killer_disp:<42} {str(fail_count):<5} "
+        f"{status:<14} {revert_status:<14}"
+    )
 print()
 kill_count = sum(1 for r in REPORT if r[6] == "KILLED")
 missed = sum(1 for r in REPORT if r[6] == "MISSED")
 na = sum(1 for r in REPORT if r[2] == "NOT_APPLIED")
 applied = sum(1 for r in REPORT if r[2] == "APPLIED")
 print(f"TOTAL: {len(REPORT)}, APPLIED: {applied}, KILLED: {kill_count}, MISSED: {missed}, NOT_APPLIED: {na}")
+print()
 
 # Cleanup
 BACKUP.unlink(missing_ok=True)
-SOURCE.write_text(SOURCE.read_text())  # ensure clean tree
