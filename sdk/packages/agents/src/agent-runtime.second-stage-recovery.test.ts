@@ -371,32 +371,46 @@ describe("AgentRuntime / C1.4 second-stage / opaque fresh-input", () => {
 			proposals,
 			[createOpaqueThrowTool(executorCalls)],
 		);
-		// Provider-request count must be FINITE and bounded by
-		// the episode-level ceiling. With maxRecoveryEpisodeFailures=6
-		// the runtime should arm after the 6th distinct-key failure
-		// and the 7th provider request consumes the bounded
-		// continuation; the run terminates there.
-		expect(requestCount).toBeLessThanOrEqual(
-			recoverySnapshot.maxRecoveryEpisodeFailures + 1,
-		);
-		// The run terminates truthfully as aborted, with the
-		// typed C1.4 reason surfaced on `result.error`.
+		// Provider-request and executor-call counts are pinned
+		// exactly, derived from the state-machine trace for
+		// default policy `maxRecoveryEpisodeFailures=6`:
+		//
+		//   iter 1 (key-1): fail. counter 0→1. No arm.
+		//   iter 2 (key-2): fail. counter 1→2. No arm.
+		//   iter 3 (key-3): fail. counter 2→3. No arm.
+		//   iter 4 (key-4): fail. counter 3→4. No arm.
+		//   iter 5 (key-5): fail. counter 4→5. No arm.
+		//   iter 6 (key-6): fail. counter 5→6. Trigger D
+		//     arms with `episode_exhausted`.
+		//   iter 7 (key-7): stream entry. state=armed →
+		//     state.lastError set. Stream returns key-7.
+		//     Tool runs (fresh key, no pre-exec block).
+		//     Fails. applyPost: beforeRecord=armed →
+		//     flip to terminating. counter NOT incremented
+		//     (state is no longer idle).
+		//   iter 8: stream entry. state=terminating →
+		//     throw. Run aborts.
+		//
+		// Counts:
+		//   requestCount     === 7  (iters 1..7)
+		//   executorCalls    === 7  (each iters 1..7 ran
+		//                           their tool; no skip)
+		//   exactOnlyBudget  === 7  (7 distinct keys observed;
+		//                           the 7th failure still
+		//                           records because
+		//                           `exactOnlyBudget.set`
+		//                           runs unconditionally on
+		//                           the family-ineligible path)
+		//   episodeFailures  === 6  (cap reached exactly)
+		expect(requestCount).toBe(7);
+		expect(executorCalls.count).toBe(7);
 		expect(result.status).toBe("aborted");
 		expect(result.error?.message).toBe("bounded_recovery_exhausted");
 		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
-		// Trigger D was the source of the arm.
 		expect(recoverySnapshot.secondStage.trigger).toBe(
 			"episode_exhausted",
 		);
-		// exactOnlyBudget cardinality must be FINITE: at most
-		// `requestCount` distinct keys were ever recorded. With
-		// N=12 proposals but only ~7 stream calls, the
-		// cardinality must be strictly less than N.
-		expect(recoverySnapshot.exactOnlyBudgetSize).toBeLessThan(N);
-		expect(recoverySnapshot.exactOnlyBudgetSize).toBeLessThanOrEqual(
-			requestCount,
-		);
-		// Episode counter reached the cap exactly.
+		expect(recoverySnapshot.exactOnlyBudgetSize).toBe(7);
 		expect(recoverySnapshot.episodeFailures).toBe(
 			recoverySnapshot.maxRecoveryEpisodeFailures,
 		);
@@ -787,7 +801,7 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 	// can apply mutations WITHOUT touching the static code path.
 	// This is invoked for mutations 1-5 below.
 
-	it("MUTATION_TERMINAL_GATE_REMOVED_bites (empirical): under the latch, requests.length equals the script step count exactly", async () => {
+	it("LOAD_BEARING_SENTINEL_TERMINAL_GATE_REMOVED_bites : under the latch, requests.length equals the script step count exactly", async () => {
 		// Empirical mutation proof: the C1.4 terminal latch
 		// is load-bearing. The fixture drives 4 identical
 		// failing proposals which would consume 5 model-
@@ -816,7 +830,7 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 		expect(result.status).toBe("aborted");
 	});
 
-	it("MUTATION_FAMILY_ARM_REMOVED_bites (empirical): runtime family-arm Trigger B fires on the 3rd family-eligible observation", async () => {
+	it("LOAD_BEARING_SENTINEL_FAMILY_ARM_REMOVED_bites : runtime family-arm Trigger B fires on the 3rd family-eligible observation", async () => {
 		// Empirical mutation proof: Trigger B (family
 		// exhaustion arms the second-stage) is load-
 		// bearing. Removing the `family in getBlockedFamilies()`
@@ -843,7 +857,7 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 		);
 	});
 
-	it("MUTATION_INPUT_CHANGE_AS_PROGRESS_bites (empirical): distinct canonical inputs do NOT evade the family-exhaustion arm", async () => {
+	it("LOAD_BEARING_SENTINEL_INPUT_CHANGE_AS_PROGRESS_bites : distinct canonical inputs do NOT evade the family-exhaustion arm", async () => {
 		// Empirical mutation proof: claiming "different
 		// input == progress" would defeat recovery by
 		// allowing the model to flood distinct keys under
@@ -869,7 +883,7 @@ describe("AgentRuntime / C1.4 mandatory mutation tests", () => {
 		expect(recoverySnapshot.secondStage.kind).toBe("terminating");
 	});
 
-	it("MUTATION_SUCCESS_RESET_REMOVED_bites (empirical): a successful repair during the bounded continuation resets the second-stage to idle", async () => {
+	it("LOAD_BEARING_SENTINEL_SUCCESS_RESET_REMOVED_bites : a successful repair during the bounded continuation resets the second-stage to idle", async () => {
 		// Empirical mutation proof: removing the success
 		// path (the `if armed → idle` reset) would mean a
 		// successful repair during the bounded continuation
@@ -1038,6 +1052,315 @@ describe("AgentRuntime / C1.4 parallel precedence", () => {
 		expect(snapshot.secondStage.trigger).toBe("episode_exhausted");
 		expect(result.status).toBe("aborted");
 		expect(result.error?.message).toBe("bounded_recovery_exhausted");
+	});
+});
+
+// ============================================================================
+//      C14_REAL_PARALLEL_PRECEDENCE (reviewer correction: actual parallel mode)
+// ============================================================================
+
+describe("AgentRuntime / C1.4 real-parallel precedence", () => {
+	it("C14_REAL_PARALLEL_FAIL_FIRST: with toolExecution='parallel', failure finishing first still flips the latch; subsequent sibling success does NOT reset state", async () => {
+		// Reviewer-required: the previous test used sequential
+		// default, which is a deterministic order. This test
+		// runs in actual parallel mode and lets the failure
+		// resolve FIRST by gating the success on a promise
+		// that resolves after the failure has been observed.
+		// Invariant: regardless of completion order, the
+		// latch MUST flip to terminating when the genuine
+		// recovery failure on the bounded continuation
+		// resolves.
+		const failExecs = { count: 0 };
+		const okExecs = { count: 0 };
+		const order: string[] = [];
+		// Synchronous throw — fails immediately. We set a
+		// flag once the failure has been observed so the
+		// parallel sibling success can release its gate.
+		let failureResolved = false;
+		const failTool: AgentTool<{ x: number }, never> = {
+			name: "opaque_thrower",
+			description: "Fails opaque",
+			inputSchema: { type: "object" },
+			async execute() {
+				failExecs.count += 1;
+				failureResolved = true;
+				order.push("fail_throw");
+				throw OPAQUE;
+			},
+		};
+		// Deferred success — waits for the failure to
+		// resolve before completing. The runtime then sees
+		// the success outcome after the failure has already
+		// applied.
+		const okTool: AgentTool<{ x: number }, { ok: true }> = {
+			name: "ok",
+			description: "Succeeds",
+			inputSchema: { type: "object" },
+			async execute() {
+				okExecs.count += 1;
+				order.push("ok_start");
+				// Spin briefly until the failure has been
+				// observed. This guarantees the success
+				// completes AFTER the failure.
+				while (!failureResolved) {
+					await new Promise((r) => setImmediate(r));
+				}
+				order.push("ok_resolve");
+				return { ok: true };
+			},
+		};
+		const captureAll: CapturedOutcome[] = [];
+		const make = (n: number) => ({
+			type: "tool-call-delta",
+			toolCallId: `a${n}`,
+			toolName: "opaque_thrower",
+			inputText: JSON.stringify({ x: n }),
+		});
+		const model = new ScriptedModel([
+			...Array.from({ length: 6 }, (_, i) => () => [
+				make(i + 1),
+				{ type: "finish", reason: "tool-calls" },
+			]),
+			// iter 7: parallel batch with one failure + one
+			// deferred success. The runtime runs both
+			// concurrently; the failure resolves first, the
+			// success waits for the failure to finish.
+			() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_fail",
+					toolName: "opaque_thrower",
+					inputText: JSON.stringify({ x: 99 }),
+				},
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_ok",
+					toolName: "ok",
+					inputText: JSON.stringify({ x: 1 }),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [failTool, okTool],
+			toolExecution: "parallel",
+			hooks: captureOutcomes(captureAll),
+		});
+		await runtime.run("Start");
+		const snapshot = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// The latch MUST flip to terminating regardless of
+		// the failure finishing first or last.
+		expect(snapshot.secondStage.kind).toBe("terminating");
+		expect(snapshot.secondStage.trigger).toBe("episode_exhausted");
+		// Sanity check: both tools actually ran in the
+		// continuation batch.
+		expect(failExecs.count).toBe(7); // 6 pre-arm + 1 continuation
+		expect(okExecs.count).toBe(1); // 1 continuation
+	});
+
+	it("C14_REAL_PARALLEL_OK_FIRST: with toolExecution='parallel', success finishing first MUST NOT reset the latch when the failure follows", async () => {
+		// Inverse ordering: the success resolves first; the
+		// failure is delayed by several event-loop ticks so
+		// it is guaranteed to run AFTER the success's
+		// applyPost. This is the worst-case race: the
+		// success's applyPost runs while state is armed
+		// and would normally flip armed→idle; the failure
+		// then runs and observes an idle state. The latch
+		// MUST still flip — the bounded continuation was
+		// non-convergent because it contained a genuine
+		// recovery failure, not because of any single
+		// outcome.
+		const failExecs = { count: 0 };
+		const okExecs = { count: 0 };
+		const order: string[] = [];
+		const failTool: AgentTool<{ x: number }, never> = {
+			name: "opaque_thrower",
+			description: "Fails opaque",
+			inputSchema: { type: "object" },
+			async execute() {
+				failExecs.count += 1;
+				order.push("fail_start");
+				// Delay several ticks to guarantee the
+				// synchronous ok tool completes and its
+				// applyPost runs first.
+				for (let i = 0; i < 20; i++) {
+					await new Promise((r) => setImmediate(r));
+				}
+				order.push("fail_throw");
+				throw OPAQUE;
+			},
+		};
+		const okTool: AgentTool<{ x: number }, { ok: true }> = {
+			name: "ok",
+			description: "Succeeds",
+			inputSchema: { type: "object" },
+			async execute() {
+				okExecs.count += 1;
+				order.push("ok_resolve");
+				return { ok: true };
+			},
+		};
+		const captureAll: CapturedOutcome[] = [];
+		const make = (n: number) => ({
+			type: "tool-call-delta",
+			toolCallId: `a${n}`,
+			toolName: "opaque_thrower",
+			inputText: JSON.stringify({ x: n }),
+		});
+		const model = new ScriptedModel([
+			...Array.from({ length: 6 }, (_, i) => () => [
+				make(i + 1),
+				{ type: "finish", reason: "tool-calls" },
+			]),
+			() => [
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_fail",
+					toolName: "opaque_thrower",
+					inputText: JSON.stringify({ x: 99 }),
+				},
+				{
+					type: "tool-call-delta",
+					toolCallId: "p_ok",
+					toolName: "ok",
+					inputText: JSON.stringify({ x: 1 }),
+				},
+				{ type: "finish", reason: "tool-calls" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [failTool, okTool],
+			toolExecution: "parallel",
+			hooks: captureOutcomes(captureAll),
+		});
+		await runtime.run("Start");
+		const snapshot = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// The latch MUST flip to terminating. If the
+		// success's applyPost reset state to idle (because
+		// it ran while armed) and the subsequent failure
+		// observed an idle state, the latch would NOT fire
+		// and the run would either complete normally
+		// (false negative) or accumulate enough failures
+		// to re-arm later. The C1.4 batch-level guard in
+		// `executeToolCalls` (parallel path) handles this:
+		// after Promise.all resolves, if state was
+		// `armed` at batch start AND any sibling had a
+		// non-convergent failure, force flip to
+		// `terminating`. Pin that behavior here.
+		expect(snapshot.secondStage.kind).toBe("terminating");
+		expect(snapshot.secondStage.trigger).toBe("episode_exhausted");
+		// Both tools ran in the continuation batch.
+		expect(failExecs.count).toBe(7); // 6 pre-arm + 1 continuation
+		expect(okExecs.count).toBe(1); // 1 continuation
+	});
+});
+
+// ============================================================================
+//      C14_EPISODE_SUCCESS_RESETS_FAILURE_ACCUMULATION (reviewer correction)
+// ============================================================================
+
+describe("AgentRuntime / C1.4 episode-success reset", () => {
+	it("C14_EPISODE_SUCCESS_RESETS_FAILURE_ACCUMULATION: intermittent failures with genuine progress between them MUST NOT trigger episode_exhausted", async () => {
+		// Reviewer-required fixture. The episode counter
+		// measures NON-CONVERGENT observations; a genuine
+		// successful tool execution between failures
+		// terminates the current recovery episode and starts
+		// a fresh one. Without the reset, 6 alternating
+		// fail/success pairs would still trip Trigger D,
+		// turning intermittent failures with real forward
+		// progress into a false-positive non-convergence.
+		const executorCalls = { count: 0 };
+		const executorOk = { count: 0 };
+		const failTool: AgentTool<{ x: number }, never> = {
+			name: "opaque_thrower",
+			description: "Fails opaque",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorCalls.count += 1;
+				throw OPAQUE;
+			},
+		};
+		const okTool: AgentTool<{ x: number }, { ok: true }> = {
+			name: "ok",
+			description: "Succeeds",
+			inputSchema: { type: "object" },
+			async execute() {
+				executorOk.count += 1;
+				return { ok: true };
+			},
+		};
+		const captureAll: CapturedOutcome[] = [];
+		// 5 fail → 5 success → text-only completion. Even
+		// with the default `maxRecoveryEpisodeFailures=6`,
+		// every success resets the counter, so 5 failures
+		// across 5 fresh episodes MUST NOT arm Trigger D.
+		const failSteps = Array.from({ length: 5 }, (_, k) => () => [
+			{
+				type: "tool-call-delta",
+				toolCallId: `f${k + 1}`,
+				toolName: "opaque_thrower",
+				inputText: JSON.stringify({ x: k + 1 }),
+			},
+			{ type: "finish", reason: "tool-calls" },
+		]);
+		const okSteps = Array.from({ length: 5 }, (_, k) => () => [
+			{
+				type: "tool-call-delta",
+				toolCallId: `s${k + 1}`,
+				toolName: "ok",
+				inputText: JSON.stringify({ x: k + 1 }),
+			},
+			{ type: "finish", reason: "tool-calls" },
+		]);
+		const model = new ScriptedModel([
+			// 5 alternating pairs.
+			failSteps[0],
+			okSteps[0],
+			failSteps[1],
+			okSteps[1],
+			failSteps[2],
+			okSteps[2],
+			failSteps[3],
+			okSteps[3],
+			failSteps[4],
+			okSteps[4],
+			// Text-only completion.
+			() => [
+				{ type: "text-delta", text: "done" },
+				{ type: "finish", reason: "stop" },
+			],
+		]);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [failTool, okTool],
+			hooks: captureOutcomes(captureAll),
+		});
+		const result = await runtime.run("Start");
+		const snapshot = (
+			runtime as unknown as {
+				__recoverySnapshotForTests(): RecoveryTestSnapshot;
+			}
+		).__recoverySnapshotForTests();
+		// 5 failures ran.
+		expect(executorCalls.count).toBe(5);
+		// 5 successes ran.
+		expect(executorOk.count).toBe(5);
+		// No arm ever fired. Trigger D did NOT trip because
+		// each success reset the counter before it reached 6.
+		expect(snapshot.secondStage.kind).toBe("idle");
+		expect(snapshot.episodeFailures).toBe(0);
+		// Run completed truthfully, NOT aborted.
+		expect(result.status).toBe("completed");
 	});
 });
 

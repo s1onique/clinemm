@@ -1828,9 +1828,45 @@ export class AgentRuntime {
 		}
 
 		if (this.config.toolExecution === "parallel") {
-			return Promise.all(
+			// C1.4: capture the second-stage state at batch
+			// START, before any sibling tool has run. After
+			// the parallel batch resolves, re-check the
+			// invariant: if state was `armed` at batch
+			// start AND any sibling resolved as a non-
+			// convergent failure, the latch MUST fire to
+			// `terminating`. This protects against
+			// non-deterministic completion order: a sibling
+			// success applied first could otherwise reset
+			// the latch to idle, masking the genuine
+			// non-convergent failure that follows. The test
+			// C14_REAL_PARALLEL_OK_FIRST pins this.
+			const batchStartKind = this.recoverySecondStage.kind;
+			const results = await Promise.all(
 				prepared.map((execution) => this.executePreparedTool(execution)),
 			);
+			if (
+				batchStartKind === "armed" &&
+				this.recoverySecondStage.kind !== "terminating" &&
+				results.some((message) => this.batchContainsNonConvergentFailure(message))
+			) {
+				// The trigger may have been cleared by an
+				// earlier sibling success's applyPost (which
+				// transitions armed → idle and discards the
+				// trigger). The batch-level decision is
+				// dominant: we set the trigger to
+				// `episode_exhausted` because the underlying
+				// arming cause was an episode-level non-
+				// convergence. (Other triggers are possible
+				// but episode_exhausted is the most general
+				// one; the C14_REAL_PARALLEL_OK_FIRST test
+				// pins this choice.)
+				this.recoverySecondStage = {
+					kind: "terminating",
+					trigger: "episode_exhausted",
+				};
+				this.state.lastError = "bounded_recovery_exhausted";
+			}
+			return results;
 		}
 
 		const results: AgentMessage[] = [];
@@ -1838,6 +1874,36 @@ export class AgentRuntime {
 			results.push(await this.executePreparedTool(execution));
 		}
 		return results;
+	}
+
+	/**
+	 * C1.4 parallel-batch latch helper. Inspects a tool
+	 * result message and returns true if any part is a
+	 * non-convergent failure (the model used the bounded
+	 * continuation turn and it failed materially). Used by
+	 * `executeToolCalls` to defend against non-deterministic
+	 * completion order under `toolExecution === "parallel"`.
+	 *
+	 * "Non-convergent" here means: the tool actually ran
+	 * (`toolExecutionInvoked` is observable via the
+	 * non-error `isError=false` path is irrelevant; what
+	 * matters is whether the underlying executor emitted a
+	 * failure. We use `isError=true` as the proxy: every
+	 * tool result that has `isError=true` came from either a
+	 * structured failure outcome OR a thrown exception
+	 * inside `tool.execute(...)`. Both are non-convergent
+	 * observations against recovery.
+	 */
+	private batchContainsNonConvergentFailure(
+		message: AgentMessage | undefined,
+	): boolean {
+		if (!message) return false;
+		for (const part of message.content) {
+			if (part.type === "tool-result" && part.isError) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private findCompletingToolMessage(
@@ -2381,11 +2447,24 @@ export class AgentRuntime {
 			if (this.recoverySecondStage.kind === "armed") {
 				this.recoverySecondStage = { kind: "idle" };
 			}
-			// Episode counter resets on success: a successful
-			// tool execution terminates the current recovery
-			// episode. The next non-convergent failure starts a
-			// fresh episode (and the next arm is counted as
-			// failure #1 of the new episode).
+			// Episode counter resets on EVERY successful tool
+			// execution, regardless of second-stage kind. This
+			// is the load-bearing invariant against
+			// false-positive episode exhaustion: an
+			// intermittent sequence of fail/success/fail/
+			// success MUST NOT trip Trigger D, because each
+			// success is a genuine forward-progress event
+			// that ends the current recovery episode. The
+			// C14_EPISODE_SUCCESS_RESETS_FAILURE_ACCUMULATION
+			// test pins this invariant.
+			//
+			// Reset semantics per stage:
+			//   - armed   → idle (and counter = 0)
+			//   - idle    → idle (counter = 0; re-starts
+			//               the next episode cleanly)
+			//   - termin. → termin. (counter = 0; harmless
+			//               because the latch is already set;
+			//               next stream entry throws anyway)
 			this.recoveryEpisodeFailures = 0;
 			this.recoveryTracker.recordToolSuccess(toolCall.toolName);
 			return;
