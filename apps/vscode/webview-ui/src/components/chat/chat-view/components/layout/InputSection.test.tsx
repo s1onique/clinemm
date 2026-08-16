@@ -97,7 +97,14 @@ describe("InputSection", () => {
 		expect(handleSendMessage).toHaveBeenCalledWith("queue this", [], [])
 	})
 
-	it("allows submit for legacy active-task state when turnState is unavailable", () => {
+	it("keeps the composer disabled when canonical turnState is unavailable, even with a stale partial tail", () => {
+		// ACT-CLINEMM-COMPLETION-CHANGESET-UI-STATE-TRUTH01:
+		// the previous `legacyTaskRunning` fallback derived task-running state from the
+		// message tail (lastMessage.partial / api_req_started) when turnState was
+		// undefined. That made prose-derived state authoritative whenever canonical
+		// state was missing. The fixed consumer is honest: missing canonical state =>
+		// conservative UI, not a heuristic over chat history. This regression pins the
+		// behavior so a future contributor cannot reintroduce the fallback silently.
 		mockTurnState.mockReturnValue(undefined)
 		const handleSendMessage = vi.fn().mockResolvedValue(undefined)
 
@@ -116,10 +123,12 @@ describe("InputSection", () => {
 		)
 
 		const composer = screen.getByLabelText("composer")
-		expect(composer).not.toBeDisabled()
+		// Composer is locked because there is no canonical run-state authority on
+		// the wire. A stale api_req_started row must NOT lift the lockout.
+		expect(composer).toBeDisabled()
 
 		fireEvent.keyDown(composer, { key: "Enter" })
-		expect(handleSendMessage).toHaveBeenCalledWith("queue this", [], [])
+		expect(handleSendMessage).not.toHaveBeenCalled()
 	})
 
 	it("keeps submit disabled for non-active blocked states", () => {

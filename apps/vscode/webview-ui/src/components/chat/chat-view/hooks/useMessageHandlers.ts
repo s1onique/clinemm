@@ -6,6 +6,7 @@ import { useCallback, useRef } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { SlashServiceClient, TaskServiceClient, UiServiceClient } from "@/services/grpc-client"
 import type { ButtonActionType } from "../shared/buttonConfig"
+import { turnAllowsFollowup } from "../shared/turnStateSelectors"
 import type { ChatState, MessageHandlers } from "../types/chatTypes"
 
 /**
@@ -260,25 +261,20 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 					}
 				} else if (messages.length > 0) {
 					// No clineAsk set, but there is an existing conversation. Route this to the
-					// active session as a follow-up when either:
+					// active session as a follow-up when the authoritative turnState says the
+					// conversation is continuable — phases "completed" / "awaiting_followup" (the
+					// agent finished or is waiting for the user) or "streaming" (interrupt with
+					// feedback). The SDK does not emit a trailing ask:"completion_result", so
+					// clineAsk is undefined even when the user can keep talking; turnState is
+					// the source of truth.
 					//
-					//   1. The authoritative turnState says the conversation is continuable —
-					//      phases "completed" / "awaiting_followup" (the agent finished or is
-					//      waiting for the user) or "streaming" (interrupt with feedback). The SDK
-					//      does not emit a trailing ask:"completion_result", so clineAsk is
-					//      undefined even when the user can keep talking; turnState is the source
-					//      of truth.
-					//   2. Legacy fallback (no turnState): the task looks actively running from the
-					//      message tail.
-					const lastMessage = messages[messages.length - 1]
-					const isTaskRunning =
-						lastMessage.partial === true || (lastMessage.type === "say" && lastMessage.say === "api_req_started")
-					const turnAllowsFollowup =
-						turnState?.phase === "completed" ||
-						turnState?.phase === "awaiting_followup" ||
-						turnState?.phase === "streaming"
-
-					if (turnAllowsFollowup || isTaskRunning) {
+					// The previous `lastMessage.partial` / `api_req_started` fallback was
+					// prose-derived state that has been removed: turnState is always present
+					// in the state payload (the SdkController includes `turnState: tracker.get()`
+					// in every webview state push), so a `undefined` turnState is a
+					// missing-canonical-state condition, not a license to parse messages. The
+					// phase rule is centralised in `shared/turnStateSelectors.ts`.
+					if (turnAllowsFollowup(turnState)) {
 						// Continue the conversation / interrupt with feedback.
 						await sendAskResponseWithPendingState(
 							AskResponseRequest.create({
