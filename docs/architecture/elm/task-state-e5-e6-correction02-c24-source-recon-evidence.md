@@ -3,12 +3,20 @@
 ```text
 ACT             = ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4
 PLAN_HEAD       = 76662f445 (C2.4 BOOKKEEPING01; reviewer round-6 plan accepted)
-ENTRY_HEAD      = 1bafc70da (C2.4 AMENDMENT-02; R7 directional fix)
+RECON_HEAD      = 11b2d41c7 (C2.4-A SOURCE RECON01; reviewer round-7 rejected
+                               — overstatement; R1–R7 corrections required)
+RECON_COR_HEAD  = b3e6977be (C2.4-A CORRECTION01; reviewer round-7 reviewed
+                             R1–R7 fixed; R8–R10 bookkeeping fixup required)
 PROTECTED_STASH = 141372c52 (FORENSIC; do NOT pop)
 EXIT_HEAD       = <this commit>
 
-C2_4_A_AUTHORIZED = true
-C2_4_A_VERDICT    = (see §6)
+C2_4_A_AUTHORIZED                          = true
+C2_4_A_VERDICT                             = PASS_RECON
+                                              (after R1–R7 substantive
+                                               fixes in b3e6977be AND
+                                               R8–R10 accounting fixes
+                                               in this fixup commit)
+C2_4_B_AUTHORIZED                          = true
 ```
 
 ## 0. Scope
@@ -400,7 +408,7 @@ total provenance.
 
 | Backend | canonical seam | fallback route to TaskShadowReverseTranslator | total provenance | final qualification |
 | ------- | -------------- | -------------------------------------------- | ---------------- | ------------------- |
-| Local | ABSENT | NO — legacy `subscribe` (CoreSessionEvent) still emits, but Local canonical seam supersedes it for state-mutating events | FULL (canonical authority via `LocalRuntimeHost.subscribeRuntimeEvents`) | `LOCAL_QUALIFIED_FOR_CANONICAL_AUTHORITY` (pending C2.4-B/C verification) |
+| Local | PRESENT | YES — for state-mutating events, canonical authority supersedes the legacy `CoreSessionEvent` fallback (DIAGNOSTIC_ONLY regardless of arrival order; see R10) | FULL (canonical authority via `LocalRuntimeHost.subscribeRuntimeEvents`) | `LOCAL_QUALIFIED_FOR_CANONICAL_AUTHORITY` (pending C2.4-B/C verification) |
 | Hub | ABSENT | PENDING_FALLBACK_RECON — see CORRECTION01 R6 below | PENDING_FALLBACK_RECON | PENDING C2.4-D |
 | Remote | ABSENT | PENDING_FALLBACK_RECON — see CORRECTION01 R6 below | PENDING_FALLBACK_RECON | PENDING C2.4-D |
 
@@ -454,9 +462,15 @@ The reconstructed path is NOT used in the Local backend for
 state-mutating events because Local has full canonical
 authority (A6 above). The reconstructed translator IS still
 instantiated for Local (the wiring is backend-uniform), but
-the coordinator's edge-coalescing logic suppresses the
-reconstructed emit when the canonical event has already
-arrived.
+the wiring is **order-independent** with respect to that
+suppression: when `canonicalAvailable` is true (i.e. on
+LocalRuntimeHost), every `RUNTIME_RECONSTRUCTED` event is
+**DIAGNOSTIC_ONLY** and never owns TaskState mutation,
+regardless of whether the canonical event was observed
+before, after, or collocated with the reconstructed
+event. This is the C2.2-CORRECTION02 invariant frozen
+in the wiring: `canonicalAvailable=true ⇒
+RUNTIME_RECONSTRUCTED = DIAGNOSTIC_ONLY`.
 
 ```
 REVERSE_TRANSLATOR_IMPLEMENTATION_AUDITED        = true
@@ -564,9 +578,21 @@ CANONICAL_SOURCE_RECON_TABLE (CORRECTION01)
   HUB_REMOTE_FALLBACK_REACHABILITY_VERIFIED       = NO   (R6 — pending C2.4-D)
   RUN_ID_GUARANTEE_CLASSIFIED                    = 100%
   SESSION_BINDING_CLASSIFIED                     = 100%
-  UNRESOLVED_REACHABILITY_ROWS                   = 0
+  C2_4_A_UNRESOLVED_RECON_ROWS                   = 0
                                                     (after R5 explicit
-                                                     re-classification)
+                                                     re-classification;
+                                                     this is the recon
+                                                     gate alone)
+  C2_4_B_PENDING_BOUNDARY_ROWS                     > 0
+                                                    (R5: 7-event
+                                                     NO_ACTIVE_SESSION
+                                                     witnesses, including
+                                                     recovery-state-changed
+                                                     with runId===undefined)
+  C2_4_D_PENDING_BACKEND_ROWS                      > 0
+                                                    (R6/R7: Hub and Remote
+                                                     fallback reachability
+                                                     + final qualification)
 ```
 
 ### Disposition matrix (CORRECTION01 R7)
@@ -645,9 +671,24 @@ RUN_ID_GUARANTEE_CLASSIFIED                       = 100%
 SESSION_BINDING_CLASSIFIED                        = 100%
 RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE_IMPL        = 100%
 HUB_REMOTE_FALLBACK_REACHABILITY_VERIFIED          = NO   (R6: pending C2.4-D)
-UNRESOLVED_REACHABILITY_ROWS                      = 0
-                                                       (after R5 explicit
-                                                        re-classification)
+UNRESOLVED_RECON_ROWS                            = 0
+                                                       (C2.4-A recon gate;
+                                                        after R5
+                                                        re-classification;
+                                                        NOT a global
+                                                        unresolved-row
+                                                        claim)
+C2_4_B_PENDING_BOUNDARY_ROWS                         > 0
+                                                       (R5: 7-event
+                                                        NO_ACTIVE_SESSION
+                                                        witnesses +
+                                                        recovery-state-changed
+                                                        with runId===undefined)
+C2_4_D_PENDING_BACKEND_ROWS                          > 0
+                                                       (R6/R7: Hub and
+                                                        Remote fallback
+                                                        reachability +
+                                                        final qualification)
 
 LOCAL_EVENT_OBJECT_PRESERVED_FOR_ACCEPTED_EVENTS  = PASS
                                                        (R3: conditional
