@@ -11,8 +11,8 @@
  *   - Tooltip for tool count corrected.
  */
 import type { TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
-import { render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { act, render, screen } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import TaskHeaderTelemetry from "./TaskHeaderTelemetry"
 
 function ts(phase: TurnState["phase"], seq = 1): TurnState {
@@ -125,5 +125,111 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("awaiting_followup")} />)
 		expect(screen.getByTestId("task-header-state").textContent).toContain("Waiting")
 		expect(screen.getByTestId("task-header-elapsed")).toBeTruthy()
+	})
+
+	// =========================================================================
+	// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION01
+	//
+	// When the runtime phase is "live" (streaming / awaiting_approval /
+	// awaiting_followup), the elapsed display must visibly advance at
+	// 1-second granularity. Without an active interval the display froze
+	// at e.g. "00:00" until the next state post — which the user reported
+	// as "the clock is dead". The fix upstream: ensure the canonical
+	// phase reaches the webview as `streaming` (see CORRECTION01 in
+	// `sdk-task-start-coordinator.test.ts`). These tests pin the
+	// half the user observes: given `state.live === true`, the
+	// component schedules `setInterval(1000)` and repaints.
+	// =========================================================================
+
+	describe("elapsed clock tick", () => {
+		beforeEach(() => {
+			vi.useFakeTimers()
+		})
+		afterEach(() => {
+			vi.useRealTimers()
+		})
+
+		it("CLOCK-1: at T0 the elapsed display is 00:00 when the phase is streaming", () => {
+			const startedAt = 1_700_000_000_000
+			vi.setSystemTime(startedAt)
+			render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("streaming")} />)
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:00")
+		})
+
+		it("CLOCK-2: at T0+1500ms the elapsed display advances to 00:01 (sub-second tick)", () => {
+			const startedAt = 1_700_000_000_000
+			vi.setSystemTime(startedAt)
+			render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("streaming")} />)
+			act(() => {
+				vi.advanceTimersByTime(1_500)
+			})
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:01")
+		})
+
+		it("CLOCK-3: at T0+6500ms the elapsed display is 00:06", () => {
+			const startedAt = 1_700_000_000_000
+			vi.setSystemTime(startedAt)
+			render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("streaming")} />)
+			act(() => {
+				vi.advanceTimersByTime(6_500)
+			})
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:06")
+		})
+
+		it("CLOCK-4: at T0+65000ms the elapsed display crosses the minute boundary to 01:05", () => {
+			const startedAt = 1_700_000_000_000
+			vi.setSystemTime(startedAt)
+			render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("streaming")} />)
+			act(() => {
+				vi.advanceTimersByTime(65_000)
+			})
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("01:05")
+		})
+
+		it("CLOCK-5: when phase is idle, no interval is scheduled and the elapsed stays at the snapshot", () => {
+			const startedAt = 1_700_000_000_000
+			vi.setSystemTime(startedAt + 30_000)
+			render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("idle")} />)
+			act(() => {
+				vi.advanceTimersByTime(5_000)
+			})
+			// idle phase → no interval → elapsed stays at snapshot value (30s).
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:30")
+		})
+
+		it("CLOCK-6: transitioning from idle → streaming schedules the interval and advances the display", () => {
+			const startedAt = 1_700_000_000_000
+			vi.setSystemTime(startedAt + 5_000)
+			const { rerender } = render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("idle")} />)
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:05")
+
+			act(() => {
+				vi.advanceTimersByTime(60_000)
+			})
+			// Still idle — display is frozen at the render snapshot (no interval).
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:05")
+
+			rerender(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("streaming")} />)
+			act(() => {
+				vi.advanceTimersByTime(2_000)
+			})
+			// Phase is now live → interval ticks → elapsed reads the CURRENT
+			// wall-clock delta from `startedAt`: startedAt + 60s + 2s = 01:07,
+			// not 00:07. The interval picks up where the wall-clock is.
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("01:07")
+		})
+
+		it("CLOCK-7 (M4 killer): when endedAt is set, the clock does NOT advance even on a live phase", () => {
+			const startedAt = 1_700_000_000_000
+			const endedAt = startedAt + 30_000
+			vi.setSystemTime(startedAt + 60_000) // pretend 30s more wall-time has passed
+			render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt, endedAt })} turnState={ts("streaming")} />)
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:30")
+			act(() => {
+				vi.advanceTimersByTime(10_000)
+			})
+			// endedAt freezes the display; the live phase does NOT override it.
+			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:30")
+		})
 	})
 })

@@ -1,7 +1,7 @@
 import { getProviderAuthStorageId } from "@cline/core"
 import { createSessionId } from "@cline/shared"
 import { CLINE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/ClineAccount"
-import type { ClineMessage } from "@shared/ExtensionMessage"
+import type { ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { Settings } from "@shared/storage/state-keys"
 import type { Mode } from "@shared/storage/types"
@@ -56,6 +56,19 @@ export interface SdkTaskStartCoordinatorOptions {
 	emitClineAuthError: (task?: string) => void
 	captureProviderApiError?: (event: ProviderFailureTelemetry) => void
 	postStateToWebview: () => Promise<void>
+	/**
+	 * Assert the authoritative UI turn phase at the lifecycle boundary.
+	 *
+	 * ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION03: this option is
+	 * REQUIRED. The coordinator is the sole writer of the new-task /
+	 * resume → streaming transition. Allowing `undefined` here would
+	 * silently downgrade a wiring defect into a stale-state runtime
+	 * mode — the runtime would keep running, but the webview's header
+	 * would stay at the previous phase forever. TypeScript must enforce
+	 * that every real constructor supplies the authority, so a missing
+	 * `setTurnPhase` is a construction error, not a runtime fallback.
+	 */
+	setTurnPhase: (phase: TurnPhase, anchorTs?: number) => void
 }
 
 export class SdkTaskStartCoordinator {
@@ -123,10 +136,16 @@ export class SdkTaskStartCoordinator {
 			const task = this.createAndSetTask(taskSessionId)
 			this.emitInitialTaskMessage(taskSessionId, prompt ?? "", images, files)
 
-			// The turn phase was already set to "streaming" (in SdkController.initTask), but the
-			// webview only learns the phase through a full state post. Ship one now, in parallel
-			// with the potentially slow session startup below, so the chat shows the thinking
-			// indicator as soon as the task message lands instead of after startNewSession settles.
+			// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION01: ship a state
+			// post so the webview sees the initial task message immediately
+			// while `startNewSession` resolves in parallel below. The
+			// authoritative `streaming` turn-phase is asserted right after
+			// `startNewSession` returns (below) — not here, because at
+			// THIS point the previous task's `clearTask()` has already
+			// stamped `idle`, and posting here would just confirm that
+			// idle state. Posting here is still useful to seed the
+			// task message into the webview's transcript; the phase is
+			// pinned on the next post, once the session is running.
 			this.options.postStateToWebview().catch((error) => {
 				Logger.error("[SdkController] Failed to post state after emitting initial task message:", error)
 			})
@@ -139,6 +158,33 @@ export class SdkTaskStartCoordinator {
 				task.taskId = startResult.sessionId
 				taskSessionId = startResult.sessionId
 			}
+
+			// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION03: this is the
+			// CANONICAL authority for the new-task → streaming transition.
+			// Sole writer — `SdkController.initTask` no longer re-asserts
+			// streaming after this returns. Asserting it HERE (after the
+			// inner `clearTask()` ran and after `startNewSession`
+			// resolves) guarantees:
+			//
+			//   1. The header's streaming indicator reaches the webview
+			//      AFTER the seed post — the initial task message lands
+			//      first, then the phase flips to streaming.
+			//   2. The new session is actually running before we claim
+			//      "streaming" — the deferred-promise test in
+			//      `sdk-task-start-coordinator.test.ts` pins this by
+			//      blocking `startNewSession` on a manual resolver and
+			//      asserting `setTurnPhase` is NOT called until the
+			//      session promise resolves.
+			//   3. One logical new-task lifecycle produces exactly ONE
+			//      streaming transition. Nothing else writes it.
+			//   4. The setTurnPhase option is REQUIRED (not optional) —
+			//      see `SdkTaskStartCoordinatorOptions.setTurnPhase`.
+			//      TypeScript enforces that every constructor supplies
+			//      the authority.
+			//   5. A subsequent `postStateToWebview()` follows below so
+			//      the webview observes the streaming phase. The order
+			//      is asserted by CORRECTION03-1.
+			this.options.setTurnPhase("streaming")
 
 			const newHistoryItem = this.options.createHistoryItemFromSession(
 				taskSessionId,
@@ -207,6 +253,16 @@ export class SdkTaskStartCoordinator {
 			})
 
 			this.createAndSetTask(startResult.sessionId)
+			// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION03: same canonical
+			// ownership as `initTask`. The resumed session is now running
+			// after `startNewSession` resolved — assert "streaming" at the
+			// boundary so the header is never left at Idle while the agent
+			// streams. Sole writer; nothing else touches it. The
+			// `postStateToWebview` immediately below delivers the streaming
+			// phase to the webview (the resume path makes this ordering
+			// explicit; the new-task path's identical ordering is asserted
+			// by CORRECTION03-1).
+			this.options.setTurnPhase("streaming")
 			await this.options.postStateToWebview()
 
 			Logger.log(`[SdkController] Task resumed: ${taskId} → ${startResult.sessionId}`)

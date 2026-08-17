@@ -758,6 +758,15 @@ export class Controller {
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
 			isClineManagedProviderActive: () => this.isClineManagedProviderActive(),
 			emitClineAuthError: (task) => this.emitClineAuthErrorWithTelemetry(task),
+			// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION02: the canonical
+			// new-task → streaming writer is `SdkTaskStartCoordinator`,
+			// which calls this callback at the lifecycle boundary (after
+			// the inner `clearTask()` ran and after `startNewSession`
+			// resolves). We inject it here so the coordinator writes
+			// through this controller's shared `turnStateTracker` — no
+			// other site in this controller writes "streaming" for the
+			// new-task or resume lifecycle.
+			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
 			captureProviderApiError: (event) => this.captureProviderFailure(event),
 			postStateToWebview: () => this.postStateToWebview(),
 		})
@@ -1413,9 +1422,22 @@ export class Controller {
 		// policies like allowedMCPServers, provider lockdown, etc.) without
 		// blocking the UI.
 		this.refreshRemoteConfig().catch((err) => Logger.error("[SdkController] Remote config refresh before task failed:", err))
-		// A new task is starting — the agent is about to stream.
-		this.turnStateTracker.set("streaming")
-		// Clear the previous turn's completion signal so this turn's phase is computed fresh.
+		// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION02: clear the previous
+		// turn's completion signal so this turn's phase is computed fresh.
+		// The canonical "streaming" transition is asserted by
+		// `SdkTaskStartCoordinator` at the lifecycle boundary (after the
+		// inner `clearTask()` ran, and after `startNewSession` resolves).
+		// We deliberately do NOT call `turnStateTracker.set("streaming")`
+		// here — a previous design tried to defend against the inner
+		// `clearTask()` clobbering the streaming set by re-asserting it
+		// after `taskStart.initTask` returned, but that produced TWO
+		// writers at the same logical transition (`startNewSession` would
+		// assert streaming, then this controller would assert it again).
+		// That violates the canonical-authority invariant: ONE writer,
+		// ONE lifecycle transition, downstream observation. The
+		// coordinator is the owner; the controller only injects the
+		// shared tracker via the `setTurnPhase` callback in its
+		// constructor options.
 		this.messageTranslatorState.clearTurnOutcome()
 		const sessionId = await this.taskStart.initTask(prompt, images, files, historyItem, taskSettings)
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: start (or re-start) the
@@ -1467,7 +1489,16 @@ export class Controller {
 	}
 
 	async reinitExistingTaskFromId(taskId: string): Promise<void> {
-		this.turnStateTracker.set("streaming")
+		// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION02: the canonical
+		// "streaming" transition for the resume path is asserted by
+		// `SdkTaskStartCoordinator.reinitExistingTaskFromId` AFTER the
+		// inner `clearTask()` ran and AFTER `startNewSession` resolves.
+		// We deliberately do NOT call `turnStateTracker.set("streaming")`
+		// here — that would produce two writers at the same logical
+		// transition (this controller + the coordinator). The coordinator
+		// is the sole writer; the controller only injects the shared
+		// tracker via the `setTurnPhase` callback in its constructor
+		// options.
 		this.messageTranslatorState.clearTurnOutcome()
 		await this.taskStart.reinitExistingTaskFromId(taskId)
 	}
