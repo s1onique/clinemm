@@ -486,3 +486,54 @@ docs(elm): record Phase C2.0 baseline + W12 ordering evidence
 
 No production source has changed. No reducer edit, no host wiring
 edit, no recorder edit, no SDK controller edit.
+
+---
+
+## CORRECTION02 — PHASE C2.1 SEMANTIC RECON (2026-08-17)
+
+Read-only architectural recon. No production source modified.
+
+See `task-state-e5-e6-correction02-c21-recon.md` for the full
+trace.
+
+**Decisions frozen:**
+
+```
+W12_MODEL                              = A
+REJECT_MODEL_B_REASON                  = setTurnPhase("streaming") runs
+                                          INSIDE taskStart.initTask,
+                                          BEFORE emitTaskRequested
+W12_CONTRACT_DOCUMENTED                = true
+
+T8_ROOT_CAUSE                          = CASE_2
+T8_INDEPENDENT_OF_W12_EPOCH            = true
+T8_FIX_DEPENDS_ON                      = ELM-02F or classifier extension
+```
+
+**Key insight:** T8's `session_started → D02_SHADOW_FALSE_ACTIVE`
+is not caused by `task_reset`/`task_requested(B)` epoch semantics.
+It happens on the FIRST `iteration_start` of run #1, before any
+epoch boundary exists. The defect is in how
+`execution-state-changed` (the canonical "I'm now streaming"
+signal) is discarded by the runtime-event-adapter, so the shadow
+never receives the `model_stream_started` TaskMsg that would
+flip its projection to `streaming`.
+
+**Active board after C2.1:**
+
+```
+ELM-02C2 / C2.0 witness freeze            ✅ PASS
+ELM-02C2 / C2.1 architecture decision     ✅ FROZEN
+    W12_MODEL_A                           ✅
+    T8_SESSION_START_SEMANTICS            🔴 CASE_2
+ELM-02F canonical runtime seam             🟡 decision pending
+ELM-02C2 / C2.2 implementation            ⛔ blocked on ELM-02F decision
+ELM-02C2 / C2.3 stateful W01-W16          ⛔
+ELM-02C2 / C2.4 real production/build     ⛔
+ELM-02C2 / C2.5 real E6 dogfood           ⛔
+ELM-03 E7 consumer cutover                 ⛔ BLOCKED
+```
+
+The next decision is on ELM-02F: restore the canonical seam,
+extend the classifier, or defer T8. That decision is a separate
+ACT and is the gate to C2.2 implementation.
