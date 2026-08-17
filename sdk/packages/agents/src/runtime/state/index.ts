@@ -37,3 +37,9 @@ export {
 	isSameExecutionState,
 	type ExecutionStateSources,
 } from "./execution-state";
+
+// ACT-CLINEMM-ELM-ARCHITECTURE01: shadow TaskState (E0–E4) lives
+// alongside this file per the same ownership rule ("general runtime
+// state, not under recovery"). Internal only; no public-API expansion
+// during shadow mode.
+export * as TaskState from "./task-state";
