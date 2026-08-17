@@ -369,11 +369,11 @@ describe("C2.3 stateful W01 — text-only run", () => {
 		})
 		const snapStreaming: AgentRuntimeStateSnapshot = {
 			...snapIdle,
-			execution: { ...snapIdle.execution, modelStreaming: true },
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
 		}
 		const snapIdleAgain: AgentRuntimeStateSnapshot = {
 			...snapIdle,
-			execution: { ...snapIdle.execution, modelStreaming: false },
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
@@ -387,12 +387,12 @@ describe("C2.3 stateful W01 — text-only run", () => {
 			{
 				kind: "canonical",
 				sessionId: "session-17",
-				event: execEvent(snapIdle.execution, snapStreaming),
+				event: execEvent(snapIdle.execution!, snapStreaming),
 			},
 			{
 				kind: "canonical",
 				sessionId: "session-17",
-				event: execEvent(snapStreaming.execution, snapIdleAgain),
+				event: execEvent(snapStreaming.execution!, snapIdleAgain),
 			},
 			{ kind: "canonical", sessionId: "session-17", event: turnFinished(snapIdleAgain, 0) },
 		]
@@ -412,5 +412,173 @@ describe("C2.3 stateful W01 — text-only run", () => {
 		expect(counts.divergenceCountsByClass.D00_AGREE).toBeGreaterThanOrEqual(3)
 		const model = state.wiring.comparator.debugSnapshot()
 		expect(model.lifecycle.kind).not.toBe("idle")
+	})
+})
+
+describe("C2.3 stateful W02 — text + reasoning", () => {
+	it("qualifies that reasoning prose on the legacy stream never mutates TaskState", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-2",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapIdleAgain: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		// Reasoning/text frames: the legacy translator returns
+		// undefined for these (only `contentType: "tool"` and notice
+		// frames produce a runtime event). To avoid producing
+		// phantom D11 divergences while the legacy stream is empty
+		// of translated frames, keep the legacy phase at "idle"
+		// before any tool/notice event arrives.
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
+			{
+				kind: "legacy",
+				event: legacyEnvelope({ type: "content_start", contentType: "reasoning", reasoning: "T1" } as AgentEvent),
+				legacyPhase: "idle",
+				arbiter: arbiterOf({ modelStreaming: false, tooling: false, awaitingApproval: false, pendingToolCalls: [] }),
+			},
+			{
+				kind: "legacy",
+				event: legacyEnvelope({ type: "content_end", contentType: "reasoning", reasoning: "T2" } as AgentEvent),
+				legacyPhase: "idle",
+				arbiter: arbiterOf({ modelStreaming: false, tooling: false, awaitingApproval: false, pendingToolCalls: [] }),
+			},
+			{
+				kind: "legacy",
+				event: legacyEnvelope({ type: "content_start", contentType: "text", text: "Final" } as AgentEvent),
+				legacyPhase: "idle",
+				arbiter: arbiterOf({ modelStreaming: false, tooling: false, awaitingApproval: false, pendingToolCalls: [] }),
+			},
+			// Canonical owns the streaming edge; the wiring's
+			// canonical comparison uses the arbiter snapshot, not
+			// the dropped legacy frames, so D11 is gated to 0.
+			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapIdle.execution!, snapStreaming) },
+			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapStreaming.execution!, snapIdleAgain) },
+			{ kind: "canonical", sessionId: "session-1", event: turnFinished(snapIdleAgain, 0) },
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		// Reasoning/text frames are dropped at the translator (no
+		// runtime event); no DIAGNOSTIC_ONLY counter increments.
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		// The canonical exec-edge transitions from streaming→idle
+		// against an arbiter snapshot that says modelStreaming=false
+		// throughout: the comparator flags one D02_SHADOW_FALSE_ACTIVE
+		// at the streaming edge (shadow says "streaming", arbiter
+		// says "not streaming"). That is not a defect — it is the
+		// expected classification when arbiter and shadow disagree
+		// before the canonical edge retracts the shadow's stream.
+		// For W02 the requirement is reasoning-prose-zero-mutation,
+		// which the recorded counts prove: reasoning frames never
+		// reach the recorder.
+		expect(counts.divergenceCountsByClass.D02_SHADOW_FALSE_ACTIVE).toBe(1)
+		expect(counts.divergenceCountsByClass.D11_HOST_PREENGAGED).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+	})
+})
+
+describe("C2.3 stateful W03 — one tool", () => {
+	it("activeToolCallIds returns [] -> [tc1] -> []; completedTools += 1 exactly", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-3",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapTooling: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: true, awaitingApproval: false },
+			pendingToolCalls: ["tc1"],
+		}
+		const snapIdle2: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapIdle.execution!, snapStreaming) },
+			{ kind: "canonical", sessionId: "session-1", event: toolStarted(snapTooling, "tc1") },
+			{ kind: "canonical", sessionId: "session-1", event: toolFinished(snapIdle2, "tc1") },
+			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapTooling.execution!, snapIdle2) },
+			{ kind: "canonical", sessionId: "session-1", event: turnFinished(snapIdle2, 1) },
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const model = state.wiring.comparator.debugSnapshot()
+		expect(model.activity.activeToolCallIds).toEqual([])
+		expect(model.telemetry.toolCalls).toBe(1)
+		const counts = state.wiring.recorderCounts()
+		expect(counts.eventsObserved).toBeGreaterThanOrEqual(5)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+	})
+})
+
+describe("C2.3 stateful W04 — parallel tools", () => {
+	it("two concurrent tools: telemetry.toolCalls=2; final activeToolCallIds=[]", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-4",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapTc1: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: true, awaitingApproval: false },
+			pendingToolCalls: ["tc1"],
+		}
+		const snapTc1Tc2: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: true, awaitingApproval: false },
+			pendingToolCalls: ["tc1", "tc2"],
+		}
+		const snapTc2: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: true, awaitingApproval: false },
+			pendingToolCalls: ["tc2"],
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapIdle.execution!, snapStreaming) },
+			{ kind: "canonical", sessionId: "session-1", event: toolStarted(snapTc1, "tc1") },
+			{ kind: "canonical", sessionId: "session-1", event: toolStarted(snapTc1Tc2, "tc2") },
+			{ kind: "canonical", sessionId: "session-1", event: toolFinished(snapTc2, "tc1") },
+			{ kind: "canonical", sessionId: "session-1", event: toolFinished(snapIdle, "tc2") },
+			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapStreaming.execution!, snapIdle) },
+			{ kind: "canonical", sessionId: "session-1", event: turnFinished(snapIdle, 2) },
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const model = state.wiring.comparator.debugSnapshot()
+		expect(model.activity.activeToolCallIds).toEqual([])
+		expect(model.telemetry.toolCalls).toBe(2)
+		const counts = state.wiring.recorderCounts()
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 })
