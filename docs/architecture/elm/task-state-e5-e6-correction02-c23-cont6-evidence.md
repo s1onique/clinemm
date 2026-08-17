@@ -5,7 +5,7 @@ ACT =
 ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.6
 
 ENTRY_HEAD = d78ff32d4 (CONT.6 plan)
-EXIT_HEAD  = <this commit's tip>
+EXIT_HEAD  = $SUBJECT_HEAD (use `git rev-parse HEAD` at review time)
 
 PROTECTED_STASHES = 141372c52 (FORENSIC), 371752f71 (CONTEXT)
 ```
@@ -351,7 +351,22 @@ C2.5                                             ⛔
 E7                                               ⛔
 ```
 
-## 13. PROTECTED STASHES INTACT
+## 13. Non-cyclic SHA convention
+
+CONT.6 evidence does NOT embed this document's own commit SHA
+(self-reference is a known fixed-point trap). Instead:
+
+```
+EXIT_HEAD  = $SUBJECT_HEAD (use `git rev-parse HEAD` at review time)
+ENTRY_HEAD = explicit SHA (`d78ff32d4...`)
+PROTECTED_STASHES = explicit SHA
+```
+
+The document is the closure ACT record. The bound of the
+qualification is the commit that introduces this document. The
+reviewer resolves `git rev-parse HEAD` at review time.
+
+## 14. PROTECTED STASHES INTACT
 
 ```
 FORENSIC = 141372c52ddd560f8d65bd438d9f9c22ba0f1f85
