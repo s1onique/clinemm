@@ -103,3 +103,8 @@ apps/examples/desktop-app/.cursor/settings.json
 
 # Factory staging/backup siblings (µC-3 round 7 atomic publish)
 .factory-leamas-staging-*
+
+# Python build artifacts (ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01)
+**/__pycache__/
+*.pyc
+*.pyo
