@@ -178,7 +178,7 @@ function updateModelStreamStarted(
 		{
 			...model,
 			identity: { ...model.identity, endedAt: undefined },
-			lifecycle: isTerminal(model.lifecycle) ? model.lifecycle : { kind: "running" },
+			lifecycle: promoteToRunning(model.lifecycle),
 			activity: { ...model.activity, modelStreaming: true },
 		},
 		NO_EFFECTS,
@@ -206,6 +206,11 @@ function updateToolStarted(
 	_msg: { readonly type: "tool_started"; readonly toolCallId: string; readonly at: number },
 ): UpdateResult {
 	void _msg;
+	// I01 / I02: terminal lifecycle never becomes active again from
+	// a stray tool_started. Stale events are IGNORED_STALE.
+	if (isTerminal(model.lifecycle)) {
+		return [model, NO_EFFECTS];
+	}
 	// Idempotent per toolCallId: parallel siblings count as two
 	// tool-started events. The cumulative counter is monotonic (I10).
 	const alreadyActive = model.activity.tooling;
@@ -213,6 +218,7 @@ function updateToolStarted(
 		{
 			...model,
 			identity: { ...model.identity, endedAt: undefined },
+			lifecycle: promoteToRunning(model.lifecycle),
 			activity: { ...model.activity, tooling: true },
 			telemetry: alreadyActive
 				? model.telemetry
@@ -254,7 +260,7 @@ function updateApprovalRequested(
 		{
 			...model,
 			identity: { ...model.identity, endedAt: undefined },
-			lifecycle: isTerminal(model.lifecycle) ? model.lifecycle : { kind: "running" },
+			lifecycle: promoteToRunning(model.lifecycle),
 			activity: { ...model.activity, awaitingApproval: true },
 		},
 		NO_EFFECTS,
@@ -404,4 +410,17 @@ function isTerminal(lifecycle: TaskModel["lifecycle"]): boolean {
 		lifecycle.kind === "failed" ||
 		lifecycle.kind === "cancelled"
 	);
+}
+
+/**
+ * Promote an idle lifecycle to "running" whenever activity is becoming
+ * true. `resumable` and the terminal kinds are left untouched. This
+ * is the rule I02 enforces: any activity=true ⇒ projectTurnState ≠
+ * "idle" (as a model invariant).
+ */
+function promoteToRunning(lifecycle: TaskModel["lifecycle"]): TaskModel["lifecycle"] {
+	if (isTerminal(lifecycle)) return lifecycle;
+	if (lifecycle.kind === "resumable") return lifecycle;
+	if (lifecycle.kind === "running") return lifecycle;
+	return { kind: "running" };
 }

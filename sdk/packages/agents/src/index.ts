@@ -60,3 +60,8 @@ export {
 // AgentRuntime. Contract types live in `@cline/shared`; the state machine
 // implementation lives in `@cline/agents/src/runtime/recovery/`.
 export * from "./runtime/recovery/index";
+
+// ACT-CLINEMM-ELM-ARCHITECTURE01 / E0–E4: shadow TaskState (TEA-shaped).
+// Internal-only; no public-API expansion during shadow mode. Consumers
+// should only reach this module from the host boundary.
+export * as TaskState from "./runtime/state/task-state";

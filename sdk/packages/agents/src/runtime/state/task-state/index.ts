@@ -63,3 +63,6 @@ export {
 
 export type { TaskInvariantViolation } from "./invariants";
 export { checkTaskInvariants, assertInvariants } from "./invariants";
+
+export type { TaskShadowObservation } from "./shadow-adapter";
+export { adaptRuntimeEvent, TaskStateShadow } from "./shadow-adapter";

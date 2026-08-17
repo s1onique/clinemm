@@ -36,6 +36,13 @@ export type ShadowTurnPhase =
 /**
  * Map the shadow lifecycle/activity axes onto the shadow `TurnPhase`
  * taxonomy. Mirrors the precedence table in Phase 9 of the ACT.
+ *
+ * The `running` lifecycle with NO activity projects to `idle` —
+ * the agent has not actually produced any visible work in the
+ * current turn. This matches the legacy host's behavior: the
+ * `TurnStateTracker.phase` is "idle" until a turn actually streams
+ * or runs a tool; `task_requested` alone does not flip the phase
+ * to "streaming".
  */
 export function projectTurnState(model: TaskModel): ShadowTurnPhase {
 	if (model.activity.awaitingApproval) return "awaiting_approval";
@@ -50,7 +57,9 @@ export function projectTurnState(model: TaskModel): ShadowTurnPhase {
 		case "cancelled":
 			return "resumable";
 		case "running":
-			return "streaming";
+			// Running lifecycle but no activity ⇒ between turns.
+			// Matches the legacy host's "no visible work yet" rule.
+			return "idle";
 		case "idle":
 			return "idle";
 		default: {
