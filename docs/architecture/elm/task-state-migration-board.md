@@ -382,3 +382,38 @@ on CORRECTION01-CLOSURE01 closure gate). E5-E6 wires the shadow into
 real workload event streams, captures divergences, and qualifies the
 shadow against the legacy `TurnStateTracker`. E5-E6 must clear the
 `modeling passes E5-E6` gate above before E7 starts.
+---
+
+## CORRECTION02 — HALTED (2026-08-17)
+
+The first CORRECTION02 implementation attempt was discarded after
+forensic review. See
+`task-state-e5-e6-correction02-halt-evidence.md` for the full
+evidence.
+
+**Authority flags (as of halt):**
+
+```
+ELM-02C1 CORRECTION01                = PASS_FROZEN (closure gate cleared)
+ELM-02C2 first dirty attempt         = HALTED (forensic evidence retained)
+ELM-02C2 clean restart               = NEXT
+ELM-02F canonical runtime seam       = RECOMMENDED before E7
+ELM-03 consumer cutover              = BLOCKED
+
+DIRTY_BASE_HEAD                       = 810c7a6f3ee90a82915d107080f0f051049c0fdb
+DIRTY_FORENSIC_STASH                  = stash@{0} on act/elm-architecture01-e0-e4
+CONTEXT_ACCOUNTING_STASH             = stash@{1} (pre-existing, DO NOT POP;
+                                                  distinct from the earlier
+                                                  `CONTEXT_STASH_INTACT` line
+                                                  which is about the
+                                                  `a7fab1952` ref in the
+                                                  main worktree)
+SOURCE_WORKTREE_CLEAN                 = true (no source-code diffs from HEAD)
+DOCS_DIRTY                            = true (3 uncommitted doc files)
+WORKTREE_CLEAN                        = false  (== SOURCE_WORKTREE_CLEAN && !DOCS_DIRTY)
+E7_AUTHORIZED                         = false
+NEXT_FREEZE                           = commit the three docs as the docs-freeze, then WORKTREE_CLEAN=true
+```
+
+The clean CORRECTION02 restart plan lives in
+`task-state-e5-e6-correction02-plan.md` (next to this file).
