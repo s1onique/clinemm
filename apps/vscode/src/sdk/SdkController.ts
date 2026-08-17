@@ -56,6 +56,7 @@ import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { AuthService, LogoutReason } from "./auth-service"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
+import { subscribeCanonicalRuntimeEventsToShadow } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
 import { createProviderCatalog } from "./model-catalog/catalog"
@@ -1665,21 +1666,15 @@ export class Controller {
 		if (!sdkHost?.subscribeRuntimeEvents) {
 			return
 		}
-		this.taskStateRuntimeEventsUnsub = sdkHost.subscribeRuntimeEvents((evtSessionId, event) => {
-			if (evtSessionId && evtSessionId !== sessionId) {
-				// Stale session — ignore.
-				return
-			}
-			const shadow = this.taskStateShadowWiring
-			if (!shadow) {
-				return
-			}
-			shadow.observeCanonicalRuntimeEvent({
-				origin: "RUNTIME_CANONICAL",
-				sessionId,
-				event,
-			})
-		})
+		const shadow = this.taskStateShadowWiring
+		if (!shadow) {
+			return
+		}
+		// Delegate the listener filter (sessionId guard + typed
+		// envelope into the shadow) to the production-grade
+		// helper. F1-CORRECTION02: the controller and the lifecycle
+		// qualification test now call the SAME function.
+		this.taskStateRuntimeEventsUnsub = subscribeCanonicalRuntimeEventsToShadow(sdkHost, shadow, sessionId)
 	}
 
 	async reinitExistingTaskFromId(taskId: string): Promise<void> {
