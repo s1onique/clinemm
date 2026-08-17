@@ -897,24 +897,6 @@ export const ChatRowContent = memo(
 						// partial-then-final micro-window), but once
 						// `turnState` reports anything other than
 						// "streaming" the shimmer is suppressed.
-						// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04:
-						//
-						// The previous shape keyed the streaming shimmer
-						// entirely on `message.partial === true`
-						// (`isReasoningStreaming`). When the model finished
-						// but the SDK never finalized this reasoning row
-						// (i.e. `partial` stayed `true`), the in-list
-						// "Thinking..." shimmer kept animating while the
-						// assistant's final text report was already
-						// visible - exactly the LIVE02 dogfood bug.
-						//
-						// Migration: the canonical authority is
-						// `turnState.phase === "streaming"`. The message
-						// tail can still drive a transient shimmer inside
-						// an active streaming phase (for the optimistic
-						// partial-then-final micro-window), but once
-						// `turnState` reports anything other than
-						// "streaming" the shimmer is suppressed.
 						const messageTailStreaming = message.partial === true
 						const turnStateIsStreaming = turnState?.phase === "streaming"
 						const isReasoningStreaming = messageTailStreaming && turnStateIsStreaming

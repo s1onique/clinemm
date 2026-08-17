@@ -38,10 +38,16 @@ interface RequestStartRowProps {
 	isExpanded: boolean
 	handleToggle: () => void
 	/**
-	 * Authoritative UI turn phase. When omitted (e.g. in tests that
-	 * pre-date the C04 lifecycle reconciliation), the component falls
-	 * back to the message-tail-derived heuristic — the legacy
-	 * behaviour — so existing unit tests keep their shape.
+	 * Authoritative UI turn phase, consumed from
+	 * `ExtensionStateContext` in production. Tests may inject it
+	 * directly via this prop.
+	 *
+	 * When neither the prop nor the provider value is available,
+	 * the component conservatively treats the turn as
+	 * non-streaming (the shimmer is hidden). It never falls back
+	 * to the message-tail-derived heuristic: the whole point of
+	 * C04-CORRECTION04 is that "I have reasoning text in the
+	 * buffer" is not evidence of an in-flight turn.
 	 */
 	turnState?: TurnState
 }

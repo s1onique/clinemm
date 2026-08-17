@@ -1,17 +1,20 @@
 // ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04:
 //
-// Mutation campaign (Phase Q). Six structural mutations are applied
-// to the production code path that the dogfood fix touches. Each
-// mutation is a concrete code edit (no prose-only claims) and the
-// corresponding test must fail in the mutated state, then pass when
-// the fix is restored.
+// RequestStartRow mutation campaign (Phase Q).
 //
 // M1 - drop the turnState gate in RequestStartRow (legacy reverts)
-// M2 - drop the turnState gate in ChatRow reasoning case
 // M3 - invert the gate (shimmer shows only when NOT streaming)
 // M4 - turnStateProp silently ignored, useOptionalTurnState only
 // M5 - turnStateProp used as a truthy flag instead of consulting phase
 // M6 - gate on a different phase like "awaiting_approval"
+//
+// NOTE on M2: the real ChatRowContent `say:"reasoning"` mutation
+// evidence lives in
+//   src/components/chat/__tests__/ChatRow.reasoning-lifecycle.mutations.test.tsx
+// (added in CORRECTION04-CORRECTION01). The original M2 row was
+// structurally identical to the M1 row because both targeted
+// RequestStartRow — it could not detect removal of the ChatRow
+// gate. See CORRECTION01 for the corrected disposition.
 
 import type { ClineMessage, TurnState } from "@shared/ExtensionMessage"
 import { render } from "@testing-library/react"
@@ -77,18 +80,6 @@ describe("C04-C04-F6 base invariant (LIVE02)", () => {
 
 describe("M1: RequestStartRow drop the turnState gate", () => {
 	it("M1 kill: completed turn + assistant report does NOT show the shimmer", () => {
-		const { hasShimmer } = renderRow({
-			cost: undefined,
-			reasoning: "thinking...",
-			clineMessages: [apiReqStarted({ cost: undefined, reasoning: "thinking..." }), assistantReport(2)],
-			turnState: turnState("completed"),
-		})
-		expect(hasShimmer).toBe(false)
-	})
-})
-
-describe("M2: ChatRow reasoning drop the turnState gate", () => {
-	it("M2 kill: completed phase does not drive a reasoning-row shimmer", () => {
 		const { hasShimmer } = renderRow({
 			cost: undefined,
 			reasoning: "thinking...",
