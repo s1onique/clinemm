@@ -281,11 +281,16 @@ describe("C2.2 T10 — canonical recovery produces exactly one record", () => {
 			event: makeRecoveryEvent("idle", "recovering"),
 		})
 		// Host recovery with same edge (canonicalAvailable=true).
+		// The projection is required by TaskMsg shape; supply a stub.
 		coordinator.observe({
 			kind: "host-recovery",
 			origin: "HOST_RECOVERY",
 			sessionId: "session-A",
-			msg: { type: "recovery_changed", at: NOW + 1 },
+			msg: {
+				type: "recovery_changed",
+				at: NOW + 1,
+				projection: { state: "recovering", episodeFailures: 0, circuitNoticeCount: 0 },
+			},
 			canonicalAvailable: true,
 		})
 		const counts = recorder.getCounts()
@@ -307,8 +312,6 @@ describe("C2.2 T10 — canonical recovery produces exactly one record", () => {
 				projection: {
 					state: "recovering",
 					episodeFailures: 0,
-					maxEpisodeFailures: 5,
-					secondStage: "idle",
 					circuitNoticeCount: 0,
 				},
 			},
