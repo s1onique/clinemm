@@ -1309,3 +1309,77 @@ ELM-02C2 C2.3 stateful W01-W16           🟢 NEXT (authorized)
 
 ELM-03 E7 consumer cutover               ⛔ BLOCKED (gated on C2.3..C2.5)
 ```
+
+---
+
+## ELM-02C2 — C2.2-CORRECTION02 (2026-08-17)
+
+```
+ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION02
+
+edbbf4de9  feat(elm): C2.2-CORRECTION02 — freeze Option A: reconstructed is DIAGNOSTIC_ONLY when canonicalAvailable=true
+THIS        docs(elm): record C2.2-CORRECTION02 evidence + C2.3 authorization verdict
+
+Reviewer R7 was correct: previous "order-independent dedup" was
+contradicted by R7.2 expecting 2 mutations for reconstructed→canonical.
+Fix: Option A (canonicalAvailable=true => RUNTIME_RECONSTRUCTED =
+DIAGNOSTIC_ONLY).
+
+R7.1  canonical-then-reconstructed: reconstructed DIAGNOSTIC_ONLY
+R7.2  reconstructed-then-canonical:  1 mutation total (single)
+R7.3  canonicalAvailable=false:      FALLBACK_APPLY (Hub/Remote)
+R7.4  cross-session dedup:           distinct sessions do NOT cross-dedup
+R7.4b sequential sessions:           STALE against wrong active session
+R7.5  cross-runId dedup:             distinct runs do NOT cross-dedup
+R7.6  same session+run+edge:         still suppresses (fallback dedup works)
+
+C2.2-CORRECTION02 VERDICT = PASS_UNIFIED_SHADOW_OBSERVATION_C2_2_CORRECTION02
+```
+
+### C2.2-CORRECTION02 commit accounting
+
+```
+C2.2-CORR02 = 2 commits
+  edbbf4de9  feat(elm): C2.2-CORRECTION02 — freeze Option A
+  THIS        docs(elm): record C2.2-CORRECTION02 evidence
+```
+
+### Production LOC delta (CORRECTION02 vs CORRECTION01)
+
+```
+task-state-shadow-coordinator.ts         +36 / -22   (scopedEdgeKey + Option A resolver)
+task-state-shadow-host-wiring.ts         +6  / -3    (canonicalAvailable:true plumbing)
+
+NET_PRODUCTION_LOC_CORRECTION02 = +42 / -25 = +17
+
+C2.2 + CORRECTION01 + CORRECTION02 cumulative from F1-CORRECTION03 head:
+  C2.2                        = +549 / -63  = +486
+  C2.2-CORRECTION01           = +144 / -41 = +103
+  C2.2-CORRECTION02           = +42  / -25 = +17
+  C2.2_TOTAL                  = +735 / -129 = +606
+```
+
+### Performance measured
+
+```
+legacy-path  (10k events): 0 records (diagnostic only under Option A)
+                            p50=0.4us events/sec=62931
+
+canonical-path (10k events): 10000 records
+                              p50=1.1us p95=5.9us p99=26.4us
+                              eventsPerSec=228152
+                              (under 100us budget)
+
+C2_2_PERFORMANCE = PASS
+```
+
+### Active board after C2.2-CORRECTION02
+
+```
+ELM-02F F0/F0-CORR01/F1/F1-CORR01..03   ✅ all closed
+ELM-02C2 C2.0/C2.1                       ✅ closed
+ELM-02C2 C2.2 + CORR01 + CORR02          ✅ CLOSED
+ELM-02C2 C2.3 stateful W01-W16           🟢 NEXT (authorized)
+
+ELM-03 E7 consumer cutover               ⛔ BLOCKED
+```
