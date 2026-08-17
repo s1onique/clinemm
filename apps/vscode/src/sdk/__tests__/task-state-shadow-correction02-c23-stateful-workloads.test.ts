@@ -5160,8 +5160,19 @@ describe("C2.3-CONT.5 W15 — synthetic C04 under Option A (LocalRuntimeHost)", 
 		hardGates(state)
 		const counts = state.wiring.recorderCounts()
 		const records = state.wiring.records()
-		// Diagnostic counter must increment for reconstructed.
-		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
+		// Diagnostic counter increments exactly twice: the legacy
+		// `done` envelope produces a reconstructed run-finished,
+		// and the legacy `iteration_start` with conversationId=
+		// run-W15-late produces a reconstructed run-started
+		// (the translator's stale-epoch gate applies only to
+		// `done` / `error`, not to `iteration_start`). Both are
+		// DIAGNOSTIC_ONLY under LocalRuntimeHost — the
+		// reconstructed events cannot mutate the shadow.
+		// Note: the translator updates its internal activeRunId to
+		// run-W15-late on iteration_start; this is distinct from
+		// the production-side canonicalRunIdRef (canonical
+		// authority) which stays at run-W15.
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(2)
 		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 		// The critical invariant: NO reconstructed event was
 		// applied as fallback. fallbackReconstructedApplied MUST
@@ -5272,8 +5283,13 @@ describe("C2.3-CONT.5 W16 — awaiting follow-up (host-only projection, reconstr
 		// DIAGNOSTIC_ONLY and did not mutate the lifecycle.
 		const m = state.wiring.comparator.debugSnapshot()
 		expect(m.lifecycle.kind).toBe("running")
-		// Diagnostic counter increments for reconstructed.
-		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
+		// Diagnostic counter increments exactly once: the legacy
+		// content_start (text) envelope does NOT translate to a
+		// state-mutating event (the translator only emits
+		// tool-started for contentType="tool"). Only the legacy
+		// done envelope produces a reconstructed run-finished,
+		// which is DIAGNOSTIC_ONLY.
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
 		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 		// No fallback applied under LocalRuntimeHost.
 		expect(counts.fallbackReconstructedApplied).toBe(0)
@@ -5298,9 +5314,9 @@ describe("C2.3-CONT.5 W16 — awaiting follow-up (host-only projection, reconstr
 		// awaiting_followup vs shadow=streaming). Verify the
 		// record exists and its origin is HOST_TASK.
 		const d08 = records.filter((r) => r.classification === "D08_FOLLOWUP_EXTERNAL")
-		expect(d08.length).toBeGreaterThanOrEqual(1)
+		expect(d08.length).toBe(1)
 		for (const d of d08) {
-			expect(d.origin).not.toBe("RUNTIME_RECONSTRUCTED")
+			expect(d.origin).toBe("HOST_TASK")
 		}
 	})
 })
