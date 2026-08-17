@@ -372,3 +372,131 @@ reviewer resolves `git rev-parse HEAD` at review time.
 FORENSIC = 141372c52ddd560f8d65bd438d9f9c22ba0f1f85
 CONTEXT  = 371752f71e5b9a385af32736e007540386d48b82
 ```
+
+
+---
+
+# C2.3-CONT.6-CORRECTION01 closure
+
+CONT.6 was reviewed by the differential-testing reviewer. The
+reviewer accepted W06, bounded, exact-count normalization, and
+the wording cleanup, but flagged four weaker claims:
+
+```
+R1 (CRITICAL): historical disposition tests were tautological
+                (`expect(true).toBe(true)` x2)
+R2 (CRITICAL): THREE_RUN_DETERMINISM used one representative
+                workload, not the full W01-W16 matrix
+R3 (BORDERLINE): PURE_REPLAY scope was narrower than the claim
+                 of "every qualified workload"
+R4 (BORDERLINE): CONT.5 evidence addendum had no trailing newline
+R5 (BORDERLINE): CONT.6 evidence embedded self-referential SHAs
+```
+
+The CONT.6-CORRECTION01 ACT (4 commits) addressed each:
+
+```
+R1 -> real machine-readable historical disposition
+  - Layer 1: HISTORICAL_DISPOSITION const table
+  - Layer 2: 7 structural assertions (partition, disjoint, etc.)
+  - Layer 3: ACTUAL_OUTCOME enforcement (re-exercises every
+    historical primitive in-process)
+  - Removes the two `expect(true).toBe(true)` tests
+  - 0 tautological greens
+
+R2 -> FULL_MATRIX_3X_DETERMINISM with W01-W16
+  - 16 buildWxxSteps() helpers extracted from the W's describes
+  - runMatrix() runs all 16 Ws in one harness invocation
+  - runMatrix() called three times (RUN1, RUN2, RUN3)
+  - All three snapshots MUST be byte-identical
+  - 1 test, full matrix x 3
+
+R3 -> FULL_MATRIX_PURE_REPLAY with canonical-only scope
+  - Scoped to Ws WITHOUT HOST_TASK steps: pure == live (exact)
+  - Ws WITH HOST_TASK steps: live reflects host authority,
+    pure reflects canonical-only. Mismatches are EXPECTED
+    by design.
+  - 2 tests (canonical-only + documentary)
+
+R4 -> trailing newline added to CONT.5 evidence
+
+R5 -> non-cyclic SHA convention for CONT.6 EXIT_HEAD
+  - EXIT_HEAD  = $SUBJECT_HEAD (use `git rev-parse HEAD` at
+    review time); no self-reference.
+```
+
+## Updated PASS gate (after -CORRECTION01)
+
+```
+W06_REAL_DENY_SEMANTICS            = PASS
+
+PURE_REPLAY_EQUIVALENCE            = PASS
+  FULL_MATRIX_PURE_REPLAY (canonical-only) = PASS
+  PURE_REPLAY_MISMATCHES (canonical-only)  = 0
+  PURE_REPLAY_HOST_AUTHORITY_SCOPE          = DOCUMENTED
+
+BOUNDED_RECORDING                  = PASS
+MAX_RETAINED_RECORDS               = 256
+
+THREE_RUN_DETERMINISM              = PASS
+  FULL_MATRIX_3X                 = PASS (RUN1 == RUN2 == RUN3)
+  REPRESENTATIVE_3X              = PASS (unchanged)
+
+HISTORICAL_DISPOSITION_MACHINE_CHECK = PASS
+TAUTOLOGICAL_DISPOSITION_TESTS       = 0
+HISTORICAL_ACTUAL_PASS_SET = T1, T2, T7, T11
+HISTORICAL_ACTUAL_RED_SET  = T3, T4, T5, T6, T8, T9, T10, T12
+HISTORICAL_UNEXPLAINED_RED = 0
+HISTORICAL_ACTIVE_DEFECT   = 0
+
+W01_W16_EXACT_EVIDENCE_NORMALIZED  = PASS
+WORDING_CLEANUP                    = PASS
+
+D10_UNKNOWN                        = 0
+INVARIANT_VIOLATIONS               = 0
+OBSERVER_ERRORS                    = 0
+EVIDENCE_GAPS                      = 0
+
+NEW_TS_ERRORS                      = 0  (typecheck)
+git diff --check                   = PASS
+PROTECTED_STASHES_INTACT           = true
+
+VERDICT = PASS_STATEFUL_WORKLOAD_QUALIFICATION_C2_3
+
+C2_3 = CLOSED
+C2_4_AUTHORIZED = true
+E7_AUTHORIZED   = false
+```
+
+## Updated board (after -CORRECTION01)
+
+```
+ELM-02F                              ✅
+C2.0 / C2.1                         ✅
+C2.2 + CORR01 + CORR02              ✅
+
+C2.3
+  W01-W16                           ✅
+  F01-F03                           ✅
+  all semantic corrections          ✅
+  CONT.6 W06 real deny              ✅
+  bounded >256                      ✅
+  exact normalization               ✅
+  CONT.6-CORRECTION01 R1/R4/R5      ✅
+  CONT.6-CORRECTION01 R2/R3         ✅
+
+  C2.3 = CLOSED
+
+C2.4  NO_ACTIVE_SESSION + reachability  🟢 NEXT (AUTHORIZED)
+C2.5                                  ⛔
+E7                                    ⛔
+```
+
+## Commits in CONT.6-CORRECTION01
+
+```
+1b62804db  test(elm): FULL_MATRIX_3X + pure replay  (R2 + R3)
+bc934d018  test+docs(elm): real disposition check    (R1 + R4 + R5)
+```
+
+(plus this evidence doc addendum)
