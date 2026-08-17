@@ -351,3 +351,85 @@ E7                                              ⛔
 FORENSIC = 141372c52ddd560f8d65bd438d9f9c22ba0f1f85
 CONTEXT  = 371752f71e5b9a385af32736e007540386d48b82
 ```
+
+
+---
+
+# CONT.6 wording addendum
+
+Per the CONT.6 reviewer's pass, two pieces of prose in this
+evidence doc need correction:
+
+## Wording fix #1 — W15 `activeRunId` distinction
+
+The CONT.5 evidence stated:
+
+> RECONSTRUCTED ENVELOPE 2:
+>   legacy iteration_start (conversationId=run-W15-late)
+>   -> reverseTranslator updates internal activeRunId to run-W15-late
+>      (canonicalRunIdRef stays at run-W15)
+>   -> coordinator.observe RUNTIME_RECONSTRUCTED
+>   -> Option A: DIAGNOSTIC_ONLY
+
+The exact-count normalization in CONT.6 also confirmed this
+distinction: W15 now asserts
+`observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED === 2`,
+demonstrating that the reconstructed `iteration_start` does
+reach the coordinator, is demoted to DIAGNOSTIC_ONLY by Option A,
+and does not advance the canonical-side `canonicalRunIdRef`.
+
+The two run trackers are now explicitly distinct:
+
+```
+reverseTranslator.activeRunId
+    ≠
+canonicalRunIdRef
+```
+
+`reverseTranslator.activeRunId` is a TRANSLATOR-INTERNAL field
+updated by `iteration_start` events to maintain run-epoch
+provenance. `canonicalRunIdRef` is the production-side canonical
+authority that is set ONLY by an accepted canonical `run-started`
+event arriving via `RUNTIME_CANONICAL`. The translator's stale-
+epoch gate (`done`/`error` eventConvId mismatch) prevents
+stranded terminals from reaching the shadow, but the translator
+itself is not a production authority — its `activeRunId` is a
+local convenience, not a state-mutating reference.
+
+## Wording fix #2 — W16 probe terminology
+
+The CONT.5 evidence listed two probes for W16 and labeled them
+both as `gate-defect necessity probes`. The reviewer correctly
+noted that the first probe (`require >= 1 D08 record`) was not
+a defect-killing mutation in the same sense as the second
+(inverted origin guard). The CONT.6 evidence doc re-labels
+them:
+
+```
+W16 exercise witness (probe a):
+  D08 count > 0                = PASS
+  This proves the assertion machinery exercises the
+  trace (D08 records DO exist; the count check
+  would FAIL on a trace that produced none).
+
+W16 negative mutation (probe b):
+  require reconstructed origin  = FAIL
+  This proves the origin guard is the meaningful
+  assertion — D08 records must NOT come from
+  RUNTIME_RECONSTRUCTED.
+```
+
+The trace-level fix that enabled both probes is the same:
+adding the `same_task_continued` HOST_TASK step BEFORE the
+reconstructed envelopes. This causes the shadow to flip from
+`completed` to `running`, producing exactly one D08 record (the
+shadow/legacy divergence) with HOST_TASK origin. Without the
+`same_task_continued`, the trace produces zero D08 records
+and both probes would be vacuous (the inverted origin guard
+would pass trivially because no records exist).
+
+The CONT.6 commit
+`3ada58920` (exact-count normalization) records this in the
+test code itself: the W16 D08 assertion is now `toBe(1)` (exact)
+and the origin guard is `expect(d.origin).toBe("HOST_TASK")`
+(positive, not negative).
