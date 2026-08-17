@@ -349,8 +349,20 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	// This is a DIAGNOSTIC counter, not a divergence class —
 	// suppression is correct behavior, but dogfood needs the
 	// signal to detect chronic suppression as a runtime bug.
+	//
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.4-CORRECTION01:
+	// post-reset, pre-run-start epoch. After
+	// `resetForNewTask()` the wiring is in
+	//   AWAITING_FIRST_CANONICAL_RUN_OF_NEW_TASK
+	// — neither an active run nor a fenced continuation. While
+	// this flag is set, ANY canonical terminal with a defined
+	// runId is SUPPRESSED (same policy shape as the continuation
+	// fence above). Cleared ONLY by an accepted canonical
+	// `run-started` (post-R1 session authority); cleared by the
+	// same branch that clears `awaitingNextCanonicalRunRef`.
 	const canonicalRunIdRef: { value: string | undefined } = { value: undefined }
 	const awaitingNextCanonicalRunRef: { value: boolean } = { value: false }
+	const postResetAwaitingCanonicalRunRef: { value: boolean } = { value: false }
 
 	return {
 		recorder,
@@ -386,29 +398,41 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 				return
 			}
 
-			// C3.CONT.2-CORRECTION04 R2 + R3: terminal canonical
-			// events are SUPPRESSED if EITHER (a) the continuation
-			// fence is set AND the event's runId matches the
-			// retired identity, OR (b) the tracked active runId is
-			// defined and the event's runId does not match it.
-			// The disjunction is intentionally OR, not AND — while
-			// fenced, defined-runId terminals are uniformly
-			// suppressed regardless of identity equality, because
-			// at this window the previous identity is retired and
-			// the next run-started has not yet advanced the
-			// tracker. See the gate's truth table at the top of
-			// this file for the full enumeration. Any suppression
-			// increments `staleRunTerminalSuppressed` so dogfood
-			// can observe chronic suppression.
+			// C3.CONT.2-CORRECTION04 R2 + R3 (extended by CORRECTION01 to
+			// also cover the post-reset epoch): terminal canonical
+			// events are SUPPRESSED if EITHER
+			//   (a) awaitingEpoch: the system is in
+			//       `awaitingNextCanonicalRunRef` (continuation
+			//       fence after `same_task_continued`) OR in
+			//       `postResetAwaitingCanonicalRunRef` (post-
+			//       reset, pre-run-start after
+			//       `resetForNewTask`), AND the event's runId is
+			//       defined. While in either epoch there is no
+			//       authoritative run for the current visible task
+			//       yet, so ANY defined-runId terminal is stranded.
+			//   (b) wrongActiveRun: a defined active runId exists
+			//       in the tracker, AND the event's runId is
+			//       defined, AND they differ.
+			//
+			// The disjunction is intentionally OR, not AND. While
+			// fenced (continuation OR post-reset), defined-runId
+			// terminals are uniformly suppressed regardless of
+			// identity equality, because at these windows the
+			// previous identity is retired (or undefined) and the
+			// next run-started has not yet advanced the tracker.
+			// There is no reliable retiredRunId after
+			// resetForNewTask, so the gate must not depend on one.
+			// See the gate's truth table at the top of this file
+			// for the full enumeration. Any suppression increments
+			// `staleRunTerminalSuppressed` so dogfood can observe
+			// chronic suppression.
 			if (evt.type === "run-finished" || evt.type === "run-failed") {
 				const eventRunId = evt.snapshot.runId
 				const active = canonicalRunIdRef.value
-				const stranded =
-					(awaitingNextCanonicalRunRef.value &&
-						eventRunId !== undefined &&
-						active !== undefined &&
-						eventRunId === active) ||
-					(active !== undefined && eventRunId !== undefined && active !== eventRunId)
+				const awaitingEpoch =
+					(awaitingNextCanonicalRunRef.value || postResetAwaitingCanonicalRunRef.value) && eventRunId !== undefined
+				const wrongActiveRun = active !== undefined && eventRunId !== undefined && active !== eventRunId
+				const stranded = awaitingEpoch || wrongActiveRun
 				if (stranded) {
 					recorder.recordStaleRunTerminalSuppressed?.()
 					return
@@ -417,12 +441,18 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 
 			// Tracker update only happens AFTER session + run-epoch
 			// validation. The only accepted canonical run-started
-			// events advance canonicalRunIdRef and clear the fence.
+			// events advance canonicalRunIdRef and clear BOTH the
+			// continuation fence AND the post-reset-awaiting-run
+			// flag (C3.CONT.4-CORRECTION01). Clearing the latter
+			// MUST happen here, post-R1, so a stale-session
+			// run-started cannot clear it — that would recreate
+			// CORRECTION04's stale-session poisoning bug.
 			if (evt.type === "run-started") {
 				const newRunId = evt.snapshot.runId
 				if (newRunId !== undefined) {
 					canonicalRunIdRef.value = newRunId
 					awaitingNextCanonicalRunRef.value = false
+					postResetAwaitingCanonicalRunRef.value = false
 				}
 			}
 
@@ -460,6 +490,15 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			// continuation fence too. A new visible task starts
 			// with no awaited-continuation state.
 			awaitingNextCanonicalRunRef.value = false
+			// C3.CONT.4-CORRECTION01: declare the post-reset,
+			// pre-run-start epoch. Until an accepted canonical
+			// `run-started` (post-R1) arrives, the new visible
+			// task has no authoritative run yet. While this flag
+			// is set, ANY defined-runId canonical terminal is
+			// SUPPRESSED. Repeated resetForNewTask calls are
+			// idempotent (the flag is already true). Cleared
+			// only inside the accepted-run-started branch above.
+			postResetAwaitingCanonicalRunRef.value = true
 		},
 		dispose(): void {
 			deps.sessionOptions.onSessionEvent = userOnSessionEvent
