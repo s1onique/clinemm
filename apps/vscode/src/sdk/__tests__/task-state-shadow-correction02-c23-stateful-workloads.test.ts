@@ -3599,3 +3599,684 @@ describe("C2.3-CONT.4 W12 — brand-new-task epoch transition (Model A)", () => 
 		expect(counts.fallbackReconstructedApplied).toBe(0)
 	})
 })
+
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.4-CORRECTION01-C9
+// Post-reset fence witnesses.
+//
+// C9.1 — original CONT.4 W12.4 defect turns green (positive
+//        re-verification). Identical trace to W12.4 above; same
+//        identities, same fixtures, same expected outcome.
+// C9.2 — arbitrary defined terminal suppressed during post-reset
+//        (proves "no terminal authority yet", not just retired-id
+//        blacklist).
+// C9.3 — accepted canonical run-started(B) clears the post-reset
+//        fence.
+// C9.4 — stale-session run-started CANNOT clear the post-reset
+//        fence (would otherwise recreate CORRECTION04 stale-session
+//        poisoning). CRITICAL witness.
+// C9.5 — repeated resetForNewTask before any run-start is idempotent.
+// C9.6 — W11.x (W11.1 / W11.2) is unchanged by the new fence.
+//
+// All identities deliberately distinct from W11/W12.4 fixtures to
+// prevent accidental cross-test coupling:
+//   task-A   = "task-C0"   task-Z = "task-CZ"
+//   session-A = "session-C0"  session-B = "session-C1"
+//   run-A    = "run-C0"   run-B    = "run-C1"
+//   run-Z    = "run-CZ"   run-X    = "run-CX"
+//   run-Q    = "run-CQ"
+// =========================================================================
+
+describe("C2.3-CONT.4-CORRECTION01 C9 — post-reset fence witnesses", () => {
+	it("C9.1 — original W12.4 defect turns green: late run-A terminal in post-reset window is SUPPRESSED", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "session-C0" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-C0", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-C0" },
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			{ kind: "host-task", taskId: "task-C0", which: "reset", legacyPhase: "idle" },
+			{ kind: "wiring-reset-for-new-task" },
+			// No set-active-session here — keep session-C0.
+			{ kind: "host-task", taskId: "task-C1", which: "requested", legacyPhase: "idle" },
+			// Pre-run-B-start late run-A terminal (the C9.1 defect
+			// shape). Must be SUPPRESSED by the new post-reset fence.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 99,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Accepted run-started(B) — clears post-reset fence.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			// Post-run-B-start late run-failed(run-A) — must be
+			// SUPPRESSED by identity mismatch.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFailed(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 100,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "failed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "completed", advance: true },
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		const counts = st.wiring.recorderCounts()
+
+		// The defect is closed: pre-start late run-A is SUPPRESSED.
+		expect(counts.staleRunTerminalSuppressed).toBe(2)
+		// Only run-B's terminal applies.
+		expect(taskCompleted.length).toBe(1)
+		expect(m.identity.taskId).toBe("task-C1")
+		expect(m.lifecycle.kind).toBe("completed")
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+
+	it("C9.2 — arbitrary defined terminal suppressed during post-reset (not just retired run-A)", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "session-C0" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-C0", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-C0" },
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			{ kind: "host-task", taskId: "task-C0", which: "reset", legacyPhase: "idle" },
+			{ kind: "wiring-reset-for-new-task" },
+			{ kind: "host-task", taskId: "task-CZ", which: "requested", legacyPhase: "idle" },
+			// Arbitrary late terminal run-Z (not retired run-A).
+			// Must be SUPPRESSED by post-reset fence.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-CZ",
+						iteration: 50,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Another arbitrary terminal run-Q.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFailed(
+					snapshotFixture({
+						runId: "run-CQ",
+						iteration: 51,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "failed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Accepted run-started(run-Z) — clears post-reset fence.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-CZ",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			// Legitimate terminal for the accepted run.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-CZ",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "completed", advance: true },
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		const taskFailed = allRecords.filter((r) => r.event === "task_failed")
+		const counts = st.wiring.recorderCounts()
+
+		// Both arbitrary late terminals suppressed.
+		expect(counts.staleRunTerminalSuppressed).toBe(2)
+		// Only the accepted run-Z's terminal applies.
+		expect(taskCompleted.length).toBe(1)
+		expect(taskFailed.length).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+
+	it("C9.3 — accepted canonical run-started(B) clears the post-reset fence", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "session-C0" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-C0", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-C0" },
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			{ kind: "host-task", taskId: "task-C0", which: "reset", legacyPhase: "idle" },
+			{ kind: "wiring-reset-for-new-task" },
+			{ kind: "host-task", taskId: "task-C1", which: "requested", legacyPhase: "idle" },
+			// Accepted run-started(run-B) clears post-reset fence.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			// Now a terminal with runId === active run is the
+			// legitimate accepted terminal — must APPLY exactly once.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "completed", advance: true },
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		const counts = st.wiring.recorderCounts()
+
+		// No suppression: post-reset was cleared by accepted
+		// run-started(B); run-B's terminal applied.
+		expect(counts.staleRunTerminalSuppressed).toBe(0)
+		expect(taskCompleted.length).toBe(1)
+		expect(m.identity.taskId).toBe("task-C1")
+		expect(m.lifecycle.kind).toBe("completed")
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+
+	it("C9.4 — stale-session run-started CANNOT clear post-reset fence (no CORRECTION04 regression)", () => {
+		// CRITICAL: must not recreate CORRECTION04 stale-session
+		// poisoning. Trace:
+		//   active session = session-C1
+		//   postResetAwaitingCanonicalRunRef = true
+		//   stale-session run-started(run-C0, session-C0)
+		//     -> R1 REFUSES
+		//     -> canonicalRunIdRef stays undefined
+		//     -> postResetAwaitingCanonicalRunRef MUST stay true
+		//   stale-session terminal(run-C0, session-C0)
+		//     -> R1 REFUSES (cross-session)
+		//   accepted run-started(run-C1, session-C1)
+		//     -> postResetAwaitingCanonicalRunRef cleared
+		//   run-finished(run-C1, session-C1)
+		//     -> APPLY
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "session-C0" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-C0", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-C0" },
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			{ kind: "host-task", taskId: "task-C0", which: "reset", legacyPhase: "idle" },
+			{ kind: "wiring-reset-for-new-task" },
+			// Active session advances to session-C1 (the new
+			// task's session in production).
+			{ kind: "set-active-session", sessionId: "session-C1" },
+			{ kind: "host-task", taskId: "task-C1", which: "requested", legacyPhase: "idle" },
+			// Stale-session run-started(run-C0) from session-C0.
+			// R1 REFUSES (session-C0 != active session-C1).
+			// postResetAwaitingCanonicalRunRef MUST stay true.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Stale-session terminal from session-C0. R1 REFUSES
+			// (cross-session). Even if it slipped past R1, the
+			// post-reset fence would still catch it. Defense in
+			// depth.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 99,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Accepted run-started(B) from active session.
+			{
+				kind: "canonical",
+				sessionId: "session-C1",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			{
+				kind: "canonical",
+				sessionId: "session-C1",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "completed", advance: true },
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		const counts = st.wiring.recorderCounts()
+
+		// Stale-session run-started was REFUSED by R1; post-reset
+		// fence stayed set; the subsequent stale-session terminal
+		// was REFUSED by R1 too. The only terminal that applies
+		// is run-B's accepted terminal.
+		expect(counts.staleRunTerminalSuppressed).toBe(0)
+		expect(taskCompleted.length).toBe(1)
+		expect(m.identity.taskId).toBe("task-C1")
+		expect(m.lifecycle.kind).toBe("completed")
+		// Critical: canonicalRunIdRef is run-C1, NOT run-C0.
+		expect(st.activeRunId).toBe("run-C1")
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+
+	it("C9.5 — repeated resetForNewTask before any run-start is idempotent", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "session-C0" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-C0", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-C0" },
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			{ kind: "host-task", taskId: "task-C0", which: "reset", legacyPhase: "idle" },
+			{ kind: "wiring-reset-for-new-task" },
+			// Repeated reset without any run-start in between.
+			// The post-reset flag is already true; the second
+			// set is a no-op (idempotent).
+			{ kind: "host-task", taskId: "task-C0", which: "reset", legacyPhase: "idle" },
+			{ kind: "wiring-reset-for-new-task" },
+			{ kind: "host-task", taskId: "task-CX", which: "requested", legacyPhase: "idle" },
+			// Late terminal run-A from the original run — must be
+			// SUPPRESSED by post-reset fence.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 99,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Late terminal run-X (arbitrary, not retired).
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-CX",
+						iteration: 88,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Accepted run-started for the new task.
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "completed", advance: true },
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		const counts = st.wiring.recorderCounts()
+
+		// Both late terminals suppressed; only run-C1's terminal
+		// applies.
+		expect(counts.staleRunTerminalSuppressed).toBe(2)
+		expect(taskCompleted.length).toBe(1)
+		expect(m.identity.taskId).toBe("task-CX")
+		expect(m.lifecycle.kind).toBe("completed")
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+
+	it("C9.6 — W11.x (continuation fence) is unaffected by the new post-reset fence", () => {
+		// Re-run W11.1 with distinct fixtures; same expected
+		// outcome. The new post-reset fence must not over-apply
+		// to the continuation path (which has its own fence,
+		// awaitingNextCanonicalRunRef, and the same awaitingEpoch
+		// clause handles both uniformly).
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "session-C0" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-C0", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-C0" },
+			{
+				kind: "canonical",
+				sessionId: "session-C0",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			// Continuation — same visible task continues.
+			{ kind: "host-task", taskId: "task-C0", which: "continued", legacyPhase: "idle" },
+			{ kind: "fence-canonical-run" },
+			{ kind: "set-active-session", sessionId: "session-C1" },
+			// Pre-run-B-start late run-finished(run-A) from SAME
+			// session. SUPPRESSED by the continuation fence (via
+			// awaitingEpoch).
+			{
+				kind: "canonical",
+				sessionId: "session-C1",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 99,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Accepted run-started(B). Clears continuation fence
+			// (NOT post-reset, because no resetForNewTask was
+			// called).
+			{
+				kind: "canonical",
+				sessionId: "session-C1",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "streaming", advance: true },
+			},
+			// Post-run-B-start late run-failed(run-A). SUPPRESSED
+			// by identity mismatch.
+			{
+				kind: "canonical",
+				sessionId: "session-C1",
+				event: runFailed(
+					snapshotFixture({
+						runId: "run-C0",
+						iteration: 100,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "failed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Legitimate terminal for run-B.
+			{
+				kind: "canonical",
+				sessionId: "session-C1",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-C1",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+				setLegacyPhase: { phase: "completed", advance: true },
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		const counts = st.wiring.recorderCounts()
+
+		// Continuation-fence behavior unchanged:
+		//   - pre-start late run-finished(run-A): SUPPRESSED
+		//   - post-start late run-failed(run-A): SUPPRESSED
+		//   - run-B's terminal: APPLY
+		expect(counts.staleRunTerminalSuppressed).toBe(2)
+		expect(taskCompleted.length).toBe(1)
+		expect(m.identity.taskId).toBe("task-C0")
+		expect(m.lifecycle.kind).toBe("completed")
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+})
