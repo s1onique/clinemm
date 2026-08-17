@@ -11,18 +11,29 @@
  * `LocalRuntimeHost.subscribeRuntimeEvents` method.
  *
  * Witnesses:
- *   F1-H4-C1: subscribing BEFORE any session exists delivers
- *             events from a session created later — but only via
- *             the documented re-subscription pattern. The host's
- *             `subscribeRuntimeEvents` is point-in-time.
+ *   F1-H4-C1: POST-SESSION point-in-time subscription. The host
+ *             attaches a listener to sessions that already exist
+ *             when `subscribeRuntimeEvents` is called. (Sessions
+ *             created AFTER the subscribe call require the caller
+ *             to invoke `subscribeRuntimeEvents` again — this is
+ *             the documented `POINT_IN_TIME` contract; the
+ *             production caller invariant is enforced by
+ *             `SdkController.attachCanonicalRuntimeEventSubscription`,
+ *             see `apps/vscode/src/sdk/SdkController.ts:1661`.)
  *   F1-H4-C2: after unsubscribing, no further events are delivered.
  *   F1-H4-C3: two simultaneous subscribers both receive events
- *             with their originating sessionId.
+ *             with their originating sessionId; unsubscribing A
+ *             does not affect B.
  *   F1-H4-C4: the canonical event object reference is preserved
  *             end-to-end (host wraps it; listener receives the
  *             same reference via the host).
- *   F1-H4-C5: execution-state-changed and recovery-state-changed
- *             both reach the host listener with origin=runtime.
+ *
+ * F1-LC-1 (PRE-SESSION no-op → re-attach pattern) lives in
+ * `apps/vscode/src/sdk/__tests__/sdk-controller-production-lifecycle.e2f-f1-correction02.test.ts`,
+ * which exercises the PRODUCTION helper
+ * `subscribeCanonicalRuntimeEventsToShadow` that
+ * `SdkController.attachCanonicalRuntimeEventSubscription` delegates
+ * to. F1-CORRECTION02 closed the remaining lifecycle proof gap.
  */
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"

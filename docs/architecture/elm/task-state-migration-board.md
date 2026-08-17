@@ -897,86 +897,128 @@ ELM-02C2 C2.4 production qualification            ⛔
 ELM-02C2 C2.5 real E6 dogfood                     ⛔
 
 ELM-03 E7 consumer cutover                        ⛔ BLOCKED (gated on C2.2..C2.5)
-```
+
 
 ---
 
-## ELM-02F — PHASE F1-CORRECTION01 (2026-08-17)
+## ELM-02F — PHASE F1-CORRECTION02 (2026-08-17)
 
-**ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION01**
+**ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION02**
 
-The initial F1 evidence claimed PASS but the F1 review identified
-six gaps in the host and VS Code qualification. This correction closes
-every one:
+The F1-CORRECTION01 review identified one remaining blocker: the
+lifecycle test mirrored the controller body locally instead of
+invoking the production code. F1-CORRECTION02 closes that gap by
+extracting the listener-filter logic into a single exported helper
+that both the SdkController and the qualification test invoke.
 
 ```
 F1_VERDICT                            = PASS_CANONICAL_RUNTIME_SEAM_F1
 ELM_02F_F1                            = PASS
 
+PRODUCTION_REATTACH_AFTER_SESSION_START = PASS
+PRODUCTION_REATTACH_AFTER_REINIT        = PASS
+OLD_SUBSCRIPTION_DISPOSED               = PASS
+
 C2_2_IMPLEMENTATION_AUTHORIZED        = true
 E7_AUTHORIZED                         = false
 ```
 
-### Three commits
+### Two commits
 
 ```
-ab8cf2f66  fix(vscode): extract canonical-event proxy and add typed origin marker
-f8c2beaf3  test(vscode,core): real LocalRuntimeHost + wiring boundary + exact F0 legacy
-a84b1f183  test(vscode): SdkController re-subscription lifecycle at the VS Code boundary
+(produced in this correction)
 ```
 
-### Six review concerns closed
+### Three review concerns closed
 
 ```
-2  LocalRuntimeHost was a manual mirror    -> real LocalRuntimeHost instance (4 tests)
-3  future-session lifecycle unproven       -> F1-LC-1: pre-session subscribe is a no-op
-4  VS Code proxy was synthetic             -> extracted subscribeRuntimeEventsThroughProxy()
-5  F1-V1 fidelity was tautological          -> F1-V1-C2/C3 use literal event references
-6  recovery at VS Code boundary not proven  -> F1-V1-C3 + F1-W3 both pass
-7  RUNTIME_CANONICAL not encoded            -> TaskShadowRuntimeOrigin + typed envelope
+1  lifecycle test mirrored SdkController body
+   -> extracted subscribeCanonicalRuntimeEventsToShadow() as
+      the single production helper; controller delegates; test
+      invokes the same function
+
+2  POINT_IN_TIME contract not frozen
+   -> documented as a typed freeze in
+      apps/vscode/src/sdk/canonical-event-subscription.ts
+
+3  F1-H4-C1 description claimed pre-session behavior the
+   test does not exercise
+   -> corrected: F1-H4-C1 is the post-session point-in-time
+      path; the pre-session no-op pattern lives in F1-LC-1
 ```
 
 ### Test deltas
 
 ```
-@cline/core (was 512):     +4 = 516 passed
-@cline/vscode (was 36):   +15 = 51 passed
-Typecheck baselines:       unchanged (core=2, vscode=18)
+@cline/vscode F1-CORRECTION02:
+  sdk-controller-production-lifecycle  6 passed
+  (replaces 3-test mirror from F1-CORRECTION01)
+
+Total F1+CORRECTION01+CORRECTION02 vscode tests:  54 passed
+Typecheck baseline:                                unchanged (vscode=18)
 ```
 
-### Production deltas (CORRECTION01)
+### Production deltas (CORRECTION02)
 
 ```
-apps/vscode/src/sdk/runtime-events-proxy.ts                 NEW +41
-apps/vscode/src/sdk/vscode-session-host.ts                  +5 /-3
-apps/vscode/src/sdk/task-state-shadow-host-wiring.ts       +57/-14
-apps/vscode/src/sdk/SdkController.ts                       +6 /-1
-NET production LOC CORRECTION01: +85 /-8
+apps/vscode/src/sdk/canonical-event-subscription.ts    NEW +80
+apps/vscode/src/sdk/SdkController.ts                  +5  /-13
+
+NET production LOC CORRECTION02: +85 /-13
 ```
 
-### Active board after F1-CORRECTION01
+### Caller invariant (now frozen as a typed contract)
+
+```
+LOCAL_RUNTIME_SUBSCRIPTION_MODEL = POINT_IN_TIME
+
+REQUIRED CALLER INVARIANT:
+after every startSession / reinit / setActiveSession,
+the caller MUST refresh the canonical subscription via
+subscribeCanonicalRuntimeEventsToShadow(host, wiring, sessionId).
+```
+
+The SdkController enforces this invariant via
+`attachCanonicalRuntimeEventSubscription`, which is called from:
+- `initTask` (new task)
+- `reinitExistingTaskFromId` (resume existing task)
+- The `startNewSession` resolution callback (post-session attach)
+
+### Active board after F1-CORRECTION02
 
 ```
 ELM-02F F0                                        ✅
 ELM-02F F0-CORRECTION01                           ✅
-ELM-02F F1 plan freeze                            ✅
-ELM-02F F1 core canonical seam                    ✅
-ELM-02F F1 core tests                             ✅
-ELM-02F F1 vscode bridge                          ✅
-ELM-02F F1 vscode tests (initial)                 ✅
-ELM-02F F1 bench/dual-stream                      ✅
-ELM-02F F1 evidence (initial, superseded)         ✅
-ELM-02F F1-CORRECTION01 proxy + origin            ✅
-ELM-02F F1-CORRECTION01 host + wiring tests      ✅
-ELM-02F F1-CORRECTION01 lifecycle test            ✅
-ELM-02F F1-CORRECTION01 evidence (final)          ✅ THIS COMMIT
+ELM-02F F1 plan freeze                            ✅ 0042f2845
+ELM-02F F1 core canonical seam                    ✅ 9e4c653a1
+ELM-02F F1 core tests                             ✅ 0c7362f03
+ELM-02F F1 vscode bridge                          ✅ 1ea52f379
+ELM-02F F1 vscode tests (initial)                 ✅ d5c89b032
+ELM-02F F1 bench/dual-stream                      ✅ 80d7e6463
+ELM-02F F1 evidence (initial, superseded)         ✅ 5abc9b62d
+ELM-02F F1-CORRECTION01 proxy + origin            ✅ ab8cf2f66
+ELM-02F F1-CORRECTION01 host + wiring tests      ✅ f8c2beaf3
+ELM-02F F1-CORRECTION01 lifecycle test (mirror)   ✅ a84b1f183  (superseded)
+ELM-02F F1-CORRECTION01 evidence                  ✅ f3fc47e08
+ELM-02F F1-CORRECTION02 production helper         ✅ THIS CORRECTION
+ELM-02F F1-CORRECTION02 production-path test      ✅ THIS CORRECTION
 
 ELM-02F F1 VERDICT                                ✅ PASS_CANONICAL_RUNTIME_SEAM_F1
 
-ELM-02C2 C2.2 unified observation                 🟢 NEXT  (now authorized)
+ELM-02C2 C2.2 unified observation                 🟢 NEXT  (authorized)
 ELM-02C2 C2.3 W01-W16                             ⛔
 ELM-02C2 C2.4 production qualification            ⛔
 ELM-02C2 C2.5 real E6 dogfood                     ⛔
 
 ELM-03 E7 consumer cutover                        ⛔ BLOCKED (gated on C2.2..C2.5)
+```
+
+### Commit accounting (clean)
+
+```
+F1_PLAN_FREEZE          = 1   (0042f2845)
+F1_AFTER_FREEZE         = 6   (9e4c65...5abc9b)
+F1_CORRECTION01         = 4   (ab8cf2f66..f3fc47e08)
+F1_CORRECTION02         = 2   (this correction)
+TOTAL_E2F_F1_STACK      = 13
 ```
