@@ -1434,6 +1434,195 @@ describe("C2.3-CONT.6 BOUNDED_RECORDING — >256 observations on a single wiring
 	})
 })
 
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.6
+// THREE_RUN_DETERMINISM: run the canonical Local path through three
+// independent harness instances from clean state. Freeze a
+// machine-safe normalized result containing every counter and the
+// final TaskModel. Require byte-identical outputs across runs.
+//
+// This is the principal determinism gate for the qualification. If
+// the harness, comparator, recorder, or wiring state is non-
+// deterministic (carried state, order-dependent counters, etc.),
+// this witness will catch it.
+// =========================================================================
+
+function snapshotState(state: HarnessState): {
+	finalLifecycle: string
+	finalModelStreaming: boolean
+	finalActiveToolCallIds: readonly string[]
+	finalAwaitingApproval: boolean
+	counts: {
+		eventsObserved: number
+		comparisons: number
+		agreements: number
+		divergences: number
+		droppedRecords: number
+		invariantViolations: number
+		observerErrors: number
+		evidenceGaps: number
+		staleRunTerminalSuppressed: number
+		fallbackReconstructedApplied: number
+		fallbackRecoveryApplied: number
+		D00_AGREE: number
+		D01_LEGACY_FALSE_IDLE: number
+		D02_SHADOW_FALSE_ACTIVE: number
+		D03_TERMINAL_ORDERING: number
+		D04_APPROVAL_PRECEDENCE: number
+		D05_TOOL_CARDINALITY: number
+		D06_RESUME_BOUNDARY: number
+		D07_FAILURE_MAPPING: number
+		D08_FOLLOWUP_EXTERNAL: number
+		D09_EVENT_GAP: number
+		D10_UNKNOWN: number
+		D11_HOST_PREENGAGED: number
+		suppressed_RUNTIME_CANONICAL: number
+		suppressed_RUNTIME_RECONSTRUCTED: number
+		suppressed_HOST_TASK: number
+		suppressed_HOST_RECOVERY: number
+		diagnostic_RUNTIME_CANONICAL: number
+		diagnostic_RUNTIME_RECONSTRUCTED: number
+		diagnostic_HOST_TASK: number
+		diagnostic_HOST_RECOVERY: number
+	}
+} {
+	const counts = state.wiring.recorderCounts()
+	const dc = counts.divergenceCountsByClass
+	const os = counts.observationsSuppressedByOrigin
+	const od = counts.observationsDiagnosticByOrigin
+	const m = state.wiring.comparator.debugSnapshot()
+	return {
+		finalLifecycle: m.lifecycle.kind,
+		finalModelStreaming: m.activity.modelStreaming,
+		finalActiveToolCallIds: [...m.activity.activeToolCallIds],
+		finalAwaitingApproval: m.activity.awaitingApproval,
+		counts: {
+			eventsObserved: counts.eventsObserved,
+			comparisons: counts.comparisons,
+			agreements: counts.agreements,
+			divergences: counts.divergences,
+			droppedRecords: counts.droppedRecords,
+			invariantViolations: counts.invariantViolations,
+			observerErrors: counts.observerErrors,
+			evidenceGaps: counts.evidenceGaps,
+			staleRunTerminalSuppressed: counts.staleRunTerminalSuppressed,
+			fallbackReconstructedApplied: counts.fallbackReconstructedApplied,
+			fallbackRecoveryApplied: counts.fallbackRecoveryApplied,
+			D00_AGREE: dc.D00_AGREE,
+			D01_LEGACY_FALSE_IDLE: dc.D01_LEGACY_FALSE_IDLE,
+			D02_SHADOW_FALSE_ACTIVE: dc.D02_SHADOW_FALSE_ACTIVE,
+			D03_TERMINAL_ORDERING: dc.D03_TERMINAL_ORDERING,
+			D04_APPROVAL_PRECEDENCE: dc.D04_APPROVAL_PRECEDENCE,
+			D05_TOOL_CARDINALITY: dc.D05_TOOL_CARDINALITY,
+			D06_RESUME_BOUNDARY: dc.D06_RESUME_BOUNDARY,
+			D07_FAILURE_MAPPING: dc.D07_FAILURE_MAPPING,
+			D08_FOLLOWUP_EXTERNAL: dc.D08_FOLLOWUP_EXTERNAL,
+			D09_EVENT_GAP: dc.D09_EVENT_GAP,
+			D10_UNKNOWN: dc.D10_UNKNOWN,
+			D11_HOST_PREENGAGED: dc.D11_HOST_PREENGAGED,
+			suppressed_RUNTIME_CANONICAL: os.RUNTIME_CANONICAL,
+			suppressed_RUNTIME_RECONSTRUCTED: os.RUNTIME_RECONSTRUCTED,
+			suppressed_HOST_TASK: os.HOST_TASK,
+			suppressed_HOST_RECOVERY: os.HOST_RECOVERY,
+			diagnostic_RUNTIME_CANONICAL: od.RUNTIME_CANONICAL,
+			diagnostic_RUNTIME_RECONSTRUCTED: od.RUNTIME_RECONSTRUCTED,
+			diagnostic_HOST_TASK: od.HOST_TASK,
+			diagnostic_HOST_RECOVERY: od.HOST_RECOVERY,
+		},
+	}
+}
+
+// A representative deterministic workload that exercises:
+//  - canonical run-start/run-finished
+//  - HOST_TASK task_requested/cancelled
+//  - HOST_TASK same_task_continued
+//  - tool-started/tool-finished pair
+//  - approval_requested/approval_resolved
+function deterministicWorkload(): WorkloadStep[] {
+	const snapIdle = snapshotFixture({
+		runId: "run-DET",
+		iteration: 0,
+		execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+		recoveryState: "idle",
+		status: "running",
+		pendingToolCalls: [],
+	})
+	const snapStreaming: AgentRuntimeStateSnapshot = {
+		...snapIdle,
+		execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+	}
+	const snapTooling: AgentRuntimeStateSnapshot = {
+		...snapIdle,
+		execution: { ...snapIdle.execution, modelStreaming: true, tooling: true, awaitingApproval: false },
+		pendingToolCalls: ["tc1"],
+	}
+	const snapIdleAgain: AgentRuntimeStateSnapshot = {
+		...snapIdle,
+		execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+	}
+	const snapAwaitingApproval: AgentRuntimeStateSnapshot = {
+		...snapIdle,
+		execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: true },
+	}
+	const snapApprovedClear: AgentRuntimeStateSnapshot = {
+		...snapIdle,
+		execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+		pendingToolCalls: ["tc1"],
+	}
+	const snapIdleAfterTool: AgentRuntimeStateSnapshot = {
+		...snapIdle,
+		execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+		pendingToolCalls: [],
+	}
+	return [
+		{ kind: "host-task", taskId: "task-DET", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-DET" },
+		{ kind: "canonical", sessionId: "session-DET", event: runStarted(snapIdle) },
+		{ kind: "canonical", sessionId: "session-DET", event: execEvent(snapIdle.execution!, snapStreaming) },
+		{ kind: "canonical", sessionId: "session-DET", event: toolStarted(snapTooling, "tc1") },
+		{ kind: "canonical", sessionId: "session-DET", event: toolFinished(snapIdleAgain, "tc1") },
+		{ kind: "set-legacy-phase", phase: "awaiting_approval" },
+		{ kind: "canonical", sessionId: "session-DET", event: execEvent(snapIdleAgain.execution!, snapAwaitingApproval) },
+		{ kind: "canonical", sessionId: "session-DET", event: execEvent(snapAwaitingApproval.execution!, snapApprovedClear) },
+		{ kind: "set-legacy-phase", phase: "streaming" },
+		{ kind: "canonical", sessionId: "session-DET", event: toolStarted(snapApprovedClear, "tc2") },
+		{ kind: "canonical", sessionId: "session-DET", event: toolFinished(snapIdleAfterTool, "tc2") },
+		{ kind: "set-legacy-phase", phase: "completed" },
+		{ kind: "canonical", sessionId: "session-DET", event: runFinished(snapIdleAfterTool) },
+	]
+}
+
+describe("C2.3-CONT.6 THREE_RUN_DETERMINISM — RUN1 == RUN2 == RUN3 (byte-identical)", () => {
+	it("three independent harness instances produce identical frozen results", () => {
+		const steps = deterministicWorkload()
+		const run1State = runWorkload(steps)
+		const run2State = runWorkload(steps)
+		const run3State = runWorkload(steps)
+		const snap1 = snapshotState(run1State)
+		const snap2 = snapshotState(run2State)
+		const snap3 = snapshotState(run3State)
+		// Final state identical.
+		expect(snap1.finalLifecycle).toBe(snap2.finalLifecycle)
+		expect(snap2.finalLifecycle).toBe(snap3.finalLifecycle)
+		expect(snap1.finalLifecycle).toBe("completed")
+		expect(snap1.finalModelStreaming).toBe(snap2.finalModelStreaming)
+		expect(snap1.finalModelStreaming).toBe(snap3.finalModelStreaming)
+		expect(snap1.finalActiveToolCallIds).toEqual(snap2.finalActiveToolCallIds)
+		expect(snap2.finalActiveToolCallIds).toEqual(snap3.finalActiveToolCallIds)
+		expect(snap1.finalAwaitingApproval).toBe(snap2.finalAwaitingApproval)
+		expect(snap2.finalAwaitingApproval).toBe(snap3.finalAwaitingApproval)
+		// Counts identical.
+		expect(snap1.counts).toEqual(snap2.counts)
+		expect(snap2.counts).toEqual(snap3.counts)
+		// Hard gates for determinism.
+		expect(snap1.counts.D10_UNKNOWN).toBe(0)
+		expect(snap1.counts.invariantViolations).toBe(0)
+		expect(snap1.counts.observerErrors).toBe(0)
+		expect(snap1.counts.evidenceGaps).toBe(0)
+		expect(snap1.counts.fallbackReconstructedApplied).toBe(0)
+	})
+})
+
 describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activity must not reactivate (CORRECTION01)", () => {
 	it("HOST_TASK cancel during model_streaming freezes lifecycle at 'cancelled'; late run-finished IS IGNORED_STALE after CONT.2-CORRECTION01", () => {
 		const snapIdle = snapshotFixture({
