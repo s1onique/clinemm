@@ -68,6 +68,12 @@ export interface TaskShadowDivergence {
 	readonly shadowPhase: TurnPhase
 	readonly lifecycleKind: string
 	readonly modelStreaming: boolean
+	/**
+	 * Derived boolean: `activeToolCallIds.length > 0`. Kept as a
+	 * named field on the divergence record so the host test stays
+	 * readable. The shadow's projection (selectors.isTooling) is
+	 * the single source of truth.
+	 */
 	readonly tooling: boolean
 	readonly awaitingApproval: boolean
 }
@@ -127,7 +133,7 @@ export class TaskShadowComparator {
 				shadowPhase,
 				lifecycleKind: observation.model.lifecycle.kind,
 				modelStreaming: observation.model.activity.modelStreaming,
-				tooling: observation.model.activity.tooling,
+				tooling: observation.model.activity.activeToolCallIds.length > 0,
 				awaitingApproval: observation.model.activity.awaitingApproval,
 			}
 			this.divergences.push(divergence)
