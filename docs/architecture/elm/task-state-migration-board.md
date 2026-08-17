@@ -1019,6 +1019,144 @@ ELM-03 E7 consumer cutover                        ⛔ BLOCKED (gated on C2.2..C2
 F1_PLAN_FREEZE          = 1   (0042f2845)
 F1_AFTER_FREEZE         = 6   (9e4c65...5abc9b)
 F1_CORRECTION01         = 4   (ab8cf2f66..f3fc47e08)
-F1_CORRECTION02         = 2   (this correction)
-TOTAL_E2F_F1_STACK      = 13
+F1_CORRECTION02         = 3   (eeeb34e..9fba7678b)
+F1_CORRECTION03         = 3   (f2f2270..THIS CORRECTION)
+TOTAL_E2F_F1_STACK      = 17
 ```
+
+---
+
+## ELM-02F — PHASE F1-CORRECTION03 (2026-08-17)
+
+**ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION03**
+
+The F1-CORRECTION02 review identified that the helper still did not
+own the unsubscribe state, and F1-LC-4 actually demonstrated two
+subscriptions alive rather than one. F1-CORRECTION03 closes both
+gaps by extracting the production owner
+`CanonicalRuntimeShadowSubscription`.
+
+```
+F1_VERDICT                            = PASS_CANONICAL_RUNTIME_SEAM_F1
+ELM_02F_F1                            = PASS
+
+SDKCONTROLLER_REATTACH_OWNERSHIP       = PASS
+OLD_SUBSCRIPTION_DISPOSED_ON_REINIT    = PASS
+
+C2_2_IMPLEMENTATION_AUTHORIZED        = true
+E7_AUTHORIZED                         = false
+```
+
+### Three commits
+
+```
+f2f2270ec  refactor(vscode): extract CanonicalRuntimeShadowSubscription owner
+           test(vscode): production-path owner lifecycle test (8 witnesses)
+           docs(elm): record ELM-02F F1-CORRECTION03 evidence
+```
+
+### Four review concerns closed
+
+```
+1  F1-LC-4 demonstrated two subscriptions alive (local mirror)
+   -> replaced with F1-LC-3, F1-LC-4, F1-LC-8, F1-LC-9 against
+      the production owner
+
+2  Subscription owner was implicit in the controller
+   -> extracted CanonicalRuntimeShadowSubscription
+   -> SdkController replaces taskStateRuntimeEventsUnsub with
+      taskStateRuntimeEventsSubscription
+
+3  Pre-session modeling mismatched the real LocalRuntimeHost
+   -> new fixture exposes subscribeRuntimeEvents from the start;
+      sessions are added via api.addSession() and existing
+      subscriptions do NOT see newly added sessions
+
+4  Stale commit accounting (2/13 in CORR02 evidence)
+   -> corrected to 3 commits per correction; 17 total
+```
+
+### Test deltas
+
+```
+@cline/vscode F1-CORRECTION03:
+  sdk-controller-production-lifecycle  8 passed (was 6 in CORR02)
+  (replaces 6-test F1-CORRECTION02 test)
+
+Total F1+CORRECTION01+CORRECTION02+CORRECTION03 vscode tests:  56 passed
+Typecheck baseline:                                                unchanged (vscode=18)
+```
+
+### Production deltas (CORRECTION03)
+
+```
+apps/vscode/src/sdk/canonical-event-subscription.ts    +108 /-2   (add owner class)
+apps/vscode/src/sdk/SdkController.ts                   +8 /-13   (delegate to owner)
+
+NET production LOC CORRECTION03: +116 / -15
+```
+
+### Owner invariant (now frozen as a typed contract)
+
+```
+LOCAL_RUNTIME_SUBSCRIPTION_MODEL = POINT_IN_TIME
+
+REQUIRED CALLER INVARIANT:
+after every startSession / reinit / setActiveSession,
+the caller MUST refresh the canonical subscription by calling
+CanonicalRuntimeShadowSubscription.attach(host, wiring, sessionId).
+The owner disposes the previous subscription and attaches a new one
+in the same call.
+
+CONTROLLER LIFECYCLE INVARIANT:
+the controller instantiates ONE owner and delegates all
+attach/dispose operations to it. The controller never stores a raw
+unsubscribe callback.
+```
+
+### Active board after F1-CORRECTION03
+
+```
+ELM-02F F0                                        ✅
+ELM-02F F0-CORRECTION01                           ✅
+ELM-02F F1 plan freeze                            ✅ 0042f2845
+ELM-02F F1 core canonical seam                    ✅ 9e4c653a1
+ELM-02F F1 core tests                             ✅ 0c7362f03
+ELM-02F F1 vscode bridge                          ✅ 1ea52f379
+ELM-02F F1 vscode tests (initial)                 ✅ d5c89b032
+ELM-02F F1 bench/dual-stream                      ✅ 80d7e6463
+ELM-02F F1 evidence (initial, superseded)         ✅ 5abc9b62d
+ELM-02F F1-CORRECTION01 proxy + origin            ✅ ab8cf2f66
+ELM-02F F1-CORRECTION01 host + wiring tests      ✅ f8c2beaf3
+ELM-02F F1-CORRECTION01 lifecycle test (mirror)   ✅ a84b1f183  (superseded)
+ELM-02F F1-CORRECTION01 evidence                  ✅ f3fc47e08
+ELM-02F F1-CORRECTION02 helper                    ✅ eeeb34ea5
+ELM-02F F1-CORRECTION02 production-path test     ✅ b5fb5e41c  (superseded)
+ELM-02F F1-CORRECTION02 evidence                  ✅ 9fba7678b
+ELM-02F F1-CORRECTION03 owner                     ✅ f2f2270ec
+ELM-02F F1-CORRECTION03 owner-path test           ✅ THIS CORRECTION
+ELM-02F F1-CORRECTION03 evidence                  ✅ THIS CORRECTION
+
+ELM-02F F1 VERDICT                                ✅ PASS_CANONICAL_RUNTIME_SEAM_F1
+
+ELM-02C2 C2.2 unified observation                 🟢 NEXT (authorized)
+ELM-02C2 C2.3 W01-W16                             ⛔
+ELM-02C2 C2.4 production qualification            ⛔
+ELM-02C2 C2.5 real E6 dogfood                     ⛔
+
+ELM-03 E7 consumer cutover                        ⛔ BLOCKED (gated on C2.2..C2.5)
+```
+
+### Commit accounting (clean — corrected)
+
+```
+F1_PLAN_FREEZE          = 1   (0042f2845)
+F1_AFTER_FREEZE         = 6   (9e4c653a1..5abc9b62d)
+F1_CORRECTION01         = 4   (ab8cf2f66..f3fc47e08)
+F1_CORRECTION02         = 3   (eeeb34ea5..9fba7678b)
+F1_CORRECTION03         = 3   (f2f2270ec..THIS COMMIT)
+
+TOTAL_E2F_F1_STACK      = 17
+```
+
+ELM-02F is now genuinely closed at F1.

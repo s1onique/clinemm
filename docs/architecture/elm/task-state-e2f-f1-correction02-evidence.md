@@ -309,13 +309,18 @@ f8c2beaf3  test(vscode,core): real LocalRuntimeHost + wiring boundary + exact F0
 a84b1f183  test(vscode): SdkController re-subscription lifecycle at the VS Code boundary
 f3fc47e08  docs(elm): record ELM-02F F1-CORRECTION01 evidence and verdict
 
-F1_CORRECTION02         (2):
-             (this commit): refactor(vscode): extract production helper; controller delegates
-             (this commit): test(vscode): production-path lifecycle test
-             (this commit): docs(elm): record ELM-02F F1-CORRECTION02 evidence
+F1_CORRECTION02         (3):
+eeeb34ea5  refactor(vscode): extract production canonical-event subscription helper
+b5fb5e41c  test(vscode): production-path lifecycle test + F1-H4-C1 description fix
+9fba7678b  docs(elm): record ELM-02F F1-CORRECTION02 evidence and verdict
+
+F1_CORRECTION03         (3):
+f2f2270ec  refactor(vscode): extract CanonicalRuntimeShadowSubscription owner
+              test(vscode): production-path owner lifecycle test (8 witnesses)
+              docs(elm): record ELM-02F F1-CORRECTION03 evidence
 ```
 
-Total = 13 commits.
+Total = 17 commits.
 
 ---
 
