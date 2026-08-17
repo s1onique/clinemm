@@ -44,6 +44,7 @@ function makeInput(overrides: Partial<TaskShadowRecordInput> = {}): TaskShadowRe
 	return {
 		seq: 1,
 		timestamp: 1000,
+		origin: "RUNTIME_CANONICAL",
 		divergence: undefined,
 		observationEvent: "noop",
 		observationLifecycleKind: "idle",
@@ -58,6 +59,7 @@ function makeInput(overrides: Partial<TaskShadowRecordInput> = {}): TaskShadowRe
 const PRIVACY_ALLOWED_KEYS = new Set([
 	"seq",
 	"timestamp",
+	"origin",
 	"event",
 	"legacyPhase",
 	"shadowPhase",
@@ -282,7 +284,7 @@ describe("TaskShadowRecorder — E5-DIFF recorder contract", () => {
 		for (const k of keys) {
 			expect(PRIVACY_ALLOWED_KEYS.has(k)).toBe(true)
 		}
-		for (const k of ["seq", "timestamp", "event", "legacyPhase", "shadowPhase", "classification"]) {
+		for (const k of ["seq", "timestamp", "origin", "event", "legacyPhase", "shadowPhase", "classification"]) {
 			expect(keys.has(k)).toBe(true)
 		}
 	})

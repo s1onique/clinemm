@@ -33,8 +33,14 @@ import { TaskShadowComparator } from "./task-state-shadow"
 import { createTaskShadowObservationCoordinator, type TaskShadowCoordinator } from "./task-state-shadow-coordinator"
 import { TaskShadowReverseTranslator, type TaskShadowReverseTranslatorInput } from "./task-state-shadow-observer"
 
-const { TaskStateShadow } = TaskState
-type TaskStateShadow = TaskState.TaskStateShadow
+const { TaskStateShadow: _TaskStateShadow } = TaskState
+// R2 (C2.2-CORRECTION01): the comparator owns a private TaskStateShadow
+// exclusively. The wiring exposes that shadow via `comparator.debugSnapshot()`,
+// so the public `shadow` handle is removed. See `TaskShadowComparator`.
+// The local `_TaskStateShadow` alias is retained so the no-op wiring
+// branch can still construct one internally for the (test-only)
+// debugSnapshot escape hatch if needed in the future; today it is not.
+type _TaskStateShadowRetired = TaskState.TaskStateShadow
 
 import {
 	type ArbiterSnapshot,
@@ -133,17 +139,21 @@ export interface TaskShadowHostWiring {
 }
 
 /**
- * Extended host-only sink surface. Adds the comparator and shadow
- * instance handles so the host can emit `task_requested` /
- * `task_cancelled` / `task_reset` / `same_task_continued` TaskMsgs
- * directly into the shadow (the runtime cannot provide these
- * events). The comparator and shadow are exposed read-only; the
- * only mutation path is through the emit helpers in
+ * Extended host-only sink surface. Adds the comparator handle so
+ * the host can emit `task_requested` / `task_cancelled` /
+ * `task_reset` / `same_task_continued` TaskMsgs into the shadow via
+ * the unified coordinator (the runtime cannot provide these
+ * events). The comparator is exposed read-only; the only mutation
+ * path is through the coordinator / emit helpers in
  * `task-state-shadow-host-msgs.ts`.
+ *
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R2:
+ * The previous `shadow` handle has been REMOVED. The comparator owns
+ * exactly one `TaskStateShadow` internally; for read-only inspection
+ * use `comparator.debugSnapshot()`.
  */
 export interface TaskShadowHostWiringWithSink extends TaskShadowHostWiring {
 	readonly comparator: TaskShadowComparator
-	readonly shadow: TaskStateShadow
 	readonly now: () => number
 }
 
@@ -179,11 +189,9 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	}
 	const translator = new TaskShadowReverseTranslator()
 	const comparator = new TaskShadowComparator()
-	const shadow = new TaskStateShadow()
-	// The comparator owns a private shadow; we mirror its `observeTaskMsg`
-	// path through the comparator so the host-only emit helpers feed
-	// the same recorder. The shadow exposed here is the comparator's
-	// internal one — kept for read-only debug/test access.
+	// R2 (C2.2-CORRECTION01): the wiring owns exactly ONE shadow
+	// — the one inside the comparator. There is no `new TaskStateShadow()`
+	// here. Read-only access goes through `comparator.debugSnapshot()`.
 	const recorder = new TaskShadowRecorder((record, violations) => {
 		if (deps.onInvariantViolation) {
 			try {
@@ -237,7 +245,6 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		recorderCounts: () => recorder.getCounts(),
 		records: () => recorder.getRecords(),
 		comparator,
-		shadow,
 		now: deps.now,
 		coordinator,
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
@@ -283,7 +290,6 @@ function createNoopWiring(): TaskShadowHostWiringWithSink {
 		recorderCounts: () => recorder.getCounts(),
 		records: () => recorder.getRecords(),
 		comparator: noopComparator,
-		shadow: new TaskStateShadow(),
 		now: () => Date.now(),
 		coordinator: noopCoordinator,
 		observeCanonicalRuntimeEvent(_input: TaskShadowCanonicalEvent): void {
@@ -297,6 +303,29 @@ function createNoopWiring(): TaskShadowHostWiringWithSink {
 	}
 }
 
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01:
+ *
+ * Extract the **source** session id from a legacy `CoreSessionEvent`.
+ * Per C2.2-CORRECTION01 R3, reconstructed events must propagate the
+ * id of the session that actually emitted the event — not the
+ * currently active session. Identity laundering across session
+ * boundaries defeats the stale-session gate.
+ *
+ * Only `agent_event` carries a `payload.sessionId`. Other legacy
+ * envelopes (chunk, team_progress, snapshot, ended, pending_*) are
+ * not state-mutating for the shadow and fall through as `undefined`.
+ */
+function extractLegacyEventSessionId(event: CoreSessionEvent): string | undefined {
+	if (event.type === "agent_event") {
+		const payload = (event as { payload?: { sessionId?: string } }).payload
+		if (payload && typeof payload.sessionId === "string") {
+			return payload.sessionId
+		}
+	}
+	return undefined
+}
+
 function observeLegacyEvent(
 	event: CoreSessionEvent,
 	deps: TaskShadowHostWiringDeps,
@@ -304,38 +333,54 @@ function observeLegacyEvent(
 	comparator: TaskShadowComparator,
 	coordinator: TaskShadowCoordinator,
 ): void {
+	void comparator
 	const now = deps.now()
 	const legacyPhase = deps.getLegacyPhase()
 	const arbiter = deps.getArbiterSnapshot()
 	const previousExecution = translator.getPreviousExecution()
 	const runtimeStatus = deps.getRuntimeStatus?.()
 	const activeSession = deps.lifecycle.getActiveSession()
-	const taskEpochOrOpaqueTaskKey = activeSession?.sessionId
+	const activeSessionId = activeSession?.sessionId
 	const input: TaskShadowReverseTranslatorInput = {
 		event,
 		now,
 		legacyPhase,
 		arbiter,
 		previousExecution,
-		taskEpochOrOpaqueTaskKey,
+		taskEpochOrOpaqueTaskKey: activeSessionId,
 		runtimeStatus,
 	}
-	// Run the translator to update its internal state (`previousExecution`,
-	// `lastRecoveryState`, `activeRunId`). The reconstructed runtime
-	// event it produces is then routed through the unified coordinator
-	// as `RUNTIME_RECONSTRUCTED` origin.
-	const output = translator.observe(input, comparator)
-	const runtimeEvent = output.runtimeEvent
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R1:
+	//
+	// Use the NON-MUTATING `translate()` API. The translator updates
+	// its internal state (`previousExecution`, `lastRecoveryState`,
+	// `activeRunId`) but does NOT touch the comparator. The
+	// coordinator is the ONLY entity that decides whether the
+	// reconstructed event mutates the shadow.
+	const runtimeEvent = translator.translate(input)
 	if (!runtimeEvent) {
 		// No reconstructed event (presentation-only legacy envelope
 		// that does not map to a state-mutating edge). The translator
 		// still updated its internal state for the next call.
 		return
 	}
+	// R3: propagate the SOURCE session id from the legacy envelope.
+	// If the legacy event carries no `payload.sessionId`, fall back
+	// to the active session id (the event arrived from this session's
+	// stream by construction). Never fabricate `"unknown"` — that
+	// would let stale envelopes sneak past the coordinator's stale
+	// gate.
+	const sourceSessionId = extractLegacyEventSessionId(event) ?? activeSessionId
+	if (!sourceSessionId) {
+		// No session id resolvable — refuse to relay a reconstructed
+		// observation that cannot be session-scoped. Counts as a
+		// session-id-missing diagnostic.
+		return
+	}
 	coordinator.observe({
 		kind: "runtime-reconstructed",
 		origin: "RUNTIME_RECONSTRUCTED",
-		sessionId: taskEpochOrOpaqueTaskKey ?? "unknown",
+		sessionId: sourceSessionId,
 		event: runtimeEvent,
 	})
 }

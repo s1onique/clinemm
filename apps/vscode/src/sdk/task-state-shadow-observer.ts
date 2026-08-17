@@ -186,10 +186,16 @@ export class TaskShadowReverseTranslator {
 	}
 
 	/**
-	 * Translate, observe, and produce the differential payload.
-	 * Returns `output.observation === undefined` when the legacy event
-	 * had no shadow analogue; the host wiring records that as a
-	 * `noop` classification.
+	 * @deprecated ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R1:
+	 * This method directly mutates the supplied comparator, bypassing
+	 * the unified observation coordinator. Production C2.2 wiring
+	 * uses the non-mutating `translate()` and routes the result
+	 * through the coordinator.
+	 *
+	 * This entry point is retained ONLY for the legacy
+	 * `task-state-shadow-observer.test.ts` test, which exercises the
+	 * end-to-end comparator-driving behavior in isolation. It is
+	 * not safe to call from production code paths.
 	 */
 	observe(input: TaskShadowReverseTranslatorInput, comparator: TaskShadowComparator): TaskShadowReverseTranslatorOutput {
 		const runtimeEvent = this.translate(input)

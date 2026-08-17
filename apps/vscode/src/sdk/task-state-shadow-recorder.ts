@@ -64,6 +64,14 @@ export type ArbitrationOutcome = "LEGACY_CORRECT" | "SHADOW_CORRECT" | "BOTH_VAL
 export interface TaskShadowDifferentialRecord {
 	readonly seq: number
 	readonly timestamp: number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R5:
+	 * The origin that produced this record. Persisted on every
+	 * record so downstream qualification can answer "which authority
+	 * path generated this observation" without consulting the
+	 * suppression counters.
+	 */
+	readonly origin: TaskShadowRuntimeOrigin
 	readonly event: TaskMsg["type"] | "noop"
 	readonly legacyPhase: TurnPhase
 	readonly shadowPhase: TurnPhase
@@ -88,6 +96,15 @@ export interface TaskShadowDifferentialRecord {
 export interface TaskShadowRecordInput {
 	readonly seq: number
 	readonly timestamp: number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R5:
+	 * Origin of the ingress that produced this record. Persisted
+	 * onto the differential record (`TaskShadowDifferentialRecord.origin`)
+	 * for downstream qualification. The recorder treats this as
+	 * authoritative; the unified coordinator MUST set it on every
+	 * record it persists.
+	 */
+	readonly origin: TaskShadowRuntimeOrigin
 	readonly divergence: TaskShadowDivergence | undefined
 	readonly observationEvent: TaskMsg["type"] | "noop"
 	readonly observationLifecycleKind: string
@@ -165,6 +182,12 @@ export interface TaskShadowRecorderCounts {
 	 */
 	readonly observationsSuppressedByOrigin: Readonly<Record<TaskShadowRuntimeOrigin, number>>
 	/**
+	 * C2.2-CORRECTION01 R8: per-origin count of diagnostic-only
+	 * observations (e.g. HOST_RECOVERY when canonicalAvailable=true).
+	 * Diagnostic observations do not mutate state.
+	 */
+	readonly observationsDiagnosticByOrigin: Readonly<Record<TaskShadowRuntimeOrigin, number>>
+	/**
 	 * C2.2: count of HOST_RECOVERY observations applied as fallback
 	 * when canonical recovery transport was unavailable. Should be
 	 * 0 for LocalRuntimeHost (canonicalAvailable=true); >0 only for
@@ -179,6 +202,15 @@ export interface TaskShadowRecorderCounts {
 	 * by the recorder and this counter records the failure.
 	 */
 	readonly observerErrors: number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R4:
+	 * count of EVIDENCE_GAP events: a state mutation was committed
+	 * to the comparator's shadow but the differential record
+	 * could not be persisted. The shadow has advanced without a
+	 * corresponding bounded record; this counter is the only
+	 * qualification signal for that asymmetry.
+	 */
+	readonly evidenceGaps: number
 }
 
 const ALL_CLASSES: readonly DivergenceClass[] = [
@@ -230,8 +262,10 @@ export class TaskShadowRecorder {
 	private invariantViolations = 0
 	private droppedRecords = 0
 	private suppressedCounts: Record<TaskShadowRuntimeOrigin, number> = makeSuppressedCounts()
+	private diagnosticCounts: Record<TaskShadowRuntimeOrigin, number> = makeSuppressedCounts()
 	private fallbackRecoveryApplied = 0
 	private observerErrors = 0
+	private evidenceGaps = 0
 
 	constructor(
 		/**
@@ -261,6 +295,7 @@ export class TaskShadowRecorder {
 		const record: TaskShadowDifferentialRecord = {
 			seq: input.seq,
 			timestamp: input.timestamp,
+			origin: input.origin,
 			event: input.observationEvent,
 			legacyPhase: input.divergence?.legacyPhase ?? "idle",
 			shadowPhase: input.divergence?.shadowPhase ?? "idle",
@@ -321,6 +356,31 @@ export class TaskShadowRecorder {
 		this.observerErrors += 1
 	}
 
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R4:
+	 * Count an explicit EVIDENCE_GAP: a state mutation was applied
+	 * to the comparator's shadow, but the corresponding differential
+	 * record could not be persisted (the recorder threw). The
+	 * shadow's state diverges from the recorded evidence by exactly
+	 * one transition. The counter is qualification-only — production
+	 * authority is unaffected.
+	 */
+	recordEvidenceGap(): void {
+		this.evidenceGaps += 1
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R8:
+	 * Count an observation that was admitted as DIAGNOSTIC_ONLY by
+	 * the authority resolver (e.g. HOST_RECOVERY with
+	 * canonicalAvailable=true). Diagnostic observations do NOT
+	 * mutate state and do NOT add to the bounded record buffer;
+	 * this counter surfaces the diagnostic volume to qualification.
+	 */
+	recordDiagnosticObservation(origin: TaskShadowRuntimeOrigin): void {
+		this.diagnosticCounts[origin] += 1
+	}
+
 	/** Read-only snapshot of the bounded buffer. */
 	getRecords(): readonly TaskShadowDifferentialRecord[] {
 		return this.records
@@ -337,8 +397,10 @@ export class TaskShadowRecorder {
 			invariantViolations: this.invariantViolations,
 			droppedRecords: this.droppedRecords,
 			observationsSuppressedByOrigin: { ...this.suppressedCounts },
+			observationsDiagnosticByOrigin: { ...this.diagnosticCounts },
 			fallbackRecoveryApplied: this.fallbackRecoveryApplied,
 			observerErrors: this.observerErrors,
+			evidenceGaps: this.evidenceGaps,
 		}
 	}
 
@@ -353,8 +415,10 @@ export class TaskShadowRecorder {
 		this.invariantViolations = 0
 		this.droppedRecords = 0
 		this.suppressedCounts = makeSuppressedCounts()
+		this.diagnosticCounts = makeSuppressedCounts()
 		this.fallbackRecoveryApplied = 0
 		this.observerErrors = 0
+		this.evidenceGaps = 0
 	}
 }
 

@@ -196,17 +196,24 @@ function edgeKeyOf(event: AgentRuntimeEvent): string {
 /**
  * Resolver state. Tracks the canonical edges already applied for
  * dedup; reset between tasks (via `debugReset`).
+ *
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R6:
+ * The previous `activeSessionId` field has been REMOVED. The active
+ * session id is read directly from `deps.getActiveSessionId()` (the
+ * real `SdkSessionLifecycle.getActiveSession()`) so the resolver
+ * never confuses a `taskId` (visible-task identity, host-only) with
+ * a `sessionId` (runtime session identity).
  */
 interface ResolverState {
-	activeSessionId: string | undefined
 	canonicalEdges: Set<string>
+	reconstructedEdges: Set<string>
 	lastAuthority: Record<TaskShadowRuntimeOrigin, ObservationAuthority | undefined>
 }
 
 function makeInitialResolverState(): ResolverState {
 	return {
-		activeSessionId: undefined,
 		canonicalEdges: new Set(),
+		reconstructedEdges: new Set(),
 		lastAuthority: {
 			RUNTIME_CANONICAL: undefined,
 			RUNTIME_RECONSTRUCTED: undefined,
@@ -251,8 +258,14 @@ export function resolveObservationAuthority(
 		case "runtime-canonical":
 			return "APPLY"
 		case "runtime-reconstructed": {
+			// R7 (C2.2-CORRECTION01): the dedup gate is now order-
+			// independent. A reconstructed event is SUPPRESS_DUPLICATE
+			// if the same edge was already observed by EITHER a
+			// canonical event OR an earlier reconstructed event. This
+			// prevents the "reconstructed first, canonical later"
+			// race from causing two mutations.
 			const edgeKey = edgeKeyOf(input.event)
-			if (state.canonicalEdges.has(edgeKey)) {
+			if (state.canonicalEdges.has(edgeKey) || state.reconstructedEdges.has(edgeKey)) {
 				return "SUPPRESS_DUPLICATE"
 			}
 			return "APPLY"
@@ -260,7 +273,15 @@ export function resolveObservationAuthority(
 		case "host-task":
 			return "APPLY"
 		case "host-recovery":
-			return input.canonicalAvailable ? "SUPPRESS_DUPLICATE" : "FALLBACK_APPLY"
+			// R8 (C2.2-CORRECTION01): freeze Policy A. When canonical
+			// transport is available, HOST_RECOVERY is
+			// DIAGNOSTIC_ONLY — never authoritative. This is simpler
+			// than semantic-edge matching (which the implementation
+			// does not actually do — `SUPPRESS_DUPLICATE` was
+			// applied to every HOST_RECOVERY observation
+			// indiscriminately) and prevents any chance of dual
+			// authority on recovery state.
+			return input.canonicalAvailable ? "DIAGNOSTIC_ONLY" : "FALLBACK_APPLY"
 	}
 }
 
@@ -283,17 +304,11 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 		const authority = resolveObservationAuthority(input, state, deps.getActiveSessionId)
 		state.lastAuthority[input.origin] = authority
 
-		// Track the active session AFTER authority resolution so a
-		// stale event does NOT promote itself to active.
-		if (authority !== "STALE") {
-			if (input.kind === "runtime-canonical") {
-				state.activeSessionId = input.sessionId
-			} else if (input.kind === "host-task") {
-				if (state.activeSessionId === undefined) {
-					state.activeSessionId = input.taskId
-				}
-			}
-		}
+		// R6 (C2.2-CORRECTION01): no internal `activeSessionId` mutation.
+		// The active session id always comes from `deps.getActiveSessionId()`
+		// (live `SdkSessionLifecycle.getActiveSession()`). Resolver state
+		// never holds a session id, so it cannot confuse one with a
+		// `taskId`.
 
 		// 2. Branch on authority outcome.
 		try {
@@ -304,6 +319,11 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 					deps.recorder.recordSuppression(input.origin)
 					return
 				case "DIAGNOSTIC_ONLY":
+					// R8 (C2.2-CORRECTION01): HOST_RECOVERY with
+					// canonicalAvailable=true is diagnostic-only.
+					// Increment a counter so qualification can see
+					// the diagnostic volume.
+					deps.recorder.recordDiagnosticObservation(input.origin)
 					return
 				case "FALLBACK_APPLY":
 					deps.recorder.recordFallbackRecoveryApplied()
@@ -311,8 +331,15 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 					return
 				case "APPLY":
 					applyAndRecord(input, undefined)
+					// R7 (C2.2-CORRECTION01): register the edge on
+					// whichever set corresponds to the observation's
+					// origin, so a subsequent event of either origin
+					// can be dedup'd. This is what makes the dedup
+					// gate order-independent.
 					if (input.kind === "runtime-canonical") {
 						state.canonicalEdges.add(edgeKeyOf(input.event))
+					} else if (input.kind === "runtime-reconstructed") {
+						state.reconstructedEdges.add(edgeKeyOf(input.event))
 					}
 					return
 			}
@@ -352,6 +379,7 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 		const recordInput: TaskShadowRecordInput = {
 			seq: nextSeq(),
 			timestamp: now,
+			origin: input.origin,
 			divergence,
 			observationEvent: observation.event,
 			observationLifecycleKind: observation.model.lifecycle.kind,
@@ -364,7 +392,20 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 			classificationOverride: overrideClassification,
 			arbitrationOverride: overrideClassification === "D11_HOST_PREENGAGED" ? "BOTH_VALID_DIFFERENT_PROJECTION" : undefined,
 		}
-		const persisted = deps.recorder.record(recordInput, observation.violations)
+		// R4 (C2.2-CORRECTION01): the comparator has already mutated
+		// the shadow above. If `recorder.record` throws, the bounded
+		// record buffer does not contain this transition — the shadow
+		// has advanced without a corresponding record. Surface this
+		// explicitly as an EVIDENCE_GAP so qualification can detect
+		// the asymmetry. The throw still propagates to the outer
+		// catch so the legacy/runtime authority remains unaffected.
+		let persisted: ReturnType<typeof deps.recorder.record>
+		try {
+			persisted = deps.recorder.record(recordInput, observation.violations)
+		} catch {
+			deps.recorder.recordEvidenceGap()
+			throw new Error("EVIDENCE_GAP")
+		}
 
 		if (observation.violations.length > 0 && deps.onInvariantViolation) {
 			try {
@@ -400,7 +441,7 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 			deps.recorder.debugReset()
 			deps.comparator.debugReset()
 			state.canonicalEdges.clear()
-			state.activeSessionId = undefined
+			state.reconstructedEdges.clear()
 			state.lastAuthority = {
 				RUNTIME_CANONICAL: undefined,
 				RUNTIME_RECONSTRUCTED: undefined,

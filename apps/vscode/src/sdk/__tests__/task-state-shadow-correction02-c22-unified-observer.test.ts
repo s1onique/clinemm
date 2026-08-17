@@ -271,7 +271,7 @@ describe("C2.2 T10 — canonical recovery produces exactly one record", () => {
 		expect(records[0]!.event).toBe("recovery_changed")
 	})
 
-	it("T10.2: HOST_RECOVERY is suppressed when canonicalAvailable=true (canonical already produced the edge)", () => {
+	it("T10.2: HOST_RECOVERY is DIAGNOSTIC_ONLY when canonicalAvailable=true (Policy A: never authoritative when canonical transport exists)", () => {
 		const { coordinator, recorder } = makeCoordinator()
 		// Canonical recovery first.
 		coordinator.observe({
@@ -280,8 +280,9 @@ describe("C2.2 T10 — canonical recovery produces exactly one record", () => {
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
 		})
-		// Host recovery with same edge (canonicalAvailable=true).
-		// The projection is required by TaskMsg shape; supply a stub.
+		// Host recovery (canonicalAvailable=true). Policy A: never
+		// authoritative. Increments diagnostic counter, no record,
+		// no state mutation.
 		coordinator.observe({
 			kind: "host-recovery",
 			origin: "HOST_RECOVERY",
@@ -294,9 +295,9 @@ describe("C2.2 T10 — canonical recovery produces exactly one record", () => {
 			canonicalAvailable: true,
 		})
 		const counts = recorder.getCounts()
-		// Exactly one record (the canonical) + one HOST_RECOVERY suppression.
 		expect(counts.eventsObserved).toBe(1)
-		expect(counts.observationsSuppressedByOrigin.HOST_RECOVERY).toBe(1)
+		expect(counts.observationsDiagnosticByOrigin.HOST_RECOVERY).toBe(1)
+		expect(counts.observationsSuppressedByOrigin.HOST_RECOVERY).toBe(0)
 		expect(counts.fallbackRecoveryApplied).toBe(0)
 	})
 
