@@ -606,3 +606,83 @@ Both protected stashes restored and intact:
 stash@{0} = ACT-ELM-02C2 forensic (RECOVERED, intact)
 stash@{1} = ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (untouched)
 ```
+
+---
+
+## ELM-02F — PHASE F0-CORRECTION01 (2026-08-17)
+
+Witness-only strengthening on top of F0 freeze. No production source modified.
+
+One commit:
+
+```
+fbd7f2f29  test(elm): strengthen ELM-02F canonical/legacy F0 witnesses
+```
+
+Three reviewer-required corrections:
+
+```
+1. F0-T2 RECOVERY CANONICAL
+   Before: only proved that the recovery-state-changed type
+           narrowing compiles against AgentRuntimeEvent.
+   After:  actually observes recovery-state-changed through
+           AgentRuntime.subscribe() using the C1.5 deterministic
+           ENOENT-throwing fs_read tool harness. Asserts:
+             previousState  = "idle"
+             payloadState   = "recovering"
+             episodeFailures = 1
+           Gate: F0_T2_RECOVERY_EVENT_OBSERVED >= 1  → PASS
+
+2. F0-T5 LEGACY EXACT SEQUENCE
+   Before: legacyEvents.toContain(...)
+   After:  legacyEvents.toEqual([...exact 5-event array...])
+           + separate F0_T5_LEGACY_EXACT_COUNT asserting length = 5
+           + separate F0_T5_CANONICAL_NO_DUPLICATION asserting
+             exactly one execution-state-changed for the text-only fixture
+           Baselines frozen:
+             LEGACY_EVENT_COUNT_BASELINE = 5
+             LEGACY_EVENT_SEQUENCE_BASELINE = [
+               "iteration_start", "content_start", "content_end",
+               "iteration_end", "done",
+             ]
+             CANONICAL_EXECUTION_STATE_CHANGED_COUNT_BASELINE = 1
+             CANONICAL_RECOVERY_STATE_CHANGED_COUNT_BASELINE  = 0
+
+3. H14 — promoted from NOT_REQUIRED to TRIGGERED → RECOVERED_AND_MITIGATED
+   Recon §7 row now reflects the actual disposition (forensic
+   preservation stash dropped between C2.1 freeze and ELM-02F
+   start; recovered via git stash store from dropped commit
+   141372c52; see recon §10).
+   Recon §10.1 adds STASH_IDENTITY_TABLE tracking each protected
+   stash by OBJECT_ID + MESSAGE + INDEX + CONTENTS + STATE so
+   future drops are detectable.
+```
+
+Total F0-CORRECTION01 witnesses: 10/10 pass.
+Typecheck: 0 new errors (2 pre-existing unchanged).
+
+**Active board after F0-CORRECTION01:**
+
+```
+ELM-02F
+    F0 architecture recon                   ✅ PASS
+    F0-CORRECTION01 witness freeze          ✅ PASS (this commit)
+    F0 RECON DOC (with H14 fix + baselines) ✅ fbd7f2f29 + 817c63cf5
+    F1 canonical seam                       🟢 AUTO-AUTHORIZED
+                                             (no additional review stop)
+
+ELM-02C2 / C2.2 unified observation            ⛔ blocked on ELM-02F F1
+ELM-02C2 / C2.3 stateful W01-W16               ⛔
+ELM-02C2 / C2.4 production qualification      ⛔
+ELM-02C2 / C2.5 real E6 dogfood                ⛔
+
+ELM-03 E7 consumer cutover                     ⛔ BLOCKED
+```
+
+Both protected stashes intact:
+
+```
+stash@{0} = ACT-ELM-02C2 forensic (RECOVERED, intact)
+           OBJECT_ID = 141372c52ddd560f8d65bd438d9f9c22ba0f1f85
+stash@{1} = ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (untouched)
+```
