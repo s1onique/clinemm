@@ -417,3 +417,72 @@ NEXT_FREEZE                           = commit the three docs as the docs-freeze
 
 The clean CORRECTION02 restart plan lives in
 `task-state-e5-e6-correction02-plan.md` (next to this file).
+
+---
+
+## CORRECTION02 — PHASE C2.0 WITNESS FREEZE (2026-08-17)
+
+The clean restart has begun with Phase C2.0 — twelve witnesses
+(T1–T12) pinned against HEAD `894472c14` BEFORE any production
+code change. No production source was modified. See
+`task-state-e5-e6-correction02-c20-witness-freeze.md` for the full
+evidence.
+
+**Witness baseline:**
+
+```
+T1   task_requested reaches recorder        RED   (R14 — host path bypasses recorder)
+T2   task_cancelled reaches recorder        RED   (R14)
+T3   W07 cancellation precedes completion   RED   (depends on T2)
+T4   W08 cancellation while tool active     RED   (depends on T2)
+T5   W11 same_task_continued between runs   RED   (R14)
+T6   W12 task_reset+task_requested precede  RED   (R14)
+T7   W12 invariantViolations == 0           PASS  (real pass)
+T8   W12 unexplained D02 == 0               RED   (2 D02s on W12 trace — REAL BUG)
+T9   approval false→true→false              RED   (depends on T2)
+T10  recovery callback reaches recorder     RED   (R17/R18)
+T11  production package guard               PASS  (tsc + imports)
+T12  single-record ingress matrix           RED   (R14)
+
+W12 production source delta                 0 lines
+New TS errors introduced                    0
+```
+
+**Key findings beyond R14:**
+
+1. **T8 reveals 2 unexplained `D02_SHADOW_FALSE_ACTIVE` divergences**
+   on the W12 runtime-event trace. The shadow projects `idle`/
+   `completed` at `session_started` records while the legacy phase
+   walker reports `streaming`. Arbitration: `LEGACY_CORRECT`.
+   The shadow is the one lying about its lifecycle state. This is
+   a separate bug from R14 and must be addressed during the
+   W12 Model A/B decision in Phase C2.1.
+
+2. **T11 is enforced by direct import**, not by grep. The witness
+   file imports `TaskShadowComparator` and `TaskShadowRecorder`
+   so any future production breakage surfaces at `npx tsc --noEmit`.
+
+**Authority flags (after C2.0 freeze):**
+
+```
+ELM-02C1 CORRECTION01                = PASS_FROZEN (closure gate cleared)
+ELM-02C2 first dirty attempt         = HALTED (forensic evidence retained)
+ELM-02C2 C2.0 witness freeze         = PINNED (10 RED / 2 PASS)
+ELM-02C2 C2.1 W12 Model A/B          = NEXT
+ELM-02F canonical runtime seam       = RECOMMENDED (C2.4 recon)
+ELM-03 consumer cutover              = BLOCKED
+
+WORKTREE_HEAD                          = next commit (witness + C2.0 docs)
+WORKTREE_CLEAN_AFTER_COMMIT            = true
+E7_AUTHORIZED                         = false
+```
+
+Phase C2.0 is committed as two deliverables:
+
+```
+test(elm): pin CORRECTION02 witnesses T1-T12
+docs(elm): record Phase C2.0 baseline + W12 ordering evidence
+```
+
+No production source has changed. No reducer edit, no host wiring
+edit, no recorder edit, no SDK controller edit.
