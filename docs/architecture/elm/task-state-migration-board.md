@@ -1227,3 +1227,85 @@ NET_PRODUCTION_LOC_C2_2 = +549 / -63 = +486
 
 F1+CORR01+CORR02+CORR03+C2_2_TOTAL_LOC = +1079 / -102 = +977 net
 ```
+
+---
+
+## ELM-02C2 — C2.2-CORRECTION01 (2026-08-17)
+
+```
+ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01
+
+039d17330  feat(elm): C2.2-CORRECTION01 — close R1..R8 unified observation defects
+THIS         docs(elm): record C2.2-CORRECTION01 evidence + C2.3 authorization verdict
+
+R1   translator no longer mutates comparator in production
+R2   disconnected second TaskStateShadow REMOVED
+R3   reconstructed source session id PRESERVED (extract from event.payload.sessionId)
+R4   half-transaction evidence gap CLOSED (recordEvidenceGap counter)
+R5   record origin PERSISTED (TaskShadowDifferentialRecord.origin)
+R6   task/session identity NOT conflated (resolver.activeSessionId REMOVED)
+R7   dedup ORDER-INDEPENDENT (reconstructedEdges Set tracks reconstructed-only edges)
+R8   HOST_RECOVERY = DIAGNOSTIC_ONLY when canonicalAvailable=true (Policy A)
+R9   performance measured: 62931 events/sec, p50=0.4µs/event
+R10  halt disposition EXPLICIT_ACCEPT (C2.2+CORR01 = +589 net vs F1 hard halt +800)
+
+C2.2-CORRECTION01 VERDICT = PASS_UNIFIED_SHADOW_OBSERVATION_C2_2_CORRECTION01
+```
+
+### C2.2-CORRECTION01 commit accounting
+
+```
+C2.2-CORR01 = 2 commits
+  039d17330  feat(elm): C2.2-CORRECTION01 — close R1..R8 unified observation defects
+  THIS        docs(elm): record C2.2-CORRECTION01 evidence + C2.3 authorization verdict
+```
+
+### Production LOC delta (CORRECTION01 vs C2.2 final)
+
+```
+task-state-shadow-coordinator.ts        +24  / -8
+task-state-shadow-recorder.ts           +60  / -2
+task-state-shadow-host-wiring.ts        +50  / -30
+task-state-shadow-observer.ts           +10  / -1
+
+NET_PRODUCTION_LOC_CORRECTION01 = +144 / -41 = +103
+
+C2.2 + CORRECTION01 cumulative from F1-CORRECTION03 head:
+  C2.2          = +549 / -63  = +486
+  CORRECTION01  = +144 / -41 = +103
+  C2.2_TOTAL    = +693 / -104 = +589
+
+F1+CORR01..03+C2.2+CORRECTION01 cumulative from F1 plan freeze:
+  +1282 / -143 = +1139 net
+  HARD_HALT = 800
+  TRIGGERED = true
+  DISPOSITION = EXPLICIT_ACCEPT
+```
+
+### Test totals
+
+```
+@cline/core                                          : 516 passed
+@cline/vscode:
+  C2.2 unified observer (13)                         : PASS
+  C2.2-CORRECTION01 R1..R8 witnesses (13)             : PASS
+  F1 + CORR01..03 (legacy correctness)                : PASS
+  C2.0 historical file (T1..T12)                       : 5 PASS (T1,T2,T4,T7,T11) | 7 RED per ACT §61
+  TOTAL                                              : 1422/1430
+  10000-event benchmark                              : p50=0.4µs / 62931 events/sec
+
+TYPECHECK:
+  @cline/core baseline 2    -> 2 (unchanged)
+  @cline/vscode baseline 18 -> 16 (unchanged; 0 new errors)
+```
+
+### Active board after C2.2-CORRECTION01
+
+```
+ELM-02F F0/F0-CORR01/F1/F1-CORR01..03   ✅ all closed
+ELM-02C2 C2.0/C2.1                       ✅ closed
+ELM-02C2 C2.2                            ✅ (with CORRECTION01)
+ELM-02C2 C2.3 stateful W01-W16           🟢 NEXT (authorized)
+
+ELM-03 E7 consumer cutover               ⛔ BLOCKED (gated on C2.3..C2.5)
+```
