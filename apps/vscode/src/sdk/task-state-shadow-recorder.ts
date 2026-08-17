@@ -115,6 +115,16 @@ export interface TaskShadowRecordInput {
 	 * the recorder's projection classifier.
 	 */
 	readonly classificationOverride?: DivergenceClass
+	/**
+	 * C2.2: optional arbitration override supplied alongside the
+	 * classification override. When present, the recorder uses this
+	 * value INSTEAD of its built-in `arbitrate()`. Used together
+	 * with `classificationOverride` for D11 (host-pre-engaged is
+	 * arbitrated as `BOTH_VALID_DIFFERENT_PROJECTION` because the
+	 * legacy "streaming" and canonical "model not streaming"
+	 * projections answer different questions).
+	 */
+	readonly arbitrationOverride?: ArbitrationOutcome
 }
 
 /**
@@ -246,7 +256,8 @@ export class TaskShadowRecorder {
 		this.eventsObserved += 1
 		this.comparisons += 1
 		const classification = input.classificationOverride ?? classify(input)
-		const arbitration = classification === "D00_AGREE" ? undefined : arbitrate(input, classification)
+		const arbitration =
+			classification === "D00_AGREE" ? undefined : (input.arbitrationOverride ?? arbitrate(input, classification))
 		const record: TaskShadowDifferentialRecord = {
 			seq: input.seq,
 			timestamp: input.timestamp,

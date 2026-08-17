@@ -231,10 +231,16 @@ function makeInitialResolverState(): ResolverState {
  *   5. HOST_RECOVERY        → SUPPRESS_DUPLICATE if canonicalAvailable,
  *                              FALLBACK_APPLY otherwise.
  */
-export function resolveObservationAuthority(input: TaskShadowObservationInput, state: ResolverState): ObservationAuthority {
-	// Rule 1: stale session.
+export function resolveObservationAuthority(
+	input: TaskShadowObservationInput,
+	state: ResolverState,
+	getActiveSessionId: () => string | undefined,
+): ObservationAuthority {
+	// Rule 1: stale session. The active session id comes from the
+	// dep so it tracks the live `SdkSessionLifecycle.getActiveSession()`
+	// result rather than only the previously-observed canonical id.
 	if (input.kind !== "host-task") {
-		const active = state.activeSessionId
+		const active = getActiveSessionId()
 		if (active !== undefined) {
 			if (input.sessionId !== active) {
 				return "STALE"
@@ -272,18 +278,22 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 	}
 
 	function observe(input: TaskShadowObservationInput): void {
-		// 0. Track the active session for stale detection.
-		if (input.kind === "runtime-canonical") {
-			state.activeSessionId = input.sessionId
-		} else if (input.kind === "host-task") {
-			if (state.activeSessionId === undefined) {
-				state.activeSessionId = input.taskId
+		// 1. Resolve authority (handles stale-session check against
+		// the live active session id).
+		const authority = resolveObservationAuthority(input, state, deps.getActiveSessionId)
+		state.lastAuthority[input.origin] = authority
+
+		// Track the active session AFTER authority resolution so a
+		// stale event does NOT promote itself to active.
+		if (authority !== "STALE") {
+			if (input.kind === "runtime-canonical") {
+				state.activeSessionId = input.sessionId
+			} else if (input.kind === "host-task") {
+				if (state.activeSessionId === undefined) {
+					state.activeSessionId = input.taskId
+				}
 			}
 		}
-
-		// 1. Resolve authority.
-		const authority = resolveObservationAuthority(input, state)
-		state.lastAuthority[input.origin] = authority
 
 		// 2. Branch on authority outcome.
 		try {
@@ -352,6 +362,7 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 			runtimeStatus: deps.getRuntimeStatus(),
 			arbiter,
 			classificationOverride: overrideClassification,
+			arbitrationOverride: overrideClassification === "D11_HOST_PREENGAGED" ? "BOTH_VALID_DIFFERENT_PROJECTION" : undefined,
 		}
 		const persisted = deps.recorder.record(recordInput, observation.violations)
 
