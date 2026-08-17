@@ -349,6 +349,22 @@ export class SessionRuntime {
 	 * subscribers receive a frozen snapshot.
 	 */
 	private readonly recoveryListeners = new Set<(sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void>();
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * canonical `AgentRuntimeEvent` listener registry. Every event the
+	 * runtime dispatches reaches each listener, including
+	 * `execution-state-changed` and `recovery-state-changed` (which
+	 * `RuntimeEventAdapter.translate()` drops to `[]`).
+	 *
+	 * Semantics (see F1 plan freeze §1.1):
+	 *   - zero buffering; new subscribers see only future events;
+	 *   - exact-once per registered listener;
+	 *   - event object passed verbatim (no copying, no invented fields);
+	 *   - order matches `handleRuntimeEvent()` input order;
+	 *   - per-listener try/catch isolation;
+	 *   - idempotent unsubscribe.
+	 */
+	private readonly runtimeEventListeners = new Set<(event: AgentRuntimeEvent) => void>();
 	private readonly createAgentRuntimeImpl: (
 		config: Parameters<typeof createAgentRuntime>[0],
 	) => AgentRuntime;
@@ -614,6 +630,31 @@ export class SessionRuntime {
 		this.recoveryListeners.add(listener);
 		return () => {
 			this.recoveryListeners.delete(listener);
+		};
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * subscribe to raw `AgentRuntimeEvent`s from this session's
+	 * runtime. This is the **canonical** seam: every event the
+	 * runtime dispatches is delivered, including the
+	 * `execution-state-changed` and `recovery-state-changed` events
+	 * which `RuntimeEventAdapter.translate()` drops to `[]`.
+	 *
+	 * Parallel to:
+	 *   - `subscribeEvents(listener)`           — legacy `AgentEvent`s
+	 *   - `subscribeRecoveryStateChange(listener)` — recovery snapshot only
+	 *
+	 * Listeners are observation-only; nothing on the recovery-policy,
+	 * task-control, or tool-execution path reads from them.
+	 *
+	 * Returns an unsubscribe function. Calling unsubscribe more than
+	 * once is harmless (idempotent — Set.delete returns false on miss).
+	 */
+	subscribeRuntimeEvents(listener: (event: AgentRuntimeEvent) => void): () => void {
+		this.runtimeEventListeners.add(listener);
+		return () => {
+			this.runtimeEventListeners.delete(listener);
 		};
 	}
 
@@ -1247,6 +1288,30 @@ export class SessionRuntime {
 			}
 			default:
 				break;
+		}
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+		// canonical `AgentRuntimeEvent` fanout FIRST, before any
+		// translation or projection. This is the parallel seam that
+		// preserves the runtime's verbatim event surface, including
+		// `execution-state-changed` and `recovery-state-changed` (which
+		// `RuntimeEventAdapter.translate()` drops to `[]`).
+		//
+		// Per-listener try/catch isolates listener failures; one
+		// throwing listener cannot prevent others from receiving the
+		// event, and cannot break the legacy translation below.
+		for (const listener of this.runtimeEventListeners) {
+			try {
+				listener(event)
+			} catch (error) {
+				this.logger?.error?.(
+					"SessionRuntime canonical runtime-event listener threw",
+					{
+						agentId: this.agentId,
+						eventType: event.type,
+						error,
+					},
+				)
+			}
 		}
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: forward
 		// `recovery-state-changed` to the host-side telemetry listeners.
