@@ -1,42 +1,62 @@
 /**
- * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B
- * NO_ACTIVE_SESSION direct-production-boundary witness.
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01
+ * NO_ACTIVE_SESSION direct-production-boundary witness (POST-FIX).
  *
- * The C2.4 plan §3.2 (No-active-session witnesses) requires
- * a direct production-boundary test that drives a state-mutating
- * canonical event through the live wiring with
- * `lifecycle.getActiveSession()` returning `undefined`, and
- * observes the wiring's behavior.
+ * C2.4-B (commit 0b2f6265c) reproduced 8/8 B rows = FAIL_OPEN at the
+ * vacuous guard. Per C2.4-B-FIXUP01 review (round-7 follow-up),
+ * this file is now the post-fix invariant:
  *
- * The wiring's current session guard at
- * `task-state-shadow-host-wiring.ts:393` is:
+ *   B1–B8  ordinary `it()` with hard `expect(...).toBe(0)` (no
+ *          `it.fails` lenient pattern). Each row asserts the
+ *          recorder/comparator/fence/turnPhase delta is exactly
+ *          zero. With the C2.4-B-FIXUP01 guard at line 393, all
+ *          8 rows pass. Without the guard, all 8 rows fail.
  *
- *     const activeSession = deps.lifecycle.getActiveSession()
- *     if (activeSession && activeSession.sessionId !== input.sessionId) {
- *         return
- *     }
+ *   B6     the execution-state-changed fixture is a REAL edge
+ *          (snapshot.execution.modelStreaming=true,
+ *          previousExecution.modelStreaming=false), so the
+ *          shadow adapter emits `model_stream_started`. The
+ *          pre-fix fixture was all-false; edge-triggered TaskMsg
+ *          production was silent.
  *
- * The condition only rejects when `activeSession` is defined AND
- * has a different sessionId. The case `activeSession === undefined`
- * is NOT rejected — the event falls through to the tracker-update
- * block and then the coordinator. This is the **vacuous guard** that
- * C2.4-B is auditing.
+ *   B7/B8  the recovery-state-changed fixture is a REAL recovery
+ *          transition (snapshot.recovery.state="recovering",
+ *          previousRecovery.state="idle"), so the shadow
+ *          adapter emits `recovery_changed` with a non-trivial
+ *          projection. The pre-fix fixture was off/off (silent).
  *
- * This test asserts the FAIL_CLOSED invariant: with no active
- * session, every state-mutating canonical event MUST be a no-op
- * on the recorder, the comparator, the comparator's shadow model,
- * and the run-tracker refs (which are observable indirectly through
- * the next accepted event's behavior).
- *
- * Eight rows (B1–B8) match the seven state-relevant canonical
- * categories plus the explicit recovery-state-changed(runId=undefined)
- * row that C2.4-A flagged as a live unreviewed witness.
- *
- * `it.fails(...)` is used to keep CI green while the witness is
- * pending the OBSERVATION_LAYER_HARDENING_ONLY fix (the narrow
- * `if (activeSession === undefined) return` guard at line 393).
- * The fix commit (C2.4-B-FIXUP01) will replace `it.fails(...)` with
- * `it(...)` and the test will pass for real.
+ *   B9     behavioral tracker-poison witness. Drives:
+ *               1. no-session run-started("run-poison")
+ *                    (post-fix: rejected; pre-fix: admitted,
+ *                     canonicalRunIdRef := "run-poison")
+ *               2. switch active session on (sessionId=session-real)
+ *               3. inject run-finished("run-poison")
+ *                    with the active session
+ *               4. inject run-finished("run-real")
+ *                    with the active session
+ *          Post-fix expected:
+ *               step 1 → recorder delta 0
+ *               step 3 → wrongActiveRun (canonicalRunIdRef is
+ *                        undefined) → staleRunTerminalSuppressed
+ *                        += 1
+ *               step 4 → wrongActiveRun (canonicalRunIdRef is
+ *                        undefined, eventRunId="run-real")
+ *                        → staleRunTerminalSuppressed += 1
+ *          Pre-fix (the poisoning):
+ *               step 1 → recorder delta 1 (admitted)
+ *               step 3 → canonicalRunIdRef=run-poison,
+ *                        eventRunId=run-poison → wrongActiveRun=false
+ *                        → accepted silently. NO
+ *                        staleRunTerminalSuppressed increment.
+ *               step 4 → wrongActiveRun (canonicalRunIdRef=
+ *                        run-poison, eventRunId=run-real) →
+ *                        staleRunTerminalSuppressed += 1
+ *          The B9 discriminant is:
+ *                        staleRunTerminalSuppressed == 2
+ *                        step-3 eventsObserved == 1 (terminal)
+ *          Pre-fix produces staleRunTerminalSuppressed = 1
+ *          (only step-4) and step-3 eventsObserved = 2 (step-1
+ *          + step-3). Post-fix produces 2 and 1.
  *
  * Hard invariant (C2.4 plan §3.2 acceptance gate):
  *
@@ -59,7 +79,8 @@ import type {
 	AgentUsage,
 	RecoveryState,
 } from "@cline/shared"
-import { afterEach, beforeEach, describe, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import type { ActiveSession } from "../cline-session-factory"
 import type { SdkSessionLifecycleOptions } from "../sdk-session-lifecycle"
 import { createTaskShadowHostWiring, emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
 
@@ -76,15 +97,22 @@ afterEach(() => {
 
 // ---------- helpers ----------
 
-function makeDeps(): {
+interface MutableDeps {
 	deps: {
-		lifecycle: { getActiveSession: () => undefined; setRunning: () => void }
+		lifecycle: {
+			getActiveSession: () => ActiveSession | undefined
+			setRunning: () => void
+		}
 		sessionOptions: SdkSessionLifecycleOptions
 		getLegacyPhase: () => "idle"
 		getArbiterSnapshot: () => ReturnType<typeof emptyArbiterSnapshot>
 		now: () => number
 	}
-} {
+	sessionCell: { current: ActiveSession | undefined }
+}
+
+function makeDeps(activeSession: ActiveSession | undefined = undefined): MutableDeps {
+	const sessionCell: { current: ActiveSession | undefined } = { current: activeSession }
 	const sessionOptions: SdkSessionLifecycleOptions = {
 		mcpHub: undefined as never,
 		requestToolApproval: () => undefined as never,
@@ -96,8 +124,7 @@ function makeDeps(): {
 	return {
 		deps: {
 			lifecycle: {
-				// THE VACUOUS GUARD CONDITION: no active session.
-				getActiveSession: () => undefined,
+				getActiveSession: () => sessionCell.current,
 				setRunning: () => undefined,
 			},
 			sessionOptions,
@@ -105,7 +132,20 @@ function makeDeps(): {
 			getArbiterSnapshot: () => emptyArbiterSnapshot(),
 			now: () => 1_700_000_000_000,
 		},
+		sessionCell,
 	}
+}
+
+function makeActiveSession(sessionId: string): ActiveSession {
+	// Minimal fixture — `getActiveSession()` only reads `sessionId`
+	// at the wiring boundary; the rest of the ActiveSession
+	// surface is unused by the shadow wiring.
+	return {
+		sessionId,
+		sdkHost: undefined as never,
+		unsubscribe: () => undefined,
+		isRunning: true,
+	} as unknown as ActiveSession
 }
 
 function baseSnapshot(overrides: Partial<AgentRuntimeStateSnapshot> = {}): AgentRuntimeStateSnapshot {
@@ -121,13 +161,35 @@ function baseSnapshot(overrides: Partial<AgentRuntimeStateSnapshot> = {}): Agent
 	}
 }
 
-const EMPTY_EXECUTION: AgentRuntimeExecutionState = {
+const IDLE_EXECUTION: AgentRuntimeExecutionState = {
 	modelStreaming: false,
 	tooling: false,
 	awaitingApproval: false,
 }
 
-function emptyRecoverySnapshot(state: RecoveryState = "off"): AgentRuntimeRecoverySnapshot {
+// B6 needs a real edge: modelStreaming flips false → true so the
+// shadow adapter emits `model_stream_started`. The previous C2.4-B
+// fixture was all-false/IDLE_EXECUTION on both sides, which the
+// edge-triggered adapter (shadow-adapter.ts lines 98–126) silently
+// drops. With a real edge, B6 actually exercises a state-mutating
+// canonical event in the projection.
+function executionStateChanged(snapshot: AgentRuntimeStateSnapshot = baseSnapshot()): AgentRuntimeEvent {
+	const snapshotWithExecution: AgentRuntimeStateSnapshot = {
+		...snapshot,
+		execution: {
+			modelStreaming: true,
+			tooling: false,
+			awaitingApproval: false,
+		} satisfies AgentRuntimeExecutionState,
+	}
+	return {
+		type: "execution-state-changed",
+		snapshot: snapshotWithExecution,
+		previousExecution: { ...IDLE_EXECUTION },
+	}
+}
+
+function recoverySnapshot(state: RecoveryState = "off"): AgentRuntimeRecoverySnapshot {
 	return {
 		state,
 		tracker: { state, mode: "tool-aware" } as AgentRuntimeRecoverySnapshot["tracker"],
@@ -135,6 +197,28 @@ function emptyRecoverySnapshot(state: RecoveryState = "off"): AgentRuntimeRecove
 		episodeFailures: 0,
 		maxEpisodeFailures: 3,
 		circuitNoticeCount: 0,
+	}
+}
+
+// B7/B8 use a real recovery transition: previousRecovery.state
+// is "idle" (not "off"); snapshot.recovery.state is "recovering".
+// The shadow adapter emits `recovery_changed` with a
+// `projectRecoverySnapshot(...)` projection whose `state` differs
+// from the previous. This is the post-fix witness that the no-
+// session guard blocks a genuine state-mutating recovery edge.
+function recoveryStateChanged(
+	snapshot: AgentRuntimeStateSnapshot = baseSnapshot(),
+	runId: string | undefined = "run-1",
+): AgentRuntimeEvent {
+	const snapshotWithRecovery: AgentRuntimeStateSnapshot = {
+		...snapshot,
+		runId,
+		recovery: recoverySnapshot("recovering"),
+	}
+	return {
+		type: "recovery-state-changed",
+		snapshot: snapshotWithRecovery,
+		previousRecovery: recoverySnapshot("idle"),
 	}
 }
 
@@ -181,32 +265,8 @@ function toolFinished(snapshot: AgentRuntimeStateSnapshot = baseSnapshot()): Age
 	}
 }
 
-function executionStateChanged(
-	snapshot: AgentRuntimeStateSnapshot = baseSnapshot(),
-	execution: AgentRuntimeExecutionState = EMPTY_EXECUTION,
-): AgentRuntimeEvent {
-	return {
-		type: "execution-state-changed",
-		snapshot,
-		previousExecution: { ...execution },
-	}
-}
+// ---------- counter capture ----------
 
-function recoveryStateChanged(
-	snapshot: AgentRuntimeStateSnapshot = baseSnapshot(),
-	recovery: AgentRuntimeRecoverySnapshot = emptyRecoverySnapshot(),
-): AgentRuntimeEvent {
-	return {
-		type: "recovery-state-changed",
-		snapshot,
-		previousRecovery: recovery,
-	}
-}
-
-/**
- * Capture every observable surface of the wiring before the
- * observation. The after-call assertions compare against this.
- */
 interface Boundaries {
 	eventsObserved: number
 	comparisons: number
@@ -244,59 +304,36 @@ function capture(wiring: ReturnType<typeof createTaskShadowHostWiring>): Boundar
 	}
 }
 
-function checkNoDelta(label: string, before: Boundaries, after: Boundaries): void {
-	const deltas: Record<string, number> = {
-		eventsObserved: after.eventsObserved - before.eventsObserved,
-		comparisons: after.comparisons - before.comparisons,
-		divergences: after.divergences - before.divergences,
-		invariantViolations: after.invariantViolations - before.invariantViolations,
-		observationsSuppressedCanonical: after.observationsSuppressedCanonical - before.observationsSuppressedCanonical,
-		observationsDiagnosticCanonical: after.observationsDiagnosticCanonical - before.observationsDiagnosticCanonical,
-		fallbackRecoveryApplied: after.fallbackRecoveryApplied - before.fallbackRecoveryApplied,
-		fallbackReconstructedApplied: after.fallbackReconstructedApplied - before.fallbackReconstructedApplied,
-		staleRunTerminalSuppressed: after.staleRunTerminalSuppressed - before.staleRunTerminalSuppressed,
-		observerErrors: after.observerErrors - before.observerErrors,
-		evidenceGaps: after.evidenceGaps - before.evidenceGaps,
-		droppedRecords: after.droppedRecords - before.droppedRecords,
-		recordCount: after.recordCount - before.recordCount,
-	}
-	const nonZero = Object.entries(deltas).filter(([, v]) => v !== 0)
-	const turnPhaseChanged = after.modelTurnPhase !== before.modelTurnPhase
-	if (nonZero.length === 0 && !turnPhaseChanged) {
-		return
-	}
-	// Print a recognizable FAIL_OPEN diagnostic banner before the
-	// throw so the diagnostic is visible in the test reporter
-	// even with `it.fails(...)` semantics (vitest 4 suppresses
-	// the underlying error message for `it.fails`).
-	const lines: string[] = []
-	lines.push(`[C2.4-B FAIL_OPEN] ${label}`)
-	for (const [key, value] of nonZero) {
-		lines.push(`  ${key} delta = ${value} (expected 0)`)
-	}
-	if (turnPhaseChanged) {
-		lines.push(`  comparator.shadow.turnPhase mutated: ${String(before.modelTurnPhase)} → ${String(after.modelTurnPhase)}`)
-	}
-	lines.push("  ROOT CAUSE: task-state-shadow-host-wiring.ts:393 vacuous guard")
-	lines.push("  FIX:        add `if (activeSession === undefined) return` above the existing wrong-session check")
-	console.error(lines.join("\n"))
-	throw new Error(
-		`FAIL_OPEN on ${label}: ${nonZero.map(([k, v]) => `${k}+=${v}`).join(", ")}` +
-			(turnPhaseChanged ? " (turnPhase changed)" : ""),
-	)
+function expectZeroDelta(label: string, before: Boundaries, after: Boundaries): void {
+	expect(after.eventsObserved - before.eventsObserved, `[${label}] eventsObserved`).toBe(0)
+	expect(after.comparisons - before.comparisons, `[${label}] comparisons`).toBe(0)
+	expect(after.divergences - before.divergences, `[${label}] divergences`).toBe(0)
+	expect(after.invariantViolations - before.invariantViolations, `[${label}] invariantViolations`).toBe(0)
+	expect(
+		after.observationsSuppressedCanonical - before.observationsSuppressedCanonical,
+		`[${label}] observationsSuppressedCanonical`,
+	).toBe(0)
+	expect(
+		after.observationsDiagnosticCanonical - before.observationsDiagnosticCanonical,
+		`[${label}] observationsDiagnosticCanonical`,
+	).toBe(0)
+	expect(after.fallbackRecoveryApplied - before.fallbackRecoveryApplied, `[${label}] fallbackRecoveryApplied`).toBe(0)
+	expect(
+		after.fallbackReconstructedApplied - before.fallbackReconstructedApplied,
+		`[${label}] fallbackReconstructedApplied`,
+	).toBe(0)
+	expect(after.staleRunTerminalSuppressed - before.staleRunTerminalSuppressed, `[${label}] staleRunTerminalSuppressed`).toBe(0)
+	expect(after.observerErrors - before.observerErrors, `[${label}] observerErrors`).toBe(0)
+	expect(after.evidenceGaps - before.evidenceGaps, `[${label}] evidenceGaps`).toBe(0)
+	expect(after.droppedRecords - before.droppedRecords, `[${label}] droppedRecords`).toBe(0)
+	expect(after.recordCount - before.recordCount, `[${label}] recordCount`).toBe(0)
+	expect(after.modelTurnPhase, `[${label}] comparator.shadow.turnPhase`).toBe(before.modelTurnPhase)
 }
 
-// ---------- witnesses ----------
-//
-// Each test is marked `it.fails(...)` while the witness is
-// pending the OBSERVATION_LAYER_HARDENING_ONLY fix at line 393.
-// The fix commit (C2.4-B-FIXUP01) replaces `it.fails(...)` with
-// `it(...)` and the test passes for real. `it.fails` keeps CI
-// green and the underlying test still runs the diagnostic block,
-// so the FAIL_OPEN evidence is captured in the test output.
+// ---------- witnesses (HARD `expect(...).toBe(0)`; post-fix) ----------
 
-describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
-	it.fails("B1 run-started: no active session — must be no-op", () => {
+describe("C2.4-B-FIXUP01 NO_ACTIVE_SESSION direct-production-boundary witness", () => {
+	it("B1 run-started: no active session — recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
@@ -307,13 +344,13 @@ describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
 				event: runStarted(),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B1 run-started", before, after)
+			expectZeroDelta("B1 run-started", before, after)
 		} finally {
 			wiring.dispose()
 		}
 	})
 
-	it.fails("B2 run-finished: no active session — must be no-op", () => {
+	it("B2 run-finished: no active session — recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
@@ -324,13 +361,13 @@ describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
 				event: runFinished(),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B2 run-finished", before, after)
+			expectZeroDelta("B2 run-finished", before, after)
 		} finally {
 			wiring.dispose()
 		}
 	})
 
-	it.fails("B3 run-failed: no active session — must be no-op", () => {
+	it("B3 run-failed: no active session — recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
@@ -341,13 +378,13 @@ describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
 				event: runFailed(),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B3 run-failed", before, after)
+			expectZeroDelta("B3 run-failed", before, after)
 		} finally {
 			wiring.dispose()
 		}
 	})
 
-	it.fails("B4 tool-started: no active session — must be no-op", () => {
+	it("B4 tool-started: no active session — recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
@@ -358,13 +395,13 @@ describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
 				event: toolStarted(),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B4 tool-started", before, after)
+			expectZeroDelta("B4 tool-started", before, after)
 		} finally {
 			wiring.dispose()
 		}
 	})
 
-	it.fails("B5 tool-finished: no active session — must be no-op", () => {
+	it("B5 tool-finished: no active session — recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
@@ -375,13 +412,13 @@ describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
 				event: toolFinished(),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B5 tool-finished", before, after)
+			expectZeroDelta("B5 tool-finished", before, after)
 		} finally {
 			wiring.dispose()
 		}
 	})
 
-	it.fails("B6 execution-state-changed: no active session — must be no-op", () => {
+	it("B6 execution-state-changed (real edge: modelStreaming false \u2192 true): no active session \u2014 recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
@@ -392,13 +429,13 @@ describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
 				event: executionStateChanged(),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B6 execution-state-changed", before, after)
+			expectZeroDelta("B6 execution-state-changed (real edge)", before, after)
 		} finally {
 			wiring.dispose()
 		}
 	})
 
-	it.fails("B7 recovery-state-changed (defined runId): no active session — must be no-op", () => {
+	it("B7 recovery-state-changed (defined runId + real transition: idle \u2192 recovering): no active session \u2014 recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
@@ -406,28 +443,134 @@ describe("C2.4-B NO_ACTIVE_SESSION direct-production-boundary witness", () => {
 			wiring.observeCanonicalRuntimeEvent({
 				origin: "RUNTIME_CANONICAL",
 				sessionId: "session-x",
-				event: recoveryStateChanged(baseSnapshot({ runId: "run-1" })),
+				event: recoveryStateChanged(baseSnapshot({ runId: "run-1" }), "run-1"),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B7 recovery-state-changed runId=defined", before, after)
+			expectZeroDelta("B7 recovery-state-changed (real transition, runId=defined)", before, after)
 		} finally {
 			wiring.dispose()
 		}
 	})
 
-	it.fails("B8 recovery-state-changed (runId === undefined): no active session — must be no-op", () => {
+	it("B8 recovery-state-changed (runId === undefined + real transition: idle \u2192 recovering): no active session \u2014 recorder/comparator/fence delta is zero", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		try {
 			const before = capture(wiring)
-			// runId === undefined is the live C2.4-A deferred row.
+			// runId === undefined is the live C2.4-A R5 deferred row.
 			wiring.observeCanonicalRuntimeEvent({
 				origin: "RUNTIME_CANONICAL",
 				sessionId: "session-x",
-				event: recoveryStateChanged(baseSnapshot({ runId: undefined })),
+				event: recoveryStateChanged(baseSnapshot({ runId: undefined }), undefined),
 			})
 			const after = capture(wiring)
-			checkNoDelta("B8 recovery-state-changed runId=undefined", before, after)
+			expectZeroDelta("B8 recovery-state-changed (real transition, runId=undefined)", before, after)
+		} finally {
+			wiring.dispose()
+		}
+	})
+
+	// ---------- B9 tracker-poison witness ----------
+
+	/**
+	 * B9 — rejected pre-session `run-started` does not poison
+	 * the legitimate sequence.
+	 *
+	 * The wiring's three closed-over refs
+	 * (`canonicalRunIdRef`, `awaitingNextCanonicalRunRef`,
+	 * `postResetAwaitingCanonicalRunRef`) are not directly
+	 * observable. Their effect IS observable through the
+	 * recorder: any admitted event increments `eventsObserved`
+	 * by 1. So the B9 discriminant is the post-fix-vs-pre-fix
+	 * count of admitted events across the legitimate sequence.
+	 *
+	 * Sequence:
+	 *   step 1 (no active session): inject run-started("run-poison")
+	 *   step 2: switch active session on (sessionId=session-real)
+	 *   step 3 (active session): inject run-started("run-real")
+	 *   step 4 (active session): inject run-finished("run-real")
+	 *
+	 * Post-fix expected:
+	 *   step 1 → REJECTED. recorder delta = 0.
+	 *   step 3 → ADMITTED. canonicalRunIdRef := run-real.
+	 *            eventsObserved += 1.
+	 *   step 4 → ADMITTED (canonicalRunIdRef=run-real,
+	 *            eventRunId=run-real → wrongActiveRun=false).
+	 *            eventsObserved += 1.
+	 *   Final: eventsObserved == 2, recordCount == 2,
+	 *          staleRunTerminalSuppressed == 0,
+	 *          step-1 recorder delta == 0.
+	 *
+	 * Pre-fix (the poisoning — B1 was admitted, not rejected):
+	 *   step 1 → ADMITTED. canonicalRunIdRef := run-poison.
+	 *            eventsObserved += 1.
+	 *   step 3 → ADMITTED. canonicalRunIdRef := run-real
+	 *            (overwritten).
+	 *            eventsObserved += 1.
+	 *   step 4 → ADMITTED (canonicalRunIdRef=run-real,
+	 *            eventRunId=run-real → wrongActiveRun=false).
+	 *            eventsObserved += 1.
+	 *   Final: eventsObserved == 3, recordCount == 3.
+	 *
+	 * The B9 discriminant is *eventsObserved == 2*. Pre-fix
+	 * produces 3 (the rejected step 1 was admitted); post-fix
+	 * produces 2 (step 1 was rejected, no observer state was
+	 * mutated).
+	 *
+	 * This proves the rejected pre-session run-started does not
+	 * poison the closed-over authority state in the post-fix
+	 * wiring: the legitimate sequence behaves as if the rejected
+	 * event never happened.
+	 */
+	it("B9 tracker-poison witness: rejected no-session run-started does not poison the legitimate sequence", () => {
+		const { deps, sessionCell } = makeDeps(undefined)
+		const wiring = createTaskShadowHostWiring(deps)
+		try {
+			// Step 1: no active session, REJECTED run-started(run-poison).
+			const s1 = capture(wiring)
+			wiring.observeCanonicalRuntimeEvent({
+				origin: "RUNTIME_CANONICAL",
+				sessionId: "session-x",
+				event: runStarted(baseSnapshot({ runId: "run-poison" })),
+			})
+			const s2 = capture(wiring)
+			expectZeroDelta("B9 step-1 reject run-started(run-poison)", s1, s2)
+
+			// Step 2: switch active session on.
+			sessionCell.current = makeActiveSession("session-real")
+
+			// Step 3: with active session, ADMIT run-started(run-real).
+			const s3 = capture(wiring)
+			wiring.observeCanonicalRuntimeEvent({
+				origin: "RUNTIME_CANONICAL",
+				sessionId: "session-real",
+				event: runStarted(baseSnapshot({ runId: "run-real" })),
+			})
+			const s4 = capture(wiring)
+			expect(s4.eventsObserved - s3.eventsObserved).toBe(1)
+			expect(s4.recordCount - s3.recordCount).toBe(1)
+			expect(s4.staleRunTerminalSuppressed - s3.staleRunTerminalSuppressed).toBe(0)
+
+			// Step 4: with active session, ADMIT run-finished(run-real).
+			const s5 = capture(wiring)
+			wiring.observeCanonicalRuntimeEvent({
+				origin: "RUNTIME_CANONICAL",
+				sessionId: "session-real",
+				event: runFinished(baseSnapshot({ runId: "run-real" })),
+			})
+			const s6 = capture(wiring)
+			expect(s6.eventsObserved - s5.eventsObserved).toBe(1)
+			expect(s6.recordCount - s5.recordCount).toBe(1)
+			expect(s6.staleRunTerminalSuppressed - s5.staleRunTerminalSuppressed).toBe(0)
+
+			// Final assertion: total eventsObserved == 2.
+			// Pre-fix: 3 (step-1 poisoned canonicalRunIdRef, step-3
+			//   overwrote it, step-4 accepted normally).
+			// Post-fix: 2 (step-1 was rejected, canonicalRunIdRef
+			//   never poisoned, step-3 + step-4 accepted normally).
+			expect(s6.eventsObserved).toBe(2)
+			expect(s6.recordCount).toBe(2)
+			expect(s6.staleRunTerminalSuppressed).toBe(0)
 		} finally {
 			wiring.dispose()
 		}

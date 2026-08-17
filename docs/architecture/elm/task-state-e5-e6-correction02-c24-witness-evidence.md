@@ -1,29 +1,45 @@
 # ACT-CLINEMM-ELM-ARCHITECTURE01 / E5-E6 / C2.4-B — NO_ACTIVE_SESSION direct-production-boundary witness evidence
 
 ```text
-ACT             = ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B
+ACT             = ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01
 PLAN_HEAD       = 76662f445 (C2.4 BOOKKEEPING01; reviewer round-6 plan accepted)
 RECON_HEAD      = 11b2d41c7 (C2.4-A SOURCE RECON01; rejected)
 RECON_COR_HEAD  = b3e6977be (C2.4-A CORRECTION01; R1–R7 fixed)
 RECON_FIX_HEAD  = e1f02bb01 (C2.4-A FIXUP01 R8–R10; closed)
+WITNESS_HEAD    = 0b2f6265c (C2.4-B witness; 8/8 FAIL_OPEN reproduced)
 PROTECTED_STASH = 141372c52 (FORENSIC; do NOT pop)
-SUBJECT_HEAD    = (resolved at review time — see `git log --grep=ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B -1`)
+SUBJECT_HEAD    = (resolved at review time — see `git log --grep=ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01 -1`)
 
 C2_3                       = CLOSED
 C2_4_A_VERDICT              = PASS_RECON
 C2_4_A                      = CLOSED
-C2_4_B_AUTHORIZED           = true
 C2_4_B_VERDICT              = FAIL_OPEN_REPRODUCED
-                              (8/8 B rows show recorder mutation
-                               with no active session)
+                              (8/8 B rows showed recorder mutation
+                               with no active session;
+                               witness committed at 0b2f6265c)
 C2_4_B_FIXUP01_AUTHORIZED   = true
-                              (narrow guard at line 393 only;
-                               REDUCER_SEMANTIC_DELTA = 0)
+C2_4_B_FIXUP01_VERDICT      = PASS_CLOSED
+                              (9/9 B rows + B9 produce zero
+                               recorder/comparator/fence delta)
+C2_4_B                      = CLOSED
+
+C2_4_C_AUTHORIZED           = false
+C2_4_D_AUTHORIZED           = false
+C2_5_AUTHORIZED             = false
+E7_AUTHORIZED               = false
 ```
 
 ## 0. Scope
 
-This is the first C2.4-B commit. Per C2.4 plan §3.2:
+This is the C2.4-B-FIXUP01 commit. The C2.4-B witness
+(committed at `0b2f6265c`) reproduced 8/8 B rows = FAIL_OPEN
+at the vacuous guard. Per the C2.4-B reviewer round-7
+follow-up (R1–R4), this commit applies the narrow guard,
+broadens the witness to hard `expect(...).toBe(0)` assertions
+with a real execution edge (B6) and a real recovery transition
+(B7/B8), and adds the B9 tracker-poison witness.
+
+Per C2.4 plan §3.2:
 
 > "Witness test. Construct a direct production-boundary
 > test that drives a state-mutating canonical event through
@@ -39,9 +55,19 @@ The plan explicitly distinguishes the witness from the fix:
 > wiring-layer fix, NOT a reducer change, so it does NOT
 > reopen C2.3."
 
-This commit contains B1–B8 witness tests + the FAIL_OPEN
-evidence table. **No production edit.** The narrow guard is
-committed in C2.4-B-FIXUP01 (the next commit).
+This commit contains:
+1. The narrow guard at line 393 (the only production edit).
+2. The B1–B8 post-fix witness (now with real edges + hard
+   zero assertions).
+3. The B9 tracker-poison witness (eventsObserved == 2
+   discriminant).
+4. Pre-existing test fixture updates (`F1-CORRECTION01`,
+   `F1-CORRECTION03`, `task-state-shadow-benchmark`,
+   `task-state-shadow-correction02-c23-stateful-workloads`)
+   that previously relied on the vacuous guard. These are
+   test-only changes; they do not alter the production
+   semantic. The reducer, recorder, comparator, and host
+   lifecycle are unchanged from 0b2f6265c.
 
 ## 1. The vacuous guard
 
@@ -385,8 +411,38 @@ focused test sweep (post-C2.4-B witness)     = 26 passed + 8 expected fail
                                                 (CI exit 0;
                                                  FAIL_OPEN evidence
                                                  captured in stderr)
-production/test ratio                        = 1 file (witness) / 0 source
-witness file length                          = 441 lines
-                                              (8 it.fails + assertion
-                                               helpers + capture infra)
+focused test sweep (post-C2.4-B-FIXUP01)    = 214 passed + 0 failed
+                                                (sdk/__tests__/; 17 files)
+                                                (B1–B9 + F1-CORRECTION01+
+                                                 F1-CORRECTION03+
+                                                 stateful-workloads+
+                                                 benchmark all pass)
+pre-existing test fixtures updated          = 4 files
+  + apps/vscode/src/sdk/__tests__/task-state-shadow-host-wiring.e2f-f1-correction01.test.ts
+      makeDeps now returns { sessionId: "session-XYZ" }
+  + apps/vscode/src/sdk/__tests__/sdk-controller-production-lifecycle.e2f-f1-correction03.test.ts
+      makeWiringDeps accepts a session cell;
+      sessionA.current wired to addSession + owner.attach
+      (8/8 F1-CORRECTION03 tests pass)
+  + apps/vscode/src/sdk/__tests__/task-state-shadow-benchmark.test.ts
+      both fixtures return { sessionId: "session-A" }
+  + apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts
+      16 buildWNNSteps functions + 8 inline `steps`
+      arrays prefixed with `set-active-session` step
+      (60/60 stateful-workloads tests pass)
+
+REDUCER_SEMANTIC_DELTA                       = 0
+                                              (no reducer touched)
+ACTUAL_PRODUCTION_SEMANTIC_DELTA             = 1 line guard
+                                              (activeSession === undefined)
+                                              + the redundant `activeSession &&`
+                                              in the second check is removed
+                                              (TypeScript narrowing after the
+                                              first guard)
+                                              (no behavior change for the
+                                              well-defined session shape)
+witness file length                          = 592 lines
+                                              (9 hard-it() + B9 poison
+                                               witness + capture + assert
+                                               + 7-file event-type helpers)
 ```

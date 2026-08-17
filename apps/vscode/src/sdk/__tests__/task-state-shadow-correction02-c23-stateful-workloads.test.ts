@@ -349,6 +349,16 @@ function runStep(state: HarnessState, step: WorkloadStep): void {
 			if (step.event.snapshot?.runId) {
 				state.activeRunId = step.event.snapshot.runId
 			}
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01:
+			// the wiring's NO_ACTIVE_SESSION guard (line 393) refuses
+			// events when `getActiveSession()` returns undefined. The
+			// harness does NOT auto-track `activeSessionId` from the
+			// canonical event's sessionId — that would defeat the
+			// staleness tests (C8.1 R1, C9.4) which deliberately
+			// drive a cross-session canonical event. Workloads that
+			// need an active session must include a `set-active-session`
+			// step before the canonical events. The original W01-W16
+			// workloads are updated below to include such steps.
 			state.wiring.observeCanonicalRuntimeEvent({
 				origin: "RUNTIME_CANONICAL",
 				sessionId: step.sessionId,
@@ -530,6 +540,7 @@ describe("C2.3-CONT W01 — text-only streaming run; terminal lifecycle = comple
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-17" },
 			{ kind: "canonical", sessionId: "session-17", event: runStarted(snapIdle) },
 			// D11: legacy phase says streaming while arbiter says
 			// modelStreaming=false BEFORE the canonical edge has
@@ -613,6 +624,7 @@ describe("C2.3-CONT W02 — text + reasoning on legacy stream (production-realis
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-1" },
 			{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
 			// Production-realistic: legacyTurnState says streaming
 			// while reasoning/text frames arrive. R1+R7: keep
@@ -700,6 +712,7 @@ describe("C2.3-CONT W03 — one tool; intermediate activeToolCallIds proven via 
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-1" },
 			{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
 			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapIdle.execution!, snapStreaming) },
 			{ kind: "canonical", sessionId: "session-1", event: toolStarted(snapTooling, "tc1") },
@@ -772,6 +785,7 @@ describe("C2.3-CONT W04 — parallel tools; intermediate activeToolCallIds prove
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-1" },
 			{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
 			{ kind: "canonical", sessionId: "session-1", event: execEvent(snapIdle.execution!, snapStreaming) },
 			{ kind: "canonical", sessionId: "session-1", event: toolStarted(snapTc1, "tc1") },
@@ -856,6 +870,7 @@ describe("C3.CONT.1 W05 — approval_allow; canonical awaitingApproval false→t
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-W05", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W05" },
 			{ kind: "canonical", sessionId: "session-W05", event: runStarted(snapIdle) },
 			// Legacy enters the user-approval UI; canonical confirms
 			// awaitingApproval=true. Both sides agree -> D00_AGREE.
@@ -964,6 +979,7 @@ describe("C3.CONT.1 W06 — approval_deny; awaitingApproval false→true→false
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-W06", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W06" },
 			{ kind: "canonical", sessionId: "session-W06", event: runStarted(snapIdle) },
 			// Rise: legacy + canonical both flip to awaitingApproval.
 			{ kind: "set-legacy-phase", phase: "awaiting_approval" },
@@ -1643,6 +1659,7 @@ describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activit
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-W07", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W07" },
 			{ kind: "canonical", sessionId: "session-W07", event: runStarted(snapIdle) },
 			// Rise: model streaming starts.
 			{
@@ -1764,6 +1781,7 @@ describe("C3.CONT.2 W08 — cancel with active tool; late tool-finished must not
 		}
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-W08", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W08" },
 			{ kind: "canonical", sessionId: "session-W08", event: runStarted(snapIdle) },
 			// Tool active (R5: prove tc1 is genuinely active).
 			{
@@ -5358,6 +5376,7 @@ function buildW01Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-17" },
 		{ kind: "canonical", sessionId: "session-17", event: runStarted(snapIdle) },
 		// D11: legacy phase says streaming while arbiter says
 		// modelStreaming=false BEFORE the canonical edge has
@@ -5416,6 +5435,7 @@ function buildW02Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-1" },
 		{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
 		// Production-realistic: legacyTurnState says streaming
 		// while reasoning/text frames arrive. R1+R7: keep
@@ -5485,6 +5505,7 @@ function buildW03Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-1" },
 		{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-1", event: execEvent(snapIdle.execution!, snapStreaming) },
 		{ kind: "canonical", sessionId: "session-1", event: toolStarted(snapTooling, "tc1") },
@@ -5547,6 +5568,7 @@ function buildW04Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-1" },
 		{ kind: "canonical", sessionId: "session-1", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-1", event: execEvent(snapIdle.execution!, snapStreaming) },
 		{ kind: "canonical", sessionId: "session-1", event: toolStarted(snapTc1, "tc1") },
@@ -5620,6 +5642,7 @@ function buildW05Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W05", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-W05" },
 		{ kind: "canonical", sessionId: "session-W05", event: runStarted(snapIdle) },
 		// Legacy enters the user-approval UI; canonical confirms
 		// awaitingApproval=true. Both sides agree -> D00_AGREE.
@@ -5693,6 +5716,7 @@ function buildW06Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W06", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-W06" },
 		{ kind: "canonical", sessionId: "session-W06", event: runStarted(snapIdle) },
 		// Rise: legacy + canonical both flip to awaitingApproval.
 		{ kind: "set-legacy-phase", phase: "awaiting_approval" },
@@ -5755,6 +5779,7 @@ function buildW07Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W07", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-W07" },
 		{ kind: "canonical", sessionId: "session-W07", event: runStarted(snapIdle) },
 		// Rise: model streaming starts.
 		{
@@ -5835,6 +5860,7 @@ function buildW08Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W08", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-W08" },
 		{ kind: "canonical", sessionId: "session-W08", event: runStarted(snapIdle) },
 		// Tool active (R5: prove tc1 is genuinely active).
 		{
@@ -5895,6 +5921,7 @@ function buildW08Steps(): WorkloadStep[] {
 function buildW09Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "s-canon" },
 		{
 			kind: "canonical",
 			sessionId: "s-canon",
@@ -5929,6 +5956,7 @@ function buildW09Steps(): WorkloadStep[] {
 function buildW10Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "s-canon" },
 		{
 			kind: "canonical",
 			sessionId: "s-canon",
@@ -5956,6 +5984,7 @@ function buildW10Steps(): WorkloadStep[] {
 function buildW11Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-17" },
 		{ kind: "set-active-session", sessionId: "session-17" },
 		{
 			kind: "canonical",
@@ -6051,6 +6080,7 @@ function buildW11Steps(): WorkloadStep[] {
 function buildW12Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-17" },
 		{ kind: "set-active-session", sessionId: "session-17" },
 		{
 			kind: "canonical",
@@ -6168,6 +6198,7 @@ function buildW13Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-W13", which: "requested", legacyPhase: "idle" },
 		{ kind: "set-active-session", sessionId: "session-W13" },
+		{ kind: "set-active-session", sessionId: "session-W13" },
 		{ kind: "canonical", sessionId: "session-W13", event: runStarted(snapIdle) },
 		// Stream / unstream transition so the modelStreaming
 		// edge is exercised before completion (this is not
@@ -6238,6 +6269,7 @@ function buildW14Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-W14", which: "requested", legacyPhase: "idle" },
 		{ kind: "set-active-session", sessionId: "session-W14" },
+		{ kind: "set-active-session", sessionId: "session-W14" },
 		{ kind: "canonical", sessionId: "session-W14", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-W14", event: execEvent(snapIdle.execution!, snapStreaming) },
 		// HOST_TASK cancel. legacyPhase mirrors production
@@ -6301,6 +6333,7 @@ function buildW15Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W15", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-W15" },
 		{ kind: "set-active-session", sessionId: "session-W15" },
 		{ kind: "canonical", sessionId: "session-W15", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-W15", event: execEvent(snapIdle.execution!, snapStreaming) },
@@ -6369,6 +6402,7 @@ function buildW16Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W16", which: "requested", legacyPhase: "idle" },
+		{ kind: "set-active-session", sessionId: "session-W16" },
 		{ kind: "set-active-session", sessionId: "session-W16" },
 		{ kind: "canonical", sessionId: "session-W16", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-W16", event: execEvent(snapIdle.execution!, snapStreaming) },

@@ -82,10 +82,17 @@ function makeSnapshot(): AgentRuntimeStateSnapshot {
 	}
 }
 
-function makeWiringDeps(): TaskShadowHostWiringDeps {
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01:
+// the wiring's NO_ACTIVE_SESSION guard (line 393) refuses events
+// when `getActiveSession()` returns undefined. The F1-CORRECTION03
+// tests pre-fix relied on the vacuous guard. The fixture now
+// returns a session matching whatever sessionId is currently
+// active in the test's session cell. The test's `addSession`
+// call updates the cell, mirroring the production lifecycle.
+function makeWiringDeps(activeSession: { current: string | undefined }): TaskShadowHostWiringDeps {
 	return {
 		lifecycle: {
-			getActiveSession: () => undefined,
+			getActiveSession: () => (activeSession.current ? { sessionId: activeSession.current } : undefined) as never,
 			setRunning: () => undefined,
 		} as never,
 		sessionOptions: {
@@ -101,6 +108,14 @@ function makeWiringDeps(): TaskShadowHostWiringDeps {
 		now: () => NOW,
 	}
 }
+
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01:
+ * shared session cell for the F1-CORRECTION03 test set. Updated by
+ * each test's `addSession` call to mirror the production session
+ * lifecycle. The wiring's `getActiveSession` reads from this cell.
+ */
+const sessionA: { current: string | undefined } = { current: undefined }
 
 /**
  * A faithful `POINT_IN_TIME` host fixture:
@@ -229,12 +244,13 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-1 + F1-LC-2: pre-session no-op -> post-session reattach observes exactly once", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
 		// Stage 1: no sessions; owner.attach() returns without
 		// observation (point-in-time contract: method exists, no
 		// active sessions to attach to).
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 		expect(owner.hasActiveListener()).toBe(true)
 		expect(api.stats().subscribeCalls).toBe(1)
@@ -242,12 +258,14 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 		// Stage 2: session A appears. Without re-attach, the prior
 		// subscription does NOT see it.
+		sessionA.current = "session-A"
 		api.addSession("session-A")
 		api.deliver("session-A", makeExecEvent())
 		expect(wiring.recorderCounts().eventsObserved).toBe(0)
 
 		// Stage 3: production reattach. Now the new listener sees
 		// session A and only session A.
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 		expect(api.stats().unsubscribeCalls).toBe(1) // old listener disposed
 		expect(api.stats().subscribeCalls).toBe(2) // new listener attached
@@ -262,10 +280,12 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-3: attach(B) disposes the previous listener; event A no longer observed; event B observed exactly once", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
+		sessionA.current = "session-A"
 		api.addSession("session-A")
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 		expect(api.stats().activeListeners).toBe(1)
 
@@ -274,7 +294,9 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 		expect(wiring.recorderCounts().eventsObserved).toBe(1)
 
 		// Replace with session B.
+		sessionA.current = "session-B"
 		api.addSession("session-B")
+		sessionA.current = "session-B"
 		owner.attach(host, wiring, "session-B")
 		expect(api.stats().unsubscribeCalls).toBe(1) // previous listener disposed exactly once
 		expect(api.stats().activeListeners).toBe(1) // exactly one active listener
@@ -294,16 +316,20 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-4: reinit pattern — single owner, replace on task transition; exactly one active listener at all times", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
 		// Initial task.
+		sessionA.current = "session-A"
 		api.addSession("session-A")
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 		expect(api.stats().activeListeners).toBe(1)
 
 		// Reinit: new session replaces the old one.
+		sessionA.current = "session-B"
 		api.addSession("session-B")
+		sessionA.current = "session-B"
 		owner.attach(host, wiring, "session-B")
 		expect(api.stats().activeListeners).toBe(1)
 		expect(api.stats().unsubscribeCalls).toBe(1)
@@ -321,11 +347,14 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-5: stale-session filter — events from a different sessionId are dropped at the listener", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
+		sessionA.current = "session-A"
 		api.addSession("session-A")
+		sessionA.current = "session-B"
 		api.addSession("session-B")
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 
 		// event tagged session-B: dropped (host only delivers to
@@ -344,10 +373,12 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-6: owner.dispose() drops the active listener; subsequent events are not observed", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
+		sessionA.current = "session-A"
 		api.addSession("session-A")
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 		expect(owner.hasActiveListener()).toBe(true)
 
@@ -368,10 +399,12 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-7: exactly one shadow observation per canonical event (execution + recovery)", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
+		sessionA.current = "session-A"
 		api.addSession("session-A")
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 
 		api.deliver("session-A", makeExecEvent())
@@ -393,21 +426,25 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-8: without owner.attach(B) the event from the new session is NOT observed — production reattach is required", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
+		sessionA.current = "session-A"
 		api.addSession("session-A")
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 		api.deliver("session-A", makeExecEvent())
 		expect(wiring.recorderCounts().eventsObserved).toBe(1)
 
 		// A new session is created. The current subscription does
 		// NOT observe it without an explicit reattach.
+		sessionA.current = "session-B"
 		api.addSession("session-B")
 		api.deliver("session-B", makeExecEvent())
 		expect(wiring.recorderCounts().eventsObserved).toBe(1)
 
 		// Now reattach to session-B.
+		sessionA.current = "session-B"
 		owner.attach(host, wiring, "session-B")
 		expect(api.stats().unsubscribeCalls).toBe(1)
 		expect(api.stats().subscribeCalls).toBe(2)
@@ -423,18 +460,24 @@ describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle ow
 
 	it("F1-LC-9: active listener count is exactly 1 after each replacement; 0 after dispose", () => {
 		const { host, api } = makeHost()
-		const wiring = createTaskShadowHostWiring(makeWiringDeps())
+		const wiring = createTaskShadowHostWiring(makeWiringDeps(sessionA))
 		const owner = new CanonicalRuntimeShadowSubscription()
 
+		sessionA.current = "session-A"
 		api.addSession("session-A")
+		sessionA.current = "session-A"
 		owner.attach(host, wiring, "session-A")
 		expect(api.stats().activeListeners).toBe(1)
 
+		sessionA.current = "session-B"
 		api.addSession("session-B")
+		sessionA.current = "session-B"
 		owner.attach(host, wiring, "session-B")
 		expect(api.stats().activeListeners).toBe(1)
 
+		sessionA.current = "session-C"
 		api.addSession("session-C")
+		sessionA.current = "session-C"
 		owner.attach(host, wiring, "session-C")
 		expect(api.stats().activeListeners).toBe(1)
 

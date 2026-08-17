@@ -44,9 +44,19 @@ function makeSnapshot(): AgentRuntimeStateSnapshot {
 }
 
 function makeDeps(): TaskShadowHostWiringDeps {
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01:
+	// the wiring's NO_ACTIVE_SESSION guard (line 393) refuses events
+	// when `getActiveSession()` returns undefined. The pre-fix
+	// fixture relied on the vacuous guard, which is exactly the bug
+	// C2.4-B flagged. The fixture now provides an active session
+	// whose sessionId matches the canonical event's sessionId for
+	// the F1-W2/W3/W5 admissibility tests (which use session-XYZ).
+	// The F1-W4/W6/W8 tests use sessionId="s1" and assert
+	// non-admissibility properties (no throw, no onSessionEvent
+	// invocation) that hold regardless of the guard state.
 	return {
 		lifecycle: {
-			getActiveSession: () => undefined,
+			getActiveSession: () => ({ sessionId: "session-XYZ" }) as never,
 			setRunning: () => undefined,
 		} as never,
 		sessionOptions: {
@@ -276,8 +286,16 @@ describe("ELM-02F F1-CORRECTION01 — strict canonical-event fidelity", () => {
 			onSendError: () => {},
 		} as never
 		const deps: TaskShadowHostWiringDeps = {
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01:
+			// F1-W8's `wiring.observeCanonicalRuntimeEvent({ sessionId:
+			// "s1", ... })` is asserted NOT to invoke the wrapped
+			// onSessionEvent hook. The post-fix guard rejects the event
+			// (no onSessionEvent invocations, no record), so the spy
+			// assertion still holds. The fixture's getActiveSession
+			// returns a session with a non-matching sessionId, which is
+			// sufficient for F1-W8's negative assertion.
 			lifecycle: {
-				getActiveSession: () => undefined,
+				getActiveSession: () => ({ sessionId: "owner-session" }) as never,
 				setRunning: () => undefined,
 			} as never,
 			sessionOptions,

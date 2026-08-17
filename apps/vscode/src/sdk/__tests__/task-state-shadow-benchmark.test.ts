@@ -80,7 +80,7 @@ describe("TaskShadowPerformance — E5-DIFF p50 µs/event gate (R10 + R11)", () 
 			onSendError: () => undefined,
 		}
 		const deps: TaskShadowHostWiringDeps = {
-			lifecycle: { getActiveSession: () => undefined, setRunning: () => undefined },
+			lifecycle: { getActiveSession: () => ({ sessionId: "session-A" }) as never, setRunning: () => undefined },
 			sessionOptions,
 			getLegacyPhase: () => "idle",
 			getArbiterSnapshot: () => emptyArbiterSnapshot(),
@@ -142,7 +142,7 @@ describe("TaskShadowPerformance — E5-DIFF p50 µs/event gate (R10 + R11)", () 
 			onSendError: () => undefined,
 		}
 		const deps: TaskShadowHostWiringDeps = {
-			lifecycle: { getActiveSession: () => undefined, setRunning: () => undefined },
+			lifecycle: { getActiveSession: () => ({ sessionId: "session-A" }) as never, setRunning: () => undefined },
 			sessionOptions,
 			getLegacyPhase: () => "idle",
 			getArbiterSnapshot: () => emptyArbiterSnapshot(),

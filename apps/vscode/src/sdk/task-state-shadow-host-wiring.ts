@@ -389,9 +389,33 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			// mutate the run tracker; only accepted-session events
 			// advance it. This prevents a late stale-session
 			// run-started from poisoning canonicalRunIdRef.
+			//
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01:
+			// also refuse when THERE IS NO ACTIVE SESSION AT ALL.
+			// The pre-fix guard only rejected when activeSession was
+			// defined AND had a different sessionId (a vacuous guard
+			// for the `activeSession === undefined` case). The C2.4-B
+			// witness reproduced 8/8 B rows = FAIL_OPEN with no active
+			// session: every state-mutating canonical event was
+			// admitted, the run-tracker refs were mutated, and a
+			// record was emitted. With this guard, the wiring
+			// returns before any tracker mutation. The guard is
+			// observation-only: it does NOT alter the recorder,
+			// comparator, comparator.shadow, reducer, host-task
+			// lifecycle, or recovery. It ONLY short-circuits the
+			// bridge before any mutation.
 			const evt = input.event
 			const activeSession = deps.lifecycle.getActiveSession()
-			if (activeSession && activeSession.sessionId !== input.sessionId) {
+			if (activeSession === undefined) {
+				// NO_ACTIVE_SESSION — refuse without recording.
+				// Mirrors the C2.2-CORRECTION02 invariant
+				// `canonicalAvailable=true ⇒ no mutation` for the
+				// no-session case. The bridge must not grant
+				// shadow authority when there is no consumer
+				// capable of binding it.
+				return
+			}
+			if (activeSession.sessionId !== input.sessionId) {
 				// Cross-session canonical event. The coordinator
 				// would classify this as STALE and refuse it. Do
 				// not advance the tracker.
