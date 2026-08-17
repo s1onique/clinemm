@@ -326,11 +326,13 @@ What F1 will NOT change:
 | H11 Buffering | NOT_REQUIRED | pure fanout |
 | H12 Production LOC > 800 | EXPECTED_FAR_BELOW | ~6 narrow additions |
 | H13 Context/stateVersion work | NOT_REQUIRED | out of scope |
-| H14 Protected stash changes | NOT_REQUIRED | recon only |
+| H14 Protected stash changes | TRIGGERED → RECOVERED_AND_MITIGATED | forensic-preservation stash dropped between C2.1 freeze and ELM-02F start; recovered via `git stash store` from dropped commit 141372c52; see §10 |
 | H15 Webview/legacy authority | NOT_REQUIRED | read-only observation |
 
-All halt conditions can be satisfied by the F1 plan above. The
-ACT can proceed.
+H14 was misclassified as `NOT_REQUIRED` in the first F0 freeze.
+The second F0 freeze (CORRECTION01) marks it
+`TRIGGERED → RECOVERED_AND_MITIGATED` per the reviewer note
+and §10. No production contamination occurred.
 
 ---
 
@@ -433,3 +435,83 @@ RECORDED — it did not propagate into any production edit.
 The cause of the original drop is unknown to this ACT and is
 outside the ELM-02F scope; it should be investigated by a separate
 forensic ACT if desired.
+
+### 10.1 Protected-stash durable identities
+
+Per CORRECTION01 reviewer note: numeric stash positions are not
+durable identities. Each protected stash is now tracked by its
+object id and message, with `@N` only as a convenience index:
+
+```
+STASH_IDENTITY_TABLE
+  FORENSIC_ELM02C2:
+    OBJECT_ID = 141372c52ddd560f8d65bd438d9f9c22ba0f1f85
+    MESSAGE   = "ACT-ELM-02C2-dirty-failed-attempt-preserved-for-forensics
+                 5-files-SdkController-host-wiring-host-msgs-2tests;
+                 pre-F0-recon-digest:141372c52 RECOVERED from dropped commit"
+    INDEX     = stash@{0} at time of F0-CORRECTION01
+    CONTENTS  = SdkController.ts + task-state-shadow-host-msgs.ts +
+                task-state-shadow-host-wiring.ts + 2 host-shadow tests
+    STATE     = INTACT
+    ORIGIN    = preserved-forensic; recovered via git stash store
+
+  CONTEXT_ACCOUNTING:
+    OBJECT_ID = 371752f713ce6c12ea8b8e0d9e30e17d49f0aa98 (approximately;
+                 recoverable via git reflog if dropped)
+    MESSAGE   = "On act/elm-architecture01-e0-e4: WIP ACT-CLINEMM-CONTEXT-
+                 ACCOUNTING-TRUTH01 forensic corrections before telemetry C04"
+    INDEX     = stash@{1} at time of F0-CORRECTION01
+    STATE     = INTACT, UNTOUCHED throughout this ACT
+```
+
+If either protected stash mutates during ELM-02F, halt and report
+H14 TRIGGERED; do not proceed until reviewed.
+
+---
+
+## 11. CORRECTION01 frozen baselines (for F1 before/after conservation)
+
+Frozen at ELM-02F-F0-WITNESS-CORRECTION01, before any F1 production
+edit. F1 must preserve these baselines exactly:
+
+```
+LEGACY_EVENT_COUNT_BASELINE = 5
+LEGACY_EVENT_SEQUENCE_BASELINE = [
+    "iteration_start",
+    "content_start",
+    "content_end",
+    "iteration_end",
+    "done",
+]
+
+CANONICAL_EXECUTION_STATE_CHANGED_COUNT_BASELINE = 1
+CANONICAL_RECOVERY_STATE_CHANGED_COUNT_BASELINE  = 0   # for the text-only fixture
+
+F0_T2_RECOVERY_TRANSITION_FIXTURE = {
+    previousState: "idle",
+    payloadState:  "recovering",
+    episodeFailures: 1,
+}
+```
+
+The runtime-event-adapter.e2f-f0-witnesses.test.ts file holds
+ten witnesses total. Names map to gate checks:
+
+```
+F0_T1_EXECUTION_CANONICAL          PASS
+F0_T2_RECOVERY_CANONICAL           PASS   (NEW in CORRECTION01)
+F0_T2_UNSUBSCRIBE                  PASS
+
+F0_T3_EXECUTION_LEGACY_ABSENT      PASS
+F0_T4_RECOVERY_LEGACY_ABSENT       PASS
+
+F0_T5_LEGACY_EXACT_SEQUENCE        PASS   (NEW in CORRECTION01, toEqual)
+F0_T5_LEGACY_EXACT_COUNT           PASS   (NEW in CORRECTION01, =5)
+F0_T5_CANONICAL_NO_DUPLICATION     PASS   (NEW in CORRECTION01, =1)
+```
+
+Any regression in these baselines (a new legacy event appearing,
+an event being dropped, the order changing, recovery events
+appearing in the legacy stream, the canonical execution event
+appearing more or fewer than once, etc.) must fail the witness
+file and force a conscious review.
