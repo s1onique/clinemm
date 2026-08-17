@@ -296,4 +296,3 @@ CONTEXT_STASH_OBJECT  = 371752f71e5b9a385af32736e007540386d48b82  (intact)
 ```
 
 Both preserved unchanged through every commit in this ACT.
-

@@ -18,6 +18,8 @@
  * `TurnStateTracker`, `TaskTelemetryTracker`, or any host state.
  * EFFECT_EXECUTION_ENABLED is FALSE.
  */
+
+import type { RecoveryState } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { TaskShadowCoordinator } from "./task-state-shadow-coordinator"
 import type { TaskShadowHostWiring } from "./task-state-shadow-host-wiring"
@@ -98,4 +100,47 @@ export function emitSameTaskContinued(sink: TaskShadowHostMsgSink, legacyPhase: 
  */
 export function sinkFromWiring(wiring: TaskShadowHostWiring & { now: () => number }): TaskShadowHostMsgSink {
 	return { coordinator: wiring.coordinator, now: wiring.now }
+}
+
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3:
+ *
+ * Production ingress for `HOST_RECOVERY` observations.
+ *
+ * The host telemetry/SDK surfaces emit recovery projection deltas
+ * through this single function. The unified observation
+ * coordinator IS the production decision authority, but going
+ * through `emitHostRecovery` (instead of calling `coordinator.observe`
+ * directly) lets us centralize the payload projection and
+ * future-proof for a wrapper layer.
+ *
+ * `canonicalAvailable` is the wiring's runtime-policy decision
+ * (true for LocalRuntimeHost; false for Hub/Remote). The wiring
+ * owns this decision; callers do not guess.
+ *
+ * `state` accepts the broader `RecoveryState` so callers don't
+ * have to coerce.
+ */
+export function emitHostRecovery(
+	sink: TaskShadowHostMsgSink,
+	sessionId: string,
+	projection: { state: RecoveryState; episodeFailures?: number; circuitNoticeCount?: number },
+	canonicalAvailable: boolean,
+	now = sink.now(),
+): void {
+	sink.coordinator.observe({
+		kind: "host-recovery",
+		origin: "HOST_RECOVERY",
+		sessionId,
+		canonicalAvailable,
+		msg: {
+			type: "recovery_changed",
+			projection: {
+				state: projection.state,
+				episodeFailures: projection.episodeFailures ?? 0,
+				circuitNoticeCount: projection.circuitNoticeCount ?? 0,
+			},
+			at: now,
+		},
+	})
 }

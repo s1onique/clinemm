@@ -11,8 +11,15 @@ ACT-CLINEMM-ELM-ARCHITECTURE01-
 E5-E6-SHADOW-DIFFERENTIAL01-
 CORRECTION02-C2.2-CORRECTION02
 
-BASE_HEAD =
-ed8ed94ce... (C2.3-C2a, recorder counter split)
+PLAN_FREEZE_HEAD = THIS-COMMIT
+  (the plan was frozen BEFORE C2.3-C2a; the
+   production-semantics base for the contract is
+   ff2c053ed..., the C2.2-CORRECTION02 final state.)
+
+PRODUCTION_BASE_HEAD =
+ff2c053ede26108817883c5e438eaac4cd461de1
+  (the C2.2-CORRECTION02 final state — invariant of
+   authority model, host scope, TaskState shape)
 
 FINAL_HEAD = THIS-COMMIT
 
