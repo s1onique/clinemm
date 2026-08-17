@@ -222,11 +222,18 @@ Reasoning:
 - It mirrors `runtime/state/execution-state.ts` (precedent).
 - It does **not** violate the rule "task-state architecture should not
   sit back under `runtime/recovery/`" (Phase 5 of the ACT).
-- It is `@cline/agents`-internal; no public-API expansion.
+- It is a **provisional `@cline/agents` public surface addition** at
+  the package root (`export * as TaskState from "./runtime/state/task-state"`).
+  Classified `@internal` JSDoc + `PROVISIONAL / INTERNAL-USE-ONLY`
+  stability label. Real surface for technical reasons (it lets other
+  internal packages import the namespace during migration); not
+  stable surface for contractual reasons. See the migration board
+  "Conservation record" section for the explicit declaration.
 
 No `@cline/shared` change is required for E0–E4. The `TaskMsg`,
 `TaskModel`, `TaskEffect`, projections, and divergences are entirely
-package-internal.
+package-internal; the package-root `TaskState` namespace is the only
+external entry point, and it is provisional.
 
 ---
 

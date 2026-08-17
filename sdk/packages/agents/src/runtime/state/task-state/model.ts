@@ -18,13 +18,22 @@
  *   - `identity`   — visible task identity & wall-clock anchors.
  *   - `lifecycle`  — orthogonal to activity. Closed tagged union.
  *                    No `streaming` here; that is activity.
- *   - `activity`   — orthogonal booleans for the three axes already
- *                    established by RSMT01 (`modelStreaming`,
- *                    `tooling`, `awaitingApproval`). See
+ *   - `activity`   — orthogonal axes already established by RSMT01:
+ *                    `modelStreaming` (boolean), `tooling` (boolean
+ *                    projection derived from the canonical tool-call
+ *                    registry — see below), and `awaitingApproval`
+ *                    (boolean). CORRECTION01 R1 promoted the tool
+ *                    axis from a boolean to `activeToolCallIds`,
+ *                    a frozen record of the tool calls currently in
+ *                    flight; `tooling` is now derived as
+ *                    `activeToolCallIds.length > 0`. The two booleans
+ *                    (`modelStreaming`, `awaitingApproval`) stay
+ *                    booleans; the tool axis gains parallel-tool
+ *                    exactness at the cost of a projection step.
+ *                    Forced into a single tagged union would lose
+ *                    the orthogonal precedence rules. See
  *                    `runtime/state/execution-state.ts` for the
- *                    precedent. Forced into a single tagged union
- *                    would lose the orthogonal precedence rules;
- *                    the booleans stay.
+ *                    RSMT01 precedent.
  *   - `recovery`   — the already-public-safe projection that
  *                    `AgentRuntimeRecoverySnapshot` exposes.
  *                    Used only to fold the cumulative

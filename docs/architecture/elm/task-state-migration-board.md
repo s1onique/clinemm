@@ -20,7 +20,7 @@ the next ACTs must clear before any production authority changes.
 |----------------------------------|----------------------------------------|----------------------------------------|-------|
 | Run lifecycle                    | `AgentRuntime.state.status`            | `TaskModel.lifecycle`                  | Shadow is derived from `TaskMsg` sequence. |
 | Model streaming activity         | `AgentRuntime.state.executionModelStreaming` | `TaskModel.activity.modelStreaming` | Shadow observes via `execution-state-changed`. |
-| Tool activity                    | `AgentRuntime.state.pendingToolCalls.length` | `TaskModel.activity.tooling`     | Shadow observes via `tool-started`/`tool-finished`. |
+| Tool activity                    | `AgentRuntime.state.pendingToolCalls.length` | `TaskModel.activity.activeToolCallIds` (projection: `tooling := activeToolCallIds.length > 0`) | Shadow observes via `tool-started`/`tool-finished`; `activeToolCallIds` is the canonical representation (COR01 R1). |
 | Approval activity                | `AgentRuntime.state.executionAwaitingApproval` | `TaskModel.activity.awaitingApproval` | Same |
 | Recovery gating                   | `RecoveryTracker.state`                | `TaskModel.recovery.state`             | Same |
 | Recovery projection              | `AgentRuntimeRecoverySnapshot`         | `TaskRecoveryProjection`               | Narrow, safe-projection. |
@@ -152,6 +152,45 @@ C4 mutation terminology honest               = FIXED (WITNESSES_DEFINED/PASS not
 C5 LOC metric reconciled                     = FIXED (PHYSICAL_LOC vs CODE_LOC explicit)
 C6 invariant count wording                  = FIXED (CONCEPTUAL/SNAPSHOT/TRANSITION/REPLAY labels)
 C7 unambiguous E5_E6 authorization verdict  = FIXED (single value, single NEXT)
+```
+
+CORRECTION01-CLOSURE02 status (this ACT; closure-only, no engineering;
+no Leamas protocol involvement):
+
+```text
+C1 authoritative Leamas v2 closure binding    = NOT ATTEMPTED (protocol is
+                                                  structurally self-referential
+                                                  — closure commit cannot
+                                                  cryptographically contain
+                                                  its own SHA; a separate
+                                                  LEAMAS-CLOSURE-PROTOCOL-
+                                                  SELF-REFERENCE-REPAIR ACT
+                                                  will be needed if/when the
+                                                  Factory / Leamas team wants
+                                                  GENERATOR_AUTHORITATIVE_FOR_
+                                                  DIGEST=true from this
+                                                  codebase; out of Elm scope)
+
+C2 R4 host comparator test strict              = FIXED (exactly
+                                                  model_stream_started; no
+                                                  phantom approval_resolved)
+C3 stale authority-inventory "no public-API"   = FIXED (PROVISIONAL/INTERNAL
+                                                  classification + @internal
+                                                  JSDoc reference)
+C4 stale TaskModel.activity.tooling reference  = FIXED (activeToolCallIds
+                                                  with derived projection note)
+C5 stale three-booleans JSDoc contradiction   = FIXED (model.ts activity
+                                                  block rewritten to describe
+                                                  activeToolCallIds as the
+                                                  canonical tool representation)
+
+Leamas protocol independence note:
+  E5–E6 is now authorized on the strength of
+  the engineering evidence (tests, type checks,
+  conservation diff), NOT on the Leamas v2
+  authoritative-closure binding. That binding
+  is a known-broken protocol pattern; fixing
+  it is a separate epic, not an Elm ACT.
 ```
 
 ACT-CLINEMM-ELM-ARCHITECTURE01-E0-E4-BOOTSTRAP01-CORRECTION01 added

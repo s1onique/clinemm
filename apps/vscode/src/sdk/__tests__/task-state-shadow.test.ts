@@ -82,11 +82,14 @@ describe("TaskShadowComparator — E4-DIFF-01 ACTIVE_LEGACY_IDLE_DIVERGENCE", ()
 		expect(divergence?.legacyPhase).toBe("idle")
 		expect(divergence?.shadowPhase).toBe("streaming")
 		expect(divergence?.modelStreaming).toBe(true)
-		// The event label is the LAST `TaskMsg` produced by the
-		// adapter for the runtime event. The execution-state-changed
-		// adapter emits (model_stream_started, approval_resolved) so
-		// the recorded event is the approval_resolved.
-		expect(["model_stream_started", "approval_resolved"]).toContain(divergence?.event)
+		// CORRECTION01-CLOSURE02: strict assertion.
+		// The fixture is an `execution-state-changed` event whose
+		// `previousExecution` differs from `execution` ONLY on
+		// `modelStreaming` (false -> true). The edge-triggered
+		// adapter therefore emits EXACTLY one TaskMsg:
+		// `model_stream_started`. `tooling` and `awaitingApproval`
+		// are unchanged (false -> false) and produce no TaskMsg.
+		expect(divergence?.event).toBe("model_stream_started")
 	})
 
 	it("no divergence when legacy and shadow agree", () => {
