@@ -340,6 +340,25 @@ export function classify(input: TaskShadowRecordInput): DivergenceClass {
 			arbiter.execution.modelStreaming || arbiter.execution.awaitingApproval || arbiter.pendingToolCalls.length > 0
 		if (!arbiterActive) return "D02_SHADOW_FALSE_ACTIVE"
 	}
+	if (shadowPhase === "completed" && (legacyPhase === "idle" || legacyPhase === "streaming")) {
+		// Inverse: shadow says terminal, legacy says active/idle. The
+		// canonical arbiter has not flipped to a terminal status, so
+		// the shadow is ahead of the canonical truth (LEGACY_CORRECT).
+		const arbiterTerminal = arbiter.status === "completed" || arbiter.status === "failed" || arbiter.status === "aborted"
+		if (!arbiterTerminal) return "D02_SHADOW_FALSE_ACTIVE"
+	}
+	if (shadowPhase === "idle" && (legacyPhase === "streaming" || legacyPhase === "completed")) {
+		// Inverse: shadow says idle while legacy reports activity or
+		// terminal. The arbiter has not confirmed activity — the
+		// shadow's lifecycle is the authoritative truth (LEGACY_CORRECT).
+		// D09 (event-gap) takes precedence: when the shadow received
+		// no TaskMsg for this legacy event, we cannot arbitrate the
+		// projection disagreement.
+		if (observationEvent === "noop") return "D09_EVENT_GAP"
+		const arbiterActive =
+			arbiter.execution.modelStreaming || arbiter.execution.awaitingApproval || arbiter.pendingToolCalls.length > 0
+		if (!arbiterActive) return "D02_SHADOW_FALSE_ACTIVE"
+	}
 	if ((legacyPhase === "completed" || legacyPhase === "error" || legacyPhase === "resumable") && shadowPhase === "streaming") {
 		return "D03_TERMINAL_ORDERING"
 	}
@@ -357,6 +376,9 @@ export function classify(input: TaskShadowRecordInput): DivergenceClass {
 	if (shadowPhase === "error" || legacyPhase === "error") {
 		return "D07_FAILURE_MAPPING"
 	}
+	// D09 (event-gap) takes precedence over the inverse-D02 fall-through:
+	// when the shadow received no TaskMsg for this legacy event, we
+	// cannot arbitrate the projection disagreement.
 	if (observationEvent === "noop") {
 		return "D09_EVENT_GAP"
 	}
