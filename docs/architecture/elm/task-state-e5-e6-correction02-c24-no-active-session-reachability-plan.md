@@ -14,7 +14,17 @@ EXIT_HEAD  = <this commit's tip>
 PROTECTED_STASHES = 141372c52 (FORENSIC), 371752f71 (CONTEXT)
 
 C2_4_AUTHORIZED = true (per CONT.6-CORRECTION02-DEDUPE01)
-EXPECTED_PRODUCTION_SEMANTIC_DELTA = 0  (qualification + boundary-test ACT)
+
+# Production-delta accounting (reviewer round-6 bookkeeping,
+# folded into C2.4-A's first recon commit; NOT a new ACT and
+# NOT a new plan AMENDMENT-03 review stop):
+#
+#   EXPECTED_PRODUCTION_SEMANTIC_DELTA    = 0  (default case)
+#   PERMITTED_PRODUCTION_SEMANTIC_DELTA   =
+#     OBSERVATION_LAYER_HARDENING_ONLY    (narrow guard only)
+#   REDUCER_SEMANTIC_DELTA                = 0  (hard, R3)
+#   ACTUAL_PRODUCTION_SEMANTIC_DELTA      =
+#     0 | NARROW_OBSERVATION_FIX
 ```
 
 ## 0. Amendment log
@@ -345,19 +355,48 @@ AgentRuntime
 **Acceptance gate.**
 
 ```
+# Completeness-coverage gates (reviewer round-6; arbitrary
+# N-thresholds replaced by 100% discovered-surface coverage
+# — number of layers is an output of recon, not a success
+# criterion):
 CANONICAL_SOURCE_RECON_TABLE
-  producer sites audited (sdk/packages/agents)   = N (>= 6)
+  STATE_RELEVANT_CANONICAL_PRODUCERS_DISCOVERED = N
+  STATE_RELEVANT_CANONICAL_PRODUCERS_AUDITED    = N
+  PRODUCER_AUDIT_COVERAGE                       = 100%
   producer runId guarantee documented           = 100%
   SessionRuntime fanout audited                  = YES
-  transport hops audited (top-down direction)    = N (>= 5 per event type)
+  ALL_ACTUAL_HOPS_FROM_PRODUCER_TO_SHADOW_AUDITED = true
   Local F1-I3 reference-identity still PASS      = YES
   Local proxy rewrites provenance?               = NO (expected)
   Hub proxy rewrites provenance?                 = (audit reveals)
   Remote proxy rewrites provenance?              = (audit reveals)
   backend binding confirmed                      = (local / hub / remote / mixed / unknown)
-  reconstructed-fallback sites                   = N (>= 0)
+  RECONSTRUCTED_FALLBACK_SITES_DISCOVERED        = N
+  RECONSTRUCTED_FALLBACK_AUDITED                 = N
+  RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE          = 100%
   reconstructed-fallback reach to TaskStateShadow = (yes / no / partial)
   reconstructed-envelope distinguishable from canonical? = (yes / no)
+  RUN_ID_GUARANTEE_CLASSIFIED                    = 100%
+  SESSION_BINDING_CLASSIFIED                     = 100%
+  UNRESOLVED_REACHABILITY_ROWS                   = 0
+
+# Per-event-type recon template (reviewer round-6).
+# The recon MUST produce, for every state-relevant event
+# type, a row proving each cell (not inferring):
+#
+# | Event                     | Producer condition       |   runId | S-bind | Local reach | Authority |
+# | ------------------------- | ------------------------ | ------: | -----: | ----------: | --------- |
+# | run-started               | active run created       |  prove  |  prove |        prove | epoch     |
+# | run-finished              | current run ends         |  prove  |  prove |        prove | terminal  |
+# | run-failed                | current run fails        |  prove  |  prove |        prove | terminal  |
+# | execution-state-changed   | execution axis changes   |  prove  |  prove |        prove | mutation  |
+# | recovery-state-changed    | recovery episode changes |  prove  |  prove |        prove | mutation  |
+# | others                    | ...                      |   ...   |   ...  |         ... | ...       |
+#
+# The unit of work is
+#   event x producer_condition x runId x session_binding x reachability
+# NOT "grep every AgentRuntimeEvent constructor and dump them".
+# `prove` means source line + assertion/test, not inference.
 ```
 
 ### 3.2 (C2.4-B) NO_ACTIVE_SESSION witnesses
@@ -411,16 +450,39 @@ explicitly fail-closed.
 **Acceptance gate.**
 
 ```
+# Completeness-coverage gates (reviewer round-6):
 NO_ACTIVE_SESSION_TABLE
-  canonical-event-types audited       = N (>= 6)
+  CANONICAL_EVENT_TYPES_DISCOVERED     = N
+  CANONICAL_EVENT_TYPES_AUDITED        = N
+  EVENT_TYPE_AUDIT_COVERAGE            = 100%
   REACHABLE_FAIL_OPEN count            = 0
   UNJUSTIFIED_FAIL_OPEN count          = 0   (hard rule, R6)
-  REACHABLE_FAIL_CLOSED count          = N (>= 0)
-  NOT_REACHABLE count                  = N
-  NOT_REACHABLE_BY_TRANSPORT count     = N (>= 0)
+  REACHABLE_FAIL_CLOSED count          = N
+  NOT_REACHABLE_BY_TRANSPORT count     = N
   REACHABLE_NO_AUTHORITY count         = N
+  UNRESOLVED_BOUNDARY_ROWS             = 0
   defensive wiring fix added (if any)  = YES / NO
   wiring-layer fix reopens C2.3?       = NO  (always)
+
+# Dual-proof invariant (reviewer round-6).
+# C2.4-B MUST preserve both:
+#
+#   TRANSPORT_REACHABILITY =
+#     NOT_REACHABLE_BY_TRANSPORT
+#
+# and independently:
+#
+#   BOUNDARY_BEHAVIOR_WITH_NO_ACTIVE_SESSION =
+#     FAIL_CLOSED
+#
+# even if implementing the guard costs one simple branch.
+# Transport topology is mutable; the boundary invariant
+#   no authoritative active session
+#   => no canonical TaskState mutation
+# is durable. If a direct production-boundary witness
+# currently demonstrates fail-open, favor adding the narrow
+# guard even if C2.4-A later proves today's Local transport
+# normally prevents the no-active-session state.
 ```
 
 **R6 enforcement.** The original plan allowed fail-open via
@@ -505,6 +567,28 @@ The integration test belongs in
 `apps/vscode/src/sdk/__tests__/` and is reviewed as
 production-adjacent code, not just a state-shadow
 qualification.
+
+**Production-object constraint (reviewer round-6).**
+"Real `LocalRuntimeHost`" MUST mean **the production object
+and subscription implementation**, not another test-local
+class reproducing its semantics. F1 had this exact evidence
+failure and is why its event-fidelity assertion was
+tautological before correction. Required chain:
+
+```
+instanceof / actual constructed LocalRuntimeHost
+        ↓
+actual subscribeRuntimeEvents path
+        ↓
+production canonical subscription helper
+        ↓
+production TaskStateShadowHostWiring
+```
+
+Test seams around dependencies are fine; reimplementing the
+path is forbidden. Any test that asserts behavior against a
+test-local stand-in for `LocalRuntimeHost` is disqualified.
+
 
 ### 3.4 (C2.4-D) backend disposition
 
@@ -670,7 +754,11 @@ C2_4 closure gates:
     L1-L12 observed                        = YES (all 12)
     L13/L14 mutation                       = ZERO
   NEW_TS_ERRORS                           = 0
-  PRODUCTION_SEMANTIC_DELTA               = 0  (wiring-layer fix OK)
+  REDUCER_SEMANTIC_DELTA                  = 0  (hard rule, R3)
+  ACTUAL_PRODUCTION_SEMANTIC_DELTA        =
+    0 | NARROW_OBSERVATION_FIX
+  PERMITTED_PRODUCTION_SEMANTIC_DELTA =
+    OBSERVATION_LAYER_HARDENING_ONLY
   PROTECTED_STASHES_INTACT                = true
   git diff --check                        = PASS
   focused tests                           = PASS
@@ -678,13 +766,16 @@ C2_4 closure gates:
   reviewer accepts                        = yes
 ```
 
-`PRODUCTION_SEMANTIC_DELTA` may be non-zero only if a real
-observation-layer defect is fixed. Any reducer change is
-forbidden by C2.3 closure and would require reopening C2.3.
-Wiring-layer changes that do NOT alter reducer semantics
-(e.g. adding an `if (activeSession === undefined) return`
-guard, or strengthening transport-level filtering) do NOT
-reopen C2.3.
+`ACTUAL_PRODUCTION_SEMANTIC_DELTA` may be NARROW_OBSERVATION_FIX
+only if a real observation-layer defect is fixed and is
+captured under `PERMITTED_PRODUCTION_SEMANTIC_DELTA =
+OBSERVATION_LAYER_HARDENING_ONLY`. Any reducer change
+(REDUCER_SEMANTIC_DELTA != 0) is forbidden by C2.3 closure
+and would require reopening C2.3. Wiring-layer changes that
+do NOT alter reducer semantics (e.g. adding an
+`if (activeSession === undefined) return` guard, or
+strengthening transport-level filtering) are the only
+permitted non-zero path.
 
 ## 6. Board delta after C2.4
 
