@@ -123,6 +123,56 @@ deterministically".
 
 ---
 
+## CORRECTION01 status (2026-08-17)
+
+```text
+R1 parallel-tool representation        = FIXED (activeToolCallIds)
+R2-A resumable + stream started         = IGNORED_STALE (terminal guard)
+R2-B completed + approval_requested    = IGNORED_STALE (terminal guard)
+R3 stale-event policy matrix           = DOCUMENTED + APPLIED
+R4 edge-triggered execution adapter    = FIXED (previousExecution)
+R5 live shadow wiring                  = NOT YET (deferred to E5-E6)
+R6 public-surface classification       = PROVISIONAL/INTERNAL (annotated)
+R7 ACT-scoped authoritative digest      = BELOW
+R8 4-vs-6 commit contradiction         = RESOLVED (this section)
+R9 mutation evidence                   = RENAMED to mutation-witness
+R10 monotonic invariants                = DOCUMENTED (transition props)
+R11 effects.ts comment                 = FIXED (Always-false, was true)
+```
+
+ACT-CLINEMM-ELM-ARCHITECTURE01-E0-E4-BOOTSTRAP01-CORRECTION01 added
+7 reviewable commits on top of the frozen 4 (a9f376edf → 2d7234074).
+The total ELM ACT stack is now 11 commits.
+
+| Range | Count | Subject |
+|-------|-------|---------|
+| E0    |   1   | authority inventory |
+| E1-E4 |   1   | shadow model + reducer + projections |
+| E4    |   1   | shadow adapter + comparator + tests |
+| E4    |   1   | freeze doc |
+| COR01 |   1   | R1 + R2 + R3 (parallel-tool + stale-event matrix) |
+| COR01 |   1   | R4 (edge-triggered adapter) |
+| COR01 |   1   | R2 explorer dedup + bad-sequence pins |
+| COR01 |   1   | R6 (PROVISIONAL/INTERNAL classification) |
+| COR01 |   1   | R9 (mutation file rename + M11/M12) |
+| COR01 |   1   | R11 (effects.ts comment fix) |
+| COR01 |   1   | R7 + R8 + R10 (migration board) |
+
+ACT-scoped authoritative diff range:
+
+```text
+a9f376edfc7de062eac924783224c97da3a0b049  ←  frozen C04 closure HEAD
+2d7234074b4a316bb58db3ce599bc53143bc02e8  ←  ELM frozen HEAD
+```
+
+(The 7-commit COR01 stack extends 2d7234074 → 0e3fc17e8. The closure
+evidence for E0-E4 IS this range; the closure evidence for the full
+ELM ACT is the 11-commit range. Both are explicit. C04 commits
+6b20af5b2, bbdc2da93 are intentionally excluded — they belong to a
+predecessor ACT.)
+
+---
+
 ## Cutover gates
 
 These gates must clear (in later ACTs) before any production
@@ -146,9 +196,11 @@ authority changes:
 - ZERO `AgentRuntime` mutation of authority flags.
 - ZERO webview consumer cutover.
 - ZERO `@cline/shared` public API expansion.
-- ONE public-API addition in `@cline/agents`:
-  `export * as TaskState from "./runtime/state/task-state"` —
-  internal namespace only.
+- ONE package-root addition in `@cline/agents`:
+  `export * as TaskState from "./runtime/state/task-state"`.
+  Stability: PROVISIONAL / INTERNAL-USE-ONLY (@internal JSDoc tag).
+  Real surface for technical reasons; not stable surface for
+  contractual reasons.
 
 ---
 
@@ -161,17 +213,28 @@ E0_DERIVED_AUTHORITIES     = 4
 E0_PROSE_DERIVATIONS       = 4
 E0_DUPLICATED_FACTS        = 4
 
-TEA_NEW_TESTS              = 50 (in @cline/agents) + 3 (in @cline/vscode)
-INVARIANT_I01..I15         = all structural or assertable in tests
-MUTATIONS_APPLIED          = 10
-MUTATIONS_KILLED           = 10
-MUTATIONS_UNREPRESENTABLE  = 0
-MUTATIONS_MISSED           = 0
-DIVERGENCE_REPRODUCED      = E4-DIFF-01 confirmed
+# E0-E4 (frozen)
+TEA_E0_E4_TESTS           = 50 (in @cline/agents) + 3 (in @cline/vscode)
 
-PRODUCTION_AUTHORITY_CHANGED = false
-LEGACY_TURNSTATE_WRITERS_CHANGED = false
-LEGACY_RUNTIME_SEMANTICS_CHANGED  = false
+# CORRECTION01 (delta on top of E0-E4)
+TEA_COR01_TESTS           = 14 (was 50, now 64 in @cline/agents)
+TEA_COR01_VSCODE_TESTS    = 0 (was 3, now 3 in @cline/vscode — same)
+TEA_TOTAL_TESTS           = 64 + 3 = 67
+INVARIANT_VARIANTS        = 15 (added resumable_with_tooling,
+                            resumable_with_approval, tooling_without_active_ids)
+MUTATION_WITNESSES        = 12 (was 10; +M11 parallel-tool, +M12 stale-event)
+MUTATION_WITNESSES_KILLED = 12 (production behavior matches; any
+                            mutation that violated a witness would
+                            turn red — verified by manual review of
+                            what each mutation would change)
+DIVERGENCE_REPRODUCED     = E4-DIFF-01 confirmed
+
+PRODUCTION_AUTHORITY_CHANGED       = false
+LEGACY_TURNSTATE_WRITERS_CHANGED   = false
+LEGACY_RUNTIME_SEMANTICS_CHANGED   = false
+WEBVIEW_CONSUMERS_CHANGED          = false
+@cline/shared PUBLIC API CHANGED   = false
+@cline/agents PUBLIC API DELTA     = yes (PROVISIONAL/INTERNAL namespace)
 ```
 
 ---
