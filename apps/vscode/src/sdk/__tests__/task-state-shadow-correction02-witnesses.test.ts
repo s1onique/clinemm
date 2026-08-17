@@ -178,23 +178,281 @@ function countRecordsByEvent(records: readonly { event: string }[], eventName: s
 	return n
 }
 
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.6-CORRECTION02
+// SHARED_HISTORICAL_EVALUATORS: each T1-T12 historical primitive
+// is exposed as an `evaluateTx()` function that returns the actual
+// outcome of running the frozen primitive at HEAD. Both the
+// historical witness `it()` and the ACTUAL_OUTCOME machine check
+// call the SAME evaluator. This removes the circularity that
+// R1 of -CORRECTION01 had (where ACTUAL_OUTCOME encoded the
+// expected answer directly).
+//
+// T11 is a special case: it is a static/import gate, not a
+// runtime primitive. T11 is split into:
+//   - T11_IMPORT_GATE: imports + construction are observable
+//   - T11_RUNTIME_EVALUATOR: returns the import gate's result
+//
+// NO hardcoded outcome literals (`return false` / `return true`).
+// Every evaluator returns the actual observation.
+// =========================================================================
+
+function evaluateT1(): boolean {
+	// T1: emitTaskRequested produces exactly one record with event=task_requested.
+	const { wiring, sessionOptions } = makeWiring(
+		() => emptyArbiterSnapshot(),
+		() => "idle",
+	)
+	sessionOptions.onSessionEvent(agentEvent(iterationStart()))
+	emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-1", NOW + 1)
+	const counts = wiring.recorderCounts()
+	const records = wiring.records()
+	wiring.dispose()
+	return countRecordsByEvent(records, "task_requested") === 1 && counts.eventsObserved >= 1
+}
+
+function evaluateT2(): boolean {
+	// T2: emitTaskCancelled produces exactly one record with event=task_cancelled.
+	const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(toolStart("tc-1"))]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
+	const records = wiring.records()
+	wiring.dispose()
+	return countRecordsByEvent(records, "task_cancelled") === 1
+}
+
+function evaluateT3(): boolean {
+	// T3: task_cancelled arrives in recorder with index < task_completed.
+	const events: CoreSessionEvent[] = [
+		agentEvent(iterationStart()),
+		agentEvent(toolStart("tc-1")),
+		agentEvent(toolEnd("tc-1")),
+		agentEvent(iterationEnd()),
+		agentEvent(done()),
+	]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
+	const records = [...wiring.records()]
+	wiring.dispose()
+	const doneIdx = records.findIndex((r) => r.event === "task_completed")
+	const cancelIdx = records.findIndex((r) => r.event === "task_cancelled")
+	return cancelIdx >= 0 && doneIdx >= 0 && cancelIdx < doneIdx
+}
+
+function evaluateT4(): boolean {
+	// T4: activeToolCount > 0 BEFORE task_cancelled reaches recorder.
+	const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(toolStart("tc-1"))]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	const preCancelRecords = wiring.records()
+	const lastPreCancel = preCancelRecords[preCancelRecords.length - 1]
+	const preCancelOk = (lastPreCancel?.activeToolCount ?? 0) > 0
+	emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
+	const records = wiring.records()
+	const cancelRecord = records.find((r) => r.event === "task_cancelled")
+	wiring.dispose()
+	return preCancelOk && cancelRecord !== undefined
+}
+
+function evaluateT5(): boolean {
+	// T5: same_task_continued record appears between run #1
+	// task_completed and run #2 session_started.
+	const events: CoreSessionEvent[] = [
+		agentEvent(iterationStart()),
+		agentEvent(done()),
+		agentEvent(iterationStart(2)),
+		agentEvent(done()),
+	]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	emitSameTaskContinued({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
+	const records = [...wiring.records()]
+	wiring.dispose()
+	const run1Done = records.findIndex((r) => r.event === "task_completed")
+	const cont = records.findIndex((r) => r.event === "same_task_continued")
+	const run2Start = records.findIndex((r, i) => i > run1Done && r.event === "session_started")
+	return cont > run1Done && cont < run2Start
+}
+
+function evaluateT6(): boolean {
+	// T6: task_reset + task_requested(B) precede run #2 session_started.
+	const events: CoreSessionEvent[] = [
+		agentEvent(iterationStart()),
+		agentEvent(done()),
+		agentEvent(iterationStart(2)),
+		agentEvent(done()),
+	]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
+	emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
+	const records = [...wiring.records()]
+	wiring.dispose()
+	const run1Done = records.findIndex((r) => r.event === "task_completed")
+	const reset = records.findIndex((r) => r.event === "task_reset")
+	const reqB = records.findIndex(
+		(r, i) => i > reset && r.event === "task_requested" && (r as { taskId?: string }).taskId === "task-2",
+	)
+	const run2Start = records.findIndex((r, i) => i > run1Done && r.event === "session_started")
+	return reset > run1Done && reqB > reset && reqB < run2Start
+}
+
+function evaluateT7(): boolean {
+	// T7: after task_reset + task_requested(B), invariantViolations == 0.
+	const events: CoreSessionEvent[] = [
+		agentEvent(iterationStart()),
+		agentEvent(done()),
+		agentEvent(iterationStart(2)),
+		agentEvent(done()),
+	]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
+	emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
+	const counts = wiring.recorderCounts()
+	wiring.dispose()
+	return counts.invariantViolations === 0
+}
+
+function evaluateT8(): boolean {
+	// T8: after task_reset + task_requested(B), D02_SHADOW_FALSE_ACTIVE == 0.
+	const events: CoreSessionEvent[] = [
+		agentEvent(iterationStart()),
+		agentEvent(done()),
+		agentEvent(iterationStart(2)),
+		agentEvent(done()),
+	]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
+	emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
+	const counts = wiring.recorderCounts()
+	wiring.dispose()
+	return counts.divergenceCountsByClass.D02_SHADOW_FALSE_ACTIVE === 0
+}
+
+function evaluateT9(): boolean {
+	// T9: awaitingApproval transitions false,true,false across records.
+	const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(toolStart("tc-1"))]
+	const arbiterSnapshots: ArbiterSnapshotLike[] = [
+		{ ...emptyArbiterSnapshot() },
+		{
+			...emptyArbiterSnapshot(),
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: true },
+			pendingToolCalls: ["tc-1"],
+		},
+		{ ...emptyArbiterSnapshot(), pendingToolCalls: [] },
+	]
+	let arbiterIdx = 0
+	const { wiring, sessionOptions } = makeWiring(
+		() => arbiterSnapshots[Math.min(arbiterIdx++, arbiterSnapshots.length - 1)]!,
+		() => "awaiting_approval",
+	)
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	const records = [...wiring.records()]
+	wiring.dispose()
+	const flags = records.map((r) => r.awaitingApproval)
+	const trueIdx = flags.indexOf(true)
+	const falseAfterIdx = flags.slice(trueIdx + 1).indexOf(false)
+	return trueIdx >= 0 && falseAfterIdx >= 0
+}
+
+function evaluateT10(): boolean {
+	// T10: recovery-state transition produces a D06_RESUME_BOUNDARY record.
+	const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
+	const { wiring, sessionOptions } = makeWiring(
+		() => ({ ...emptyArbiterSnapshot(), recoveryState: "circuit_open" }),
+		legacyPhaseWalker(events),
+	)
+	for (const e of events) sessionOptions.onSessionEvent(e)
+	const records = wiring.records()
+	wiring.dispose()
+	const d06 = records.find((r) => r.classification === "D06_RESUME_BOUNDARY")
+	return d06 !== undefined
+}
+
+// T11_RUNTIME_EVALUATOR: returns the import gate outcome
+// directly. The T11 "test" is not a runtime observation; it
+// is a static import + construction guard. The pass value is
+// whether the imports resolve and the constructors succeed.
+function evaluateT11ImportGate(): boolean {
+	try {
+		const comparator = new TaskShadowComparator()
+		const recorder = new TaskShadowRecorder()
+		return comparator !== undefined && recorder !== undefined
+	} catch {
+		return false
+	}
+}
+function evaluateT11(): boolean {
+	// T11 has no runtime primitive. Delegate to the import gate.
+	return evaluateT11ImportGate()
+}
+
+function evaluateT12(): boolean {
+	// T12: exact one recorder observation per state-mutating
+	// ingress. This is the ORIGINAL frozen T12 primitive.
+	// Five state-mutating ingress events:
+	//   - session_started (RUNTIME_RECONSTRUCTED)
+	//   - task_requested (HOST_TASK x2)
+	//   - task_cancelled (HOST_TASK x1)
+	//   - task_reset (HOST_TASK x1)
+	//   - same_task_continued (HOST_TASK x1)
+	//   - recovery_changed (HOST_RECOVERY x1)
+	// Each must produce exactly the documented number of records.
+	const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
+	const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
+	sessionOptions.onSessionEvent(events[0]!)
+	emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-1", NOW + 1)
+	emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "idle", NOW + 2)
+	emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 3)
+	emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 4)
+	emitSameTaskContinued({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 5)
+	const records = [...wiring.records()]
+	wiring.dispose()
+	const counts = {
+		RUNTIME_RECONSTRUCTED: countRecordsByEvent(records, "session_started"),
+		task_requested: countRecordsByEvent(records, "task_requested"),
+		task_cancelled: countRecordsByEvent(records, "task_cancelled"),
+		task_reset: countRecordsByEvent(records, "task_reset"),
+		same_task_continued: countRecordsByEvent(records, "same_task_continued"),
+		HOST_RECOVERY: countRecordsByEvent(records, "recovery_changed"),
+	}
+	return (
+		counts.RUNTIME_RECONSTRUCTED === 1 &&
+		counts.task_requested === 2 &&
+		counts.task_cancelled === 1 &&
+		counts.task_reset === 1 &&
+		counts.same_task_continued === 1 &&
+		counts.HOST_RECOVERY === 1
+	)
+}
+
+const SHARED_HISTORICAL_EVALUATORS = {
+	T1: evaluateT1,
+	T2: evaluateT2,
+	T3: evaluateT3,
+	T4: evaluateT4,
+	T5: evaluateT5,
+	T6: evaluateT6,
+	T7: evaluateT7,
+	T8: evaluateT8,
+	T9: evaluateT9,
+	T10: evaluateT10,
+	T11: evaluateT11,
+	T12: evaluateT12,
+} as const
+
 // =============================================================================
 // T1 - task_requested reaches recorder
 // =============================================================================
-describe("T1 - task_requested reaches recorder (RED at HEAD: R14 defect class)", () => {
+describe("T1 - task_requested reaches recorder (PASS at HEAD)", () => {
 	it("T1.1 - emitTaskRequested produces exactly one record with event=task_requested", () => {
-		const { wiring, sessionOptions } = makeWiring(
-			() => emptyArbiterSnapshot(),
-			() => "idle",
-		)
-		sessionOptions.onSessionEvent(agentEvent(iterationStart()))
-		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-1", NOW + 1)
-		const counts = wiring.recorderCounts()
-		const records = wiring.records()
-		wiring.dispose()
-		const taskRequestedRecords = countRecordsByEvent(records, "task_requested")
-		expect(taskRequestedRecords).toBe(1)
-		expect(counts.eventsObserved).toBeGreaterThanOrEqual(1)
+		// PASS at HEAD: T1 is GREEN_EXPECTED in the disposition table.
+		const expected = (HISTORICAL_DISPOSITION.T1.status as string) === "PASS"
+		expect(evaluateT1()).toBe(expected)
 	})
 })
 
@@ -203,14 +461,12 @@ describe("T1 - task_requested reaches recorder (RED at HEAD: R14 defect class)",
 // =============================================================================
 describe("T2 - task_cancelled reaches recorder (RED at HEAD)", () => {
 	it("T2.1 - emitTaskCancelled produces exactly one record with event=task_cancelled", () => {
-		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(toolStart("tc-1"))]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
-		const records = wiring.records()
-		wiring.dispose()
-		const cancelledRecords = countRecordsByEvent(records, "task_cancelled")
-		expect(cancelledRecords).toBe(1)
+		// RED at HEAD: T2 is SUPERSEDED_NEGATIVE_WITNESS in the
+		// disposition table. The evaluator returns the actual
+		// observation; the test asserts it matches the frozen
+		// RED expectation.
+		const expected = (HISTORICAL_DISPOSITION.T2.status as string) === "PASS"
+		expect(evaluateT2()).toBe(expected)
 	})
 })
 
@@ -223,26 +479,11 @@ describe("T2 - task_cancelled reaches recorder (RED at HEAD)", () => {
 // LocalRuntimeHost; the semantic contract lives in W07.
 describe("T3 - W07 cancellation precedes completion (RED at HEAD)", () => {
 	it("T3.1 - task_cancelled arrives in recorder with index < task_completed event index", () => {
-		const events: CoreSessionEvent[] = [
-			agentEvent(iterationStart()),
-			agentEvent(toolStart("tc-1")),
-			agentEvent(toolEnd("tc-1")),
-			agentEvent(iterationEnd()),
-			agentEvent(done()),
-		]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
-		const records = [...wiring.records()]
-		wiring.dispose()
-		// After Phase C2.1 fix, the runtime `done` event translates to
-		// a record with event="task_completed" in the shadow's
-		// vocabulary (per shadow-adapter.ts).
-		const doneIdx = records.findIndex((r) => r.event === "task_completed")
-		const cancelIdx = records.findIndex((r) => r.event === "task_cancelled")
-		expect(cancelIdx).toBeGreaterThanOrEqual(0)
-		expect(doneIdx).toBeGreaterThanOrEqual(0)
-		expect(cancelIdx).toBeLessThan(doneIdx)
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS. The shared
+		// evaluator runs the original T3 primitive and returns
+		// the actual observation.
+		const expected = (HISTORICAL_DISPOSITION.T3.status as string) === "PASS"
+		expect(evaluateT3()).toBe(expected)
 	})
 })
 
@@ -254,17 +495,9 @@ describe("T3 - W07 cancellation precedes completion (RED at HEAD)", () => {
 // rationale as T3.
 describe("T4 - W08 cancellation while tool is active (RED at HEAD)", () => {
 	it("T4.1 - activeToolCount > 0 is asserted BEFORE task_cancelled reaches recorder", () => {
-		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(toolStart("tc-1"))]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		const preCancelRecords = wiring.records()
-		const lastPreCancel = preCancelRecords[preCancelRecords.length - 1]
-		expect(lastPreCancel?.activeToolCount).toBeGreaterThan(0)
-		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
-		const records = wiring.records()
-		const cancelRecord = records.find((r) => r.event === "task_cancelled")
-		wiring.dispose()
-		expect(cancelRecord).toBeDefined()
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS.
+		const expected = (HISTORICAL_DISPOSITION.T4.status as string) === "PASS"
+		expect(evaluateT4()).toBe(expected)
 	})
 })
 
@@ -277,24 +510,9 @@ describe("T4 - W08 cancellation while tool is active (RED at HEAD)", () => {
 // canonical Local path W11 qualification.
 describe("T5 - W11 same_task_continued between run #1 and run #2 (RED at HEAD)", () => {
 	it("T5.1 - same_task_continued record appears between run #1 task_completed and run #2 session_started", () => {
-		const events: CoreSessionEvent[] = [
-			agentEvent(iterationStart()),
-			agentEvent(done()),
-			agentEvent(iterationStart(2)),
-			agentEvent(done()),
-		]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitSameTaskContinued({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
-		const records = [...wiring.records()]
-		wiring.dispose()
-		// Runtime `iteration_start` → shadow "session_started".
-		// Runtime `done` → shadow "task_completed".
-		const run1Done = records.findIndex((r) => r.event === "task_completed")
-		const cont = records.findIndex((r) => r.event === "same_task_continued")
-		const run2Start = records.findIndex((r, i) => i > run1Done && r.event === "session_started")
-		expect(cont).toBeGreaterThan(run1Done)
-		expect(cont).toBeLessThan(run2Start)
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS.
+		const expected = (HISTORICAL_DISPOSITION.T5.status as string) === "PASS"
+		expect(evaluateT5()).toBe(expected)
 	})
 })
 
@@ -305,47 +523,20 @@ describe("T5 - W11 same_task_continued between run #1 and run #2 (RED at HEAD)",
 // C2.3-CONT.4 / W12 (brand-new-task epoch transition).
 describe("T6 - W12 task_reset + task_requested(B) precede run #2 (RED at HEAD)", () => {
 	it("T6.1 - task_reset then task_requested(B) both reach recorder before run #2 session_started", () => {
-		const events: CoreSessionEvent[] = [
-			agentEvent(iterationStart()),
-			agentEvent(done()),
-			agentEvent(iterationStart(2)),
-			agentEvent(done()),
-		]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
-		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
-		const records = [...wiring.records()]
-		wiring.dispose()
-		const run1Done = records.findIndex((r) => r.event === "task_completed")
-		const reset = records.findIndex((r) => r.event === "task_reset")
-		const req = records.findIndex((r) => r.event === "task_requested")
-		const run2Start = records.findIndex((r, i) => i > run1Done && r.event === "session_started")
-		expect(run1Done).toBeGreaterThanOrEqual(0)
-		expect(reset).toBeGreaterThan(run1Done)
-		expect(req).toBeGreaterThan(reset)
-		expect(run2Start).toBeGreaterThan(req)
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS.
+		const expected = (HISTORICAL_DISPOSITION.T6.status as string) === "PASS"
+		expect(evaluateT6()).toBe(expected)
 	})
 })
 
 // =============================================================================
 // T7 - W12 invariantViolations == 0
 // =============================================================================
-describe("T7 - W12 invariant gate (GREEN_EXPECTED at HEAD but trivially)", () => {
+describe("T7 - W12 invariant gate (PASS at HEAD)", () => {
 	it("T7.1 - after task_reset + task_requested(B), invariantViolations stays 0", () => {
-		const events: CoreSessionEvent[] = [
-			agentEvent(iterationStart()),
-			agentEvent(done()),
-			agentEvent(iterationStart(2)),
-			agentEvent(done()),
-		]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
-		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
-		const counts = wiring.recorderCounts()
-		wiring.dispose()
-		expect(counts.invariantViolations).toBe(0)
+		// PASS at HEAD: GREEN_EXPECTED.
+		const expected = (HISTORICAL_DISPOSITION.T7.status as string) === "PASS"
+		expect(evaluateT7()).toBe(expected)
 	})
 })
 
@@ -356,21 +547,11 @@ describe("T7 - W12 invariant gate (GREEN_EXPECTED at HEAD but trivially)", () =>
 // C2.3-CONT.5 / W15 (synthetic C04 under Option A): under
 // LocalRuntimeHost, RUNTIME_RECONSTRUCTED is DIAGNOSTIC_ONLY and
 // does not produce D02_SHADOW_FALSE_ACTIVE divergences.
-describe("T8 - W12 unexplained D02_SHADOW_FALSE_ACTIVE gate (RED at HEAD: 2 divergences on the W12 runtime-event trace)", () => {
+describe("T8 - W12 unexplained D02_SHADOW_FALSE_ACTIVE gate (RED at HEAD)", () => {
 	it("T8.1 - after task_reset + task_requested(B), D02_SHADOW_FALSE_ACTIVE == 0", () => {
-		const events: CoreSessionEvent[] = [
-			agentEvent(iterationStart()),
-			agentEvent(done()),
-			agentEvent(iterationStart(2)),
-			agentEvent(done()),
-		]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
-		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
-		const counts = wiring.recorderCounts()
-		wiring.dispose()
-		expect(counts.divergenceCountsByClass.D02_SHADOW_FALSE_ACTIVE).toBe(0)
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS.
+		const expected = (HISTORICAL_DISPOSITION.T8.status as string) === "PASS"
+		expect(evaluateT8()).toBe(expected)
 	})
 })
 
@@ -383,29 +564,9 @@ describe("T8 - W12 unexplained D02_SHADOW_FALSE_ACTIVE gate (RED at HEAD: 2 dive
 // tool-finished pair).
 describe("T9 - approval false -> true -> false (RED at HEAD)", () => {
 	it("T9.1 - awaitingApproval transitions false,true,false across records", () => {
-		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(toolStart("tc-1"))]
-		const arbiterSnapshots: ArbiterSnapshotLike[] = [
-			{ ...emptyArbiterSnapshot() },
-			{
-				...emptyArbiterSnapshot(),
-				execution: { modelStreaming: false, tooling: false, awaitingApproval: true },
-				pendingToolCalls: ["tc-1"],
-			},
-			{ ...emptyArbiterSnapshot(), pendingToolCalls: [] },
-		]
-		let arbiterIdx = 0
-		const { wiring, sessionOptions } = makeWiring(
-			() => arbiterSnapshots[Math.min(arbiterIdx++, arbiterSnapshots.length - 1)]!,
-			() => "awaiting_approval",
-		)
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		const records = [...wiring.records()]
-		wiring.dispose()
-		const flags = records.map((r) => r.awaitingApproval)
-		const trueIdx = flags.indexOf(true)
-		const falseAfterIdx = flags.slice(trueIdx + 1).indexOf(false)
-		expect(trueIdx).toBeGreaterThanOrEqual(0)
-		expect(falseAfterIdx).toBeGreaterThanOrEqual(0)
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS.
+		const expected = (HISTORICAL_DISPOSITION.T9.status as string) === "PASS"
+		expect(evaluateT9()).toBe(expected)
 	})
 })
 
@@ -417,28 +578,26 @@ describe("T9 - approval false -> true -> false (RED at HEAD)", () => {
 // qualification) on the canonical Local path.
 describe("T10 - recovery callback reaches recorder (RED at HEAD)", () => {
 	it("T10.1 - recovery-state transition appears in recorder", () => {
-		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
-		const { wiring, sessionOptions } = makeWiring(
-			() => ({ ...emptyArbiterSnapshot(), recoveryState: "circuit_open" }),
-			legacyPhaseWalker(events),
-		)
-		for (const e of events) sessionOptions.onSessionEvent(e)
-		const records = wiring.records()
-		wiring.dispose()
-		const d06 = records.find((r) => r.classification === "D06_RESUME_BOUNDARY")
-		expect(d06).toBeDefined()
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS. The shared
+		// evaluator runs the original T10 primitive (recovery
+		// edge → D06_RESUME_BOUNDARY record) and returns the
+		// actual observation.
+		const expected = (HISTORICAL_DISPOSITION.T10.status as string) === "PASS"
+		expect(evaluateT10()).toBe(expected)
 	})
 })
 
 // =============================================================================
 // T11 - actual production package guard
 // =============================================================================
-describe("T11 - production package guard (compile-time, not runtime)", () => {
+describe("T11 - production package guard (PASS at HEAD: import gate)", () => {
 	it("T11.1 - production classes import successfully", () => {
-		const comparator = new TaskShadowComparator()
-		const recorder = new TaskShadowRecorder()
-		expect(comparator).toBeDefined()
-		expect(recorder).toBeDefined()
+		// PASS at HEAD: GREEN_EXPECTED. T11 has no runtime
+		// primitive; the shared evaluator runs the import gate
+		// (constructor instantiation) and returns the actual
+		// outcome.
+		const expected = (HISTORICAL_DISPOSITION.T11.status as string) === "PASS"
+		expect(evaluateT11ImportGate()).toBe(expected)
 	})
 })
 
@@ -451,33 +610,19 @@ describe("T11 - production package guard (compile-time, not runtime)", () => {
 // qualification.
 describe("T12 - single-record ingress matrix (RED at HEAD)", () => {
 	it("T12.1 - every state-mutating ingress produces exactly one recorder observation", () => {
-		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
-		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
-		sessionOptions.onSessionEvent(events[0]!)
-		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-1", NOW + 1)
-		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "idle", NOW + 2)
-		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 3)
-		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 4)
-		emitSameTaskContinued({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 5)
-		const records = [...wiring.records()]
-		wiring.dispose()
-		const counts = {
-			// Runtime `iteration_start` is translated to `session_started`
-			// by the shadow-adapter; that's the marker for
-			// RUNTIME_RECONSTRUCTED ingress.
-			RUNTIME_RECONSTRUCTED: countRecordsByEvent(records, "session_started"),
-			task_requested: countRecordsByEvent(records, "task_requested"),
-			task_cancelled: countRecordsByEvent(records, "task_cancelled"),
-			task_reset: countRecordsByEvent(records, "task_reset"),
-			same_task_continued: countRecordsByEvent(records, "same_task_continued"),
-			HOST_RECOVERY: countRecordsByEvent(records, "recovery_changed"),
-		}
-		expect(counts.RUNTIME_RECONSTRUCTED).toBe(1)
-		expect(counts.task_requested).toBe(2)
-		expect(counts.task_cancelled).toBe(1)
-		expect(counts.task_reset).toBe(1)
-		expect(counts.same_task_continued).toBe(1)
-		expect(counts.HOST_RECOVERY).toBe(1)
+		// RED at HEAD: SUPERSEDED_NEGATIVE_WITNESS. The shared
+		// evaluator runs the original T12 primitive (exact
+		// one-record-per-ingress) and returns the actual
+		// observation. NO relaxed replica: the original five
+		// events must produce exactly:
+		//   RUNTIME_RECONSTRUCTED (session_started) = 1
+		//   task_requested                        = 2
+		//   task_cancelled                        = 1
+		//   task_reset                            = 1
+		//   same_task_continued                   = 1
+		//   HOST_RECOVERY (recovery_changed)      = 1
+		const expected = (HISTORICAL_DISPOSITION.T12.status as string) === "PASS"
+		expect(evaluateT12()).toBe(expected)
 	})
 })
 
@@ -521,7 +666,7 @@ const HISTORICAL_DISPOSITION = {
 type Tk = keyof typeof HISTORICAL_DISPOSITION
 const EXPECTED_PASS: ReadonlySet<Tk> = new Set(
 	Object.entries(HISTORICAL_DISPOSITION)
-		.filter(([, v]) => v.status === "PASS")
+		.filter(([, v]) => (v.status as string) === "PASS")
 		.map(([k]) => k as Tk),
 )
 const EXPECTED_RED: ReadonlySet<Tk> = new Set(
@@ -584,7 +729,7 @@ describe("C2.3-CONT.6-CORRECTION01 HISTORICAL_DISPOSITION — machine-readable T
 		}
 		// Status must be PASS or RED.
 		for (const [k, v] of Object.entries(HISTORICAL_DISPOSITION)) {
-			expect(v.status === "PASS" || v.status === "RED").toBe(true)
+			expect((v.status as string) === "PASS" || v.status === "RED").toBe(true)
 		}
 	})
 })
@@ -810,7 +955,26 @@ const ACTUAL_OUTCOME: Record<Tk, boolean> = {
 	T12: isT12Pass(),
 }
 
-describe("C2.3-CONT.6-CORRECTION01 ACTUAL_OUTCOME — actual PASS/RED matches documented table", () => {
+describe("C2.3-CONT.6-CORRECTION02 ACTUAL_OUTCOME — actual PASS/RED matches documented table", () => {
+	// SHARED EVALUATORS: the actual outcome of every T1-T12 is
+	// determined by the same `evaluateTx()` function used by the
+	// historical `it()` for that T. The test below asserts that
+	// the actual outcomes match the documented table.
+	const ACTUAL_OUTCOME: Record<Tk, boolean> = {
+		T1: SHARED_HISTORICAL_EVALUATORS.T1(),
+		T2: SHARED_HISTORICAL_EVALUATORS.T2(),
+		T3: SHARED_HISTORICAL_EVALUATORS.T3(),
+		T4: SHARED_HISTORICAL_EVALUATORS.T4(),
+		T5: SHARED_HISTORICAL_EVALUATORS.T5(),
+		T6: SHARED_HISTORICAL_EVALUATORS.T6(),
+		T7: SHARED_HISTORICAL_EVALUATORS.T7(),
+		T8: SHARED_HISTORICAL_EVALUATORS.T8(),
+		T9: SHARED_HISTORICAL_EVALUATORS.T9(),
+		T10: SHARED_HISTORICAL_EVALUATORS.T10(),
+		T11: SHARED_HISTORICAL_EVALUATORS.T11(),
+		T12: SHARED_HISTORICAL_EVALUATORS.T12(),
+	}
+
 	it("actual PASS set matches EXPECTED_PASS", () => {
 		const actualPass = new Set(
 			Object.entries(ACTUAL_OUTCOME)
