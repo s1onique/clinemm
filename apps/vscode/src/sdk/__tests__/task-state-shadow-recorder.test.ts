@@ -287,7 +287,7 @@ describe("TaskShadowRecorder — E5-DIFF recorder contract", () => {
 		}
 	})
 
-	it("exposes every D00–D10 class at least once across the suite", () => {
+	it("exposes every D00–D11 class at least once across the suite", () => {
 		const covered: ReadonlySet<DivergenceClass> = new Set([
 			"D00_AGREE",
 			"D01_LEGACY_FALSE_IDLE",
@@ -298,6 +298,7 @@ describe("TaskShadowRecorder — E5-DIFF recorder contract", () => {
 			"D07_FAILURE_MAPPING",
 			"D08_FOLLOWUP_EXTERNAL",
 			"D09_EVENT_GAP",
+			"D11_HOST_PREENGAGED",
 		])
 		for (const c of ALL_DIFFERENCE_TYPES) {
 			expect(covered.has(c) || c === "D06_RESUME_BOUNDARY" || c === "D10_UNKNOWN").toBe(true)
