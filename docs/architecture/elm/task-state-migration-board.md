@@ -537,3 +537,72 @@ ELM-03 E7 consumer cutover                 ⛔ BLOCKED
 The next decision is on ELM-02F: restore the canonical seam,
 extend the classifier, or defer T8. That decision is a separate
 ACT and is the gate to C2.2 implementation.
+
+---
+
+## ELM-02F — PHASE F0 RECON/WITNESS FREEZE (2026-08-17)
+
+Read-only recon + witnesses. No production source modified.
+
+Two commits on top of C2.1:
+
+```
+817c63cf5  docs(elm): freeze ELM-02F runtime ownership + subscription recon
+49e966f7d  test(elm): pin raw-vs-legacy runtime event seam witnesses
+```
+
+Six witnesses pinned in
+`sdk/packages/core/src/runtime/orchestration/runtime-event-adapter.e2f-f0-witnesses.test.ts`:
+
+```
+F0-T1  AgentRuntime.subscribe receives execution-state-changed
+F0-T2  subscribe/unsubscribe contract on AgentRuntime
+F0-T3  RuntimeEventAdapter returns [] for execution-state-changed
+F0-T4  RuntimeEventAdapter returns [] for recovery-state-changed
+F0-T5  legacy event counts for text-only run are stable
+```
+
+All 6 pass at HEAD `49e966f7d` with zero production change.
+
+**Recon document:** `task-state-e2f-runtime-seam-recon.md` — freezes the
+six anchor sites required by ACT section 5 (RUNTIME_OWNER,
+RAW_EVENT_SUBSCRIPTION_SITE, LEGACY_TRANSLATION_SITE,
+LEGACY_FANOUT_SITE, SESSION_TEARDOWN_SITE, VS_CODE_SHADOW_SUBSCRIBER_SITE).
+
+**Key architectural finding:** AgentRuntime.emit
+(`agent-runtime.ts:3365`) already fans out to a Set of listeners with
+per-listener exception isolation (RSMT01 CORRECTION03 / C1.5 P1).
+Therefore the runtime side of F1 requires **no AgentRuntime edits** —
+only a fanout API exposed on SessionRuntime.
+
+**Integrity incident detected, mitigated, recorded:** the
+ACT-ELM-02C2 forensic-preservation stash was found missing from the
+stash list at F0 start. The underlying commit was still in git
+objects and was recovered via `git stash store` under its original
+label. No production code modified. Documented in recon doc §10.
+
+**Active board after F0:**
+
+```
+ELM-02C2 / C2.0 witness freeze                 ✅
+ELM-02C2 / C2.1 semantic recon                 ✅
+
+ELM-02F canonical runtime-event seam           🟢 F0 RECON COMPLETE
+    F0 RECON DOC                               ✅ 817c63cf5
+    F0-T1..T5 WITNESSES                        ✅ 49e966f7d
+    F1 SEAM IMPLEMENTATION                     ⏭️ NEXT (after F0 acceptance)
+
+ELM-02C2 / C2.2 unified observation            ⛔ blocked on ELM-02F F1
+ELM-02C2 / C2.3 stateful W01-W16               ⛔
+ELM-02C2 / C2.4 production qualification      ⛔
+ELM-02C2 / C2.5 real E6 dogfood                ⛔
+
+ELM-03 E7 consumer cutover                     ⛔ BLOCKED
+```
+
+Both protected stashes restored and intact:
+
+```
+stash@{0} = ACT-ELM-02C2 forensic (RECOVERED, intact)
+stash@{1} = ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (untouched)
+```
