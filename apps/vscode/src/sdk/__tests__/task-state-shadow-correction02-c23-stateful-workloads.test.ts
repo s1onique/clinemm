@@ -6480,7 +6480,7 @@ describe("C2.3-CONT.6-CORRECTION01 FULL_MATRIX_3X_DETERMINISM — W01-W16, RUN1 
 // identity (taskId). This is the correct split: the pure
 // reducer has no host task identity model.
 
-function runMatrixPureReplay(label: string): Record<
+function runPureReplayCanonicalOnly(label: string): Record<
 	string,
 	{
 		live: ReturnType<typeof snapshotState>
@@ -6565,7 +6565,7 @@ function runMatrixPureReplay(label: string): Record<
 //     the divergence. We compute this by replaying through
 //     runWorkload but excluding HOST_TASK steps.
 
-const W_WITH_HOST_TASK: ReadonlySet<string> = new Set([
+const HOST_AUTHORITY_WORKLOADS: ReadonlySet<string> = new Set([
 	// Ws with cancel/reset/same_task_continued/host-recovery steps
 	"W07", // host-task cancelled
 	"W08", // host-task cancelled
@@ -6578,15 +6578,15 @@ const W_WITH_HOST_TASK: ReadonlySet<string> = new Set([
 	"W16", // host-task continued
 ])
 
-describe("C2.3-CONT.6-CORRECTION01 FULL_MATRIX_PURE_REPLAY — W01-W16 canonical-only", () => {
+describe("C2.3-CONT.6-CORRECTION02 PURE_REPLAY_CANONICAL_ONLY_EQUIVALENCE — canonical-only Ws: live == pure", () => {
 	it("Ws WITHOUT HOST_TASK steps: live == pure", () => {
-		const result = runMatrixPureReplay("RUN1")
+		const result = runPureReplayCanonicalOnly("RUN1")
 		const runKeys = Object.keys(result).sort()
 		expect(runKeys.length).toBe(16)
 		let mismatches = 0
 		const matched: string[] = []
 		for (const w of runKeys) {
-			if (W_WITH_HOST_TASK.has(w)) continue
+			if (HOST_AUTHORITY_WORKLOADS.has(w)) continue
 			const { live, pure } = result[w]
 			const liveCanonical = {
 				lifecycle: live.finalLifecycle,
@@ -6610,8 +6610,8 @@ describe("C2.3-CONT.6-CORRECTION01 FULL_MATRIX_PURE_REPLAY — W01-W16 canonical
 		// This is a documentary test: the mismatches are EXPECTED
 		// by design (host TASK authority is not in the pure
 		// reducer). The test asserts that mismatches exist for
-		// exactly the Ws in W_WITH_HOST_TASK.
-		const result = runMatrixPureReplay("RUN1")
+		// exactly the Ws in HOST_AUTHORITY_WORKLOADS.
+		const result = runPureReplayCanonicalOnly("RUN1")
 		let expectedMismatches = 0
 		let unexpectedMismatches = 0
 		const unexpectedW: string[] = []
@@ -6625,7 +6625,7 @@ describe("C2.3-CONT.6-CORRECTION01 FULL_MATRIX_PURE_REPLAY — W01-W16 canonical
 				awaitingApproval: live.finalAwaitingApproval,
 			}
 			const same = JSON.stringify(liveCanonical) === JSON.stringify(pure)
-			if (W_WITH_HOST_TASK.has(w)) {
+			if (HOST_AUTHORITY_WORKLOADS.has(w)) {
 				if (!same) expectedMismatches += 1
 			} else {
 				if (!same) {

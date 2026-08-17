@@ -500,3 +500,155 @@ bc934d018  test+docs(elm): real disposition check    (R1 + R4 + R5)
 ```
 
 (plus this evidence doc addendum)
+
+
+---
+
+# C2.3-CONT.6-CORRECTION02 closure
+
+CONT.6-CORRECTION01 was reviewed. The reviewer accepted R2/R3/R4/R5
+but flagged one critical defect in R1: the historical-disposition
+ACTUAL_OUTCOME machine check was partially manufactured:
+
+```
+- T10 hardcoded `return false` (the answer)
+- T11 hardcoded `return true`
+- T12 used a relaxed `>= 4` substitute instead of exact one-ingress
+```
+
+The "actual PASS set == expected PASS set" check that
+ACTUAL_OUTCOME did was therefore circular: it encoded the
+expected answers directly into the evaluators.
+
+The CONT.6-CORRECTION02 ACT (one test-only commit) addressed
+this:
+
+## Fix: SHARED_HISTORICAL_EVALUATORS
+
+For each T1-T12, the EXACT original primitive was extracted
+into a `evaluateTx()` function. Both the historical `it()`
+test and the ACTUAL_OUTCOME block call the same evaluator.
+
+```
+SHARED_HISTORICAL_EVALUATORS = {
+  T1: evaluateT1,
+  T2: evaluateT2,
+  ...
+  T12: evaluateT12,
+}
+```
+
+Each `evaluateTx()` returns the actual pass/fail observation
+from running the frozen primitive. No hardcoded answers.
+
+T11 is a special case: T11 has no runtime primitive (it's a
+static/import construction guard). The evaluator is split into:
+
+```
+evaluateT11ImportGate(): boolean  // actual outcome of constructor
+evaluateT11(): boolean           // delegates to the import gate
+```
+
+T12's exact one-ingress semantics are restored (no `>= 4`
+substitute).
+
+## Historical `it()` refactor
+
+Each T's `it()` body was reduced to:
+
+```
+const expected = HISTORICAL_DISPOSITION.Tx.status as string === "PASS"
+expect(evaluateTx()).toBe(expected)
+```
+
+If the underlying observation changes (e.g. recovery becomes
+reachable), both the historical test AND the ACTUAL_OUTCOME
+block will detect the divergence.
+
+## Updated PASS gate (after -CORRECTION02)
+
+```
+HISTORICAL_SHARED_EVALUATORS       = 12
+HARDCODED_HISTORICAL_OUTCOMES      = 0
+RELAXED_REPLICA_WITNESSES          = 0
+
+actual PASS = T1, T2, T7, T11
+actual RED  = T3, T4, T5, T6, T8, T9, T10, T12
+
+HISTORICAL_UNEXPLAINED_RED         = 0
+HISTORICAL_ACTIVE_DEFECT           = 0
+
+FULL_MATRIX_3X_DETERMINISM         = PASS
+
+PURE_REPLAY_SCOPE                  = HONEST
+  PURE_REPLAY_CANONICAL_ONLY_EQUIVALENCE = PASS
+  PURE_REPLAY_EXACT_EQ_WORKLOADS =
+    W01, W02, W03, W04, W05, W06, W09
+  HOST_AUTHORITY_WORKLOADS =
+    W07, W08, W10, W11, W12, W13, W14, W15, W16
+  HOST_AUTHORITY_MISMATCH          = EXPECTED_BY_CONSTRUCTION
+
+D10_UNKNOWN                        = 0
+INVARIANT_VIOLATIONS               = 0
+OBSERVER_ERRORS                    = 0
+EVIDENCE_GAPS                      = 0
+
+PRODUCTION_SEMANTIC_DELTA          = 0
+NEW_TS_ERRORS                      = 0
+git diff --check                   = PASS
+PROTECTED_STASHES_INTACT           = true
+
+VERDICT = PASS_STATEFUL_WORKLOAD_QUALIFICATION_C2_3
+
+C2_3 = CLOSED
+C2_4_AUTHORIZED = true
+E7_AUTHORIZED   = false
+```
+
+## Audit digest (small targeted excerpt)
+
+For reviewer audit, the FULL_MATRIX_3X and pure-replay bodies
+are at these line ranges in the C23 file:
+
+```
+src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts
+  buildW01Steps()..buildW16Steps():    lines 5342..6423
+  runMatrix(label):                    lines 6425..6450
+  FULL_MATRIX_3X_DETERMINISM describe: lines 6453..6475
+  runPureReplayCanonicalOnly(label):   lines 6477..6540
+  PURE_REPLAY_CANONICAL_ONLY_EQUIVALENCE describe: lines 6545..6605
+  HOST_AUTHORITY_WORKLOADS set:        lines 6490..6502
+```
+
+## Updated board (after -CORRECTION02)
+
+```
+ELM-02F                                       ✅
+C2.0 / C2.1                                  ✅
+C2.2 + CORR01 + CORR02                       ✅
+
+C2.3                                         ✅ CLOSED
+  W01-W16                                     ✅
+  F01-F03                                     ✅
+  all semantic corrections                   ✅
+  CONT.6 W06 real deny                       ✅
+  bounded >256                               ✅
+  exact normalization                        ✅
+  CONT.6-CORRECTION01 R1/R4/R5               ✅
+  CONT.6-CORRECTION01 R2/R3                  ✅
+  CONT.6-CORRECTION02 R1 (real evaluators)   ✅
+
+  C2.3 = CLOSED
+
+C2.4  NO_ACTIVE_SESSION + reachability       🟢 NEXT (AUTHORIZED)
+C2.5                                          ⛔
+E7                                            ⛔
+```
+
+## Commits in CONT.6-CORRECTION02
+
+```
+4a9e4d80d  test(elm): shared historical evaluators  (R1)
+```
+
+(plus this evidence doc addendum)
