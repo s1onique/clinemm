@@ -159,4 +159,14 @@ export class TaskShadowComparator {
 		this.legacyPhases.length = 0
 		this.seq = 0
 	}
+
+	/**
+	 * Test-only: read the comparator's internal shadow model. Production
+	 * code MUST NOT call this. Used by the host-msgs emitter tests to
+	 * observe the post-state of `task_requested` / `task_cancelled` / etc.
+	 * without exposing the shadow via a public writer API.
+	 */
+	debugSnapshot(): TaskModel {
+		return this.shadow.debugSnapshot()
+	}
 }
