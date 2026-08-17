@@ -1160,3 +1160,70 @@ TOTAL_E2F_F1_STACK      = 17
 ```
 
 ELM-02F is now genuinely closed at F1.
+
+---
+
+## ELM-02F — PHASE C2.2 UNIFIED OBSERVATION (2026-08-17)
+
+```
+ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2
+
+C2.2-C1  b942d9097  docs(elm): freeze unified-observation authority matrix
+C2.2-C2  65611f20f  refactor(elm): add unified TaskShadow observation coordinator
+C2.2-C3  f0dc355af  feat(elm): add C2.2 unified observer tests + D11 arbitration override
+C2.2-C4  427993248  test(elm): add D11_HOST_PREENGAGED to divergence-class coverage
+C2.2-C5  01066f0f3  docs(elm): record C2.2 evidence + C2.3 authorization verdict
+
+F1+CORR01+CORR02+CORR03+C2_2 = 22 commits total
+C2_2_VERDICT = PASS_UNIFIED_SHADOW_OBSERVATION_C2_2
+```
+
+### Unified observation boundary
+
+```
+RUNTIME_CANONICAL    → coordinator.observe(runtime-canonical)
+RUNTIME_RECONSTRUCTED→ coordinator.observe(runtime-reconstructed)
+HOST_TASK            → coordinator.observe(host-task)
+HOST_RECOVERY        → coordinator.observe(host-recovery, canonicalAvailable)
+
+one coordinator per wiring, owned by SdkController.
+```
+
+### Active board after C2.2
+
+```
+ELM-02F F0/F0-CORR01/F1/F1-CORR01..03         ✅ all closed
+ELM-02C2 C2.2 unified observation           ✅ PASS
+
+ELM-02C2 C2.3 stateful W01-W16               🟢 NEXT (authorized)
+ELM-02C2 C2.4 production qualification       ⛔
+ELM-02C2 C2.5 real E6 dogfood                ⛔
+
+ELM-03 E7 consumer cutover                   ⛔ BLOCKED (gated on C2.3..C2.5)
+```
+
+### C2.2 commit accounting (clean)
+
+```
+C2.2-C1 = 1   (b942d9097)
+C2.2-C2 = 1   (65611f20f)
+C2.2-C3 = 1   (f0dc355af)
+C2.2-C4 = 1   (427993248)
+C2.2-C5 = 1   (01066f0f3)
+
+TOTAL_C2_2_STACK = 5
+```
+
+### Production LOC (C2.2 delta from F1-CORR03 head `a6f3c7d7b`)
+
+```
+task-state-shadow-coordinator.ts      NEW (+420)
+task-state-shadow-recorder.ts         +60  /-2
+task-state-shadow-host-wiring.ts      +50  /-30
+task-state-shadow-host-msgs.ts        +18  /-30
+SdkController.ts                      +1   /-1
+
+NET_PRODUCTION_LOC_C2_2 = +549 / -63 = +486
+
+F1+CORR01+CORR02+CORR03+C2_2_TOTAL_LOC = +1079 / -102 = +977 net
+```
