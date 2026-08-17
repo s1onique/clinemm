@@ -145,10 +145,10 @@ describe("adaptRuntimeEvent — basic mappings", () => {
 			},
 			NOW,
 		);
-		expect(out).toEqual([
-			{ type: "model_stream_started", at: NOW },
-			{ type: "approval_resolved", at: NOW },
-		]);
+		// CORRECTION01 R4: edge-triggered. Only the model_stream_started
+		// transition emits; the awaitingApproval false->false
+		// unchanged state emits nothing.
+		expect(out).toEqual([{ type: "model_stream_started", at: NOW }]);
 	});
 
 	it("execution-state-changed(awaitingApproval=true) → approval_requested", () => {
@@ -170,10 +170,55 @@ describe("adaptRuntimeEvent — basic mappings", () => {
 			},
 			NOW,
 		);
-		expect(out).toEqual([
-			{ type: "model_stream_started", at: NOW },
-			{ type: "approval_requested", at: NOW },
-		]);
+		// CORRECTION01 R4: only the awaitingApproval transition emits;
+		// modelStreaming true->true is unchanged, no message.
+		expect(out).toEqual([{ type: "approval_requested", at: NOW }]);
+	});
+
+	it("execution-state-changed(modelStreaming=true→false) → model_stream_finished", () => {
+		const out = adaptRuntimeEvent(
+			{
+				type: "execution-state-changed",
+				snapshot: {
+					agentId: "a",
+					status: "running",
+					iteration: 1,
+					messages: [],
+					pendingToolCalls: [],
+					usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalCost: 0 },
+					runId: "run-1",
+					recovery: makeRecoverySnapshot(),
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+				},
+				previousExecution: { modelStreaming: true, tooling: false, awaitingApproval: false },
+			},
+			NOW,
+		);
+		expect(out).toEqual([{ type: "model_stream_finished", at: NOW }]);
+	});
+
+	it("execution-state-changed(no transition) → no TaskMsg", () => {
+		const out = adaptRuntimeEvent(
+			{
+				type: "execution-state-changed",
+				snapshot: {
+					agentId: "a",
+					status: "running",
+					iteration: 1,
+					messages: [],
+					pendingToolCalls: [],
+					usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalCost: 0 },
+					runId: "run-1",
+					recovery: makeRecoverySnapshot(),
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+				},
+				previousExecution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			},
+			NOW,
+		);
+		// CORRECTION01 R4: when nothing changes, the adapter emits no
+		// TaskMsg. The shadow stays where it is.
+		expect(out).toEqual([]);
 	});
 
 	it("recovery-state-changed → recovery_changed", () => {

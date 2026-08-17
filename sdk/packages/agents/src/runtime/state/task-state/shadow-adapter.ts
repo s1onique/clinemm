@@ -96,16 +96,32 @@ export function adaptRuntimeEvent(event: AgentRuntimeEvent, now: number): readon
 			out.push({ type: "tool_finished", toolCallId: event.toolCall.toolCallId, at: now });
 			break;
 		case "execution-state-changed": {
+			// CORRECTION01 R4: edge-triggered. Use `previousExecution`
+			// to emit a TaskMsg only on the transition, not from
+			// current booleans. The shadow's own reducer is the single
+			// authority for "is model streaming right now" — the
+			// adapter should describe EVENTS, never current state.
+			//
+			//   previousExecution = false, current = true   => *_started / *_requested
+			//   previousExecution = true,  current = false  => *_finished / *_resolved
+			//   unchanged                                   => no TaskMsg
+			//
+			// Note: `tooling` is not edge-triggered here. Tool starts
+			// and finishes flow through `tool-started` / `tool-finished`
+			// events with explicit IDs; that is the canonical channel.
 			const exec = event.snapshot.execution;
-			if (exec?.modelStreaming) {
-				out.push({ type: "model_stream_started", at: now });
-			} else {
-				out.push({ type: "model_stream_finished", at: now });
-			}
-			if (exec?.awaitingApproval) {
-				out.push({ type: "approval_requested", at: now });
-			} else {
-				out.push({ type: "approval_resolved", at: now });
+			const prev = event.previousExecution;
+			if (exec) {
+				if (exec.modelStreaming && !prev.modelStreaming) {
+					out.push({ type: "model_stream_started", at: now });
+				} else if (!exec.modelStreaming && prev.modelStreaming) {
+					out.push({ type: "model_stream_finished", at: now });
+				}
+				if (exec.awaitingApproval && !prev.awaitingApproval) {
+					out.push({ type: "approval_requested", at: now });
+				} else if (!exec.awaitingApproval && prev.awaitingApproval) {
+					out.push({ type: "approval_resolved", at: now });
+				}
 			}
 			break;
 		}
