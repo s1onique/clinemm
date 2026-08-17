@@ -1,9 +1,24 @@
-import type { ClineMessage, ClineSayTool } from "@shared/ExtensionMessage"
+import type { ClineMessage, ClineSayTool, TurnState } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import type { LucideIcon } from "lucide-react"
 import type React from "react"
-import { useMemo } from "react"
+import { useContext, useMemo } from "react"
+import { ExtensionStateContext } from "@/context/ExtensionStateContext"
 import { cleanPathPrefix } from "../common/CodeAccordian"
+
+/**
+ * Read `turnState` from the global `ExtensionStateContext` without
+ * throwing when the provider is missing. The throwing variant
+ * (`useExtensionState`) is fine for production call sites that are
+ * always mounted inside the webview; the unit tests for this component
+ * thread `turnState` as a prop and intentionally do not mount the
+ * provider, so a missing-provider-tolerant reader is required.
+ */
+function useOptionalTurnState(): TurnState | undefined {
+	const ctx = useContext(ExtensionStateContext)
+	return ctx?.turnState
+}
+
 import { getIconByToolName } from "./chat-view"
 import { isApiReqAbsorbable, isLowStakesTool } from "./chat-view/utils/messageUtils"
 import ErrorRow from "./ErrorRow"
@@ -22,6 +37,13 @@ interface RequestStartRowProps {
 	classNames?: string
 	isExpanded: boolean
 	handleToggle: () => void
+	/**
+	 * Authoritative UI turn phase. When omitted (e.g. in tests that
+	 * pre-date the C04 lifecycle reconciliation), the component falls
+	 * back to the message-tail-derived heuristic — the legacy
+	 * behaviour — so existing unit tests keep their shape.
+	 */
+	turnState?: TurnState
 }
 
 // State type for api_req_started rendering
@@ -140,7 +162,30 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	handleToggle,
 	isExpanded,
 	message,
+	turnState: turnStateProp,
 }) => {
+	// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04:
+	//
+	// The legacy `RequestStartRow` shimmer rendered below (line ~234)
+	// was driven entirely by message-tail inference
+	// (`reasoningContent && !hasCost`). The installed build exposed
+	// this divergence: the Task Header correctly read
+	// `turnState.phase !== "streaming"` (via `TaskHeaderTelemetry` /
+	// `taskHeaderStateLabel`) but the in-list "Thinking..." shimmer
+	// kept rendering — the assistant's final report was already
+	// visible AND the shimmer was still animating.
+	//
+	// Migration: the canonical authority is `turnState.phase`. When
+	// the prop is provided (the production MessagesArea path), the
+	// shimmer is suppressed for every non-streaming phase. We only
+	// call `useExtensionState` as a fallback when the prop is
+	// undefined (legacy test harnesses that don't yet thread the
+	// prop) so existing unit tests don't need a context provider.
+	// Always read the context — the rule of hooks — but tolerate a
+	// missing provider (unit tests that thread the prop directly).
+	const turnStateFromContext = useOptionalTurnState()
+	const turnState = turnStateProp ?? turnStateFromContext
+	const turnStateIsStreaming = turnState?.phase === "streaming"
 	// Derive explicit state
 	const hasError = !!(apiRequestFailedMessage || apiReqStreamingFailedMessage)
 	const hasCost = cost != null
@@ -233,14 +278,29 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 			)}
 			{reasoningContent &&
 				(!hasCost ? (
-					// Still streaming - show "Thinking..." text with shimmer
-					<div className="ml-1 pl-0 mb-1 -mt-1.25 pt-1">
-						<div className="inline-flex justify-baseline gap-0.5 text-left select-none px-0 w-full">
-							<span className="animate-shimmer bg-linear-90 from-foreground to-description bg-[length:200%_100%] bg-clip-text text-transparent text-[13px] leading-none">
-								Thinking...
-							</span>
+					// Still streaming - show "Thinking..." text with shimmer.
+					//
+					// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04:
+					// Gate the shimmer on the authoritative
+					// `turnState.phase === "streaming"`. Without this
+					// gate the in-list indicator kept rendering after
+					// the model finished (the assistant's final report
+					// was visible AND the shimmer still animated),
+					// because the message-tail-only check
+					// (`reasoningContent && !hasCost`) does not know
+					// about terminal/resumable/error phases. The
+					// canonical authority is `turnState.phase`, which
+					// the same webview already uses for
+					// `TaskHeaderTelemetry` and `useThinkingLoaderRow`.
+					turnStateIsStreaming ? (
+						<div className="ml-1 pl-0 mb-1 -mt-1.25 pt-1">
+							<div className="inline-flex justify-baseline gap-0.5 text-left select-none px-0 w-full">
+								<span className="animate-shimmer bg-linear-90 from-foreground to-description bg-[length:200%_100%] bg-clip-text text-transparent text-[13px] leading-none">
+									Thinking...
+								</span>
+							</div>
 						</div>
-					</div>
+					) : null
 				) : (
 					// Complete - always show collapsible thinking section
 					<ThinkingRow
