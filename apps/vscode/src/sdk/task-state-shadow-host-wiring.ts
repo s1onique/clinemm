@@ -26,7 +26,7 @@
 
 import { TaskState } from "@cline/agents"
 import type { CoreSessionEvent } from "@cline/core"
-import type { AgentRunStatus, AgentRuntimeExecutionState, RecoveryState } from "@cline/shared"
+import type { AgentRunStatus, AgentRuntimeEvent, AgentRuntimeExecutionState, RecoveryState } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { SdkSessionLifecycle, SdkSessionLifecycleOptions } from "./sdk-session-lifecycle"
 import { TaskShadowComparator } from "./task-state-shadow"
@@ -61,6 +61,27 @@ function isWiringEnabled(): boolean {
 }
 
 /**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+ * origin marker for canonical runtime events at the shadow boundary.
+ * Only `RUNTIME_CANONICAL` is in use in F1; C2.2 will add the
+ * remaining values (e.g. `RUNTIME_RECONSTRUCTED`, `HOST_TASK`,
+ * `HOST_RECOVERY`) when it unifies the observation surface.
+ */
+export type TaskShadowRuntimeOrigin = "RUNTIME_CANONICAL"
+
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+ * typed envelope for canonical events at the shadow boundary.
+ * The `origin` field is required so that future observation
+ * pathways (C2.2) can be distinguished unambiguously.
+ */
+export interface TaskShadowCanonicalEvent {
+	readonly origin: TaskShadowRuntimeOrigin
+	readonly sessionId: string
+	readonly event: AgentRuntimeEvent
+}
+
+/**
  * Public surface of the live shadow wiring. The controller owns one
  * instance for the duration of its visible-task lifetime.
  */
@@ -68,6 +89,17 @@ export interface TaskShadowHostWiring {
 	readonly recorder: TaskShadowRecorder
 	readonly recorderCounts: () => TaskShadowRecorderCounts
 	readonly records: () => readonly TaskShadowDifferentialRecord[]
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * narrow bridge for the canonical `AgentRuntimeEvent` seam. The
+	 * controller calls this from `attachCanonicalRuntimeEventSubscription`
+	 * after it subscribes via `VscodeSessionHost.subscribeRuntimeEvents`.
+	 *
+	 * Observation-only: does not influence recovery, tool execution,
+	 * approval, or task scheduling. The wiring's `dispose()` cleans
+	 * up any state set by this method.
+	 */
+	observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void
 	resetForNewTask(): void
 	dispose(): void
 }
@@ -156,6 +188,22 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		comparator,
 		shadow,
 		now: deps.now,
+		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+			// narrow bridge from the canonical `AgentRuntimeEvent` seam
+			// into the shadow comparator. Origin is checked explicitly
+			// (not via implicit inference) so that C2.2 can introduce
+			// additional origin values without ambiguity.
+			if (input.origin !== "RUNTIME_CANONICAL") {
+				/* F1 only knows RUNTIME_CANONICAL; future origins land here. */
+				return
+			}
+			try {
+				comparator.observeRuntimeEvent(input.event, deps.getLegacyPhase(), deps.now())
+			} catch {
+				/* Observation-only — never throw into production paths. */
+			}
+		},
 		resetForNewTask(): void {
 			translator.debugReset()
 			comparator.debugReset()
@@ -176,6 +224,9 @@ function createNoopWiring(): TaskShadowHostWiringWithSink {
 		comparator: new TaskShadowComparator(),
 		shadow: new TaskStateShadow(),
 		now: () => Date.now(),
+		observeCanonicalRuntimeEvent(_input: TaskShadowCanonicalEvent): void {
+			/* No-op: wiring disabled by env flag. */
+		},
 		resetForNewTask: () => {
 			recorder.debugReset()
 		},

@@ -46,6 +46,7 @@ import { getDistinctId } from "@/services/logging/distinctId"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
 import { CommandJobManager } from "./command-job-manager"
+import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import type { SdkSessionHost } from "./session-host"
 import { createVscodeExtraTools } from "./vscode-runtime-builder"
@@ -341,9 +342,6 @@ export class VscodeSessionHost implements SdkSessionHost {
 		const inner = this.inner as ClineCore & {
 			subscribeRuntimeEvents?: (listener: (sessionId: string, event: AgentRuntimeEvent) => void) => () => void
 		}
-		if (!inner.subscribeRuntimeEvents) {
-			return () => {}
-		}
-		return inner.subscribeRuntimeEvents(listener)
+		return subscribeRuntimeEventsThroughProxy(inner, listener)
 	}
 }

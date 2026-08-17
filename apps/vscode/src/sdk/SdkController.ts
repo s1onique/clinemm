@@ -1674,7 +1674,11 @@ export class Controller {
 			if (!shadow) {
 				return
 			}
-			shadow.comparator.observeRuntimeEvent(event, this.turnStateTracker.currentPhase, Date.now())
+			shadow.observeCanonicalRuntimeEvent({
+				origin: "RUNTIME_CANONICAL",
+				sessionId,
+				event,
+			})
 		})
 	}
 
