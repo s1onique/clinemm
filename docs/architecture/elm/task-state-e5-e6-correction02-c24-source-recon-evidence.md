@@ -73,16 +73,48 @@ above):
 1062  emitExecutionStateChangeIfChanged (call site)
 ```
 
-**Producer inventory total: 26 emit sites producing 12 distinct
-canonical event types** (excluding `assistant-text-delta` /
-`assistant-reasoning-delta` / `message-added` / `assistant-message`
-/ `usage-updated` / `tool-updated` / `turn-started` /
-`turn-finished` / `status-notice`, the shadow adapter drops these
-to `[]` per `shadow-adapter.ts:75-79` and `shadow-adapter.ts:140-142`).
+**Producer inventory (CORRECTION01 R2 — reconciling the 16/12/7 split):**
 
-The 12 distinct producers form the **state-relevant canonical
-producer surface** for C2.4.
-- **A2** Canonical event-type table (per-event-type template, 5 questions)
+```
+AGENT_RUNTIME_EVENT_TYPES_EMITTED = 16
+STATE_IRRELEVANT_NOOP_TYPES        = 9
+  (assistant-text-delta,
+   assistant-reasoning-delta,
+   message-added,
+   assistant-message,
+   usage-updated,
+   tool-updated,
+   turn-started,
+   turn-finished,
+   status-notice)
+STATE_RELEVANT_CATEGORICAL_TYPES   = 7
+  (run-started,
+   run-finished,
+   run-failed,
+   tool-started,
+   tool-finished,
+   execution-state-changed,
+   recovery-state-changed)
+EMIT_SITES                         = 26
+
+RECONCILIATION:
+  26 emit sites produce 16 distinct types
+  of which 9 are noop at the shadow adapter
+  leaving 7 state-relevant canonical events,
+  the same 7 that produce TaskMsg
+  (edge-triggered or otherwise).
+```
+
+The 9 state-irrelevant types are dropped to `[]` by
+the shadow adapter per `shadow-adapter.ts:75-79` and
+`shadow-adapter.ts:140-142`. The 7 state-relevant types
+form the canonical producer surface for C2.4. The
+original A1 claim of "26 emit sites producing 12 distinct
+canonical event types" was a documentary error (12 was
+not the count of *any* of the three categories) and is
+amended here. The 16 distinct types produced by the 26
+emit sites are listed exhaustively in the inventory table
+above.- **A2** Canonical event-type table (per-event-type template, 5 questions)
 - **A3** Transport-hop table (with per-hop semantics labels)
 - **A4** runId guarantee table (type-has-field vs emission-guarantee)
 ## 2. A2 — Canonical event-type table (per-event-type template)
@@ -98,7 +130,7 @@ or `observe` / `observeRuntimeEvent` test references.
 | `run-failed` | `agent-runtime.ts:1454` inside `execute()` catch with `status === "failed"` | DEFINED — same `this.state.runId` | YES | YES — `shadow-adapter.ts:89-91` → `task_failed` TaskMsg | terminal (failure) |
 | `tool-started` | `agent-runtime.ts:1745` (parallel-batch), `2616` (per-tool), legacy emit under `emitToolStarted` | DEFINED — same `this.state.runId` via `snapshot` | YES | YES — `shadow-adapter.ts:92-94` → `tool_started` TaskMsg | activity |
 | `tool-finished` | `agent-runtime.ts:1809, 2820` | DEFINED — same `this.state.runId` | YES | YES — `shadow-adapter.ts:95-97` → `tool_finished` TaskMsg | activity |
-| `execution-state-changed` | `agent-runtime.ts:1090` via `emitExecutionStateChangeIfChanged` (RSMT01 sole owner) | DEFINED for active runs (`state.runId` populated); MAY be `undefined` after `restore()` clears `runId` at line 794 | YES | YES — `shadow-adapter.ts:98-126` → no TaskMsg (read-only delta for `execution` projection); comparator consumes `execution` projection only | authority-state projection |
+| `execution-state-changed` | `agent-runtime.ts:1090` via `emitExecutionStateChangeIfChanged` (RSMT01 sole owner) | DEFINED for active runs (`state.runId` populated); MAY be `undefined` after `restore()` clears `runId` at line 794 | YES | YES — `shadow-adapter.ts:98-126` → edge-triggered TaskMsgs via `previousExecution`: `model_stream_started` / `model_stream_finished` / `approval_requested` / `approval_resolved` (4 possible, 0 if unchanged) | execution projection |
 | `recovery-state-changed` | `agent-runtime.ts:857, 1024` via `emitRecoveryStateChangeIfChanged` | DEFINED for active runs; MAY be `undefined` after `restore()` | YES | YES — `shadow-adapter.ts:127-156` → `recovery_changed` TaskMsg (with sanitized projection) | recovery projection |
 | `message-added` | `agent-runtime.ts:1191, 1247, 1293, 1343, 2210` | DEFINED for active runs | YES | NO — `shadow-adapter.ts` returns `[]` (presentation-only; carries no shadow-relevant projection) | not relevant |
 | `turn-started` | `agent-runtime.ts:1268` | DEFINED | YES | NO — no TaskMsg mapping (presentation boundary only) | not relevant |
@@ -187,16 +219,46 @@ TRANSLATE | FILTER | RECONSTRUCT`.
 | 5 | `ClineCore.subscribeRuntimeEvents(listener)` → `host.subscribeRuntimeEvents(listener)` | `ClineCore.ts:674-681` | `REFERENCE_PASS_THROUGH` | YES |
 | 6 | `VscodeSessionHost.subscribeRuntimeEvents` → `subscribeRuntimeEventsThroughProxy(inner, listener)` | `vscode-session-host.ts:341-346`, `runtime-events-proxy.ts:23-35` | `REFERENCE_PASS_THROUGH` — proxy is a 35-line direct forwarder | YES |
 | 7 | `subscribeCanonicalRuntimeEventsToShadow` sessionId filter | `canonical-event-subscription.ts:55-72` | `FILTER` — drops when `evtSessionId !== sessionId`; otherwise forwards | YES when forwarded |
-| 8 | `TaskShadowHostWiring.observeCanonicalRuntimeEvent` | `task-state-shadow-host-wiring.ts:374-466` | `REFERENCE_PASS_THROUGH` after session-authority guard (line 393-399), terminal-ownership guard (line 429-440), and tracker update (line 450-457) | YES |
+| 8 | `TaskShadowHostWiring.observeCanonicalRuntimeEvent` | `task-state-shadow-host-wiring.ts:374-466` | `FILTER_AUTHORITY + TRACK_EPOCH + REFERENCE_PASS_THROUGH_IF_ACCEPTED` — session-authority guard (line 393-399), terminal-ownership guard on `run-finished/run-failed` (line 429-440), tracker update on `run-started` (line 450-457), then forward to coordinator | YES only when accepted (otherwise the event is dropped before the coordinator sees it) |
 | 9 | `coordinator.observe({ kind: "runtime-canonical", origin, sessionId, event })` | `task-state-shadow-host-wiring.ts:459-465` | `REFERENCE_PASS_THROUGH` (typed envelope) | YES |
 | 10 | `TaskStateShadow.observeRuntimeEvent(event, now)` → `adaptRuntimeEvent(event, now)` | `shadow-adapter.ts:206-213` and `:80-156` | `TRANSLATE` — canonical `AgentRuntimeEvent` → array of `TaskMsg`s | NO — `event` is consumed; output is a `TaskMsg[]` |
 | 11 | `TaskMsg → taskUpdate(model, msg)` reducer | `sdk/packages/agents/src/runtime/state/task-state/update.ts` | `TRANSLATE` — TaskMsg → next `(TaskModel, TaskEffect[])` | NO — terminal transformation |
 
 `ALL_ACTUAL_HOPS_FROM_PRODUCER_TO_SHADOW_AUDITED = true`
 
-Every hop in the chain is enumerated. `REFERENCE_PASS_THROUGH`
-through hops 0-9 (verbatim event object). `TRANSLATE` only at
-hops 10-11 (into TaskMsg / TaskModel).
+Every hop in the chain is enumerated. CORRECTION01 R3
+narrows the fidelity claim:
+
+```
+0–6  REFERENCE_PASS_THROUGH          (in-process JS, no rewrite)
+7    FILTER_SESSION_SUBSCRIPTION     (drop if wrong session)
+8    FILTER_AUTHORITY + TRACK_EPOCH + REFERENCE_PASS_THROUGH_IF_ACCEPTED
+9    REFERENCE_PASS_THROUGH          (typed envelope to coordinator)
+10   TRANSLATE  AgentRuntimeEvent → TaskMsg[]
+11   TRANSLATE  TaskMsg → TaskModel (reducer)
+```
+
+Reference identity is preserved for events that are
+accepted at hops 7 and 8. Events dropped at hop 7
+(cross-session) or hop 8 (cross-session, awaited
+epoch, wrong-active-run) never reach the reducer, so
+their reference identity is moot.
+
+```
+LOCAL_EVENT_OBJECT_PRESERVED_FOR_ACCEPTED_EVENTS = PASS
+                                                   (NOT a global
+                                                    all-hops claim)
+```
+
+Per C2.4 reviewer's correction (R3), the prior
+"Local F1-I3 reference-identity still PASS" wording
+is preserved as a narrower property: it holds at the
+consumer-side handoff (hops 0-6, 9) and at hops 7/8
+*conditional on acceptance*. The frozen F1-I3
+witness at `task-state-e2f-f1-correction03-evidence.md:135`
+proven at SessionRuntime is the narrowest, most direct
+evidence — it does not extend across hops 7-8 of the
+task-state-shadow-host-wiring path.
 
 ### Per-hop recon evidence for F1-I3 reference-identity preservation
 
@@ -250,8 +312,22 @@ shadow-input boundary.**
 **Summary**: 6 of 7 state-relevant event types have `runId`
 DEFINED at the emission site whenever `state.status === "running"`.
 The 1 exception is `recovery-state-changed` when emitted from
-`restore()` (line 857), which is the post-reset epoch fence that
-the wiring's `postResetAwaitingCanonicalRunRef` already handles.
+`restore()` (line 857), which carries `runId === undefined`.
+This is a live C2.4-B reachability row — the wiring's
+terminal-runId gate (line 429-440) is keyed on `run-finished`
+and `run-failed` only and does NOT special-case a
+`recovery-state-changed` with `runId === undefined`. The
+event is forwarded to the coordinator via hop 8 (where the
+session-authority guard and the run-epoch terminal gate
+both ignore it) and into `adaptRuntimeEvent` which produces
+a `recovery_changed` TaskMsg. **CORRECTION01 R5**: this row
+must be observed directly in C2.4-B, not marked as
+"already handled" by the wiring. The C2.3 post-reset fence
+was built primarily to prevent terminal `run-finished`
+events from acquiring authority before the next canonical
+`run-started`; it does not by itself prove that a
+`recovery-state-changed` carrying `runId === undefined`
+is harmless.
 
 `RUN_ID_GUARANTEE_CLASSIFIED = 100%` (every event type covered).
 ## 5. A5 — Session-binding table
@@ -306,15 +382,51 @@ For Hub/Remote, the canonical-event seam **does not exist in
 the current codebase**. This is a decisive recon finding for
 A6 below.
 
-## 6. A6 — Backend capability preliminary table
+## 6. A6 — Backend canonical capability & total provenance
 
-| Backend | canonical stream | runId provenance | session binding | canonical authority | qualification (preliminary) |
-| ------- | ----------------- | ---------------- | --------------- | ------------------- | --------------------------- |
-| Local | YES — `LocalRuntimeHost.subscribeRuntimeEvents` (`local-runtime-host.ts:1511-1531`) | YES — verbatim `snapshot.runId` from producer | YES — closure over `active.sessionId` (`local-runtime-host.ts:1516-1520`) | YES — wiring accepts RUNTIME_CANONICAL with `event.snapshot.runId` provenance | `LOCAL_QUALIFIED` (pending C2.4-B/C) |
-| Hub | **NO** — `hub-runtime-host.ts` does not implement `subscribeRuntimeEvents` (zero matches) | N/A — seam absent | N/A — seam absent | NO — `ClineCore.subscribeRuntimeEvents` returns no-op (`ClineCore.ts:677-679`) | `NOT_YET_QUALIFIED` |
-| Remote | **NO** — `remote-runtime-host.ts` extends `HubRuntimeHost`, no override (verified by grep) | N/A | N/A | NO | `NOT_YET_QUALIFIED` |
+CORRECTION01 R7 splits the disposition differently. The
+canonical-seam absence alone is not sufficient to assert
+total provenance.
+
+### Canonical-seam presence (per backend)
+
+| Backend | canonical stream | runId provenance | session binding | canonical authority |
+| ------- | ----------------- | ---------------- | --------------- | ------------------- |
+| Local | YES — `LocalRuntimeHost.subscribeRuntimeEvents` (`local-runtime-host.ts:1511-1531`) | YES — verbatim `snapshot.runId` from producer | YES — closure over `active.sessionId` (`local-runtime-host.ts:1516-1520`) | YES — wiring accepts RUNTIME_CANONICAL with `event.snapshot.runId` provenance |
+| Hub | **ABSENT** — `hub-runtime-host.ts` does not implement `subscribeRuntimeEvents` (zero matches) | N/A — seam absent | N/A — seam absent | NO — `ClineCore.subscribeRuntimeEvents` returns no-op (`ClineCore.ts:677-679`) |
+| Remote | **ABSENT** — `remote-runtime-host.ts` extends `HubRuntimeHost`, no override (verified by grep) | N/A | N/A | NO |
+
+### Total provenance (canonical + fallback route)
+
+| Backend | canonical seam | fallback route to TaskShadowReverseTranslator | total provenance | final qualification |
+| ------- | -------------- | -------------------------------------------- | ---------------- | ------------------- |
+| Local | ABSENT | NO — legacy `subscribe` (CoreSessionEvent) still emits, but Local canonical seam supersedes it for state-mutating events | FULL (canonical authority via `LocalRuntimeHost.subscribeRuntimeEvents`) | `LOCAL_QUALIFIED_FOR_CANONICAL_AUTHORITY` (pending C2.4-B/C verification) |
+| Hub | ABSENT | PENDING_FALLBACK_RECON — see CORRECTION01 R6 below | PENDING_FALLBACK_RECON | PENDING C2.4-D |
+| Remote | ABSENT | PENDING_FALLBACK_RECON — see CORRECTION01 R6 below | PENDING_FALLBACK_RECON | PENDING C2.4-D |
+
+```
+LOCAL_CANONICAL_CAPABILITY = QUALIFIED_FOR_CANONICAL_AUTHORITY
+HUB_CANONICAL_CAPABILITY    = ABSENT
+REMOTE_CANONICAL_CAPABILITY = ABSENT
+HUB_TOTAL_PROVENANCE        = PENDING_FALLBACK_RECON
+REMOTE_TOTAL_PROVENANCE     = PENDING_FALLBACK_RECON
+HUB_FINAL_QUALIFICATION     = PENDING C2.4-D
+REMOTE_FINAL_QUALIFICATION  = PENDING C2.4-D
+```
+
+The previous A6 column "NOT_YET_QUALIFIED" collapsed
+canonical and total provenance into one — corrected here
+per R7. Final qualification is the C2.4-D deliverable,
+not a recon finding.
 
 ## 7. A7 — Reconstructed-fallback inventory
+
+CORRECTION01 R6: split the previous "100% coverage" claim
+into two distinct gates — the **translator implementation**
+is fully audited, but the **Hub/Remote fallback reachability
+chain** is not yet traced end-to-end.
+
+### Translator implementation (audited)
 
 The reconstructed path is `TaskShadowReverseTranslator` in
 `task-state-shadow-observer.ts`. Per its doc-block at
@@ -338,32 +450,136 @@ is absent. The wiring's coordinator SUPPRESSES reconstructed
 events when a canonical event for the same edge is available
 (`task-state-shadow-host-wiring.ts:82-87`).
 
-The reconstructed path is NOT used in the Local backend
+The reconstructed path is NOT used in the Local backend for
+state-mutating events because Local has full canonical
+authority (A6 above). The reconstructed translator IS still
+instantiated for Local (the wiring is backend-uniform), but
+the coordinator's edge-coalescing logic suppresses the
+reconstructed emit when the canonical event has already
+arrived.
+
+```
+REVERSE_TRANSLATOR_IMPLEMENTATION_AUDITED        = true
+REVERSE_TRANSLATOR_SUBSET_DOCUMENTED              = 7 events
+                                                    (matches the 7
+                                                     state-relevant
+                                                     canonical)
+reconstructed-envelope distinguishable from canonical? = YES
+   (origin tag at line 96-107 of wiring:
+    "RUNTIME_CANONICAL" vs "RUNTIME_RECONSTRUCTED")
+```
+
+### Hub/Remote fallback reachability (TRACED, not empirical)
+
+The wiring's wrapping of `onSessionEvent` is the single
+fallback ingress point for ALL backends:
+
+```
+Hub/Remote CoreSessionEvent
+  ↓
+host.subscribe(handler)  (ClineCore.subscribe → host.subscribe)
+  ↓
+VscodeSessionHost.subscribe(listener)  (vscode-session-host.ts:313-314)
+  ↓
+this.inner.subscribe(listener)         (thin pass-through)
+  ↓
+SdkSessionLifecycle.ensureSharedHostSubscription
+  (sdk-session-lifecycle.ts:304-323)
+  ↓
+Wrapped by TaskShadowHostWiring
+  (task-state-shadow-host-wiring.ts:266-279)
+  ↓
+Wrapped onSessionEvent first calls
+  observeLegacyEvent(...)   (reconstructed path)
+  ↓
+TaskShadowReverseTranslator   (RUNTIME_RECONSTRUCTED)
+  ↓
+coordinator.observe
+  (with canonical edge-key coalescing)
+```
+
+This is a **traced** chain, not an empirically observed
+flow. The reviewer's R6 concern stands: the `onSessionEvent`
+hook is consumed by `SdkController` for gRPC streaming
+(`SdkController.ts:556, 598`) and by `SdkSessionLifecycle`
+for in-process teardown. Whether legacy Hub/Remote events
+*actually* go through `SdkController` (and thus through the
+wiring's wrapper) depends on the gRPC bridge and the
+host's `subscribe` contract — neither of which live in the
+Local fallback path. C2.4-D must verify the Hub/Remote
+gRPC bridge calls `onSessionEvent` so the wiring wrapper
+is in the live path.
+
+```
+HUB_REMOTE_FALLBACK_REACHABILITY_TRACED  = YES
+HUB_REMOTE_FALLBACK_REACHABILITY_VERIFIED = NO
+                                              (pending C2.4-D
+                                               gRPC bridge proof)
+```
+
+The previous "RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE = 100%"
+claim was a conflation of these two distinct gates and is
+corrected here.
+
 ## 8. A8 — Recon evidence + B authorization
 
 ### Acceptance gate (per plan round-6 bookkeeping)
 
+CORRECTION01 revised gate (committing after R1–R7 corrections):
+
 ```
-CANONICAL_SOURCE_RECON_TABLE
-  STATE_RELEVANT_CANONICAL_PRODUCERS_DISCOVERED = 7
-  STATE_RELEVANT_CANONICAL_PRODUCERS_AUDITED    = 7
-  PRODUCER_AUDIT_COVERAGE                       = 100%
-  producer runId guarantee documented           = 100%
+CANONICAL_SOURCE_RECON_TABLE (CORRECTION01)
+  AGENT_RUNTIME_EVENT_TYPES_EMITTED              = 16  (R2)
+  STATE_IRRELEVANT_NOOP_TYPES                    = 9   (R2)
+  STATE_RELEVANT_CATEGORICAL_TYPES               = 7   (R2)
+  STATE_RELEVANT_CATEGORICAL_TYPES_AUDITED       = 7
+  PRODUCER_AUDIT_COVERAGE                        = 100%
+  EMIT_SITES_DISCOVERED                          = 26
+  EMIT_SITES_AUDITED                             = 26
+  EMIT_SITE_AUDIT_COVERAGE                       = 100%
+  producer runId guarantee documented            = 100%
   SessionRuntime fanout audited                  = YES
   ALL_ACTUAL_HOPS_FROM_PRODUCER_TO_SHADOW_AUDITED = true
-  Local F1-I3 reference-identity still PASS      = YES
-  Local proxy rewrites provenance?               = NO (REFERENCE_PASS_THROUGH verified at all 10 hops)
+  hops 0-6                                       = REFERENCE_PASS_THROUGH
+  hop 7                                          = FILTER_SESSION_SUBSCRIPTION
+  hop 8                                          = FILTER_AUTHORITY + TRACK_EPOCH
+                                                   + REFERENCE_PASS_THROUGH_IF_ACCEPTED
+  hop 9                                          = REFERENCE_PASS_THROUGH
+  hops 10-11                                     = TRANSLATE (TaskMsg, reducer)
+  Local F1-I3 reference-identity (consumer-side) = PASS
+  LOCAL_EVENT_OBJECT_PRESERVED_FOR_ACCEPTED_EVENTS = PASS (R3)
+  Local proxy rewrites provenance?               = NO
   Hub proxy rewrites provenance?                 = NOT_APPLICABLE (no canonical seam)
   Remote proxy rewrites provenance?              = NOT_APPLICABLE (no canonical seam)
   backend binding confirmed                      = local-only (canonical authority)
-  RECONSTRUCTED_FALLBACK_SITES_DISCOVERED        = 1
-  RECONSTRUCTED_FALLBACK_AUDITED                 = 1
-  RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE          = 100%
-  reconstructed-fallback reach to TaskStateShadow = yes (suppressed when canonical exists)
+  RECONSTRUCTED_FALLBACK_SITES_DISCOVERED        = 1 (R6)
+  REVERSE_TRANSLATOR_IMPLEMENTATION_AUDITED      = YES (R6)
+  REVERSE_TRANSLATOR_SUBSET_DOCUMENTED           = 7 events (matches canonical)
+  RECONSTRUCTED_FALLBACK_SITES_AUDITED           = 1
+  RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE_IMPL     = 100%
+  reconstructed-fallback reach to TaskStateShadow = yes (via coordinator;
+                                                    suppressed when canonical exists)
   reconstructed-envelope distinguishable from canonical? = yes
+  HUB_REMOTE_FALLBACK_REACHABILITY_TRACED        = YES  (R6)
+  HUB_REMOTE_FALLBACK_REACHABILITY_VERIFIED       = NO   (R6 — pending C2.4-D)
   RUN_ID_GUARANTEE_CLASSIFIED                    = 100%
   SESSION_BINDING_CLASSIFIED                     = 100%
   UNRESOLVED_REACHABILITY_ROWS                   = 0
+                                                    (after R5 explicit
+                                                     re-classification)
+```
+
+### Disposition matrix (CORRECTION01 R7)
+
+```
+LOCAL_CANONICAL_CAPABILITY  = QUALIFIED_FOR_CANONICAL_AUTHORITY
+                              (pending C2.4-B/C verification)
+HUB_CANONICAL_CAPABILITY     = ABSENT
+REMOTE_CANONICAL_CAPABILITY  = ABSENT
+HUB_TOTAL_PROVENANCE         = PENDING_FALLBACK_RECON
+REMOTE_TOTAL_PROVENANCE      = PENDING_FALLBACK_RECON
+HUB_FINAL_QUALIFICATION      = PENDING C2.4-D
+REMOTE_FINAL_QUALIFICATION   = PENDING C2.4-D
 ```
 
 ### Key architectural facts established
@@ -371,9 +587,11 @@ CANONICAL_SOURCE_RECON_TABLE
 1. **Producer direction is correct** (AMENDMENT-02 verified):
    `AgentRuntime.emit` → `runtime.subscribe` → `SessionRuntimeOrchestrator.handleRuntimeEvent` → `runtimeEventListeners` fanout → `LocalRuntimeHost.subscribeRuntimeEvents` → `ClineCore` → `VscodeSessionHost` → `runtime-events-proxy` → `subscribeCanonicalRuntimeEventsToShadow` → `TaskShadowHostWiring.observeCanonicalRuntimeEvent` → `coordinator.observe` → `TaskStateShadow.observeRuntimeEvent`.
 
-2. **Local F1-I3 reference-identity is preserved verbatim** at every hop (0-9). No SERIALIZE, COPY, or RECONSTRUCT in the canonical pipeline. `Local F1-I3 reference-identity still PASS = YES`.
+2. **Local reference-identity is preserved conditionally** (R3 correction):
+   `LOCAL_EVENT_OBJECT_PRESERVED_FOR_ACCEPTED_EVENTS = PASS`. The frozen F1-I3 witness at `task-state-e2f-f1-correction03-evidence.md:135` proves reference-identity at SessionRuntime. Hops 0-6 and 9 are `REFERENCE_PASS_THROUGH`. Hop 7 filters cross-session, hop 8 filters cross-session / awaited-epoch / wrong-active-run; accepted events are then `REFERENCE_PASS_THROUGH`. The narrower claim is accurate; the broader "all 10 hops pass-through" claim is not.
 
-3. **Hub/Remote canonical seam is absent**. The current production code base does not implement `subscribeRuntimeEvents` on `HubRuntimeHost` or `RemoteRuntimeHost`. Therefore Hub/Remote disposition is `NOT_YET_QUALIFIED` — the canonical-event authority path that the wiring observes is **only available in Local backend**.
+3. **Hub/Remote canonical seam is absent** (R7 correction):
+   `HubRuntimeHost` and `RemoteRuntimeHost` do not implement `subscribeRuntimeEvents`. Therefore the canonical authority path is **only available in Local backend**. Hub/Remote total provenance is `PENDING_FALLBACK_RECON` until C2.4-D traces the `onSessionEvent` wrapper through the gRPC bridge.
 
 4. **Per-event-type recon template completed** with source citations for all 7 state-relevant event types. `RUN_ID_GUARANTEE_CLASSIFIED = 100%`, `SESSION_BINDING_CLASSIFIED = 100%`.
 
@@ -384,26 +602,73 @@ CANONICAL_SOURCE_RECON_TABLE
    - Session identity binding? → §5
    - Reach canonical shadow ingress? → §2 (all 7 YES for Local)
 
-6. **Per-hop semantics labels applied** (reviewer round-6):
-   REFERENCE_PASS_THROUGH at hops 0-9; TRANSLATE at hops 10-11
-   (TaskMsg / reducer). No SERIALIZE_DESERIALIZE, FILTER, or
-   RECONSTRUCT in the canonical pipeline.
+6. **Per-hop semantics labels applied** (reviewer round-6, R3):
+   REFERENCE_PASS_THROUGH at hops 0-6, 9; FILTER at hop 7;
+   FILTER_AUTHORITY + TRACK_EPOCH + REFERENCE_PASS_THROUGH_IF_ACCEPTED
+   at hop 8; TRANSLATE at hops 10-11 (TaskMsg / reducer). The
+   pipeline has 2 FILTERs (1 session, 1 authority) and 1
+   AUTHORITY guard, plus a TRACK_EPOCH update on `run-started`.
+   No SERIALIZE_DESERIALIZE, no COPY, no RECONSTRUCT in the
+   canonical pipeline.
+
+7. **`execution-state-changed` is edge-triggered** (R1 correction):
+   it produces `model_stream_started` / `model_stream_finished`
+   / `approval_requested` / `approval_resolved` TaskMsgs via
+   `previousExecution` diffing
+   (`shadow-adapter.ts:98-126`). The previous A2 row
+   "no TaskMsg (read-only delta)" was a documentary error.
+
+8. **`recovery-state-changed(runId === undefined)` is a live row** (R5 correction):
+   emitted at `restore()` (`agent-runtime.ts:857`) AFTER
+   `this.state.runId = undefined` (`agent-runtime.ts:794`).
+   The wiring's `postResetAwaitingCanonicalRunRef` flag
+   exists but its terminal-ownership gate (line 429-440)
+   keys on `run-finished`/`run-failed`, not on
+   `recovery-state-changed`. C2.4-B must observe this row
+   directly.
 
 ### Verdict
 
 ```
-C2_4_A_VERDICT = PASS_RECON
+C2_4_A_VERDICT = PASS_RECON (after CORRECTION01 R1–R7 fixing)
 
 NEXT = C2.4-B NO_ACTIVE_SESSION WITNESSES
        (no production edits in this commit)
 
 C2_4_B_AUTHORIZED = true
 
-PRODUCER_AUDIT_COVERAGE             = 100%
-EVENT_TYPE_AUDIT_COVERAGE            = 100%
-ALL_ACTUAL_HOPS_FROM_PRODUCER_TO_SHADOW_AUDITED = true
-UNRESOLVED_REACHABILITY_ROWS         = 0
-LOCAL_EVENT_FIDELITY                 = PASS (all 10 hops REFERENCE_PASS_THROUGH)
+PRODUCER_AUDIT_COVERAGE                           = 100%
+EMIT_SITE_AUDIT_COVERAGE                          = 100%
+EVENT_TYPE_AUDIT_COVERAGE                         = 100%
+ALL_ACTUAL_HOPS_FROM_PRODUCER_TO_SHADOW_AUDITED   = true
+RUN_ID_GUARANTEE_CLASSIFIED                       = 100%
+SESSION_BINDING_CLASSIFIED                        = 100%
+RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE_IMPL        = 100%
+HUB_REMOTE_FALLBACK_REACHABILITY_VERIFIED          = NO   (R6: pending C2.4-D)
+UNRESOLVED_REACHABILITY_ROWS                      = 0
+                                                       (after R5 explicit
+                                                        re-classification)
+
+LOCAL_EVENT_OBJECT_PRESERVED_FOR_ACCEPTED_EVENTS  = PASS
+                                                       (R3: conditional
+                                                        on hop 7/8
+                                                        acceptance)
+LOCAL_F1_I3_REFERENCE_IDENTITY_CONSUMER_SIDE      = PASS
+                                                       (frozen F1-I3
+                                                        witness at
+                                                        SessionRuntime)
+
+LOCAL_CANONICAL_CAPABILITY                        = QUALIFIED_FOR_CANONICAL_AUTHORITY
+                                                       (pending C2.4-B/C
+                                                        verification)
+HUB_CANONICAL_CAPABILITY                          = ABSENT
+REMOTE_CANONICAL_CAPABILITY                       = ABSENT
+HUB_TOTAL_PROVENANCE                              = PENDING_FALLBACK_RECON
+REMOTE_TOTAL_PROVENANCE                           = PENDING_FALLBACK_RECON
+HUB_FINAL_QUALIFICATION                           = PENDING C2.4-D
+REMOTE_FINAL_QUALIFICATION                        = PENDING C2.4-D
+```
+
 ### What this commit deliberately does NOT do
 
 - Does NOT introduce the observation-layer guard
@@ -419,6 +684,10 @@ LOCAL_EVENT_FIDELITY                 = PASS (all 10 hops REFERENCE_PASS_THROUGH)
 - Does NOT update `task-state-authority-inventory.md`. The
   backend disposition matrix population belongs to C2.4-D,
   after recon + B + C are complete.
+- Does NOT classify Hub/Remote as `NOT_YET_QUALIFIED`.
+  Hub/Remote canonical seam is **ABSENT**; total provenance
+  is **PENDING_FALLBACK_RECON**; final qualification is
+  **PENDING C2.4-D** (R7 correction).
 
 ### Files referenced (NOT modified) by this commit
 
@@ -427,42 +696,13 @@ sdk/packages/agents/src/agent-runtime.ts
 sdk/packages/agents/src/runtime/state/task-state/{model,msg,update,effects,selectors,invariants,shadow-adapter,index}.ts
 sdk/packages/core/src/ClineCore.ts
 sdk/packages/core/src/runtime/host/{runtime-host,local-runtime-host}.ts
+sdk/packages/core/src/runtime/host/runtime-host-support.ts
 sdk/packages/core/src/runtime/orchestration/{session-runtime,session-runtime-orchestrator,runtime-event-adapter}.ts
 sdk/packages/core/src/hub/runtime-host/{hub-runtime-host,remote-runtime-host}.ts
 sdk/packages/shared/src/agent.ts
 apps/vscode/src/sdk/{runtime-events-proxy,canonical-event-subscription,task-state-shadow,task-state-shadow-observer,task-state-shadow-host-wiring}.ts
+apps/vscode/src/sdk/sdk-session-lifecycle.ts
+apps/vscode/src/sdk/vscode-session-host.ts
 ```
 
 No file in any of these paths was edited by this commit.
-LOCAL_REFERENCE_PRESERVATION         = PASS (snapshot.runId verbatim)
-HUB_CANONICAL_CAPABILITY             = KNOWN (NOT_YET_QUALIFIED)
-REMOTE_CANONICAL_CAPABILITY          = KNOWN (NOT_YET_QUALIFIED)
-HUB_PROVENANCE                       = NONE
-REMOTE_PROVENANCE                    = NONE
-RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE = 100%
-```
-recon because Local has full canonical authority (A6 above).
-
-```
-RECONSTRUCTED_FALLBACK_SITES_DISCOVERED = 1 (TaskShadowReverseTranslator)
-RECONSTRUCTED_FALLBACK_AUDITED          = 1
-RECONSTRUCTED_FALLBACK_AUDIT_COVERAGE   = 100%
-reconstructed-fallback reach to TaskStateShadow = yes (via coordinator; suppressed when canonical exists)
-reconstructed-envelope distinguishable from canonical? = yes (origin tag at line 96-107 of wiring)
-```
-The **fallback path** for Hub/Remote is the **reconstructed
-translator** at
-`task-state-shadow-observer.ts` (453 lines), which reverse-translates
-legacy `CoreSessionEvent` / `AgentEvent` into a
-`AgentRuntimeEvent`-shaped approximation. The wiring receives
-these as `origin: "RUNTIME_RECONSTRUCTED"` events, which the
-coordinator SUPPRESSES when canonical authority is available
-(per `task-state-shadow-host-wiring.ts:81-94`).
-
-```
-HUB_CANONICAL_CAPABILITY  = KNOWN (NOT_YET_QUALIFIED)
-REMOTE_CANONICAL_CAPABILITY = KNOWN (NOT_YET_QUALIFIED)
-HUB_PROVENANCE = NONE  (canonical seam absent)
-REMOTE_PROVENANCE = NONE  (canonical seam absent)
-backend binding confirmed = local-only (canonical authority)
-```
