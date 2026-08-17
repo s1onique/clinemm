@@ -1035,6 +1035,133 @@ describe("C3.CONT.1 W06 — approval_deny; awaitingApproval false→true→false
 		expect(m.activity.awaitingApproval).toBe(false)
 		expect(m.activity.modelStreaming).toBe(false)
 	})
+
+	// =========================================================================
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.6
+	// W06_REAL_DENY: production-realistic approval-deny canonical sequence.
+	// =========================================================================
+
+	describe("C2.3-CONT.6 W06_REAL_DENY — production-realistic approval-deny canonical sequence", () => {
+		it("lifecycle stays running; full canonical sequence (approval cycle + tool-started/tool-finished pair); exact counts", () => {
+			const snapIdle = snapshotFixture({
+				runId: "run-W06R",
+				iteration: 0,
+				execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+				recoveryState: "idle",
+				status: "running",
+				pendingToolCalls: [],
+			})
+			const snapStreaming: AgentRuntimeStateSnapshot = {
+				...snapIdle,
+				execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+			}
+			const snapAwaitingApproval: AgentRuntimeStateSnapshot = {
+				...snapIdle,
+				execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: true },
+			}
+			const snapApprovedClear: AgentRuntimeStateSnapshot = {
+				...snapIdle,
+				execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+				pendingToolCalls: ["tc1"],
+			}
+			const snapIdleAfterTool: AgentRuntimeStateSnapshot = {
+				...snapIdle,
+				execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+				pendingToolCalls: [],
+			}
+			const steps: WorkloadStep[] = [
+				{ kind: "host-task", taskId: "task-W06R", which: "requested", legacyPhase: "idle" },
+				{ kind: "set-active-session", sessionId: "session-W06R" },
+				{ kind: "canonical", sessionId: "session-W06R", event: runStarted(snapIdle) },
+				{
+					kind: "canonical",
+					sessionId: "session-W06R",
+					event: execEvent(snapIdle.execution!, snapStreaming),
+				},
+				{ kind: "set-legacy-phase", phase: "awaiting_approval" },
+				{
+					kind: "canonical",
+					sessionId: "session-W06R",
+					event: execEvent(snapStreaming.execution!, snapAwaitingApproval),
+				},
+				{
+					kind: "expect-state",
+					assertion: (m) => {
+						expect(m.activity.awaitingApproval).toBe(true)
+					},
+				},
+				{
+					kind: "canonical",
+					sessionId: "session-W06R",
+					event: execEvent(snapAwaitingApproval.execution!, snapApprovedClear),
+				},
+				{
+					kind: "expect-state",
+					assertion: (m) => {
+						expect(m.activity.awaitingApproval).toBe(false)
+					},
+				},
+				{
+					kind: "canonical",
+					sessionId: "session-W06R",
+					event: toolStarted(snapApprovedClear, "tc1"),
+				},
+				{
+					kind: "expect-state",
+					assertion: (m) => {
+						expect(m.activity.activeToolCallIds).toEqual(["tc1"])
+					},
+				},
+				// Production: after the tool-finished, the model
+				// continues. Legacy flips back to streaming to mirror
+				// the production-realistic TurnStateTracker behaviour
+				// (the model is streaming again because the run
+				// continues with the deny result).
+				{ kind: "set-legacy-phase", phase: "streaming" },
+				{
+					kind: "canonical",
+					sessionId: "session-W06R",
+					event: toolFinished(snapIdleAfterTool, "tc1"),
+				},
+				{
+					kind: "expect-state",
+					assertion: (m) => {
+						expect(m.lifecycle.kind).toBe("running")
+						expect(m.activity.modelStreaming).toBe(false)
+						expect(m.activity.activeToolCallIds).toEqual([])
+						expect(m.activity.awaitingApproval).toBe(false)
+					},
+				},
+			]
+			const state = runWorkload(steps)
+			hardGates(state)
+			const counts = state.wiring.recorderCounts()
+			const records = state.wiring.records()
+			// Exact counts per W06_REAL_DENY spec.
+			expect(records.filter((r) => r.event === "approval_requested").length).toBe(1)
+			expect(records.filter((r) => r.event === "approval_resolved").length).toBe(1)
+			expect(records.filter((r) => r.event === "tool_started").length).toBe(1)
+			expect(records.filter((r) => r.event === "tool_finished").length).toBe(1)
+			expect(records.filter((r) => r.event === "task_completed").length).toBe(0)
+			expect(records.filter((r) => r.event === "task_failed").length).toBe(0)
+			expect(records.filter((r) => r.event === "task_cancelled").length).toBe(0)
+			// D04_APPROVAL_PRECEDENCE: exactly 2 — the rise edge
+			// (shadow=streaming vs legacy=awaiting_approval) and the
+			// fall edge (shadow=idle vs legacy=awaiting_approval).
+			// The tool-started/tool-finished pair happens after
+			// legacyPhase flips back to streaming, so those
+			// observations are not D04.
+			expect(counts.divergenceCountsByClass.D04_APPROVAL_PRECEDENCE).toBe(2)
+			expect(counts.divergenceCountsByClass.D00_AGREE).toBeGreaterThanOrEqual(1)
+			expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+			expect(counts.fallbackReconstructedApplied).toBe(0)
+			const m = state.wiring.comparator.debugSnapshot()
+			expect(m.lifecycle.kind).toBe("running")
+			expect(m.activity.modelStreaming).toBe(false)
+			expect(m.activity.activeToolCallIds).toEqual([])
+			expect(m.activity.awaitingApproval).toBe(false)
+		})
+	})
 })
 
 describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activity must not reactivate (CORRECTION01)", () => {
