@@ -1,11 +1,22 @@
 /**
- * ACT-CLINEMM-ELM-ARCHITECTURE01 / Phase 18 — Mutation campaign.
+ * ACT-CLINEMM-ELM-ARCHITECTURE01 / Phase 18 — Mutation witness matrix.
  *
- * The campaign mutates the shadow implementation in this file (not
- * the production code) to prove the test suite bites each class of
- * mutation. The production code under test is the original
- * `taskUpdate` / `selectors.ts`; each mutation here is a tiny
- * deliberate sabotage that the test suite must detect.
+ * CORRECTION01 R9: the previous file was named `mutations.test.ts`
+ * and reported "APPLIED=10, KILLED=10". That was an overstatement:
+ * this file is a WITNESS MATRIX. Each entry (M1–W10) names a class
+ * of bug and asserts the production behavior the test suite would
+ * catch if that class were introduced. The assertions DO run against
+ * the real `taskUpdate`; they would turn red if the corresponding
+ * mutation were applied.
+ *
+ * This file does NOT itself apply mutations. The active mutation
+ * work is what produced this ACT (R1/R2/R3 found by review,
+ * R4/R7/R10 fixed in source). Future ACTs that want a real mutation
+ * score should add a separate `task-state.mutation-sweep.test.ts`
+ * that programmatically mutates `update.ts` and re-runs the suite.
+ *
+ * Renamed from `task-state.mutations.test.ts` to make the
+ * distinction explicit.
  */
 import { describe, expect, it } from "vitest";
 import { initialTaskModel, type TaskModel } from "./model";
@@ -166,5 +177,44 @@ describe("M10 — no Date.now() / clock reads inside taskUpdate", () => {
 		const a = seq.reduce<TaskModel>((m, msg) => taskUpdate(m, msg)[0], initialTaskModel());
 		const b = seq.reduce<TaskModel>((m, msg) => taskUpdate(m, msg)[0], initialTaskModel());
 		expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+	});
+});
+
+describe("M11 (CORRECTION01 R1) — tool IDs are tracked individually", () => {
+	it("two distinct tool IDs both increment toolCalls and stay in activeToolCallIds", () => {
+		const seq: TaskMsg[] = [
+			{ type: "task_requested", taskId: "t", at: NOW },
+			{ type: "tool_started", toolCallId: "a", at: NOW + 1 },
+			{ type: "tool_started", toolCallId: "b", at: NOW + 2 },
+			{ type: "tool_finished", toolCallId: "a", at: NOW + 3 },
+		];
+		const m = seq.reduce<TaskModel>((acc, msg) => taskUpdate(acc, msg)[0], initialTaskModel());
+		expect(m.activity.activeToolCallIds).toEqual(["b"]);
+		expect(m.telemetry.toolCalls).toBe(2);
+		expect(projectTurnState(m)).toBe("streaming");
+	});
+});
+
+describe("M12 (CORRECTION01 R3) — stale activity events do not reactivate the shadow", () => {
+	it("a stream start after task_completed is a no-op (the shadow stays completed)", () => {
+		const seq: TaskMsg[] = [
+			{ type: "task_requested", taskId: "t", at: NOW },
+			{ type: "model_stream_started", at: NOW + 1 },
+			{ type: "task_completed", at: NOW + 100 },
+			{ type: "model_stream_started", at: NOW + 200 },
+		];
+		const m = seq.reduce<TaskModel>((acc, msg) => taskUpdate(acc, msg)[0], initialTaskModel());
+		expect(m.lifecycle.kind).toBe("completed");
+		expect(m.activity.modelStreaming).toBe(false);
+	});
+
+	it("a stream start after task_became_resumable is a no-op (the shadow stays resumable)", () => {
+		const seq: TaskMsg[] = [
+			{ type: "task_became_resumable", at: NOW },
+			{ type: "model_stream_started", at: NOW + 1 },
+		];
+		const m = seq.reduce<TaskModel>((acc, msg) => taskUpdate(acc, msg)[0], initialTaskModel());
+		expect(m.lifecycle.kind).toBe("resumable");
+		expect(m.activity.modelStreaming).toBe(false);
 	});
 });
