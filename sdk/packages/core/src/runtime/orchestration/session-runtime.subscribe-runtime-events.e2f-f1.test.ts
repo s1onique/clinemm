@@ -533,10 +533,10 @@ describe("ELM-02F F1 — SessionRuntime.subscribeRuntimeEvents canonical seam", 
 	})
 
 	// ------------------------------------------------------------------------
-	// F1-T8 — legacy conservation
+	// F1-T8 — legacy conservation (EXACT F0 baseline)
 	// ------------------------------------------------------------------------
 
-	it("F1-T8: a canonical listener does not perturb the legacy event sequence", async () => {
+	it("F1-T8: a canonical listener does not perturb the legacy event sequence (exact F0 baseline)", async () => {
 		const deps = makeDeps({ events: fullTextSequence() })
 		const session = new SessionRuntime(makeAgentConfig(), deps)
 
@@ -549,14 +549,20 @@ describe("ELM-02F F1 — SessionRuntime.subscribeRuntimeEvents canonical seam", 
 
 		await session.run("go")
 
-		// The legacy sequence must still match the F0 baseline shape:
-		// start → content_start → content_end → iteration_end → done.
-		expect(legacy).toContain("iteration_start")
-		expect(legacy).toContain("iteration_end")
-		expect(legacy).toContain("content_start")
-		expect(legacy).toContain("content_end")
-		expect(legacy).toContain("done")
-		expect(legacy.length).toBeGreaterThanOrEqual(5)
+		// F1-T8 (CORRECTION01): use exact equality against the
+		// F0 baseline sequence, not just membership checks.
+		// The F0 frozen baseline is documented in
+		// docs/architecture/elm/task-state-e2f-f1-plan-freeze.md
+		// §2 and pinned by runtime-event-adapter.e2f-f0-witnesses.test.ts.
+		expect(legacy).toEqual([
+			"iteration_start",
+			"content_start",
+			"content_end",
+			"iteration_end",
+			"done",
+		])
+		// And the count is exact.
+		expect(legacy.length).toBe(5)
 	})
 
 	// ------------------------------------------------------------------------

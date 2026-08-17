@@ -191,15 +191,44 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
 			// narrow bridge from the canonical `AgentRuntimeEvent` seam
-			// into the shadow comparator. Origin is checked explicitly
-			// (not via implicit inference) so that C2.2 can introduce
-			// additional origin values without ambiguity.
+			// into the shadow comparator AND recorder. Origin is checked
+			// explicitly (not via implicit inference) so that C2.2 can
+			// introduce additional origin values without ambiguity.
 			if (input.origin !== "RUNTIME_CANONICAL") {
 				/* F1 only knows RUNTIME_CANONICAL; future origins land here. */
 				return
 			}
+			const now = deps.now()
+			const legacyPhase = deps.getLegacyPhase()
+			const arbiter = deps.getArbiterSnapshot()
+			const activeSession = deps.lifecycle.getActiveSession()
+			const taskEpochOrOpaqueTaskKey = activeSession?.sessionId
+			const runtimeStatus = deps.getRuntimeStatus?.()
 			try {
-				comparator.observeRuntimeEvent(input.event, deps.getLegacyPhase(), deps.now())
+				const observation = comparator.observeRuntimeEvent(input.event, legacyPhase, now)
+				const model = observation.observation.model
+				if (!model) {
+					/* No-op shadow observation; nothing to record. */
+					return
+				}
+				const toolCalls = observation.observation.projections.toolCalls ?? 0
+				const recoveryBudgetFailures = observation.observation.projections.recoveryBudgetFailures ?? 0
+				recorder.record(
+					{
+						seq: 0,
+						timestamp: now,
+						divergence: observation.divergence,
+						observationEvent: observation.observation.event,
+						observationLifecycleKind: model.lifecycle.kind,
+						observationModel: model,
+						observationToolCalls: toolCalls,
+						observationRecoveryBudgetFailures: recoveryBudgetFailures,
+						taskEpochOrOpaqueTaskKey,
+						runtimeStatus,
+						arbiter,
+					},
+					observation.observation.violations,
+				)
 			} catch {
 				/* Observation-only — never throw into production paths. */
 			}
