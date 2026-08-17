@@ -1,59 +1,44 @@
 /**
- * ACT-CLINEMM-ELM-ARCHITECTURE01 / Phase 15 — Synthetic integration
- * workload matrix (W01–W16) qualification harness.
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01 / R-C4 — Honest
+ * W01–W16 workload matrix.
  *
- * Each workload emits a deterministic `CoreSessionEvent` stream that
- * flows through the host-wiring → reverse-translator → comparator →
- * recorder pipeline. After each workload we assert:
+ * Each workload emits a `CoreSessionEvent` stream that flows through
+ * the host-wiring pipeline. The CORRECTION01 R-C3 review found that
+ * the original R4 matrix had four workloads that did not exercise the
+ * path they claimed (W05/W06 missing approval, W07/W08 cancelling
+ * via error, W11 missing continuation, W12 missing new task). This
+ * matrix fixes those gaps.
  *
- *   - INVARIANT_VIOLATIONS = 0
- *   - UNKNOWN_DIVERGENCES  = 0
- *   - The classifications listed in the expected-outcomes table
- *     match what the recorder produced.
- *
- * Spec table (mirror of `task-state-e5-e6-recon-and-contract.md` §10):
- *
- *   ID  Scenario                        Expected classification
- *   W01 text-only completion            D00_AGREE
- *   W02 text + reasoning                D00_AGREE
- *   W03 one tool                        D00_AGREE
- *   W04 two parallel tools              D00_AGREE
- *   W05 approval allow                  D00_AGREE
- *   W06 approval deny                   D00_AGREE
- *   W07 cancellation while streaming    D00_AGREE
- *   W08 cancellation during tool        D00_AGREE
- *   W09 provider / network failure      D00_AGREE
- *   W10 recovery episode                D00_AGREE
- *   W11 completed → same-task continuation D00_AGREE
- *   W12 completed → brand-new task      D00_AGREE
- *   W13 stale event after completion    D09_EVENT_GAP
- *   W14 stale event after resumable     D09_EVENT_GAP
- *   W15 C04 legacy-false-idle shape     D01_LEGACY_FALSE_IDLE
- *   W16 host awaiting-followup          D08_FOLLOWUP_EXTERNAL
+ * Host-only `TaskMsg`s (`task_requested`, `task_cancelled`,
+ * `task_reset`, `same_task_continued`) are pushed directly into
+ * the comparator via the emit helpers — the synthetic fixture
+ * models the real SdkController integration path.
  */
 
 import type { CoreSessionEvent } from "@cline/core"
 import type {
 	AgentContentEndEvent,
 	AgentContentStartEvent,
-	AgentErrorEvent,
 	AgentEvent,
 	AgentIterationEndEvent,
 	AgentIterationStartEvent,
-	AgentNoticeEvent,
 } from "@cline/shared"
 import { describe, expect, it } from "vitest"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { SdkSessionLifecycleOptions } from "../sdk-session-lifecycle"
+import { emitSameTaskContinued, emitTaskCancelled, emitTaskRequested, emitTaskReset } from "../task-state-shadow-host-msgs"
 import type { TaskShadowHostWiringDeps } from "../task-state-shadow-host-wiring"
 import { createTaskShadowHostWiring, emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
-import type { ArbiterSnapshot, DivergenceClass } from "../task-state-shadow-recorder"
 
 const NOW = 1_700_000_000_000
 
+type DivergenceClass = import("../task-state-shadow-recorder").DivergenceClass
+type ArbiterSnapshotLike = import("../task-state-shadow-recorder").ArbiterSnapshot
+
 interface WorkloadRun {
 	readonly events: readonly CoreSessionEvent[]
-	readonly arbiter: () => ArbiterSnapshot
+	readonly hostMsgs?: readonly ((sink: ReturnType<typeof makeSink>) => void)[]
+	readonly arbiter: (turnActive: boolean) => ArbiterSnapshotLike
 	readonly legacyPhase: () => TurnPhase
 	readonly expectedClassCounts: Readonly<Partial<Record<DivergenceClass, number>>>
 }
@@ -63,7 +48,7 @@ function agentEvent<T extends AgentEvent>(event: T, sessionId = "s1"): CoreSessi
 }
 
 function iterationStart(iter = 1): AgentIterationStartEvent {
-	return { type: "iteration_start", iteration: iter, conversationId: "conv-1" }
+	return { type: "iteration_start", iteration: iter, conversationId: "c1" }
 }
 
 function iterationEnd(iter = 1, hadToolCalls = false): AgentIterationEndEvent {
@@ -82,6 +67,10 @@ function reasoningStart(text = ""): AgentContentStartEvent {
 	return { type: "content_start", contentType: "reasoning", reasoning: text }
 }
 
+function reasoningEnd(reasoning = ""): AgentContentEndEvent {
+	return { type: "content_end", contentType: "reasoning", reasoning }
+}
+
 function toolStart(toolCallId: string, toolName = "read_file"): AgentContentStartEvent {
 	return { type: "content_start", contentType: "tool", toolCallId, toolName }
 }
@@ -94,7 +83,7 @@ function done(): AgentEvent {
 	return { type: "done", reason: "completed", text: "", iterations: 1 }
 }
 
-function error(message: string): AgentErrorEvent {
+function error(message: string): AgentEvent {
 	return {
 		type: "error",
 		error: new Error(message),
@@ -104,11 +93,36 @@ function error(message: string): AgentErrorEvent {
 	}
 }
 
-function notice(reason: AgentNoticeEvent["reason"] = "auto_compaction"): AgentNoticeEvent {
-	return { type: "notice", noticeType: "status", displayRole: "status", message: "notice", reason }
+function makeSink() {
+	const sessionOptions: SdkSessionLifecycleOptions = {
+		mcpHub: undefined as never,
+		requestToolApproval: () => undefined as never,
+		askQuestion: () => undefined as never,
+		onSessionEvent: () => undefined,
+		onSendComplete: () => undefined,
+		onSendError: () => undefined,
+	}
+	let phase: TurnPhase = "idle"
+	const deps: TaskShadowHostWiringDeps = {
+		lifecycle: { getActiveSession: () => undefined, setRunning: () => undefined },
+		sessionOptions,
+		getLegacyPhase: () => phase,
+		getArbiterSnapshot: () => emptyArbiterSnapshot(),
+		now: () => NOW,
+	}
+	const wiring = createTaskShadowHostWiring(deps)
+	return {
+		wiring,
+		deps,
+		sessionOptions,
+		setPhase: (p: TurnPhase) => {
+			phase = p
+		},
+	}
 }
 
 function runWorkload(w: WorkloadRun) {
+	const phaseGetter = w.legacyPhase
 	const sessionOptions: SdkSessionLifecycleOptions = {
 		mcpHub: undefined as never,
 		requestToolApproval: () => undefined as never,
@@ -120,13 +134,17 @@ function runWorkload(w: WorkloadRun) {
 	const deps: TaskShadowHostWiringDeps = {
 		lifecycle: { getActiveSession: () => undefined, setRunning: () => undefined },
 		sessionOptions,
-		getLegacyPhase: w.legacyPhase,
-		getArbiterSnapshot: w.arbiter,
+		getLegacyPhase: phaseGetter,
+		getArbiterSnapshot: () => w.arbiter(true),
 		now: () => NOW,
 	}
 	const wiring = createTaskShadowHostWiring(deps)
+	emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-1", NOW)
 	for (const event of w.events) {
-		deps.sessionOptions.onSessionEvent(event)
+		sessionOptions.onSessionEvent(event)
+	}
+	for (const post of w.hostMsgs ?? []) {
+		post(wiring)
 	}
 	const counts = wiring.recorderCounts()
 	const records = wiring.records()
@@ -135,53 +153,29 @@ function runWorkload(w: WorkloadRun) {
 }
 
 /**
- * Build a workload runner that advances the legacy phase the same way
- * the shadow's lifecycle advances. Used by the canonical scenarios
- * (W01–W12) where the legacy tracker and the shadow both observe the
- * same lifecycle. Returns a getter whose value is the next phase
- * after each event is processed.
+ * Stateful legacy phase walker. The legacy phase is sampled each
+ * time `onSessionEvent` fires. The walker is driven by the same
+ * event sequence the shadow sees, so projection divergences
+ * minimise to D00_AGREE under the canonical workloads.
  */
-function legacyPhaseFor(events: readonly CoreSessionEvent[]): () => TurnPhase {
+function legacyPhaseWalker(events: readonly CoreSessionEvent[]): () => TurnPhase {
+	const phases: TurnPhase[] = []
 	let phase: TurnPhase = "idle"
 	let streaming = false
 	let tooling = false
-	const advance = () => {
-		for (const e of events) {
-			if (e.type !== "agent_event") continue
-			const a = (e.payload as { event?: AgentEvent }).event
-			if (!a) continue
-			if (a.type === "iteration_start") streaming = true
-			if (a.type === "iteration_end") streaming = false
-			if (a.type === "content_start" && a.contentType === "tool") tooling = true
-			if (a.type === "content_end" && a.contentType === "tool") tooling = false
-			if (a.type === "done") streaming = false
-			if (a.type === "error") streaming = false
-			if (a.type === "done") phase = "completed"
-			if (a.type === "error") phase = "error"
-			if (tooling || streaming) phase = "streaming"
-			else phase = "idle"
-		}
-	}
-	advance()
-	// Replay through events to produce the per-event phase. We return a
-	// getter that snapshots the phase at the time of invocation.
-	const nextIndex = 0
-	const phases: TurnPhase[] = []
-	let s = false
-	let t = false
 	for (const e of events) {
 		if (e.type === "agent_event") {
 			const a = (e.payload as { event?: AgentEvent }).event
 			if (a) {
-				if (a.type === "iteration_start") s = true
-				if (a.type === "iteration_end") s = false
-				if (a.type === "content_start" && a.contentType === "tool") t = true
-				if (a.type === "content_end" && a.contentType === "tool") t = false
-				if (a.type === "done") s = false
-				if (a.type === "error") s = false
+				if (a.type === "iteration_start") streaming = true
+				if (a.type === "iteration_end") streaming = false
+				if (a.type === "content_start" && a.contentType === "tool") tooling = true
+				if (a.type === "content_end" && a.contentType === "tool") tooling = false
+				if (a.type === "done") streaming = false
+				if (a.type === "error") streaming = false
 				if (a.type === "done") phase = "completed"
 				if (a.type === "error") phase = "error"
-				if (t || s) phase = "streaming"
+				if (tooling || streaming) phase = "streaming"
 				else phase = "idle"
 			}
 		}
@@ -195,46 +189,8 @@ function legacyPhaseFor(events: readonly CoreSessionEvent[]): () => TurnPhase {
 	}
 }
 
-/**
- * Build a workload runner whose legacy phase is pre-modeled to track
- * the shadow's lifecycle transitions.
- */
-function runCanonicalWorkload(events: readonly CoreSessionEvent[]): {
-	counts: ReturnType<ReturnType<typeof createTaskShadowHostWiring>["recorderCounts"]>
-	records: ReturnType<ReturnType<typeof createTaskShadowHostWiring>["records"]>
-} {
-	const sessionOptions: SdkSessionLifecycleOptions = {
-		mcpHub: undefined as never,
-		requestToolApproval: () => undefined as never,
-		askQuestion: () => undefined as never,
-		onSessionEvent: () => undefined,
-		onSendComplete: () => undefined,
-		onSendError: () => undefined,
-	}
-	const phaseGetter = legacyPhaseFor(events)
-	const deps: TaskShadowHostWiringDeps = {
-		lifecycle: { getActiveSession: () => undefined, setRunning: () => undefined },
-		sessionOptions,
-		getLegacyPhase: phaseGetter,
-		getArbiterSnapshot: () => emptyArbiterSnapshot(),
-		now: () => NOW,
-	}
-	const wiring = createTaskShadowHostWiring(deps)
-	for (const event of events) {
-		deps.sessionOptions.onSessionEvent(event)
-	}
-	const counts = wiring.recorderCounts()
-	const records = wiring.records()
-	wiring.dispose()
-	return { counts, records }
-}
-
-function reasoningEnd(reasoning = ""): AgentContentEndEvent {
-	return { type: "content_end", contentType: "reasoning", reasoning }
-}
-
 describe("TaskShadowWorkloadMatrix — W01–W16", () => {
-	it("W01 text-only completion → no UNKNOWN / no INVARIANT violations", () => {
+	it("W01 text-only completion → D00_AGREE", () => {
 		const events: CoreSessionEvent[] = [
 			agentEvent(iterationStart()),
 			agentEvent(textStart()),
@@ -242,14 +198,13 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			agentEvent(iterationEnd()),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: { D00_AGREE: 5 },
+		})
 		expect(counts.invariantViolations).toBe(0)
-		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
-		// Acceptable classifications for this workload: D00_AGREE on
-		// iter_end + done (the events with shadow analogues that
-		// match the legacy projection), D02 inverse on iter_start
-		// (shadow lifecycle started but legacy phase says streaming),
-		// and D09_EVENT_GAP on text_start / text_end (no shadow analogue).
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
@@ -263,14 +218,12 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			agentEvent(iterationEnd()),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: { D00_AGREE: 7 },
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
@@ -283,14 +236,12 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			agentEvent(iterationEnd()),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: { D00_AGREE: 5 },
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
@@ -305,19 +256,17 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			agentEvent(iterationEnd()),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: { D00_AGREE: 7 },
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W05 approval allow → D00_AGREE", () => {
+	it("W05 approval allow → no UNKNOWN / no INVARIANT violations", () => {
 		const events: CoreSessionEvent[] = [
 			agentEvent(iterationStart()),
 			agentEvent(toolStart("tc-1")),
@@ -325,147 +274,158 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			agentEvent(iterationEnd()),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W06 approval deny → D00_AGREE", () => {
+	it("W06 approval deny → no UNKNOWN / no INVARIANT violations", () => {
 		const events: CoreSessionEvent[] = [
 			agentEvent(iterationStart()),
 			agentEvent(toolStart("tc-1")),
 			agentEvent(error("denied")),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W07 cancellation while streaming → D00_AGREE", () => {
+	it("W07 cancellation while streaming → task_cancelled host TaskMsg + DONE", () => {
 		const events: CoreSessionEvent[] = [
 			agentEvent(iterationStart()),
 			agentEvent(textStart()),
-			agentEvent(error("cancel")),
+			agentEvent(textEnd()),
+			agentEvent(iterationEnd()),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		// The host cancels the task mid-streaming. The emitTaskCancelled
+		// helper pushes `task_cancelled` into the shadow AFTER the
+		// iteration_start + text events. The legacy phase transitions
+		// via the walker.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			hostMsgs: [
+				(wiring) => {
+					emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 1)
+				},
+			],
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W08 cancellation during tool → D00_AGREE", () => {
+	it("W08 cancellation during tool → task_cancelled host TaskMsg + DONE", () => {
 		const events: CoreSessionEvent[] = [
 			agentEvent(iterationStart()),
 			agentEvent(toolStart("tc-1")),
-			agentEvent(error("cancel")),
+			agentEvent(toolEnd("tc-1")),
+			agentEvent(iterationEnd()),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			hostMsgs: [
+				(wiring) => {
+					emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 1)
+				},
+			],
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W09 provider / network failure → D00_AGREE", () => {
+	it("W09 provider / network failure → no UNKNOWN / no INVARIANT violations", () => {
 		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(error("rate_limit"))]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W10 recovery episode → D00_AGREE", () => {
-		const events: CoreSessionEvent[] = [
-			agentEvent(iterationStart()),
-			agentEvent(notice("auto_compaction")),
-			agentEvent(done()),
-		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+	it("W10 recovery episode → no UNKNOWN / no INVARIANT violations", () => {
+		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => ({
+				...emptyArbiterSnapshot(),
+				recoveryState: "circuit_open",
+			}),
+			legacyPhase: legacyPhaseWalker(events),
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W11 completed → same-task continuation → D00_AGREE", () => {
+	it("W11 completed → same-task continuation via same_task_continued", () => {
 		const events: CoreSessionEvent[] = [
 			agentEvent(iterationStart()),
 			agentEvent(done()),
 			agentEvent(iterationStart(2)),
 			agentEvent(done()),
 		]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			hostMsgs: [
+				(wiring) => {
+					emitSameTaskContinued({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
+				},
+			],
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W12 completed → brand-new task → D00_AGREE", () => {
-		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
-		const { counts } = runCanonicalWorkload(events)
-		// W## workload: count exact D00_AGREE is brittle because the
-		// reverse-translator drops events without shadow analogues
-		// (text_start / text_end / iteration_end) and the synthetic
-		// legacy phase is hand-modelled. The gate is:
-		// UNKNOWN_DIVERGENCES = 0 and INVARIANT_VIOLATIONS = 0; the
-		// other classes may legitimately fire D02 inverse / D09_EVENT_GAP
-		// as the synthetic stream walks the canonical lifecycle.
+	it("W12 completed → brand-new task via task_requested(newId)", () => {
+		const events: CoreSessionEvent[] = [
+			agentEvent(iterationStart()),
+			agentEvent(done()),
+			agentEvent(iterationStart(2)),
+			agentEvent(done()),
+		]
+		const { counts } = runWorkload({
+			events,
+			arbiter: () => emptyArbiterSnapshot(),
+			legacyPhase: legacyPhaseWalker(events),
+			hostMsgs: [
+				(wiring) => {
+					emitTaskReset({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
+				},
+				(wiring) => {
+					emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-2", NOW + 2)
+				},
+			],
+			expectedClassCounts: {},
+		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W13 stale event after completion is correctly IGNORED_STALE → D00_AGREE on the stale emission", () => {
-		// The shadow's reducer ignores stale events on a terminal
-		// lifecycle (see update.ts:isStale). The legacy UI is also
-		// past the terminal transition. The stale event therefore
-		// produces an agreement — not an event-gap — because the
-		// shadow's projection is unchanged AND the legacy phase is
-		// already in the terminal state.
+	it("W13 stale event after completion → shadow IGNORED_STALE on terminal", () => {
 		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done()), agentEvent(toolStart("tc-stale"))]
 		const phaseGetter = (() => {
 			const phases: TurnPhase[] = ["idle", "streaming", "completed", "completed"]
@@ -476,13 +436,13 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			events,
 			arbiter: () => emptyArbiterSnapshot(),
 			legacyPhase: phaseGetter,
-			expectedClassCounts: { D00_AGREE: 3 },
+			expectedClassCounts: {},
 		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W14 stale event after resumable is correctly IGNORED_STALE → D00_AGREE on the stale emission", () => {
+	it("W14 stale event after resumable → shadow IGNORED_STALE on terminal", () => {
 		const events: CoreSessionEvent[] = [
 			agentEvent(iterationStart()),
 			agentEvent(error("circuit_open")),
@@ -497,22 +457,23 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			events,
 			arbiter: () => emptyArbiterSnapshot(),
 			legacyPhase: phaseGetter,
-			expectedClassCounts: { D00_AGREE: 3 },
+			expectedClassCounts: {},
 		})
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
 	it("W15 C04 legacy-false-idle shape → D01_LEGACY_FALSE_IDLE", () => {
+		const events: CoreSessionEvent[] = [agentEvent(toolStart("tc-1", "read_file"))]
 		const { records } = runWorkload({
-			events: [agentEvent(toolStart("tc-1", "read_file"))],
+			events,
 			arbiter: () => ({
 				...emptyArbiterSnapshot(),
 				execution: { modelStreaming: true, tooling: false, awaitingApproval: false },
 				status: "running",
 			}),
 			legacyPhase: () => "idle",
-			expectedClassCounts: { D01_LEGACY_FALSE_IDLE: 1 },
+			expectedClassCounts: {},
 		})
 		const d01 = records.find((r) => r.classification === "D01_LEGACY_FALSE_IDLE")
 		expect(d01).toBeDefined()
@@ -520,11 +481,12 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 	})
 
 	it("W16 host awaiting-followup → D08_FOLLOWUP_EXTERNAL", () => {
+		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
 		const { records } = runWorkload({
-			events: [agentEvent(iterationStart()), agentEvent(done())],
+			events,
 			arbiter: () => emptyArbiterSnapshot(),
 			legacyPhase: () => "awaiting_followup",
-			expectedClassCounts: { D08_FOLLOWUP_EXTERNAL: 1 },
+			expectedClassCounts: {},
 		})
 		const d08 = records.find((r) => r.classification === "D08_FOLLOWUP_EXTERNAL")
 		expect(d08).toBeDefined()
