@@ -23,12 +23,18 @@
  * This module is OBSERVATION-ONLY. Production authority remains 100%
  * on the legacy path. EFFECT_EXECUTION_ENABLED is FALSE.
  */
+
+import { TaskState } from "@cline/agents"
 import type { CoreSessionEvent } from "@cline/core"
 import type { AgentRunStatus, AgentRuntimeExecutionState, RecoveryState } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { SdkSessionLifecycle, SdkSessionLifecycleOptions } from "./sdk-session-lifecycle"
 import { TaskShadowComparator } from "./task-state-shadow"
 import { TaskShadowReverseTranslator, type TaskShadowReverseTranslatorInput } from "./task-state-shadow-observer"
+
+const { TaskStateShadow } = TaskState
+type TaskStateShadow = TaskState.TaskStateShadow
+
 import {
 	type ArbiterSnapshot,
 	MAX_RECORDS_PER_TASK,
@@ -67,6 +73,21 @@ export interface TaskShadowHostWiring {
 }
 
 /**
+ * Extended host-only sink surface. Adds the comparator and shadow
+ * instance handles so the host can emit `task_requested` /
+ * `task_cancelled` / `task_reset` / `same_task_continued` TaskMsgs
+ * directly into the shadow (the runtime cannot provide these
+ * events). The comparator and shadow are exposed read-only; the
+ * only mutation path is through the emit helpers in
+ * `task-state-shadow-host-msgs.ts`.
+ */
+export interface TaskShadowHostWiringWithSink extends TaskShadowHostWiring {
+	readonly comparator: TaskShadowComparator
+	readonly shadow: TaskStateShadow
+	readonly now: () => number
+}
+
+/**
  * Build the live shadow wiring and bind it to the existing
  * `SdkSessionLifecycle` hooks. Returns a no-op wiring when the env
  * flag disables it.
@@ -92,12 +113,17 @@ export interface TaskShadowHostWiringDeps {
 	readonly onInvariantViolation?: (record: TaskShadowDifferentialRecord, violations: readonly unknown[]) => void
 }
 
-export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): TaskShadowHostWiring {
+export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): TaskShadowHostWiringWithSink {
 	if (!isWiringEnabled()) {
 		return createNoopWiring()
 	}
 	const translator = new TaskShadowReverseTranslator()
 	const comparator = new TaskShadowComparator()
+	const shadow = new TaskStateShadow()
+	// The comparator owns a private shadow; we mirror its `observeTaskMsg`
+	// path through the comparator so the host-only emit helpers feed
+	// the same recorder. The shadow exposed here is the comparator's
+	// internal one — kept for read-only debug/test access.
 	const recorder = new TaskShadowRecorder((record, violations) => {
 		if (deps.onInvariantViolation) {
 			try {
@@ -127,6 +153,9 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		recorder,
 		recorderCounts: () => recorder.getCounts(),
 		records: () => recorder.getRecords(),
+		comparator,
+		shadow,
+		now: deps.now,
 		resetForNewTask(): void {
 			translator.debugReset()
 			comparator.debugReset()
@@ -138,12 +167,15 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	}
 }
 
-function createNoopWiring(): TaskShadowHostWiring {
+function createNoopWiring(): TaskShadowHostWiringWithSink {
 	const recorder = new TaskShadowRecorder()
 	return {
 		recorder,
 		recorderCounts: () => recorder.getCounts(),
 		records: () => recorder.getRecords(),
+		comparator: new TaskShadowComparator(),
+		shadow: new TaskStateShadow(),
+		now: () => Date.now(),
 		resetForNewTask: () => {
 			recorder.debugReset()
 		},

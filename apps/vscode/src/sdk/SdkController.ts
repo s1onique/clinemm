@@ -116,6 +116,12 @@ import {
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
+import { emitSameTaskContinued, emitTaskCancelled, emitTaskRequested, emitTaskReset } from "./task-state-shadow-host-msgs"
+import {
+	createTaskShadowHostWiring,
+	emptyArbiterSnapshot,
+	type TaskShadowHostWiringWithSink,
+} from "./task-state-shadow-host-wiring"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
 import { TurnStateTracker } from "./turn-state-tracker"
@@ -193,6 +199,18 @@ export class Controller {
 	private mode: SdkModeCoordinator
 	private mcpTools: SdkMcpCoordinator
 	private terminalExecutionMode: SdkTerminalExecutionModeCoordinator
+
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
+	// Live shadow wiring — observation-only. The wiring is instantiated
+	// in the constructor and disposed in `dispose()`. It subscribes to
+	// the existing `SdkSessionLifecycle.onSessionEvent` hook, samples
+	// `TurnStateTracker.currentPhase` synchronously, and feeds the
+	// recorder with the classified differential records. The host-only
+	// emit helpers in `task-state-shadow-host-msgs.ts` push
+	// `task_requested` / `task_reset` / `task_cancelled` /
+	// `same_task_continued` TaskMsgs into the shadow through this sink.
+	// EFFECT_EXECUTION_ENABLED is FALSE.
+	private taskStateShadowWiring: TaskShadowHostWiringWithSink | undefined
 	private providerChanges: SdkProviderChangeCoordinator
 	private followups: SdkFollowupCoordinator
 	private taskControl: SdkTaskControlCoordinator
@@ -494,6 +512,61 @@ export class Controller {
 				}
 			},
 			getCwd: () => this.lastKnownWorkspaceRoot,
+		})
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
+		// Instantiate the live shadow wiring BEFORE `new SdkSessionLifecycle`
+		// because the wiring wraps `onSessionEvent` by mutating the
+		// session-options object. The lifecycle reads `options.onSessionEvent`
+		// lazily inside `ensureSharedHostSubscription`, so wrapping here
+		// takes effect at the first event.
+		this.taskStateShadowWiring = createTaskShadowHostWiring({
+			// Pass a self-reference so the wiring can reach back through
+			// `this.sessions` after the lifecycle is constructed. The
+			// wiring calls `lifecycle.getActiveSession()` only lazily
+			// (inside `observeLegacyEvent`), so the closure is safe.
+			lifecycle: {
+				getActiveSession: () => this.sessions?.getActiveSession(),
+				setRunning: (flag) => this.sessions?.setRunning(flag),
+			},
+			sessionOptions: {
+				mcpHub: this.mcpHub,
+				telemetry: this.sdkTelemetry.telemetry,
+				requestToolApproval: (request) => this.interactions.handleRequestToolApproval(request),
+				askQuestion: (question, options, context) => this.interactions.handleAskQuestion(question, options, context),
+				editorExecutor: (input, cwd, context) => this.diffEdits.executeEditorTool(input, cwd, context),
+				applyPatchExecutor: (input, cwd, context) => this.diffEdits.executeApplyPatchTool(input, cwd, context),
+				readFileExecutor: createWorkspaceFileReadExecutor(() => this.getWorkspaceRoot()),
+				onSessionEvent: (event) => {
+					this.sessionEvents.handleSessionEvent(event).catch((err) => {
+						Logger.error("[SdkController] Failed to handle session event:", err)
+					})
+				},
+				onSendComplete: () => undefined,
+				onSendError: () => undefined,
+			},
+			getLegacyPhase: () => this.turnStateTracker.currentPhase,
+			getArbiterSnapshot: () => {
+				// The canonical arbiter is the AgentRuntime.snapshot(); until
+				// the forward-fix seam (ELM-02F) lands, the wiring mirrors
+				// the legacy projection so classification / arbitration
+				// remain well-defined. The recovery-state field is updated
+				// by `subscribeRecoveryStateChange` via the wiring's own
+				// recording path.
+				const phase = this.turnStateTracker.currentPhase
+				return {
+					...emptyArbiterSnapshot(),
+					execution: {
+						modelStreaming: phase === "streaming",
+						tooling: phase === "streaming",
+						awaitingApproval: phase === "awaiting_approval",
+					},
+				}
+			},
+			getRuntimeStatus: () => "running",
+			now: () => Date.now(),
+			onInvariantViolation: (record) => {
+				Logger.error(`[SdkController] TaskStateShadow invariant violation: ${JSON.stringify(record)}`)
+			},
 		})
 		this.sessions = new SdkSessionLifecycle({
 			mcpHub: this.mcpHub,
@@ -944,6 +1017,10 @@ export class Controller {
 	}
 
 	async dispose(): Promise<void> {
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01: dispose the
+		// live shadow wiring first so no further events are observed.
+		this.taskStateShadowWiring?.dispose()
+		this.taskStateShadowWiring = undefined
 		this.providerConfigStoreSubscription.dispose()
 		// Clear the remote config timer to prevent stale fetches
 		if (this.remoteConfigTimer) {
@@ -1458,6 +1535,22 @@ export class Controller {
 				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
 			)
 			this.attachRecoveryTelemetrySubscription(sessionId)
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
+			// Reset the shadow recorder for the new task identity and push
+			// `task_requested(taskId)` into the shadow. The reset clears
+			// the previous session's classifications / counts; the task
+			// message seeds `TaskModel.identity.taskId`. Both are
+			// observation-only (no legacy writes).
+			if (this.taskStateShadowWiring) {
+				this.taskStateShadowWiring.resetForNewTask()
+				emitTaskRequested(
+					{
+						comparator: this.taskStateShadowWiring.comparator,
+						now: this.taskStateShadowWiring.now,
+					},
+					sessionId,
+				)
+			}
 		}
 		return sessionId
 	}
@@ -1485,6 +1578,51 @@ export class Controller {
 				return
 			}
 			this.taskTelemetry.observeRecovery(recovery)
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
+			// Mirror the recovery-state change into the shadow. The
+			// shadow's `recovery-state-changed` TaskMsg carries the
+			// canonical projection via the runtime's snapshot().
+			// We construct a synthetic AgentRuntimeEvent here so the
+			// shadow's adapter can fold the change.
+			const shadow = this.taskStateShadowWiring
+			if (shadow) {
+				shadow.comparator.observeRuntimeEvent(
+					{
+						type: "recovery-state-changed",
+						snapshot: {
+							agentId: "host",
+							runId: sessionId,
+							status: "running",
+							iteration: 0,
+							messages: [],
+							pendingToolCalls: [],
+							usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalCost: 0 },
+							recovery,
+							execution: {
+								modelStreaming: false,
+								tooling: false,
+								awaitingApproval: false,
+							},
+						},
+						previousRecovery: {
+							state: "idle",
+							tracker: {
+								state: "idle",
+								currentRepairAttempts: 0,
+								equivalentRepeatCount: 0,
+								blockedExactKeys: [],
+								blockedFamilies: [],
+							},
+							secondStage: "idle",
+							episodeFailures: 0,
+							maxEpisodeFailures: 5,
+							circuitNoticeCount: 0,
+						},
+					},
+					this.turnStateTracker.currentPhase,
+					Date.now(),
+				)
+			}
 		})
 	}
 
@@ -1519,6 +1657,17 @@ export class Controller {
 		// the moment of cancellation so the header shows the task duration
 		// at interruption, not a perpetually-ticking value.
 		this.taskTelemetry.endTask()
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
+		// Emit `task_cancelled` into the shadow so the host-initiated
+		// cancellation path is observed. The shadow's reducer transitions
+		// the lifecycle to `cancelled`, which projects to `resumable`
+		// (matching the legacy `turnStateTracker.set("resumable")` above).
+		if (this.taskStateShadowWiring) {
+			emitTaskCancelled(
+				{ comparator: this.taskStateShadowWiring.comparator, now: this.taskStateShadowWiring.now },
+				this.turnStateTracker.currentPhase,
+			)
+		}
 		await this.taskControl.cancelTask()
 	}
 
@@ -1586,6 +1735,16 @@ export class Controller {
 		// allocation site). This is the property the user expects when they
 		// arm a follow-up task before clearing the current one.
 		this.sessionAutoApproval.clearActiveOverride()
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
+		// Emit `task_reset` into the shadow so the host-initiated reset
+		// path is observed. The shadow's reducer transitions the lifecycle
+		// back to `idle`. Observation-only.
+		if (this.taskStateShadowWiring) {
+			emitTaskReset(
+				{ comparator: this.taskStateShadowWiring.comparator, now: this.taskStateShadowWiring.now },
+				this.turnStateTracker.currentPhase,
+			)
+		}
 		await this.taskControl.clearTask()
 		await this.postStateToWebview()
 	}
@@ -1633,6 +1792,24 @@ export class Controller {
 
 		const turnStateBefore = this.turnStateTracker.get()
 
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
+		// Emit `same_task_continued` into the shadow when the previous turn
+		// was already terminal (the user is continuing the SAME visible task
+		// after a completed / awaiting_followup / resumable / error phase).
+		// This is the only accepted exit from `resumable` in the shadow's
+		// lifecycle. Observation-only.
+		if (
+			this.taskStateShadowWiring &&
+			(turnStateBefore.phase === "completed" ||
+				turnStateBefore.phase === "error" ||
+				turnStateBefore.phase === "resumable" ||
+				turnStateBefore.phase === "awaiting_followup")
+		) {
+			emitSameTaskContinued(
+				{ comparator: this.taskStateShadowWiring.comparator, now: this.taskStateShadowWiring.now },
+				turnStateBefore.phase,
+			)
+		}
 		// Answering an ask / continuing after completion / resuming a cancelled task all kick off a
 		// new agent turn — move the authoritative phase to "streaming" so the footer shows
 		// Thinking + Cancel (and not the stale resumable/completed/awaiting_followup buttons or the
