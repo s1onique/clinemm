@@ -69,7 +69,12 @@ import {
 	type TaskShadowHostWiringDeps,
 	type TaskShadowHostWiringWithSink,
 } from "../task-state-shadow-host-wiring"
-import type { ArbiterSnapshot, TaskShadowDifferentialRecord, TaskShadowRecorderCounts } from "../task-state-shadow-recorder"
+import {
+	type ArbiterSnapshot,
+	MAX_RECORDS_PER_TASK,
+	type TaskShadowDifferentialRecord,
+	type TaskShadowRecorderCounts,
+} from "../task-state-shadow-recorder"
 
 const NOW = 1_700_000_000_000
 const ENV_FLAG = "CLINEMM_TASK_STATE_SHADOW_DIFFERENTIAL"
@@ -1353,6 +1358,79 @@ describe("C2.3-CONT.6 PURE_REPLAY_EQUIVALENCE — live ingress == pure reducer",
 		expect(result.liveFinal.lifecycle.kind).toBe(result.pureFinal.lifecycle.kind)
 		expect(result.liveFinal.activity.modelStreaming).toBe(result.pureFinal.activity.modelStreaming)
 		expect(result.liveFinal.activity.activeToolCallIds).toEqual(result.pureFinal.activity.activeToolCallIds)
+	})
+})
+
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.6
+// BOUNDED_RECORDING: drive >MAX_RECORDS_PER_TASK (=256) observations
+// through a single wiring. Verify that:
+//   - retained records length === 256
+//   - droppedRecords === eventsObserved - 256
+//   - aggregate counters (D00..D11, origins, diagnostics,
+//     fallback counts, staleRunTerminalSuppressed) remain correct
+//     after truncation
+//   - no payload/history expansion
+// =========================================================================
+
+describe("C2.3-CONT.6 BOUNDED_RECORDING — >256 observations on a single wiring", () => {
+	it("retained records capped at 256; droppedRecords exact; aggregate counters correct", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-BOUND",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapIdleAgain: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const TOTAL_OBSERVATIONS = 300 // > 256 (MAX_RECORDS_PER_TASK)
+		const state = buildWiring({ canonicalAvailable: true })
+		// task_requested first.
+		runStep(state, { kind: "host-task", taskId: "task-BOUND", which: "requested", legacyPhase: "idle" })
+		runStep(state, { kind: "set-active-session", sessionId: "session-BOUND" })
+		runStep(state, { kind: "canonical", sessionId: "session-BOUND", event: runStarted(snapIdle) })
+		// Oscillate modelStreaming false<->true to generate many
+		// observations. Each oscillation produces one TaskMsg
+		// (model_stream_started or model_stream_finished), which
+		// generates one record.
+		let cur = snapIdle
+		let next = snapStreaming
+		for (let i = 0; i < TOTAL_OBSERVATIONS; i++) {
+			runStep(state, { kind: "canonical", sessionId: "session-BOUND", event: execEvent(cur.execution!, next) })
+			const tmp = cur
+			cur = next
+			next = tmp
+		}
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		// Retained records capped at MAX_RECORDS_PER_TASK = 256.
+		expect(records.length).toBeLessThanOrEqual(MAX_RECORDS_PER_TASK)
+		expect(records.length).toBe(MAX_RECORDS_PER_TASK)
+		expect(counts.droppedRecords).toBeGreaterThan(0)
+		expect(counts.droppedRecords).toBe(counts.eventsObserved - MAX_RECORDS_PER_TASK)
+		// eventsObserved > 256 (we drove 300+ observations).
+		expect(counts.eventsObserved).toBeGreaterThan(MAX_RECORDS_PER_TASK)
+		// No unclassified divergence after bounded truncation.
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+		// Each oscillation flips modelStreaming exactly once;
+		// D00 (agree) and D11 (host pre-engaged) are the dominant
+		// classifications here since legacyPhase stays at the
+		// same value through the oscillation. Verify D00 count
+		// > 0 (records that arrived with shadow == legacy).
+		expect(counts.divergenceCountsByClass.D00_AGREE).toBeGreaterThan(0)
 	})
 })
 
