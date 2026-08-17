@@ -254,6 +254,36 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	}
 	deps.sessionOptions.onSessionEvent = wrappedOnSessionEvent
 
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION03:
+	// CANONICAL RUN-EPOCH TERMINAL OWNERSHIP GATE.
+	//
+	// CONT.2-CORRECTION02 closed the same race on the reconstructed
+	// (legacy) ingress via TaskShadowReverseTranslator. But on
+	// LocalRuntimeHost (canonicalAvailable=true) the *authoritative*
+	// path is RUNTIME_CANONICAL, which BYPASSES the translator and
+	// reaches the shadow-adapter directly. Without an equivalent
+	// gate on the canonical side, a stranded canonical run-finished /
+	// run-failed from a cancelled epoch that arrives AFTER
+	// same_task_continued would still reach the reducer and could
+	// terminate the resumed run.
+	//
+	// The canonical surface carries explicit `snapshot.runId`
+	// provenance on every event. The wiring tracks the
+	// `canonicalRunId` from the most recent canonical `run-started`
+	// event. Terminal canonical events (`run-finished`,
+	// `run-failed`) with a `snapshot.runId` that does NOT match
+	// the tracked `canonicalRunId` are SUPPRESSED before they
+	// reach the coordinator — they neither feed the shadow nor
+	// feed the recorder.
+	//
+	// Policy (mirrors the translator gate):
+	//   canonicalRunId=undef, snapshot.runId=undef  → apply (very first event)
+	//   canonicalRunId=undef, snapshot.runId=def   → apply (transient)
+	//   canonicalRunId=def,   snapshot.runId=undef → apply (legacy runtime without runId — tolerated)
+	//   canonicalRunId=def,   snapshot.runId=def, MATCH    → apply
+	//   canonicalRunId=def,   snapshot.runId=def, MISMATCH → SUPPRESS (stranded epoch)
+	const canonicalRunIdRef: { value: string | undefined } = { value: undefined }
+
 	return {
 		recorder,
 		recorderCounts: () => recorder.getCounts(),
@@ -267,6 +297,29 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			// into the unified observation coordinator. All four
 			// ingress kinds funnel through the coordinator; this is
 			// just the canonical-event wrapper.
+			//
+			// C3.CONT.2-CORRECTION03: enforce canonical run-epoch
+			// terminal ownership BEFORE handing off to the coordinator.
+			// On LocalRuntimeHost, canonical events own TaskState truth
+			// — the reconstructed translator gate (CORRECTION02) does
+			// not see them at all.
+			const evt = input.event
+			if (evt.type === "run-started") {
+				canonicalRunIdRef.value = evt.snapshot.runId ?? canonicalRunIdRef.value
+			}
+			if (evt.type === "run-finished" || evt.type === "run-failed") {
+				const eventRunId = evt.snapshot.runId
+				const active = canonicalRunIdRef.value
+				if (active !== undefined && eventRunId !== undefined && active !== eventRunId) {
+					// Stranded canonical terminal from a previous
+					// run epoch. Suppress before it can mutate the
+					// shadow or be recorded as a divergence. The
+					// shadow is task-epoch-agnostic (taskMsg carries
+					// no runId); this gate is the only authority
+					// that can refuse it.
+					return
+				}
+			}
 			const origin = input.origin as "RUNTIME_CANONICAL"
 			coordinator.observe({
 				kind: "runtime-canonical",
@@ -280,6 +333,11 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			comparator.debugReset()
 			recorder.debugReset()
 			coordinator.debugReset()
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION03:
+			// Clear the canonical run-epoch identity alongside
+			// the translator's activeRunId. A new visible task
+			// gets a fresh epoch.
+			canonicalRunIdRef.value = undefined
 		},
 		dispose(): void {
 			deps.sessionOptions.onSessionEvent = userOnSessionEvent
