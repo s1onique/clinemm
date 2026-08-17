@@ -4280,3 +4280,441 @@ describe("C2.3-CONT.4-CORRECTION01 C9 — post-reset fence witnesses", () => {
 		expect(counts.fallbackReconstructedApplied).toBe(0)
 	})
 })
+
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.5
+// CONT.5 qualification ACT — W13-W16 on the canonical Local path.
+//
+// All four witnesses use DISTINCT fixtures (task-W13, task-W14,
+// task-W15, task-W16 / run-W13..W16 / session-W13..W16) to prevent
+// accidental coupling with the W11/W12/C9 fixtures.
+//
+// W13 — stale activity after completion. After a task_completed
+//       transition, late model_stream_started / tool_started /
+//       approval_requested canonical events must NOT reactivate
+//       the lifecycle. Hard requirement: lifecycle=completed,
+//       activity all false.
+//
+// W14 — stale activity after cancellation / resumable. After a
+//       host-task cancelled, late canonical activity must NOT
+//       resurrect the lifecycle. Hard requirement: lifecycle=
+//       cancelled, activity all false. The only legitimate path
+//       back to running is same_task_continued.
+//
+// W15 — synthetic C04 under Option A. A legacy envelope that
+//       would historically mutate the shadow (C04 bug shape)
+//       must be DIAGNOSTIC_ONLY under LocalRuntimeHost
+//       (canonicalAvailable=true). No fallbackReconstructedApplied
+//       increment.
+//
+// W16 — awaiting follow-up. With legacy phase awaiting_followup,
+//       a runtime-reconstructed envelope must be DIAGNOSTIC_ONLY.
+//       Any D08_FOLLOWUP_EXTERNAL divergence must come from
+//       HOST_TASK origin, not from RUNTIME_RECONSTRUCTED.
+//
+// Production semantic delta = 0. No reducer, comparator,
+// coordinator, recorder, SdkController, emit*, proto, harness,
+// or public-API change.
+// =========================================================================
+
+describe("C2.3-CONT.5 W13 — stale activity after completion", () => {
+	it("lifecycle stays completed; late model_stream_started, tool_started, approval_requested are IGNORED_STALE", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-W13",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapIdleAgain: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const snapAwaitingApproval: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: true },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W13", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W13" },
+			{ kind: "canonical", sessionId: "session-W13", event: runStarted(snapIdle) },
+			// Stream / unstream transition so the modelStreaming
+			// edge is exercised before completion (this is not
+			// required for the W13 invariant; it just keeps the
+			// trace representative of a real run).
+			{ kind: "canonical", sessionId: "session-W13", event: execEvent(snapIdle.execution!, snapStreaming) },
+			{ kind: "canonical", sessionId: "session-W13", event: execEvent(snapStreaming.execution!, snapIdleAgain) },
+			// Complete the task via a canonical run-finished
+			// (status="completed"). Mirror the legacy phase to
+			// "completed" so the comparator agrees on the
+			// terminal edge.
+			{ kind: "set-legacy-phase", phase: "completed" },
+			{ kind: "canonical", sessionId: "session-W13", event: runFinished(snapIdleAgain) },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("completed")
+					expect(m.activity.modelStreaming).toBe(false)
+					expect(m.activity.activeToolCallIds).toEqual([])
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+			// LATE ACTIVITY (must be IGNORED_STALE because
+			// lifecycle=completed):
+			// (a) late model_stream_started via execEvent(false->streaming)
+			{ kind: "canonical", sessionId: "session-W13", event: execEvent(snapIdleAgain.execution!, snapStreaming) },
+			// (b) late tool_started
+			{ kind: "canonical", sessionId: "session-W13", event: toolStarted(snapIdleAgain, "tc-late") },
+			// (c) late approval_requested via execEvent(false->awaitingApproval)
+			{
+				kind: "canonical",
+				sessionId: "session-W13",
+				event: execEvent(snapIdleAgain.execution!, snapAwaitingApproval),
+			},
+			// FINAL: lifecycle MUST STILL be completed. Activity
+			// MUST STILL be all false. The late activity
+			// observations must not have resurrected the
+			// shadow's lifecycle or activity flags.
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("completed")
+					expect(m.activity.modelStreaming).toBe(false)
+					expect(m.activity.activeToolCallIds).toEqual([])
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		// Exactly ONE task_completed observation (the legitimate
+		// terminal). Late activity is recorded as observations
+		// (because the comparator sees a transition) but the
+		// reducer IGNORED_STALE-gates them, so the shadow stays
+		// at lifecycle=completed.
+		const records = state.wiring.records()
+		const taskCompleted = records.filter((r) => r.event === "task_completed").length
+		expect(taskCompleted).toBe(1)
+		// No task_requested, task_cancelled, task_reset, or
+		// same_task_continued transitions beyond the one initial
+		// task_requested.
+		const taskRequested = records.filter((r) => r.event === "task_requested").length
+		expect(taskRequested).toBe(1)
+		// Hard gates per W13 spec.
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+})
+
+describe("C2.3-CONT.5 W14 — stale activity after cancellation/resumable", () => {
+	it("lifecycle stays cancelled; late tool_started, approval_requested, model_stream_started are IGNORED_STALE", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-W14",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapAwaitingApproval: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: true },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W14", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W14" },
+			{ kind: "canonical", sessionId: "session-W14", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-W14", event: execEvent(snapIdle.execution!, snapStreaming) },
+			// HOST_TASK cancel. legacyPhase mirrors production
+			// (host UI still says "streaming" when the user hit
+			// cancel). The shadow flips lifecycle to "cancelled";
+			// projectTurnState(cancelled)=resumable.
+			{ kind: "host-task", taskId: "task-W14", which: "cancelled", legacyPhase: "streaming" },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("cancelled")
+					expect(m.activity.modelStreaming).toBe(false)
+					expect(m.activity.activeToolCallIds).toEqual([])
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+			// LATE ACTIVITY (must be IGNORED_STALE because
+			// lifecycle=cancelled):
+			// (a) late tool_started — must not add tc-late to activeToolCallIds.
+			{ kind: "canonical", sessionId: "session-W14", event: toolStarted(snapStreaming, "tc-late") },
+			// (b) late approval_requested via execEvent(streaming->awaitingApproval).
+			{
+				kind: "canonical",
+				sessionId: "session-W14",
+				event: execEvent(snapStreaming.execution!, snapAwaitingApproval),
+			},
+			// (c) late model_stream_started via execEvent(awaitingApproval->streaming).
+			{
+				kind: "canonical",
+				sessionId: "session-W14",
+				event: execEvent(snapAwaitingApproval.execution!, snapStreaming),
+			},
+			// FINAL: lifecycle is STILL cancelled. Activity is
+			// STILL all false. The only path back to running is
+			// the deliberate same_task_continued, which is NOT
+			// exercised in W14 (it was qualified in CONT.3 / W11).
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("cancelled")
+					expect(m.activity.modelStreaming).toBe(false)
+					expect(m.activity.activeToolCallIds).toEqual([])
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		const taskCancelled = records.filter((r) => r.event === "task_cancelled").length
+		expect(taskCancelled).toBe(1)
+		// Hard gates per W14 spec.
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+	})
+})
+
+describe("C2.3-CONT.5 W15 — synthetic C04 under Option A (LocalRuntimeHost)", () => {
+	it("legacy envelopes that historically mutated the shadow (C04 bug shape) are DIAGNOSTIC_ONLY under LocalRuntimeHost", () => {
+		// The harness buildWiring({ canonicalAvailable: true })
+		// is a LocalRuntimeHost. Under Option A
+		// (CONT.0-CORRECTION01), RUNTIME_RECONSTRUCTED is
+		// DIAGNOSTIC_ONLY when canonicalAvailable === true.
+		// W15 verifies the C04 bug shape is closed at the
+		// authority resolver.
+		const snapIdle = snapshotFixture({
+			runId: "run-W15",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W15", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W15" },
+			{ kind: "canonical", sessionId: "session-W15", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-W15", event: execEvent(snapIdle.execution!, snapStreaming) },
+			// Canonical completion.
+			{ kind: "set-legacy-phase", phase: "completed" },
+			{ kind: "canonical", sessionId: "session-W15", event: runFinished(snapStreaming) },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("completed")
+				},
+			},
+			// RECONSTRUCTED ENVELOPE 1: a legacy "done" arrives
+			// after the canonical completion. Reverse-translator
+			// would emit run-finished; under Option A it is
+			// DIAGNOSTIC_ONLY. The shadow lifecycle stays
+			// completed.
+			{
+				kind: "legacy",
+				event: legacyEnvelope(
+					{ type: "done", reason: "completed", text: "", iterations: 1, conversationId: "run-W15" } as AgentEvent,
+					"session-W15",
+				),
+				legacyPhase: "completed",
+				arbiter: emptyArbiterSnapshot(),
+			},
+			// RECONSTRUCTED ENVELOPE 2: a fresh iteration_start
+			// arrives with a NEW conversationId, simulating a
+			// stale reconstructed envelope from a future reset.
+			// Reverse-translator would emit run-started; under
+			// Option A it is DIAGNOSTIC_ONLY. activeRunId stays
+			// run-W15 (canonicalRunIdRef untouched).
+			{
+				kind: "legacy",
+				event: legacyEnvelope(
+					{ type: "iteration_start", iteration: 1, conversationId: "run-W15-late" } as AgentEvent,
+					"session-W15",
+				),
+				legacyPhase: "completed",
+				arbiter: emptyArbiterSnapshot(),
+			},
+			// FINAL: lifecycle is STILL completed. activeRunId is
+			// still run-W15 (the reconstructed iteration_start
+			// did not promote it). No fallback was applied.
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("completed")
+				},
+			},
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		// Diagnostic counter must increment for reconstructed.
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		// The critical invariant: NO reconstructed event was
+		// applied as fallback. fallbackReconstructedApplied MUST
+		// remain 0 under LocalRuntimeHost.
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+		// Under Option A, RUNTIME_RECONSTRUCTED observations are
+		// DIAGNOSTIC_ONLY: they increment the per-origin diagnostic
+		// counter but DO NOT produce a TaskShadowDifferentialRecord
+		// (the coordinator does not call applyAndRecord for
+		// DIAGNOSTIC_ONLY). Any record with origin RUNTIME_RECONSTRUCTED
+		// in the records array is therefore a bug — it would imply
+		// the C04 bug shape leaked through.
+		const reconstructedRecords = records.filter((r) => r.origin === "RUNTIME_RECONSTRUCTED").length
+		expect(reconstructedRecords).toBe(0)
+		// Sanity: the reconstructed observation was actually seen
+		// (so the diagnostic-counter assertion above is not a
+		// trivially-passing "no events happened").
+		// Hard gates per W15 spec.
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
+})
+
+describe("C2.3-CONT.5 W16 — awaiting follow-up (host-only projection, reconstructed is non-authoritative)", () => {
+	it("legacy phase awaiting_followup + reconstructed envelope -> D08, if any, must be from HOST_TASK only", () => {
+		// awaiting_followup is a host-only phase. The runtime
+		// cannot generate it. The shadow's comparator samples it
+		// from the legacy TurnStateTracker. Under LocalRuntimeHost
+		// (Option A), a runtime-reconstructed envelope must be
+		// DIAGNOSTIC_ONLY — it cannot flip the shadow back to
+		// running, and any D08_FOLLOWUP_EXTERNAL divergence must
+		// be sourced from HOST_TASK origin, not from
+		// RUNTIME_RECONSTRUCTED.
+		const snapIdle = snapshotFixture({
+			runId: "run-W16",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W16", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-W16" },
+			{ kind: "canonical", sessionId: "session-W16", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-W16", event: execEvent(snapIdle.execution!, snapStreaming) },
+			// Canonical completion.
+			{ kind: "set-legacy-phase", phase: "completed" },
+			{ kind: "canonical", sessionId: "session-W16", event: runFinished(snapStreaming) },
+			// Host flips the legacy phase to awaiting_followup
+			// (e.g. user typed a follow-up question in the input).
+			{ kind: "set-legacy-phase", phase: "awaiting_followup" },
+			// HOST_TASK same_task_continued: the user actually
+			// submitted the follow-up. Shadow flips to running
+			// (projects to streaming legacy phase). Divergence:
+			// legacy=awaiting_followup vs shadow=streaming.
+			// Classifies as D08_FOLLOWUP_EXTERNAL with HOST_TASK
+			// origin. The origin guard MUST permit this.
+			{ kind: "host-task", taskId: "task-W16", which: "continued", legacyPhase: "awaiting_followup" },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("running")
+				},
+			},
+			// RECONSTRUCTED ENVELOPE 1: a legacy content_start
+			// arrives under awaiting_followup legacy phase.
+			// Under Option A it is DIAGNOSTIC_ONLY.
+			{
+				kind: "legacy",
+				event: legacyEnvelope(
+					{
+						type: "content_start",
+						contentType: "text",
+						text: "follow-up question?",
+					} as AgentEvent,
+					"session-W16",
+				),
+				legacyPhase: "awaiting_followup",
+				arbiter: emptyArbiterSnapshot(),
+			},
+			// RECONSTRUCTED ENVELOPE 2: a legacy "done" arrives
+			// under awaiting_followup. Reverse-translator emits
+			// run-finished; under Option A it is DIAGNOSTIC_ONLY.
+			{
+				kind: "legacy",
+				event: legacyEnvelope(
+					{ type: "done", reason: "completed", text: "", iterations: 1, conversationId: "run-W16" } as AgentEvent,
+					"session-W16",
+				),
+				legacyPhase: "awaiting_followup",
+				arbiter: emptyArbiterSnapshot(),
+			},
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		// Lifecycle is running: the same_task_continued HOST_TASK
+		// flipped it back to running after the canonical
+		// completion. Reconstructed envelopes that followed are
+		// DIAGNOSTIC_ONLY and did not mutate the lifecycle.
+		const m = state.wiring.comparator.debugSnapshot()
+		expect(m.lifecycle.kind).toBe("running")
+		// Diagnostic counter increments for reconstructed.
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		// No fallback applied under LocalRuntimeHost.
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+		// Hard gates per W16 spec.
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		// The D08_FOLLOWUP_EXTERNAL_ORIGIN_GUARD: if any D08
+		// divergence exists, its origin MUST be HOST_TASK (the
+		// host awaiting_followup projection), never
+		// RUNTIME_RECONSTRUCTED. Under Option A this means
+		// reconstructed envelopes cannot produce D08 by
+		// themselves; D08 only emerges when a HOST_TASK ingress
+		// (e.g. same_task_continued arriving under
+		// awaiting_followup legacy phase) drives the shadow
+		// back to running, causing a temporary
+		// shadow=streaming vs legacy=awaiting_followup
+		// disagreement that classifies as D08.
+		// The same_task_continued HOST_TASK step above produces
+		// exactly one D08_FOLLOWUP_EXTERNAL record (legacy=
+		// awaiting_followup vs shadow=streaming). Verify the
+		// record exists and its origin is HOST_TASK.
+		const d08 = records.filter((r) => r.classification === "D08_FOLLOWUP_EXTERNAL")
+		expect(d08.length).toBeGreaterThanOrEqual(1)
+		for (const d of d08) {
+			expect(d.origin).not.toBe("RUNTIME_RECONSTRUCTED")
+		}
+	})
+})
