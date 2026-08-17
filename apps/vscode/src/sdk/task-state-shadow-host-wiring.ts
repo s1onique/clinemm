@@ -178,6 +178,20 @@ export interface TaskShadowHostWiringDeps {
 	readonly sessionOptions: SdkSessionLifecycleOptions
 	readonly getLegacyPhase: () => TurnPhase
 	readonly getArbiterSnapshot: () => ArbiterSnapshot
+	/**
+	 * C3.CONT.0-CORRECTION01 R2: production ingress for the
+	 * canonical-runtime-availability decision. Returns true when
+	 * the canonical `AgentRuntimeEvent` stream is reachable
+	 * (LocalRuntimeHost production path). Returns false when the
+	 * host only sees reconstructed legacy envelopes (Hub/Remote
+	 * fallback paths), in which case reconstructed observations
+	 * are authoritative via FALLBACK_APPLY.
+	 *
+	 * Defaults to true when absent — preserves existing
+	 * production behavior. Hosts that need fallback semantics
+	 * MUST provide this dependency.
+	 */
+	readonly getCanonicalRuntimeAvailable?: () => boolean
 	readonly getRuntimeStatus?: () => AgentRunStatus
 	readonly now: () => number
 	readonly onInvariantViolation?: (record: TaskShadowDifferentialRecord, violations: readonly unknown[]) => void
@@ -382,13 +396,13 @@ function observeLegacyEvent(
 		origin: "RUNTIME_RECONSTRUCTED",
 		sessionId: sourceSessionId,
 		event: runtimeEvent,
-		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION02:
-		// LocalRuntimeHost wires its legacy translator; canonical
-		// transport is available, so reconstructed observations are
-		// DIAGNOSTIC_ONLY under Option A. Hub/RemoteRuntimeHost
-		// (future wiring) sets this to `false` to make reconstructed
-		// events authoritative via FALLBACK_APPLY.
-		canonicalAvailable: true,
+		// C3.CONT.0-CORRECTION01 R2: the wiring now resolves
+		// canonical-runtime availability from the host-supplied
+		// dependency (LocalRuntimeHost = true; Hub/Remote = false).
+		// Defaults to true to preserve existing production behavior.
+		// This is the single production decision authority for
+		// DIAGNOSTIC_ONLY vs FALLBACK_APPLY under the legacy ingress.
+		canonicalAvailable: deps.getCanonicalRuntimeAvailable?.() ?? true,
 	})
 }
 

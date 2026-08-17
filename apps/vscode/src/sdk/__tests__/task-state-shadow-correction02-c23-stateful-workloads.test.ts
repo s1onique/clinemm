@@ -114,7 +114,6 @@ export type WorkloadStep =
 			canonicalAvailable: boolean
 	  }
 	| { kind: "set-active-session"; sessionId: string | undefined }
-	| { kind: "set-active-run"; runId: string | undefined }
 	| { kind: "set-legacy-phase"; phase: TurnPhase }
 	| { kind: "checkpoint"; selected: CheckpointSelection }
 	| { kind: "expect-state"; assertion: (model: TaskState.TaskModel) => void }
@@ -305,6 +304,11 @@ function buildWiring(opts: { canonicalAvailable: boolean; initialSession?: strin
 		sessionOptions,
 		getLegacyPhase: () => state.currentLegacyPhase,
 		getArbiterSnapshot: () => state.currentArbiter,
+		// C3.CONT.0-CORRECTION01 R2: real wiring dependency for the
+		// canonical-runtime availability decision. The wiring's
+		// legacy ingress reads this and routes through the same
+		// production decision the rest of the system uses.
+		getCanonicalRuntimeAvailable: () => state.canonicalAvailable,
 		now: () => NOW,
 	}
 	state.wiring = createTaskShadowHostWiring(deps)
@@ -376,15 +380,6 @@ function runStep(state: HarnessState, step: WorkloadStep): void {
 			return
 		case "set-active-session":
 			state.activeSessionId = step.sessionId
-			return
-		case "set-active-run":
-			// R3: actually swap the active runId. Future canonical
-			// edges will read from event.snapshot.runId; for
-			// legacy/reconstructed edges the wiring's policy keys
-			// off sessionId:runId so a separate runId is needed.
-			// The wiring's activeSessionId remains; runId identity
-			// lives on the wiring's coordinator via fallbackEdges.
-			state.activeRunId = step.runId
 			return
 		case "set-legacy-phase":
 			state.currentLegacyPhase = step.phase
@@ -802,118 +797,115 @@ describe("C2.3-CONT W04 — parallel tools; intermediate activeToolCallIds prove
 // CONT.0 capability gates: R2 (canonicalAvailable) + R3 (active-run)
 // =============================================================================
 
-describe("C3.CONT.0 R2 — canonicalAvailable=false routes reconstructed through FALLBACK_APPLY", () => {
-	it("with canonicalAvailable=false, reconstructed events are authoritative via FALLBACK_APPLY (Hub/Remote)", () => {
-		const sessionOptions: SdkSessionLifecycleOptions = {
-			mcpHub: undefined as never,
-			requestToolApproval: () => undefined as never,
-			askQuestion: () => undefined as never,
-			onSessionEvent: () => undefined,
-			onSendComplete: () => undefined,
-			onSendError: () => undefined,
-		}
-		const state: HarnessState = {
-			wiring: undefined as never,
-			sessionOptions,
-			currentArbiter: emptyArbiterSnapshot(),
-			currentLegacyPhase: "idle",
-			activeSessionId: "session-A",
-			activeRunId: "run-A",
-			canonicalAvailable: false,
-		}
-		const deps: TaskShadowHostWiringDeps = {
-			lifecycle: {
-				getActiveSession: () => ({ sessionId: state.activeSessionId ?? "session-unknown" }) as never,
-				setRunning: () => undefined,
-			},
-			sessionOptions,
-			getLegacyPhase: () => state.currentLegacyPhase,
-			getArbiterSnapshot: () => state.currentArbiter,
-			now: () => NOW,
-		}
-		state.wiring = createTaskShadowHostWiring(deps)
+describe("C3.CONT.0-CORRECTION01 R2 — canonicalAvailable is a real wiring control (legacy ingress)", () => {
+	// F01 / F02 / F03 are qualified here using a single coordinator
+	// and the production legacy ingress
+	// (sessionOptions.onSessionEvent -> observeLegacyEvent).
+	// NO direct coordinator.observe() calls.
 
-		// Reconstructed fallback run-started: session=session-A, run=run-A -> APPLY
-		state.wiring.coordinator.observe({
-			kind: "runtime-reconstructed",
-			origin: "RUNTIME_RECONSTRUCTED",
-			sessionId: "session-A",
-			event: runStarted(
-				snapshotFixture({
-					runId: "run-A",
-					iteration: 0,
-					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
-					recoveryState: "idle",
-					status: "running",
-					pendingToolCalls: [],
-				}),
-			),
-			canonicalAvailable: false,
-		})
-		// Reconstructed fallback run-started: session=session-B, run=run-B -> APPLY
-		state.activeSessionId = "session-B"
-		state.wiring.coordinator.observe({
-			kind: "runtime-reconstructed",
-			origin: "RUNTIME_RECONSTRUCTED",
-			sessionId: "session-B",
-			event: runStarted(
-				snapshotFixture({
-					runId: "run-B",
-					iteration: 0,
-					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
-					recoveryState: "idle",
-					status: "running",
-					pendingToolCalls: [],
-				}),
-			),
-			canonicalAvailable: false,
-		})
+	function buildLegacyIngressState(canonicalAvailable: boolean, sessionId: string): HarnessState {
+		const st = buildWiring({ canonicalAvailable, initialSession: sessionId })
+		// Set the legacy phase to "streaming" so the legacy
+		// translator's `iteration_start` edge produces a
+		// reconstructed run-started observation (the same path
+		// the production LocalRuntimeHost uses).
+		st.currentLegacyPhase = "streaming"
+		return st
+	}
 
-		const counts = state.wiring.recorderCounts()
-		// 2 events observed, 0 suppressed.
-		expect(counts.eventsObserved).toBe(2)
-		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
-		// Both apply (no cross-session dedup collision).
+	it("F01 sequential fallback sessions — different sessions, same edge, both APPLY (no cross-session dedup)", () => {
+		const st = buildLegacyIngressState(false, "session-A")
+		// session-A: iteration_start -> reconstructed run-started.
+		// With canonicalAvailable=false -> FALLBACK_APPLY.
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-A", iteration: 0 } as AgentEvent, "session-A"),
+		)
+		// Switch active session -> session-B
+		st.activeSessionId = "session-B"
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-B", iteration: 0 } as AgentEvent, "session-B"),
+		)
+		const counts = st.wiring.recorderCounts()
 		expect(counts.fallbackReconstructedApplied).toBe(2)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
 
-		// Same session, same run, same edge -> SUPPRESS_DUPLICATE.
-		state.wiring.coordinator.observe({
-			kind: "runtime-reconstructed",
-			origin: "RUNTIME_RECONSTRUCTED",
-			sessionId: "session-B",
-			event: runStarted(
-				snapshotFixture({
-					runId: "run-B",
-					iteration: 0,
-					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
-					recoveryState: "idle",
-					status: "running",
-					pendingToolCalls: [],
-				}),
-			),
-			canonicalAvailable: false,
-		})
-		const counts2 = state.wiring.recorderCounts()
-		// SUPPRESS_DUPLICATE does NOT increment eventsObserved
-		// (only the recorder's recordSuppression counter); the
-		// 2 applied events still count.
-		expect(counts2.eventsObserved).toBe(2)
-		expect(counts2.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
-		expect(counts2.fallbackReconstructedApplied).toBe(2)
-		expect(counts2.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
-		expect(counts2.evidenceGaps).toBe(0)
-		expect(counts2.invariantViolations).toBe(0)
+	it("F02 sequential fallback runs in the same session — different runIds, both APPLY (no cross-run dedup)", () => {
+		const st = buildLegacyIngressState(false, "session-X")
+		// Same session, run-A.
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-A", iteration: 0 } as AgentEvent, "session-X"),
+		)
+		// Same session, run-B (new conversationId).
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-B", iteration: 0 } as AgentEvent, "session-X"),
+		)
+		const counts = st.wiring.recorderCounts()
+		// 2 distinct sessionId:runId:baseEdge scoped keys -> both APPLY.
+		expect(counts.fallbackReconstructedApplied).toBe(2)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+	})
+
+	it("F03 fallback duplicate suppression — same session, same run, same edge SUPPRESSES the second", () => {
+		const st = buildLegacyIngressState(false, "session-X")
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-A", iteration: 0 } as AgentEvent, "session-X"),
+		)
+		// Re-deliver the same envelope (e.g. event replay).
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-A", iteration: 0 } as AgentEvent, "session-X"),
+		)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.fallbackReconstructedApplied).toBe(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
+
+	it("CAPABILITY TRUE LEGACY INGRESS = DIAGNOSTIC_ONLY (LocalRuntimeHost path)", () => {
+		const st = buildLegacyIngressState(true, "session-A")
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-A", iteration: 0 } as AgentEvent, "session-A"),
+		)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
+
+	it("CAPABILITY FALSE LEGACY INGRESS = FALLBACK_APPLY (Hub/Remote path)", () => {
+		const st = buildLegacyIngressState(false, "session-A")
+		st.sessionOptions.onSessionEvent(
+			legacyEnvelope({ type: "iteration_start", conversationId: "run-A", iteration: 0 } as AgentEvent, "session-A"),
+		)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.fallbackReconstructedApplied).toBe(1)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
 	})
 })
 
-describe("C3.CONT.0 R3 — set-active-run actually swaps the active runId", () => {
-	it("after set-active-run, subsequent canonical events carry the new runId", () => {
-		const state = buildWiring({ canonicalAvailable: true, initialSession: "session-X" })
+describe("C3.CONT.0-CORRECTION01 R3 — run identity is derived from event.snapshot.runId", () => {
+	it("canonical runId is read from the event snapshot, not from a decorative harness step", () => {
+		// Two consecutive canonical run-started events with
+		// DIFFERENT runIds must NOT cross-dedup: each carries
+		// a distinct (session, run, edge) key derived from the
+		// snapshot, not from any mutable harness state.
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "session-1" })
 		const steps: WorkloadStep[] = [
 			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
 			{
 				kind: "canonical",
-				sessionId: "session-X",
+				sessionId: "session-1",
 				event: runStarted(
 					snapshotFixture({
 						runId: "run-A",
@@ -926,15 +918,8 @@ describe("C3.CONT.0 R3 — set-active-run actually swaps the active runId", () =
 				),
 			},
 			{
-				kind: "expect-state",
-				assertion: () => {
-					/* nothing — runId is opaque */
-				},
-			},
-			{ kind: "set-active-run", runId: "run-B" },
-			{
 				kind: "canonical",
-				sessionId: "session-X",
+				sessionId: "session-1",
 				event: runStarted(
 					snapshotFixture({
 						runId: "run-B",
@@ -947,20 +932,13 @@ describe("C3.CONT.0 R3 — set-active-run actually swaps the active runId", () =
 				),
 			},
 		]
-		const final = runWorkload([])
-		// The above runWorkload([]) is a no-op; we want the steps
-		// to drive the actual state. Build a state via buildWiring
-		// then run each step in this test directly.
-		for (const s of steps) {
-			runStep(state, s)
-		}
-		void final
-		// Active runId is now "run-B".
-		expect(state.activeRunId).toBe("run-B")
-		// Hard gates hold.
-		const counts = state.wiring.recorderCounts()
+		for (const s of steps) runStep(st, s)
+		// activeRunId is derived from the latest canonical event.
+		expect(st.activeRunId).toBe("run-B")
+		const counts = st.wiring.recorderCounts()
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 		expect(counts.invariantViolations).toBe(0)
 		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.eventsObserved).toBe(3) // 1 host_task + 2 canonical
 	})
 })

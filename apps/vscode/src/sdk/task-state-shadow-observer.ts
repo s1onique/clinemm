@@ -156,10 +156,21 @@ export class TaskShadowReverseTranslator {
 		if (evt.type !== "agent_event") return undefined
 		const agentEvent = evt.payload?.event as AgentEvent | undefined
 		if (!agentEvent) return undefined
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.0-CORRECTION01:
+		// Update activeRunId BEFORE reconstructSnapshot so the
+		// snapshot's runId matches the new conversation identity.
+		// Previously the assignment lived after reconstructSnapshot,
+		// which meant the FIRST iteration_start produced a snapshot
+		// with runId=undefined (no prior runId yet). The downstream
+		// coordinator dedup gate (scopedEdgeKey) then produced a
+		// different scoped key on the first vs. subsequent call,
+		// silently defeating fallback duplicate suppression.
+		if (agentEvent.type === "iteration_start") {
+			this.activeRunId.value = (agentEvent.conversationId as string | undefined) ?? this.activeRunId.value
+		}
 		const snapshot = this.reconstructSnapshot(agentEvent, input)
 		switch (agentEvent.type) {
 			case "iteration_start":
-				this.activeRunId.value = (agentEvent.conversationId as string | undefined) ?? this.activeRunId.value
 				return { type: "run-started", snapshot }
 			case "done":
 				return {
