@@ -794,8 +794,205 @@ describe("C2.3-CONT W04 — parallel tools; intermediate activeToolCallIds prove
 })
 
 // =============================================================================
+// C3.CONT.1 — W05 (approval_allow) + W06 (approval_deny)
+// =============================================================================
+
+describe("C3.CONT.1 W05 — approval_allow; canonical awaitingApproval false→true→false; terminal lifecycle = completed", () => {
+	it("approval granted: terminal lifecycle.kind === completed; exactly one approval_requested + one approval_resolved edge", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-W05",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapWaiting: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: true },
+		}
+		const snapResolved: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapIdleAgain: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W05", which: "requested", legacyPhase: "idle" },
+			{ kind: "canonical", sessionId: "session-W05", event: runStarted(snapIdle) },
+			// Legacy enters the user-approval UI; canonical confirms
+			// awaitingApproval=true. Both sides agree -> D00_AGREE.
+			{ kind: "set-legacy-phase", phase: "awaiting_approval" },
+			{
+				kind: "canonical",
+				sessionId: "session-W05",
+				event: execEvent(snapIdle.execution!, snapWaiting),
+			},
+			// Mid-approval checkpoint: shadow reports awaitingApproval=true.
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.activity.awaitingApproval).toBe(true)
+				},
+			},
+			// Legacy resolves approval (UI close). Canonical flips
+			// awaitingApproval back to false. Shadow follows.
+			{ kind: "set-legacy-phase", phase: "streaming" },
+			{
+				kind: "canonical",
+				sessionId: "session-W05",
+				event: execEvent(snapWaiting.execution!, snapResolved),
+			},
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+			// Streaming proceeds and finishes.
+			{
+				kind: "canonical",
+				sessionId: "session-W05",
+				event: execEvent(snapResolved.execution!, snapStreaming),
+			},
+			{
+				kind: "canonical",
+				sessionId: "session-W05",
+				event: execEvent(snapStreaming.execution!, snapIdleAgain),
+			},
+			// run-finished -> task_completed -> lifecycle completed.
+			{ kind: "set-legacy-phase", phase: "completed" },
+			{ kind: "canonical", sessionId: "session-W05", event: runFinished(snapIdleAgain) },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("completed")
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		const approvalRequested = records.filter((r) => r.event === "approval_requested").length
+		const approvalResolved = records.filter((r) => r.event === "approval_resolved").length
+		expect(approvalRequested, "exactly one approval_requested edge").toBe(1)
+		expect(approvalResolved, "exactly one approval_resolved edge").toBe(1)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.divergenceCountsByClass.D03_TERMINAL_ORDERING).toBe(0)
+		// R7: legacy "streaming" with canonical awaitingApproval
+		// false→true→false produces D11_HOST_PREENGAGED on the
+		// approval_resolved and model_stream_finished edges. This
+		// is the legitimate production-realistic classification:
+		// host says "streaming" while canonical runtime says
+		// modelStreaming=false. Same mechanism as W02.
+		expect(counts.divergenceCountsByClass.D11_HOST_PREENGAGED).toBeGreaterThanOrEqual(1)
+		// RUNTIME_RECONSTRUCTED applied mutations must be 0 (canonical
+		// path is authoritative; reconstructed would race it).
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+		// EXACT counts: 1 host_task_requested + 6 canonical =
+		//   session_started, approval_requested, approval_resolved,
+		//   model_stream_started, model_stream_finished, task_completed.
+		expect(counts.eventsObserved).toBe(7)
+		expect(counts.comparisons).toBe(7)
+	})
+})
+
+// =============================================================================
 // CONT.0 capability gates: R2 (canonicalAvailable) + R3 (active-run)
 // =============================================================================
+
+describe("C3.CONT.1 W06 — approval_deny; awaitingApproval false→true→false; lifecycle frozen at denial boundary", () => {
+	it("approval denied: lifecycle.kind does NOT advance past the denial; exactly one D04_APPROVAL_PRECEDENCE", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-W06",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapWaiting: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: true },
+		}
+		const snapResolved: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W06", which: "requested", legacyPhase: "idle" },
+			{ kind: "canonical", sessionId: "session-W06", event: runStarted(snapIdle) },
+			// Rise: legacy + canonical both flip to awaitingApproval.
+			{ kind: "set-legacy-phase", phase: "awaiting_approval" },
+			{
+				kind: "canonical",
+				sessionId: "session-W06",
+				event: execEvent(snapIdle.execution!, snapWaiting),
+			},
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.activity.awaitingApproval).toBe(true)
+				},
+			},
+			// Fall: canonical flips awaitingApproval back to false.
+			// The legacy phase here stays at "awaiting_approval"
+			// because the deny outcome does not flip legacy back to
+			// streaming — that IS the production-realistic
+			// observation. Shadow says idle, legacy says still
+			// awaiting_approval → D04_APPROVAL_PRECEDENCE.
+			//
+			// NOTE: we do NOT call set-legacy-phase before this
+			// canonical event, which is the W05 vs W06 distinction:
+			// approval_allow → legacy advances to streaming;
+			// approval_deny → legacy stays stuck at awaiting_approval.
+			{
+				kind: "canonical",
+				sessionId: "session-W06",
+				event: execEvent(snapWaiting.execution!, snapResolved),
+			},
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+			// No further canonical events. Lifecycle is frozen at
+			// whatever it was at the denial boundary (still running
+			// per the canonical arbiter; nothing has transitioned it
+			// to a terminal state).
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		const approvalRequested = records.filter((r) => r.event === "approval_requested").length
+		const approvalResolved = records.filter((r) => r.event === "approval_resolved").length
+		expect(approvalRequested, "exactly one approval_requested edge").toBe(1)
+		expect(approvalResolved, "exactly one approval_resolved edge").toBe(1)
+		// W06 spec: exactly one D04_APPROVAL_PRECEDENCE (the fall
+		// edge where legacy still says awaiting_approval while
+		// shadow flipped to idle). The rise edge was D00_AGREE
+		// because legacy + canonical both said awaiting_approval.
+		expect(
+			counts.divergenceCountsByClass.D04_APPROVAL_PRECEDENCE,
+			"exactly one approval-precedence divergence on the deny edge",
+		).toBe(1)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		// Lifecycle frozen at the denial — never reached terminal.
+		const m = state.wiring.comparator.debugSnapshot()
+		expect(m.lifecycle.kind).not.toBe("completed")
+		expect(m.lifecycle.kind).not.toBe("failed")
+	})
+})
 
 describe("C3.CONT.0-CORRECTION01 R2 — canonicalAvailable is a real wiring control (legacy ingress)", () => {
 	// F01 / F02 / F03 are qualified here using a single coordinator
