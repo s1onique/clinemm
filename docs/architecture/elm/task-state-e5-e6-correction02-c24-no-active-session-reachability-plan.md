@@ -3,8 +3,9 @@
 ```
 ACT =
 ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-NO_ACTIVE_SESSION-REACHABILITY
-ACT-AMENDMENT-01 (this version)
-  REVIEWER-AMENDMENTS-APPLIED = R1..R6 + E7-scope
+ACT-AMENDMENT-02 (this version)
+  REVIEWER-AMENDMENTS-APPLIED = R1..R7 + E7-scope
+  SUPERSEDES-PLAN-AMENDMENT01 = c7b50ed54
   SUPERSEDES-PLAN             = dbef640da
 
 ENTRY_HEAD = f6c4b39a9 (CONT.6-CORRECTION02-DEDUPE01; C2.3 closed)
@@ -18,10 +19,14 @@ EXPECTED_PRODUCTION_SEMANTIC_DELTA = 0  (qualification + boundary-test ACT)
 
 ## 0. Amendment log
 
-The committed plan at `dbef640da` was amended in response to
-six reviewer-identified architectural-location errors. The
-amendment does NOT reopen C2.3 and does NOT authorize any new
-production semantic delta. It restructures the audit-target
+The committed plan at `dbef640da` was first amended at
+`c7b50ed54` (AMENDMENT-01) in response to six
+reviewer-identified architectural-location errors. This file
+was further amended (AMENDMENT-02) in response to a seventh
+reviewer-identified directional error: §3.1 was auditing the
+consumer/bridge end instead of the producer end. The
+amendments do NOT reopen C2.3 and do NOT authorize any new
+production semantic delta. They restructure the audit-target
 locations so the executor inspects the correct layer.
 
 ```
@@ -81,6 +86,42 @@ ADD  E7 backend scope is currently implicit. C2.4 must freeze
     E7_INITIAL_BACKEND_SCOPE before closure so Hub/Remote
     NOT_YET_QUALIFIED does NOT block C2.5 if product
     requirements accept LOCAL_ONLY initial cutover.
+
+R7  C2.4-A producer/transport direction is BACKWARDS in
+    AMENDMENT-01. The plan started the audit in
+    apps/vscode/src/sdk/ (the consumer/bridge end), but
+    canonical AgentRuntimeEvents ORIGINATE in
+    sdk/packages/agents/ and flow downstream through
+    SessionRuntime → RuntimeHost → ClineCore → VS Code.
+    Verified by grep:
+      sdk/packages/agents/src/agent-runtime.ts:1241
+        constructs { type: "run-started", snapshot: ... }
+      sdk/packages/core/src/runtime/orchestration/session-runtime.ts
+        references @cline/agents' Agent (lines 27-30)
+      sdk/packages/core/src/runtime/host/local-runtime-host.ts
+        implements RuntimeHost for Local
+      sdk/packages/core/src/hub/runtime-host/hub-runtime-host.ts
+        implements RuntimeHost for Hub
+      sdk/packages/core/src/hub/runtime-host/remote-runtime-host.ts
+        extends HubRuntimeHost for Remote
+      sdk/packages/core/src/ClineCore.ts
+        contains the cross-process event routing
+      apps/vscode/src/sdk/canonical-event-subscription.ts
+        sits at the consumer/bridge end
+    Producer is the TOP of the chain, not the bottom.
+    Amended plan: §3.1 now freezes the directional rule
+    "audit from producer (sdk/packages/agents) downstream;
+    VS Code is consumer/bridge, not producer."
+
+    Additionally: AMENDMENT-01 split Local vs Hub/Remote
+    implicitly but let the proxy-rewrites language apply
+    to both. F1 already proved Local proxy preserves
+    reference identity (F1-I3_EVENT_FIDELITY PASS via
+    F1-T3 toBe(reference) witness — see
+    task-state-e2f-f1-correction03-evidence.md:135).
+    Amended plan: §3.1 step 4 splits the concern explicitly
+    — Local must remain reference-preserving (re-verify
+    F1-V1-C2/C3); Hub/Remote may rewrite provenance.
 ```
 
 ## 1. Mission
@@ -177,33 +218,107 @@ C2.4-D  BACKEND DISPOSITION + EVIDENCE
 the production call chain actually deliver to the wiring, and
 what run-id / session-id guarantees does each producer make?
 
+**Directional rule (AMENDMENT-02).** The previous version of
+this section pointed the audit at `apps/vscode/src/sdk/` —
+the **consumer** end. That is backwards. `AgentRuntimeEvent`s
+originate in `sdk/packages/agents/`, flow through
+`SessionRuntime` to the host implementation, then through
+`ClineCore`, and only then cross into the VS Code host. The
+producer is the **top** of the chain, not the bottom. The
+audit must start at the producer and trace downstream; the
+VS Code layer must be audited as **consumer/bridge**, not as
+producer.
+
+**Canonical event flow (frozen direction).**
+
+```
+AgentRuntime
+  (sdk/packages/agents/src/agent-runtime.ts)
+        ↓ emit({ type: "run-started", snapshot })
+        ↓ listener fanout (this.listeners / this.hooks.onEvent)
+  SessionRuntime
+  (sdk/packages/core/src/runtime/orchestration/session-runtime.ts)
+        ↓ registerLeadAgent → session-bound fanout
+  RuntimeHost implementation
+  - LocalRuntimeHost: sdk/packages/core/src/runtime/host/local-runtime-host.ts
+  - HubRuntimeHost:   sdk/packages/core/src/hub/runtime-host/hub-runtime-host.ts
+  - RemoteRuntimeHost:sdk/packages/core/src/hub/runtime-host/remote-runtime-host.ts
+        ↓
+  ClineCore
+  (sdk/packages/core/src/ClineCore.ts)
+        ↓
+  VscodeSessionHost / runtime-events proxy
+  (apps/vscode/src/sdk/runtime-events-proxy.ts)
+        ↓
+  subscribeCanonicalRuntimeEventsToShadow
+  (apps/vscode/src/sdk/canonical-event-subscription.ts)
+        ↓ sessionId guard
+  TaskStateShadowHostWiring.observeCanonicalRuntimeEvent()
+  (apps/vscode/src/sdk/task-state-shadow-host-wiring.ts)
+```
+
 **Method.**
 
-1. **Producer inventory.** Audit every site in
-   `apps/vscode/src/sdk/` that constructs an
-   `AgentRuntimeEvent` and delivers it through the canonical
-   subscription path. For each producer:
-   - Event type (e.g. `run-started`, `message`, `tool-result`).
+1. **Producer inventory (start at the top).** Audit every site
+   in `sdk/packages/agents/src/` that constructs an
+   `AgentRuntimeEvent`. Verified producers to include:
+   - `agent-runtime.ts:856` — `recovery-state-changed` event
+     construction inside `resetRecoveryEpisode`.
+   - `agent-runtime.ts:1241` — `run-started` event construction
+     inside the run-loop.
+   - Other emit sites discovered during recon.
+   For each producer:
+   - Event type (e.g. `run-started`, `message`,
+     `tool-result`, `recovery-state-changed`).
    - `snapshot.runId` guarantee (always defined / sometimes
      undefined / never defined).
    - Producer location (file:line).
-   - Transport path (direct emit / proxy / reconstructed).
-2. **Transport preservation recon.** Trace each event type
-   through:
+   - Listener fanout mechanism (synchronous `this.listeners`
+     fanout vs async `emit()` dispatch).
+2. **SessionRuntime fanout recon.** Trace how
+   `SessionRuntime` (line 27-30 of session-runtime.ts
+   references `@cline/agents`' `Agent`) wires producer
+   listeners to the per-session `subscribeRuntimeEvents`
+   surface. Determine:
+   - Is the AgentRuntime listener registered once globally
+     and fanned out per active session, or once per session?
+   - Does the fanout preserve `snapshot.runId` literally?
+   - Does the fanout re-construct or re-emit, or pass
+     reference through?
+3. **Transport preservation recon.** Trace each event type
+   through (in direction order):
    ```
-   producer
-     → RuntimeHost / ClineCore (any backend)
-     → SessionRuntime canonical fanout
-     → VS Code canonical proxy (if applicable)
-     → subscribeRuntimeEventsThroughProxy
+   AgentRuntime
+     → SessionRuntime
+     → RuntimeHost (LocalRuntimeHost / HubRuntimeHost /
+                   RemoteRuntimeHost)
+     → ClineCore
+     → VS Code proxy (runtime-events-proxy.ts)
      → subscribeCanonicalRuntimeEventsToShadow
      → TaskStateShadowHostWiring.observeCanonicalRuntimeEvent
    ```
    At each hop, confirm the runId / sessionId is preserved or
-   deliberately rewritten. The proxy layer
-   (`runtime-events-proxy.ts`) is particularly important: it
-   may rewrite provenance for cross-process delivery.
-3. **Backend capability recon.** Audit the actual `inner`
+   deliberately rewritten.
+4. **Local vs Hub/Remote proxy rewrites (split concern).**
+   Do NOT imply Local rewrites provenance; it does not.
+   - **Local path:** F1 already proved
+     `F1_I3_EVENT_FIDELITY = PASS (F1-T3 toBe(reference)
+     witness)` (see
+     `docs/architecture/elm/task-state-e2f-f1-correction03-evidence.md:135`).
+     The C2.4-A audit must confirm that F1-V1-C2/C3
+     literal-event reference tests still pass against the
+     Local path after the wiring-layer fence hardening in
+     §3.2. Reference identity is preserved end-to-end.
+   - **Hub/Remote path:** the proxy layer MAY rewrite
+     provenance for cross-process delivery (the hub spoke
+     topology routes events through a coordinator). Audit
+     whether the rewrite:
+     - preserves sessionId verbatim,
+     - preserves runId verbatim,
+     - reconstitutes a canonical-looking envelope that the
+       wiring may mis-classify as canonical,
+     - strips provenance entirely.
+5. **Backend capability recon.** Audit the actual `inner`
    binding in `SdkController`'s call to
    `subscribeCanonicalRuntimeEventsToShadow`. Determine:
    - Does the production code bind to `LocalRuntimeHost`,
@@ -212,24 +327,37 @@ what run-id / session-id guarantees does each producer make?
    - Does `subscribeRuntimeEvents` exist on each backend, or
      do Hub/Remote use a different surface (e.g. SSE,
      reconstructed envelopes)?
-4. **Reconstructed-fallback recon.** If a backend lacks a
+   - **Do NOT infer backend capability from the generic
+     optional `subscribeRuntimeEvents` interface alone.** The
+     generic signature exists precisely so the audit cannot
+     conclude from the type alone.
+6. **Reconstructed-fallback recon.** If a backend lacks a
    canonical stream, find the reconstructed-envelope
    fallback producer and characterize:
    - What envelope types does it produce?
    - Does the envelope carry `runId`?
    - Does it ever reach `TaskStateShadow.record(...)`?
    - What authority does the envelope claim?
+   - Is the reconstructed event typed the same as the
+     canonical one (would wiring mis-classify it as
+     canonical)?
 
 **Acceptance gate.**
 
 ```
 CANONICAL_SOURCE_RECON_TABLE
-  producer sites audited       = N (>= 6)
-  producer runId guarantee documented  = 100%
-  transport hops audited       = N (>= 4 per event type)
-  backend binding confirmed    = (local / hub / remote / mixed / unknown)
-  reconstructed-fallback sites = N (>= 0)
+  producer sites audited (sdk/packages/agents)   = N (>= 6)
+  producer runId guarantee documented           = 100%
+  SessionRuntime fanout audited                  = YES
+  transport hops audited (top-down direction)    = N (>= 5 per event type)
+  Local F1-I3 reference-identity still PASS      = YES
+  Local proxy rewrites provenance?               = NO (expected)
+  Hub proxy rewrites provenance?                 = (audit reveals)
+  Remote proxy rewrites provenance?              = (audit reveals)
+  backend binding confirmed                      = (local / hub / remote / mixed / unknown)
+  reconstructed-fallback sites                   = N (>= 0)
   reconstructed-fallback reach to TaskStateShadow = (yes / no / partial)
+  reconstructed-envelope distinguishable from canonical? = (yes / no)
 ```
 
 ### 3.2 (C2.4-B) NO_ACTIVE_SESSION witnesses
