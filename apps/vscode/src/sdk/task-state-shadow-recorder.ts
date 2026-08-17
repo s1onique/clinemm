@@ -195,6 +195,14 @@ export interface TaskShadowRecorderCounts {
 	 */
 	readonly fallbackRecoveryApplied: number
 	/**
+	 * C2.3 C23-R2: count of RUNTIME_RECONSTRUCTED observations applied
+	 * as fallback when canonical runtime transport was unavailable
+	 * (Hub/RemoteRuntimeHost). Distinguishes reconstructed-runtime
+	 * fallback from HOST_RECOVERY fallback so qualification can
+	 * verify the correct counter increments per authority path.
+	 */
+	readonly fallbackReconstructedApplied: number
+	/**
 	 * C2.2: count of observation paths that threw inside the
 	 * coordinator transaction but did not affect legacy/runtime
 	 * authority. A non-zero value indicates a diagnostic gap; the
@@ -263,6 +271,7 @@ export class TaskShadowRecorder {
 	private droppedRecords = 0
 	private suppressedCounts: Record<TaskShadowRuntimeOrigin, number> = makeSuppressedCounts()
 	private diagnosticCounts: Record<TaskShadowRuntimeOrigin, number> = makeSuppressedCounts()
+	private fallbackReconstructedApplied = 0
 	private fallbackRecoveryApplied = 0
 	private observerErrors = 0
 	private evidenceGaps = 0
@@ -347,6 +356,18 @@ export class TaskShadowRecorder {
 	}
 
 	/**
+	 * C2.3 C23-R2: increment the RUNTIME_RECONSTRUCTED fallback
+	 * counter. Called by the unified coordinator when a
+	 * reconstructed event APPLYs via FALLBACK_APPLY (Hub/Remote
+	 * hosts with `canonicalAvailable=false`). Mutually exclusive
+	 * with `recordFallbackRecoveryApplied()` — the coordinator
+	 * dispatches based on `input.origin`.
+	 */
+	recordFallbackReconstructedApplied(): void {
+		this.fallbackReconstructedApplied += 1
+	}
+
+	/**
 	 * C2.2: count an exception that occurred inside the coordinator
 	 * transaction. Legacy/runtime authority is unaffected; the
 	 * transition that was already applied is reported as
@@ -399,6 +420,7 @@ export class TaskShadowRecorder {
 			observationsSuppressedByOrigin: { ...this.suppressedCounts },
 			observationsDiagnosticByOrigin: { ...this.diagnosticCounts },
 			fallbackRecoveryApplied: this.fallbackRecoveryApplied,
+			fallbackReconstructedApplied: this.fallbackReconstructedApplied,
 			observerErrors: this.observerErrors,
 			evidenceGaps: this.evidenceGaps,
 		}
@@ -417,6 +439,7 @@ export class TaskShadowRecorder {
 		this.suppressedCounts = makeSuppressedCounts()
 		this.diagnosticCounts = makeSuppressedCounts()
 		this.fallbackRecoveryApplied = 0
+		this.fallbackReconstructedApplied = 0
 		this.observerErrors = 0
 		this.evidenceGaps = 0
 	}

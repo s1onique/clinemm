@@ -396,7 +396,14 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 					deps.recorder.recordDiagnosticObservation(input.origin)
 					return
 				case "FALLBACK_APPLY":
-					deps.recorder.recordFallbackRecoveryApplied()
+					// C2.3 C23-R2: truth-bound per-origin fallback counters.
+					// Both runtime-reconstructed and host-recovery can
+					// reach FALLBACK_APPLY when canonicalAvailable=false.
+					if (input.origin === "RUNTIME_RECONSTRUCTED") {
+						deps.recorder.recordFallbackReconstructedApplied()
+					} else if (input.origin === "HOST_RECOVERY") {
+						deps.recorder.recordFallbackRecoveryApplied()
+					}
 					applyAndRecord(input, undefined)
 					state.fallbackEdges.add(scopedEdgeKey(input))
 					return

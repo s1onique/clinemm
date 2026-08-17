@@ -389,7 +389,10 @@ describe("R7 — canonical-over-reconstructed dedup", () => {
 		})
 		const counts = recorder.getCounts()
 		expect(counts.eventsObserved).toBe(1)
-		expect(counts.fallbackRecoveryApplied).toBe(1)
+		// C2.3 C23-R2: per-origin counter.
+		expect(counts.fallbackReconstructedApplied).toBe(1)
+		// HOST_RECOVERY counter must NOT increment for runtime-reconstructed.
+		expect(counts.fallbackRecoveryApplied).toBe(0)
 	})
 
 	it("R7.4: fallback dedup keys are scoped by sessionId — different sessions do NOT cross-dedup", () => {
