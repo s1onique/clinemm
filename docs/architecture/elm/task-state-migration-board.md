@@ -686,3 +686,133 @@ stash@{0} = ACT-ELM-02C2 forensic (RECOVERED, intact)
            OBJECT_ID = 141372c52ddd560f8d65bd438d9f9c22ba0f1f85
 stash@{1} = ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (untouched)
 ```
+
+---
+
+## ELM-02F — PHASE F1 (2026-08-17)
+
+**ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1**
+
+The canonical `AgentRuntimeEvent` seam is now wired end-to-end
+through core/host layers into the VS Code shadow boundary.
+
+```
+VERDICT                       = PASS_CANONICAL_RUNTIME_SEAM_F1
+CANONICAL_RUNTIME_SEAM_PRESENT = true
+C2_2_IMPLEMENTATION_AUTHORIZED = true
+E7_AUTHORIZED                  = false
+```
+
+Six production + test commits on `act/elm-architecture01-e0-e4`:
+
+```
+0042f2845  docs(elm): freeze ELM-02F F1 implementation contract
+9e4c653a1  feat(core): expose canonical AgentRuntimeEvent session subscription
+0c7362f03  test(core): prove canonical fanout and legacy conservation
+1ea52f379  feat(vscode): bridge canonical runtime events to TaskState shadow
+d5c89b032  test(vscode): qualify canonical execution/recovery delivery
+80d7e6463  test(elm): qualify dual-stream ordering, disposal, filtering, performance
+```
+
+### API surface delta
+
+```
+@cline/agents:  0  (AgentRuntime unchanged)
+@cline/shared:  0  (no public type change)
+@cline/core:    1  (ClineCore.subscribeRuntimeEvents added; PROVISIONAL)
+```
+
+### New canonical seam
+
+```
+AgentRuntime.subscribe (unchanged)
+   ↓ existing SessionRuntime subscription
+SessionRuntime.subscribeRuntimeEvents  ← NEW, mirror of recovery side-channel
+   ↓ per-listener try/catch; zero buffering; exact-once
+RuntimeHost.subscribeRuntimeEvents?    ← NEW, optional
+   ↓ walks active sessions, wraps (event) -> (sessionId, event)
+LocalRuntimeHost.subscribeRuntimeEvents ← NEW
+   ↓ proxy through host
+ClineCore.subscribeRuntimeEvents       ← NEW, public API delta
+   ↓ proxy through ClineCore
+VscodeSessionHost.subscribeRuntimeEvents ← NEW
+   ↓ bridge to shadow comparator
+SdkController.attachCanonicalRuntimeEventSubscription ← NEW, idempotent
+```
+
+### Performance
+
+```
+F1-P1  10_000 events × 1 subscriber = 7.6ms   (0.76 us/event)
+F1-P2   5_000 events × 4 subscribers = 1.5ms  (0.08 us/event-per-listener)
+                                                       (13M events/sec aggregate)
+```
+
+Well below the F1 budget of 50us/event p50.
+
+### Conservation
+
+```
+LEGACY_EVENT_COUNT_BASELINE = 5  (unchanged after F1)
+LEGACY_EVENT_SEQUENCE       = [iteration_start, content_start, content_end,
+                                iteration_end, done]  (unchanged after F1)
+RUNTIME_EVENT_ADAPTER       = unchanged
+F0_WITNESSES                = 10 / 10 pass
+EXECUTION_STATE_CHANGED_LEGACY = 0  (still dropped from legacy)
+RECOVERY_STATE_CHANGED_LEGACY  = 0  (still dropped from legacy)
+```
+
+### Protected stashes
+
+```
+FORENSIC_ELM02C2:
+  OBJECT_ID = 141372c52ddd560f8d65bd438d9f9c22ba0f1f85
+  STATE     = INTACT, UNTOUCHED throughout F1
+CONTEXT_ACCOUNTING:
+  OBJECT_ID = 371752f71e5b9a385af32736e007540386d48b82
+  STATE     = INTACT, UNTOUCHED throughout F1
+```
+
+### Net production LOC
+
+```
++228 lines added across 7 production files
+SOFT_TARGET <= 500    PASS (228 << 500)
+HARD_HALT    > 800    far below
+```
+
+### Test totals (final)
+
+```
+@cline/core runtime/:        512 tests passing
+  F0 witnesses:               10
+  F1 core session-runtime:     9
+  F1 core local-runtime-host:  3
+  F1 core bench/dual-stream:   4
+@cline/vscode src/sdk/__tests__/:
+  shadow tests:              36
+  F1 proxy tests:             2
+```
+
+### Active board after F1
+
+```
+ELM-02F
+    F0 recon                        ✅ PASS
+    F0 witness correction           ✅ PASS
+    F1 plan freeze                  ✅ 0042f2845
+    F1 core canonical seam          ✅ 9e4c653a1
+    F1 core tests                   ✅ 0c7362f03
+    F1 vscode bridge                ✅ 1ea52f379
+    F1 vscode tests                 ✅ d5c89b032
+    F1 bench/dual-stream            ✅ 80d7e6463
+    F1 evidence + verdict           ✅ THIS COMMIT
+    F1 VERDICT                      ✅ PASS_CANONICAL_RUNTIME_SEAM_F1
+
+ELM-02C2 C2.2 unified observation   🟢 NEXT  (now authorized)
+ELM-02C2 C2.3 W01-W16               ⛔
+ELM-02C2 C2.4 production qualification ⛔
+ELM-02C2 C2.5 real E6 dogfood        ⛔
+
+ELM-03 E7 consumer cutover           ⛔ BLOCKED (gated on C2.2..C2.5)
+```
