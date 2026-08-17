@@ -96,7 +96,7 @@ describe("TaskShadowHostWiring — lifecycle", () => {
 })
 
 describe("TaskShadowHostWiring — observation-only", () => {
-	it("records C04 legacy-false-idle shape as D01_LEGACY_FALSE_IDLE when arbiter confirms activity", () => {
+	it("under LocalRuntimeHost canonicalAvailable=true, the legacy path produces DIAGNOSTIC_ONLY observations (no record, no state mutation)", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring({
 			...deps,
@@ -109,25 +109,31 @@ describe("TaskShadowHostWiring — observation-only", () => {
 		})
 		// Tool-start flips the shadow's `tooling` projection via
 		// `activeToolCallIds`. Once that is true, the shadow projects
-		// to `streaming` and the D01 branch fires when legacy says
-		// `idle` but the canonical arbiter confirms activity.
+		// to `streaming`. Under CORRECTION02 Option A, the legacy
+		// path is DIAGNOSTIC_ONLY — the reconstructed observation
+		// never reaches the shadow or the bounded record buffer.
 		const event = legacyAgentEvent({ type: "content_start", contentType: "tool", toolCallId: "tc-1", toolName: "read_file" })
 		deps.sessionOptions.onSessionEvent(event)
 		const records = wiring.records()
-		expect(records.length).toBeGreaterThan(0)
-		expect(records[0].classification).toBe("D01_LEGACY_FALSE_IDLE")
-		expect(records[0].arbitration).toBe("SHADOW_CORRECT")
+		const counts = wiring.recorderCounts()
+		// No bounded record; legacy reconstructed is diagnostic only.
+		expect(records.length).toBe(0)
+		expect(counts.eventsObserved).toBe(0)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
 		wiring.dispose()
 	})
 
-	it("records a non-divergent iteration as D00_AGREE when legacy and shadow agree", () => {
+	it("under LocalRuntimeHost canonicalAvailable=true, a non-divergent iteration_start produces DIAGNOSTIC_ONLY (no record)", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		const event = legacyAgentEvent({ type: "iteration_start", iteration: 1 })
 		deps.sessionOptions.onSessionEvent(event)
 		const records = wiring.records()
-		expect(records.length).toBeGreaterThan(0)
-		expect(records[0].classification).toBe("D00_AGREE")
+		const counts = wiring.recorderCounts()
+		// No bounded record; the legacy path is diagnostic-only.
+		expect(records.length).toBe(0)
+		expect(counts.eventsObserved).toBe(0)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
 		wiring.dispose()
 	})
 
@@ -142,14 +148,16 @@ describe("TaskShadowHostWiring — observation-only", () => {
 		wiring.dispose()
 	})
 
-	it("resetForNewTask clears the recorder state", () => {
+	it("resetForNewTask clears the recorder state and diagnostic counter", () => {
 		const { deps } = makeDeps()
 		const wiring = createTaskShadowHostWiring(deps)
 		const event = legacyAgentEvent({ type: "iteration_start", iteration: 1 })
 		deps.sessionOptions.onSessionEvent(event)
-		expect(wiring.recorderCounts().eventsObserved).toBeGreaterThan(0)
+		// Under CORRECTION02 Option A, the legacy path increments the
+		// diagnostic counter, not eventsObserved.
+		expect(wiring.recorderCounts().observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
 		wiring.resetForNewTask()
-		expect(wiring.recorderCounts().eventsObserved).toBe(0)
+		expect(wiring.recorderCounts().observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 		wiring.dispose()
 	})
 

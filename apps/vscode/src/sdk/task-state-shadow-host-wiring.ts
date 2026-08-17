@@ -382,6 +382,13 @@ function observeLegacyEvent(
 		origin: "RUNTIME_RECONSTRUCTED",
 		sessionId: sourceSessionId,
 		event: runtimeEvent,
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION02:
+		// LocalRuntimeHost wires its legacy translator; canonical
+		// transport is available, so reconstructed observations are
+		// DIAGNOSTIC_ONLY under Option A. Hub/RemoteRuntimeHost
+		// (future wiring) sets this to `false` to make reconstructed
+		// events authoritative via FALLBACK_APPLY.
+		canonicalAvailable: true,
 	})
 }
 

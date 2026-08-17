@@ -410,18 +410,20 @@ describe("C2.2 T12 — exactly one observation per state-mutating ingress", () =
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
 		})
-		// Now a reconstructed event with the same edge arrives. It
-		// is SUPPRESSED because canonical authority already produced it.
+		// Now a reconstructed event with the same edge arrives. Under
+		// Option A (canonicalAvailable=true), it is DIAGNOSTIC_ONLY
+		// rather than SUPPRESSED — reconstructed never had authority.
 		coordinator.observe({
 			kind: "runtime-reconstructed",
 			origin: "RUNTIME_RECONSTRUCTED",
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
+			canonicalAvailable: true,
 		})
 		const counts = recorder.getCounts()
 		expect(counts.eventsObserved).toBe(1)
-		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
-		expect(counts.eventsObserved + counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(2)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 	})
 })
 

@@ -463,9 +463,9 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 	})
 
-	it("W15 C04 legacy-false-idle shape → D01_LEGACY_FALSE_IDLE", () => {
+	it("W15 C04 legacy-false-idle shape: under LocalRuntimeHost (canonicalAvailable=true), the legacy path is DIAGNOSTIC_ONLY — no D01 record, diagnostic counter incremented", () => {
 		const events: CoreSessionEvent[] = [agentEvent(toolStart("tc-1", "read_file"))]
-		const { records } = runWorkload({
+		const { records, counts } = runWorkload({
 			events,
 			arbiter: () => ({
 				...emptyArbiterSnapshot(),
@@ -475,21 +475,41 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			legacyPhase: () => "idle",
 			expectedClassCounts: {},
 		})
+		// Under CORRECTION02 Option A, reconstructed is DIAGNOSTIC_ONLY.
+		// The HOST_TASK record from `emitTaskRequested` is allowed;
+		// the assertion is that NO reconstructed event produced a
+		// D01 divergence record.
 		const d01 = records.find((r) => r.classification === "D01_LEGACY_FALSE_IDLE")
-		expect(d01).toBeDefined()
-		expect(d01?.arbitration).toBe("SHADOW_CORRECT")
+		expect(d01).toBeUndefined()
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
+		// eventsObserved can be >= 1 because of the HOST_TASK from
+		// emitTaskRequested; the assertion is on origin-specific
+		// counters, not total.
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 	})
 
-	it("W16 host awaiting-followup → D08_FOLLOWUP_EXTERNAL", () => {
+	it("W16 host awaiting-followup: under LocalRuntimeHost, reconstructed events are DIAGNOSTIC_ONLY — the D08 classification (if any) comes only from HOST_TASK, not reconstructed", () => {
+		// Under CORRECTION02 Option A, reconstructed events no longer
+		// mutate the shadow. The D08 classification can still appear
+		// from HOST_TASK ingress under awaiting_followup legacy
+		// phase — that is the host-only path and is unaffected by
+		// Option A. The witness is that the diagnostic counter
+		// increments AND no reconstructed-origin record exists.
 		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
-		const { records } = runWorkload({
+		const { records, counts } = runWorkload({
 			events,
 			arbiter: () => emptyArbiterSnapshot(),
 			legacyPhase: () => "awaiting_followup",
 			expectedClassCounts: {},
 		})
+		// Diagnostic counter must have incremented for reconstructed.
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBeGreaterThanOrEqual(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		// Any D08 record present must be from HOST_TASK, not
+		// reconstructed.
 		const d08 = records.find((r) => r.classification === "D08_FOLLOWUP_EXTERNAL")
-		expect(d08).toBeDefined()
-		expect(d08?.arbitration).toBe("BOTH_VALID_DIFFERENT_PROJECTION")
+		if (d08) {
+			expect(d08.origin).toBe("HOST_TASK")
+		}
 	})
 })

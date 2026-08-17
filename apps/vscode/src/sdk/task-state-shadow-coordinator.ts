@@ -75,6 +75,19 @@ export type TaskShadowObservationInput =
 			readonly origin: "RUNTIME_RECONSTRUCTED"
 			readonly sessionId: string
 			readonly event: AgentRuntimeEvent
+			/**
+			 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION02:
+			 *
+			 * `true` when the canonical transport is available
+			 * (LocalRuntimeHost). Under Option A, reconstructed
+			 * observations are DIAGNOSTIC_ONLY and never mutate
+			 * the shadow.
+			 *
+			 * `false` (HubRuntimeHost / RemoteRuntimeHost) makes
+			 * reconstructed observations authoritative via
+			 * FALLBACK_APPLY with session/run-scoped dedup.
+			 */
+			readonly canonicalAvailable: boolean
 	  }
 	| {
 			readonly kind: "host-task"
@@ -147,6 +160,46 @@ export interface TaskShadowCoordinator {
  * canonical authority is registered but they do not enter the
  * dedup gate (they do not represent a state-mutating edge).
  */
+/**
+ * Build the session/run-scoped edge identity used by the fallback
+ * dedup gate.
+ *
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION02:
+ *
+ * `edgeKeyOf()` produces a globally-unique key for a state edge,
+ * but the resolver state is shared across the controller's
+ * visible-task lifetime. Without scoping, two unrelated runs of
+ * the same visible task (W11/W12 multi-run scenarios) would
+ * cross-dedup each other's edges. The scoped identity combines
+ * the originating `sessionId` with `runId` (when the runtime
+ * event carries one) and the semantic edge key, so cross-session
+ * / cross-run observations cannot collide.
+ */
+function scopedEdgeKey(input: TaskShadowObservationInput): string {
+	if (input.kind === "runtime-canonical" || input.kind === "runtime-reconstructed") {
+		// Runtime events carry their own snapshot; runId is taken
+		// from there. sessionId comes from the originating stream.
+		const baseEdge = edgeKeyOf(input.event)
+		const runId = input.event.snapshot?.runId
+		const sessionPart = input.sessionId
+		const runPart = runId ? `:${runId}` : ""
+		return `${sessionPart}${runPart}:${baseEdge}`
+	}
+	// host-task / host-recovery don't go through the dedup gate in
+	// the current design, but the helper must be total.
+	if (input.kind === "host-task") {
+		return `host-task:${input.taskId}:${msgEdgeKey(input.msg.type)}`
+	}
+	if (input.kind === "host-recovery") {
+		return `host-recovery:${input.sessionId}:${msgEdgeKey(input.msg.type)}`
+	}
+	return "unknown"
+}
+
+function msgEdgeKey(msgType: string): string {
+	return `msg:${msgType}`
+}
+
 function edgeKeyOf(event: AgentRuntimeEvent): string {
 	switch (event.type) {
 		case "execution-state-changed": {
@@ -205,15 +258,20 @@ function edgeKeyOf(event: AgentRuntimeEvent): string {
  * a `sessionId` (runtime session identity).
  */
 interface ResolverState {
-	canonicalEdges: Set<string>
-	reconstructedEdges: Set<string>
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION02:
+	 * Set of `scopedEdgeKey()` values already applied under
+	 * fallback (canonicalAvailable=false) reconstruction. Cross-
+	 * session / cross-run collisions are impossible because
+	 * `scopedEdgeKey` includes sessionId + runId.
+	 */
+	fallbackEdges: Set<string>
 	lastAuthority: Record<TaskShadowRuntimeOrigin, ObservationAuthority | undefined>
 }
 
 function makeInitialResolverState(): ResolverState {
 	return {
-		canonicalEdges: new Set(),
-		reconstructedEdges: new Set(),
+		fallbackEdges: new Set(),
 		lastAuthority: {
 			RUNTIME_CANONICAL: undefined,
 			RUNTIME_RECONSTRUCTED: undefined,
@@ -258,17 +316,29 @@ export function resolveObservationAuthority(
 		case "runtime-canonical":
 			return "APPLY"
 		case "runtime-reconstructed": {
-			// R7 (C2.2-CORRECTION01): the dedup gate is now order-
-			// independent. A reconstructed event is SUPPRESS_DUPLICATE
-			// if the same edge was already observed by EITHER a
-			// canonical event OR an earlier reconstructed event. This
-			// prevents the "reconstructed first, canonical later"
-			// race from causing two mutations.
-			const edgeKey = edgeKeyOf(input.event)
-			if (state.canonicalEdges.has(edgeKey) || state.reconstructedEdges.has(edgeKey)) {
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION02:
+			//
+			// Option A: when canonical transport is available
+			// (`canonicalAvailable=true`), RUNTIME_RECONSTRUCTED is
+			// DIAGNOSTIC_ONLY. Canonical authority owns runtime truth;
+			// reconstructed events cannot duplicate-mutate the shadow.
+			// This mirrors the recovery Policy A and eliminates the
+			// "reconstructed first, canonical later" double-mutation
+			// race entirely.
+			//
+			// For fallback hosts (Hub/Remote, `canonicalAvailable=false`),
+			// reconstructed events ARE authoritative, and dedup is by
+			// session/run-scoped edge identity to avoid cross-session
+			// collisions in W11/W12 multi-run scenarios.
+			if (input.canonicalAvailable) {
+				return "DIAGNOSTIC_ONLY"
+			}
+			// Fallback dedup: scope by session + run + edge.
+			const scoped = scopedEdgeKey(input)
+			if (state.fallbackEdges.has(scoped)) {
 				return "SUPPRESS_DUPLICATE"
 			}
-			return "APPLY"
+			return "FALLBACK_APPLY"
 		}
 		case "host-task":
 			return "APPLY"
@@ -328,18 +398,18 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 				case "FALLBACK_APPLY":
 					deps.recorder.recordFallbackRecoveryApplied()
 					applyAndRecord(input, undefined)
+					state.fallbackEdges.add(scopedEdgeKey(input))
 					return
 				case "APPLY":
 					applyAndRecord(input, undefined)
-					// R7 (C2.2-CORRECTION01): register the edge on
-					// whichever set corresponds to the observation's
-					// origin, so a subsequent event of either origin
-					// can be dedup'd. This is what makes the dedup
-					// gate order-independent.
+					// Canonical authority always wins; canonical events
+					// do not need to be dedup'd against each other
+					// (the runtime emits each event exactly once per
+					// edge by contract). We still record the canonical
+					// edge so a fallback rebuild in the same
+					// controller lifetime does not duplicate it.
 					if (input.kind === "runtime-canonical") {
-						state.canonicalEdges.add(edgeKeyOf(input.event))
-					} else if (input.kind === "runtime-reconstructed") {
-						state.reconstructedEdges.add(edgeKeyOf(input.event))
+						state.fallbackEdges.add(scopedEdgeKey(input))
 					}
 					return
 			}
@@ -440,8 +510,7 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 		debugReset: () => {
 			deps.recorder.debugReset()
 			deps.comparator.debugReset()
-			state.canonicalEdges.clear()
-			state.reconstructedEdges.clear()
+			state.fallbackEdges.clear()
 			state.lastAuthority = {
 				RUNTIME_CANONICAL: undefined,
 				RUNTIME_RECONSTRUCTED: undefined,

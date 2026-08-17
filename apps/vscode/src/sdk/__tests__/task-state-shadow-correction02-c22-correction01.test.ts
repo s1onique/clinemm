@@ -103,7 +103,9 @@ function makeAgentEvent(sessionId: string, innerEvent: { type: "iteration_start"
 //     wiring uses the non-mutating `translate()` API.
 describe("R1 — production translator path is non-mutating", () => {
 	it("R1.1: one reconstructed run-started ingress advances the comparator exactly once", () => {
-		const { coordinator, recorder } = makeCoordinator()
+		const { coordinator, recorder } = makeCoordinator({
+			activeSessionId: () => "session-A",
+		})
 		// Construct a legacy CoreSessionEvent with iteration_start so
 		// the translator can translate it to a runtime event.
 		const legacy = makeAgentEvent("session-A", { type: "iteration_start", iteration: 1 })
@@ -123,6 +125,10 @@ describe("R1 — production translator path is non-mutating", () => {
 			origin: "RUNTIME_RECONSTRUCTED",
 			sessionId: "session-A",
 			event: runtimeEvent!,
+			// canonicalAvailable=false: the test exercises the
+			// reconstructed-mutates-shadow path; production wiring
+			// (LocalRuntimeHost) sets this to true.
+			canonicalAvailable: false,
 		})
 		// Recorder receives exactly one record (one ingress -> one mutation).
 		expect(recorder.getCounts().eventsObserved).toBe(1)
@@ -137,17 +143,21 @@ describe("R1 — production translator path is non-mutating", () => {
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
 		})
-		// Reconstructed equivalent — must be SUPPRESS_DUPLICATE, must
-		// NOT mutate the comparator's shadow.
+		// Reconstructed equivalent — must be DIAGNOSTIC_ONLY under
+		// Option A (canonicalAvailable=true). No mutation, no
+		// suppression — the reconstructed event was never
+		// authoritative to begin with.
 		coordinator.observe({
 			kind: "runtime-reconstructed",
 			origin: "RUNTIME_RECONSTRUCTED",
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
+			canonicalAvailable: true,
 		})
-		// One record total (canonical only), one suppression.
+		// One record total (canonical only); reconstructed is diagnostic.
 		expect(recorder.getCounts().eventsObserved).toBe(1)
-		expect(recorder.getCounts().observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		expect(recorder.getCounts().observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		expect(recorder.getCounts().observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 	})
 })
 
@@ -186,21 +196,26 @@ describe("R3 — reconstructed source session id is preserved", () => {
 			origin: "RUNTIME_RECONSTRUCTED",
 			sessionId: "old-session",
 			event: makeRecoveryEvent("idle", "recovering"),
+			canonicalAvailable: true,
 		})
 		const counts = recorder.getCounts()
-		// STALE → no events observed.
+		// STALE → no events observed (whether diagnostic or apply).
 		expect(counts.eventsObserved).toBe(0)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 	})
 
-	it("R3.2: a fresh reconstructed event against the active session is APPLY", () => {
+	it("R3.2: a fresh reconstructed event against the active session is APPLY (canonical) or DIAGNOSTIC_ONLY (reconstructed)", () => {
 		const { coordinator, recorder } = makeCoordinator({
 			activeSessionId: () => "session-A",
 		})
+		// canonicalAvailable=false: reconstructed is FALLBACK_APPLY
+		// for the active session; one record is produced.
 		coordinator.observe({
 			kind: "runtime-reconstructed",
 			origin: "RUNTIME_RECONSTRUCTED",
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
+			canonicalAvailable: false,
 		})
 		expect(recorder.getCounts().eventsObserved).toBe(1)
 	})
@@ -302,48 +317,52 @@ describe("R6 — task/session identity conflation", () => {
 	})
 })
 
-// R7: dedup is order-independent.
-describe("R7 — dedup is order-independent", () => {
-	it("R7.1: canonical-then-reconstructed suppresses reconstructed", () => {
+// R7: dedup is order-INDEPENDENT and authority is canonical-over-
+//     reconstructed. Under CORRECTION02 Option A, when canonical
+//     transport is available, RUNTIME_RECONSTRUCTED is DIAGNOSTIC_ONLY
+//     regardless of arrival order. When canonical transport is
+//     unavailable, reconstructed is authoritative via FALLBACK_APPLY
+//     with session/run-scoped edge identity.
+describe("R7 — canonical-over-reconstructed dedup", () => {
+	it("R7.1: with canonicalAvailable=true, reconstructed events are DIAGNOSTIC_ONLY regardless of arrival order (no double mutation)", () => {
 		const { coordinator, recorder } = makeCoordinator({
 			activeSessionId: () => "session-A",
 		})
+		// Canonical first → APPLY.
 		coordinator.observe({
 			kind: "runtime-canonical",
 			origin: "RUNTIME_CANONICAL",
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
 		})
+		// Reconstructed after → DIAGNOSTIC_ONLY (not SUPPRESS — the
+		// reconstructed event was never authoritative to begin with).
 		coordinator.observe({
 			kind: "runtime-reconstructed",
 			origin: "RUNTIME_RECONSTRUCTED",
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
+			canonicalAvailable: true,
 		})
-		expect(recorder.getCounts().eventsObserved).toBe(1)
-		expect(recorder.getCounts().observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		const counts = recorder.getCounts()
+		expect(counts.eventsObserved).toBe(1)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
 	})
 
-	it("R7.2: reconstructed-then-canonical suppresses the second reconstructed", () => {
+	it("R7.2: with canonicalAvailable=true, reconstructed-first is DIAGNOSTIC_ONLY; canonical later applies once (single mutation)", () => {
 		const { coordinator, recorder } = makeCoordinator({
 			activeSessionId: () => "session-A",
 		})
-		// Reconstructed first — APPLY (no canonical yet to dedup against).
+		// Reconstructed first → DIAGNOSTIC_ONLY (no mutation).
 		coordinator.observe({
 			kind: "runtime-reconstructed",
 			origin: "RUNTIME_RECONSTRUCTED",
 			sessionId: "session-A",
 			event: makeRecoveryEvent("idle", "recovering"),
+			canonicalAvailable: true,
 		})
-		// Reconstructed second — SUPPRESS_DUPLICATE (same edge in
-		// reconstructedEdges set).
-		coordinator.observe({
-			kind: "runtime-reconstructed",
-			origin: "RUNTIME_RECONSTRUCTED",
-			sessionId: "session-A",
-			event: makeRecoveryEvent("idle", "recovering"),
-		})
-		// Canonical afterwards — APPLY (canonical authority always APPLY).
+		// Canonical later → APPLY (single mutation).
 		coordinator.observe({
 			kind: "runtime-canonical",
 			origin: "RUNTIME_CANONICAL",
@@ -351,7 +370,135 @@ describe("R7 — dedup is order-independent", () => {
 			event: makeRecoveryEvent("idle", "recovering"),
 		})
 		const counts = recorder.getCounts()
+		// Exactly one mutation total — never two.
+		expect(counts.eventsObserved).toBe(1)
+		expect(counts.observationsDiagnosticByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+	})
+
+	it("R7.3: with canonicalAvailable=false (Hub/Remote), reconstructed events are authoritative via FALLBACK_APPLY", () => {
+		const { coordinator, recorder } = makeCoordinator({
+			activeSessionId: () => "session-A",
+		})
+		coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-A",
+			event: makeRecoveryEvent("idle", "recovering"),
+			canonicalAvailable: false,
+		})
+		const counts = recorder.getCounts()
+		expect(counts.eventsObserved).toBe(1)
+		expect(counts.fallbackRecoveryApplied).toBe(1)
+	})
+
+	it("R7.4: fallback dedup keys are scoped by sessionId — different sessions do NOT cross-dedup", () => {
+		// Cross-session dedup test via two coordinated sequences,
+		// each gated by its own active session. The scopedEdgeKey
+		// must produce distinct keys for distinct sessions; if it
+		// did not, the second session would be SUPPRESS_DUPLICATE.
+		// Sequence 1: session-A is active.
+		const seq1 = makeCoordinator({ activeSessionId: () => "session-A" })
+		seq1.coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-A",
+			event: { type: "run-started", snapshot: makeSnapshot() } as AgentRuntimeEvent,
+			canonicalAvailable: false,
+		})
+		// Sequence 2: session-B is active, with its own dedup state.
+		const seq2 = makeCoordinator({ activeSessionId: () => "session-B" })
+		seq2.coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-B",
+			event: { type: "run-started", snapshot: makeSnapshot() } as AgentRuntimeEvent,
+			canonicalAvailable: false,
+		})
+		// Each sequence APPLY'd exactly once — neither was suppressed
+		// by the other's session scope.
+		expect(seq1.recorder.getCounts().eventsObserved).toBe(1)
+		expect(seq1.recorder.getCounts().observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+		expect(seq2.recorder.getCounts().eventsObserved).toBe(1)
+		expect(seq2.recorder.getCounts().observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+	})
+
+	it("R7.4b: same controller with two sequential sessions — session-B observation is STALE against active session-A", () => {
+		// Structural complement to R7.4: when the same resolver state
+		// spans two sessions, only the active session's observations
+		// are admitted. Session B's reconstructed observation against
+		// active session A is correctly STALE.
+		const { coordinator, recorder } = makeCoordinator({
+			activeSessionId: () => "session-A",
+		})
+		coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-A",
+			event: { type: "run-started", snapshot: makeSnapshot() } as AgentRuntimeEvent,
+			canonicalAvailable: false,
+		})
+		coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-B",
+			event: { type: "run-started", snapshot: makeSnapshot() } as AgentRuntimeEvent,
+			canonicalAvailable: false,
+		})
+		const counts = recorder.getCounts()
+		// Session A APPLY'd; session B is STALE.
+		expect(counts.eventsObserved).toBe(1)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+	})
+
+	it("R7.5: fallback dedup keys are scoped by runId — same session different runs do NOT cross-dedup", () => {
+		const { coordinator, recorder } = makeCoordinator({
+			activeSessionId: () => "session-A",
+		})
+		// Same session, different runId.
+		coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-A",
+			event: { type: "run-started", snapshot: { ...makeSnapshot(), runId: "run-1" } } as AgentRuntimeEvent,
+			canonicalAvailable: false,
+		})
+		coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-A",
+			event: { type: "run-started", snapshot: { ...makeSnapshot(), runId: "run-2" } } as AgentRuntimeEvent,
+			canonicalAvailable: false,
+		})
+		const counts = recorder.getCounts()
 		expect(counts.eventsObserved).toBe(2)
+		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(0)
+	})
+
+	it("R7.6: fallback dedup same session+run+edge still suppresses", () => {
+		const { coordinator, recorder } = makeCoordinator({
+			activeSessionId: () => "session-A",
+		})
+		const sameEvent = {
+			type: "run-started",
+			snapshot: { ...makeSnapshot(), runId: "run-1" },
+		} as AgentRuntimeEvent
+		coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-A",
+			event: sameEvent,
+			canonicalAvailable: false,
+		})
+		coordinator.observe({
+			kind: "runtime-reconstructed",
+			origin: "RUNTIME_RECONSTRUCTED",
+			sessionId: "session-A",
+			event: sameEvent,
+			canonicalAvailable: false,
+		})
+		const counts = recorder.getCounts()
+		expect(counts.eventsObserved).toBe(1)
 		expect(counts.observationsSuppressedByOrigin.RUNTIME_RECONSTRUCTED).toBe(1)
 	})
 })
