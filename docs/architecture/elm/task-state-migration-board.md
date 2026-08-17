@@ -1383,3 +1383,63 @@ ELM-02C2 C2.3 stateful W01-W16           🟢 NEXT (authorized)
 
 ELM-03 E7 consumer cutover               ⛔ BLOCKED
 ```
+
+---
+
+## ELM-02C2 — C2.3 (2026-08-17)
+
+```
+ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3
+
+7ed99b8aa  docs(elm): freeze C2.3 stateful workload qualification contract
+ed8ed94ce  refactor(elm): make fallback observation counters semantically truthful
+64deb36a7  test(elm): C2.3 stateful workload harness + W01 baseline
+88c2c0b18  test(elm): C2.3 qualify W01-W04 stateful scenarios
+THIS       docs(elm): record C2.3 (W01-W04 partial) evidence
+
+Verdict   = PARTIAL_STATEFUL_QUALIFICATION_C2_3_W01_TO_W04
+C2_4_AUTH = false (must wait for W05-W16 + F01-F03 + replay + bounded)
+E7_AUTH   = false
+```
+
+### Production changes (C2.3)
+
+```
+TaskStateShadowRecorder : +6 net LOC   (fallbackReconstructedApplied)
+TaskStateShadowCoordinator : +1 LOC    (origin-dispatched increment)
+
+Net semantic production delta = +5 LOC instrumentation-only
+                                 (counter split for C23-R2)
+                                 NO semantic behavior change
+```
+
+### State after C2.3
+
+```
+W01 (text-only)               : PASS
+W02 (text + reasoning)        : PASS
+W03 (one tool)                : PASS
+W04 (parallel tools)          : PASS
+W05..W16 (approval/cancel/    : NOT QUALIFIED in C2.3
+       failure/recovery/
+       continuation/new-task/
+       stale/C04/follow-up)
+F01..F03 (fallback sequential : NOT QUALIFIED in C2.3
+       sessions/runs)
+Replay + bounded + 3x         : NOT QUALIFIED in C2.3
+```
+
+### Active board after C2.3
+
+```
+ELM-02F F0/F0-CORR01/F1/F1-CORR01..03   ✅
+ELM-02C2 C2.0/C2.1/C2.2 + CORR01 + CORR02 ✅
+ELM-02C2 C2.3 stateful W01-W04         🟨 PARTIAL
+
+ELM-02C2 C2.3 stateful W05-W16 + F01-F03 🟧 CONTINUATION
+ELM-02C2 C2.4 production qualification   ⛔
+ELM-02C2 C2.5 real E6 dogfood            ⛔
+
+ELM-03 E7                                ⛔
+```
+
