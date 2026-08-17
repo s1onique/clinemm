@@ -61,7 +61,30 @@ export {
 // implementation lives in `@cline/agents/src/runtime/recovery/`.
 export * from "./runtime/recovery/index";
 
-// ACT-CLINEMM-ELM-ARCHITECTURE01 / E0–E4: shadow TaskState (TEA-shaped).
-// Internal-only; no public-API expansion during shadow mode. Consumers
-// should only reach this module from the host boundary.
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01 / E0–E4: shadow TaskState (TEA-shaped).
+ *
+ * @internal
+ *
+ * PROVISIONAL / INTERNAL-USE-ONLY — not part of the stable SDK surface.
+ *
+ * This namespace exists so the host boundary (apps/vscode/src/sdk/
+ * task-state-shadow.ts) can reach the shadow model from a single
+ * import path during shadow-mode qualification. The shadow is
+ * observation-only; nothing inside `@cline/agents` writes to the
+ * legacy `TurnStateTracker` or `TaskTelemetryTracker`, and the webview
+ * does not consume this namespace during E0–E4.
+ *
+ * Consumers SHOULD NOT depend on this namespace from outside the
+ * `@cline/agents` and `apps/vscode` source trees. Treat it as a
+ * pre-1.0 internal seam: the shape, members, and stability are
+ * deliberately undocumented and may change between ACTs without a
+ * deprecation cycle.
+ *
+ * Public package surface delta (CORRECTION01 R6): yes, the export
+ * mechanically exists at the package root. Stability commitment:
+ * PROVISIONAL / INTERNAL-USE-ONLY. The dual classification here is
+ * intentional — it is real surface for technical reasons, but not
+ * stable surface for contractual reasons.
+ */
 export * as TaskState from "./runtime/state/task-state";
