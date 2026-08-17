@@ -146,6 +146,12 @@ const ALL_CLASSES: readonly DivergenceClass[] = [
 ] as const
 
 /**
+ * Re-export the full divergence-class array for downstream tests
+ * that want to assert coverage of every class.
+ */
+export const ALL_DIFFERENCE_TYPES: readonly DivergenceClass[] = ALL_CLASSES
+
+/**
  * Maximum number of records retained per recorder instance. Once the
  * buffer is full, the oldest record is dropped to make room.
  */
@@ -263,7 +269,11 @@ export class TaskShadowRecorder {
 
 function pushBounded<T>(arr: T[], value: T): T | undefined {
 	if (arr.length >= MAX_RECORDS_PER_TASK) {
-		return arr.shift()
+		// Drop the oldest record to make room for the new one. Without
+		// the subsequent push, the buffer would shrink below the bound.
+		const dropped = arr.shift()
+		arr.push(value)
+		return dropped
 	}
 	arr.push(value)
 	return undefined
@@ -304,17 +314,28 @@ export function classify(input: TaskShadowRecordInput): DivergenceClass {
 	if (shadowPhase === "awaiting_followup" || legacyPhase === "awaiting_followup") {
 		return "D08_FOLLOWUP_EXTERNAL"
 	}
-	if (legacyPhase === "idle" && (shadowPhase === "streaming" || shadowPhase === "awaiting_approval")) {
+	// D04 first — any awaiting_approval disagreement is approval
+	// precedence; the legacy-false-idle D01 narrows to streaming only.
+	if (shadowPhase === "awaiting_approval" || legacyPhase === "awaiting_approval") {
+		return "D04_APPROVAL_PRECEDENCE"
+	}
+	if (legacyPhase === "idle" && shadowPhase === "streaming") {
 		const arbiterActive =
 			arbiter.execution.modelStreaming || arbiter.execution.awaitingApproval || arbiter.pendingToolCalls.length > 0
 		if (arbiterActive) return "D01_LEGACY_FALSE_IDLE"
 	}
-	if (shadowPhase === "awaiting_approval" || legacyPhase === "awaiting_approval") {
-		return "D04_APPROVAL_PRECEDENCE"
-	}
 	// legacyPhase is now in {"idle","streaming","completed","error","resumable"}
 	// (awaiting_followup and awaiting_approval were eliminated above).
-	if (shadowPhase === "streaming" && legacyPhase !== "streaming") {
+	if (
+		shadowPhase === "streaming" &&
+		legacyPhase !== "streaming" &&
+		legacyPhase !== "completed" &&
+		legacyPhase !== "error" &&
+		legacyPhase !== "resumable"
+	) {
+		// D02 is "shadow false active" — only when neither side is
+		// terminal and the canonical arbiter agrees with the shadow's
+		// active projection, the shadow is just wrong.
 		const arbiterActive =
 			arbiter.execution.modelStreaming || arbiter.execution.awaitingApproval || arbiter.pendingToolCalls.length > 0
 		if (!arbiterActive) return "D02_SHADOW_FALSE_ACTIVE"
