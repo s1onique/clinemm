@@ -485,3 +485,115 @@ describe("E4-DIFF-01 ACTIVE_LEGACY_IDLE_DIVERGENCE (Phase 16)", () => {
 		expect(projectThinking(streamingModel)).not.toBe(false);
 	});
 });
+
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.2-CORRECTION01
+// Terminal-precedence regression witnesses (C7.1–C7.6).
+//
+// The CONT.2 W07/W08 stateful workloads surfaced the contract gap
+// that motivated this correction: a late canonical `task_completed`
+// or `task_failed` would overwrite a frozen `cancelled` /
+// `resumable` lifecycle, losing the user's explicit cancellation
+// intent. These unit-level witnesses pin the corrected precedence
+// matrix directly at the reducer boundary so a regression would
+// surface here in milliseconds rather than at the stateful harness
+// layer.
+// =========================================================================
+describe("C2.3-CONT.2-CORRECTION01 C7 — terminal-precedence policy", () => {
+	it("C7.1 cancelled + late task_completed is IGNORED_STALE", () => {
+		const { final, models } = replay([
+			{ type: "task_requested", taskId: "c71", at: NOW },
+			{ type: "task_cancelled", at: NOW + 1 },
+			{ type: "task_completed", at: NOW + 2 },
+		]);
+		expect(final.lifecycle.kind).toBe("cancelled");
+		// endedAt stamped at cancel time, NOT overwritten by late completion.
+		expect(final.identity.endedAt).toBe(NOW + 1);
+		// The post-cancelled model (models[2]) and the post-completed
+		// model (models[3]) are structurally identical — late completion
+		// is a no-op.
+		expect(models[3]).toEqual(models[2]);
+	});
+
+	it("C7.2 cancelled + late task_failed is IGNORED_STALE", () => {
+		const { final, models } = replay([
+			{ type: "task_requested", taskId: "c72", at: NOW },
+			{ type: "task_cancelled", at: NOW + 1 },
+			{ type: "task_failed", classification: "rate_limit", at: NOW + 2 },
+		]);
+		expect(final.lifecycle.kind).toBe("cancelled");
+		expect(final.identity.endedAt).toBe(NOW + 1);
+		expect(models[3]).toEqual(models[2]);
+	});
+
+	it("C7.3 resumable + late task_completed is IGNORED_STALE", () => {
+		const { final } = replay([
+			{ type: "task_requested", taskId: "c73", at: NOW },
+			{ type: "task_became_resumable", at: NOW + 1 },
+			{ type: "task_completed", at: NOW + 2 },
+		]);
+		expect(final.lifecycle.kind).toBe("resumable");
+	});
+
+	it("C7.3 resumable + late task_failed is IGNORED_STALE", () => {
+		const { final } = replay([
+			{ type: "task_requested", taskId: "c73b", at: NOW },
+			{ type: "task_became_resumable", at: NOW + 1 },
+			{ type: "task_failed", classification: "rate_limit", at: NOW + 2 },
+		]);
+		expect(final.lifecycle.kind).toBe("resumable");
+	});
+
+	it("C7.4 normal completion still works (running → completed)", () => {
+		const { final } = replay([
+			{ type: "task_requested", taskId: "c74", at: NOW },
+			{ type: "task_completed", at: NOW + 1 },
+		]);
+		expect(final.lifecycle.kind).toBe("completed");
+		expect(final.identity.endedAt).toBe(NOW + 1);
+	});
+
+	it("C7.5 normal failure still works (running → failed)", () => {
+		const { final } = replay([
+			{ type: "task_requested", taskId: "c75", at: NOW },
+			{ type: "task_failed", classification: "rate_limit", at: NOW + 1 },
+		]);
+		expect(final.lifecycle.kind).toBe("failed");
+		if (final.lifecycle.kind === "failed") {
+			expect(final.lifecycle.reason).toBe("rate_limit");
+		}
+		expect(final.identity.endedAt).toBe(NOW + 1);
+	});
+
+	it("C7.6 cancellation followed by same_task_continued + genuine completion", () => {
+		// The only legitimate exit from a cancelled or resumable
+		// boundary is `same_task_continued`, which is unconditional
+		// (I08). After continuation, a real task_completed from
+		// the resumed turn must apply normally.
+		const { final } = replay([
+			{ type: "task_requested", taskId: "c76", at: NOW },
+			{ type: "task_cancelled", at: NOW + 1 },
+			// Stranded late completion MUST be stale.
+			{ type: "task_completed", at: NOW + 2 },
+			// Same-task continuation is the legitimate exit.
+			{ type: "same_task_continued", at: NOW + 3 },
+			// Now a real completion can apply to the resumed turn.
+			{ type: "task_completed", at: NOW + 4 },
+		]);
+		expect(final.lifecycle.kind).toBe("completed");
+		expect(final.identity.endedAt).toBe(NOW + 4);
+	});
+
+	it("C7.6b terminal-to-terminal ordering remains last-arrival-wins (completed → failed)", () => {
+		// Not a correctness invariant under C2.3, but the
+		// narrow CORRECTION01 only freezes the
+		// cancelled/resumable case. Terminal-to-terminal
+		// ordering is unchanged.
+		const { final } = replay([
+			{ type: "task_requested", taskId: "c76b", at: NOW },
+			{ type: "task_completed", at: NOW + 1 },
+			{ type: "task_failed", classification: "unknown", at: NOW + 2 },
+		]);
+		expect(final.lifecycle.kind).toBe("failed");
+	});
+});

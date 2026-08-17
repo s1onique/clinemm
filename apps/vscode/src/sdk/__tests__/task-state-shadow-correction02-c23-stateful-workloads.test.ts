@@ -1011,8 +1011,8 @@ describe("C3.CONT.1 W06 — approval_deny; awaitingApproval false→true→false
 	})
 })
 
-describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activity must not reactivate", () => {
-	it("HOST_TASK cancel during model_streaming freezes lifecycle at 'cancelled'; late run-finished is IGNORED_STALE", () => {
+describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activity must not reactivate (CORRECTION01)", () => {
+	it("HOST_TASK cancel during model_streaming freezes lifecycle at 'cancelled'; late run-finished IS IGNORED_STALE after CONT.2-CORRECTION01", () => {
 		const snapIdle = snapshotFixture({
 			runId: "run-W07",
 			iteration: 0,
@@ -1061,26 +1061,27 @@ describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activit
 					expect(m.activity.awaitingApproval).toBe(false)
 				},
 			},
-			// Late canonical edges. The shadow reducer's
-			// updateTaskCompleted does NOT gate on isStale, so
-			// late run-finished UNCONDITIONALLY transitions the
-			// lifecycle back to "completed" (last-arrival-wins for
-			// terminal states). This is the production-realistic
-			// resolver rule — the test pins it exactly.
+			// Late canonical edges. After CONT.2-CORRECTION01 the
+			// shadow reducer's updateTaskCompleted is gated on a
+			// cancellation/resumable stale predicate (see
+			// sdk/packages/agents/src/runtime/state/task-state/update.ts).
+			// Late run-finished from a cancelled epoch is
+			// IGNORED_STALE — it cannot overwrite the visible
+			// cancellation. Activity edges were already
+			// isStale-gated by their own reducers.
 			{
 				kind: "canonical",
 				sessionId: "session-W07",
 				event: execEvent(snapStreaming.execution!, snapIdleAgain),
 			},
 			{ kind: "canonical", sessionId: "session-W07", event: runFinished(snapIdleAgain) },
-			// Lifecycle is now "completed" (late canonical won).
-			// Exactly one task_cancelled is recorded in the
-			// trace (the HOST_TASK one), so no second visible
-			// cancellation transition occurs.
+			// Lifecycle is STILL "cancelled" after late canonical
+			// completion — the user's explicit cancellation
+			// survives stranded runtime completion.
 			{
 				kind: "expect-state",
 				assertion: (m) => {
-					expect(m.lifecycle.kind).toBe("completed")
+					expect(m.lifecycle.kind).toBe("cancelled")
 					expect(m.activity.modelStreaming).toBe(false)
 					expect(m.activity.activeToolCallIds).toEqual([])
 					expect(m.activity.awaitingApproval).toBe(false)
@@ -1107,19 +1108,18 @@ describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activit
 		// VISIBLE_CANCELLATION_MUTATIONS = 1.
 		const taskCancelled = records.filter((r) => r.event === "task_cancelled").length
 		expect(taskCancelled).toBe(1)
-		// FROZEN RESOLVER RULE (production-realistic):
-		//   late canonical run-finished UNCONDITIONALLY advances
-		//   the shadow's lifecycle to "completed". The shadow
-		//   reducer's `updateTaskCompleted` does NOT gate on
-		//   `isStale(lifecycle)` — terminal states are
-		//   last-arrival-wins. This is the observed production
-		//   behavior, and the test pins it exactly. The test's
-		//   value is to RECORD the resolver rule, not to argue
-		//   with it. The differential recorder surfaces the
-		//   D03_TERMINAL_ORDERING divergence between legacy
-		//   (cancelled) and shadow (completed) at that late edge.
+		// FROZEN RESOLVER RULE (C2.3-CONT.2-CORRECTION01):
+		//   late canonical run-finished from a cancelled epoch
+		//   is IGNORED_STALE. The visible-task cancellation
+		//   survives stranded runtime completion. The
+		//   differential recorder may still note the late
+		//   canonical edges as D03_TERMINAL_ORDERING divergences
+		//   between the harness's legacy phase (still
+		//   "streaming" sample) and the shadow projection (now
+		//   "resumable" because cancelled→resumable), but no
+		//   terminal-lifecycle mutations occur after the cancel.
 		const m = state.wiring.comparator.debugSnapshot()
-		expect(m.lifecycle.kind).toBe("completed")
+		expect(m.lifecycle.kind).toBe("cancelled")
 		expect(m.activity.modelStreaming).toBe(false)
 		expect(m.activity.activeToolCallIds).toEqual([])
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
@@ -1130,8 +1130,8 @@ describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activit
 	})
 })
 
-describe("C3.CONT.2 W08 — cancel with active tool; late tool-finished must not reactivate", () => {
-	it("HOST_TASK cancel during tool execution freezes lifecycle at 'cancelled'; late run-finished reaches 'completed' (last-arrival-wins)", () => {
+describe("C3.CONT.2 W08 — cancel with active tool; late tool-finished must not reactivate (CORRECTION01)", () => {
+	it("HOST_TASK cancel during tool execution freezes lifecycle at 'cancelled'; late run-finished is IGNORED_STALE after CONT.2-CORRECTION01", () => {
 		const snapIdle = snapshotFixture({
 			runId: "run-W08",
 			iteration: 0,
@@ -1182,12 +1182,14 @@ describe("C3.CONT.2 W08 — cancel with active tool; late tool-finished must not
 				},
 			},
 			// Late canonical: tool-finished + execEvent(true→false)
-			// + run-finished. The shadow's updateTaskCompleted is
-			// last-arrival-wins (no isStale gate), so the
-			// lifecycle moves to "completed". updateToolFinished
-			// IS gated by isStale — the late tool-finished does
-			// not resurrect activeToolCallIds. So the FROZEN
-			// lifecycle is "completed" but activeToolCallIds=[].
+			// + run-finished. After CONT.2-CORRECTION01 the
+			// shadow reducer's updateTaskCompleted is gated
+			// on a cancellation/resumable stale predicate
+			// (see sdk/packages/agents/src/runtime/state/task-state/update.ts).
+			// updateToolFinished was already isStale-gated.
+			// So all three late canonical edges are
+			// IGNORED_STALE: lifecycle stays "cancelled" and
+			// activeToolCallIds stays [].
 			{ kind: "canonical", sessionId: "session-W08", event: toolFinished(snapIdleAgain, "tc1") },
 			{
 				kind: "canonical",
@@ -1198,7 +1200,7 @@ describe("C3.CONT.2 W08 — cancel with active tool; late tool-finished must not
 			{
 				kind: "expect-state",
 				assertion: (m) => {
-					expect(m.lifecycle.kind).toBe("completed")
+					expect(m.lifecycle.kind).toBe("cancelled")
 					// Late tool-finished cannot resurrect active
 					// tools (isStale gate in updateToolFinished).
 					expect(m.activity.activeToolCallIds).toEqual([])

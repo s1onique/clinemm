@@ -392,6 +392,31 @@ function updateTaskCompleted(
 	model: TaskModel,
 	msg: { readonly type: "task_completed"; readonly at: number },
 ): UpdateResult {
+	// CORRECTION01 (C3.CONT.2-CORRECTION01): terminal-precedence
+	// policy. A late `task_completed` arriving AFTER the visible
+	// task has been cancelled or set to resumable MUST be ignored.
+	// The user's explicit cancellation / boundary intent takes
+	// precedence over any stranded canonical completion the
+	// runtime emits during shutdown. Activity messages are
+	// already isStale-gated by their own reducers — this gate is
+	// the matching terminal-lifecycle gate. See C3.CONT.2 for the
+	// W07/W08 race evidence that motivated this correction.
+	//
+	// Policy matrix:
+	//   idle     | running | completed | failed | cancelled | resumable
+	//       Apply       Apply      stale     stale     STALE       STALE
+	//
+	// Terminal-to-terminal orderings (`completed → failed`, etc.)
+	// remain last-arrival-wins for now — that is a separate
+	// discipline and not a correctness invariant under the C2.3
+	// contract. Only cancellation/resumable boundaries freeze
+	// the lifecycle.
+	if (
+		model.lifecycle.kind === "cancelled" ||
+		model.lifecycle.kind === "resumable"
+	) {
+		return [model, NO_EFFECTS];
+	}
 	return [
 		{
 			...model,
@@ -407,6 +432,17 @@ function updateTaskFailed(
 	model: TaskModel,
 	msg: { readonly type: "task_failed"; readonly classification: TaskFailureClass; readonly at: number },
 ): UpdateResult {
+	// CORRECTION01 (C3.CONT.2-CORRECTION01): mirror terminal-
+	// precedence policy for `task_failed`. A late failure from a
+	// cancelled epoch cannot poison the visible "cancelled"
+	// signal. See updateTaskCompleted above for the full policy
+	// matrix and the rationale.
+	if (
+		model.lifecycle.kind === "cancelled" ||
+		model.lifecycle.kind === "resumable"
+	) {
+		return [model, NO_EFFECTS];
+	}
 	return [
 		{
 			...model,
