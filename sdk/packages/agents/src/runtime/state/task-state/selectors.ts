@@ -46,7 +46,7 @@ export type ShadowTurnPhase =
  */
 export function projectTurnState(model: TaskModel): ShadowTurnPhase {
 	if (model.activity.awaitingApproval) return "awaiting_approval";
-	if (model.activity.modelStreaming || model.activity.tooling) return "streaming";
+	if (model.activity.modelStreaming || isTooling(model)) return "streaming";
 	switch (model.lifecycle.kind) {
 		case "completed":
 			return "completed";
@@ -68,6 +68,15 @@ export function projectTurnState(model: TaskModel): ShadowTurnPhase {
 			return "idle";
 		}
 	}
+}
+
+/**
+ * Pure projection: true iff at least one tool call is currently in flight.
+ * CORRECTION01 R1: derived from `activeToolCallIds.length > 0`, not a
+ * single boolean field. Parallel tool calls are accurately reflected.
+ */
+export function isTooling(model: TaskModel): boolean {
+	return model.activity.activeToolCallIds.length > 0;
 }
 
 /**
@@ -104,7 +113,7 @@ export function projectControls(model: TaskModel): TaskControlsProjection {
 	const inFlight =
 		model.lifecycle.kind === "running" ||
 		model.activity.modelStreaming ||
-		model.activity.tooling ||
+		isTooling(model) ||
 		model.activity.awaitingApproval;
 	const terminal =
 		model.lifecycle.kind === "completed" ||

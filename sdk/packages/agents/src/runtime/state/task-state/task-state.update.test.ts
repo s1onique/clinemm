@@ -107,9 +107,9 @@ describe("S03 tool call lifecycle", () => {
 		];
 		const { models } = replay(seq);
 		expect(projectTurnState(models[3])).toBe("streaming");
-		expect(models[3].activity.tooling).toBe(true);
+		expect(models[3].activity.activeToolCallIds).toEqual(["c1"]);
 		expect(models[3].telemetry.toolCalls).toBe(1);
-		expect(models[4].activity.tooling).toBe(false);
+		expect(models[4].activity.activeToolCallIds).toEqual([]);
 		expect(models[4].activity.modelStreaming).toBe(true);
 		for (const m of models) {
 			expect(m.telemetry.toolCalls).toBeGreaterThanOrEqual(0);
@@ -148,9 +148,9 @@ describe("S05 cancel during model streaming", () => {
 		expect(final.lifecycle.kind).toBe("cancelled");
 		expect(projectTurnState(final)).toBe("resumable");
 		expect(final.activity.modelStreaming).toBe(false);
-		expect(final.activity.tooling).toBe(false);
+		expect(final.activity.activeToolCallIds).toEqual([]);
 		const [ignoredModel] = taskUpdate(final, { type: "tool_started", toolCallId: "late", at: NOW + 6 });
-		expect(ignoredModel.activity.tooling).toBe(false);
+		expect(ignoredModel.activity.activeToolCallIds).toEqual([]);
 		expect(checkTaskInvariants(models[models.length - 1])).toEqual([]);
 	});
 });
@@ -166,7 +166,7 @@ describe("S06 cancel during tool", () => {
 		const { final } = replay(seq);
 		expect(final.lifecycle.kind).toBe("cancelled");
 		const [afterLate] = taskUpdate(final, { type: "tool_finished", toolCallId: "c1", at: NOW + 4 });
-		expect(afterLate.activity.tooling).toBe(false);
+		expect(afterLate.activity.activeToolCallIds).toEqual([]);
 	});
 });
 
@@ -244,7 +244,7 @@ describe("S10 new task after completion resets epoch", () => {
 });
 
 describe("S11 parallel tools", () => {
-	it("two parallel tool-started events count as one tool batch", () => {
+	it("two parallel tool-started events leave both IDs active and count both", () => {
 		const seq: TaskMsg[] = [
 			{ type: "task_requested", taskId: "t11", at: NOW },
 			{ type: "model_stream_started", at: NOW + 1 },
@@ -252,7 +252,36 @@ describe("S11 parallel tools", () => {
 			{ type: "tool_started", toolCallId: "b", at: NOW + 3 },
 		];
 		const { final } = replay(seq);
-		// Parallel batch: one logical tool batch → one counter tick.
+		// CORRECTION01 R1: parallel tools are distinct entities. Both IDs
+		// are tracked in the active set; the cumulative counter is the
+		// number of distinct tool starts (not the number of batches).
+		expect(final.activity.activeToolCallIds).toEqual(["a", "b"]);
+		expect(final.telemetry.toolCalls).toBe(2);
+	});
+
+	it("finishing one parallel tool leaves the sibling active (R1 regression)", () => {
+		const seq: TaskMsg[] = [
+			{ type: "task_requested", taskId: "t11b", at: NOW },
+			{ type: "model_stream_started", at: NOW + 1 },
+			{ type: "tool_started", toolCallId: "a", at: NOW + 2 },
+			{ type: "tool_started", toolCallId: "b", at: NOW + 3 },
+			{ type: "tool_finished", toolCallId: "a", at: NOW + 4 },
+		];
+		const { final } = replay(seq);
+		expect(final.activity.activeToolCallIds).toEqual(["b"]);
+		expect(projectTurnState(final)).toBe("streaming");
+		expect(final.telemetry.toolCalls).toBe(2);
+	});
+
+	it("a duplicate tool_started for an already-active ID is a no-op on the counter", () => {
+		const seq: TaskMsg[] = [
+			{ type: "task_requested", taskId: "t11c", at: NOW },
+			{ type: "model_stream_started", at: NOW + 1 },
+			{ type: "tool_started", toolCallId: "a", at: NOW + 2 },
+			{ type: "tool_started", toolCallId: "a", at: NOW + 3 },
+		];
+		const { final } = replay(seq);
+		expect(final.activity.activeToolCallIds).toEqual(["a"]);
 		expect(final.telemetry.toolCalls).toBe(1);
 	});
 });
@@ -324,7 +353,7 @@ describe("S15 idempotent / no-op / stale", () => {
 		];
 		const { final } = replay(seq);
 		expect(final.lifecycle.kind).toBe("completed");
-		expect(final.activity.tooling).toBe(false);
+		expect(final.activity.activeToolCallIds).toEqual([]);
 	});
 });
 

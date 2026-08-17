@@ -17,7 +17,43 @@
  * Determinism (I14): identical `(model, msg)` pairs always produce
  * deeply-equal results. Verified by `task-state.update.test.ts`.
  *
- * ## Transition policy
+ * ## Transition policy matrix (CORRECTION01, R3)
+ *
+ * Activity messages (`model_stream_started`, `tool_started`,
+ * `approval_requested`) obey one explicit policy. The matrix is
+ * the contract; downstream tests and invariants enforce it.
+ *
+ * ```text
+ *                 model_stream_started  tool_started  approval_requested
+ *   idle          promote->running      promote->run  promote->running
+ *   running       VALID                 VALID          VALID
+ *   resumable     IGNORED_STALE         IGNORED_STALE  IGNORED_STALE
+ *   completed     IGNORED_STALE         IGNORED_STALE  IGNORED_STALE
+ *   failed        IGNORED_STALE         IGNORED_STALE  IGNORED_STALE
+ *   cancelled     IGNORED_STALE         IGNORED_STALE  IGNORED_STALE
+ * ```
+ *
+ * The `IGNORED_STALE` policy prevents late async events belonging to
+ * a stopped epoch from reactivating the shadow. This is the rule I01
+ * ("terminal_no_activity") and I02 ("active_not_idle") enforce, but
+ * the policy applies to `resumable` as well: a `resumable` lifecycle
+ * is treated as "stopped epoch" for activity purposes. The only way
+ * to leave `resumable` for `running` is the explicit
+ * `same_task_continued` message, which itself clears activity.
+ *
+ * ## Tool representation (CORRECTION01, R1)
+ *
+ * `TaskActivityState.tooling` is replaced by
+ * `TaskActivityState.activeToolCallIds: readonly string[]`. The
+ * projection `tooling` is `activeToolCallIds.length > 0`.
+ *
+ * `tool_started(id)` adds the ID if unseen, increments the cumulative
+ * `toolCalls` counter only on a previously-unseen ID. `tool_finished(id)`
+ * removes only the matching ID. This prevents the false-idle bug
+ * observed when one of N parallel tools finishes while siblings remain
+ * in flight.
+ *
+ * ## Effect execution
  *
  * The reducer follows the four-tier classification the ACT specifies:
  *
@@ -118,7 +154,7 @@ function updateTaskRequested(
 			lifecycle: { kind: "running" },
 			activity: {
 				modelStreaming: false,
-				tooling: false,
+				activeToolCallIds: [],
 				awaitingApproval: false,
 			},
 			telemetry: {
@@ -157,7 +193,7 @@ function updateTaskReset(
 		{
 			identity: {},
 			lifecycle: { kind: "idle" },
-			activity: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			activity: { modelStreaming: false, activeToolCallIds: [], awaitingApproval: false },
 			recovery: { state: "idle", episodeFailures: 0, circuitNoticeCount: 0 },
 			telemetry: { toolCalls: 0, recoveryBudgetFailures: 0 },
 		},
@@ -166,7 +202,8 @@ function updateTaskReset(
 }
 
 // =========================================================================
-// Activity transitions
+// Activity transitions (CORRECTION01: stale-event policy applies to all
+// activity messages uniformly; tool calls are tracked by ID, not boolean)
 // =========================================================================
 
 function updateModelStreamStarted(
@@ -174,6 +211,12 @@ function updateModelStreamStarted(
 	_msg: { readonly type: "model_stream_started"; readonly at: number },
 ): UpdateResult {
 	void _msg;
+	// CORRECTION01 R3: same stale-event policy as `updateToolStarted`.
+	// A stray stream start belonging to a stopped epoch must not
+	// reactivate the shadow. `resumable` is treated as stopped epoch.
+	if (isStale(model.lifecycle)) {
+		return [model, NO_EFFECTS];
+	}
 	return [
 		{
 			...model,
@@ -192,6 +235,11 @@ function updateModelStreamFinished(
 	// Do NOT auto-promote to `completed` here. Stream-end does not
 	// prove the turn completed. The next `task_completed` message
 	// performs it. (Phase 7 explicit semantic.)
+	// Stale stream-finished after a stopped epoch is IGNORED_STALE
+	// too: don't clobber whatever the shadow has projected.
+	if (isStale(model.lifecycle)) {
+		return [model, NO_EFFECTS];
+	}
 	return [
 		{
 			...model,
@@ -203,32 +251,34 @@ function updateModelStreamFinished(
 
 function updateToolStarted(
 	model: TaskModel,
-	_msg: { readonly type: "tool_started"; readonly toolCallId: string; readonly at: number },
+	msg: { readonly type: "tool_started"; readonly toolCallId: string; readonly at: number },
 ): UpdateResult {
-	void _msg;
+	void msg;
 	// I01 / I02: terminal lifecycle never becomes active again from
 	// a stray tool_started. Stale events are IGNORED_STALE.
-	if (isTerminal(model.lifecycle)) {
+	// CORRECTION01 R3: `resumable` is also stale for activity.
+	if (isStale(model.lifecycle)) {
 		return [model, NO_EFFECTS];
 	}
-	// Idempotent per toolCallId: parallel siblings count as two
-	// tool-started events. The cumulative counter is monotonic (I10).
-	const alreadyActive = model.activity.tooling;
+	// CORRECTION01 R1: parallel tools are tracked by ID. An unseen ID
+	// increments the cumulative toolCalls counter and adds to the set;
+	// a re-emit of an already-active ID is a no-op for the counter but
+	// also a no-op for the set (deduped).
+	const ids = model.activity.activeToolCallIds;
+	const alreadyActive = ids.includes(msg.toolCallId);
+	const nextIds = alreadyActive ? ids : [...ids, msg.toolCallId];
 	return [
 		{
 			...model,
 			identity: { ...model.identity, endedAt: undefined },
 			lifecycle: promoteToRunning(model.lifecycle),
-			activity: { ...model.activity, tooling: true },
+			activity: { ...model.activity, activeToolCallIds: nextIds },
 			telemetry: alreadyActive
 				? model.telemetry
 				: {
 						toolCalls: model.telemetry.toolCalls + 1,
 						recoveryBudgetFailures: model.telemetry.recoveryBudgetFailures,
 					},
-			// `toolCallId` is intentionally not retained; this is a
-			// counter projection, not a registry. The runtime holds
-			// the per-tool state.
 		},
 		NO_EFFECTS,
 	];
@@ -236,16 +286,25 @@ function updateToolStarted(
 
 function updateToolFinished(
 	model: TaskModel,
-	_msg: { readonly type: "tool_finished"; readonly toolCallId: string; readonly at: number },
+	msg: { readonly type: "tool_finished"; readonly toolCallId: string; readonly at: number },
 ): UpdateResult {
-	// Stale tool_finished after a completed task is `IGNORED_STALE`.
-	if (isTerminal(model.lifecycle)) {
+	void msg;
+	// Stale tool_finished after a stopped epoch is `IGNORED_STALE`.
+	if (isStale(model.lifecycle)) {
 		return [model, NO_EFFECTS];
 	}
+	// CORRECTION01 R1: remove only the matching ID. Other in-flight
+	// tools remain active. If the ID is not present (orphan finish),
+	// the model is unchanged.
+	const ids = model.activity.activeToolCallIds;
+	if (!ids.includes(msg.toolCallId)) {
+		return [model, NO_EFFECTS];
+	}
+	const nextIds = ids.filter((id) => id !== msg.toolCallId);
 	return [
 		{
 			...model,
-			activity: { ...model.activity, tooling: false },
+			activity: { ...model.activity, activeToolCallIds: nextIds },
 		},
 		NO_EFFECTS,
 	];
@@ -256,6 +315,11 @@ function updateApprovalRequested(
 	_msg: { readonly type: "approval_requested"; readonly at: number },
 ): UpdateResult {
 	void _msg;
+	// CORRECTION01 R3: same stale-event policy. An approval that
+	// belongs to a stopped epoch must not reactivate the shadow.
+	if (isStale(model.lifecycle)) {
+		return [model, NO_EFFECTS];
+	}
 	return [
 		{
 			...model,
@@ -271,6 +335,10 @@ function updateApprovalResolved(
 	model: TaskModel,
 	_msg: { readonly type: "approval_resolved"; readonly at: number },
 ): UpdateResult {
+	// Resolving an approval on a stopped epoch is a no-op too.
+	if (isStale(model.lifecycle)) {
+		return [model, NO_EFFECTS];
+	}
 	return [
 		{
 			...model,
@@ -329,7 +397,7 @@ function updateTaskCompleted(
 			...model,
 			identity: { ...model.identity, endedAt: msg.at },
 			lifecycle: { kind: "completed" },
-			activity: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			activity: { modelStreaming: false, activeToolCallIds: [], awaitingApproval: false },
 		},
 		NO_EFFECTS,
 	];
@@ -344,7 +412,7 @@ function updateTaskFailed(
 			...model,
 			identity: { ...model.identity, endedAt: msg.at },
 			lifecycle: { kind: "failed", reason: msg.classification },
-			activity: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			activity: { modelStreaming: false, activeToolCallIds: [], awaitingApproval: false },
 		},
 		NO_EFFECTS,
 	];
@@ -354,12 +422,17 @@ function updateTaskBecameResumable(
 	model: TaskModel,
 	msg: { readonly type: "task_became_resumable"; readonly at: number },
 ): UpdateResult {
+	// CORRECTION01 R3: `resumable` is "stopped epoch" for activity
+	// purposes. All activity fields are cleared on entry so the
+	// invariants (I07 RESUMABLE_NOT_STREAMING, etc.) hold on entry
+	// and the stale guard prevents any future activity message from
+	// reactivating the shadow until a `same_task_continued` arrives.
 	return [
 		{
 			...model,
 			identity: { ...model.identity, endedAt: msg.at },
 			lifecycle: { kind: "resumable" },
-			activity: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			activity: { modelStreaming: false, activeToolCallIds: [], awaitingApproval: false },
 		},
 		NO_EFFECTS,
 	];
@@ -374,7 +447,7 @@ function updateTaskCancelled(
 			...model,
 			identity: { ...model.identity, endedAt: msg.at },
 			lifecycle: { kind: "cancelled" },
-			activity: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			activity: { modelStreaming: false, activeToolCallIds: [], awaitingApproval: false },
 		},
 		NO_EFFECTS,
 	];
@@ -387,22 +460,44 @@ function updateSameTaskContinued(
 	// I08: startedAt preserved. endedAt cleared. Lifecycle returns
 	// to `running` (mirrors the host's "first terminal wins within
 	// current stopped interval" reopenable-freeze semantics).
+	// Activity starts fresh — no carryover from the previous epoch.
 	return [
 		{
 			...model,
 			identity: { ...model.identity, endedAt: undefined },
 			lifecycle: { kind: "running" },
-			activity: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			activity: { modelStreaming: false, activeToolCallIds: [], awaitingApproval: false },
 		},
 		NO_EFFECTS,
 	];
 }
 
 /**
- * Whether a lifecycle is terminal (i.e. cannot be silently overwritten
- * by an activity transition). Mirrors the host's behavior for
- * `setTurnPhase("completed")` writes that should not be reverted by a
- * stray `model_stream_started` event from a stale runtime.
+ * Whether a lifecycle is "stale" for activity purposes (CORRECTION01 R3).
+ *
+ * True for terminal kinds (completed, failed, cancelled) AND for
+ * `resumable`. Activity messages addressed to a stale lifecycle are
+ * `IGNORED_STALE` so the shadow is never reactivated by an event that
+ * belongs to a stopped epoch. Only `same_task_continued` (or
+ * `task_requested` for a brand-new task) can leave a stopped lifecycle
+ * behind.
+ */
+function isStale(lifecycle: TaskModel["lifecycle"]): boolean {
+	return (
+		lifecycle.kind === "completed" ||
+		lifecycle.kind === "failed" ||
+		lifecycle.kind === "cancelled" ||
+		lifecycle.kind === "resumable"
+	);
+}
+
+/**
+ * Whether a lifecycle is strictly terminal (cannot be un-terminalized).
+ * Mirrors the host's behavior for `setTurnPhase("completed")` writes
+ * that should not be reverted by a stray `model_stream_started`.
+ *
+ * `resumable` is *not* terminal — it can be un-terminalized via
+ * `same_task_continued`. It is, however, stale for activity messages.
  */
 function isTerminal(lifecycle: TaskModel["lifecycle"]): boolean {
 	return (
@@ -414,13 +509,15 @@ function isTerminal(lifecycle: TaskModel["lifecycle"]): boolean {
 
 /**
  * Promote an idle lifecycle to "running" whenever activity is becoming
- * true. `resumable` and the terminal kinds are left untouched. This
- * is the rule I02 enforces: any activity=true ⇒ projectTurnState ≠
- * "idle" (as a model invariant).
+ * true. `resumable` and the terminal kinds are left untouched.
+ *
+ * Note: callers gate activity transitions with `isStale()` first, so
+ * `promoteToRunning` is only ever reached for `idle` or `running`.
+ * The defensive checks for terminal/resumable/running remain as
+ * belt-and-braces guarantees.
  */
 function promoteToRunning(lifecycle: TaskModel["lifecycle"]): TaskModel["lifecycle"] {
-	if (isTerminal(lifecycle)) return lifecycle;
-	if (lifecycle.kind === "resumable") return lifecycle;
+	if (isTerminal(lifecycle) || lifecycle.kind === "resumable") return lifecycle;
 	if (lifecycle.kind === "running") return lifecycle;
 	return { kind: "running" };
 }

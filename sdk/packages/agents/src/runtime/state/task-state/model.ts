@@ -84,11 +84,27 @@ export type TaskFailureClass =
  * established by `AgentRuntimeExecutionState`; the booleans stay
  * distinct because each has its own precedence in the
  * `projectTurnState` projection.
+ *
+ * CORRECTION01 (R1): `tooling` is no longer a single boolean.
+ * It is now `activeToolCallIds`, a frozen record of the tool
+ * calls currently in flight. The projection `tooling` is derived
+ * as `activeToolCallIds.length > 0`. This means parallel tool
+ * calls are accurately modeled: starting two tools leaves two
+ * IDs in the set; finishing one of them leaves the other
+ * active. The previous boolean collapsed two distinct facts
+ * (cardinality and cumulative count) into one and produced
+ * false-idle shadow states whenever one of N parallel tools
+ * completed while siblings remained in flight.
  */
 export interface TaskActivityState {
 	readonly modelStreaming: boolean;
-	/** Derived from the runtime's `pendingToolCalls.length > 0`. */
-	readonly tooling: boolean;
+	/**
+	 * Identifiers of tool calls currently in flight. Order is
+	 * the order in which the shadow saw them start. The set is
+	 * deduplicated on `tool_started`; `tool_finished(id)` removes
+	 * the entry regardless of order.
+	 */
+	readonly activeToolCallIds: readonly string[];
 	readonly awaitingApproval: boolean;
 }
 
@@ -142,7 +158,7 @@ export function initialTaskModel(): TaskModel {
 		lifecycle: { kind: "idle" },
 		activity: {
 			modelStreaming: false,
-			tooling: false,
+			activeToolCallIds: [],
 			awaitingApproval: false,
 		},
 		recovery: {
@@ -172,12 +188,26 @@ export function isSameTaskModel(a: TaskModel, b: TaskModel): boolean {
 		if (a.lifecycle.reason !== b.lifecycle.reason) return false;
 	}
 	if (a.activity.modelStreaming !== b.activity.modelStreaming) return false;
-	if (a.activity.tooling !== b.activity.tooling) return false;
 	if (a.activity.awaitingApproval !== b.activity.awaitingApproval) return false;
+	if (!sameStringArray(a.activity.activeToolCallIds, b.activity.activeToolCallIds)) return false;
 	if (a.recovery.state !== b.recovery.state) return false;
 	if (a.recovery.episodeFailures !== b.recovery.episodeFailures) return false;
 	if (a.recovery.circuitNoticeCount !== b.recovery.circuitNoticeCount) return false;
 	if (a.telemetry.toolCalls !== b.telemetry.toolCalls) return false;
 	if (a.telemetry.recoveryBudgetFailures !== b.telemetry.recoveryBudgetFailures) return false;
+	return true;
+}
+
+/**
+ * Order-sensitive string-array equality. Used by
+ * `isSameTaskModel` to compare `activeToolCallIds` while keeping
+ * the comparator deterministic (order is the order in which the
+ * shadow saw the IDs start).
+ */
+function sameStringArray(a: readonly string[], b: readonly string[]): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false;
+	}
 	return true;
 }

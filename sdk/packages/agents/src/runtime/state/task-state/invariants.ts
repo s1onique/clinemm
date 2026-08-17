@@ -24,11 +24,14 @@ export type TaskInvariantViolation =
 	| { readonly kind: "completed_with_streaming" }
 	| { readonly kind: "failed_with_streaming" }
 	| { readonly kind: "resumable_with_streaming" }
+	| { readonly kind: "resumable_with_tooling" }
+	| { readonly kind: "resumable_with_approval" }
 	| { readonly kind: "cancelled_with_streaming" }
 	| { readonly kind: "active_but_idle_phase" }
 	| { readonly kind: "started_after_ended" }
 	| { readonly kind: "non_monotonic_tool_calls" }
-	| { readonly kind: "negative_recovery_counter" };
+	| { readonly kind: "negative_recovery_counter" }
+	| { readonly kind: "tooling_without_active_ids" };
 
 /**
  * Pure invariant check. Returns every violation found; an empty
@@ -64,15 +67,16 @@ export function checkTaskInvariants(model: TaskModel): readonly TaskInvariantVio
 		model.lifecycle.kind === "completed" ||
 		model.lifecycle.kind === "failed" ||
 		model.lifecycle.kind === "cancelled";
+	const tooling = model.activity.activeToolCallIds.length > 0;
+	const anyActive = model.activity.modelStreaming || tooling || model.activity.awaitingApproval;
 	if (
 		isTerminal &&
-		(model.activity.modelStreaming || model.activity.tooling || model.activity.awaitingApproval)
+		anyActive
 	) {
 		violations.push({ kind: "terminal_with_activity" });
 	}
 
 	// I02: active ⇒ not idle.
-	const anyActive = model.activity.modelStreaming || model.activity.tooling || model.activity.awaitingApproval;
 	if (anyActive && model.lifecycle.kind === "idle") {
 		violations.push({ kind: "active_but_idle_phase" });
 	}
@@ -86,6 +90,12 @@ export function checkTaskInvariants(model: TaskModel): readonly TaskInvariantVio
 	}
 	if (model.lifecycle.kind === "resumable" && model.activity.modelStreaming) {
 		violations.push({ kind: "resumable_with_streaming" });
+	}
+	if (model.lifecycle.kind === "resumable" && tooling) {
+		violations.push({ kind: "resumable_with_tooling" });
+	}
+	if (model.lifecycle.kind === "resumable" && model.activity.awaitingApproval) {
+		violations.push({ kind: "resumable_with_approval" });
 	}
 	if (model.lifecycle.kind === "cancelled" && model.activity.modelStreaming) {
 		violations.push({ kind: "cancelled_with_streaming" });
@@ -120,6 +130,24 @@ export function checkTaskInvariants(model: TaskModel): readonly TaskInvariantVio
 	}
 	if (model.telemetry.recoveryBudgetFailures < 0) {
 		violations.push({ kind: "negative_recovery_counter" });
+	}
+
+	// CORRECTION01 R1: `activeToolCallIds` must be deduplicated and
+	// consistent with the bookkeeping model. We do not assert exact
+	// equality with toolCalls on a snapshot (a tool that started and
+	// finished has its ID in toolCalls but not in activeToolCallIds).
+	// What we DO assert: no duplicate IDs in the array.
+	const seen = new Set<string>();
+	let dupFound = false;
+	for (const id of model.activity.activeToolCallIds) {
+		if (seen.has(id)) {
+			dupFound = true;
+			break;
+		}
+		seen.add(id);
+	}
+	if (dupFound) {
+		violations.push({ kind: "tooling_without_active_ids" });
 	}
 
 	return violations;

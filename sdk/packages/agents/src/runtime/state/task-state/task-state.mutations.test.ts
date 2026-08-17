@@ -43,7 +43,7 @@ describe("M2 — projection must NOT report idle while activity is true", () => 
 	it("killed if a buggy projection returns idle while modelStreaming=true", () => {
 		const m: TaskModel = {
 			...initialTaskModel(),
-			activity: { modelStreaming: true, tooling: false, awaitingApproval: false },
+			activity: { modelStreaming: true, activeToolCallIds: [], awaitingApproval: false },
 		};
 		expect(projectTurnState(m)).toBe("streaming");
 	});
@@ -61,7 +61,7 @@ describe("M3 — task_completed must clear all activity", () => {
 			m = taskUpdate(m, msg)[0];
 		}
 		expect(m.activity.modelStreaming).toBe(false);
-		expect(m.activity.tooling).toBe(false);
+		expect(m.activity.activeToolCallIds).toEqual([]);
 		expect(m.activity.awaitingApproval).toBe(false);
 		expect(projectTurnState(m)).toBe("completed");
 	});
