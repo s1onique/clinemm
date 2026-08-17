@@ -117,7 +117,13 @@ import {
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
-import { emitSameTaskContinued, emitTaskCancelled, emitTaskRequested, emitTaskReset } from "./task-state-shadow-host-msgs"
+import {
+	emitHostRecovery,
+	emitSameTaskContinued,
+	emitTaskCancelled,
+	emitTaskRequested,
+	emitTaskReset,
+} from "./task-state-shadow-host-msgs"
 import {
 	createTaskShadowHostWiring,
 	emptyArbiterSnapshot,
@@ -1600,49 +1606,36 @@ export class Controller {
 			}
 			this.taskTelemetry.observeRecovery(recovery)
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
-			// Mirror the recovery-state change into the shadow. The
-			// shadow's `recovery-state-changed` TaskMsg carries the
-			// canonical projection via the runtime's snapshot().
-			// We construct a synthetic AgentRuntimeEvent here so the
-			// shadow's adapter can fold the change.
+			// Mirror the recovery-state change into the shadow as a
+			// HOST_RECOVERY observation. The canonical recovery
+			// event is delivered separately via
+			// `attachCanonicalRuntimeEventSubscription` through
+			// `observeCanonicalRuntimeEvent` (RUNTIME_CANONICAL
+			// origin). The host projection is DIAGNOSTIC_ONLY
+			// under canonicalAvailable=true (Policy A) — canonical
+			// recovery owns the actual shadow mutation. Going
+			// through `emitHostRecovery` (the production ingress)
+			// ensures HOST_RECOVERY never double-mutates the
+			// shadow against canonical recovery.
 			const shadow = this.taskStateShadowWiring
 			if (shadow) {
-				shadow.comparator.observeRuntimeEvent(
-					{
-						type: "recovery-state-changed",
-						snapshot: {
-							agentId: "host",
-							runId: sessionId,
-							status: "running",
-							iteration: 0,
-							messages: [],
-							pendingToolCalls: [],
-							usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalCost: 0 },
-							recovery,
-							execution: {
-								modelStreaming: false,
-								tooling: false,
-								awaitingApproval: false,
-							},
-						},
-						previousRecovery: {
-							state: "idle",
-							tracker: {
-								state: "idle",
-								currentRepairAttempts: 0,
-								equivalentRepeatCount: 0,
-								blockedExactKeys: [],
-								blockedFamilies: [],
-							},
-							secondStage: "idle",
-							episodeFailures: 0,
-							maxEpisodeFailures: 5,
-							circuitNoticeCount: 0,
-						},
-					},
-					this.turnStateTracker.currentPhase,
-					Date.now(),
-				)
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.3-W10:
+				// Mirror the recovery-state change into the shadow
+				// as a HOST_RECOVERY observation via the
+				// production ingress `emitHostRecovery`. The
+				// canonical recovery-state-changed event is
+				// delivered separately through
+				// `attachCanonicalRuntimeEventSubscription` via
+				// `observeCanonicalRuntimeEvent` —
+				// RUNTIME_CANONICAL origin, APPLYs under the
+				// canonical path. The host projection is
+				// DIAGNOSTIC_ONLY under canonicalAvailable=true
+				// (Policy A) — canonical recovery owns the
+				// actual shadow mutation. Going through
+				// `emitHostRecovery` ensures HOST_RECOVERY
+				// never double-mutates the shadow against
+				// canonical recovery. R8 carry-forward closed.
+				emitHostRecovery({ coordinator: shadow.coordinator, now: shadow.now }, sessionId, recovery, true, Date.now())
 			}
 		})
 	}

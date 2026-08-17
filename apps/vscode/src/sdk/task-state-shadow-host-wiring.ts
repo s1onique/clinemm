@@ -301,32 +301,45 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	// reach the coordinator — they neither feed the shadow nor
 	// feed the recorder.
 	//
-	// Policy (mirrors the translator gate):
-	//   canonicalRunId=undef, snapshot.runId=undef  → apply (very first event)
-	//   canonicalRunId=undef, snapshot.runId=def   → apply (transient)
-	//   canonicalRunId=def,   snapshot.runId=undef → apply (legacy runtime without runId — tolerated)
-	//   canonicalRunId=def,   snapshot.runId=def, MATCH    → apply
-	//   canonicalRunId=def,   snapshot.runId=def, MISMATCH → SUPPRESS (stranded epoch)
+	// Policy (frozen, ALL clauses must hold):
+	//   R1 session authority (BEFORE any other check):
+	//     activeSession set && activeSession.sessionId !== input.sessionId
+	//       → REFUSE (no tracker mutation; no diagnostic counter — the
+	//         coordinator already counted cross-session STALE).
 	//
-	// R1 fix (C3.CONT.2-CORRECTION04): tracker MUST NOT be mutated
-	// for events that the coordinator will classify as STALE
-	// (cross-session). A late run-started from a stale session
-	// arriving after run-B is active would otherwise overwrite
-	// canonicalRunIdRef with run-A, then a legitimate run-B
-	// terminal would MISMATCH and be wrongly suppressed.
-	// Validation order is: (a) session authority, (b) run-epoch
-	// gate, (c) tracker update, (d) hand off to coordinator.
+	//   For run-finished / run-failed (terminal events):
+	//     stranded =
+	//         (fenced && event.runId === retiredCanonicalRunId)   // R2
+	//      || (activeRunId defined && event.runId !== activeRunId) // identity mismatch
+	//     if stranded → SUPPRESS + increment staleRunTerminalSuppressed.
 	//
-	// R2 fix (C3.CONT.2-CORRECTION04): the continuation window
-	// (between same_task_continued and the next run-started) is
-	// fenced. While fenced, ANY terminal canonical event whose
-	// event.runId matches the retired canonicalRunId is
-	// SUPPRESSED, because at this point the resumed run is
-	// authorized at task level but has not yet announced its
-	// new runId — and a late terminal from the previous run
-	// would otherwise match-by-identity and apply. The fence is
-	// cleared by the next accepted canonical run-started (which
-	// also updates canonicalRunIdRef) or by resetForNewTask().
+	//     Concrete truth table (the implementation is STRICTER than
+	//     a naive "fence only suppresses retired ID" reading):
+	//       fence=true,  active=A, terminal=A → SUPPRESS (R2)
+	//       fence=true,  active=A, terminal=B → SUPPRESS (identity mismatch)
+	//       fence=true,  active=A, terminal=undef → SUPPRESS (identity mismatch, undef != A)
+	//       fence=true,  active=undef, terminal=undef → SUPPRESS (R2 + identity)
+	//       fence=true,  active=undef, terminal=B   → apply (no retired identity known)
+	//       fence=false, active=A, terminal=A → apply
+	//       fence=false, active=A, terminal=B → SUPPRESS (identity mismatch)
+	//       fence=false, active=undef, terminal=undef → apply (very first event)
+	//       fence=false, active=undef, terminal=B → apply (transient)
+	//
+	//   Note: the fence=true + active=undef case is the
+	//   `C23-HARDEN-1` carry-forward — currently a defined-runId
+	//   terminal would pass while fenced. In normal Local runtime
+	//   observed orderings run-started precedes run-finished, so
+	//   this is unreachable in practice; qualifiy explicitly in C2.4.
+	//
+	//   Tracker update (only for accepted events):
+	//     run-started && snapshot.runId defined
+	//       → canonicalRunIdRef = snapshot.runId
+	//       → awaitingNextCanonicalRunRef = false
+	//
+	//   The fence is cleared by:
+	//     - accepted canonical run-started (above)
+	//     - resetForNewTask()
+	//     - dispose()
 	//
 	// R3 fix (C3.CONT.2-CORRECTION04): every suppressed stranded
 	// canonical terminal increments `staleRunTerminalSuppressed`
@@ -374,11 +387,19 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			}
 
 			// C3.CONT.2-CORRECTION04 R2 + R3: terminal canonical
-			// events arriving while the continuation fence is set,
-			// OR whose snapshot.runId does not match the tracked
-			// canonicalRunId, are SUPPRESSED with a diagnostic
-			// counter increment so dogfood can observe chronic
-			// suppression.
+			// events are SUPPRESSED if EITHER (a) the continuation
+			// fence is set AND the event's runId matches the
+			// retired identity, OR (b) the tracked active runId is
+			// defined and the event's runId does not match it.
+			// The disjunction is intentionally OR, not AND — while
+			// fenced, defined-runId terminals are uniformly
+			// suppressed regardless of identity equality, because
+			// at this window the previous identity is retired and
+			// the next run-started has not yet advanced the
+			// tracker. See the gate's truth table at the top of
+			// this file for the full enumeration. Any suppression
+			// increments `staleRunTerminalSuppressed` so dogfood
+			// can observe chronic suppression.
 			if (evt.type === "run-finished" || evt.type === "run-failed") {
 				const eventRunId = evt.snapshot.runId
 				const active = canonicalRunIdRef.value

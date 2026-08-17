@@ -2507,3 +2507,401 @@ describe("C2.3-CONT.2-CORRECTION04 — canonical run-tracker ordering (R1/R2/R3)
 		expect(counts.staleRunTerminalSuppressed).toBe(1)
 	})
 })
+
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.3-W09-W10
+// Failure and recovery qualification on the canonical Local path.
+//
+// W09 — current-run failure. The current canonical run fails
+// (`run-failed(A)`). The shadow must APPLY it: lifecycle=failed,
+// `task_failed` count=1, no divergences, no gaps, no errors.
+// W09 also includes a stranded-old-run-failure witness that
+// must be SUPPRESSED by the canonical run-epoch terminal ownership
+// gate (CORRECTION04 R2 + identity clause).
+//
+// W10 — recovery. The canonical recovery event
+// (`recovery-state-changed`) APPLYs exactly once. The parallel
+// host recovery projection
+// (`emitHostRecovery` with canonicalAvailable=true) is
+// DIAGNOSTIC_ONLY under Policy A: never authoritative when
+// canonical recovery exists. R8 carry-forward (R8:
+// REAL_SDK_RECOVERY_CALLSITE_USES_emitHostRecovery = PASS) was
+// closed when the production SdkController telemetry subscription
+// was rewired to feed `emitHostRecovery` instead of calling
+// `comparator.observeRuntimeEvent` directly.
+// =========================================================================
+
+describe("C2.3-CONT.3 W09 — failure qualification on canonical Local path", () => {
+	it("W09.1 — current-run canonical run-failed(A) APPLYs exactly once", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runFailed(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "failed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		// Shadow derives failed lifecycle from the canonical
+		// run-failed event.
+		expect(m.lifecycle.kind).toBe("failed")
+		const allRecords = st.wiring.records()
+		const taskFailed = allRecords.filter((r) => r.event === "task_failed")
+		expect(taskFailed.length).toBe(1)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		// No stranded terminal was suppressed.
+		expect(counts.staleRunTerminalSuppressed).toBe(0)
+	})
+
+	it("W09.2 — stranded old-run run-failed(A) in continuation window is SUPPRESSED", () => {
+		// After cancel + continue + fence, a late run-failed(run-A)
+		// arrives BEFORE run-started(B). The fence must suppress
+		// (event.runId === retired active && fenced). Lifecycle
+		// stays running, no task_failed mutation, R3 counter
+		// increments.
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{ kind: "host-task", taskId: "task-A", which: "cancelled", legacyPhase: "streaming" },
+			{ kind: "host-task", taskId: "task-A", which: "continued", legacyPhase: "idle" },
+			{ kind: "fence-canonical-run" },
+			// LATE run-failed(run-A) in the continuation window.
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runFailed(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 99,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "failed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		// Lifecycle must remain `running` (resumed task, awaiting
+		// run-B start). NOT failed.
+		expect(m.lifecycle.kind).toBe("running")
+		const allRecords = st.wiring.records()
+		const taskFailed = allRecords.filter((r) => r.event === "task_failed")
+		expect(taskFailed.length).toBe(0)
+		const counts = st.wiring.recorderCounts()
+		// R2 + R3: exactly one stranded terminal suppression.
+		expect(counts.staleRunTerminalSuppressed).toBe(1)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
+
+	it("W09.3 — stranded old-run run-failed(A) is SUPPRESSED by identity mismatch after run-B is active", () => {
+		// Sequence: run-A starts, run-B starts and finishes
+		// (shadow: completed). A late run-failed(run-A) arrives
+		// AFTER run-B was the active canonical run. Identity
+		// mismatch (run-A != active run-B) → SUPPRESSED. Lifecycle
+		// stays completed, no extra task_failed. R3 counter
+		// increments.
+		//
+		// This is the simpler identity-mismatch path of
+		// CORRECTION03 (the same identity clause re-derived in
+		// CORRECTION04's truth table). It does NOT need the
+		// cancel/continue + fence machinery — the active run
+		// identity has advanced, so the stranded terminal is
+		// caught by the identity clause alone.
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-B",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runFinished(
+					snapshotFixture({
+						runId: "run-B",
+						iteration: 1,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "completed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// LATE run-failed(run-A) (identity mismatch with active
+			// run-B → SUPPRESSED).
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runFailed(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 99,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "failed",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const m = st.wiring.comparator.debugSnapshot()
+		// Lifecycle is completed (run-B), not failed.
+		expect(m.lifecycle.kind).toBe("completed")
+		const allRecords = st.wiring.records()
+		const taskFailed = allRecords.filter((r) => r.event === "task_failed")
+		expect(taskFailed.length).toBe(0)
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		expect(taskCompleted.length).toBe(1)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.staleRunTerminalSuppressed).toBe(1)
+		// The stranded run-failed(run-A) is SUPPRESSED — it does
+		// NOT add a record and does NOT add a task_failed
+		// mutation. The D10 divergence on run-B's task_completed
+		// is a separate, expected artifact: the shadow reaches
+		// `completed` via run-B but the host task hasn't been
+		// `task_reset` for the new run. This is the documented
+		// D10_UNKNOWN semantic — the shadow says something the
+		// host hasn't observed — and is NOT the gate's concern.
+		// The gate's contract is the stranded-terminal
+		// suppression, which is verified by the
+		// `staleRunTerminalSuppressed` counter and the absence
+		// of any `task_failed` record.
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+	})
+})
+
+describe("C2.3-CONT.3 W10 — recovery qualification on canonical Local path", () => {
+	it("W10.1 — canonical recovery-state-changed APPLYs exactly once", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				arbiter: {
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "recovering",
+					status: "running",
+					pendingToolCalls: [],
+				},
+				event: recoveryEvent(
+					"idle",
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const allRecords = st.wiring.records()
+		const recoveryChanged = allRecords.filter((r) => r.event === "recovery_changed")
+		expect(recoveryChanged.length).toBe(1)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.fallbackRecoveryApplied).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
+
+	it("W10.2 — parallel host recovery projection is DIAGNOSTIC_ONLY under canonicalAvailable=true (Policy A)", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			// Canonical recovery arrives first.
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				arbiter: {
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "recovering",
+					status: "running",
+					pendingToolCalls: [],
+				},
+				event: recoveryEvent(
+					"idle",
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Parallel host recovery projection (the
+			// `emitHostRecovery` sink). Policy A: never
+			// authoritative when canonical recovery exists.
+			{
+				kind: "host-recovery",
+				sessionId: "s-canon",
+				from: "idle",
+				to: "recovering",
+				canonicalAvailable: true,
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const allRecords = st.wiring.records()
+		const recoveryChanged = allRecords.filter((r) => r.event === "recovery_changed")
+		// Exactly one recovery_changed record (from the canonical
+		// path). The HOST_RECOVERY projection is DIAGNOSTIC_ONLY
+		// and must NOT add a second record.
+		expect(recoveryChanged.length).toBe(1)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.observationsDiagnosticByOrigin.HOST_RECOVERY).toBe(1)
+		expect(counts.fallbackRecoveryApplied).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.invariantViolations).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
+
+	it("W10.3 — multiple parallel host recovery projections never double-mutate the shadow", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				arbiter: {
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "recovering",
+					status: "running",
+					pendingToolCalls: [],
+				},
+				event: recoveryEvent(
+					"idle",
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "recovering",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			// Three redundant host recovery projections, all
+			// DIAGNOSTIC_ONLY regardless of canonicalAvailable.
+			{
+				kind: "host-recovery",
+				sessionId: "s-canon",
+				from: "idle",
+				to: "recovering",
+				canonicalAvailable: true,
+			},
+			{
+				kind: "host-recovery",
+				sessionId: "s-canon",
+				from: "idle",
+				to: "recovering",
+				canonicalAvailable: true,
+			},
+			{
+				kind: "host-recovery",
+				sessionId: "s-canon",
+				from: "idle",
+				to: "recovering",
+				canonicalAvailable: true,
+			},
+		]
+		for (const s of steps) runStep(st, s)
+
+		const allRecords = st.wiring.records()
+		const recoveryChanged = allRecords.filter((r) => r.event === "recovery_changed")
+		expect(recoveryChanged.length).toBe(1)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.observationsDiagnosticByOrigin.HOST_RECOVERY).toBe(3)
+		expect(counts.fallbackRecoveryApplied).toBe(0)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.observerErrors).toBe(0)
+		expect(counts.evidenceGaps).toBe(0)
+	})
+})
