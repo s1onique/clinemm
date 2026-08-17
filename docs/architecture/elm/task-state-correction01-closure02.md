@@ -6,7 +6,10 @@ ACT-CLINEMM-ELM-ARCHITECTURE01-
 E0-E4-BOOTSTRAP01-CORRECTION01-CLOSURE02
 ```
 
-CLOSURE-ONLY. No reducer / model / adapter / invariant / test changes.
+CLOSURE-ONLY. No reducer / model / adapter / invariant changes to the
+engineering subject. The one test assertion tightened (R4) was an
+existing assertion rewritten to its strict form — the file was already
+added in E4; this ACT only rephrased its expectation.
 No Leamas protocol artifact attempted (see "Why no protocol artifact"
 below). Only:
 
