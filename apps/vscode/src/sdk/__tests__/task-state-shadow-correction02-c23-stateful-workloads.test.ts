@@ -115,6 +115,7 @@ export type WorkloadStep =
 	  }
 	| { kind: "set-active-session"; sessionId: string | undefined }
 	| { kind: "set-legacy-phase"; phase: TurnPhase }
+	| { kind: "fence-canonical-run" }
 	| { kind: "checkpoint"; selected: CheckpointSelection }
 	| { kind: "expect-state"; assertion: (model: TaskState.TaskModel) => void }
 	| {
@@ -394,6 +395,16 @@ function runStep(state: HarnessState, step: WorkloadStep): void {
 			return
 		case "set-legacy-phase":
 			state.currentLegacyPhase = step.phase
+			return
+		case "fence-canonical-run":
+			// C3.CONT.2-CORRECTION04 R2: harness hook that
+			// mirrors SdkController's call to
+			// fenceCanonicalRunForContinuation() adjacent to
+			// emitSameTaskContinued(). In production this is
+			// driven by SdkController; the harness drives it
+			// explicitly so each witness can target the
+			// continuation-before-next-run-start window.
+			state.wiring.fenceCanonicalRunForContinuation()
 			return
 		case "checkpoint":
 			assertCheckpoint(state, step.selected)
@@ -2080,5 +2091,419 @@ describe("C2.3-CONT.2-CORRECTION03 — canonical run-epoch terminal ownership ga
 		const allRecords = st.wiring.records()
 		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
 		expect(taskCompleted.length).toBe(1)
+	})
+})
+
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION04
+// Canonical run-tracker ORDERING witnesses (C8.1-C8.5). These pin the
+// two specific defects CORRECTION03 left open:
+//
+//   R1: a stale-session canonical run-started MUST NOT mutate the
+//       run-epoch tracker. Otherwise a legitimate later run-B
+//       terminal sees `active = run-A` (poisoned) and is wrongly
+//       suppressed.
+//
+//   R2: between same_task_continued and the next accepted canonical
+//       run-started, late terminals for the retired run identity
+//       would otherwise match-by-identity and APPLY, terminating
+//       the resumed run.
+//
+//   R3: every suppressed stranded terminal increments the
+//       diagnostic counter `staleRunTerminalSuppressed`.
+//
+// These test the AUTHORITATIVE LocalRuntimeHost path
+// (`canonicalAvailable=true`, RUNTIME_CANONICAL).
+// =========================================================================
+
+describe("C2.3-CONT.2-CORRECTION04 — canonical run-tracker ordering (R1/R2/R3)", () => {
+	it("C8.1 R1 — stale-session canonical run-started cannot poison canonicalRunIdRef", () => {
+		// Active session is B; stale session A sends a late run-started.
+		// R1: the tracker MUST NOT mutate. A subsequent legitimate
+		// run-finished(B) must APPLY (not be wrongly suppressed).
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-B" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-B",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-B",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+		]
+		for (const s of steps) runStep(st, s)
+		expect(st.activeRunId).toBe("run-B")
+
+		// LATE stale-session run-started from session A. Coordinator
+		// would classify STALE; wiring must NOT advance the tracker.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-A",
+			event: runStarted(
+				snapshotFixture({
+					runId: "run-A",
+					iteration: 0,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "running",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		// Legitimate run-finished(run-B). Without R1, tracker would
+		// have been poisoned to run-A and this would be wrongly
+		// suppressed. With R1, it must APPLY.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-B",
+			event: runFinished(
+				snapshotFixture({
+					runId: "run-B",
+					iteration: 1,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "completed",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		const m = st.wiring.comparator.debugSnapshot()
+		expect(m.lifecycle.kind).toBe("completed")
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		expect(taskCompleted.length).toBe(1)
+		const counts = st.wiring.recorderCounts()
+		// No stranded terminal was suppressed here (the stale
+		// run-started was session-mismatched, not a stranded terminal).
+		expect(counts.staleRunTerminalSuppressed).toBe(0)
+	})
+
+	it("C8.2 R2 — late terminal run-A in continuation-before-next-run-start window is SUPPRESSED", () => {
+		// The nastiest ordering: run-A finished, cancel, continued,
+		// and then a late run-finished(run-A) arrives BEFORE
+		// run-started(B) fires. R2 fence must suppress.
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{ kind: "host-task", taskId: "task-A", which: "cancelled", legacyPhase: "streaming" },
+			{ kind: "host-task", taskId: "task-A", which: "continued", legacyPhase: "idle" },
+			// C3.CONT.2-CORRECTION04 R2: production fences the
+			// canonical tracker via SdkController adjacent to
+			// emitSameTaskContinued. The harness bypasses
+			// SdkController, so we set the fence explicitly.
+			{ kind: "fence-canonical-run" },
+		]
+		for (const s of steps) runStep(st, s)
+		expect(st.activeRunId).toBe("run-A")
+
+		// LATE run-finished(run-A) arriving in the continuation
+		// window. Without R2 fence, event.runId === active
+		// (run-A) => APPLY, terminating the resumed run. With
+		// R2 fence, MUST be SUPPRESSED.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-canon",
+			event: runFinished(
+				snapshotFixture({
+					runId: "run-A",
+					iteration: 99,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "completed",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		const m = st.wiring.comparator.debugSnapshot()
+		// Lifecycle must remain `running` (resumed task, awaiting
+		// run-B start). NOT completed/failed.
+		expect(m.lifecycle.kind).toBe("running")
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		expect(taskCompleted.length).toBe(0)
+		const counts = st.wiring.recorderCounts()
+		expect(counts.staleRunTerminalSuppressed).toBe(1)
+	})
+
+	it("C8.3 R2 (parity) — late terminal run-failed(run-A) in continuation window is SUPPRESSED", () => {
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{ kind: "host-task", taskId: "task-A", which: "cancelled", legacyPhase: "streaming" },
+			{ kind: "host-task", taskId: "task-A", which: "continued", legacyPhase: "idle" },
+			{ kind: "fence-canonical-run" },
+		]
+		for (const s of steps) runStep(st, s)
+
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-canon",
+			event: runFailed(
+				snapshotFixture({
+					runId: "run-A",
+					iteration: 99,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "recovering",
+					status: "failed",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		const m = st.wiring.comparator.debugSnapshot()
+		expect(m.lifecycle.kind).toBe("running")
+		const counts = st.wiring.recorderCounts()
+		expect(counts.staleRunTerminalSuppressed).toBe(1)
+	})
+
+	it("C8.4 — fence clears when next run-started(B) is accepted", () => {
+		// Same as C8.2 setup, but now run-started(B) fires. The
+		// fence clears; the tracker advances; later run-B
+		// terminals APPLY normally.
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{ kind: "host-task", taskId: "task-A", which: "cancelled", legacyPhase: "streaming" },
+			{ kind: "host-task", taskId: "task-A", which: "continued", legacyPhase: "idle" },
+			{ kind: "fence-canonical-run" },
+			// Now run-B starts; fence clears, tracker advances.
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-B",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+		]
+		for (const s of steps) runStep(st, s)
+		expect(st.activeRunId).toBe("run-B")
+
+		// After run-B is announced, late run-finished(run-A) is
+		// SUPPRESSED by identity mismatch (run-A != run-B), NOT
+		// by the fence. R3 counter still increments.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-canon",
+			event: runFinished(
+				snapshotFixture({
+					runId: "run-A",
+					iteration: 99,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "completed",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		// Legitimate run-finished(run-B) APPLIES.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-canon",
+			event: runFinished(
+				snapshotFixture({
+					runId: "run-B",
+					iteration: 1,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "completed",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		const m = st.wiring.comparator.debugSnapshot()
+		expect(m.lifecycle.kind).toBe("completed")
+		const counts = st.wiring.recorderCounts()
+		// Only the stranded run-A terminal counted.
+		expect(counts.staleRunTerminalSuppressed).toBe(1)
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		expect(taskCompleted.length).toBe(1)
+	})
+
+	it("C8.5 — combined stress: stale-session run-start (R1) + retired-run terminal (R2)", () => {
+		// Strongest poisoning witness: initial active run is run-A.
+		// After cancel + continue + fence, two attacks arrive
+		// interleaved:
+		//   (a) stale-session-A run-started(run-A2) — R1 must
+		//       prevent tracker mutation (otherwise the late
+		//       retired run-A terminal would match the poisoned
+		//       ref OR the tracker would mismatch later run-A
+		//       terminals).
+		//   (b) late retired run-finished(run-A) arriving in the
+		//       continuation window — R2 fence must suppress
+		//       (event.runId === retired active && fenced).
+		// Then a legitimate run-started(run-B) + run-finished(run-B)
+		// proves the recovered run applies cleanly.
+		const st = buildWiring({ canonicalAvailable: true, initialSession: "s-canon" })
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
+			{
+				kind: "canonical",
+				sessionId: "s-canon",
+				event: runStarted(
+					snapshotFixture({
+						runId: "run-A",
+						iteration: 0,
+						execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+						recoveryState: "idle",
+						status: "running",
+						pendingToolCalls: [],
+					}),
+				),
+			},
+			{ kind: "host-task", taskId: "task-A", which: "cancelled", legacyPhase: "streaming" },
+			{ kind: "host-task", taskId: "task-A", which: "continued", legacyPhase: "idle" },
+			{ kind: "fence-canonical-run" },
+		]
+		for (const s of steps) runStep(st, s)
+		expect(st.activeRunId).toBe("run-A")
+
+		// Attack (a): stale-session-A run-started. Switch the
+		// active session to s-A so R1's session authority check
+		// fires (mirrors a runtime emitting on the wrong
+		// session). R1 must prevent tracker mutation.
+		runStep(st, { kind: "set-active-session", sessionId: "s-A" })
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-A",
+			event: runStarted(
+				snapshotFixture({
+					runId: "run-A2",
+					iteration: 0,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "running",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		// Reset active session back to s-canon for the
+		// legitimate events.
+		runStep(st, { kind: "set-active-session", sessionId: "s-canon" })
+
+		// Attack (b): late retired run-finished(run-A) arriving
+		// in the continuation window. R2 fence must suppress.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-canon",
+			event: runFinished(
+				snapshotFixture({
+					runId: "run-A",
+					iteration: 99,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "completed",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		// Now run-B is announced: fence clears, tracker advances.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-canon",
+			event: runStarted(
+				snapshotFixture({
+					runId: "run-B",
+					iteration: 0,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "running",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		// Legitimate run-finished(run-B) APPLIES.
+		runStep(st, {
+			kind: "canonical",
+			sessionId: "s-canon",
+			event: runFinished(
+				snapshotFixture({
+					runId: "run-B",
+					iteration: 1,
+					execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+					recoveryState: "idle",
+					status: "completed",
+					pendingToolCalls: [],
+				}),
+			),
+		})
+
+		const m = st.wiring.comparator.debugSnapshot()
+		expect(m.lifecycle.kind).toBe("completed")
+		const allRecords = st.wiring.records()
+		const taskCompleted = allRecords.filter((r) => r.event === "task_completed")
+		expect(taskCompleted.length).toBe(1)
+		// R2 suppressed exactly the retired run-A terminal
+		// arriving in the continuation window. R1 stale-session
+		// run-started was session-rejected (not counted as a
+		// stranded run-terminal because it wasn't a terminal
+		// event).
+		const counts = st.wiring.recorderCounts()
+		expect(counts.staleRunTerminalSuppressed).toBe(1)
 	})
 })

@@ -219,6 +219,20 @@ export interface TaskShadowRecorderCounts {
 	 * qualification signal for that asymmetry.
 	 */
 	readonly evidenceGaps: number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION04:
+	 * Count of canonical `run-finished` / `run-failed` events that
+	 * were SUPPRESSED by the canonical run-epoch terminal ownership
+	 * gate because their `snapshot.runId` did not match the
+	 * active canonical run identity, OR because the
+	 * continuation-before-next-run-start fence was set.
+	 *
+	 * DIAGNOSTIC counter — suppression is correct behavior, but
+	 * dogfood needs this signal to detect chronic suppression as
+	 * a runtime bug (e.g. a runtime that keeps emitting terminals
+	 * for old runs after every continuation).
+	 */
+	readonly staleRunTerminalSuppressed: number
 }
 
 const ALL_CLASSES: readonly DivergenceClass[] = [
@@ -275,6 +289,7 @@ export class TaskShadowRecorder {
 	private fallbackRecoveryApplied = 0
 	private observerErrors = 0
 	private evidenceGaps = 0
+	private staleRunTerminalSuppressed = 0
 
 	constructor(
 		/**
@@ -391,6 +406,19 @@ export class TaskShadowRecorder {
 	}
 
 	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION04:
+	 * Count a canonical `run-finished` / `run-failed` event that
+	 * was SUPPRESSED by the canonical run-epoch terminal
+	 * ownership gate (R1: stale-session run-started poisoning
+	 * already prevented at the gate; R2: continuation fence
+	 * suppression; R3: identity mismatch). Diagnostic only —
+	 * the suppression itself is correct behavior.
+	 */
+	recordStaleRunTerminalSuppressed(): void {
+		this.staleRunTerminalSuppressed += 1
+	}
+
+	/**
 	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2-CORRECTION01 R8:
 	 * Count an observation that was admitted as DIAGNOSTIC_ONLY by
 	 * the authority resolver (e.g. HOST_RECOVERY with
@@ -423,6 +451,7 @@ export class TaskShadowRecorder {
 			fallbackReconstructedApplied: this.fallbackReconstructedApplied,
 			observerErrors: this.observerErrors,
 			evidenceGaps: this.evidenceGaps,
+			staleRunTerminalSuppressed: this.staleRunTerminalSuppressed,
 		}
 	}
 
@@ -442,6 +471,7 @@ export class TaskShadowRecorder {
 		this.fallbackReconstructedApplied = 0
 		this.observerErrors = 0
 		this.evidenceGaps = 0
+		this.staleRunTerminalSuppressed = 0
 	}
 }
 

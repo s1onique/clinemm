@@ -129,6 +129,30 @@ export interface TaskShadowHostWiring {
 	resetForNewTask(): void
 	dispose(): void
 	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION04:
+	 *
+	 * Fences the canonical run-epoch terminal gate for the
+	 * continuation-before-next-run-start window. Called by
+	 * `SdkController` adjacent to `emitSameTaskContinued` when a
+	 * follow-up resumes the SAME visible task after a terminal
+	 * phase (completed / awaiting_followup / resumable / error).
+	 *
+	 * While fenced, any canonical `run-finished` / `run-failed`
+	 * event arriving for the retired run identity is SUPPRESSED
+	 * — even if its `snapshot.runId` matches the now-retired
+	 * `canonicalRunId` — until the next accepted canonical
+	 * `run-started` (or the fence is cleared by `resetForNewTask`).
+	 *
+	 * The fence is cleared on:
+	 *   - the next accepted canonical `run-started` (new run begins)
+	 *   - `resetForNewTask()` (a new visible task starts)
+	 *   - `dispose()` (wiring is torn down)
+	 *
+	 * Observation-only: does not influence recovery, tool
+	 * execution, approval, or task scheduling.
+	 */
+	fenceCanonicalRunForContinuation(): void
+	/**
 	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
 	 * The unified observation coordinator. The single ingress point
 	 * for every state-mutating observation (canonical, reconstructed,
@@ -255,6 +279,7 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	deps.sessionOptions.onSessionEvent = wrappedOnSessionEvent
 
 	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION03:
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION04:
 	// CANONICAL RUN-EPOCH TERMINAL OWNERSHIP GATE.
 	//
 	// CONT.2-CORRECTION02 closed the same race on the reconstructed
@@ -282,7 +307,37 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	//   canonicalRunId=def,   snapshot.runId=undef → apply (legacy runtime without runId — tolerated)
 	//   canonicalRunId=def,   snapshot.runId=def, MATCH    → apply
 	//   canonicalRunId=def,   snapshot.runId=def, MISMATCH → SUPPRESS (stranded epoch)
+	//
+	// R1 fix (C3.CONT.2-CORRECTION04): tracker MUST NOT be mutated
+	// for events that the coordinator will classify as STALE
+	// (cross-session). A late run-started from a stale session
+	// arriving after run-B is active would otherwise overwrite
+	// canonicalRunIdRef with run-A, then a legitimate run-B
+	// terminal would MISMATCH and be wrongly suppressed.
+	// Validation order is: (a) session authority, (b) run-epoch
+	// gate, (c) tracker update, (d) hand off to coordinator.
+	//
+	// R2 fix (C3.CONT.2-CORRECTION04): the continuation window
+	// (between same_task_continued and the next run-started) is
+	// fenced. While fenced, ANY terminal canonical event whose
+	// event.runId matches the retired canonicalRunId is
+	// SUPPRESSED, because at this point the resumed run is
+	// authorized at task level but has not yet announced its
+	// new runId — and a late terminal from the previous run
+	// would otherwise match-by-identity and apply. The fence is
+	// cleared by the next accepted canonical run-started (which
+	// also updates canonicalRunIdRef) or by resetForNewTask().
+	//
+	// R3 fix (C3.CONT.2-CORRECTION04): every suppressed stranded
+	// canonical terminal increments `staleRunTerminalSuppressed`
+	// on the recorder, so dogfood can distinguish
+	//   "no stranded events occurred" from
+	//   "17 stranded events were silently dropped".
+	// This is a DIAGNOSTIC counter, not a divergence class —
+	// suppression is correct behavior, but dogfood needs the
+	// signal to detect chronic suppression as a runtime bug.
 	const canonicalRunIdRef: { value: string | undefined } = { value: undefined }
+	const awaitingNextCanonicalRunRef: { value: boolean } = { value: false }
 
 	return {
 		recorder,
@@ -303,23 +358,53 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			// On LocalRuntimeHost, canonical events own TaskState truth
 			// — the reconstructed translator gate (CORRECTION02) does
 			// not see them at all.
+			//
+			// C3.CONT.2-CORRECTION04 R1: validate session authority
+			// FIRST. A canonical event from a stale session must NOT
+			// mutate the run tracker; only accepted-session events
+			// advance it. This prevents a late stale-session
+			// run-started from poisoning canonicalRunIdRef.
 			const evt = input.event
-			if (evt.type === "run-started") {
-				canonicalRunIdRef.value = evt.snapshot.runId ?? canonicalRunIdRef.value
+			const activeSession = deps.lifecycle.getActiveSession()
+			if (activeSession && activeSession.sessionId !== input.sessionId) {
+				// Cross-session canonical event. The coordinator
+				// would classify this as STALE and refuse it. Do
+				// not advance the tracker.
+				return
 			}
+
+			// C3.CONT.2-CORRECTION04 R2 + R3: terminal canonical
+			// events arriving while the continuation fence is set,
+			// OR whose snapshot.runId does not match the tracked
+			// canonicalRunId, are SUPPRESSED with a diagnostic
+			// counter increment so dogfood can observe chronic
+			// suppression.
 			if (evt.type === "run-finished" || evt.type === "run-failed") {
 				const eventRunId = evt.snapshot.runId
 				const active = canonicalRunIdRef.value
-				if (active !== undefined && eventRunId !== undefined && active !== eventRunId) {
-					// Stranded canonical terminal from a previous
-					// run epoch. Suppress before it can mutate the
-					// shadow or be recorded as a divergence. The
-					// shadow is task-epoch-agnostic (taskMsg carries
-					// no runId); this gate is the only authority
-					// that can refuse it.
+				const stranded =
+					(awaitingNextCanonicalRunRef.value &&
+						eventRunId !== undefined &&
+						active !== undefined &&
+						eventRunId === active) ||
+					(active !== undefined && eventRunId !== undefined && active !== eventRunId)
+				if (stranded) {
+					recorder.recordStaleRunTerminalSuppressed?.()
 					return
 				}
 			}
+
+			// Tracker update only happens AFTER session + run-epoch
+			// validation. The only accepted canonical run-started
+			// events advance canonicalRunIdRef and clear the fence.
+			if (evt.type === "run-started") {
+				const newRunId = evt.snapshot.runId
+				if (newRunId !== undefined) {
+					canonicalRunIdRef.value = newRunId
+					awaitingNextCanonicalRunRef.value = false
+				}
+			}
+
 			const origin = input.origin as "RUNTIME_CANONICAL"
 			coordinator.observe({
 				kind: "runtime-canonical",
@@ -327,6 +412,18 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 				sessionId: input.sessionId,
 				event: input.event,
 			})
+		},
+		fenceCanonicalRunForContinuation(): void {
+			// C3.CONT.2-CORRECTION04 R2: same_task_continued has
+			// fired. The previous run identity (canonicalRunId)
+			// is now RETIRED. Any canonical terminal whose
+			// snapshot.runId matches the retired identity will be
+			// suppressed until the next accepted canonical
+			// run-started announces the new run. Until that
+			// run-started arrives, the resumed task's lifecycle
+			// stays "running" — it cannot be poisoned by a late
+			// run-finished/run-failed from the previous run.
+			awaitingNextCanonicalRunRef.value = true
 		},
 		resetForNewTask(): void {
 			translator.debugReset()
@@ -338,6 +435,10 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			// the translator's activeRunId. A new visible task
 			// gets a fresh epoch.
 			canonicalRunIdRef.value = undefined
+			// C3.CONT.2-CORRECTION04 R2: clear the
+			// continuation fence too. A new visible task starts
+			// with no awaited-continuation state.
+			awaitingNextCanonicalRunRef.value = false
 		},
 		dispose(): void {
 			deps.sessionOptions.onSessionEvent = userOnSessionEvent
@@ -365,6 +466,9 @@ function createNoopWiring(): TaskShadowHostWiringWithSink {
 		now: () => Date.now(),
 		coordinator: noopCoordinator,
 		observeCanonicalRuntimeEvent(_input: TaskShadowCanonicalEvent): void {
+			/* No-op: wiring disabled by env flag. */
+		},
+		fenceCanonicalRunForContinuation: () => {
 			/* No-op: wiring disabled by env flag. */
 		},
 		resetForNewTask: () => {

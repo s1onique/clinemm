@@ -1858,6 +1858,15 @@ export class Controller {
 				{ coordinator: this.taskStateShadowWiring.coordinator, now: this.taskStateShadowWiring.now },
 				turnStateBefore.phase,
 			)
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION04 R2:
+			// Fence the canonical run-epoch terminal gate so that
+			// any canonical run-finished/run-failed arriving for the
+			// retired run identity (run-A) BEFORE the next accepted
+			// canonical run-started (run-B) is SUPPRESSED. Until
+			// run-B announces itself, the resumed task's lifecycle
+			// stays "running" and cannot be poisoned by a late
+			// terminal from run-A.
+			this.taskStateShadowWiring.fenceCanonicalRunForContinuation()
 		}
 		// Answering an ask / continuing after completion / resuming a cancelled task all kick off a
 		// new agent turn — move the authoritative phase to "streaming" so the footer shows
