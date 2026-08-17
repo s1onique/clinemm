@@ -18,8 +18,12 @@ export type TaskEffect =
 	| { readonly type: "request_approval" };
 
 /**
- * Always-`true` during E0–E4. Cutover ACTs flip this when they wire
- * the effect interpreter.
+ * Always-`false` during E0–E4. Cutover ACTs flip this to `true` when
+ * they wire the effect interpreter. The shadow adapter and host code
+ * MUST consult this flag before running any taskUpdate-produced
+ * effect.
+ *
+ * CORRECTION01 R11: previous comment incorrectly said "Always-true".
  */
 export const EFFECT_EXECUTION_ENABLED = false as const;
 
