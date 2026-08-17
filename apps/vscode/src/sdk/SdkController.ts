@@ -2407,8 +2407,9 @@ export class Controller {
 					: undefined,
 				taskHistory: processedTaskHistory,
 				turnState: this.turnStateTracker.get(),
-				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A + CORRECTION02: project
-				// the host-owned task telemetry (elapsed / toolCalls /
+				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A + CORRECTION02 +
+				// ACT-CLINEMM-DOGFOOD-CORRECTION04: project the host-owned
+				// task telemetry (elapsed / toolCalls /
 				// recoveryBudgetFailures) to the webview. When the tracker
 				// has no active task, the field is undefined and the
 				// TaskHeader renders em-dash rather than fabricating values
@@ -2418,6 +2419,15 @@ export class Controller {
 				// recoveryBudgetFailures to reflect the underlying
 				// bounded-recovery semantics (the counter only grows while
 				// the recovery second stage is idle).
+				//
+				// C04 root cause: getStateToPostToWebview() projected
+				// `turnState` but omitted `taskTelemetry`, so the webview
+				// always received `undefined` for the telemetry strip even
+				// though the tracker was alive and accumulating. Fix is the
+				// single line below — the tracker's `get()` is the
+				// canonical projection (it already returns the strip-or-
+				// undefined shape the wire field expects).
+				taskTelemetry: this.taskTelemetry.get(),
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
 				// authority; this is a read-only mirror for the webview.
