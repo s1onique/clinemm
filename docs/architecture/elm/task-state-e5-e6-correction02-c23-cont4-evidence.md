@@ -405,3 +405,38 @@ No production source files modified. Production semantic delta: 0.
 
 The next ACT (CONT.4-CORRECTION) is the only place a production
 change may be made, and it is restricted to the narrow fix in §4.3.
+
+
+---
+
+## Addendum (post-CORRECTION01)
+
+The CONT.4 evidence doc above was frozen at the HALT. During
+CORRECTION01 the reviewer flagged two wording inconsistencies:
+
+1. Section 4.3 first sketched a retired-run-id match policy, then
+   immediately recommended the stronger uniform policy. The CONT.4
+   freeze left the reader to guess which was implemented.
+   CORRECTION01 implements the **stronger** uniform policy
+   (`fence || post-reset` ⇒ any defined-runId is SUPPRESSED).
+
+2. The "defensive gap, not active race" framing leaned on
+   production-side ordering rather than the component invariant.
+   The defect is real because the **component invariant is false**
+   regardless of current production timing:
+
+   > The canonical run-epoch terminal ownership gate admits a
+   > defined-runId terminal when neither the continuation fence
+   > nor the identity mismatch protects. This is invariant
+   > regardless of whether the runtime subscription is currently
+   > torn down in time.
+
+   CORRECTION01 closes the invariant gap with the post-reset fence.
+   The CONT.4 evidence doc section 4.3 should be read as recording
+   the HALT with the wider framing; the CORRECTION01 evidence doc
+   (`task-state-e5-e6-correction02-c23-cont4-correction01-evidence.md`)
+   records the corrected wording and the implementation.
+
+3. The CONT.4 halt trace itself is preserved unchanged. The defect
+   was real and the W12.4 minimal trace is the qualification
+   witness.
