@@ -56,7 +56,7 @@ import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { AuthService, LogoutReason } from "./auth-service"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
-import { subscribeCanonicalRuntimeEventsToShadow } from "./canonical-event-subscription"
+import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
 import { createProviderCatalog } from "./model-catalog/catalog"
@@ -223,11 +223,14 @@ export class Controller {
 	private taskTelemetry: TaskTelemetryTracker
 	private taskTelemetryRecoveryUnsub: (() => void) | undefined
 	/**
-	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
-	 * canonical `AgentRuntimeEvent` subscription on the VS Code shadow
-	 * boundary. Created on each new task; disposed in `dispose()`.
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION03:
+	 * Owner of the canonical `AgentRuntimeEvent` subscription on the
+	 * VS Code shadow boundary. The owner is the single source of
+	 * truth for the unsubscribe handle; the controller does not
+	 * store a raw `unsubscribe` callback. Created once per
+	 * controller; attached on each new task; disposed in `dispose()`.
 	 */
-	private taskStateRuntimeEventsUnsub: (() => void) | undefined
+	private readonly taskStateRuntimeEventsSubscription: CanonicalRuntimeShadowSubscription
 	private taskTelemetryPhaseUnsub: (() => void) | undefined
 	// ACT-CLINEMM-SESSION-AUTONOMY01:
 	// Single owner of the active-session auto-approval override ("none" | "all").
@@ -526,6 +529,7 @@ export class Controller {
 		// session-options object. The lifecycle reads `options.onSessionEvent`
 		// lazily inside `ensureSharedHostSubscription`, so wrapping here
 		// takes effect at the first event.
+		this.taskStateRuntimeEventsSubscription = new CanonicalRuntimeShadowSubscription()
 		this.taskStateShadowWiring = createTaskShadowHostWiring({
 			// Pass a self-reference so the wiring can reach back through
 			// `this.sessions` after the lifecycle is constructed. The
@@ -1028,11 +1032,11 @@ export class Controller {
 		// live shadow wiring first so no further events are observed.
 		this.taskStateShadowWiring?.dispose()
 		this.taskStateShadowWiring = undefined
-		// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
-		// detach the canonical runtime-event subscription so the host
-		// stops forwarding events to the (now-disposed) shadow.
-		this.taskStateRuntimeEventsUnsub?.()
-		this.taskStateRuntimeEventsUnsub = undefined
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION03:
+		// delegate to the subscription owner, which disposes the
+		// active listener (if any). The controller does NOT store
+		// a raw unsubscribe callback anywhere.
+		this.taskStateRuntimeEventsSubscription.dispose()
 		this.providerConfigStoreSubscription.dispose()
 		// Clear the remote config timer to prevent stale fetches
 		if (this.remoteConfigTimer) {
@@ -1660,21 +1664,15 @@ export class Controller {
 	 * `attachRecoveryTelemetrySubscription`).
 	 */
 	private attachCanonicalRuntimeEventSubscription(sessionId: string): void {
-		this.taskStateRuntimeEventsUnsub?.()
-		this.taskStateRuntimeEventsUnsub = undefined
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION03:
+		// delegate the full subscribe cycle (dispose previous, attach
+		// new) to the production-grade owner. The controller does
+		// NOT manage an unsubscribe callback directly. The owner is
+		// the single source of truth for the canonical subscription
+		// state, exercised by both the controller and the lifecycle
+		// qualification test.
 		const sdkHost = this.sessions.getActiveSession()?.sdkHost
-		if (!sdkHost?.subscribeRuntimeEvents) {
-			return
-		}
-		const shadow = this.taskStateShadowWiring
-		if (!shadow) {
-			return
-		}
-		// Delegate the listener filter (sessionId guard + typed
-		// envelope into the shadow) to the production-grade
-		// helper. F1-CORRECTION02: the controller and the lifecycle
-		// qualification test now call the SAME function.
-		this.taskStateRuntimeEventsUnsub = subscribeCanonicalRuntimeEventsToShadow(sdkHost, shadow, sessionId)
+		this.taskStateRuntimeEventsSubscription.attach(sdkHost, this.taskStateShadowWiring, sessionId)
 	}
 
 	async reinitExistingTaskFromId(taskId: string): Promise<void> {

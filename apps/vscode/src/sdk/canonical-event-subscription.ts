@@ -73,3 +73,110 @@ export function subscribeCanonicalRuntimeEventsToShadow(
 		})
 	})
 }
+
+// ===========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION03:
+// CanonicalRuntimeShadowSubscription owns the unsubscribe handle and is
+// the single source of truth for the controller's re-attach lifecycle.
+// ===========================================================================
+
+/**
+ * Owner of the canonical runtime-event subscription used by the
+ * `SdkController`. The controller and the qualification test both
+ * use this same object; the controller does not directly store an
+ * `unsubscribe` callback anywhere.
+ *
+ * SEMANTIC CONTRACT
+ * -----------------
+ * `attach()` is the only way to obtain (or replace) the canonical
+ * subscription. It always:
+ *
+ *   1. Disposes the existing subscription (if any) so the previous
+ *      session's events stop flowing through the wiring. This is
+ *      the single point at which "old subscription disposed" is
+ *      enforced for the SdkController.
+ *   2. Replaces the subscription with a fresh one to the supplied
+ *      `host`. If the host lacks `subscribeRuntimeEvents` or the
+ *      `wiring` is undefined, the owner transitions to a NO-OP
+ *      state (no active listener, but the existing unsubscribe is
+ *      still called).
+ *
+ * `dispose()` is the only way to terminate the subscription. It is
+ * idempotent; calling it multiple times is safe.
+ *
+ * TESTING POINT_IN_TIME LIFECYCLE
+ * --------------------------------
+ * The owner captures the *subscriber's view*: attach returns an
+ * unsubscribe function regardless of whether the host currently has
+ * any active sessions (the host may expose the method even with
+ * zero sessions). The session then appears, the controller calls
+ * `attach()` again, and the new subscription observes.
+ *
+ * This faithfully reflects the documented
+ * `LOCAL_RUNTIME_SUBSCRIPTION_MODEL = POINT_IN_TIME` contract:
+ *   * the host method EXISTS at all times (when the host is the
+ *     LocalRuntimeHost);
+ *   * the host attaches the listener to CURRENTLY ACTIVE sessions;
+ *   * sessions created AFTER the subscribe call require the caller
+ *     to invoke `attach()` again.
+ */
+
+export interface RuntimeEventHost {
+	subscribeRuntimeEvents?: (listener: (sessionId: string, event: AgentRuntimeEvent) => void) => () => void
+}
+
+export type CanonicalSessionId = string
+
+/**
+ * The owner. The `SdkController` keeps exactly one of these per
+ * instance. Tests keep one of these per scenario.
+ */
+export class CanonicalRuntimeShadowSubscription {
+	private unsubscribe: Unsubscribe | undefined
+
+	/**
+	 * Replace the active subscription.
+	 *
+	 *   - Disposes the previous subscription (if any).
+	 *   - Calls `subscribeRuntimeEventsThroughProxy` on the new host.
+	 *     If the host lacks `subscribeRuntimeEvents` or the wiring is
+	 *     undefined, the owner transitions to a NO-OP state (still
+	 *     returns `false` from `hasActiveListener`).
+	 *
+	 * Idempotent with respect to the same `(host, wiring, sessionId)`
+	 * triple: the previous subscription is disposed and a fresh one
+	 * is established, so the net effect is exactly one new listener.
+	 */
+	attach(host: RuntimeEventHost | undefined, wiring: TaskShadowHostWiring | undefined, sessionId: CanonicalSessionId): void {
+		// Step 1: dispose the previous subscription so old session
+		// events stop flowing. This is the single point at which
+		// "old subscription disposed" is enforced.
+		this.unsubscribe?.()
+		this.unsubscribe = undefined
+
+		// Step 2: replace. If anything is missing, we transition to
+		// a no-op state — the owner keeps no active listener.
+		if (!host?.subscribeRuntimeEvents || !wiring) {
+			return
+		}
+		this.unsubscribe = subscribeCanonicalRuntimeEventsToShadow(host, wiring, sessionId)
+	}
+
+	/**
+	 * Stop observing and drop the active subscription.
+	 * Idempotent.
+	 */
+	dispose(): void {
+		this.unsubscribe?.()
+		this.unsubscribe = undefined
+	}
+
+	/**
+	 * True iff the owner currently holds an active unsubscribe
+	 * handle. Exposed for the qualification test (and for any future
+	 * debugging surface).
+	 */
+	hasActiveListener(): boolean {
+		return this.unsubscribe !== undefined
+	}
+}
