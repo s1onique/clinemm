@@ -168,6 +168,46 @@ export class TaskShadowReverseTranslator {
 		if (agentEvent.type === "iteration_start") {
 			this.activeRunId.value = (agentEvent.conversationId as string | undefined) ?? this.activeRunId.value
 		}
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C3.CONT.2-CORRECTION02:
+		// RUN-EPOCH TERMINAL OWNERSHIP GATE.
+		//
+		// CONT.2-CORRECTION01 closed the *immediate* cancellation race
+		// (lifecycle.kind ∈ {cancelled,resumable} ⇒ ignore terminal).
+		// But lifecycle alone cannot distinguish:
+		//
+		//   (a) a stranded terminal event from a CANCELLED epoch that
+		//       arrives AFTER same_task_continued moved the lifecycle
+		//       back to "running" for the resumed epoch, vs.
+		//   (b) a legitimate terminal event from the resumed epoch.
+		//
+		// Without provenance, the reducer cannot tell them apart.
+		// The translator owns `activeRunId` (the conversationId of
+		// the most recent `iteration_start`). When a terminal
+		// `done` / `error` event arrives with a DIFFERENT
+		// conversationId than `activeRunId.value`, the event is
+		// stranded from a previous epoch and MUST NOT reach the
+		// shadow. Returning `undefined` here is the narrowest
+		// equivalent of a stale-epoch gate: it neither feeds the
+		// shadow nor feeds the recorder, so the resumed epoch
+		// continues unaffected.
+		//
+		// Policy:
+		//   activeRunId=undefined, eventConvId=undefined  → apply (very first event)
+		//   activeRunId=undefined, eventConvId=defined    → apply (transient: no iteration_start yet)
+		//   activeRunId=defined,   eventConvId=undefined  → apply (legacy runtime without conversationId — tolerated)
+		//   activeRunId=defined,   eventConvId=defined, MATCH  → apply
+		//   activeRunId=defined,   eventConvId=defined, MISMATCH → SUPPRESS (stranded epoch)
+		if (agentEvent.type === "done" || agentEvent.type === "error") {
+			const eventConvId = (agentEvent as { conversationId?: string }).conversationId
+			const active = this.activeRunId.value
+			if (active !== undefined && eventConvId !== undefined && active !== eventConvId) {
+				// Stranded terminal event from a previous epoch.
+				// Suppress at the observation boundary so the shadow
+				// never sees a task_completed / task_failed whose
+				// origin run is not the currently-active run.
+				return undefined
+			}
+		}
 		const snapshot = this.reconstructSnapshot(agentEvent, input)
 		switch (agentEvent.type) {
 			case "iteration_start":

@@ -402,15 +402,25 @@ function updateTaskCompleted(
 	// the matching terminal-lifecycle gate. See C3.CONT.2 for the
 	// W07/W08 race evidence that motivated this correction.
 	//
-	// Policy matrix:
-	//   idle     | running | completed | failed | cancelled | resumable
-	//       Apply       Apply      stale     stale     STALE       STALE
+	// Policy implemented in THIS reducer (single axis: lifecycle):
+	//   current lifecycle | task_completed
+	//   ------------------+-----------------
+	//   cancelled          | STALE  ← freeze
+	//   resumable          | STALE  ← freeze
+	//   any other          | Apply  (idle / running / completed / failed)
 	//
-	// Terminal-to-terminal orderings (`completed → failed`, etc.)
-	// remain last-arrival-wins for now — that is a separate
-	// discipline and not a correctness invariant under the C2.3
-	// contract. Only cancellation/resumable boundaries freeze
-	// the lifecycle.
+	// Terminal-to-terminal orderings (completed → failed, failed →
+	// completed) are NOT governed by this gate — they remain
+	// last-arrival-wins for now. Out of scope of C2.3; flagged as
+	// TERMINAL_TO_TERMINAL_PRECEDENCE = UNRESOLVED on the board.
+	//
+	// Cross-epoch terminal ownership (a stranded terminal from a
+	// cancelled run arriving AFTER same_task_continued) is governed
+	// at the observation boundary (TaskShadowReverseTranslator in
+	// apps/vscode/src/sdk/task-state-shadow-observer.ts), NOT here,
+	// because `task_completed` carries no runId. See
+	// C3.CONT.2-CORRECTION02 for the run-epoch terminal ownership
+	// gate.
 	if (
 		model.lifecycle.kind === "cancelled" ||
 		model.lifecycle.kind === "resumable"
@@ -436,7 +446,9 @@ function updateTaskFailed(
 	// precedence policy for `task_failed`. A late failure from a
 	// cancelled epoch cannot poison the visible "cancelled"
 	// signal. See updateTaskCompleted above for the full policy
-	// matrix and the rationale.
+	// and the rationale. Cross-epoch (run-epoch) ownership of
+	// late terminal failures is governed at the observation
+	// boundary (see C3.CONT.2-CORRECTION02), not here.
 	if (
 		model.lifecycle.kind === "cancelled" ||
 		model.lifecycle.kind === "resumable"
