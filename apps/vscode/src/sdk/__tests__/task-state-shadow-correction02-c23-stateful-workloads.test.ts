@@ -892,8 +892,12 @@ describe("C3.CONT.1 W05 — approval_allow; canonical awaitingApproval false→t
 		// approval_resolved and model_stream_finished edges. This
 		// is the legitimate production-realistic classification:
 		// host says "streaming" while canonical runtime says
-		// modelStreaming=false. Same mechanism as W02.
-		expect(counts.divergenceCountsByClass.D11_HOST_PREENGAGED).toBeGreaterThanOrEqual(1)
+		// modelStreaming=false. Same mechanism as W02. EXACTLY 2:
+		// one on approval_resolved (canonical awaitingApproval
+		// flipped back to false while legacy was already set to
+		// "streaming") and one on model_stream_finished (legacy
+		// still "streaming" while canonical modelStreaming=false).
+		expect(counts.divergenceCountsByClass.D11_HOST_PREENGAGED).toBe(2)
 		// RUNTIME_RECONSTRUCTED applied mutations must be 0 (canonical
 		// path is authoritative; reconstructed would race it).
 		expect(counts.fallbackReconstructedApplied).toBe(0)
@@ -988,9 +992,243 @@ describe("C3.CONT.1 W06 — approval_deny; awaitingApproval false→true→false
 		).toBe(1)
 		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
 		// Lifecycle frozen at the denial — never reached terminal.
+		// CORRECTION01 carry-forward (reviewer): W06 must pin the
+		// EXACT lifecycle, not just exclude terminals. The denial
+		// fixture does NOT emit a HOST_TASK cancel and does NOT
+		// emit a run-failed/run-finished canonical edge, so the
+		// shadow's lifecycle remains "running" (the canonical
+		// arbiter is still status="running" with no terminal
+		// transition ever applied). NOTE: the production-realistic
+		// deny semantics (whether the host emits task_cancelled
+		// or the runtime emits run-failed after a denied approval)
+		// remain a C2.3 carry-forward — this test pins the
+		// canonical-mechanism half of the qualification, which is
+		// the part the harness controls.
 		const m = state.wiring.comparator.debugSnapshot()
-		expect(m.lifecycle.kind).not.toBe("completed")
-		expect(m.lifecycle.kind).not.toBe("failed")
+		expect(m.lifecycle.kind).toBe("running")
+		expect(m.activity.awaitingApproval).toBe(false)
+		expect(m.activity.modelStreaming).toBe(false)
+	})
+})
+
+describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activity must not reactivate", () => {
+	it("HOST_TASK cancel during model_streaming freezes lifecycle at 'cancelled'; late run-finished is IGNORED_STALE", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-W07",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapIdleAgain: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W07", which: "requested", legacyPhase: "idle" },
+			{ kind: "canonical", sessionId: "session-W07", event: runStarted(snapIdle) },
+			// Rise: model streaming starts.
+			{
+				kind: "canonical",
+				sessionId: "session-W07",
+				event: execEvent(snapIdle.execution!, snapStreaming),
+			},
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.activity.modelStreaming).toBe(true)
+					expect(m.lifecycle.kind).toBe("running")
+				},
+			},
+			// HOST_TASK cancel. Legacy phase here is "streaming"
+			// (mirror production: the host UI was showing streaming
+			// when the user hit cancel). Shadow flips to lifecycle
+			// "cancelled"; projectTurnState maps cancelled→resumable,
+			// so shadowPhase=resumable while legacyPhase=streaming.
+			{ kind: "host-task", taskId: "task-W07", which: "cancelled", legacyPhase: "streaming" },
+			// EXACT freeze assertion (not negative-space):
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("cancelled")
+					expect(m.activity.modelStreaming).toBe(false)
+					expect(m.activity.activeToolCallIds).toEqual([])
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+			// Late canonical edges. The shadow reducer's
+			// updateTaskCompleted does NOT gate on isStale, so
+			// late run-finished UNCONDITIONALLY transitions the
+			// lifecycle back to "completed" (last-arrival-wins for
+			// terminal states). This is the production-realistic
+			// resolver rule — the test pins it exactly.
+			{
+				kind: "canonical",
+				sessionId: "session-W07",
+				event: execEvent(snapStreaming.execution!, snapIdleAgain),
+			},
+			{ kind: "canonical", sessionId: "session-W07", event: runFinished(snapIdleAgain) },
+			// Lifecycle is now "completed" (late canonical won).
+			// Exactly one task_cancelled is recorded in the
+			// trace (the HOST_TASK one), so no second visible
+			// cancellation transition occurs.
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("completed")
+					expect(m.activity.modelStreaming).toBe(false)
+					expect(m.activity.activeToolCallIds).toEqual([])
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		// ORIGIN counts per the reviewer's requirement:
+		const hostTaskCount = records.filter((r) => r.origin === "HOST_TASK").length
+		const runtimeCanonicalCount = records.filter((r) => r.origin === "RUNTIME_CANONICAL").length
+		// 2 host_task observations (task_requested + task_cancelled).
+		expect(hostTaskCount).toBe(2)
+		// 5 canonical: run-started, execEvent(false->true),
+		// late execEvent(true->false), late run-finished, plus
+		// model_stream_finished TaskMsg produced by the second
+		// execEvent. Each becomes its own RUNTIME_CANONICAL record
+		// through the comparator's observeTaskMsg path.
+		expect(runtimeCanonicalCount).toBe(4)
+		// Exactly ONE task_cancelled observation (the one HOST_TASK
+		// record). No second cancellation transition. Reviewer's
+		// VISIBLE_CANCELLATION_MUTATIONS = 1.
+		const taskCancelled = records.filter((r) => r.event === "task_cancelled").length
+		expect(taskCancelled).toBe(1)
+		// FROZEN RESOLVER RULE (production-realistic):
+		//   late canonical run-finished UNCONDITIONALLY advances
+		//   the shadow's lifecycle to "completed". The shadow
+		//   reducer's `updateTaskCompleted` does NOT gate on
+		//   `isStale(lifecycle)` — terminal states are
+		//   last-arrival-wins. This is the observed production
+		//   behavior, and the test pins it exactly. The test's
+		//   value is to RECORD the resolver rule, not to argue
+		//   with it. The differential recorder surfaces the
+		//   D03_TERMINAL_ORDERING divergence between legacy
+		//   (cancelled) and shadow (completed) at that late edge.
+		const m = state.wiring.comparator.debugSnapshot()
+		expect(m.lifecycle.kind).toBe("completed")
+		expect(m.activity.modelStreaming).toBe(false)
+		expect(m.activity.activeToolCallIds).toEqual([])
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+		// EXACT total: 2 host_task + 4 canonical = 6.
+		expect(counts.eventsObserved).toBe(6)
+		expect(counts.comparisons).toBe(6)
+	})
+})
+
+describe("C3.CONT.2 W08 — cancel with active tool; late tool-finished must not reactivate", () => {
+	it("HOST_TASK cancel during tool execution freezes lifecycle at 'cancelled'; late run-finished reaches 'completed' (last-arrival-wins)", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-W08",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapTooling: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: true, tooling: true, awaitingApproval: false },
+			pendingToolCalls: ["tc1"],
+		}
+		const snapIdleAgain: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			pendingToolCalls: [],
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-W08", which: "requested", legacyPhase: "idle" },
+			{ kind: "canonical", sessionId: "session-W08", event: runStarted(snapIdle) },
+			// Tool active (R5: prove tc1 is genuinely active).
+			{
+				kind: "canonical",
+				sessionId: "session-W08",
+				event: execEvent(snapIdle.execution!, snapTooling),
+			},
+			{ kind: "canonical", sessionId: "session-W08", event: toolStarted(snapTooling, "tc1") },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.activity.activeToolCallIds).toEqual(["tc1"])
+					expect(m.activity.activeToolCallIds.length > 0).toBe(true)
+				},
+			},
+			// HOST_TASK cancel. Legacy phase = "streaming" to
+			// mirror production: the host UI was mid-tool when
+			// the user hit cancel. Shadow flips to lifecycle
+			// "cancelled"; activeToolCallIds=[].
+			{ kind: "host-task", taskId: "task-W08", which: "cancelled", legacyPhase: "streaming" },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("cancelled")
+					expect(m.activity.activeToolCallIds).toEqual([])
+					expect(m.activity.modelStreaming).toBe(false)
+					expect(m.activity.awaitingApproval).toBe(false)
+				},
+			},
+			// Late canonical: tool-finished + execEvent(true→false)
+			// + run-finished. The shadow's updateTaskCompleted is
+			// last-arrival-wins (no isStale gate), so the
+			// lifecycle moves to "completed". updateToolFinished
+			// IS gated by isStale — the late tool-finished does
+			// not resurrect activeToolCallIds. So the FROZEN
+			// lifecycle is "completed" but activeToolCallIds=[].
+			{ kind: "canonical", sessionId: "session-W08", event: toolFinished(snapIdleAgain, "tc1") },
+			{
+				kind: "canonical",
+				sessionId: "session-W08",
+				event: execEvent(snapTooling.execution!, snapIdleAgain),
+			},
+			{ kind: "canonical", sessionId: "session-W08", event: runFinished(snapIdleAgain) },
+			{
+				kind: "expect-state",
+				assertion: (m) => {
+					expect(m.lifecycle.kind).toBe("completed")
+					// Late tool-finished cannot resurrect active
+					// tools (isStale gate in updateToolFinished).
+					expect(m.activity.activeToolCallIds).toEqual([])
+				},
+			},
+		]
+		const state = runWorkload(steps)
+		hardGates(state)
+		const counts = state.wiring.recorderCounts()
+		const records = state.wiring.records()
+		const hostTaskCount = records.filter((r) => r.origin === "HOST_TASK").length
+		const runtimeCanonicalCount = records.filter((r) => r.origin === "RUNTIME_CANONICAL").length
+		expect(hostTaskCount).toBe(2)
+		// 5 canonical records (one per canonical event):
+		//   run-started
+		//   execEvent(idle→tooling) -> model_stream_started
+		//   tool-started (tc1) -> tool_started
+		//   late tool-finished (tc1) -> tool_finished (isStale-gated, but still observed)
+		//   late execEvent(tooling→idle) -> model_stream_finished
+		//   late run-finished -> task_completed
+		// That's 6 canonical events -> 6 records.
+		expect(runtimeCanonicalCount).toBe(6)
+		expect(counts.divergenceCountsByClass.D10_UNKNOWN).toBe(0)
+		expect(counts.fallbackReconstructedApplied).toBe(0)
+		// Exactly one task_cancelled observation.
+		const taskCancelled = records.filter((r) => r.event === "task_cancelled").length
+		expect(taskCancelled).toBe(1)
+		// Total: 2 host_task + 6 canonical = 8.
+		expect(counts.eventsObserved).toBe(8)
+		expect(counts.comparisons).toBe(8)
 	})
 })
 
