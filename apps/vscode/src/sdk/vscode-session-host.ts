@@ -33,6 +33,7 @@ import {
 	type ToolExecutors,
 } from "@cline/core"
 import {
+	type AgentRuntimeEvent,
 	type AgentRuntimeRecoverySnapshot,
 	type AgentToolContext,
 	type ToolApprovalRequest,
@@ -328,5 +329,21 @@ export class VscodeSessionHost implements SdkSessionHost {
 			return () => {}
 		}
 		return inner.subscribeRecoveryStateChange(listener)
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * forward canonical `AgentRuntimeEvent`s to host-side observation
+	 * consumers (the TaskState shadow boundary). No state, no
+	 * buffering, no reinterpretation. Mirrors the recovery proxy above.
+	 */
+	subscribeRuntimeEvents(listener: (sessionId: string, event: AgentRuntimeEvent) => void): () => void {
+		const inner = this.inner as ClineCore & {
+			subscribeRuntimeEvents?: (listener: (sessionId: string, event: AgentRuntimeEvent) => void) => () => void
+		}
+		if (!inner.subscribeRuntimeEvents) {
+			return () => {}
+		}
+		return inner.subscribeRuntimeEvents(listener)
 	}
 }

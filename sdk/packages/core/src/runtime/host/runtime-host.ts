@@ -2,6 +2,7 @@ import type * as LlmsProviders from "@cline/llms";
 import type {
 	AgentMode,
 	AgentResult,
+	AgentRuntimeEvent,
 	AgentRuntimeRecoverySnapshot,
 	RuntimeConfigExtensionKind,
 } from "@cline/shared";
@@ -416,6 +417,27 @@ export interface RuntimeHost {
 	 */
 	subscribeRecoveryStateChange?(
 		listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void,
+	): () => void;
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * subscribe to raw canonical `AgentRuntimeEvent`s from any active
+	 * session hosted by this runtime host. The listener receives
+	 * `(sessionId, event)` tuples so consumers can filter by session.
+	 *
+	 * Parallel to `subscribeRecoveryStateChange?` (recovery snapshot
+	 * only) but exposes the full canonical event surface, including
+	 * `execution-state-changed` and `recovery-state-changed` (which
+	 * `RuntimeEventAdapter.translate()` drops to `[]`).
+	 *
+	 * Optional. Hosts that cannot surface raw canonical events (legacy
+	 * host bridges; hub clients without direct AgentRuntime access)
+	 * MUST omit this method. Consumers MUST treat the absence of the
+	 * method as "canonical seam unavailable for this host". Listeners
+	 * are observation-only; nothing on the recovery-policy, task-control,
+	 * or tool-execution path reads from them.
+	 */
+	subscribeRuntimeEvents?(
+		listener: (sessionId: string, event: AgentRuntimeEvent) => void,
 	): () => void;
 }
 

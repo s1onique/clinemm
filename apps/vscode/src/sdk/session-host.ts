@@ -20,7 +20,7 @@ import type {
 	StartSessionInput,
 	StartSessionResult,
 } from "@cline/core"
-import type { AgentResult, AgentRuntimeRecoverySnapshot } from "@cline/shared"
+import type { AgentResult, AgentRuntimeEvent, AgentRuntimeRecoverySnapshot } from "@cline/shared"
 
 export interface SdkSessionHost {
 	readonly runtimeAddress: string | undefined
@@ -73,6 +73,17 @@ export interface SdkSessionHost {
 	 * the standalone core for legacy host bridges) may omit this method.
 	 */
 	subscribeRecoveryStateChange?(listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void): () => void
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * subscribe to canonical `AgentRuntimeEvent`s for the active
+	 * session. Mirrors `subscribeRecoveryStateChange?` (recovery
+	 * projection only) but exposes the full canonical event surface.
+	 *
+	 * Optional. Implementations that don't expose raw canonical events
+	 * (e.g. remote/hub hosts that proxy legacy `AgentEvent`s only)
+	 * MUST omit this method.
+	 */
+	subscribeRuntimeEvents?(listener: (sessionId: string, event: AgentRuntimeEvent) => void): () => void
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
 }
 

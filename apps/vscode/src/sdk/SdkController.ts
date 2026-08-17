@@ -221,6 +221,12 @@ export class Controller {
 	// remount; resets only on a NEW task identity.
 	private taskTelemetry: TaskTelemetryTracker
 	private taskTelemetryRecoveryUnsub: (() => void) | undefined
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * canonical `AgentRuntimeEvent` subscription on the VS Code shadow
+	 * boundary. Created on each new task; disposed in `dispose()`.
+	 */
+	private taskStateRuntimeEventsUnsub: (() => void) | undefined
 	private taskTelemetryPhaseUnsub: (() => void) | undefined
 	// ACT-CLINEMM-SESSION-AUTONOMY01:
 	// Single owner of the active-session auto-approval override ("none" | "all").
@@ -1021,6 +1027,11 @@ export class Controller {
 		// live shadow wiring first so no further events are observed.
 		this.taskStateShadowWiring?.dispose()
 		this.taskStateShadowWiring = undefined
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+		// detach the canonical runtime-event subscription so the host
+		// stops forwarding events to the (now-disposed) shadow.
+		this.taskStateRuntimeEventsUnsub?.()
+		this.taskStateRuntimeEventsUnsub = undefined
 		this.providerConfigStoreSubscription.dispose()
 		// Clear the remote config timer to prevent stale fetches
 		if (this.remoteConfigTimer) {
@@ -1535,6 +1546,11 @@ export class Controller {
 				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
 			)
 			this.attachRecoveryTelemetrySubscription(sessionId)
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+			// also attach the canonical runtime-event seam so the shadow
+			// comparator receives real `execution-state-changed` and
+			// `recovery-state-changed` events. Idempotent on re-init.
+			this.attachCanonicalRuntimeEventSubscription(sessionId)
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
 			// Reset the shadow recorder for the new task identity and push
 			// `task_requested(taskId)` into the shadow. The reset clears
@@ -1623,6 +1639,42 @@ export class Controller {
 					Date.now(),
 				)
 			}
+		})
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * subscribe to canonical `AgentRuntimeEvent`s for the active session
+	 * and deliver them read-only to the TaskState shadow comparator.
+	 *
+	 * Idempotent on re-init (covers the new-task case where
+	 * `initTask` is invoked again): the previous unsubscribe is
+	 * invoked before a new subscription is attached.
+	 *
+	 * Observation-only: nothing on the recovery-policy, task-control,
+	 * or tool-execution path reads from this stream. The shadow
+	 * comparator receives the canonical event verbatim; existing
+	 * C2.1/C2.2 work decides whether and how to dedupe against the
+	 * host-computed recovery projection (see
+	 * `attachRecoveryTelemetrySubscription`).
+	 */
+	private attachCanonicalRuntimeEventSubscription(sessionId: string): void {
+		this.taskStateRuntimeEventsUnsub?.()
+		this.taskStateRuntimeEventsUnsub = undefined
+		const sdkHost = this.sessions.getActiveSession()?.sdkHost
+		if (!sdkHost?.subscribeRuntimeEvents) {
+			return
+		}
+		this.taskStateRuntimeEventsUnsub = sdkHost.subscribeRuntimeEvents((evtSessionId, event) => {
+			if (evtSessionId && evtSessionId !== sessionId) {
+				// Stale session — ignore.
+				return
+			}
+			const shadow = this.taskStateShadowWiring
+			if (!shadow) {
+				return
+			}
+			shadow.comparator.observeRuntimeEvent(event, this.turnStateTracker.currentPhase, Date.now())
 		})
 	}
 

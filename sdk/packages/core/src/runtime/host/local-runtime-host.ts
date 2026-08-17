@@ -6,6 +6,7 @@ import {
 	type AgentConfig,
 	type AgentEvent,
 	type AgentResult,
+	type AgentRuntimeEvent,
 	type AgentRuntimeRecoverySnapshot,
 	type BasicLogger,
 	captureSdkError,
@@ -1485,6 +1486,39 @@ export class LocalRuntimeHost implements RuntimeHost {
 		const unsubscribers: Array<() => void> = []
 		for (const active of this.sessions.values()) {
 			unsubscribers.push(active.agent.subscribeRecoveryStateChange(listener))
+		}
+		return () => {
+			for (const unsub of unsubscribers) {
+				try {
+					unsub()
+				} catch {
+					// defensive: subscriber already detached
+				}
+			}
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * fan out canonical `AgentRuntimeEvent`s from every active
+	 * session to the listener. Mirrors the recovery projection fanout
+	 * but exposes the full canonical event surface.
+	 *
+	 * Point-in-time fan-out of currently-active sessions (same
+	 * semantics as `subscribeRecoveryStateChange`). The host
+	 * (SdkController) re-subscribes whenever a new task starts.
+	 */
+	subscribeRuntimeEvents(
+		listener: (sessionId: string, event: AgentRuntimeEvent) => void,
+	): () => void {
+		const unsubscribers: Array<() => void> = []
+		for (const active of this.sessions.values()) {
+			const sessionId = active.sessionId
+			unsubscribers.push(
+				active.agent.subscribeRuntimeEvents((event) => {
+					listener(sessionId, event)
+				}),
+			)
 		}
 		return () => {
 			for (const unsub of unsubscribers) {

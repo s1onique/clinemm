@@ -1,4 +1,9 @@
-import type { AgentRuntimeRecoverySnapshot, BasicLogger, ITelemetryService } from "@cline/shared";
+import type {
+	AgentRuntimeEvent,
+	AgentRuntimeRecoverySnapshot,
+	BasicLogger,
+	ITelemetryService,
+} from "@cline/shared";
 import {
 	ClineCoreAutomationController,
 	createClineCoreAutomationExtensionContext,
@@ -653,6 +658,26 @@ export class ClineCore {
 			return () => {}
 		}
 		return this.host.subscribeRecoveryStateChange(listener)
+	}
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+	 * subscribe to canonical `AgentRuntimeEvent`s for the active
+	 * session. Returns a no-op unsubscribe if the underlying host does
+	 * not implement this hook (legacy / hub modes without
+	 * canonical-event surface access). Callers MUST treat the returned
+	 * unsubscribe as idempotent.
+	 *
+	 * PUBLIC API DELTA: yes. Adds ClineCore.subscribeRuntimeEvents.
+	 * Surface stability: PROVISIONAL — internal-use-only during ELM
+	 * qualification; not for third-party consumers yet.
+	 */
+	subscribeRuntimeEvents(
+		listener: (sessionId: string, event: AgentRuntimeEvent) => void,
+	): () => void {
+		if (!this.host.subscribeRuntimeEvents) {
+			return () => {}
+		}
+		return this.host.subscribeRuntimeEvents(listener)
 	}
 	/**
 	 * Updates the AI model used by an active session.
