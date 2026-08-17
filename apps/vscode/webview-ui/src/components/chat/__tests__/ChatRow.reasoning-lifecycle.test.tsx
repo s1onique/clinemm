@@ -8,18 +8,26 @@
 // which is rendered by ChatRowContent's `case "reasoning"`
 // branch — NOT by RequestStartRow.
 //
-// This test renders ChatRowContent directly with the same
-// shape of `message` and `clineMessages` the LIVE02 screenshot
-// captured, and drives `turnState` through
-// ExtensionStateContext.Provider (the actual production seam).
+// This test renders ChatRowContent directly and drives `turnState`
+// through ExtensionStateContext.Provider (the actual production
+// seam).
 //
-// Pin:
+// Pin (the single reasoning row in isolation):
 //   - turnState.phase === "streaming" + message.partial === true
 //       => shimmer ("Thinking...") visible
 //   - turnState.phase === "completed" + message.partial === true
-//       => shimmer hidden
+//       => shimmer hidden (collapses to "Thinking")
 //   - turnState.phase === "awaiting_approval" + message.partial === true
 //       => shimmer hidden
+//
+// What this fixture does NOT cover:
+//   The composite UI shape that the LIVE02 screenshot captured —
+//   "assistant report visibly rendered AND old reasoning row still
+//   in the list AND old shimmer gone" — is a multi-row concern
+//   owned by the parent list and `clineMessages`. It cannot be
+//   exercised by rendering a single ChatRowContent in isolation,
+//   and we do not pretend otherwise here. That composition is
+//   accepted by walking LIVE02 on the installed dogfood build.
 
 import type { ClineMessage, TurnState } from "@shared/ExtensionMessage"
 import { render } from "@testing-library/react"
@@ -27,18 +35,14 @@ import { describe, expect, it, vi } from "vitest"
 import { ExtensionStateContext } from "@/context/ExtensionStateContext"
 import { ChatRowContent } from "../ChatRow"
 
-function reasoningMessage(opts: { partial: boolean; text?: string }): ClineMessage {
+function reasoningMessage(partial: boolean, text = "thinking through the problem..."): ClineMessage {
 	return {
 		ts: 1,
 		type: "say",
 		say: "reasoning",
-		text: opts.text ?? "thinking through the problem...",
-		partial: opts.partial,
+		text,
+		partial,
 	}
-}
-
-function assistantReport(ts: number, partial: boolean): ClineMessage {
-	return { ts, type: "say", say: "text", text: "Here is the answer.", partial }
 }
 
 function turnState(phase: TurnState["phase"]): TurnState {
@@ -53,20 +57,15 @@ function makeContextValue(phase: TurnState["phase"]) {
 	} as unknown as Parameters<typeof ExtensionStateContext.Provider>[0]["value"]
 }
 
-function renderReasoningRow(opts: { phase: TurnState["phase"]; partialReasoning?: boolean; assistantReportPartial?: boolean }) {
-	const messages: ClineMessage[] = []
-	messages.push(reasoningMessage({ partial: opts.partialReasoning ?? true }))
-	if (opts.assistantReportPartial !== undefined) {
-		messages.push(assistantReport(2, opts.assistantReportPartial))
-	}
+function renderReasoningRow(phase: TurnState["phase"], partial = true) {
 	const { container } = render(
-		<ExtensionStateContext.Provider value={makeContextValue(opts.phase)}>
+		<ExtensionStateContext.Provider value={makeContextValue(phase)}>
 			<ChatRowContent
 				inputValue=""
 				isExpanded={false}
 				isLast={false}
 				lastModifiedMessage={undefined}
-				message={messages[0]}
+				message={reasoningMessage(partial)}
 				mode="act"
 				onCancelCommand={undefined}
 				onLastRowContentChange={undefined}
@@ -89,39 +88,20 @@ function renderReasoningRow(opts: { phase: TurnState["phase"]; partialReasoning?
 }
 
 describe('C04-C04-CHATROW-01: ChatRowContent `say:"reasoning"` consumes turnState', () => {
-	it('streaming phase + partial tail => shimmer ("Thinking...") visible', () => {
-		const { hasShimmer, thinkingTitleText } = renderReasoningRow({
-			phase: "streaming",
-			partialReasoning: true,
-		})
+	it('streaming phase + partial reasoning tail => shimmer ("Thinking...") visible', () => {
+		const { hasShimmer, thinkingTitleText } = renderReasoningRow("streaming")
 		expect(hasShimmer).toBe(true)
 		expect(thinkingTitleText).toBe("Thinking...")
 	})
 
-	it("completed phase + partial tail => shimmer hidden", () => {
-		const { hasShimmer, thinkingTitleText } = renderReasoningRow({
-			phase: "completed",
-			partialReasoning: true,
-			assistantReportPartial: false,
-		})
+	it("completed phase + stale partial reasoning tail => shimmer hidden", () => {
+		const { hasShimmer, thinkingTitleText } = renderReasoningRow("completed")
 		expect(hasShimmer).toBe(false)
 		expect(thinkingTitleText).toBe("Thinking")
 	})
 
-	it("awaiting_approval phase + partial tail => shimmer hidden", () => {
-		const { hasShimmer } = renderReasoningRow({
-			phase: "awaiting_approval",
-			partialReasoning: true,
-		})
-		expect(hasShimmer).toBe(false)
-	})
-
-	it("LIVE02 pin: completed phase + assistant report visible + stale reasoning tail => no shimmer", () => {
-		const { hasShimmer } = renderReasoningRow({
-			phase: "completed",
-			partialReasoning: true,
-			assistantReportPartial: false,
-		})
+	it("awaiting_approval phase + partial reasoning tail => shimmer hidden", () => {
+		const { hasShimmer } = renderReasoningRow("awaiting_approval")
 		expect(hasShimmer).toBe(false)
 	})
 })
