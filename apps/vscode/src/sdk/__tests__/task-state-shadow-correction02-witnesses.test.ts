@@ -459,12 +459,11 @@ describe("T1 - task_requested reaches recorder (PASS at HEAD)", () => {
 // =============================================================================
 // T2 - task_cancelled reaches recorder
 // =============================================================================
-describe("T2 - task_cancelled reaches recorder (RED at HEAD)", () => {
+describe("T2 - task_cancelled reaches recorder (PASS at HEAD)", () => {
 	it("T2.1 - emitTaskCancelled produces exactly one record with event=task_cancelled", () => {
-		// RED at HEAD: T2 is SUPERSEDED_NEGATIVE_WITNESS in the
-		// disposition table. The evaluator returns the actual
-		// observation; the test asserts it matches the frozen
-		// RED expectation.
+		// PASS at HEAD: GREEN_EXPECTED. The evaluator returns the
+		// actual observation; the test asserts it matches the documented
+		// PASS expectation.
 		const expected = (HISTORICAL_DISPOSITION.T2.status as string) === "PASS"
 		expect(evaluateT2()).toBe(expected)
 	})
