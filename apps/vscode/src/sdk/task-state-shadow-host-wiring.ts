@@ -30,6 +30,7 @@ import type { AgentRunStatus, AgentRuntimeEvent, AgentRuntimeExecutionState, Rec
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { SdkSessionLifecycle, SdkSessionLifecycleOptions } from "./sdk-session-lifecycle"
 import { TaskShadowComparator } from "./task-state-shadow"
+import { createTaskShadowObservationCoordinator, type TaskShadowCoordinator } from "./task-state-shadow-coordinator"
 import { TaskShadowReverseTranslator, type TaskShadowReverseTranslatorInput } from "./task-state-shadow-observer"
 
 const { TaskStateShadow } = TaskState
@@ -38,6 +39,7 @@ type TaskStateShadow = TaskState.TaskStateShadow
 import {
 	type ArbiterSnapshot,
 	MAX_RECORDS_PER_TASK,
+	type TaskInvariantViolation,
 	TaskShadowDifferentialRecord,
 	TaskShadowRecorder,
 	TaskShadowRecorderCounts,
@@ -62,12 +64,30 @@ function isWiringEnabled(): boolean {
 
 /**
  * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
- * origin marker for canonical runtime events at the shadow boundary.
- * Only `RUNTIME_CANONICAL` is in use in F1; C2.2 will add the
- * remaining values (e.g. `RUNTIME_RECONSTRUCTED`, `HOST_TASK`,
- * `HOST_RECOVERY`) when it unifies the observation surface.
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
+ *
+ * Origin marker for observation ingresses at the shadow boundary.
+ * Every state-mutating ingress MUST tag its origin explicitly; the
+ * unified `TaskShadowObservationCoordinator` is the only entity that
+ * may assign an authority decision based on the origin.
+ *
+ *   RUNTIME_CANONICAL    — AgentRuntimeEvent from LocalRuntimeHost
+ *                          (F1 canonical seam, qualified).
+ *   RUNTIME_RECONSTRUCTED — AgentRuntimeEvent-shaped approximation
+ *                          translated from a legacy CoreSessionEvent
+ *                          by `TaskShadowReverseTranslator`. Used for
+ *                          tool lifecycle / run lifecycle when canonical
+ *                          authority is unavailable; suppressed when
+ *                          canonical authority exists for the same edge.
+ *   HOST_TASK            — visible-task identity event (task_requested,
+ *                          task_reset, task_cancelled, same_task_continued).
+ *                          Host-only; no canonical equivalent.
+ *   HOST_RECOVERY        — recovery projection translated from a legacy
+ *                          `notice(reason)` envelope. Fallback-only;
+ *                          suppressed when canonical recovery is
+ *                          available.
  */
-export type TaskShadowRuntimeOrigin = "RUNTIME_CANONICAL"
+export type TaskShadowRuntimeOrigin = "RUNTIME_CANONICAL" | "RUNTIME_RECONSTRUCTED" | "HOST_TASK" | "HOST_RECOVERY"
 
 /**
  * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
@@ -102,6 +122,14 @@ export interface TaskShadowHostWiring {
 	observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void
 	resetForNewTask(): void
 	dispose(): void
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
+	 * The unified observation coordinator. The single ingress point
+	 * for every state-mutating observation (canonical, reconstructed,
+	 * host-task, host-recovery). Production code MUST funnel every
+	 * observation through this object.
+	 */
+	readonly coordinator: TaskShadowCoordinator
 }
 
 /**
@@ -166,6 +194,29 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		}
 	})
 
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
+	// The unified observation coordinator is the single ingress point
+	// for every state-mutating observation. The wiring owns exactly
+	// one instance for the controller's visible-task lifetime.
+	const coordinator: TaskShadowCoordinator = createTaskShadowObservationCoordinator({
+		comparator,
+		recorder,
+		now: deps.now,
+		getLegacyPhase: deps.getLegacyPhase,
+		getArbiterSnapshot: deps.getArbiterSnapshot,
+		getActiveSessionId: () => deps.lifecycle.getActiveSession()?.sessionId,
+		getRuntimeStatus: () => deps.getRuntimeStatus?.() ?? "idle",
+		onInvariantViolation: (record, violations) => {
+			if (deps.onInvariantViolation && record) {
+				try {
+					deps.onInvariantViolation(record, violations as readonly TaskInvariantViolation[])
+				} catch {
+					/* Observation-only — never throw. */
+				}
+			}
+		},
+	})
+
 	// Mirror the existing `onSessionEvent` hook without replacing it.
 	// SdkSessionLifecycle reads `options.onSessionEvent` lazily inside
 	// `ensureSharedHostSubscription`, so wrapping it here before the
@@ -173,7 +224,7 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 	const userOnSessionEvent = deps.sessionOptions.onSessionEvent
 	const wrappedOnSessionEvent = (event: CoreSessionEvent) => {
 		try {
-			observeLegacyEvent(event, deps, translator, comparator, recorder)
+			observeLegacyEvent(event, deps, translator, comparator, coordinator)
 		} catch {
 			/* Observation-only — never throw into production paths. */
 		}
@@ -188,55 +239,26 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		comparator,
 		shadow,
 		now: deps.now,
+		coordinator,
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
-			// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
 			// narrow bridge from the canonical `AgentRuntimeEvent` seam
-			// into the shadow comparator AND recorder. Origin is checked
-			// explicitly (not via implicit inference) so that C2.2 can
-			// introduce additional origin values without ambiguity.
-			if (input.origin !== "RUNTIME_CANONICAL") {
-				/* F1 only knows RUNTIME_CANONICAL; future origins land here. */
-				return
-			}
-			const now = deps.now()
-			const legacyPhase = deps.getLegacyPhase()
-			const arbiter = deps.getArbiterSnapshot()
-			const activeSession = deps.lifecycle.getActiveSession()
-			const taskEpochOrOpaqueTaskKey = activeSession?.sessionId
-			const runtimeStatus = deps.getRuntimeStatus?.()
-			try {
-				const observation = comparator.observeRuntimeEvent(input.event, legacyPhase, now)
-				const model = observation.observation.model
-				if (!model) {
-					/* No-op shadow observation; nothing to record. */
-					return
-				}
-				const toolCalls = observation.observation.projections.toolCalls ?? 0
-				const recoveryBudgetFailures = observation.observation.projections.recoveryBudgetFailures ?? 0
-				recorder.record(
-					{
-						seq: 0,
-						timestamp: now,
-						divergence: observation.divergence,
-						observationEvent: observation.observation.event,
-						observationLifecycleKind: model.lifecycle.kind,
-						observationModel: model,
-						observationToolCalls: toolCalls,
-						observationRecoveryBudgetFailures: recoveryBudgetFailures,
-						taskEpochOrOpaqueTaskKey,
-						runtimeStatus,
-						arbiter,
-					},
-					observation.observation.violations,
-				)
-			} catch {
-				/* Observation-only — never throw into production paths. */
-			}
+			// into the unified observation coordinator. All four
+			// ingress kinds funnel through the coordinator; this is
+			// just the canonical-event wrapper.
+			const origin = input.origin as "RUNTIME_CANONICAL"
+			coordinator.observe({
+				kind: "runtime-canonical",
+				origin,
+				sessionId: input.sessionId,
+				event: input.event,
+			})
 		},
 		resetForNewTask(): void {
 			translator.debugReset()
 			comparator.debugReset()
 			recorder.debugReset()
+			coordinator.debugReset()
 		},
 		dispose(): void {
 			deps.sessionOptions.onSessionEvent = userOnSessionEvent
@@ -246,18 +268,30 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 
 function createNoopWiring(): TaskShadowHostWiringWithSink {
 	const recorder = new TaskShadowRecorder()
+	const noopComparator = new TaskShadowComparator()
+	const noopCoordinator: TaskShadowCoordinator = createTaskShadowObservationCoordinator({
+		comparator: noopComparator,
+		recorder,
+		now: () => Date.now(),
+		getLegacyPhase: () => "idle",
+		getArbiterSnapshot: () => emptyArbiterSnapshot(),
+		getActiveSessionId: () => undefined,
+		getRuntimeStatus: () => "idle",
+	})
 	return {
 		recorder,
 		recorderCounts: () => recorder.getCounts(),
 		records: () => recorder.getRecords(),
-		comparator: new TaskShadowComparator(),
+		comparator: noopComparator,
 		shadow: new TaskStateShadow(),
 		now: () => Date.now(),
+		coordinator: noopCoordinator,
 		observeCanonicalRuntimeEvent(_input: TaskShadowCanonicalEvent): void {
 			/* No-op: wiring disabled by env flag. */
 		},
 		resetForNewTask: () => {
 			recorder.debugReset()
+			noopCoordinator.debugReset()
 		},
 		dispose: () => {},
 	}
@@ -268,7 +302,7 @@ function observeLegacyEvent(
 	deps: TaskShadowHostWiringDeps,
 	translator: TaskShadowReverseTranslator,
 	comparator: TaskShadowComparator,
-	recorder: TaskShadowRecorder,
+	coordinator: TaskShadowCoordinator,
 ): void {
 	const now = deps.now()
 	const legacyPhase = deps.getLegacyPhase()
@@ -286,26 +320,24 @@ function observeLegacyEvent(
 		taskEpochOrOpaqueTaskKey,
 		runtimeStatus,
 	}
+	// Run the translator to update its internal state (`previousExecution`,
+	// `lastRecoveryState`, `activeRunId`). The reconstructed runtime
+	// event it produces is then routed through the unified coordinator
+	// as `RUNTIME_RECONSTRUCTED` origin.
 	const output = translator.observe(input, comparator)
-	const violations = output.observation?.violations ?? []
-	const observationModel = output.observation?.model
-	if (!observationModel) return
-	recorder.record(
-		{
-			seq: 0,
-			timestamp: now,
-			divergence: output.divergence,
-			observationEvent: output.observationEvent,
-			observationLifecycleKind: output.observation?.model.lifecycle.kind ?? "idle",
-			observationModel,
-			observationToolCalls: output.toolCalls,
-			observationRecoveryBudgetFailures: output.recoveryBudgetFailures,
-			taskEpochOrOpaqueTaskKey,
-			runtimeStatus,
-			arbiter,
-		},
-		violations,
-	)
+	const runtimeEvent = output.runtimeEvent
+	if (!runtimeEvent) {
+		// No reconstructed event (presentation-only legacy envelope
+		// that does not map to a state-mutating edge). The translator
+		// still updated its internal state for the next call.
+		return
+	}
+	coordinator.observe({
+		kind: "runtime-reconstructed",
+		origin: "RUNTIME_RECONSTRUCTED",
+		sessionId: taskEpochOrOpaqueTaskKey ?? "unknown",
+		event: runtimeEvent,
+	})
 }
 
 /**

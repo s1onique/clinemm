@@ -1566,7 +1566,7 @@ export class Controller {
 				this.taskStateShadowWiring.resetForNewTask()
 				emitTaskRequested(
 					{
-						comparator: this.taskStateShadowWiring.comparator,
+						coordinator: this.taskStateShadowWiring.coordinator,
 						now: this.taskStateShadowWiring.now,
 					},
 					sessionId,
@@ -1713,7 +1713,7 @@ export class Controller {
 		// (matching the legacy `turnStateTracker.set("resumable")` above).
 		if (this.taskStateShadowWiring) {
 			emitTaskCancelled(
-				{ comparator: this.taskStateShadowWiring.comparator, now: this.taskStateShadowWiring.now },
+				{ coordinator: this.taskStateShadowWiring.coordinator, now: this.taskStateShadowWiring.now },
 				this.turnStateTracker.currentPhase,
 			)
 		}
@@ -1790,7 +1790,7 @@ export class Controller {
 		// back to `idle`. Observation-only.
 		if (this.taskStateShadowWiring) {
 			emitTaskReset(
-				{ comparator: this.taskStateShadowWiring.comparator, now: this.taskStateShadowWiring.now },
+				{ coordinator: this.taskStateShadowWiring.coordinator, now: this.taskStateShadowWiring.now },
 				this.turnStateTracker.currentPhase,
 			)
 		}
@@ -1855,7 +1855,7 @@ export class Controller {
 				turnStateBefore.phase === "awaiting_followup")
 		) {
 			emitSameTaskContinued(
-				{ comparator: this.taskStateShadowWiring.comparator, now: this.taskStateShadowWiring.now },
+				{ coordinator: this.taskStateShadowWiring.coordinator, now: this.taskStateShadowWiring.now },
 				turnStateBefore.phase,
 			)
 		}

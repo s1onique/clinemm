@@ -16,18 +16,15 @@
  * real VSCode host; it covers the actual wiring path the
  * SdkController takes.
  */
-import { describe, expect, it } from "vitest"
+
 import type { CoreSessionEvent } from "@cline/core"
 import type { AgentEvent } from "@cline/shared"
-import { createTaskShadowHostWiring, emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
-import type { TaskShadowHostWiringDeps } from "../task-state-shadow-host-wiring"
-import { SdkSessionLifecycle } from "../sdk-session-lifecycle"
+import { describe, expect, it } from "vitest"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
-import {
-	emitTaskRequested,
-	emitTaskCancelled,
-	emitTaskReset,
-} from "../task-state-shadow-host-msgs"
+import { SdkSessionLifecycle } from "../sdk-session-lifecycle"
+import { emitTaskCancelled, emitTaskRequested, emitTaskReset } from "../task-state-shadow-host-msgs"
+import type { TaskShadowHostWiringDeps } from "../task-state-shadow-host-wiring"
+import { createTaskShadowHostWiring, emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
 
 const NOW = 1_700_000_000_000
 
@@ -102,17 +99,17 @@ describe("TaskShadowControllerIntegration — R-C3", () => {
 			now: () => NOW,
 		}
 		const wiring = createTaskShadowHostWiring(deps)
-		emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-visible-1", NOW)
+		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-visible-1", NOW)
 		// After task_requested, identity.taskId is set.
 		const afterReq = wiring.comparator.debugSnapshot()
 		expect(afterReq?.identity.taskId).toBe("task-visible-1")
-		emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "idle", NOW + 1)
+		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "idle", NOW + 1)
 		const afterCancel = wiring.comparator.debugSnapshot()
 		// Cancelled lifecycle.
 		expect(afterCancel?.lifecycle.kind).toBe("cancelled")
 		// taskId is preserved across cancel.
 		expect(afterCancel?.identity.taskId).toBe("task-visible-1")
-		emitTaskReset({ comparator: wiring.comparator, now: wiring.now }, "idle", NOW + 2)
+		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "idle", NOW + 2)
 		// After reset, lifecycle is idle and identity cleared (the
 		// shadow's `task_reset` reducer returns identity: {}).
 		const afterReset = wiring.comparator.debugSnapshot()

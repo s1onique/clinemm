@@ -152,7 +152,7 @@ describe("T1 - task_requested reaches recorder (RED at HEAD: R14 defect class)",
 			() => "idle",
 		)
 		sessionOptions.onSessionEvent(agentEvent(iterationStart()))
-		emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-1", NOW + 1)
+		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-1", NOW + 1)
 		const counts = wiring.recorderCounts()
 		const records = wiring.records()
 		wiring.dispose()
@@ -170,7 +170,7 @@ describe("T2 - task_cancelled reaches recorder (RED at HEAD)", () => {
 		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(toolStart("tc-1"))]
 		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
 		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 1)
+		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
 		const records = wiring.records()
 		wiring.dispose()
 		const cancelledRecords = countRecordsByEvent(records, "task_cancelled")
@@ -192,7 +192,7 @@ describe("T3 - W07 cancellation precedes completion (RED at HEAD)", () => {
 		]
 		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
 		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 1)
+		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
 		const records = [...wiring.records()]
 		wiring.dispose()
 		// After Phase C2.1 fix, the runtime `done` event translates to
@@ -217,7 +217,7 @@ describe("T4 - W08 cancellation while tool is active (RED at HEAD)", () => {
 		const preCancelRecords = wiring.records()
 		const lastPreCancel = preCancelRecords[preCancelRecords.length - 1]
 		expect(lastPreCancel?.activeToolCount).toBeGreaterThan(0)
-		emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 1)
+		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
 		const records = wiring.records()
 		const cancelRecord = records.find((r) => r.event === "task_cancelled")
 		wiring.dispose()
@@ -238,7 +238,7 @@ describe("T5 - W11 same_task_continued between run #1 and run #2 (RED at HEAD)",
 		]
 		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
 		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitSameTaskContinued({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
+		emitSameTaskContinued({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
 		const records = [...wiring.records()]
 		wiring.dispose()
 		// Runtime `iteration_start` → shadow "session_started".
@@ -264,8 +264,8 @@ describe("T6 - W12 task_reset + task_requested(B) precede run #2 (RED at HEAD)",
 		]
 		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
 		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskReset({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
-		emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-2", NOW + 2)
+		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
+		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
 		const records = [...wiring.records()]
 		wiring.dispose()
 		const run1Done = records.findIndex((r) => r.event === "task_completed")
@@ -292,8 +292,8 @@ describe("T7 - W12 invariant gate (GREEN_EXPECTED at HEAD but trivially)", () =>
 		]
 		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
 		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskReset({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
-		emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-2", NOW + 2)
+		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
+		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
 		const counts = wiring.recorderCounts()
 		wiring.dispose()
 		expect(counts.invariantViolations).toBe(0)
@@ -313,8 +313,8 @@ describe("T8 - W12 unexplained D02_SHADOW_FALSE_ACTIVE gate (RED at HEAD: 2 dive
 		]
 		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
 		for (const e of events) sessionOptions.onSessionEvent(e)
-		emitTaskReset({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
-		emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-2", NOW + 2)
+		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
+		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
 		const counts = wiring.recorderCounts()
 		wiring.dispose()
 		expect(counts.divergenceCountsByClass.D02_SHADOW_FALSE_ACTIVE).toBe(0)
@@ -390,11 +390,11 @@ describe("T12 - single-record ingress matrix (RED at HEAD)", () => {
 		const events: CoreSessionEvent[] = [agentEvent(iterationStart()), agentEvent(done())]
 		const { wiring, sessionOptions } = makeWiring(() => emptyArbiterSnapshot(), legacyPhaseWalker(events))
 		sessionOptions.onSessionEvent(events[0]!)
-		emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-1", NOW + 1)
-		emitTaskReset({ comparator: wiring.comparator, now: wiring.now }, "idle", NOW + 2)
-		emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-2", NOW + 3)
-		emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 4)
-		emitSameTaskContinued({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 5)
+		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-1", NOW + 1)
+		emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "idle", NOW + 2)
+		emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 3)
+		emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 4)
+		emitSameTaskContinued({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 5)
 		const records = [...wiring.records()]
 		wiring.dispose()
 		const counts = {

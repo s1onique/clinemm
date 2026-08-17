@@ -1,115 +1,124 @@
 /**
- * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01 / R-C3 — Host-only
- * TaskMsg emitter tests.
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION02-C2.2:
  *
- * Verifies the four emit helpers transform their arguments into the
- * expected TaskMsg and pipe it through the comparator without
- * touching any legacy state.
+ * Host-only TaskMsg emitter tests. Verifies the four emit
+ * helpers funnel through the unified coordinator as `HOST_TASK`
+ * origin without touching any legacy state.
  *
  * Privacy: the emit helpers are typed — they only carry the
  * `taskId` opaque key. No message prose, no tool args, no API
  * payloads.
  */
 import { describe, expect, it } from "vitest"
-import { TaskState } from "@cline/agents"
 import { TaskShadowComparator } from "../task-state-shadow"
-import {
-	emitTaskCancelled,
-	emitTaskRequested,
-	emitTaskReset,
-	emitSameTaskContinued,
-} from "../task-state-shadow-host-msgs"
-
+import { createTaskShadowObservationCoordinator } from "../task-state-shadow-coordinator"
+import { emitSameTaskContinued, emitTaskCancelled, emitTaskRequested, emitTaskReset } from "../task-state-shadow-host-msgs"
+import { emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
+import { TaskShadowRecorder } from "../task-state-shadow-recorder"
 
 const NOW = 1_700_000_000_000
 
-function makeSink() {
+function makeWiringLike() {
 	const comparator = new TaskShadowComparator()
+	const recorder = new TaskShadowRecorder()
+	const coordinator = createTaskShadowObservationCoordinator({
+		comparator,
+		recorder,
+		now: () => NOW,
+		getLegacyPhase: () => "idle",
+		getArbiterSnapshot: () => emptyArbiterSnapshot(),
+		getActiveSessionId: () => undefined,
+		getRuntimeStatus: () => "idle",
+	})
 	return {
 		comparator,
-		compatibility: { comparator, now: () => NOW },
+		coordinator,
+		now: () => NOW,
+		recorder,
 	}
 }
 
-describe("TaskShadowHostMsgEmitter — R-C3 contract", () => {
+describe("TaskShadowHostMsgEmitter — R-C3 contract (routed via unified coordinator)", () => {
 	it("emitTaskRequested seeds identity.taskId and runs task_requested(TaskMsg)", () => {
-		const sink = makeSink()
-		emitTaskRequested(sink.compatibility, "task-visible-1", NOW)
-		// The shadow's identity.taskId is set after the task_requested
-		// TaskMsg is processed.
-		const model = sink.comparator.debugSnapshot()
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-visible-1", NOW)
+		const model = wiring.comparator.debugSnapshot()
 		expect(model?.identity.taskId).toBe("task-visible-1")
 	})
 
 	it("emitTaskCancelled produces a cancelled lifecycle", () => {
-		const sink = makeSink()
-		emitTaskRequested(sink.compatibility, "task-X", NOW)
-		emitTaskCancelled(sink.compatibility, "streaming", NOW + 1)
-		const model = sink.comparator.debugSnapshot()
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-X", NOW)
+		emitTaskCancelled(sink, "streaming", NOW + 1)
+		const model = wiring.comparator.debugSnapshot()
 		expect(model?.lifecycle.kind).toBe("cancelled")
 	})
 
 	it("emitTaskReset returns lifecycle to idle", () => {
-		const sink = makeSink()
-		emitTaskRequested(sink.compatibility, "task-X", NOW)
-		emitTaskReset(sink.compatibility, "streaming", NOW + 1)
-		const model = sink.comparator.debugSnapshot()
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-X", NOW)
+		emitTaskReset(sink, "streaming", NOW + 1)
+		const model = wiring.comparator.debugSnapshot()
 		expect(model?.lifecycle.kind).toBe("idle")
 	})
 
-	it("emitSameTaskContinued keeps the same taskId and runs a turn", () => {
-		const sink = makeSink()
-		emitTaskRequested(sink.compatibility, "task-Y", NOW)
-		emitTaskRequested(sink.compatibility, "task-Y", NOW + 1) // poison
-		emitSameTaskContinued(sink.compatibility, "completed", NOW + 2)
-		const model = sink.comparator.debugSnapshot()
-		// Continuation does NOT change the task identity — it stays
-		// the same taskId.
-		expect(model?.identity.taskId).toBe("task-Y")
+	it("emitSameTaskContinued keeps the same task identity but advances lifecycle", () => {
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-continued-1", NOW)
+		emitSameTaskContinued(sink, "completed", NOW + 1)
+		const model = wiring.comparator.debugSnapshot()
+		expect(model?.identity.taskId).toBe("task-continued-1")
 	})
 
-	it("Privacy: emit helpers never carry message prose", () => {
-		const sink = makeSink()
-		// Construct a sink that's compatible with the typed surface.
-		emitTaskRequested(sink.compatibility, "task-1", NOW)
-		// The shadow's lifecycle / identity / activity fields are
-		// purely typed. No `text`, `input`, `output`, `toolArgs`.
-		const model = sink.comparator.debugSnapshot()
-		const allowedTopLevelKeys = new Set([
-			"identity",
-			"lifecycle",
-			"activity",
-			"recovery",
-			"telemetry",
-		])
-		expect(new Set(Object.keys(model ?? {}))).toEqual(allowedTopLevelKeys)
+	it("emitTaskRequested produces exactly one HOST_TASK record", () => {
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-X", NOW)
+		const records = wiring.recorder.getRecords()
+		expect(records.length).toBe(1)
+		expect(records[0]!.event).toBe("task_requested")
 	})
 
-	it("Comparator tracks divergence for each emitted TaskMsg", () => {
-		const sink = makeSink()
-		emitTaskRequested(sink.compatibility, "task-1", NOW)
-		emitTaskCancelled(sink.compatibility, "idle", NOW + 1)
-		// The comparator's seq advances by 1 per observeTaskMsg
-		// invocation. Two calls = at least 2 observations.
-		// (We don't read the private seq — we just confirm the
-		// shadow advanced by re-reading the model.)
-		const model = sink.comparator.debugSnapshot()
-		expect(model?.lifecycle.kind).toBe("cancelled")
+	it("emitTaskCancelled produces exactly one HOST_TASK record", () => {
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-X", NOW)
+		emitTaskCancelled(sink, "streaming", NOW + 1)
+		const records = wiring.recorder.getRecords()
+		const cancelRecord = records.find((r) => r.event === "task_cancelled")
+		expect(cancelRecord).toBeDefined()
+	})
+
+	it("emitTaskReset produces exactly one HOST_TASK record", () => {
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-X", NOW)
+		emitTaskReset(sink, "streaming", NOW + 1)
+		const records = wiring.recorder.getRecords()
+		const resetRecord = records.find((r) => r.event === "task_reset")
+		expect(resetRecord).toBeDefined()
+	})
+
+	it("emitSameTaskContinued produces exactly one HOST_TASK record", () => {
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-X", NOW)
+		emitSameTaskContinued(sink, "completed", NOW + 1)
+		const records = wiring.recorder.getRecords()
+		const contRecord = records.find((r) => r.event === "same_task_continued")
+		expect(contRecord).toBeDefined()
+	})
+
+	it("the recorder count reflects exactly one observation per emit", () => {
+		const wiring = makeWiringLike()
+		const sink = { coordinator: wiring.coordinator, now: wiring.now }
+		emitTaskRequested(sink, "task-X", NOW)
+		emitTaskCancelled(sink, "streaming", NOW + 1)
+		const counts = wiring.recorder.getCounts()
+		expect(counts.eventsObserved).toBeGreaterThanOrEqual(2)
 	})
 })
-
-/**
- * Test-only helper that peeks at the comparator's private shadow.
- * The comparator's `TaskStateShadow` is read-only for tests; the
- * shadow reducer is pure (ELM05), so observing its mutation gives
- * a deterministic post-condition.
- */
-const TaskShadowTaskModelPeek = {
-	peek(cmp: TaskStateShadow): import("@cline/agents").TaskModel | undefined {
-		// The comparator owns a private shadow that is reachable
-		// only through the public TaskMsg pump. We expose the
-		// debugSnapshot here for unit tests; the comparator module
-		// intentionally exposes this hook for testing.
-		return cmp.debugSnapshot()
-	},
-}

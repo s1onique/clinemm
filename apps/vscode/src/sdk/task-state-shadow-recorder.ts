@@ -31,6 +31,7 @@ import { TaskState } from "@cline/agents"
 import type { AgentRunStatus, AgentRuntimeExecutionState, RecoveryState } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { TaskShadowDivergence } from "./task-state-shadow"
+import type { TaskShadowRuntimeOrigin } from "./task-state-shadow-host-wiring"
 
 type TaskInvariantViolation = TaskState.TaskInvariantViolation
 type TaskMsg = TaskState.TaskMsg
@@ -52,6 +53,7 @@ export type DivergenceClass =
 	| "D08_FOLLOWUP_EXTERNAL"
 	| "D09_EVENT_GAP"
 	| "D10_UNKNOWN"
+	| "D11_HOST_PREENGAGED"
 
 export type ArbitrationOutcome = "LEGACY_CORRECT" | "SHADOW_CORRECT" | "BOTH_VALID_DIFFERENT_PROJECTION" | "INSUFFICIENT_EVIDENCE"
 
@@ -102,6 +104,17 @@ export interface TaskShadowRecordInput {
 	 * AgentRuntime directly.
 	 */
 	readonly arbiter: ArbiterSnapshot
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
+	 * Optional classification override supplied by the unified
+	 * observation coordinator. When present, the recorder uses this
+	 * value INSTEAD of its built-in classifier. Currently used for
+	 * `D11_HOST_PREENGAGED` — the host-pre-engaged window is
+	 * classified by the coordinator (which owns the
+	 * canonical-vs-legacy vocabulary mismatch semantics), not by
+	 * the recorder's projection classifier.
+	 */
+	readonly classificationOverride?: DivergenceClass
 }
 
 /**
@@ -129,6 +142,33 @@ export interface TaskShadowRecorderCounts {
 	readonly divergenceCountsByClass: Readonly<Record<DivergenceClass, number>>
 	readonly invariantViolations: number
 	readonly droppedRecords: number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
+	 * Per-origin count of observations that were SUPPRESSED at the
+	 * authority resolver because a higher-authority observation
+	 * (canonical > reconstructed, HOST_TASK > nothing) had already
+	 * produced the semantic transition.
+	 *
+	 * Diagnostic only. State-mutation counts remain governed by
+	 * `eventsObserved`/`comparisons`; this counter explains the
+	 * delta.
+	 */
+	readonly observationsSuppressedByOrigin: Readonly<Record<TaskShadowRuntimeOrigin, number>>
+	/**
+	 * C2.2: count of HOST_RECOVERY observations applied as fallback
+	 * when canonical recovery transport was unavailable. Should be
+	 * 0 for LocalRuntimeHost (canonicalAvailable=true); >0 only for
+	 * Hub/RemoteRuntimeHost paths that have not yet been qualified.
+	 */
+	readonly fallbackRecoveryApplied: number
+	/**
+	 * C2.2: count of observation paths that threw inside the
+	 * coordinator transaction but did not affect legacy/runtime
+	 * authority. A non-zero value indicates a diagnostic gap; the
+	 * transition that was already applied is reported as EVIDENCE_GAP
+	 * by the recorder and this counter records the failure.
+	 */
+	readonly observerErrors: number
 }
 
 const ALL_CLASSES: readonly DivergenceClass[] = [
@@ -143,6 +183,7 @@ const ALL_CLASSES: readonly DivergenceClass[] = [
 	"D08_FOLLOWUP_EXTERNAL",
 	"D09_EVENT_GAP",
 	"D10_UNKNOWN",
+	"D11_HOST_PREENGAGED",
 ] as const
 
 /**
@@ -178,6 +219,9 @@ export class TaskShadowRecorder {
 	private divergences = 0
 	private invariantViolations = 0
 	private droppedRecords = 0
+	private suppressedCounts: Record<TaskShadowRuntimeOrigin, number> = makeSuppressedCounts()
+	private fallbackRecoveryApplied = 0
+	private observerErrors = 0
 
 	constructor(
 		/**
@@ -201,7 +245,7 @@ export class TaskShadowRecorder {
 	): TaskShadowDifferentialRecord | undefined {
 		this.eventsObserved += 1
 		this.comparisons += 1
-		const classification = classify(input)
+		const classification = input.classificationOverride ?? classify(input)
 		const arbitration = classification === "D00_AGREE" ? undefined : arbitrate(input, classification)
 		const record: TaskShadowDifferentialRecord = {
 			seq: input.seq,
@@ -236,6 +280,36 @@ export class TaskShadowRecorder {
 		return dropped ? undefined : record
 	}
 
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
+	 * Count an observation that was SUPPRESSED at the authority
+	 * resolver (a higher-authority ingress had already produced the
+	 * semantic transition). Diagnostic only — does NOT add a record
+	 * to the bounded buffer and does NOT mutate state.
+	 */
+	recordSuppression(origin: TaskShadowRuntimeOrigin): void {
+		this.suppressedCounts[origin] += 1
+	}
+
+	/**
+	 * C2.2: count a HOST_RECOVERY observation that was applied as
+	 * fallback (canonicalAvailable === false). Should be 0 for the
+	 * LocalRuntimeHost production path.
+	 */
+	recordFallbackRecoveryApplied(): void {
+		this.fallbackRecoveryApplied += 1
+	}
+
+	/**
+	 * C2.2: count an exception that occurred inside the coordinator
+	 * transaction. Legacy/runtime authority is unaffected; the
+	 * transition that was already applied is reported as
+	 * EVIDENCE_GAP by the coordinator.
+	 */
+	recordObserverError(): void {
+		this.observerErrors += 1
+	}
+
 	/** Read-only snapshot of the bounded buffer. */
 	getRecords(): readonly TaskShadowDifferentialRecord[] {
 		return this.records
@@ -251,6 +325,9 @@ export class TaskShadowRecorder {
 			divergenceCountsByClass: { ...this.divergenceCounts },
 			invariantViolations: this.invariantViolations,
 			droppedRecords: this.droppedRecords,
+			observationsSuppressedByOrigin: { ...this.suppressedCounts },
+			fallbackRecoveryApplied: this.fallbackRecoveryApplied,
+			observerErrors: this.observerErrors,
 		}
 	}
 
@@ -264,6 +341,18 @@ export class TaskShadowRecorder {
 		this.divergences = 0
 		this.invariantViolations = 0
 		this.droppedRecords = 0
+		this.suppressedCounts = makeSuppressedCounts()
+		this.fallbackRecoveryApplied = 0
+		this.observerErrors = 0
+	}
+}
+
+function makeSuppressedCounts(): Record<TaskShadowRuntimeOrigin, number> {
+	return {
+		RUNTIME_CANONICAL: 0,
+		RUNTIME_RECONSTRUCTED: 0,
+		HOST_TASK: 0,
+		HOST_RECOVERY: 0,
 	}
 }
 

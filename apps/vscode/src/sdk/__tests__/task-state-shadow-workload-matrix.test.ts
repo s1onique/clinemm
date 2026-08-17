@@ -139,7 +139,7 @@ function runWorkload(w: WorkloadRun) {
 		now: () => NOW,
 	}
 	const wiring = createTaskShadowHostWiring(deps)
-	emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-1", NOW)
+	emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-1", NOW)
 	for (const event of w.events) {
 		sessionOptions.onSessionEvent(event)
 	}
@@ -319,7 +319,7 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			legacyPhase: legacyPhaseWalker(events),
 			hostMsgs: [
 				(wiring) => {
-					emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 1)
+					emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
 				},
 			],
 			expectedClassCounts: {},
@@ -342,7 +342,7 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			legacyPhase: legacyPhaseWalker(events),
 			hostMsgs: [
 				(wiring) => {
-					emitTaskCancelled({ comparator: wiring.comparator, now: wiring.now }, "streaming", NOW + 1)
+					emitTaskCancelled({ coordinator: wiring.coordinator, now: wiring.now }, "streaming", NOW + 1)
 				},
 			],
 			expectedClassCounts: {},
@@ -391,7 +391,7 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			legacyPhase: legacyPhaseWalker(events),
 			hostMsgs: [
 				(wiring) => {
-					emitSameTaskContinued({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
+					emitSameTaskContinued({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
 				},
 			],
 			expectedClassCounts: {},
@@ -413,10 +413,10 @@ describe("TaskShadowWorkloadMatrix — W01–W16", () => {
 			legacyPhase: legacyPhaseWalker(events),
 			hostMsgs: [
 				(wiring) => {
-					emitTaskReset({ comparator: wiring.comparator, now: wiring.now }, "completed", NOW + 1)
+					emitTaskReset({ coordinator: wiring.coordinator, now: wiring.now }, "completed", NOW + 1)
 				},
 				(wiring) => {
-					emitTaskRequested({ comparator: wiring.comparator, now: wiring.now }, "task-2", NOW + 2)
+					emitTaskRequested({ coordinator: wiring.coordinator, now: wiring.now }, "task-2", NOW + 2)
 				},
 			],
 			expectedClassCounts: {},
