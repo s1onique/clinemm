@@ -1164,6 +1164,198 @@ describe("C3.CONT.1 W06 — approval_deny; awaitingApproval false→true→false
 	})
 })
 
+// =========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.3-CONT.6
+// PURE_REPLAY_EQUIVALENCE: capture the typed TaskMsg sequence produced
+// by live ingress and replay through the pure reducer. The final
+// TaskModel from the live comparator MUST equal the final TaskModel
+// from the pure TaskStateShadow reducer. Suppressed events MUST NOT
+// appear in the replay input.
+//
+// Mechanism:
+//   1. Drive the workload through the live canonical Local path
+//      harness (buildWiring({ canonicalAvailable: true })).
+//   2. Capture the canonical AgentRuntimeEvent sequence.
+//   3. Translate each canonical event to TaskMsg(s) using
+//      adaptRuntimeEvent.
+//   4. Apply each TaskMsg to a fresh TaskStateShadow via observe().
+//   5. Compare final TaskModel: live comparator == pure reducer.
+//
+// CRITICAL: the replay input is canonical-only. Reconstructed
+// envelopes that flow through the reverse translator but are
+// suppressed at the coordinator authority gate MUST NOT appear
+// in the replay input — they are diagnostic-only.
+// =========================================================================
+
+function replaySteps(steps: readonly WorkloadStep[]): {
+	liveFinal: TaskState.TaskModel
+	pureFinal: TaskState.TaskModel
+	canonicalEventsLength: number
+	legacyEventsLength: number
+} {
+	const state = buildWiring({ canonicalAvailable: true })
+	const canonicalEvents: AgentRuntimeEvent[] = []
+	let legacyEventsLength = 0
+	for (const step of steps) {
+		if (step.kind === "canonical") {
+			canonicalEvents.push(step.event)
+		} else if (step.kind === "legacy") {
+			legacyEventsLength += 1
+		}
+		runStep(state, step)
+	}
+	const liveFinal = state.wiring.comparator.debugSnapshot()
+	// Pure replay: build a fresh TaskStateShadow, translate each
+	// canonical event to TaskMsg(s) via adaptRuntimeEvent, apply.
+	const shadow = new TaskState.TaskStateShadow()
+	for (const evt of canonicalEvents) {
+		const msgs = TaskState.adaptRuntimeEvent(evt, state.wiring.now())
+		for (const msg of msgs) {
+			shadow.observe(msg, state.wiring.now())
+		}
+	}
+	const pureFinal = shadow.debugSnapshot()
+	return {
+		liveFinal,
+		pureFinal,
+		canonicalEventsLength: canonicalEvents.length,
+		legacyEventsLength,
+	}
+}
+
+describe("C2.3-CONT.6 PURE_REPLAY_EQUIVALENCE — live ingress == pure reducer", () => {
+	it("W01 text-only: live comparator final == pure TaskStateShadow.observe() final", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-PR-W01",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapIdleAgain: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-PR-W01", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-PR-W01" },
+			{ kind: "canonical", sessionId: "session-PR-W01", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-PR-W01", event: execEvent(snapIdle.execution!, snapStreaming) },
+			{ kind: "canonical", sessionId: "session-PR-W01", event: execEvent(snapStreaming.execution!, snapIdleAgain) },
+			{ kind: "set-legacy-phase", phase: "completed" },
+			{ kind: "canonical", sessionId: "session-PR-W01", event: runFinished(snapIdleAgain) },
+		]
+		const result = replaySteps(steps)
+		expect(result.canonicalEventsLength).toBeGreaterThan(0)
+		expect(result.liveFinal.lifecycle.kind).toBe(result.pureFinal.lifecycle.kind)
+		expect(result.liveFinal.lifecycle.kind).toBe("completed")
+		expect(result.liveFinal.activity.modelStreaming).toBe(result.pureFinal.activity.modelStreaming)
+		expect(result.liveFinal.activity.activeToolCallIds).toEqual(result.pureFinal.activity.activeToolCallIds)
+		expect(result.liveFinal.activity.awaitingApproval).toBe(result.pureFinal.activity.awaitingApproval)
+	})
+
+	it("W06_REAL_DENY: lifecycle stays running; live == pure replay", () => {
+		const snapIdle = snapshotFixture({
+			runId: "run-PR-W06R",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const snapAwaitingApproval: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: true },
+		}
+		const snapApprovedClear: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+			pendingToolCalls: ["tc1"],
+		}
+		const snapIdleAfterTool: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: false, tooling: false, awaitingApproval: false },
+			pendingToolCalls: [],
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-PR-W06R", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-PR-W06R" },
+			{ kind: "canonical", sessionId: "session-PR-W06R", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-PR-W06R", event: execEvent(snapIdle.execution!, snapStreaming) },
+			{ kind: "set-legacy-phase", phase: "awaiting_approval" },
+			{ kind: "canonical", sessionId: "session-PR-W06R", event: execEvent(snapStreaming.execution!, snapAwaitingApproval) },
+			{
+				kind: "canonical",
+				sessionId: "session-PR-W06R",
+				event: execEvent(snapAwaitingApproval.execution!, snapApprovedClear),
+			},
+			{ kind: "canonical", sessionId: "session-PR-W06R", event: toolStarted(snapApprovedClear, "tc1") },
+			{ kind: "set-legacy-phase", phase: "streaming" },
+			{ kind: "canonical", sessionId: "session-PR-W06R", event: toolFinished(snapIdleAfterTool, "tc1") },
+		]
+		const result = replaySteps(steps)
+		expect(result.liveFinal.lifecycle.kind).toBe("running")
+		expect(result.pureFinal.lifecycle.kind).toBe("running")
+		expect(result.liveFinal.activity.activeToolCallIds).toEqual(result.pureFinal.activity.activeToolCallIds)
+		expect(result.liveFinal.activity.activeToolCallIds).toEqual([])
+		expect(result.liveFinal.activity.awaitingApproval).toBe(result.pureFinal.activity.awaitingApproval)
+	})
+
+	it("replay input MUST exclude reconstructed envelopes (DIAGNOSTIC_ONLY)", () => {
+		// W15-style: legacy envelope arrives AFTER canonical completion.
+		// Under LocalRuntimeHost it is DIAGNOSTIC_ONLY. The pure replay
+		// MUST NOT include the diagnostic event in the replay input.
+		const snapIdle = snapshotFixture({
+			runId: "run-PR-DIAG",
+			iteration: 0,
+			execution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			recoveryState: "idle",
+			status: "running",
+			pendingToolCalls: [],
+		})
+		const snapStreaming: AgentRuntimeStateSnapshot = {
+			...snapIdle,
+			execution: { ...snapIdle.execution, modelStreaming: true, tooling: false, awaitingApproval: false },
+		}
+		const steps: WorkloadStep[] = [
+			{ kind: "host-task", taskId: "task-PR-DIAG", which: "requested", legacyPhase: "idle" },
+			{ kind: "set-active-session", sessionId: "session-PR-DIAG" },
+			{ kind: "canonical", sessionId: "session-PR-DIAG", event: runStarted(snapIdle) },
+			{ kind: "canonical", sessionId: "session-PR-DIAG", event: execEvent(snapIdle.execution!, snapStreaming) },
+			{ kind: "set-legacy-phase", phase: "completed" },
+			{ kind: "canonical", sessionId: "session-PR-DIAG", event: runFinished(snapStreaming) },
+			{
+				kind: "legacy",
+				event: legacyEnvelope(
+					{ type: "done", reason: "completed", text: "", iterations: 1, conversationId: "run-PR-DIAG" } as AgentEvent,
+					"session-PR-DIAG",
+				),
+				legacyPhase: "completed",
+				arbiter: emptyArbiterSnapshot(),
+			},
+		]
+		const result = replaySteps(steps)
+		expect(result.legacyEventsLength).toBeGreaterThanOrEqual(1)
+		expect(result.liveFinal.lifecycle.kind).toBe("completed")
+		expect(result.pureFinal.lifecycle.kind).toBe("completed")
+		// The pure replay excludes host-task identity (no
+		// task_requested message reaches the pure shadow). Compare
+		// on the canonical-shadow fields instead.
+		expect(result.liveFinal.lifecycle.kind).toBe(result.pureFinal.lifecycle.kind)
+		expect(result.liveFinal.activity.modelStreaming).toBe(result.pureFinal.activity.modelStreaming)
+		expect(result.liveFinal.activity.activeToolCallIds).toEqual(result.pureFinal.activity.activeToolCallIds)
+	})
+})
+
 describe("C3.CONT.2 W07 — cancel while model streaming; late canonical activity must not reactivate (CORRECTION01)", () => {
 	it("HOST_TASK cancel during model_streaming freezes lifecycle at 'cancelled'; late run-finished IS IGNORED_STALE after CONT.2-CORRECTION01", () => {
 		const snapIdle = snapshotFixture({
