@@ -32,10 +32,15 @@ const sdkCoreHubRuntimeHost = path.resolve(sdkCoreRoot, "hub/runtime-host/hub-ru
 export default defineConfig({
 	test: {
 		environment: "node",
-		// Only the D2 test file. The base config does not include
-		// this (and the dedicated config does not include the base
+		// D2 + D3 in the same dedicated config. D3 extends the
+		// existing include list (per D3 plan §7 — no new config
+		// proliferated). The base config does not include this
+		// (and the dedicated config does not include the base
 		// tests), so the two streams are isolated.
-		include: ["src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts"],
+		include: [
+			"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
+			"src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts",
+		],
 		testTimeout: 30_000,
 	},
 	resolve: {
