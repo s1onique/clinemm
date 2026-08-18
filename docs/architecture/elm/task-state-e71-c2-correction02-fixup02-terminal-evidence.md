@@ -36,19 +36,20 @@ C2C2_FIXUP01_CLOSURE_HEAD         = 9928cb140  (closure of C2-CORRECTION02-FIXUP
 C2C2_FIXUP02_ENTRY_HEAD           = 9928cb140  (= C2C2_FIXUP01_CLOSURE_HEAD)
 C2C2_FIXUP02_BUILD_HEAD           = 9f7538557  (push-pinning architecture)
 C2C2_FIXUP02_REVIEW_HEAD          = 7448e8329  (R4 + R5 proof tests)
+C2C2_FIXUP02_CLOSURE_HEAD         = b884ea131  (terminal evidence + FIXUP01 prose refresh)
 
 (Commit chain — 4 commits on top of C2C2_FIXUP02_ENTRY_HEAD:)
   0bac1f2bd  docs(elm): C2-CORRECTION02-FIXUP02 plan + source recon
   9f7538557  fix(elm): C2-CORRECTION02-FIXUP02 push-pinned applied capture (R4 + R5)
   7448e8329  test(elm): C2-CORRECTION02-FIXUP02 R4 burst-cardinality + R5 fail-closed proofs
-  <commit 4> docs(elm): C2-CORRECTION02-FIXUP02 terminal evidence + fixup01 nits refresh
+  b884ea131  docs(elm): C2-CORRECTION02-FIXUP02 terminal evidence + FIXUP01 prose refresh
 
 C2C2_FIXUP02_PLAN_DOC             = task-state-e71-c2-correction02-fixup02-plan.md
 C2C2_FIXUP02_SOURCE_RECON_DOC     = task-state-e71-c2-correction02-fixup02-source-recon.md
 
-VSIX_C2C2_FIXUP02_PATH            = dist/dogfood/clinemm-4.1.10-7448e8329.vsix
-VSIX_C2C2_FIXUP02_SHA256          = <bound after VSIX build>
-VSIX_C2C2_FIXUP02_BYTES           = <bound after VSIX build>
+VSIX_C2C2_FIXUP02_PATH            = dist/dogfood/clinemm-4.1.10-b884ea131.vsix
+VSIX_C2C2_FIXUP02_SHA256          = 777f97936dce22d7b3862ecbfeea11241b40ca2b8a5b3cfeb80000da230de86d
+VSIX_C2C2_FIXUP02_BYTES           = 8,883,093
 
 WORKTREE_CLEAN                    = true
 PROTECTED_STASHES_INTACT          = true
@@ -65,7 +66,7 @@ dist/dogfood/clinemm-4.1.10-dfab15b3f.vsix    (C2 live diagnostic)
 dist/dogfood/clinemm-4.1.10-bc2c794be.vsix    (C2R closure)
 dist/dogfood/clinemm-4.1.10-b40fa2477.vsix    (C2-CORRECTION02 raw-incoming)
 dist/dogfood/clinemm-4.1.10-7d2ed0a78.vsix    (C2-CORRECTION02-FIXUP01 React-updater purity)
-dist/dogfood/clinemm-4.1.10-7448e8329.vsix    (this ACT — push-pinned applied capture)
+dist/dogfood/clinemm-4.1.10-b884ea131.vsix    (this ACT — push-pinned applied capture)
 ```
 
 ---
@@ -315,7 +316,7 @@ F5   missing pushId: 2 pushes (one with no id) → no overwrite       PASS
 F6   R5: missing pushId fails closed (log, skip pending)            PASS
 F7   existing 553 webview-ui tests still pass                       PASS
 F8   existing 24 PTAD schema tests still pass                       PASS
-F9   exact-HEAD VSIX built with `fixup02` short SHA                 PASS  (7448e8329)
+F9   exact-HEAD VSIX built with `fixup02` short SHA                 PASS  (b884ea131)
 F10  protected stashes intact                                       PASS
 F11  worktree clean                                                 PASS
 F12  FIXUP01 ceiling-exception annotation added                     PASS
@@ -338,7 +339,7 @@ R5 (fail-closed on missing _ptadPushId)           = FIXED + PROVEN
 CAUSE_CLASS_FOR_C2_CORRECTION02                   = UNKNOWN  (still requires the live dogfood walk)
 
 NEXT_ACT                                            = live dogfood walk on the new HEAD
-                                                       (7448e8329) VSIX; the diagnostic is
+                                                       (b884ea131) VSIX; the diagnostic is
                                                        now cardinality-safe under React
                                                        Strict Mode AND under React
                                                        batching, so the live walk can
