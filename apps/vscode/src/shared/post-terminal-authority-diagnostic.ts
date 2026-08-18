@@ -69,9 +69,26 @@ const DEFAULT_BUFFER_SIZE = 64
  * impossible to tell input-section decisions apart from action-buttons
  * decisions apart from follow-up-route decisions. With `captureKind` the
  * diagnostic can assert per-site coverage.
+ *
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH
+ *
+ * The C2R isolated replay proved the production applyTurnState reducer is
+ * correct for the live E1-E9 sequence; the defect, if real, lives OUTSIDE
+ * the authorized replica boundary. The `webview-raw-incoming` captureKind
+ * adds a paired record stamped BEFORE the reducer mutates the raw incoming
+ * payload, on the SAME `_ptadPushId` as the post-reducer `webview-replica`
+ * record. The pair makes the boundary decision binary:
+ *
+ *   extension.current != rawIncoming   -> W1_PRE_APPLY (corruption before webview apply)
+ *   rawIncoming != applied             -> W2_DURING_APPLY (corruption during apply)
+ *   rawIncoming == applied             -> W3_POST_CONTEXT (consumer/memoization)
+ *
+ * The capture is OPT-IN: when PTAD is disabled (production default), neither
+ * the raw nor the applied record is emitted and the wire shape is unchanged.
  */
 export type PostTerminalAuthorityCaptureKind =
 	| "extension-push"
+	| "webview-raw-incoming"
 	| "webview-replica"
 	| "input-section"
 	| "action-buttons"
@@ -153,11 +170,59 @@ export interface PostTerminalAuthoritySnapshot {
 	readonly legacySeq?: number
 	readonly legacyAnchorTs?: number
 
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH
+	 *
+	 * Raw incoming payload fields. These record the values on the `stateData`
+	 * argument as parsed from `JSON.parse(response.stateJson)`, BEFORE the
+	 * production `applyStateSnapshot` reducer mutates the `stateData.turnState`
+	 * in place. They are populated on both the `webview-raw-incoming` and the
+	 * `webview-replica` records (the latter for paired-with-applied comparison)
+	 * so a single diagnostic dump lets the analyzer correlate the raw truth
+	 * with the post-reducer applied truth on the same `_ptadPushId`.
+	 *
+	 * The existing `legacyPhase` / `legacySeq` keep their meaning as the
+	 * post-reducer applied view (consumed by the C2R replay tests), so adding
+	 * these explicit `rawIncoming*` aliases is purely additive and cannot
+	 * silently re-purpose existing semantics.
+	 */
+	readonly rawIncomingLegacyPhase?: TurnPhase
+	readonly rawIncomingLegacySeq?: number
+	/**
+	 * Explicit applied view, populated on the `webview-replica` record for
+	 * paired-with-raw comparison. Functionally identical to `legacyPhase` /
+	 * `legacySeq` (which are always the post-reducer applied values), but
+	 * the explicit `applied*` name makes forensic analysis self-documenting.
+	 */
+	readonly appliedLegacyPhase?: TurnPhase
+	readonly appliedLegacySeq?: number
+
 	// E7.1 thinkingPresentation projection
 	readonly thinkingPresentation?: ThinkingPresentationProjection
 
 	// Task telemetry (host-cumulative)
 	readonly taskTelemetry?: TaskHeaderTelemetryStrip
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH
+	 *
+	 * Raw incoming `thinkingPresentation`, recorded on the
+	 * `webview-raw-incoming` capture BEFORE any reducer touches the payload.
+	 * This is the cross-check companion to the post-reducer
+	 * `thinkingPresentation` field: if the live `bc2c794be` trace showed
+	 * the extension's `modelStreaming=false` reached the webview applied
+	 * view, comparing these two fields across the same `_ptadPushId`
+	 * confirms whether the wire-side projection is identical (raw ==
+	 * applied) or whether the reducer mutated it.
+	 */
+	readonly rawIncomingThinkingPresentation?: ThinkingPresentationProjection
+
+	/**
+	 * Raw incoming `taskTelemetry`, recorded on the `webview-raw-incoming`
+	 * capture BEFORE any reducer touches the payload. Companion to the
+	 * post-reducer `taskTelemetry` field.
+	 */
+	readonly rawIncomingTaskTelemetry?: TaskHeaderTelemetryStrip
 
 	// Composer-related authorities (populated only on the webview side)
 	readonly buttonConfig?: {
@@ -300,6 +365,65 @@ export function getPostTerminalAuthorityDiagnosticSeq(side: "extension" | "webvi
  * so this shared module stays free of `ArbiterSnapshot`/`@cline/shared`
  * imports (see the INTENTIONAL DESIGN NOTE at the top).
  */
+
+// ============================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH
+// ============================================================================
+//
+// Pure diagnostic classifier. Given the three-way (extension, raw,
+// applied) phase/seq tuple on the same _ptadPushId, returns the
+// boundary class. This is NOT a runtime reducer — it is a static
+// helper for the diagnostic dump analyzer. It is exported because
+// the C2-CORRECTION02 RED tests assert it directly.
+//
+// Classification:
+//
+//   NO_DIVERGENCE      extension == raw == applied
+//   W1_PRE_APPLY       extension != raw, raw == applied
+//   W2_DURING_APPLY    extension == raw, raw != applied
+//   W4_MULTI_BOUNDARY  extension != raw AND raw != applied
+//
+// Note: W3_POST_CONTEXT (consumer/memoization divergence with all
+// three equal) cannot be detected from this triple alone; the live
+// dogfood analyzer inspects a separate consumer-side capture to
+// classify W3.
+
+export type BoundaryClass = "NO_DIVERGENCE" | "W1_PRE_APPLY" | "W2_DURING_APPLY" | "W3_POST_CONTEXT" | "W4_MULTI_BOUNDARY"
+
+interface PhaseSeqPair {
+	readonly phase?: TurnPhase
+	readonly seq?: number
+}
+
+function pairEquals(a: PhaseSeqPair, b: PhaseSeqPair): boolean {
+	return a.phase === b.phase && a.seq === b.seq
+}
+
+export function classifyBoundary(extension: PhaseSeqPair, raw: PhaseSeqPair, applied: PhaseSeqPair): BoundaryClass {
+	const extEqRaw = pairEquals(extension, raw)
+	const rawEqApplied = pairEquals(raw, applied)
+
+	if (extEqRaw && rawEqApplied) {
+		// Healthy (and also W3, which the analyzer distinguishes by
+		// inspecting a separate consumer-side capture; the classifier
+		// itself returns NO_DIVERGENCE for this case).
+		return "NO_DIVERGENCE"
+	}
+	if (!extEqRaw && rawEqApplied) {
+		// Raw matches applied but both diverge from the extension:
+		// the corruption happened BEFORE the webview received the
+		// payload (or during the wire serialization).
+		return "W1_PRE_APPLY"
+	}
+	if (extEqRaw && !rawEqApplied) {
+		// Raw is current but applied is stale: the corruption
+		// happened DURING the reducer / apply composition.
+		return "W2_DURING_APPLY"
+	}
+	// Both edges diverge independently: multiple boundaries are
+	// faulty. The ACT halts on this case.
+	return "W4_MULTI_BOUNDARY"
+}
 
 // ============================================================================
 // TRANSACTIONAL-TEST-CONTROL SAFETY

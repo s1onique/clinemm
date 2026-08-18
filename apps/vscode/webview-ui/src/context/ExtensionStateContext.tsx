@@ -30,6 +30,15 @@ import {
 // field is undefined on the wire and the diagnostic record carries
 // `undefined`.
 //
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
+// This helper is the SINGLE capture-site factory. It stamps
+// `rawIncoming*` from `rawStateData` and `applied*` (and the existing
+// `legacyPhase`/`legacySeq` / `thinkingPresentation` / `taskTelemetry`)
+// from `newState` so a single dump correlates raw + applied truth on
+// the same `_ptadPushId`. For captureKinds where one side is not
+// meaningful (e.g. `webview-raw-incoming` has no `applied*` because the
+// reducer has not run yet), the corresponding fields are simply absent.
+//
 // The capture is OPT-IN: the diagnostic is a complete no-op when
 // isPostTerminalAuthorityDiagnosticEnabled("webview") === false.
 // ============================================================================
@@ -38,6 +47,23 @@ function buildWebviewSnapshot(
 	rawStateData: ExtensionState,
 	captureKind: PostTerminalAuthorityCaptureKind,
 ): PostTerminalAuthoritySnapshot {
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
+	// Raw incoming payload fields, read from `rawStateData` BEFORE the
+	// reducer mutates it. These are stamped on BOTH the raw and the
+	// applied capture so a single dump correlates them.
+	const rawIncomingLegacyPhase = rawStateData.turnState?.phase
+	const rawIncomingLegacySeq = rawStateData.turnState?.seq
+	const rawIncomingThinkingPresentation = rawStateData.thinkingPresentation
+	const rawIncomingTaskTelemetry = rawStateData.taskTelemetry
+
+	// The `webview-raw-incoming` capture is stamped BEFORE the reducer
+	// runs, so `newState` is the same `rawStateData` we already received
+	// and the post-reducer `applied*` aliases are meaningless on this
+	// record. We still emit `legacyPhase`/`legacySeq` as `undefined` so
+	// the type stays uniform; the explicit `appliedLegacyPhase` /
+	// `appliedLegacySeq` fields are omitted on the raw capture.
+	const isRaw = captureKind === "webview-raw-incoming"
+
 	return {
 		origin: "webview",
 		captureKind,
@@ -47,11 +73,21 @@ function buildWebviewSnapshot(
 		epoch: newState.epoch ?? rawStateData.epoch,
 		sessionId: undefined,
 		taskId: newState.currentTaskItem?.id,
-		legacyPhase: newState.turnState?.phase,
-		legacySeq: newState.turnState?.seq,
-		legacyAnchorTs: newState.turnState?.anchorTs,
-		thinkingPresentation: newState.thinkingPresentation,
-		taskTelemetry: newState.taskTelemetry,
+		// Post-reducer applied values (the legacy contract).
+		legacyPhase: isRaw ? undefined : newState.turnState?.phase,
+		legacySeq: isRaw ? undefined : newState.turnState?.seq,
+		legacyAnchorTs: isRaw ? undefined : newState.turnState?.anchorTs,
+		// Explicit applied view, identical to legacyPhase / legacySeq
+		// but self-documenting for forensic analysis.
+		appliedLegacyPhase: isRaw ? undefined : newState.turnState?.phase,
+		appliedLegacySeq: isRaw ? undefined : newState.turnState?.seq,
+		thinkingPresentation: isRaw ? undefined : newState.thinkingPresentation,
+		taskTelemetry: isRaw ? undefined : newState.taskTelemetry,
+		// Raw incoming view (always stamped on both raw and applied records).
+		rawIncomingLegacyPhase,
+		rawIncomingLegacySeq,
+		rawIncomingThinkingPresentation,
+		rawIncomingTaskTelemetry,
 	}
 }
 
@@ -526,6 +562,23 @@ export const ExtensionStateContextProvider: React.FC<{
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
 							const shouldUpdateAutoApproval = incomingVersion > currentVersion
+
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
+							// Capture the RAW incoming payload BEFORE the reducer mutates
+							// stateData.turnState in place. The capture is OPT-IN: the
+							// diagnostic is a no-op when the workspace-state PTAD toggle is
+							// OFF (production default), so the wire shape and the production
+							// path semantics are byte-for-byte unchanged in the default build.
+							if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+								recordPostTerminalAuthoritySnapshot(
+									// Pass stateData as both newState and rawStateData:
+									// there is no post-reducer state at this point, and the
+									// isRaw branch in buildWebviewSnapshot correctly omits
+									// the applied fields. The raw fields are stamped from
+									// rawStateData (== stateData).
+									buildWebviewSnapshot(stateData, stateData, "webview-raw-incoming"),
+								)
+							}
 
 							// Route the snapshot's transcript through the convergent-replica reducer:
 							// merge by ts/seq within the same epoch (never truncate), replace on a
