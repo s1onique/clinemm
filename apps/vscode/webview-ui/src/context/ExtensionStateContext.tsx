@@ -549,6 +549,18 @@ export const ExtensionStateContextProvider: React.FC<{
 	// `webview-replica(P) = exactly 1` survives React retry paths.
 	const pendingRawSnapshotsRef = useRef<Map<string | number, ExtensionState>>(new Map())
 
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP02-BATCHED-PUSH-CARDINALITY:
+	// Cached "prevState" for the reducer computation. We hoist the reducer
+	// OUT of the React setState updater (see R4 fix below) so the inbound
+	// handler needs an explicit prevState reference. The ref is updated
+	// synchronously when nextState is committed. React batching does not
+	// affect this ref — it is mutated in the order the inbound pushes
+	// arrive, and the React commit may coalesce the resulting setState
+	// calls into a single render. The applied capture is emitted from the
+	// hoisted `nextState`, not from the React-committed state, so each
+	// push produces its own applied record regardless of batching.
+	const prevStateRef = useRef<ExtensionState | null>(null)
+
 	// Subscribe to state updates and UI events using the gRPC streaming API
 	useEffect(() => {
 		// Set up state subscription
@@ -570,34 +582,55 @@ export const ExtensionStateContextProvider: React.FC<{
 							disablePostTerminalAuthorityDiagnostic("webview")
 						}
 
-						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY:
-						// RAW capture lives at the inbound boundary so the ring-buffer
-						// append is OUTSIDE the React setState updater. The capture is
-						// OPT-IN: when the workspace-state PTAD toggle is OFF
-						// (production default), this if-branch is skipped and the
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP02-BATCHED-PUSH-CARDINALITY:
+						// RAW capture + pending stash + R5 fail-closed pushId check.
+						// The capture is OPT-IN: when the workspace-state PTAD toggle is
+						// OFF (production default), this if-branch is skipped and the
 						// wire shape and production path semantics are byte-for-byte
 						// unchanged.
 						//
-						// We clone the wire-side `stateData` (shallow clone + the
-						// turnState reference is captured at clone time) so the
-						// post-commit useEffect can read the original wire-side
-						// turnState even if the reducer mutates it in place inside
-						// the setState updater. The shallow clone is sufficient
-						// because `buildWebviewSnapshot` only reads the top-level
-						// `turnState` shape (it does NOT descend into clineMessages
-						// or other arrays).
+						// R5 (FAIL CLOSED): if `_ptadPushId` is undefined, the diagnostic
+						// cannot correlate the capture to any push id, so we log and
+						// emit the RAW capture (with `_ptadPushId = undefined`) but
+						// DO NOT stash a pending entry under a sentinel key. Two
+						// missing-ID pushes no longer overwrite one another in the
+						// pending map, and the applied capture (which is keyed by
+						// pushId) is simply not emitted because there is no correlation
+						// key. The forensic chain is preserved as "raw only" with an
+						// explicit log entry, instead of being silently corrupted.
+						//
+						// We shallow-clone the wire-side `stateData` so the applied
+						// capture can read the original wire-side turnState even after
+						// the reducer mutates it in place.
+						let rawSnapForApplied: ExtensionState | null = null
 						if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
-							const pushId = stateData._ptadPushId ?? "no-push-id"
-							pendingRawSnapshotsRef.current.set(pushId, {
-								...stateData,
-								turnState: stateData.turnState,
-							})
+							const pushId = stateData._ptadPushId
+							if (pushId === undefined) {
+								console.error(
+									"[PTAD] webview raw capture without _ptadPushId — failing closed; correlation will be missing",
+								)
+							} else {
+								const cloned: ExtensionState = {
+									...stateData,
+									turnState: stateData.turnState,
+								}
+								pendingRawSnapshotsRef.current.set(pushId, cloned)
+								rawSnapForApplied = cloned
+							}
 							recordPostTerminalAuthoritySnapshot(
 								buildWebviewSnapshot(stateData, stateData, "webview-raw-incoming"),
 							)
 						}
 
-						setState((prevState) => {
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP02-BATCHED-PUSH-CARDINALITY:
+						// R4 (PUSH-PINNED APPLIED CAPTURE): hoist the reducer out of
+						// the React setState updater so the applied capture is emitted
+						// at the inbound boundary, BEFORE React batches the next
+						// inbound push. setState is called with a plain value (no
+						// updater function), so the result is committed verbatim and
+						// does not interact with React batching.
+						const prevState = prevStateRef.current ?? state
+						{
 							// Versioning logic for autoApprovalSettings
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
@@ -621,7 +654,7 @@ export const ExtensionStateContextProvider: React.FC<{
 							// undefined for classic/legacy state.
 							stateData.turnState = replicaRef.current.turnState
 
-							const newState = {
+							const newState: ExtensionState = {
 								...stateData,
 								autoApprovalSettings: shouldUpdateAutoApproval
 									? stateData.autoApprovalSettings
@@ -639,15 +672,39 @@ export const ExtensionStateContextProvider: React.FC<{
 
 							setDidHydrateState(true)
 
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY:
-							// The matching `webview-replica` capture is emitted from the
-							// post-commit `useEffect` keyed on `[state._ptadPushId, state]`
-							// below — NOT here. This updater is pure now (no ring-buffer
-							// writes), so React Strict Mode retries cannot double-record.
-							// The pending raw snapshot is held in `pendingRawSnapshotsRef`
-							// keyed by `pushId` and is drained by that effect.
-							return newState
-						})
+							// Cache the new state as the next "prevState" for the
+							// following inbound delivery. This ref is mutated
+							// synchronously per push, so the next reducer call reads
+							// the correct previous state even when React has not yet
+							// committed the current setState.
+							prevStateRef.current = newState
+
+							// setState with a plain value (NO updater function): React
+							// may batch this with subsequent setState calls from
+							// later inbound pushes, but the applied capture below
+							// already records the correct nextState for THIS push.
+							setState(newState)
+
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP02-BATCHED-PUSH-CARDINALITY:
+							// Emit the APPLIED capture at the inbound boundary, AFTER
+							// setState is scheduled. This guarantees exactly one
+							// webview-replica capture per wire push, regardless of
+							// React batching. The capture is keyed on the LOCAL
+							// rawSnapForApplied (captured above before reducer
+							// mutation), NOT on React-committed state, so the
+							// applied record carries the wire-side turnState on its
+							// rawIncoming* fields even when the reducer mutated it.
+							if (rawSnapForApplied !== null) {
+								// Drain the pending entry so the ref map stays tidy.
+								const pushId = stateData._ptadPushId
+								if (pushId !== undefined) {
+									pendingRawSnapshotsRef.current.delete(pushId)
+								}
+								recordPostTerminalAuthoritySnapshot(
+									buildWebviewSnapshot(newState, rawSnapForApplied, "webview-replica"),
+								)
+							}
+						}
 					} catch (error) {
 						console.error("Error parsing state JSON:", error)
 						console.log("[DEBUG] ERR getting state", error)
@@ -978,36 +1035,14 @@ export const ExtensionStateContextProvider: React.FC<{
 		}
 	}, [])
 
-	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY:
-	// Post-commit APPLIED capture. Fires once per distinct push id (and
-	// once per committed state). The dependency `[state, state._ptadPushId]`
-	// is stable across React Strict Mode retries because the second-run
-	// effect sees a `state` reference that is identical to the first-run
-	// reference; the ref-map drain is idempotent because each captured
-	// push id is deleted on first commit. Net result: exactly one
-	// `webview-replica` capture per push.
-	//
-	// Under Strict Mode, the effect still runs twice on mount (the
-	// developer's first commit). The first run drains the entry from the
-	// ref map and emits the capture; the second run finds the map empty
-	// for the same push id and short-circuits with a no-op return. No
-	// double-record. For subsequent gRPC-driven pushes, the dependency
-	// `[state, state._ptadPushId]` differs, so the effect runs once.
-	useEffect(() => {
-		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
-			return
-		}
-		const pushId = state._ptadPushId ?? "no-push-id"
-		const rawSnap = pendingRawSnapshotsRef.current.get(pushId)
-		if (!rawSnap) {
-			// No pending raw snapshot for this push id — either the raw
-			// emit was skipped (PTAD off at the time of the gRPC delivery),
-			// or the entry has already been drained by a prior commit.
-			return
-		}
-		pendingRawSnapshotsRef.current.delete(pushId)
-		recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(state, rawSnap, "webview-replica"))
-	}, [state._ptadPushId, state])
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP02-BATCHED-PUSH-CARDINALITY:
+	// REMOVED: the post-commit applied-capture useEffect from
+	// C2-CORRECTION02-FIXUP01. That effect only fired once per React commit,
+	// so when React batches multiple setState calls (which it does by
+	// default under React 18+ automatic batching), only the LAST pushId in
+	// the batch got an applied capture. The applied capture now lives at
+	// the inbound boundary (see onResponse above), so each wire push emits
+	// exactly one webview-replica record regardless of React batching.
 
 	const refreshOpenRouterModels = useCallback(() => {
 		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))
