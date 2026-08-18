@@ -71,6 +71,7 @@
 		"src/test/e2e/**/*",
 		"src/test/scenarios/**/*",
 		"src/test/cline-core-vitest-stub.ts",
-		"src/test/bun-test-preload.ts"
+		"src/test/bun-test-preload.ts",
+		"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts"
 	]
 }

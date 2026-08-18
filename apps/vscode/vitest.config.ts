@@ -26,6 +26,11 @@ export default defineConfig({
 		],
 		environment: "node",
 		setupFiles: ["./src/test/vitest-setup.ts"],
+		// The bridge test lives under apps/vscode/src/sdk/__tests__/ but
+		// requires the `vitest.config.c2-4-c-bridge.ts` config (which
+		// adds the resolve.alias for @cline-internal/core/...). Exclude
+		// it from the base config so the alias-less base runs cleanly.
+		exclude: ["src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts"],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
 		// workspace packages (@cline/core/@cline/llms/@cline/shared), and on loaded

@@ -1,8 +1,24 @@
 /**
  * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-C
  *
- * C2.4-C -- REAL-Local-transport composition with the C2.4-B authority
- * boundary.
+ * C2.4-C COMPONENT TEST -- Local-shape host shim -> wiring-side
+ * classification with a hand-rolled shim.
+ *
+ * SCOPE (CORRECTED after C2.4-C review):
+ *   This file is a COMPONENT TEST, not a real-host composition
+ *   proof. The host fixture is a hand-rolled
+ *   `LocalRuntimeHost.subscribeRuntimeEvents` simulation
+ *   (POINT_IN_TIME topology, same semantics as the E2F F1-CORRECTION03
+ *   fixture). It does NOT exercise the real `LocalRuntimeHost` class.
+ *
+ *   For the REAL-Local-to-REAL-wiring composition proof that
+ *   CLOSES C2.4-C, see
+ *   `src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts`
+ *   (run with
+ *   `bun run vitest --config vitest.config.c2-4-c-bridge.ts`).
+ *   That file is the C2.4-C closing test. This file remains as a
+ *   labeled control for the wiring's no-active-session
+ *   classification under hand-rolled Local topology.
  *
  * Pair of
  * `sdk/packages/core/src/runtime/host/local-runtime-host.c24-c-transport.test.ts`:
