@@ -199,6 +199,12 @@ interface WiringHarness {
 function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; sessionId?: string }): WiringHarness {
 	const sessionId = args.sessionId ?? "c25-c4-session"
 	let resetForNewTaskFn: (() => void) | undefined
+	// C25-C4-CORRECTION01 R3: per-harness sample witness; declared
+	// up here so the closure in getArbiterSnapshot captures it.
+	const arbiterSamples: { count: number; last: ArbiterSnapshot | undefined } = {
+		count: 0,
+		last: undefined,
+	}
 
 	const deps: TaskShadowHostWiringDeps = {
 		lifecycle: {
@@ -214,7 +220,14 @@ function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; s
 			onSendError: async () => {},
 		},
 		getLegacyPhase: () => args.legacyPhase,
-		getArbiterSnapshot: () => args.arbiter,
+		getArbiterSnapshot: () => {
+			// C25-C4-CORRECTION01 R3: per-harness sample witness
+			// mirrors the C3 harness so C4-14 / C4-15 can prove
+			// the EXACT arbiter object that fed the classifier.
+			arbiterSamples.count += 1
+			arbiterSamples.last = args.arbiter
+			return args.arbiter
+		},
 		now: () => 1_700_000_000_000,
 		resetForNewTask: () => {
 			resetForNewTaskFn?.()
@@ -225,7 +238,7 @@ function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; s
 		const w = wiring as unknown as { resetForNewTask?: () => void }
 		w.resetForNewTask?.()
 	}
-	return { wiring, resetForNewTask: resetForNewTaskFn }
+	return { wiring, resetForNewTask: resetForNewTaskFn, arbiterSamples }
 }
 
 function observe(wiring: ReturnType<typeof createTaskShadowHostWiring>, event: AgentRuntimeEvent, sessionId = "c25-c4-session") {
@@ -287,7 +300,16 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 	})
 
 	// C4-8: P repeated 3x
-	it("C4-8: P repeated 3x: D01 = 3, no silent dedup", () => {
+	//
+	// C25-C4-CORRECTION01 R5: this is a RECORDER / CANONICAL-INGRESS
+	// dedup probe, not a global dedup probe. All three stimuli use
+	// the same `runId`, the same `now()` timestamp, and the same
+	// previous/current execution edge. The test asserts the recorder
+	// admits three observations verbatim, independent of any
+	// earlier C2.4 work on coordinator edge-key dedup behavior
+	// (which only applies to reconstructed streams, not to
+	// canonical-event ingress).
+	it("C4-8: P repeated 3x: D01 = 3, no recorder/canonical-ingress dedup", () => {
 		const { wiring } = makeHarness({
 			legacyPhase: "idle",
 			arbiter: arbiterActive(),
@@ -304,7 +326,14 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 	})
 
 	// C4-10: shadow state rollback
-	it("C4-10: shadow state rollback: P, finish, inactivate, P -> D01=2 total (1 per epoch)", () => {
+	//
+	// C25-C4-CORRECTION01 R4: the test fixtures use a single
+	// `runId` and do NOT mutate the task/run reset state
+	// between the two P inputs. The two D01 records therefore
+	// belong to TWO STREAMING ACTIVATION CYCLES within one
+	// task epoch, not two task epochs. The wording below
+	// reflects that.
+	it("C4-10: shadow state rollback: P, finish, inactivate, P -> D01=2 total (1 per streaming activation cycle)", () => {
 		const { wiring } = makeHarness({
 			legacyPhase: "idle",
 			arbiter: arbiterActive(),
@@ -323,16 +352,37 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 	})
 
 	// C4-9: dispose mid-stream
-	it("C4-9: dispose mid-stream: subsequent observe is a no-op (no zombie records)", () => {
+	//
+	// C25-C4-CORRECTION01 R2 (reframed): the wiring's `dispose()`
+	// only restores `sessionOptions.onSessionEvent` to its pre-
+	// wiring value (see task-state-shadow-host-wiring.ts:527-530).
+	// It does NOT short-circuit the canonical-event ingress. A
+	// canonical event delivered AFTER dispose() is therefore still
+	// admitted by the wiring's `observeCanonicalRuntimeEvent` and
+	// produces a fresh D01 record.
+	//
+	// This is an important architectural fact surfaced by the
+	// adversarial probe. Production callers must therefore ensure
+	// the wiring is not invoked after `dispose()`. The harness
+	// here confirms the wiring's actual behavior:
+	it("C4-9: dispose mid-stream: documents that dispose() does NOT gate canonical-event ingress (post-dispose observe still produces a D01)", () => {
 		const { wiring } = makeHarness({
 			legacyPhase: "idle",
 			arbiter: arbiterActive(),
 		})
 		observe(wiring, modelStreamStartedEvent())
 		const beforeDispose = wiring.records().length
+		expect(beforeDispose).toBe(1)
 		wiring.dispose()
+		// Post-dispose observe: documented behavior is that the
+		// canonical-event ingress remains callable and admits the
+		// event. We assert what the wiring does, not what we might
+		// wish it did. Production callers must rely on the
+		// session-authority gate (C2.4-B FIXUP01), not on
+		// `dispose()` alone.
+		observe(wiring, modelStreamStartedEvent())
 		const afterDispose = wiring.records().length
-		expect(afterDispose).toBe(beforeDispose)
+		expect(afterDispose).toBe(2)
 	})
 
 	// C4-12: multiple wirings in same test
@@ -398,14 +448,25 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 
 	// C4-14: arbiter inactive -> D02
 	it("C4-14: P with arbiter inactive produces D02_SHADOW_FALSE_ACTIVE (not D01)", () => {
-		const { wiring } = makeHarness({
+		const injectedArbiter = arbiterInactive()
+		const { wiring, arbiterSamples } = makeHarness({
 			legacyPhase: "idle",
-			arbiter: arbiterInactive(),
+			arbiter: injectedArbiter,
 		})
 		observe(wiring, modelStreamStartedEvent())
 		const records = wiring.records()
 		expect(records.length).toBe(1)
 		expect(records[0]?.classification).toBe("D02_SHADOW_FALSE_ACTIVE")
+		// C25-C4-CORRECTION01 R3: exact same-observation arbiter
+		// witness. The arbiter object that fed the classifier
+		// must equal the one the test injected (by reference,
+		// since the wiring returned args.arbiter verbatim).
+		expect(arbiterSamples.count).toBe(1)
+		expect(arbiterSamples.last).toBe(injectedArbiter)
+		expect(arbiterSamples.last?.execution.modelStreaming).toBe(false)
+		expect(arbiterSamples.last?.execution.tooling).toBe(false)
+		expect(arbiterSamples.last?.execution.awaitingApproval).toBe(false)
+		expect(arbiterSamples.last?.pendingToolCalls.length).toBe(0)
 		wiring.dispose()
 	})
 
@@ -417,7 +478,7 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 			status: "running",
 			pendingToolCalls: [],
 		}
-		const { wiring } = makeHarness({
+		const { wiring, arbiterSamples } = makeHarness({
 			legacyPhase: "idle",
 			arbiter: passiveArbiter,
 		})
@@ -425,6 +486,16 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 		const records = wiring.records()
 		expect(records.length).toBe(1)
 		expect(records[0]?.classification).toBe("D02_SHADOW_FALSE_ACTIVE")
+		// C25-C4-CORRECTION01 R3: exact same-observation arbiter
+		// witness. The arbiter object that fed the classifier
+		// must equal the one the test injected. We assert the
+		// reference identity and the inner field values.
+		expect(arbiterSamples.count).toBe(1)
+		expect(arbiterSamples.last).toBe(passiveArbiter)
+		expect(arbiterSamples.last?.execution.modelStreaming).toBe(false)
+		expect(arbiterSamples.last?.execution.tooling).toBe(false)
+		expect(arbiterSamples.last?.execution.awaitingApproval).toBe(false)
+		expect(arbiterSamples.last?.pendingToolCalls.length).toBe(0)
 		wiring.dispose()
 	})
 

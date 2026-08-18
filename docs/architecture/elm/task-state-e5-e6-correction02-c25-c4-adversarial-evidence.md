@@ -44,20 +44,49 @@ All 12 tests pass:
 
 ## 3. EVIDENCE-STRENGTHENING (per C25-C3 reviewer's round-21)
 
-For C4-14 and C4-15, the harness has the injected arbiter input
-available; the test verifies the EXACT arbiter input at the
-same observation (asserted via the wiring's recorded snapshot,
-not derived from observationModel.activity). The retained
-recorder fields are derived from observationModel.activity; the
-arbiter input is the canonical projection that is *not* persisted
-to the recording but participates in arbiterActive.
+C4-14 and C4-15 use a per-harness sample counter mirroring the
+C3 harness. The witness captures the EXACT arbiter object that
+fed the classifier (reference identity plus inner field values).
+The retained recorder fields are derived from observationModel.activity;
+the arbiter input is the canonical projection that is *not*
+persisted to the recording but participates in arbiterActive. The
+witness proves the projection that the classifier observed matches
+the harness's intended arbiter snapshot.
 
 C4-1, C4-8, C4-10, C4-11, C4-12, C4-13, C4-16 all use the
 arbiterActive() helper; C4-2 and C4-7 use arbiterActive() at the
 first event; C4-10 uses arbiterActive() at start and at the second
 P event. C4-14 and C4-15 use arbiterInactive() and a fully
 passive arbiter respectively to assert the D02 classification
-result.
+result AND the exact same-observation arbiter sample.
+
+## 3a. C25-C4-CORRECTION01 amendments (applied this commit)
+
+C25-C4-CORRECTION01 applies five reviewer-flagged corrections:
+
+* **R1** Plan doc trailing blank line stripped (Git whitespace
+  diagnostic blank-at-eof at line 140 of
+  task-state-e5-e6-correction02-c25-c4-adversarial-plan.md).
+* **R2** C4-9 reframed: the wiring's dispose() only restores
+  sessionOptions.onSessionEvent (see
+  task-state-shadow-host-wiring.ts:527-530); it does NOT
+  short-circuit the canonical-event ingress. The test now
+  asserts the actual documented behavior (post-dispose observe
+  still produces a fresh D01) rather than a wished-for one.
+  Production callers must rely on the C2.4-B FIXUP01 session-
+  authority gate, not on dispose() alone.
+* **R3** C4-14 / C4-15 add the per-harness sample witness used
+  in C3. The previous wording in this section overclaimed that
+  "the test verifies the EXACT arbiter input at the same
+  observation"; the current wording is precise.
+* **R4** C4-10 description changed from "1 per epoch" to "1 per
+  streaming activation cycle". The two P inputs share the same
+  runId; they belong to two streaming cycles within one task
+  epoch, not two task epochs.
+* **R5** C4-8 description changed from "no silent dedup" to "no
+  recorder/canonical-ingress dedup". The test does not exercise
+  coordinator edge-key dedup (which only applies to reconstructed
+  streams, not to canonical-event ingress).
 
 ## 4. HYGIENE
 
@@ -103,6 +132,7 @@ C25_ARB_SOURCE_RESIDUE                    OPEN  (gates E7)
 C25_C4_ADVERSARIAL_VERDICT = PASS
 TWELVE_C25_C4_TESTS_PASS   = 12
 C25_C5_AUTHORIZED          = true
+C25_C4_PATCH_HYGIENE       = PASS_AFTER_CORRECTION01
 ```
 
 C25-C5 (terminal + E7 auth) is authorized on the strength of:

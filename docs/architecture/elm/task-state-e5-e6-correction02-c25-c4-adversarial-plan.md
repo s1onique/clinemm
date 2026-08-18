@@ -1,5 +1,11 @@
 # C2.5-C4 plan — adversarial
 
+**Note:** C25-C4-CORRECTION01 amended the C25-C4 evidence with
+five reviewer-flagged fixes (R1..R5). See
+`task-state-e5-e6-correction02-c25-c4-correction01-evidence.md`
+for the amendment details. The plan is unchanged.
+
+
 **Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.5-C4-ADVERSARIAL
 
 **ENTRY:** `9996a388` (C25-C3-CORRECTION01, frozen classifier contract)
@@ -137,4 +143,3 @@ C25-C5 terminal + E7 auth ACT
   - frozen E7_INITIAL_BACKEND_SCOPE = LOCAL_ONLY
   - C25-C5 closes C2.4-D
 ```
-

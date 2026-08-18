@@ -479,7 +479,8 @@ C2.5
   C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN 🟢 AUTHORIZED
     P / N1 / N2 / N3 matrix frozen
   C25-C3-CORRECTION01                     ✅ APPLIED (R1+R2+R3 dispositioned)
-  C25-C4 adversarial                       ✅ CLOSED (12/12 tests PASS; this commit)
+  C25-C4 adversarial                       ✅ CLOSED (12/12 tests PASS)
+    C25-C4-CORRECTION01                    🟢 APPLIED (R1+R2+R3+R4+R5)
 
 E7                                         ⛔ BLOCKED on C2.5
 ```
