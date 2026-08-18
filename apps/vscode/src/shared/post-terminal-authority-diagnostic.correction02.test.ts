@@ -28,6 +28,7 @@ import type { TaskHeaderTelemetryStrip, ThinkingPresentationProjection, TurnPhas
 import {
 	type BoundaryClass,
 	classifyBoundary,
+	classifyFullBoundary,
 	clearPostTerminalAuthorityDiagnostic,
 	clearPostTerminalAuthorityDiagnosticBoth,
 	disablePostTerminalAuthorityDiagnostic,
@@ -36,6 +37,7 @@ import {
 	getPostTerminalAuthorityDiagnosticRecords,
 	type PostTerminalAuthorityCaptureKind,
 	recordPostTerminalAuthoritySnapshot,
+	type ThreeBoundaryClass,
 } from "./post-terminal-authority-diagnostic"
 
 afterEach(() => {
@@ -172,6 +174,69 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-C
 					{ phase: "idle", seq: 2 }, // applied != raw AND != extension
 				),
 			).toBe<BoundaryClass>("W4_MULTI_BOUNDARY")
+		})
+
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01:
+		// The pure three-way classifier cannot return W3 because W3 means
+		// "extension == raw == applied with a SEPARATE consumer-side
+		// divergence". A test that proves C5's pure helper indeed lacks the
+		// inputs to classify W3 (negative assertion):
+		it("C6: pure classifyBoundary returns ThreeBoundaryClass; W3 unreachable from triple", () => {
+			// Type assertion: the return is the narrower type.
+			const result: ThreeBoundaryClass = classifyBoundary(
+				{ phase: "awaiting_followup", seq: 15 },
+				{ phase: "awaiting_followup", seq: 15 },
+				{ phase: "awaiting_followup", seq: 15 },
+			)
+			expect(result).toBe("NO_DIVERGENCE")
+			// Compile-time proof: "W3_POST_CONTEXT" is NOT assignable to
+			// ThreeBoundaryClass. The type system itself enforces the
+			// "pure helper has no W3" contract.
+		})
+	})
+
+	describe("classifyFullBoundary helper (W3 requires consumer diff)", () => {
+		it("C7: W3 selected when triple is equal AND consumer capture differs", () => {
+			expect(
+				classifyFullBoundary(
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "idle", seq: 2 }, // consumer disagrees with the equal triple
+				),
+			).toBe<BoundaryClass>("W3_POST_CONTEXT")
+		})
+
+		it("C8: NO_DIVERGENCE when triple is equal AND no consumer provided", () => {
+			expect(
+				classifyFullBoundary(
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "awaiting_followup", seq: 15 },
+				),
+			).toBe<BoundaryClass>("NO_DIVERGENCE")
+		})
+
+		it("C9: NO_DIVERGENCE when triple is equal AND consumer equals triple", () => {
+			expect(
+				classifyFullBoundary(
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "awaiting_followup", seq: 15 },
+					{ phase: "awaiting_followup", seq: 15 },
+				),
+			).toBe<BoundaryClass>("NO_DIVERGENCE")
+		})
+
+		it("C10: classifyFullBoundary forwards three-way divergence to the underlying classifier", () => {
+			expect(
+				classifyFullBoundary(
+					{ phase: "awaiting_followup", seq: 15 }, // ext
+					{ phase: "idle", seq: 2 }, // raw != ext
+					{ phase: "idle", seq: 2 }, // applied == raw
+					{ phase: "idle", seq: 2 }, // consumer == raw
+				),
+			).toBe<BoundaryClass>("W1_PRE_APPLY")
 		})
 	})
 

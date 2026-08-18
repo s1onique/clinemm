@@ -388,7 +388,43 @@ export function getPostTerminalAuthorityDiagnosticSeq(side: "extension" | "webvi
 // dogfood analyzer inspects a separate consumer-side capture to
 // classify W3.
 
-export type BoundaryClass = "NO_DIVERGENCE" | "W1_PRE_APPLY" | "W2_DURING_APPLY" | "W3_POST_CONTEXT" | "W4_MULTI_BOUNDARY"
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01:
+// Split classification into two layers:
+//
+//   - THREE-WAY boundary classification (extension, raw, applied) is a
+//     PURE function over the three captures. W3 cannot be detected
+//     from this triple alone (W3 means extension == raw == applied with
+//     a SEPARATE consumer/memoization divergence), so the pure helper
+//     returns `ThreeBoundaryClass` which excludes W3 by design.
+//   - FULL boundary classification combines the three-way result with
+//     an optional consumer capture so that W3_POST_CONTEXT can be
+//     assigned when the three are equal AND the consumer differs.
+//
+// This split avoids the API misuse of having `classifyBoundary` return
+// a W3 value that its inputs cannot actually distinguish.
+
+/**
+ * PURE three-way boundary classification. Cannot return W3 (consumer-
+ * side divergence) because the inputs do not include a consumer
+ * capture. Callers that want W3 must use `classifyFullBoundary` with
+ * the additional consumer capture.
+ */
+export type ThreeBoundaryClass = "NO_DIVERGENCE" | "W1_PRE_APPLY" | "W2_DURING_APPLY" | "W4_MULTI_BOUNDARY"
+
+/**
+ * Full five-way classification including W3. The consumer capture is
+ * optional: if it is omitted, the helper falls back to the three-way
+ * result. To classify W3 the caller MUST provide a consumer capture
+ * whose phase/seq differs from the equal triple.
+ */
+export type BoundaryClass = ThreeBoundaryClass | "W3_POST_CONTEXT"
+
+/**
+ * @deprecated Kept as an alias for backward compatibility with the
+ * C2-CORRECTION02 `BoundaryClass` declaration. New code should prefer
+ * `ThreeBoundaryClass` or `BoundaryClass` directly.
+ */
+export type BoundaryClassDeprecated = BoundaryClass
 
 interface PhaseSeqPair {
 	readonly phase?: TurnPhase
@@ -399,14 +435,22 @@ function pairEquals(a: PhaseSeqPair, b: PhaseSeqPair): boolean {
 	return a.phase === b.phase && a.seq === b.seq
 }
 
-export function classifyBoundary(extension: PhaseSeqPair, raw: PhaseSeqPair, applied: PhaseSeqPair): BoundaryClass {
+/**
+ * Pure three-way boundary classifier. CANNOT return W3.
+ *
+ *   NO_DIVERGENCE     extension == raw == applied
+ *   W1_PRE_APPLY      extension != raw, raw == applied
+ *   W2_DURING_APPLY   extension == raw, raw != applied
+ *   W4_MULTI_BOUNDARY extension != raw AND raw != applied
+ */
+export function classifyBoundary(extension: PhaseSeqPair, raw: PhaseSeqPair, applied: PhaseSeqPair): ThreeBoundaryClass {
 	const extEqRaw = pairEquals(extension, raw)
 	const rawEqApplied = pairEquals(raw, applied)
 
 	if (extEqRaw && rawEqApplied) {
-		// Healthy (and also W3, which the analyzer distinguishes by
-		// inspecting a separate consumer-side capture; the classifier
-		// itself returns NO_DIVERGENCE for this case).
+		// Healthy. W3 (consumer-side divergence with all three equal)
+		// is NOT classified here — call `classifyFullBoundary` with a
+		// consumer capture to assign W3.
 		return "NO_DIVERGENCE"
 	}
 	if (!extEqRaw && rawEqApplied) {
@@ -423,6 +467,30 @@ export function classifyBoundary(extension: PhaseSeqPair, raw: PhaseSeqPair, app
 	// Both edges diverge independently: multiple boundaries are
 	// faulty. The ACT halts on this case.
 	return "W4_MULTI_BOUNDARY"
+}
+
+/**
+ * Higher-level boundary classifier that combines the three-way
+ * equality result with an optional consumer capture. W3 is assigned
+ * only when the three captures are pairwise equal AND the consumer
+ * capture is provided AND the consumer differs from the equal triple.
+ */
+export function classifyFullBoundary(
+	extension: PhaseSeqPair,
+	raw: PhaseSeqPair,
+	applied: PhaseSeqPair,
+	consumer?: PhaseSeqPair,
+): BoundaryClass {
+	const threeWay = classifyBoundary(extension, raw, applied)
+	if (threeWay !== "NO_DIVERGENCE") {
+		return threeWay
+	}
+	// threeWay is NO_DIVERGENCE: the triple is equal. W3 is only
+	// possible here if a consumer capture disagrees.
+	if (consumer && !pairEquals(consumer, extension)) {
+		return "W3_POST_CONTEXT"
+	}
+	return "NO_DIVERGENCE"
 }
 
 // ============================================================================
