@@ -158,5 +158,5 @@ C25-C5 (terminal + E7 auth) is authorized on the strength of:
 - ROBUSTNESS_PROOF    (C25-C4, 12 adversarial tests)
 - JOINT_PROOF         = TRANSPORT_PROOF ∧ CLASSIFIER_PROOF
 
-C25-C5 will close C2.4-D; C2.5 closes C2.5; E7 remains blocked on
-C25_ARB_SOURCE_RESIDUE and the C2.5 terminal gate.
+C25-C5 closes C2.5 (terminal). C2.4-D remains historical CLOSED (D4).
+E7 remains blocked on C25_ARB_SOURCE_RESIDUE and the C2.5 terminal gate.

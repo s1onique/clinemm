@@ -162,5 +162,5 @@ C25-C5 terminal + E7 auth ACT
   - C-REAL bridge + C25-C3 classifier + C25-C4 robustness
   - terminal classification of all hostile inputs
   - frozen E7_INITIAL_BACKEND_SCOPE = LOCAL_ONLY
-  - C25-C5 closes C2.4-D
+  - C25-C5 closes C2.5 (terminal); C2.4-D remains historical CLOSED (D4)
 ```
