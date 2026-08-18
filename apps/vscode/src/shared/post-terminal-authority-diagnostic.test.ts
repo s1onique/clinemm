@@ -72,6 +72,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			disablePostTerminalAuthorityDiagnostic("extension")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 1,
 				capturedAt: Date.now(),
 			})
@@ -82,6 +83,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			for (let i = 0; i < 5; i += 1) {
 				recordPostTerminalAuthoritySnapshot({
 					origin: "extension",
+				captureKind: "extension-push",
 					stateVersion: i,
 					capturedAt: Date.now() + i,
 				})
@@ -99,6 +101,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			for (let i = 0; i < 10; i += 1) {
 				recordPostTerminalAuthoritySnapshot({
 					origin: "extension",
+				captureKind: "extension-push",
 					stateVersion: i,
 					capturedAt: Date.now() + i,
 				})
@@ -112,11 +115,13 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 		it("R4: independent side buffers do not leak", () => {
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 1,
 				capturedAt: Date.now(),
 			})
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
+				captureKind: "webview-replica",
 				stateVersion: 2,
 				capturedAt: Date.now(),
 			})
@@ -133,6 +138,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			disablePostTerminalAuthorityDiagnostic("extension")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 1,
 				capturedAt: Date.now(),
 			})
@@ -140,6 +146,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			enablePostTerminalAuthorityDiagnostic("extension")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 1,
 				capturedAt: Date.now(),
 			})
@@ -156,6 +163,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			const capturedAt = Date.now()
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 42,
 				capturedAt,
 				legacyPhase: "idle",
@@ -180,12 +188,14 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			const sharedVersion = 99
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: sharedVersion,
 				capturedAt: Date.now(),
 			})
 			enablePostTerminalAuthorityDiagnostic("webview")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
+				captureKind: "webview-replica",
 				stateVersion: sharedVersion,
 				capturedAt: Date.now() + 1,
 			})
@@ -204,6 +214,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			// constructing a literal and checking every field is present.
 			const snap: PostTerminalAuthoritySnapshot = {
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 0,
 				capturedAt: 0,
 			}

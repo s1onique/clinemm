@@ -92,6 +92,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			// A subsequent capture must succeed.
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 1,
 				capturedAt: Date.now(),
 			})
@@ -105,12 +106,14 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			enablePostTerminalAuthorityDiagnostic("extension")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 1,
 				capturedAt: Date.now(),
 				legacyPhase: "idle",
 			})
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 2,
 				capturedAt: Date.now(),
 				legacyPhase: "streaming",
@@ -131,12 +134,14 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			await appendWebviewSidePostTerminalAuthorityDiagnostic(context, [
 				{
 					origin: "webview",
+				captureKind: "webview-replica",
 					stateVersion: 1,
 					capturedAt: Date.now(),
 					legacyPhase: "idle",
 				},
 				{
 					origin: "webview",
+				captureKind: "webview-replica",
 					stateVersion: 2,
 					capturedAt: Date.now(),
 					buttonConfig: { sendingDisabled: true },
@@ -169,6 +174,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			enablePostTerminalAuthorityDiagnostic("extension")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "extension",
+				captureKind: "extension-push",
 				stateVersion: 1,
 				capturedAt: Date.now(),
 				legacyPhase: "idle",
@@ -187,6 +193,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			await appendWebviewSidePostTerminalAuthorityDiagnostic(freshContext, [
 				{
 					origin: "webview",
+				captureKind: "webview-replica",
 					stateVersion: 1,
 					capturedAt: Date.now(),
 					legacyPhase: "idle",

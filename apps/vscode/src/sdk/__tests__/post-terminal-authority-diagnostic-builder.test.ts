@@ -126,4 +126,35 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 		expect(result.capturedAt).toBeGreaterThanOrEqual(before)
 		expect(result.capturedAt).toBeLessThanOrEqual(after)
 	})
+
+	it("B7: captureKind is always 'extension-push' (extension-side producer invariant)", () => {
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+		// Every extension-side record is stamped with `captureKind: "extension-push"`.
+		// The C2 live smoke proved that without `captureKind` the webview records
+		// collapsed into a single ambiguous bucket; this pins the extension-side
+		// discriminator so the per-site assertion is testable.
+		const result = buildExtensionSnapshotFromState({ state: baseState, shadow })
+		expect(result.captureKind).toBe("extension-push")
+	})
+
+	it("B8: _ptadPushId propagates verbatim from state._ptadPushId", () => {
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+		// The extension mints the push ID and stamps it into both the wire payload
+		// (a private `_ptadPushId` field) and the diagnostic record. The builder
+		// just passes the value through — it must NOT derive, increment, or mutate
+		// the push ID.
+		const result = buildExtensionSnapshotFromState({
+			state: { ...baseState, _ptadPushId: 4242 },
+			shadow,
+		})
+		expect(result._ptadPushId).toBe(4242)
+	})
+
+	it("B9: _ptadPushId is undefined when the state does not carry one", () => {
+		// In production (PTAD toggle OFF) the wire payload never carries a push ID,
+		// so the diagnostic record must reflect that with `undefined` rather than
+		// fabricating a value.
+		const result = buildExtensionSnapshotFromState({ state: baseState, shadow })
+		expect(result._ptadPushId).toBeUndefined()
+	})
 })
