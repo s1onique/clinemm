@@ -537,6 +537,18 @@ export const ExtensionStateContextProvider: React.FC<{
 	// arrival order, duplication, or loss. See messageReducer.ts.
 	const replicaRef = useRef<ReplicaState>(createReplicaState())
 
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY:
+	// Per-pushId raw-snapshot stash. The inbound gRPC handler writes
+	// (pushId -> stateData) here BEFORE any reducer mutation AND BEFORE
+	// `setState` is called. The post-commit `useEffect` (below) drains
+	// the entry when React has committed a state transition with the
+	// same pushId and emits the matching `webview-replica` capture.
+	// Using a ref keeps the writes out of the React state updater
+	// (which must be pure under Strict Mode) so the cardinality
+	// contract `webview-raw-incoming(P) = exactly 1` and
+	// `webview-replica(P) = exactly 1` survives React retry paths.
+	const pendingRawSnapshotsRef = useRef<Map<string, ExtensionState>>(new Map())
+
 	// Subscribe to state updates and UI events using the gRPC streaming API
 	useEffect(() => {
 		// Set up state subscription
@@ -557,28 +569,39 @@ export const ExtensionStateContextProvider: React.FC<{
 						} else if (!ptadEnabled && webviewRecorderOn) {
 							disablePostTerminalAuthorityDiagnostic("webview")
 						}
+
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY:
+						// RAW capture lives at the inbound boundary so the ring-buffer
+						// append is OUTSIDE the React setState updater. The capture is
+						// OPT-IN: when the workspace-state PTAD toggle is OFF
+						// (production default), this if-branch is skipped and the
+						// wire shape and production path semantics are byte-for-byte
+						// unchanged.
+						//
+						// We clone the wire-side `stateData` (shallow clone + the
+						// turnState reference is captured at clone time) so the
+						// post-commit useEffect can read the original wire-side
+						// turnState even if the reducer mutates it in place inside
+						// the setState updater. The shallow clone is sufficient
+						// because `buildWebviewSnapshot` only reads the top-level
+						// `turnState` shape (it does NOT descend into clineMessages
+						// or other arrays).
+						if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+							const pushId = stateData._ptadPushId ?? "no-push-id"
+							pendingRawSnapshotsRef.current.set(pushId, {
+								...stateData,
+								turnState: stateData.turnState,
+							})
+							recordPostTerminalAuthoritySnapshot(
+								buildWebviewSnapshot(stateData, stateData, "webview-raw-incoming"),
+							)
+						}
+
 						setState((prevState) => {
 							// Versioning logic for autoApprovalSettings
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
 							const shouldUpdateAutoApproval = incomingVersion > currentVersion
-
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
-							// Capture the RAW incoming payload BEFORE the reducer mutates
-							// stateData.turnState in place. The capture is OPT-IN: the
-							// diagnostic is a no-op when the workspace-state PTAD toggle is
-							// OFF (production default), so the wire shape and the production
-							// path semantics are byte-for-byte unchanged in the default build.
-							if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
-								recordPostTerminalAuthoritySnapshot(
-									// Pass stateData as both newState and rawStateData:
-									// there is no post-reducer state at this point, and the
-									// isRaw branch in buildWebviewSnapshot correctly omits
-									// the applied fields. The raw fields are stamped from
-									// rawStateData (== stateData).
-									buildWebviewSnapshot(stateData, stateData, "webview-raw-incoming"),
-								)
-							}
 
 							// Route the snapshot's transcript through the convergent-replica reducer:
 							// merge by ts/seq within the same epoch (never truncate), replace on a
@@ -592,11 +615,6 @@ export const ExtensionStateContextProvider: React.FC<{
 								stateData.turnState,
 							)
 							stateData.clineMessages = replicaRef.current.messages
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
-							// Save the raw incoming snapshot before the post-reducer overwrite
-							// mutates stateData.turnState in place. The applied capture below reads
-							// its raw view from this saved object, not from the mutated stateData.
-							const rawStateDataSnapshot = { ...stateData, turnState: stateData.turnState }
 							// Use the seq-gated turnState from the replica, NOT the raw snapshot's, so a
 							// late/stale snapshot carrying an older phase (e.g. "idle") cannot revert a
 							// newer phase (e.g. "streaming") and hide the Cancel button. Falls back to
@@ -621,27 +639,13 @@ export const ExtensionStateContextProvider: React.FC<{
 
 							setDidHydrateState(true)
 
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1:
-							// Capture the post-reducer webview state for the post-terminal authority
-							// diagnostic. The capture is OPT-IN: when the diagnostic is disabled
-							// (the default in production), the if-branch is skipped and the
-							// production path semantics are unchanged. The replica reducer has
-							// already applied seq-gating, so `newState` is the post-reducer
-							// view that React will see.
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
-							// Stamp `captureKind: "webview-replica"` so the diagnostic can tell
-							// the replica-record apart from input-section / action-buttons /
-							// followup-route captures that the next phases of this ACT add.
-							if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
-								// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
-								// Pass the SAVED raw snapshot (cloned before the reducer mutated
-								// stateData.turnState) as the second arg, so the applied record
-								// carries the actual wire-side turnState on its rawIncoming* fields.
-								recordPostTerminalAuthoritySnapshot(
-									buildWebviewSnapshot(newState, rawStateDataSnapshot, "webview-replica"),
-								)
-							}
-
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY:
+							// The matching `webview-replica` capture is emitted from the
+							// post-commit `useEffect` keyed on `[state._ptadPushId, state]`
+							// below — NOT here. This updater is pure now (no ring-buffer
+							// writes), so React Strict Mode retries cannot double-record.
+							// The pending raw snapshot is held in `pendingRawSnapshotsRef`
+							// keyed by `pushId` and is drained by that effect.
 							return newState
 						})
 					} catch (error) {
@@ -973,6 +977,37 @@ export const ExtensionStateContextProvider: React.FC<{
 			}
 		}
 	}, [])
+
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY:
+	// Post-commit APPLIED capture. Fires once per distinct push id (and
+	// once per committed state). The dependency `[state, state._ptadPushId]`
+	// is stable across React Strict Mode retries because the second-run
+	// effect sees a `state` reference that is identical to the first-run
+	// reference; the ref-map drain is idempotent because each captured
+	// push id is deleted on first commit. Net result: exactly one
+	// `webview-replica` capture per push.
+	//
+	// Under Strict Mode, the effect still runs twice on mount (the
+	// developer's first commit). The first run drains the entry from the
+	// ref map and emits the capture; the second run finds the map empty
+	// for the same push id and short-circuits with a no-op return. No
+	// double-record. For subsequent gRPC-driven pushes, the dependency
+	// `[state, state._ptadPushId]` differs, so the effect runs once.
+	useEffect(() => {
+		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+			return
+		}
+		const pushId = state._ptadPushId ?? "no-push-id"
+		const rawSnap = pendingRawSnapshotsRef.current.get(pushId)
+		if (!rawSnap) {
+			// No pending raw snapshot for this push id — either the raw
+			// emit was skipped (PTAD off at the time of the gRPC delivery),
+			// or the entry has already been drained by a prior commit.
+			return
+		}
+		pendingRawSnapshotsRef.current.delete(pushId)
+		recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(state, rawSnap, "webview-replica"))
+	}, [state._ptadPushId, state])
 
 	const refreshOpenRouterModels = useCallback(() => {
 		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))
