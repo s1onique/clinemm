@@ -3,9 +3,9 @@
 **ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01**
 
 This is a **diagnostic-only** ACT. The closure-correction commit (`81f82f471`)
-admitted that the real installed-VSIX path was not proven and that T15 was not
-executed. The reviewer ran that path. The result is RED with a NEW failure mode
-that did not exist in the prior LIVE02 walk:
+admitted that the real installed-VSIX path was not proven and that T15 was
+not executed. The reviewer ran that path. The result is RED with a NEW
+failure mode that did not exist in the prior LIVE02 walk:
 
 ```text
 OLD failure (LIVE02, pre-E7.1):
@@ -20,21 +20,22 @@ NEW failure (LIVE-E71-R1, post-E7.1):
 ```
 
 The NEW failure is a **post-terminal authority split**: three subsystems
-(TaskHeader, ChatRow reasoning row, composer) read three different states for
-the same logical instant of "task is finished." The E7.1 cutover migrated only
-the Thinking-renderer consumers; the TaskHeader, composer, and follow-up
-routing were deliberately left behind (see
+(TaskHeader, ChatRow reasoning row, composer) read three different states
+for the same logical instant of "task is finished." The E7.1 cutover
+migrated only the Thinking-renderer consumers; the TaskHeader, composer,
+and follow-up routing were deliberately left behind (see
 `task-state-e71-webview-shadow-projection-consumer-inventory.md` §6:
 
-> "Other consumer rows (button set, composer lockout, follow-up routing, etc.)
-> are explicitly NOT touched."
+> "Other consumer rows (button set, composer lockout, follow-up routing,
+> etc.) are explicitly NOT touched."
 
-The real walk proved that "NOT touched" is not a safe boundary for this bug
-state. The split happens *through* the cut, not around it.
+The real walk proved that "NOT touched" is not a safe boundary for this
+bug state. The split happens *through* the cut, not around it.
 
-This ACT refrains from any repair. It captures the authority surface at the
-failing instant, correlates what the extension produced with what the webview
-received, and identifies the first boundary where the views diverge.
+This ACT refrains from any repair. It captures the authority surface at
+the failing instant, correlates what the extension produced with what the
+webview received, and identifies the first boundary where the views
+diverge.
 
 ---
 
@@ -60,11 +61,35 @@ NO repair is authorized in this ACT.
 
 ```text
 E7.1_IMPLEMENTATION                     = PARTIAL_QUALIFIED
+E71_T14_INSTALL_BINDING                 = PASS   (4.1.10-6a4cfe564 visible)
+E71_T15_REAL_DOGFOOD                    = FAIL
+
+LIVE_DOGFOOD_OBSERVATION (multi-instant screenshot walk):
+  installed_version                     = 4.1.10-6a4cfe564
+  assistant_final_visible               = true
+  task_header_phase                     = Idle
+  task_header_elapsed                   = 00:00
+  task_header_tool_count                = 0
+  static_thinking_visible               = true
+  next_prompt_text_enterable            = true
+  next_prompt_sendable                  = false
+
+OLD_THINKING_ELLIPSIS_STALE = NOT_OBSERVED_IN_THIS_SMOKE
+  (the original animated-shimmer symptom is not present in this walk.
+  One live walk is not sufficient to declare it FIXED under all paths;
+  the honest wording is "not observed in this smoke.")
+
+E8                                      = HOLD
+E9                                      = HOLD
+TASKHEADER_MIGRATION                    = HOLD
+COMPOSER_FIX                            = HOLD
+```
 
 ## 3. Authority surface (for the diagnostic)
 
-The post-terminal state is read by four consumers. The diagnostic MUST capture
-all four authorities plus the shadow / runtime witnesses in the SAME push.
+The post-terminal state is read by four consumers. The diagnostic MUST
+capture all four authorities plus the shadow / runtime witnesses in the
+SAME push.
 
 | # | Consumer                            | Authority field(s)                       | Source                    |
 |---|-------------------------------------|------------------------------------------|---------------------------|
@@ -88,28 +113,65 @@ The shadow / runtime / seq checkpoints:
 | E | Runtime snapshot (`AgentRuntime.snapshot().status`) | truth source upstream of the tracker       |
 | F | Last observed canonical event sequence   | evidence for the seq-gating claim                  |
 
-### Why the webview-side `sendingDisabled` is also in scope
+### 3.1 Composer disable predicate (exact production expression)
 
-`useChatState.ts:18` declares `sendingDisabled` as a `useState(false)`. The
-production callers of `setSendingDisabled(false)` are:
+The downstream visible button-disabled predicate is:
 
-1. `ActionButtons.tsx:64` — `setSendingDisabled(buttonConfig.sendingDisabled)`
-   (normal unlock via `buttonConfig`).
-2. `useMessageHandlers.ts:483` — local rollback path inside a single
-   `handleSendMessage` callback.
+```ts
+// InputSection.tsx:62
+const submitDisabled = sendingDisabled && !allowQueuedSubmit
+// InputSection.tsx:94
+<ChatTextArea sendingDisabled={submitDisabled} ... />
 
-The production callers of `setSendingDisabled(true)` are:
+// turnStateSelectors.ts:80-85
+allowsQueuedSubmit(turnState)
+  = turnState?.phase === "streaming"
+  || turnState?.phase === "awaiting_approval"
 
-1. `useMessageHandlers.ts:96` — `clearSentMessageState()` inside the
-   post-submit optimistic path.
-2. `useMessageHandlers.ts:471` — pre-flight set when a previous request is
-   pending.
+// useChatState.ts:18
+const [sendingDisabled, setSendingDisabled] = useState(false)
 
-If `buttonConfig.sendingDisabled` is also `true` post-terminal, the bug is in
-`buttonConfig` (Case A: control selector). If `buttonConfig.sendingDisabled`
-is `false` but `sendingDisabled` is still `true`, the bug is in
-`ActionButtons.tsx` either missing the unlock or re-rendering with stale
-`buttonConfig`. The diagnostic must distinguish these.
+// buttonConfig.ts
+buttonConfig.sendingDisabled  // per-phase constant from BUTTON_CONFIGS
+
+// ActionButtons.tsx:64 — the normal unlock
+useEffect(() => setSendingDisabled(buttonConfig.sendingDisabled), [buttonConfig, setSendingDisabled])
+```
+
+The three signals the diagnostic must capture, with their source:
+
+```text
+sendingDisabled              (useChatState.ts:18, useState hook)
+buttonConfig.sendingDisabled (buttonConfig.ts, derived per phase)
+allowsQueuedSubmit(turnState) (turnStateSelectors.ts:80-85)
+```
+
+In the post-terminal walk, phase is `idle`, so `allowsQueuedSubmit` is
+false. The bind reduces to `submitDisabled = sendingDisabled`. The
+diagnostic must distinguish:
+
+- Case A (buttonConfig wrong): `buttonConfig.sendingDisabled === true`
+- Case I (chat reducer stuck): `buttonConfig.sendingDisabled === false` AND `sendingDisabled === true`
+
+### 3.2 Why the legacy chat-reducer write/clear lifecycles are in scope
+
+The two production writers of `sendingDisabled = true`:
+
+```text
+useMessageHandlers.ts:96   setSendingDisabled(true)   post-submit optimistic
+useMessageHandlers.ts:471  setSendingDisabled(true)   pre-flight set when a previous request is pending
+```
+
+The two production writers of `sendingDisabled = false`:
+
+```text
+useMessageHandlers.ts:483  setSendingDisabled(false)  inside a single handleSendMessage callback (rollback)
+ActionButtons.tsx:64       setSendingDisabled(buttonConfig.sendingDisabled)  // normal unlock
+```
+
+If the prior submit's `clearSentMessageState` set `sendingDisabled = true`
+and the matching rollback never ran, the unlock is missing. The diagnostic
+must capture `pendingResponse` to verify the rollback path was reachable.
 
 ## 4. Diagnostic record (one record per push, immutable)
 
@@ -175,6 +237,42 @@ type PostTerminalAuthoritySnapshot = {
 
   buttonConfig: {
     sendingDisabled?: boolean
+    enableButtons?: boolean
+    primaryText?: string
+    secondaryText?: string
+    primaryAction?: string
+    secondaryAction?: string
+  }
+}
+```
+
+### 4.1 Required correlated webview record
+
+```text
+pushId                            (matches EXTENSION pushId)
+receivedAt                        (Date.now in the webview reducer)
+replica.turnState.phase
+replica.turnState.seq
+replica.thinkingPresentation.*
+replica.taskTelemetry.*
+chatReducer.sendingDisabled       (local useState, NOT on the wire)
+chatReducer.enableButtons
+ActionButtons.buttonConfig.*      (the consumer's input + computed output)
+```
+
+### 4.2 Core correlation gates
+
+```text
+PUSH_CORRELATION_COVERAGE                  = 100%
+UNMATCHED_EXTENSION_PUSHES                 = 0
+UNMATCHED_WEBVIEW_PUSHES                   = 0
+
+TURNSTATE_SEQ_MONOTONIC                    = PASS | FAIL
+THINKING_SEQ_MATCHES_ASSOCIATED_TURNSTATE  = PASS | FAIL
+
+POST_TERMINAL_PUSH_OBSERVED                = true
+POST_TERMINAL_WEBVIEW_APPLY_OBSERVED       = true
+```
 
 ## 5. Classification matrix (mechanically decidable)
 
@@ -214,6 +312,62 @@ E TRANSPORT_OR_REPLICA_DEFECT
 F IDENTITY_SKEW
   runtime/shadow refer task A
   telemetry/composer refer task B (or cleared task identity)
+  → 00:00 / Idle / 0 is the ZEROED task identity bleeding through
+
+G TERMINAL_EVENT_VS_FOLLOWUP_TRANSITION_GAP
+  runtime/snapshot already terminal
+  turnState.phase === "completed"  (or "idle")
+  composer disabled  AND  buttonConfig.sendingDisabled === false
+  → the chat-reducer lockout is sticky because the unlock event
+    (e.g. "completion_result" message-flush) is not flowing correctly
+    → sub-case G1: a previously-submitted prompt left
+      sendingDisabled=true and never resolved
+    → sub-case G2: a rollback path ran but did not commit the unlock
+    → sub-case G3: ActionButtons effect missed (stale closure)
+
+I WEBVIEW_LOCAL_REDUCER_STUCK
+  terminal everywhere on the wire (turnState, taskTelemetry, etc.)
+  buttonConfig.sendingDisabled === false
+  chatReducer.sendingDisabled === true   (sticky)
+  → ONE OF:
+      I1: a previous submit called setSendingDisabled(true) and never
+          reached the matching setSendingDisabled(false) (rollback path
+          did not run, or the unlock was guarded by a condition that
+          became false)
+      I2: ActionButtons effect did not re-fire (stale dependency / stale
+          closure) so setSendingDisabled(buttonConfig.sendingDisabled)
+          is never called with the new (false) value
+      I3: a sibling state such as pendingResponse / pendingUserMessage
+          is still set, and the unlock is gated behind it
+```
+
+Hybrids are allowed. The most likely composites per the reviewer's prior:
+
+```text
+A + C  composer selector defect  AND  reasoning-row presentation semantics defect
+B + E  telemetry projection  AND  transport/replica fencing
+A + I  composer selector  AND  webview-local reducer stuck state
+```
+
+## 6. Capture moments (freezable, sequential)
+
+For each run, label the following moments and capture the diagnostic
+record at each:
+
+```text
+M0 pre-run                              (no task active)
+M1 streaming                            (first modelStreaming=true push)
+M2 last modelStreaming=true push        (just before terminal)
+M3 first modelStreaming=false push      (terminal flip)
+M4 terminal runtime event               (locally logged)
+M5 first stable post-terminal webview state  (the freeze frame)
+M6 attempted follow-up submit           (the user's submit-one-more-prompt)
+```
+
+The most informative transitions are **M2 → M3 → M5** and **M5 → M6**. They
+expose whether the terminal event (M3) propagates synchronously to the
+webview (E if not), and whether the user-initiated follow-up (M6) leaves
+the composer in a recoverable state (A or I if not).
 
 ## 7. Instrumentation constraints
 
@@ -339,131 +493,3 @@ things the diagnostic must establish, not assume.
 The smallest correct move is to **observe once**: capture the
 same-push authority snapshot, correlate it with the webview replica,
 and read the divergence. Then repair.
-
-  → 00:00 / Idle / 0 is the ZEROED task identity bleeding through
-```
-
-### Hybrid: terminal-event vs follow-up transition gap
-
-```text
-G TERMINAL_EVENT_VS_FOLLOWUP_TRANSITION_GAP
-  runtime/snapshot already terminal
-  turnState.phase === "completed"  (or "idle")
-  composer disabled  AND  buttonConfig.sendingDisabled === false
-  → the chat-reducer lockout is sticky because the unlock event
-    (e.g. "completion_result" message-flush) is not flowing correctly
-    → sub-case G1: a previously-submitted prompt left
-      sendingDisabled=true and never resolved
-    → sub-case G2: a rollback path ran but did not commit the unlock
-    → sub-case G3: ActionButtons effect missed (stale closure)
-```
-
-### New candidate: webview-local reducer stuck state
-
-This is a strong candidate for the composer lockout specifically. It is
-distinct from any cluster above because none of the wire-authorities are wrong.
-
-```text
-I WEBVIEW_LOCAL_REDUCER_STUCK
-  terminal everywhere on the wire (turnState, taskTelemetry, etc.)
-  buttonConfig.sendingDisabled === false
-  chatReducer.sendingDisabled === true   (sticky)
-  → ONE OF:
-      I1: a previous submit called setSendingDisabled(true) and never
-          reached the matching setSendingDisabled(false) (rollback path
-          did not run, or the unlock was guarded by a condition that
-          became false)
-      I2: ActionButtons effect did not re-fire (stale dependency / stale
-          closure) so setSendingDisabled(buttonConfig.sendingDisabled)
-          is never called with the new (false) value
-      I3: a sibling state such as pendingResponse / pendingUserMessage
-          is still set, and the unlock is gated behind it
-```
-
-Hybrids are allowed. The classification §6 covers the most likely composites.
-
-## 6. Capture moments (freezable, sequential)
-
-For each run, label the following moments and capture the diagnostic record
-at each:
-
-```text
-M0 pre-run                              (no task active)
-M1 streaming                            (first modelStreaming=true push)
-M2 last modelStreaming=true push        (just before terminal)
-M3 first modelStreaming=false push     (terminal flip)
-M4 terminal runtime event              (locally logged)
-M5 first stable post-terminal webview state  (the freeze frame)
-M6 attempted follow-up submit          (the user's submit-one-more-prompt)
-```
-
-The most informative transitions are **M2 → M3 → M5** and **M5 → M6**. They
-expose whether the terminal event (M3) propagates synchronously to the
-webview (E if not), and whether the user-initiated follow-up (M6) leaves
-the composer in a recoverable state (A or I if not).
-
-
-    enableButtons?: boolean
-    primaryText?: string
-    secondaryText?: string
-    primaryAction?: string
-    secondaryAction?: string
-  }
-}
-```
-
-### Required correlated webview record
-
-```text
-pushId                            (matches EXTENSION pushId)
-receivedAt                        (Date.now in the webview reducer)
-replica.turnState.phase
-replica.turnState.seq
-replica.thinkingPresentation.*
-replica.taskTelemetry.*
-chatReducer.sendingDisabled       (local useState, NOT on the wire)
-chatReducer.enableButtons
-ActionButtons.buttonConfig.*      (the consumer's input + computed output)
-```
-
-### Core correlation gates
-
-```text
-PUSH_CORRELATION_COVERAGE                  = 100%
-UNMATCHED_EXTENSION_PUSHES                 = 0
-UNMATCHED_WEBVIEW_PUSHES                   = 0
-
-TURNSTATE_SEQ_MONOTONIC                    = PASS | FAIL
-THINKING_SEQ_MATCHES_ASSOCIATED_TURNSTATE  = PASS | FAIL
-
-POST_TERMINAL_PUSH_OBSERVED                = true
-POST_TERMINAL_WEBVIEW_APPLY_OBSERVED       = true
-```
-
-
-
-
-E71_T14_INSTALL_BINDING                 = PASS   (4.1.10-6a4cfe564 visible)
-E71_T15_REAL_DOGFOOD                    = FAIL
-
-LIVE_DOGFOOD_OBSERVATION (multi-instant screenshot walk):
-  installed_version                     = 4.1.10-6a4cfe564
-  assistant_final_visible               = true
-  task_header_phase                     = Idle
-  task_header_elapsed                   = 00:00
-  task_header_tool_count                = 0
-  static_thinking_visible               = true
-  next_prompt_text_enterable            = true
-  next_prompt_sendable                  = false
-
-OLD_THINKING_ELLIPSIS_STALE = NOT_OBSERVED_IN_THIS_SMOKE
-  (the original animated-shimmer symptom is not present in this walk.
-  One live walk is not sufficient to declare it FIXED under all paths;
-  the honest wording is "not observed in this smoke.")
-
-E8                                      = HOLD
-E9                                      = HOLD
-TASKHEADER_MIGRATION                    = HOLD
-COMPOSER_FIX                            = HOLD
-```
-
