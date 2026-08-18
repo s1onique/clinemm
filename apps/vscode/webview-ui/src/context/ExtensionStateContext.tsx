@@ -547,7 +547,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	// (which must be pure under Strict Mode) so the cardinality
 	// contract `webview-raw-incoming(P) = exactly 1` and
 	// `webview-replica(P) = exactly 1` survives React retry paths.
-	const pendingRawSnapshotsRef = useRef<Map<string, ExtensionState>>(new Map())
+	const pendingRawSnapshotsRef = useRef<Map<string | number, ExtensionState>>(new Map())
 
 	// Subscribe to state updates and UI events using the gRPC streaming API
 	useEffect(() => {
