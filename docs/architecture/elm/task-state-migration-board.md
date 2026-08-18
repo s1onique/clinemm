@@ -1441,4 +1441,65 @@ ELM-02C2 C2.4 production qualification   ⛔
 ELM-02C2 C2.5 real E6 dogfood            ⛔
 
 ELM-03 E7                                ⛔
+
+---
+
+## ELM-03 — E7.1 Real-Dogfood Post-Terminal Authority-Split Triage (2026-08-19)
+
+**ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01**
+
+The closure-correction commit (`81f82f471`) honestly noted that the real
+connected extension→webview path was not proven and that T15 was not
+executed. The reviewer ran that exact installed-VSIX path. The result
+is RED with a NEW failure mode that did not exist in the prior LIVE02 walk:
+
+```text
+OLD failure (LIVE02, pre-E7.1):
+  animated "Thinking..." shimmer stayed after the assistant final report.
+
+NEW failure (LIVE-E71-R1, post-E7.1):
+  the animated shimmer is gone (good), but a STATIC "Thinking" row is
+  still rendered while the TaskHeader reads "Idle / 00:00 / 0" and the
+  composer refuses the next prompt.
+```
+
+This is a **post-terminal authority split**: three subsystems reading
+three different states for the same logical instant. The E7.1 cutover
+migrated only the Thinking-renderer consumers; the TaskHeader, composer,
+and follow-up routing were deliberately left behind (see
+`task-state-e71-webview-shadow-projection-consumer-inventory.md` §6).
+The real walk proves that "NOT touched" is not a safe boundary for this
+bug state — the split happens *through* the cut, not around it.
+
+```text
+E7.1 Thinking implementation                 🟡 QUALIFIED_PARTIAL
+E7.1 real dogfood                            🔴 FAIL
+
+E7.1 POST_TERMINAL_AUTHORITY_SPLIT_TRIAGE    🟢 NEXT
+
+TaskHeader migration                         ⛔ HOLD
+Composer migration/fix                       ⛔ HOLD
+E8 writer retirement                         ⛔ HOLD
+E9 effect execution                          ⛔ HOLD
+```
+
+The triage is **diagnostic-only**. It adds a bounded same-push authority
+capture, captures the post-terminal state in the installed build, and
+identifies the first authority boundary where the views diverge. No
+production semantic change is authorized until the divergence is proven.
+
+```text
+TRUST_BINDING       = SUBJECT_HEAD = 6a4cfe564b1f685212528a0d9d77ddf400732abd
+INSTALLED_VERSION   = 4.1.10-6a4cfe564
+VSIX_SHA256         = 266b5aa4b4d65aa3c116f8166244bae8b53850c1f8d83f1666b72add5772a5a1
+PROTECTED_STASHES   = INTACT (FORENSIC 141372c52, CONTEXT-ACCOUNTING 371752f71)
+
+OLD_THINKING_ELLIPSIS_STALE = NOT_OBSERVED_IN_THIS_SMOKE
+  (honest qualifier; one walk is not sufficient to declare FIXED.)
+
+EVIDENCE_ARTIFACTS =
+  docs/architecture/elm/LIVE-E71-R1-red-witness.md
+  docs/architecture/elm/task-state-e71-real-dogfood-post-terminal-authority-split-triage01-plan.md
+```
+
 ```
