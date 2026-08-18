@@ -28,6 +28,7 @@ import { defineConfig } from "vitest/config"
 const repoRoot = path.resolve(__dirname, "../..")
 const sdkCoreRoot = path.resolve(repoRoot, "sdk/packages/core/src")
 const sdkCoreHubRuntimeHost = path.resolve(sdkCoreRoot, "hub/runtime-host/hub-runtime-host.ts")
+const sdkCoreRemoteRuntimeHost = path.resolve(sdkCoreRoot, "hub/runtime-host/remote-runtime-host.ts")
 
 export default defineConfig({
 	test: {
@@ -46,6 +47,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@cline-internal/core/hub/runtime-host/hub-runtime-host": sdkCoreHubRuntimeHost,
+			"@cline-internal/core/hub/runtime-host/remote-runtime-host": sdkCoreRemoteRuntimeHost,
 			// Workspace package bundles. The base apps/vscode config
 			// aliases these for the standard test runs, but the
 			// dedicated D2 config stands alone and must repeat them.
