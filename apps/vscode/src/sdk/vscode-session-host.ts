@@ -35,6 +35,7 @@ import {
 import {
 	type AgentRuntimeEvent,
 	type AgentRuntimeRecoverySnapshot,
+	type AgentRuntimeStateSnapshot,
 	type AgentToolContext,
 	type ToolApprovalRequest,
 	type ToolApprovalResult,
@@ -343,5 +344,21 @@ export class VscodeSessionHost implements SdkSessionHost {
 			subscribeRuntimeEvents?: (listener: (sessionId: string, event: AgentRuntimeEvent) => void) => () => void
 		}
 		return subscribeRuntimeEventsThroughProxy(inner, listener)
+	}
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
+	 * Returns the canonical `AgentRuntimeStateSnapshot` of the
+	 * currently active `AgentRuntime` instance for `sessionId`, if
+	 * any. Proxies to `ClineCore.getActiveRuntimeSnapshot(sessionId)`,
+	 * which in turn reaches the canonical `AgentRuntime.snapshot()`
+	 * via `LocalRuntimeHost.getActiveRuntimeSnapshot(sessionId)`
+	 * (when the underlying host is `LocalRuntimeHost`). The proxy
+	 * returns `undefined` when the host does not implement
+	 * `getActiveRuntimeSnapshot?` — production code MUST use `?.()`
+	 * so the method-absent and returns-undefined cases collapse to
+	 * a single legacy-mirror fallback.
+	 */
+	runtimeSnapshot(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined {
+		return this.inner.getActiveRuntimeSnapshot(sessionId)
 	}
 }

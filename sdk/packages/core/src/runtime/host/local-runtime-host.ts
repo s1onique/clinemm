@@ -13,6 +13,7 @@ import {
 	createSessionId,
 	type ITelemetryService,
 	isLikelyAuthError,
+	type LiveAgentRuntimeStateSnapshot,
 	normalizeUserInput,
 } from "@cline/shared";
 import { setHomeDirIfUnset } from "@cline/shared/storage";
@@ -1162,6 +1163,39 @@ export class LocalRuntimeHost implements RuntimeHost {
 		if (row) return toSessionRecord(row);
 		const manifest = await this.readManifest(target);
 		return manifest ? manifestToSessionRecord(manifest) : undefined;
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
+	 * Returns the canonical `LiveAgentRuntimeStateSnapshot` of the
+	 * currently active `AgentRuntime` instance for `sessionId`, if
+	 * any. Returns `undefined` when:
+	 *   * the session is not active on this host (no entry in
+	 *     `this.sessions`),
+	 *   * the session is active but no `AgentRuntime` instance is
+	 *     currently alive (between runs, or after `stop()` /
+	 *     `dispose()`),
+	 *   * the active session's `agent` lacks a `snapshot` method
+	 *     (defensive; the canonical `SessionRuntime` orchestrator
+	 *     exposes it post-ELM-02F-CORRECTION01).
+	 *
+	 * The production chain is `?.()`-only — the
+	 * `ClineCore.runtimeSnapshot?()` proxy and the
+	 * `SdkSessionHost.runtimeSnapshot?()` interface surface both
+	 * use optional chaining, so the two absence states
+	 * (Hub/Remote host absent vs Local-but-no-active-agent)
+	 * collapse to the same legacy-mirror fallback at the
+	 * consumer. See ELM-02F plan §1.2 (CONTRACT_2).
+	 *
+	 * Production code MUST NOT branch on the difference between
+	 * `undefined` returned here and the absent-method case in
+	 * `SdkSessionHost` / `ClineCore`.
+	 */
+	getActiveRuntimeSnapshot(sessionId: string | undefined): LiveAgentRuntimeStateSnapshot | undefined {
+		if (!sessionId) return undefined
+		const active = this.sessions.get(sessionId)
+		if (!active) return undefined
+		return active.agent.snapshot?.()
 	}
 
 	async listSessions(limit = 200): Promise<SessionRecord[]> {

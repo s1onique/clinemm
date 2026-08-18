@@ -439,6 +439,27 @@ export interface RuntimeHost {
 	subscribeRuntimeEvents?(
 		listener: (sessionId: string, event: AgentRuntimeEvent) => void,
 	): () => void;
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
+	 * Returns the canonical `LiveAgentRuntimeStateSnapshot` of the
+	 * currently active `AgentRuntime` instance for `sessionId`, if
+	 * any. The proxy chain (`ClineCore.runtimeSnapshot?.()` →
+	 * `SdkSessionHost.runtimeSnapshot?.()` → this method) reaches
+	 * the canonical `AgentRuntime.snapshot()` for the arbiter
+	 * source that ELM-02F unblocks.
+	 *
+	 * Optional. Hosts that cannot surface the canonical runtime
+	 * snapshot (legacy host bridges; hub clients without direct
+	 * AgentRuntime access) MUST omit this method. Consumers MUST
+	 * treat the absence of the method as "canonical seam
+	 * unavailable for this host" — at the consumer this is
+	 * observationally identical to "method present but returns
+	 * undefined", and production code uses `?.()` so the two
+	 * absence states collapse to a single legacy-mirror fallback.
+	 */
+	getActiveRuntimeSnapshot?(
+		sessionId: string | undefined,
+	): import("@cline/shared").LiveAgentRuntimeStateSnapshot | undefined;
 }
 
 export type RuntimeHostMode = "auto" | "local" | "hub" | "remote";

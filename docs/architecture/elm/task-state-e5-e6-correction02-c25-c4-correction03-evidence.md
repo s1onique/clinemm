@@ -340,9 +340,12 @@ C25-C3 + C25-C3-CORRECTION01             CLOSED
 C25-C4 + C25-C4-CORRECTION01             CLOSED
    + C25-C4-CORRECTION02                 CLOSED
    + C25-C4-CORRECTION03                 CLOSED  (this commit)
-C25-C5 terminal + E7 auth                CLOSED (this commit's terminal ACT)
-ELM-02F-CORRECTION01                     🟢 NEXT (bounded E7-unblock ACT)
-E7                                      ⛔ BLOCKED on ELM-02F-CORRECTION01
+C25-C5 terminal + E7 auth                CLOSED (terminal ACT)
+ELM-02F-CORRECTION01                     ✅ CLOSED (T1..T8 PASS;
+                                                CANONICAL_ARBITER_SOURCE
+                                                = AGENT_RUNTIME_SNAPSHOT)
+E7                                      🟢 NEXT (unblocked;
+                                                  E7 backend activation ACT)
 ```
 
 ## 7. C25-C5 IMPLICATIONS CARRY-FORWARD

@@ -118,17 +118,17 @@ import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import {
+	legacyArbiterSnapshotFromTurnPhase,
+	mapAgentRuntimeStateSnapshotToArbiterSnapshot,
+} from "./task-state-shadow-arbiter-mapper"
+import {
 	emitHostRecovery,
 	emitSameTaskContinued,
 	emitTaskCancelled,
 	emitTaskRequested,
 	emitTaskReset,
 } from "./task-state-shadow-host-msgs"
-import {
-	createTaskShadowHostWiring,
-	emptyArbiterSnapshot,
-	type TaskShadowHostWiringWithSink,
-} from "./task-state-shadow-host-wiring"
+import { createTaskShadowHostWiring, type TaskShadowHostWiringWithSink } from "./task-state-shadow-host-wiring"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
 import { TurnStateTracker } from "./turn-state-tracker"
@@ -563,21 +563,40 @@ export class Controller {
 			},
 			getLegacyPhase: () => this.turnStateTracker.currentPhase,
 			getArbiterSnapshot: () => {
-				// The canonical arbiter is the AgentRuntime.snapshot(); until
-				// the forward-fix seam (ELM-02F) lands, the wiring mirrors
-				// the legacy projection so classification / arbitration
-				// remain well-defined. The recovery-state field is updated
-				// by `subscribeRecoveryStateChange` via the wiring's own
-				// recording path.
-				const phase = this.turnStateTracker.currentPhase
-				return {
-					...emptyArbiterSnapshot(),
-					execution: {
-						modelStreaming: phase === "streaming",
-						tooling: phase === "streaming",
-						awaitingApproval: phase === "awaiting_approval",
-					},
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
+				// Canonical arbiter source. The legacy mirror that
+				// derived `execution` from `turnStateTracker.currentPhase`
+				// is preserved as the FALLBACK only.
+				//
+				// Source selection (CONTRACT_2 — `?.()` only):
+				//   * `this.sessions?.getActiveSession()?.sdkHost`
+				//     may be absent (no active session) — no-op
+				//   * `.runtimeSnapshot?.()` may be absent on
+				//     Hub/Remote hosts — same path as returns-undefined
+				//   * the function call may return `undefined` even
+				//     when present (Local active but no
+				//     `AgentRuntime` instance yet, or between runs)
+				//
+				// All three converge to the legacy fallback
+				// (CANONICAL_MAPPER_ACCEPTS_TURN_PHASE = false, §3.2):
+				//
+				//   legacyArbiterSnapshotFromTurnPhase(
+				//       this.turnStateTracker.currentPhase,
+				//   )
+				//
+				// The legacy phase is read ONLY in the fallback
+				// branch. The canonical mapper reads ONLY from the
+				// snapshot — by construction, T2_LEGACY_INDEPENDENCE
+				// holds. T8_NECESSITY holds because the canonical
+				// mapper is a real `AgentRuntime.snapshot()`
+				// projection (not a constant/dead function).
+				const sdkHost = this.sessions?.getActiveSession()?.sdkHost
+				const sessionId = this.sessions?.getActiveSession()?.sessionId
+				const canonical = sdkHost?.runtimeSnapshot?.(sessionId)
+				if (canonical) {
+					return mapAgentRuntimeStateSnapshotToArbiterSnapshot(canonical)
 				}
+				return legacyArbiterSnapshotFromTurnPhase(this.turnStateTracker.currentPhase)
 			},
 			getRuntimeStatus: () => "running",
 			now: () => Date.now(),

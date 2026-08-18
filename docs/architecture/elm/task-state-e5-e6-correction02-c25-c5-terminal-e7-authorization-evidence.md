@@ -334,8 +334,11 @@ C25-C4 + C25-C4-CORRECTION01                  CLOSED
    + R14 (C2.4-D wording residue)             CLOSED
 C25-C5 terminal + E7 auth                     CLOSED  (this commit)
 
-ELM-02F-CORRECTION01                          🟢 NEXT
-E7                                            ⛔ BLOCKED on ELM-02F-CORRECTION01
+ELM-02F-CORRECTION01                          ✅ CLOSED (commit fc500d7ad... next commit)
+                                                  T1..T8 PASS; CANONICAL_ARBITER_SOURCE
+                                                  = AGENT_RUNTIME_SNAPSHOT;
+                                                  C25_ARB_SOURCE_RESIDUE = CLOSED
+E7                                            🟢 NEXT (unblocked; E7 backend activation ACT)
 ```
 
 The ELM-02F-CORRECTION01 ACT is the bounded unblock
@@ -388,10 +391,10 @@ C25-C4-CORRECTION01     ✅ CLOSED
 C25-C4-CORRECTION02     ✅ CLOSED
 C25-C4-CORRECTION03     ✅ CLOSED
 C25-C5                  ✅ CLOSED  (this commit)
-ELM-02F-CORRECTION01    🟢 NEXT
+ELM-02F-CORRECTION01    ✅ CLOSED  (commit <ELM-02F impl>)
 
 C2.5 OVERALL            ✅ CLOSED_CLEAN
-E7                      ⛔ BLOCKED on ELM-02F-CORRECTION01
+E7                      🟢 NEXT (unblocked by ELM-02F-CORRECTION01)
 ```
 
 After ELM-02F-CORRECTION01 lands:

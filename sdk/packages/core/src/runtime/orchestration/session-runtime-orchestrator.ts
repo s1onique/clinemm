@@ -42,6 +42,7 @@ import {
 	type ITelemetryService,
 	isLikelyAuthError,
 	type LegacyAgentUsage,
+	type LiveAgentRuntimeStateSnapshot,
 	type LoopDetectionConfig,
 	type Message,
 	type MessageWithMetadata,
@@ -661,6 +662,27 @@ export class SessionRuntime {
 	// -------------------------------------------------------------------
 	// Abort / shutdown
 	// -------------------------------------------------------------------
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
+	 * Returns the canonical `AgentRuntime.snapshot()` of the currently
+	 * active `AgentRuntime` instance for this session, if any. The
+	 * `AgentRuntime` is created per `run()` and cleared on drain, so
+	 * there is no live snapshot between runs or after `stop()` /
+	 * `dispose()`; in those gaps this returns `undefined` and the
+	 * canonical arbiter source falls back to the legacy mirror.
+	 *
+	 * This is the single load-bearing producer of the canonical
+	 * arbiter source that ELM-02F-CORRECTION01 unblocks. The
+	 * `LocalRuntimeHost.getActiveRuntimeSnapshot(sessionId)` proxy
+	 * reaches this method through `ActiveSession.agent.snapshot?.()`,
+	 * so the production chain is `?.()`-only (CONTRACT_2) and the
+	 * two absence states (Hub/Remote host absent vs Local active
+	 * but no agent instance) collapse to the same legacy fallback.
+	 */
+	snapshot(): LiveAgentRuntimeStateSnapshot | undefined {
+		return this.activeRuntime?.snapshot()
+	}
 
 	abort(reason?: unknown): void {
 		const message =

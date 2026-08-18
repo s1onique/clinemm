@@ -3,6 +3,7 @@ import type {
 	AgentRuntimeRecoverySnapshot,
 	BasicLogger,
 	ITelemetryService,
+	LiveAgentRuntimeStateSnapshot,
 } from "@cline/shared";
 import {
 	ClineCoreAutomationController,
@@ -678,6 +679,38 @@ export class ClineCore {
 			return () => {}
 		}
 		return this.host.subscribeRuntimeEvents(listener)
+	}
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
+	 * Returns the canonical `LiveAgentRuntimeStateSnapshot` of the
+	 * currently active `AgentRuntime` instance for `sessionId`, if
+	 * any. Returns `undefined` when:
+	 *   * the underlying host does not implement
+	 *     `getActiveRuntimeSnapshot?` (Hub/Remote hosts omit it by
+	 *     design — "canonical seam unavailable for this host"),
+	 *   * the session is not active on the host,
+	 *   * the session is active but no `AgentRuntime` instance is
+	 *     currently alive (between runs / after stop / dispose).
+	 *
+	 * Callers MUST treat this as the canonical arbiter source
+	 * when non-`undefined`, and as "no canonical seam" when
+	 * `undefined` — production code uses `?.()` so the method-
+	 * absent case and the returns-undefined case collapse to a
+	 * single legacy-mirror fallback at the consumer. See ELM-02F
+	 * plan §1.2 (CONTRACT_2).
+	 *
+	 * PUBLIC API DELTA: yes. Adds ClineCore.getActiveRuntimeSnapshot.
+	 * Surface stability: PROVISIONAL — internal-use-only during ELM
+	 * qualification; not for third-party consumers yet.
+	 */
+	getActiveRuntimeSnapshot(
+		sessionId: string | undefined,
+	): LiveAgentRuntimeStateSnapshot | undefined {
+		if (!sessionId) return undefined
+		if (!this.host.getActiveRuntimeSnapshot) {
+			return undefined
+		}
+		return this.host.getActiveRuntimeSnapshot(sessionId)
 	}
 	/**
 	 * Updates the AI model used by an active session.

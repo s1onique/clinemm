@@ -20,7 +20,7 @@ import type {
 	StartSessionInput,
 	StartSessionResult,
 } from "@cline/core"
-import type { AgentResult, AgentRuntimeEvent, AgentRuntimeRecoverySnapshot } from "@cline/shared"
+import type { AgentResult, AgentRuntimeEvent, AgentRuntimeRecoverySnapshot, AgentRuntimeStateSnapshot } from "@cline/shared"
 
 export interface SdkSessionHost {
 	readonly runtimeAddress: string | undefined
@@ -84,6 +84,24 @@ export interface SdkSessionHost {
 	 * MUST omit this method.
 	 */
 	subscribeRuntimeEvents?(listener: (sessionId: string, event: AgentRuntimeEvent) => void): () => void
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
+	 * Returns the canonical `AgentRuntimeStateSnapshot` of the
+	 * currently active `AgentRuntime` instance for `sessionId`, if
+	 * any. This is the canonical arbiter source that ELM-02F
+	 * unblocks — when the result is non-`undefined`, the
+	 * `TaskStateShadow` wiring uses the canonical `mapper`; when
+	 * `undefined`, the legacy mirror is preserved as the
+	 * FALLBACK. Hub/Remote hosts omit this method by design; the
+	 * method-absent and returns-undefined cases collapse to a
+	 * single fallback at the consumer via `?.()`. See ELM-02F
+	 * plan §1.2 (CONTRACT_2) and §3 T4_SOURCE_SELECTION.
+	 *
+	 * Optional. Implementations that don't expose the canonical
+	 * runtime snapshot (e.g. remote/hub hosts) MUST omit this
+	 * method.
+	 */
+	runtimeSnapshot?(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
 }
 
