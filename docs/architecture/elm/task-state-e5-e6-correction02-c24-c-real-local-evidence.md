@@ -262,6 +262,50 @@ BRIDGE_TEST_CANONICAL_GATE      = PASS
 MANUAL_ONLY_TEST                = false
 ```
 
+### C2.4-C-TOOLING-HARDENING frozen at `<this commit>` (defensive)
+
+The CI / build / TypeScript-tooling / runtime-integration reviewer
+flagged three wrapper defects in `69788593a`:
+
+- R1 — `runTsc()` ignored `result.error`, `result.signal`, and
+  `result.status`. An infrastructure failure producing zero
+  parseable diagnostics would have rewritten a baseline to `[]`
+  and then passed a future identical failure as `[] == []`.
+- R2 — the wrapper's comment claimed `tsc --noEmit` exits with
+  the count of errors as the exit code; that is incorrect.
+- R3 — ADDED / REMOVED reports compared JSON lines, which can
+  fragment a single diagnostic across multiple lines.
+
+The current non-empty baseline already fails closed for ordinary
+compiler-launch failure (a zero-diagnostic tool failure would
+mismatch the one-entry baseline and exit 1), so this is hardening
+not evidence. Folded into a separate small commit immediately
+before C2.4-D recon so the wrapper is defensible before reuse
+as a general pattern.
+
+- `runTsc()` now throws on `result.error`, `result.signal !== null`,
+  or `result.status !== 0` with zero parsed diagnostics. The
+  wrapper main catches the throw, logs the failure mode, and
+  exits `2` (distinct from `0` clean / `1` drift).
+- The incorrect exit-code comment is removed.
+- ADDED / REMOVED reports compare whole diagnostic tuples via a
+  single `JSON.stringify([file, line, col, code, message])` key.
+  Diagnostic records are no longer fragmented across lines.
+
+Production semantic delta: 0. No production source touched.
+
+```
+BRIDGE_TYPECHECK_WRAPPER_HARDENING = PASS
+  spawn failure / signal / non-diagnostic exit
+    → exit 2, baseline UNTOUCHED               = verified
+  drift detection (ADDED diagnostic)           = exit 1
+  happy path                                   = exit 0
+EXIT_CODE_DISTINCTION
+  0  = clean (observed diagnostics == baseline)
+  1  = drift  (observed diagnostics != baseline)
+  2  = infrastructure failure (tsc did not run cleanly)
+```
+
 ## Acceptance gate (C2.4-C-CORRECTION01, after review)
 
 ```text
