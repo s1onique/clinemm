@@ -84,7 +84,7 @@ PLAN-AMENDMENT-03          = <this commit> (post-D1 closure)
         iteration.started alone           = IMPOSSIBLE
       HUB_D0_CENTRAL_FINDING_EMPIRICAL    = PASS
 
-  - D1-REMOTE closed by `<D1-REMOTE commit>` (real RemoteRuntimeHost
+  - D1-REMOTE closed by `27d56708d` (real RemoteRuntimeHost
     parity witness). The witness is in
     `sdk/packages/core/src/hub/runtime-host/remote-runtime-host.reachability.c24-d.test.ts`
     and asserts:
@@ -121,6 +121,86 @@ R4  §3 D2 ordering corrected. Earlier wording held D2 behind D3,
     the corrected stream; if D3 chooses C, the original D2 still
     proves the fallback machinery works and explains why that
     machinery is unsafe for E7. Fixed in §3 next-step ordering.
+
+R5  §1.2 (the HUB/REMOTE steps）"in-process native transport offered
+    by NodeHubClient" wording was inaccurate -- NodeHubClient has
+    no production injection seam, only the proven module-level
+    `vi.mock("../client")` seam. Fixed in §1.2 to state the actual
+    seam.
+
+PLAN-AMENDMENT-04          = <D2 commit> (post-D2 closure)
+  - D2 closed by `<D2 commit>`. The witness is in
+    `apps/vscode/src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts`
+    (722 lines, 3 tests) plus the companion
+    `apps/vscode/vitest.config.c2-4-d-hub.ts` config. D2 drives
+    the SAME real reconstructed Hub stream from D1-HUB through
+    the production shadow wiring
+    (TaskShadowReverseTranslator +
+     createTaskShadowObservationCoordinator +
+     TaskShadowComparator + TaskShadowRecorder) under both
+    `canonicalAvailable` polarities, ON REAL HubRuntimeHost.
+
+  - D2 empirical findings (decoder for D3):
+      D2-F1 (canonicalAvailable=false):
+        translatedCount = 8 (iteration_start x2, content_start x2,
+                             content_end x2, done x2)
+        fallbackReconstructedApplied = 6
+        fallbackSuppressedCount     = 2  (the SECOND run-started and
+                                          the SECOND run-finished
+                                          collide on scopedEdgeKey
+                                          because Hub's
+                                          runId=undefined makes both
+                                          epochs' "run-started"/"run-finished"
+                                          edges share the same key)
+        diagnosticByOrigin = 0
+        shadowMutated = true
+        observationsObserved = 6 (= fallbackReconstructedApplied)
+
+      D2-T1 (canonicalAvailable=true):
+        translatedCount = 8 (same)
+        fallbackReconstructedApplied = 0
+        diagnosticByOrigin = 8
+        shadowMutated = false
+        observationsObserved = 0
+        JSON.stringify(shadowBefore) === JSON.stringify(shadowAfter)
+
+      D2-E1..E7 (epoch-defect evidence):
+        ALL 8 reconstructed snapshots carry runId=undefined.
+        The translator's `activeRunId` tracker is never seeded
+        because Hub's `iteration.started` envelope does NOT carry
+        conversationId on the emitted AgentEvent (the per-event
+        per-conversationId is lifted from
+        `payload.agent.conversationId` only on `session.notice`,
+        which the translator's `translateNotice` returns
+        undefined for because `stuck` reason is not in
+        AgentNoticeEvent.reason union).
+        EXPECTED: 0 notice events translated (confirmed).
+
+      D2-X1 (stranded-terminal gate):
+        Under FALLBACK_APPLY, 6 of 8 translated events reach
+        the shadow. The 2 collisions are
+        SUPPRESS_DUPLICATE at the coordinator's scopedEdgeKey
+        layer, NOT at the translator's stranded-terminal gate
+        (which is structurally dead because both sides of the
+        comparison are undefined).
+
+  - D2 / D3 ordering implication:
+      The D2 findings prove that the polarity machinery WORKS
+      (F1 mutates, T1 does not). The defective provenance is
+      the residual: even at FALLBACK_APPLY, the shadow sees
+      only 6 of 8 events due to the two run-id-less edge
+      collisions. D3 must decide whether:
+        A) Hub's iteration.started should carry conversationId
+           (alters the Hub source boundary).
+        B) The translator should seed activeRunId from another
+           source (e.g. session.notice.agent.conversationId).
+        C) Freeze E7_INITIAL_BACKEND_SCOPE = LOCAL_ONLY and
+           leave Hub/Remote out of E7.
+      D2's evidence is the bound on how dangerous C is: under
+      FALLBACK_APPLY the shadow sees the structural shape (run
+      start/stop, tool start/finish) correctly except for the
+      two colliding edge duplicates. If those two duplicates are
+      acceptable for dogfood and E7 is LOCAL_ONLY, C is viable.
 ```
 
 ## 1. The reviewer-corrected guardrail (replaces an earlier
@@ -144,10 +224,16 @@ The corrected rule:
 2. HOST_REACHABILITY    = wherever construction seams permit,
                           test the PRODUCTION Hub / Remote host
                           object against the shadow wiring. The
-                          in-process native transport offered by
-                          `NodeHubClient` is the production seam
-                          for Hub; Remote is the same shape with
-                          `endpoint: ws://...` instead of `url`.
+                          proven test seam is module-level
+                          `vi.mock("../client", ...)` that swaps
+                          `NodeHubClient` at import time
+                          (see `hub-runtime-host.test.ts:8-43`),
+                          with `RemoteRuntimeHost` additionally
+                          using `vi.importActual` to forward
+                          `normalizeHubWebSocketUrl` (the only
+                          override path). Remote is otherwise
+                          the same shape with `endpoint: ...`
+                          instead of `url`.
 
 3. FALLBACK_COMPOSITION = prove the runtime-reconstructed shadow
                           path (DIAGNOSTIC_ONLY vs FALLBACK_APPLY)

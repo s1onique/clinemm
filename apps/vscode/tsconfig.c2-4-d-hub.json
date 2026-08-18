@@ -1,0 +1,55 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"rootDir": "../..",
+		"baseUrl": ".",
+		"paths": {
+			"@/*": [
+				"./src/*"
+			],
+			"@api/*": [
+				"./src/core/api/*"
+			],
+			"@core/*": [
+				"./src/core/*"
+			],
+			"@generated/*": [
+				"./src/generated/*"
+			],
+			"@hosts/*": [
+				"./src/hosts/*"
+			],
+			"@integrations/*": [
+				"./src/integrations/*"
+			],
+			"@packages/*": [
+				"./src/packages/*"
+			],
+			"@services/*": [
+				"./src/services/*"
+			],
+			"@shared/*": [
+				"./src/shared/*"
+			],
+			"@utils/*": [
+				"./src/utils/*"
+			],
+			"@cline-internal/core/hub/runtime-host/hub-runtime-host": [
+				"../../sdk/packages/core/src/hub/runtime-host/hub-runtime-host"
+			]
+		}
+	},
+	"include": [
+		"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts"
+	],
+	"exclude": [
+		"node_modules",
+		"webview-ui",
+		"src/test/e2e/**/*",
+		"src/test/scenarios/**/*",
+		"src/test/cline-core-vitest-stub.ts",
+		"src/test/bun-test-preload.ts",
+		"src/generated/**/*"
+	]
+}
