@@ -13,23 +13,42 @@ the next dogfood walk uses to produce a binary boundary decision.
 ## 1. Identity (binding-confirmed)
 
 ```text
-C2R_SOURCE_HEAD        = 2f1a9999b4542a2cbbb7a671999390f1dba0d7c9  (closure head)
-ENTRY_HEAD_AT_C2C2    = b40fa2477b2a6f08d6eec6084fd2e17574c37d72  (this ACT's HEAD)
-                        (4 commits on top of 2f1a9999b)
+ENTRY_HEAD                = 2f1a9999b4542a2cbbb7a671999390f1dba0d7c9  (C2 closure; start of C2-CORRECTION02)
+BUILD_HEAD                = b40fa2477b2a6f08d6eec6084fd2e17574c37d72  (the C2-CORRECTION02 build head)
+DOGFOOD_SOURCE_HEAD       = b40fa2477b2a6f08d6eec6084fd2e17574c37d72  (the head bound to the dogfood VSIX)
+CLOSURE_HEAD              = ea5446a79...(see Notes)                   (closure of C2-CORRECTION02)
 
-VSIX_PATH              = dist/dogfood/clinemm-4.1.10-b40fa2477.vsix
-VSIX_VERSION           = 4.1.10-b40fa2477
-VSIX_SHA256            = 413f7595cee7918ab7f3a61a325994434637e462f4074823293531e78d839318
-VSIX_BYTES             = 8,882,905
-VSIX_BUILD_FLAGS       = --skip-typecheck  (baseline TS errors are pre-existing
-                        in src/sdk/__tests__/* from earlier ACTs; this ACT adds
-                        zero new production TS errors)
+C2-CORRECTION02 commit chain (5 commits on top of ENTRY_HEAD):
+  ba1c3fbe5  docs(elm): C2-CORRECTION02 freeze raw-incoming truth contract + source recon
+  729fef6a9  test+chore(elm): add PTAD raw-incoming/applied boundary correlation
+  872a80f7b  test(elm): qualify real extension-state receive/apply composition
+  b40fa2477  fix(elm): test telemetry strip uses startedAt not elapsedMs (rounds out BUILD_HEAD)
+  a34674fa4  docs(elm): C2-CORRECTION02 terminal evidence + exact-HEAD dogfood result
+  ea5446a79  docs(elm): refine C2-CORRECTION02 verdict disposition to HALT_CAPTURE_INSUFFICIENT (= CLOSURE_HEAD)
 
-WORKTREE_CLEAN         = true (no untracked, no modified, no staged)
-PROTECTED_STASHES_INTACT = true
-  PROTECTED_STASH_FORENSIC   = 141372c52
-  PROTECTED_STASH_CONTEXT    = 371752f71
+VSIX_PATH                 = dist/dogfood/clinemm-4.1.10-b40fa2477.vsix
+VSIX_VERSION              = 4.1.10-b40fa2477
+VSIX_SHA256               = 413f7595cee7918ab7f3a61a325994434637e462f4074823293531e78d839318
+VSIX_BYTES                = 8,882,905
+VSIX_BUILD_FLAGS          = --skip-typecheck  (baseline TS errors are pre-existing
+                           in src/sdk/__tests__/* from earlier ACTs; this ACT adds
+                           zero new production TS errors)
+
+WORKTREE_CLEAN            = true (no untracked, no modified, no staged)
+PROTECTED_STASHES_INTACT  = true
+  PROTECTED_STASH_FORENSIC = 141372c52
+  PROTECTED_STASH_CONTEXT  = 371752f71
 ```
+
+> **R3 correction note (added by C2-CORRECTION02-FIXUP01):** the
+> original version of this doc conflated three heads under the term
+> `ENTRY_HEAD_AT_C2C2 = b40fa2477`. After the architecture review the
+> doc was updated to the four-name convention
+> `ENTRY_HEAD` / `BUILD_HEAD` / `CLOSURE_HEAD` / `DOGFOOD_SOURCE_HEAD`.
+> The build artifact (the .vsix) and its SHA256 are unchanged — only
+> the doc rename was applied. See
+> `task-state-e71-c2-correction02-fixup01-terminal-evidence.md` for
+> the fixup itself.
 
 Historical VSIX files preserved:
 
