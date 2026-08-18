@@ -230,7 +230,11 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 
 		it("W5-4: the webview reads _ptadEnabled on its first state push", () => {
 			const source = readSource(WEBVIEW_CONTEXT_PATH)
-			expect(source).toMatch(/if\s*\(\s*stateData\._ptadEnabled\s*===\s*true/)
+			// The wiring must reference _ptadEnabled and act on it
+			// (enable or disable) — the if may be in either form
+			// (inline or hoisted const). The W12-1 test pins the
+			// disable path independently.
+			expect(source).toMatch(/stateData\._ptadEnabled\s*===\s*true/)
 		})
 
 		it("W5-5: package.json declares the two debug commands", () => {
@@ -305,6 +309,66 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			const source = readSource(resolve(__dirname, "../../shared/post-terminal-authority-diagnostic.ts"))
 			expect(source).not.toMatch(/same\s+logical\s+instant/i)
 			expect(source).not.toMatch(/literal\s+single\s+instant/i)
+		})
+	})
+
+	describe("W9: correlation-domain fix (R7)", () => {
+		it("W9-1: InputSection captures the wire-side ExtensionState.stateVersion, NOT turnState.seq", () => {
+			const source = readSource(INPUT_SECTION_PATH)
+			// The capture must pull stateVersion from useExtensionState, not
+			// turnState?.seq.
+			expect(source).toMatch(/stateVersion:\s*wireStateVersion\s*\?\?\s*0/)
+			expect(source).not.toMatch(/stateVersion:\s*turnState\?\.seq/)
+		})
+
+		it("W9-2: ActionButtons captures the wire-side ExtensionState.stateVersion, NOT turnState.seq", () => {
+			const source = readSource(ACTION_BUTTONS_PATH)
+			expect(source).toMatch(/stateVersion:\s*wireStateVersion\s*\?\?\s*0/)
+			expect(source).not.toMatch(/stateVersion:\s*turnState\?\.seq/)
+		})
+
+		it("W9-3: useMessageHandlers captures the wire-side ExtensionState.stateVersion, NOT turnState.seq", () => {
+			const source = readSource(USE_MESSAGE_HANDLERS_PATH)
+			expect(source).toMatch(/stateVersion:\s*args\.wireStateVersion\s*\?\?\s*0/)
+			expect(source).not.toMatch(/stateVersion:\s*args\.turnStateSeq\s*\?\?\s*0/)
+		})
+	})
+
+	describe("W10: dump-path robustness (R8)", () => {
+		it("W10-1: the runtime creates globalStorageUri.fsPath with mkdir before writing", () => {
+			const source = readSource(RUNTIME_PATH)
+			expect(source).toMatch(/mkdir\([^)]*\{[^}]*recursive:\s*true\s*\}/)
+			expect(source).toMatch(/ensureDirectory/)
+		})
+
+		it("W10-2: both dump paths call ensureDirectory before writeFile", () => {
+			const source = readSource(RUNTIME_PATH)
+			const ensureCount = source.split("ensureDirectory(dir)").length - 1
+			expect(ensureCount).toBeGreaterThanOrEqual(2)
+		})
+	})
+
+	describe("W11: failed-followup coverage (R9)", () => {
+		it("W11-1: useMessageHandlers captures the BLOCKED branch when turnAllowsFollowup returns false", () => {
+			const source = readSource(USE_MESSAGE_HANDLERS_PATH)
+			// The blocked branch must exist and route name must carry the
+			// phase that rejected the follow-up.
+			expect(source).toMatch(/clineAsk\.turnAllowsFollowup\.blocked/)
+			expect(source).toMatch(/canSubmit:\s*false/)
+		})
+
+		it("W11-2: the allowed branch uses route=...allowed and canSubmit=true", () => {
+			const source = readSource(USE_MESSAGE_HANDLERS_PATH)
+			expect(source).toMatch(/clineAsk\.turnAllowsFollowup\.allowed/)
+			expect(source).toMatch(/canSubmit:\s*true/)
+		})
+	})
+
+	describe("W12: toggle disable symmetry (R10)", () => {
+		it("W12-1: the webview context disables the recorder when the wire bit is missing or false", () => {
+			const source = readSource(WEBVIEW_CONTEXT_PATH)
+			// Must have an else branch that calls disablePostTerminalAuthorityDiagnostic.
+			expect(source).toMatch(/disablePostTerminalAuthorityDiagnostic\(\s*"webview"\s*\)/)
 		})
 	})
 })

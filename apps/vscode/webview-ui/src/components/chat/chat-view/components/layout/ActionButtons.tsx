@@ -24,7 +24,7 @@ interface ActionButtonsProps {
  */
 export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, chatState, mode, messageHandlers }) => {
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
-	const { turnState, foregroundCommandRunning } = useExtensionState()
+	const { turnState, foregroundCommandRunning, stateVersion: wireStateVersion } = useExtensionState()
 
 	// Tracks the ask the user last acted on. Clicking a footer button latches this so the
 	// buttons disable immediately (and survive the trailing bookkeeping re-renders before the
@@ -75,9 +75,13 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 		// `chatReducerSendingDisabled` (Case I) so the live C2 verdict can
 		// disambiguate which authority holds the lockout.
 		if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
+			// Correlation-domain fix: stateVersion now stamps the wire-side
+			// ExtensionState.stateVersion (same counter as the push boundary),
+			// NOT turnState.seq. The turnState.seq is preserved as `legacySeq`.
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
-				stateVersion: turnState?.seq ?? 0,
+				stateVersion: wireStateVersion ?? 0,
 				capturedAt: Date.now(),
 				legacyPhase: turnState?.phase,
 				legacySeq: turnState?.seq,
@@ -104,6 +108,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 		turnState?.seq,
 		turnState?.phase,
 		turnState?.anchorTs,
+		wireStateVersion,
 	])
 
 	// Clear input when transitioning from command_output to api_req

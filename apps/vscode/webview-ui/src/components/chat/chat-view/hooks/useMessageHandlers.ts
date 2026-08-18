@@ -25,13 +25,18 @@ function captureFollowupRoute(args: {
 	turnStateSeq: number | undefined
 	turnStatePhase: TurnPhase | undefined
 	turnStateAnchorTs: number | undefined
+	wireStateVersion: number | undefined
 }) {
 	if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
 		return
 	}
 	recordPostTerminalAuthoritySnapshot({
 		origin: "webview",
-		stateVersion: args.turnStateSeq ?? 0,
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
+		// Correlation-domain fix: stamp the wire-side
+		// ExtensionState.stateVersion (same counter as the push boundary),
+		// NOT turnState.seq. The turnState.seq is preserved as `legacySeq`.
+		stateVersion: args.wireStateVersion ?? 0,
 		capturedAt: Date.now(),
 		legacyPhase: args.turnStatePhase,
 		legacySeq: args.turnStateSeq,
@@ -48,7 +53,7 @@ function captureFollowupRoute(args: {
  * Handles sending messages, button clicks, and task management
  */
 export function useMessageHandlers(messages: ClineMessage[], chatState: ChatState): MessageHandlers {
-	const { backgroundCommandRunning, turnState } = useExtensionState()
+	const { backgroundCommandRunning, turnState, stateVersion: wireStateVersion } = useExtensionState()
 	const {
 		setInputValue,
 		activeQuote,
@@ -310,21 +315,23 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 					// in every webview state push), so a `undefined` turnState is a
 					// missing-canonical-state condition, not a license to parse messages. The
 					// phase rule is centralised in `shared/turnStateSelectors.ts`.
+					// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
+					// Capture the follow-up routing decision at the BOUNDARY (before
+					// branching) so C2 records show what happened when the follow-up
+					// failed too. This is critical for distinguishing Case G (terminal
+					// event vs follow-up transition gap) from Case I (chat reducer
+					// stuck).
 					if (turnAllowsFollowup(turnState)) {
 						// Continue the conversation / interrupt with feedback.
-						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
-						// Capture the follow-up routing decision. The diagnostic record
-						// pins `canSubmit`, the route name, and the pending flags so the
-						// live C2 verdict can distinguish Case G (terminal event vs
-						// follow-up transition gap) from Case I (chat reducer stuck).
 						captureFollowupRoute({
-							route: "clineAsk.turnAllowsFollowup",
+							route: "clineAsk.turnAllowsFollowup.allowed",
 							canSubmit: true,
 							hasPendingResponse: pendingResponse !== undefined,
 							hasPendingUserMessage: pendingUserMessage !== undefined,
 							turnStateSeq: turnState?.seq,
 							turnStatePhase: turnState?.phase,
 							turnStateAnchorTs: turnState?.anchorTs,
+							wireStateVersion,
 						})
 						await sendAskResponseWithPendingState(
 							AskResponseRequest.create({
@@ -338,6 +345,20 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 							},
 						)
 						messageSent = true
+					} else {
+						// Capture the BLOCKED path. The route name carries the phase
+						// that rejected the follow-up so C2 can attribute the failure.
+						const blockingPhase = turnState?.phase ?? "unknown"
+						captureFollowupRoute({
+							route: `clineAsk.turnAllowsFollowup.blocked:${blockingPhase}`,
+							canSubmit: false,
+							hasPendingResponse: pendingResponse !== undefined,
+							hasPendingUserMessage: pendingUserMessage !== undefined,
+							turnStateSeq: turnState?.seq,
+							turnStatePhase: turnState?.phase,
+							turnStateAnchorTs: turnState?.anchorTs,
+							wireStateVersion,
+						})
 					}
 				}
 

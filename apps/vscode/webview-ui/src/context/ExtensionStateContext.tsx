@@ -2,6 +2,7 @@ import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import {
+	disablePostTerminalAuthorityDiagnostic,
 	enablePostTerminalAuthorityDiagnostic,
 	getPostTerminalAuthorityDiagnosticRecords,
 	isPostTerminalAuthorityDiagnosticEnabled,
@@ -492,13 +493,17 @@ export const ExtensionStateContextProvider: React.FC<{
 				if (response.stateJson) {
 					try {
 						const stateData = JSON.parse(response.stateJson) as ExtensionState
-						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
-						// Pick up the wire bit on every push; the first push with
-						// `_ptadEnabled: true` enables the webview recorder. In production
-						// (no toggle ever fired) the field is undefined and the recorder
-						// stays a no-op.
-						if (stateData._ptadEnabled === true && !isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
+						// Toggle symmetry fix: enable when `_ptadEnabled === true`,
+						// disable when the bit is missing or false. The wire bit is
+						// undefined in production (no toggle ever fired), so the
+						// default-off path is the no-op path.
+						const ptadEnabled = stateData._ptadEnabled === true
+						const webviewRecorderOn = isPostTerminalAuthorityDiagnosticEnabled("webview")
+						if (ptadEnabled && !webviewRecorderOn) {
 							enablePostTerminalAuthorityDiagnostic("webview")
+						} else if (!ptadEnabled && webviewRecorderOn) {
+							disablePostTerminalAuthorityDiagnostic("webview")
 						}
 						setState((prevState) => {
 							// Versioning logic for autoApprovalSettings

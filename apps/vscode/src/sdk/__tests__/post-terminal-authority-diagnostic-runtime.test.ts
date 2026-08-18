@@ -159,5 +159,40 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			const text = readFileSync(extPath, "utf8")
 			expect(text).toBe("")
 		})
+
+		it("R2-4 (R8): dump creates the globalStorage directory if it does not exist (fresh install)", async () => {
+			// Simulate a fresh installation: globalStorageUri points at a
+			// directory that does NOT yet exist on disk.
+			const freshDir = join(tmp, "fresh-install", "does-not-exist")
+			const freshContext = fakeContext(freshDir)
+			expect(existsSync(freshDir)).toBe(false)
+			enablePostTerminalAuthorityDiagnostic("extension")
+			recordPostTerminalAuthoritySnapshot({
+				origin: "extension",
+				stateVersion: 1,
+				capturedAt: Date.now(),
+				legacyPhase: "idle",
+			})
+			const extPath = await dumpExtensionSidePostTerminalAuthorityDiagnostic(freshContext)
+			expect(existsSync(extPath)).toBe(true)
+			expect(existsSync(freshDir)).toBe(true)
+			const text = readFileSync(extPath, "utf8")
+			expect(text.length).toBeGreaterThan(0)
+		})
+
+		it("R2-5 (R8): the webview dump also creates the globalStorage directory if missing", async () => {
+			const freshDir = join(tmp, "fresh-install-webview", "does-not-exist")
+			const freshContext = fakeContext(freshDir)
+			expect(existsSync(freshDir)).toBe(false)
+			await appendWebviewSidePostTerminalAuthorityDiagnostic(freshContext, [
+				{
+					origin: "webview",
+					stateVersion: 1,
+					capturedAt: Date.now(),
+					legacyPhase: "idle",
+				},
+			])
+			expect(existsSync(freshDir)).toBe(true)
+		})
 	})
 })

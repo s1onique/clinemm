@@ -64,21 +64,20 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	// the previous `legacyTaskRunning` was an `OR` short-circuit on `turnState === undefined`
 	// and disappeared with that branch.
 	const submitDisabled = sendingDisabled && !allowQueuedSubmit
-	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
-	// Capture the composer-lockout decision inputs at the exact production
-	// expression site (this is InputSection.tsx:62). Capturing here — rather
-	// than at the post-reducer boundary — ensures the diagnostic record
-	// reflects the values that React actually used to compute `submitDisabled`,
-	// not just the wire-side snapshot. The capture is OPT-IN: when the
-	// diagnostic is disabled (the default), the if-branch is skipped and the
-	// production render path is unchanged.
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
+	// Correlation-domain fix: the capture stamps `stateVersion` with the
+	// wire-side ExtensionState.stateVersion (the SAME counter the push
+	// boundary uses), NOT turnState.seq. The turnState.seq is preserved
+	// as `legacySeq`. This keeps the push-boundary and component records
+	// in one joinable domain.
+	const { stateVersion: wireStateVersion } = useExtensionState()
 	useEffect(() => {
 		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
 			return
 		}
 		recordPostTerminalAuthoritySnapshot({
 			origin: "webview",
-			stateVersion: turnState?.seq ?? 0,
+			stateVersion: wireStateVersion ?? 0,
 			capturedAt: Date.now(),
 			legacyPhase: turnState?.phase,
 			legacySeq: turnState?.seq,
@@ -87,7 +86,15 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			allowQueuedSubmit,
 			submitDisabled,
 		})
-	}, [turnState?.seq, turnState?.phase, turnState?.anchorTs, sendingDisabled, allowQueuedSubmit, submitDisabled])
+	}, [
+		turnState?.seq,
+		turnState?.phase,
+		turnState?.anchorTs,
+		sendingDisabled,
+		allowQueuedSubmit,
+		submitDisabled,
+		wireStateVersion,
+	])
 	// `lastMessage` is destructured for type parity with the chat state surface; the field
 	// is no longer part of the runtime-task inference.
 	void lastMessage

@@ -27,7 +27,7 @@
  * module so the diagnostic stays webview-bundle-safe.
  */
 
-import { writeFile } from "node:fs/promises"
+import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
 	disablePostTerminalAuthorityDiagnostic,
@@ -89,6 +89,18 @@ export async function togglePostTerminalAuthorityDiagnosticWorkspaceEnabled(
 }
 
 /**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
+ * VS Code's API documents that `globalStorageUri` is the URI of the
+ * directory "in which the extension can store global state" and that
+ * "the directory might not exist on disk and creation is up to the
+ * extension". We ensure the directory exists before writing so the
+ * C2 smoke cannot ENOENT on a fresh installation.
+ */
+async function ensureDirectory(pathname: string): Promise<void> {
+	await mkdir(pathname, { recursive: true })
+}
+
+/**
  * Dump the extension-side ring buffer to a JSONL file under the global
  * storage directory. Returns the absolute path on success.
  */
@@ -96,7 +108,9 @@ export async function dumpExtensionSidePostTerminalAuthorityDiagnostic(
 	context: PostTerminalAuthorityDiagnosticContext,
 ): Promise<string> {
 	const records = getPostTerminalAuthorityDiagnosticRecords("extension")
-	const file = join(context.globalStorageUri.fsPath, DUMP_FILE_EXTENSION)
+	const dir = context.globalStorageUri.fsPath
+	await ensureDirectory(dir)
+	const file = join(dir, DUMP_FILE_EXTENSION)
 	const jsonl = records.map((record) => JSON.stringify(record)).join("\n")
 	await writeFile(file, jsonl, "utf8")
 	return file
@@ -110,7 +124,9 @@ export async function appendWebviewSidePostTerminalAuthorityDiagnostic(
 	context: PostTerminalAuthorityDiagnosticContext,
 	records: readonly PostTerminalAuthoritySnapshot[],
 ): Promise<string> {
-	const file = join(context.globalStorageUri.fsPath, DUMP_FILE_WEBVIEW)
+	const dir = context.globalStorageUri.fsPath
+	await ensureDirectory(dir)
+	const file = join(dir, DUMP_FILE_WEBVIEW)
 	const jsonl = records.map((record) => JSON.stringify(record)).join("\n")
 	if (jsonl.length > 0) {
 		await writeFile(file, jsonl, "utf8")
