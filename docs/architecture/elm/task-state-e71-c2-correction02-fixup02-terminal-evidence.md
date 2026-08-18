@@ -325,6 +325,27 @@ F13  FIXUP01 production shape refreshed in prose                   PASS
 
 ---
 
+## 6.1 Ceiling-exception annotation
+
+The original FIXUP02 plan documented a 4-commit ceiling. Five
+commits landed (commit 5 = the VSIX-binding refresh that records
+the final head + SHA256 + bytes in this terminal evidence doc).
+
+```text
+PLANNED_COMMIT_CEILING = 4
+ACTUAL_COMMITS         = 5
+CEILING_EXCEPTION      = VSIX-binding documentation refresh
+                        (commit 5 = record final HEAD + VSIX SHA256)
+                        No production behavior change.
+```
+
+The convention established by C2-CORRECTION02-FIXUP01 §6.1 is
+followed: future fixups that exceed their `PLANNED_COMMIT_CEILING`
+MUST call out the over-ceiling commits explicitly under a
+`CEILING_EXCEPTION` block of this shape.
+
+---
+
 ## 7. Verdict
 
 ```text
