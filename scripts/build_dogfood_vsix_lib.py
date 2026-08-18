@@ -180,6 +180,42 @@ def write_package_version(package_json: Path, version: str) -> None:
         raise BuildError(f"cannot write {package_json}: {exc}")
 
 
+def disable_vscode_prepublish_hook(package_json: Path) -> None:
+    """Replace ``scripts["vscode:prepublish"]`` with a no-op in the
+    *staged* package.json. Used on the staged manifest only
+    (DOGFOOD-VSIX-QUALIFICATION01 deliberate dogfood shortcut).
+
+    Why: ``@vscode/vsce package`` automatically invokes the
+    package's ``vscode:prepublish`` npm script (NPM lifecycle
+    integration). For dogfood qualification where the typecheck
+    is intentionally bypassed, that hook must be neutralised in
+    the STAGED copy only -- the source tree's package.json is
+    never touched.
+
+    This is a sibling to :func:`write_package_version` -- same
+    staging-only invariant. The staged package.json is captured
+    by DOGFOOD03b before, and asserted after, this mutation.
+
+    ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION04.
+    """
+    if not package_json.is_file():
+        raise BuildError(
+            f"staged package.json missing: {package_json} -- "
+            "refusing to neuter a non-existent prepublish hook"
+        )
+    try:
+        data = json.loads(package_json.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BuildError(f"cannot read {package_json}: {exc}")
+    scripts = data.setdefault("scripts", {})
+    if "vscode:prepublish" in scripts:
+        scripts["vscode:prepublish"] = "true"
+    try:
+        package_json.write_text(json.dumps(data, indent=2) + "\n")
+    except OSError as exc:
+        raise BuildError(f"cannot write {package_json}: {exc}")
+
+
 def short_sha_from_head(repo: Path, *, run_cmd: Optional[Callable[[Sequence[str], Path], str]] = None) -> str:
     """Return ``git rev-parse --short=9 HEAD``. The only IO is the git
     invocation, which can be swapped for a test double via ``run_cmd``."""
@@ -783,6 +819,11 @@ def build_dogfood_vsix(
 
         # ---- D05 (cont.) VSCE_AUTHORITY ---------------------------------
         stage_out = stage_apps / "dist" / final_path.name
+        # CORRECTION04: when skip_typecheck is set, neuter the
+        # vscode:prepublish hook in the STAGED package.json so that
+        # ``vsce package`` does not re-trigger the typecheck gate.
+        if skip_typecheck:
+            disable_vscode_prepublish_hook(stage_apps / "package.json")
         vsce_package(stage_apps, stage_out, run_visible=run_visible)
 
         # ---- D08 PACKAGE_VERIFICATION (DOGFOOD05) -----------------------
@@ -826,6 +867,7 @@ __all__ = [
     "derive_dogfood_version",
     "read_package_version",
     "write_package_version",
+    "disable_vscode_prepublish_hook",
     "short_sha_from_head",
     "full_sha_from_head",
     "assert_clean_worktree",
