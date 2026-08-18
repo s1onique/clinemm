@@ -5985,7 +5985,6 @@ function buildW11Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
 		{ kind: "set-active-session", sessionId: "session-17" },
-		{ kind: "set-active-session", sessionId: "session-17" },
 		{
 			kind: "canonical",
 			sessionId: "session-17",
@@ -6080,7 +6079,6 @@ function buildW11Steps(): WorkloadStep[] {
 function buildW12Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-A", which: "requested", legacyPhase: "idle" },
-		{ kind: "set-active-session", sessionId: "session-17" },
 		{ kind: "set-active-session", sessionId: "session-17" },
 		{
 			kind: "canonical",
@@ -6198,7 +6196,6 @@ function buildW13Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-W13", which: "requested", legacyPhase: "idle" },
 		{ kind: "set-active-session", sessionId: "session-W13" },
-		{ kind: "set-active-session", sessionId: "session-W13" },
 		{ kind: "canonical", sessionId: "session-W13", event: runStarted(snapIdle) },
 		// Stream / unstream transition so the modelStreaming
 		// edge is exercised before completion (this is not
@@ -6269,7 +6266,6 @@ function buildW14Steps(): WorkloadStep[] {
 	return [
 		{ kind: "host-task", taskId: "task-W14", which: "requested", legacyPhase: "idle" },
 		{ kind: "set-active-session", sessionId: "session-W14" },
-		{ kind: "set-active-session", sessionId: "session-W14" },
 		{ kind: "canonical", sessionId: "session-W14", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-W14", event: execEvent(snapIdle.execution!, snapStreaming) },
 		// HOST_TASK cancel. legacyPhase mirrors production
@@ -6333,7 +6329,6 @@ function buildW15Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W15", which: "requested", legacyPhase: "idle" },
-		{ kind: "set-active-session", sessionId: "session-W15" },
 		{ kind: "set-active-session", sessionId: "session-W15" },
 		{ kind: "canonical", sessionId: "session-W15", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-W15", event: execEvent(snapIdle.execution!, snapStreaming) },
@@ -6402,7 +6397,6 @@ function buildW16Steps(): WorkloadStep[] {
 	}
 	return [
 		{ kind: "host-task", taskId: "task-W16", which: "requested", legacyPhase: "idle" },
-		{ kind: "set-active-session", sessionId: "session-W16" },
 		{ kind: "set-active-session", sessionId: "session-W16" },
 		{ kind: "canonical", sessionId: "session-W16", event: runStarted(snapIdle) },
 		{ kind: "canonical", sessionId: "session-W16", event: execEvent(snapIdle.execution!, snapStreaming) },

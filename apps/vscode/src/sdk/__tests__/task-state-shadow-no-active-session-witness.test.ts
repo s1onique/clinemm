@@ -1,64 +1,102 @@
 /**
  * ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01
- * NO_ACTIVE_SESSION direct-production-boundary witness (POST-FIX).
+ * NO_ACTIVE_SESSION direct-production-boundary witness — POST-FIX
+ * (frozen at adbb5e2d5; production guard at wiring.ts:393).
  *
- * C2.4-B (commit 0b2f6265c) reproduced 8/8 B rows = FAIL_OPEN at the
- * vacuous guard. Per C2.4-B-FIXUP01 review (round-7 follow-up),
- * this file is now the post-fix invariant:
+ * PRE-FIX HISTORY (frozen at 0b2f6265c):
+ *   The vacuous guard `if (activeSession && activeSession.sessionId
+ *   !== input.sessionId) return` is FALSE under `getActiveSession()
+ *   === undefined`. The C2.4-B witness reproduced 8/8 B rows =
+ *   FAIL_OPEN at that vacuous guard. See
+ *   `docs/architecture/elm/task-state-e5-e6-correction02-c24-witness-evidence.md`
+ *   §A for the captured pre-fix evidence.
  *
- *   B1–B8  ordinary `it()` with hard `expect(...).toBe(0)` (no
- *          `it.fails` lenient pattern). Each row asserts the
- *          recorder/comparator/fence/turnPhase delta is exactly
- *          zero. With the C2.4-B-FIXUP01 guard at line 393, all
- *          8 rows pass. Without the guard, all 8 rows fail.
+ * POST-FIX (this file, frozen at adbb5e2d5):
+ *   The wiring's NO_ACTIVE_SESSION guard is added BEFORE the
+ *   second session-id check:
  *
- *   B6     the execution-state-changed fixture is a REAL edge
- *          (snapshot.execution.modelStreaming=true,
- *          previousExecution.modelStreaming=false), so the
- *          shadow adapter emits `model_stream_started`. The
- *          pre-fix fixture was all-false; edge-triggered TaskMsg
- *          production was silent.
+ *     if (activeSession === undefined) {
+ *         return
+ *     }
+ *     if (activeSession.sessionId !== input.sessionId) {
+ *         return
+ *     }
  *
- *   B7/B8  the recovery-state-changed fixture is a REAL recovery
- *          transition (snapshot.recovery.state="recovering",
- *          previousRecovery.state="idle"), so the shadow
- *          adapter emits `recovery_changed` with a non-trivial
- *          projection. The pre-fix fixture was off/off (silent).
+ *   The guard is observation-only: it returns BEFORE the wiring
+ *   reads `canonicalRunIdRef`, BEFORE either epoch fence is
+ *   touched, and BEFORE `coordinator.observe(...)`. REDUCER is
+ *   unchanged (C2.3 stays closed).
  *
- *   B9     behavioral tracker-poison witness. Drives:
- *               1. no-session run-started("run-poison")
- *                    (post-fix: rejected; pre-fix: admitted,
- *                     canonicalRunIdRef := "run-poison")
- *               2. switch active session on (sessionId=session-real)
- *               3. inject run-finished("run-poison")
- *                    with the active session
- *               4. inject run-finished("run-real")
- *                    with the active session
- *          Post-fix expected:
- *               step 1 → recorder delta 0
- *               step 3 → wrongActiveRun (canonicalRunIdRef is
- *                        undefined) → staleRunTerminalSuppressed
- *                        += 1
- *               step 4 → wrongActiveRun (canonicalRunIdRef is
- *                        undefined, eventRunId="run-real")
- *                        → staleRunTerminalSuppressed += 1
- *          Pre-fix (the poisoning):
- *               step 1 → recorder delta 1 (admitted)
- *               step 3 → canonicalRunIdRef=run-poison,
- *                        eventRunId=run-poison → wrongActiveRun=false
- *                        → accepted silently. NO
- *                        staleRunTerminalSuppressed increment.
- *               step 4 → wrongActiveRun (canonicalRunIdRef=
- *                        run-poison, eventRunId=run-real) →
- *                        staleRunTerminalSuppressed += 1
- *          The B9 discriminant is:
- *                        staleRunTerminalSuppressed == 2
- *                        step-3 eventsObserved == 1 (terminal)
- *          Pre-fix produces staleRunTerminalSuppressed = 1
- *          (only step-4) and step-3 eventsObserved = 2 (step-1
- *          + step-3). Post-fix produces 2 and 1.
+ * WITNESS PATTERN (B1–B8):
+ *   Ordinary `it()` with hard `expect(...).toBe(0)` assertions
+ *   (reviewer R4 rejected the `it.fails` lenient pattern from
+ *   the pre-fix commit, because `it.fails` accepts any throw).
+ *   Each row asserts the recorder/comparator/fence/turnPhase
+ *   delta across the canonical-event delivery is exactly zero.
  *
- * Hard invariant (C2.4 plan §3.2 acceptance gate):
+ *   With the post-fix guard active, all 8 B rows pass.
+ *   Without the guard (pre-fix), all 8 B rows fail because the
+ *   increment of `eventsObserved` is non-zero.
+ *
+ *   B6 uses a REAL execution edge (snapshot.execution.modelStreaming
+ *   = true, previousExecution.modelStreaming = false) so the
+ *   shadow adapter (sdk/packages/agents/.../shadow-adapter.ts
+ *   lines 98–126, edge-triggered) emits `model_stream_started`.
+ *   The pre-fix fixture was all-false on both sides, which
+ *   produced NO TaskMsg — the adapter was silently dropping the
+ *   event. The new edge makes B6 actually exercise a state-
+ *   mutating canonical event in the projection.
+ *
+ *   B7/B8 use a REAL recovery transition (previousRecovery.state
+ *   = "idle", snapshot.recovery.state = "recovering") so the
+ *   shadow adapter (shadow-adapter.ts line 128, NOT edge-
+ *   triggered) emits `recovery_changed` with a non-trivial
+ *   projection. The pre-fix fixture was off/off (silent). The
+ *   new transition makes B7/B8 actually exercise a state-
+ *   mutating recovery edge.
+ *
+ * WITNESS PATTERN (B9 — tracker-poison witness):
+ *   The wiring's three closed-over refs (`canonicalRunIdRef`,
+ *   `awaitingNextCanonicalRunRef`, `postResetAwaitingCanonicalRunRef`)
+ *   are NOT directly observable (no test fixture should reach
+ *   into private refs). The BEHAVIORAL consequence IS observable
+ *   through the recorder: any admitted event increments
+ *   `eventsObserved` by 1.
+ *
+ *     step 1 (no active session): inject run-started("run-poison")
+ *     step 2:                    switch active session on
+ *                                (sessionId = session-real)
+ *     step 3 (active session):   inject run-started("run-real")
+ *     step 4 (active session):   inject run-finished("run-real")
+ *
+ *     POST-FIX: step 1 REJECTED. canonicalRunIdRef stays
+ *               undefined. step 3 + step 4 ADMITTED. final
+ *               eventsObserved = 2, recordCount = 2,
+ *               staleRunTerminalSuppressed = 0.
+ *
+ *     PRE-FIX:  step 1 ADMITTED (canonicalRunIdRef :=
+ *               "run-poison"). step 3 ADMITTED (canonicalRunIdRef
+ *               := "run-real", overwriting). step 4 ADMITTED
+ *               (canonicalRunIdRef = eventRunId =
+ *               "run-real" → wrongActiveRun = false). final
+ *               eventsObserved = 3, recordCount = 3.
+ *
+ *   The B9 discriminant is `eventsObserved == 2`. Pre-fix
+ *   produces 3 (the rejected step 1 was admitted). Post-fix
+ *   produces 2 (step 1 was rejected; the legitimate sequence
+ *   behaves as if the rejected event never happened).
+ *
+ *   NOTE: the original C2.4-B-FIXUP01 sketch proposed a
+ *   `staleRunTerminalSuppressed == 2` discriminant. That design
+ *   was rejected because the post-fix gate at line 433 sets
+ *   `wrongActiveRun = (active !== undefined && eventRunId !==
+ *   undefined && active !== eventRunId)`. With
+ *   canonicalRunIdRef = undefined (post-fix step 3 / step 4),
+ *   `wrongActiveRun = false` regardless of `eventRunId`, so no
+ *   suppression fires. The legitimate-sequence
+ *   `eventsObserved`-discriminant above is the actual implementation.
+ *
+ * HARD INVARIANT (C2.4 plan §3.2 acceptance gate):
  *
  *     NO_ACTIVE_SESSION
  *     + state-mutating canonical event
@@ -67,6 +105,18 @@
  *     = NO comparator mutation
  *     = NO run-tracker mutation
  *     = NO comparator.shadow mutation
+ *
+ * DENOMINATORS (reviewer R5):
+ *   canonical event types audited = 7
+ *       (run-started, run-finished, run-failed, tool-started,
+ *        tool-finished, execution-state-changed,
+ *        recovery-state-changed)
+ *   NO_ACTIVE_SESSION boundary rows = 8
+ *       (B8 is a second provenance variant of
+ *        recovery-state-changed — `runId === undefined` — not
+ *        an eighth event TYPE)
+ *   tracker-poison witnesses       = 1 (B9)
+ *   boundary-row outcome           = 9/9 PASS_CLOSED
  */
 
 import type {

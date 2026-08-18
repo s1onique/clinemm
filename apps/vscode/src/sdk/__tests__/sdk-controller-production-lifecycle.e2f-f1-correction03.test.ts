@@ -240,6 +240,15 @@ function makeRecoveryEvent(): AgentRuntimeEvent {
 describe("ELM-02F F1-CORRECTION03 — SdkController production-path lifecycle owner", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-B-FIXUP01-CLOSURE-FIXUP:
+		// the wiring's NO_ACTIVE_SESSION guard (line 393) reads
+		// `sessionA.current` once per event. The shared mutable
+		// cell must be reset to `undefined` between tests so the
+		// legacy post-fix F1-LC-* fixtures do not leak session
+		// state from one test to the next. Without this reset,
+		// reordering the test file could change the observed
+		// outcome of `eventsObserved === 1` assertions.
+		sessionA.current = undefined
 	})
 
 	it("F1-LC-1 + F1-LC-2: pre-session no-op -> post-session reattach observes exactly once", () => {
