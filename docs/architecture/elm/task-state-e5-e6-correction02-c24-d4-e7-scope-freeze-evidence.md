@@ -305,4 +305,3 @@ C2_5_AUTHORIZED           = true   (with LOCAL_ONLY constraint)
 NEXT                      = C2.5
 E7                        = BLOCKED on C2.5
 ```
-
