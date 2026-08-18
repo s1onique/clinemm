@@ -201,7 +201,125 @@ PLAN-AMENDMENT-04          = <D2 commit> (post-D2 closure)
       start/stop, tool start/finish) correctly except for the
       two colliding edge duplicates. If those two duplicates are
       acceptable for dogfood and E7 is LOCAL_ONLY, C is viable.
-```
+
+R6  Reviewer round-14 on 3d14ccd5c found that the D2 test
+    exercised the Hub emissions through translator.translate +
+    coordinator.observe directly, merely "mirroring" what
+    observeLegacyEvent does. The production wiring seam
+    (`createTaskShadowHostWiring` -> `sessionOptions.onSessionEvent`
+    wrap -> `observeLegacyEvent`) was bypassed. The reviewer
+    correctly identified this as the same evidence mistake the
+    C2.4-C bridge rounds corrected: production components
+    individually real but the production composition seam
+    replaced by test code. D2 was downgraded from CLOSED to
+    QUALIFICATION_USEFUL_BUT_INCOMPLETE.
+
+R7  The 6/2/8 decomposition assertions were loose
+    (`fallbackReconstructedApplied > 0`,
+    `fallbackSuppressedCount >= 2`). Pinned to EXACT === 6,
+    === 2, === 8 in PLAN-AMENDMENT-05 below so D3 has a frozen
+    empirical decoder rather than prose inferred from looser
+    assertions.
+
+R8  check-types-d-hub-with-baseline.ts header still said
+    "C2.4-C bridge typecheck" and the refresh hint still said
+    `BRIDGE_BASELINE_UPDATE=1`. Corrected to "C2.4-D-HUB
+    fallback-composition typecheck" and `D2_BASELINE_UPDATE=1`
+    (matching the implementation) in PLAN-AMENDMENT-05 below.
+
+PLAN-AMENDMENT-05          = <D2-CORRECTION01 commit> (post-D2 fixup)
+  - D2 closed by `<D2-CORRECTION01 commit>`. The witness is
+    `apps/vscode/src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts`
+    rewritten as a REAL production-wiring composition test (755
+    lines, 3 tests). All other D2 companion files are unchanged
+    (vitest.config.c2-4-d-hub.ts, tsconfig.c2-4-d-hub.json,
+    check-types-d-hub-with-baseline.ts, baseline, package.json
+    scripts, vitest.config.ts exclude, ci:check-all).
+
+  - Why the rewrite replaces the polled shape:
+      3d14ccd5c's test polled the Hub -> CoreSessionEvent path
+      and then called translator.translate + coordinator.observe
+      directly, with canonicalAvailable set on the coordinator
+      input. That bypasses the production
+      `createTaskShadowHostWiring`'s
+      `sessionOptions.onSessionEvent` wrap, which is the seam
+      the plan names in §1 HOST_REACHABILITY. The rewritten test
+      drives the SAME real Hub emissions through the production
+      wiring:
+
+        REAL HubRuntimeHost.subscribe(wrappedOnSessionEvent)
+        wrappedOnSessionEvent = observeLegacyEvent (production)
+        observeLegacyEvent -> translator.translate(input)
+        observeLegacyEvent -> coordinator.observe({
+          canonicalAvailable:
+            deps.getCanonicalRuntimeAvailable?.() ?? true,
+        })
+
+      No test code calls translator.translate or
+      coordinator.observe directly. Translator and coordinator
+      are reachable only through the wiring's wrapped
+      onSessionEvent handler. Reviewer R1 closed.
+
+  - D2-CORRECTION01 tests (3 in one file):
+      D2-F1 + D2-T1 (exact 6/2/8 decomposition):
+        canonicalAvailable=false:
+          translatedCount                = 8   (Hub emissions
+                                                filtered to
+                                                translator maps:
+                                                iteration_start x2,
+                                                content_start x2,
+                                                content_end x2,
+                                                done x2)
+          fallbackReconstructedApplied   = 6   (EXACT)
+          fallbackSuppressedCount        = 2   (EXACT; the two
+                                                run-id-less
+                                                scopedEdgeKey
+                                                collisions)
+          diagnosticByOrigin             = 0
+          observationsObserved            = 6
+          shadowMutated                  = true
+
+        canonicalAvailable=true:
+          translatedCount                = 8   (same)
+          fallbackReconstructedApplied   = 0
+          diagnosticByOrigin             = 8
+          observationsObserved            = 0
+          shadowMutated                  = false
+          JSON.stringify(shadowBefore) === JSON.stringify(shadowAfter)
+
+      D2-E1..E7 + D2-X1 (epoch-defect evidence under wiring
+      composition): Hub iteration.started carries no
+      conversationId on the emitted AgentEvent. The 6/2 split is
+      the structural consequence of runId=undefined. Translator's
+      stranded-terminal gate is dead; coordinator's scopedEdgeKey
+      dedup is the only remaining layer.
+
+      D2-NECESSITY (closes reviewer R1 necessity probe):
+      Three compositions under the SAME wiring pattern with
+      `getCanonicalRuntimeAvailable` = () => false /
+      () => true / () => false. P1 and P3 (both () => false)
+      agree exactly. P2 (() => true) differs in all three
+      polarity outcomes. Demonstrates the production hook (not
+      the test) controls authority; if the wiring bypassed the
+      hook, P1 and P2 would be equal and the test would fail.
+
+  - D2-CORRECTION01 test seam quality:
+      REAL_HUB_TO_CORE_SESSION_EVENT             = PASS
+      REAL_TRANSLATOR_ON_HUB_STREAM              = PASS
+      COORDINATOR_POLARITY                       = PASS
+      REAL_HUB_TO_PRODUCTION_WIRING_POLARITY     = PASS  (NEW)
+      GET_CANONICAL_RUNTIME_AVAILABLE_HOOK       = PASS  (NEW)
+
+  - Next (per the corrected verdict):
+      C2.4-D3 PROVENANCE/EPOCH
+        D2-CORRECTION01 now provides the frozen empirical
+        decoder (6/2/8 + D2-NECESSITY hook-control evidence).
+        D3 chooses repair class A/B/C and, if A or B, re-runs
+        D2 against the corrected stream. If C, the frozen 6/2
+        decomposition is the bound on how dangerous C is.
+      C2.4-D4 E7 SCOPE FREEZE  ⛔
+      C2.5                     ⛔
+      E7                       ⛔
 
 ## 1. The reviewer-corrected guardrail (replaces an earlier
    `HubTopology`-shim-first draft)

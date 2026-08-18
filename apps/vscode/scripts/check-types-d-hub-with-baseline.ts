@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
- * Machine-enforced baseline wrapper for the C2.4-C bridge typecheck.
+ * Machine-enforced baseline wrapper for the C2.4-D-HUB fallback-
+ * composition typecheck.
  *
  * Runs `bunx tsc --project tsconfig.c2-4-d-hub.json --noEmit`,
  * canonicalizes the resulting diagnostic set, and verifies it
@@ -24,10 +25,10 @@
  * to production wiring):
  *
  *   1. Edit the production code.
- *   2. Re-run this script with BRIDGE_BASELINE_UPDATE=1 to refresh
+ *   2. Re-run this script with D2_BASELINE_UPDATE=1 to refresh
  *      the baseline file:
  *
- *        BRIDGE_BASELINE_UPDATE=1 bun run check-types-d-hub-with-baseline
+ *        D2_BASELINE_UPDATE=1 bun run check-types-d-hub-with-baseline
  *
  *   3. Commit the updated baseline alongside the production change
  *      with an explicit justification in the commit message.
@@ -116,7 +117,7 @@ function canonicalize(diagnostics: readonly Diagnostic[]): string {
 		if (a.code !== b.code) return a.code - b.code
 		return a.message.localeCompare(b.message)
 	})
-	return JSON.stringify(sorted, null, 2) + "\n"
+	return `${JSON.stringify(sorted, null, 2)}\n`
 }
 
 function diagnosticKey(d: Diagnostic): string {
@@ -162,14 +163,14 @@ function main(): void {
 	const removed = baseline.filter((d) => !observedKeys.has(diagnosticKey(d)))
 	if (added.length) {
 		console.error("\nADDED (not in baseline):")
-		for (const d of added) console.error("  " + diagnosticKey(d))
+		for (const d of added) console.error(`  ${diagnosticKey(d)}`)
 	}
 	if (removed.length) {
 		console.error("\nREMOVED (in baseline, not observed):")
-		for (const d of removed) console.error("  " + diagnosticKey(d))
+		for (const d of removed) console.error(`  ${diagnosticKey(d)}`)
 	}
 	console.error("\nIf the change is intentional, refresh the baseline:")
-	console.error("  BRIDGE_BASELINE_UPDATE=1 bun run check-types-d-hub-with-baseline")
+	console.error("  D2_BASELINE_UPDATE=1 bun run check-types-d-hub-with-baseline")
 	process.exit(1)
 }
 

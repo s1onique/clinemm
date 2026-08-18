@@ -46,6 +46,12 @@ export default defineConfig({
 			// dedicated D2 config stands alone and must repeat them.
 			"@cline/agents": path.resolve(__dirname, "node_modules/@cline/agents/dist/index.js"),
 			"@cline/shared": path.resolve(__dirname, "node_modules/@cline/shared/dist/index.js"),
+			// The wiring imports `CoreSessionEvent` from
+			// `@cline/core`. The base apps/vscode config aliases
+			// `@cline/core` to a stub; the dedicated D2 config
+			// repeats that alias so the wiring's type imports
+			// resolve.
+			"@cline/core": path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts"),
 		},
 	},
 	server: {
