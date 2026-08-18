@@ -26,7 +26,7 @@ import type { ApiConfiguration } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
 import { CLINE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/ClineAccount"
 import { mentionRegexGlobal } from "@shared/context-mentions"
-import type { ClineApiReqInfo, ClineMessage, ExtensionState } from "@shared/ExtensionMessage"
+import type { ClineApiReqInfo, ClineMessage, ExtensionState, TurnPhase } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import { DeleteAllTaskHistoryCount, type GetTaskHistoryRequest, TaskHistoryArray, TaskResponse } from "@shared/proto/cline/task"
 import type { Settings } from "@shared/storage/state-keys"
@@ -129,6 +129,7 @@ import {
 	emitTaskReset,
 } from "./task-state-shadow-host-msgs"
 import { createTaskShadowHostWiring, type TaskShadowHostWiringWithSink } from "./task-state-shadow-host-wiring"
+import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
 import { TurnStateTracker } from "./turn-state-tracker"
@@ -1050,6 +1051,43 @@ export class Controller {
 		if (userInstructionServicePromise) {
 			await userInstructionServicePromise.then((service) => service.stop()).catch(() => {})
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+	 *
+	 * Local-consumer advisory accessor. Returns the LAST canonical
+	 * `ArbiterSnapshot` the shadow wiring recorded via its
+	 * coordinator — i.e. the canonical projection the wiring just
+	 * observed for the active task identity, or `undefined` when
+	 * no observation has happened yet (no active task, the wiring
+	 * was disabled by env flag, etc.).
+	 *
+	 * This is the E7-T2 LOCAL_CONSUMER_CUTOVER seam. The Local
+	 * consumer (any Local-only diagnostic / assertion / future
+	 * authority decision) reads the qualified backend through this
+	 * accessor. Hub/Remote hosts do not have a
+	 * `taskStateShadowWiring` — production code uses `?.()` so the
+	 * absence state collapses to the legacy observation path.
+	 *
+	 * EFFECT_EXECUTION_ENABLED remains `false` — this accessor is
+	 * read-only and advisory; it does NOT mutate Task / control
+	 * state. E9 owns the effect-execution cutover.
+	 */
+	getLocalShadowProjection(): ArbiterSnapshot | undefined {
+		return this.taskStateShadowWiring?.getLastObservedArbiter()
+	}
+
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+	 *
+	 * Local-consumer advisory accessor. Returns the LAST
+	 * shadow-side `TurnPhase` projection the wiring recorded, or
+	 * `undefined`. Non-mutating; same `?.()` collapse contract as
+	 * `getLocalShadowProjection()`.
+	 */
+	getLocalShadowPhase(): TurnPhase | undefined {
+		return this.taskStateShadowWiring?.getLastObservedShadowPhase()
 	}
 
 	async dispose(): Promise<void> {

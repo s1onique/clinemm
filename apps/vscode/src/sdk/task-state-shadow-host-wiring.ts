@@ -179,6 +179,35 @@ export interface TaskShadowHostWiring {
 export interface TaskShadowHostWiringWithSink extends TaskShadowHostWiring {
 	readonly comparator: TaskShadowComparator
 	readonly now: () => number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+	 * Returns the LAST canonical `ArbiterSnapshot` the recorder
+	 * observed via `coordinator.observe(...)`, or `undefined` when
+	 * no observation has been recorded yet for this task identity.
+	 *
+	 * Read-only advisory accessor. The wiring's recorder persists
+	 * `arbiter: ArbiterSnapshot` on every record, so this accessor
+	 * surfaces the canonical projection that the wiring actually
+	 * saw — which is the same `ArbiterSnapshot` produced by
+	 * `SdkController.getArbiterSnapshot` (the selection closure
+	 * from ELM-02F-CORRECTION01).
+	 *
+	 * EFFECT_EXECUTION_ENABLED remains `false` — this accessor is
+	 * a consumer-cutover signal for the Local backend only; it
+	 * does NOT mutate Task / control state.
+	 */
+	readonly getLastObservedArbiter: () => import("./task-state-shadow-recorder").ArbiterSnapshot | undefined
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+	 * Returns the LAST shadow-side `TurnPhase` projection the
+	 * recorder observed (`shadowPhase` on the latest record), or
+	 * `undefined` when no observation has been recorded yet. The
+	 * shadow phase is `projectTurnState(model)` applied to the
+	 * canonical-side `TaskModel`.
+	 *
+	 * Read-only advisory accessor; non-mutating.
+	 */
+	readonly getLastObservedShadowPhase: () => import("@shared/ExtensionMessage").TurnPhase | undefined
 }
 
 /**
@@ -370,6 +399,16 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		records: () => recorder.getRecords(),
 		comparator,
 		now: deps.now,
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+		// Local-consumer advisory accessors. The recorder holds the
+		// last canonical `ArbiterSnapshot` in a separate advisory
+		// cache (the public record's privacy allowlist strips
+		// `arbiter` from the bounded buffer; the cache is the
+		// surface for the wiring's Local-consumer cutover
+		// accessor). The shadow phase is read from the last
+		// differential record. Both are NON-MUTATING.
+		getLastObservedArbiter: () => recorder.getLastArbiter(),
+		getLastObservedShadowPhase: () => recorder.getRecords().at(-1)?.shadowPhase,
 		coordinator,
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
@@ -548,6 +587,13 @@ function createNoopWiring(): TaskShadowHostWiringWithSink {
 		records: () => recorder.getRecords(),
 		comparator: noopComparator,
 		now: () => Date.now(),
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+		// Noop wiring: same advisory accessors, returning
+		// `undefined` (no observation has happened) — which is the
+		// exact semantics the consumer-cutover signal collapses
+		// with the Hub/Remote absence state.
+		getLastObservedArbiter: () => undefined,
+		getLastObservedShadowPhase: () => undefined,
 		coordinator: noopCoordinator,
 		observeCanonicalRuntimeEvent(_input: TaskShadowCanonicalEvent): void {
 			/* No-op: wiring disabled by env flag. */

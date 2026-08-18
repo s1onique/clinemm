@@ -340,12 +340,11 @@ C25-C3 + C25-C3-CORRECTION01             CLOSED
 C25-C4 + C25-C4-CORRECTION01             CLOSED
    + C25-C4-CORRECTION02                 CLOSED
    + C25-C4-CORRECTION03                 CLOSED  (this commit)
-C25-C5 terminal + E7 auth                CLOSED (terminal ACT)
-ELM-02F-CORRECTION01                     ✅ CLOSED (T1..T8 PASS;
-                                                CANONICAL_ARBITER_SOURCE
-                                                = AGENT_RUNTIME_SNAPSHOT)
-E7                                      🟢 NEXT (unblocked;
-                                                  E7 backend activation ACT)
+C25-C5 terminal + E7 auth                CLOSED
+ELM-02F-CORRECTION01                     ✅ CLOSED
+E7                                      ✅ CLOSED (T0..T9 PASS; 89/89 tests;
+                                                LOCAL backend activation ACT)
+DOGFOOD VSIX                            🟢 NEXT (unblocked)
 ```
 
 ## 7. C25-C5 IMPLICATIONS CARRY-FORWARD

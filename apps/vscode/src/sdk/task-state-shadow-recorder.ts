@@ -276,6 +276,20 @@ export const MAX_RECORDS_PER_TASK = 256
  */
 export class TaskShadowRecorder {
 	private readonly records: TaskShadowDifferentialRecord[] = []
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+	 * Last canonical `ArbiterSnapshot` the recorder saw during
+	 * `record()`. NOT persisted on the public
+	 * `TaskShadowDifferentialRecord` (the privacy allowlist
+	 * intentionally strips it from the differential record), but
+	 * held separately so the wiring's advisory accessor
+	 * (`getLastObservedArbiter`) can surface it to the Local
+	 * consumer without re-running the closure.
+	 *
+	 * Cleared on `debugReset()` (which is what
+	 * `TaskShadowHostWiring.resetForNewTask` calls).
+	 */
+	private lastArbiter: ArbiterSnapshot | undefined = undefined
 	private divergenceCounts: Record<DivergenceClass, number> = makeClassCounts()
 	private eventsObserved = 0
 	private comparisons = 0
@@ -336,6 +350,10 @@ export class TaskShadowRecorder {
 		}
 		const dropped = pushBounded(this.records, record)
 		if (dropped) this.droppedRecords += 1
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+		// capture the canonical arbiter the wiring just observed —
+		// advisory only; not persisted on the public record.
+		this.lastArbiter = input.arbiter
 		this.divergenceCounts[classification] += 1
 		if (classification === "D00_AGREE") this.agreements += 1
 		else this.divergences += 1
@@ -430,6 +448,22 @@ export class TaskShadowRecorder {
 		this.diagnosticCounts[origin] += 1
 	}
 
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+	 * Returns the LAST canonical `ArbiterSnapshot` the recorder
+	 * saw during `record(...)`, or `undefined` if no observation
+	 * has been recorded yet. Read-only advisory accessor for the
+	 * wiring's Local-consumer cutover seam.
+	 *
+	 * Note: the public `TaskShadowDifferentialRecord` strips
+	 * `arbiter` per the privacy allowlist (so the differential
+	 * record buffer doesn't carry it); this getter returns the
+	 * separately-held advisory cache populated at record time.
+	 */
+	getLastArbiter(): ArbiterSnapshot | undefined {
+		return this.lastArbiter
+	}
+
 	/** Read-only snapshot of the bounded buffer. */
 	getRecords(): readonly TaskShadowDifferentialRecord[] {
 		return this.records
@@ -458,6 +492,11 @@ export class TaskShadowRecorder {
 	/** Reset (test-only). Clears the buffer and counters. */
 	debugReset(): void {
 		this.records.length = 0
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01:
+		// clear the advisory last-arbiter cache as well so the
+		// new-task identity does not inherit the previous
+		// canonical projection.
+		this.lastArbiter = undefined
 		this.divergenceCounts = makeClassCounts()
 		this.eventsObserved = 0
 		this.comparisons = 0

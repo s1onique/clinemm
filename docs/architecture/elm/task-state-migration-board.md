@@ -257,7 +257,7 @@ authority changes:
 |------------------------------|-------------|-----------------------------------------------|--------------|
 | `modeling` shadow-mode freeze | CORRECTION01-CLOSURE01 | Diff qualification against real workloads | ✅ PASS      |
 | `modeling` passes E5–E6       | E5–E6       | Diff qualification against real workloads     | ⛔ NOT YET  |
-| `consumer cutover`           | E7          | Webview reads shadow projection                | ⛔ NOT YET  |
+| `consumer cutover`           | E7          | Webview reads shadow projection                | ✅ DONE     |
 | `writer retirement`          | E8          | Legacy `TurnStateTracker.set` removal        | ⛔ NOT YET  |
 | `effect interpreter`         | E9          | `EFFECT_EXECUTION_ENABLED = true`             | ⛔ NOT YET  |
 | `factory model-check gate`   | E10         | Differential invariant proof                   | ⛔ NOT YET  |
