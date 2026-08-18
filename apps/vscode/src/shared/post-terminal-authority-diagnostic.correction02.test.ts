@@ -49,7 +49,7 @@ const PHASE = (p: TurnPhase, seq: number): TurnState => ({ phase: p, seq, anchor
 const THINKING: ThinkingPresentationProjection = { modelStreaming: false, source: "shadow", seq: 15 }
 
 const TELEMETRY: TaskHeaderTelemetryStrip = {
-	elapsedMs: 1234,
+	startedAt: 1234,
 	toolCalls: 0,
 	recoveryBudgetFailures: 0,
 }

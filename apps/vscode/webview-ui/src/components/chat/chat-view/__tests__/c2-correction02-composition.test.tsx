@@ -146,7 +146,7 @@ function buildStateData(spec: PushSpec): ExtensionState {
 		_ptadEnabled: true,
 		_ptadPushId: spec.pushId,
 		thinkingPresentation: { modelStreaming: false, source: "shadow", seq: spec.turnState?.seq ?? 0 },
-		taskTelemetry: { elapsedMs: 0, toolCalls: 0, recoveryBudgetFailures: 0 },
+		taskTelemetry: { startedAt: 0, toolCalls: 0, recoveryBudgetFailures: 0 },
 	} as ExtensionState
 }
 
