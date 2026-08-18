@@ -339,20 +339,39 @@ E7                                            ⛔ BLOCKED on ELM-02F-CORRECTION0
 ```
 
 The ELM-02F-CORRECTION01 ACT is the bounded unblock
-for E7. Its scope is:
+for E7. Its scope is **(tightened from reviewer
+round-20; see ELM-02F plan §1-§3)**:
 
-* add `runtimeSnapshot()` to `SdkSessionHost`
-  interface (1 method)
-* implement it in `VscodeSessionHost` via
-  `LocalRuntimeHost.runtime.snapshot()` (~10 LOC)
+* **access-chain additions (no private reach-through)**:
+  * `BuiltRuntime.snapshot(): LiveAgentRuntimeStateSnapshot`
+    (new optional method on `session-runtime.ts:39`)
+  * `LocalRuntimeHost.getActiveRuntimeSnapshot(sessionId)`
+    (new public method on `local-runtime-host.ts:227`)
+* add `runtimeSnapshot?(): AgentRuntimeStateSnapshot | undefined`
+  to `SdkSessionHost` interface (1 method, optional,
+  Hub/Remote omit)
+* implement `runtimeSnapshot()` on `VscodeSessionHost`
+  via the new `LocalRuntimeHost.getActiveRuntimeSnapshot`
+  method (NOT a reach-through of `LocalRuntimeHost.runtime`,
+  which is private)
 * replace the `getArbiterSnapshot` closure in
-  `SdkController.ts` to use the new getter (~25 LOC
-  mapping function)
+  `SdkController.ts` to call the new mapper
+  (`mapAgentRuntimeStateSnapshotToArbiterSnapshot`,
+  ~25-40 LOC; legacy phase is read **only** in the
+  fallback branch)
 * preserve the legacy mirror as FALLBACK when the
-  getter returns `undefined` (~5 LOC)
-* unit-qualify the new mapping shape (~10-20 tests)
-* type-equivalence verified
-* no C25-C4 fixture modification
+  canonical getter returns `undefined` (~5 LOC)
+* unit-qualify the new mapping shape (~20-30 tests)
+  including the **load-bearing** `ELM_02F_T2_LEGACY_INDEPENDENCE`
+  + `ELM_02F_T8_NECESSITY` dual witnesses
+* **TWO-ABSENCE-STATE COLLAPSE**: Hub/Remote (method
+  absent) and Local-no-canonical-session (method
+  returns undefined) produce byte-identical
+  ArbiterSnapshots; production code uses `?.()` only
+* type-equivalence verified (no `any`, no unjustified
+  casts outside the mapper boundary)
+* no C25-C4 fixture modification (T7)
+* no protocol change, no hub/remote change
 
 ## 8. C2.5 FINAL STATUS
 

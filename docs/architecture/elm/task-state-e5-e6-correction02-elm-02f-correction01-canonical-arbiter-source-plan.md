@@ -2,10 +2,11 @@
 
 **Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-ELM-02F-CORRECTION01
 
-**ENTRY_HEAD:** `<C25-C5 terminal commit>`
+**ENTRY_HEAD:** `<C25-C5 terminal commit>`  (currently `c16b3ccbb`)
 **EXIT_HEAD:**  `<this commit's tip>`
 **OPENED_BY:**  C25-C5 (`docs/architecture/elm/task-state-e5-e6-correction02-c25-c5-terminal-e7-authorization-evidence.md`)
 **DEPENDS_ON:** C25-C4 (12 adversarial tests, typecheck gate, dispose-safety sharpening)
+**FROZEN_ACCEPTANCE:** see §3 (tightened from reviewer round-20)
 
 ## 1. SCOPE
 
@@ -14,38 +15,148 @@ A bounded production change that replaces the
 `AgentRuntime.snapshot()` projection. This is the
 explicit E7 unblock.
 
+The shape has three access-chain additions
+(no private reach-through), one interface method
+on `SdkSessionHost`, one closure replacement in
+`SdkController.ts`, and one mapping function with
+its unit-qualification suite.
+
+### 1.1 Access-chain additions (no private reach-through)
+
+| Layer | Surface | Type |
+|-------|---------|------|
+| `BuiltRuntime` (`session-runtime.ts:39`) | `snapshot: () => LiveAgentRuntimeStateSnapshot` | new optional method |
+| `LocalRuntimeHost` (`local-runtime-host.ts:227`) | `getActiveRuntimeSnapshot(sessionId: string): LiveAgentRuntimeStateSnapshot \| undefined` | new public method |
+| `SdkSessionHost` (`session-host.ts:60`) | `runtimeSnapshot?(): AgentRuntimeStateSnapshot \| undefined` | new optional method |
+
+The canonical arbiter source is reached via a 3-link
+public chain, not a reach-through of the private
+`runtime` field:
+
 ```
-PRODUCTION_SEMANTIC_DELTA = small (1 closure + 1 getter + 1 mapping function)
-PRODUCTION_LOC_DELTA      = ~40 lines
+SdkController.getArbiterSnapshot
+  → sdkHost.runtimeSnapshot?.()        (SdkSessionHost)
+  → localRuntimeHost.getActiveRuntimeSnapshot(sessionId)
+                                    (LocalRuntimeHost)
+  → activeSession.runtime.snapshot()  (BuiltRuntime)
+  → agentRuntime.snapshot()           (AgentRuntime, public)
+```
+
+This honors the convention that every "this is a
+Hub/Remote concern" method on `SdkSessionHost` is
+`?` (Hub/Remote hosts omit; only Local implements).
+The `?` is part of the interface contract, not an
+oversight.
+
+### 1.2 Contract on the `?` (two-absence-state collapse)
+
+```
+CONTRACT_1:  host.runtimeSnapshot === undefined
+                (method absent, e.g. Hub/Remote hosts)
+            ≡ "no canonical seam for this host"
+            ≡ use legacy mirror fallback
+                ⇒ ALWAYS behaves identically to:
+            host.runtimeSnapshot?.() === undefined
+                (method present, returns undefined)
+
+CONTRACT_2:  production code uses ?.() everywhere;
+            never checks the method's presence directly.
+
+CONTRACT_3:  one fallback path; one fallback shape;
+            one disposition.
+```
+
+The reviewer flagged two absence states
+(`host.runtimeSnapshot === undefined` vs
+`host.runtimeSnapshot() === undefined`) as needless
+state-space growth. These collapse at the consumer
+because the production code uses `?.()` and treats
+both as "no canonical seam." §3's
+`ELM_02F_T4_SOURCE_SELECTION` proves this collapse
+explicitly.
+
+### 1.3 Mapping function
+
+```ts
+// apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts (new)
+import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
+import type { AgentRuntimeStateSnapshot } from "@cline/shared"
+
+export function mapAgentRuntimeStateSnapshotToArbiterSnapshot(
+    runtime: AgentRuntimeStateSnapshot | undefined,
+    legacyPhase: TurnPhase,
+): ArbiterSnapshot {
+    if (!runtime) {
+        // FALLBACK: legacy mirror projection, byte-equivalent to
+        // pre-ELM-02F behavior. This is the ONLY place the
+        // legacy phase is read.
+        return legacyMirrorFromPhase(legacyPhase)
+    }
+    return {
+        ...emptyArbiterSnapshot(),
+        execution: {
+            modelStreaming: runtime.execution?.modelStreaming ?? false,
+            tooling: runtime.execution?.tooling ?? false,
+            awaitingApproval: runtime.execution?.awaitingApproval ?? false,
+        },
+        pendingToolCalls: runtime.pendingToolCalls ?? [],
+        recovery: runtime.recovery ? {
+            state: runtime.recovery.state,
+            recoveryState: runtime.recovery.state,
+            episodeFailures: runtime.recovery.episodeFailures,
+        } : undefined,
+        status: runtime.status,
+    }
+}
+```
+
+The mapper accepts `AgentRuntimeStateSnapshot | undefined`
+and `TurnPhase`. The `legacyPhase` parameter is
+read **only inside the undefined branch** — never
+when a canonical snapshot is supplied. This is the
+key semantic-independence property.
+
+### 1.4 What this commit produces
+
+```
+PRODUCTION_SEMANTIC_DELTA = small (3 access-chain methods + 1 closure + 1 mapper)
+PRODUCTION_LOC_DELTA      = ~70 lines (+ the mapper file)
 PUBLIC_API_DELTA          = +1 method on `SdkSessionHost`
-                          = `runtimeSnapshot(): AgentRuntimeStateSnapshot | undefined`
+                          = +1 method on `BuiltRuntime`
+                          = +1 method on `LocalRuntimeHost`
 PROTOCOL_DELTA            = 0
-HUB_PRODUCTION_DELTA      = 0 (unchanged; this ACT does not touch the hub path)
+HUB_PRODUCTION_DELTA      = 0 (this ACT does not touch the hub path)
 REMOTE_PRODUCTION_DELTA   = 0
 TEST_DELTA                = +1 dedicated qualification file
-                          ~10-20 tests covering:
-                          - getter returns the snapshot when host is alive
-                          - getter returns undefined when no session is active
-                          - getter returns undefined when session is disposed
-                          - the SdkController.getArbiterSnapshot uses the
-                            getter when defined and falls back to the
-                            legacy mirror only when undefined
-                          - the wiring classifier sees identical shapes
-                            whether fed the new mapping or the legacy
-                            mirror (shape-only equivalence)
+                          ~20-30 tests:
+                          - T1 canonical-source mapping (positive)
+                          - T2 legacy-independence witness (ELM02F-N1)
+                          - T3 fallback exactness (ELM02F-N2)
+                          - T4 source selection (two-absence-state collapse)
+                          - T5 mapper field-by-field exactness
+                          - T6 type-equivalence
+                          - T7 existing qualification unchanged
+                          - T8 necessity witness (uncommitted mutation)
 DOC_DELTA                 = 1 production-source comment update
                           (the "until ELM-02F lands" note removed)
                           + 1 evidence doc
 CONFIG_DELTA              = 0
 ```
 
-## 2. WHY THIS SHAPE
+## 2. WHY THIS SHAPE (three reviewer tightenings applied)
 
-The current production closure at `SdkController.ts:565-580`
-is:
+### 2.1 The current LEGACY_MIRROR
+
+`apps/vscode/src/sdk/SdkController.ts:565-580`:
 
 ```ts
 getArbiterSnapshot: () => {
+    // The canonical arbiter is the AgentRuntime.snapshot(); until
+    // the forward-fix seam (ELM-02F) lands, the wiring mirrors
+    // the legacy projection so classification / arbitration
+    // remain well-defined. The recovery-state field is updated
+    // by `subscribeRecoveryStateChange` via the wiring's own
+    // recording path.
     const phase = this.turnStateTracker.currentPhase
     return {
         ...emptyArbiterSnapshot(),
@@ -58,72 +169,212 @@ getArbiterSnapshot: () => {
 },
 ```
 
-This is `LEGACY_MIRROR`: it derives the arbiter from the
-legacy `turnStateTracker.currentPhase` projection, NOT
-from the canonical `AgentRuntime.snapshot()`.
+This is `LEGACY_MIRROR`: it derives the arbiter from
+the legacy `turnStateTracker.currentPhase` projection.
+The classification chain (C25-C3/C4) is well-defined
+against this projection, but the production source is
+NOT `AgentRuntime.snapshot()` — the C25-C2 C04 capture
+is structurally unreachable precisely because the
+mirror doesn't capture mutations that haven't yet
+reached the legacy phase.
 
-The replacement:
+### 2.2 Tightening #1: T3 SHAPE_EQUIVALENCE is the wrong property
 
-1. **Add** `runtimeSnapshot()` to the `SdkSessionHost`
-   interface in `apps/vscode/src/sdk/session-host.ts`.
+The earlier freeze said:
 
-   ```ts
-   runtimeSnapshot?(): AgentRuntimeStateSnapshot | undefined
-   ```
+> for every (phase, status) tuple the legacy mirror
+> could produce, the new getter-driven mapping
+> produces an identical ArbiterSnapshot
 
-2. **Implement** it in `VscodeSessionHost`
-   (`apps/vscode/src/sdk/vscode-session-host.ts`) by
-   reading the `LocalRuntimeHost`'s `runtime.snapshot()`.
+That's potentially self-defeating: ELM-02F's purpose
+is to make the arbiter INDEPENDENT of legacy phase.
+Demanding byte-equivalence to the mirror across legacy
+tuples risks proving that the new source still behaves
+like the thing it's replacing.
 
-3. **Replace** the `getArbiterSnapshot` closure in
-   `SdkController.ts` to read the new getter and map the
-   `AgentRuntimeStateSnapshot` to the `ArbiterSnapshot`
-   shape. The map function (`AgentRuntimeStateSnapshot ->
-   ArbiterSnapshot`) is exactly the shape already
-   exercised by the C25-C4 `liveBaseSnapshot()` fixture
-   (post-R11-a: `recovery` → state + `execution` →
-   execution).
-
-4. **Fallback**: if the getter returns `undefined` (no
-   active session host — i.e. HUB/REMOTE fallback paths),
-   the legacy mirror projection is preserved as the
-   defensive default. This matches the C2.4-D-HUB
-   classification: the canonical event source is
-   unreachable on HUB/REMOTE paths, so the
-   `FALLBACK_APPLY` semantics already cover that
-   scenario.
-
-The mapping function is intentionally trivial (it's
-basically a type-cast + field extraction) and is
-unit-testable without VS Code dependencies.
-
-## 3. ACCEPTANCE GATE
+T3 is split into three distinct properties:
 
 ```
-ELM_02F_T1_PRODUCTION_REPLACEMENT = DONE
-ELM_02F_T2_UNIT_QUALIFICATION     = PASS  (~10-20 tests)
-ELM_02F_T3_SHAPE_EQUIVALENCE      = PASS
-  * for every (phase, status) tuple the legacy mirror
-    could produce, the new getter-driven mapping produces
-    an identical ArbiterSnapshot;
-  * for every AgentRuntimeStateSnapshot the new mapping
-    accepts, the produced ArbiterSnapshot is well-formed
-    and matches the existing C25-C4 fixture assertions
-ELM_02F_T4_FALLBACK_PRESERVED     = PASS
-  * when runtimeSnapshot() returns undefined, the
-    legacy mirror projection is used unchanged
-ELM_02F_T5_TYPE_EQUIVALENCE       = PASS
-  * the new mapping function's input/output types are
-    TypeScript-exact (no `any`, no `as` casts outside
-    the map boundary)
-ELM_02F_T6_C25_TESTS_UNCHANGED    = PASS
-  * all 12 C25-C4 adversarial tests still pass against
-    the new closure without modification
+T3A STRUCTURAL_SHAPE_EQUIVALENCE
+  mapAgentRuntimeStateSnapshotToArbiterSnapshot(snapshot)
+  produces a valid ArbiterSnapshot with the schema/field
+  semantics expected by classify().
 
-ELM_02F_CORRECTION01_VERDICT      = PASS
-CANONICAL_ARBITER_SOURCE          = AGENT_RUNTIME_SNAPSHOT
-C25_ARB_SOURCE_RESIDUE            = CLOSED
-E7_AUTHORIZED                     = true   (UNLOCK)
+T3B SEMANTIC_INDEPENDENCE  (the load-bearing property)
+  canonical arbiter fields derive ONLY from
+  AgentRuntimeStateSnapshot;
+  changing legacy TurnPhase while holding
+  runtimeSnapshot constant MUST NOT change the
+  canonical mapped arbiter.
+
+T3C FALLBACK_EQUIVALENCE
+  ONLY when runtimeSnapshot() === undefined:
+    legacy fallback result is byte-/field-equivalent to
+    the pre-ELM-02F mirror behavior.
+```
+
+### 2.3 Tightening #2: ELM02F-N1 / N2 necessity witnesses
+
+Two specific witnesses are mandatory:
+
+```
+ELM02F-N1 — legacy independence
+
+  Given:
+    runtimeSnapshot.execution.modelStreaming = true
+    runtimeSnapshot.execution.awaitingApproval = false
+    runtimeSnapshot.pendingToolCalls = []
+  And:
+    legacy phase A = idle
+    legacy phase B = completed
+  Then:
+    map(A) == map(B)
+    arbiterActive under A == true
+    arbiterActive under B == true
+
+  If N1 fails, ELM-02F hasn't eliminated the causal
+  coupling that made C04 structurally unreachable.
+
+ELM02F-N2 — fallback dependence
+
+  Given: runtimeSnapshot() === undefined
+  Then:
+    legacy=idle      → old idle mirror exactly
+    legacy=streaming → old streaming mirror exactly
+```
+
+### 2.4 Tightening #3: no private reach-through
+
+`LocalRuntimeHost.runtime` is private state. The
+canonical access path goes through a new public
+method on the host, not a `.runtime.snapshot()`
+reach-through:
+
+```
+VscodeSessionHost
+  → LocalRuntimeHost.getActiveRuntimeSnapshot(sessionId)
+  → ActiveSession.runtime.snapshot()   (BuiltRuntime)
+  → AgentRuntime.snapshot()            (public, agents package)
+```
+
+This reduces coupling rather than relocating it.
+The new method is observable, testable, and Hub/Remote
+hosts can simply not implement it (which collapses
+to the legacy-mirror fallback via §1.2).
+
+## 3. ACCEPTANCE GATE (FROZEN, tightened)
+
+The ELM-02F ACT must satisfy ALL of the following:
+
+```
+ELM_02F_T1_CANONICAL_SOURCE
+  Local active runtime snapshot -> ArbiterSnapshot
+  The mapper produces a well-formed ArbiterSnapshot
+  from an AgentRuntimeStateSnapshot.
+  PASS
+
+ELM_02F_T2_LEGACY_INDEPENDENCE  (the load-bearing property)
+  same canonical snapshot + different TurnPhase
+  -> identical canonical ArbiterSnapshot
+  ELM02F-N1 witness: PASS
+
+ELM_02F_T3_FALLBACK_EXACTNESS
+  runtimeSnapshot() === undefined
+  -> pre-ELM-02F legacy mirror semantics exactly
+  ELM02F-N2 witness: PASS
+
+ELM_02F_T4_SOURCE_SELECTION  (two-absence-state collapse)
+  Defined canonical snapshot ALWAYS wins over legacy mirror.
+  Undefined canonical snapshot ALWAYS uses fallback.
+  - hostA (Local, runtimeSnapshot() returns snapshot)
+  - hostB (Local, runtimeSnapshot() returns undefined)
+  - hostC (Hub/Remote, runtimeSnapshot method absent)
+  hostB and hostC produce byte-identical ArbiterSnapshots.
+  PASS
+
+ELM_02F_T5_MAPPING  (field-by-field exactness)
+  execution.modelStreaming      exact
+  execution.tooling             exact
+  execution.awaitingApproval    exact
+  pendingToolCalls              exact
+  recovery.state -> recoveryState exact
+  status                        exact
+  PASS
+
+ELM_02F_T6_TYPES
+  no any
+  no unjustified casts outside the mapper boundary
+  dedicated typecheck catches fixture/source drift
+  PASS
+
+ELM_02F_T7_EXISTING_QUALIFICATION
+  C25-C3 7/7
+  C25-C4 12/12
+  C-REAL 5/5
+  lifecycle 20/20
+  PASS
+
+ELM_02F_T8_NECESSITY  (uncommitted mutation probe)
+  Temporarily forcing legacy mirror instead of
+  canonical source causes the C25 C04 positive
+  condition to collapse back to D02.
+  PASS  ← proves this production change IS the
+          specific missing causal edge identified
+          by C25-C2 (not merely plumbing).
+
+ELM_02F_CORRECTION01_VERDICT  = PASS iff T1..T8
+
+CANONICAL_ARBITER_SOURCE       = AGENT_RUNTIME_SNAPSHOT
+C25_ARB_SOURCE_RESIDUE         = CLOSED
+E7_AUTHORIZED                  = true   (UNLOCK)
+```
+
+### 3.1 What `T8 NECESSITY` proves in particular
+
+T8 is the dual of T2. Together they say:
+
+```
+T2  same canonical snapshot + different legacy phase
+    → IDENTICAL canonical arbiter
+
+T8  different canonical snapshot (real mutation) +
+    SAME legacy phase
+    → DIFFERENT canonical arbiter
+
+Therefore the canonical arbiter:
+  * IS independent of legacy phase (T2),
+  * DOES track real canonical mutations (T8).
+
+T2 alone would prove independence but not
+that the canonical source actually captures anything
+new. T8 alone would prove the canonical source
+captures new things but not that the legacy phase
+isn't somehow the real driver. Together they pin
+down the right causal relationship.
+```
+
+### 3.2 Disallowed at the gate
+
+These are explicitly NOT acceptable substitutes
+for T2 / T8:
+
+```
+* Mapping the runtime snapshot back through the legacy
+  phase for "compatibility" — defeats the whole ACT.
+
+* Demanding byte-equivalence to the mirror across legacy
+  phase tuples — proves nothing; that's the tightening
+  #1 reject.
+
+* Checking the host method's presence at the call site
+  (e.g. `'runtimeSnapshot' in host`) — would create
+  the third state `host.runtimeSnapshot === undefined`
+  that the reviewer's tightening #2 explicitly rejects.
+
+* `as any` casts in the mapper — T6 fails.
+
+* Modifying the C25-C4 fixture to fit a new shape — T7
+  fails.
 ```
 
 ## 4. POST-ELM-02F-CORRECTION01 BOARD
