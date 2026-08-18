@@ -2,20 +2,23 @@
 
 **Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.5-C3-C04-SYNTHETIC-REAL-CLASSIFIER-CHAIN
 
-**Status:** classifier contract qualification against the post-mirror semantic shape. No production, no config, no source changes.
+**Status:** classifier contract qualification against the post-mirror semantic shape. C25-C3 implementation PASS (7/7 tests green); C25-C3-CORRECTION01 amends the frozen R4 wording to match the observed behavior (R1 + R2 + R3). No production, no config, no source changes.
 
-**Author:** response to reviewer round-21 verdict on C25-C2A-CORRECTION01 (`4cf549a1f`).
+**Author:** response to reviewer round-21 verdict on C25-C2A-CORRECTION01 (`4cf549a1f`) and the round-22 disposition that flagged R1/R2/R3 contract drifts in `aa273d922` (C25-C3 implementation).
 
 ## Entry freeze
 
 ```text
-ENTRY_HEAD                       = 4cf549a1f (C25-C2A-CORRECTION01)
+ENTRY_HEAD                       = aa273d922 (C25-C3 implementation, before this correction)
 BRANCH                           = act/elm-architecture01-e0-e4
 UNEXPECTED_TRACKED_DIRTY         = false
 KNOWN_CLINERULES_UNTRACKED_ONLY  = true  (.clinerules/sdk-transport-integration.md; G0.10)
 PROTECTED_STASHES_INTACT         = true
   SHA-256 stash@{1} (FORENSIC, 141372c52)         = e4df6de3220647d5c9dbc27165ec8311d2f277683ff26b66ced67f977d26f233
   SHA-256 stash@{2} (CONTEXT-ACCOUNTING)          = ac85c95cfbabf14945b490a121901175700a41939b9dfd3f80767c84fed5755a
+
+CORRECTION_HEAD                  = <this commit> (C25-C3-CORRECTION01)
+CORRECTION_REASON                = QUALIFICATION_FOUND_CONTRACT_ERROR (R1 + R2 + R3)
 ```
 
 ## C25-C2A-CORRECTION01 disposition (round-21)
@@ -37,7 +40,321 @@ This commit applies the C25-C3 contract per the reviewer's freeze in C25-C2A-COR
 > E7_ENTRY_REQUIREMENT:
 >   REPLACE_LEGACY_ARBITER_MIRROR = REQUIRED
 
-## Topology (per R4 freeze)
+## C25-C3-CORRECTION01 — frozen-contract disposition
+
+This is the small correction the reviewer required after the C25-C3
+implementation (`aa273d922`) was found to qualify the **correct**
+classifier contract but **silently supersede** three points of the
+frozen R4 wording in `C25-C2A-CORRECTION01` (`4cf549a1f`).
+
+The classifier behavior itself passes (see `## Tests`, `## P`,
+`## N1`, `## N2`, `## N3` below). The correction is **procedural**:
+amend the freeze wording so the contract matches what was actually
+qualified. No production change. No test semantic change.
+
+### R1 — frozen N1/N3 expected `D10_UNKNOWN`, observed `D00_AGREE`
+
+The C25-C2A-CORRECTION01 freeze said:
+
+```text
+N1  legacyPhase = streaming       (remove legacy side)
+    arbiterActive = true
+    shadowPhase = streaming
+    → D01 = 0
+    → frozen expected classification = D10_UNKNOWN
+
+N3  legacyPhase = idle
+    arbiterActive = true
+    shadowPhase = idle            (remove shadow side)
+    → D01 = 0
+    → frozen expected classification = D10_UNKNOWN
+```
+
+The C25-C3 implementation observed:
+
+```text
+N1  → classification = D00_AGREE  (divergence is undefined when legacy == shadow)
+N3  → classification = D00_AGREE  (divergence is undefined when legacy == shadow)
+```
+
+The reviewer correctly identifies this as a `QUALIFICATION_FOUND_CONTRACT_ERROR`,
+not a `CLASSIFIER_IMPLEMENTATION_DEFECT`:
+
+```text
+CLASSIFIER_IMPLEMENTATION_DEFECT = false
+C25_C3_TEST_DEFECT              = false
+C25_C3_FREEZE_DEFECT            = true
+
+N1_EXPECTED_CLASS               = D00_AGREE   (not D10_UNKNOWN)
+N3_EXPECTED_CLASS               = D00_AGREE   (not D10_UNKNOWN)
+
+ROOT_CAUSE:
+  For N1 and N3, legacy and shadow agree on the same phase:
+    N1: legacy = "streaming", shadow = "streaming"
+    N3: legacy = "idle",      shadow = "idle"
+  The comparator's compareWith returns divergence = undefined when
+  shadowPhase === legacyPhase (see task-state-shadow.ts:127-141 and
+  the early return at task-state-shadow-recorder.ts:530: `if (!divergence)
+  return "D00_AGREE"`). The classifier is therefore not reached for
+  D00-D10 on N1/N3; the recorder short-circuits to D00_AGREE.
+  D10_UNKNOWN is reachable only when a divergence EXISTS but no
+  branch matches D00-D09 — a situation that does not arise when
+  legacy == shadow.
+
+PRODUCTION_DEFECT = false
+TEST_DEFECT       = false
+FROZEN_CONTRACT_DEFECT = true
+```
+
+The frozen N1, N3 expected classifications were **wrong**;
+`D00_AGREE` is the correct expected class. This is the kind of
+freeze-discipline finding the matrix is designed to catch.
+
+The frozen N1, N3 expected classifications were **wrong**;
+`D00_AGREE` is the correct expected class. This is the kind of
+freeze-discipline finding the matrix is designed to catch.
+
+### R2 — frozen topology included real Local transport; C25-C3 bypassed it
+
+The C25-C2A-CORRECTION01 freeze said:
+
+```text
+synthetic causal inputs (legacyPhase, arbiter, canonical event)
+  ↓
+REAL LocalRuntimeHost
+  ↓
+REAL subscribeRuntimeEventsToShadow
+  ↓
+REAL TaskShadowHostWiring
+  ↓
+REAL comparator
+  ↓
+REAL recorder/classify()
+```
+
+The C25-C3 implementation (with reviewer concurrence in R4 of
+`C25-C2A-CORRECTION01` itself: "deliberately decouples … so the
+classifier contract can be qualified in isolation") entered at
+`wiring.observeCanonicalRuntimeEvent(...)` rather than at
+`LocalRuntimeHost`. The reviewer's preferred disposition is **Option B**:
+
+```text
+Option B — decompose the proof:
+  TRANSPORT_PROOF  = C-REAL-1..5  (real Local → real helper → real wiring)
+  CLASSIFIER_PROOF = C25-C3       (direct canonical-event ingress into wiring)
+  JOINT_SYNTHETIC_REAL_PROOF = TRANSPORT_PROOF ∧ CLASSIFIER_PROOF
+```
+
+This option is preferred because re-running the qualified Local
+transport inside every classifier matrix case adds setup cost
+(isolated home dir, stub agent, `LocalRuntimeHost` factory) without
+materially strengthening the **classifier** causal evidence. The
+transport was already independently qualified as a 1:1 fan-out
+(C-REAL-1..5 PASS); the classifier contract is what C25-C3
+qualifies.
+
+The synthetic-real C04 proof is therefore **joint**:
+
+```text
+JOINT_SYNTHETIC_REAL_C04_PROOF
+  = TRANSPORT_PROOF              (C-REAL-1..5)
+  ∧ CLASSIFIER_PROOF             (C25-C3: P, N1, N2, N3, necessity,
+                                         diagnostic, type-sanity)
+
+  TRANSPORT_PROOF:
+    real LocalRuntimeHost
+      → real subscribeCanonicalRuntimeEventsToShadow
+      → real TaskShadowHostWiring
+    DELIVERS_CANONICAL_EVENTS_1:1    (C-REAL-1: 0 events pre-session,
+                                         2 events post-session)
+    BOUNDARY_FAILS_CLOSED            (C-REAL-4: no active session in
+                                         lifecycle -> wiring drops)
+
+  CLASSIFIER_PROOF:
+    synthetic getLegacyPhase
+    synthetic getArbiterSnapshot
+    synthetic canonical event
+      → real wiring.observeCanonicalRuntimeEvent(...)
+      → real TaskShadowObservationCoordinator
+      → real TaskShadowComparator
+      → real TaskStateShadow
+      → real TaskShadowRecorder
+      → real classify() at task-state-shadow-recorder.ts:521
+      → real arbitrate() at task-state-shadow-recorder.ts:616
+    PRODUCES_DISCRIMINATING_PREDICATE  (P → D01_LEGACY_FALSE_IDLE,
+                                         N1 → D00_AGREE,
+                                         N2 → D02_SHADOW_FALSE_ACTIVE,
+                                         N3 → D00_AGREE;
+                                         necessity: each conjunct matters)
+```
+
+The wiring's `observeCanonicalRuntimeEvent(...)` is **the exact
+entry point** that `subscribeCanonicalRuntimeEventsToShadow` calls
+per canonical event (`canonical-event-subscription.ts`). The
+classifier sees an identical `TaskShadowRecordInput` whether the
+event came through `LocalRuntimeHost → subscribeCanonicalRuntimeEventsToShadow`
+or through direct ingress.
+
+classifier sees an identical `TaskShadowRecordInput` whether the
+event came through `LocalRuntimeHost → subscribeCanonicalRuntimeEventsToShadow`
+or through direct ingress.
+
+### R3 — "four conjuncts" wording
+
+The C25-C3 test header initially said:
+
+> "All four conjuncts (legacy side, arbiter side, shadow side,
+> shadow=streaming specifically) independently matter."
+
+The C04 predicate at `task-state-shadow-recorder.ts:540-547` actually
+has three logical requirements:
+
+```text
+legacyPhase   === "idle"
+shadowPhase   === "streaming"
+arbiterActive === (modelStreaming || awaitingApproval || pendingToolCalls.length > 0)
+```
+
+The corrected wording is:
+
+```text
+THREE_PREDICATE_CONJUNCTS:
+  conjunct_1: legacyPhase === "idle"           (legacy side)
+  conjunct_2: shadowPhase === "streaming"      (shadow side, streaming specifically)
+  conjunct_3: arbiterActive === true           (arbiter side)
+
+N1 removes conjunct_1 (legacy flipped to "streaming")
+N2 removes conjunct_3 (arbiter flipped to inactive)
+N3 removes conjunct_2 (shadow flipped to "idle")
+
+Each ablation yields D01 = 0 with a distinct non-D01 classification.
+```
+
+### Corrected C25-C3 contract (restated)
+
+```text
+SYNTHETIC:
+  getLegacyPhase
+  getArbiterSnapshot
+  canonical event stimulus
+
+REAL (TRANSPORT — qualified separately by C-REAL-1..5):
+  LocalRuntimeHost
+  subscribeCanonicalRuntimeEventsToShadow
+  TaskShadowHostWiring
+
+REAL (CLASSIFIER — qualified by C25-C3):
+  wiring.observeCanonicalRuntimeEvent(...)
+  TaskShadowObservationCoordinator
+  TaskShadowComparator
+  TaskStateShadow
+  TaskShadowRecorder
+  classify() at task-state-shadow-recorder.ts:521
+  arbitrate() at task-state-shadow-recorder.ts:616
+
+EXPECTED_CLASSIFICATIONS (corrected):
+  P   legacyPhase = idle
+      arbiterActive = true
+      shadowPhase = streaming
+      → D01_LEGACY_FALSE_IDLE = 1
+      → arbitration = SHADOW_CORRECT
+      → D00_AGREE = 0
+      → D02_SHADOW_FALSE_ACTIVE = 0
+      → D10_UNKNOWN = 0
+      → invariantViolations = 0
+      → observerErrors = 0
+      → evidenceGaps = 0
+      → assert exact injected arbiter input at the same observation
+
+  N1  legacyPhase = streaming       (remove conjunct_1)
+      arbiterActive = true
+      shadowPhase = streaming
+      → D01_LEGACY_FALSE_IDLE = 0
+      → classification = D00_AGREE   (divergence undefined; not D10_UNKNOWN)
+      → assert shadow transitioned (modelStreaming=true, event=model_stream_started)
+
+  N2  legacyPhase = idle
+      arbiterActive = false         (remove conjunct_3)
+      shadowPhase = streaming
+      → D01_LEGACY_FALSE_IDLE = 0
+      → D02_SHADOW_FALSE_ACTIVE = 1
+      → arbitration = LEGACY_CORRECT
+      → assert exact injected arbiter input (all-false) at the same observation
+
+  N3  legacyPhase = idle
+      arbiterActive = true
+      shadowPhase = idle            (remove conjunct_2)
+      → D01_LEGACY_FALSE_IDLE = 0
+      → classification = D00_AGREE   (divergence undefined; not D10_UNKNOWN)
+
+NECESSITY (corrected):
+  THREE_PREDICATE_CONJUNCTS = (legacy=idle, shadow=streaming, arbiterActive=true)
+  Each conjunct independently necessary (verified by input ablation).
+
+VERDICT:
+  CLASSIFIER_IMPLEMENTATION_DEFECT = false
+  C25_C3_TEST_DEFECT              = false
+  C25_C3_FREEZE_DEFECT            = true   (already amended by this correction)
+
+  C25_C3_VERDICT                  = PASS_C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN
+  C25_C4_AUTHORIZED               = true
+```
+
+### Verbatim contract restatement (for citation by downstream commits)
+
+```text
+C25-C3 qualifies the classifier contract for C04_SYNTHETIC_REAL against
+the post-mirror semantic shape. The proof is joint:
+
+  TRANSPORT_PROOF  = C-REAL-1..5  (C2.4-C, real Local → real helper → real wiring)
+  CLASSIFIER_PROOF = C25-C3       (this commit, direct canonical ingress)
+
+The classifier proof exercises:
+  P   → D01_LEGACY_FALSE_IDLE = 1, arbitration = SHADOW_CORRECT
+  N1  → D00_AGREE              (NOT D10_UNKNOWN; legacy==shadow, divergence undefined)
+  N2  → D02_SHADOW_FALSE_ACTIVE = 1
+  N3  → D00_AGREE              (NOT D10_UNKNOWN; legacy==shadow, divergence undefined)
+
+Three predicate conjuncts (legacy=idle, shadow=streaming, arbiterActive=true)
+are independently necessary (input ablation). No classifier mutation.
+
+Synthetic inputs:
+  getLegacyPhase, getArbiterSnapshot, canonical event stimulus.
+
+Real chain (classifier proof):
+  wiring.observeCanonicalRuntimeEvent → coordinator → comparator → shadow
+    → recorder.classify → recorder.record → wiring.records()/recorderCounts().
+
+The wiring's canonical-event ingress is the exact entry point that
+subscribeCanonicalRuntimeEventsToShadow calls per canonical event, so
+the classifier sees an identical TaskShadowRecordInput whether the
+event arrived via LocalRuntimeHost transport or direct ingress.
+
+The classifier WILL correctly detect C04 once ELM-02F (or equivalent)
+replaces the production arbiter mirror (C25_ARB_SOURCE_RESIDUE).
+Current production inputs intentionally cannot express D01; that is the
+C25-C2 structural finding and it remains unchanged by C25-C3.
+```
+
+### Why this is a correction, not a re-implementation
+
+```text
+PRODUCTION_DELTA           = 0   (no source change in any layer)
+TEST_DELTA                 = 0   (the seven tests remain semantically unchanged)
+WIRING_DELTA               = 0   (no production wiring code modified)
+RECORDER_DELTA             = 0   (no production recorder code modified)
+CLASSIFIER_DELTA           = 0   (no production classifier code modified)
+CONFIG_DELTA               = 0
+EVIDENCE_DOC_DELTA         = +1 (this correction section in C25-C3 evidence)
+C25_C2A_CORRECTION01_DELTA = amendment (N1/N3 wording; topology decomposition;
+                                       THREE_PREDICATE_CONJUNCTS)
+```
+
+The classifier behavior is correct. The R4 freeze wording was slightly
+imprecise. This correction makes the freeze match what was actually
+qualified.
+
+## Topology (per R4 freeze, amended by R1/R2/R3 disposition above)
 
 ```text
 synthetic causal inputs (legacyPhase, arbiter, canonical event)
@@ -496,7 +813,7 @@ The production arbiter-source switch is the consumer-side work that
 must precede E7 authorization; that work belongs to a separate
 commit (likely C25-C5 or a narrow pre-E7 correction), not C25-C3.
 
-## Board after C25-C3
+## Board after C25-C3-CORRECTION01
 
 ```text
 C2.3                                          ✅ CLOSED
@@ -515,24 +832,35 @@ C2.5
     SAME_INGRESS_SAMPLE                       ✅
     C25-C2A                                   ✅ CLOSED
     C25-C2A-CORRECTION01                      ✅ CLOSED (4cf549a1f)
+                                              AMENDED by this commit (N1/N3 wording,
+                                                  topology decomposition, THREE_PREDICATE_CONJUNCTS)
 
-  C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN  ✅ CLOSED (this commit)
+  C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN  ✅ CLOSED (aa273d922)
     P  (idle + streaming shadow + active arbiter → D01 = 1)        ✅
-    N1 (streaming + streaming shadow + active arbiter → D01 = 0)   ✅
-    N2 (idle + streaming shadow + inactive arbiter → D01 = 0)      ✅
-    N3 (idle + idle shadow + active arbiter → D01 = 0)            ✅
-    necessity by input ablation (no classifier mutation)          ✅
+    N1 (streaming + streaming shadow + active arbiter → D01 = 0,
+   ) classification = D00_AGREE                                  ✅
+    N2 (idle + streaming shadow + inactive arbiter → D01 = 0,
+   ) D02_SHADOW_FALSE_ACTIVE = 1                                ✅
+    N3 (idle + idle shadow + active arbiter → D01 = 0,
+   ) classification = D00_AGREE                                  ✅
+    necessity by input ablation (THREE_PREDICATE_CONJUNCTS)       ✅
     diagnostic: production classify() is the writer               ✅
     type sanity: production shapes satisfied                       ✅
-    arbiter-source residue                                         OPEN
+
+  C25-C3-CORRECTION01                          ✅ CLOSED (this commit)
+    R1  N1/N3 frozen D10_UNKNOWN → observed D00_AGREE              AMENDED
+    R2  frozen Local-transport topology → Option B decomposition   AMENDED
+    R3  "four conjuncts" → THREE_PREDICATE_CONJUNCTS               AMENDED
+    C25_C3_VERDICT                  = PASS_C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN
+    C25_C4_AUTHORIZED               = true
 
   C25_ARB_SOURCE_RESIDUE                       🟨 OPEN
     current = LEGACY_MIRROR
     target  = CANONICAL ARBITER
     must be dispositioned before E7 execution
 
-  C25-C4 adversarial                           ⏳
-  C25-C5 terminal + E7 auth                    ⏳
+  C25-C4 adversarial                           🟢 AUTHORIZED
+  C25-C5 terminal + E7 auth                    ⏳ (gated on C25-C4 PASS)
 
 E7                                            ⛔ BLOCKED on C2.5
                                              (E7_ENTRY_REQUIREMENT:
@@ -565,9 +893,20 @@ disposition must be visible in the C25-C5 evidence file.
 ## Commit ledger (this commit)
 
 ```
-<this commit's SHA> test(elm): C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN
+<this commit's SHA> docs(elm): C25-C3-CORRECTION01 — frozen-contract disposition (R1 + R2 + R3)
 ```
 
 Files touched:
-- `apps/vscode/src/sdk/__tests__/c04-synthetic-real-classifier-chain.c25-c3.test.ts` (new, 763 lines, 7 tests)
-- `docs/architecture/elm/task-state-e5-e6-correction02-c25-c3-c04-synthetic-real-classifier-chain-evidence.md` (new, this file)
+- `docs/architecture/elm/task-state-e5-e6-correction02-c25-c3-c04-synthetic-real-classifier-chain-evidence.md`
+  (amended — C25-C3-CORRECTION01 section added; R1/R2/R3 disposition,
+   corrected contract, verbatim restatement, Board after correction,
+   Commit ledger rewritten for correction01)
+- `docs/architecture/elm/task-state-e5-e6-correction02-c25-c2a-correction01-wording-revision.md`
+  (amended — R4 freeze wording amended to match observed behavior;
+   N1/N3 frozen classification corrected to D00_AGREE;
+   topology decomposed as TRANSPORT_PROOF ∧ CLASSIFIER_PROOF;
+   THREE_PREDICATE_CONJUNCTS instead of "four conjuncts")
+
+C25-C3 implementation commit (predecessor, UNCHANGED):
+- `aa273d922` test(elm): C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN —
+  classifier contract qualification (7/7 tests PASS)

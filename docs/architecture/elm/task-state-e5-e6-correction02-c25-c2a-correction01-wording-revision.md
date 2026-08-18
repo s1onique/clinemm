@@ -463,6 +463,119 @@ matter. No production classifier code is mutated. If a mutation probe
 is desired, it stays secondary and **uncommitted** (lives in a stash
 or scratch file, never enters a commit in this epic).
 
+This demonstrates that all three parts of the predicate independently
+matter. No production classifier code is mutated. If a mutation probe
+is desired, it stays secondary and **uncommitted** (lives in a stash
+or scratch file, never enters a commit in this epic).
+
+### R4 amendment (C25-C3-CORRECTION01 — frozen-contract disposition)
+
+When the C25-C3 implementation landed at `aa273d922`, the reviewer's
+round-22 disposition identified three contract drifts between this
+R4 freeze and what the implementation actually qualified. They are
+**dispositioned here** rather than silently superseding the freeze.
+
+**CLASSIFIER_IMPLEMENTATION_DEFECT = false**
+**C25_C3_TEST_DEFECT              = false**
+**C25_C3_FREEZE_DEFECT            = true** (this amendment corrects it)
+
+#### N1, N3 frozen expected classification: `D10_UNKNOWN` → `D00_AGREE`
+
+The freeze above said:
+
+```text
+N1  → frozen expected classification = D10_UNKNOWN
+       (no legacy-shadow divergence; classifier falls through)
+
+N3  → frozen expected classification = D10_UNKNOWN
+       (no shadow-streaming branch reached)
+```
+
+The C25-C3 implementation observed `D00_AGREE` for both N1 and N3.
+
+**Root cause:** for N1 and N3, `legacyPhase === shadowPhase`. The
+comparator's `compareWith` returns `divergence === undefined`. The
+recorder's classifier entry (`task-state-shadow-recorder.ts:530`)
+short-circuits with `if (!divergence) return "D00_AGREE"`. The
+classifier is therefore not reached for D00-D10 on N1/N3.
+
+`D10_UNKNOWN` is reachable only when a divergence EXISTS but no
+branch matches D00-D09 — a situation that does not arise when
+legacy == shadow.
+
+**Disposition:** the frozen expected classifications were wrong;
+`D00_AGREE` is the correct expected class for both N1 and N3.
+This is exactly the kind of freeze-discipline finding the matrix
+is designed to catch. `QUALIFICATION_FOUND_CONTRACT_ERROR = true`.
+
+#### Topology decomposition: full chain → TRANSPORT_PROOF ∧ CLASSIFIER_PROOF
+
+The freeze above said the full topology starts at `LocalRuntimeHost`.
+The C25-C3 implementation entered at `wiring.observeCanonicalRuntimeEvent(...)`
+— which is **the exact entry point** that `subscribeCanonicalRuntimeEventsToShadow`
+calls per canonical event. Reviewer's preferred disposition:
+
+```text
+Option B — decompose the proof:
+  TRANSPORT_PROOF  = C-REAL-1..5  (real Local → real helper → real wiring)
+  CLASSIFIER_PROOF = C25-C3       (direct canonical-event ingress into wiring)
+  JOINT_SYNTHETIC_REAL_PROOF = TRANSPORT_PROOF ∧ CLASSIFIER_PROOF
+```
+
+Re-running already-qualified Local transport inside every classifier
+matrix case adds setup cost without materially strengthening the
+classifier causal evidence. The proof is joint:
+`JOINT_SYNTHETIC_REAL_C04_PROOF = TRANSPORT_PROOF ∧ CLASSIFIER_PROOF`.
+
+#### "Three parts" → THREE_PREDICATE_CONJUNCTS
+
+The freeze above uses the word "three parts" (which is correct —
+legacy side, arbiter side, shadow side). The C25-C3 test header
+later used "four conjuncts" which was an imprecise wording. The
+corrected wording:
+
+```text
+THREE_PREDICATE_CONJUNCTS:
+  conjunct_1: legacyPhase === "idle"           (legacy side)
+  conjunct_2: shadowPhase === "streaming"      (shadow side, streaming specifically)
+  conjunct_3: arbiterActive === true           (arbiter side)
+
+N1 removes conjunct_1 (legacy flipped to "streaming")
+N2 removes conjunct_3 (arbiter flipped to inactive)
+N3 removes conjunct_2 (shadow flipped to "idle")
+```
+
+#### Corrected C25-C3 frozen contract (this amendment supersedes the R4 wording above for C25-C3 only)
+
+```text
+EXPECTED_CLASSIFICATIONS:
+  P   → D01_LEGACY_FALSE_IDLE = 1, arbitration = SHADOW_CORRECT
+  N1  → D01 = 0, classification = D00_AGREE
+  N2  → D01 = 0, classification = D02_SHADOW_FALSE_ACTIVE
+  N3  → D01 = 0, classification = D00_AGREE
+
+JOINT_SYNTHETIC_REAL_C04_PROOF:
+  TRANSPORT_PROOF  = C-REAL-1..5
+  CLASSIFIER_PROOF = C25-C3
+
+THREE_PREDICATE_CONJUNCTS = (legacy=idle, shadow=streaming, arbiterActive=true)
+
+VERDICT (after C25-C3-CORRECTION01):
+  CLASSIFIER_IMPLEMENTATION_DEFECT = false
+  C25_C3_TEST_DEFECT              = false
+  C25_C3_FREEZE_DEFECT            = true   (now amended)
+
+  C25_C3_VERDICT                  = PASS_C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN
+  C25_C4_AUTHORIZED               = true
+```
+
+This amendment does NOT modify R1, R2, R3 of this doc (which
+remain as-applied for the C25-C2A disposition). It is a R4-only
+amendment that scopes precisely to the C25-C3 freeze wording. The
+R4-corrected contract has been carried into the C25-C3 evidence
+file at `docs/architecture/elm/task-state-e5-e6-correction02-c25-c3-c04-synthetic-real-classifier-chain-evidence.md`
+under `## C25-C3-CORRECTION01 — frozen-contract disposition`.
+
 ## R5 — terminating newline (EOF hygiene defect in C25-C2A file)
 
 C25-C2A's evidence file `task-state-e5-e6-correction02-c25-c2-real-c04-capture-evidence.md`
@@ -490,9 +603,10 @@ trailing newline from the start.
 | R2 | Remove "non-D01 active states captured" claim; reframe C-REAL-3/4 as transport-boundary invariants | C25-C2A evidence doc (amend), this doc | APPLIED |
 | R3 | Reframe C-REAL as CAPTURE_SURFACE_COMPONENT_QUALIFICATION (not organic) | C25-C2A evidence doc (amend), this doc | APPLIED |
 | R4 | Freeze C25-C3 synthetic-vs-real dependency split + P/N1/N2/N3 necessity matrix + frozen expected classifications | this doc | APPLIED |
+| R4 amendment (C25-C3-CORRECTION01) | Dispositioned R1 + R2 + R3 drifts found in `aa273d922`; N1/N3 D10_UNKNOWN → D00_AGREE; topology decomposed as TRANSPORT_PROOF ∧ CLASSIFIER_PROOF; THREE_PREDICATE_CONJUNCTS | this doc + C25-C3 evidence doc | APPLIED |
 | R5 | Add terminating newline to C25-C2A file + this file | both files | APPLIED |
 
-## What is preserved (NOT changed by R1..R5)
+## What is preserved (NOT changed by R1..R5 + R4 amendment)
 
 ```text
 ✓ structural finding: getArbiterSnapshot mirror makes D01 unreachable
