@@ -19,6 +19,14 @@ function streaming(seq = 1): TurnState {
 
 function inputsFor(messages: ClineMessage[], turnState: TurnState | undefined): ThinkingLoaderInputs {
 	return {
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+		// The pre-E7.1 turnState-path and legacy-path tests below intentionally
+		// pass `undefined` for the new `thinkingPresentation` field so the
+		// projector falls back to the legacy `turnState.phase` gate. This
+		// preserves the existing test contract while opening the new
+		// canonical-shadow path (covered by the `e7.1` describe block
+		// further down).
+		thinkingPresentation: undefined,
 		turnState,
 		lastRawMessage: messages.at(-1),
 		groupedMessages: messages,
@@ -67,6 +75,99 @@ describe("computeIsWaitingForResponse (legacy path)", () => {
 
 	it("waits when the last visible row is not actively partial", () => {
 		expect(computeIsWaitingForResponse(inputsFor([say(1, "text", false)], undefined))).toBe(true)
+	})
+})
+
+// ===========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+//
+// Canonical-shadow path for the thinking loader. When the backend
+// publishes a `thinkingPresentation` projection (LOCAL with qualified
+// shadow, or the legacy fallback for Hub/Remote), the loader reads
+// from it directly — the legacy `turnState` gate is bypassed for the
+// "is the agent thinking" decision. The two-source rule pins the
+// shadow-source wins + legacy-source compatibility.
+//
+// The witness matrix:
+//   T-S1..T-S6 — shadow branch reads only modelStreaming
+//   T-L1..T-L2 — legacy branch matches existing turnState-path tests
+// ===========================================================================
+
+describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1 / computeIsWaitingForResponse (shadow path)", () => {
+	function inputsWithShadow(
+		messages: ClineMessage[],
+		thinkingPresentation: ThinkingPresentationInputs["thinkingPresentation"],
+		turnState?: TurnState,
+	): ThinkingLoaderInputs {
+		return {
+			thinkingPresentation,
+			turnState,
+			lastRawMessage: messages.at(-1),
+			groupedMessages: messages,
+			lastVisibleRow: messages.at(-1),
+			lastVisibleMessage: messages.at(-1),
+			modifiedMessages: messages,
+		}
+	}
+
+	it("T-S1: shadow modelStreaming=true with no visible rows → wait", () => {
+		expect(computeIsWaitingForResponse(inputsWithShadow([], { modelStreaming: true, source: "shadow", seq: 1 }))).toBe(true)
+	})
+
+	it("T-S2: shadow modelStreaming=true with actively-partial text → no wait (suppressed)", () => {
+		expect(
+			computeIsWaitingForResponse(
+				inputsWithShadow([say(1, "text", true)], { modelStreaming: true, source: "shadow", seq: 1 }),
+			),
+		).toBe(false)
+	})
+
+	it("T-S3: shadow modelStreaming=false → no wait (regardless of legacy phase)", () => {
+		// T2_LEGACY_INDEPENDENCE — shadow wins, legacy phase='streaming'
+		// is IGNORED.
+		expect(
+			computeIsWaitingForResponse(
+				inputsWithShadow(
+					[say(1, "text", false)],
+					{ modelStreaming: false, source: "shadow", seq: 1 },
+					{ phase: "streaming", seq: 1 },
+				),
+			),
+		).toBe(false)
+	})
+
+	it("T-S4: shadow modelStreaming=false → no wait outside streaming phase", () => {
+		expect(
+			computeIsWaitingForResponse(
+				inputsWithShadow(
+					[say(1, "text", false)],
+					{ modelStreaming: false, source: "shadow", seq: 1 },
+					{ phase: "completed", seq: 1 },
+				),
+			),
+		).toBe(false)
+	})
+
+	it("T-S5: shadow source='legacy' + modelStreaming=true from legacy fallback is byte-equivalent to the legacy path", () => {
+		// The Hub/Remote absence-state collapse: shadow source='legacy',
+		// modelStreaming = legacyPhase === 'streaming'.
+		expect(
+			computeIsWaitingForResponse(
+				inputsWithShadow([], { modelStreaming: true, source: "legacy", seq: 1 }, { phase: "streaming", seq: 1 }),
+			),
+		).toBe(true)
+	})
+
+	it("T-S6: shadow source='legacy' + completion_result anti-flicker", () => {
+		expect(
+			computeIsWaitingForResponse(
+				inputsWithShadow(
+					[say(1, "completion_result", false)],
+					{ modelStreaming: true, source: "legacy", seq: 1 },
+					{ phase: "streaming", seq: 1 },
+				),
+			),
+		).toBe(false)
 	})
 })
 
