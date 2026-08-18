@@ -93,8 +93,11 @@ setState((prevState) => {
 ### 2.2 After (C2-CORRECTION02-FIXUP01, commit `46bf32bcd`)
 
 ```ts
-// (NEW) Per-pushId ref map, declared near replicaRef
-const pendingRawSnapshotsRef = useRef<Map<string, ExtensionState>>(new Map())
+// (NEW) Per-pushId ref map, declared near replicaRef.
+// (The FINAL shape is `Map<string | number, ...>` because `stateData._ptadPushId`
+//  is `number | undefined` on the wire. The TS2345 width fix landed at
+//  commit `7d2ed0a78` — see the FIXUP01 ceiling-exception annotation below.)
+const pendingRawSnapshotsRef = useRef<Map<string | number, ExtensionState>>(new Map())
 
 // (1) RAW emit — at the inbound boundary, OUTSIDE the updater:
 onResponse: (response: any) => {
@@ -112,15 +115,10 @@ onResponse: (response: any) => {
     })
 }
 
-// (2) APPLIED emit — from a post-commit useEffect, OUTSIDE the updater:
-useEffect(() => {
-    if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) return
-    const pushId = state._ptadPushId ?? "no-push-id"
-    const rawSnap = pendingRawSnapshotsRef.current.get(pushId)
-    if (!rawSnap) return
-    pendingRawSnapshotsRef.current.delete(pushId)
-    recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(state, rawSnap, "webview-replica"))
-}, [state._ptadPushId, state])
+// (2) APPLIED emit — from a post-commit useEffect, OUTSIDE the updater
+// (REMOVED in C2-CORRECTION02-FIXUP02 because the post-commit effect only
+//  fires once per React commit, which collapses burst-push cardinality
+//  under React 18+ automatic batching. See FIXUP02 terminal evidence.)
 ```
 
 ### 2.3 Strict Mode behavior
@@ -300,6 +298,31 @@ F9   exact-HEAD VSIX built with `fixup01` short SHA          PASS  (7d2ed0a78)
 F10  protected stashes intact                                PASS
 F11  worktree clean                                          PASS
 ```
+
+---
+
+## 6.1 Ceiling-exception annotation (added by FIXUP02)
+
+The original FIXUP01 plan documented a 4-commit ceiling. Six commits
+landed. The over-ceiling commits are not behavioral changes — they
+are build-discovered type-width defects and the corresponding
+documentation refresh:
+
+```text
+PLANNED_COMMIT_CEILING = 4
+ACTUAL_COMMITS         = 6
+CEILING_EXCEPTION      = build-discovered TS2345 type-width defect +
+                          evidence refresh
+                        (commit 5 = Map<string | number> width fix,
+                         commit 6 = terminal evidence doc refresh)
+                        No production behavior change.
+```
+
+Future fixups should keep their `PLANNED_COMMIT_CEILING` ≤ the
+number of commits actually needed for the documented scope. If a
+build-discovered defect adds commits, it MUST be called out
+explicitly in the terminal evidence under a `CEILING_EXCEPTION`
+block of this shape.
 
 ---
 
