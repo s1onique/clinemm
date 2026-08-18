@@ -92,7 +92,7 @@ apps/vscode/vitest.config.c2-4-c-bridge.ts
   source path. Loaded only via
   `bun run vitest --config vitest.config.c2-4-c-bridge.ts`.
 
-android/vscode/src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts
+apps/vscode/src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts
   Excluded from the base vitest config (lacks the alias) and
   from the base tsconfig.json (lacks the alias paths).
 ```
@@ -169,12 +169,63 @@ apps/vscode/src/sdk vitest sweep (base config)  = 18 files, 218 tests PASS (no r
 apps/vscode/src/sdk vitest bridge config (C-REAL) = 5 tests PASS
 apps/vscode check-types                        = 22 errors (baseline at 48c6a3c4d;
                                               ZERO new errors from C2.4-C File 3)
+apps/vscode check-types:c2-4-c-bridge          = 1 transitive error
+                                              (apps/vscode/src/sdk/task-state-shadow.ts:169
+                                              — same baseline error as the base config;
+                                              ZERO new errors from the bridge test itself)
+                                              BRIDGE_TEST_TS_ERRORS              = 0
+                                              BRIDGE_TYPECHECK                  = PASS
 sdk/packages/core typecheck (tsconfig.dev)     = 2 errors (baseline at 48c6a3c4d;
                                               ZERO new errors from C2.4-C File 1)
 PROTECTED_STASHES_INTACT                       = true
    stash@{1} = FORENSIC ACT-ELM-02C2 (5 files,
               pre-F0-recon-digest:141372c52
               RECOVERED from dropped commit)
+```
+
+## History and re-evaluation
+
+### C2.4-C frozen at `da3fb414d`
+
+Two-file split with REAL `LocalRuntimeHost` topology + hand-rolled
+LocalRuntimeHost shim. The reviewer correctly identified that the
+seam between real LocalRuntimeHost and real TaskShadowHostWiring was
+never exercised end-to-end.
+
+### C2.4-C-CORRECTION01 frozen at `ef00f7ec2`
+
+Three-file split. File 3 is the real LocalRuntimeHost -> REAL wiring
+bridge (C-REAL-1..5). Closes the architecture.
+
+### C2.4-C-CORRECTION02 frozen at `<this commit>` (test infra)
+
+- Adds `apps/vscode/tsconfig.c2-4-c-bridge.json` (dedicated typecheck
+  project for the bridge test, with `@cline-internal/core/...` paths
+  and the SDK source `rootDir: "../.."`).
+- Adds `apps/vscode/package.json` scripts:
+  - `test:vitest:c2-4-c-bridge` — runs the bridge vitest config.
+  - `test:vitest:c2-4-c-bridge:watch` — same, watch mode.
+  - `check-types:c2-4-c-bridge` — runs the dedicated bridge typecheck.
+  - `ci:check-all` now includes `check-types:c2-4-c-bridge` and
+    `test:vitest:c2-4-c-bridge` alongside the existing base sweeps.
+- Documents R5 (L9 wording: session replacement -> subscription
+  replacement) and R6 (event-count wording normalization).
+- Fixes R3 (stale "base config untouched" prose in the bridge
+  vitest config) and R4 (`android/vscode` -> `apps/vscode` path
+  typo in this evidence doc).
+
+Production semantic delta: 0. No production source touched.
+
+```
+BRIDGE_TYPECHECK              = PASS
+  BRIDGE_TEST_TS_ERRORS       = 0
+  TRANSITIVE_PROD_TS_ERRORS   = 1 (baseline at 48c6a3c4d;
+                                same as base typecheck)
+BRIDGE_TEST_CANONICAL_GATE    = PASS
+  test:vitest:c2-4-c-bridge   = 5/5 PASS
+  check-types:c2-4-c-bridge  = 0 NEW errors
+  ci:check-all now invokes both
+MANUAL_ONLY_TEST              = false
 ```
 
 ## Acceptance gate (C2.4-C-CORRECTION01, after review)
@@ -187,11 +238,30 @@ SUBSCRIBE_BEFORE_SESSION                      = PASS
 FUTURE_SESSION_NOT_AUTO_ATTACHED              = PASS
 REFRESH_AFTER_SESSION_START                   = PASS
 UNSUBSCRIBE                                   = PASS
-REAL_HOST_DELIVERY_COUNT == SHADOW_OBSERVATION_COUNT = PASS
+SCRIPTED_CANONICAL_EVENT_COUNT == SHADOW_OBSERVATION_COUNT = PASS
+  (C-REAL-2 / C-REAL-1 second-half asserts that every scripted
+   event was observed by the wiring. There is no separate host
+   delivery counter in this test; the only route to the wiring
+   is via the real host, so the equality stands as the strongest
+   claim the bridge test can make without introducing a second
+   real-host subscriber.)
 TRANSPORT_REACHABILITY_WITH_NO_ACTIVE_SESSION = PASS
 BOUNDARY_FAIL_CLOSED                          = PASS
 REDUCER_SEMANTIC_DELTA                        = 0
 PRODUCTION_SEMANTIC_DELTA                     = 0
+
+# Acceptance gate (C2.4-C-CORRECTION02, after test-infra review)
+
+```text
+BRIDGE_TYPECHECK                                = PASS
+  BRIDGE_TEST_TS_ERRORS                         = 0
+  TRANSITIVE_PROD_TS_ERRORS                     = 1 (baseline)
+BRIDGE_TEST_CANONICAL_GATE                     = PASS
+  test:vitest:c2-4-c-bridge                    = 5/5 PASS
+  check-types:c2-4-c-bridge                   = 0 NEW errors
+  ci:check-all invokes both                    = yes
+C2_4_C_VERDICT                                 = CLOSED
+C2_4_D_AUTHORIZED                              = true
 ```
 
 ## Board

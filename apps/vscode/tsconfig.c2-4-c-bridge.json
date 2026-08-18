@@ -1,0 +1,58 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"rootDir": "../..",
+		"baseUrl": ".",
+		"paths": {
+			"@/*": [
+				"./src/*"
+			],
+			"@api/*": [
+				"./src/core/api/*"
+			],
+			"@core/*": [
+				"./src/core/*"
+			],
+			"@generated/*": [
+				"./src/generated/*"
+			],
+			"@hosts/*": [
+				"./src/hosts/*"
+			],
+			"@integrations/*": [
+				"./src/integrations/*"
+			],
+			"@packages/*": [
+				"./src/packages/*"
+			],
+			"@services/*": [
+				"./src/services/*"
+			],
+			"@shared/*": [
+				"./src/shared/*"
+			],
+			"@utils/*": [
+				"./src/utils/*"
+			],
+			"@cline-internal/core/runtime/host/local-runtime-host": [
+				"../../sdk/packages/core/src/runtime/host/local-runtime-host"
+			],
+			"@cline-internal/core/session/services/file-session-service": [
+				"../../sdk/packages/core/src/session/services/file-session-service"
+			]
+		}
+	},
+	"include": [
+		"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts"
+	],
+	"exclude": [
+		"node_modules",
+		"webview-ui",
+		"src/test/e2e/**/*",
+		"src/test/scenarios/**/*",
+		"src/test/cline-core-vitest-stub.ts",
+		"src/test/bun-test-preload.ts",
+		"src/generated/**/*"
+	]
+}

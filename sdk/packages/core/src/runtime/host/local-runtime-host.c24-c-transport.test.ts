@@ -38,7 +38,15 @@
  *   L1  creation of session A
  *   L2-L7 run-started/exec/tool-started/tool-finished/recovery/run-finished
  *   L8  run-failed
- *   L9  session replacement disposes the old subscription
+ *   L9  unsubscribe + subscription replacement: a fresh
+ *      `subscribeRuntimeEvents` attaches a new wrapper to the
+ *      session-A agent's listener set after the prior wrapper
+ *      was disposed; both subscribers see the scripted events
+ *      independently, and the prior wrapper no longer receives
+ *      them post-dispose.
+ *      (This is SUBSCRIPTION replacement, NOT session
+ *      replacement. Session replacement is the C-REAL-3 row in
+ *      `apps/vscode/src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts`.)
  *   L10 no fan-out duplication (exactly once per emit)
  *   L11 two simultaneous subscribers each receive all events
  *   L12 POINT_IN_TIME empty-sessions no-op
@@ -365,8 +373,10 @@ describe("C2.4-C - REAL LocalRuntimeHost canonical-runtime-event transport reach
 		}
 	})
 
-	// L9 - session replacement disposes the previous fan-out cleanly
-	it("L9: replacing the host listener disposes the previous fan-out (real LocalRuntimeHost)", async () => {
+	// L9 - unsubscribe + subscription replacement (NOT session
+	// replacement; this is the test seam through which the bridge
+	// test's C-REAL-3 disposes and re-uses the same session).
+	it("L9: unsubscribe + subscription replacement (real LocalRuntimeHost, same session-A reused)", async () => {
 		const events = makeRunEvents("run-L9")
 		const { agent, unsubCalls } = makeStubAgent(events)
 		const host = makeHostWithAgent(agent)

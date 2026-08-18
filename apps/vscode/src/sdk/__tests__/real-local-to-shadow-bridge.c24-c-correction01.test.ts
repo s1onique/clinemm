@@ -56,6 +56,7 @@ import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtim
 import { FileSessionService } from "@cline-internal/core/session/services/file-session-service"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { subscribeCanonicalRuntimeEventsToShadow } from "../canonical-event-subscription"
+import type { ActiveSession } from "../cline-session-factory"
 import { createTaskShadowHostWiring, emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
 
 // =========================================================================
@@ -173,7 +174,19 @@ async function emitEvents(agent: { run: () => Promise<unknown> }) {
 // for the C2.4-B narrow guard. The bridge test simulates a real
 // SdkSessionLifecycle by exposing just the methods the wiring reads.
 
-const sessionMap = new Map<string, { sessionId: string }>()
+const sessionMap = new Map<string, ActiveSession>()
+
+function makeActiveSession(sessionId: string): ActiveSession {
+	// Minimal fixture — `getActiveSession()` only reads `sessionId`
+	// at the wiring boundary; the rest of the `ActiveSession`
+	// surface is unused by the shadow wiring.
+	return {
+		sessionId,
+		sdkHost: undefined as never,
+		unsubscribe: () => undefined,
+		isRunning: true,
+	} as unknown as ActiveSession
+}
 
 function makeWiringDeps() {
 	return {
@@ -275,7 +288,7 @@ describe("C2.4-C-CORRECTION01 - REAL LocalRuntimeHost -> wiring bridge", () => {
 		const oldUnsub = subscribeCanonicalRuntimeEventsToShadow(host, wiring, "session-A")
 		const beforeOld = wiring.recorderCounts()
 		await startSessionA(host)
-		sessionMap.set("session-A", { sessionId: "session-A" })
+		sessionMap.set("session-A", makeActiveSession("session-A"))
 		await emitEvents(agent)
 		const afterOld = wiring.recorderCounts()
 		expect(afterOld.eventsObserved - beforeOld.eventsObserved).toBe(0)
@@ -299,7 +312,7 @@ describe("C2.4-C-CORRECTION01 - REAL LocalRuntimeHost -> wiring bridge", () => {
 		const host = makeRealHost(agent, isolatedHomeDir)
 		const wiring = createTaskShadowHostWiring(makeWiringDeps())
 		await startSessionA(host)
-		sessionMap.set("session-A", { sessionId: "session-A" })
+		sessionMap.set("session-A", makeActiveSession("session-A"))
 		const unsub = subscribeCanonicalRuntimeEventsToShadow(host, wiring, "session-A")
 		const before = wiring.recorderCounts()
 		await emitEvents(agent)
@@ -315,7 +328,7 @@ describe("C2.4-C-CORRECTION01 - REAL LocalRuntimeHost -> wiring bridge", () => {
 		const host = makeRealHost(agent, isolatedHomeDir)
 		const wiring = createTaskShadowHostWiring(makeWiringDeps())
 		await startSessionA(host)
-		sessionMap.set("session-A", { sessionId: "session-A" })
+		sessionMap.set("session-A", makeActiveSession("session-A"))
 		const unsub = subscribeCanonicalRuntimeEventsToShadow(host, wiring, "session-A")
 		const before = wiring.recorderCounts()
 		await emitEvents(agent)

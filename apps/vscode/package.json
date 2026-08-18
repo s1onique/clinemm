@@ -1,7 +1,7 @@
 {
 	"name": "clinemm",
 	"displayName": "ClineMM",
-	"description": "ClineMM — a Cline fork for daily local dogfood (MiniMax M3 by default). Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
+	"description": "ClineMM \u2014 a Cline fork for daily local dogfood (MiniMax M3 by default). Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
 	"version": "4.1.10",
 	"icon": "assets/icons/icon.png",
 	"engines": {
@@ -370,7 +370,7 @@
 		"format": "biome format --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error --semicolons=as-needed",
 		"format:fix": "biome check --config-path ./biome.jsonc --changed --since main --no-errors-on-unmatched --files-ignore-unknown=true --write --semicolons=as-needed",
 		"fix:all": "biome check --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --write --diagnostic-level=error --unsafe --semicolons=as-needed",
-		"ci:check-all": "bun run --parallel check-types lint format",
+		"ci:check-all": "bun run --parallel check-types check-types:c2-4-c-bridge test:vitest test:vitest:c2-4-c-bridge lint format",
 		"ci:build": "bun run protos && bun run build:webview && bun esbuild.mjs && bun run compile-tests",
 		"pretest": "bun run compile && bun run compile-tests && bun run compile-standalone && bun run lint",
 		"test": "bun run test:unit && bun run test:integration",
@@ -401,7 +401,10 @@
 		"docs:rename-file": "cd docs && bun run rename",
 		"report-issue": "node scripts/report-issue.js",
 		"storybook": "cd webview-ui && bun run storybook",
-		"eval:smoke:run": "bun evals/smoke-tests/run-smoke-tests.ts"
+		"eval:smoke:run": "bun evals/smoke-tests/run-smoke-tests.ts",
+		"test:vitest:c2-4-c-bridge": "vitest run --config vitest.config.c2-4-c-bridge.ts",
+		"test:vitest:c2-4-c-bridge:watch": "vitest --config vitest.config.c2-4-c-bridge.ts",
+		"check-types:c2-4-c-bridge": "bunx tsc --project tsconfig.c2-4-c-bridge.json --noEmit"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [

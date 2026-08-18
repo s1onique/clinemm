@@ -7,10 +7,12 @@
  *   - the `@cline/core` bundle minifier name-collision
  *   - the `apps/vscode/vitest.config.ts` `@cline/core` stub alias
  *
- * The base `vitest.config.ts` is untouched. This config is loaded
- * only by `bun run vitest --config vitest.config.c2-4-c-bridge.ts`
- * and runs ONLY against the bridge test files. The base config
- * continues to run all 18 existing C2.4-B and earlier witness files.
+ * The base config is modified only to exclude this bridge from
+ * its alias-incompatible test stream; the dedicated bridge
+ * configuration owns execution of this test. The bridge runs via
+ * `bun run vitest --config vitest.config.c2-4-c-bridge.ts`. The
+ * base config continues to run all 18 existing C2.4-B and
+ * earlier witness files.
  *
  * NOTE: `setupFiles` is intentionally omitted. The base
  * `src/test/vitest-setup.ts` calls `resetModelsFileState`, which
