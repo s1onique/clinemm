@@ -340,10 +340,9 @@ C25-C3 + C25-C3-CORRECTION01             CLOSED
 C25-C4 + C25-C4-CORRECTION01             CLOSED
    + C25-C4-CORRECTION02                 CLOSED
    + C25-C4-CORRECTION03                 CLOSED  (this commit)
-C25-C5 terminal + E7 auth                NEXT
-C25_ARB_SOURCE_RESIDUE                   OPEN   (gates E7)
-
-E7                                      ⛔ BLOCKED on C2.5
+C25-C5 terminal + E7 auth                CLOSED (this commit's terminal ACT)
+ELM-02F-CORRECTION01                     🟢 NEXT (bounded E7-unblock ACT)
+E7                                      ⛔ BLOCKED on ELM-02F-CORRECTION01
 ```
 
 ## 7. C25-C5 IMPLICATIONS CARRY-FORWARD

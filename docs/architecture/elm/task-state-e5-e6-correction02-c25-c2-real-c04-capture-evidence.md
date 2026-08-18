@@ -483,6 +483,7 @@ C2.5
     C25-C4-CORRECTION01                    🟢 APPLIED (R1+R2+R3+R4+R5)
     C25-C4-CORRECTION02                    🟢 APPLIED (R6+R7+R8+R9+R10)
     C25-C4-CORRECTION03                    🟢 APPLIED (R11+R12+R13 + R-wording-nit)
+    C25-C5 terminal + E7 auth               🟢 APPLIED (T1 PROVEN + T2 CLASSIFIED)
 
 E7                                         ⛔ BLOCKED on C2.5
 ```
