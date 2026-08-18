@@ -1,8 +1,17 @@
-# C2.5-C2 — REAL C04 capture evidence (organic experiment)
+# C2.5-C2 — REAL C04 reachability evidence (source-level + capture-surface qualification)
 
 **Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.5-C2-REAL-C04-CAPTURE
 
 **Status:** evidence-only commit. No production, test, or config changes in C25-C2A.
+
+**Note (amended by C25-C2A-CORRECTION01):** the original "organic
+experiment" wording overclaimed. This evidence commit proves (a)
+source-level structural unreachability of C04 in current production,
+(b) capture-surface component qualification via C-REAL bridge tests.
+It does NOT prove organic REAL_C04 reproduction — that requires an
+actually running extension/task/session lifecycle which was NOT_EXECUTED.
+See `task-state-e5-e6-correction02-c25-c2a-correction01-wording-revision.md`
+for the disposition correction.
 
 ## Entry freeze
 
@@ -32,22 +41,38 @@ C25-C0 recon/capture contract     PASS_RECON_ACCEPTED (cf8705544)
   C25-C1                          = SKIPPED
 ```
 
-## C25-C2 disposition (epistemic split)
+## C25-C2 disposition (R1 — amended by C25-C2A-CORRECTION01)
 
 ```text
-REAL_C04_DISPOSITION            = NOT_REPRODUCED_CAPTURE_VALID
+CURRENT_PRODUCTION_C04_REACHABILITY    = PROVEN_STRUCTURALLY_UNREACHABLE
+ORGANIC_REAL_C04_EXPERIMENT             = NOT_EXECUTED
+  (execution unnecessary for reachability determination;
+   source proof is decisive)
+CAPTURE_SURFACE                         = QUALIFIED_FOR_CANONICAL_BRIDGE
+REAL_C04_REPRODUCED                     = false
+REAL_C04_NOT_REPRODUCED_EMPIRICALLY     = NOT_CLAIMED
 
-  ✓ real Local canonical events observed              = YES  (C-REAL-1..5)
-  ✓ raw classifier inputs captured                    = YES  (per-record fields, ELM10-safe)
-  ✓ known non-D01 active states captured             = YES  (negative-control bridge rows)
-  ✓ classifier operational                           = YES  (production classify() at task-state-shadow-recorder.ts:521)
-  ✓ no evidence gap prevented detection              = YES  (capture surface is sufficient)
-
-This disposition is VALID per the reviewer's 3-way scheme.
-CAPTURE_INSUFFICIENT is NOT triggered.
-C25-C2 = AUTHORIZED TO PROCEED (→ C25-C3 is decisive).
-E7     = STILL BLOCKED on C2.5 (no change).
+C25_C2_VERDICT                          = PASS_STRUCTURAL_UNREACHABILITY_CURRENT_PRODUCTION
 ```
+
+The original wording `NOT_REPRODUCED_CAPTURE_VALID` overclaimed
+(implied an organic run had been observed). The corrected wording is
+stronger: it explicitly states that the experiment's reachability was
+determined by source recon, not by capture-surface inspection. The
+capture surface IS sufficient — but the question of sufficiency became
+moot when reachability was disproven at the source level.
+
+**Why NOT CAPTURE_INSUFFICIENT:** all four reviewer-listed triggers
+(classification visible but raw arbiter fields missing; cannot bind
+record to current session; cannot distinguish canonical from
+reconstructed; capture output silently drops relevant observations)
+are negated by C-REAL-1..5 evidence (see Phase 2 below). The capture
+surface is qualified; the production reachability is what failed.
+
+C25-C2 = CLOSED with structural unreachability finding.
+C25-C3 = AUTHORIZED (decisive phase; classifier contract qualification
+        against the post-mirror semantic shape via input ablation).
+E7     = STILL BLOCKED on C2.5 (no change).
 
 ## Phase 1 — organic trigger recon (current production)
 
@@ -141,11 +166,19 @@ classification under the mirrored `getArbiterSnapshot()`.** Organic
 reproduction is structurally blocked by the wiring's own arbiter
 implementation, not by any test-side reconstruction or capture-surface gap.
 
-## Phase 2 — capture surface validation (C-REAL bridge chain)
+## Phase 2 — CAPTURE_SURFACE_COMPONENT_QUALIFICATION (R3 — amended)
 
 The C-REAL bridge test at
 `apps/vscode/src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts`
-exercises the REAL chain:
+qualifies the **components** of the canonical path (production-typed at
+every observation-ingress component). It is NOT organic extension
+execution — it uses the test `createAgent` seam with stub agents. It
+proves that if a canonical event flows through the production
+transport, the recorder will receive it. It does NOT prove that the
+production process produces D01 (that is the C25-C3 classifier
+contract qualification).
+
+The qualified chain:
 
 ```text
 real LocalRuntimeHost
@@ -158,13 +191,13 @@ real LocalRuntimeHost
 
 Rows proved at HEAD `cf8705544`:
 
-| Row     | PASS/FAIL | What it proves                                                          |
-|---------|-----------|-------------------------------------------------------------------------|
-| C-REAL-1| PASS      | Pre-session subscribe is point-in-time; later sessions need re-attach    |
-| C-REAL-2| PASS      | Fresh subscribe + canonical sequence yields exactly 1:1 host → shadow    |
-| C-REAL-3| PASS      | Dispose removes the listener; later events do not affect shadow delta  |
-| C-REAL-4| PASS      | No-active-session drops the canonical event at the boundary (fail-closed)|
-| C-REAL-5| PASS      | Package-pin: production wiring factory, production LocalRuntimeHost     |
+| Row     | PASS/FAIL | What it proves (R2 wording — transport-boundary invariant, not classifier discriminative evidence) |
+|---------|-----------|--------------------------------------------------------------------------------------------|
+| C-REAL-1| PASS      | Pre-session subscribe is point-in-time; later sessions need re-attach                       |
+| C-REAL-2| PASS      | Fresh subscribe + canonical sequence yields exactly 1:1 host → shadow                       |
+| C-REAL-3| PASS      | Post-dispose: shadow delta = 0   (transport-boundary invariant: disposed subscriptions do not leak into shadow) |
+| C-REAL-4| PASS      | No-active-session: shadow delta = 0 (session-binding invariant: events for non-active sessions do not leak into shadow) |
+| C-REAL-5| PASS      | Package-pin: production wiring factory, production LocalRuntimeHost                          |
 
 Run at HEAD `cf8705544`:
 
@@ -172,6 +205,25 @@ Run at HEAD `cf8705544`:
 Test Files  1 passed (1)
      Tests  5 passed (5)
    Duration  4.51s
+```
+
+What this collectively proves:
+
+```text
+✓ transport object identity is correct
+✓ canonical subscription delivers exactly one observation per canonical event
+✓ disposed subscriptions do not leak into shadow   (C-REAL-3)
+✓ events for non-active sessions do not leak into shadow   (C-REAL-4)
+✓ wiring factory + LocalRuntimeHost are production-typed
+```
+
+What it does **NOT** prove:
+
+```text
+✗ the classifier discriminates correctly under active inputs
+  (that requires C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN)
+✗ non-D01 active states are observed in production
+  (that would require organic REAL_C04 execution, which is NOT_EXECUTED)
 ```
 
 Each captured record carries the full causal-input field set required
@@ -189,48 +241,70 @@ applies the C04 predicate verbatim (`task-state-shadow-recorder.ts:542-547`).
 The `arbitration` field is the production `arbitrate()` output
 (`task-state-shadow-recorder.ts:622-626`).
 
-## Phase 3 — negative real control
+## Phase 3 — classifier discriminative behavior (R2 — reframed)
 
-The C-REAL-2 row covers the canonical-event positive case (host
-delivery count == shadow observation count exactly). The C-REAL-4 row
-covers the no-active-session negative case (boundary drops the event).
-The C-REAL-3 row covers the dispose negative case (post-dispose events
-do not affect shadow delta).
-
-Combined, these prove:
+The original "negative real control" wording overclaimed. C-REAL-3/4
+are transport-boundary suppression tests, not active classifier
+observations where the predicate is false. The classifier's
+discriminative behavior is **structural**, not captured:
 
 ```text
-✓ when canonical events flow and conditions are normal, shadow receives them
-✓ when no active session, the boundary fails closed (C2.4-B invariant preserved)
-✓ when subscription is disposed, no further shadow updates occur
-✓ non-D01 active states do NOT spuriously classify as D01
-  (because the production classify() discriminates; this is structural)
+The classifier discriminates because:
+  - classify() at task-state-shadow-recorder.ts:521 is structural
+  - the C04 predicate at recorder.ts:542-547 is exact
+  - if the predicate holds, D01 returns; otherwise the classifier
+    falls through to D02 / D03 / D05 / D09 / D10 etc.
+  - this is provable by reading the classifier, not by capturing it.
 ```
 
-The capture surface discriminates: it does NOT yield D01 whenever
-arbitrary activity exists; it yields D01 only when the C04 predicate
-holds. Under the current mirrored arbiter, the predicate holds never,
-so D01 = 0 by structural construction. This is the negative real
-control the reviewer's plan requires (Phase C25-C2 / Phase 5).
+What C-REAL-3/4 actually prove (the correct framing):
 
-## Phase 4 — organic attempts (3 controlled)
+```text
+C-REAL-3: post-dispose subscription does not reach shadow
+          (transport-boundary invariant — fail-closed at the
+           subscription boundary, NOT classifier discriminative evidence)
+
+C-REAL-4: no-active-session event does not reach shadow
+          (session-binding invariant — fail-closed at the
+           session-boundary, NOT classifier discriminative evidence)
+```
+
+What remains to prove classifier discriminative behavior under
+**active** inputs: C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN. That
+phase synthesizes inputs that exercise the classifier's C04 guard
+directly, asserting the P / N1 / N2 / N3 matrix.
+
+Under the current mirrored arbiter, the predicate holds never, so D01
+= 0 by structural construction at the source level — not by capture
+evidence.
+
+## Phase 4 — organic attempts (NOT_EXECUTED; source decisive)
 
 The reviewer's plan calls for three principled attempts. In this
 environment the debug harness is not runnable (Playwright + Electron +
 VSCode would need a cold download; the local-disk-usage constraint
-makes that impractical). The organic attempts are therefore
-**source-recon-attested**, not debug-harness-attested. This is the
-defensible disposition for this turn:
+makes that impractical). More importantly, after Phase 1's structural
+finding, the three attempts would be MOOT — even if a trigger fired
+and even if the shadow diverged, the mirrored `getArbiterSnapshot()`
+forces `arbiterActive = false` whenever `legacyPhase = "idle"`, so the
+classifier cannot yield D01 regardless of what organic events flow.
+
+The organic experiment is therefore **NOT_EXECUTED**, by deliberate
+choice (source proof is decisive):
 
 ```text
-ATTEMPT_1  (T1 follow-up / completion)        → DISPOSITION: REACHABLE_BUT_D02_NOT_D01
-ATTEMPT_2  (T3 model-stream start ordering)   → DISPOSITION: REACHABLE_BUT_D02_NOT_D01
-ATTEMPT_3  (T6 cancellation / recovery)       → DISPOSITION: REACHABLE_BUT_D03/D06/D07_NOT_D01
+ATTEMPT_1  (T1 follow-up / completion)        → WOULD_YIELD: D02_NOT_D01
+ATTEMPT_2  (T3 model-stream start ordering)   → WOULD_YIELD: D02_NOT_D01
+ATTEMPT_3  (T6 cancellation / recovery)       → WOULD_YIELD: D03/D06/D07_NOT_D01
 
-REAL_C04_REPEATABILITY = NOT_REPRODUCED (not because of a capture gap,
-                                         but because the production
-                                         arbiter mirror makes D01 unreachable)
+ORGANIC_REAL_C04_EXPERIMENT = NOT_EXECUTED (source decisive)
+REAL_C04_NOT_REPRODUCED_EMPIRICALLY = NOT_CLAIMED
 ```
+
+This is consistent with R1's disposition:
+`PASS_STRUCTURAL_UNREACHABILITY_CURRENT_PRODUCTION`. The organic
+attempt is not necessary because the source proof already shows
+reachability fails.
 
 ## Phase 5 — SAME_INGRESS_SAMPLE proof
 
@@ -252,19 +326,18 @@ with all three causal inputs co-located. This rules out the
 "two adjacent log lines constitute one observation" overclaim.
 ```
 
-## Why NOT_REPRODUCED_CAPTURE_VALID, not CAPTURE_INSUFFICIENT
+## Why PASS_STRUCTURAL_UNREACHABILITY_CURRENT_PRODUCTION, not CAPTURE_INSUFFICIENT (R1 amended)
 
-The reviewer's plan distinguishes these explicitly:
+The reviewer's `CAPTURE_INSUFFICIENT` examples are:
 
 ```text
-CAPTURE_INSUFFICIENT examples:
-  - classification visible but raw arbiter fields missing
-  - cannot bind record to current session
-  - cannot distinguish canonical from reconstructed
-  - capture output silently drops relevant observations
+- classification visible but raw arbiter fields missing
+- cannot bind record to current session
+- cannot distinguish canonical from reconstructed
+- capture output silently drops relevant observations
 ```
 
-None of these apply:
+None of these apply (negated by C-REAL-1..5 evidence in Phase 2):
 
 1. **Raw arbiter fields ARE captured.** Every record carries
    `modelStreaming`, `awaitingApproval`, `activeToolCount`,
@@ -287,21 +360,34 @@ path (`ELM-02F`).
 
 ## Why NOT a halt
 
-The reviewer explicitly authorized `NOT_REPRODUCED_CAPTURE_VALID`:
+The reviewer explicitly authorized this disposition in round-20:
 
 ```text
-This is valid only if:
-  real Local canonical events observed        = yes
-  raw classifier inputs captured              = yes
-  known non-D01 active states captured         = yes
-  classifier operational                      = yes
-  no evidence gap prevented detection          = yes
+CURRENT_PRODUCTION_C04_REACHABILITY
+  = PROVEN_STRUCTURALLY_UNREACHABLE
+CAPTURE_SURFACE
+  = QUALIFIED_FOR_CANONICAL_BRIDGE
+ORGANIC_REAL_C04_EXPERIMENT
+  = NOT_EXECUTED
+    (execution unnecessary for reachability determination;
+     source proof is decisive)
+REAL_C04_REPRODUCED
+  = false
+REAL_C04_NOT_REPRODUCED_EMPIRICALLY
+  = NOT_CLAIMED
+
+C25_C2_VERDICT
+  = PASS_STRUCTURAL_UNREACHABILITY_CURRENT_PRODUCTION
 ```
 
-All five are yes. Therefore:
+This disposition is **stronger** than `NOT_REPRODUCED_CAPTURE_VALID`
+because it explicitly states that the experiment's reachability was
+determined by source recon, not by capture-surface inspection.
+
+Therefore:
 
 ```text
-C25-C2 verdict      = NOT_REPRODUCED_CAPTURE_VALID
+C25-C2 verdict      = PASS_STRUCTURAL_UNREACHABILITY_CURRENT_PRODUCTION
 C2.5 verdict        = PENDING (C25-C3 is decisive)
 E7                  = STILL BLOCKED on C2.5
 ```
@@ -372,7 +458,7 @@ git diff --check (working tree)           exit 0
 Verified at C25-C2A entry. Both SHA-256 fingerprints match the D3-C7
 witness unchanged.
 
-## Board after C25-C2A
+## Board after C25-C2A (R1 amended)
 
 ```text
 C2.3                                       ✅ CLOSED
@@ -383,26 +469,43 @@ C2.4-D4                                    ✅ CLOSED_CLEAN
 C2.5
   C25-C0 recon/capture contract            ✅ CLOSED (cf8705544)
   C25-C1                                   ⏭️ SKIPPED (INSTRUMENTATION_REQUIRED=false)
-  C25-C2 REAL C04 capture experiment       ✅ NOT_REPRODUCED_CAPTURE_VALID
-    capture surface validation             ✅ C-REAL-1..5 PASS
-    negative control                       ✅ C-REAL-3/4 PASS
+  C25-C2 REAL C04 reachability             ✅ PASS_STRUCTURAL_UNREACHABILITY_CURRENT_PRODUCTION
+    source proof                           ✅ getArbiterSnapshot mirror, ELM-02F forward-fix
+    CAPTURE_SURFACE_COMPONENT_QUALIFICATION ✅ C-REAL-1..5 PASS (transport-boundary + 1:1 delivery)
     SAME_INGRESS_SAMPLE                    ✅ PROVEN (host-wiring.ts:596-599)
-    structural blocker                     ✅ documented (getArbiterSnapshot mirror, ELM-02F forward-fix)
-  C25-C3 C04_SYNTHETIC_REAL                ⏳ NEXT (decisive)
+    ORGANIC_REAL_C04_EXPERIMENT            = NOT_EXECUTED (source decisive)
+    REAL_C04_NOT_REPRODUCED_EMPIRICALLY    = NOT_CLAIMED
+    C25-C2A-CORRECTION01                   🟢 APPLIED (this commit)
+  C25-C3 C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN 🟢 AUTHORIZED
+    P / N1 / N2 / N3 matrix frozen
   C25-C4 adversarial                       ⏳
   C25-C5 terminal + E7 auth                ⏳
 
 E7                                         ⛔ BLOCKED on C2.5
 ```
 
+
 ## Next (planned, contingent)
 
-C25-C3 — C04_SYNTHETIC_REAL positive/negative/necessity.
-Synthetic stimulus on the C-REAL canonical chain. Must yield:
-- positive: D01 count = 1, D10 = 0, invariant violations = 0
-- negative: D01 count = 0
-- necessity: changing only one side of the predicate yields D01 = 0
+C25-C3 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN.
+Synthetic stimulus on the C-REAL canonical chain (real
+LocalRuntimeHost + real subscribeCanonicalRuntimeEventsToShadow + real
+wiring). Synthetic: getLegacyPhase, getArbiterSnapshot, canonical
+event stimulus. Real: transport, subscription, observation ingress,
+shadow transition, comparator, classifier, recorder.
+
+Must yield (per R4 freeze in C25-C2A-CORRECTION01):
+- P: D01_LEGACY_FALSE_IDLE = 1, arbitration = SHADOW_CORRECT
+- N1 (streaming + streaming shadow + active arbiter): D01 = 0
+- N2 (idle + streaming shadow + inactive arbiter): D01 = 0
+       frozen expected classification = D02_SHADOW_FALSE_ACTIVE
+- N3 (idle + idle shadow + active arbiter): D01 = 0
+- necessity by input ablation (no classifier mutation)
 
 The C-REAL bridge test chain (real LocalRuntimeHost + real
 subscribeCanonicalRuntimeEventsToShadow + real wiring) is the correct
-evidence vehicle for C04_SYNTHETIC_REAL per the reviewer's freeze.
+evidence vehicle for C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN per the
+reviewer's freeze. The C25-C2A-CORRECTION01 evidence file freezes the
+exact assertion contract (see
+`task-state-e5-e6-correction02-c25-c2a-correction01-wording-revision.md`,
+R4).
