@@ -20,19 +20,32 @@ review issues from the E7.1 architecture walkthrough of the prior ACT:
 ```text
 C2R_SOURCE_HEAD                 = 2f1a9999b  (closure of C2-CORRECTION01)
 C2C2_FIXUP01_ENTRY_HEAD         = ea5446a79  (closure of C2-CORRECTION02)
-C2C2_FIXUP01_BUILD_HEAD         = 46bf32bcd  (React-updater purity fix)
-C2C2_FIXUP01_REVIEW_HEAD        = 2b3f72413  (classifier split + StrictMode test)
+C2C2_FIXUP01_BUILD_HEAD         = 46bf32bcd  (React-updater purity fix, R1)
+C2C2_FIXUP01_REVIEW_HEAD        = 2b3f72413  (R2 classifier split + StrictMode test)
+C2C2_FIXUP01_TYPEHEAD           = 7d2ed0a78  (Map<string|number> TS2345 width fix — see Note A)
 
-(Commit chain:)
+(Commit chain — 5 commits on top of C2C2_FIXUP01_ENTRY_HEAD:)
   a5775868e  docs(elm): C2-CORRECTION02-FIXUP01 plan + source recon
   46bf32bcd  fix(elm): React-updater purity
   2b3f72413  fix+test(elm): R2 classifier split + StrictMode cardinality
+  8f906dc30  docs(elm): C2-CORRECTION02-FIXUP01 terminal evidence + R3 head rename
+  7d2ed0a78  fix(elm): Map<string | number> (TS2345 width fix — see Note A)
 
 C2C2_FIXUP01_PLAN_DOC           = task-state-e71-c2-correction02-fixup01-plan.md
 C2C2_FIXUP01_SOURCE_RECON_DOC   = task-state-e71-c2-correction02-fixup01-source-recon.md
 
-VSIX_C2C2_FIXUP01_PATH          = dist/dogfood/clinemm-4.1.10-2b3f72413.vsix
-                                   (built after commit 3; see below)
+VSIX_C2C2_FIXUP01_PATH          = dist/dogfood/clinemm-4.1.10-7d2ed0a78.vsix
+VSIX_C2C2_FIXUP01_SHA256        = 79aec8b8bdb95e2d748c8972496214460252cfb998a7ef7f276806ad9993b8e1
+VSIX_C2C2_FIXUP01_BYTES         = 8,883,010
+
+Note A: The TS2345 width fix (`Map<string, ...>` -> `Map<string | number, ...>`)
+        was discovered by the dogfood-VSIX build's `tsc -b` step, which the
+        fast vitest test runs do not invoke. The fix is one character of
+        type width: runtime semantics are unchanged. This is the 5th
+        commit of the fixup (the original plan budgeted 4; the
+        budget is exceeded by 1 doc+fix commit because of TS strictness,
+        not behavioral change). All 5 commits are listed above for
+        traceability.
 
 WORKTREE_CLEAN                  = true
 PROTECTED_STASHES_INTACT        = true
@@ -40,7 +53,7 @@ PROTECTED_STASHES_INTACT        = true
   PROTECTED_STASH_CONTEXT       = 371752f71
 ```
 
-Historical VSIX files preserved (5 prior + 1 this ACT):
+Historical VSIX files preserved (5 prior + 1 this ACT + 1 TS2345 follow-up):
 
 ```text
 dist/dogfood/clinemm-4.1.10-6a4cfe564.vsix    (RED smoke)
@@ -48,7 +61,8 @@ dist/dogfood/clinemm-4.1.10-df3c57edf.vsix    (interim fixture)
 dist/dogfood/clinemm-4.1.10-dfab15b3f.vsix    (C2 live diagnostic)
 dist/dogfood/clinemm-4.1.10-bc2c794be.vsix    (C2R closure)
 dist/dogfood/clinemm-4.1.10-b40fa2477.vsix    (C2-CORRECTION02 raw-incoming)
-dist/dogfood/clinemm-4.1.10-2b3f72413.vsix    (this ACT — React-updater purity)
+dist/dogfood/clinemm-4.1.10-2b3f72413.vsix    (this ACT — classifier+test mid-fixup; superseded)
+dist/dogfood/clinemm-4.1.10-7d2ed0a78.vsix    (this ACT — final dogfood VSIX, TS2345-fixed)
 ```
 
 ---
@@ -204,8 +218,9 @@ For this C2-CORRECTION02-FIXUP01 ACT:
 ENTRY_HEAD         = ea5446a79...   (closure of C2-CORRECTION02)
 BUILD_HEAD         = 46bf32bcd...   (the R1 fix head)
 REVIEW_HEAD        = 2b3f72413...   (the R2 + StrictMode fix head)
-CLOSURE_HEAD       = 2b3f72413...   (= REVIEW_HEAD for this fixup)
-DOGFOOD_SOURCE_HEAD = 2b3f72413...  (the head bound to the new VSIX)
+TYPEHEAD           = 7d2ed0a78...   (the TS2345 width-fix head)
+CLOSURE_HEAD       = 7d2ed0a78...   (= TYPEHEAD for this fixup)
+DOGFOOD_SOURCE_HEAD = 7d2ed0a78...  (the head bound to the new VSIX)
 ```
 
 The renamed file is `task-state-e71-c2-correction02-terminal-evidence.md`
@@ -281,7 +296,7 @@ F5   R2: ThreeBoundaryClass + FullBoundaryClass split        PASS
 F6   R3: heads renamed (entry / build / closure / dogfood)   PASS
 F7   React.StrictMode cardinality test (1 raw+applied/push)  PASS
 F8   existing 11 tests still pass                            PASS
-F9   exact-HEAD VSIX built with `fixup01` short SHA          PASS  (2b3f72413)
+F9   exact-HEAD VSIX built with `fixup01` short SHA          PASS  (7d2ed0a78)
 F10  protected stashes intact                                PASS
 F11  worktree clean                                          PASS
 ```
@@ -300,7 +315,7 @@ R3 (head-naming in C2-CORRECTION02 terminal doc)   = FIXED
 CAUSE_CLASS_FOR_C2_CORRECTION02                   = UNKNOWN  (still requires the live dogfood walk)
 
 NEXT_ACT                                            = live dogfood walk on the new HEAD
-                                                       (2b3f72413) VSIX; the diagnostic is
+                                                       (7d2ed0a78) VSIX; the diagnostic is
                                                        now cardinality-safe under React
                                                        Strict Mode, so the live walk can
                                                        produce architecture-grade binary
