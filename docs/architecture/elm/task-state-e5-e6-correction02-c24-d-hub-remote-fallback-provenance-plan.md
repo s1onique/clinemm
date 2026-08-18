@@ -658,8 +658,133 @@ PLAN-AMENDMENT-07          = <D2-FIXUP03 commit> (post-FIXUP02 OS-portability fi
                                 epoch defect. No further
                                 review needed before D3.)
       C2.4-D4 E7 SCOPE FREEZE    ⛔
-      C2.5                       ⛔
-      E7                         ⛔
+
+R12  Reviewer round-17 on 88d0ec391 expanded D3 spec to require
+    a qualification ACT first and a repair ACT second. D3
+    must NOT preselect a repair. The decisive test for B is
+    temporal authority, not availability.
+
+PLAN-AMENDMENT-08          = <D3-C7 commit> (post-D3 closure)
+  - D3 closed by `afe10e8d2` (D3-C7 evidence document).
+      D3-C1 = ad8588e39 (D3 plan contract)
+      D3-C2 = f5a9d963c (pre-repair witness matrix)
+      D3-C3 = 421b27f18 (repair selection document)
+      D3-C7 = afe10e8d2 (provenance matrix + D4 authorization)
+
+  - D3 verdict: SELECT C. No safe repair proven in this cycle.
+      A: REJECTED_NO_SOURCE_PROVENANCE
+        A1 fails. session-event-projector.ts:138-148 strips
+        agentEvent.conversationId when emitting Hub
+        'iteration.started'. Restoring would require a
+        producer-side change (protocol/schema), outside the
+        permitted D3 surface.
+      B: REJECTED_TEMPORAL_AUTHORITY
+        B1 passes (session.notice carries conversationId).
+        B2 fails decisively. The Hub protocol order is
+        run.started -> iteration.started -> session.notice.
+        The first iteration_start of every epoch has
+        runId=undefined. There is no production event that
+        can seed activeRunId before the first iteration_start.
+        A B-style repair would inherit this defect silently.
+      C: SELECTED.
+
+  - D3 seven-axis provenance matrix (final):
+      D3-P1 SESSION_ID_PROVENANCE              = QUALIFIED
+      D3-P2 RUN_ID/CONVERSATION_ID_PROVENANCE  = NOT_YET_QUALIFIED
+      D3-P3 FIRST_ITERATION_START_IDENTITY     = NOT_YET_QUALIFIED
+      D3-P4 STALE_OLD_RUN_TERMINAL_SUPPRESSION  = NOT_YET_QUALIFIED
+      D3-P5 CONTINUATION_BEFORE_NEXT_RUN_START = NOT_YET_QUALIFIED
+      D3-P6 TASK_RESET/NEW_TASK_EPOCH_BOUNDARY = NOT_YET_QUALIFIED
+      D3-P7 RECOVERY_WITH_MISSING_RUN_PROVENANCE = PARTIALLY_QUALIFIED
+      (Same for Hub and Remote -- Remote inherits via D1-REMOTE)
+
+  - D3 aggregate backend status:
+      HUB_TOTAL_PROVENANCE    = NOT_YET_QUALIFIED
+      REMOTE_TOTAL_PROVENANCE = NOT_YET_QUALIFIED
+
+  - D3 D2 frozen decoder PRESERVED:
+      canonicalAvailable=false: 8/6/2 EXACT
+      canonicalAvailable=true:  8/0/8 EXACT
+
+  - D3 production delta:
+      PRODUCTION_FILES_TOUCHED = 0
+      REDUCER_SEMANTIC_DELTA   = 0
+      PUBLIC_API_DELTA         = 0
+      PROTOCOL_SCHEMA_DELTA    = 0
+
+  - D3 test counts (focused):
+      apps/vscode vitest (c2-4-d-hub config):
+        2 files / 12 tests / 0 failed / 27ms
+          D2 (D2-F1 + D2-T1 + D2-E1..E7 + D2-X1 + PORTABILITY) = 4 PASS
+          D3 pre-repair witnesses (W1..W8)                    = 8 PASS
+      apps/vscode vitest (c2-4-c-bridge config):
+        1 file / 5 tests / 0 failed / 62ms (no regression)
+      sdk/packages/core unit suite:
+        172 files / 2105 tests / 0 failed / 14 skipped / 36.54s
+
+  - D3 protected-stash verification:
+      SHA-256 of stash@{1} (FORENSIC, 141372c52):
+        e4df6de3220647d5c9dbc27165ec8311d2f277683ff26b66ced67f977d26f233
+      SHA-256 of stash@{2} (CONTEXT-ACCOUNTING-TRUTH01):
+        ac85c95cfbabf14945b490a121901175700a41939b9dfd3f80767c84fed5755a
+      Both stashes intact. No stash refs rewritten.
+
+  - D3 verdict:
+      D3_REPAIR_CLASS             = C
+      HUB_RUN_EPOCH_PROVENANCE    = NOT_YET_QUALIFIED
+      REMOTE_RUN_EPOCH_PROVENANCE = NOT_YET_QUALIFIED
+      D4_AUTHORIZED               = true
+      E7_AUTHORIZED               = false
+      D3_VERDICT                  = PASS_PROVENANCE_EPOCH_C2_4_D3_CLASS_C
+
+  - D3 does NOT authorize E7. D4 is the scope-freeze step.
+    D3 does NOT pre-freeze E7_INITIAL_BACKEND_SCOPE.
+
+  - Files (5 changes):
+      docs/architecture/elm/task-state-e5-e6-correction02-c24-d3-provenance-epoch-plan.md
+        (D3-C1, plan contract, 743 lines)
+      apps/vscode/src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts
+        (D3-C2, pre-repair witness matrix, 760 lines, 8 tests)
+      apps/vscode/vitest.config.c2-4-d-hub.ts
+        (extended include list -- no new config)
+      docs/architecture/elm/task-state-e5-e6-correction02-c24-d3-repair-selection.md
+        (D3-C3, repair selection document, 391 lines)
+      docs/architecture/elm/task-state-e5-e6-correction02-c24-d3-provenance-epoch-evidence.md
+        (D3-C7, evidence document with provenance matrix + D4 authorization, 485 lines)
+
+  - Companion files UNCHANGED:
+      - apps/vscode/vitest.config.c2-4-d-hub.ts (only include list extended)
+      - apps/vscode/tsconfig.c2-4-d-hub.json
+      - apps/vscode/scripts/check-types-d-hub-with-baseline.ts
+      - apps/vscode/baselines/c2-4-d-hub-ts-baseline.json
+      - apps/vscode/package.json
+      - apps/vscode/vitest.config.ts
+      All production code unchanged (PRODUCTION_SEMANTIC_DELTA = 0).
+
+  - Test runs:
+      apps/vscode vitest (c2-4-d-hub config):
+        2 files / 12 tests / 0 failed / 27ms
+      apps/vscode vitest (c2-4-c-bridge config):
+        1 file / 5 tests / 0 failed / 62ms (no regression)
+      sdk/packages/core unit suite:
+        172 files / 2105 tests / 0 failed / 14 skipped / 36.54s
+
+      git diff --check HEAD~4 HEAD: clean.
+      biome check (D3 test file + D2 test file): clean.
+      check-types:c2-4-d-hub: 1 diagnostic matches frozen baseline.
+      check-types:c2-4-c-bridge: 1 diagnostic matches frozen baseline.
+
+  - Next:
+      C2.4-D4 E7 SCOPE FREEZE  (D4 is authorized with the
+                                frozen C-selection. D4 will
+                                finalize E7_INITIAL_BACKEND_SCOPE
+                                = LOCAL_ONLY unless a future
+                                correction ACT patches the
+                                upstream source boundary.
+                                D3 does NOT pre-freeze E7.)
+      C2.5                     BLOCKED
+      E7                       BLOCKED
+
 
 ## 1. The reviewer-corrected guardrail (replaces an earlier
    `HubTopology`-shim-first draft)
