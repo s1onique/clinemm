@@ -63,6 +63,64 @@ UNCHANGED from PLAN-AMENDMENT-01:
   - §5 exit criteria
   - §6 HubTopology scope
   - §7 linkage
+
+PLAN-AMENDMENT-03          = <this commit> (post-D1 closure)
+  - D1-HUB closed by `97e2ba7ee` (real HubRuntimeHost reachability
+    witness, two-epoch scripted sequence). The witness is in
+    `sdk/packages/core/src/hub/runtime-host/hub-runtime-host.reachability.c24-d.test.ts`
+    (703 lines, 1 test). It empirically confirms:
+      HUB_REAL_HOST_REACHABILITY          = PASS
+      HUB_SESSION_ID_PROVENANCE           = PASS
+      HUB_CONVERSATION_ID_PROVENANCE      = PARTIAL
+        session.notice                    = present when supplied
+        iteration/tool/terminal           = absent
+      HUB_RUN_EPOCH_METADATA_AT_HOST      = ABSENT
+      HUB_ITERATION_STARTED_EPOCH_ID      = ABSENT
+      HUB_TOOL_EVENT_EPOCH_ID             = ABSENT
+      HUB_TERMINAL_EVENT_EPOCH_ID         = ABSENT
+      HUB_CANONICAL_RUNTIME_SEAM          = ABSENT
+        subscribeRuntimeEvents            = undefined
+      HUB_TWO_EPOCH_SEPARATION_BY_HOST
+        iteration.started alone           = IMPOSSIBLE
+      HUB_D0_CENTRAL_FINDING_EMPIRICAL    = PASS
+
+  - D1-REMOTE closed by `<D1-REMOTE commit>` (real RemoteRuntimeHost
+    parity witness). The witness is in
+    `sdk/packages/core/src/hub/runtime-host/remote-runtime-host.reachability.c24-d.test.ts`
+    and asserts:
+      LR1 RemoteRuntimeHost instanceof HubRuntimeHost
+           (real inheritance link, not faked)
+      LR2 RemoteRuntimeHost.subscribe emits the same kind and count
+           of CoreSessionEvent as HubRuntimeHost for the same
+           scripted HubEventEnvelope sequence
+      LR3 RemoteRuntimeHost.subscribeRuntimeEvents is undefined
+      LR4 RemoteRuntimeHost's other observables (subscribe, close,
+           dispose, getClientId, getUrl) are inherited from Hub
+      LR5 normalizeHubWebSocketUrl(http://...) -> ws://...
+           propagation through RemoteRuntimeHost's only override path
+
+    No new HubTopology class is introduced. The witness uses the
+    proven NodeHubClient mock seam from D1-HUB and
+    `hub-runtime-host.test.ts:8-43` -- but with `vi.importActual`
+    forwarding for `normalizeHubWebSocketUrl`, which Remote's
+    constructor imports from `../client`.
+
+  - D1 overall closed: HUB + REMOTE both reachability-qualified
+    through real HubRuntimeHost / RemoteRuntimeHost objects
+    (the only test seam is the proven NodeHubClient mock).
+
+R4  §3 D2 ordering corrected. Earlier wording held D2 behind D3,
+    reasoning that D2's polarity question becomes "moot for Hub"
+    if D3 picks C (Hub stays NOT_YET_QUALIFIED). Reviewer round-13
+    corrected: D2's polarity question is INDEPENDENT of repair
+    choice. The defective provenance makes the pre-repair D2
+    MORE useful -- it lets us observe exactly how the deficient
+    stream behaves under real fallback authority, which is the
+    evidence D3 needs to choose A/B/C. D2 must therefore run
+    BEFORE D3. If D3 implements A or B later, re-run D2 against
+    the corrected stream; if D3 chooses C, the original D2 still
+    proves the fallback machinery works and explains why that
+    machinery is unsafe for E7. Fixed in §3 next-step ordering.
 ```
 
 ## 1. The reviewer-corrected guardrail (replaces an earlier
@@ -371,25 +429,44 @@ private createClient(url: string): NodeHubClient {
 }
 ```
 
-`NodeHubClient` accepts a `command-transport` plugin so an
-in-process native transport can stand in for the WebSocket
-during a test. This is the **production seam** for Hub
-qualification.
+`NodeHubClient` is constructed via `HubRuntimeHost.createClient`,
+a `private` method that has **no production injection point**. The
+plan originally claimed a "command-transport plugin" seam, but
+that interface (`HubCommandTransport`) is implemented by the
+*server*-side adapter only (`sdk/packages/core/src/hub/server/browser-websocket.ts`),
+not the client. The actual reachability seam is therefore:
+
+  - the proven `vi.mock("../client", ...)` pattern that mocks
+    `NodeHubClient` at module-import time, used by both the
+    existing `hub-runtime-host.test.ts:8-43` and the new
+    D1-HUB / D1-REMOTE witnesses; OR
+  - the `RemoteRuntimeHost` constructor's invocation of the real
+    `normalizeHubWebSocketUrl`, which Remote imports from
+    `../client` and which the D1-REMOTE witness forwards via
+    `vi.importActual`.
 
 D1 build order:
 
 - **D1.1** Construct a REAL `HubRuntimeHost` with the
-  in-process native transport producing Hub events.
+  NodeHubClient mock seam producing scripted Hub events.
+  → closed by `97e2ba7ee`.
 - **D1.2** Construct a REAL `RemoteRuntimeHost` with the same.
+  → closed by the D1-REMOTE parity witness
+  (`remote-runtime-host.reachability.c24-d.test.ts`).
 - **D1.3** Verify `subscribe(listener)` receives the actual
   `CoreSessionEvent` produced by `handleHubEvent`. No fabricated
   `CoreSessionEvent` shape — only what `handleHubEvent` actually
   emits.
+  → closed: D1-HUB asserts per-event CoreSessionEvent shape for
+  eight envelope types across two epochs; D1-REMOTE asserts
+  structural parity for the same shapes.
 - **D1.4** Confirm `subscribeRuntimeEvents` is **undefined** on
   Hub / Remote (so the proxy returns a no-op unsubscribe), and
   that means the canonical `RUNTIME_CANONICAL` seam is silent
   when the host is Hub/Remote. This is a feature, not a bug:
   events arrive through the legacy stream instead.
+  → closed: both D1-HUB (L9) and D1-REMOTE (LR3) assert
+  `host.subscribeRuntimeEvents === undefined`.
 
 D1 evidence should include the source-line verifying the
 `subscribeRuntimeEvents` is missing from HubRuntimeHost (search
@@ -439,6 +516,34 @@ D2 does NOT introduce a `HubTopology` shim. It uses the REAL
 HubRuntimeHost end-to-end. A `HubTopology` (or
 `HubTopologyFixture`) may exist in code as a component-control
 helper, but it is NOT the evidence vehicle.
+
+**D2 ordering (post-D1):** D2 MUST run **before** D3, not
+after. The polarity question (canonicalAvailable ⇒ mutation /
+no-mutation) is **independent of repair choice**: D2 must
+observe how the *current unmodified* Hub stream behaves under
+real fallback authority, because that observation is the
+evidence D3 needs to choose between repair classes A/B/C.
+
+The defective provenance makes the pre-repair D2 MORE useful,
+not less:
+
+```text
+REAL Hub stream (current, unrepaired)
+  + activeRunId never seeded
+  + terminal runId undefined
+  + FALLBACK_APPLY (canonicalAvailable=false)
+       ↓
+what exactly mutates?
+what stale-terminal protections are bypassed?
+```
+
+If D3 later implements A or B, D2 re-runs against the
+corrected stream to prove the recovered polarity. If D3
+chooses C, the original D2 still proves the fallback
+authority machinery itself works, and explains why that
+working machinery is nevertheless unsafe for E7.
+
+**D2 is NOT moot under C.**
 
 ### D3 — PROVENANCE / EPOCH SAFETY (qualification step 3)
 
