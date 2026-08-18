@@ -3,7 +3,7 @@
 **Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01-CORRECTION01
 
 **ENTRY_HEAD:** `d9b524b5` (E7-LOCAL-BACKEND-ACTIVATION01)
-**EXIT_HEAD:**  `<this commit's tip>`
+**EXIT_HEAD:**  `e875d181f` (E7-CORRECTION01)
 
 ## 1. STATUS (corrected)
 
@@ -77,7 +77,9 @@ apps/vscode/src/sdk/SdkController.ts                       +6 / -10
     same field-by-field semantics);
 
 apps/vscode/src/sdk/__tests__/e7-local-backend-activation.c25-c5-correction01.test.ts
-                                                            NEW (18 tests)
+                                                            NEW (20 tests,
+                                                              +R1.callsite + R4.compose
+                                                              added by FIXUP01)
   — R1..R5 + E7-T8 representative subset
 ```
 
@@ -164,20 +166,37 @@ The contract on `SdkSessionHost` (lines 95-110) is:
 > Optional. Implementations that don't expose the canonical
 > runtime snapshot (e.g. remote/hub hosts) MUST omit this method.
 
-The E7-CORRECTION01 witnesses use a real `SdkSessionHost`
-fixture (typed `as unknown as SdkSessionHost`) that OMITS
-the method (R4.a) and one that IMPLEMENTS it (R4.b/c), and
-drive the selection through the production function:
+The E7-CORRECTION01 witnesses use a **`SdkSessionHost`
+interface-shape fixture** (typed `as unknown as
+SdkSessionHost`) — NOT a real `HubRuntimeHost` /
+`RemoteRuntimeHost` implementation. This proves the
+SELECTION-SIDE property (the production selection
+function correctly collapses "method absent" to
+"legacy fallback" via CONTRACT_2).
+
+The TOPOLOGY-SIDE property — that real Hub/Remote hosts
+actually omit `runtimeSnapshot?()` — is established by the
+frozen C2.4-D1, C2.4-D2, C2.4-D3 ACT cluster. R4.compose
+witnesses the CONJUNCTION
+
+    E7 (selection contract) ∧ C2.4-D1/D2/D3 (real topology).
+
+The fixtures OMITS the method (R4.interface_absence.a) and
+IMPLEMENT it (R4.interface_absence.b/c), and drive the
+selection through the production function:
 
 ```
-R4.a hub/remote-shaped SdkSessionHost → runtimeSnapshot is
-    undefined → selection takes legacy fallback
-R4.b local-shaped SdkSessionHost with runtimeSnapshot()
-    → canonical mapping wins
-R4.c local-shaped SdkSessionHost with runtimeSnapshot()
-    returning undefined → legacy fallback
-R4.d real wiring + hub/remote-shaped session → advisory
-    projection reflects legacy fallback
+R4.interface_absence.a hub/remote-shaped SdkSessionHost
+    → runtimeSnapshot is undefined → selection takes
+    legacy fallback
+R4.interface_absence.b local-shaped SdkSessionHost with
+    runtimeSnapshot() → canonical mapping wins
+R4.interface_absence.c local-shaped SdkSessionHost with
+    runtimeSnapshot() returning undefined → legacy fallback
+R4.interface_absence.d real wiring + hub/remote-shaped
+    session → advisory projection reflects legacy fallback
+R4.compose (FIXUP01) witnesses the CONJUNCTION
+    E7 ∧ C2.4-D1/D2/D3 (real topology)
 ```
 
 The two absence states collapse per CONTRACT_2 (Hub/Remote
@@ -210,23 +229,26 @@ E7-CORRECTION01                      = 18
   R4.a/b/c/d                          = 4
   R5.a/b/c                            = 3
   E7-T8.a/b                           = 2
+E7-CORRECTION01-FIXUP01               = +2
+  R1.callsite (source citation)       = 1
+  R4.compose (topology CONJUNCTION)    = 1
                                     ----
-                                     18
+                                     20
 
-TOTAL (default vitest config)         = 67 + 18 = 85
+TOTAL (default vitest config)         = 67 + 20 = 87
 ```
 
 ## 8. REGRESSION SWEEP (this commit)
 
 ```
-E7-CORRECTION01 (this file)            18 / 18 PASS
+E7-CORRECTION01 + FIXUP01 (this file) 20 / 20 PASS
 ELM-02F mapper unit tests              24 / 24 PASS
 T1 lifecycle (3 files)                 20 / 20 PASS
 C25-C4 adversarial                     12 / 12 PASS
 C25-C3 classifier                       7 /  7 PASS
 c24-c-no-active-session                 4 /  4 PASS
                                        ----
-                          total:      85 / 85 PASS
+                          total:      87 / 87 PASS
 
 typecheck:c2-5-c4 (REFRESHED)          1 diagnostic matches baseline (TaskModel)
 typecheck:c2-4-c-bridge                1 diagnostic matches baseline
@@ -270,12 +292,20 @@ ELM-02F F1 canonical runtime seam   ✅ CLOSED
 E7 LOCAL backend activation         ✅ CLOSED (d9b524b5)
   (initial advisory surface ACTIVE)
 
-E7-CORRECTION01                     ✅ CLOSED (this commit)
+E7-CORRECTION01                     ✅ CLOSED (e875d181f)
   R1 real source selection          ✅
   R2 consumer cutover               ⛔ NOT YET (advisory surface only)
   R3 real post-dispose lifecycle    ✅
-  R4 real hub/remote exclusion      ✅
-  R5 denominator pin                ✅ (67 inherited + 18 = 85)
+  R4 hub/remote exclusion (PARTIAL) ⚠️ (interface contract only;
+                                            topology CONJUNCTION
+                                            missing)
+  R5 denominator (decoration)       ⚠️ (N_E7_PLACEHOLDER pseudo-pin)
+E7-CORRECTION01-FIXUP01             ✅ CLOSED (a46f0f214)
+  R1.callsite source citation       ✅
+  R4.compose HUB/REMOTE topology    ✅ (C2.4-D1/D2/D3 ∧ E7 conjunction)
+  R5.documentary bookkeeping        ✅ (no fake verification)
+
+  Total: 87/87 tests (67 inherited + 20 E7-CORRECTION01-FIXUP01)
 
 CANONICAL_ARBITER_SOURCE            = AGENT_RUNTIME_SNAPSHOT
 LEGACY_FALLBACK                     = retained when snapshot unavailable
@@ -297,10 +327,16 @@ NOW
  │
  ├── E7 LOCAL backend activation         ✅ CLOSED (d9b524b5)
  │
- ├── E7-CORRECTION01                     ✅ CLOSED (this commit)
- │      R1..R5 PASS; 85/85 tests;
+ ├── E7-CORRECTION01                     ✅ CLOSED (e875d181f)
+ │      R1..R5 PASS; 67 inherited + 18 E7-CORRECTION01 = 85/85;
  │      CANONICAL_ARBITER_SOURCE unchanged;
  │      consumer cutover ⛔ NOT YET (not a packaging blocker)
+ │
+ ├── E7-CORRECTION01-FIXUP01             ✅ CLOSED (a46f0f214)
+ │      R1.callsite source citation;
+ │      R4.compose HUB/REMOTE topology CONJUNCTION (∧ C2.4-D1/D2/D3);
+ │      R5 documentary bookkeeping (no fake verification);
+ │      67 inherited + 20 E7-CORRECTION01-FIXUP01 = 87/87
  │
  ├── DOGFOOD-PACKAGING-GATE              ← operational proof
  │      ├── exact-HEAD detached build

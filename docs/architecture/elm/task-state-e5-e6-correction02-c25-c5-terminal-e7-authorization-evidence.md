@@ -3,7 +3,7 @@
 **Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.5-C5
 
 **ENTRY_HEAD:** `34f326f6e` (C25-C4-CORRECTION03 R14)
-**EXIT_HEAD:**  `<this commit's tip>`
+**EXIT_HEAD:**  `c16b3ccbb` (C25-C5 terminal)
 **PLAN:**       docs/architecture/elm/task-state-e5-e6-correction02-c25-c5-terminal-e7-authorization-plan.md
 **ELM-02F-CORRECTION01:** docs/architecture/elm/task-state-e5-e6-correction02-elm-02f-correction01-canonical-arbiter-source-plan.md
 
@@ -344,7 +344,7 @@ E7 (initial)                                  ✅ CLOSED (commit d9b524b5)
                                                   inherited; 67 inherited + 22 E7
                                                   = 89 tests; HUB/REMOTE unchanged
                                                   (component-shape only)
-E7-CORRECTION01-FIXUP01                        ✅ CLOSED (commit <E7-CORRECTION01-FIXUP01>)
+E7-CORRECTION01-FIXUP01                        ✅ CLOSED (commit a46f0f214)
                                                   R1 REAL source selection
                                                     (selectTaskShadowArbiterSnapshot
                                                      shared by SdkController + tests;
@@ -423,10 +423,10 @@ C25-C4-CORRECTION03     ✅ CLOSED
 C25-C5                  ✅ CLOSED  (this commit)
 ELM-02F-CORRECTION01    ✅ CLOSED  (commit ae111383b)
 E7                      ✅ CLOSED  (commit d9b524b5)
-E7-CORRECTION01         ✅ CLOSED  (commit <E7-CORRECTION01>)
+E7-CORRECTION01         ✅ CLOSED  (commit e875d181f)
                           R1..R5 PASS;
                           consumer cutover ⛔ NOT YET (advisory surface only)
-E7-CORRECTION01-FIXUP01  ✅ CLOSED  (commit <E7-CORRECTION01-FIXUP01>)
+E7-CORRECTION01-FIXUP01  ✅ CLOSED  (commit a46f0f214)
                           R1.callsite source citation PASS;
                           R4.compose HUB/REMOTE topology CONJUNCTION PASS;
                           R5 documentary bookkeeping (no fake verification);
@@ -441,8 +441,8 @@ After E7-CORRECTION01-FIXUP01 lands:
 ```
 ELM-02F-CORRECTION01    ✅ CLOSED  (commit ae111383b)
 E7                      ✅ CLOSED  (commit d9b524b5)
-E7-CORRECTION01         ✅ CLOSED  (commit <E7-CORRECTION01>)
-E7-CORRECTION01-FIXUP01 ✅ CLOSED  (commit <E7-CORRECTION01-FIXUP01>)
+E7-CORRECTION01         ✅ CLOSED  (commit e875d181f)
+E7-CORRECTION01-FIXUP01 ✅ CLOSED  (commit a46f0f214)
 DOGFOOD VSIX            🟢 NEXT (operational proof;
                                        consumer cutover ⛔ NOT YET
                                        is not a packaging blocker)

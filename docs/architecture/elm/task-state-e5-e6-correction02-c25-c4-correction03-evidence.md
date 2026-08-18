@@ -3,7 +3,7 @@
 **Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.5-C4-CORRECTION03
 
 **ENTRY_HEAD:** `d3c1f7b20` (C25-C4-CORRECTION02)
-**EXIT_HEAD:**  `<this commit's tip>`
+**EXIT_HEAD:**  `fc500d7ad` (C25-C4-CORRECTION03)
 **PLAN:** docs/architecture/elm/task-state-e5-e6-correction02-c25-c4-adversarial-plan.md
 **EVIDENCE:** docs/architecture/elm/task-state-e5-e6-correction02-c25-c4-adversarial-evidence.md
 **CORRECTION01:** docs/architecture/elm/task-state-e5-e6-correction02-c25-c4-correction01-evidence.md
@@ -344,8 +344,12 @@ C25-C5 terminal + E7 auth                CLOSED
 ELM-02F-CORRECTION01                     ✅ CLOSED
 E7                                      ✅ CLOSED (commit d9b524b5;
                                                 advisory surface ACTIVE;
-                                                67 inherited + 22 E7 = 89)
-E7-CORRECTION01                         ✅ CLOSED (commit <E7-CORRECTION01>;
+                                                67 inherited + 22 E7 = 89
+                                                 [historical: this pre-E7-CORRECTION01
+                                                  figure; superseded by 67+18=85 in
+                                                  E7-CORRECTION01, then 67+20=87 in
+                                                  E7-CORRECTION01-FIXUP01])
+E7-CORRECTION01                         ✅ CLOSED (commit e875d181f;
                                                 R1 REAL source selection;
                                                 R2 consumer cutover ⛔ NOT YET
                                                   (advisory surface only);
@@ -353,7 +357,7 @@ E7-CORRECTION01                         ✅ CLOSED (commit <E7-CORRECTION01>;
                                                 R4 HUB/REMOTE EXCLUSION (composed);
                                                 R5 denominator (documentary);
                                                 85/85 tests)
-E7-CORRECTION01-FIXUP01                  ✅ CLOSED (commit <E7-CORRECTION01-FIXUP01>;
+E7-CORRECTION01-FIXUP01                  ✅ CLOSED (commit a46f0f214;
                                                 R1.callsite source citation;
                                                 R4.compose HUB/REMOTE topology
                                                   CONJUNCTION;
