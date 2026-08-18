@@ -937,6 +937,105 @@ PLAN-AMENDMENT-09          = <D3-CORRECTION01 commit> (post-D3
       C2.5                     BLOCKED
       E7                       BLOCKED
 
+
+R14  C2.4-D4 closes the D-cycle with the E7 scope freeze.
+    Per reviewer round-18: D4 is small and mostly declarative;
+    the central decision is already forced by D3.
+
+PLAN-AMENDMENT-10          = <D4 commit> (C2.4-D4 closure)
+
+  - D4 closed by this commit (doc-only: one evidence doc +
+    PLAN-AMENDMENT-10 in this plan). No production edits.
+
+  - Verdict table frozen (verbatim from D3-CORRECTION01
+    evidence):
+      Hub P2/P3/P4/P5/P6 = NOT_YET_QUALIFIED
+      Remote P2/P3/P4/P5/P6 = NOT_YET_QUALIFIED
+        (now directly witnessed via R-D3-1..R-D3-3)
+
+  - Scope freeze (per plan §4.D4 formula):
+      E7_INITIAL_BACKEND_SCOPE = LOCAL_ONLY
+
+  - LOCAL_ONLY is a SAFETY BOUNDARY, not a product preference.
+    The translator's stranded-terminal gate is structurally
+    dead under Hub because `iteration.started` strips
+    `agentEvent.conversationId` (A1) and `session.notice`
+    arrives AFTER `iteration.started` (B2). Including Hub/
+    Remote would corrupt `executorStatus` / `lastRecoveryState`
+    under cross-epoch or recovery scenarios.
+
+  - Reopening condition (for Hub/Remote to be added to
+    E7_INITIAL_BACKEND_SCOPE):
+      (a) upstream source-boundary patch — the Hub projector
+          propagates agentEvent.conversationId on
+          iteration.started, OR
+      (b) a new envelope is added BEFORE iteration.started,
+      (c) D2 is re-run with a current evidence commit,
+      (d) D3 is re-run and ALL 7 axes are QUALIFIED for Hub
+          (Remote inherits by construction),
+      (e) a subsequent D-cycle ACT freezes the new scope.
+      All five sub-conditions are required.
+
+  - Forbid rule: NO future ACT may assert
+      E7_INITIAL_BACKEND_SCOPE ⊇ {HUB, REMOTE}
+    without satisfying all five sub-conditions and producing
+    a current evidence commit.
+
+  - C2.5 authorization: D4 unlocks C2.5 (real C04 capture +
+    C04_SYNTHETIC_REAL capture) under the LOCAL_ONLY
+    constraint. C2.5 cannot add Hub/Remote without re-running
+    D4 against a requalified matrix.
+
+  - E7 authorization: D4 does NOT authorize E7. E7 is the
+    consumer-cutover ACT gated on the full C2.3..C2.5
+    closure chain. With LOCAL_ONLY frozen and C2.5 unlocked,
+    E7 will be authorized when C2.5 closes with its real
+    capture qualified for LOCAL_ONLY.
+
+  - D4 board:
+      C2.4-D0                   ✅ CLOSED
+      C2.4-D1 HUB/REMOTE        ✅ CLOSED
+      C2.4-D2                   ✅ CLOSED
+      C2.4-D3 PROVENANCE/EPOCH  ✅ CLOSED (CORRECTION01-refreshed)
+      C2.4-D4 E7 SCOPE FREEZE   ✅ CLOSED (this commit,
+                                            LOCAL_ONLY frozen)
+
+      C2.5                      🟢 NEXT (D4 has unlocked it
+                                          under LOCAL_ONLY
+                                          constraint)
+      E7                        ⛔ BLOCKED on C2.5
+
+      D3 DOES NOT AUTHORIZE E7.
+      D4 DOES NOT AUTHORIZE E7 EITHER.
+      ONLY C2.5 → E7 CHAIN CAN AUTHORIZE E7.
+
+  - Files (D4 changes):
+      docs/architecture/elm/task-state-e5-e6-correction02-c24-d4-e7-scope-freeze-evidence.md
+        (new evidence doc; 308 lines; verdict table, scope
+         freeze, safety-boundary rationale, reopening
+         condition, C2.5 authorization, E7 non-authorization)
+      docs/architecture/elm/task-state-e5-e6-correction02-c24-d-hub-remote-fallback-provenance-plan.md
+        (this file; PLAN-AMENDMENT-10 records D4 closure)
+
+  - Companion files UNCHANGED:
+      All production code, test files, vitest configs,
+      typecheck scripts, and baselines unchanged.
+      D3-C1 plan / D3-C3 selection unchanged (these are
+      historical frozen artifacts, now annotated with
+      DOC_CLASS = HISTORICAL_FROZEN pointers per R13 in the
+      residue-fix commit 1ab23b6ee).
+      D3-CORRECTION01 evidence unchanged.
+      PLAN-AMENDMENT-09 unchanged.
+
+  - Stash integrity: verified at D4 commit. SHA-256
+    fingerprints of stash@{1} (FORENSIC) and stash@{2}
+    (CONTEXT-ACCOUNTING) match D3-C7 evidence.
+
+  - Next:
+      C2.5   (real C04 capture + C04_SYNTHETIC_REAL capture,
+              constrained to LOCAL_ONLY by D4)
+      E7     BLOCKED on C2.5
+
 ## 1. The reviewer-corrected guardrail (replaces an earlier
    `HubTopology`-shim-first draft)
 
