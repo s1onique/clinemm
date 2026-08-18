@@ -35,13 +35,26 @@ is which.
 
 ## §0. Source-of-truth commit map
 
-The C2.4-B pipeline shipped across exactly two commits. Each half
+The C2.4-B pipeline shipped across these commits:
+
+```text
+C2.4-B engineering pipeline          = 2 commits
+  0b2f6265c  PRE_FIX witness
+  adbb5e2d5  POST_FIX engineering
+
+C2.4-B closure normalization        = 1 additional commit
+  b24c8c459  evidence rewrite + test
+              hygiene + bulk-fixture audit
+```
+
+§A is frozen at `0b2f6265c`, §B is frozen at `adbb5e2d5`. Each half
 of this evidence document MUST be read with its own commit.
 
 | Section        | Commit     | Diff stat                              |
 |----------------|------------|----------------------------------------|
 | §A (PRE_FIX)   | `0b2f6265c` | +1 file (witness), +1 file (this doc)   |
 | §B (POST_FIX)  | `adbb5e2d5` | +26 lines production, +4 fixture files   |
+| (closure fix)  | `b24c8c459` | docs rewrite + 6-line fixture dedup      |
 
 Anything in §A that contradicts §B is a **PRE_FIX** truth that
 **FIXUP01** corrected. Anything in §B that disagrees with §A is a
@@ -578,20 +591,24 @@ STASH_POP                             = 0 (FORENSIC untouched)
 
 ## §B.11 Verification
 
-```
+```text
 git diff --check                       = PASS
 focused test sweep (post-FIXUP01)     = 9/9 B rows PASS
                                        (B1-B9 hard assertions)
-full sdk/__tests__/ sweep             = 214/214 tests PASS
+
+sdk/__tests__/ focused closure sweep  = 214/214 tests PASS
                                        (17 files; CI exit 0)
-                                       (1 test failure in
-                                       sdk-task-control-coordinator.test.ts
-                                       is pre-existing and
-                                       unrelated to this change;
-                                       confirmed via stash-and-
-                                       rerun pre-fix; the test
-                                       takes ~20s and times out
-                                       sporadically)
+
+broader app sweep (pre-existing baseline):
+  one unrelated flake can occur in
+  sdk-task-control-coordinator.test.ts;
+  the test takes ~20s and times out
+  sporadically on cloud VMs. Confirmed
+  pre-fix by stash-and-rerun at 0b2f6265c^:
+  the flake is independent of C2.4-B.
+  Documented; not blocking C2.4-B
+  closure or C2.4-C authorization.
+
 PROTECTED_STASHES_INTACT              = true
                                        (FORENSIC 141372c52 at
                                        stash@{1}; lint-staged at
