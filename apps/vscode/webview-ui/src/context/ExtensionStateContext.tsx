@@ -592,6 +592,11 @@ export const ExtensionStateContextProvider: React.FC<{
 								stateData.turnState,
 							)
 							stateData.clineMessages = replicaRef.current.messages
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
+							// Save the raw incoming snapshot before the post-reducer overwrite
+							// mutates stateData.turnState in place. The applied capture below reads
+							// its raw view from this saved object, not from the mutated stateData.
+							const rawStateDataSnapshot = { ...stateData, turnState: stateData.turnState }
 							// Use the seq-gated turnState from the replica, NOT the raw snapshot's, so a
 							// late/stale snapshot carrying an older phase (e.g. "idle") cannot revert a
 							// newer phase (e.g. "streaming") and hide the Cancel button. Falls back to
@@ -628,7 +633,13 @@ export const ExtensionStateContextProvider: React.FC<{
 							// the replica-record apart from input-section / action-buttons /
 							// followup-route captures that the next phases of this ACT add.
 							if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
-								recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(newState, stateData, "webview-replica"))
+								// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
+								// Pass the SAVED raw snapshot (cloned before the reducer mutated
+								// stateData.turnState) as the second arg, so the applied record
+								// carries the actual wire-side turnState on its rawIncoming* fields.
+								recordPostTerminalAuthoritySnapshot(
+									buildWebviewSnapshot(newState, rawStateDataSnapshot, "webview-replica"),
+								)
 							}
 
 							return newState
