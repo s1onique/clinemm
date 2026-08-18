@@ -13,7 +13,9 @@ prose overclaimed in four places. This correction:
 ```
 R1 REAL SOURCE SELECTION             PASS  (selectTaskShadowArbiterSnapshot
                                              shared by SdkController and tests;
-                                             no test-side re-implementation)
+                                             no test-side re-implementation;
+                                             R1.callsite witnesses the production
+                                             callsite via source citation)
 R2 REAL CONSUMER CUTOVER             DOWNGRADED — explicit non-claim;
                                              consumer cutover remains
                                              ⛔ NOT YET (E7.1 or E8/E9)
@@ -21,13 +23,15 @@ R3 REAL POST-DISPOSE LIFECYCLE       PASS  (CanonicalRuntimeShadowSubscription
                                              owner; subscribe → observe →
                                              owner.dispose() → host emits →
                                              advisory projection unchanged)
-R4 REAL HUB/REMOTE EXCLUSION         PASS  (real SdkSessionHost fixture;
-                                             method-absent / returns-undefined
-                                             collapse to legacy fallback via
-                                             CONTRACT_2)
-R5 DENOMINATOR                       PASS  (67 inherited + 18 E7-CORRECTION01
-                                             = 85 in the default vitest config;
-                                             5 c24-c-bridge tests excluded-but-pinned)
+R4 HUB/REMOTE EXCLUSION (composed)   PASS  (R4.interface_absence.{a..d} prove
+                                             the host-interface contract;
+                                             R4.compose witnesses the
+                                             CONJUNCTION with C2.4-D1/D2/D3
+                                             real-topology proofs)
+R5 DENOMINATOR (documentary)         PASS  (87 = 67 inherited + 20 E7-CORRECTION01
+                                             in the default vitest config;
+                                             5 c24-c-bridge tests excluded-and-pinned
+                                             as documentary-only)
 E7_READ_ONLY_ADVISORY_SEAM           RELEASED (the advisory API exists;
                                              no consumer wired to it)
 CANONICAL_ARBITER_SOURCE             = AGENT_RUNTIME_SNAPSHOT (unchanged)

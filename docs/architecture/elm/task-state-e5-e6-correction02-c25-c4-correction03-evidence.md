@@ -350,10 +350,16 @@ E7-CORRECTION01                         ✅ CLOSED (commit <E7-CORRECTION01>;
                                                 R2 consumer cutover ⛔ NOT YET
                                                   (advisory surface only);
                                                 R3 REAL post-dispose lifecycle;
-                                                R4 REAL hub/remote exclusion;
-                                                R5 denominator pin (67 + 18 = 85);
+                                                R4 HUB/REMOTE EXCLUSION (composed);
+                                                R5 denominator (documentary);
                                                 85/85 tests)
-DOGFOOD VSIX                            🟡 NEXT (after E7-CORRECTION01 lands)
+E7-CORRECTION01-FIXUP01                  ✅ CLOSED (commit <E7-CORRECTION01-FIXUP01>;
+                                                R1.callsite source citation;
+                                                R4.compose HUB/REMOTE topology
+                                                  CONJUNCTION;
+                                                R5 documentary bookkeeping;
+                                                87/87 tests)
+DOGFOOD VSIX                            🟢 NEXT (after E7-CORRECTION01-FIXUP01 lands)
 ```
 
 ## 7. C25-C5 IMPLICATIONS CARRY-FORWARD

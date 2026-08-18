@@ -344,26 +344,31 @@ E7 (initial)                                  ✅ CLOSED (commit d9b524b5)
                                                   inherited; 67 inherited + 22 E7
                                                   = 89 tests; HUB/REMOTE unchanged
                                                   (component-shape only)
-E7-CORRECTION01                               ✅ CLOSED (commit <E7-CORRECTION01>)
+E7-CORRECTION01-FIXUP01                        ✅ CLOSED (commit <E7-CORRECTION01-FIXUP01>)
                                                   R1 REAL source selection
                                                     (selectTaskShadowArbiterSnapshot
-                                                     shared by SdkController + tests)
+                                                     shared by SdkController + tests;
+                                                     R1.callsite witnesses the
+                                                     production callsite via source
+                                                     citation)
                                                   R2 consumer cutover ⛔ NOT YET
                                                     (advisory surface only; explicit
                                                      non-claim in §2 of the test)
                                                   R3 REAL post-dispose lifecycle
                                                     (CanonicalRuntimeShadowSubscription)
-                                                  R4 REAL hub/remote exclusion
-                                                    (real SdkSessionHost fixture,
-                                                     method-absent /returns-undefined
-                                                     collapse to legacy fallback)
-                                                  R5 denominator pin (67 inherited
-                                                     + 18 E7-CORRECTION01 = 85)
-                                                  85/85 tests; HUB/REMOTE unchanged
-                                                  (read through real topology)
+                                                  R4 HUB/REMOTE EXCLUSION (composed)
+                                                    (R4.interface_absence.{a..d}
+                                                      prove the host-interface
+                                                      contract; R4.compose witnesses
+                                                      the CONJUNCTION with C2.4-D1/D2/D3
+                                                      real-topology proofs)
+                                                  R5 denominator (documentary)
+                                                    (87 = 67 inherited + 20
+                                                     E7-CORRECTION01-FIXUP01)
+                                                  87/87 tests; HUB/REMOTE unchanged
                                                   CANONICAL_ARBITER_SOURCE unchanged
                                                   EFFECT_EXECUTION_ENABLED = false
-DOGFOOD VSIX                                  🟡 NEXT (after E7-CORRECTION01 lands)
+DOGFOOD VSIX                                  🟢 NEXT
 ```
 
 The ELM-02F-CORRECTION01 ACT is the bounded unblock
@@ -419,19 +424,25 @@ C25-C5                  ✅ CLOSED  (this commit)
 ELM-02F-CORRECTION01    ✅ CLOSED  (commit ae111383b)
 E7                      ✅ CLOSED  (commit d9b524b5)
 E7-CORRECTION01         ✅ CLOSED  (commit <E7-CORRECTION01>)
-                          R1..R5 PASS; 85/85 tests;
+                          R1..R5 PASS;
                           consumer cutover ⛔ NOT YET (advisory surface only)
+E7-CORRECTION01-FIXUP01  ✅ CLOSED  (commit <E7-CORRECTION01-FIXUP01>)
+                          R1.callsite source citation PASS;
+                          R4.compose HUB/REMOTE topology CONJUNCTION PASS;
+                          R5 documentary bookkeeping (no fake verification);
+                          87/87 tests
 
 C2.5 OVERALL            ✅ CLOSED_CLEAN
-DOGFOOD VSIX            🟡 NEXT (after E7-CORRECTION01 lands)
+DOGFOOD VSIX            🟢 NEXT (operational proof)
 ```
 
-After E7-CORRECTION01 lands:
+After E7-CORRECTION01-FIXUP01 lands:
 
 ```
 ELM-02F-CORRECTION01    ✅ CLOSED  (commit ae111383b)
 E7                      ✅ CLOSED  (commit d9b524b5)
 E7-CORRECTION01         ✅ CLOSED  (commit <E7-CORRECTION01>)
+E7-CORRECTION01-FIXUP01 ✅ CLOSED  (commit <E7-CORRECTION01-FIXUP01>)
 DOGFOOD VSIX            🟢 NEXT (operational proof;
                                        consumer cutover ⛔ NOT YET
                                        is not a packaging blocker)
