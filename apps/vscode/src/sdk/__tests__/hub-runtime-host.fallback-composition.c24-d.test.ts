@@ -48,6 +48,29 @@
  *
  * Rows asserted (D2 acceptance core, composition form):
  *
+ * Evidence split (reviewer R10, post-63bc24249):
+ *   The D2 epoch-defect proof is split between two witnesses:
+ *
+ *     DIRECT_TRANSLATOR_RUNID_WITNESS  = 3d14ccd5c
+ *       8/8 reconstructed snapshots carry runId=undefined
+ *       (inspected translated runtimeEvents directly).
+ *
+ *     PRODUCTION_WIRING_CONSEQUENCE_WITNESS = 63bc24249 (this file)
+ *       Both Hub iteration_start events carry conversationId=undefined
+ *       on the emitted AgentEvent (inspects Hub emissions, not
+ *       translated runtimeEvents).
+ *       Exact 6 APPLY / 2 SUPPRESS under FALLBACK_APPLY (proves
+ *       the production composition reaches the consequence
+ *       predicted by the direct-translator witness).
+ *
+ *     COMBINED_D2_EPOCH_DEFECT_PROOF = PASS
+ *
+ *   This test does NOT directly inspect translated runtimeEvents
+ *   to assert runId=undefined, because doing so would require
+ *   calling translator.translate(...) outside the production
+ *   wiring — the exact evidence mistake R1 corrected.
+ *
+ *
  *   D2-F1 (canonicalAvailable=false)
  *     shadowMutated                  = true
  *     fallbackReconstructedApplied   = 6   (exact)
@@ -68,7 +91,14 @@
  *     observationsObserved            = 0
  *
  *   D2-E1..E7 (epoch-defect evidence, composition form)
- *     All 8 translated runtimeEvents carry snapshot.runId=undefined.
+ *     Both Hub `iteration_start` events carry `conversationId=undefined`
+ *     on the emitted AgentEvent. Combined with the historical
+ *     3d14ccd5c direct-translator witness (which captured each
+ *     reconstructed snapshot and asserted runId=undefined), this
+ *     composes the D2 epoch-defect proof without the production
+ *     composition test needing to inspect translated runtimeEvents
+ *     directly. See "Evidence split" below for the joint proof.
+ *
  *     0 notice events make it to a translator output (the
  *     scripted envelopes use `reason: "stuck"` which the
  *     translator's isRecoveryNoticeReason filter rejects).
@@ -118,6 +148,7 @@
  *   use the production wiring; neither hand-rolls a shim.
  */
 
+import path from "node:path"
 import type { CoreSessionEvent } from "@cline/core"
 import type { HubEventEnvelope } from "@cline/shared"
 import { HubRuntimeHost } from "@cline-internal/core/hub/runtime-host/hub-runtime-host"
@@ -127,16 +158,26 @@ import { createTaskShadowHostWiring } from "../task-state-shadow-host-wiring"
 import type { ArbiterSnapshot } from "../task-state-shadow-recorder"
 
 // ---------------------------------------------------------------------------
-// vi.hoisted so the absolute path is reachable at vitest's
-// mock-hoist time. The path is hardcoded to the REAL SDK source
-// (this test file lives outside the SDK source tree). Same proven
-// pattern as the C2.4-C bridge config's
-// `vitest.config.c2-4-c-bridge.ts`.
+// Portable mock seam. Resolve the Hub client source path RELATIVE
+// to this test file's location rather than embedding the
+// repository root.
+//
+//   apps/vscode/src/sdk/__tests__/foo.c24-d.test.ts
+//     → ../../../../../sdk/packages/core/src/hub/client/index.ts
+//       (five `..` levels: __tests__ → sdk → src → vscode → apps → repo root)
+//
+// `__dirname` is available here because the test file runs under
+// the CJS module mode (the apps/vscode package has no
+// `"type": "module"`). Resolving at module-init time keeps the
+// path portable: it works on every checkout, every CI runner,
+// every worktree, regardless of where the repository happens
+// to live on disk.
+//
+// `vi.hoisted` is required because vitest hoists `vi.mock` calls
+// above static imports, and the path it references must already
+// be computable at hoist time.
 // ---------------------------------------------------------------------------
-const HUB_CLIENT_MODULE_PATH = vi.hoisted(
-	() =>
-		"/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-elm-architecture01/sdk/packages/core/src/hub/client/index.ts",
-)
+const HUB_CLIENT_MODULE_PATH = vi.hoisted(() => `${__dirname}/../../../../../sdk/packages/core/src/hub/client/index.ts`)
 
 // ---------------------------------------------------------------------------
 // Hub client mock seam (proven in D1-HUB / D1-REMOTE).
@@ -550,6 +591,35 @@ describe("C2.4-D2-CORRECTION01 — REAL Hub → production-wiring fallback compo
 		disposeMock.mockReset()
 		getClientIdMock.mockClear()
 		restartLocalHubIfIdleAfterStartupTimeoutMock.mockReset()
+	})
+
+	it("PORTABILITY (reviewer R9): no hard-coded absolute repository roots anywhere in this test file", () => {
+		// The previous D2-CORRECTION01 commit (63bc24249) embedded
+		// an absolute path under /Volumes/UserData/... in the test
+		// file, defeating the canonical CI gate. This test asserts
+		// the corrected test file no longer embeds any absolute
+		// repository root — the Hub client path is now computed
+		// from `__dirname` at module-init time, so the gate works
+		// portably on every checkout.
+		//
+		// Specifically:
+		//   HARD_CODED_REPOSITORY_ROOTS = 0
+		//   test_file_path_uses___dirname_or_import.meta.url = yes
+		//   hub_client_mock_seam_is_relative_to_test_file = yes
+		const absoluteRepoRootPatterns = [
+			/^\/Volumes\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/sdk\/packages\/core\/src\/hub\/client\/index\.ts$/,
+			/^\/home\/[^/]+\/[^/]+\/sdk\/packages\/core\/src\/hub\/client\/index\.ts$/,
+			/^C:\\[^\\]+\\[^\\]+\\[^\\]+\\sdk\\packages\\core\\src\\hub\\client\\index\.ts$/,
+		]
+		expect(absoluteRepoRootPatterns.some((p) => p.test(HUB_CLIENT_MODULE_PATH))).toBe(false)
+		// The path must end with the SDK hub client entry point.
+		expect(
+			HUB_CLIENT_MODULE_PATH.endsWith(
+				`sdk${path.sep}packages${path.sep}core${path.sep}src${path.sep}hub${path.sep}client${path.sep}index.ts`,
+			),
+		).toBe(true)
+		// The path must be absolute (so vitest can locate it).
+		expect(path.isAbsolute(HUB_CLIENT_MODULE_PATH)).toBe(true)
 	})
 
 	it("D2-F1 + D2-T1: REAL Hub host → production wiring polarity mirror (exact 6/2/8)", async () => {

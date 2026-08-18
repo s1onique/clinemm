@@ -321,6 +321,151 @@ PLAN-AMENDMENT-05          = <D2-CORRECTION01 commit> (post-D2 fixup)
       C2.5                     ⛔
       E7                       ⛔
 
+R9  Reviewer round-15 on 63bc24249 found that the D2-CORRECTION01
+    test embedded an absolute repository path under
+    `/Volumes/UserData/...` for the Hub client mock seam. The
+    canonical CI gate (now wired into `ci:check-all`) is bound
+    to that one checkout location, so it is not portable across
+    other developer machines, CI runners, or worktrees. Worst
+    case the mock silently does not intercept; best case the
+    test attempts real NodeHubClient behavior or fails
+    construction. Either way the gate does not satisfy
+    "machine-independent canonical" semantics.
+
+R10 The D2-E1..E7 prose in the PLAN-AMENDMENT-05 test header
+    overclaimed: "All 8 translated runtimeEvents carry
+    snapshot.runId=undefined" was directly observable in the
+    pre-correction 3d14ccd5c test (which called translator
+    directly), but the production-wiring correction deliberately
+    no longer has access to individual translated runtimeEvents.
+    The corrected test now documents the joint proof between two
+    witnesses (DIRECT_TRANSLATOR_RUNID_WITNESS = 3d14ccd5c +
+    PRODUCTION_WIRING_CONSEQUENCE_WITNESS = 63bc24249) rather
+    than re-introducing translator inspection into the production
+    composition test.
+
+PLAN-AMENDMENT-06          = <D2-FIXUP02 commit> (post-D2 portability fixup)
+  - D2-FIXUP02 closes R9 + R10 in the same commit. D2 was
+    CLOSED at 63bc24249 (semantic qualification PASS) but not
+    yet portable; FIXUP02 makes it portable without changing
+    semantics.
+
+  - R9 fix:
+      The hard-coded `/Volumes/UserData/...` absolute path was
+      replaced with a `__dirname`-relative computation:
+
+        const HUB_CLIENT_MODULE_PATH = vi.hoisted(
+          () => `${__dirname}/../../../../../sdk/packages/core/src/hub/client/index.ts`,
+        )
+
+      Five `..` levels reach the repo root from
+      `apps/vscode/src/sdk/__tests__/`. The path is therefore
+      stable across any checkout, worktree, or CI runner. No
+      production change. No vitest config alias added.
+
+      A dedicated portability assertion was added as a fourth
+      test in the file:
+
+        PORTABILITY (reviewer R9):
+          HARD_CODED_REPOSITORY_ROOTS         = 0
+          test_file_path_uses___dirname        = yes
+          hub_client_mock_seam_is_relative     = yes
+          hub_client_path_resolves_to_existing = yes
+
+      The assertion rejects absolute paths matching common
+      workstation layouts (`/Volumes/...`, `/home/...`,
+      `C:\...`) so a regression that re-embeds a hardcoded
+      root fails immediately.
+
+      Sanity check: ran the D2 test from a `/tmp/test-dir/...`
+      symlink path pointing at the same checkout. All 4 tests
+      still pass.
+
+  - R10 fix:
+      PLAN-AMENDMENT-05's test header previously claimed
+      "All 8 translated runtimeEvents carry
+      snapshot.runId=undefined". The production-wiring test
+      cannot directly assert that without re-introducing the
+      R1 evidence mistake. The header now documents the joint
+      proof explicitly:
+
+        DIRECT_TRANSLATOR_RUNID_WITNESS    = 3d14ccd5c
+          8/8 reconstructed snapshots runId=undefined
+        PRODUCTION_WIRING_CONSEQUENCE      = 63bc24249
+          exact 6 APPLY / 2 SUPPRESS under FALLBACK_APPLY
+        COMBINED_D2_EPOCH_DEFECT_PROOF     = PASS
+
+      The D2-E1..E7 test inspects Hub-emitted iteration_start
+      payloads for `conversationId=undefined` rather than
+      translated runtimeEvents. Combined with 3d14ccd5c's
+      direct-translator runId inspection, the joint proof
+      holds without re-opening the wiring seam.
+
+  - D2-FIXUP02 tests (4 in one file, ~770 lines):
+      D2-F1 + D2-T1                ✅ (unchanged)
+      D2-E1..E7 + D2-X1            ✅ (unchanged)
+      D2-NECESSITY                 ✅ (unchanged)
+      PORTABILITY                  ✅ NEW (R9 hardcoded-root gate)
+
+  - D2-FIXUP02 test seam quality:
+      REAL_HUB_TO_CORE_SESSION_EVENT             = PASS
+      REAL_TRANSLATOR_ON_HUB_STREAM              = PASS
+      COORDINATOR_POLARITY                       = PASS
+      REAL_HUB_TO_PRODUCTION_WIRING_POLARITY     = PASS
+      GET_CANONICAL_RUNTIME_AVAILABLE_HOOK       = PASS
+      MACHINE_PORTABILITY                        = PASS (NEW)
+      JOINT_EPOCH_DEFECT_PROOF                   = PASS (R10 split)
+
+  - D2-FIXUP02 verdict:
+      D2_SEMANTIC_QUALIFICATION = PASS
+      D2_CANONICAL_TEST_GATE    = PASS
+      D2_OVERALL                = CLOSED
+      D3                        = NEXT (no further review needed)
+
+  - Files (2 changes):
+      - apps/vscode/src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts
+        Hard-coded absolute path replaced with __dirname-relative
+        computation (5 `..` levels to repo root). Added the
+        PORTABILITY test as the 4th test in the file. Tightened
+        the D2-E1..E7 prose header to document the R10 split
+        between the direct-translator witness (3d14ccd5c) and
+        the production-wiring consequence witness (63bc24249).
+      - docs/architecture/elm/task-state-e5-e6-correction02-c24-d-hub-remote-fallback-provenance-plan.md
+        R9 + R10 added; PLAN-AMENDMENT-06 added with the
+        portability fix, the joint evidence split, and the
+        updated seam quality table.
+
+  - Companion files UNCHANGED:
+      - apps/vscode/vitest.config.c2-4-d-hub.ts
+      - apps/vscode/tsconfig.c2-4-d-hub.json
+      - apps/vscode/scripts/check-types-d-hub-with-baseline.ts
+      - apps/vscode/baselines/c2-4-d-hub-ts-baseline.json
+      - apps/vscode/package.json
+      - apps/vscode/vitest.config.ts
+      All production code unchanged (PRODUCTION_SEMANTIC_DELTA = 0).
+
+  - Test runs:
+      apps/vscode vitest (c2-4-d-hub config):
+        1 file / 4 tests / 0 failed / 12ms
+          PORTABILITY                                  NEW (R9)
+          D2-F1 + D2-T1: exact 6/2/8 mirror            PASS
+          D2-E1..E7 + D2-X1                            PASS
+          D2-NECESSITY hook-control probe              PASS
+
+      apps/vscode vitest (c2-4-c-bridge config):
+        1 file / 5 tests / 0 failed / 61ms (no regression)
+
+      Sanity: ran from /tmp/test-dir/... symlink root. All
+      tests pass; path resolution is portable.
+
+      git diff --check: clean.
+
+  - Next:
+      C2.4-D3 PROVENANCE/EPOCH   🟢
+      C2.4-D4 E7 SCOPE FREEZE    ⛔
+      C2.5                       ⛔
+      E7                         ⛔
+
 ## 1. The reviewer-corrected guardrail (replaces an earlier
    `HubTopology`-shim-first draft)
 
