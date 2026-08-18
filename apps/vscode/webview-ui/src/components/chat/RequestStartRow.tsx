@@ -1,4 +1,4 @@
-import type { ClineMessage, ClineSayTool, TurnState } from "@shared/ExtensionMessage"
+import type { ClineMessage, ClineSayTool, ThinkingPresentationProjection, TurnState } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import type { LucideIcon } from "lucide-react"
 import type React from "react"
@@ -17,6 +17,19 @@ import { cleanPathPrefix } from "../common/CodeAccordian"
 function useOptionalTurnState(): TurnState | undefined {
 	const ctx = useContext(ExtensionStateContext)
 	return ctx?.turnState
+}
+
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+ *
+ * Read the new `thinkingPresentation` projection from the global
+ * context, tolerating a missing provider (unit tests that thread
+ * `turnState` as a prop do not mount the provider). The parallel
+ * shape mirrors `useOptionalTurnState` for the legacy surface.
+ */
+function useOptionalThinkingPresentation(): ThinkingPresentationProjection | undefined {
+	const ctx = useContext(ExtensionStateContext)
+	return ctx?.thinkingPresentation
 }
 
 import { getIconByToolName } from "./chat-view"
@@ -192,6 +205,15 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 	const turnStateFromContext = useOptionalTurnState()
 	const turnState = turnStateProp ?? turnStateFromContext
 	const turnStateIsStreaming = turnState?.phase === "streaming"
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+	// Canonical Thinking authority. LOCAL qualified path → read from
+	// `thinkingPresentation.modelStreaming` (the field the SdkController
+	// projects from `getLocalShadowProjection()`); Hub/Remote and pre-
+	// observation absence → fall back to the legacy `turnState.phase ===
+	// "streaming"` projection. The two-source rule is frozen by
+	// `selectThinkingPresentation` in `task-state-shadow-arbiter-mapper.ts`.
+	const thinkingPresentationFromContext = useOptionalThinkingPresentation()
+	const canonicalModelStreaming = thinkingPresentationFromContext?.modelStreaming ?? turnStateIsStreaming
 	// Derive explicit state
 	const hasError = !!(apiRequestFailedMessage || apiReqStreamingFailedMessage)
 	const hasCost = cost != null
@@ -286,19 +308,20 @@ export const RequestStartRow: React.FC<RequestStartRowProps> = ({
 				(!hasCost ? (
 					// Still streaming - show "Thinking..." text with shimmer.
 					//
-					// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04:
-					// Gate the shimmer on the authoritative
-					// `turnState.phase === "streaming"`. Without this
-					// gate the in-list indicator kept rendering after
-					// the model finished (the assistant's final report
-					// was visible AND the shimmer still animated),
-					// because the message-tail-only check
+					// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04 +
+					// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+					// Gate the shimmer on the authoritative canonical
+					// Thinking projection (`thinkingPresentation.modelStreaming`,
+					// sourced from `getLocalShadowProjection()` for LOCAL,
+					// or the legacy `turnState.phase === "streaming"`
+					// fallback for Hub/Remote). Without this gate the
+					// in-list indicator kept rendering after the model
+					// finished (the assistant's final report was
+					// visible AND the shimmer still animated), because
+					// the message-tail-only check
 					// (`reasoningContent && !hasCost`) does not know
-					// about terminal/resumable/error phases. The
-					// canonical authority is `turnState.phase`, which
-					// the same webview already uses for
-					// `TaskHeaderTelemetry` and `useThinkingLoaderRow`.
-					turnStateIsStreaming ? (
+					// about terminal/resumable/error phases.
+					canonicalModelStreaming ? (
 						<div className="ml-1 pl-0 mb-1 -mt-1.25 pt-1">
 							<div className="inline-flex justify-baseline gap-0.5 text-left select-none px-0 w-full">
 								<span className="animate-shimmer bg-linear-90 from-foreground to-description bg-[length:200%_100%] bg-clip-text text-transparent text-[13px] leading-none">

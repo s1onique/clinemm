@@ -153,6 +153,7 @@ export const ChatRowContent = memo(
 			showFeatureTips,
 			enableCheckpointsSetting,
 			turnState,
+			thinkingPresentation,
 		} = useExtensionState()
 		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
 			visible: false,
@@ -879,7 +880,8 @@ export const ChatRowContent = memo(
 						)
 					}
 					case "reasoning": {
-						// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04:
+						// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION04 +
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
 						//
 						// The previous shape keyed the streaming shimmer
 						// entirely on `message.partial === true`
@@ -890,16 +892,22 @@ export const ChatRowContent = memo(
 						// assistant's final text report was already
 						// visible — exactly the LIVE02 dogfood bug.
 						//
-						// Migration: the canonical authority is
-						// `turnState.phase === "streaming"`. The message
-						// tail can still drive a transient shimmer inside
-						// an active streaming phase (for the optimistic
-						// partial-then-final micro-window), but once
-						// `turnState` reports anything other than
-						// "streaming" the shimmer is suppressed.
+						// Migration (E7.1): the canonical authority is the
+						// backend-projected `thinkingPresentation.modelStreaming`
+						// field. When the projection is present
+						// (LOCAL with qualified shadow, or legacy fallback
+						// for Hub/Remote) the shimmer requires BOTH the
+						// message-tail precondition AND the canonical
+						// modelStreaming flag. Once the backend posts any
+						// non-streaming phase, the shimmer disappears.
+						//
+						// Defensive fallback: when `thinkingPresentation`
+						// is missing (legacy transports without the wire
+						// field), fall back to the legacy `turnState.phase`
+						// gate so pre-E7.1 webview clients continue to work.
 						const messageTailStreaming = message.partial === true
-						const turnStateIsStreaming = turnState?.phase === "streaming"
-						const isReasoningStreaming = messageTailStreaming && turnStateIsStreaming
+						const canonicalModelStreaming = thinkingPresentation?.modelStreaming ?? turnState?.phase === "streaming"
+						const isReasoningStreaming = messageTailStreaming && canonicalModelStreaming
 						const hasReasoningText = !!message.text?.trim()
 						// Show feature tips throughout the entire thinking/reasoning phase
 						const showFeatureTip = isReasoningStreaming

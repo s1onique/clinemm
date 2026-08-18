@@ -45,7 +45,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	chatState,
 	messageHandlers,
 }) => {
-	const { clineMessages, turnState } = useExtensionState()
+	const { clineMessages, turnState, thinkingPresentation } = useExtensionState()
 	const lastRawMessage = useMemo(() => clineMessages.at(-1), [clineMessages])
 
 	const {
@@ -96,6 +96,7 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 	// Keep loader in the message flow (not footer). Show/hide logic (waiting heuristic,
 	// waiting -> reasoning handoff guard, and anti-flash debounce on turn end) lives in the hook.
 	const showThinkingLoaderRow = useThinkingLoaderRow({
+		thinkingPresentation,
 		turnState,
 		lastRawMessage,
 		groupedMessages,

@@ -117,7 +117,7 @@ import {
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
-import { selectTaskShadowArbiterSnapshot } from "./task-state-shadow-arbiter-mapper"
+import { selectTaskShadowArbiterSnapshot, selectThinkingPresentation } from "./task-state-shadow-arbiter-mapper"
 import {
 	emitHostRecovery,
 	emitSameTaskContinued,
@@ -2745,6 +2745,27 @@ export class Controller {
 				// canonical projection (it already returns the strip-or-
 				// undefined shape the wire field expects).
 				taskTelemetry: this.taskTelemetry.get(),
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+				//
+				// The webview-facing Thinking/presentation projection. LOCAL
+				// qualified path uses the canonical TaskState shadow
+				// (`getLocalShadowProjection()`); the legacy fallback uses
+				// `TurnStateTracker.phase === "streaming"` (Hub/Remote hosts
+				// and Local sessions with no canonical snapshot yet — both
+				// collapse per CONTRACT_2 in `task-state-shadow-arbiter-mapper.ts`).
+				//
+				// The four webview Thinking consumers (ChatRow `case "reasoning"`,
+				// RequestStartRow inline shimmer, useThinkingLoaderRow, TaskHeader)
+				// consume this field instead of `turnState.phase` directly.
+				//
+				// The legacy `turnState` field is retained for non-thinking
+				// presentation concepts (button set, composer lockout, follow-up
+				// routing) that E7.1 explicitly does not migrate.
+				thinkingPresentation: selectThinkingPresentation({
+					canonicalShadow: this.getLocalShadowProjection(),
+					currentLegacyPhase: this.turnStateTracker.currentPhase,
+					seq: this.turnStateTracker.get().seq,
+				}),
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
 				// authority; this is a read-only mirror for the webview.

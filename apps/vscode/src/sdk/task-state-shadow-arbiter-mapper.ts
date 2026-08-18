@@ -43,7 +43,7 @@
 // ===========================================================================
 
 import type { AgentRunStatus, AgentRuntimeStateSnapshot, RecoveryState } from "@cline/shared"
-import type { TurnPhase } from "@shared/ExtensionMessage"
+import type { ThinkingPresentationProjection, TurnPhase } from "@shared/ExtensionMessage"
 import { emptyArbiterSnapshot } from "./task-state-shadow-host-wiring"
 import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 
@@ -151,4 +151,94 @@ export function selectTaskShadowArbiterSnapshot(input: {
 		return mapAgentRuntimeStateSnapshotToArbiterSnapshot(input.canonicalSnapshot)
 	}
 	return legacyArbiterSnapshotFromTurnPhase(input.currentLegacyPhase)
+}
+
+// ===========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+//
+//   selectThinkingPresentation
+//
+// The webview-facing Thinking/presentation projection. Single source
+// of truth for the `thinkingPresentation` field that
+// `SdkController.getStateToPostToWebview` publishes. The four webview
+// Thinking consumers (ChatRow `case "reasoning"`, RequestStartRow inline
+// shimmer, useThinkingLoaderRow, TaskHeader) consume this projection —
+// NOT `turnState.phase` directly.
+//
+// Selection rule (frozen):
+//
+//   * When `canonicalShadow` is provided (LOCAL with the qualified
+//     TaskState shadow available), the canonical
+//     `execution.modelStreaming` flag is the source of truth. Source is
+//     labeled `"shadow"`. This is the E7.1 consumer cutover target.
+//
+//   * When `canonicalShadow` is `undefined` (Hub/Remote hosts that omit
+//     `runtimeSnapshot()`, or Local sessions with no active AgentRuntime
+//     instance yet — both collapse per CONTRACT_2 in the arbiter mapper
+//     above), the legacy `TurnStateTracker.phase === "streaming"` flag
+//     is used. Source is labeled `"legacy"`. This preserves the existing
+//     Hub/Remote consumer behavior byte-equivalent.
+//
+// `seq` is stamped from the legacy `TurnStateTracker.seq` so the webview
+// can apply the same stale-push-fencing rule the legacy `turnState.seq`
+// field already provides.
+//
+// The two-source rule is a true causal property:
+//   - T2_LEGACY_INDEPENDENCE: changing the legacy phase while the
+//     canonical shadow is fixed does NOT change `modelStreaming` in
+//     shadow-source mode (pinned by mutation test).
+//   - T8_NECESSITY: changing the canonical `modelStreaming` while the
+//     legacy phase is fixed DOES change the shadow-source value
+//     (pinned by mutation test).
+//
+// EFFECT_EXECUTION_ENABLED remains `false` — this projector is
+// read-only; it does NOT mutate any Task or control state. E9 owns
+// the effect-execution cutover.
+// ===========================================================================
+
+export interface ThinkingPresentationInputs {
+	/**
+	 * The canonical TaskState shadow projection (the same one
+	 * `SdkController.getLocalShadowProjection()` returns). May be
+	 * `undefined` for Hub/Remote hosts and for Local sessions with no
+	 * active AgentRuntime instance yet.
+	 */
+	readonly canonicalShadow: ArbiterSnapshot | undefined
+	/**
+	 * The legacy host-owned phase. Read ONLY in the legacy-source
+	 * branch — by construction, T2_LEGACY_INDEPENDENCE holds.
+	 */
+	readonly currentLegacyPhase: TurnPhase
+	/**
+	 * Monotonic seq stamp from `TurnStateTracker`. Carried through to
+	 * the projection so webview stale-push fencing continues to work.
+	 */
+	readonly seq: number
+}
+
+/**
+ * Pure, deterministic Thinking presentation projector.
+ *
+ *   shadow available → `source: "shadow"`, `modelStreaming` from
+ *     `canonicalShadow.execution.modelStreaming`
+ *
+ *   shadow absent   → `source: "legacy"`, `modelStreaming` from
+ *     `currentLegacyPhase === "streaming"`
+ *
+ * NEVER throws. NEVER reads global state. The two-source rule is
+ * enforced by the body shape, not by an assertion.
+ */
+export function selectThinkingPresentation(input: ThinkingPresentationInputs): ThinkingPresentationProjection {
+	if (input.canonicalShadow) {
+		return {
+			modelStreaming: input.canonicalShadow.execution.modelStreaming,
+			source: "shadow",
+			seq: input.seq,
+		}
+	}
+	return {
+		modelStreaming: input.currentLegacyPhase === "streaming",
+		source: "legacy",
+		seq: input.seq,
+	}
 }

@@ -118,6 +118,35 @@ export interface ExtensionState {
 	 */
 	taskTelemetry?: TaskHeaderTelemetryStrip
 	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+	 *
+	 * The webview-facing projection of the canonical TaskState shadow for
+	 * Thinking/presentation. Source authority:
+	 *
+	 *   - LOCAL + qualified shadow available → projected from
+	 *     `SdkController.getLocalShadowProjection().execution.modelStreaming`
+	 *     (the same canonical mapper the wiring already produces for the
+	 *     arbiter differential). Source = `"shadow"`.
+	 *   - LOCAL qualified shadow absent → falls back to the legacy
+	 *     `TurnStateTracker.phase === "streaming"` projection. Source =
+	 *     `"legacy"` — same value the legacy `turnState` field encodes,
+	 *     preserved byte-equivalent so Hub/Remote consumers see no
+	 *     observable delta.
+	 *
+	 * The webview `Thinking` consumers (ChatRow `case "reasoning"`,
+	 * RequestStartRow inline shimmer, useThinkingLoaderRow, TaskHeader)
+	 * MUST consume this field instead of reaching into `turnState.phase`
+	 * directly. The legacy `turnState` field is retained for non-thinking
+	 * presentation concepts (button set, composer lockout, follow-up
+	 * routing) that E7.1 explicitly does not migrate.
+	 *
+	 * Lifetime: stamped every `getStateToPostToWebview` push; reset on
+	 * new task. Webview consumers should treat `undefined` as the
+	 * legacy-safe state (no Thinking) — the canonical producer never
+	 * publishes `undefined` while a controller is alive.
+	 */
+	thinkingPresentation?: ThinkingPresentationProjection
+	/**
 	 * Follow-up prompts submitted while the active agent turn is still running.
 	 * These are owned by the SDK pending-prompt queue and are sent after the
 	 * current turn reaches a safe continuation point.
@@ -200,6 +229,60 @@ export interface ExtensionState {
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
+}
+
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+ *
+ * Wire-shape for the webview-facing `Thinking`/`model streaming` projection.
+ * The webview renders the Thinking indicator (ChatRow `case "reasoning"`
+ * shimmer, RequestStartRow inline shimmer, useThinkingLoaderRow loader row,
+ * TaskHeader state label) from this projection — NOT from `turnState.phase`
+ * directly.
+ *
+ * Two-source rule (frozen):
+ *
+ *   - `source: "shadow"`  — projected from the canonical TaskState shadow
+ *     (`SdkController.getLocalShadowProjection().execution.modelStreaming`).
+ *     This is the LOCAL qualified path; `modelStreaming` reflects the
+ *     canonical `AgentRuntime.snapshot().execution.modelStreaming` flag,
+ *     independent of the legacy `TurnStateTracker.phase`.
+ *   - `source: "legacy"`  — projected from `TurnStateTracker.phase ===
+ *     "streaming"`. Hub/Remote hosts (no `taskStateShadowWiring`), LOCAL
+ *     sessions with no canonical snapshot yet, and the absence-state
+ *     collapse (CONTRACT_2 in `task-state-shadow-arbiter-mapper.ts`).
+ *
+ * Webview consumers MUST tolerate both sources. Mutation-kill tests pin
+ * the dual-source rule: T2_LEGACY_INDEPENDENCE (canonical mapper ignores
+ * legacy phase) and T8_NECESSITY (canonical mapper captures new mutations).
+ *
+ * The shape is intentionally minimal — only the facts the Thinking consumers
+ * actually need. Other TurnPhase concepts (button set, composer lockout,
+ * follow-up routing) keep reading `turnState.phase` and are explicitly
+ * OUT OF SCOPE for E7.1.
+ */
+export interface ThinkingPresentationProjection {
+	/**
+	 * Whether the agent is currently producing model output. Drives:
+	 *   - ChatRow `case "reasoning"` Thinking shimmer
+	 *   - RequestStartRow inline shimmer
+	 *   - useThinkingLoaderRow loader row (pre-reasoning)
+	 *   - TaskHeader state label
+	 */
+	modelStreaming: boolean
+	/**
+	 * Which authority produced `modelStreaming`. Diagnostic only; do not
+	 * branch behavior on this in production code paths — the value is the
+	 * same regardless of source (the legacy fallback is byte-equivalent).
+	 */
+	source: "shadow" | "legacy"
+	/**
+	 * Stamped from `TurnStateTracker.seq` so the webview can ignore stale
+	 * out-of-order state pushes (the same monotonic seq semantics the
+	 * legacy `turnState.seq` field carries). Matches the legacy field's
+	 * seq so consumers that have not yet migrated cannot drift.
+	 */
+	seq: number
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { ClineMessage, TurnState } from "@shared/ExtensionMessage"
+import type { ClineMessage, ThinkingPresentationProjection, TurnState } from "@shared/ExtensionMessage"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { isToolGroup } from "../utils/messageUtils"
 
@@ -14,6 +14,14 @@ import { isToolGroup } from "../utils/messageUtils"
 export const THINKING_LOADER_GRACE_MS = 500
 
 export interface ThinkingLoaderInputs {
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+	 * The canonical TaskState shadow projection of Thinking (sourced
+	 * from `getLocalShadowProjection()` for LOCAL; legacy fallback for
+	 * Hub/Remote). When provided, this is the authoritative authority
+	 * for the loader — supersedes `turnState.phase === "streaming"`.
+	 */
+	thinkingPresentation: ThinkingPresentationProjection | undefined
 	turnState: TurnState | undefined
 	/** Tail of the raw clineMessages array. */
 	lastRawMessage: ClineMessage | undefined
@@ -43,6 +51,7 @@ export interface ThinkingLoaderInputs {
  * Hides once reasoning, tools, text, or any other content message appears.
  */
 export function computeIsWaitingForResponse({
+	thinkingPresentation,
 	turnState,
 	lastRawMessage,
 	groupedMessages,
@@ -52,13 +61,47 @@ export function computeIsWaitingForResponse({
 }: ThinkingLoaderInputs): boolean {
 	const lastMsg = modifiedMessages[modifiedMessages.length - 1]
 
-	// AUTHORITATIVE PATH: when the backend provides a TurnState, the agent is only "thinking"
-	// while phase === "streaming". Any other phase (awaiting_approval/followup, completed,
-	// error, resumable, idle) is never a thinking state — this is what makes the footer
-	// immune to trailing bookkeeping messages and prevents the stuck-"Thinking" bug (RC1).
-	// During streaming we still suppress the footer loader once a partial content row is
-	// actually rendering, to avoid a duplicate spinner (handled by the legacy sub-logic
-	// below, which only runs in the streaming case).
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
+	// AUTHORITATIVE SHADOW PATH: when the backend provides the canonical
+	// Thinking projection, it is the single source of truth. `modelStreaming`
+	// is true ⇔ the canonical `AgentRuntime.snapshot().execution.modelStreaming`
+	// is true (LOCAL qualified) or, for Hub/Remote absence, the legacy
+	// `TurnStateTracker.phase === "streaming"` fallback (which is
+	// byte-equivalent for the affected inputs). Any non-streaming state
+	// is never "thinking" — this is what makes the loader immune to
+	// trailing bookkeeping messages and prevents the stuck-"Thinking"
+	// bug (RC1).
+	//
+	// The pre-E7.1 `if (turnState)` branch is preserved below as the
+	// legacy fallback for transports that have not yet shipped the new
+	// field. Order matters: shadow wins when present.
+	if (thinkingPresentation) {
+		if (!thinkingPresentation.modelStreaming) {
+			return false
+		}
+		// completion_result anti-flicker guard (shared with the legacy
+		// path) — the assistant's final report lands just before the
+		// `done` event flips the canonical modelStreaming flag, and the
+		// loader would otherwise flash during that gap.
+		if (
+			lastRawMessage?.type === "say" &&
+			(lastRawMessage.say === "completion_result" || lastRawMessage.say === "plan_completion_result")
+		) {
+			return false
+		}
+		// canonical modelStreaming: show Thinking until a visible content row
+		// is actually streaming.
+		if (groupedMessages.length === 0 || !lastVisibleMessage) {
+			return true
+		}
+		if (lastVisibleRow && isToolGroup(lastVisibleRow)) {
+			return true
+		}
+		return lastVisibleMessage.partial !== true
+	}
+
+	// LEGACY PATH (no Thinking projection — pre-E7.1 transports): use the
+	// turnState phase gate the same way the original CORRECTION04 did.
 	if (turnState) {
 		if (turnState.phase !== "streaming") {
 			return false
@@ -220,11 +263,21 @@ export function useDebouncedLoaderVisibility(
  * anti-flash debounce for tail-finalization triggers.
  */
 export function useThinkingLoaderRow(inputs: ThinkingLoaderInputs): boolean {
-	const { turnState, lastRawMessage, groupedMessages, lastVisibleRow, lastVisibleMessage, modifiedMessages, forceShow } = inputs
+	const {
+		thinkingPresentation,
+		turnState,
+		lastRawMessage,
+		groupedMessages,
+		lastVisibleRow,
+		lastVisibleMessage,
+		modifiedMessages,
+		forceShow,
+	} = inputs
 
 	const isWaitingForResponse = useMemo(
 		() =>
 			computeIsWaitingForResponse({
+				thinkingPresentation,
 				turnState,
 				lastRawMessage,
 				groupedMessages,
@@ -232,7 +285,7 @@ export function useThinkingLoaderRow(inputs: ThinkingLoaderInputs): boolean {
 				lastVisibleMessage,
 				modifiedMessages,
 			}),
-		[turnState, lastRawMessage, groupedMessages, lastVisibleRow, lastVisibleMessage, modifiedMessages],
+		[thinkingPresentation, turnState, lastRawMessage, groupedMessages, lastVisibleRow, lastVisibleMessage, modifiedMessages],
 	)
 
 	// During handoff from waiting -> reasoning stream, keep the loader mounted until a real
