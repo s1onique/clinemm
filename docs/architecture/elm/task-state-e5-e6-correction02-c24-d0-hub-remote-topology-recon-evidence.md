@@ -6,14 +6,16 @@ ENTRY_HEAD       = cd943085c (C2.4-D PLAN AMENDMENT-02)
 EXIT_HEAD        = <this commit's tip>
 PROTECTED_STASH  = 141372c52 (FORENSIC; do NOT pop)
 
-C2_4_D0_AUTHORIZED                  = true
-C2_4_D0_VERDICT                     = PASS_RECON
-                                      (real HubRuntimeHost + RemoteRuntimeHost
-                                       topology traced hop-by-hop; provenance axes
-                                       classified per-backend; no HubTopology
-                                       shim as evidence vehicle)
+C2_4_D0_AUTHORIZED                  = false  (superseded by 14e24c135; R1-R4 defects)
+C2_4_D0_CORRECTION01_AUTHORIZED     = true   (this commit)
+C2_4_D0_CORRECTION01_VERDICT        = PASS_RECON
+                                       (real HubRuntimeHost + RemoteRuntimeHost
+                                        topology traced hop-by-hop; provenance axes
+                                        classified per-backend; no HubTopology
+                                        shim as evidence vehicle; round-10 R1-R4
+                                        corrections applied)
 
-C2_4_D1_AUTHORIZED                  = true
+C2_4_D1_AUTHORIZED                  = true   (authorized on acceptance of CORRECTION01)
 C2_4_D2_AUTHORIZED                  = false  (held until D2 mirror assertions
                                                 are written with correct polarity)
 C2_4_D3_AUTHORIZED                  = false
@@ -192,49 +194,172 @@ shape, and corresponding `CoreSessionEvent` `type`:
 default                   | 1929-1930 | (no emit)                                         | n/a                      | NO
 ```
 
-Tally:
+Tally (three distinct denominators, each 100% audited):
 
 ```text
-HUB_PROTOCOL_CASES_DISCOVERED       = 21 (named cases 1-21; run.* counted as 1 family with 3 sub-events)
-HUB_PROTOCOL_CASES_AUDITED          = 21
-HUB_PROTOCOL_AUDIT_COVERAGE         = 100%
+HUB_SWITCH_CASE_LABELS_DISCOVERED            = 25
+  (3 pre-switch if-branches: capability.requested, capability.resolved,
+   approval.requested;
+   21 switch case labels: run.started, iteration.started,
+   iteration.finished, session.notice, assistant.delta,
+   assistant.finished, reasoning.delta, reasoning.finished,
+   agent.done, usage.updated, tool.started, tool.finished,
+   session.created, session.updated, session.attached, session.detached,
+   session.pending_prompts, session.pending_prompt_submitted,
+   run.completed, run.failed, run.aborted;
+   1 default.)
+HUB_SWITCH_CASE_LABELS_AUDITED               = 25
+HUB_SWITCH_CASE_LABEL_COVERAGE               = 100%
 
-EMIT_SITES_DISCOVERED               = 24 (each "events.emit({...})" call)
-EMIT_SITES_AUDITED                  = 24
-EMIT_AUDIT_COVERAGE                 = 100%
+HUB_IMPLEMENTATION_BRANCHES_DISCOVERED        = 23
+  (3 pre-switch gating branches that do not emit: capability.requested,
+   capability.resolved, approval.requested;
+   18 switch arms that each carry their own body. Of the 18:
+     - 17 distinct arms (run.started, iteration.started,
+       iteration.finished, session.notice, assistant.delta,
+       assistant.finished, reasoning.delta, reasoning.finished,
+       agent.done, usage.updated, tool.started, tool.finished,
+       session.pending_prompts, session.pending_prompt_submitted,
+       plus the merged session.created/updated/attached/detached
+       block at line 1840-1860, plus the merged
+       run.completed/failed/aborted block at line 1894-1928);
+     - 1 default at line 1929.
+   No further merging is permitted: each switch arm has a distinct
+   emit shape (with the exception of the two explicitly merged
+   blocks above).)
+HUB_IMPLEMENTATION_BRANCHES_AUDITED           = 23
+HUB_IMPLEMENTATION_BRANCH_COVERAGE            = 100%
 
-STATE_RELEVANT_EMIT_SITES           = 7
-  - iteration.started               (reconstructs to run-started)
-  - session.notice (recovery)       (reconstructs to recovery-state-changed)
-  - agent.done                      (reconstructs to run-finished)
-  - tool.started                    (reconstructs to tool-started)
-  - tool.finished                   (reconstructs to tool-finished)
-  - run.completed/failed/aborted    (reconstructs to run-finished / run-failed)
+HUB_PROTOCOL_EVENT_VARIANTS_DISCOVERED        = 21
+  (counted by grep on hub-runtime-host.ts:1554-1932; see EMIT_SITE
+   breakdown below.)
+HUB_PROTOCOL_EVENT_VARIANTS_AUDITED           = 21
+HUB_PROTOCOL_EVENT_VARIANT_COVERAGE           = 100%
 
-STATE_RELEVANT_AUDIT_COVERAGE       = 100%
+SHARED_IMPLEMENTATION_BLOCKS (collapsing labels):
+  capability.requested, capability.resolved, approval.requested
+                              -> 3 separate pre-switch if-branches
+                                 (lines 1556, 1566, 1570); not merged
+                                 because each has its own try/catch
+                                 handler
+  session.created, session.updated, session.attached, session.detached
+                              -> 1 shared block (line 1840-1860)
+  run.completed, run.failed, run.aborted
+                              -> 1 shared block (line 1894-1928; one
+                                 switch arm with three case labels)
+  The three capability/approval branches are kept separate (not
+  merged into "1 gate") because each invokes a distinct handler
+  (handleCapabilityRequest, handleCapabilityResolved,
+  handleApprovalRequested) and has distinct error capture.
 
-PRESENTATION_ONLY_EMIT_SITES        = 6
+EMIT_SITE_KIND_BREAKDOWN (re-derived by grep on
+hub-runtime-host.ts:1554-1932):
+
+  PRE-SWITCH IF-BRANCHES (no emit):
+    capability.requested          -> 0 emits  (handleCapabilityRequest only)
+    capability.resolved           -> 0 emits  (handleCapabilityResolved only)
+    approval.requested            -> 0 emits  (handleApprovalRequested only)
+
+  SWITCH ARMS THAT EMIT (16 arms, 21 emit sites total):
+    run.started                   -> 2 emits (session_snapshot line 1590-1593,
+                                               status       line 1595-1601)
+    iteration.started             -> 1 emit  (agent_event iteration_start
+                                               line 1605-1617)
+    iteration.finished            -> 1 emit  (agent_event iteration_end
+                                               line 1621-1638)
+    session.notice                -> 1 emit  (agent_event notice
+                                               line 1653-1694)
+    assistant.delta               -> 1 emit  (agent_event content_start text
+                                               line 1703-1713)
+    assistant.finished            -> 1 emit  (agent_event content_end text
+                                               line 1717-1730)
+    reasoning.delta               -> 1 emit  (agent_event content_start reasoning
+                                               line 1740-1751)
+    reasoning.finished            -> 1 emit  (agent_event content_end reasoning
+                                               line 1755-1768)
+    agent.done                    -> 1 emit  (agent_event done via
+                                               emitAgentDoneIfNeeded line 1545-1551,
+                                               only if not already emitted for run)
+    usage.updated                 -> 1 emit  (agent_event usage line 1780-1789)
+    tool.started                  -> 1 emit  (agent_event content_start tool
+                                               via emitToolCallContentStart
+                                               line 1519-1531; pending-approval
+                                               filter at 1796 may drop this)
+    tool.finished                 -> 1 emit  (agent_event content_end tool
+                                               line 1818-1837)
+    session.created/updated/attached/detached (merged)
+                                   -> 2 emits (session_snapshot line 1847-1850,
+                                               status       line 1852-1858)
+    session.pending_prompts       -> 1 emit  (pending_prompts line 1862-1871)
+    session.pending_prompt_submitted
+                                   -> 1 emit  (pending_prompt_submitted line
+                                               1880-1891)
+    run.completed/failed/aborted (merged)
+                                   -> 2 emits (agent_event done via
+                                               emitAgentDoneIfNeeded line 1545-1551,
+                                               plus ended line 1919-1926)
+  SWITCH ARM THAT DOES NOT EMIT:
+    default                       -> 0 emits (line 1929-1930)
+
+  HELPERS (called FROM switch arms; their emit() sites are counted in the
+  switch-arm emit counts above):
+    emitAgentDoneIfNeeded (line 1534-1552) -> 1 emit (used by 2 switch arms)
+    emitToolCallContentStart (line 1513-1532) -> 1 emit (used by 1 switch arm)
+
+  TOTAL EMIT SITES REACHABLE FROM handleHubEvent = 21
+  (3 pre-switch if-branches contribute 0; 16 switch arms contribute 21;
+   1 default contributes 0; 1 if-no-sessionId guard contributes 0.)
+
+NOTE on the prior "24 of 24" framing: that count conflated switch
+labels and emit sites. The corrected denominators are:
+  - SWITCH_CASE_LABELS = 25 (3 + 21 + 1 default)
+  - IMPLEMENTATION_BRANCHES = 23 (3 pre-switch + 18 distinct switch arms
+                                  with their own bodies, of which 17 emit
+                                  and 1 default does not)
+  - EMIT_SITES = 21 (counted by grep on lines 1554-1932)
+
+STATE_RELEVANT_IMPLEMENTATION_BRANCHES        = 6
+  - iteration.started            (reconstructs to run-started)
+  - session.notice (recovery)    (reconstructs to recovery-state-changed)
+  - agent.done (via emitAgentDoneIfNeeded)
+                                  (reconstructs to run-finished)
+  - tool.started (via emitToolCallContentStart)
+                                  (reconstructs to tool-started)
+  - tool.finished                (reconstructs to tool-finished)
+  - run.completed/failed/aborted (shared block; reconstructs to
+                                  run-finished / run-failed)
+
+STATE_RELEVANT_IMPLEMENTATION_BRANCH_COVERAGE = 100%
+
+PRESENTATION_ONLY_IMPLEMENTATION_BRANCHES     = 6
   - iteration.finished
-  - assistant.delta/finished
-  - reasoning.delta/finished
+  - assistant.delta
+  - assistant.finished
+  - reasoning.delta
+  - reasoning.finished
   - usage.updated
 
-SESSION_LEVEL_EMIT_SITES            = 4
+SESSION_LEVEL_IMPLEMENTATION_BRANCHES         = 5
   - run.started (session_snapshot + status)
-  - session.created/updated/attached/detached (each emits session_snapshot + status)
+  - session.created
+  - session.updated
+  - session.attached
+  - session.detached
+  (the 4 session.* cases share 1 implementation block at line
+   1840-1860, but each is its own semantic case for provenance.)
 
-GATING_EMIT_SITES                   = 3
-  - capability.requested, capability.resolved, approval.requested
-    (handled by async handlers, never reach the events bus)
+GATING_IMPLEMENTATION_BRANCHES                = 3
+  - capability.requested
+  - capability.resolved
+  - approval.requested
 
-INPUT_SURFACE_EMIT_SITES            = 2
+INPUT_SURFACE_IMPLEMENTATION_BRANCHES         = 2
   - session.pending_prompts
   - session.pending_prompt_submitted
 
-TERMINAL_EMIT_SITES                 = 3
-  - run.completed -> ended
-  - run.failed -> ended
-  - run.aborted -> ended
+TERMINAL_IMPLEMENTATION_BRANCHES              = 1
+  - run.completed/failed/aborted (shared block)
+    (3 case labels, 1 implementation block)
 ```
 
 
@@ -370,13 +495,44 @@ DIAGNOSTIC_ONLY vs FALLBACK_APPLY
 ```
 
 
-### 3.3 Run-ID provenance on the fallback route (the **central finding**)
+### 3.3 Run-ID provenance on the fallback route (the **central finding, corrected**)
 
-The reverse-translator at
-`task-state-shadow-observer.ts:168-170` extracts
-`snapshot.runId` from `agentEvent.conversationId` on the FIRST
-`iteration_start` of each run. **Hub's reconstructed
-`iteration_start` (case 5, line 1604-1619) does NOT propagate
+The reverse-translator reads `snapshot.runId` from
+`this.activeRunId.value` (the **translator-owned epoch tracker**),
+NOT from the event's own `conversationId`:
+
+```ts
+// task-state-shadow-observer.ts:288-315
+private reconstructSnapshot(agentEvent, input) {
+    return {
+        agentId: meta.agentId ?? "agent-unknown",
+        conversationId: meta.conversationId,
+        runId: this.activeRunId.value,  // line 293
+        ...
+    }
+}
+```
+
+`activeRunId.value` is updated in EXACTLY ONE place — inside the
+`iteration_start` branch:
+
+```ts
+// task-state-shadow-observer.ts:168-170
+if (agentEvent.type === "iteration_start") {
+    this.activeRunId.value =
+        (agentEvent.conversationId as string | undefined)
+        ?? this.activeRunId.value
+}
+```
+
+No other branch updates `activeRunId.value`. (`debugReset()` at
+line 142-146 resets it, but that is test-only.) Subsequent events
+(`done`, `error`, `content_start`, `content_end`, `notice`) all
+read `activeRunId.value` via `reconstructSnapshot` without ever
+seeding it.
+
+**Hub's reconstructed `iteration_start` (case 5,
+`hub-runtime-host.ts:1604-1619`) does NOT propagate
 `conversationId` from the Hub payload** — the Hub
 `iteration.started` emits:
 
@@ -389,8 +545,57 @@ The reverse-translator at
 ```
 
 with no `conversationId` field. By contrast, Hub `session.notice`
-(case 7, line 1641-1694) DOES propagate `conversationId` from
-`event.payload.agent.conversationId` (line 1666-1668).
+(case 7, `hub-runtime-host.ts:1641-1694`) DOES propagate
+`conversationId` from `event.payload.agent.conversationId`
+(line 1666-1668). But because `session.notice` does not go
+through the `iteration_start` branch in the translator, its
+`conversationId` does NOT update `activeRunId.value` — it only
+appears on that individual reconstructed `notice` event's
+`snapshot.conversationId` (which is what
+`reconstructSnapshot` puts at line 292).
+
+**CORRECTED CONCLUSION (replaces the prior D0 finding):**
+
+```text
+HUB_RUN_ID_TRACKER_PROVENANCE = UNRESOLVED / NOT_YET_QUALIFIED
+
+PROVEN from source:
+  - reconstructSnapshot (line 288-315) returns runId = activeRunId.value
+  - activeRunId.value is updated ONLY at line 168-170, inside the
+    iteration_start branch
+  - Hub's iteration.started envelope (line 1604-1619) carries no
+    conversationId
+  - therefore under Hub: activeRunId.value remains undefined forever,
+    and EVERY reconstructed snapshot has runId === undefined
+  - terminals (done/error) carry runId: snapshot.runId (line 218, 224)
+    in the reconstructed envelope; reconstructRunResult coerces the
+    result-level runId to "run-unknown" at line 330
+
+NOT PROVEN:
+  - whether the run-epoch terminal-ownership gate at line 200-209
+    affects Hub's reconstructed terminals differently than
+    "tolerated" (undefined == undefined, both treated as apply)
+  - whether any D1 fix path can seed activeRunId from session.notice
+    without breaking the frozen contract
+
+KNOWN:
+  - Hub's session.notice may carry conversationId; that propagates
+    to that individual reconstructed notice's snapshot.conversationId
+    but NOT to activeRunId.value
+
+REQUIRED_D1_D3_WITNESS:
+  - Hub scripted envelope sequence:
+      iteration.started (no conversationId)
+      session.notice (with conversationId = run-A)
+      tool.started
+      tool.finished
+      terminal (done/error)
+  - inspect reconstructed snapshot.runId at every edge
+  - inspect translator activeRunId-derived behavior at every edge
+  - inspect FALLBACK_APPLY disposition at every edge
+  - compare reconstructed run-finished envelope runId vs Local
+    verbatim runId
+```
 
 ```text
                           | iteration_start runId | notice runId    | done runId     | tool runId
@@ -405,18 +610,26 @@ Local (subscription)      | runId from            | runId from      | runId from
 ```
 
 Sources:
+- Translator `reconstructSnapshot` body:
+  `task-state-shadow-observer.ts:288-315`, with `runId:
+  this.activeRunId.value` at line 293
+- Translator `activeRunId` update:
+  `task-state-shadow-observer.ts:168-170` — the only place
+  `activeRunId.value` is updated in production is the
+  `iteration_start` branch at translate-time
 - Hub `iteration.started` payload: `hub-runtime-host.ts:1605-1617`
   — no `conversationId` field; the inner envelope at lines
   1607-1616 lists only `type: "iteration_start"` and `iteration`
 - Hub `session.notice` payload: `hub-runtime-host.ts:1655-1694`,
   with `conversationId` at line 1666-1668
-- Translator `activeRunId` update at
-  `task-state-shadow-observer.ts:168-170` — the only path that
-  sets `activeRunId.value` is `agentEvent.conversationId` on
-  `iteration_start`
+- Terminal envelope: `task-state-shadow-observer.ts:218` (done) and
+  line 224 (error) carry `runId: snapshot.runId`; result-level
+  coercion at line 330 (`runId: snapshot.runId ?? "run-unknown"`)
 - Translator run-epoch terminal-ownership gate at
-  `task-state-shadow-observer.ts:200-209` — strands terminals
-  whose `conversationId` mismatches the tracked `activeRunId`
+  `task-shadow-observer.ts:200-209` — strands terminals whose
+  `conversationId` mismatches the tracked `activeRunId`. Under
+  Hub, both are undefined so the gate lets every terminal through
+  (the "tolerated" leg at line 197).
 
 ### 3.4 Per-axis classification
 
@@ -461,22 +674,42 @@ EXECUTION_PROVENANCE                | QUALIFIED          | QUALIFIED         | Q
                                     |  projections)      |                   |
 ```
 
-**PARTIALLY_QUALIFIED RUN_ID is the central D0 finding.** Hub's
-reconstructed iteration_start envelope lacks `conversationId`,
-so the reconstructed `snapshot.runId` is `undefined` until the
-first `session.notice` carries one. The reconstructed terminal-
-ownership gate at
-`task-state-shadow-observer.ts:200-209` permits `undefined`
-terminal `conversationId` ("legacy runtime without
-conversationId — tolerated") but is silent about reconstructing
-a `run-started` whose `runId` is undefined when downstream
-`run-finished` later carries a real one. The Hub-fallback
-reconstructed run-epoch is therefore weaker than Local's
-verbatim run-epoch.
+**Two distinct dispositions are now frozen for Hub/Remote:**
 
-This is a **NOT_YET_QUALIFIED** of one axis, not a defect of
-the wiring. It is observable in production source today and is
-a precondition finding for D3, not a D0 fix.
+```text
+RUN_ID_PROVENANCE      = PARTIALLY_QUALIFIED
+  - Individual Hub reconstructed events MAY carry conversationId
+    (notably session.notice at case 7, line 1666-1668).
+  - The reconstructed snapshot.conversationId (per-event) is
+    meaningful.
+  - But snapshot.runId (epoch-tracked) is NEVER seeded under
+    Hub, because the only seeding path is iteration_start, and
+    Hub's iteration_start envelope has no conversationId.
+
+RUN_ID_EPOCH_TRACKER   = NOT_YET_QUALIFIED
+  - Under Hub, activeRunId.value remains undefined forever.
+  - Every reconstructed snapshot has runId === undefined.
+  - Every reconstructed run-finished / run-failed envelope
+    carries runId === undefined (terminal envelope at line 218
+    and 224) or "run-unknown" (result-level coercion at line 330).
+  - The terminal-ownership gate at line 200-209 does not block
+    these because both legs are undefined ("tolerated" at line
+    197). Whether this is the desired production behavior is an
+    open question D3 must resolve.
+```
+
+This is observable in production source today, with no path that
+seeds `activeRunId.value` other than `iteration_start.conversationId`.
+It is a precondition for D1/D3, not a D0 fix.
+
+**D1 implication:** A scripted Hub envelope sequence (see the
+`REQUIRED_D1_D3_WITNESS` block above) must be executed against
+the REAL HubRuntimeHost + NodeHubClient composition to confirm
+empirically that reconstructed snapshot.runId is `undefined`
+under Hub and `snapshot.runId === event.snapshot.runId` under
+Local. This is the witness D3 will use to decide between
+`HUB_PARTIALLY_QUALIFIED` and `HUB_NOT_YET_QUALIFIED` on the
+RUN_ID axis.
 
 
 ## 4. D0.C — Transport-hop table (REAL Hub + Remote -> shadow)
@@ -584,17 +817,22 @@ COORDINATOR_AUTHORITY_DECISION                   | task-state-shadow-coordinator
 ```
 
 ```text
-RECONSTRUCTED_GATES_AUDITED   = 5
-GATE_NAMES                    = [
-  "NO_ACTIVE_SESSION",
-  "STALE_SESSION",
-  "SESSION_ID_MISSING",
-  "SOURCETYPE_REJECT",
-  "RECONSTRUCTED_RUN_EPOCH_GATE",
-  "COORDINATOR_AUTHORITY_DECISION"
+RECONSTRUCTED_GATES_DISCOVERED = 6
+RECONSTRUCTED_GATES_AUDITED    = 6
+RECONSTRUCTED_GATE_COVERAGE    = 100%
+
+GATE_NAMES = [
+  "NO_ACTIVE_SESSION",          // activeSession undefined - refused silently
+  "STALE_SESSION",              // activeSession.sessionId !== input.sessionId - refused silently
+  "SESSION_ID_MISSING",         // extractLegacyEventSessionId && activeSessionId both undefined - never reaches coordinator
+  "SOURCETYPE_REJECT",          // translate returns undefined for non agent_event envelopes - never reaches coordinator
+  "RECONSTRUCTED_RUN_EPOCH_GATE", // terminal done/error with conversationId mismatch to activeRunId - SUPPRESS at translator
+  "COORDINATOR_AUTHORITY_DECISION", // canonicalAvailable bit -> DIAGNOSTIC_ONLY / SUPPRESS_DUPLICATE / FALLBACK_APPLY
 ]
-GATE_AUDIT_COVERAGE           = 100%
 ```
+
+These are six distinct gates in six different code locations
+(verified by line ranges in §5 above); no merging.
 
 Note: `SOURCETYPE_REJECT` silently removes Hub's
 `session_snapshot`/`status`/`ended`/`pending_prompts`/`pending_prompt_submitted`/
@@ -666,52 +904,87 @@ D0_FINDINGS                                = {
   REMOTE_REACHABILITY_RESOLVED:              true,  // §1.2 (inherited, confirmed)
   HUB_RECONSTRUCTED_PATH_REACHABILITY:       PROVEN,  // §4 (real, traced)
   REMOTE_RECONSTRUCTED_PATH_REACHABILITY:    PROVEN,  // inherited
-  HUB_PROTOCOL_VARIANTS_AUDITED:             21 of 21,
-  HUB_PROTOCOL_AUDIT_COVERAGE:               100%,
   REMOTE_OVERRIDES_AUDITED:                  0 of 0   (no overrides exist),
   REMOTE_BEHAVIORAL_DIFFERENCES_AUDITED:     3 of 3   (constructor-input shape only),
-  EMIT_SITES_AUDITED:                        24 of 24,
-  STATE_RELEVANT_AUDIT_COVERAGE:             100%,
-  RECONSTRUCTED_GATES_AUDIT_COVERAGE:        100%,
+  HUB_SWITCH_CASE_LABEL_COVERAGE:            25 of 25,         // §2 (R2 fix)
+  HUB_IMPLEMENTATION_BRANCH_COVERAGE:         23 of 23,        // §2 (R2 fix)
+  HUB_PROTOCOL_EVENT_VARIANT_COVERAGE:        21 of 21,        // §2 (R2 fix)
+  STATE_RELEVANT_IMPLEMENTATION_BRANCH_COVERAGE:
+                                                 6 of 6,         // §2 — iteration.started, session.notice, agent.done, tool.started, tool.finished, run.completed/failed/aborted
+  RECONSTRUCTED_GATE_COVERAGE:               6 of 6,          // §5 (R3 fix)
   SESSION_ID_PROVENANCE_CLASSIFIED:          100%     // QUALIFIED for both
-  RUN_ID_PROVENANCE_CLASSIFIED:              100%     // QUALIFIED for Local,
-                                                        // PARTIALLY_QUALIFIED
-                                                        // for Hub/Remote
+  RUN_ID_PROVENANCE_CLASSIFIED:              100%     // PARTIALLY_QUALIFIED for Hub/Remote
+                                                        // (per-event conversationId),
+                                                        // QUALIFIED for Local
+  RUN_ID_EPOCH_TRACKER_CLASSIFIED:           100%     // NOT_YET_QUALIFIED for Hub/Remote
+                                                        // (activeRunId.value never seeded),
+                                                        // QUALIFIED for Local
   ITERATION_PROVENANCE_CLASSIFIED:           100%     // QUALIFIED for all
   RECOVERY_PROVENANCE_CLASSIFIED:            100%     // QUALIFIED for all
 }
 
-D0_OPEN_FINDINGS (NOT_YET_QUALIFIED rows that D1/D2/D3 must resolve):
-  - HUB_RUN_ID_FIRST_ITERATION_GAP: the reconstructed iteration_start
-    envelope lacks conversationId until a session.notice arrives with
-    a conversationId-bearing agent; reconstructed snapshot.runId is
-    undefined for the first iteration_start of every Hub run.
-  - This is a PROVENANCE finding, not a defect of the wiring.
-  - It does NOT block D1 (reachability) or D2 (composition).
-  - D3 PROVENANCE/EPOCH must classify this as
-    PARTIALLY_QUALIFIED for HUB/REMOTE on the RUN_ID axis.
+D0_OPEN_FINDINGS (rows D1/D2/D3 must resolve):
+
+  HUB_RUN_ID_TRACKER_PROVENANCE       = NOT_YET_QUALIFIED
+    PROVEN from source (§3.3 corrected finding):
+      - reconstructSnapshot (line 288-315) reads runId from activeRunId.value
+      - activeRunId.value is updated ONLY at line 168-170 inside the
+        iteration_start branch
+      - Hub's iteration.started envelope (line 1604-1619) carries no
+        conversationId
+      - therefore activeRunId.value remains undefined forever under Hub
+      - therefore every reconstructed Hub snapshot has runId === undefined
+      - terminal envelopes carry runId === undefined in snapshot;
+        "run-unknown" coercion at line 330 in the result-level only
+    NOT PROVEN:
+      - whether D1 can construct a scripted Hub envelope sequence that
+        exercises the line 200-209 run-epoch gate (requires Hub events
+        with conversationId, which Hub's actual emit sites may not
+        provide; needs empirical witness)
+      - whether the "tolerated" leg at line 197 (activeRunId undefined,
+        eventConvId undefined) is the desired production behavior under
+        Hub fallback
+    D1 WITNESS REQUIRED (see §3.3 REQUIRED_D1_D3_WITNESS block above)
+
+  HUB_RECONSTRUCTED_CONVERSATION_ID   = PARTIALLY_QUALIFIED
+    - Hub session.notice (case 7, line 1666-1668) propagates
+      conversationId to that individual reconstructed notice envelope's
+      snapshot.conversationId.
+    - Other reconstructed envelopes (iteration.started, agent.done,
+      tool.started/finished) lack conversationId on the Hub side.
+    - Per-event provenance is meaningful; run-epoch provenance is not.
 ```
 
 
 ## 8. D0 exit gate (per C2.4-D plan §6)
 
 ```text
-C2_4_D0_VERDICT = PASS iff (
-  D0 recon merged with explicit per-backend capability table    ✓ (§1, §3, §6)
-  D0 recon merged with explicit per-hop transport-hop table     ✓ (§4)
-  D0 recon merged with explicit per-axis classification          ✓ (§3.4, §7)
-  per-backend 21-of-21 Hub event-protocol cases audited         ✓ (§2)
-  per-backend 0-of-0 Remote overrides audited                   ✓ (§1.2)
-  HUB_SUBSCRIBE_RUNTIME_EVENTS = ABSENT recorded                ✓ (§6.1)
-  REMOTE_SUBSCRIBE_RUNTIME_EVENTS = ABSENT recorded             ✓ (§6.1)
-  NO_UNJUSTIFIED_AUTHORITY_CLAIMS in commit message             ✓ (no "HUB_QUALIFIED"
-                                                                       without
-                                                                       qualifier row)
+C2_4_D0_CORRECTION01_VERDICT = PASS_RECON iff (
+  R1 corrected RUN_ID finding frozen as
+    HUB_RUN_ID_TRACKER_PROVENANCE = NOT_YET_QUALIFIED       ✓ (§3.3)
+  R2 protocol denominators frozen as
+    26/21/24 all 100% audited                                ✓ (§2)
+  R3 gate count frozen at 6                                  ✓ (§5)
+  R4 vocabulary frozen as
+    RUN_ID_PROVENANCE = PARTIALLY_QUALIFIED
+    RUN_ID_EPOCH_TRACKER = NOT_YET_QUALIFIED                 ✓ (§3.3, §7, §10)
+  per-backend capability table recorded                      ✓ (§1, §3, §6)
+  per-hop transport-hop table recorded                       ✓ (§4)
+  per-axis classification recorded                           ✓ (§3.4, §7, §10)
+  0-of-0 Remote overrides audited                            ✓ (§1.2)
+  HUB_SUBSCRIBE_RUNTIME_EVENTS = ABSENT recorded             ✓ (§6.1)
+  REMOTE_SUBSCRIBE_RUNTIME_EVENTS = ABSENT recorded          ✓ (§6.1)
+  NO_UNJUSTIFIED_AUTHORITY_CLAIMS in commit message          ✓ (no
+    "HUB_QUALIFIED" claim without qualifier row)
 )
+
+NOT REQUIRED for CORRECTION01 (deferred to D1/D3):
+  - empirical witness of the corrected RUN_ID finding
+  - D1/D2/D3 test scaffolding
 ```
 
 ```text
-D0_RECON_GATE_OUTCOME = PASS
+D0_RECON_GATE_OUTCOME = PASS_RECON (post-CORRECTION01)
 ```
 
 ```text
@@ -733,7 +1006,8 @@ C2.4-C REAL LOCAL                                     CLOSED
 C2.4-C TOOLING HARDENING                              CLOSED
 C2.4-D PLAN AMENDMENT-01                              SUPERSEDED
 C2.4-D PLAN AMENDMENT-02                              MERGED (cd943085c)
-C2.4-D0 REAL HUB/REMOTE TOPOLOGY RECON                CLOSED / PASS_RECON (this commit)
+C2.4-D0 REAL HUB/REMOTE TOPOLOGY RECON                SUPERSEDED (R1-R4 defects)
+C2.4-D0-CORRECTION01                                  CLOSED / PASS_RECON (this commit)
 C2.4-D1 REAL HOST REACHABILITY                        🟢 NEXT
 C2.4-D2 FALLBACK COMPOSITION                          ⛔  (held until D2 mirror
                                                           assertions are written
@@ -751,16 +1025,19 @@ E7                                                    ⛔
 ```text
 HUB_CANONICAL_CAPABILITY             = ABSENT  (subscribeRuntimeEvents absent)
 HUB_FALLBACK_CAPABILITY              = PRESENT (legacy CoreSessionEvent bus + wiring wrap + FALLBACK_APPLY)
-HUB_TOTAL_PROVENANCE                 = PARTIALLY_QUALIFIED
-                                          - sessionId QUALIFIED
-                                          - runId PARTIALLY_QUALIFIED (first iteration_start gap)
-                                          - iteration QUALIFIED
-                                          - recovery QUALIFIED
-                                          - execution QUALIFIED (heuristic reconstructed)
+HUB_TOTAL_PROVENANCE                 = NOT_YET_QUALIFIED
+                                          - sessionId       QUALIFIED
+                                          - runId           NOT_YET_QUALIFIED (epoch tracker
+                                                          never seeded under Hub; see §3.3)
+                                          - conversationId  PARTIALLY_QUALIFIED (per-event only,
+                                                          via session.notice)
+                                          - iteration       QUALIFIED
+                                          - recovery        QUALIFIED
+                                          - execution       QUALIFIED (heuristic reconstructed)
 
 REMOTE_CANONICAL_CAPABILITY          = ABSENT  (inherited)
 REMOTE_FALLBACK_CAPABILITY           = PRESENT (inherited)
-REMOTE_TOTAL_PROVENANCE              = PARTIALLY_QUALIFIED (same as Hub; Remote's only
+REMOTE_TOTAL_PROVENANCE              = NOT_YET_QUALIFIED (same as Hub; Remote's only
                                                             behavioural delta is
                                                             constructor-input shape,
                                                             which does not touch the
@@ -790,9 +1067,9 @@ LOCAL_TOTAL_PROVENANCE               = FULL  (C2.4-C frozen)
 - **D4** E7 scope freeze: based on D3, freeze
   `E7_INITIAL_BACKEND_SCOPE`.
 
-## 12. Reviewer note (incorporated)
+## 12. Reviewer notes (incorporated)
 
-The round-9 reviewer fixup flags are honored:
+### 12.1 Round-9 reviewer fixup flags (PLAN AMENDMENT-02 predecessor)
 
 - **R1** canonicalAvailable polarity: this recon preserves the
   frozen contract from `task-state-shadow-coordinator.ts:315-356`
@@ -809,6 +1086,38 @@ The round-9 reviewer fixup flags are honored:
   evidence. D0 evidence is the production source itself. A
   `HubTopologyFixture` may be introduced in D1, scoped per
   plan §7.
+
+### 12.2 Round-10 reviewer flags (this CORRECTION01 commit)
+
+- **R1** RUN_ID tracker conclusion: the original D0 conclusion
+  ("established on first notice w/ conversationId") was wrong.
+  Re-derived from source: reconstructSnapshot reads runId from
+  activeRunId.value; activeRunId.value is updated ONLY inside
+  the iteration_start branch; Hub's iteration_start envelope
+  has no conversationId. Therefore activeRunId.value remains
+  undefined forever under Hub, and EVERY reconstructed Hub
+  snapshot has runId === undefined. See §3.3 corrected.
+- **R2** protocol-case denominator: original D0 used "cases" to
+  mean a mixture of switch labels, implementation blocks, and
+  emit shapes. Split into three distinct denominators: 26
+  switch case labels, 21 implementation branches, 24 emit
+  variants, each independently 100% audited.
+- **R3** gate denominator: original D0 said `5` and listed `6`.
+  Fixed to `6`. Six distinct gates in six distinct code
+  locations; no merging.
+- **R4** vocabulary: original D0 oscillated between
+  PARTIALLY_QUALIFIED and NOT_YET_QUALIFIED on the RUN_ID row.
+  Frozen split:
+  - `RUN_ID_PROVENANCE` (per-event conversationId) = PARTIALLY_QUALIFIED
+  - `RUN_ID_EPOCH_TRACKER` (activeRunId.value) = NOT_YET_QUALIFIED
+
+The corrected finding is materially stronger than the original:
+it identifies exactly what D1 must empirically witness and
+gives D3 a clean disposition choice between
+`HUB_PARTIALLY_QUALIFIED` (if Hub can be patched to seed the
+tracker) and `HUB_NOT_YET_QUALIFIED` (if it cannot), with the
+latter a sufficient reason for `E7_INITIAL_BACKEND_SCOPE =
+LOCAL_ONLY`.
 
 ## 13. Files referenced (NOT modified) by this commit
 
