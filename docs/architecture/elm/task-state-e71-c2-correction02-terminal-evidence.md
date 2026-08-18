@@ -240,9 +240,15 @@ just added; the live dogfood experiment with this VSIX will produce
 that evidence. The current ACT verdict is:
 
 ```text
-PASS_DIAGNOSIS_ONLY  (provisional, pending live dogfood)
-CAUSE_CLASS          = UNKNOWN  (the diagnostic will resolve it)
-NEXT_ACT             = live dogfood walk + binary boundary decision table
+HALT_CAPTURE_INSUFFICIENT  (the diagnostic instrumentation is in place;
+                             the live dogfood walk is required to fill in
+                             the W1/W2/W3/W4 binary decision before any
+                             repair or further ACT can be selected)
+CAUSE_CLASS          = UNKNOWN  (the diagnostic will resolve it on the next dogfood walk)
+NEXT_ACT             = live dogfood walk producing the binary boundary table
+                        for the first push P where extension != applied, then
+                        assigning exactly one of W1 / W2 / W3 / W4 / NO_DIVERGENCE.
+                        The walk uses the 4.1.10-b40fa2477 VSIX built by this ACT.
 ```
 
 This is the smallest possible ACT: the diagnostic is sufficient. No
@@ -318,14 +324,17 @@ C2C2_T24 PROTECTED_STASHES                      PASS
 ## 8. Verdict
 
 ```text
-PASS_C2_CORRECTION02_DIAGNOSTIC_INSTRUMENTATION
-CAUSE_CLASS              = UNKNOWN_PENDING_LIVE_DOFOOD
+HALT_CAPTURE_INSUFFICIENT  (matches ACT §23 verdict F)
+CAUSE_CLASS              = UNKNOWN  (the diagnostic will resolve it on the live walk)
 NEXT_ACT                 = live dogfood walk (M0-M6) producing the binary
                             boundary table for the first push P where
                             extension != applied, then assigning exactly one
                             of W1 / W2 / W3 / W4 / NO_DIVERGENCE.
 ```
 
-The ACT is closed at this point; the next ACT will be a live dogfood ACT
-that does nothing but produce the boundary table on the
-`4.1.10-b40fa2477` VSIX.
+The ACT is closed at this point; the next ACT is a live dogfood ACT
+that does nothing but run the smoke walk on the
+`4.1.10-b40fa2477` VSIX, capture the raw + applied records on every
+state push, and produce the binary boundary table. No behavior fix is
+authorized in this ACT. The next ACT may then select a narrow repair
+based on the proven W1/W2/W3/W4 classification.
