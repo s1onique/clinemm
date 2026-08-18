@@ -6,6 +6,7 @@ import {
 	enablePostTerminalAuthorityDiagnostic,
 	getPostTerminalAuthorityDiagnosticRecords,
 	isPostTerminalAuthorityDiagnosticEnabled,
+	type PostTerminalAuthorityCaptureKind,
 	type PostTerminalAuthoritySnapshot,
 	recordPostTerminalAuthoritySnapshot,
 } from "@shared/post-terminal-authority-diagnostic"
@@ -20,13 +21,28 @@ import {
 // thinkingPresentation, taskTelemetry, and the post-reducer `newState` are
 // captured here.
 //
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+// The webview NEVER derives the push ID independently. It reads
+// `rawStateData._ptadPushId` (the extension's monotonic push counter
+// stamped into the wire payload) and propagates it verbatim into the
+// diagnostic record so `_ptadPushId` equality proves same-push
+// correlation across the realm boundary. When PTAD is disabled the
+// field is undefined on the wire and the diagnostic record carries
+// `undefined`.
+//
 // The capture is OPT-IN: the diagnostic is a complete no-op when
 // isPostTerminalAuthorityDiagnosticEnabled("webview") === false.
 // ============================================================================
-function buildWebviewSnapshot(newState: ExtensionState, rawStateData: ExtensionState): PostTerminalAuthoritySnapshot {
+function buildWebviewSnapshot(
+	newState: ExtensionState,
+	rawStateData: ExtensionState,
+	captureKind: PostTerminalAuthorityCaptureKind,
+): PostTerminalAuthoritySnapshot {
 	return {
 		origin: "webview",
+		captureKind,
 		stateVersion: newState.stateVersion ?? rawStateData.stateVersion ?? 0,
+		_ptadPushId: newState._ptadPushId ?? rawStateData._ptadPushId,
 		capturedAt: Date.now(),
 		epoch: newState.epoch ?? rawStateData.epoch,
 		sessionId: undefined,
@@ -554,8 +570,12 @@ export const ExtensionStateContextProvider: React.FC<{
 							// production path semantics are unchanged. The replica reducer has
 							// already applied seq-gating, so `newState` is the post-reducer
 							// view that React will see.
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+							// Stamp `captureKind: "webview-replica"` so the diagnostic can tell
+							// the replica-record apart from input-section / action-buttons /
+							// followup-route captures that the next phases of this ACT add.
 							if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
-								recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(newState, stateData))
+								recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(newState, stateData, "webview-replica"))
 							}
 
 							return newState

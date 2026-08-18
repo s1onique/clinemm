@@ -21,6 +21,7 @@ import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 export interface BuildExtensionSnapshotArgs {
 	state: {
 		stateVersion?: number
+		_ptadPushId?: number
 		epoch?: number
 		taskId?: string
 		sessionId?: string
@@ -48,7 +49,9 @@ export function buildExtensionSnapshotFromState(args: BuildExtensionSnapshotArgs
 	// is always populated.
 	return {
 		origin: "extension",
+		captureKind: "extension-push",
 		stateVersion: state.stateVersion ?? 0,
+		_ptadPushId: state._ptadPushId,
 		capturedAt: Date.now(),
 		epoch: state.epoch,
 		sessionId: state.sessionId,

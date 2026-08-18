@@ -24,7 +24,12 @@ interface ActionButtonsProps {
  */
 export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, chatState, mode, messageHandlers }) => {
 	const { inputValue, selectedImages, selectedFiles, setSendingDisabled } = chatState
-	const { turnState, foregroundCommandRunning, stateVersion: wireStateVersion } = useExtensionState()
+	const {
+		turnState,
+		foregroundCommandRunning,
+		stateVersion: wireStateVersion,
+		_ptadPushId: wirePtadPushId,
+	} = useExtensionState()
 
 	// Tracks the ask the user last acted on. Clicking a footer button latches this so the
 	// buttons disable immediately (and survive the trailing bookkeeping re-renders before the
@@ -81,7 +86,12 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 			// NOT turnState.seq. The turnState.seq is preserved as `legacySeq`.
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+				// `captureKind: "action-buttons"` disambiguates this decision from
+				// input-section / followup-route / webview-replica captures.
+				captureKind: "action-buttons",
 				stateVersion: wireStateVersion ?? 0,
+				_ptadPushId: wirePtadPushId,
 				capturedAt: Date.now(),
 				legacyPhase: turnState?.phase,
 				legacySeq: turnState?.seq,
@@ -109,6 +119,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 		turnState?.phase,
 		turnState?.anchorTs,
 		wireStateVersion,
+		wirePtadPushId,
 	])
 
 	// Clear input when transitioning from command_output to api_req

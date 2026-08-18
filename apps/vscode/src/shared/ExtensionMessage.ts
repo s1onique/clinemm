@@ -189,6 +189,19 @@ export interface ExtensionState {
 	 * always `undefined` and the wire shape is byte-for-byte identical to C0.
 	 */
 	_ptadEnabled?: boolean
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+	 * Diagnostic-only monotonic push ID. Stamped by the extension on every
+	 * ExtensionState push (sampled from the shared `MessageIdMinter` counter)
+	 * ONLY when the workspace-state PTAD toggle is ON. The webview reads this
+	 * field and propagates it verbatim into every webview-side diagnostic
+	 * record so `_ptadPushId` equality proves same-push correlation across
+	 * the realm boundary — independent of the wire `stateVersion` (which is
+	 * no longer the diagnostic correlation authority because all live
+	 * captured records used `stateVersion=0`). In production (toggle OFF)
+	 * the field is always `undefined` and the wire shape is unchanged.
+	 */
+	_ptadPushId?: number
 	currentTaskItem?: HistoryItem
 	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode

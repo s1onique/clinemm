@@ -60,6 +60,23 @@ const DEFAULT_BUFFER_SIZE = 64
  * capture partial states (e.g. before the shadow has produced an
  * ArbiterSnapshot).
  */
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH
+ *
+ * The `captureKind` discriminator identifies WHICH capture site a record
+ * came from. The C2 live smoke proved that every webview-side record was
+ * effectively equivalent (all from the `webview-replica` site), making it
+ * impossible to tell input-section decisions apart from action-buttons
+ * decisions apart from follow-up-route decisions. With `captureKind` the
+ * diagnostic can assert per-site coverage.
+ */
+export type PostTerminalAuthorityCaptureKind =
+	| "extension-push"
+	| "webview-replica"
+	| "input-section"
+	| "action-buttons"
+	| "followup-route"
+
 export interface PostTerminalAuthoritySnapshot {
 	/**
 	 * The wire monotonic counter. Identical between the extension
@@ -67,8 +84,39 @@ export interface PostTerminalAuthoritySnapshot {
 	 * `stateVersion` equality proves same-push / same-payload-version
 	 * correlation; wall-clock `capturedAt` is separately recorded so
 	 * the diagnostic can measure transport/apply latency.
+	 *
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+	 * `stateVersion` is no longer the primary PTAD correlation authority
+	 * — see `_ptadPushId` below. It is retained as a witness because the
+	 * webview's `messageReducer.applyStateSnapshot` still uses it as
+	 * the snapshot-version gate.
 	 */
 	readonly stateVersion: number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH
+	 *
+	 * Diagnostic-only monotonic push ID. The extension mints a fresh
+	 * value (from the shared `MessageIdMinter.nextSeq()` counter) on
+	 * every `ExtensionState` push and stamps it into both the wire
+	 * payload (a private `_ptadPushId` field) and the extension
+	 * diagnostic record. The webview propagates the same value into
+	 * every diagnostic record it emits — the webview NEVER derives the
+	 * value independently. `_ptadPushId` equality across records
+	 * proves they refer to the same `ExtensionState` push, regardless
+	 * of `stateVersion`.
+	 *
+	 * `undefined` when PTAD is disabled (no monotonic counter stamped
+	 * into the wire payload). In production (PTAD off), this field is
+	 * never set on any record and has zero observable effect.
+	 */
+	readonly _ptadPushId?: number
+	/**
+	 * Which capture site produced this record. The C2 live smoke showed
+	 * that without `captureKind` the webview records collapsed into a
+	 * single ambiguous bucket. See the `PostTerminalAuthorityCaptureKind`
+	 * union for the full taxonomy.
+	 */
+	readonly captureKind: PostTerminalAuthorityCaptureKind
 	/** Date.now() at the moment of capture. Strictly >= the prior record. */
 	readonly capturedAt: number
 	/**

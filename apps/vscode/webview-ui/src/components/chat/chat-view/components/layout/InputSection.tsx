@@ -70,14 +70,25 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	// boundary uses), NOT turnState.seq. The turnState.seq is preserved
 	// as `legacySeq`. This keeps the push-boundary and component records
 	// in one joinable domain.
-	const { stateVersion: wireStateVersion } = useExtensionState()
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+	// The capture now stamps `captureKind: "input-section"` (disambiguating
+	// the input-section decisions from action-buttons / followup-route /
+	// webview-replica captures) and propagates the wire-side `_ptadPushId`
+	// verbatim so same-push correlation across the realm boundary holds
+	// even when stateVersion is 0.
+	const {
+		stateVersion: wireStateVersion,
+		_ptadPushId: wirePtadPushId,
+	} = useExtensionState()
 	useEffect(() => {
 		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
 			return
 		}
 		recordPostTerminalAuthoritySnapshot({
 			origin: "webview",
+			captureKind: "input-section",
 			stateVersion: wireStateVersion ?? 0,
+			_ptadPushId: wirePtadPushId,
 			capturedAt: Date.now(),
 			legacyPhase: turnState?.phase,
 			legacySeq: turnState?.seq,
@@ -94,6 +105,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 		allowQueuedSubmit,
 		submitDisabled,
 		wireStateVersion,
+		wirePtadPushId,
 	])
 	// `lastMessage` is destructured for type parity with the chat state surface; the field
 	// is no longer part of the runtime-task inference.

@@ -2739,6 +2739,20 @@ export class Controller {
 			// out-of-order state pushes and fence traffic from a previous task/render. Sampled
 			// synchronously here (no await between sampling and return).
 			const minter = this.messageTranslatorState.getMinter()
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+			// Diagnostic-only monotonic push ID. Mints a fresh value (from the shared
+			// MessageIdMinter counter) on every ExtensionState push. The push ID is
+			// stamped into the wire payload as a private `_ptadPushId` field ONLY when
+			// the workspace-state PTAD toggle is ON; in production (toggle OFF) the
+			// field is undefined and the wire shape is byte-for-byte identical to C0.
+			// The webview propagates the same value into its diagnostic records — it
+			// never derives the push ID independently. `_ptadPushId` equality across
+			// records proves they refer to the same ExtensionState push, regardless
+			// of the wire `stateVersion` (which is no longer the diagnostic correlation
+			// authority; see
+			// `docs/architecture/elm/task-state-e71-c2-live-replica-truth-evidence.md`).
+			const ptadEnabled = isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context)
+			const ptadPushId = ptadEnabled ? minter.nextSeq() : undefined
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1:
 			// Capture the just-built snapshot for the post-terminal authority diagnostic.
 			// The capture is OPT-IN: when isPostTerminalAuthorityDiagnosticEnabled("extension")
@@ -2820,13 +2834,21 @@ export class Controller {
 				// `_ptadEnabled` field so the webview's first state push enables its
 				// own side of the recorder. When OFF (the default), the field is
 				// undefined and the wire shape is byte-for-byte identical to C0.
-				...(isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context) ? { _ptadEnabled: true } : {}),
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+				// Companion wire-bit stamp: `_ptadPushId` carries the same monotonic
+				// counter the extension diagnostic records use, so the webview can
+				// propagate it without ever deriving it locally. When the toggle is OFF
+				// the field is undefined and the wire shape is unchanged.
+				...(ptadEnabled
+					? { _ptadEnabled: true, _ptadPushId: ptadPushId }
+					: {}),
 			}
 			if (isPostTerminalAuthorityDiagnosticEnabled("extension")) {
 				recordPostTerminalAuthoritySnapshot(
 					buildExtensionSnapshotFromState({
 						state: {
 							stateVersion: snapshot.stateVersion,
+							_ptadPushId: ptadPushId,
 							epoch: snapshot.epoch,
 							taskId: snapshot.currentTaskItem?.id,
 							sessionId: undefined,

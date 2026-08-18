@@ -26,17 +26,24 @@ function captureFollowupRoute(args: {
 	turnStatePhase: TurnPhase | undefined
 	turnStateAnchorTs: number | undefined
 	wireStateVersion: number | undefined
+	wirePtadPushId: number | undefined
 }) {
 	if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
 		return
 	}
 	recordPostTerminalAuthoritySnapshot({
 		origin: "webview",
-		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION02:
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
+		// `captureKind: "followup-route"` disambiguates this decision from
+		// input-section / action-buttons / webview-replica captures. Every
+		// follow-up attempt (allowed AND blocked) emits exactly one record
+		// so the per-attempt coverage gate can be enforced.
+		captureKind: "followup-route",
 		// Correlation-domain fix: stamp the wire-side
 		// ExtensionState.stateVersion (same counter as the push boundary),
 		// NOT turnState.seq. The turnState.seq is preserved as `legacySeq`.
 		stateVersion: args.wireStateVersion ?? 0,
+		_ptadPushId: args.wirePtadPushId,
 		capturedAt: Date.now(),
 		legacyPhase: args.turnStatePhase,
 		legacySeq: args.turnStateSeq,
@@ -53,7 +60,12 @@ function captureFollowupRoute(args: {
  * Handles sending messages, button clicks, and task management
  */
 export function useMessageHandlers(messages: ClineMessage[], chatState: ChatState): MessageHandlers {
-	const { backgroundCommandRunning, turnState, stateVersion: wireStateVersion } = useExtensionState()
+	const {
+		backgroundCommandRunning,
+		turnState,
+		stateVersion: wireStateVersion,
+		_ptadPushId: wirePtadPushId,
+	} = useExtensionState()
 	const {
 		setInputValue,
 		activeQuote,
@@ -332,6 +344,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 							turnStatePhase: turnState?.phase,
 							turnStateAnchorTs: turnState?.anchorTs,
 							wireStateVersion,
+							wirePtadPushId,
 						})
 						await sendAskResponseWithPendingState(
 							AskResponseRequest.create({
@@ -358,6 +371,7 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 							turnStatePhase: turnState?.phase,
 							turnStateAnchorTs: turnState?.anchorTs,
 							wireStateVersion,
+							wirePtadPushId,
 						})
 					}
 				}
