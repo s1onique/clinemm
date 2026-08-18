@@ -191,9 +191,28 @@ function arbiterInactive(): ArbiterSnapshot {
 // Wiring harness
 // =========================================================================
 
+/**
+ * C25-C4-CORRECTION02 R6: alias for the per-harness sample
+ * witness so the interface and the inline record type are
+ * defined once and cannot drift.
+ */
+type ArbiterSamples = { count: number; last: ArbiterSnapshot | undefined }
+
 interface WiringHarness {
 	readonly wiring: ReturnType<typeof createTaskShadowHostWiring>
 	readonly resetForNewTask: () => void
+	/**
+	 * C25-C4-CORRECTION01 R3: per-harness sample counter + last
+	 * sampled arbiter snapshot, mirroring the C3 harness. Lets
+	 * C4-14 / C4-15 assert the EXACT arbiter object at the
+	 * observation rather than only its externally-applied effect.
+	 *
+	 * C25-C4-CORRECTION02 R6: declared as a required member of
+	 * the public harness shape so a strict object-literal
+	 * assignment satisfies the target type without an excess-
+	 * property error.
+	 */
+	readonly arbiterSamples: ArbiterSamples
 }
 
 function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; sessionId?: string }): WiringHarness {
@@ -201,7 +220,7 @@ function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; s
 	let resetForNewTaskFn: (() => void) | undefined
 	// C25-C4-CORRECTION01 R3: per-harness sample witness; declared
 	// up here so the closure in getArbiterSnapshot captures it.
-	const arbiterSamples: { count: number; last: ArbiterSnapshot | undefined } = {
+	const arbiterSamples: ArbiterSamples = {
 		count: 0,
 		last: undefined,
 	}
@@ -361,10 +380,21 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 	// admitted by the wiring's `observeCanonicalRuntimeEvent` and
 	// produces a fresh D01 record.
 	//
-	// This is an important architectural fact surfaced by the
-	// adversarial probe. Production callers must therefore ensure
-	// the wiring is not invoked after `dispose()`. The harness
-	// here confirms the wiring's actual behavior:
+	// C25-C4-CORRECTION02 R8: the safety conclusion that production
+	// callers "must rely on the C2.4-B FIXUP01 session-authority
+	// gate, NOT on dispose() alone" was sharper than the evidence
+	// supports. The C4-9 fixture itself disproves session-authority
+	// sufficiency: after dispose() the session is still active,
+	// the same sessionId is still in `lifecycle.getActiveSession()`,
+	// the session-authority gate therefore passes, and a fresh D01
+	// is recorded. The actual production safety property is one
+	// level earlier: **the owner (subscription) must stop delivering
+	// events to the disposed wiring** — i.e. the transport /
+	// subscription teardown (or the owner itself) prevents post-
+	// dispose invocation. The session-authority gate is a separate
+	// stale/wrong-session defense and is NOT sufficient on its own
+	// when the disposed wiring is called with the still-active
+	// session ID. The harness confirms the wiring's actual behavior:
 	it("C4-9: dispose mid-stream: documents that dispose() does NOT gate canonical-event ingress (post-dispose observe still produces a D01)", () => {
 		const { wiring } = makeHarness({
 			legacyPhase: "idle",

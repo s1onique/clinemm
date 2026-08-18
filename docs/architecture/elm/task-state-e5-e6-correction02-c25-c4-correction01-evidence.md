@@ -64,11 +64,23 @@ TaskShadowHostWiring.dispose() implementation:
 dispose() does NOT short-circuit observeCanonicalRuntimeEvent().
 A canonical event delivered AFTER dispose() is still admitted
 and produces a fresh D01 record.
-
-Production callers must rely on the C2.4-B FIXUP01 session-
-authority gate, NOT on dispose() alone, to prevent zombie
-events.
 ```
+
+**C25-C4-CORRECTION02 R8 (sharpens R2's safety conclusion):**
+R2's conclusion that "production callers must rely on the
+C2.4-B FIXUP01 session-authority gate, NOT on `dispose()`
+alone" was sharper than the evidence supports. The C4-9
+fixture itself disproves session-authority sufficiency: after
+dispose() the session is still active, the same sessionId is
+still in `lifecycle.getActiveSession()`, the session-authority
+gate therefore passes, and a fresh D01 is recorded. The
+actual production safety property is one level earlier:
+**the owner (subscription) must stop delivering events to
+the disposed wiring** — i.e. transport / subscription teardown
+prevents post-dispose invocation. The session-authority gate
+is a separate stale/wrong-session defense and is NOT
+sufficient on its own when the disposed wiring is called
+with the still-active session ID.
 
 The test now asserts the actual documented behavior.
 
@@ -79,9 +91,10 @@ TEST_DELTA       = 1 test body rewritten (8 lines -> 24 lines)
 
 ### R3 — C4-14 / C4-15 add the per-harness sample witness
 
-The previous C4-9 and the evidence doc §3 overclaimed
-"the test verifies the EXACT arbiter input at the same
-observation". The original `makeHarness` had:
+The previous C4-14 / C4-15 (and the evidence doc §3's
+wording for them) overclaimed that "the test verifies the EXACT
+arbiter input at the same observation". The original
+`makeHarness` had:
 
 ```
 getArbiterSnapshot: () => args.arbiter

@@ -76,14 +76,34 @@ REMOTE_PRODUCTION_DELTA   = 0
   - start (D01=1) + finish (D00_AGREE); no duplicate D01
 - **C4-7**: tool events only (no execution-state edge)
   - D01 = 0
-- **C4-8**: P repeated 3x (no silent dedup)
+- **C4-8**: P repeated 3x (no recorder/canonical-ingress dedup)
+  `[SUPERSEDED_BY_CORRECTION01 R5]` — original wording
+  "no silent dedup" was too broad; corrected to scope this test
+  to recorder/canonical-ingress dedup. The earlier C2.4 work
+  established coordinator edge-key dedup on reconstructed
+  streams, which is a separate concern and NOT exercised here.
   - D01 = 3
 - **C4-10**: shadow state rollback (P, finish, inactivate, P)
-  - D01 = 2 (1 per epoch)
+  `[SUPERSEDED_BY_CORRECTION01 R4]` — original wording
+  "1 per epoch" was inaccurate; the two P inputs share the
+  same runId and the test does not mutate the task/run reset
+  state. The two D01 records belong to two streaming activation
+  cycles within ONE task epoch, not two task epochs.
+  - D01 = 2 (1 per streaming activation cycle)
 
 ### Family B: wiring lifecycle / disposal (3)
 
-- **C4-9**: dispose mid-stream (no zombie records)
+- **C4-9**: dispose mid-stream — post-dispose observe still
+  produces a D01 `[SUPERSEDED_BY_CORRECTION01 R2, sharpened
+  by CORRECTION02 R8]` — original wording "no zombie records"
+  was a wish, not what the wiring does. The wiring's
+  `dispose()` only restores `sessionOptions.onSessionEvent`
+  (see task-state-shadow-host-wiring.ts:527-530); it does NOT
+  short-circuit the canonical-event ingress. R8 sharpens the
+  safety conclusion: the session-authority gate is NOT a
+  sufficient post-dispose defense either; the actual production
+  safety property is transport / subscription teardown (or the
+  owner itself) preventing post-dispose invocation.
 - **C4-12**: multiple wirings in same test (each is independent)
 - **C4-13**: dispose + new wiring in same test (no leak between wirings)
 
