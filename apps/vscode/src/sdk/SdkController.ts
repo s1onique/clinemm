@@ -64,6 +64,11 @@ import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigS
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
 import {
+	buildExtensionSnapshotFromState,
+	isPostTerminalAuthorityDiagnosticEnabled,
+	recordPostTerminalAuthoritySnapshot,
+} from "./post-terminal-authority-diagnostic-builder"
+import {
 	PROVIDER_FAILURE_ERROR_TYPE,
 	PROVIDER_FAILURE_PHASE,
 	type ProviderFailureTelemetry,
@@ -2717,7 +2722,12 @@ export class Controller {
 			// out-of-order state pushes and fence traffic from a previous task/render. Sampled
 			// synchronously here (no await between sampling and return).
 			const minter = this.messageTranslatorState.getMinter()
-			return {
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1:
+			// Capture the just-built snapshot for the post-terminal authority diagnostic.
+			// The capture is OPT-IN: when isPostTerminalAuthorityDiagnosticEnabled("extension")
+			// is false (the default in production), the if-branch is skipped and the production
+			// path semantics are byte-for-byte unchanged.
+			const snapshot = {
 				...state,
 				currentTaskItem: this.task?.taskId
 					? processedTaskHistory.find((item) => item.id === this.task?.taskId)
@@ -2789,6 +2799,23 @@ export class Controller {
 					}
 				})(),
 			}
+			if (isPostTerminalAuthorityDiagnosticEnabled("extension")) {
+				recordPostTerminalAuthoritySnapshot(
+					buildExtensionSnapshotFromState({
+						state: {
+							stateVersion: snapshot.stateVersion,
+							epoch: snapshot.epoch,
+							taskId: snapshot.currentTaskItem?.id,
+							sessionId: undefined,
+							turnState: snapshot.turnState,
+							thinkingPresentation: snapshot.thinkingPresentation,
+							taskTelemetry: snapshot.taskTelemetry,
+						},
+						shadow: this.getLocalShadowProjection(),
+					}),
+				)
+			}
+			return snapshot
 		} catch (error) {
 			Logger.error("[SdkController] Failed to get state for webview:", error)
 			throw error

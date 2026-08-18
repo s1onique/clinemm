@@ -1,6 +1,41 @@
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
+import {
+	isPostTerminalAuthorityDiagnosticEnabled,
+	type PostTerminalAuthoritySnapshot,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
+
+// ============================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1
+//
+// Pure helper that builds a PostTerminalAuthoritySnapshot for the webview side.
+// The webview does NOT have the `ArbiterSnapshot` shape on the wire (the
+// shadow lives only in the extension host), so the shadow-derived fields
+// are simply absent on the webview side. The legacy turnStateTracker,
+// thinkingPresentation, taskTelemetry, and the post-reducer `newState` are
+// captured here.
+//
+// The capture is OPT-IN: the diagnostic is a complete no-op when
+// isPostTerminalAuthorityDiagnosticEnabled("webview") === false.
+// ============================================================================
+function buildWebviewSnapshot(newState: ExtensionState, rawStateData: ExtensionState): PostTerminalAuthoritySnapshot {
+	return {
+		origin: "webview",
+		stateVersion: newState.stateVersion ?? rawStateData.stateVersion ?? 0,
+		capturedAt: Date.now(),
+		epoch: newState.epoch ?? rawStateData.epoch,
+		sessionId: undefined,
+		taskId: newState.currentTaskItem?.id,
+		legacyPhase: newState.turnState?.phase,
+		legacySeq: newState.turnState?.seq,
+		legacyAnchorTs: newState.turnState?.anchorTs,
+		thinkingPresentation: newState.thinkingPresentation,
+		taskTelemetry: newState.taskTelemetry,
+	}
+}
+
 import { DEFAULT_MCP_DISPLAY_MODE } from "@shared/McpDisplayMode"
 import type { UserInfo } from "@shared/proto/cline/account"
 import { EmptyRequest } from "@shared/proto/cline/common"
@@ -496,6 +531,17 @@ export const ExtensionStateContextProvider: React.FC<{
 							}
 
 							setDidHydrateState(true)
+
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1:
+							// Capture the post-reducer webview state for the post-terminal authority
+							// diagnostic. The capture is OPT-IN: when the diagnostic is disabled
+							// (the default in production), the if-branch is skipped and the
+							// production path semantics are unchanged. The replica reducer has
+							// already applied seq-gating, so `newState` is the post-reducer
+							// view that React will see.
+							if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+								recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(newState, stateData))
+							}
 
 							return newState
 						})

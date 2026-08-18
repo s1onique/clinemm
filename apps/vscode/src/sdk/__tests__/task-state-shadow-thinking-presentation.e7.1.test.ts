@@ -194,17 +194,23 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1 / SdkController.wiring", () => {
 		expect(body).toMatch(/thinkingPresentation:\s*selectThinkingPresentation\(/)
 	})
 
-	it("WIRE-2: the projection is inside the return { ... } object literal", () => {
+	it("WIRE-2: the projection is inside the getStateToPostToWebview object literal", () => {
 		const fs = require("node:fs") as typeof import("node:fs")
 		const path = require("node:path") as typeof import("node:path")
 		const sdkControllerPath = path.resolve(__dirname, "../SdkController.ts")
 		const source = fs.readFileSync(sdkControllerPath, "utf8")
 		const start = source.indexOf("async getStateToPostToWebview(): Promise<ExtensionState>")
+		expect(start, "SdkController.getStateToPostToWebview signature must exist").toBeGreaterThanOrEqual(0)
 		const body = source.slice(start)
-		const returnBlockMatch = body.match(/return\s*\{([\s\S]*?)\n\s{2,}\}/)
-		expect(returnBlockMatch).not.toBeNull()
-		const returnBlock = returnBlockMatch?.[1] ?? ""
-		expect(returnBlock).toContain("thinkingPresentation: selectThinkingPresentation(")
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1
+		// re-shaped the legacy `return { ... }` into `const snapshot = { ... }; return snapshot`
+		// so the post-terminal authority diagnostic can capture the just-built object literal.
+		// The structural witness is preserved: the projection still lives inside the
+		// object literal that the function returns. We match either shape.
+		const snapshotBlockMatch = body.match(/(?:return\s*\{|const\s+snapshot\s*=\s*\{)\s*([\s\S]*?)\n\s{2,}\}/)
+		expect(snapshotBlockMatch).not.toBeNull()
+		const snapshotBlock = snapshotBlockMatch?.[1] ?? ""
+		expect(snapshotBlock).toContain("thinkingPresentation: selectThinkingPresentation(")
 	})
 
 	it("WIRE-3: ExtensionState declares thinkingPresentation as ThinkingPresentationProjection-or-undefined", () => {
