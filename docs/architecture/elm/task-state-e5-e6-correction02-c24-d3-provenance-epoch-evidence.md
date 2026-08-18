@@ -12,9 +12,12 @@ D3-C1_HEAD          = ad8588e39 (D3 plan contract)
 D3-C2_HEAD          = f5a9d963c (pre-repair witness matrix)
 D3-C3_HEAD          = 421b27f18 (selection document)
 D3-C7_HEAD          = <this commit>
+D3-CORRECTION01_HEAD = ad995a7c0 (R-D3-1..R-D3-3 + W4/W5/W6
+                  witness-classification tightening per
+                  reviewer round-17 R1/R2/R3/R4)
 PROTECTED_STASH     = 141372c52 (FORENSIC, do NOT pop)
-D3_REPAIR_CLASS     = C
-D3_VERDICT          = PASS_PROVENANCE_EPOCH_C2_4_D3_CLASS_C
+D3_REPAIR_CLASS     = C (unchanged by CORRECTION01)
+D3_VERDICT          = PASS_PROVENANCE_EPOCH_C2_4_D3_CLASS_C_CORRECTION01
 D4_AUTHORIZED       = true
 E7_AUTHORIZED       = false
 ```
@@ -33,6 +36,7 @@ D3-C1 plan contract         = CLOSED                (ad8588e39)
 D3-C2 pre-repair witnesses  = CLOSED                (f5a9d963c)
 D3-C3 selection document    = CLOSED                (421b27f18)
 D3-C7 evidence doc          = CLOSED                (this commit)
+D3-CORRECTION01             = CLOSED                (ad995a7c0)
 ```
 
 ## 2. D2 frozen pre-repair decoder (negative control)
@@ -166,12 +170,39 @@ Pre-repair observation:
   W2 under the pre-repair harness. The translator's stranded-
   terminal gate is structurally dead because both activeRunId
   and eventConvId are undefined.
-- D3-W6 cross-session is a control: 8/4/0 because sessionId
-  differs across the two epochs, so the run-started edges do
-  NOT collide on scopedEdgeKey.
+- D3-W4 (PROTOCOL_ABSENCE reclassification per reviewer R2,
+  D3-CORRECTION01): Hub protocol has no continueTask envelope;
+  the same_task_continued boundary is implicit and observable
+  only via the lifecycleStub. The witness does NOT emit/invoke
+  same_task_continued.
+- D3-W5 (PROTOCOL_ABSENCE reclassification per reviewer R2):
+  Hub protocol has no task_reset envelope; the same sessionId
+  is reused for both tasks. The witness does NOT emit/invoke
+  task_reset.
+- D3-W6 (SESSION_GUARD control per reviewer R3, tightened to
+  exact positive assertions): 8 translated / 0 APPLY / 0 SUPPRESS
+  / 0 DIAGNOSTIC. Cross-session events arrive with sessionId
+  "sess-d3-w6-A" or "sess-d3-w6-B" while the active session is
+  "sess-d3-w6". The coordinator's authority resolver
+  (task-state-shadow-coordinator.ts:311) returns STALE for each
+  cross-session event, and the recorder short-circuits without
+  incrementing any counter (coordinator.ts:386-388:
+  `case "STALE": return`). The 8 agent_events still reach
+  fixture.captured (the wiring does not reject at the
+  envelope-routing layer for the reconstructed path), but none
+  of them mutate state.
 - D3-W7 recovery without conversationId produces 4/4/0
   (single epoch).
 - D3-W8 terminal variants produce the same shape as W1.
+
+R-D3-* pre-repair results on REAL RemoteRuntimeHost (per
+reviewer R1, D3-CORRECTION01):
+  R-D3-1 REMOTE TWO EPOCHS        : 8 translated / 6 APPLY / 2 SUPPRESS
+  R-D3-2 REMOTE STALE TERMINAL    : 8 translated / 6 APPLY / 2 SUPPRESS
+  R-D3-3 REMOTE RECOVERY MISSING  : 4 translated / 4 APPLY / 0 SUPPRESS
+
+These match the Hub counterparts exactly, confirming the
+Remote inheritance claim is machine-verifiable.
 
 These witnesses are NOT evidence that a repair is possible;
 they are evidence that the pre-repair state is structurally
@@ -442,21 +473,27 @@ PRE_REPAIR:
     W1: 4/4/0
     W2: 8/6/2 (D2-F1 control)
     W3: 8/6/2
-    W4: 7/6/1
-    W5: 8/6/2
-    W6: 8/4/0 (control)
+    W4: 7/6/1 (PROTOCOL_ABSENCE)
+    W5: 8/6/2 (PROTOCOL_ABSENCE)
+    W6: 8/0/0 (SESSION_GUARD control — tightened per R3)
     W7: 4/4/0
     W8: 4/4/0
+    R-D3-1: 8/6/2 (real Remote parity)
+    R-D3-2: 8/6/2 (real Remote parity)
+    R-D3-3: 4/4/0 (real Remote parity)
 
 POST_REPAIR:
   N/A — C was selected.
 
 PROVENANCE_MATRIX:
   Local / Hub / Remote × all 7 axes (see §8 and §9 above).
+  Hub and Remote are now directly witnessed via R-D3-1..R-D3-3
+  (per reviewer R1, D3-CORRECTION01); inheritance claim is
+  machine-verifiable, not just inferred.
 
 TESTS:
-  focused       = 12 tests (4 D2 + 8 D3) / 0 failed / 27ms
-  full          = 2120 tests (D2 + D3 + C bridge + sdk core unit) / 0 failed
+  focused       = 15 tests (4 D2 + 8 D3 Hub + 3 D3 Remote) / 0 failed / 26ms
+  full          = 2125 tests (D2 + D3 + C bridge + sdk core unit) / 0 failed
   typechecks    = c2-4-c-bridge matches baseline; c2-4-d-hub matches baseline
   build         = N/A (no app build in current branch closure protocol)
   diff-check    = clean
@@ -466,10 +503,13 @@ DELTA:
   reducer delta     = 0
   public API delta  = 0
   protocol delta    = 0
-  test/config delta = 1 test file (758 lines) + 1 include line in vitest config
+  test/config delta = 1 test file (+ ~70 lines for R-D3-* and
+                    classify W4/W5/W6 comments), 1 alias line
+                    in vitest config for RemoteRuntimeHost, 1
+                    mock-seam extension for normalizeHubWebSocketUrl
 
 VERDICT:
-  PASS_PROVENANCE_EPOCH_C2_4_D3_CLASS_C
+  PASS_PROVENANCE_EPOCH_C2_4_D3_CLASS_C_CORRECTION01
 
 D4_AUTHORIZED:
   true

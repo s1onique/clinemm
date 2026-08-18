@@ -786,6 +786,157 @@ PLAN-AMENDMENT-08          = <D3-C7 commit> (post-D3 closure)
       E7                       BLOCKED
 
 
+
+R13  Reviewer round-17 on the D3 closure (458d2308f) found three
+    qualification-contract gaps in the committed D3 witness matrix:
+
+    R1: W8 does not satisfy the frozen Remote witness requirement.
+        The D3-W8 witness was a Hub-only terminal-variants test;
+        its comment said Remote was not re-exercised because
+        D1 inheritance evidence was considered sufficient.
+        D1-REMOTE was a single-epoch structural-parity witness,
+        not an epoch-separation witness.
+        Required: add a real RemoteRuntimeHost D3 parity witness
+        covering the decisive subset (two same-session epochs;
+        stale old terminal after next epoch; recovery /
+        missing-conversationId parity).
+
+    R2: W4 and W5 are named as continuation/reset witnesses but
+        do not execute those boundaries. The Hub protocol has no
+        continueTask envelope (W4) and no task_reset envelope (W5).
+        Required: reclassify W4/W5 as PROTOCOL_ABSENCE
+        qualification rows. Do NOT present them as temporal
+        execution of same_task_continued and task_reset.
+
+    R3: W6 does not machine-prove what the evidence doc claims.
+        Evidence doc says W6 = 8/4/0 (control); actual test
+        asserts <= 8 / <= 2. Real behavior: 8/0/0 because the
+        coordinator's authority resolver returns STALE for
+        cross-session events.
+        Required: tighten W6 to exact positive assertions (0/0/0)
+        and reconcile evidence prose.
+
+    R4: Terminal-path prose internally confusing. D3 header says
+        run.completed/failed/aborted → ended, while the same
+        test suite counts an emitted agent_event: done as one
+        of the translated events.
+        Required: clarify the dual-edge structure (translator-
+        visible done agent_event vs. non-translator "ended"
+        CoreSessionEvent).
+
+PLAN-AMENDMENT-09          = <D3-CORRECTION01 commit> (post-D3
+                              qualification-contract tightening)
+
+  - D3-CORRECTION01 closed by `ad995a7c0` (test + vitest config
+    changes only; no production edits).
+
+  - R1 fix: added R-D3-1, R-D3-2, R-D3-3 as real
+    RemoteRuntimeHost parity witnesses in the same D3 test
+    file. The mock seam forwards the real client module's
+    normalizeHubWebSocketUrl via a 4-line pure-function
+    re-implementation (kept locally because vi.importActual
+    triggers transitive imports not resolvable under the
+    dedicated config; the function is otherwise trivial). All
+    three match Hub counterparts:
+      R-D3-1: 8/6/2 (mirrors D3-W2)
+      R-D3-2: 8/6/2 (mirrors D3-W3)
+      R-D3-3: 4/4/0 (mirrors D3-W7)
+
+  - R2 fix: W4 and W5 reclassified as PROTOCOL_ABSENCE
+    qualification rows. Test names updated to
+    'D3-W4 (PROTOCOL_ABSENCE)' and 'D3-W5 (PROTOCOL_ABSENCE)'.
+    Comments now state that Hub has no continueTask / task_reset
+    envelope and the witnesses do not emit/invoke those
+    boundaries. Per-axis provenance matrix unchanged:
+      D3-P5 CONTINUATION_BEFORE_NEXT_RUN_START = NOT_YET_QUALIFIED
+      D3-P6 TASK_RESET/NEW_TASK_EPOCH_BOUNDARY   = NOT_YET_QUALIFIED
+
+  - R3 fix: W6 tightened to exact positive assertions.
+    Coordinator's authority resolver returns STALE for cross-
+    session events and the recorder short-circuits without
+    incrementing any counter (task-state-shadow-coordinator.ts:386-388).
+    Real behavior: 8 translated / 0 APPLY / 0 SUPPRESS /
+    0 DIAGNOSTIC. Test name updated to
+    'D3-W6 (SESSION_GUARD control)'. Evidence doc updated
+    to 8/0/0 (was 8/4/0).
+
+  - R4 fix: tightened the done-vs-ended prose in the W3
+    comment and in the per-event translation filter section
+    of the test header. The translator-visible edge is the
+    agent_event:done emitted by emitAgentDoneIfNeeded; the
+    "ended" CoreSessionEvent is a separate edge that does NOT
+    reach the shadow. Late-time emit dedup at the HubRuntimeHost
+    layer is documented for W4/W5.
+
+  - Vitest config change (companion only):
+      Extended alias set to include
+      '@cline-internal/core/hub/runtime-host/remote-runtime-host'.
+      Include list unchanged (D2 + D3 in same config, per D3
+      plan §7 — no new config proliferated).
+
+  - A/B/C selection: C (unchanged). D3 disposition unchanged.
+    PRODUCTION_SEMANTIC_DELTA = 0. No production code touched.
+
+  - D3 test counts (post-CORRECTION01):
+      apps/vscode vitest (c2-4-d-hub config):
+        2 files / 15 tests / 0 failed / 26ms
+          D2 (D2-F1 + D2-T1 + D2-E1..E7 + D2-X1 + PORTABILITY)  4 PASS
+          D3 Hub pre-repair witnesses (W1..W8)                    8 PASS
+          D3 Remote parity witnesses (R-D3-1..R-D3-3)            3 PASS
+      apps/vscode vitest (c2-4-c-bridge config):
+        1 file / 5 tests / 0 failed / 55ms (no regression)
+      sdk/packages/core unit suite:
+        172 files / 2105 tests / 0 failed / 14 skipped / 35.45s
+
+  - Tooling gates:
+      check-types:c2-4-d-hub: 1 diagnostic matches frozen baseline.
+      check-types:c2-4-c-bridge: 1 diagnostic matches frozen baseline.
+      biome check (D3 test file + vitest config): clean.
+      git diff --check: clean.
+
+  - D3 verdict (post-CORRECTION01):
+      D3_REPAIR_CLASS             = C (unchanged)
+      HUB_RUN_EPOCH_PROVENANCE    = NOT_YET_QUALIFIED
+      REMOTE_RUN_EPOCH_PROVENANCE = NOT_YET_QUALIFIED
+        (now directly witnessed via R-D3-1..R-D3-3)
+      D4_AUTHORIZED               = true
+      E7_AUTHORIZED               = false
+      D3_VERDICT                  = PASS_PROVENANCE_EPOCH_C2_4_D3_CLASS_C_CORRECTION01
+
+  - Files (CORRECTION01 changes):
+      apps/vscode/src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts
+        (R-D3-* tests, W4/W5/W6 classification tightening,
+         mock-seam extension, done-vs-ended prose tightening)
+      apps/vscode/vitest.config.c2-4-d-hub.ts
+        (RemoteRuntimeHost alias added)
+      docs/architecture/elm/task-state-e5-e6-correction02-c24-d3-provenance-epoch-evidence.md
+        (final-response block updated: W6 = 8/0/0 not 8/4/0;
+         R-D3-1..R-D3-3 results added; verdict =
+         PASS_PROVENANCE_EPOCH_C2_4_D3_CLASS_C_CORRECTION01)
+
+  - Companion files UNCHANGED:
+      - apps/vscode/src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts
+      - apps/vscode/vitest.config.c2-4-d-hub.ts (alias added only)
+      - apps/vscode/tsconfig.c2-4-d-hub.json
+      - apps/vscode/scripts/check-types-d-hub-with-baseline.ts
+      - apps/vscode/baselines/c2-4-d-hub-ts-baseline.json
+      - apps/vscode/package.json
+      - apps/vscode/vitest.config.ts
+      All production code unchanged (PRODUCTION_SEMANTIC_DELTA = 0).
+
+  - Next:
+      C2.4-D4 E7 SCOPE FREEZE  (D4 is authorized with the frozen
+                                C-selection, now backed by direct
+                                Remote parity witnesses.
+                                D4 will finalize
+                                E7_INITIAL_BACKEND_SCOPE = LOCAL_ONLY
+                                unless a future correction ACT
+                                patches the upstream source
+                                boundary. D3 does NOT pre-freeze
+                                E7.)
+      C2.5                     BLOCKED
+      E7                       BLOCKED
+
 ## 1. The reviewer-corrected guardrail (replaces an earlier
    `HubTopology`-shim-first draft)
 
