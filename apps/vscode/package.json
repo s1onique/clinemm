@@ -404,7 +404,8 @@
 		"eval:smoke:run": "bun evals/smoke-tests/run-smoke-tests.ts",
 		"test:vitest:c2-4-c-bridge": "vitest run --config vitest.config.c2-4-c-bridge.ts",
 		"test:vitest:c2-4-c-bridge:watch": "vitest --config vitest.config.c2-4-c-bridge.ts",
-		"check-types:c2-4-c-bridge": "bunx tsc --project tsconfig.c2-4-c-bridge.json --noEmit"
+		"check-types:c2-4-c-bridge": "bun scripts/check-types-bridge-with-baseline.ts",
+		"check-types:c2-4-c-bridge:refresh-baseline": "BRIDGE_BASELINE_UPDATE=1 bun scripts/check-types-bridge-with-baseline.ts"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [

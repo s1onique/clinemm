@@ -169,11 +169,13 @@ apps/vscode/src/sdk vitest sweep (base config)  = 18 files, 218 tests PASS (no r
 apps/vscode/src/sdk vitest bridge config (C-REAL) = 5 tests PASS
 apps/vscode check-types                        = 22 errors (baseline at 48c6a3c4d;
                                               ZERO new errors from C2.4-C File 3)
-apps/vscode check-types:c2-4-c-bridge          = 1 transitive error
-                                              (apps/vscode/src/sdk/task-state-shadow.ts:169
-                                              — same baseline error as the base config;
-                                              ZERO new errors from the bridge test itself)
-                                              BRIDGE_TEST_TS_ERRORS              = 0
+apps/vscode check-types:c2-4-c-bridge          = exit 0
+                                              (machine-enforced baseline wrapper;
+                                              observed 1 diagnostic matching the
+                                              frozen baseline file
+                                              apps/vscode/baselines/c2-4-c-bridge-ts-baseline.json)
+                                              BRIDGE_TEST_TS_ERRORS             = 0
+                                              BRIDGE_TYPECHECK_COMMAND_EXIT     = 0
                                               BRIDGE_TYPECHECK                  = PASS
 sdk/packages/core typecheck (tsconfig.dev)     = 2 errors (baseline at 48c6a3c4d;
                                               ZERO new errors from C2.4-C File 1)
@@ -197,7 +199,7 @@ never exercised end-to-end.
 Three-file split. File 3 is the real LocalRuntimeHost -> REAL wiring
 bridge (C-REAL-1..5). Closes the architecture.
 
-### C2.4-C-CORRECTION02 frozen at `<this commit>` (test infra)
+### C2.4-C-CORRECTION02 frozen at `5e0ebf428` (test infra)
 
 - Adds `apps/vscode/tsconfig.c2-4-c-bridge.json` (dedicated typecheck
   project for the bridge test, with `@cline-internal/core/...` paths
@@ -214,18 +216,50 @@ bridge (C-REAL-1..5). Closes the architecture.
   vitest config) and R4 (`android/vscode` -> `apps/vscode` path
   typo in this evidence doc).
 
+The reviewer (test-infrastructure / runtime integration / CI)
+flagged that `check-types:c2-4-c-bridge` exited non-zero and the
+`ci:check-all` gate therefore was not provably green. C2.4-C's
+qualification required either fixing the production error or
+introducing a machine-enforced baseline wrapper.
+
+### C2.4-C-CORRECTION03 frozen at `<this commit>` (gate closure)
+
+- Adds `apps/vscode/scripts/check-types-bridge-with-baseline.ts`
+  (the wrapper): runs `tsc -p tsconfig.c2-4-c-bridge.json
+  --noEmit`, parses the output into (file, line, col, code,
+  message) tuples, canonicalizes them, and compares against the
+  frozen baseline in
+  `apps/vscode/baselines/c2-4-c-bridge-ts-baseline.json`.
+  Exits 0 on exact match; exits 1 with ADDED/REMOVED reports
+  on any drift.
+- Adds `apps/vscode/baselines/c2-4-c-bridge-ts-baseline.json`
+  (the frozen baseline): one transitive production error in
+  `task-state-shadow.ts(169)` (cannot find `TaskModel`).
+- Replaces the raw `tsc` invocation in
+  `check-types:c2-4-c-bridge` with the wrapper, so the canonical
+  gate is now genuinely green (exit 0).
+- Adds `check-types:c2-4-c-bridge:refresh-baseline` for
+  intentional baseline updates: runs the wrapper with
+  `BRIDGE_BASELINE_UPDATE=1` to rewrite the baseline file.
+- Reverts the unrelated em-dash (`\u2014` -> `—`) churn in
+  `package.json`'s top-level `description` (R6 hygiene).
+- Fixes malformed Markdown fence (R3): the CORRECTION01
+  acceptance block's trailing fence is now closed before the
+  CORRECTION03 heading begins.
+- Updates `.clinerules/sdk-transport-integration.md` to reflect
+  Option B (baseline wrapper is the correct pattern) — but the
+  rules document remains untracked per user policy.
+
 Production semantic delta: 0. No production source touched.
 
 ```
-BRIDGE_TYPECHECK              = PASS
-  BRIDGE_TEST_TS_ERRORS       = 0
-  TRANSITIVE_PROD_TS_ERRORS   = 1 (baseline at 48c6a3c4d;
-                                same as base typecheck)
-BRIDGE_TEST_CANONICAL_GATE    = PASS
-  test:vitest:c2-4-c-bridge   = 5/5 PASS
-  check-types:c2-4-c-bridge  = 0 NEW errors
-  ci:check-all now invokes both
-MANUAL_ONLY_TEST              = false
+BRIDGE_TYPECHECK_COMMAND_EXIT   = 0
+BRIDGE_TEST_CANONICAL_GATE      = PASS
+  test:vitest:c2-4-c-bridge     = 5/5 PASS, exit 0
+  check-types:c2-4-c-bridge     = exit 0
+                                  (wrapper matches frozen baseline)
+  ci:check-all invokes both     = yes
+MANUAL_ONLY_TEST                = false
 ```
 
 ## Acceptance gate (C2.4-C-CORRECTION01, after review)
@@ -249,19 +283,31 @@ TRANSPORT_REACHABILITY_WITH_NO_ACTIVE_SESSION = PASS
 BOUNDARY_FAIL_CLOSED                          = PASS
 REDUCER_SEMANTIC_DELTA                        = 0
 PRODUCTION_SEMANTIC_DELTA                     = 0
+```
 
-# Acceptance gate (C2.4-C-CORRECTION02, after test-infra review)
+## Acceptance gate (C2.4-C-CORRECTION02, after test-infra review)
 
 ```text
-BRIDGE_TYPECHECK                                = PASS
-  BRIDGE_TEST_TS_ERRORS                         = 0
-  TRANSITIVE_PROD_TS_ERRORS                     = 1 (baseline)
-BRIDGE_TEST_CANONICAL_GATE                     = PASS
-  test:vitest:c2-4-c-bridge                    = 5/5 PASS
-  check-types:c2-4-c-bridge                   = 0 NEW errors
+BRIDGE_RUNTIME_TEST                             = 5/5 PASS
+BRIDGE_TEST_TS_ERRORS                           = 0
+BRIDGE_TYPECHECK_BASELINE                       = 1 (transitive
+                                                  production error)
+BRIDGE_TYPECHECK_WRAPPER                        = PASS
+  apps/vscode/scripts/check-types-bridge-with-baseline.ts
+  runs `tsc -p tsconfig.c2-4-c-bridge.json --noEmit`,
+  canonicalizes the diagnostic set, and verifies exact match
+  against the frozen baseline in
+  apps/vscode/baselines/c2-4-c-bridge-ts-baseline.json.
+  Exits 0 when the observed diagnostics equal the baseline;
+  exits 1 with ADDED / REMOVED reports on any drift.
+BRIDGE_TEST_CANONICAL_GATE                      = PASS
+  test:vitest:c2-4-c-bridge                    = 5/5 PASS,
+                                                    exit 0
+  check-types:c2-4-c-bridge                   = exit 0
   ci:check-all invokes both                    = yes
-C2_4_C_VERDICT                                 = CLOSED
-C2_4_D_AUTHORIZED                              = true
+BRIDGE_TYPECHECK_COMMAND_EXIT                   = 0
+C2_4_C_VERDICT                                  = CLOSED
+C2_4_D_AUTHORIZED                               = true
 ```
 
 ## Board
