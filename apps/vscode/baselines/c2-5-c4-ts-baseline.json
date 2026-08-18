@@ -1,19 +1,5 @@
 [
 	{
-		"file": "src/sdk/__tests__/c04-synthetic-real-classifier-chain-adversarial.c25-c4.test.ts",
-		"line": 97,
-		"col": 3,
-		"code": 2353,
-		"message": "Object literal may only specify known properties, and 'recoveryState' does not exist in type 'AgentRuntimeStateSnapshot'."
-	},
-	{
-		"file": "src/sdk/__tests__/c04-synthetic-real-classifier-chain-adversarial.c25-c4.test.ts",
-		"line": 236,
-		"col": 4,
-		"code": 2561,
-		"message": "Object literal may only specify known properties, but 'taskQuestion' does not exist in type 'SdkSessionLifecycleOptions'. Did you mean to write 'askQuestion'?"
-	},
-	{
 		"file": "src/sdk/task-state-shadow.ts",
 		"line": 169,
 		"col": 19,

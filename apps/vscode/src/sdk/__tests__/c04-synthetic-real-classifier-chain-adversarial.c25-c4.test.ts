@@ -94,7 +94,23 @@ function liveBaseSnapshot(): AgentRuntimeStateSnapshot {
 			tooling: false,
 			awaitingApproval: false,
 		},
-		recoveryState: "idle",
+		// C25-C4-CORRECTION03 R11: production type is
+		// `recovery?: AgentRuntimeRecoverySnapshot`, not the
+		// flat `recoveryState`. Mirror the C3 fixture exactly.
+		recovery: {
+			state: "idle",
+			episodeFailures: 0,
+			circuitNoticeCount: 0,
+			tracker: {
+				state: "idle",
+				currentRepairAttempts: 0,
+				equivalentRepeatCount: 0,
+				blockedExactKeys: [],
+				blockedFamilies: [],
+			},
+			secondStage: "idle",
+			maxEpisodeFailures: 3,
+		},
 	}
 }
 
@@ -200,7 +216,13 @@ type ArbiterSamples = { count: number; last: ArbiterSnapshot | undefined }
 
 interface WiringHarness {
 	readonly wiring: ReturnType<typeof createTaskShadowHostWiring>
-	readonly resetForNewTask: () => void
+	// C25-C4-CORRECTION03 R11-c: the `resetForNewTask` member
+	// introduced in C25-C4-CORRECTION01 was dead code — no test
+	// in this file calls it. Removing it from the harness also
+	// removes the matching dep on `TaskShadowHostWiringDeps`,
+	// which the production type does not declare (the actual
+	// API is `wiring.resetForNewTask()` on the wiring itself,
+	// not a dep). All 12 tests are unaffected by this removal.
 	/**
 	 * C25-C4-CORRECTION01 R3: per-harness sample counter + last
 	 * sampled arbiter snapshot, mirroring the C3 harness. Lets
@@ -217,7 +239,6 @@ interface WiringHarness {
 
 function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; sessionId?: string }): WiringHarness {
 	const sessionId = args.sessionId ?? "c25-c4-session"
-	let resetForNewTaskFn: (() => void) | undefined
 	// C25-C4-CORRECTION01 R3: per-harness sample witness; declared
 	// up here so the closure in getArbiterSnapshot captures it.
 	const arbiterSamples: ArbiterSamples = {
@@ -233,7 +254,12 @@ function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; s
 		sessionOptions: {
 			mcpHub: undefined as never,
 			requestToolApproval: (() => undefined) as never,
-			taskQuestion: (() => undefined) as never,
+			// C25-C4-CORRECTION03 R11: production field is
+			// `askQuestion` (per SdkSessionLifecycleOptions),
+			// not `taskQuestion`. The previous version was
+			// fixture drift — these options are literally
+			// declared on the production type.
+			askQuestion: (() => undefined) as never,
 			onSessionEvent: () => {},
 			onSendComplete: async () => {},
 			onSendError: async () => {},
@@ -248,16 +274,9 @@ function makeHarness(args: { legacyPhase: TurnPhase; arbiter: ArbiterSnapshot; s
 			return args.arbiter
 		},
 		now: () => 1_700_000_000_000,
-		resetForNewTask: () => {
-			resetForNewTaskFn?.()
-		},
 	}
 	const wiring = createTaskShadowHostWiring(deps)
-	resetForNewTaskFn = () => {
-		const w = wiring as unknown as { resetForNewTask?: () => void }
-		w.resetForNewTask?.()
-	}
-	return { wiring, resetForNewTask: resetForNewTaskFn, arbiterSamples }
+	return { wiring, arbiterSamples }
 }
 
 function observe(wiring: ReturnType<typeof createTaskShadowHostWiring>, event: AgentRuntimeEvent, sessionId = "c25-c4-session") {
@@ -407,9 +426,20 @@ describe("C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial", () => {
 		// Post-dispose observe: documented behavior is that the
 		// canonical-event ingress remains callable and admits the
 		// event. We assert what the wiring does, not what we might
-		// wish it did. Production callers must rely on the
-		// session-authority gate (C2.4-B FIXUP01), not on
-		// `dispose()` alone.
+		// wish it did.
+		//
+		// C25-C4-CORRECTION03 R12 (sharpens the prior CORRECTION02
+		// R8 comment): the production safety property is NOT
+		// the C2.4-B FIXUP01 session-authority gate. The C4-9
+		// fixture itself disproves session-authority sufficiency:
+		// after dispose() the session is still active, the same
+		// sessionId is still in `lifecycle.getActiveSession()`,
+		// the session-authority gate therefore passes, and a
+		// fresh D01 is recorded. The actual safety property is
+		// that direct ingress remains callable after dispose(),
+		// and production safety therefore depends on the
+		// subscription / owner teardown preventing this invocation
+		// — session authority alone does not.
 		observe(wiring, modelStreamStartedEvent())
 		const afterDispose = wiring.records().length
 		expect(afterDispose).toBe(2)

@@ -30,9 +30,9 @@ All 12 tests pass:
 | **C4-1** | P + tool-started + tool-finished: D01 = 1 (from P only); tool events produce no extra D01 |
 | **C4-2** | back-to-back execution-state-changed: shadow state transitions through streaming then idle; no duplicate D01 |
 | **C4-7** | tool events only: 0 D01 (no execution-state edge fired) |
-| **C4-8** | P repeated 3x: D01 = 3 (no silent dedup) |
-| **C4-10** | shadow state rollback: P, finish, inactivate, P → D01=2 (1 per epoch) |
-| **C4-9** | dispose mid-stream: subsequent observe is a no-op (no zombie records) |
+| **C4-8** | P repeated 3x: D01 = 3 (no recorder/canonical-ingress dedup) `[CORRECTION01 R5]` |
+| **C4-10** | shadow state rollback: P, finish, inactivate, P → D01=2 (1 per streaming activation cycle, same runId) `[CORRECTION01 R4]` |
+| **C4-9** | dispose mid-stream: post-dispose observe STILL produces a D01 (wiring does NOT gate ingress) `[CORRECTION01 R2, sharpened by CORRECTION02 R8, restated by CORRECTION03 R12]` |
 | **C4-12** | multiple wirings in same test: each is independent |
 | **C4-13** | dispose + new wiring in same test: no leak between wirings |
 | **C4-11** | session ID with special chars (`/.\\s_-`) is accepted verbatim |
@@ -73,8 +73,21 @@ C25-C4-CORRECTION01 applies five reviewer-flagged corrections:
   short-circuit the canonical-event ingress. The test now
   asserts the actual documented behavior (post-dispose observe
   still produces a fresh D01) rather than a wished-for one.
-  Production callers must rely on the C2.4-B FIXUP01 session-
-  authority gate, not on dispose() alone.
+
+  **CORRECTION02 R8 / CORRECTION03 R12** (the surviving safety
+  conclusion after sharpening): production safety does NOT
+  depend on the C2.4-B FIXUP01 session-authority gate. The
+  C4-9 fixture itself disproves session-authority sufficiency:
+  after dispose() the session is still active, the same
+  sessionId is still in `lifecycle.getActiveSession()`, the
+  session-authority gate therefore passes, and a fresh D01 is
+  recorded. The actual production safety property is that
+  direct ingress remains callable after dispose(), and
+  production safety therefore depends on the **subscription
+  / owner teardown** preventing post-dispose invocation.
+  The session-authority gate is a separate stale/wrong-
+  session defense and is NOT sufficient when the disposed
+  wiring is called with the still-active session ID.
 * **R3** C4-14 / C4-15 add the per-harness sample witness used
   in C3. The previous wording in this section overclaimed that
   "the test verifies the EXACT arbiter input at the same
@@ -129,10 +142,14 @@ C25_ARB_SOURCE_RESIDUE                    OPEN  (gates E7)
 ## 7. VERDICT
 
 ```
-C25_C4_ADVERSARIAL_VERDICT = PASS
-TWELVE_C25_C4_TESTS_PASS   = 12
-C25_C5_AUTHORIZED          = true
-C25_C4_PATCH_HYGIENE       = PASS_AFTER_CORRECTION01
+C25_C4_ADVERSARIAL_VERDICT    = PASS
+TWELVE_C25_C4_TESTS_PASS      = 12
+C25_C4_PATCH_HYGIENE          = PASS_AFTER_CORRECTION03
+C25_C4_TYPECHECK_OWN_SOURCE   = 0  (after R11)
+C25_C4_TYPECHECK_TRANSITIVE   = 1  (TaskModel in task-state-shadow.ts)
+C25_C4_DISPOSE_SAFETY_FINDING = PASS_AFTER_CORRECTION03
+C25_C4_DOC_CONSISTENCY        = PASS_AFTER_CORRECTION03
+C25_C5_AUTHORIZED             = true
 ```
 
 C25-C5 (terminal + E7 auth) is authorized on the strength of:

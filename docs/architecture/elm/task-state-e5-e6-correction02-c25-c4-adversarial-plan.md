@@ -122,7 +122,8 @@ C25_C4_ADVERSARIAL_VERDICT = PASS
 
 THREE_PREDICATE_CONJUNCTS_FROZEN = 3 (C3, unchanged)
 TWELVE_C25_C4_TESTS_PASS        = 12
-D01_COUNT                      = exactly per test (no silent dedup)
+D01_COUNT                      = exactly per test
+RECORDER_CANONICAL_INGRESS_DEDUP = absent where C4-8 asserts it  `[CORRECTION01 R5]`
 D02_INACTIVE_ARBITER            = exactly per test
 LEGACY_AUTHORITY               = 100%
 SHADOW_AUTHORITY               = 0%
