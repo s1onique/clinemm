@@ -342,9 +342,18 @@ C25-C4 + C25-C4-CORRECTION01             CLOSED
    + C25-C4-CORRECTION03                 CLOSED  (this commit)
 C25-C5 terminal + E7 auth                CLOSED
 ELM-02F-CORRECTION01                     ✅ CLOSED
-E7                                      ✅ CLOSED (T0..T9 PASS; 89/89 tests;
-                                                LOCAL backend activation ACT)
-DOGFOOD VSIX                            🟢 NEXT (unblocked)
+E7                                      ✅ CLOSED (commit d9b524b5;
+                                                advisory surface ACTIVE;
+                                                67 inherited + 22 E7 = 89)
+E7-CORRECTION01                         ✅ CLOSED (commit <E7-CORRECTION01>;
+                                                R1 REAL source selection;
+                                                R2 consumer cutover ⛔ NOT YET
+                                                  (advisory surface only);
+                                                R3 REAL post-dispose lifecycle;
+                                                R4 REAL hub/remote exclusion;
+                                                R5 denominator pin (67 + 18 = 85);
+                                                85/85 tests)
+DOGFOOD VSIX                            🟡 NEXT (after E7-CORRECTION01 lands)
 ```
 
 ## 7. C25-C5 IMPLICATIONS CARRY-FORWARD

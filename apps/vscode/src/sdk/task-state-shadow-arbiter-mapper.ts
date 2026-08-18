@@ -113,3 +113,42 @@ export function legacyArbiterSnapshotFromTurnPhase(phase: TurnPhase): ArbiterSna
 		},
 	}
 }
+
+// ===========================================================================
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01-CORRECTION01 R1:
+//
+//   selectTaskShadowArbiterSnapshot
+//
+// Single source of the canonical-arbiter selection expression. The
+// production SdkController.getArbiterSnapshot closure and the E7-PRE1
+// integration witness BOTH call this function — there is no test-side
+// re-implementation of the selection (E7-CORRECTION01 R1).
+//
+// CONTRACT (frozen by ELM-02F-CORRECTION01 §1.2):
+//
+//   * `canonicalSnapshot` is consulted first; if it returns a truthy
+//     `AgentRuntimeStateSnapshot`, the canonical mapper is applied.
+//   * Otherwise, the legacy fallback
+//     (`legacyArbiterSnapshotFromTurnPhase(currentLegacyPhase)`) is
+//     used — the legacy phase is read ONLY in this branch.
+//
+// The two absence states collapse per CONTRACT_2:
+//
+//   * `canonicalSnapshot` is `undefined` (denormalized: Hub/Remote
+//     hosts that omit `runtimeSnapshot()`, or Local sessions with no
+//     active AgentRuntime instance)
+//   * `canonicalSnapshot` returns `undefined` (the method exists but
+//     yields no run)
+//
+// Both produce the legacy fallback ArbiterSnapshot.
+// ===========================================================================
+
+export function selectTaskShadowArbiterSnapshot(input: {
+	readonly canonicalSnapshot: AgentRuntimeStateSnapshot | undefined
+	readonly currentLegacyPhase: TurnPhase
+}): ArbiterSnapshot {
+	if (input.canonicalSnapshot) {
+		return mapAgentRuntimeStateSnapshotToArbiterSnapshot(input.canonicalSnapshot)
+	}
+	return legacyArbiterSnapshotFromTurnPhase(input.currentLegacyPhase)
+}

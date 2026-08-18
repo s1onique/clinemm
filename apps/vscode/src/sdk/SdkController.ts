@@ -117,10 +117,7 @@ import {
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
-import {
-	legacyArbiterSnapshotFromTurnPhase,
-	mapAgentRuntimeStateSnapshotToArbiterSnapshot,
-} from "./task-state-shadow-arbiter-mapper"
+import { selectTaskShadowArbiterSnapshot } from "./task-state-shadow-arbiter-mapper"
 import {
 	emitHostRecovery,
 	emitSameTaskContinued,
@@ -579,11 +576,7 @@ export class Controller {
 				//     `AgentRuntime` instance yet, or between runs)
 				//
 				// All three converge to the legacy fallback
-				// (CANONICAL_MAPPER_ACCEPTS_TURN_PHASE = false, §3.2):
-				//
-				//   legacyArbiterSnapshotFromTurnPhase(
-				//       this.turnStateTracker.currentPhase,
-				//   )
+				// (CANONICAL_MAPPER_ACCEPTS_TURN_PHASE = false, §3.2).
 				//
 				// The legacy phase is read ONLY in the fallback
 				// branch. The canonical mapper reads ONLY from the
@@ -591,13 +584,21 @@ export class Controller {
 				// holds. T8_NECESSITY holds because the canonical
 				// mapper is a real `AgentRuntime.snapshot()`
 				// projection (not a constant/dead function).
+				//
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7-LOCAL-BACKEND-ACTIVATION01-CORRECTION01 R1:
+				// The selection expression is delegated to
+				// `selectTaskShadowArbiterSnapshot` so the E7-PRE1
+				// integration witness and the production
+				// `SdkController.getArbiterSnapshot` closure share
+				// the SAME selection function. There is no
+				// test-side re-implementation of the selection.
 				const sdkHost = this.sessions?.getActiveSession()?.sdkHost
 				const sessionId = this.sessions?.getActiveSession()?.sessionId
-				const canonical = sdkHost?.runtimeSnapshot?.(sessionId)
-				if (canonical) {
-					return mapAgentRuntimeStateSnapshotToArbiterSnapshot(canonical)
-				}
-				return legacyArbiterSnapshotFromTurnPhase(this.turnStateTracker.currentPhase)
+				const canonicalSnapshot = sdkHost?.runtimeSnapshot?.(sessionId)
+				return selectTaskShadowArbiterSnapshot({
+					canonicalSnapshot,
+					currentLegacyPhase: this.turnStateTracker.currentPhase,
+				})
 			},
 			getRuntimeStatus: () => "running",
 			now: () => Date.now(),

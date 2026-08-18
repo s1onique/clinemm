@@ -338,12 +338,32 @@ ELM-02F-CORRECTION01                          ✅ CLOSED (commit ae111383b)
                                                   T1..T8 PASS; CANONICAL_ARBITER_SOURCE
                                                   = AGENT_RUNTIME_SNAPSHOT;
                                                   C25_ARB_SOURCE_RESIDUE = CLOSED
-E7                                            ✅ CLOSED (commit <E7 impl>)
-                                                  T0..T9 PASS; 89/89 tests;
-                                                  LOCAL consumer cutover advisory
-                                                  accessors; E7-PRE1 integration
-                                                  witness; HUB/REMOTE unchanged
-DOGFOOD VSIX                                  🟢 NEXT
+E7 (initial)                                  ✅ CLOSED (commit d9b524b5)
+                                                  Advisory surface ACTIVE;
+                                                  ELM-02F selection closure
+                                                  inherited; 67 inherited + 22 E7
+                                                  = 89 tests; HUB/REMOTE unchanged
+                                                  (component-shape only)
+E7-CORRECTION01                               ✅ CLOSED (commit <E7-CORRECTION01>)
+                                                  R1 REAL source selection
+                                                    (selectTaskShadowArbiterSnapshot
+                                                     shared by SdkController + tests)
+                                                  R2 consumer cutover ⛔ NOT YET
+                                                    (advisory surface only; explicit
+                                                     non-claim in §2 of the test)
+                                                  R3 REAL post-dispose lifecycle
+                                                    (CanonicalRuntimeShadowSubscription)
+                                                  R4 REAL hub/remote exclusion
+                                                    (real SdkSessionHost fixture,
+                                                     method-absent /returns-undefined
+                                                     collapse to legacy fallback)
+                                                  R5 denominator pin (67 inherited
+                                                     + 18 E7-CORRECTION01 = 85)
+                                                  85/85 tests; HUB/REMOTE unchanged
+                                                  (read through real topology)
+                                                  CANONICAL_ARBITER_SOURCE unchanged
+                                                  EFFECT_EXECUTION_ENABLED = false
+DOGFOOD VSIX                                  🟡 NEXT (after E7-CORRECTION01 lands)
 ```
 
 The ELM-02F-CORRECTION01 ACT is the bounded unblock
@@ -397,16 +417,22 @@ C25-C4-CORRECTION02     ✅ CLOSED
 C25-C4-CORRECTION03     ✅ CLOSED
 C25-C5                  ✅ CLOSED  (this commit)
 ELM-02F-CORRECTION01    ✅ CLOSED  (commit ae111383b)
-E7                      ✅ CLOSED  (commit <E7 impl>)
+E7                      ✅ CLOSED  (commit d9b524b5)
+E7-CORRECTION01         ✅ CLOSED  (commit <E7-CORRECTION01>)
+                          R1..R5 PASS; 85/85 tests;
+                          consumer cutover ⛔ NOT YET (advisory surface only)
 
 C2.5 OVERALL            ✅ CLOSED_CLEAN
-DOGFOOD VSIX            🟢 NEXT
+DOGFOOD VSIX            🟡 NEXT (after E7-CORRECTION01 lands)
 ```
 
-After ELM-02F-CORRECTION01 lands:
+After E7-CORRECTION01 lands:
 
 ```
 ELM-02F-CORRECTION01    ✅ CLOSED  (commit ae111383b)
-E7                      ✅ CLOSED  (commit <E7 impl>)
-DOGFOOD VSIX            🟢 NEXT (operational proof)
+E7                      ✅ CLOSED  (commit d9b524b5)
+E7-CORRECTION01         ✅ CLOSED  (commit <E7-CORRECTION01>)
+DOGFOOD VSIX            🟢 NEXT (operational proof;
+                                       consumer cutover ⛔ NOT YET
+                                       is not a packaging blocker)
 ```
