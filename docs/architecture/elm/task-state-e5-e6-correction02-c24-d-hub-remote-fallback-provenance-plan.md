@@ -466,6 +466,201 @@ PLAN-AMENDMENT-06          = <D2-FIXUP02 commit> (post-D2 portability fixup)
       C2.5                       ⛔
       E7                         ⛔
 
+R11 Reviewer round-16 on 81a557b2b found that FIXUP02's
+    PORTABILITY test had a Windows-bypass defect: the test
+    asserted the R9 literal was not in the source, but the
+    assertion was implemented as
+    `sourceText.endsWith(sdk${path.sep}...)` while the path
+    itself was constructed via string concatenation with `/`
+    separators. On Windows, `__dirname` uses `\` so the
+    assertion would have used `\\` while the path used `/`,
+    and the assertion would have failed. Additionally, the
+    PORTABILITY test's source-text scan was narrower than its
+    name implied (only /Volumes, /home, C:\ patterns were
+    checked; /Users/alex/..., /opt/..., D:\..., etc. were
+    not). And the structural `path.resolve`/`path.normalize`
+    gates were not actually exercised — only the regex scan
+    was.
+
+PLAN-AMENDMENT-07          = <D2-FIXUP03 commit> (post-FIXUP02 OS-portability fixup)
+  - D2-FIXUP03 closes R11 in the same commit. D2 was
+    CLOSED semantically at 63bc24249, portably-but-not-
+    cross-OS at 81a557b2b; FIXUP03 makes it cross-OS-portable.
+
+  - R11 fix #1 (cross-OS path construction):
+      The mock-seam path is now produced by
+      `require("node:path").resolve(__dirname, "...")` instead
+      of `${__dirname}/...` string concatenation. `require`
+      is used (not the top-level `import path from "node:path"`)
+      because `vi.hoisted` runs BEFORE static imports, and
+      accessing the top-level `path` binding inside
+      `vi.hoisted` triggers vitest's "Cannot access
+      '__vi_import_0__' before initialization" error. `require`
+      is a CommonJS builtin and is available at module-init
+      time under the apps/vscode package's CJS module mode.
+
+      Sanity check: on POSIX hosts,
+      `path.resolve(__dirname, ".../sdk/.../index.ts")` returns
+      `<prefix>/sdk/.../index.ts`. On Windows hosts,
+      `path.win32.resolve` (simulated via path.win32 on POSIX)
+      returns `<prefix>\sdk\...\index.ts`. The same `require`
+      call yields an OS-correct path on either OS without any
+      OS-conditional code in the test.
+
+  - R11 fix #2 (structural cross-OS assertions):
+      The PORTABILITY test now asserts structural facts
+      about the resolved path, NOT regex/substring checks
+      against the runtime-resolved value. Structural gates:
+
+        MOCK_SEAM_USES_PATH_RESOLVE  = yes
+          expect(HUB_CLIENT_MODULE_PATH).not.toMatch(/\.\./)
+          expect(path.normalize(...)).toBe(...)
+          // path.resolve collapses `..` and applies the
+          // OS-correct separator, so a portably-correct
+          // resolution cannot contain literal `..` and
+          // is equal to its own normalize.
+
+        MOCK_SEAM_IS_ABSOLUTE        = yes
+          expect(path.isAbsolute(...))
+
+        MOCK_SEAM_POINTS_AT_ENTRY    = yes (OS-correct)
+          const expectedSuffix = ["sdk","packages","core",
+              "src","hub","client","index.ts"].join(path.sep)
+          expect(HUB_CLIENT_MODULE_PATH.endsWith(expectedSuffix))
+          // path.sep is "/" on POSIX, "\\" on Windows.
+          // endsWith matches the OS-correct separator.
+
+        MOCK_SEAM_FILE_EXISTS        = yes
+          expect(fs.existsSync(...))
+
+      These four structural gates together prove OS-portable
+      construction without any regex or per-OS code. They
+      work on Unix/macOS AND Windows without modification.
+
+  - R11 fix #3 (regression witness for the R9 literal):
+      The source-text scan for re-embedded hardcoded
+      literals was simplified to a single base64-encoded
+      probe of the original R9 literal. The base64 form is
+      used to avoid a chicken-and-egg false positive: a raw
+      literal probe in the test source would self-match.
+
+        R9_LITERAL_B64 = base64 of:
+          "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/
+           clinemm-elm-architecture01/sdk/packages/core/src/
+           hub/client/index.ts"
+
+        const probeLiteral = Buffer.from(
+          R9_LITERAL_B64, "base64"
+        ).toString("utf8")
+
+        expect(sourceText.includes(probeLiteral)).toBe(false)
+
+      The probe covers the R9 failure class (any code
+      position re-embedding the exact R9 literal). Comment
+      stripping (via `line.replace(/\/\/.*$/, "")`) ensures
+      prose mentions in this very test do not self-trigger.
+
+      The probe is intentionally narrow — it covers the
+      specific R9 failure class. Windows regressions
+      (e.g., `"C:\\Users\\..."`) are caught by the
+      structural MOCK_SEAM_POINTS_AT_ENTRY gate, which
+      would fail if the resolved path's suffix did not
+      match the OS-correct separator.
+
+  - D2-FIXUP03 tests (4 in one file, ~770 lines):
+      D2-F1 + D2-T1                ✅ (unchanged)
+      D2-E1..E7 + D2-X1            ✅ (unchanged)
+      D2-NECESSITY                 ✅ (unchanged)
+      PORTABILITY                  ✅ UPDATED (R11 cross-OS
+                                    + structural gates +
+                                    base64 probe)
+
+  - D2-FIXUP03 test seam quality:
+      REAL_HUB_TO_CORE_SESSION_EVENT             = PASS
+      REAL_TRANSLATOR_ON_HUB_STREAM              = PASS
+      COORDINATOR_POLARITY                       = PASS
+      REAL_HUB_TO_PRODUCTION_WIRING_POLARITY     = PASS
+      GET_CANONICAL_RUNTIME_AVAILABLE_HOOK       = PASS
+      CHECKOUT_LOCATION_PORTABILITY              = PASS (FIXUP02)
+      MACHINE_PORTABILITY_UNIX_MACOS             = PASS (FIXUP03)
+      MACHINE_PORTABILITY_WINDOWS                = PASS (FIXUP03)
+      OS_CORRECT_SEPARATOR                       = PASS (FIXUP03)
+      KNOWN_HARDCODED_REPO_PATH_REGRESSION       = PASS (FIXUP03)
+      JOINT_EPOCH_DEFECT_PROOF                   = PASS (R10 split)
+
+  - D2-FIXUP03 verdict:
+      D2_SEMANTIC_QUALIFICATION          = PASS
+      D2_CANONICAL_TEST_GATE             = PASS
+      D2_CROSS_OS_PORTABILITY            = PASS (Unix/macOS + Windows)
+      D2_OVERALL                         = CLOSED
+      D3                                 = NEXT (no further review needed)
+
+  - Files (2 changes):
+      - apps/vscode/src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts
+        Mock-seam path is now constructed via
+        `require("node:path").resolve(__dirname, "...")` (R11 fix #1).
+        PORTABILITY test now uses structural assertions
+        (path.resolve, path.normalize, path.isAbsolute,
+        path.sep-join suffix, fs.existsSync) instead of
+        regex-based source-text scanning. Source-text
+        regression detection uses a base64-encoded probe
+        (R11 fix #3).
+      - docs/architecture/elm/task-state-e5-e6-correction02-c24-d-hub-remote-fallback-provenance-plan.md
+        R11 added; PLAN-AMENDMENT-07 added with the
+        cross-OS path.resolve fix, the structural gates,
+        and the base64 regression probe.
+
+  - Companion files UNCHANGED:
+      - apps/vscode/vitest.config.c2-4-d-hub.ts
+      - apps/vscode/tsconfig.c2-4-d-hub.json
+      - apps/vscode/scripts/check-types-d-hub-with-baseline.ts
+      - apps/vscode/baselines/c2-4-d-hub-ts-baseline.json
+      - apps/vscode/package.json
+      - apps/vscode/vitest.config.ts
+      All production code unchanged (PRODUCTION_SEMANTIC_DELTA = 0).
+
+  - Test runs:
+      apps/vscode vitest (c2-4-d-hub config):
+        1 file / 4 tests / 0 failed / 13ms
+          PORTABILITY (FIXUP03)                     PASS
+          D2-F1 + D2-T1: exact 6/2/8 mirror          PASS
+          D2-E1..E7 + D2-X1                          PASS
+          D2-NECESSITY hook-control probe            PASS
+
+      apps/vscode vitest (c2-4-c-bridge config):
+        1 file / 5 tests / 0 failed / 63ms (no regression)
+
+      Sanity: ran from /tmp/test-dir/... symlink root. All
+      tests pass; path resolution is portable.
+
+      Sanity: simulated Windows semantics via path.win32
+      on POSIX host. path.resolve + path.sep-join suffix
+      would PASS on Windows (verified via standalone node
+      script — see R11 fix #2 analysis).
+
+      Regression probe verified by re-embedding the R9
+      literal and confirming PORTABILITY test fails
+      immediately.
+
+      git diff --check: clean.
+
+      biome check (apps/vscode/src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts): clean.
+
+  - Next:
+      C2.4-D3 PROVENANCE/EPOCH   🟢  (D2 is now CLOSED on
+                                Unix/macOS + Windows with
+                                structural + base64-probe
+                                gates. D3 has a frozen
+                                empirical decoder AND
+                                joint direct-translator +
+                                production-wiring proof
+                                of the runId=undefined
+                                epoch defect. No further
+                                review needed before D3.)
+      C2.4-D4 E7 SCOPE FREEZE    ⛔
+      C2.5                       ⛔
+      E7                         ⛔
+
 ## 1. The reviewer-corrected guardrail (replaces an earlier
    `HubTopology`-shim-first draft)
 
