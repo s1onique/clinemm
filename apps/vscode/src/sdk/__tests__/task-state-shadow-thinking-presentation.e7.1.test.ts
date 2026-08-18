@@ -4,10 +4,16 @@
 // Qualification suite for the webview-facing `selectThinkingPresentation`
 // projector. The projector is the single source of truth for the
 // `thinkingPresentation` field `SdkController.getStateToPostToWebview`
-// publishes; the four webview Thinking consumers (ChatRow `case
-// "reasoning"`, RequestStartRow inline shimmer, useThinkingLoaderRow
-// loader row, TaskHeader state label — the latter out of scope for
-// E7.1) read from this field instead of `turnState.phase` directly.
+// publishes; the three webview Thinking consumers actually migrated
+// by E7.1 (ChatRow `case "reasoning"`, RequestStartRow inline
+// shimmer, useThinkingLoaderRow loader row — threaded via MessagesArea)
+// read from this field instead of `turnState.phase` directly.
+//
+// The TaskHeader state label
+// (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
+// is NOT migrated by E7.1; its `taskHeaderStateLabel` helper consumes
+// the full multi-phase `turnState.phase` vocabulary. The TaskHeader
+// migration is reserved for the E7.1-2 slice.
 //
 // Frozen contract (mirrors the C25-C5 / ELM-02F dual-source rule):
 //

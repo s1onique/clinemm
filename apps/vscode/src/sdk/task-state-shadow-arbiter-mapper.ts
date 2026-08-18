@@ -160,10 +160,19 @@ export function selectTaskShadowArbiterSnapshot(input: {
 //
 // The webview-facing Thinking/presentation projection. Single source
 // of truth for the `thinkingPresentation` field that
-// `SdkController.getStateToPostToWebview` publishes. The four webview
-// Thinking consumers (ChatRow `case "reasoning"`, RequestStartRow inline
-// shimmer, useThinkingLoaderRow, TaskHeader) consume this projection —
-// NOT `turnState.phase` directly.
+// `SdkController.getStateToPostToWebview` publishes. The three webview
+// Thinking consumers actually migrated by E7.1 (ChatRow `case "reasoning"`,
+// RequestStartRow inline shimmer, useThinkingLoaderRow loader row)
+// consume this projection — NOT `turnState.phase` directly.
+//
+// The TaskHeader state label
+// (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
+// is explicitly NOT migrated by E7.1 — its `taskHeaderStateLabel`
+// helper consumes the full multi-phase `turnState.phase` vocabulary
+// ("Working" / "Approval" / "Complete" / "Error" / "Paused" /
+// "Waiting"). Migrating it requires a richer TurnPhase-shaped
+// projection that the current `modelStreaming`-only shape does not
+// carry; the E7.1-2 slice is reserved for that.
 //
 // Selection rule (frozen):
 //
@@ -181,7 +190,9 @@ export function selectTaskShadowArbiterSnapshot(input: {
 //
 // `seq` is stamped from the legacy `TurnStateTracker.seq` so the webview
 // can apply the same stale-push-fencing rule the legacy `turnState.seq`
-// field already provides.
+// field already provides (the seq gating is applied UPSTREAM in
+// `apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx`,
+// not inside the migrated consumers).
 //
 // The two-source rule is a true causal property:
 //   - T2_LEGACY_INDEPENDENCE: changing the legacy phase while the

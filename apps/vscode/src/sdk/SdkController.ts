@@ -2754,9 +2754,17 @@ export class Controller {
 				// and Local sessions with no canonical snapshot yet — both
 				// collapse per CONTRACT_2 in `task-state-shadow-arbiter-mapper.ts`).
 				//
-				// The four webview Thinking consumers (ChatRow `case "reasoning"`,
-				// RequestStartRow inline shimmer, useThinkingLoaderRow, TaskHeader)
+				// The three webview Thinking consumers actually migrated by E7.1
+				// (ChatRow `case "reasoning"`, RequestStartRow inline shimmer,
+				// useThinkingLoaderRow loader row — threaded via MessagesArea)
 				// consume this field instead of `turnState.phase` directly.
+				//
+				// The TaskHeader state label
+				// (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
+				// is explicitly NOT migrated by E7.1 — its `taskHeaderStateLabel`
+				// helper consumes the full multi-phase `turnState.phase` vocabulary
+				// ("Working" / "Approval" / "Complete" / "Error" / "Paused" /
+				// "Waiting"). The TaskHeader is left for an E7.1-2 slice.
 				//
 				// The legacy `turnState` field is retained for non-thinking
 				// presentation concepts (button set, composer lockout, follow-up

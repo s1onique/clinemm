@@ -133,10 +133,19 @@ export interface ExtensionState {
 	 *     preserved byte-equivalent so Hub/Remote consumers see no
 	 *     observable delta.
 	 *
-	 * The webview `Thinking` consumers (ChatRow `case "reasoning"`,
-	 * RequestStartRow inline shimmer, useThinkingLoaderRow, TaskHeader)
-	 * MUST consume this field instead of reaching into `turnState.phase`
-	 * directly. The legacy `turnState` field is retained for non-thinking
+	 * The three webview `Thinking` consumers migrated in E7.1
+	 * (ChatRow `case "reasoning"`, RequestStartRow inline shimmer,
+	 * useThinkingLoaderRow — threaded via MessagesArea) MUST consume
+	 * this field instead of reaching into `turnState.phase` directly.
+	 * The TaskHeader state label (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
+	 * is explicitly NOT migrated by E7.1 — its `taskHeaderStateLabel`
+	 * helper consumes the full multi-phase `turnState.phase` vocabulary
+	 * ("Working" / "Approval" / "Complete" / "Error" / "Paused" /
+	 * "Waiting") and is left for an E7.1-2 slice. Migrating it requires
+	 * a richer TurnPhase-shaped projection that is out of scope for
+	 * the current ACT.
+	 *
+	 * The legacy `turnState` field is retained for non-thinking
 	 * presentation concepts (button set, composer lockout, follow-up
 	 * routing) that E7.1 explicitly does not migrate.
 	 *
@@ -144,6 +153,13 @@ export interface ExtensionState {
 	 * new task. Webview consumers should treat `undefined` as the
 	 * legacy-safe state (no Thinking) — the canonical producer never
 	 * publishes `undefined` while a controller is alive.
+	 *
+	 * Note: the `seq` field on the projection is stamped from
+	 * `TurnStateTracker.seq` for transport-level fencing (the same
+	 * monotonic seq semantics the legacy `turnState.seq` field carries),
+	 * but the migrated E7.1 consumers do NOT compare it directly — the
+	 * stale-push-fencing rule is applied upstream on the wire (the
+	 * webview replica reducer's seq gating), not inside the consumers.
 	 */
 	thinkingPresentation?: ThinkingPresentationProjection
 	/**
@@ -235,10 +251,20 @@ export interface ExtensionState {
  * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
  *
  * Wire-shape for the webview-facing `Thinking`/`model streaming` projection.
- * The webview renders the Thinking indicator (ChatRow `case "reasoning"`
- * shimmer, RequestStartRow inline shimmer, useThinkingLoaderRow loader row,
- * TaskHeader state label) from this projection — NOT from `turnState.phase`
- * directly.
+ * The webview renders the Thinking indicator from this projection in the
+ * three consumers actually migrated by E7.1:
+ *
+ *   - ChatRow `case "reasoning"` Thinking shimmer
+ *   - RequestStartRow inline shimmer
+ *   - useThinkingLoaderRow loader row (pre-reasoning; threaded via MessagesArea)
+ *
+ * — NOT from `turnState.phase` directly. The TaskHeader state label
+ * (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
+ * is explicitly OUT OF SCOPE for E7.1; its `taskHeaderStateLabel` helper
+ * consumes the full multi-phase `turnState.phase` vocabulary ("Working" /
+ * "Approval" / "Complete" / "Error" / "Paused" / "Waiting") and is left
+ * for an E7.1-2 slice. Migrating it requires a richer TurnPhase-shaped
+ * projection that the current shape does not carry.
  *
  * Two-source rule (frozen):
  *
@@ -256,10 +282,10 @@ export interface ExtensionState {
  * the dual-source rule: T2_LEGACY_INDEPENDENCE (canonical mapper ignores
  * legacy phase) and T8_NECESSITY (canonical mapper captures new mutations).
  *
- * The shape is intentionally minimal — only the facts the Thinking consumers
- * actually need. Other TurnPhase concepts (button set, composer lockout,
- * follow-up routing) keep reading `turnState.phase` and are explicitly
- * OUT OF SCOPE for E7.1.
+ * The shape is intentionally minimal — only the facts the three migrated
+ * Thinking consumers actually need. Other TurnPhase concepts (button set,
+ * composer lockout, follow-up routing, TaskHeader state label) keep
+ * reading `turnState.phase` and are explicitly OUT OF SCOPE for E7.1.
  */
 export interface ThinkingPresentationProjection {
 	/**
@@ -267,7 +293,10 @@ export interface ThinkingPresentationProjection {
 	 *   - ChatRow `case "reasoning"` Thinking shimmer
 	 *   - RequestStartRow inline shimmer
 	 *   - useThinkingLoaderRow loader row (pre-reasoning)
-	 *   - TaskHeader state label
+	 *
+	 * The TaskHeader state label is NOT driven by `modelStreaming`
+	 * (it carries the multi-phase `turnState.phase` vocabulary;
+	 * E7.1-2 will plumb a richer projection for it).
 	 */
 	modelStreaming: boolean
 	/**
@@ -277,10 +306,13 @@ export interface ThinkingPresentationProjection {
 	 */
 	source: "shadow" | "legacy"
 	/**
-	 * Stamped from `TurnStateTracker.seq` so the webview can ignore stale
-	 * out-of-order state pushes (the same monotonic seq semantics the
-	 * legacy `turnState.seq` field carries). Matches the legacy field's
-	 * seq so consumers that have not yet migrated cannot drift.
+	 * Stamped from `TurnStateTracker.seq`. Transport-level stale-push
+	 * fencing is applied UPSTREAM by the webview replica reducer's seq
+	 * gating (`apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx`),
+	 * NOT inside the E7.1 consumers — none of the three migrated
+	 * consumers compare `thinkingPresentation.seq` directly. The field
+	 * is preserved here so a future E7.1-2 consumer that needs it (or
+	 * a diagnostic overlay) can rely on a stable seq stamp.
 	 */
 	seq: number
 }
