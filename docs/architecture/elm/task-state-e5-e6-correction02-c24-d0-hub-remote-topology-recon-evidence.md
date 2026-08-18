@@ -7,15 +7,18 @@ EXIT_HEAD        = <this commit's tip>
 PROTECTED_STASH  = 141372c52 (FORENSIC; do NOT pop)
 
 C2_4_D0_AUTHORIZED                  = false  (superseded by 14e24c135; R1-R4 defects)
-C2_4_D0_CORRECTION01_AUTHORIZED     = true   (this commit)
-C2_4_D0_CORRECTION01_VERDICT        = PASS_RECON
+C2_4_D0_CORRECTION01_AUTHORIZED     = false  (superseded by 1593a3e0e; R5-R10 defects)
+C2_4_D0_CORRECTION01_FIXUP01_AUTHORIZED = true   (this commit)
+C2_4_D0_CORRECTION01_FIXUP01_VERDICT    = PASS_RECON
                                        (real HubRuntimeHost + RemoteRuntimeHost
                                         topology traced hop-by-hop; provenance axes
                                         classified per-backend; no HubTopology
-                                        shim as evidence vehicle; round-10 R1-R4
-                                        corrections applied)
+                                        shim as evidence vehicle; round-11 R5-R10
+                                        + R-architectural corrections applied;
+                                        denominators are now deterministic and
+                                        derived from explicit row lists)
 
-C2_4_D1_AUTHORIZED                  = true   (authorized on acceptance of CORRECTION01)
+C2_4_D1_AUTHORIZED                  = true   (authorized on acceptance of FIXUP01)
 C2_4_D2_AUTHORIZED                  = false  (held until D2 mirror assertions
                                                 are written with correct polarity)
 C2_4_D3_AUTHORIZED                  = false
@@ -194,129 +197,150 @@ shape, and corresponding `CoreSessionEvent` `type`:
 default                   | 1929-1930 | (no emit)                                         | n/a                      | NO
 ```
 
-Tally (three distinct denominators, each 100% audited):
+Tally (eight deterministic denominators derived from
+hub-runtime-host.ts:1554-1935, each 100% audited):
 
 ```text
-HUB_SWITCH_CASE_LABELS_DISCOVERED            = 25
-  (3 pre-switch if-branches: capability.requested, capability.resolved,
-   approval.requested;
-   21 switch case labels: run.started, iteration.started,
-   iteration.finished, session.notice, assistant.delta,
-   assistant.finished, reasoning.delta, reasoning.finished,
-   agent.done, usage.updated, tool.started, tool.finished,
-   session.created, session.updated, session.attached, session.detached,
-   session.pending_prompts, session.pending_prompt_submitted,
-   run.completed, run.failed, run.aborted;
-   1 default.)
-HUB_SWITCH_CASE_LABELS_AUDITED               = 25
-HUB_SWITCH_CASE_LABEL_COVERAGE               = 100%
+PRE_SWITCH_BRANCHES_DISCOVERED                = 3
+  capability.requested   -> handleCapabilityRequest  (line 1556)
+  capability.resolved    -> handleCapabilityResolved (line 1566)
+  approval.requested     -> handleApprovalRequested  (line 1570)
+PRE_SWITCH_BRANCHES_AUDITED                   = 3
+PRE_SWITCH_BRANCH_COVERAGE                    = 100%
+  (none of these three branches calls this.events.emit. They
+   dispatch to async handlers that emit on their own, but those
+   emissions are NOT counted in EVENTS_EMIT_SITES below because
+   they happen on the handler path, not inside handleHubEvent.)
 
-HUB_IMPLEMENTATION_BRANCHES_DISCOVERED        = 23
-  (3 pre-switch gating branches that do not emit: capability.requested,
-   capability.resolved, approval.requested;
-   18 switch arms that each carry their own body. Of the 18:
-     - 17 distinct arms (run.started, iteration.started,
-       iteration.finished, session.notice, assistant.delta,
-       assistant.finished, reasoning.delta, reasoning.finished,
-       agent.done, usage.updated, tool.started, tool.finished,
-       session.pending_prompts, session.pending_prompt_submitted,
-       plus the merged session.created/updated/attached/detached
-       block at line 1840-1860, plus the merged
-       run.completed/failed/aborted block at line 1894-1928);
-     - 1 default at line 1929.
-   No further merging is permitted: each switch arm has a distinct
-   emit shape (with the exception of the two explicitly merged
-   blocks above).)
-HUB_IMPLEMENTATION_BRANCHES_AUDITED           = 23
-HUB_IMPLEMENTATION_BRANCH_COVERAGE            = 100%
+NO_SESSION_ID_GUARD                            = 1
+  if (!sessionId) { return; }                  (line 1578)
+NO_SESSION_ID_GUARD_AUDITED                    = 1
+  (not a Hub protocol variant; included for completeness so the
+   handleHubEvent control-flow branch total is exhaustive.)
 
-HUB_PROTOCOL_EVENT_VARIANTS_DISCOVERED        = 21
-  (counted by grep on hub-runtime-host.ts:1554-1932; see EMIT_SITE
-   breakdown below.)
-HUB_PROTOCOL_EVENT_VARIANTS_AUDITED           = 21
-HUB_PROTOCOL_EVENT_VARIANT_COVERAGE           = 100%
+SWITCH_CASE_LABELS_DISCOVERED                  = 21
+  (counted by grep on lines 1585-1896 for the literal "case X"
+   lines, including the four fall-through labels at 1840-1843
+   and the three fall-through labels at 1894-1896.)
+SWITCH_CASE_LABELS_AUDITED                     = 21
+SWITCH_CASE_LABEL_COVERAGE                     = 100%
 
-SHARED_IMPLEMENTATION_BLOCKS (collapsing labels):
-  capability.requested, capability.resolved, approval.requested
-                              -> 3 separate pre-switch if-branches
-                                 (lines 1556, 1566, 1570); not merged
-                                 because each has its own try/catch
-                                 handler
-  session.created, session.updated, session.attached, session.detached
-                              -> 1 shared block (line 1840-1860)
-  run.completed, run.failed, run.aborted
-                              -> 1 shared block (line 1894-1928; one
-                                 switch arm with three case labels)
-  The three capability/approval branches are kept separate (not
-  merged into "1 gate") because each invokes a distinct handler
-  (handleCapabilityRequest, handleCapabilityResolved,
-  handleApprovalRequested) and has distinct error capture.
+SWITCH_ARMS_DISTINCT_BODY_DISCOVERED           = 16
+  (the 21 case labels collapse into 16 distinct body blocks,
+   because 4 session.* labels share one block at 1843-1860 and
+   3 run.* labels share one block at 1896-1928.)
+SWITCH_ARMS_DISTINCT_BODY_AUDITED              = 16
+SWITCH_ARMS_DISTINCT_BODY_COVERAGE             = 100%
 
-EMIT_SITE_KIND_BREAKDOWN (re-derived by grep on
-hub-runtime-host.ts:1554-1932):
+SWITCH_ARMS_DEFAULT_DISCOVERED                 = 1
+  default: return;                              (line 1929-1930)
+SWITCH_ARMS_DEFAULT_AUDITED                    = 1
+SWITCH_ARMS_DEFAULT_COVERAGE                   = 100%
 
-  PRE-SWITCH IF-BRANCHES (no emit):
-    capability.requested          -> 0 emits  (handleCapabilityRequest only)
-    capability.resolved           -> 0 emits  (handleCapabilityResolved only)
-    approval.requested            -> 0 emits  (handleApprovalRequested only)
+HANDLE_HUB_EVENT_BRANCHES_TOTAL                = 20
+  = 3 pre-switch + 16 distinct-body switch arms + 1 default
+    (NO_SESSION_ID_GUARD is a control-flow guard, not a branch
+     that handles an event variant, so it is not counted here.)
+HANDLE_HUB_EVENT_BRANCHES_AUDITED              = 20
+HANDLE_HUB_EVENT_BRANCH_COVERAGE               = 100%
 
-  SWITCH ARMS THAT EMIT (16 arms, 21 emit sites total):
-    run.started                   -> 2 emits (session_snapshot line 1590-1593,
-                                               status       line 1595-1601)
-    iteration.started             -> 1 emit  (agent_event iteration_start
-                                               line 1605-1617)
-    iteration.finished            -> 1 emit  (agent_event iteration_end
-                                               line 1621-1638)
-    session.notice                -> 1 emit  (agent_event notice
-                                               line 1653-1694)
-    assistant.delta               -> 1 emit  (agent_event content_start text
-                                               line 1703-1713)
-    assistant.finished            -> 1 emit  (agent_event content_end text
-                                               line 1717-1730)
-    reasoning.delta               -> 1 emit  (agent_event content_start reasoning
-                                               line 1740-1751)
-    reasoning.finished            -> 1 emit  (agent_event content_end reasoning
-                                               line 1755-1768)
-    agent.done                    -> 1 emit  (agent_event done via
-                                               emitAgentDoneIfNeeded line 1545-1551,
-                                               only if not already emitted for run)
-    usage.updated                 -> 1 emit  (agent_event usage line 1780-1789)
-    tool.started                  -> 1 emit  (agent_event content_start tool
-                                               via emitToolCallContentStart
-                                               line 1519-1531; pending-approval
-                                               filter at 1796 may drop this)
-    tool.finished                 -> 1 emit  (agent_event content_end tool
-                                               line 1818-1837)
-    session.created/updated/attached/detached (merged)
-                                   -> 2 emits (session_snapshot line 1847-1850,
-                                               status       line 1852-1858)
-    session.pending_prompts       -> 1 emit  (pending_prompts line 1862-1871)
-    session.pending_prompt_submitted
-                                   -> 1 emit  (pending_prompt_submitted line
-                                               1880-1891)
-    run.completed/failed/aborted (merged)
-                                   -> 2 emits (agent_event done via
-                                               emitAgentDoneIfNeeded line 1545-1551,
-                                               plus ended line 1919-1926)
-  SWITCH ARM THAT DOES NOT EMIT:
-    default                       -> 0 emits (line 1929-1930)
+EVENTS_EMIT_SITES_DISCOVERED                   = 18
+  (16 direct this.events.emit() call-sites inside the
+   handleHubEvent body, counted by grep on lines 1554-1932;
+   plus 2 helper emit() call-sites reachable from
+   handleHubEvent: emitToolCallContentStart at line 1519, and
+   emitAgentDoneIfNeeded at line 1545.)
+EVENTS_EMIT_SITES_AUDITED                      = 18
+EVENTS_EMIT_SITE_COVERAGE                      = 100%
+  (Note: EVENTS_EMIT_SITES is a syntactic count of
+   `this.events.emit(...)` call-sites. It is NOT a protocol-
+   variant denominator; a single Hub protocol variant can map
+   to multiple emit-sites (e.g. run.started emits 2 distinct
+   events), and conversely a single emit-site can be reached
+   from multiple switch arms via a helper.)
+```
 
-  HELPERS (called FROM switch arms; their emit() sites are counted in the
-  switch-arm emit counts above):
-    emitAgentDoneIfNeeded (line 1534-1552) -> 1 emit (used by 2 switch arms)
-    emitToolCallContentStart (line 1513-1532) -> 1 emit (used by 1 switch arm)
+PER-SWITCH-ARM EMIT-SITE BREAKDOWN (derives the 16 direct + 2 helper):
 
-  TOTAL EMIT SITES REACHABLE FROM handleHubEvent = 21
-  (3 pre-switch if-branches contribute 0; 16 switch arms contribute 21;
-   1 default contributes 0; 1 if-no-sessionId guard contributes 0.)
+```text
+run.started                            -> 2 direct  (session_snapshot + status)
+iteration.started                      -> 1 direct  (agent_event iteration_start)
+iteration.finished                     -> 1 direct  (agent_event iteration_end)
+session.notice                         -> 1 direct  (agent_event notice)
+assistant.delta                        -> 1 direct  (agent_event content_start text)
+assistant.finished                     -> 1 direct  (agent_event content_end text)
+reasoning.delta                        -> 1 direct  (agent_event content_start reasoning)
+reasoning.finished                     -> 1 direct  (agent_event content_end reasoning)
+agent.done                             -> 1 helper  (emitAgentDoneIfNeeded -> agent_event done)
+usage.updated                          -> 1 direct  (agent_event usage)
+tool.started                           -> 1 helper  (emitToolCallContentStart -> agent_event content_start tool)
+tool.finished                          -> 1 direct  (agent_event content_end tool)
+session.created (merged, 4 labels)     -> 2 direct  (session_snapshot + status)
+session.pending_prompts                -> 1 direct  (pending_prompts)
+session.pending_prompt_submitted       -> 1 direct  (pending_prompt_submitted)
+run.completed (merged, 3 labels)       -> 1 direct  (ended)
+                                       + 1 helper  (emitAgentDoneIfNeeded -> agent_event done)
+default                                -> 0
+                              TOTAL    = 16 direct + 2 helper = 18 emit-sites
+```
 
-NOTE on the prior "24 of 24" framing: that count conflated switch
-labels and emit sites. The corrected denominators are:
-  - SWITCH_CASE_LABELS = 25 (3 + 21 + 1 default)
-  - IMPLEMENTATION_BRANCHES = 23 (3 pre-switch + 18 distinct switch arms
-                                  with their own bodies, of which 17 emit
-                                  and 1 default does not)
-  - EMIT_SITES = 21 (counted by grep on lines 1554-1932)
+MERGED-IMPLEMENTATION-BLOCKS (label-collapse map):
+
+```text
+session.created, session.updated, session.attached, session.detached
+                                      -> 1 body block (line 1843-1860)
+run.completed, run.failed, run.aborted
+                                      -> 1 body block (line 1896-1928)
+capability.requested, capability.resolved, approval.requested
+                                      -> NOT merged (each is a separate
+                                         pre-switch if-branch with its
+                                         own handler and error capture;
+                                         kept as 3 distinct branches.)
+```
+
+TRANSLATOR-RECOGNIZED HUB SOURCES (state-relevant for run identity):
+
+```text
+TRANSLATOR_RECOGNIZED_HUB_PROTOCOL_VARIANTS     = 8
+  (the 8 Hub protocol variants whose reconstructed events reach
+   TaskState reducers and drive run identity, run epoch, or
+   recovery state):
+    1. iteration.started          (reconstructs to run-started)
+    2. session.notice             (reconstructs to recovery-state-changed)
+    3. agent.done                 (reconstructs to run-finished)
+    4. tool.started               (reconstructs to tool-started)
+    5. tool.finished              (reconstructs to tool-finished)
+    6. run.completed              (reconstructs to run-finished)
+    7. run.failed                 (reconstructs to run-failed)
+    8. run.aborted                (reconstructs to run-failed)
+
+TRANSLATOR_RECOGNIZED_HUB_IMPLEMENTATION_BRANCHES  = 6
+  (the same 8 protocol variants collapse into 6 distinct body
+   blocks because run.completed/failed/aborted share one block.)
+```
+
+NON-STATE-RELEVANT Hub sources (reconstructed but presentation-only,
+do not drive TaskState reducers): assistant.delta, assistant.finished,
+reasoning.delta, reasoning.finished, usage.updated, iteration.finished
+(the last is recognized by the translator's reconstruct path at line
+318 but falls through to `default: return undefined` at line 234, so
+it never produces a CoreSessionEvent).
+
+NOTE on the prior denominators that this commit supersedes:
+
+  - D0 (14e24c135): "21 cases, 24 emits" - conflated switch labels
+    and emit-sites
+  - CORRECTION01 (1593a3e0e): "25 labels, 23 branches, 21 emits" -
+    the 25 was a row-count drift (3 pre-switch if-branches were
+    incorrectly counted as switch labels); the 23 was an arithmetic
+    slip (3 + 18 != 23, it is 21); the 21 was a re-counted emit
+    number that did not match the 18 deterministic grep result.
+  - FIXUP01 (this commit): "21 switch case labels, 16 distinct
+    switch body blocks + 1 default = 17 switch arms, 3 pre-switch
+    branches, 1 NO_SESSION_ID guard, 18 events.emit call-sites,
+    8 state-relevant protocol variants, 6 state-relevant
+    implementation branches" - all derived from explicit row lists
+    and grep counts.
 
 STATE_RELEVANT_IMPLEMENTATION_BRANCHES        = 6
   - iteration.started            (reconstructs to run-started)
@@ -575,8 +599,9 @@ NOT PROVEN:
   - whether the run-epoch terminal-ownership gate at line 200-209
     affects Hub's reconstructed terminals differently than
     "tolerated" (undefined == undefined, both treated as apply)
-  - whether any D1 fix path can seed activeRunId from session.notice
-    without breaking the frozen contract
+  - whether any D1 fix path can seed activeRunId.value without
+    breaking the frozen contract (three candidate repair classes
+    A/B/C are listed in §11; session.notice is NOT preselected)
 
 KNOWN:
   - Hub's session.notice may carry conversationId; that propagates
@@ -600,9 +625,15 @@ REQUIRED_D1_D3_WITNESS:
 ```text
                           | iteration_start runId | notice runId    | done runId     | tool runId
 --------------------------+-----------------------+-----------------+----------------+-----------
-Hub (handleHubEvent)      | UNDEFINED until       | conversationId  | (no own runId; |
-                          | first notice arrives) | (when present   | inherits from  |
-                          |                       | in payload)     | activeRunId)   |
+Hub (handleHubEvent)      | UNDEFINED             | (per-event      | UNDEFINED      | UNDEFINED
+                          | (activeRunId.value    | snapshot.       | (activeRunId   | (activeRunId
+                          |  is never seeded;     | conversationId  |  remains       |  remains
+                          |  Hub iteration_start  | present only on |  undefined;    |  undefined)
+                          |  has no conversationId| that individual | terminal       |
+                          |  in its envelope)     | reconstructed   | envelope       |
+                          |                       | notice; does    | inherits       |
+                          |                       | NOT seed        | snapshot.runId |
+                          |                       | activeRunId)    |  === undefined)|
 --------------------------+-----------------------+-----------------+----------------+-----------
 Local (subscription)      | runId from            | runId from      | runId from     | runId from
                           | event.snapshot.runId  | event.snapshot  | event.snapshot | event.snapshot
@@ -644,12 +675,22 @@ SESSION_ID_PROVENANCE               | QUALIFIED          | QUALIFIED         | Q
                                     |  activeSessionId)  |                   |
                                     |                    |                   |
 RUN_ID_PROVENANCE                   | PARTIALLY_QUALIFIED| PARTIALLY_QUALIFIED| QUALIFIED
-                                    | (runId undefined on| (inherited from   | (verbatim
-                                    |  the FIRST         |  Hub — same gap) |  event.snapshot.
-                                    |  iteration_start;  |                   |  runId on every
-                                    |  established on    |                   |  AgentRuntimeEvent)
-                                    |  first notice w/   |                   |
+                                    | (per-event         | (inherited from   | (verbatim
+                                    |  snapshot.         |  Hub)             |  event.snapshot.
+                                    |  conversationId    |                   |  runId on every
+                                    |  reaches notice    |                   |  AgentRuntimeEvent)
+                                    |  only; other       |                   |
+                                    |  reconstructed     |                   |
+                                    |  events lack       |                   |
                                     |  conversationId)   |                   |
+                                    |                    |                   |
+RUN_ID_EPOCH_TRACKER                | NOT_YET_QUALIFIED  | NOT_YET_QUALIFIED  | QUALIFIED
+                                    | (activeRunId.value | (inherited from   | (verbatim
+                                    |  is never seeded;  |  Hub)             |  runId on every
+                                    |  every recon-      |                   |  AgentRuntimeEvent)
+                                    |  structed snapshot |                   |
+                                    |  has runId ===     |                   |
+                                    |  undefined)        |                   |
                                     |                    |                   |
 ITERATION_PROVENANCE                | QUALIFIED          | QUALIFIED         | QUALIFIED
                                     | (event.payload.    | (inherited)       | (event.snapshot.
@@ -906,11 +947,18 @@ D0_FINDINGS                                = {
   REMOTE_RECONSTRUCTED_PATH_REACHABILITY:    PROVEN,  // inherited
   REMOTE_OVERRIDES_AUDITED:                  0 of 0   (no overrides exist),
   REMOTE_BEHAVIORAL_DIFFERENCES_AUDITED:     3 of 3   (constructor-input shape only),
-  HUB_SWITCH_CASE_LABEL_COVERAGE:            25 of 25,         // §2 (R2 fix)
-  HUB_IMPLEMENTATION_BRANCH_COVERAGE:         23 of 23,        // §2 (R2 fix)
-  HUB_PROTOCOL_EVENT_VARIANT_COVERAGE:        21 of 21,        // §2 (R2 fix)
+  HUB_SWITCH_CASE_LABEL_COVERAGE:            21 of 21,         // §2 (R6/R9 fix)
+  HUB_SWITCH_ARMS_DISTINCT_BODY_COVERAGE:    16 of 16,         // §2 (R6 fix)
+  HUB_SWITCH_ARMS_DEFAULT_COVERAGE:           1 of 1,          // §2 (R6 fix)
+  HUB_PRE_SWITCH_BRANCH_COVERAGE:            3 of 3,           // §2 (R6 fix)
+  HUB_HANDLE_HUB_EVENT_BRANCH_COVERAGE:      20 of 20,         // §2 (R6 fix)
+  HUB_EVENTS_EMIT_SITE_COVERAGE:             18 of 18,         // §2 (R7 fix)
+  TRANSLATOR_RECOGNIZED_HUB_PROTOCOL_VARIANTS:
+                                                 8 of 8,         // §2 (R8 fix)
+  TRANSLATOR_RECOGNIZED_HUB_IMPLEMENTATION_BRANCHES:
+                                                 6 of 6,         // §2 (R8 fix)
   STATE_RELEVANT_IMPLEMENTATION_BRANCH_COVERAGE:
-                                                 6 of 6,         // §2 — iteration.started, session.notice, agent.done, tool.started, tool.finished, run.completed/failed/aborted
+                                                 6 of 6,         // §2
   RECONSTRUCTED_GATE_COVERAGE:               6 of 6,          // §5 (R3 fix)
   SESSION_ID_PROVENANCE_CLASSIFIED:          100%     // QUALIFIED for both
   RUN_ID_PROVENANCE_CLASSIFIED:              100%     // PARTIALLY_QUALIFIED for Hub/Remote
@@ -963,7 +1011,10 @@ C2_4_D0_CORRECTION01_VERDICT = PASS_RECON iff (
   R1 corrected RUN_ID finding frozen as
     HUB_RUN_ID_TRACKER_PROVENANCE = NOT_YET_QUALIFIED       ✓ (§3.3)
   R2 protocol denominators frozen as
-    26/21/24 all 100% audited                                ✓ (§2)
+    21 switch case labels / 16 distinct switch body blocks +
+    1 default + 3 pre-switch branches + 1 NO_SESSION_ID guard /
+    18 events.emit call-sites / 8 state-relevant protocol variants /
+    6 state-relevant implementation branches, all 100% audited ✓ (§2)
   R3 gate count frozen at 6                                  ✓ (§5)
   R4 vocabulary frozen as
     RUN_ID_PROVENANCE = PARTIALLY_QUALIFIED
@@ -984,7 +1035,7 @@ NOT REQUIRED for CORRECTION01 (deferred to D1/D3):
 ```
 
 ```text
-D0_RECON_GATE_OUTCOME = PASS_RECON (post-CORRECTION01)
+D0_RECON_GATE_OUTCOME = PASS_RECON (post-CORRECTION01-FIXUP01)
 ```
 
 ```text
@@ -1007,8 +1058,9 @@ C2.4-C TOOLING HARDENING                              CLOSED
 C2.4-D PLAN AMENDMENT-01                              SUPERSEDED
 C2.4-D PLAN AMENDMENT-02                              MERGED (cd943085c)
 C2.4-D0 REAL HUB/REMOTE TOPOLOGY RECON                SUPERSEDED (R1-R4 defects)
-C2.4-D0-CORRECTION01                                  CLOSED / PASS_RECON (this commit)
-C2.4-D1 REAL HOST REACHABILITY                        🟢 NEXT
+C2.4-D0-CORRECTION01 (1593a3e0e)                      SUPERSEDED (R5-R10 / R-architectural defects)
+C2.4-D0-CORRECTION01-FIXUP01                          CLOSED / PASS_RECON (this commit)
+C2.4-D1 REAL HOST REACHABILITY                        🟢 NEXT (authorized on acceptance of FIXUP01)
 C2.4-D2 FALLBACK COMPOSITION                          ⛔  (held until D2 mirror
                                                           assertions are written
                                                           with correct polarity
@@ -1060,10 +1112,22 @@ LOCAL_TOTAL_PROVENANCE               = FULL  (C2.4-C frozen)
   mutate under the same Hub host with `canonicalAvailable=true`
   (negative-control mirror, per PLAN §3 as amended).
 - **D3** provenance/epoch: classify each axis per the table in
-  §3.4 and resolve the PARTIALLY_QUALIFIED row (RUN_ID on first
-  iteration). May conclude `HUB_QUALIFIED`,
-  `HUB_PARTIALLY_QUALIFIED`, or `HUB_NOT_YET_QUALIFIED`;
-  `LOCAL_ONLY` is a legitimate scope outcome.
+  §3.4. Resolve the `RUN_ID_EPOCH_TRACKER = NOT_YET_QUALIFIED`
+  finding (activeRunId.value never seeded under Hub) by
+  evaluating three candidate repair classes:
+    A. preserve conversationId on Hub iteration.started so the
+       translator's existing iteration_start seeding path
+       populates activeRunId.value;
+    B. seed activeRunId.value from another authoritative Hub
+       lifecycle event;
+    C. leave Hub fallback as NOT_YET_QUALIFIED on the
+       RUN_ID_EPOCH_TRACKER axis and freeze
+       E7_INITIAL_BACKEND_SCOPE = LOCAL_ONLY.
+  D1 must empirically witness which candidate is feasible
+  before any production modification is proposed. D3 will
+  conclude `HUB_PARTIALLY_QUALIFIED` if A or B works, or
+  `HUB_NOT_YET_QUALIFIED` otherwise. `LOCAL_ONLY` remains a
+  legitimate E7 scope outcome in either case.
 - **D4** E7 scope freeze: based on D3, freeze
   `E7_INITIAL_BACKEND_SCOPE`.
 
@@ -1097,11 +1161,24 @@ LOCAL_TOTAL_PROVENANCE               = FULL  (C2.4-C frozen)
   has no conversationId. Therefore activeRunId.value remains
   undefined forever under Hub, and EVERY reconstructed Hub
   snapshot has runId === undefined. See §3.3 corrected.
-- **R2** protocol-case denominator: original D0 used "cases" to
-  mean a mixture of switch labels, implementation blocks, and
-  emit shapes. Split into three distinct denominators: 26
-  switch case labels, 21 implementation branches, 24 emit
-  variants, each independently 100% audited.
+- **R2** protocol-case denominator (FIXUP01 round-11 close):
+  D0 conflated "cases" with three distinct concepts. CORRECTION01
+  split into three denominators but used non-deterministic row
+  counts (25/23/21) that did not match the actual grep output.
+  FIXUP01 derives every denominator from an explicit row list
+  and grep count:
+    - SWITCH_CASE_LABELS_DISCOVERED      = 21  (grep on case "X" lines)
+    - SWITCH_ARMS_DISTINCT_BODY          = 16  (4+3 fall-through collapses)
+    - SWITCH_ARMS_DEFAULT                = 1
+    - SWITCH_ARMS_TOTAL                  = 17  (= 16 + 1 default)
+    - PRE_SWITCH_BRANCHES                = 3   (capability/approval)
+    - NO_SESSION_ID_GUARD                = 1   (control-flow guard)
+    - HANDLE_HUB_EVENT_BRANCHES_TOTAL    = 20  (= 3 + 17)
+    - EVENTS_EMIT_SITES_TOTAL            = 18  (= 16 direct + 2 helper)
+    - STATE_RELEVANT_PROTOCOL_VARIANTS   = 8   (run identity axis)
+    - STATE_RELEVANT_IMPLEMENTATION_BRANCHES = 6 (= 8 minus run.* merge)
+  Each independently 100% audited, with the row that yields each
+  number listed verbatim in §2.
 - **R3** gate denominator: original D0 said `5` and listed `6`.
   Fixed to `6`. Six distinct gates in six distinct code
   locations; no merging.
@@ -1119,7 +1196,60 @@ tracker) and `HUB_NOT_YET_QUALIFIED` (if it cannot), with the
 latter a sufficient reason for `E7_INITIAL_BACKEND_SCOPE =
 LOCAL_ONLY`.
 
-## 13. Files referenced (NOT modified) by this commit
+## 13. Reviewer verdicts and FIXUP01 verdict
+
+C2.4-D PLAN AMENDMENT-02 (cd943085c)               ✅ ACCEPTED
+C2.4-D0 ORIGINAL (14e24c135)                       ❌ SUPERSEDED (R1-R4 defects)
+C2.4-D0-CORRECTION01 (1593a3e0e)                   ❌ SUPERSEDED (R5-R10 / R-architectural defects)
+C2.4-D0-CORRECTION01-FIXUP01 (this commit)         ✅ PASS_RECON
+C2_4_D1_AUTHORIZED                                  = true (on acceptance of FIXUP01)
+
+### 13.1 Round-11 reviewer flags (this FIXUP01 commit)
+
+- **R5** stale R1 conclusions in §3.3 and §3.4: the table row
+  at §3.3 still said "UNDEFINED until first notice arrives" and
+  the §3.4 RUN_ID_PROVENANCE row still said "established on
+  first notice w/ conversationId". Replaced with the corrected
+  wording throughout. §3.4 now has two rows for run identity:
+  RUN_ID_PROVENANCE (per-event, PARTIALLY_QUALIFIED for Hub)
+  and RUN_ID_EPOCH_TRACKER (epoch tracker, NOT_YET_QUALIFIED
+  for Hub). The §3.3 table now states the correct "activeRunId
+  is never seeded" finding at every column.
+- **R6** denominator arithmetic: the 23-branch claim was a
+  self-contradiction (3 + 18 != 23). Recomputed deterministically:
+  3 pre-switch + 16 distinct switch body blocks + 1 default =
+  20 handleHubEvent branches. Each denominator is now derived
+  from an explicit grep / row-list.
+- **R7** emit-site vs protocol-variant terminology: renamed
+  HUB_PROTOCOL_EVENT_VARIANTS to EVENTS_EMIT_SITES, with a
+  separate TRANSLATOR_RECOGNIZED_HUB_PROTOCOL_VARIANTS row for
+  Hub protocol variants that actually reach the translator.
+- **R8** translator-source denominator: frozen at 8 protocol
+  variants / 6 implementation branches (the run.completed/
+  failed/aborted merge collapses 3 protocol variants into 1
+  implementation branch).
+- **R9** §8 / §12 stale denominators: §8 R2 line and §12 R2
+  narrative updated to match §2.
+- **R10** §11 first-iteration wording: the D3 out-of-scope
+  description now says "resolve the RUN_ID_EPOCH_TRACKER =
+  NOT_YET_QUALIFIED finding" instead of "resolve the
+  PARTIALLY_QUALIFIED row (RUN_ID on first iteration)".
+
+- **Architectural point (preserved from review):** D3 will not
+  preselect `session.notice` as the candidate repair. Three
+  candidate repair classes are now frozen:
+    A. preserve conversationId on Hub iteration.started so that
+       the translator's existing iteration_start seeding path
+       can populate activeRunId.value;
+    B. seed activeRunId.value from another authoritative Hub
+       lifecycle event;
+    C. leave Hub fallback as NOT_YET_QUALIFIED on the
+       RUN_ID_EPOCH_TRACKER axis and freeze
+       E7_INITIAL_BACKEND_SCOPE = LOCAL_ONLY.
+  D1 must empirically witness which candidate is feasible
+  before any production modification is proposed.
+
+## 14. Files referenced (NOT modified) by this commit
 
 - `sdk/packages/core/src/hub/runtime-host/hub-runtime-host.ts`
   (audited)
