@@ -180,6 +180,15 @@ export interface ExtensionState {
 	 * Optional for classic/legacy.
 	 */
 	epoch?: number
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+	 * Debug-only wire bit. Stamped `true` by the extension when the user has toggled
+	 * `cline.debug.togglePostTerminalAuthorityDiagnostic` ON via the workspace state.
+	 * The webview reads this field on its first state push and enables its own side of
+	 * the diagnostic recorder. In production (no toggle ever fired) the field is
+	 * always `undefined` and the wire shape is byte-for-byte identical to C0.
+	 */
+	_ptadEnabled?: boolean
 	currentTaskItem?: HistoryItem
 	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode

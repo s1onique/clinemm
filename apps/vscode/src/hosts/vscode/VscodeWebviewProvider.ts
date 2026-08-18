@@ -1,13 +1,32 @@
 import { sendShowWebviewEvent } from "@core/controller/ui/subscribeToShowWebview"
 import { WebviewProvider } from "@core/webview"
+import type { PostTerminalAuthoritySnapshot } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
 import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/grpc-handler"
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
+import { appendWebviewSidePostTerminalAuthorityDiagnostic } from "@/sdk/post-terminal-authority-diagnostic-runtime"
 import { telemetryService } from "@/services/telemetry"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { WebviewMessage } from "@/shared/WebviewMessage"
+
+/**
+ * Type guard for an unknown record coming back from the webview over the
+ * postMessage bridge. The webview is not in our trust boundary, so we
+ * must validate the shape before persisting. The guard pins the minimum
+ * structural invariant: an `origin` field set to "webview" plus a
+ * `capturedAt` number.
+ */
+function isPostTerminalAuthoritySnapshotLike(value: unknown): value is PostTerminalAuthoritySnapshot {
+	if (typeof value !== "object" || value === null) {
+		return false
+	}
+	const candidate = value as { origin?: unknown; capturedAt?: unknown; stateVersion?: unknown }
+	return (
+		candidate.origin === "webview" && typeof candidate.capturedAt === "number" && typeof candidate.stateVersion === "number"
+	)
+}
 
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
@@ -181,6 +200,20 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 			case "grpc_request_cancel": {
 				if (message.grpc_request_cancel) {
 					await handleGrpcRequestCancel(postMessageToWebview, message.grpc_request_cancel)
+				}
+				break
+			}
+			case "clinemm.appendPostTerminalAuthorityDiagnostic": {
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+				// Webview-side records flushed back to the extension. The shape is
+				// validated lazily (every record is unknown; we cast at the call site
+				// because the gRPC layer is intentionally type-erased for this path).
+				const records = message.clinemm_postTerminalAuthorityDiagnosticRecords ?? []
+				const typedRecords = records.filter(isPostTerminalAuthoritySnapshotLike)
+				try {
+					await appendWebviewSidePostTerminalAuthorityDiagnostic(this.context, typedRecords)
+				} catch (err) {
+					Logger.error("[PTAD] webview flush failed", err)
 				}
 				break
 			}

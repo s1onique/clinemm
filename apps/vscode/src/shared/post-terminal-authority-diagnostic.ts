@@ -55,15 +55,18 @@ import type { TaskHeaderTelemetryStrip, ThinkingPresentationProjection, TurnPhas
 const DEFAULT_BUFFER_SIZE = 64
 
 /**
- * The T0 diagnostic record. Same-push / same-logical-instant capture
- * shape as frozen in the ACT plan. Every field is optional so the
- * caller can capture partial states (e.g. before the shadow has
- * produced an ArbiterSnapshot).
+ * The T0 diagnostic record. Same pushed payload / version capture shape
+ * as frozen in the ACT plan. Every field is optional so the caller can
+ * capture partial states (e.g. before the shadow has produced an
+ * ArbiterSnapshot).
  */
 export interface PostTerminalAuthoritySnapshot {
 	/**
 	 * The wire monotonic counter. Identical between the extension
 	 * side and the webview side because both read `state.stateVersion`.
+	 * `stateVersion` equality proves same-push / same-payload-version
+	 * correlation; wall-clock `capturedAt` is separately recorded so
+	 * the diagnostic can measure transport/apply latency.
 	 */
 	readonly stateVersion: number
 	/** Date.now() at the moment of capture. Strictly >= the prior record. */
@@ -72,7 +75,9 @@ export interface PostTerminalAuthoritySnapshot {
 	 * Side marker. The extension side captures this BEFORE the
 	 * postMessage call; the webview side captures this AFTER the
 	 * `setState` reducer applies. Same `stateVersion` proves
-	 * same-push / same-logical-instant correlation.
+	 * same-pushed-payload correlation; it does NOT prove a literal
+	 * same wall-clock instant — the two captures are deliberately
+	 * separated by VS Code's webview message-delivery latency.
 	 */
 	readonly origin: "extension" | "webview"
 

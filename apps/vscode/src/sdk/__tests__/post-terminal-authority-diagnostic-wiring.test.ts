@@ -30,6 +30,23 @@ const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 const BUILDER_PATH = resolve(__dirname, "../post-terminal-authority-diagnostic-builder.ts")
 const SHARED_DIAGNOSTIC_PATH = resolve(__dirname, "../../shared/post-terminal-authority-diagnostic.ts")
 const WEBVIEW_CONTEXT_PATH = resolve(__dirname, "../../../webview-ui/src/context/ExtensionStateContext.tsx")
+const RUNTIME_PATH = resolve(__dirname, "../post-terminal-authority-diagnostic-runtime.ts")
+const REGISTRY_PATH = resolve(__dirname, "../../registry.ts")
+const PACKAGE_JSON_PATH = resolve(__dirname, "../../../package.json")
+const INPUT_SECTION_PATH = resolve(
+	__dirname,
+	"../../../webview-ui/src/components/chat/chat-view/components/layout/InputSection.tsx",
+)
+const ACTION_BUTTONS_PATH = resolve(
+	__dirname,
+	"../../../webview-ui/src/components/chat/chat-view/components/layout/ActionButtons.tsx",
+)
+const USE_MESSAGE_HANDLERS_PATH = resolve(
+	__dirname,
+	"../../../webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts",
+)
+const WEBVIEW_MESSAGE_PATH = resolve(__dirname, "../../shared/WebviewMessage.ts")
+const EXTENSION_MESSAGE_PATH = resolve(__dirname, "../../shared/ExtensionMessage.ts")
 
 function readSource(path: string): string {
 	return readFileSync(path, "utf8")
@@ -37,16 +54,22 @@ function readSource(path: string): string {
 
 describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1 / wiring", () => {
 	describe("W1: extension-side module wiring", () => {
-		it("W1-1: SdkController imports the three diagnostic names from the builder", () => {
+		it("W1-1: SdkController imports buildExtensionSnapshotFromState from the builder and the rest from @shared", () => {
 			const source = readSource(SDK_CONTROLLER_PATH)
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+			// The builder re-exports buildExtensionSnapshotFromState; the
+			// webview-bundle-safe module (@shared) exposes the lifecycle
+			// helpers. The import split keeps the SDK-side file free of
+			// gRPC plumbing while ensuring the SdkController never imports
+			// the diagnostic schema through the webview-only path.
 			expect(source).toMatch(
 				/import\s*\{[^}]*buildExtensionSnapshotFromState[^}]*\}\s*from\s*"\.\/post-terminal-authority-diagnostic-builder"/s,
 			)
 			expect(source).toMatch(
-				/import\s*\{[^}]*isPostTerminalAuthorityDiagnosticEnabled[^}]*\}\s*from\s*"\.\/post-terminal-authority-diagnostic-builder"/s,
+				/import\s*\{[^}]*isPostTerminalAuthorityDiagnosticEnabled[^}]*\}\s*from\s*"@shared\/post-terminal-authority-diagnostic"/s,
 			)
 			expect(source).toMatch(
-				/import\s*\{[^}]*recordPostTerminalAuthoritySnapshot[^}]*\}\s*from\s*"\.\/post-terminal-authority-diagnostic-builder"/s,
+				/import\s*\{[^}]*recordPostTerminalAuthoritySnapshot[^}]*\}\s*from\s*"@shared\/post-terminal-authority-diagnostic"/s,
 			)
 		})
 
@@ -174,9 +197,6 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 		it("W4-1: every diagnostic entry-point is gated by isPostTerminalAuthorityDiagnosticEnabled", () => {
 			const s1 = readSource(SDK_CONTROLLER_PATH)
 			const s2 = readSource(WEBVIEW_CONTEXT_PATH)
-			// Every call to recordPostTerminalAuthoritySnapshot in the
-			// production code must be inside an if-branch that checks
-			// isPostTerminalAuthorityDiagnosticEnabled.
 			const extCallSites = s1.split("recordPostTerminalAuthoritySnapshot(").length - 1
 			const extGuardSites = s1.split('isPostTerminalAuthorityDiagnosticEnabled("extension")').length - 1
 			expect(extCallSites).toBeGreaterThan(0)
@@ -186,6 +206,105 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			const wvGuardSites = s2.split('isPostTerminalAuthorityDiagnosticEnabled("webview")').length - 1
 			expect(wvCallSites).toBeGreaterThan(0)
 			expect(wvGuardSites).toBeGreaterThanOrEqual(wvCallSites)
+		})
+	})
+
+	describe("W5: live enablement (R1)", () => {
+		it("W5-1: the runtime module exists with workspace-state-driven enablement", () => {
+			const source = readSource(RUNTIME_PATH)
+			expect(source).toContain("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1")
+			expect(source).toContain("togglePostTerminalAuthorityDiagnosticWorkspaceEnabled")
+			expect(source).toContain("isPostTerminalAuthorityDiagnosticWorkspaceEnabled")
+		})
+
+		it("W5-2: SdkController reads the workspace flag and stamps _ptadEnabled on the wire", () => {
+			const source = readSource(SDK_CONTROLLER_PATH)
+			expect(source).toMatch(/isPostTerminalAuthorityDiagnosticWorkspaceEnabled\(/)
+			expect(source).toMatch(/_ptadEnabled: true/)
+		})
+
+		it("W5-3: the ExtensionState wire type declares _ptadEnabled as optional boolean", () => {
+			const source = readSource(EXTENSION_MESSAGE_PATH)
+			expect(source).toMatch(/_ptadEnabled\?:\s*boolean/)
+		})
+
+		it("W5-4: the webview reads _ptadEnabled on its first state push", () => {
+			const source = readSource(WEBVIEW_CONTEXT_PATH)
+			expect(source).toMatch(/if\s*\(\s*stateData\._ptadEnabled\s*===\s*true/)
+		})
+
+		it("W5-5: package.json declares the two debug commands", () => {
+			const source = readSource(PACKAGE_JSON_PATH)
+			expect(source).toContain("cline.debug.togglePostTerminalAuthorityDiagnostic")
+			expect(source).toContain("cline.debug.dumpPostTerminalAuthorityDiagnostic")
+		})
+
+		it("W5-6: the registry exposes the two debug command constants", () => {
+			const source = readSource(REGISTRY_PATH)
+			expect(source).toContain("TogglePostTerminalAuthorityDiagnostic")
+			expect(source).toContain("DumpPostTerminalAuthorityDiagnostic")
+		})
+
+		it("W5-7: extension.ts registers both commands", () => {
+			const source = readSource(resolve(__dirname, "../../extension.ts"))
+			expect(source).toMatch(/vscode\.commands\.registerCommand\([^)]*commands\.TogglePostTerminalAuthorityDiagnostic/s)
+			expect(source).toMatch(/vscode\.commands\.registerCommand\([^)]*commands\.DumpPostTerminalAuthorityDiagnostic/s)
+		})
+	})
+
+	describe("W6: live extraction (R2)", () => {
+		it("W6-1: the dump command sends a webview postMessage asking the webview to flush", () => {
+			const source = readSource(resolve(__dirname, "../../extension.ts"))
+			expect(source).toMatch(/type:\s*"clinemm\.dumpPostTerminalAuthorityDiagnostic"/)
+		})
+
+		it("W6-2: the webview listens for the dump trigger and posts records back", () => {
+			const source = readSource(WEBVIEW_CONTEXT_PATH)
+			expect(source).toMatch(/clinemm\.dumpPostTerminalAuthorityDiagnostic/)
+			expect(source).toMatch(/__clineVsCodeApi/)
+		})
+
+		it("W6-3: the extension handleWebviewMessage handles the flush-back type", () => {
+			const source = readSource(resolve(__dirname, "../../hosts/vscode/VscodeWebviewProvider.ts"))
+			expect(source).toMatch(/case\s*"clinemm\.appendPostTerminalAuthorityDiagnostic"/)
+			expect(source).toMatch(/isPostTerminalAuthoritySnapshotLike/)
+		})
+
+		it("W6-4: WebviewMessage union includes the flush-back type", () => {
+			const source = readSource(WEBVIEW_MESSAGE_PATH)
+			expect(source).toMatch(/clinemm\.appendPostTerminalAuthorityDiagnostic/)
+		})
+	})
+
+	describe("W7: composer/follow-up capture (R3)", () => {
+		it("W7-1: InputSection captures submitDisabled at the exact production expression site", () => {
+			const source = readSource(INPUT_SECTION_PATH)
+			expect(source).toMatch(/isPostTerminalAuthorityDiagnosticEnabled\("webview"\)/)
+			expect(source).toMatch(/chatReducerSendingDisabled: sendingDisabled/)
+			expect(source).toMatch(/submitDisabled,/)
+			expect(source).toMatch(/allowQueuedSubmit,/)
+		})
+
+		it("W7-2: ActionButtons captures buttonConfig.sendingDisabled at the unlock site", () => {
+			const source = readSource(ACTION_BUTTONS_PATH)
+			expect(source).toMatch(/isPostTerminalAuthorityDiagnosticEnabled\("webview"\)/)
+			expect(source).toMatch(/buttonConfig:\s*\{[\s\S]*?sendingDisabled:\s*buttonConfig\.sendingDisabled/)
+		})
+
+		it("W7-3: useMessageHandlers captures the follow-up routing decision", () => {
+			const source = readSource(USE_MESSAGE_HANDLERS_PATH)
+			expect(source).toMatch(/captureFollowupRoute/)
+			expect(source).toMatch(/followupCanSubmit/)
+			expect(source).toMatch(/pendingResponsePresent/)
+			expect(source).toMatch(/pendingUserMessagePresent/)
+		})
+	})
+
+	describe("W8: correlation semantics (R4)", () => {
+		it("W8-1: same stateVersion implies same pushed payload/version (NOT literal same wall-clock instant)", () => {
+			const source = readSource(resolve(__dirname, "../../shared/post-terminal-authority-diagnostic.ts"))
+			expect(source).not.toMatch(/same\s+logical\s+instant/i)
+			expect(source).not.toMatch(/literal\s+single\s+instant/i)
 		})
 	})
 })

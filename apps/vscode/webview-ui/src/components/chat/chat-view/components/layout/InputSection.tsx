@@ -1,4 +1,8 @@
-import React from "react"
+import {
+	isPostTerminalAuthorityDiagnosticEnabled,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
+import React, { useEffect } from "react"
 import ChatTextArea from "@/components/chat/ChatTextArea"
 import QuotedMessagePreview from "@/components/chat/QuotedMessagePreview"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -60,6 +64,30 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	// the previous `legacyTaskRunning` was an `OR` short-circuit on `turnState === undefined`
 	// and disappeared with that branch.
 	const submitDisabled = sendingDisabled && !allowQueuedSubmit
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+	// Capture the composer-lockout decision inputs at the exact production
+	// expression site (this is InputSection.tsx:62). Capturing here — rather
+	// than at the post-reducer boundary — ensures the diagnostic record
+	// reflects the values that React actually used to compute `submitDisabled`,
+	// not just the wire-side snapshot. The capture is OPT-IN: when the
+	// diagnostic is disabled (the default), the if-branch is skipped and the
+	// production render path is unchanged.
+	useEffect(() => {
+		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+			return
+		}
+		recordPostTerminalAuthoritySnapshot({
+			origin: "webview",
+			stateVersion: turnState?.seq ?? 0,
+			capturedAt: Date.now(),
+			legacyPhase: turnState?.phase,
+			legacySeq: turnState?.seq,
+			legacyAnchorTs: turnState?.anchorTs,
+			chatReducerSendingDisabled: sendingDisabled,
+			allowQueuedSubmit,
+			submitDisabled,
+		})
+	}, [turnState?.seq, turnState?.phase, turnState?.anchorTs, sendingDisabled, allowQueuedSubmit, submitDisabled])
 	// `lastMessage` is destructured for type parity with the chat state surface; the field
 	// is no longer part of the runtime-task inference.
 	void lastMessage

@@ -40,6 +40,18 @@ export interface ClineExtensionContext {
 	}[]
 
 	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+	 * Per-workspace key-value store (mirrors VS Code's
+	 * `ExtensionContext.workspaceState`). Surfaced here so the post-terminal
+	 * authority diagnostic can read/write its `ptadEnabled` flag without
+	 * casting to the full vscode.ExtensionContext type.
+	 */
+	readonly workspaceState: {
+		get<T>(key: string): T | undefined
+		update(key: string, value: unknown): Thenable<void> | Promise<void>
+	}
+
+	/**
 	 * The uri of the directory containing the extension.
 	 */
 	readonly extensionUri: URI

@@ -2,7 +2,12 @@
 // Import the module and reference it with the alias vscode in your code below
 
 import assert from "node:assert"
+import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
+import {
+	dumpExtensionSidePostTerminalAuthorityDiagnostic,
+	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
+} from "@/sdk/post-terminal-authority-diagnostic-runtime"
 import { Logger } from "@/shared/services/Logger"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
@@ -514,6 +519,49 @@ ${ctx.cellJson || "{}"}
 		}),
 		vscode.commands.registerCommand(commands.AbortCommit, () => {
 			abortCommitGeneration()
+		}),
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+		// Debug commands for the post-terminal authority diagnostic. Default off;
+		// the toggle command flips a workspace-state flag and the dump command
+		// flushes both ring buffers to JSONL files under globalStorageUri.
+		vscode.commands.registerCommand(commands.TogglePostTerminalAuthorityDiagnostic, async () => {
+			const next = await togglePostTerminalAuthorityDiagnosticWorkspaceEnabled(context)
+			const status = next ? "ENABLED" : "DISABLED"
+			Logger.log(`[PTAD] Workspace toggle → ${status}`)
+			void vscode.window.showInformationMessage(
+				`Post-terminal authority diagnostic: ${status}. Re-open or refresh the webview to pick up the wire bit.`,
+			)
+		}),
+		vscode.commands.registerCommand(commands.DumpPostTerminalAuthorityDiagnostic, async () => {
+			try {
+				const extPath = await dumpExtensionSidePostTerminalAuthorityDiagnostic(context)
+				const activeWebview = WebviewProvider.getVisibleInstance()
+				const extCount = getPostTerminalAuthorityDiagnosticRecords("extension").length
+				if (activeWebview) {
+					// VscodeWebviewProvider exposes getWebview(); the returned
+					// WebviewView carries the actual vscode.Webview we postMessage
+					// to. The cast is the same shape used by the existing
+					// MCP/settings registration paths (extension.ts:386).
+					const vscodeProvider = activeWebview as unknown as {
+						getWebview(): { webview: { postMessage(m: unknown): Thenable<boolean | undefined> } }
+					}
+					const view = vscodeProvider.getWebview()
+					if (view?.webview) {
+						await view.webview.postMessage({
+							type: "clinemm.dumpPostTerminalAuthorityDiagnostic",
+						})
+					}
+				}
+				void vscode.window.showInformationMessage(
+					`Post-terminal diagnostic: extension records (${extCount}) → ${extPath}. ` +
+						`Webview records (after flush) → ${path.join(context.globalStorageUri.fsPath, "post-terminal-authority-diagnostic-webview.jsonl")}.`,
+				)
+			} catch (err) {
+				Logger.error("[PTAD] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Post-terminal diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
 		}),
 	)
 

@@ -28,6 +28,12 @@ import { CLINE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/ClineAccount"
 import { mentionRegexGlobal } from "@shared/context-mentions"
 import type { ClineApiReqInfo, ClineMessage, ExtensionState, TurnPhase } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
+import {
+	disablePostTerminalAuthorityDiagnostic,
+	enablePostTerminalAuthorityDiagnostic,
+	isPostTerminalAuthorityDiagnosticEnabled,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
 import { DeleteAllTaskHistoryCount, type GetTaskHistoryRequest, TaskHistoryArray, TaskResponse } from "@shared/proto/cline/task"
 import type { Settings } from "@shared/storage/state-keys"
 import type { Mode } from "@shared/storage/types"
@@ -63,11 +69,8 @@ import { createProviderCatalog } from "./model-catalog/catalog"
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
-import {
-	buildExtensionSnapshotFromState,
-	isPostTerminalAuthorityDiagnosticEnabled,
-	recordPostTerminalAuthoritySnapshot,
-} from "./post-terminal-authority-diagnostic-builder"
+import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
+import { isPostTerminalAuthorityDiagnosticWorkspaceEnabled } from "./post-terminal-authority-diagnostic-runtime"
 import {
 	PROVIDER_FAILURE_ERROR_TYPE,
 	PROVIDER_FAILURE_PHASE,
@@ -2647,6 +2650,20 @@ export class Controller {
 		// Build the base ExtensionState from StateManager, then layer the SDK's
 		// task history on top.
 		try {
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+			// Sync the extension-side diagnostic enable with the workspace-state
+			// flag. The toggle command flips the workspace state; the sync here
+			// ensures every getStateToPostToWebview call observes the latest value
+			// without requiring a SdkController restart.
+			if (isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context)) {
+				if (!isPostTerminalAuthorityDiagnosticEnabled("extension")) {
+					enablePostTerminalAuthorityDiagnostic("extension")
+				}
+			} else {
+				if (isPostTerminalAuthorityDiagnosticEnabled("extension")) {
+					disablePostTerminalAuthorityDiagnostic("extension")
+				}
+			}
 			syncTelemetrySettingFromSharedGlobalSettings(this.stateManager)
 			const { getStateToPostToWebview: buildBaseState } = await import("@core/controller/state/getStateToPostToWebview")
 			const state = await buildBaseState({
@@ -2798,6 +2815,12 @@ export class Controller {
 						sessionAutoApprovalArmed: snap.armed,
 					}
 				})(),
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+				// Wire-bit stamp. When the workspace-state toggle is ON, set the
+				// `_ptadEnabled` field so the webview's first state push enables its
+				// own side of the recorder. When OFF (the default), the field is
+				// undefined and the wire shape is byte-for-byte identical to C0.
+				...(isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context) ? { _ptadEnabled: true } : {}),
 			}
 			if (isPostTerminalAuthorityDiagnosticEnabled("extension")) {
 				recordPostTerminalAuthoritySnapshot(

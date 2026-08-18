@@ -1,4 +1,8 @@
-import type { ClineMessage } from "@shared/ExtensionMessage"
+import type { ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
+import {
+	isPostTerminalAuthorityDiagnosticEnabled,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
 import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
 import { AskResponseRequest, NewTaskRequest } from "@shared/proto/cline/task"
 import { IntentEvent } from "@shared/proto/cline/ui"
@@ -8,6 +12,36 @@ import { SlashServiceClient, TaskServiceClient, UiServiceClient } from "@/servic
 import type { ButtonActionType } from "../shared/buttonConfig"
 import { turnAllowsFollowup } from "../shared/turnStateSelectors"
 import type { ChatState, MessageHandlers } from "../types/chatTypes"
+
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+// Local helper for the follow-up routing capture. Defined at module scope so
+// the closure-captured `chatState` and `turnState` references stay stable
+// across re-renders. The capture is OPT-IN.
+function captureFollowupRoute(args: {
+	route: string
+	canSubmit: boolean
+	hasPendingResponse: boolean
+	hasPendingUserMessage: boolean
+	turnStateSeq: number | undefined
+	turnStatePhase: TurnPhase | undefined
+	turnStateAnchorTs: number | undefined
+}) {
+	if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+		return
+	}
+	recordPostTerminalAuthoritySnapshot({
+		origin: "webview",
+		stateVersion: args.turnStateSeq ?? 0,
+		capturedAt: Date.now(),
+		legacyPhase: args.turnStatePhase,
+		legacySeq: args.turnStateSeq,
+		legacyAnchorTs: args.turnStateAnchorTs,
+		followupCanSubmit: args.canSubmit,
+		followupRoute: args.route,
+		pendingResponsePresent: args.hasPendingResponse,
+		pendingUserMessagePresent: args.hasPendingUserMessage,
+	})
+}
 
 /**
  * Custom hook for managing message handlers
@@ -25,7 +59,9 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 		setSendingDisabled,
 		enableButtons,
 		setEnableButtons,
+		pendingUserMessage,
 		setPendingUserMessage,
+		pendingResponse,
 		setPendingResponse,
 		clineAsk,
 		lastMessage,
@@ -276,6 +312,20 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 					// phase rule is centralised in `shared/turnStateSelectors.ts`.
 					if (turnAllowsFollowup(turnState)) {
 						// Continue the conversation / interrupt with feedback.
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+						// Capture the follow-up routing decision. The diagnostic record
+						// pins `canSubmit`, the route name, and the pending flags so the
+						// live C2 verdict can distinguish Case G (terminal event vs
+						// follow-up transition gap) from Case I (chat reducer stuck).
+						captureFollowupRoute({
+							route: "clineAsk.turnAllowsFollowup",
+							canSubmit: true,
+							hasPendingResponse: pendingResponse !== undefined,
+							hasPendingUserMessage: pendingUserMessage !== undefined,
+							turnStateSeq: turnState?.seq,
+							turnStatePhase: turnState?.phase,
+							turnStateAnchorTs: turnState?.anchorTs,
+						})
 						await sendAskResponseWithPendingState(
 							AskResponseRequest.create({
 								responseType: "messageResponse",

@@ -34,6 +34,12 @@ const ClineCommands = {
 	Walkthrough: prefix + ".openWalkthrough",
 	GenerateCommit: prefix + ".generateGitCommitMessage",
 	AbortCommit: prefix + ".abortGitCommitMessage",
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+	// Debug commands for the post-terminal authority diagnostic. Not user-facing;
+	// only the dump command should ever be invoked (the toggle is implicit
+	// through `vscode.commands.executeCommand` from the debug harness).
+	TogglePostTerminalAuthorityDiagnostic: prefix + ".debug.togglePostTerminalAuthorityDiagnostic",
+	DumpPostTerminalAuthorityDiagnostic: prefix + ".debug.dumpPostTerminalAuthorityDiagnostic",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

@@ -1,4 +1,8 @@
 import type { ClineMessage } from "@shared/ExtensionMessage"
+import {
+	isPostTerminalAuthorityDiagnosticEnabled,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
 import type { Mode } from "@shared/storage/types"
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import type React from "react"
@@ -62,7 +66,45 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 	// changes.
 	useEffect(() => {
 		setSendingDisabled(buttonConfig.sendingDisabled)
-	}, [buttonConfig, setSendingDisabled])
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+		// Capture the buttonConfig-driven sendingDisabled at the exact production
+		// expression site (this is ActionButtons.tsx:64). The capture runs AFTER
+		// the `setSendingDisabled` call so the next React render will reflect the
+		// new value. The diagnostic record distinguishes between the
+		// `buttonConfig.sendingDisabled` source (Case A) and the local
+		// `chatReducerSendingDisabled` (Case I) so the live C2 verdict can
+		// disambiguate which authority holds the lockout.
+		if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+			recordPostTerminalAuthoritySnapshot({
+				origin: "webview",
+				stateVersion: turnState?.seq ?? 0,
+				capturedAt: Date.now(),
+				legacyPhase: turnState?.phase,
+				legacySeq: turnState?.seq,
+				legacyAnchorTs: turnState?.anchorTs,
+				buttonConfig: {
+					sendingDisabled: buttonConfig.sendingDisabled,
+					enableButtons: buttonConfig.enableButtons,
+					primaryText: buttonConfig.primaryText,
+					secondaryText: buttonConfig.secondaryText,
+					primaryAction: buttonConfig.primaryAction,
+					secondaryAction: buttonConfig.secondaryAction,
+				},
+			})
+		}
+	}, [
+		buttonConfig,
+		setSendingDisabled,
+		buttonConfig.sendingDisabled,
+		buttonConfig.enableButtons,
+		buttonConfig.primaryText,
+		buttonConfig.secondaryText,
+		buttonConfig.primaryAction,
+		buttonConfig.secondaryAction,
+		turnState?.seq,
+		turnState?.phase,
+		turnState?.anchorTs,
+	])
 
 	// Clear input when transitioning from command_output to api_req
 	// This happens when user provides feedback during command execution

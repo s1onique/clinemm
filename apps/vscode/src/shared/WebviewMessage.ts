@@ -1,7 +1,15 @@
 export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel"
+	type: "grpc_request" | "grpc_request_cancel" | "clinemm.appendPostTerminalAuthorityDiagnostic"
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+	 * The webview flushes its post-terminal-authority-diagnostic ring buffer
+	 * to the extension via this message type. The records are typed as
+	 * `unknown` to avoid pulling the diagnostic types into the gRPC layer;
+	 * the receiving handler validates the shape before persisting.
+	 */
+	clinemm_postTerminalAuthorityDiagnosticRecords?: readonly unknown[]
 }
 
 export type GrpcRequest = {

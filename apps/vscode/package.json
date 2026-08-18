@@ -197,6 +197,16 @@
 				"icon": "$(debug-stop)"
 			},
 			{
+				"command": "cline.debug.togglePostTerminalAuthorityDiagnostic",
+				"title": "Cline Debug: Toggle Post-Terminal Authority Diagnostic",
+				"category": "Cline"
+			},
+			{
+				"command": "cline.debug.dumpPostTerminalAuthorityDiagnostic",
+				"title": "Cline Debug: Dump Post-Terminal Authority Diagnostic",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

@@ -39,6 +39,13 @@ export interface BuildExtensionSnapshotArgs {
 
 export function buildExtensionSnapshotFromState(args: BuildExtensionSnapshotArgs): PostTerminalAuthoritySnapshot {
 	const { state, shadow, runtime } = args
+	// The shadow IS the canonical runtime projection (per
+	// task-state-shadow-recorder.ts:150 — the host wiring ensures these
+	// reflect `AgentRuntime.snapshot()` at the moment of the observation).
+	// When the caller does not pass an explicit runtime arg, derive the
+	// runtime fields from the shadow so the post-terminal triage verdict
+	// (which depends on the runtime truth source upstream of the trackers)
+	// is always populated.
 	return {
 		origin: "extension",
 		stateVersion: state.stateVersion ?? 0,
@@ -46,10 +53,10 @@ export function buildExtensionSnapshotFromState(args: BuildExtensionSnapshotArgs
 		epoch: state.epoch,
 		sessionId: state.sessionId,
 		taskId: state.taskId,
-		runtimeStatus: runtime?.status,
-		runtimeModelStreaming: runtime?.executionModelStreaming,
-		runtimeAwaitingApproval: runtime?.executionAwaitingApproval,
-		runtimePendingToolCount: runtime?.pendingToolCalls,
+		runtimeStatus: runtime?.status ?? shadow?.status,
+		runtimeModelStreaming: runtime?.executionModelStreaming ?? shadow?.execution?.modelStreaming,
+		runtimeAwaitingApproval: runtime?.executionAwaitingApproval ?? shadow?.execution?.awaitingApproval,
+		runtimePendingToolCount: runtime?.pendingToolCalls ?? shadow?.pendingToolCalls?.length,
 		shadowStatus: shadow?.status,
 		shadowRecoveryState: shadow?.recoveryState,
 		shadowModelStreaming: shadow?.execution?.modelStreaming,

@@ -104,14 +104,19 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 		expect(result.thinkingPresentation?.modelStreaming).toBe(false)
 	})
 
-	it("B5: runtime can be omitted", () => {
+	it("B5: runtime can be omitted (falls back to shadow-derived fields)", () => {
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+		// When the caller does not pass an explicit runtime arg, the builder
+		// derives the runtime fields from the shadow. The shadow IS the
+		// canonical runtime projection, so this fallback is the truthful
+		// state — not a degraded signal.
 		const result = buildExtensionSnapshotFromState({
 			state: baseState,
 			shadow,
 		})
-		expect(result.runtimeStatus).toBeUndefined()
-		expect(result.runtimeModelStreaming).toBeUndefined()
-		expect(result.runtimePendingToolCount).toBeUndefined()
+		expect(result.runtimeStatus).toBe("idle")
+		expect(result.runtimeModelStreaming).toBe(false)
+		expect(result.runtimePendingToolCount).toBe(0)
 	})
 
 	it("B6: result has capturedAt = Date.now() (within tolerance)", () => {

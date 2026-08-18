@@ -2,6 +2,8 @@ import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import {
+	enablePostTerminalAuthorityDiagnostic,
+	getPostTerminalAuthorityDiagnosticRecords,
 	isPostTerminalAuthorityDiagnosticEnabled,
 	type PostTerminalAuthoritySnapshot,
 	recordPostTerminalAuthoritySnapshot,
@@ -490,6 +492,14 @@ export const ExtensionStateContextProvider: React.FC<{
 				if (response.stateJson) {
 					try {
 						const stateData = JSON.parse(response.stateJson) as ExtensionState
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+						// Pick up the wire bit on every push; the first push with
+						// `_ptadEnabled: true` enables the webview recorder. In production
+						// (no toggle ever fired) the field is undefined and the recorder
+						// stays a no-op.
+						if (stateData._ptadEnabled === true && !isPostTerminalAuthorityDiagnosticEnabled("webview")) {
+							enablePostTerminalAuthorityDiagnostic("webview")
+						}
 						setState((prevState) => {
 							// Versioning logic for autoApprovalSettings
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
@@ -559,6 +569,35 @@ export const ExtensionStateContextProvider: React.FC<{
 				console.log("State subscription completed")
 			},
 		})
+
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1-CORRECTION01:
+		// Listen for the extension-side dump trigger. The extension posts
+		// `{type: "clinemm.dumpPostTerminalAuthorityDiagnostic"}` to the webview;
+		// on receipt, the webview flushes its ring buffer back via
+		// `{type: "clinemm.appendPostTerminalAuthorityDiagnostic", ...records}`.
+		// We read the records from the module-level ring buffer (which is
+		// opt-in only — so in production this listener never produces
+		// outgoing traffic).
+		const dumpMessageHandler = (event: MessageEvent) => {
+			const data = event.data as { type?: string } | undefined
+			if (!data || data.type !== "clinemm.dumpPostTerminalAuthorityDiagnostic") {
+				return
+			}
+			const records = getPostTerminalAuthorityDiagnosticRecords("webview")
+			const api = (window as unknown as { __clineVsCodeApi?: { postMessage: (m: unknown) => void } }).__clineVsCodeApi
+			if (!api) {
+				console.error("[PTAD] webview flush skipped: __clineVsCodeApi not available")
+				return
+			}
+			api.postMessage({
+				type: "clinemm.appendPostTerminalAuthorityDiagnostic",
+				clinemm_postTerminalAuthorityDiagnosticRecords: records,
+			})
+		}
+		window.addEventListener("message", dumpMessageHandler)
+		// We do not need to remove this listener on cleanup because the
+		// whole window is torn down with the webview; the gRPC stream
+		// unsubscribe already handles the state-subscription lifecycle.
 
 		// Subscribe to MCP button clicked events with webview type
 		mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(
