@@ -3,6 +3,35 @@
 > Outcome: **SELECT C** (no safe repair proven in this cycle).
 
 ```text
+DOC_CLASS              = HISTORICAL_FROZEN
+DOC_FROZEN_AT          = 421b27f18 (D3-C3 selection commit)
+DOC_SUPERSEDED_BY      = D3-CORRECTION01 evidence (ad995a7c0, 758bb925e)
+                       + PLAN-AMENDMENT-09 (758bb925e)
+
+NOTE (per reviewer round-18):
+  This document is a HISTORICAL FROZEN record of the A/B/C
+  selection at the moment of D3-C3 closure. The CORRECTION01
+  evidence (D3-CORRECTION01_HEAD = ad995a7c0) and
+  PLAN-AMENDMENT-09 (758bb925e) are the AUTHORITATIVE
+  qualification result and AUTHORITATIVE current
+  interpretation respectively. They supersede the W6=8/4/0
+  prose and the W8-D1-inheritance claim recorded below.
+
+  Specifically:
+    W6 prose below states 8/4/0. The CORRECTION01 evidence
+      establishes 8/0/0 (cross-session events are STALE in the
+      authority resolver; the recorder does not increment any
+      counter for STALE).
+    W8 prose below claims "D1-REMOTE witness establishes
+      Remote inheritance". The CORRECTION01 evidence adds
+      R-D3-1, R-D3-2, R-D3-3 which directly witness the
+      decisive D3 shapes on a real RemoteRuntimeHost.
+    W4/W5 prose below does not classify the witnesses as
+      PROTOCOL_ABSENCE. The CORRECTION01 evidence reclassifies
+      them (Hub has no continueTask / task_reset envelope).
+```
+
+```text
 ACT_ID              = ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-D3
 ENTRY_HEAD          = 88d0ec391 (C2.4-D2-FIXUP03)
 DECISION_HEAD       = <this commit's tip>

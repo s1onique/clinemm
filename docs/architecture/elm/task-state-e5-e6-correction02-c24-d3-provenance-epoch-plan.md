@@ -14,6 +14,29 @@
 > > the shadow with guessed epoch semantics."
 
 ```text
+DOC_CLASS              = HISTORICAL_FROZEN
+DOC_FROZEN_AT          = ad8588e39 (D3-C1 plan contract commit)
+DOC_SUPERSEDED_BY      = D3-CORRECTION01 evidence (ad995a7c0, 758bb925e)
+                       + PLAN-AMENDMENT-09 (758bb925e)
+
+NOTE (per reviewer round-18):
+  This document is a HISTORICAL FROZEN record of the D3 plan
+  contract at the moment of D3-C1 closure. The CORRECTION01
+  evidence (ad995a7c0) and PLAN-AMENDMENT-09 (758bb925e) are
+  the AUTHORITATIVE qualification result and AUTHORITATIVE
+  current interpretation. They supersede the witness shape
+  enumeration recorded below (which predates CORRECTION01):
+    - W4/W5 originally classified as continuation/reset
+      boundary witnesses; CORRECTION01 reclassifies them as
+      PROTOCOL_ABSENCE qualification rows.
+    - W6 originally asserted <= 8 APPLY / <= 2 SUPPRESS;
+      CORRECTION01 tightens to exact 8/0/0.
+    - W8 originally described as "Remote parity via D1-REMOTE
+      inheritance"; CORRECTION01 adds direct R-D3-1..R-D3-3
+      witnesses on a real RemoteRuntimeHost.
+```
+
+```text
 ACT_ID          = ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.4-D3
 ENTRY_HEAD      = 88d0ec391 (C2.4-D2-FIXUP03)
 EXIT_HEAD       = <this commit's tip>
