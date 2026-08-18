@@ -463,11 +463,6 @@ matter. No production classifier code is mutated. If a mutation probe
 is desired, it stays secondary and **uncommitted** (lives in a stash
 or scratch file, never enters a commit in this epic).
 
-This demonstrates that all three parts of the predicate independently
-matter. No production classifier code is mutated. If a mutation probe
-is desired, it stays secondary and **uncommitted** (lives in a stash
-or scratch file, never enters a commit in this epic).
-
 ### R4 amendment (C25-C3-CORRECTION01 — frozen-contract disposition)
 
 When the C25-C3 implementation landed at `aa273d922`, the reviewer's

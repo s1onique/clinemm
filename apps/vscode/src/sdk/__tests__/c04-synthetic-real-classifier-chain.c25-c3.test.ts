@@ -73,8 +73,8 @@
  *     -> classification = D00_AGREE (no divergence when legacy == shadow)
  *
  * Necessity probe:
- *   All four conjuncts (legacy side, arbiter side, shadow side,
- *   shadow=streaming specifically) independently matter. The
+ *   All three predicate conjuncts (legacy=idle, shadow=streaming,
+ *   arbiterActive=true) independently matter. The
  *   matrix proves input ablation without mutating the production
  *   classifier code.
  *

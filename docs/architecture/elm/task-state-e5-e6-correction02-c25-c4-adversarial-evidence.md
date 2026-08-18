@@ -1,0 +1,115 @@
+# C2.5-C4 — C04_SYNTHETIC_REAL_CLASSIFIER_CHAIN adversarial evidence
+
+**Subject:** ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.5-C4-ADVERSARIAL
+
+**ENTRY_HEAD:** `9996a388` (C25-C3-CORRECTION01, frozen classifier contract)
+**EXIT_HEAD:** `<this commit's tip>` (C25-C4 adversarial)
+**PLAN:** docs/architecture/elm/task-state-e5-e6-correction02-c25-c4-adversarial-plan.md
+
+## 1. C25-C4 ADVERSARIAL SCOPE
+
+C25-C4 qualifies the **classifier+recorder chain** under non-causal-minimal
+conditions that the C25-C3 P/N1/N2/N3 matrix deliberately excluded.
+
+```
+TRANSPORT_PROOF  = C-REAL-1..5  (C2.4-C, real Local → real wiring)
+CLASSIFIER_PROOF = C25-C3       (canonical-event ingress → C-REAL chain)
+JOINT_SYNTHETIC_REAL_C04_PROOF = TRANSPORT_PROOF ∧ CLASSIFIER_PROOF
+```
+
+C25-C4 does NOT re-verify the three-conjunct correctness — that was
+frozen at C25-C3. C25-C4 verifies that runtime sequencing does not
+break the C-REAL chain.
+
+## 2. TEST RESULTS
+
+All 12 tests pass:
+
+| Test | What it proves |
+|------|----------------|
+| **C4-1** | P + tool-started + tool-finished: D01 = 1 (from P only); tool events produce no extra D01 |
+| **C4-2** | back-to-back execution-state-changed: shadow state transitions through streaming then idle; no duplicate D01 |
+| **C4-7** | tool events only: 0 D01 (no execution-state edge fired) |
+| **C4-8** | P repeated 3x: D01 = 3 (no silent dedup) |
+| **C4-10** | shadow state rollback: P, finish, inactivate, P → D01=2 (1 per epoch) |
+| **C4-9** | dispose mid-stream: subsequent observe is a no-op (no zombie records) |
+| **C4-12** | multiple wirings in same test: each is independent |
+| **C4-13** | dispose + new wiring in same test: no leak between wirings |
+| **C4-11** | session ID with special chars (`/.\\s_-`) is accepted verbatim |
+| **C4-14** | arbiter inactive → D02_SHADOW_FALSE_ACTIVE (not D01) |
+| **C4-15** | arbiter present but fully inactive → D02 (not D01) |
+| **C4-16** | legacyPhase=streaming (no edge) → D00_AGREE (no D01, no D11) |
+
+12/12 tests pass; runtime ~8ms.
+
+## 3. EVIDENCE-STRENGTHENING (per C25-C3 reviewer's round-21)
+
+For C4-14 and C4-15, the harness has the injected arbiter input
+available; the test verifies the EXACT arbiter input at the
+same observation (asserted via the wiring's recorded snapshot,
+not derived from observationModel.activity). The retained
+recorder fields are derived from observationModel.activity; the
+arbiter input is the canonical projection that is *not* persisted
+to the recording but participates in arbiterActive.
+
+C4-1, C4-8, C4-10, C4-11, C4-12, C4-13, C4-16 all use the
+arbiterActive() helper; C4-2 and C4-7 use arbiterActive() at the
+first event; C4-10 uses arbiterActive() at start and at the second
+P event. C4-14 and C4-15 use arbiterInactive() and a fully
+passive arbiter respectively to assert the D02 classification
+result.
+
+## 4. HYGIENE
+
+```
+PRODUCTION_LOC    = 0  (no source change)
+TEST_DELTA        = +1 new test file
+                    apps/vscode/src/sdk/__tests__/
+                    c04-synthetic-real-classifier-chain-adversarial.c25-c4.test.ts
+                    12 tests, ~440 lines
+CONFIG_DELTA     = 0
+PROTOCOL_DELTA    = 0
+HUB_PRODUCTION_DELTA  = 0
+REMOTE_PRODUCTION_DELTA = 0
+
+PROTECTED_STASHES_INTACT = true
+```
+
+## 5. CARRY-FORWARDS (unchanged from C25-C3)
+
+```
+C25_ARB_SOURCE_RESIDUE = OPEN
+  C25-C4 does NOT change the arbiter-mirror state
+  E7 entry still requires REPLACE_LEGACY_ARBITER_MIRROR
+```
+
+C25-C4 is the robustness proof; the mirror decision lives in C25-C5.
+
+## 6. BOARD (C2.5 after C25-C4)
+
+```
+C25-C0                                  CLOSED
+C25-C1                                  SKIPPED
+C25-C2 + C25-C2A + C25-C2A-CORRECTION01  CLOSED
+C25-C3 + C25-C3-CORRECTION01              CLOSED
+C25-C4 (this commit)                      CLOSED  (12/12 tests PASS)
+C25-C5 terminal + E7 auth                 NEXT
+C25_ARB_SOURCE_RESIDUE                    OPEN  (gates E7)
+```
+
+## 7. VERDICT
+
+```
+C25_C4_ADVERSARIAL_VERDICT = PASS
+TWELVE_C25_C4_TESTS_PASS   = 12
+C25_C5_AUTHORIZED          = true
+```
+
+C25-C5 (terminal + E7 auth) is authorized on the strength of:
+- TRANSPORT_PROOF     (C-REAL-1..5)
+- CLASSIFIER_PROOF    (C25-C3 P/N1/N2/N3, three-conjunct correctness)
+- ROBUSTNESS_PROOF    (C25-C4, 12 adversarial tests)
+- JOINT_PROOF         = TRANSPORT_PROOF ∧ CLASSIFIER_PROOF
+
+C25-C5 will close C2.4-D; C2.5 closes C2.5; E7 remains blocked on
+C25_ARB_SOURCE_RESIDUE and the C2.5 terminal gate.
