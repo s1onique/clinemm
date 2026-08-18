@@ -695,13 +695,16 @@ class TestDogfood05cOrchestratorUsesCanonicalBuildHelper(unittest.TestCase):
                 ),
             )
 
-        # Reverse positive check: the helper IS invoked.
-        self.assertIn(
-            "run_canonical_build(stage, run_visible=run_visible)",
-            body,
+        # Reverse positive check: the helper IS invoked. Allow either
+        # with or without the skip_typecheck kwarg (CORRECTION03
+        # added the optional dogfood shortcut).
+        self.assertTrue(
+            ("run_canonical_build(stage, run_visible=run_visible)" in body)
+            or ("run_canonical_build(\n            stage, run_visible=run_visible, skip_typecheck=skip_typecheck\n        )" in body)
+            or ("run_canonical_build(stage, run_visible=run_visible, skip_typecheck=skip_typecheck)" in body),
             msg=(
                 "build_dogfood_vsix must call run_canonical_build(stage, "
-                "run_visible=run_visible)."
+                "run_visible=run_visible) [with or without skip_typecheck]."
             ),
         )
 

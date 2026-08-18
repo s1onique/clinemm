@@ -56,6 +56,15 @@ def main() -> int:
         help="publisher.name the install verifier expects after --install",
     )
     ap.add_argument("--force", action="store_true", help="overwrite an existing artifact")
+    ap.add_argument(
+        "--skip-typecheck",
+        action="store_true",
+        help=(
+            "deliberate dogfood shortcut: bypass the full-project "
+            "tsc --noEmit gate and use the protos+build:webview+esbuild "
+            "--production path instead. NOT for release."
+        ),
+    )
     args = ap.parse_args()
 
     try:
@@ -66,6 +75,7 @@ def main() -> int:
             install_cli=args.install_cli,
             extension_ns_name=args.ns_name,
             force=args.force,
+            skip_typecheck=args.skip_typecheck,
         )
     except BuildError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

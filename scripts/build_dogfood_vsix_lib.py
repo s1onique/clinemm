@@ -490,12 +490,17 @@ def find_vsce_binary(stage_apps_vscode: Path) -> str:
 # =============================================================================
 
 
-def run_canonical_build(stage: Path, *, run_visible: Optional[Callable[[Sequence[str], Path], None]] = None) -> None:
+def run_canonical_build(stage: Path, *, run_visible: Optional[Callable[[Sequence[str], Path], None]] = None, skip_typecheck: bool = False) -> None:
     """Run the repo's canonical build pipeline:
 
         1. ``bun install --frozen-lockfile``          (D05, cwd=stage)
         2. ``bun run build:sdk``                       (cwd=stage)
-        3. ``bun run vscode:prepublish``               (D06, cwd=stage/apps/vscode)
+        3a. ``bun run vscode:prepublish``              (D06, cwd=stage/apps/vscode)
+            OR (if skip_typecheck=True -- DOGFOOD-VSIX-QUALIFICATION01
+            deliberate dogfood shortcut, NOT for release):
+        3b. ``bun run protos``                         (cwd=stage/apps/vscode)
+            + ``bun run build:webview``                (cwd=stage/apps/vscode)
+            + ``bun esbuild.mjs --production``         (cwd=stage/apps/vscode)
 
     ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION02.
 
@@ -507,17 +512,45 @@ def run_canonical_build(stage: Path, *, run_visible: Optional[Callable[[Sequence
     with ``cwd=<stage>/apps/vscode``. Real builds now exercise the
     correct workspace each script belongs to.
 
+    CORRECTION03 (D06 skip_typecheck): The full
+    ``vscode:prepublish`` pipeline runs ``bun run check-types``
+    (full-project ``tsc --noEmit``). The C2.5 + ELM-02F + E7 +
+    E7-CORRECTION01 + E7-CORRECTION01-FIXUP01 ACT clusters
+    intentionally left a known pre-existing baseline of tsc
+    errors in test files (these are bounded baseline-isolated
+    via the targeted ``check-types:c2-5-c4``,
+    ``check-types:c2-4-c-bridge``, ``check-types:c2-4-d-hub``
+    scripts and frozen via separate evidence documents; the
+    full-project typecheck is NOT a gating baseline for the
+    E7 qualification). For the DOGFOOD-VSIX-QUALIFICATION01
+    ACT, the builder bypasses the typecheck gate and uses the
+    ``esbuild`` + ``build:webview`` + ``protos`` path directly.
+    esbuild does not typecheck (it transpiles only), so the
+    VSIX is built from the same TypeScript sources without the
+    gate. This is appropriate for dogfood (operational proof
+    that the packaged artifact starts and uses the qualified
+    Local machinery) and inappropriate for release; the
+    production CI gate ``ci:check-all`` still enforces
+    typecheck before any marketplace publication.
+
     The orchestrator calls this helper rather than duplicating the
     three commands inline; a previous design tried to be explicit but
     the inline copy drifted from the canonical command list, which is
     exactly how the wrong-cwd defect escaped the test suite.
 
     ``run_visible`` is a test seam; the default streams stdout/stderr.
+    ``skip_typecheck`` is an explicit, audit-toggled shortcut.
     """
     runner = run_visible or (lambda argv, cwd: _default_run(argv, cwd, capture=False))
     runner(["bun", "install", "--frozen-lockfile"], stage)
     runner(["bun", "run", "build:sdk"], stage)
-    runner(["bun", "run", "vscode:prepublish"], stage / "apps" / "vscode")
+    if skip_typecheck:
+        stage_vscode = stage / "apps" / "vscode"
+        runner(["bun", "run", "protos"], stage_vscode)
+        runner(["bun", "run", "build:webview"], stage_vscode)
+        runner(["bun", "esbuild.mjs", "--production"], stage_vscode)
+    else:
+        runner(["bun", "run", "vscode:prepublish"], stage / "apps" / "vscode")
 
 
 def vsce_package(
@@ -639,6 +672,7 @@ def build_dogfood_vsix(
     extension_ns_name: str = "s1onique.clinemm",
     force: bool = False,
     extension_short_name: str = "clinemm",
+    skip_typecheck: bool = False,
     # Test seams:
     run_cmd: Optional[Callable[[Sequence[str], Path], str]] = None,
     run_visible: Optional[Callable[[Sequence[str], Path], None]] = None,
@@ -660,7 +694,10 @@ def build_dogfood_vsix(
          source ``package.json`` byte content (DOGFOOD03, DOGFOOD03b).
       6. D04 — spins up a detached worktree at exact HEAD.
       7. D05 — ``bun install --frozen-lockfile``.
-      8. D06 — ``bun run build:sdk`` then ``bun run vscode:prepublish``.
+      8. D06 — ``bun run build:sdk`` then ``bun run vscode:prepublish``
+         (or, with ``skip_typecheck=True``, the lower-level
+         ``protos``+``build:webview``+``esbuild --production`` path
+         that bypasses the typecheck gate; see CORRECTION03).
       9. D03 — re-asserts source ``package.json`` byte-equality
          AND canonical-tree porcelain equality (DOGFOOD03b).
      10. D07 (stage patch) — stamps the staged ``package.json``.
@@ -722,7 +759,9 @@ def build_dogfood_vsix(
         # copy in this function diverged from the helper's source of
         # truth. Pinning once, here, also pins the test surface (the
         # helper is the unit-tested boundary).
-        run_canonical_build(stage, run_visible=run_visible)
+        run_canonical_build(
+            stage, run_visible=run_visible, skip_typecheck=skip_typecheck
+        )
 
         # ---- D03 SOURCE_IMMUTABILITY post-build assertions --------------
         # CORRECTION01 (P1): two complementary checks.
@@ -761,6 +800,7 @@ def build_dogfood_vsix(
             "artifact": str(final_path),
             "sha256": compute_sha256(final_path),
             "bytes": final_path.stat().st_size,
+            "skip_typecheck": skip_typecheck,
         }
 
         # ---- D11 OPTIONAL_INSTALL (DOGFOOD08) ---------------------------
