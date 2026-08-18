@@ -35,7 +35,37 @@ C2.4-D PASS does NOT mean `HUB_QUALIFIED && REMOTE_QUALIFIED`.
 C2.4-D PASS means the truth of Hub and Remote is KNOWN, not
 invented.
 
-## 0. The reviewer-corrected guardrail (replaces an earlier
+## 0. Amendment log
+
+```text
+PLAN                       = task-state-e5-e6-correction02-c24-d-hub-remote-fallback-provenance-plan.md
+PLAN-AMENDMENT-01          = cbeba6d41 (initial plan; reviewer round-9 rejected)
+PLAN-AMENDMENT-02          = <this commit>  (this file)
+
+R1  canonicalAvailable polarity was inverted in §1 prose and §3 D2.
+    Production contract at task-state-shadow-coordinator.ts:315-356
+    is canonicalAvailable=true ⇒ DIAGNOSTIC_ONLY,
+    canonicalAvailable=false ⇒ FALLBACK_APPLY.
+    Plan-AMENDMENT-01 had it backwards. Fixed in §1 and §3 D2.
+
+R2  §1 misdescribed the hook's job (said it flips to FALLBACK_APPLY
+    when host is Local; it flips to FALLBACK_APPLY when host is
+    Hub/Remote, i.e. when canonical transport is absent). Fixed.
+
+R3  Trailing-blank-line EOF hygiene error (git diff --check
+    failure). Fixed.
+
+UNCHANGED from PLAN-AMENDMENT-01:
+  - §1 reviewer-corrected guardrail
+  - §2 topology preview (with corrected polarity applied)
+  - §3 D0, D1, D3, D4 deliverables
+  - §4 production-delta accounting
+  - §5 exit criteria
+  - §6 HubTopology scope
+  - §7 linkage
+```
+
+## 1. The reviewer-corrected guardrail (replaces an earlier
    `HubTopology`-shim-first draft)
 
 The round-8 verdict corrected the prior ACT direction. An
@@ -83,7 +113,7 @@ The corrected rule:
 HubTopology is a component-control fixture for D0/D1 recon, NOT
 the evidence vehicle for D2/D3/D4.
 
-## 1. Why this is a real qualification (not just a tape-recording
+## 2. Why this is a real qualification (not just a tape-recording
    exercise over Local)
 
 The C2.4-A and C2.4-C qualification proved Local is wired end to
@@ -118,9 +148,43 @@ So Hub/Remote events reach the shadow wiring ONLY through the
 legacy `CoreSessionEvent` stream, which is the
 **RUNTIME_RECONSTRUCTED** path. The
 `getCanonicalRuntimeAvailable?.() ?? true` hook already exists
-(`task-state-shadow-host-wiring.ts:651`) — its job is to flip
-the reconstructed ingress from `DIAGNOSTIC_ONLY` to
-`FALLBACK_APPLY` when (and only when) the host is Local.
+(`task-state-shadow-host-wiring.ts:651`).
+
+**The hook's polarity (frozen contract — `task-state-shadow-coordinator.ts:315-356`):**
+
+```text
+canonicalAvailable answers:
+"Does a higher-authority canonical AgentRuntimeEvent transport exist?"
+
+canonicalAvailable = true
+  → reconstructed is diagnostic only (DIAGNOSTIC_ONLY)
+  → canonical transport owns runtime truth; reconstructed
+    observations cannot duplicate-mutate the shadow.
+
+canonicalAvailable = false
+  → reconstructed is fallback authority (FALLBACK_APPLY)
+  → reconstructed events ARE authoritative, with
+    session/run-scoped edge dedup.
+```
+
+The naming is therefore:
+
+```text
+LocalRuntimeHost     → canonicalAvailable = true
+HubRuntimeHost       → canonicalAvailable = false
+RemoteRuntimeHost    → canonicalAvailable = false
+```
+
+**A note on why "DIAGNOSTIC_ONLY" is correct for Local and not a
+downgrade.** When canonical transport exists, the shadow sees the
+same edge through TWO paths: (a) `RUNTIME_CANONICAL` via
+`subscribeCanonicalRuntimeEventsToShadow`, and (b)
+`RUNTIME_RECONSTRUCTED` via the legacy `onSessionEvent` wrapper.
+Forcing reconstructed to DIAGNOSTIC_ONLY eliminates the
+"reconstructed first, canonical later" double-mutation race
+entirely — the canonical edge is the sole mutation. Reconstructed
+becomes a pure divergence recorder. This is the C2.2-CORRECTION02
+Option A and C2.3-CONT.0-CORRECTION01 R2 contract, frozen.
 
 The reviewer-corrected D qualification is, in essence: **prove
 that this hook works correctly under a REAL Hub host under a
@@ -128,7 +192,7 @@ REAL fallback scenario**, and **classify which provenance
 properties survive the Hub/Remote → reconstructed →
 FALLBACK_APPLY hop sequence**.
 
-## 2. The actual topology (preview of the D0 recon deliverable)
+## 3. The actual topology (preview of the D0 recon deliverable)
 
 Pre-recon inventory — full source-line citations live in the D0
 evidence deliverable, not in this plan:
@@ -190,17 +254,18 @@ TaskShadowHostWiring.observeLegacyEvent
 TaskShadowObservationCoordinator
   |
   +-- if canonicalAvailable:
-  |       shadow update applies (FALLBACK_APPLY)
-  |       runId / iteration / recovery transitions propagate
+  |       diagnostic-only (DIAGNOSTIC_ONLY)
+  |       divergences still observed but do NOT mutate
   +-- else:
-          diagnostic-only (DIAGNOSTIC_ONLY)
-          divergences still observed but do NOT mutate
+          fallback authority (FALLBACK_APPLY)
+          session/run-scoped edge dedup; reconstructed mutations
+          propagate to the shadow
 ```
 
 This is the topology the D0 recon commit will exhaustively
 audit with per-hop source-line citations.
 
-## 3. The four deliverables (D0..D3) plus D4 closure
+## 4. The four deliverables (D0..D3) plus D4 closure
 
 ### D0 — TOPOLOGY RECON (capability audit; no production edits)
 
@@ -337,29 +402,38 @@ shadow wiring with `getCanonicalRuntimeAvailable() => false`,
 and asserts:
 
 ```text
-DEPENDS_ON_HOST                       = HubRuntimeHost
+DEPENDS_ON_HOST                       = HubRuntimeHost (REAL)
 getCanonicalRuntimeAvailable()        = false  (forced)
-RUNTIME_RECONSTRUCTED_EVENTS_OBSERVED > 0     (real events)
+RUNTIME_RECONSTRUCTED_EVENTS_OBSERVED > 0     (real Hub events)
 RUNTIME_CANONICAL_EVENTS_OBSERVED     = 0     (no proxy fallback)
 coordinator.observe kind              = "runtime-reconstructed"
-DIAGNOSTIC_ONLY_OBSERVED_COUNT        > 0     (canonicalAvailable gate)
-FALLBACK_APPLY_OBSERVED_COUNT         = 0
-DIVERGENCES_RECORDED                  > 0     (legacy vs projected)
-TASK_STATE_SHADOW_MUTATIONS_FROM_RECONSTRUCTED = 0
-                                            (because canonicalAvailable = false)
+FALLBACK_APPLY_OBSERVED_COUNT         > 0     (canonicalAvailable=false)
+DIAGNOSTIC_ONLY_OBSERVED_COUNT        = 0     (canonicalAvailable=false ⇒ not diagnostic)
+DIVERGENCES_RECORDED                  ≥ 0
+TASK_STATE_MUTATIONS_FROM_RECONSTRUCTED > 0   (FALLBACK_APPLY ⇒ mutations propagate)
 ```
+
+The Hub/Remote fallback case **must mutate** the shadow via
+FALLBACK_APPLY; that is what makes the reconstructed path
+authoritative when canonical transport is absent.
 
 Then the **same** composition runs with
-`getCanonicalRuntimeAvailable() => true`:
+`getCanonicalRuntimeAvailable() => true` (the negative-control
+mirror):
 
 ```text
-FALLBACK_APPLY_OBSERVED_COUNT                  > 0
-TASK_STATE_SHADOW_MUTATIONS_FROM_RECONSTRUCTED > 0
-NO_RUNTIME_CANONICAL_EVENTS_OBSERVED           = true  (still)
+getCanonicalRuntimeAvailable()        = true  (forced, Local-style)
+RUNTIME_RECONSTRUCTED_EVENTS_OBSERVED > 0     (events still flow)
+FALLBACK_APPLY_OBSERVED_COUNT         = 0
+DIAGNOSTIC_ONLY_OBSERVED_COUNT        > 0     (canonicalAvailable=true ⇒ diagnostic)
+TASK_STATE_MUTATIONS_FROM_RECONSTRUCTED = 0   (DIAGNOSTIC_ONLY ⇒ no mutation)
 ```
 
-The mirror case proves the hook is the actual authority for
-reconstructed-mutation decisions.
+The negative-control mirror proves the hook is the actual
+authority for reconstructed-mutation decisions. With Local and
+the canonical seam present, mutation flows through the
+`RUNTIME_CANONICAL` path, NOT through reconstructed — so the
+reconstructed ingress remains a divergence recorder only.
 
 D2 does NOT introduce a `HubTopology` shim. It uses the REAL
 HubRuntimeHost end-to-end. A `HubTopology` (or
@@ -436,7 +510,7 @@ E7_INITIAL_BACKEND_SCOPE ∈ {
 (`LOCAL_ONLY` is acceptable and expected if Hub/Remote
 provenance cannot be proven in this cycle.)
 
-## 4. Production-delta accounting (carried forward from C2.4-A)
+## 5. Production-delta accounting (carried forward from C2.4-A)
 
 ```text
 EXPECTED_PRODUCTION_SEMANTIC_DELTA  = 0
@@ -461,7 +535,7 @@ NOT permitted without an additional review round:
 - Adding a new `HubTopology` class to qualify itself.
 - Changing the `canonicalAvailable` default (`?? true`).
 
-## 5. Exit criteria
+## 6. Exit criteria
 
 ```text
 C2_4_D_VERDICT = PASS iff (
@@ -480,7 +554,7 @@ C2_4_D_VERDICT = PASS iff (
 )
 ```
 
-## 6. What `HubTopology` is for (and isn't)
+## 7. What `HubTopology` is for (and isn't)
 
 The single permitted use of a `HubTopology`-like object:
 
@@ -511,7 +585,7 @@ hub_topology_fixture.*  ⊂ D0/D1 recon
 hub_topology_fixture.*  ⊄ D2/D3/D4 qualification
 ```
 
-## 7. Linkage
+## 8. Linkage
 
 Reviewer lock at the top of this plan binds the
 `HubTopology`-shim-first mistake to be impossible in this cycle:
@@ -519,12 +593,13 @@ Reviewer lock at the top of this plan binds the
 - C2.4-A recon: `task-state-e5-e6-correction02-c24-source-recon-evidence.md`
 - C2.4-B NO_ACTIVE_SESSION: `task-state-e5-e6-correction02-c24-no-active-session-reachability-plan.md` and the witness evidence
 - C2.4-C REAL LOCAL + tooling hardening: `task-state-e5-e6-correction02-c24-c-real-local-evidence.md`
-- This plan: `task-state-e5-e6-correction02-c24-d-hub-remote-fallback-provenance-plan.md`
+- C2.3-CONT.0-CORRECTION01 R2 (canonicalAvailable contract):
+  `task-state-shadow-host-wiring.ts:651`,
+  `task-state-shadow-coordinator.ts:315-356`
+- This plan (AMENDMENT-02): `task-state-e5-e6-correction02-c24-d-hub-remote-fallback-provenance-plan.md`
 
 The next evidence file to be authored is:
 
 ```text
 docs/architecture/elm/task-state-e5-e6-correction02-c24-d0-hub-remote-topology-recon-evidence.md
 ```
-
-
