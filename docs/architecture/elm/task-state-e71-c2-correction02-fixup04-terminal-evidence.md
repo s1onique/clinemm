@@ -50,21 +50,22 @@ C2C2_FIXUP04_ENTRY_HEAD              = 6f4783937  (closure of FIXUP03)
 C2C2_FIXUP04_PLAN_HEAD               = 32e501da3
 C2C2_FIXUP04_CODE_FIX_HEAD           = f19dbacb9
 C2C2_FIXUP04_TEST_HEAD               = 8f8d78221
-C2C2_FIXUP04_CLOSURE_HEAD            = 8f8d78221  (FIXUP04 closure head)
+C2C2_FIXUP04_DOCS_HEAD               = 017f68a36
+C2C2_FIXUP04_CLOSURE_HEAD            = 017f68a36  (FIXUP04 closure head)
 
-(Commit chain — 3 commits on top of C2C2_FIXUP04_ENTRY_HEAD:)
+(Commit chain — 4 commits on top of C2C2_FIXUP04_ENTRY_HEAD:)
   32e501da3  docs(elm): C2-CORRECTION02-FIXUP04 plan + source recon
   f19dbacb9  fix(elm): C2-CORRECTION02-FIXUP04 pure updater + remove webview-reducer-output
   8f8d78221  test(elm): C2-CORRECTION02-FIXUP04 new test suite
-  <commit 4> docs(elm): C2-CORRECTION02-FIXUP04 terminal evidence + FIXUP03 prose refresh
+  017f68a36  docs(elm): C2-CORRECTION02-FIXUP04 terminal evidence + FIXUP03 prose refresh
   <commit 5> docs(elm): C2-CORRECTION02-FIXUP04 record final HEAD + VSIX binding
 
 C2C2_FIXUP04_PLAN_DOC                = task-state-e71-c2-correction02-fixup04-plan.md
 C2C2_FIXUP04_SOURCE_RECON_DOC        = task-state-e71-c2-correction02-fixup04-source-recon.md
 
-VSIX_C2C2_FIXUP04_PATH               = dist/dogfood/clinemm-4.1.10-8f8d78221.vsix
-VSIX_C2C2_FIXUP04_SHA256             = <bound after VSIX build>
-VSIX_C2C2_FIXUP04_BYTES              = <bound after VSIX build>
+VSIX_C2C2_FIXUP04_PATH               = dist/dogfood/clinemm-4.1.10-017f68a36.vsix
+VSIX_C2C2_FIXUP04_SHA256             = 8a7f1236ec95a1ef499d55da164054c85f6c0ff81afa05febbb26175bed4266d
+VSIX_C2C2_FIXUP04_BYTES              = 8,883,021
 
 WORKTREE_CLEAN                       = true
 PROTECTED_STASHES_INTACT             = true
@@ -83,7 +84,7 @@ dist/dogfood/clinemm-4.1.10-b40fa2477.vsix     (C2-CORRECTION02 raw-incoming)
 dist/dogfood/clinemm-4.1.10-7d2ed0a78.vsix     (C2-CORRECTION02-FIXUP01 React-updater purity)
 dist/dogfood/clinemm-4.1.10-b884ea131.vsix     (C2-CORRECTION02-FIXUP02 push-pinning)
 dist/dogfood/clinemm-4.1.10-445062d6d.vsix     (C2-CORRECTION02-FIXUP03 state-queue conservation)
-dist/dogfood/clinemm-4.1.10-8f8d78221.vsix     (this ACT — pure-updater evidence)
+dist/dogfood/clinemm-4.1.10-017f68a36.vsix     (this ACT — pure-updater evidence)
 ```
 
 ---
@@ -339,7 +340,7 @@ F7  static R9 purity check (S1 grep)                              PASS
 F8  existing webview-ui tests pass (with vocab updates)          PASS  (556 = 560 - 13 + 9)
 F9  existing PTAD schema tests pass (with vocab updates)         PASS  (24)
 F10 no production wire-shape change when PTAD is OFF              PASS
-F11 exact-HEAD VSIX built with fixup04 short SHA                  PASS  (8f8d78221)
+F11 exact-HEAD VSIX built with fixup04 short SHA                  PASS  (017f68a36)
 F12 protected stashes intact                                      PASS
 F13 worktree clean                                                PASS
 F14 FIXUP03 prose refreshes prevStateRef + queue removal         PASS
@@ -349,14 +350,17 @@ F14 FIXUP03 prose refreshes prevStateRef + queue removal         PASS
 
 ## 8.1 Ceiling-exception annotation
 
-The original FIXUP04 plan documented a 5-commit ceiling. Only 5
-commits land (the plan called for 5 commits; we land 5). No
-over-ceiling commits.
+The original FIXUP04 plan documented a 5-commit ceiling. Four code
++ doc commits landed in the chain before this VSIX-binding refresh
+(plan + source recon; source fix; new test suite; terminal
+evidence + FIXUP03 prose refresh). This commit 5 is the
+VSIX-binding refresh, which is documentation-only.
 
 ```text
 PLANNED_COMMIT_CEILING = 5
 ACTUAL_COMMITS         = 5
-CEILING_EXCEPTION      = (none)
+CEILING_EXCEPTION      = (none; commit 5 is the planned
+                            VSIX-binding refresh, not over-ceiling)
 ```
 
 ---
@@ -397,7 +401,7 @@ PRE_EXISTING_RESIDUE_ACKNOWLEDGED   = TRUE (PRE_EXISTING_REPLICA_REF_MUTATION)
 
 CAUSE_CLASS_FOR_C2_CORRECTION02     = UNKNOWN  (still requires the live dogfood walk)
 
-NEXT_ACT = live dogfood walk on the new HEAD (8f8d78221) VSIX.
+NEXT_ACT = live dogfood walk on the new HEAD (017f68a36) VSIX.
           The diagnostic is now React-pure (R9), cardinality-safe
           under React Strict Mode AND under React 18+ automatic
           batching AND under interleaved non-gRPC state updates
