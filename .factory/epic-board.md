@@ -31,8 +31,8 @@ REPOSITORY TOPOLOGY
   historical architecture branch:  act/elm-architecture01-e0-e4
     status:                MERGED, retained temporarily
     cleanup priority:      P2 (do NOT switch to it; do NOT delete in this ACT)
-```
 
+```
 Rationale: linked worktrees caused agent path/branch confusion in earlier work; the complexity cost exceeded the isolation benefit. This repo deliberately chooses the simpler single-worktree policy.
 
 ---
@@ -79,6 +79,7 @@ REMOTE PUSH SAFETY
 
 This is a repository safety invariant, not merely a preference. Enforcement is the `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` epic.
 
+```
 ---
 
 ## Git safety
@@ -90,7 +91,6 @@ This is a repository safety invariant, not merely a preference. Enforcement is t
 
 **Authority model.**
 
-```
   GitHub repository ruleset
     name = cline-- protect published history
     id   = 21037630
@@ -100,7 +100,6 @@ This is a repository safety invariant, not merely a preference. Enforcement is t
     rules           = [{type: "non_fast_forward"}]   -- i.e. "Block force pushes"
     bypass_actors   = []
     current_user_can_bypass = "never"
-```
 
 **Effective state on `main`.**
 
@@ -111,33 +110,27 @@ This is a repository safety invariant, not merely a preference. Enforcement is t
 
 **Conservation.**
 
-```
   NORMAL_FAST_FORWARD_PUSH_POLICY_DELTA = 0
   EXISTING_RULES_REMOVED                = 0
   EXISTING_RULES_WEAKENED               = 0
   RULES_ADDED                           = 1  (block_force_pushes on main)
   BYPASS_ACTORS_REMAINING               = 0
-```
 
 **Recon pre-state** (committed to `${TMPDIR:-/tmp}/clinemm-ruleset-before.json`, not committed to repo):
 
-```
   rulesets = []
   default_branch_protection = ABSENT
   branches_summary = [act/elm-architecture01-e0-e4, act/session-autonomy01-correction02,
                      act/settings-authority-parity01, main]
   collaborators = [{alexclear: admin, maintain, push, triage, pull}]
   installed_github_apps = []
-```
 
 **Recon post-state** (committed to `${TMPDIR:-/tmp}/clinemm-ruleset-after.json`, not committed to repo):
 
-```
   rulesets = [{id:21037630, name:"cline-- protect published history",
                target:branch, enforcement:active}]
   default_branch_protection = ABSENT (ruleset is the authority)
   branches_summary = same as pre; main now reports protected:true
-```
 
 **Bypass analysis.** Bypass actors were inventoried:
 
@@ -190,7 +183,7 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `OBS-03` | OBS | NEEDS_CLASSIFICATION | LOW | — | classify (human wait time) |
 | `OBS-04` | OBS | NEEDS_CLASSIFICATION | LOW | — | classify (semantic tool classification) |
 | `OBS-05` | OBS | NEEDS_CLASSIFICATION | LOW | — | classify (other remaining dimensions) |
-| `EPIC-CLINEMM-BRANDING01` | PRODUCT | OPEN | MED | none | first slice: Activity Bar icon `|| → --`; preserve command/setting/protocol IDs |
+| `EPIC-CLINEMM-BRANDING01` | PRODUCT | OPEN | MED | none | first slice: Activity Bar icon `‖ → --`; preserve command/setting/protocol IDs |
 | `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` | PRODUCT | NEXT | MED | branding01 | first bounded branding slice |
 | `BRAND-01` | PRODUCT | CLOSED → alias of `EPIC-CLINEMM-BRANDING01` | — | — | historical alias |
 | `STATE-01` | STATE | CLOSED via W1/W2 epoch-domain repair | — | — | historical alias |
@@ -207,6 +200,7 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` | GIT-SAFETY | CLOSED | — | none | server-side block-force-push enforced via repository ruleset `cline-- protect published history` (id `21037630`); `enforcement=active`, `target=branch`, `refs/heads/main`, `non_fast_forward`, `bypass_actors=[]`, `current_user_can_bypass=never`; evidence at `${TMPDIR:-/tmp}/clinemm-ruleset-{before,after}.json` |
 | `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | GIT-SAFETY | CLOSED | — | git-safety-no-force-push01 | closed at `2026-08-19`; ruleset `21037630`; bypass_actor_count=0; normal fast-forward push to `main` preserved; P2 follow-up `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` not required for closure |
 | `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` | GIT-SAFETY | DEFERRED | P2 | none | defense-in-depth local pre-push guard; not required because server-side ruleset already enforces; tracked as optional follow-up |
+| `ACT-CLINEMM-FACTORY-EPIC-BOARD-MARKDOWN-REPAIR01` | FACTORY | CLOSED | — | none | GitHub-Flavored-Markdown rendering repaired; 45 → 4 fences; validator `scripts/check-epic-board-markdown.py` + 16 unit tests added; `‖` replaces unescaped double-pipe in BRANDING01 cell |
 | `ACT-CLINEMM-PUBLISH-CURRENT-MAIN01` | DIST/REPO | OPEN | HIGH | remote-push-safety policy | fast-forward `origin/main` to current local main; requires explicit authority |
 | `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | FACTORY/REPO | CLOSED | — | — | repository-topology migration: main FF from `a9f376edf` → `5637d965d`; linked worktree removed; single-worktree topology frozen |
 | `ACT-CLINEMM-LIVE-EPOCH-REPAIR-QUALIFICATION01` | FOUNDATION/QA | CLOSED_LIVE | — | — | W1/W2 epoch repair live qualification; `PASS_LIVE_EPOCH_REPAIR` at `5637d965d` |
@@ -358,7 +352,6 @@ Three **semantically distinct** epics; do not collapse.
 
 **Must distinguish:**
 
-```
   model physical context max
   user effective context ceiling
   current request input tokens
@@ -370,13 +363,11 @@ Three **semantically distinct** epics; do not collapse.
   reasoning tokens
   compaction trigger estimate
   displayed context occupancy
-```
 
 **Leading hypotheses (NOT PROVEN):** cumulative-vs-current confusion, cache-accounting folding, stale model metadata, tokenizer approximation, double counting, display/policy quantity mismatch.
 
 **Required progression:**
 
-```
   real anomalous compaction
     → production accounting seam
     → classify token dimensions
@@ -384,7 +375,6 @@ Three **semantically distinct** epics; do not collapse.
     → causal discriminator
     → bounded repair if required
     → live qualification
-```
 
 **Rule.** No repair from leading hypothesis.
 
@@ -399,11 +389,9 @@ Three **semantically distinct** epics; do not collapse.
 
 **Invariant.**
 
-```
   active compaction
     → next_action_owner != HUMAN
     → TaskHeader MUST NOT present "Waiting"
-```
 
 **Important.** Do **NOT** repair by scraping or special-casing the visible string `"Compacting context..."`.
 
@@ -427,12 +415,10 @@ Three **semantically distinct** epics; do not collapse.
 
 **Invariant.**
 
-```
   physical model maximum   ≠
   effective configured ceiling  ≠
   current context occupancy  ≠
   cumulative token usage
-```
 
 **Dependency.** `CONTEXT-ACCOUNTING-TRUTH01` must be trustworthy enough before compaction policy is built on top of it. Do not implement before context-accounting semantics are trustworthy.
 
@@ -498,21 +484,17 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **Purpose candidates:**
 
-```
   CODE_READ        CODE_EDIT      CODE_SEARCH
   TEST             BUILD          VALIDATION
   REPO_CONTROL     EVIDENCE_CAPTURE  RUNTIME_DIAGNOSTIC
   ENVIRONMENT_SETUP  DATA_QUERY   EXTERNAL_ACTION
   DOCUMENTATION    HOUSEKEEPING   OTHER
-```
 
 **Effect class:**
 
-```
   READ_ONLY
   LOCAL_MUTATION
   EXTERNAL_MUTATION
-```
 
 **Rule.** Ambiguous shell commands must remain UNKNOWN/OTHER rather than being presented as certain semantic telemetry.
 
@@ -529,10 +511,8 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **Desired behavior:**
 
-```
   metered API        → estimated cost may be meaningful
   flat-rate / subscription  → pseudo-spend total should NOT be presented as actual spend
-```
 
 **If billing mode is not observable:** support explicit display policy / user override rather than inventing billing knowledge.
 
@@ -554,7 +534,7 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **Product identity.** `Cline--`
 
-**First bounded slice.** Activity Bar icon: `|| → --` (see `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`).
+**First bounded slice.** Activity Bar icon: `‖ → --` (see `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`).
 
 **Icon behavior.** Preserve VS Code monochrome / theming behavior (no colored branding that breaks native Activity Bar theming).
 
@@ -599,11 +579,9 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **Target direction:**
 
-```
   Elm         → deterministic state transitions, policy, projections
   TypeScript  → VS Code APIs, filesystem/network/process effects, adapters
   React       → rendering, DOM/event adaptation
-```
 
 **Forbidden goal.** `"Rewrite everything in Elm"`.
 
@@ -628,14 +606,12 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 **First ACT.** `ACT-CLINEMM-TEST-BASELINE-FAILURES-RECON01` — reproduce every currently accepted baseline failure and classify each:
 
-```
   PRODUCT_DEFECT
   TEST_DEFECT
   ENVIRONMENT_DEPENDENT
   OBSOLETE_TEST
   INTENTIONAL_UNSUPPORTED
   NOT_REPRODUCED
-```
 
 **Then.** Fix bounded causes, remove obsolete tests where justified, isolate genuine environment-specific gates explicitly.
 
@@ -667,13 +643,11 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 **Must answer first.**
 
-```
   which workspaces / packages are covered?
   which source paths are intentionally excluded?
   which coverage kind: line / function / branch / statement?
   do tests exercise production code or generated / adapter noise?
   can reports compose across workspace test suites?
-```
 
 **Output.** Machine-readable exact-head coverage report committed alongside the ACT that produces it.
 
@@ -686,9 +660,7 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 **Invariant.**
 
-```
   new coverage >= qualified baseline
-```
 
 (preferable to: `coverage >= arbitrary 80%`.)
 
@@ -708,11 +680,9 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 **Rule.**
 
-```
   recon first
   one bounded seam at a time
   no giant "modularization" rewrite
-```
 
 **Rationale.** Factorization because a concrete seam reduces coupling / testing cost — not because "factorization" itself is virtuous.
 
@@ -733,7 +703,6 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 **Substrate (committed in this repo).**
 
-```
   scripts/dump-cline-issues.py
     fetcher: Link-header pagination, PR exclusion, retry contract,
     checkpoint/resume, atomic write, bounded selection policy
@@ -741,7 +710,6 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
     stdlib unittest; 29 network-free tests
   .factory/upstream/cline-open-issues-index.json
     compact machine-readable snapshot
-```
 
 **Snapshot contract.** Stored fields per issue: `number`, `title`, `url`, `created_at`, `updated_at`, `comments`, `reactions`, `interactions`, `labels`. **Excluded:** `body`, comment bodies, reactions breakdown, avatar URLs, assignee objects, milestone description, user profile metadata, API payload copies.
 
@@ -751,16 +719,13 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 **First triage ACT.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` — uses the substrate to rank upstream open issues and decide per-issue disposition:
 
-```
   IMPORT          -- promote into a Cline-- epic/ACT
   MAP_EXISTING    -- already covered by an existing Cline-- epic
   RADAR           -- worth watching but not importing yet
   REJECT          -- out of scope or value-not-worth-effort
-```
 
 **Selection dimensions for triage.**
 
-```
   popularity           comments + reactions (interactions)
   recency / activity   updated_at
   correctness impact   label family, title keyword
@@ -769,7 +734,6 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
   implementation ROI    effort-to-value ratio
   existing-board overlap against canonical rows
   upstream momentum    active maintainer response signals
-```
 
 **Rule.** Popularity ≠ automatic priority. A 100-interaction feature request can still be REJECT if it conflicts with Cline-- direction.
 
@@ -811,14 +775,12 @@ B. Determine whether any package genuinely belongs in GitHub Packages.
 
 **Artifact trust binding:**
 
-```
   SOURCE_HEAD
   VERSION
   PATH
   BYTE_SIZE
   SHA256
   installed version where relevant
-```
 
 **Rule.** Do not rebuild a supposedly identical release artifact after qualification unless reproducibility is separately proven.
 
@@ -885,6 +847,7 @@ Compact mapping so old names are preserved without duplicate work.
 | `ACT-CLINEMM-LIVE-EPOCH-REPAIR-QUALIFICATION01` | W1/W2 epoch repair qualification | CLOSED_LIVE at `5637d965d` (`PASS_LIVE_EPOCH_REPAIR`) |
 | `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` | `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | CLOSED at `2026-08-19`; ruleset `21037630` (`cline-- protect published history`); `non_fast_forward` on `refs/heads/main`, `bypass_actors=[]`, `current_user_can_bypass=never` |
 | `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | ruleset `21037630` | CLOSED at `2026-08-19` |
+| `ACT-CLINEMM-FACTORY-EPIC-BOARD-MARKDOWN-REPAIR01` | validator `scripts/check-epic-board-markdown.py` | CLOSED at `2026-08-19`; -41 net lines (45 → 4 fences); `‖` for unescaped double-pipe in BRANDING01 cell; 16 unit tests |
 
 **Unknown-task policy.** If a historical ID is known to have existed but its exact contract cannot be reconstructed from current board + repository history + current source/docs, the row stays in this table as `NEEDS_CLASSIFICATION`. We do not invent scope, we do not silently omit, and we do not spend hours reconstructing now. Reclassification happens when the task becomes relevant to a real decision.
 
@@ -894,7 +857,6 @@ Compact mapping so old names are preserved without duplicate work.
 
 The Wave-2+ archaeology items remain deferred. This census captured task completeness; full historical narrative is still not the goal.
 
-```
 DEFERRED_POST_CENSUS
 
   - full ACT index
@@ -907,7 +869,6 @@ DEFERRED_POST_CENSUS
   - complete release history
   - complete Factory-rule provenance
   - old repo-comparison-derived tasks
-```
 
 **Reason.** Documentary completeness is lower priority than executable learning. The census is intended to be the **last** emergency global thread scan.
 
