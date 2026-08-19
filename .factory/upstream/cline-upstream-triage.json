@@ -5,18 +5,20 @@
   "triage_date_correction_01": "2026-08-19",
   "triage_date_correction_02": "2026-08-19",
   "triage_date_correction_03": "2026-08-19",
+  "triage_date_correction_04": "2026-08-19",
   "shortlist_size": 80,
-  "methodology_revision": "correction 03: stricter destination-contract test for telemetry epics (issue must materially change or validate one of the canonical outputs)",
+  "methodology_revision": "correction 04: stricter destination-contract test for STATIC-THINKING-PRESENTATION-PERSISTENCE01 (must demonstrate presentation-vs-runtime divergence, not runtime stall)",
   "dispositions": {
     "IMPORT": 5,
-    "MAP_EXISTING": 17,
-    "RADAR": 58,
+    "MAP_EXISTING": 12,
+    "RADAR": 63,
     "REJECT": 0,
     "CLOSED_UPSTREAM": 0
   },
   "semantic_classes": {
-    "EXACT_MAP": 22,
+    "EXACT_MAP": 17,
     "RELATED_TOOL_RUNTIME": 23,
+    "RUNTIME_THINKING_STALL": 5,
     "ADJACENT": 14,
     "UNRELATED": 21
   },
@@ -79,15 +81,34 @@
       "shell-integration": "Shell/terminal integration configuration",
       "approval-ux": "Tool-approval UX",
       "loop-control": "Tool loop control / retry"
+    }
+  },
+  "thinking_stall_clusters": {
+    "candidates": [
+      9546,
+      10015,
+      10031,
+      10208,
+      10537
+    ],
+    "clusters": {
+      "9546": "model-thinking-stall",
+      "10015": "skipped-command-stall",
+      "10031": "skipped-command-stall",
+      "10208": "prompt-never-sent",
+      "10537": "terminal-output-stall"
+    },
+    "cluster_names": {
+      "terminal-output-stall": "Terminal-output-then-Thinking-stall",
+      "skipped-command-stall": "Skipped-command-then-Thinking-stall",
+      "model-thinking-stall": "Model-Thinking-stall (provider state)",
+      "prompt-never-sent": "Prompt-never-sent (provider dispatch blocked)"
     },
     "cluster_counts": {
-      "shell-integration": 2,
-      "file-edit": 1,
-      "terminal-timeout": 9,
-      "mcp-routing": 3,
-      "tool-parse": 5,
-      "approval-ux": 1,
-      "loop-control": 2
+      "model-thinking-stall": 1,
+      "skipped-command-stall": 2,
+      "prompt-never-sent": 1,
+      "terminal-output-stall": 1
     }
   },
   "candidates": [
@@ -292,11 +313,12 @@
     },
     {
       "number": 9546,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Stuck on Thinking... with Sonnet 4.6 — direct thinking-presentation regression.",
-      "url": "https://github.com/cline/cline/issues/9546"
+      "semantic_class": "RUNTIME_THINKING_STALL",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Sonnet 4.6 — task genuinely stuck on Thinking; cancel/restart recovers. Runtime state-machine, not presentation.",
+      "url": "https://github.com/cline/cline/issues/9546",
+      "thinking_stall_cluster": "model-thinking-stall"
     },
     {
       "number": 9554,
@@ -349,11 +371,12 @@
     },
     {
       "number": 10015,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "\"Skipped, thinking\" terminal output that hangs in thinking state — same family as 10537.",
-      "url": "https://github.com/cline/cline/issues/10015"
+      "semantic_class": "RUNTIME_THINKING_STALL",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Skipped command → task stays in Thinking for hours. Runtime stall; recovery requires reconnect/restart.",
+      "url": "https://github.com/cline/cline/issues/10015",
+      "thinking_stall_cluster": "skipped-command-stall"
     },
     {
       "number": 10016,
@@ -365,11 +388,12 @@
     },
     {
       "number": 10031,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Task stuck on \"Thinking...\" reproducibly after simple commands — direct thinking-presentation regression.",
-      "url": "https://github.com/cline/cline/issues/10031"
+      "semantic_class": "RUNTIME_THINKING_STALL",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Task stuck on Thinking after `ls`/`echo`; recovery required. Runtime state-machine, not presentation.",
+      "url": "https://github.com/cline/cline/issues/10031",
+      "thinking_stall_cluster": "skipped-command-stall"
     },
     {
       "number": 10148,
@@ -381,11 +405,12 @@
     },
     {
       "number": 10208,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Stuck thinking forever in both Plan and Act modes — same thinking-persistence defect class.",
-      "url": "https://github.com/cline/cline/issues/10208"
+      "semantic_class": "RUNTIME_THINKING_STALL",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Cline never sends prompt to provider; UI shows Thinking but no actual call dispatched. Runtime state-machine, not presentation.",
+      "url": "https://github.com/cline/cline/issues/10208",
+      "thinking_stall_cluster": "prompt-never-sent"
     },
     {
       "number": 10246,
@@ -456,11 +481,12 @@
     },
     {
       "number": 10537,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Hangs at \"Thinking...\" indefinitely after terminal command — thinking-section-presentation persistence.",
-      "url": "https://github.com/cline/cline/issues/10537"
+      "semantic_class": "RUNTIME_THINKING_STALL",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Terminal command output returned successfully, then Cline remains in Thinking indefinitely. Runtime progression failure, not presentation.",
+      "url": "https://github.com/cline/cline/issues/10537",
+      "thinking_stall_cluster": "terminal-output-stall"
     },
     {
       "number": 10549,

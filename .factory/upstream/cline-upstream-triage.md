@@ -15,88 +15,60 @@
 | Snapshot schema_version | 1 |
 | Snapshot state | open |
 
-Triage date: **2026-08-19** (initial) → **2026-08-19** (correction 01) → **2026-08-19** (correction 02) → **2026-08-19** (correction 03).
+Triage date: **2026-08-19** (initial) → **2026-08-19** (correction 01) → **2026-08-19** (correction 02) → **2026-08-19** (correction 03) → **2026-08-19** (correction 04).
 
 ## Why this document was revised
 
-Three distinct defects were found in the upstream-triage board-evidence mappings, each addressed in its own bounded correction:
+Four distinct defects were found in the upstream-triage board-evidence mappings, each addressed in its own bounded correction:
 
-1. **Correction 01 (`b4d7ed795` initial → `88f1e10c6` correction 01).** The initial triage used **lexical/keyword overlap** as mapping authority. Token collision became semantic authority, producing systematic false mappings (e.g. "JetBrains multi-project" → `CONTEXT-ACCOUNTING-TRUTH01`, "Custom HTTP headers" → `TASKHEADER-CANONICAL-PROJECTION01`, "macOS AMFI code-signing" → `BRANDING01`). Correction 01 replaced keyword overlap with three semantic classes — `EXACT_MAP` / `ADJACENT` / `UNRELATED` — and only `EXACT_MAP` was allowed to become a `MAP_EXISTING` row on the board. 17 false mappings were removed.
+1. **Correction 01 (`b4d7ed795` initial → `88f1e10c6` correction 01).** Lexical/keyword overlap as mapping authority. Replaced with three semantic classes (`EXACT_MAP` / `ADJACENT` / `UNRELATED`); only `EXACT_MAP` becomes `MAP_EXISTING`. 17 false mappings removed.
 
-2. **Correction 02 (`88f1e10c6` → `4909884a6` correction 02).** Correction 01's `EXACT_MAP` definition was "same defect/domain" — still too loose. Review found three surviving candidates where the destination epic's *failure contract* was not the same as the issue's; e.g. `#9333` (CLI provider-routing defect) was mapped to `TEST-BASELINE-ZERO-FAILURES01` (Vitest baseline failures) — same *category* (provider bugs) but completely different failure contract. Correction 02 applied the stricter test:
+2. **Correction 02 (`88f1e10c6` → `4909884a6` correction 02).** Tighter `EXACT_MAP` contract: same user-visible failure contract OR same causal production seam OR direct upstream reproduction. 3 surviving false `EXACT_MAP`s removed (`#9333`, `#12947`, `#12079`).
 
-  - `EXACT_MAP` — same user-visible failure contract **OR** same causal production seam **OR** direct upstream reproduction of the canonical epic.
-  - `RELATED_DOMAIN` — same subsystem, different failure contract → RADAR.
-  - `UNRELATED` — no semantic relation → RADAR.
+3. **Correction 03 (`4909884a6` → `a87ef52e6` correction 03).** `TOOL-EXECUTION-SEMANTICS01` over-broad destination: epic is **telemetry classification**, issues described **runtime tool correctness**. Stricter destination test (must materially change/validate one of the canonical outputs). All 23 candidates reclassified `RELATED_TOOL_RUNTIME → RADAR` with cluster assignments.
 
-  3 false EXACT_MAPs were removed (`#9333`, `#12947`, `#12079`).
+4. **Correction 04 (`a87ef52e6` → this commit, correction 04).** `STATIC-THINKING-PRESENTATION-PERSISTENCE01` over-broad destination: epic is **presentation residue** (canonical runtime has already left thinking, but rendered Thinking presentation persists/is wrong). Five of six candidates (`#9546`, `#10015`, `#10031`, `#10208`, `#10537`) describe **runtime thinking stalls** — the canonical task is genuinely stuck in thinking, recovery requires cancel/reconnect/restart. The displayed "Thinking..." is accurate; the failure is that the runtime never advances. These cannot be presentation evidence.
 
-3. **Correction 03 (`4909884a6` → this commit).** Correction 02 left `TOOL-EXECUTION-SEMANTICS01` with 23 mapped candidates under the justification that they "share the execution signal production seam." Review found that the epic's *canonical contract* is **telemetry classification** — mechanism, purpose, effect class, duration accounting, success/failure classification, retry/recovery accounting, classification confidence/source — whereas the 23 issues describe **runtime tool correctness** defects (terminal hangs, parser failures, MCP routing, approval UX). Same production seam is not the same failure contract. The strict destination test:
-
-  - `EXACT_TELEMETRY_MAP` — the issue materially changes or validates one of the canonical outputs (mechanism classification, purpose classification, effect class, duration accounting, success/failure classification, retry/recovery accounting, classification confidence/source).
-  - `RELATED_TOOL_RUNTIME` — terminal reliability, output capture, command timeout, file-edit reliability, tool routing, approval correctness, parser correctness. Not telemetry classification.
-  - `UNRELATED` — no semantic relation.
-
-  All 23 candidates failed the strict test and were reclassified `RELATED_TOOL_RUNTIME → RADAR`. They are not destroyed; they are **recorded with coherent cluster assignments** so a future `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` can be proposed with a clear evidence table.
-
-## Correction-03 destination-contract audit (TOOL-EXECUTION-SEMANTICS01)
+## Correction-04 destination-contract audit (STATIC-THINKING-PRESENTATION-PERSISTENCE01)
 
 | # | Issue | Cluster | Verdict | Reason |
 | --- | --- | --- | --- | --- |
-| [#4356](https://github.com/cline/cline/issues/4356) | Improve Terminal Integration Reliability Across Platforms and Shell Configuratio | Shell/terminal integration configuration | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#4384](https://github.com/cline/cline/issues/4384) | Fix File Editing Tool Reliability - replace_in_file, write_to_file, and Diff Fai | File-edit reliability | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#7355](https://github.com/cline/cline/issues/7355) | Cline does not wait for terminal command to finish | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#8087](https://github.com/cline/cline/issues/8087) | MCP tool IDs use ephemeral server keys, breaking routing after reconnect/restart | MCP tool routing/approval/validation | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#8130](https://github.com/cline/cline/issues/8130) | Poor support for DeepSeek v3.2's integration of thinking into tool-use | Tool-call parsing | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#8446](https://github.com/cline/cline/issues/8446) | Tool not specified in CLI tool approval request | Tool-approval UX | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#9143](https://github.com/cline/cline/issues/9143) | The command's output could not be captured | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#9848](https://github.com/cline/cline/issues/9848) | Cline prints raw tool invocation XML in responses and gets stuck in a loop unabl | Tool-call parsing | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10413](https://github.com/cline/cline/issues/10413) | Invalid API Response: The provider returned an empty or unparsable response. Thi | Tool-call parsing | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10444](https://github.com/cline/cline/issues/10444) | Configurable Shell Path for Background Exec on Windows (to support Git Bash / MS | Shell/terminal integration configuration | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10499](https://github.com/cline/cline/issues/10499) | MCP tool calls execute without user approval when Auto-approve is OFF | MCP tool routing/approval/validation | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10549](https://github.com/cline/cline/issues/10549) | 'run_commands' tool silently times out at 30s with misleading error — causes age | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10656](https://github.com/cline/cline/issues/10656) | Latest Cline still hits OpenAI Native gpt-5.3-codex, gpt-5.4 and gpt-5.5 reasoni | Tool-call parsing | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10709](https://github.com/cline/cline/issues/10709) | OpenAI-compatible DeepSeek V4 Pro/Flash stuck after command status becomes "Skip | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10843](https://github.com/cline/cline/issues/10843) | [Bug]: Local Ollama models (Qwen 2.5 Coder) trapped in infinite loop emitting ra | Tool-call parsing | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#10931](https://github.com/cline/cline/issues/10931) | Cline hangs indefinitely when interactive CLI commands (like default "git diff") | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#11295](https://github.com/cline/cline/issues/11295) | Deadlock on remote-SSH after terminal commands | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#11542](https://github.com/cline/cline/issues/11542) | Cline enters a high-volume request loop under repeated tool-use completions | Tool loop control / retry | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#12198](https://github.com/cline/cline/issues/12198) | Cline hangs completely after skipping a command execution, requires VS Code rest | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#12431](https://github.com/cline/cline/issues/12431) | Cline hit repeated tool call failures. Try guiding it with a new prompt. | Tool loop control / retry | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#12977](https://github.com/cline/cline/issues/12977) | Unknown MCP tool name is forwarded to the server and returns an opaque error ins | MCP tool routing/approval/validation | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#13246](https://github.com/cline/cline/issues/13246) | Background Console `run_commands` has a hard-coded 30-second timeout | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
-| [#13253](https://github.com/cline/cline/issues/13253) | cline is stuck in running 1 command for 10 minutes , happened twice | Terminal timeout/wait lifecycle | RELATED_TOOL_RUNTIME | runtime tool correctness, not telemetry-classification |
+| [#9546](https://github.com/cline/cline/issues/9546) | Stuck on "Thinking..." when using Sonnet 4.6 | Model-Thinking-stall (provider state) | RUNTIME_THINKING_STALL | runtime task genuinely stuck; UI is accurate; runtime never advances |
+| [#10015](https://github.com/cline/cline/issues/10015) | Cline wants to execute this command:  Skipped, thinking | Skipped-command-then-Thinking-stall | RUNTIME_THINKING_STALL | runtime task genuinely stuck; UI is accurate; runtime never advances |
+| [#10031](https://github.com/cline/cline/issues/10031) | Stuck on Thinking... | Skipped-command-then-Thinking-stall | RUNTIME_THINKING_STALL | runtime task genuinely stuck; UI is accurate; runtime never advances |
+| [#10208](https://github.com/cline/cline/issues/10208) | Stuck thinking for ever. | Prompt-never-sent (provider dispatch blocked) | RUNTIME_THINKING_STALL | runtime task genuinely stuck; UI is accurate; runtime never advances |
+| [#10537](https://github.com/cline/cline/issues/10537) | Cline v3.82.0 hangs indefinitely at "Thinking..." after executing terminal comma | Terminal-output-then-Thinking-stall | RUNTIME_THINKING_STALL | runtime task genuinely stuck; UI is accurate; runtime never advances |
 
-## Tool-runtime cluster histogram (23 candidates)
+Only `#8636` (Thinking section not displayed in v3.50.0) survives as `EXACT_PRESENTATION_MAP` — extended-thinking content exists, but the Thinking UI section is not rendered.
+
+## Thinking-stall cluster histogram (5 candidates)
 
 | Cluster | Count | Members |
 | --- | --- | --- |
-| Terminal timeout/wait lifecycle | 9 | #13253, #13246, #12198, #11295, #10931, #10709, #10549, #9143, #7355 |
-| Tool-call parsing | 5 | #10843, #10656, #10413, #9848, #8130 |
-| MCP tool routing/approval/validation | 3 | #12977, #10499, #8087 |
-| Shell/terminal integration configuration | 2 | #10444, #4356 |
-| Tool loop control / retry | 2 | #12431, #11542 |
-| File-edit reliability | 1 | #4384 |
-| Tool-approval UX | 1 | #8446 |
+| Skipped-command-then-Thinking-stall | 2 | #10031, #10015 |
+| Model-Thinking-stall (provider state) | 1 | #9546 |
+| Prompt-never-sent (provider dispatch blocked) | 1 | #10208 |
+| Terminal-output-then-Thinking-stall | 1 | #10537 |
 
-The dominant cluster is **terminal timeout/wait lifecycle** (9 issues). All 23 together form a coherent body of evidence for a hypothetical `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` that would address runtime tool correctness, **separate from** the telemetry-classification epic. This ACT does not create that epic; it only records the cluster so a future ACT can propose it.
+These 5 form a coherent body of evidence for a hypothetical `EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01` (or be filed under a broader runtime-reliability epic). This ACT does **not** create that epic; it only records the cluster so a future ACT can propose it with a clear evidence table.
 
-## Disposition counts (correction 03 vs earlier cycles)
+## Disposition counts (correction 04 vs earlier cycles)
 
-| Disposition | Initial `b4d7ed795` | Corr 01 `88f1e10c6` | Corr 02 `4909884a6` | Corr 03 (this commit) | Δ corr 03 |
-| --- | --- | --- | --- | --- | --- |
-| `IMPORT` | 5 | 5 | 5 | 5 | 0 |
-| `MAP_EXISTING` | 60 | 43 | 40 | 17 | -23 (over-broad TOOL-EXECUTION-SEMANTICS01 mappings removed) |
-| `RADAR` | 15 | 32 | 35 | 58 | +23 (over-broad mappings downgraded) |
-| `REJECT` | 0 | 0 | 0 | 0 | 0 |
-| `CLOSED_UPSTREAM` | 0 | 0 | 0 | 0 | 0 |
+| Disposition | Initial `b4d7ed795` | Corr 01 `88f1e10c6` | Corr 02 `4909884a6` | Corr 03 `a87ef52e6` | Corr 04 (this commit) | Δ corr 04 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `IMPORT` | 5 | 5 | 5 | 5 | 5 | 0 |
+| `MAP_EXISTING` | 60 | 43 | 40 | 17 | 12 | -5 (over-broad STATIC-THINKING mappings removed) |
+| `RADAR` | 15 | 32 | 35 | 58 | 63 | +5 (over-broad mappings downgraded) |
+| `REJECT` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `CLOSED_UPSTREAM` | 0 | 0 | 0 | 0 | 0 | 0 |
 
-## Semantic-class breakdown (correction 03)
+## Semantic-class breakdown (correction 04)
 
 | Class | Count | Notes |
 | --- | --- | --- |
-| `EXACT_MAP` | 22 | 17 → MAP_EXISTING on board; 5 → IMPORT |
-| `RELATED_TOOL_RUNTIME` | 23 | All → RADAR; cluster assignments recorded for future `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` proposal |
+| `EXACT_MAP` | 17 | 12 → MAP_EXISTING on board; 5 → IMPORT |
+| `RELATED_TOOL_RUNTIME` | 23 | All → RADAR; cluster assignments for future `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` |
+| `RUNTIME_THINKING_STALL` | 5 | All → RADAR; cluster assignments for future runtime-task-progression epic |
 | `ADJACENT` | 14 | All → RADAR; not used as board evidence |
 | `UNRELATED` | 21 | All → RADAR; recorded for audit only |
 
@@ -139,14 +111,7 @@ The dominant cluster is **terminal timeout/wait lifecycle** (9 issues). All 23 t
 
 ## Mapped to existing epics (EXACT_MAP only; strict destination-contract test)
 
-Every retained entry satisfies: same user-visible failure contract **OR** same causal production seam **OR** direct upstream reproduction of the canonical epic, **AND** if the destination epic is a telemetry/classification epic (e.g. `TOOL-EXECUTION-SEMANTICS01`), the issue must materially change or validate one of the canonical outputs.
-
-### STATIC-THINKING-PRESENTATION-PERSISTENCE01 (6 mapped)
-
-- [#10537](https://github.com/cline/cline/issues/10537) — Hangs at "Thinking..." indefinitely after terminal command — thinking-section-presentation persistence.
-- [#10208](https://github.com/cline/cline/issues/10208) — Stuck thinking forever in both Plan and Act modes — same thinking-persistence defect class.
-- [#10031](https://github.com/cline/cline/issues/10031) — Task stuck on "Thinking..." reproducibly after simple commands — direct thinking-presentation regression.
-- *(+3 more — see JSON for full list)*
+Every retained entry satisfies: same user-visible failure contract **OR** same causal production seam **OR** direct upstream reproduction of the canonical epic, **AND** for telemetry/classification epics the issue must materially change or validate one of the canonical outputs, **AND** for presentation-only epics the issue must demonstrate a presentation-vs-runtime divergence (not a runtime stall).
 
 ### USER-CONTEXT-CEILING01 (5 mapped)
 
@@ -170,13 +135,17 @@ Every retained entry satisfies: same user-visible failure contract **OR** same c
 - [#11494](https://github.com/cline/cline/issues/11494) — CLI 3 does not show cost — direct cost-display defect.
 - [#10596](https://github.com/cline/cline/issues/10596) — OpenRouter provider pinning missing; requests fan out inflating cost 3-5x — cost/billing presentation.
 
+### STATIC-THINKING-PRESENTATION-PERSISTENCE01 (1 mapped)
+
+- [#8636](https://github.com/cline/cline/issues/8636) — Thinking section (extended thinking display) regressed in v3.50.0 — direct match for thinking-section-presentation persistence.
+
 ## Radar
 
-Includes all `RELATED_TOOL_RUNTIME` candidates (with cluster assignments), `ADJACENT` candidates, and `UNRELATED` candidates whose problem statement is at least interesting. None of these appear on the active board as upstream evidence for any canonical epic.
+Includes `RELATED_TOOL_RUNTIME` (23, cluster-assigned), `RUNTIME_THINKING_STALL` (5, cluster-assigned), `ADJACENT` (14), and `UNRELATED` (21) candidates. None of these appear on the active board as upstream evidence for any canonical epic.
 
 ### Related tool-runtime (downgraded in correction 03)
 
-**Terminal timeout/wait lifecycle** (9):
+**terminal-timeout** (9):
 
 - [#13253](https://github.com/cline/cline/issues/13253) — Cline stuck running 1 command 10 minutes. Runtime reliability; not telemetry.
 - [#13246](https://github.com/cline/cline/issues/13246) — Background Console run_commands 30s hard-coded timeout. Duration/runtime; not telemetry duration accounting.
@@ -188,7 +157,7 @@ Includes all `RELATED_TOOL_RUNTIME` candidates (with cluster assignments), `ADJA
 - [#9143](https://github.com/cline/cline/issues/9143) — Command output cannot be captured (executed but telemetry reports failure). Borderline: this directly causes a wrong success/failure classification. Conservative verdict: runtime output capture; epic would name this as a known gap but does not fix it.
 - [#7355](https://github.com/cline/cline/issues/7355) — Terminal command timeout/wait regression. Runtime wait lifecycle; not telemetry duration accounting.
 
-**Tool-call parsing** (5):
+**tool-parse** (5):
 
 - [#10843](https://github.com/cline/cline/issues/10843) — Ollama Qwen raw JSON → parser ignores. Parser correctness; not telemetry.
 - [#10656](https://github.com/cline/cline/issues/10656) — OpenAI Native gpt-5.x reasoning/function_call pairing error. Parser correctness; not telemetry.
@@ -196,29 +165,48 @@ Includes all `RELATED_TOOL_RUNTIME` candidates (with cluster assignments), `ADJA
 - [#9848](https://github.com/cline/cline/issues/9848) — Cline prints raw tool invocation XML instead of executing. Parser correctness; not telemetry.
 - [#8130](https://github.com/cline/cline/issues/8130) — DeepSeek v3.2 thinking-mode tool-call detection. Parser correctness; not telemetry.
 
-**MCP tool routing/approval/validation** (3):
+**mcp-routing** (3):
 
 - [#12977](https://github.com/cline/cline/issues/12977) — Unknown MCP tool name forwarded → opaque error. Validation correctness; not telemetry.
 - [#10499](https://github.com/cline/cline/issues/10499) — MCP tools run without approval when Auto-approve is OFF. Approval correctness; borderline classification-confidence/source.
 - [#8087](https://github.com/cline/cline/issues/8087) — MCP tool IDs use ephemeral server keys → routing breaks after reconnect/restart. Runtime routing correctness; not telemetry.
 
-**Shell/terminal integration configuration** (2):
+**shell-integration** (2):
 
 - [#10444](https://github.com/cline/cline/issues/10444) — Background Exec hardcodes cmd.exe on Windows (UTF-8 broken). Configuration/runtime; not telemetry.
 - [#4356](https://github.com/cline/cline/issues/4356) — Terminal integration reliability (output capture, shell integration, WSL/SSH). Runtime reliability; not telemetry-classification.
 
-**Tool loop control / retry** (2):
+**loop-control** (2):
 
 - [#12431](https://github.com/cline/cline/issues/12431) — Repeated tool call failures → "stopped" (low-info). Runtime reliability; not telemetry.
 - [#11542](https://github.com/cline/cline/issues/11542) — High-volume request loop under repeated tool-use. Runtime loop control; borderline retry/recovery accounting.
 
-**File-edit reliability** (1):
+**file-edit** (1):
 
 - [#4384](https://github.com/cline/cline/issues/4384) — File-editing reliability (diff mismatch, truncation, retry loops). Runtime reliability; not telemetry-classification.
 
-**Tool-approval UX** (1):
+**approval-ux** (1):
 
 - [#8446](https://github.com/cline/cline/issues/8446) — CLI tool approval does not display which tool is being approved. Approval UX; not telemetry success/failure source.
+
+### Runtime-thinking-stall (downgraded in correction 04)
+
+**Skipped-command-then-Thinking-stall** (2):
+
+- [#10031](https://github.com/cline/cline/issues/10031) — Task stuck on Thinking after `ls`/`echo`; recovery required. Runtime state-machine, not presentation.
+- [#10015](https://github.com/cline/cline/issues/10015) — Skipped command → task stays in Thinking for hours. Runtime stall; recovery requires reconnect/restart.
+
+**Model-Thinking-stall (provider state)** (1):
+
+- [#9546](https://github.com/cline/cline/issues/9546) — Sonnet 4.6 — task genuinely stuck on Thinking; cancel/restart recovers. Runtime state-machine, not presentation.
+
+**Prompt-never-sent (provider dispatch blocked)** (1):
+
+- [#10208](https://github.com/cline/cline/issues/10208) — Cline never sends prompt to provider; UI shows Thinking but no actual call dispatched. Runtime state-machine, not presentation.
+
+**Terminal-output-then-Thinking-stall** (1):
+
+- [#10537](https://github.com/cline/cline/issues/10537) — Terminal command output returned successfully, then Cline remains in Thinking indefinitely. Runtime progression failure, not presentation.
 
 ### Other radar (adjacent + unrelated)
 
@@ -272,17 +260,23 @@ See correction 01 artifact for the full list; 17 candidates removed from `b4d7ed
 
 ### Removed in correction 03 (over-broad TOOL-EXECUTION-SEMANTICS01 destination contract, 23 candidates)
 
-All 23 issues previously mapped to `TOOL-EXECUTION-SEMANTICS01` were reclassified `RELATED_TOOL_RUNTIME → RADAR` because their failure contract (runtime tool correctness) is not the same as the epic's contract (telemetry classification). They are not lost; they are recorded in § "Related tool-runtime" above with cluster assignments for a future `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` proposal.
+All 23 candidates previously mapped to `TOOL-EXECUTION-SEMANTICS01` were reclassified `RELATED_TOOL_RUNTIME → RADAR` because their failure contract (runtime tool correctness) is not the same as the epic's contract (telemetry classification). Cluster-assigned; see § "Related tool-runtime" above.
 
-## Method (correction 03)
+### Removed in correction 04 (over-broad STATIC-THINKING-PRESENTATION-PERSISTENCE01 destination contract, 5 candidates)
 
-1. The corrected 40-EXACT_MAP artifact from `4909884a6` (correction 02) was consumed unchanged.
-2. Each of the 23 surviving `MAP_EXISTING → TOOL-EXECUTION-SEMANTICS01` candidates was re-audited against the epic's *canonical outputs* (mechanism, purpose, effect class, duration, success/failure, retry/recovery, classification confidence/source) — not just against the same-subsystem criterion.
-3. The strict destination test: the issue must materially change or validate one of the canonical outputs. Runtime reliability, output capture, command timeout, file-edit reliability, tool routing, approval correctness, parser correctness do not satisfy this test.
-4. All 23 candidates failed the strict test and were reclassified `RELATED_TOOL_RUNTIME → RADAR`.
-5. Cluster assignments were recorded for each candidate so a future ACT can propose `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` with a clear evidence table. This ACT does **not** create that epic.
-6. The 17 surviving `MAP_EXISTING`s and the 5 `IMPORT`s are unchanged from correction 02.
-7. All 80 candidates classified; substrate SHA256 unchanged (`878eb241...`).
+All 5 candidates previously mapped to `STATIC-THINKING-PRESENTATION-PERSISTENCE01` were reclassified `RUNTIME_THINKING_STALL → RADAR` because their failure contract (runtime task genuinely stuck in thinking) is not the same as the epic's contract (presentation residue after canonical runtime has left thinking). Cluster-assigned; see § "Runtime-thinking-stall" above. Only `#8636` survives under that epic.
+
+## Method (correction 04)
+
+1. The corrected 17-EXACT_MAP artifact from `a87ef52e6` (correction 03) was consumed unchanged.
+2. Each of the 6 surviving `MAP_EXISTING → STATIC-THINKING-PRESENTATION-PERSISTENCE01` candidates was re-audited against the epic's *canonical contract* (canonical runtime has already LEFT thinking, but rendered Thinking presentation persists/is wrong).
+3. The strict destination test: a presentation-residue evidence candidate must demonstrate a presentation-vs-runtime divergence (UI says Thinking but runtime has moved on). A runtime-thinking-stall candidate demonstrates the inverse — runtime is genuinely stuck and UI is accurate.
+4. `#8636` (Thinking section not displayed in v3.50.0) passes: extended-thinking content exists, but the Thinking UI section is not rendered. Pure presentation defect. Retained as `EXACT_PRESENTATION_MAP`.
+5. Five candidates (`#9546`, `#10015`, `#10031`, `#10208`, `#10537`) failed the strict test: the canonical task is genuinely stuck in thinking, recovery requires cancel/reconnect/restart. The displayed "Thinking..." is accurate; the failure is that the runtime never advances. Reclassified `RUNTIME_THINKING_STALL → RADAR`.
+6. Cluster assignments recorded for each candidate so a future ACT can propose a runtime-task-progression epic with a clear evidence table. This ACT does **not** create that epic.
+7. The 11 surviving non-static-thinking `MAP_EXISTING`s and the 5 `IMPORT`s are unchanged from correction 03.
+8. The 23 `RELATED_TOOL_RUNTIME` candidates from correction 03 are unchanged.
+9. All 80 candidates classified; substrate SHA256 unchanged (`878eb241...`).
 
 ## What this artifact is NOT
 
@@ -290,4 +284,4 @@ All 23 issues previously mapped to `TOOL-EXECUTION-SEMANTICS01` were reclassifie
 - Not a re-enrichment of the 80-issue shortlist (all enrichment data is the same).
 - Not an implementation commitment (no IMPORT here is auto-promoted into the immediate critical path).
 - Not a substitute for `scripts/dump-cline-issues.py` (the substrate remains the canonical JSON).
-- Not a creation of `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` (the 23 tool-runtime candidates are recorded with cluster assignments, but the epic itself is not created in this ACT).
+- Not a creation of `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` or any runtime-task-progression epic (cluster assignments are recorded, but the epics themselves are not created in this ACT).

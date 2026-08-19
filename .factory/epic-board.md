@@ -212,12 +212,13 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `EPIC-CLINEMM-CODE-COVERAGE-BASELINE01` | QA | OPEN | HIGH | test-baseline-zero-failures recommended | inventory coverage seams; establish truthful exact-head baseline; publish machine-readable report |
 | `EPIC-CLINEMM-CODE-COVERAGE-RATCHET01` | QA | OPEN | HIGH | coverage-baseline01 | prevent aggregate coverage regression; thresholds increase monotonically |
 | `UP-01` | UPSTREAM | SUPERSEDED → `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | — | — | recon scope of fork vs upstream Cline; reclassified as upstream-intake substrate ACT |
-| `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | UPSTREAM | CLOSED_INITIAL_TRIAGE at `162192610` | — | none | compact upstream issue intake substrate; rank by popularity + Cline-- value; map selected candidates; final triage (after correction 01 + correction 02 + correction 03) produced 5 IMPORTs, 17 EXACT_MAPs (on board) + 23 RELATED_TOOL_RUNTIME (recorded with cluster assignments), 35 other ADJACENT/UNRELATED (RADAR), 0 REJECT, 0 CLOSED_UPSTREAM |
+| `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | UPSTREAM | CLOSED_INITIAL_TRIAGE at `162192610` | — | none | compact upstream issue intake substrate; rank by popularity + Cline-- value; map selected candidates; final triage (after correction 01 + correction 02 + correction 03 + correction 04) produced 5 IMPORTs, 12 EXACT_MAPs (on board) + 23 RELATED_TOOL_RUNTIME (cluster-assigned) + 5 RUNTIME_THINKING_STALL (cluster-assigned), 35 other ADJACENT/UNRELATED (RADAR), 0 REJECT, 0 CLOSED_UPSTREAM |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-SUBSTRATE01` | UPSTREAM | CLOSED at `f1837597b` | — | none | snapshot producer; SHA256 `878eb241e24150b4ecc9731e6fe8373b7e81566d8117f7f129b87f012f166cb6`; 573 retained rows; bounded selection policy; 29 unit tests |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` | UPSTREAM | CLOSED at `b4d7ed795` (superseded by correction 01) | — | upstream-issue-intake01 | consumed substrate; built 80-issue bounded shortlist; enriched via `gh issue view`; per-issue disposition; initial triage artifact was lexical-overlap-based and superseded by correction 01 |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION01` | UPSTREAM | CLOSED at `88f1e10c6` (superseded by correction 02) | — | upstream-issue-intake-triage01 | semantic three-class correction (EXACT_MAP / ADJACENT / UNRELATED); 17 lexical-overlap false mappings removed (#6416, #11018, #12042, #9181 spurious GITHUB-ACTIONS, +13 others) |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION02` | UPSTREAM | CLOSED at `4909884a6` (superseded by correction 03) | — | upstream-issue-intake-triage-correction01 | strict EXACT_MAP contract test (same failure contract OR same causal production seam OR direct upstream reproduction); 3 surviving false EXACT_MAPs removed (#9333, #12947, #12079); corrected artifact at `.factory/upstream/cline-upstream-triage.md` (210 lines, 18.0 KiB) |
-| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION03` | UPSTREAM | CLOSED at this commit | — | upstream-issue-intake-triage-correction02 | strict destination-contract test for `TOOL-EXECUTION-SEMANTICS01` (issue must materially change or validate one of the canonical telemetry outputs); 23 over-broad mappings removed and reclassified `RELATED_TOOL_RUNTIME → RADAR` with cluster assignments (terminal-timeout=9, tool-parse=5, mcp-routing=3, shell-integration=2, loop-control=2, file-edit=1, approval-ux=1) so a future `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` can be proposed with a clear evidence table; corrected artifact at `.factory/upstream/cline-upstream-triage.md` (293 lines, 29.9 KiB) |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION03` | UPSTREAM | CLOSED at `a87ef52e6` (superseded by correction 04) | — | upstream-issue-intake-triage-correction02 | strict destination-contract test for `TOOL-EXECUTION-SEMANTICS01` (issue must materially change or validate one of the canonical telemetry outputs); 23 over-broad mappings removed and reclassified `RELATED_TOOL_RUNTIME → RADAR` with cluster assignments (terminal-timeout=9, tool-parse=5, mcp-routing=3, shell-integration=2, loop-control=2, file-edit=1, approval-ux=1) so a future `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` can be proposed with a clear evidence table; corrected artifact at `.factory/upstream/cline-upstream-triage.md` (293 lines, 29.9 KiB) |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION04` | UPSTREAM | CLOSED at this commit | — | upstream-issue-intake-triage-correction03 | strict destination-contract test for `STATIC-THINKING-PRESENTATION-PERSISTENCE01` (issue must demonstrate presentation-vs-runtime divergence, not a runtime stall); 5 over-broad mappings removed and reclassified `RUNTIME_THINKING_STALL → RADAR` with cluster assignments (skipped-command-stall=2, terminal-output-stall=1, model-thinking-stall=1, prompt-never-sent=1) so a future runtime-task-progression epic can be proposed with a clear evidence table; only `#8636` survives as `EXACT_PRESENTATION_MAP`; corrected artifact at `.factory/upstream/cline-upstream-triage.md` (287 lines, 25.9 KiB) |
 | `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` | DIST/REPO | OPEN | HIGH | none | git checkpoint corruption (.git/.git_disabled left by interrupted tasks, submodule breakage, large-workspace corruption, disk-space exhaustion) + checkpoint restore failure; recon from upstream #4388 + #12388 |
 | `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` | MCP | OPEN | HIGH | none | MCP stdio servers spawn unbounded instances until crash on Windows; process-lifecycle bug; recon from upstream #7413 |
 | `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` | CONTEXT | OPEN | MED | context-accounting-truth | `.clineignore` documented as filtering file listing but does not actually exclude files from context; recon from upstream #9554 |
@@ -769,7 +770,7 @@ Every retained `MAP_EXISTING` row satisfied this test: *if I removed the issue t
 
 Every retained `MAP_EXISTING` row satisfies this stricter test: *does this issue describe the same failure contract as the target epic, not merely the same subsystem?* Correction 02 removed 3 surviving false `EXACT_MAP`s (`#9333`, `#12947`, `#12079`).
 
-**Correction-03 cycle.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION03` (this commit) applies the destination-contract test specifically to `TOOL-EXECUTION-SEMANTICS01`. The epic's *canonical contract* is **telemetry classification** — mechanism, purpose, effect class, duration accounting, success/failure classification, retry/recovery accounting, classification confidence/source. Correction 02 had justified the 23 surviving `TOOL-EXECUTION-SEMANTICS01` mappings by "shared execution signal production seam" — that was too permissive, since the issues describe *runtime tool correctness* (terminal hangs, parser failures, MCP routing, approval UX) rather than *telemetry-classification outputs*. The strict destination test:
+**Correction-03 cycle.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION03` (closed at `a87ef52e6`, superseded by correction 04) applies the destination-contract test specifically to `TOOL-EXECUTION-SEMANTICS01`. The epic's *canonical contract* is **telemetry classification** — mechanism, purpose, effect class, duration accounting, success/failure classification, retry/recovery accounting, classification confidence/source. Correction 02 had justified the 23 surviving `TOOL-EXECUTION-SEMANTICS01` mappings by "shared execution signal production seam" — that was too permissive, since the issues describe *runtime tool correctness* (terminal hangs, parser failures, MCP routing, approval UX) rather than *telemetry-classification outputs*. The strict destination test:
 
 - **EXACT_TELEMETRY_MAP** — the issue materially changes or validates one of the canonical outputs (mechanism classification, purpose classification, effect class, duration accounting, success/failure classification, retry/recovery accounting, classification confidence/source).
 - **RELATED_TOOL_RUNTIME** — terminal reliability, output capture, command timeout, file-edit reliability, tool routing, approval correctness, parser correctness. Not telemetry classification → RADAR.
@@ -777,20 +778,31 @@ Every retained `MAP_EXISTING` row satisfies this stricter test: *does this issue
 
 All 23 candidates failed the strict test and were reclassified `RELATED_TOOL_RUNTIME → RADAR`. They are not destroyed; they are **recorded with coherent cluster assignments** so a future ACT can propose `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` with a clear evidence table (the dominant cluster is *terminal timeout/wait lifecycle* with 9 issues).
 
-Dispositions after correction 03:
+**Correction-04 cycle.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION04` (this commit) applies the destination-contract test to the next surviving epic, `STATIC-THINKING-PRESENTATION-PERSISTENCE01`. The epic's *canonical contract* is **presentation residue**: canonical runtime has already LEFT thinking, but the rendered Thinking presentation persists or is wrong. The 6 surviving candidates were claimed (in correction 03's "thinking-presentation regressions" annotation) to all describe that contract, but the upstream issue semantics show 5 of 6 actually describe *runtime thinking stalls* — the canonical task is genuinely stuck in thinking, the displayed "Thinking..." is accurate, and recovery requires cancel/reconnect/restart. The strict destination test:
 
-| Disposition | Initial `b4d7ed795` | Corr 01 `88f1e10c6` | Corr 02 `4909884a6` | Corr 03 (this commit) | Δ corr 03 |
-| --- | --- | --- | --- | --- | --- |
-| `IMPORT` | 5 | 5 | 5 | 5 | 0 |
-| `MAP_EXISTING` | 60 | 43 | 40 | 17 | -23 (over-broad TOOL-EXECUTION-SEMANTICS01 mappings removed) |
-| `RADAR` | 15 | 32 | 35 | 58 | +23 (over-broad mappings downgraded; cluster-assigned) |
-| `REJECT` | 0 | 0 | 0 | 0 | 0 |
-| `CLOSED_UPSTREAM` | 0 | 0 | 0 | 0 | 0 |
+- **EXACT_PRESENTATION_MAP** — the issue demonstrates a presentation-vs-runtime divergence: UI says Thinking but runtime has moved on.
+- **RUNTIME_THINKING_STALL** — the runtime task is genuinely stuck in thinking; UI is accurate; runtime never advances → RADAR.
+- **UNRELATED** — no semantic relation → RADAR.
 
-| Semantic class | Count (corr 03) |
+5 of 6 candidates failed the strict test and were reclassified `RUNTIME_THINKING_STALL → RADAR`. They are not destroyed; they are **recorded with coherent cluster assignments** so a future ACT can propose a runtime-task-progression epic (or fold them into a broader runtime-reliability epic) with a clear evidence table. The dominant cluster is *skipped-command-stall* (2 issues; #10015, #10031). Only `#8636` (Thinking section not displayed in v3.50.0 — extended-thinking content exists, but the Thinking UI section is not rendered) survives as `EXACT_PRESENTATION_MAP`.
+
+This ACT closes the upstream-triage cycle: corrections 01–04 cumulatively removed **48 false-mapping rows** from the original 60 (`60 → 43 → 40 → 17 → 12`). The 12 surviving EXACT_MAPs and 5 IMPORTs all satisfy the binding invariant: an upstream issue cannot be cited as evidence for a canonical epic whose failure contract it does not reproduce.
+
+Dispositions after correction 04:
+
+| Disposition | Initial `b4d7ed795` | Corr 01 `88f1e10c6` | Corr 02 `4909884a6` | Corr 03 `a87ef52e6` | Corr 04 (this commit) | Δ corr 04 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `IMPORT` | 5 | 5 | 5 | 5 | 5 | 0 |
+| `MAP_EXISTING` | 60 | 43 | 40 | 17 | 12 | -5 (over-broad STATIC-THINKING mappings removed) |
+| `RADAR` | 15 | 32 | 35 | 58 | 63 | +5 (over-broad mappings downgraded; cluster-assigned) |
+| `REJECT` | 0 | 0 | 0 | 0 | 0 | 0 |
+| `CLOSED_UPSTREAM` | 0 | 0 | 0 | 0 | 0 | 0 |
+
+| Semantic class | Count (corr 04) |
 | --- | --- |
-| `EXACT_MAP` | 22 (17 → MAP_EXISTING on board; 5 → IMPORT) |
+| `EXACT_MAP` | 17 (12 → MAP_EXISTING on board; 5 → IMPORT) |
 | `RELATED_TOOL_RUNTIME` | 23 (all → RADAR; cluster-assigned) |
+| `RUNTIME_THINKING_STALL` | 5 (all → RADAR; cluster-assigned) |
 | `ADJACENT` | 14 (all → RADAR) |
 | `UNRELATED` | 21 (all → RADAR) |
 
@@ -823,7 +835,28 @@ The epic's canonical contract is **telemetry classification** (mechanism, purpos
 
 These 23 are not lost; they are recorded in the durable artifact (§ "Related tool-runtime") for a future ACT that proposes `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01`. This ACT does **not** create that epic.
 
-Triage artifact (correction 03): `.factory/upstream/cline-upstream-triage.md` (293 lines, 29.9 KiB). Machine-readable companion: `.factory/upstream/cline-upstream-triage.json` (29.9 KiB). All previous corrections' artifacts at this same path were overwritten; the audit section at the top of the artifact documents the full history.
+**Correction-04 red-witness audit** (over-broad STATIC-THINKING-PRESENTATION-PERSISTENCE01 destination contract):
+
+The epic's canonical contract is **presentation residue**: canonical runtime has already LEFT thinking, but the rendered Thinking presentation persists or is wrong. The 6 surviving mappings were 1 actual presentation defect and 5 runtime stalls. Review confirmed: 5 of 6 candidates describe runtime task genuinely stuck in thinking, recovery requires cancel/reconnect/restart. The displayed "Thinking..." is accurate; the failure is that the runtime never advances. All 5 reclassified `RUNTIME_THINKING_STALL → RADAR` with cluster assignments:
+
+| Cluster | Count | Members | Verdict |
+| --- | --- | --- | --- |
+| Skipped-command-then-Thinking-stall | 2 | #10015, #10031 | skipped command → task stays in Thinking for hours |
+| Terminal-output-then-Thinking-stall | 1 | #10537 | terminal command output returned, runtime stuck in Thinking |
+| Model-Thinking-stall (provider state) | 1 | #9546 | Sonnet 4.6 — task genuinely stuck; cancel/restart recovers |
+| Prompt-never-sent (provider dispatch blocked) | 1 | #10208 | Cline never sends prompt to provider; UI shows Thinking but no actual call dispatched |
+
+Reviewer-named reds confirmed:
+- **`#10537`** — runtime hangs after successful terminal output → NOT presentation residue.
+- **`#10015`** — skipped command → task stuck Thinking for hours → NOT presentation residue.
+- **`#10031`** — command use → task stops progressing on Thinking → NOT presentation residue.
+
+Reviewer-named plausible survivor confirmed:
+- **`#8636`** (Thinking section not displayed in v3.50.0) — pure presentation-layer issue; extended-thinking content exists, but the Thinking UI section is not rendered. **Survives** as `EXACT_PRESENTATION_MAP`.
+
+These 5 are not lost; they are recorded in the durable artifact (§ "Runtime-thinking-stall") for a future ACT that proposes a runtime-task-progression epic (or folds them into a broader runtime-reliability epic). This ACT does **not** create that epic.
+
+Triage artifact (correction 04): `.factory/upstream/cline-upstream-triage.md` (287 lines, 25.9 KiB). Machine-readable companion: `.factory/upstream/cline-upstream-triage.json` (30.0 KiB). All previous corrections' artifacts at this same path were overwritten; the audit section at the top of the artifact documents the full history.
 
 **IMPORTs (corrected).**
 
@@ -838,13 +871,15 @@ The previously-imported `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` row was re
 
 Each IMPORT epic has `RECON` as the first epistemic action; no upstream fix is ported. None of the 4 were promoted into the immediate critical path.
 
-**MAP_EXISTING (correction 03; only EXACT_MAP under strict destination-contract test; top 3 per epic).**
+**MAP_EXISTING (correction 04; only EXACT_MAP under strict destination-contract test; top 3 per epic).**
 
-- `STATIC-THINKING-PRESENTATION-PERSISTENCE01` → [#8636](https://github.com/cline/cline/issues/8636), [#9546](https://github.com/cline/cline/issues/9546), [#10015](https://github.com/cline/cline/issues/10015)
+- `STATIC-THINKING-PRESENTATION-PERSISTENCE01` → [#8636](https://github.com/cline/cline/issues/8636) (only)
 - `USER-CONTEXT-CEILING01` → [#9651](https://github.com/cline/cline/issues/9651), [#10410](https://github.com/cline/cline/issues/10410), [#10551](https://github.com/cline/cline/issues/10551)
 - `CONTEXT-ACCOUNTING-TRUTH01` → [#4389](https://github.com/cline/cline/issues/4389), [#10148](https://github.com/cline/cline/issues/10148)
 - `COMPACTION-STATE-AUTHORITY01` → [#9181](https://github.com/cline/cline/issues/9181), [#10637](https://github.com/cline/cline/issues/10637)
 - `COST-DISPLAY-TRUTH01` → [#10596](https://github.com/cline/cline/issues/10596), [#11494](https://github.com/cline/cline/issues/11494)
+
+**Removed in correction 04** (over-broad `STATIC-THINKING-PRESENTATION-PERSISTENCE01` destination contract): all 5 candidates previously mapped to that epic except `#8636`. The epic's canonical contract is **presentation residue** (canonical runtime has already LEFT thinking, but rendered Thinking presentation persists/is wrong); the 5 removed issues describe **runtime thinking stalls** (canonical task is genuinely stuck in thinking, recovery requires cancel/reconnect/restart). See § "Correction-04 red-witness audit" for the cluster-assigned table. The 5 candidates are recorded with cluster assignments in the durable artifact for a future ACT that proposes a runtime-task-progression epic (or folds them into a broader runtime-reliability epic).
 
 **Removed in correction 03** (over-broad `TOOL-EXECUTION-SEMANTICS01` destination contract): all 23 candidates previously mapped to that epic. The epic's canonical contract is **telemetry classification** (mechanism, purpose, effect class, duration, success/failure, retry/recovery, classification confidence/source); the 23 issues describe **runtime tool correctness** (terminal hangs, parser failures, MCP routing, approval UX). See § "Correction-03 red-witness audit" for the cluster-assigned table. The 23 candidates are recorded with cluster assignments in the durable artifact for a future ACT that proposes `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01`.
 
@@ -854,7 +889,7 @@ Each IMPORT epic has `RECON` as the first epistemic action; no upstream fix is p
 **Removed in correction 01** (lexical-overlap remediation):
 `BRANDING01 → #12042`, `CODE-COVERAGE-BASELINE01 → #11879`, `CODE-COVERAGE-RATCHET01 → #11879`, `TASKHEADER-CANONICAL-PROJECTION01 → #11018`, `CONTEXT-ACCOUNTING-TRUTH01 → #6416/#9788`, `STATIC-THINKING-PRESENTATION-PERSISTENCE01 → #12079`, `USER-CONTEXT-CEILING01 → #5915`, `GITHUB-ACTIONS01 → #9181/#12520/#11785`, `GITHUB-DISTRIBUTION01 → #10246/#11879`, `TEST-BASELINE-ZERO-FAILURES01 → #4384/#12474/#12431`, plus the `TOOL-EXECUTION-SEMANTICS01` lexical mappings #9143/#12431 that correction 03 also removed for destination-contract reasons.
 
-Full per-epic mapping with all 17 surviving EXACT_MAP candidates is in `.factory/upstream/cline-upstream-triage.md` § "Mapped to existing epics (EXACT_MAP only)". The 23 `RELATED_TOOL_RUNTIME` candidates with cluster assignments are in § "Related tool-runtime".
+Full per-epic mapping with all 12 surviving EXACT_MAP candidates is in `.factory/upstream/cline-upstream-triage.md` § "Mapped to existing epics (EXACT_MAP only)". The 23 `RELATED_TOOL_RUNTIME` candidates with cluster assignments are in § "Related tool-runtime"; the 5 `RUNTIME_THINKING_STALL` candidates with cluster assignments are in § "Runtime-thinking-stall".
 
 **This ACT is not.**
 
@@ -964,7 +999,8 @@ Compact mapping so old names are preserved without duplicate work.
 | `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` | `#7414` recon | **REMOVED** at this commit; demoted to RADAR pending recon distinction (rules-omitted vs rules-ignored) |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION01` | snapshot SHA256 `878eb241...` (unchanged) | CLOSED at `88f1e10c6`; superseded by correction 02; semantic three-class correction; 17 lexical-overlap false mappings removed (#6416, #11018, #12042, #9181 spurious GITHUB-ACTIONS, +13 others); 43 EXACT_MAPs + 5 IMPORTs + 32 RADARs |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION02` | snapshot SHA256 `878eb241...` (unchanged) | CLOSED at `4909884a6`; superseded by correction 03; strict EXACT_MAP contract test (same failure contract OR same causal production seam OR direct upstream reproduction); 3 surviving false EXACT_MAPs removed (#9333, #12947, #12079); 40 EXACT_MAPs + 5 IMPORTs + 35 RADARs |
-| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION03` | snapshot SHA256 `878eb241...` (unchanged) | CLOSED at this commit; strict destination-contract test for `TOOL-EXECUTION-SEMANTICS01` (issue must materially change or validate one of the canonical telemetry outputs); 23 over-broad mappings removed and reclassified `RELATED_TOOL_RUNTIME → RADAR` with cluster assignments; 17 EXACT_MAPs + 5 IMPORTs + 58 RADARs (23 cluster-assigned + 35 other); 0 REJECT, 0 CLOSED_UPSTREAM |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION03` | snapshot SHA256 `878eb241...` (unchanged) | CLOSED at `a87ef52e6`; superseded by correction 04; strict destination-contract test for `TOOL-EXECUTION-SEMANTICS01` (issue must materially change or validate one of the canonical telemetry outputs); 23 over-broad mappings removed and reclassified `RELATED_TOOL_RUNTIME → RADAR` with cluster assignments; 17 EXACT_MAPs + 5 IMPORTs + 58 RADARs (23 cluster-assigned + 35 other); 0 REJECT, 0 CLOSED_UPSTREAM |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION04` | snapshot SHA256 `878eb241...` (unchanged) | CLOSED at this commit; strict destination-contract test for `STATIC-THINKING-PRESENTATION-PERSISTENCE01` (issue must demonstrate presentation-vs-runtime divergence, not a runtime stall); 5 over-broad mappings removed and reclassified `RUNTIME_THINKING_STALL → RADAR` with cluster assignments; only `#8636` survives as `EXACT_PRESENTATION_MAP`; 12 EXACT_MAPs + 5 IMPORTs + 63 RADARs (23 RELATED_TOOL_RUNTIME + 5 RUNTIME_THINKING_STALL + 35 other); 0 REJECT, 0 CLOSED_UPSTREAM |
 | `ACT-CLINEMM-FACTORY-GLOBAL-TASK-CENSUS01` | Factory task census | CLOSED at `4b2b2beec059b668bd49799304b9fd78d1ef79a0` |
 | `ACT-CLINEMM-E7.1-TEMP-DIAGNOSTICS-REMOVAL01` | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | SUPERSEDED (PTAD retained DEFAULT_OFF; recon showed value) |
 | `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | repository-topology migration | CLOSED (main FF `a9f376edf` → `5637d965d`; one-worktree policy frozen) |
