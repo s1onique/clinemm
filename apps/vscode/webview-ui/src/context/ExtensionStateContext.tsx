@@ -24,6 +24,7 @@ import {
 	isLiveContextDimensions01CaptureEnabled,
 	recordLiveContextDimensions01Capture,
 	type LiveContextDimensions01CorrelationIdentity,
+	type LiveContextDimensions01NativeW2Identity,
 } from "@shared/live-context-dimensions01-capture"
 
 // ============================================================================
@@ -967,7 +968,7 @@ export const ExtensionStateContextProvider: React.FC<{
 							associatedPushId: undefined,
 							intervalInferred: undefined,
 						}
-						const w2Native = {
+						const w2Native: LiveContextDimensions01NativeW2Identity = {
 							epoch: (partialMessage as { epoch?: number } | undefined)?.epoch ?? 0,
 							seq: partialMessage?.seq ?? 0,
 							ts: partialMessage?.ts ?? 0,
@@ -979,7 +980,7 @@ export const ExtensionStateContextProvider: React.FC<{
 							nativeW2: w2Native,
 							writerIdentity: undefined,
 							replicaTurnState: undefined,
-							hostTurnState: (partialMessage as { turnState?: unknown } | undefined)?.turnState,
+							hostTurnState: undefined,
 							committedTurnState: undefined,
 						})
 						recordLiveContextDimensions01Capture({
