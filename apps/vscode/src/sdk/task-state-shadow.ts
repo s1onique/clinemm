@@ -22,6 +22,11 @@ import { TaskState } from "@cline/agents"
 import type { AgentRuntimeEvent } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 
+// Mirror the established pattern in `task-state-shadow-recorder.ts`:
+// `TaskState` is the namespace re-export from `@cline/agents`; its
+// `TaskModel` member is not promoted to a top-level package export.
+type TaskModel = TaskState.TaskModel
+
 const { TaskStateShadow } = TaskState
 type TaskMsg = TaskState.TaskMsg
 type TaskShadowObservation = TaskState.TaskShadowObservation
