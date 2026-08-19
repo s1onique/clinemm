@@ -512,7 +512,7 @@ describe("R8 — HOST_RECOVERY policy is DIAGNOSTIC_ONLY when canonical transpor
 		const { coordinator, recorder, comparator } = makeCoordinator({
 			activeSessionId: () => "session-A",
 		})
-		const beforeSeq = comparator.debugSnapshot().currentIteration
+		const beforeLifecycle = comparator.debugSnapshot().lifecycle.kind
 		coordinator.observe({
 			kind: "host-recovery",
 			origin: "HOST_RECOVERY",
@@ -530,7 +530,7 @@ describe("R8 — HOST_RECOVERY policy is DIAGNOSTIC_ONLY when canonical transpor
 		expect(counts.eventsObserved).toBe(0)
 		expect(counts.observationsSuppressedByOrigin.HOST_RECOVERY).toBe(0)
 		expect(counts.fallbackRecoveryApplied).toBe(0)
-		expect(comparator.debugSnapshot().currentIteration).toBe(beforeSeq)
+		expect(comparator.debugSnapshot().lifecycle.kind).toBe(beforeLifecycle)
 	})
 
 	it("R8.2: HOST_RECOVERY FALLBACK_APPLY when canonicalAvailable=false (Hub/Remote)", () => {

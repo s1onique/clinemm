@@ -331,7 +331,7 @@ interface Boundaries {
 	evidenceGaps: number
 	droppedRecords: number
 	recordCount: number
-	modelTurnPhase: unknown
+	modelLifecycleKind: unknown
 }
 
 function capture(wiring: ReturnType<typeof createTaskShadowHostWiring>): Boundaries {
@@ -350,7 +350,7 @@ function capture(wiring: ReturnType<typeof createTaskShadowHostWiring>): Boundar
 		evidenceGaps: counts.evidenceGaps,
 		droppedRecords: counts.droppedRecords,
 		recordCount: wiring.records().length,
-		modelTurnPhase: wiring.comparator.debugSnapshot().turnPhase,
+		modelLifecycleKind: wiring.comparator.debugSnapshot().lifecycle.kind,
 	}
 }
 
@@ -377,7 +377,7 @@ function expectZeroDelta(label: string, before: Boundaries, after: Boundaries): 
 	expect(after.evidenceGaps - before.evidenceGaps, `[${label}] evidenceGaps`).toBe(0)
 	expect(after.droppedRecords - before.droppedRecords, `[${label}] droppedRecords`).toBe(0)
 	expect(after.recordCount - before.recordCount, `[${label}] recordCount`).toBe(0)
-	expect(after.modelTurnPhase, `[${label}] comparator.shadow.turnPhase`).toBe(before.modelTurnPhase)
+	expect(after.modelLifecycleKind, `[${label}] comparator.shadow.lifecycle.kind`).toBe(before.modelLifecycleKind)
 }
 
 // ---------- witnesses (HARD `expect(...).toBe(0)`; post-fix) ----------
