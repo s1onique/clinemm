@@ -125,7 +125,6 @@ import type {
 	AgentRuntimeExecutionState,
 	AgentRuntimeRecoverySnapshot,
 	AgentRuntimeStateSnapshot,
-	AgentToolCallPart,
 	AgentUsage,
 	RecoveryState,
 } from "@cline/shared"
@@ -239,11 +238,17 @@ function executionStateChanged(snapshot: AgentRuntimeStateSnapshot = baseSnapsho
 	}
 }
 
-function recoverySnapshot(state: RecoveryState = "off"): AgentRuntimeRecoverySnapshot {
+function recoverySnapshot(state: RecoveryState = "idle"): AgentRuntimeRecoverySnapshot {
 	return {
 		state,
-		tracker: { state, mode: "tool-aware" } as AgentRuntimeRecoverySnapshot["tracker"],
-		secondStage: { kind: "none" } as AgentRuntimeRecoverySnapshot["secondStage"],
+		tracker: {
+			state,
+			currentRepairAttempts: 0,
+			equivalentRepeatCount: 0,
+			blockedExactKeys: [],
+			blockedFamilies: [],
+		},
+		secondStage: "idle",
 		episodeFailures: 0,
 		maxEpisodeFailures: 3,
 		circuitNoticeCount: 0,
@@ -301,7 +306,12 @@ function toolStarted(snapshot: AgentRuntimeStateSnapshot = baseSnapshot()): Agen
 		type: "tool-started",
 		snapshot,
 		iteration: 0,
-		toolCall: { id: "tc-1", name: "test-tool", arguments: {} } as AgentToolCallPart,
+		toolCall: {
+			type: "tool-call",
+			toolCallId: "tc-1",
+			toolName: "test-tool",
+			input: {},
+		},
 	}
 }
 
@@ -310,8 +320,18 @@ function toolFinished(snapshot: AgentRuntimeStateSnapshot = baseSnapshot()): Age
 		type: "tool-finished",
 		snapshot,
 		iteration: 0,
-		toolCall: { id: "tc-1", name: "test-tool", arguments: {} } as AgentToolCallPart,
-		message: { role: "tool", content: [] } as AgentMessage,
+		toolCall: {
+			type: "tool-call",
+			toolCallId: "tc-1",
+			toolName: "test-tool",
+			input: {},
+		},
+		message: {
+			id: "msg-1",
+			role: "tool",
+			content: [],
+			createdAt: 0,
+		},
 	}
 }
 
