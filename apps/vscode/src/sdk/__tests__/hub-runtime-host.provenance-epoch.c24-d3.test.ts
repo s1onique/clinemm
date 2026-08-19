@@ -211,13 +211,14 @@ vi.mock(HUB_CLIENT_MODULE_PATH, async () => {
 	}
 })
 
-import type { CoreSessionEvent, HubEventEnvelope } from "@cline/core"
+import type { CoreSessionEvent } from "@cline/core"
+import type { HubEventEnvelope } from "@cline/shared"
 import { HubRuntimeHost } from "@cline-internal/core/hub/runtime-host/hub-runtime-host"
 import { RemoteRuntimeHost } from "@cline-internal/core/hub/runtime-host/remote-runtime-host"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { TurnPhase } from "../task-state-e5-e6-types"
+import type { TurnPhase } from "@/shared/ExtensionMessage"
 import { createTaskShadowHostWiring } from "../task-state-shadow-host-wiring"
-import type { ArbiterSnapshot } from "../task-state-shadow-types"
+import type { ArbiterSnapshot } from "../task-state-shadow-recorder"
 
 // ---------------------------------------------------------------------------
 // Scripted envelope types (intentionally named differently from D2 to make
