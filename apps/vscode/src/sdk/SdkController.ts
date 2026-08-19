@@ -2752,7 +2752,23 @@ export class Controller {
 			// authority; see
 			// `docs/architecture/elm/task-state-e71-c2-live-replica-truth-evidence.md`).
 			const ptadEnabled = isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context)
-			const ptadPushId = ptadEnabled ? minter.nextSeq() : undefined
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
+			//
+			// Stamp the W1 (full-state) snapshot with the SAME minter authority the
+			// W2 (incremental partial-message) path stamps. Without these two fields,
+			// the webview reducer's older-epoch fence (`snapshotEpoch < state.epoch`)
+			// sees `snapshotEpoch=0` (from `state.epoch ?? 0`) for every state push,
+			// and drops the snapshot wholesale — including its `turnState` — once
+			// any newer-epoch W2 traffic has advanced the replica fence. Reproduced
+			// by `w1-epoch-domain-mismatch-red-fix01.test.tsx` (R0/R2 RED, R1 GREEN).
+			//
+			// The single `nextSeq()` value is reused as `stateVersion` (the wire
+			// monotonic version the reducer gates same-epoch snapshots by) AND as the
+			// diagnostic `_ptadPushId` when the PTAD toggle is on, so the two stay
+			// aligned and `_ptadPushId` equality across records still correlates to
+			// the same ExtensionState push.
+			const sharedSeq = minter.nextSeq()
+			const ptadPushId = ptadEnabled ? sharedSeq : undefined
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1:
 			// Capture the just-built snapshot for the post-terminal authority diagnostic.
 			// The capture is OPT-IN: when isPostTerminalAuthorityDiagnosticEnabled("extension")
@@ -2765,6 +2781,11 @@ export class Controller {
 					: undefined,
 				taskHistory: processedTaskHistory,
 				turnState: this.turnStateTracker.get(),
+				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
+				// See the rationale at `ptadPushId` (above). The snapshot MUST carry
+				// these two fields so the webview reducer can fence stale pushes.
+				stateVersion: sharedSeq,
+				epoch: minter.epoch,
 				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A + CORRECTION02 +
 				// ACT-CLINEMM-DOGFOOD-CORRECTION04: project the host-owned
 				// task telemetry (elapsed / toolCalls /

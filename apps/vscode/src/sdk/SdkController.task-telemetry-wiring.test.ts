@@ -71,9 +71,15 @@ describe("ACT-CLINEMM-DOGFOOD-CORRECTION04-CLOSE01 / structural wiring", () => {
 
 	it("C04-WIRE-2: the projection is inside the object literal returned by getStateToPostToWebview", () => {
 		const body = locateGetStateToPostToWebview(SdkControllerSource)
-		const returnBlockMatch = body.match(/return\s*\{([\s\S]*?)\n\s{2,}\}/)
-		expect(returnBlockMatch).not.toBeNull()
-		const returnBlock = returnBlockMatch?.[1] ?? ""
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
+		// The C1-CORRECTION01 ACT re-shaped `return { ... }` into `const snapshot = { ... }; return snapshot`
+		// so the post-terminal authority diagnostic can capture the just-built object literal. The
+		// structural witness continues to hold: the taskTelemetry projection still lives inside the
+		// object literal. Match either shape so this test does not regress when the producer is
+		// repaired to stamp `stateVersion` / `epoch` on the snapshot.
+		const snapshotBlockMatch = body.match(/(?:return\s*\{|const\s+snapshot\s*=\s*\{)\s*([\s\S]*?)\n\s{2,}\}/)
+		expect(snapshotBlockMatch).not.toBeNull()
+		const returnBlock = snapshotBlockMatch?.[1] ?? ""
 		expect(returnBlock).toContain("taskTelemetry: this.taskTelemetry.get()")
 	})
 
