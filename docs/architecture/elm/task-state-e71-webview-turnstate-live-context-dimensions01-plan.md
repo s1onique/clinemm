@@ -1,10 +1,12 @@
 # ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-LIVE-CONTEXT-DIMENSIONS01
 
-**STATUS:** AUTHORIZED (R12+R13+R14+R15 fixups applied)
+**STATUS:** AUTHORIZED (R12+R13+R14+R15+R16 fixups applied)
 **AUTHORIZATION_BASE_HEAD:** f41d69d2a83aa625f0195b757df54a0805c4e65f (LIVE-SHAPE R10 FIXUP ancestor)
 **INITIAL_PLAN_FREEZE_HEAD:** dd4f08d7c348373a9dba5bf8378ebf53e2754c6f (this ACT's first plan commit; superseded by the amendment below for execution purpose only — remains the source-of-truth for §1..§9 as originally written)
-**PLAN_AMENDMENT_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (R14 fixup commit — splits identity into 4-head chain; adds LIVE_UNOBSERVABLE / T7A/T7B/T7C / C0..C4 split)
-**IMPLEMENTATION_ENTRY_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (literal HEAD at C0..C4 start; R14)
+**PLAN_AMENDMENT_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (R14 fixup commit — splits identity into a 4-head chain; adds LIVE_UNOBSERVABLE / T7A/T7B/T7C / C0..C4 split)
+**IMPLEMENTATION_AUTHORIZED_FROM_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (R16 — renamed from `IMPLEMENTATION_ENTRY_HEAD`; this is a stable ancestor, NOT the literal HEAD at execution time)
+**LATEST_PLAN_HEAD:** 0888a6cdf9ddd780bcb61529b0db2eb218de2eda (this R16 docs commit; the current literal HEAD that C0 may start from or any later descendant; R16)
+**C0_ENTRY_HEAD:** UNKNOWN_UNTIL_C0 (literal HEAD at the moment C0 begins execution; recorded as evidence by C0; R16)
 **DOGFOOD_SOURCE_HEAD:** UNKNOWN_AT_FREEZE (bound at C2 build time to the literal HEAD produced by C1; R15)
 **PRECONDITION:** LIVE-SHAPE-REPRODUCTION01 CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED
 **MISSION:** Acquire the minimum live-only evidence needed to explain why `webview-raw-incoming(streaming/11)` becomes `webview-committed(idle/3)`, **without** changing application-state semantics and **without** attempting a repair.
@@ -75,46 +77,90 @@ explain the divergence.
 ## §1  Frozen authority
 
 ```text
-AUTHORIZATION_BASE_HEAD    = f41d69d2a83aa625f0195b757df54a0805c4e65f
-                             (the LIVE-SHAPE R10 FIXUP commit; the
-                              predecessor whose R10 FIXUP closed the
-                              GREEN/RED vocabulary; not the execution
-                              HEAD for this ACT — R12)
+AUTHORIZATION_BASE_HEAD              = f41d69d2a83aa625f0195b757df54a0805c4e65f
+                                       (the LIVE-SHAPE R10 FIXUP commit;
+                                        the LIVE-SHAPE ancestor that this
+                                        ACT inherits authority from —
+                                        R12)
 
-INITIAL_PLAN_FREEZE_HEAD   = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
-                             (this ACT's first plan commit; the
-                              source-of-truth for §1..§9 as originally
-                              written; superseded for execution
-                              purpose only by the amendment below —
-                              NOT the execution HEAD — R14)
+INITIAL_PLAN_FREEZE_HEAD             = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
+                                       (this ACT's first plan commit;
+                                        source-of-truth for §1..§9 as
+                                        originally written;
+                                        superseded for execution
+                                        purpose only — NOT the entry
+                                        SHA — R14)
 
-PLAN_AMENDMENT_HEAD        = 695b608a957b8c4d9be978336e6709aec0053d7e
-                             (R14 fixup commit; introduced the 4-head
-                              identity chain, LIVE_UNOBSERVABLE
-                              vocabulary, T7A/T7B/T7C sub-gates, and
-                              the C0..C4 execution split)
+PLAN_AMENDMENT_HEAD                  = 695b608a957b8c4d9be978336e6709aec0053d7e
+                                       (R14 fixup commit; introduced
+                                        the 4-head identity chain,
+                                        LIVE_UNOBSERVABLE vocabulary,
+                                        T7A/T7B/T7C sub-gates, and
+                                        the C0..C4 execution split)
 
-IMPLEMENTATION_ENTRY_HEAD  = 695b608a957b8c4d9be978336e6709aec0053d7e
-                             (literal HEAD when implementation ACTs
-                             C0..C1 begin — R14)
+IMPLEMENTATION_AUTHORIZED_FROM_HEAD  = 695b608a957b8c4d9be978336e6709aec0053d7e
+                                       (R16 — renamed from
+                                        IMPLEMENTATION_ENTRY_HEAD.
+                                        Stable ANCESTOR under which C0,
+                                        C1, C2 are authorized to
+                                        execute. NOT the literal
+                                        HEAD at execution time.)
 
-DOGFOOD_SOURCE_HEAD        = UNKNOWN_AT_FREEZE
-                             (literal HEAD at start of C2; produced
-                              by C1's temporary-capture commit; bound
-                              to the VSIX payload/version/hash at C2
-                              build time — R15. NOT a freeze-time
-                              value; the executor records and
-                              announces it in C2.)
+LATEST_PLAN_HEAD                     = 0888a6cdf9ddd780bcb61529b0db2eb218de2eda
+                                       (R16 — the current literal
+                                        plan HEAD that the executor
+                                        will start C0 from, or any
+                                        later descendant; this is the
+                                        most recent docs-only fixup
+                                        on the authorized branch.)
+
+C0_ENTRY_HEAD                        = UNKNOWN_UNTIL_C0
+                                       (R16 — recorded as evidence
+                                        by C0; equals `git rev-parse
+                                        HEAD` at the moment C0 begins
+                                        execution. The plan MUST NOT
+                                        pre-bake this SHA. Any future
+                                        docs-only commit between
+                                        LATEST_PLAN_HEAD and C0
+                                        execution is allowed; it does
+                                        not invalidate C0.)
+
+DOGFOOD_SOURCE_HEAD                  = UNKNOWN_AT_FREEZE
+                                       (R15 — literal HEAD at start
+                                        of C2; produced by C1's
+                                        temporary-capture commit;
+                                        bound to the VSIX
+                                        payload/version/hash at C2
+                                        build time. NOT a freeze-time
+                                        value; the executor records
+                                        and announces it in C2.)
 
 Do not confuse these:
-  - AUTHORIZATION_BASE_HEAD is the LIVE-SHAPE ancestor that this ACT
-    inherits authority from.
-  - INITIAL_PLAN_FREEZE_HEAD is the commit that first froze this ACT
-    as a docs-only artifact.
-  - PLAN_AMENDMENT_HEAD == IMPLEMENTATION_ENTRY_HEAD is where
-    C0 (read-only recon) and C1 (temporary capture) must start.
-  - DOGFOOD_SOURCE_HEAD is the output of C1 and the input to C2.
-    It is not predictable at plan-freeze time.
+
+  - AUTHORIZATION_BASE_HEAD is the LIVE-SHAPE ancestor this ACT
+    inherits authority from. (Read-only historical anchor.)
+
+  - INITIAL_PLAN_FREEZE_HEAD is the commit that first froze this
+    ACT as a docs-only artifact. (Read-only historical anchor.)
+
+  - PLAN_AMENDMENT_HEAD is the commit that introduced the
+    LIVE_UNOBSERVABLE vocabulary and the C0..C4 split.
+    (Read-only historical anchor.)
+
+  - IMPLEMENTATION_AUTHORIZED_FROM_HEAD is the stable ancestor
+    under which C0, C1, and C2 are authorized to execute.
+    This is a floor, not a target. C0 may start from LATEST_PLAN_
+    HEAD or any descendant. C0 MUST NOT start from a commit
+    older than this SHA.
+
+  - LATEST_PLAN_HEAD is the current literal HEAD of the plan
+    branch. C0 typically starts from this commit or a descendant.
+
+  - C0_ENTRY_HEAD is recorded by C0 itself at execution start;
+    it is the runtime discovery, not a plan-fixed SHA.
+
+  - DOGFOOD_SOURCE_HEAD is the runtime discovery at C2 build
+    time (the output of C1). Same discipline as C0_ENTRY_HEAD.
 
 TRACE01_W2                = PROVEN
   P12 raw                 = streaming/11
@@ -458,13 +504,27 @@ E9_AUTHORITY_CHANGE             = forbidden
 ## §6  Acceptance gate
 
 ```text
-LCD_T0   IMPLEMENTATION_ENTRY_IDENTITY  PASS    (HEAD == 695b608a9;
-                                                    f41d69d2a is the
-                                                    AUTHORIZATION_BASE;
-                                                    dd4f08d7c is the
-                                                    INITIAL_PLAN_FREEZE;
-                                                    neither is the entry
-                                                    SHA — see §1; R14)
+LCD_T0   IMPLEMENTATION_ENTRY_IDENTITY  PASS    (C0_ENTRY_HEAD is
+                                                    discovered at C0
+                                                    start; the gate is
+                                                    ancestry-based — see
+                                                    §1 and §6.5 C0;
+                                                    IMPLEMENTATION_AUTHORIZED_FROM_HEAD
+                                                    == 695b608a9 is the
+                                                    stable floor, NOT
+                                                    an equality target;
+                                                    R16)
+
+LCD_T0a  C0_ENTRY_HEAD_RECORDED         PASS    (C0 records
+                                                    C0_ENTRY_HEAD as
+                                                    evidence; equals
+                                                    `git rev-parse HEAD`
+                                                    at C0 start;
+                                                    descendant-or-equal
+                                                    of IMPLEMENTATION_AUTHORIZED_FROM_HEAD;
+                                                    descendant-or-equal
+                                                    of LATEST_PLAN_HEAD;
+                                                    R16)
 LCD_T1   TRACE01_PREDECESSOR           CLOSED_CLEAN
 LCD_T2   LIVE_SHAPE_PREDECESSOR        CLOSED_PARTIAL  (R10 FIXUP)
 LCD_T3   GREEN_RED_VOCABULARY          CANONICAL       (LIVE-SHAPE §2)
@@ -492,15 +552,18 @@ LCD_T17  PROTECTED_STASHES             PASS            (141372c52 + 371752f71)
 
 LCD_T18  EXACT_HEAD_VSIX               PASS            (8a7f1236... vs
                                                     post-ACT vsix;
-                                                    diagnostic vsix must
-                                                    descend from
-                                                    695b608a9
-                                                    (IMPLEMENTATION_ENTRY_HEAD)
-                                                    or any later
-                                                    descendant, NOT
-                                                    from f41d69d2a or
+                                                    diagnostic vsix
+                                                    descends from
+                                                    IMPLEMENTATION_AUTHORIZED_FROM_HEAD
+                                                    == 695b608a9 (the
+                                                    stable floor) or any
+                                                    later descendant;
+                                                    the VSIX is bound to
+                                                    DOGFOOD_SOURCE_HEAD
+                                                    == C1_HEAD; NOT from
+                                                    f41d69d2a or
                                                     dd4f08d7c — see §1;
-                                                    R14)
+                                                    R14+R16)
 LCD_T19  LIVE_TRACE_ACQUIRED           AWAIT_USER      (this ACT's primary
                                                     output)
 LCD_T20  ROOT_CAUSE_FAMILY             A|B|C|D|E|F     (LC- classification
@@ -532,9 +595,20 @@ doesn't permit.
 
 ```text
 C0  READ-ONLY RECON                          (docs only commit)
-    - rediscover exact HEAD at execution start
-      (assert: HEAD == IMPLEMENTATION_ENTRY_HEAD == 695b608a9
-       — R14)
+    - discover C0_ENTRY_HEAD = `git rev-parse HEAD` at start
+      (recorded as evidence; R16)
+    - ancestry gate (R16):
+        assert:
+          git merge-base --is-ancestor \
+            IMPLEMENTATION_AUTHORIZED_FROM_HEAD  C0_ENTRY_HEAD
+          git merge-base --is-ancestor \
+            LATEST_PLAN_HEAD                     C0_ENTRY_HEAD
+        Equivalent to: C0_ENTRY_HEAD descends from
+        IMPLEMENTATION_AUTHORIZED_FROM_HEAD and is at or past
+        LATEST_PLAN_HEAD.
+        Any number of docs-only commits between LATEST_PLAN_HEAD
+        and C0 execution is allowed; C0 is NOT invalidated by
+        them.
     - inventory W1 / W2 / Q / C code boundaries
     - populate the capture-can matrix (R14):
         CAN_P_CAPTURE                       = ?
@@ -550,7 +624,9 @@ C0  READ-ONLY RECON                          (docs only commit)
     - freeze dedicated record schema (§5)
     - freeze enable / dump mechanism
     - commit docs only — no source delta
-    - produces C0_HEAD (a docs-only commit on top of 695b608a9)
+    - produces C0_HEAD (a docs-only commit on top of
+      C0_ENTRY_HEAD).  C0_HEAD must itself descend from
+      IMPLEMENTATION_AUTHORIZED_FROM_HEAD and from LATEST_PLAN_HEAD.
 
 C1  TEMPORARY CAPTURE                        (source + test commit)
     - implement P    (if CAN_P_CAPTURE                      = YES)
@@ -575,7 +651,7 @@ C2  EXACT-HEAD DOGFOOD VSIX                  (build commit)
     - assert at C2 start:
         DOGFOOD_SOURCE_HEAD = git HEAD  (literal)
         DOGFOOD_SOURCE_HEAD descends from
-          IMPLEMENTATION_ENTRY_HEAD == 695b608a9
+          IMPLEMENTATION_AUTHORIZED_FROM_HEAD == 695b608a9
         VSIX payload / version / SHA-bound tag binds to
           DOGFOOD_SOURCE_HEAD
       C2 does NOT pre-bake a SHA; it records and announces
@@ -661,17 +737,24 @@ LIVE-SHAPE-REPRODUCTION01                ✅ CLOSED_PARTIAL
 LIVE-CONTEXT-DIMENSIONS01
   initial plan freeze                     ✅ dd4f08d7c (docs only)
   R12+R13 fixup                           ✅ 695b608a9
-  R14+R15 fixup                           ✅ (this commit)
+  R14+R15 fixup                           ✅ 0888a6cdf
+  R16 dynamic-C0-entry binding            ✅ (this commit)
   AUTHORIZATION_BASE_HEAD                 f41d69d2a (LIVE-SHAPE R10 FIXUP ancestor)
   INITIAL_PLAN_FREEZE_HEAD                dd4f08d7c (superseded for execution)
   PLAN_AMENDMENT_HEAD                     695b608a9 (R14 amendment)
-  IMPLEMENTATION_ENTRY_HEAD               ✅ 695b608a9 (R14 — what C0 starts on)
+  IMPLEMENTATION_AUTHORIZED_FROM_HEAD     695b608a9 (R16 — stable floor,
+                                                NOT an exact equality target)
+  LATEST_PLAN_HEAD                        0888a6cdf (R16 — current plan HEAD)
+  C0_ENTRY_HEAD                           ⏳ recorded at C0 start (R16;
+                                                must descend from
+                                                AUTHORIZED_FROM + LATEST_PLAN)
   DOGFOOD_SOURCE_HEAD                     ⏳ produced by C1, bound at C2 (R15)
   LIVE_UNOBSERVABLE vocabulary            ✅ R13 (no bare UNAVAILABLE)
   LC-D observability note                 ✅ R13 (NOT_DIRECTLY_OBSERVABLE)
   T7B cardinality discipline              ✅ R14 (request vs commit cardinality)
   Capture-can matrix in C0                ✅ R14
   C0 read-only recon                      ⏳ NEXT (docs-only commit;
+                                                records C0_ENTRY_HEAD;
                                                 populates capture-can matrix)
   C1 temporary capture                    ⏳
   C2 exact-head dogfood VSIX              ⏳
