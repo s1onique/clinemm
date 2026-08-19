@@ -41,7 +41,8 @@
 		}
 	},
 	"include": [
-		"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts"
+		"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
+		"src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts"
 	],
 	"exclude": [
 		"node_modules",

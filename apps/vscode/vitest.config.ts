@@ -31,13 +31,18 @@ export default defineConfig({
 		// requires the `vitest.config.c2-4-c-bridge.ts` config (which
 		// adds the resolve.alias for @cline-internal/core/...). Exclude
 		// it from the base config so the alias-less base runs cleanly.
-		// The C2.4-D Hub fallback-composition test similarly lives
-		// under src/sdk/__tests__/ but requires the dedicated
+		// The C2.4-D Hub fallback-composition test (and its D3
+		// extension, hub-runtime-host.provenance-epoch.c24-d3) similarly
+		// live under src/sdk/__tests__/ but require the dedicated
 		// `vitest.config.c2-4-d-hub.ts` config (which adds the
 		// @cline-internal/core/hub/runtime-host/hub-runtime-host alias).
+		// All three test files execute under their dedicated configs and
+		// must be excluded from this base config to keep the two test
+		// streams isolated.
 		exclude: [
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
 			"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
+			"src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
