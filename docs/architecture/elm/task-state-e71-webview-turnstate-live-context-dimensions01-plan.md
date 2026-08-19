@@ -1,11 +1,11 @@
 # ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-LIVE-CONTEXT-DIMENSIONS01
 
-**STATUS:** AUTHORIZED (R12+R13+R14+R15+R16 fixups applied)
+**STATUS:** AUTHORIZED (R12+R13+R14+R15+R16+R17 fixups applied)
 **AUTHORIZATION_BASE_HEAD:** f41d69d2a83aa625f0195b757df54a0805c4e65f (LIVE-SHAPE R10 FIXUP ancestor)
 **INITIAL_PLAN_FREEZE_HEAD:** dd4f08d7c348373a9dba5bf8378ebf53e2754c6f (this ACT's first plan commit; superseded by the amendment below for execution purpose only — remains the source-of-truth for §1..§9 as originally written)
 **PLAN_AMENDMENT_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (R14 fixup commit — splits identity into a 4-head chain; adds LIVE_UNOBSERVABLE / T7A/T7B/T7C / C0..C4 split)
 **IMPLEMENTATION_AUTHORIZED_FROM_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (R16 — renamed from `IMPLEMENTATION_ENTRY_HEAD`; this is a stable ancestor, NOT the literal HEAD at execution time)
-**LATEST_PLAN_HEAD:** 0888a6cdf9ddd780bcb61529b0db2eb218de2eda (this R16 docs commit; the current literal HEAD that C0 may start from or any later descendant; R16)
+**REQUIRED_PLAN_ANCESTOR_HEAD:** cff0218fbb0acbb74c7028ae100b285acdafa33e (R17 — the commit at which the execution contract became complete; **frozen at the R16 docs commit** so that the gate proves the C0 branch contains R16+R16's vocabulary, not just R16's parent; replaces `LATEST_PLAN_HEAD` which never advanced again)
 **C0_ENTRY_HEAD:** UNKNOWN_UNTIL_C0 (literal HEAD at the moment C0 begins execution; recorded as evidence by C0; R16)
 **DOGFOOD_SOURCE_HEAD:** UNKNOWN_AT_FREEZE (bound at C2 build time to the literal HEAD produced by C1; R15)
 **PRECONDITION:** LIVE-SHAPE-REPRODUCTION01 CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED
@@ -106,13 +106,25 @@ IMPLEMENTATION_AUTHORIZED_FROM_HEAD  = 695b608a957b8c4d9be978336e6709aec0053d7e
                                         execute. NOT the literal
                                         HEAD at execution time.)
 
-LATEST_PLAN_HEAD                     = 0888a6cdf9ddd780bcb61529b0db2eb218de2eda
-                                       (R16 — the current literal
-                                        plan HEAD that the executor
-                                        will start C0 from, or any
-                                        later descendant; this is the
-                                        most recent docs-only fixup
-                                        on the authorized branch.)
+REQUIRED_PLAN_ANCESTOR_HEAD         = cff0218fbb0acbb74c7028ae100b285acdafa33e
+                                       (R17 — the commit at which
+                                        the execution contract
+                                        became complete; frozen
+                                        at the R16 docs commit so
+                                        the C0 gate proves the C0
+                                        branch contains R16's
+                                        contract and is NOT a
+                                        sibling of R16 forked from
+                                        the R16 parent. Replaces
+                                        LATEST_PLAN_HEAD; this SHA
+                                        does NOT advance with
+                                        future docs commits. Any
+                                        ordinary later docs commit
+                                        that the executor adds
+                                        after R17 does not change
+                                        this field — C0 will
+                                        still see R17 as an
+                                        ancestor of C0_ENTRY_HEAD.)
 
 C0_ENTRY_HEAD                        = UNKNOWN_UNTIL_C0
                                        (R16 — recorded as evidence
@@ -147,20 +159,30 @@ Do not confuse these:
     LIVE_UNOBSERVABLE vocabulary and the C0..C4 split.
     (Read-only historical anchor.)
 
-  - IMPLEMENTATION_AUTHORIZED_FROM_HEAD is the stable ancestor
-    under which C0, C1, and C2 are authorized to execute.
-    This is a floor, not a target. C0 may start from LATEST_PLAN_
-    HEAD or any descendant. C0 MUST NOT start from a commit
-    older than this SHA.
+  - IMPLEMENTATION_AUTHORIZED_FROM_HEAD is the lower-stable
+    ancestor under which C0, C1, and C2 are authorized to
+    execute. (Stable floor — does NOT change.)
 
-  - LATEST_PLAN_HEAD is the current literal HEAD of the plan
-    branch. C0 typically starts from this commit or a descendant.
+  - REQUIRED_PLAN_ANCESTOR_HEAD is the upper-stable ancestor
+    that bounds the contract-completion moment. C0_ENTRY_HEAD
+    MUST descend from this SHA. (Stable floor — does NOT
+    change with future docs commits; replaces the misleading
+    LATEST_PLAN_HEAD name.)
 
   - C0_ENTRY_HEAD is recorded by C0 itself at execution start;
     it is the runtime discovery, not a plan-fixed SHA.
+    Must satisfy:
+        merge-base --is-ancestor AUTHORIZATION_BASE_HEAD  C0_ENTRY_HEAD
+        merge-base --is-ancestor REQUIRED_PLAN_ANCESTOR_HEAD  C0_ENTRY_HEAD
 
   - DOGFOOD_SOURCE_HEAD is the runtime discovery at C2 build
     time (the output of C1). Same discipline as C0_ENTRY_HEAD.
+    Must satisfy:
+        merge-base --is-ancestor REQUIRED_PLAN_ANCESTOR_HEAD  DOGFOOD_SOURCE_HEAD
+    (R17 — this was previously tied to IMPLEMENTATION_AUTHORIZED_
+    FROM_HEAD, which was correct only because there was no
+    upper anchor. With REQUIRED_PLAN_ANCESTOR_HEAD in place,
+    the stronger upper anchor takes precedence.)
 
 TRACE01_W2                = PROVEN
   P12 raw                 = streaming/11
@@ -511,9 +533,16 @@ LCD_T0   IMPLEMENTATION_ENTRY_IDENTITY  PASS    (C0_ENTRY_HEAD is
                                                     §1 and §6.5 C0;
                                                     IMPLEMENTATION_AUTHORIZED_FROM_HEAD
                                                     == 695b608a9 is the
-                                                    stable floor, NOT
-                                                    an equality target;
-                                                    R16)
+                                                    lower stable floor;
+                                                    REQUIRED_PLAN_ANCESTOR_HEAD
+                                                    == cff0218fb is the
+                                                    upper stable floor
+                                                    that ensures the C0
+                                                    branch contains the
+                                                    completed R16
+                                                    contract, NOT a
+                                                    sibling of R16;
+                                                    R16+R17)
 
 LCD_T0a  C0_ENTRY_HEAD_RECORDED         PASS    (C0 records
                                                     C0_ENTRY_HEAD as
@@ -523,8 +552,8 @@ LCD_T0a  C0_ENTRY_HEAD_RECORDED         PASS    (C0 records
                                                     descendant-or-equal
                                                     of IMPLEMENTATION_AUTHORIZED_FROM_HEAD;
                                                     descendant-or-equal
-                                                    of LATEST_PLAN_HEAD;
-                                                    R16)
+                                                    of REQUIRED_PLAN_ANCESTOR_HEAD;
+                                                    R16+R17)
 LCD_T1   TRACE01_PREDECESSOR           CLOSED_CLEAN
 LCD_T2   LIVE_SHAPE_PREDECESSOR        CLOSED_PARTIAL  (R10 FIXUP)
 LCD_T3   GREEN_RED_VOCABULARY          CANONICAL       (LIVE-SHAPE §2)
@@ -554,16 +583,23 @@ LCD_T18  EXACT_HEAD_VSIX               PASS            (8a7f1236... vs
                                                     post-ACT vsix;
                                                     diagnostic vsix
                                                     descends from
-                                                    IMPLEMENTATION_AUTHORIZED_FROM_HEAD
+                                                    REQUIRED_PLAN_ANCESTOR_HEAD
+                                                    == cff0218fb (the
+                                                    upper stable floor)
+                                                    or any later
+                                                    descendant; this
+                                                    also implies descent
+                                                    from IMPLEMENTATION_AUTHORIZED_FROM_HEAD
                                                     == 695b608a9 (the
-                                                    stable floor) or any
-                                                    later descendant;
+                                                    lower stable floor);
                                                     the VSIX is bound to
                                                     DOGFOOD_SOURCE_HEAD
                                                     == C1_HEAD; NOT from
-                                                    f41d69d2a or
-                                                    dd4f08d7c — see §1;
-                                                    R14+R16)
+                                                    f41d69d2a,
+                                                    dd4f08d7c, or any
+                                                    pre-R16 sibling of
+                                                    0888a6cdf — see §1;
+                                                    R14+R16+R17)
 LCD_T19  LIVE_TRACE_ACQUIRED           AWAIT_USER      (this ACT's primary
                                                     output)
 LCD_T20  ROOT_CAUSE_FAMILY             A|B|C|D|E|F     (LC- classification
@@ -597,18 +633,24 @@ doesn't permit.
 C0  READ-ONLY RECON                          (docs only commit)
     - discover C0_ENTRY_HEAD = `git rev-parse HEAD` at start
       (recorded as evidence; R16)
-    - ancestry gate (R16):
+    - ancestry gate (R16+R17):
         assert:
           git merge-base --is-ancestor \
             IMPLEMENTATION_AUTHORIZED_FROM_HEAD  C0_ENTRY_HEAD
           git merge-base --is-ancestor \
-            LATEST_PLAN_HEAD                     C0_ENTRY_HEAD
-        Equivalent to: C0_ENTRY_HEAD descends from
-        IMPLEMENTATION_AUTHORIZED_FROM_HEAD and is at or past
-        LATEST_PLAN_HEAD.
-        Any number of docs-only commits between LATEST_PLAN_HEAD
-        and C0 execution is allowed; C0 is NOT invalidated by
-        them.
+            REQUIRED_PLAN_ANCESTOR_HEAD         C0_ENTRY_HEAD
+        The lower anchor (AUTHORIZED_FROM_HEAD == 695b608a9)
+        grants authorization. The upper anchor
+        (REQUIRED_PLAN_ANCESTOR_HEAD == cff0218fb) proves
+        the C0 branch contains the completed R16 contract —
+        it is NOT a sibling fork of 0888a6cdf that pre-dates
+        R16.
+        Any number of docs-only commits between
+        REQUIRED_PLAN_ANCESTOR_HEAD and C0 execution is
+        allowed; C0 is NOT invalidated by them. REQUIRED_PLAN_
+        ANCESTOR_HEAD itself does NOT advance with those
+        ordinary later docs commits; C0 still sees it as an
+        ancestor of C0_ENTRY_HEAD.
     - inventory W1 / W2 / Q / C code boundaries
     - populate the capture-can matrix (R14):
         CAN_P_CAPTURE                       = ?
@@ -626,7 +668,8 @@ C0  READ-ONLY RECON                          (docs only commit)
     - commit docs only — no source delta
     - produces C0_HEAD (a docs-only commit on top of
       C0_ENTRY_HEAD).  C0_HEAD must itself descend from
-      IMPLEMENTATION_AUTHORIZED_FROM_HEAD and from LATEST_PLAN_HEAD.
+      both IMPLEMENTATION_AUTHORIZED_FROM_HEAD and
+      REQUIRED_PLAN_ANCESTOR_HEAD.
 
 C1  TEMPORARY CAPTURE                        (source + test commit)
     - implement P    (if CAN_P_CAPTURE                      = YES)
@@ -651,11 +694,18 @@ C2  EXACT-HEAD DOGFOOD VSIX                  (build commit)
     - assert at C2 start:
         DOGFOOD_SOURCE_HEAD = git HEAD  (literal)
         DOGFOOD_SOURCE_HEAD descends from
+          REQUIRED_PLAN_ANCESTOR_HEAD == cff0218fb
+          (the upper stable floor; R17 — proves the C2 branch
+           carries the completed R16 contract, NOT a
+           pre-R16 sibling fork)
+        DOGFOOD_SOURCE_HEAD also descends from
           IMPLEMENTATION_AUTHORIZED_FROM_HEAD == 695b608a9
+          (the lower authorization floor; R16 — implied by
+           the upper check but kept explicit for clarity)
         VSIX payload / version / SHA-bound tag binds to
           DOGFOOD_SOURCE_HEAD
       C2 does NOT pre-bake a SHA; it records and announces
-      DOGFOOD_SOURCE_HEAD = C1_HEAD.  R15.
+      DOGFOOD_SOURCE_HEAD = C1_HEAD.  R15+R17.
     - install (via debug harness; per operational policy)
 
 C3  USER LIVE WALK                           (artifact commit)
@@ -738,24 +788,43 @@ LIVE-CONTEXT-DIMENSIONS01
   initial plan freeze                     ✅ dd4f08d7c (docs only)
   R12+R13 fixup                           ✅ 695b608a9
   R14+R15 fixup                           ✅ 0888a6cdf
-  R16 dynamic-C0-entry binding            ✅ (this commit)
+  R16 dynamic-C0-entry binding            ✅ cff0218fb
+  R17 required-plan-ancestor upper anchor ✅ (this commit; pinned at
+                                                cff0218fb so the gate
+                                                proves the C0 branch
+                                                carries R16's contract,
+                                                not a pre-R16 sibling
+                                                fork; LATEST_PLAN_HEAD
+                                                retired; this SHA does
+                                                NOT advance with future
+                                                docs commits)
   AUTHORIZATION_BASE_HEAD                 f41d69d2a (LIVE-SHAPE R10 FIXUP ancestor)
   INITIAL_PLAN_FREEZE_HEAD                dd4f08d7c (superseded for execution)
   PLAN_AMENDMENT_HEAD                     695b608a9 (R14 amendment)
-  IMPLEMENTATION_AUTHORIZED_FROM_HEAD     695b608a9 (R16 — stable floor,
+  IMPLEMENTATION_AUTHORIZED_FROM_HEAD     695b608a9 (R16 — lower stable floor,
                                                 NOT an exact equality target)
-  LATEST_PLAN_HEAD                        0888a6cdf (R16 — current plan HEAD)
+  REQUIRED_PLAN_ANCESTOR_HEAD             cff0218fb (R17 — upper stable floor;
+                                                frozen at contract-completion
+                                                commit; C0_ENTRY_HEAD must
+                                                descend from this; this SHA
+                                                does NOT advance)
   C0_ENTRY_HEAD                           ⏳ recorded at C0 start (R16;
                                                 must descend from
-                                                AUTHORIZED_FROM + LATEST_PLAN)
-  DOGFOOD_SOURCE_HEAD                     ⏳ produced by C1, bound at C2 (R15)
+                                                AUTHORIZED_FROM +
+                                                REQUIRED_PLAN_ANCESTOR;
+                                                R16+R17)
+  DOGFOOD_SOURCE_HEAD                     ⏳ produced by C1, bound at C2 (R15);
+                                                must descend from
+                                                REQUIRED_PLAN_ANCESTOR_HEAD
+                                                (R17)
   LIVE_UNOBSERVABLE vocabulary            ✅ R13 (no bare UNAVAILABLE)
   LC-D observability note                 ✅ R13 (NOT_DIRECTLY_OBSERVABLE)
   T7B cardinality discipline              ✅ R14 (request vs commit cardinality)
   Capture-can matrix in C0                ✅ R14
   C0 read-only recon                      ⏳ NEXT (docs-only commit;
                                                 records C0_ENTRY_HEAD;
-                                                populates capture-can matrix)
+                                                populates capture-can matrix;
+                                                R16+R17)
   C1 temporary capture                    ⏳
   C2 exact-head dogfood VSIX              ⏳
   C3 user live walk                       ⏳
