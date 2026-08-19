@@ -81,6 +81,91 @@ This is a repository safety invariant, not merely a preference. Enforcement is t
 
 ---
 
+## Git safety
+
+### GIT-SAFETY-NO-FORCE-PUSH01
+
+- ID: `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01`
+- STATUS: CLOSED
+
+**Authority model.**
+
+```
+  GitHub repository ruleset
+    name = cline-- protect published history
+    id   = 21037630
+    target          = branch
+    enforcement     = active
+    conditions.ref_name.include = ["refs/heads/main"]
+    rules           = [{type: "non_fast_forward"}]   -- i.e. "Block force pushes"
+    bypass_actors   = []
+    current_user_can_bypass = "never"
+```
+
+**Effective state on `main`.**
+
+- Force pushes to `main` are server-side rejected by GitHub before they reach ref storage.
+- Branch is reported as `protected: true` via the GitHub branches API.
+- The classic `/branches/main/protection` endpoint returns 404 because protection is now expressed via ruleset (the authoritative mechanism), not legacy branch-protection rules.
+- No branch-protection rule was added, modified, or removed.
+
+**Conservation.**
+
+```
+  NORMAL_FAST_FORWARD_PUSH_POLICY_DELTA = 0
+  EXISTING_RULES_REMOVED                = 0
+  EXISTING_RULES_WEAKENED               = 0
+  RULES_ADDED                           = 1  (block_force_pushes on main)
+  BYPASS_ACTORS_REMAINING               = 0
+```
+
+**Recon pre-state** (committed to `${TMPDIR:-/tmp}/clinemm-ruleset-before.json`, not committed to repo):
+
+```
+  rulesets = []
+  default_branch_protection = ABSENT
+  branches_summary = [act/elm-architecture01-e0-e4, act/session-autonomy01-correction02,
+                     act/settings-authority-parity01, main]
+  collaborators = [{alexclear: admin, maintain, push, triage, pull}]
+  installed_github_apps = []
+```
+
+**Recon post-state** (committed to `${TMPDIR:-/tmp}/clinemm-ruleset-after.json`, not committed to repo):
+
+```
+  rulesets = [{id:21037630, name:"cline-- protect published history",
+               target:branch, enforcement:active}]
+  default_branch_protection = ABSENT (ruleset is the authority)
+  branches_summary = same as pre; main now reports protected:true
+```
+
+**Bypass analysis.** Bypass actors were inventoried:
+
+- Repository administrators (the current token user `alexclear`): classified NOT_REQUIRED. The created ruleset has `current_user_can_bypass: "never"`, so even admins cannot bypass.
+- Organization owners: N/A (this is a personal repository, not an org).
+- Teams: none configured.
+- Users (other collaborators): none.
+- GitHub Apps: none installed.
+- Deploy keys: none (this is an SSH-based remote, deploy keys would be for HTTPS).
+- Automation identities: none other than the current admin user.
+
+Conclusion: `BYPASS_ACTOR_COUNT = 0`.
+
+**Reopen conditions** (any one of these should reopen the epic):
+
+- Ruleset `21037630` becomes disabled.
+- The `non_fast_forward` rule is removed from `21037630`.
+- Any bypass actor is added to `21037630`.
+- Branch protection is changed to allow force pushes (legacy mechanism).
+- Default branch moves outside `refs/heads/main`.
+- Repository ownership/topology changes such that the rule no longer applies.
+
+**Optional follow-up (P2, non-blocking).** `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` — defense-in-depth local pre-push hook to catch `git push --force` invocations before they leave the developer machine. Not required for closure; the server-side ruleset is sufficient.
+
+**Closure ACT.** `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` closed at `2026-08-19`.
+
+---
+
 ## Canonical task index
 
 Every actionable Cline-- task has exactly one row here. Narrative sections below refer back to these IDs. Historical identifiers that could not be confidently mapped are kept as `NEEDS_CLASSIFICATION` rather than silently dropped.
@@ -119,8 +204,9 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `ACT-CLINEMM-GITHUB-ACTIONS-RECON01` | DIST | NEXT | HIGH | github-actions01 | recon ACT |
 | `EPIC-CLINEMM-GITHUB-DISTRIBUTION01` | DIST | OPEN | HIGH | none | publish VSIX via GitHub Release; decide GitHub Packages applicability |
 | `ACT-CLINEMM-DOGFOOD-SINGLE-WORKTREE-CLEANUP01` | DIST | P2/OPEN | LOW | one-worktree policy | remove detached temporary worktree from dogfood packaging |
-| `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` | GIT-SAFETY | NEXT | CRITICAL | none | server-side enforce block-force-push rule on GitHub; defense in depth |
-| `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | GIT-SAFETY | NEXT | CRITICAL | git-safety-no-force-push01 | GitHub ruleset/branch protection recon + enforce; prove server-side rule |
+| `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` | GIT-SAFETY | CLOSED | — | none | server-side block-force-push enforced via repository ruleset `cline-- protect published history` (id `21037630`); `enforcement=active`, `target=branch`, `refs/heads/main`, `non_fast_forward`, `bypass_actors=[]`, `current_user_can_bypass=never`; evidence at `${TMPDIR:-/tmp}/clinemm-ruleset-{before,after}.json` |
+| `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | GIT-SAFETY | CLOSED | — | git-safety-no-force-push01 | closed at `2026-08-19`; ruleset `21037630`; bypass_actor_count=0; normal fast-forward push to `main` preserved; P2 follow-up `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` not required for closure |
+| `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` | GIT-SAFETY | DEFERRED | P2 | none | defense-in-depth local pre-push guard; not required because server-side ruleset already enforces; tracked as optional follow-up |
 | `ACT-CLINEMM-PUBLISH-CURRENT-MAIN01` | DIST/REPO | OPEN | HIGH | remote-push-safety policy | fast-forward `origin/main` to current local main; requires explicit authority |
 | `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | FACTORY/REPO | CLOSED | — | — | repository-topology migration: main FF from `a9f376edf` → `5637d965d`; linked worktree removed; single-worktree topology frozen |
 | `ACT-CLINEMM-LIVE-EPOCH-REPAIR-QUALIFICATION01` | FOUNDATION/QA | CLOSED_LIVE | — | — | W1/W2 epoch repair live qualification; `PASS_LIVE_EPOCH_REPAIR` at `5637d965d` |
@@ -230,14 +316,14 @@ Legend:
 
 ## Immediate critical path
 
-Priority rationale: an accidental destructive force-push can destroy the evidence and commits behind every product defect. Git-safety comes before any product defect that depends on those commits remaining publishable. Quality substrate precedes long product-work cycles because a green baseline + monotonic coverage ratchet makes every subsequent Cline-- ACT cheaper to qualify.
+Priority rationale: an accidental destructive force-push can destroy the evidence and commits behind every product defect. Git-safety comes before any product defect that depends on those commits remaining publishable. Quality substrate precedes long product-work cycles because a green baseline + monotonic coverage ratchet makes every subsequent Cline-- ACT cheaper to qualify. The first three items are no longer aspirational: Git-safety enforcement is CLOSED; only publish and quality-substrate recon remain in the run-up to product work.
 
-1. **GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01** — NEXT / CRITICAL (server-side enforcement)
-2. **PUBLISH-CURRENT-MAIN01** — OPEN / HIGH (requires explicit authority; fast-forward only)
-3. **TEST-BASELINE-ZERO-FAILURES01** — OPEN / HIGH (default canonical gate = zero unexplained failures)
-4. **TYPECHECK-ZERO-BASELINE01** — OPEN / HIGH (test gate ≠ typecheck gate; both must be clean)
-5. **CODE-COVERAGE-BASELINE01** — OPEN / HIGH (recon before any ratchet)
-6. **CODE-COVERAGE-RATCHET01** — OPEN / HIGH (depends on #5; monotonic threshold increase)
+1. **PUBLISH-CURRENT-MAIN01** — OPEN / HIGH (requires explicit authority; fast-forward only; precondition `git merge-base --is-ancestor origin/main main`; now safe because `main` is server-side force-push-blocked at ruleset `21037630`)
+2. **TEST-BASELINE-ZERO-FAILURES01** — OPEN / HIGH (default canonical gate = zero unexplained failures)
+3. **TYPECHECK-ZERO-BASELINE01** — OPEN / HIGH (test gate ≠ typecheck gate; both must be clean)
+4. **CODE-COVERAGE-BASELINE01** — OPEN / HIGH (recon before any ratchet)
+5. **CODE-COVERAGE-RATCHET01** — OPEN / HIGH (depends on #4; monotonic threshold increase)
+6. **UPSTREAM-ISSUE-INTAKE-TRIAGE01** — NEXT / HIGH (uses substrate `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-SUBSTRATE01` snapshot; IMPORT/MAP_EXISTING/RADAR/REJECT per upstream issue)
 7. **COMPACTION-STATE-AUTHORITY01** — OPEN / LIVE_UI / HIGH
 8. **STATIC-THINKING-PRESENTATION-PERSISTENCE01** — OPEN / HIGH
 9. **TASKHEADER-CANONICAL-PROJECTION01** — OPEN / HIGH
@@ -797,6 +883,8 @@ Compact mapping so old names are preserved without duplicate work.
 | `ACT-CLINEMM-E7.1-TEMP-DIAGNOSTICS-REMOVAL01` | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | SUPERSEDED (PTAD retained DEFAULT_OFF; recon showed value) |
 | `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | repository-topology migration | CLOSED (main FF `a9f376edf` → `5637d965d`; one-worktree policy frozen) |
 | `ACT-CLINEMM-LIVE-EPOCH-REPAIR-QUALIFICATION01` | W1/W2 epoch repair qualification | CLOSED_LIVE at `5637d965d` (`PASS_LIVE_EPOCH_REPAIR`) |
+| `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` | `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | CLOSED at `2026-08-19`; ruleset `21037630` (`cline-- protect published history`); `non_fast_forward` on `refs/heads/main`, `bypass_actors=[]`, `current_user_can_bypass=never` |
+| `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | ruleset `21037630` | CLOSED at `2026-08-19` |
 
 **Unknown-task policy.** If a historical ID is known to have existed but its exact contract cannot be reconstructed from current board + repository history + current source/docs, the row stays in this table as `NEEDS_CLASSIFICATION`. We do not invent scope, we do not silently omit, and we do not spend hours reconstructing now. Reclassification happens when the task becomes relevant to a real decision.
 
