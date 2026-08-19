@@ -1,7 +1,9 @@
 # ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-LIVE-CONTEXT-DIMENSIONS01
 
-**STATUS:** AUTHORIZED
-**ENTRY HEAD:** f41d69d2a83aa625f0195b757df54a0805c4e65f
+**STATUS:** AUTHORIZED (R12+R13 fixup applied)
+**AUTHORIZATION_BASE_HEAD:** f41d69d2a83aa625f0195b757df54a0805c4e65f (LIVE-SHAPE R10 FIXUP ancestor)
+**PLAN_FREEZE_HEAD:** dd4f08d7c348373a9dba5bf8378ebf53e2754c6f (this ACT's first plan commit)
+**IMPLEMENTATION_ENTRY_HEAD:** dd4f08d7c348373a9dba5bf8378ebf53e2754c6f (literal HEAD at C0..C4 start; R12)
 **PRECONDITION:** LIVE-SHAPE-REPRODUCTION01 CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED
 **MISSION:** Acquire the minimum live-only evidence needed to explain why `webview-raw-incoming(streaming/11)` becomes `webview-committed(idle/3)`, **without** changing application-state semantics and **without** attempting a repair.
 
@@ -25,28 +27,72 @@ Therefore the synthetic GREEN witness is preserved, but **no
 further synthetic ladder rung can advance** until the missing
 intermediate observations are acquired from the live path:
 
-| Live dimension                                          | Status                  |
-|---------------------------------------------------------|-------------------------|
-| snapshot epoch                                           | UNAVAILABLE_FROM_TRACE  |
-| replica epoch (immediately before W1)                    | UNAVAILABLE_FROM_TRACE  |
-| snapshot stateVersion                                    | known (0); matches BASE |
-| replica stateVersion (immediately before W1)             | UNAVAILABLE_FROM_TRACE  |
-| W1 invocation ordinal per pushId                          | UNAVAILABLE_FROM_TRACE  |
-| prevState.turnState (the actual reducer argument)         | UNAVAILABLE_FROM_TRACE  |
-| reducer-output turnState                                   | UNAVAILABLE_FROM_TRACE  |
-| reducer-output epoch/stateVersion                          | UNAVAILABLE_FROM_TRACE  |
-| returned newState.turnState                                | UNAVAILABLE_FROM_TRACE  |
-| partial-message epoch / ts / seq                           | UNAVAILABLE_FROM_TRACE  |
-| queued local setState writers between raw and commit      | UNAVAILABLE_FROM_TRACE  |
+| Live dimension                                          | Status (epistemic)        |
+|---------------------------------------------------------|---------------------------|
+| snapshot epoch                                           | UNAVAILABLE_FROM_TRACE    |
+| replica epoch (immediately before W1)                    | LIVE_UNOBSERVABLE (R13)   |
+| snapshot stateVersion                                    | ALREADY_MATCHED           |
+| replica stateVersion (immediately before W1)             | LIVE_UNOBSERVABLE (R13)   |
+| W1 invocation ordinal per pushId                          | LIVE_UNOBSERVABLE (R13)   |
+| prevState.turnState (the actual reducer argument)         | LIVE_UNOBSERVABLE (R13)   |
+| reducer-output turnState                                   | LIVE_UNOBSERVABLE (R13)   |
+| reducer-output epoch/stateVersion                          | LIVE_UNOBSERVABLE (R13)   |
+| returned newState.turnState                                | LIVE_UNOBSERVABLE (R13)   |
+| partial-message epoch / ts / seq                           | UNAVAILABLE_FROM_TRACE    |
+| queued local setState writers between raw and commit      | LIVE_UNOBSERVABLE (R13)   |
 
-This ACT captures them. It does **not** explain them.
+Epistemic vocabulary (R13 — three distinct states):
+
+  UNAVAILABLE_FROM_TRACE
+      The old TRACE01 instrumentation never captured this
+      dimension; the gap predates this ACT.
+
+  LIVE_UNOBSERVABLE
+      The current live diagnostic cannot capture this dimension
+      without violating either
+      (a) the capture-at-the-boundary guarantee (§2), or
+      (b) LC_T_PURITY / the React functional-updater purity rule.
+      The dimension is real and live; the capture mechanism is
+      what is insufficient. Offline replay from immutable
+      captured inputs is the correct substitute.
+
+  CAPTURE_INSUFFICIENT
+      Even with what we can capture, available observations do
+      not isolate a single boundary. This is a §4 halt, not a
+      §2 epistemic label.
+
+Crucially: do **not** reuse bare `UNAVAILABLE`, and do **not**
+substitute `UNAVAILABLE_FROM_TRACE` for `LIVE_UNOBSERVABLE` (or
+vice-versa). They are different epistemic categories.
+
+This ACT captures what is safely live-observable. It does **not**
+explain the divergence.
 
 ---
 
 ## §1  Frozen authority
 
 ```text
-ENTRY_HEAD                = f41d69d2a83aa625f0195b757df54a0805c4e65f
+AUTHORIZATION_BASE_HEAD   = f41d69d2a83aa625f0195b757df54a0805c4e65f
+                            (the LIVE-SHAPE R10 FIXUP commit; the
+                             predecessor whose R10 FIXUP closed the
+                             GREEN/RED vocabulary; not the execution
+                             HEAD for this ACT)
+
+PLAN_FREEZE_HEAD          = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
+                            (this ACT's authorization plan commit;
+                             the source-of-truth for §1..§9 as written
+                             at freeze time)
+
+IMPLEMENTATION_ENTRY_HEAD = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
+                            (literal HEAD when implementation ACTs
+                             C0..C4 begin)
+
+Do not confuse these:
+  - AUTHORIZATION_BASE_HEAD is the LIVE-SHAPE ancestor that this ACT
+    inherits authority from.
+  - PLAN_FREEZE_HEAD == IMPLEMENTATION_ENTRY_HEAD is where
+    implementation must start.
 
 TRACE01_W2                = PROVEN
   P12 raw                 = streaming/11
@@ -71,6 +117,11 @@ of truth):
   ALREADY_MATCHED      — same value as BASE on this dimension;
                          not evidence
   UNAVAILABLE_FROM_TRACE — trace did not capture; do NOT fabricate
+  LIVE_UNOBSERVABLE     — see §0 / §2; capture mechanism cannot
+                         safely observe without violating §2 or
+                         LC_T_PURITY; offline replay substitute
+  CAPTURE_INSUFFICIENT  — see §0 / §4; even observable captures do
+                         not isolate a boundary; halt signal
   BASE                 — known-good real-provider fixture;
                          GREEN by construction
   Stop at the first RED.
@@ -78,7 +129,10 @@ of truth):
 
 No fact in this document overrides the GREEN/RED vocabulary. Any
 "the committed turnState is X" verdict inherits GREEN/RED semantics
-from LIVE-SHAPE §2 verbatim.
+from LIVE-SHAPE §2 verbatim. The three new epistemic labels
+(`LIVE_UNOBSERVABLE`, `CAPTURE_INSUFFICIENT`, plus the explicit
+absence of bare `UNAVAILABLE`) are R13 additions and do not alter
+LIVE-SHAPE §2.
 
 ---
 
@@ -147,9 +201,12 @@ The five boundary guarantees:
    or `rawSnapshot := mutatedStateData`.
 2. Capture is **observation-only**. It must not influence the
    observed code path.
-3. Each observation may be `UNAVAILABLE` if the boundary cannot
-   be observed live without violating (2). Recording
-   `UNAVAILABLE` is preferred to fabricating a value.
+3. Each observation that cannot be safely captured is recorded
+   as `LIVE_UNOBSERVABLE` (R13). The bare word `UNAVAILABLE` is
+   forbidden — it conflates two distinct epistemic categories
+   (`UNAVAILABLE_FROM_TRACE` = old TRACE gap vs. `LIVE_UNOBSERVABLE`
+   = current live mechanism cannot capture safely).
+   `LIVE_UNOBSERVABLE` is preferred to fabricating a value.
 4. Records are tagged with the `_ptadPushId` they belong to so
    they can be correlated with the existing TRACE01 JSONL.
 5. Records carry no application-state semantic delta. Anything
@@ -187,7 +244,8 @@ A. First try to observe it without changing updater purity.
 
 B. If the intermediate cannot be observed without an updater-side
    effect:
-     LIVE_OBSERVABILITY = UNAVAILABLE
+     LIVE_OBSERVABILITY = LIVE_UNOBSERVABLE
+     (R13; never bare UNAVAILABLE)
      derive/replay later from immutable captured inputs
      (e.g., return value of a pure reducer call replayed in a
      test harness against captured immutable state)
@@ -210,6 +268,52 @@ that REQUESTS an update
 
 Q records must NOT be emitted from inside the functional updater
 that CALCULATES it
+```
+
+**Capture priority for C1.** Not every capture group is equally
+cheap. The following priority order is part of this ACT:
+
+```text
+P    — incoming snapshot identity           (cheap; safe)
+W2   — partial-message identity            (cheap; safe)
+Q    — update-request chronology           (cheap; safe; Q-group only)
+C    — committed result                     (cheap; safe)
+
+B / R / N are desired, not mandatory. They are observable only
+if the executor can implement them without breaking LC_T_PURITY.
+If they cannot, mark them LIVE_UNOBSERVABLE and rely on offline
+replay from immutable outer-boundary inputs (e.g., running the
+same pure reducer against the captured immutable prevState).
+```
+
+**Sub-gates.** React documents that functional updater functions
+must be pure and that development Strict Mode intentionally
+re-invokes functions expected to be pure to expose impurity.
+Therefore, beyond the abstract `LC_T_PURITY` rule, the executor
+must also satisfy (and the test suite must verify) three concrete
+sub-gates:
+
+```text
+LCD_T7A NEW_UPDATER_SIDE_EFFECTS = 0
+  No diagnostic call introduced by this ACT adds a record append,
+  ref mutation, counter increment, or setState call inside any
+  functional updater introduced or modified by this ACT.
+
+LCD_T7B STRICT_MODE_CARDINALITY = PASS
+  Under React development Strict Mode, diagnostic appends and
+  diagnostic-state changes are cardinality-stable: each
+  diagnostic event is observed exactly once in the live trace
+  per triggering request, despite Strict Mode's deliberate
+  re-invocation. (Equivalently: no diagnostic counter advances
+  more than once per underlying React updater call.)
+
+LCD_T7C DEFAULT_OFF_EQUIVALENCE = PASS
+  With the diagnostic enable-flag off:
+    - same callback inputs
+    - same externally visible app state
+    - no forensic records emitted
+  Not byte-identical JS execution, but semantic equivalence
+  (no observer — including the user — can tell the difference).
 ```
 
 ---
@@ -238,15 +342,33 @@ LC-C  REACT_QUEUE / LATER_WRITER
       → next ACT: REACT-QUEUE-REPRODUCTION01
 
 LC-D  SHARED_MUTABLE_AUTHORITY / UPDATER_IMPURITY
-      same push's repeated updater evaluation observes different
+      Same push's repeated updater evaluation observes different
       external replica inputs (e.g., second invocation sees
-      different replica.turnState than the first)
+      different replica.turnState than the first).
+
+      OBSERVABILITY NOTE (R13):
+        Direct observation of each updater evaluation is exactly
+        where LC_T_PURITY constrains this ACT. Therefore:
+
+        LC-D is only assignable if the phenomenon is observable
+        WITHOUT introducing new updater-side diagnostic effects.
+
+        Otherwise:
+          LC-D = NOT_DIRECTLY_OBSERVABLE
+          and classification falls to LC-F unless offline replay
+          (§3 / "B" sub-rule: replay the pure reducer against
+          captured immutable outer-boundary inputs) yields a
+          separately qualified witness.
       → next ACT: UPDATER-IMPURITY-REPRODUCTION01
 
 LC-E  SECONDARY_WRITER
       another update request between raw and commit carries or
       reconstructs stale turnState
       → next ACT: SECONDARY-WRITER-REPRODUCTION01
+      (LC-E is the family most likely to be isolated by the
+      cheap-and-safe P / W2 / Q / C captures alone; if Q records
+      show a non-W1 update request between raw and commit, that
+      is a strong LC-E signal even with B / R / N unobserved.)
 
 LC-F  HALT_CAPTURE_INSUFFICIENT
       available observations do not isolate one boundary
@@ -305,7 +427,11 @@ E9_AUTHORITY_CHANGE             = forbidden
 ## §6  Acceptance gate
 
 ```text
-LCD_T0   ENTRY_IDENTITY                PASS   (HEAD == f41d69d2a)
+LCD_T0   IMPLEMENTATION_ENTRY_IDENTITY  PASS    (HEAD == dd4f08d7c;
+                                                    f41d69d2a is the
+                                                    AUTHORIZATION_BASE,
+                                                    not the entry SHA —
+                                                    see §1)
 LCD_T1   TRACE01_PREDECESSOR           CLOSED_CLEAN
 LCD_T2   LIVE_SHAPE_PREDECESSOR        CLOSED_PARTIAL  (R10 FIXUP)
 LCD_T3   GREEN_RED_VOCABULARY          CANONICAL       (LIVE-SHAPE §2)
@@ -313,7 +439,11 @@ LCD_T3   GREEN_RED_VOCABULARY          CANONICAL       (LIVE-SHAPE §2)
 LCD_T4   TEMP_SCHEMA_DEFINED           PASS            (this ACT)
 LCD_T5   DEFAULT_OFF                   PASS
 LCD_T6   NO_STATE_SEMANTIC_DELTA       PASS
-LCD_T7   UPDATER_PURITY_GATE           PASS            (LC_T_PURITY)
+LCD_T7   UPDATER_PURITY_GATE           PASS            (LC_T_PURITY abstract
+                                                    rule — §3)
+LCD_T7A  NEW_UPDATER_SIDE_EFFECTS      PASS            (= 0; §3 sub-gate)
+LCD_T7B  STRICT_MODE_CARDINALITY       PASS            (§3 sub-gate)
+LCD_T7C  DEFAULT_OFF_EQUIVALENCE       PASS            (§3 sub-gate)
 LCD_T8   CAPTURE_AT_BOUNDARY           PASS            (no after-the-fact
                                                     reads)
 LCD_T9   PUSH_CORRELATION              PASS            (_ptadPushId reused)
@@ -328,7 +458,11 @@ LCD_T16  DIFF_HYGIENE                  PASS            (no config delta)
 LCD_T17  PROTECTED_STASHES             PASS            (141372c52 + 371752f71)
 
 LCD_T18  EXACT_HEAD_VSIX               PASS            (8a7f1236... vs
-                                                    post-ACT vsix)
+                                                    post-ACT vsix;
+                                                    diagnostic vsix must
+                                                    descend from
+                                                    dd4f08d7c, NOT
+                                                    f41d69d2a — see §1)
 LCD_T19  LIVE_TRACE_ACQUIRED           AWAIT_USER      (this ACT's primary
                                                     output)
 LCD_T20  ROOT_CAUSE_FAMILY             A|B|C|D|E|F     (LC- classification
@@ -348,6 +482,70 @@ HALT_CAPTURE_INSUFFICIENT
 ```
 
 In neither case does the ACT itself authorize a fix.
+
+---
+
+## §6.5  C0..C4 execution split
+
+The ACT is implemented in five discrete sub-stages. Each stage
+is itself an executable; each one freezes its own boundary and
+its own acceptance gate. No stage authorizes what its scope
+doesn't permit.
+
+```text
+C0  READ-ONLY RECON                          (docs only commit)
+    - rediscover exact HEAD at execution start
+      (assert: HEAD == IMPLEMENTATION_ENTRY_HEAD == dd4f08d7c)
+    - inventory W1 / W2 / Q / C code boundaries
+    - identify which B / R / N values are live-observable
+      WITHOUT impurity, vs which must be marked
+      LIVE_UNOBSERVABLE
+    - freeze dedicated record schema (§5)
+    - freeze enable / dump mechanism
+    - commit docs only — no source delta
+
+C1  TEMPORARY CAPTURE                        (source + test commit)
+    - implement P
+    - implement W2
+    - implement Q
+    - implement C correlation
+    - implement only safely observable B / R / N fields
+      (mark the rest LIVE_UNOBSERVABLE)
+    - add:
+        - default-off witness                (LCD_T7C)
+        - StrictMode witness                  (LCD_T7B)
+        - correlation / schema tests
+        - removal marker
+    - VSIX NOT YET built at this stage
+
+C2  EXACT-HEAD DOGFOOD VSIX                  (build commit)
+    - bun run protos (if any .proto touched)  [n/a: none expected]
+    - bun esbuild.mjs
+    - SHA-bind
+    - assert VSIX builds from HEAD == dd4f08d7c
+    - install (via debug harness; per operational policy)
+
+C3  USER LIVE WALK                           (artifact commit)
+    - acquire forensic artifact
+    - classify LC-A..F
+    - NO FIX
+    - capture INSIDE the existing reproduction UI flow
+
+C4  TERMINAL                                 (docs commit)
+    - either:
+        PASS_LIVE_CONTEXT_DIMENSIONS_ACQUIRED
+        or
+        HALT_CAPTURE_INSUFFICIENT
+    - freeze the successor ACT name
+    - enforce removal trigger (§5)
+```
+
+Important: C3 does not require a *new* UI workflow. It reuses the
+existing live reproduction surface. The user reproduces the faulty
+run, the temporary trace is dumped to disk, and the files are
+handed back to the executor for §4 classification.
+
+`production_fix` is forbidden in every C-stage, including C4.
 
 ---
 
@@ -397,19 +595,26 @@ RED-FIX01                                ✅ CLOSED_HALTED_CLEAN
 LIVE-SHAPE-REPRODUCTION01                ✅ CLOSED_PARTIAL
   stateVersion                            ALREADY_MATCHED
   remaining live dimensions              UNAVAILABLE_FROM_TRACE
+                                          (R13 — distinct from
+                                           LIVE_UNOBSERVABLE)
   first GREEN→RED delta                   NOT_FOUND
   producer reclassification              RETRACTED
   GREEN/RED vocabulary                    ✅ CANONICAL (R10 FIXUP)
 
+LIVE-CONTEXT-DIMENSIONS01
+  authorization plan                      ✅ dd4f08d7c
+  AUTHORIZATION_BASE_HEAD                 f41d69d2a (predecessor; not entry)
+  PLAN_FREEZE_HEAD / ENTRY_HEAD           ✅ dd4f08d7c (R12 split)
+  LIVE_UNOBSERVABLE vocabulary            ✅ R13 (no bare UNAVAILABLE)
+  LC-D observability note                 ✅ R13 (NOT_DIRECTLY_OBSERVABLE)
+  C0 read-only recon                      ⏳ NEXT (docs-only commit)
+  C1 temporary capture                    ⏳
+  C2 exact-head dogfood VSIX              ⏳
+  C3 user live walk                       ⏳
+  C4 terminal classification              ⏳
+
 R11 stale test prose                     🟡 NON-BLOCKING CLEANUP
-
-LIVE-CONTEXT-DIMENSIONS01                🟢 AUTHORIZED (this ACT)
-  evidence acquisition only
-  temporary instrumentation
-  updater-purity hard gate
-  explicit removal clause
-  no repair
-
 E8                                       ⛔ HOLD
 E9                                       ⛔ HOLD
+PRODUCTION FIX                           ⛔ FORBIDDEN
 ```
