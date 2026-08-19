@@ -49,11 +49,28 @@ COMPOSER_OVERALL                   = PARTIALLY_QUALIFIED
                                     qualify the full path)
 ```
 
-The JSONL files were manually collected by the user from the
-`017f68a36` install. They are valid, parseable, and the observed
-boundary is decisive. The fixup04 chain remains closed; the W2
-boundary it could not reach is now classified, but the root
-cause remains an open question for the next ACT to resolve.
+The JSONL files were manually supplied by the user.
+Their generating VSIX is `INFERRED` to be a post-FIXUP04 build;
+the specific `017f68a36` binding is `NOT PROVEN` by the artifacts.
+The JSONLs are valid and parseable, and the observed W2 boundary
+is decisive within the W2 observable surface. The fixup04 chain
+remains closed; the W2 boundary it could not reach is now
+classified, but the root cause remains an open question for the
+next ACT to resolve.
+
+```text
+USER_REPORTED_SOURCE          = 017f68a36   (user-supplied provenance)
+ARTIFACT_PROVEN_SOURCE        = UNKNOWN     (artifacts do not embed a
+                                             commit hash or VSIX
+                                             identifier)
+ARTIFACT_INFERRED_SOURCE_FAMILY = POST_FIXUP04
+    (the structural shape of the W1 updater in the JSONLs is
+     consistent with the post-FIXUP04 cutover that introduced
+     `replicaRef.current` mutation + in-place stateData mutation;
+     this is a structural inference, not a forensic binding)
+```
+
+See `## §3` for the full frozen provenance classification.
 
 ---
 
@@ -576,12 +593,36 @@ apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx
 
 Key readings:
 
-1. The W1 updater (line 630) is a pure functional updater that
-   returns a new `state` object. Inside the updater body:
-   - `replicaRef.current` is mutated by the reducer (line 640).
-   - `stateData.turnState` is mutated by the assignment at line 647.
-   - `newState` is built by spreading `stateData` AND overriding
+1. The W1 path uses React's functional-updater form
+   (`setState((prevState) => ...)`).
+
+   It is **NOT globally pure**:
+
+   * `replicaRef.current` is mutated by the reducer (line 640).
+   * `stateData.turnState` is mutated by the assignment at line 647.
+   * `newState` is built by spreading `stateData` AND overriding
      `autoApprovalSettings` from `prevState` (line 654).
+   * Pre-existing side effects (set by the FIXUP04 predecessor
+     document at `f19dbacb9`):
+     `setShowWelcome(...)`, `setOnboardingModels(...)`,
+     `setDidHydrateState(...)` are still inside the W1 path.
+
+   FIXUP04 only proved:
+
+   ```text
+   PTAD_SIDE_EFFECTS_INSIDE_W1_UPDATER = 0
+       (i.e. no PTAD `webview-*` capture is triggered by the W1
+        updater body itself — the captures are triggered by the
+        subsequent React render/commit, not by side effects inside
+        the updater)
+   ```
+
+   That is a strictly weaker claim than "the updater is pure."
+   React documents that functional updater functions are expected
+   to be pure and may be invoked more than once (notably under
+   `<StrictMode>`); the W1 path cannot therefore be claimed as
+   globally pure while it mutates `replicaRef.current` or calls
+   setters.
 2. The bug-defeating expectation: if `replicaRef.current.turnState`
    is `streaming/11` after the reducer call, then `stateData.turnState`
    becomes `streaming/11`, and `newState.turnState` becomes `streaming/11`.
@@ -676,9 +717,27 @@ Commits:
                    (no live trace frozen)
 a4908d59c  docs(elm): E7.1 LIVE-DOGFOOD-AUTHORITY-TRACE01 existing-evidence
                    ingest (W2 boundary classified, no behavior change)
-<correction> docs(elm): TRACE01 hygiene + qualification bounds
-                   (reviewer-imposed: EOF cleanup, root-cause demoted to
-                    LEADING CANDIDATE, header/composer downgraded to
-                    TRACE_INSUFFICIENT / NOT_EXECUTED, R-D cross-callback
+0b008509d  docs(elm): TRACE01 hygiene + qualification bounds
+                   (reviewer-imposed correction01: EOF cleanup, root-cause
+                    demoted to LEADING CANDIDATE, header/composer downgraded
+                    to TRACE_INSUFFICIENT / NOT_EXECUTED, R-D cross-callback
                     aliasing rationale removed)
+<correction02> docs(elm): TRACE01 finalize provenance + updater-purity wording
+                   (reviewer-imposed correction02: R8 VSIX attribution
+                    split into USER_REPORTED / ARTIFACT_PROVEN / INFERRED;
+                    R9 §12 pure-updater overclaim removed; FIXUP04 only
+                    proved PTAD_SIDE_EFFECTS_INSIDE_W1_UPDATER = 0)
+```
+
+Final status after correction02:
+
+```text
+TRACE01_W2_BOUNDARY              = PROVEN
+TRACE01_ROOT_CAUSE               = UNKNOWN
+TRACE01_QUALIFICATION_BOUNDS     = CLEAN
+TRACE01_PATCH_HYGIENE            = PASS
+TRACE01_VERDICT                  = CLOSED_CLEAN
+
+WEBVIEW_TURNSTATE_RED_FIX01
+  AUTHORIZED                     = true
 ```
