@@ -6,6 +6,54 @@ C0 is the first executable sub-stage of `LIVE-CONTEXT-DIMENSIONS01`. Per §6.5 o
 
 This record closes C0.
 
+## C0-CORRECTION01 amendment log
+
+The original C0 manifest (committed at `6f08c82ae`) was reviewed by the
+React state-model engineer and the Factory/ACT reviewer. The review
+identified three issues that did not block the C0 docs-only commit but
+must be reflected in the C0 evidence record before C1 begins:
+
+- **R18 — B boundary identity.** The original C0 claimed
+  `CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT = YES` and named the kind
+  `webview-before-w1-updater`. That name claimed the literal reducer
+  input, but the capture is at the request site, BEFORE React evaluates
+  the queued updater. React's pending-state queue and `ref.current`'s
+  independence from React's state are documented React semantics; the
+  values can drift. The B row is split into two epistemic categories:
+  request-site (YES, but explicitly the request-site approximation) and
+  literal updater-time (NO → LIVE_UNOBSERVABLE). The capture kind is
+  renamed to `webview-w1-request-replica` / `webview-w2-request-replica`.
+
+- **R19 — W2 push-correlation provenance.** The original C0 assumed W2
+  records carry `_ptadPushId` for push correlation. The proto contract
+  (`subscribeToPartialMessage` returns `stream ClineMessage`) and the
+  `convertClineMessageToProto` wire shape confirm there is NO
+  `_ptadPushId` on the W2 wire. C0 now records
+  `DOES_W2_EVENT_CARRY_PTAD_PUSH_ID = NO` and freezes an
+  `associationQuality` channel (`INTRINSIC` / `INTERVAL_INFERRED` /
+  `NONE`) so the analyzer cannot be lulled into a causal claim it
+  cannot prove.
+
+- **R20 — purity wording.** The original C0 said the W1 updater "is
+  now PURE". LC_T_PURITY forbids NEW diagnostic side effects; it does
+  NOT certify the existing pre-PTAD application updater as pure. The
+  updater has pre-existing mutations (`replicaRef.current` writes) and
+  pre-existing local-setter calls. C0 now records
+  `NEW_DIAGNOSTIC_UPDATER_SIDE_EFFECTS = 0` and
+  `EXISTING_W1_UPDATER_GLOBAL_PURITY = NOT_PROVEN` (separate from the
+  ACT's own scope).
+
+R18 consequence — `OFFLINE_R_N_REPLAY_AUTHORITY = HYPOTHESIS_ONLY`,
+because the B + P replay inputs are not the literal updater-time
+inputs; replaying the reducer against them yields a hypothesis probe,
+not a live-evidence reconstruction. This narrows the expected
+§4 classification set: P/W2/Q/C plus request-site replica context may
+classify LC-E (secondary writer) and some queue/order families. LC-A,
+LC-B, LC-C, and LC-D may default to LC-F unless a successor probe
+supplies stronger evidence.
+
+C1 is gated on this corrected matrix.
+
 ---
 
 ## 1. Identity
@@ -65,12 +113,25 @@ Reducer call:  replicaRef.current = reducerApplyStateSnapshot(
                )
               stateData.clineMessages = replicaRef.current.messages
               stateData.turnState      = replicaRef.current.turnState
-Functional updater body is now PURE (FIXUP04):
+Functional updater body — observations (FIXUP04 baseline):
   - reads prevState (React-authoritative)
   - calls reducer (pure derive)
-  - calls pre-existing setters (out of FIXUP04 scope)
+  - calls pre-existing setters (setShowWelcome / setOnboardingModels /
+    setDidHydrateState) — these were there before PTAD; out of this
+    ACT's scope
+  - mutates `replicaRef.current` (module-level ref) — this is an
+    EXISTING updater-side mutation, also pre-existing
   - returns newState
-  - NO PTAD or diagnostic side effects inside the updater
+  - NEW_DIAGNOSTIC_UPDATER_SIDE_EFFECTS = 0
+    (FIXUP04 removed the FIXUP03 PTAD side effects; this ACT
+     introduces NO new diagnostic side effects inside the updater.)
+
+EXISTING_W1_UPDATER_GLOBAL_PURITY = NOT_PROVEN
+  LC_T_PURITY forbids NEW diagnostic side effects; it does NOT
+  certify the existing pre-PTAD application updater as pure. The
+  local-setter calls and `replicaRef.current` mutation are pre-
+  existing and out of this ACT's scope. LC-D explicitly investigates
+  shared-mutable/updater impurity; this ACT does not adjudicate it.
 ```
 
 ### 3.2 W2 (partial-message via `subscribeToPartialMessage`)
@@ -150,26 +211,159 @@ This is the primary C0 deliverable.
 
 These three record groups correspond to inside-the-updater boundaries. The hard React-purity gate (LC_T_PURITY, plan §3) forbids any diagnostic side effect inside the functional updater — including `recordPostTerminalAuthoritySnapshot(...)`, which mutates the module-level ring buffer.
 
-| Question | Decision | Rationale |
-|---|---|---|
-| `CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT` | **YES** | The literal reducer argument is `replicaRef.current` (for W1) or `replicaRef.current` (for W2), read at the **request site**, BEFORE `setState(...)` is called. Capturing `replicaRef.current.turnState`, `replicaRef.current.epoch`, `replicaRef.current.stateVersion` at the request site, and stamping them onto a `webview-before-w1-updater` (or `webview-before-w2-updater`) record, satisfies the boundary-capture rule (plan §2 rule 1: "copies scalar values at its named boundary, NOT reconstructed"). The capture is emitted at the request site, NOT inside the updater — purity preserved. |
-| `CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT` | **NO** | The reducer output is computed INSIDE the functional updater (line 638..643 for W1; line 850 for W2). Capturing it at the boundary where it is computed requires calling `recordPostTerminalAuthoritySnapshot(...)` from within the updater body, which mutates module state — a side effect that violates LC_T_PURITY. The plan §3 "B sub-rule" covers this: replay the pure reducer against the captured immutable outer-boundary inputs (B + P) to derive R offline. **`R = LIVE_UNOBSERVABLE`**; replayable offline. |
-| `CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT` | **NO** | `returnedNewState.turnState` is the value the functional updater returned. The literal returned value is not observable outside React. As with R, capturing N at its boundary requires a side effect inside the updater. **Reconstruction is possible** for the W1 case if (a) `prevState` is captured (B gives us `replicaRef.current`, which is what the reducer will see; React's `prevState` for the OTHER state fields comes from React's internal pending state queue — but for the `clineMessages`/`turnState` fields we care about, `replicaRef.current` is the literal value), and (b) `stateData` is captured (P gives us `webview-raw-incoming`), then the W1 functional updater body can be replayed offline against these captured immutables to derive the would-have-been-returned newState. **`N = LIVE_UNOBSERVABLE`**; replayable offline. |
-
-### 4.3 Summary
+R18 — the B row is split into two distinct epistemic categories. The plan §2 definition states `B.replica` is the **literal reducer argument** observed at the updater boundary. The original C0 conflated this with the request-site `replicaRef.current` snapshot. They are not the same instant: React queues updater functions and processes them against pending state, while `ref.current` is mutable outside React's state queue and can change without causing a render. Therefore:
 
 ```text
-CAN_P_CAPTURE                          = YES
-CAN_W2_CAPTURE                         = YES
-CAN_Q_CAPTURE                          = YES
-CAN_C_CAPTURE                          = YES
+REQUEST_SITE_B      = replicaRef.current sampled at the gRPC onResponse
+                       callback, BEFORE setState((prev) => ...) is invoked.
+                       Observable. NOT proof of updater-time input.
 
-CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT  = YES
-CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT  = NO  → R = LIVE_UNOBSERVABLE (replayable)
-CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT  = NO  → N = LIVE_UNOBSERVABLE (replayable)
+LITERAL_UPDATER_B   = replicaRef.current sampled at the moment React
+                       evaluates the queued updater. Protected by React's
+                       state queue. NOT observable from outside the
+                       function body without a diagnostic side effect.
 ```
 
-Per plan §3 "B sub-rule": R and N are recorded as `LIVE_UNOBSERVABLE` (never bare `UNAVAILABLE`). They are derivable offline by replaying the pure reducer / updater body against captured immutable inputs (B + P). This satisfies the React purity gate (LCD_T7) without weakening purity to collect forensic evidence.
+The original C0 manifest row said `CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT = YES` and named the kind `webview-before-w1-updater`. That is now corrected to the honest naming `webview-w1-request-replica` (and `webview-w2-request-replica`), because the request-site snapshot is NOT the updater-time literal.
+
+| Question | Decision | Rationale |
+|---|---|---|
+| `CAN_B_REQUEST_SITE_REPLICA_CAPTURE` | **YES** | `replicaRef.current` is observable at the request site (gRPC `onResponse` callback, BEFORE `setState(...)` is invoked). The capture is emitted at the request site, NOT inside the updater — purity preserved. Honest naming: `webview-w1-request-replica` / `webview-w2-request-replica`. This is a useful approximation but is NOT proof of the literal updater-time input. |
+| `CAN_B_LITERAL_UPDATER_INPUT_CAPTURE` | **NO** | The literal replica value at the moment React evaluates the queued updater is protected by React's pending-state queue. Sampling it requires either a diagnostic side effect inside the updater (forbidden by LC_T_PURITY) or some other invasive mechanism. **`B_LITERAL = LIVE_UNOBSERVABLE`**. |
+| `CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT` | **NO** | The reducer output is computed INSIDE the functional updater (line 638..643 for W1; line 850 for W2). Capturing it at the boundary where it is computed requires calling `recordPostTerminalAuthoritySnapshot(...)` from within the updater body, which mutates module state — a side effect that violates LC_T_PURITY. **`R = LIVE_UNOBSERVABLE`**; **NOT replayable-from-current-captures as a literal reproduction** — see OFFLINE_R_N_REPLAY_AUTHORITY below. |
+| `CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT` | **NO** | `returnedNewState.turnState` is the value the functional updater returned. The literal returned value is not observable outside React. As with R, capturing N at its boundary requires a side effect inside the updater. React processes updater functions sequentially using pending state generated by earlier queued updates, so the "would-have-been" committed value depends on the actual queued-update sequence. **`N = LIVE_UNOBSERVABLE`**; **NOT replayable as a literal reproduction** — see OFFLINE_R_N_REPLAY_AUTHORITY below. |
+
+#### R18 consequence — OFFLINE_R_N_REPLAY_AUTHORITY
+
+```text
+OFFLINE_R_N_REPLAY_AUTHORITY = HYPOTHESIS_ONLY
+
+  The original C0 said R and N can be reconstructed offline by
+  replaying the pure reducer against B + P. This is INCORRECT in
+  general, because:
+
+    1. B is the REQUEST-SITE replica snapshot, not the literal
+       updater-input replica. React's pending-state queue may
+       have advanced between capture and evaluation.
+
+    2. React's functional updater receives `prevState` that
+       includes the result of any earlier queued updaters in
+       the same batch. The reducer input at the request site
+       does not, in general, equal the reducer input at the
+       evaluation site.
+
+  Therefore replaying the reducer against B + P yields a
+  HYPOTHESIS, not a live-evidence reconstruction. The regression
+  is permissible only as a probe to investigate whether a
+  particular boundary is suspect; it is NOT equivalent to live
+  updater evaluation.
+
+  Consequence for §4 classification: P/W2/Q/C plus request-site
+  replica context may classify LC-E (secondary writer) and some
+  queue/order families. LC-A (replica-input authority), LC-B
+  (composition), LC-C (React queue), and LC-D (updater impurity)
+  cannot be definitively classified from these captures alone
+  and may default to LC-F (HALT_CAPTURE_INSUFFICIENT) unless a
+  successor probe supplies stronger evidence.
+```
+
+### 4.3 Summary (R18 corrected)
+
+```text
+CAN_P_CAPTURE                              = YES
+CAN_W2_CAPTURE                             = YES    (R19: native W2 identity only;
+                                                         no intrinsic _ptadPushId on
+                                                         the W2 wire; see §4.4)
+CAN_Q_CAPTURE                              = YES
+CAN_C_CAPTURE                              = YES
+
+CAN_B_REQUEST_SITE_REPLICA_CAPTURE         = YES    (request-site observation;
+                                                         NOT proof of updater-time input)
+CAN_B_LITERAL_UPDATER_INPUT_CAPTURE        = NO     → B_LITERAL = LIVE_UNOBSERVABLE
+
+CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT       = NO     → R = LIVE_UNOBSERVABLE
+CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT       = NO     → N = LIVE_UNOBSERVABLE
+
+OFFLINE_R_N_REPLAY_AUTHORITY               = HYPOTHESIS_ONLY
+  (replaying the reducer against B + P is a probe, not live-evidence
+   reproduction; see OFFLINE_R_N_REPLAY_AUTHORITY in §4.2)
+```
+
+Per plan §3 "B sub-rule": R, N, and B_LITERAL are recorded as `LIVE_UNOBSERVABLE` (never bare `UNAVAILABLE`). R and N are NOT replayable as a literal reproduction; their offline replay is a hypothesis probe only. This satisfies the React purity gate (LCD_T7) without weakening purity to collect forensic evidence.
+
+### 4.4 R19 — W2 push-correlation provenance
+
+The proto contract is:
+
+```proto
+rpc subscribeToPartialMessage(EmptyRequest) returns (stream ClineMessage);
+```
+
+The stream element is a `ClineMessage`. The wire shape (from `convertClineMessageToProto`) is:
+
+```text
+ProtoClineMessage {
+  ts, type, ask, say, text, reasoning, images, files,
+  partial, seq, epoch, lastCheckpointHash, isCheckpointCheckedOut,
+  isOperationOutsideWorkspace, conversationHistoryIndex,
+  conversationHistoryDeletedRange, modelInfo, ...
+}
+```
+
+`_ptadPushId` is stamped only on the snapshot `ExtensionState` push (W1 wire); it is NOT a field on the W2 wire in either direction. The W2 emission path on the extension side is:
+
+```text
+WebviewGrpcBridge.pushPartialMessage(message)
+  → convertClineMessageToProto(message)   // drops _ptadPushId (not on message)
+  → sendPartialMessageEvent(protoMessage) // ClineMessage-typed stream element
+```
+
+Therefore:
+
+```text
+DOES_W2_EVENT_CARRY_PTAD_PUSH_ID = NO
+  (intrinsic; not on the proto element; not stamped by the bridge)
+```
+
+The C0 schema therefore records:
+
+```text
+w2: {
+  ts, epoch, seq, partial, final, ...
+}
+
+// W2 records may carry an OPTIONAL associatedPushId stamped at
+// the request site, but only with an explicit associationQuality
+// marker so the analyzer can reject causal claims it cannot prove.
+associatedPushId?: number
+associationQuality: "INTRINSIC" | "INTERVAL_INFERRED" | "NONE"
+```
+
+Correlation rules:
+
+1. **INTRINSIC** — assertable only when the W2 wire itself carries the
+   push ID. For the current proto contract, this is impossible; the
+   field is reserved for a future wire amendment that earns a
+   separate plan revision.
+2. **INTERVAL_INFERRED** — when the W2 request lands between two W1
+   snapshots with `prevPushId` and `nextPushId`, the W2 record may
+   carry `associatedPushId = undefined` plus `intervalInferred: {
+   prevPushId, nextPushId }`. The analyzer correlates by chronology,
+   not by identity.
+3. **NONE** — when no enclosing W1 snapshot exists (e.g. cold-start
+   W2 before the first snapshot lands). The record carries the W2
+   native identity fields and is correlated only by `capturedAt` to
+   the surrounding P/Q/C records.
+
+```text
+W2_PUSH_ID_CORRELATION = NONE_INTRINSIC;
+                        INTERVAL_INFERRED via chronology;
+                        no causal identity claim
+```
+
+A W2 record stamped with `associationQuality = "INTRINSIC"` MUST be
+treated as a data-integrity violation by the analyzer; the field
+exists only for forward compatibility.
 
 ---
 
@@ -187,13 +381,18 @@ Type: LiveContextDimensions01CaptureKind =
   | "webview-w2-request"          // W2 request site; carries partial-message identity
   | "webview-w1-request-q"        // Q-group at W1 request site (chronology)
   | "webview-w2-request-q"        // Q-group at W2 request site (chronology)
-  | "webview-before-w1-updater"   // B for W1; replicaRef.current captured at request site
-  | "webview-before-w2-updater"   // B for W2; replicaRef.current captured at request site
+  | "webview-w1-request-replica"  // request-site B for W1; replicaRef.current sampled
+                                  //   at the request site BEFORE setState is invoked;
+                                  //   NOT proof of the literal updater-time input
+  | "webview-w2-request-replica"  // request-site B for W2; same disclaimer
   | "webview-committed-c"         // C; React-committed state (LATEST push only)
+
+Type: AssociationQuality = "INTRINSIC" | "INTERVAL_INFERRED" | "NONE"
 
 Type: LiveContextDimensions01Capture {
   readonly stateVersion: number                       // witness (not authority)
-  readonly _ptadPushId?: number                       // correlation key
+  readonly _ptadPushId?: number                       // correlation key (only on W1/C records;
+                                                       // undefined for W2 unless INTERVAL_INFERRED)
   readonly captureKind: LiveContextDimensions01CaptureKind
   readonly capturedAt: number                         // monotonic ordering
   readonly origin: "extension" | "webview"            // realm marker
@@ -204,8 +403,15 @@ Type: LiveContextDimensions01Capture {
                   associatedPushIdOrKey?: number }
   readonly b?:  { replicaTurnState: TurnState | undefined,
                   replicaEpoch: number,
-                  replicaStateVersion: number }
+                  replicaStateVersion: number,
+                  capturedAt: number }                 // explicitly the request-site
+                                                       // wall-clock, NOT the
+                                                       // evaluator-time wall-clock
   readonly c?:  { committedTurnState: TurnState | undefined }
+  readonly associatedPushId?: number
+  readonly associationQuality: AssociationQuality     // how (or whether) _ptadPushId
+                                                       // was derived for this record
+  readonly intervalInferred?: { prevPushId: number, nextPushId: number }
 }
 ```
 
@@ -303,12 +509,20 @@ LCD_T4   TEMP_SCHEMA_DEFINED           PASS  (§5 freeze; new file in C1)
 LCD_T5   DEFAULT_OFF                   PASS  (env-flag opt-in; recorder no-op)
 LCD_T6   NO_STATE_SEMANTIC_DELTA       PASS  (no source delta in C0; schema reads scalars)
 LCD_T7   UPDATER_PURITY_GATE           PASS  (LC_T_PURITY abstract; R/N = LIVE_UNOBSERVABLE)
-LCD_T7A  NEW_UPDATER_SIDE_EFFECTS      PASS  (= 0; B capture is at request site)
+LCD_T7A  NEW_UPDATER_SIDE_EFFECTS      PASS  (= 0; ALL captures at request site
+                                                or post-commit; none inside updater)
 LCD_T7B  STRICT_MODE_CARDINALITY       PASS  (W2/Q/P request-cardinality: 1:1; C is per-commit)
 LCD_T7C  DEFAULT_OFF_EQUIVALENCE       PASS  (recorder is complete no-op when env unset)
-LCD_T8   CAPTURE_AT_BOUNDARY           PASS  (rule 1; B reads replicaRef.current at request site)
-LCD_T9   PUSH_CORRELATION              PASS  (_ptadPushId reused; no new wire field)
-LCD_T10  W2_CONTEXT_CAPTURE            PASS  (CAN_W2 = YES; protoMessage carries ts/epoch/seq/partial)
+LCD_T8   CAPTURE_AT_BOUNDARY           PASS  (rule 1; request-site reads of
+                                                 replicaRef.current / stateData / protoMessage)
+LCD_T9   PUSH_CORRELATION              PASS  for W1/C (intrinsic _ptadPushId on
+                                                 ExtensionState push);
+                                                 PARTIAL for W2 (no intrinsic push ID;
+                                                 INTERVAL_INFERRED via chronology;
+                                                 see §4.4 R19)
+LCD_T10  W2_CONTEXT_CAPTURE            PASS  (CAN_W2 = YES; protoMessage carries
+                                                 ts/epoch/seq/partial; W2 native identity
+                                                 is the canonical correlation key)
 LCD_T11  WRITER_REQUEST_CAPTURE        PASS  (CAN_Q = YES; Q emitted at request site)
 LCD_T12  REMOVAL_CONTRACT              PASS  (§5 freeze; REMOVAL_TRIGGER set)
 LCD_T13  EXISTING_WEBVIEW_TESTS        PASS  (no test delta in C0)
@@ -333,8 +547,8 @@ C1 may execute. It is bounded by:
     webview-w2-request (W2)
     webview-w1-request-q (Q)
     webview-w2-request-q (Q)
-    webview-before-w1-updater (B)
-    webview-before-w2-updater (B)
+    webview-w1-request-replica (B0; request-site approximation)
+    webview-w2-request-replica (B0; request-site approximation)
     webview-committed-c (C)
 - Skip R and N groups; emit nothing for them; replay offline if needed.
 - Add tests:
