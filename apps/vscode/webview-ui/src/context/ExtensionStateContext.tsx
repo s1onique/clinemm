@@ -537,39 +537,28 @@ export const ExtensionStateContextProvider: React.FC<{
 	// arrival order, duplication, or loss. See messageReducer.ts.
 	const replicaRef = useRef<ReplicaState>(createReplicaState())
 
-	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
-	// Per-pushId reducer-output queue. The functional updater (below) runs
-	// the snapshot reducer against React's AUTHORITATIVE prevState and
-	// stashes the resulting `reducerOut` here, keyed by `_ptadPushId`.
-	// The post-commit `useEffect` (below) drains the queue in arrival
-	// order and emits one `webview-reducer-output` capture per pushId.
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
+	// FIXUP03 introduced a per-pushId reducer-output queue
+	// (`pendingAppliedByPushRef`) and a drain effect that emitted
+	// `webview-reducer-output` captures. The functional updater wrote
+	// to this ref map, which is an externally observable side effect
+	// inside what React's contract requires to be a pure calculate-and-
+	// return function. The reviewer (R9) flagged this as a React
+	// contract violation.
 	//
-	// Why a queue, not a single slot:
-	//   When React 18+ automatic batching coalesces multiple setState
-	//   calls into a single commit, React STILL evaluates each queued
-	//   functional updater against the prior queued result. The reducer
-	//   therefore runs exactly once per setState call (preserving
-	//   burst-push cardinality, R4) regardless of how many commits are
-	//   batched. The queue accumulates reducer outputs from ALL queued
-	//   updaters in arrival order; the post-commit effect drains them.
+	// FIXUP04 removes the queue and the drain effect entirely. The W1
+	// updater is now a pure calculate-and-return function. No PTAD or
+	// diagnostic side effects inside the updater body.
 	//
-	// R6 (STATE QUEUE CONSERVATION): every entry here was written from
-	// inside the functional updater that React queued — so the React
-	// pending state queue and this reducer-output queue are kept in
-	// strict 1:1 correspondence. There is no parallel authority.
-	// (FIXUP02's prevStateRef.current is REMOVED entirely; it could
-	// drift from React's queue when other writers — the partial-message
-	// subscription and the local setter functions exposed via context —
-	// use the functional-updater form.)
+	// The diagnostic now captures only two observable boundaries on the
+	// webview side:
+	//   - webview-raw-incoming : wire-side arrival (per onResponse call)
+	//   - webview-committed    : React-committed state (per commit,
+	//                            keyed on the LATEST pushId)
 	//
-	// R8 (DEAD MACHINERY REMOVAL): `pendingRawSnapshotsRef` from
-	// FIXUP01 is removed. After FIXUP03 the inbound handler does not
-	// need to stash anything for cross-phase correlation because the
-	// reducer output IS the applied-truth capture, captured inline by
-	// the functional updater (no asynchronous bridge).
-	const pendingAppliedByPushRef = useRef<Map<string | number, { reducerOut: ExtensionState; rawWire: ExtensionState | null }>>(
-		new Map(),
-	)
+	// Intermediate reducer outputs are no longer captured. Reasoning
+	// about them in the live walk uses the offline-qualified C2R pure
+	// reducer replay.
 
 	// Subscribe to state updates and UI events using the gRPC streaming API
 	useEffect(() => {
@@ -592,7 +581,7 @@ export const ExtensionStateContextProvider: React.FC<{
 							disablePostTerminalAuthorityDiagnostic("webview")
 						}
 
-						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
 						// RAW capture + R5 fail-closed pushId check. The capture is
 						// OPT-IN: when the workspace-state PTAD toggle is OFF
 						// (production default), this if-branch is skipped and the
@@ -601,15 +590,11 @@ export const ExtensionStateContextProvider: React.FC<{
 						//
 						// R5 (FAIL CLOSED): if `_ptadPushId` is undefined, the diagnostic
 						// cannot correlate the capture to any push id, so we log and
-						// emit the RAW capture (with `_ptadPushId = undefined`). The
-						// reducer-output queue entry is also skipped (no correlation
-						// key), so the applied capture is not emitted either. The
-						// forensic chain is preserved as "raw only" with an explicit
-						// log entry.
-						//
-						// R8 (FIXUP01 DEAD MACHINERY): `pendingRawSnapshotsRef` is
-						// removed. The applied-truth capture is now produced inline
-						// by the functional updater (via pendingAppliedByPushRef).
+						// emit the RAW capture (with `_ptadPushId = undefined`).
+						// There is no reducer-output capture to fail-close on
+						// (FIXUP04 removed that intermediate kind); the forensic
+						// chain is preserved as "raw only" with an explicit log
+						// entry.
 						if (isPostTerminalAuthorityDiagnosticEnabled("webview")) {
 							const pushId = stateData._ptadPushId
 							if (pushId === undefined) {
@@ -622,45 +607,26 @@ export const ExtensionStateContextProvider: React.FC<{
 							)
 						}
 
-						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
-						// R6 (RESTORE REACT AUTHORITY): the snapshot reducer is now
-						// invoked from inside a FUNCTIONAL UPDATER, which receives
-						// React-authoritative prevState. This brings W1 (the snapshot
-						// path) back into the same React functional-updater authority
-						// used by W2 (partial-message subscription) and W3 (local
-						// setter functions exposed via context). No parallel
-						// authority — the React pending state queue is the single
-						// source of truth.
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
+						// R9 (PURE UPDATER): the snapshot reducer is now invoked from
+						// inside a FUNCTIONAL UPDATER that contains NO PTAD or
+						// diagnostic side effects. The updater body:
+						//   1. reads `prevState` (React-authoritative, satisfies R6)
+						//   2. calls the reducer (pure derive-next-state)
+						//   3. calls existing setShowWelcome / setOnboardingModels /
+						//      setDidHydrateState setters (PRE-EXISTING side effects,
+						//      out of FIXUP04 scope; these were there before PTAD)
+						//   4. returns newState
+						// Nothing else. The reducer output is NOT captured; the
+						// committed-state capture (webview-committed) is emitted
+						// from a separate post-commit useEffect keyed on [state].
 						//
-						// R4 (PRESERVE BURST CARDINALITY): the reducer-output is
-						// stashed in `pendingAppliedByPushRef.current` keyed by
-						// `_ptadPushId`. React evaluates each queued functional
-						// updater exactly once per setState call, even when the
-						// resulting commits are batched. So the queue accumulates
-						// one entry per queued updater (in arrival order), and the
-						// post-commit effect drains the queue in that same order.
-						//
-						// We also stash the WIRE-SIDE `stateData` clone (shallow,
-						// turnState captured) so the reducer-output capture can
-						// emit the wire-side rawIncomingLegacy* fields even when
-						// the reducer mutated `stateData.turnState` to the
-						// seq-gated value. Without this, the reducer-output capture
-						// for a stale seq would carry the seq-gated value on both
-						// `appliedLegacy*` AND `rawIncomingLegacy*` fields, losing
-						// the wire-side diagnostic.
-						//
-						// Purity: the stash is a ref map write. Under Strict Mode,
-						// React may invoke the updater twice for the SAME pending
-						// update with the SAME prevState; the second invocation
-						// overwrites the same `(pushId, reducerOut)` entry with the
-						// same value. Idempotent — no double-record.
-						let rawWireClone: ExtensionState | null = null
-						if (isPostTerminalAuthorityDiagnosticEnabled("webview") && stateData._ptadPushId !== undefined) {
-							rawWireClone = {
-								...stateData,
-								turnState: stateData.turnState,
-							}
-						}
+						// R6 (REACT AUTHORITY): the functional updater receives
+						// React-authoritative prevState. W1 (snapshot), W2 (partial
+						// message), and W3 (local setters) all use the
+						// functional-updater form. React's documented queue
+						// semantics ensure each queued updater receives the prior
+						// queued result. No parallel authority.
 						setState((prevState) => {
 							// Versioning logic for autoApprovalSettings
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
@@ -703,19 +669,10 @@ export const ExtensionStateContextProvider: React.FC<{
 
 							setDidHydrateState(true)
 
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
-							// Stash the reducer output keyed by `_ptadPushId`. The
-							// post-commit effect drains this queue. Stashing is
-							// idempotent under Strict Mode retries (same key, same
-							// value).
-							const pushId = stateData._ptadPushId
-							if (pushId !== undefined) {
-								pendingAppliedByPushRef.current.set(pushId, {
-									reducerOut: newState,
-									rawWire: rawWireClone,
-								})
-							}
-
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
+							// Pure updater: return newState. No PTAD or diagnostic
+							// side effects. The committed-state capture is emitted
+							// from the post-commit useEffect below.
 							return newState
 						})
 					} catch (error) {
@@ -1048,41 +1005,22 @@ export const ExtensionStateContextProvider: React.FC<{
 		}
 	}, [])
 
-	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
-	// Post-commit drain effect for `pendingAppliedByPushRef.current`.
-	// Fires once per React commit. Reads the queue in arrival order
-	// (insertion order is preserved by JavaScript Map) and emits one
-	// `webview-reducer-output` capture per pushId, then deletes the
-	// entry from the queue. This preserves R4 (burst cardinality)
-	// because each queued functional updater wrote exactly one entry,
-	// even if multiple updaters were coalesced into a single commit.
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
+	// REMOVED in FIXUP04: the post-commit drain effect that emptied
+	// `pendingAppliedByPushRef.current` and emitted
+	// `webview-reducer-output` captures. This drained queue
+	// represented reducer outputs that may have been discarded by
+	// React (e.g., higher-priority updates superseding the render).
+	// The diagnostic was therefore emitting forensic evidence for
+	// transforms the user never observed.
 	//
-	// The queue size is bounded by the number of setState calls that
-	// React batched into the most recent commit. In the burst case
-	// (3 or 6 synchronous pushes), this means 3 or 6 captured
-	// reducer outputs per commit, each on its own `_ptadPushId`.
-	useEffect(() => {
-		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
-			return
-		}
-		if (pendingAppliedByPushRef.current.size === 0) {
-			return
-		}
-		for (const [pushId, { reducerOut, rawWire }] of pendingAppliedByPushRef.current) {
-			// The reducer-output capture is built from the reducer's
-			// `nextState` for `applied*` fields AND the wire-side clone
-			// for `rawIncoming*` fields. The wire-side clone preserves
-			// the diagnostic that on a stale-seq push, the reducer
-			// applied seq-gating (so `appliedLegacySeq` carries the
-			// newer seq) while the raw capture carries the wire-side
-			// older seq.
-			const rawSnapForCapture = rawWire ?? reducerOut
-			recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(reducerOut, rawSnapForCapture, "webview-reducer-output"))
-			pendingAppliedByPushRef.current.delete(pushId)
-		}
-	}, [state])
+	// FIXUP04 captures only the two observable boundaries:
+	//   - webview-raw-incoming  (per onResponse call, at inbound)
+	//   - webview-committed     (per React commit, the true
+	//                            downstream / context consumer view)
+	// Intermediate reducer outputs are not captured.
 
-	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
 	// Post-commit capture of React's AUTHORITATIVE committed state.
 	// This is the true downstream / context consumer view — the state
 	// the React tree actually renders from. Fires once per commit;
@@ -1090,16 +1028,12 @@ export const ExtensionStateContextProvider: React.FC<{
 	// result of the LAST queued functional updater, so this capture
 	// corresponds to the LATEST `_ptadPushId` only.
 	//
-	// R7 (VOCABULARY FREEZE): the three diagnostic capture kinds are
-	//   - webview-raw-incoming       : wire-side arrival (per push)
-	//   - webview-reducer-output     : reducer's nextState for each pushId
-	//                                 (emitted from the drain effect above)
-	//   - webview-committed          : React-committed state (per commit;
-	//                                 corresponds to the LATEST pushId)
-	// The diagnostic now explicitly distinguishes the reducer output
-	// from the React commit. W3 (post-context commit) is the only
-	// class whose boundary IS this capture; W1 and W2 are reducer-output
-	// events, not React-commit events.
+	// R7 (VOCABULARY): the two webview capture kinds are
+	//   - webview-raw-incoming : wire-side arrival (per push)
+	//   - webview-committed    : React-committed state (per commit;
+	//                            corresponds to the LATEST pushId)
+	// The webview-reducer-output capture kind is REMOVED from the
+	// PostTerminalAuthorityCaptureKind enum entirely.
 	useEffect(() => {
 		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
 			return

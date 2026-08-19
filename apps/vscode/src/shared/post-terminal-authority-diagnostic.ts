@@ -90,22 +90,20 @@ export type PostTerminalAuthorityCaptureKind =
 	| "extension-push"
 	| "webview-raw-incoming"
 	/**
-	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
-	 * Renamed from `webview-replica` (FIXUP01/FIXUP02) to
-	 * `webview-reducer-output` to disambiguate from the new
-	 * `webview-committed` capture. The reducer-output capture is
-	 * the reducer's nextState for each pushId, emitted from the
-	 * post-commit drain effect that empties the
-	 * `pendingAppliedByPushRef` queue.
-	 */
-	| "webview-reducer-output"
-	/**
-	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION:
-	 * New capture kind. The React-committed state, emitted once per
-	 * React commit. Corresponds to the LATEST `_ptadPushId` only,
-	 * because React 18+ automatic batching coalesces multiple
-	 * setState calls into a single commit. This is the true
-	 * downstream / context consumer view.
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
+	 * React-committed state, emitted once per React commit from a
+	 * `useEffect` keyed on `[state]`. Corresponds to the LATEST
+	 * `_ptadPushId` only, because React 18+ automatic batching
+	 * coalesces multiple setState calls into a single commit. This
+	 * is the true downstream / context consumer view.
+	 *
+	 * FIXUP04 removed the intermediate `webview-reducer-output`
+	 * capture kind (FIXUP03) because it required the functional
+	 * updater to write to a ref map, which is an externally
+	 * observable side effect inside what React's contract requires
+	 * to be a pure calculate-and-return function. The diagnostic now
+	 * captures only the two observable boundaries: wire-side arrival
+	 * and React commit.
 	 */
 	| "webview-committed"
 	| "input-section"
