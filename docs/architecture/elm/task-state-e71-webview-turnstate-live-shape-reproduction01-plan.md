@@ -179,14 +179,14 @@ pushId | legacy       | runtime   | shadow    | stream | webview-raw     | webvi
    (PTAD schema reserves the field but it is absent in the JSONL).
    So the **E2 rung cannot be evaluated against the live trace**:
    the snapshot epoch was **not captured**.
-   **E2 = UNAVAILABLE.**
+   **E2 = UNAVAILABLE_FROM_TRACE.**
 
 3. **No `clineMessages` body is stamped** in any webview-raw-incoming
    record. The raw captures record `legacyPhase/Seq`,
    `thinkingPresentation`, and `taskTelemetry` only — no partial
    message body, no `ts` on the message itself, no `partialMessage`
    flag. So the **E3 and E5 rungs cannot be evaluated against the
-   live trace**. **E3 = UNAVAILABLE, E5 = UNAVAILABLE.**
+   live trace**. **E3 = UNAVAILABLE_FROM_TRACE, E5 = UNAVAILABLE_FROM_TRACE.**
 
 4. **W2 classification rule from the trace** (the decisive fact):
 
@@ -213,15 +213,15 @@ pushId | legacy       | runtime   | shadow    | stream | webview-raw     | webvi
 rung | live value known? | different from BASE? | action
 ---- | ----------------- | -------------------- | ------
 E1   | YES (stateVer=0)  | NO (BASE also uses ??0)| ALREADY_MATCHED
-E2   | NO                | n/a                   | UNAVAILABLE
-E3   | NO                | n/a                   | UNAVAILABLE
-E4   | n/a               | n/a                   | UNAVAILABLE (depends on E3)
-E5   | NO                | n/a                   | UNAVAILABLE
+E2   | NO                | n/a                   | UNAVAILABLE_FROM_TRACE
+E3   | NO                | n/a                   | UNAVAILABLE_FROM_TRACE
+E4   | n/a               | n/a                   | UNAVAILABLE_FROM_TRACE (depends on E3)
+E5   | NO                | n/a                   | UNAVAILABLE_FROM_TRACE
 E6   | YES (pushes 4..32 chain via _ptadPushId)| YES (pushId monotonically advances 2..32) | POTENTIALLY_DIFFERENT — needs evaluation
-E7   | n/a (no partial-message body in trace)   | n/a                  | UNAVAILABLE_FOR_TRACE
-E8   | n/a                | n/a                  | UNAVAILABLE_FOR_TRACE
-E9   | YES (welcomeViewCompleted; not in captures) | n/a             | UNAVAILABLE_FOR_TRACE
-E10  | n/a                | n/a                  | UNAVAILABLE_FOR_TRACE
+E7   | n/a (no partial-message body in trace)   | n/a                  | UNAVAILABLE_FROM_TRACE
+E8   | n/a                | n/a                  | UNAVAILABLE_FROM_TRACE
+E9   | YES (welcomeViewCompleted; not in captures) | n/a             | UNAVAILABLE_FROM_TRACE
+E10  | n/a                | n/a                  | UNAVAILABLE_FROM_TRACE
 ```
 
 **Most consequential structural finding (retracted — see R3 below):**
@@ -290,7 +290,7 @@ clearly says `streaming/11`.
 
 ---
 
-### R4 retraction — E6 is UNAVAILABLE, not POTENTIALLY_DIFFERENT
+### R4 retraction — E6 is UNAVAILABLE_FROM_TRACE, not POTENTIALLY_DIFFERENT
 
 The original C0 table marked `E6` as `POTENTIALLY_DIFFERENT`
 because the live trace has 12 successive streaming/11 pushes.
@@ -301,7 +301,7 @@ replica history**. They are different experimental dimensions:
 E6_PRECEDING_MESSAGE_HISTORY =
   experimental dimension: clineMessages body / replica ts/seq history
   live evidence:         no clineMessages body in any capture
-  verdict:               UNAVAILABLE
+  verdict:               UNAVAILABLE_FROM_TRACE
 
 E6A_REPEATED_W1_SNAPSHOT_HISTORY =
   experimental dimension: N consecutive W1 snapshots with
@@ -312,7 +312,7 @@ E6A_REPEATED_W1_SNAPSHOT_HISTORY =
   verdict:               REQUIRES_OWN_RUNG / E6A
 ```
 
-E6 must therefore be **UNAVAILABLE**. If a separate E6A rung is
+E6 must therefore be **UNAVAILABLE_FROM_TRACE**. If a separate E6A rung is
 ever opened, it must carry its own causal rationale and cannot
 inherit the "preceding message history" semantics.
 
@@ -324,11 +324,11 @@ inherit the "preceding message history" semantics.
 rung | live value known? | different from BASE? | action
 ---- | ----------------- | -------------------- | ------
 E1   | YES (stateVer=0)  | NO (BASE also uses ??0)| ALREADY_MATCHED
-E2   | NO                | n/a                   | UNAVAILABLE
-E3   | NO                | n/a                   | UNAVAILABLE
-E4   | n/a               | n/a                   | UNAVAILABLE (depends on E3)
-E5   | NO                | n/a                   | UNAVAILABLE
-E6   | NO (no clineMessages body in trace)            | UNAVAILABLE
+E2   | NO                | n/a                   | UNAVAILABLE_FROM_TRACE
+E3   | NO                | n/a                   | UNAVAILABLE_FROM_TRACE
+E4   | n/a               | n/a                   | UNAVAILABLE_FROM_TRACE (depends on E3)
+E5   | NO                | n/a                   | UNAVAILABLE_FROM_TRACE
+E6   | NO (no clineMessages body in trace)            | UNAVAILABLE_FROM_TRACE
 E7   | n/a (no partial-message body in trace)         | UNAVAILABLE_FROM_TRACE
 E8   | n/a                                            | UNAVAILABLE_FROM_TRACE
 E9   | YES (welcomeViewCompleted; not in captures)     | UNAVAILABLE_FROM_TRACE
@@ -376,46 +376,97 @@ synthetic reproduction. See §9 for the recommended next ACT.
 
 ## §2  Isolation ladder
 
-Each rung must produce a single fact in one of three outcomes:
+### GREEN/RED vocabulary (R10 FIXUP — single source of truth)
+
+These definitions are the **only** legitimate definitions used in
+this plan and the LIVE-CONTEXT-DIMENSIONS01 successor ACT. Any
+prior wording to the contrary is RETRACTED.
 
 ```text
-GREEN         — the variant reproduces the W2 boundary (causal)
-RED           — the variant does not reproduce the W2 boundary (refuted)
-ALREADY_MATCHED — the variant has the same value as BASE; not evidence
-                 of any kind; advance to next rung
-UNAVAILABLE   — the live trace did not capture this dimension;
-                 label it as such and do not fabricate a value
+GREEN = the W2 boundary is ABSENT in the variant
+        raw == committed ; committed.turnState == raw.turnState
+        (healthy; the live condition did NOT reproduce)
+
+RED   = the W2 boundary IS PRESENT in the variant
+        raw != committed ; committed.turnState != raw.turnState
+        (live condition reproduced)
+
+ALREADY_MATCHED = the variant carries the same value as BASE on this
+                  dimension
+                  (NOT GREEN — i.e. not evidence of any kind;
+                   advance to the next rung)
+
+UNAVAILABLE_FROM_TRACE = the live TRACE01 did not capture this
+                  dimension
+                  (do NOT fabricate a value; record UNAVAILABLE_FROM_TRACE
+                  and advance)
+
+BASE = the known-good real-provider fixture established by
+       RED-FIX01 cleanup, where raw == committed and the W2
+       boundary is absent
+       (BASE is GREEN by construction; this is the witness)
+
+Stop at the first RED. ALREADY_MATCHED is not GREEN evidence.
+UNAVAILABLE_FROM_TRACE is not evidence of any kind.
 ```
+
+**Important:** "RED" in this ACT does **not** mean "test failed
+or regressed." It means "the live W2 boundary reproduced in this
+variant, hence this dimension is a candidate causal contributor."
+This matches the entire RED-FIX01 history (RED ↔ W2 reproduced;
+GREEN ↔ W2 absent).
+
+### Outcome vocabulary
+
+Each rung must produce a single fact in one of four outcomes:
+
+```text
+GREEN                — the variant does NOT reproduce the W2 boundary
+                       (same as BASE on raw vs committed)
+RED                  — the variant reproduces the W2 boundary
+                       (raw != committed; live condition)
+ALREADY_MATCHED      — the variant has the same value as BASE
+                       on the dimension under test
+                       (not evidence; advance)
+UNAVAILABLE_FROM_TRACE — the live TRACE01 did not capture this
+                       dimension; do not fabricate
+                       (advance; flag for successor ACT)
+```
+
+### Ladder table
 
 ```text
 EXPERIMENT    added dimension          result
-BASE          none                     GREEN    (already established)
-                                          (RED-FIX01 cleanup witness)
+BASE          none                     GREEN  (already established;
+                                              RED-FIX01 cleanup
+                                              witness)
 
 E1            stateVersion             GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E2            snapshot epoch           GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E3            W2 partial epoch         GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E4            E2 × E3 interaction      GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E5            partial ts/seq           GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E6            preceding message history GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E7            production conversion    GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E8            scheduling                GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E9            pre-existing W1 side effects GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 E10           wider UI tree             GREEN | RED | ALREADY_MATCHED |
-                                          UNAVAILABLE
+                                          UNAVAILABLE_FROM_TRACE
 ```
 
 Stop at the **first RED**. An experiment that changes nothing cannot
 falsify a hypothesis: `ALREADY_MATCHED` is not GREEN evidence.
+`UNAVAILABLE_FROM_TRACE` does not license any verdict — it only
+authorizes a successor evidence-acquisition ACT.
 
 ### C0 — Live-dimension resolution (mandatory pre-flight)
 
@@ -423,37 +474,57 @@ Before any test rung, the actual values stamped on the live TRACE01
 artifacts must be read from the existing JSONL and tabulated. This
 is a docs-only step (no test, no production change).
 
+**C0 disposition labels use the canonical §2 vocabulary (R10
+FIXUP)** — bare `DIFFERENT`, `UNAVAILABLE`, `TEST` are NOT
+permitted in this ACT. Every disposition maps to one of:
+
+```text
+ALREADY_MATCHED        (same as BASE on this dimension;
+                        not evidence; not a candidate)
+UNAVAILABLE_FROM_TRACE (live trace did not capture this dimension;
+                        do NOT fabricate; flag for successor evidence ACT)
+```
+
 ```text
 C0.1  Rediscover HEAD == 6735738606a6fbb7a4ae885958bf111e00e8b0e4
 C0.2  Verify clean worktree + protected stashes (141372c52, 371752f71)
 C0.3  Read the existing TRACE01 JSONLs (extension + webview) at the
       recorded absolute paths
-C0.4  Freeze, per relevant push:
+C0.4  Freeze, per relevant push, the canonical scalar values:
         stateVersion
         snapshot epoch
         partial-message epoch (if represented in the trace)
         partial ts / seq (if represented)
-C0.5  Compare each to BASE fixture values and label:
-        ALREADY_MATCHED   (same as BASE)
-        DIFFERENT         (will become a rung)
-        UNAVAILABLE       (trace did not capture this dimension)
+C0.5  For each rung, label one of:
+        ALREADY_MATCHED          (live value == BASE on this dimension)
+        UNAVAILABLE_FROM_TRACE   (dimension was not captured)
+      and ONLY IF a rung is ALREADY_MATCHED-or-below, attempt a TEST
+      that varies the dimension toward the live value, recording the
+      outcome as GREEN / RED / ALREADY_MATCHED / UNAVAILABLE_FROM_TRACE.
 ```
 
 Build this table as the C0 deliverable:
 
 ```text
-rung | live value known? | different from BASE? | action
----- | ----------------- | -------------------- | ------
-E1   | yes/no            | yes/no               | TEST / ALREADY_MATCHED / UNAVAILABLE
-E2   | yes/no            | yes/no               | TEST / ALREADY_MATCHED / UNAVAILABLE
-E3   | yes/no            | yes/no               | TEST / ALREADY_MATCHED / UNAVAILABLE
-E5   | yes/no            | yes/no               | TEST / ALREADY_MATCHED / UNAVAILABLE
+rung | live value known? | matches BASE? | disposition
+---- | ----------------- | -------------- | -----------
+E1   | yes/no            | yes/no         | ALREADY_MATCHED |
+                                      UNAVAILABLE_FROM_TRACE
+E2   | yes/no            | yes/no         | ALREADY_MATCHED |
+                                      UNAVAILABLE_FROM_TRACE
+E3   | yes/no            | yes/no         | ALREADY_MATCHED |
+                                      UNAVAILABLE_FROM_TRACE
+E5   | yes/no            | yes/no         | ALREADY_MATCHED |
+                                      UNAVAILABLE_FROM_TRACE
 ```
 
-Then build the **first rung that actually differs from BASE** (or,
-if all are ALREADY_MATCHED, the first rung that is UNAVAILABLE in
-the live trace — which then requires a probe rather than a
-live-shape test).
+Then **select the first rung whose disposition permits an actual
+test**: any rung that is *not* ALREADY_MATCHED *and* not
+UNAVAILABLE_FROM_TRACE. If, as in the post-R10 board, **every
+rung is either ALREADY_MATCHED or UNAVAILABLE_FROM_TRACE**,
+then no synthetic dimension in this ladder can be exercised, and
+this ACT terminates as CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED
+in favor of LIVE-CONTEXT-DIMENSIONS01 (§9).
 
 ### E1 — stateVersion
 
@@ -581,14 +652,14 @@ LSR_T5   STATEVERSION_VARIANT               ALREADY_MATCHED (live trace
                                                        stateVer=0; BASE
                                                        also uses ??0)
 
-LSR_T6   SNAPSHOT_EPOCH_VARIANT             UNAVAILABLE      (epoch not
+LSR_T6   SNAPSHOT_EPOCH_VARIANT             UNAVAILABLE_FROM_TRACE (epoch not
                                                        stamped in trace)
 
-LSR_T7   PARTIAL_EPOCH_VARIANT              UNAVAILABLE      (no partial-
+LSR_T7   PARTIAL_EPOCH_VARIANT              UNAVAILABLE_FROM_TRACE (no partial-
                                                        message body in
                                                        trace)
 
-LSR_T8   EPOCH_RELATION_VARIANT             UNAVAILABLE      (depends on
+LSR_T8   EPOCH_RELATION_VARIANT             UNAVAILABLE_FROM_TRACE (depends on
                                                        E3 / E7)
 
 LSR_T9   FIRST_GREEN_TO_RED_DELTA           NOT_FOUND
@@ -759,7 +830,8 @@ The instrumentation must be **opt-in**, **temporary**, and carry
 an **explicit removal clause** — not another permanent
 instrumentation architecture. After the new trace exists, the
 LIVE-SHAPE-REPRODUCTION01 ladder can be **re-opened** (in a fresh
-ACT) with concrete values for dimensions that were UNAVAILABLE
+ACT) with concrete values for dimensions that were
+UNAVAILABLE_FROM_TRACE
 here, and the first GREEN→RED delta can be sought without
 speculation.
 
