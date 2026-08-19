@@ -133,9 +133,9 @@ C0_ENTRY_HEAD                        = UNKNOWN_UNTIL_C0
                                         execution. The plan MUST NOT
                                         pre-bake this SHA. Any future
                                         docs-only commit between
-                                        LATEST_PLAN_HEAD and C0
-                                        execution is allowed; it does
-                                        not invalidate C0.)
+                                        REQUIRED_PLAN_ANCESTOR_HEAD
+                                        and C0 execution is allowed;
+                                        it does not invalidate C0.)
 
 DOGFOOD_SOURCE_HEAD                  = UNKNOWN_AT_FREEZE
                                        (R15 — literal HEAD at start
@@ -171,9 +171,11 @@ Do not confuse these:
 
   - C0_ENTRY_HEAD is recorded by C0 itself at execution start;
     it is the runtime discovery, not a plan-fixed SHA.
-    Must satisfy:
-        merge-base --is-ancestor AUTHORIZATION_BASE_HEAD  C0_ENTRY_HEAD
-        merge-base --is-ancestor REQUIRED_PLAN_ANCESTOR_HEAD  C0_ENTRY_HEAD
+    Must satisfy (canonical lower + upper anchors; see §6.5 C0):
+        merge-base --is-ancestor \
+          IMPLEMENTATION_AUTHORIZED_FROM_HEAD  C0_ENTRY_HEAD
+        merge-base --is-ancestor \
+          REQUIRED_PLAN_ANCESTOR_HEAD         C0_ENTRY_HEAD
 
   - DOGFOOD_SOURCE_HEAD is the runtime discovery at C2 build
     time (the output of C1). Same discipline as C0_ENTRY_HEAD.
