@@ -60,6 +60,23 @@
  * Verdict on disk (post-repair):
  *   FUNCTIONAL_UPDATER_EXTERNAL_WRITES = 0
  *   PRODUCTION_REPAIR_NEEDED = false (repair complete)
+ *
+ * Causal note (C2 deferred): the Factory requested live dogfood with
+ * PTAD/LCD01 enabled, walking the live P12 sequence with the repaired
+ * updater, to observe whether the live `streaming/11 → idle/3` divergence
+ * survives the impurity removal. This is the load-bearing composition
+ * experiment for ACT-REACT-UPDATER-PURITY-REPAIR01. It is OUT OF SCOPE
+ * for this turn (no live dogfood harness here) and is recommended as
+ * the FIRST step of a follow-up ACT.
+ *
+ *   Possible outcomes of the dogfood (predicted):
+ *     A. live W2 disappears  ⇒ strong composition evidence (proven
+ *        impurity + its removal + disappearance of live failure)
+ *     B. live W2 remains     ⇒ the purity repair is still valid as
+ *        an independent correctness fix; live root cause remains
+ *        UNKNOWN; continue causal investigation without reverting
+ *        the repair.
+ *   Either outcome is informative.
  */
 
 import { readFileSync } from "node:fs"
