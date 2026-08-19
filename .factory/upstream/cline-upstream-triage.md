@@ -1,4 +1,4 @@
-# Cline upstream issue triage
+# Cline upstream issue triage (corrected)
 
 ## Snapshot identity
 
@@ -15,224 +15,209 @@
 | Snapshot schema_version | 1 |
 | Snapshot state | open |
 
-Triage date: **2026-08-19**
+Triage date: **2026-08-19** (initial) → **2026-08-19** (corrected at this commit).
 
-Triage produced by `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01`.
+## Why this document was revised
 
-## Shortlist construction
+Initial triage (commit `b4d7ed795`) used lexical/keyword overlap to map candidates to existing epics. Review found that keyword overlap is not semantic authority — for example "JetBrains multi-project" was lexically mapped to `CONTEXT-ACCOUNTING-TRUTH01` despite the issue being a Windows process file-lock; "Custom HTTP headers" was mapped to `TASKHEADER-CANONICAL-PROJECTION01` despite HTTP headers having nothing to do with the TaskHeader component; "macOS AMFI code signing" was mapped to `BRANDING01`. These were false mappings caused by token collision, not semantic review.
 
-80 candidates selected as union of:
+Correction (this commit) applies three semantic classes:
 
-- **A.** top 30 by raw interactions
-- **B.** top 10 most recently active issues with interactions >= 2
-- **C.** top 5 per high-value family (CORRECTNESS, CONTEXT, TOOLS/TERMINAL, PROVIDERS, PERFORMANCE, MCP, UX, DISTRIBUTION)
-- **D.** titles semantically overlapping existing canonical Cline-- epics
+- **EXACT_MAP** — the issue is the same defect/domain as an existing epic. These become `MAP_EXISTING` rows on the board.
+- **ADJACENT** — the issue is related evidence but not the epic's core claim. These are downgraded to `RADAR` and never appear on the board as upstream evidence for that epic.
+- **UNRELATED** — keyword/token overlap was misleading; no semantic relationship. Removed from the board entirely and recorded here only for the audit trail.
 
-After dedup by issue number the union was 279; trimmed to hard cap of **80** while preserving family diversity.
+The test for every `MAP_EXISTING` row:
 
-All 80 shortlisted candidates were enriched via `gh issue view --repo cline/cline --json ...`.
-All 80 were still OPEN upstream at enrichment time.
+> If I removed the issue title and read only its actual problem statement, would I still choose this epic?
 
-## Scoring dimensions (recorded per candidate)
+## Red-witness audit (corrected)
 
-| Dimension | Range | Definition |
-| --- | --- | --- |
-| `CORRECTNESS_IMPACT` | 0..5 | data loss / state corruption / broken execution / security / severe reliability |
-| `PRODUCT_VALUE` | 0..5 | expected usefulness to a real Cline-- workflow |
-| `CLINEMM_RELEVANCE` | 0..5 | direct overlap with fork goals and current board |
-| `IMPLEMENTATION_ROI` | 0..5 | expected value vs likely bounded effort |
-| `ARCHITECTURAL_FIT` | 0..5 | fits canonical state / Elmization / Factory direction without architecture debt |
-| `UPSTREAM_MOMENTUM` | 0..3 | recent maintainer / community activity |
-
-Popularity (raw interactions + percentile band) is kept separate from value.
+| # | Initial mapping | Issue summary | Corrected class | Corrected action |
+| --- | --- | --- | --- | --- |
+| #6416 | `CONTEXT-ACCOUNTING-TRUTH01` | JetBrains multi-project, bundled `node.exe` file lock on Windows | UNRELATED | Removed from board; downgraded to RADAR |
+| #11018 | `TASKHEADER-CANONICAL-PROJECTION01` | Custom HTTP headers in OpenAI-compatible provider (HTTP headers ≠ TaskHeader) | UNRELATED | Removed from board; downgraded to RADAR |
+| #12042 | `BRANDING01` | macOS 27 AMFI kills CLI binary (code-signing, not branding) | UNRELATED | Removed from board; downgraded to RADAR |
+| #9181 | `COMPACTION-STATE-AUTHORITY01` + `GITHUB-ACTIONS01` | Opus-4.6:1M auto-compacts mid-execution at <200K | EXACT_MAP → `COMPACTION-STATE-AUTHORITY01` only | Removed the spurious GITHUB-ACTIONS01 mapping |
 
 ## Disposition counts
 
-| Disposition | Count |
-| --- | --- |
-| `IMPORT` | 5 |
-| `IMPORT_FIX` | 0 (no upstream issue in shortlist was closed with an actionable merged fix that we should port) |
-| `MAP_EXISTING` | 60 |
-| `RADAR` | 15 |
-| `REJECT` | 0 |
-| `CLOSED_UPSTREAM` | 0 |
+| Disposition | Initial (`b4d7ed795`) | Corrected (this commit) | Δ |
+| --- | --- | --- | --- |
+| `IMPORT` | 5 | 5 | 0 |
+| `IMPORT_FIX` | 0 | 0 | 0 |
+| `MAP_EXISTING` | 60 | 43 | -17 (false mappings removed) |
+| `RADAR` | 15 | 32 | +17 (false mappings downgraded) |
+| `REJECT` | 0 | 0 | 0 |
+| `CLOSED_UPSTREAM` | 0 | 0 | 0 |
+
+## Semantic-class breakdown
+
+| Class | Count | Notes |
+| --- | --- | --- |
+| `EXACT_MAP` | 48 | 43 → MAP_EXISTING on board; 5 → IMPORT (become their own canonical epic) |
+| `ADJACENT` | 14 | All → RADAR; not used as board evidence |
+| `UNRELATED` | 18 | All → RADAR; recorded for audit only |
 
 ## Imported
 
-Each IMPORT becomes a new canonical Cline-- epic. The board rows below are the authoritative form; this section is the triage rationale.
+Each IMPORT is a new canonical Cline-- epic or — for #12388 — an upstream evidence bullet under an already-IMPORTed epic. Each has a one-sentence semantic justification.
 
-### `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` (upstream #4388)
+### `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` — upstream #12388
 
-- area: `DIST/REPO`
-- status: OPEN
-- priority: HIGH
-- upstream: [#4388](https://github.com/cline/cline/issues/4388)
-- title: Fix Checkpoint System Issues
-- popularity snapshot: comments=12 reactions=5 interactions=17
-- labels: P1, VS Code, Bot Responded
-- rationale: Git checkpoint corruption (.git -> .git_disabled left by interrupted tasks, submodule breakage, large-workspace corruption, disk-space exhaustion). Distinct from existing canonical work.
-- first action: RECON (reproduce + identify root cause; do not port upstream fix until recon completes)
+- URL: <https://github.com/cline/cline/issues/12388>
+- title: Checkpoint restore fails with "No checkpoint found at or before run N" after internal continuations
+- one-sentence: Checkpoint restore fails with "No checkpoint found at or before run N" — same checkpoint-reliability family as #4388. Merge as evidence under the IMPORT epic.
+- first action: RECON
 
-### `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` (upstream #7414)
+### `EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01` — upstream #10016
 
-- area: `UX/PRODUCT`
-- status: OPEN
-- priority: MED
-- upstream: [#7414](https://github.com/cline/cline/issues/7414)
-- title: Clinerules are completely ignored
-- popularity snapshot: comments=10 reactions=3 interactions=13
-- labels: Model Quality, VS Code, Bot Responded
-- rationale: `.clinerules` (custom instructions) silently ignored by the model. Distinct correctness issue with no existing epic.
-- first action: RECON (reproduce + identify root cause; do not port upstream fix until recon completes)
-
-### `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` (upstream #7413)
-
-- area: `MCP`
-- status: OPEN
-- priority: HIGH
-- upstream: [#7413](https://github.com/cline/cline/issues/7413)
-- title: MCP Servers launching thousands of instances until crash on windows
-- popularity snapshot: comments=7 reactions=0 interactions=7
-- labels: Investigation Needed, VS Code, Bot Responded
-- rationale: MCP stdio servers spawn unbounded instances until crash on Windows. Genuine process-lifecycle bug with bounded fix surface.
-- first action: RECON (reproduce + identify root cause; do not port upstream fix until recon completes)
-
-### `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` (upstream #9554)
-
-- area: `CONTEXT`
-- status: OPEN
-- priority: MED
-- upstream: [#9554](https://github.com/cline/cline/issues/9554)
-- title: Bug: .clineignore does not omit files from context as documented
-- popularity snapshot: comments=6 reactions=1 interactions=7
-- labels: VS Code
-- rationale: `.clineignore` documented as filtering the file listing but does not actually exclude files from context. Bounded fix surface; aligns with CONTEXT-ACCOUNTING concerns but the bug itself is distinct.
-- first action: RECON (reproduce + identify root cause; do not port upstream fix until recon completes)
-
-### `EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01` (upstream #10016)
-
-- area: `PROVIDERS`
-- status: OPEN
-- priority: MED
-- upstream: [#10016](https://github.com/cline/cline/issues/10016)
+- URL: <https://github.com/cline/cline/issues/10016>
 - title: GUI configuration shows blank/incorrect models from LM Studio API on Windows 11
-- popularity snapshot: comments=4 reactions=3 interactions=7
-- labels: stale, CLI
-- rationale: Provider model list discovery broken for LM Studio API and similar OpenAI-compatible endpoints. Distinct from any existing epic.
-- first action: RECON (reproduce + identify root cause; do not port upstream fix until recon completes)
+- one-sentence: Provider model list discovery broken for LM Studio API and similar OpenAI-compatible endpoints — distinct provider-model-list defect.
+- first action: RECON
 
-## Mapped to existing epics
+### `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` — upstream #9554
 
-Each mapping is attached to the existing Cline-- epic via the board's `Upstream evidence` bullets.
+- URL: <https://github.com/cline/cline/issues/9554>
+- title: Bug: .clineignore does not omit files from context as documented
+- one-sentence: .clineignore documented as filtering the file listing but actually does not exclude files from context — distinct filter bug.
+- first action: RECON
 
-### TOOL-EXECUTION-SEMANTICS01
+### `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` — upstream #7413
 
-- [#5915](https://github.com/cline/cline/issues/5915) (int=114, corr=0, updated 14d ago) — "Cline uses complex prompts and iterative task execution that may be challenging
-- [#4356](https://github.com/cline/cline/issues/4356) (int=94, corr=3, updated 19d ago) — Improve Terminal Integration Reliability Across Platforms and Shell Configuratio
-- [#4384](https://github.com/cline/cline/issues/4384) (int=58, corr=4, updated 31d ago) — Fix File Editing Tool Reliability - replace_in_file, write_to_file, and Diff Fai
+- URL: <https://github.com/cline/cline/issues/7413>
+- title: MCP Servers launching thousands of instances until crash on windows
+- one-sentence: MCP stdio servers spawn unbounded instances until crash on Windows — distinct process-lifecycle defect.
+- first action: RECON
 
-### CONTEXT-ACCOUNTING-TRUTH01
+### `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` — upstream #4388
 
-- [#4389](https://github.com/cline/cline/issues/4389) (int=33, corr=4, updated 80d ago) — Improve Context Window Management and Large File Handling
-- [#6416](https://github.com/cline/cline/issues/6416) (int=31, corr=4, updated 13d ago) — Cline JetBrains plugin is unable to work with two or more open IDEA projects (Wi
-- [#9788](https://github.com/cline/cline/issues/9788) (int=16, corr=0, updated 86d ago) — 在windows环境下，vscode  或者cli 都出现了消息丢失，发送消息读取不到。ai提示说发送的是空消息。直接导致用不了了
+- URL: <https://github.com/cline/cline/issues/4388>
+- title: Fix Checkpoint System Issues
+- one-sentence: Checkpoint corruption: .git/.git_disabled left by interrupted tasks; submodule breakage; large-workspace corruption — distinct repo-safety issue.
+- first action: RECON
 
-### STATIC-THINKING-PRESENTATION-PERSISTENCE01
+## Mapped to existing epics (EXACT_MAP only)
 
-- [#8636](https://github.com/cline/cline/issues/8636) (int=51, corr=0, updated 20d ago) — Thinking section not displayed in v3.50.0
-- [#10015](https://github.com/cline/cline/issues/10015) (int=19, corr=0, updated 59d ago) — Cline wants to execute this command:  Skipped, thinking
-- [#12079](https://github.com/cline/cline/issues/12079) (int=17, corr=2, updated 9d ago) — Command execution shows "skipped" in Cline terminal and hangs on "thinking" — re
+Top evidence per epic, sorted by issue number. Each entry passes the test: "If I removed the issue title and read only its actual problem statement, would I still choose this epic?"
 
-### USER-CONTEXT-CEILING01
+### TOOL-EXECUTION-SEMANTICS01 (23 mapped)
 
-- [#5915](https://github.com/cline/cline/issues/5915) (int=114, corr=0, updated 14d ago) — "Cline uses complex prompts and iterative task execution that may be challenging
-- [#10551](https://github.com/cline/cline/issues/10551) (int=14, corr=4, updated 29d ago) — OpenAI-compatible DeepSeek V4 Pro: configured 1M context capped at 128K, tool pa
-- [#10980](https://github.com/cline/cline/issues/10980) (int=6, corr=2, updated 23d ago) — Deepseek V4 context window is limited in 128K
+- [#13253](https://github.com/cline/cline/issues/13253) — Stuck running one command for 10 minutes — terminal execution state.
+- [#13246](https://github.com/cline/cline/issues/13246) — Background Console run_commands has hard-coded 30s timeout — terminal tool semantics.
+- [#12977](https://github.com/cline/cline/issues/12977) — Unknown MCP tool name forwarded to server instead of validated against catalog — tool-routing semantics.
+- *(+20 more — see JSON for full list)*
 
-### TEST-BASELINE-ZERO-FAILURES01
+### STATIC-THINKING-PRESENTATION-PERSISTENCE01 (7 mapped)
 
-- [#4384](https://github.com/cline/cline/issues/4384) (int=58, corr=4, updated 31d ago) — Fix File Editing Tool Reliability - replace_in_file, write_to_file, and Diff Fai
-- [#12474](https://github.com/cline/cline/issues/12474) (int=15, corr=0, updated 0d ago) — Add latest Gemini models: `gemini-3.6-flash` and `gemini-3.5-flash-lite` (blocke
-- [#12431](https://github.com/cline/cline/issues/12431) (int=14, corr=0, updated 2d ago) — Cline hit repeated tool call failures. Try guiding it with a new prompt.
+- [#12079](https://github.com/cline/cline/issues/12079) — Command status "skipped" in terminal + hangs on "thinking" — same family as #10015/#10537; thinking-presentation persistence.
+- [#10537](https://github.com/cline/cline/issues/10537) — Hangs at "Thinking..." indefinitely after terminal command — thinking-section-presentation persistence.
+- [#10208](https://github.com/cline/cline/issues/10208) — Stuck thinking forever in both Plan and Act modes — same thinking-persistence defect class.
+- *(+4 more — see JSON for full list)*
 
-### GITHUB-ACTIONS01
+### USER-CONTEXT-CEILING01 (6 mapped)
 
-- [#9181](https://github.com/cline/cline/issues/9181) (int=10, corr=2, updated 43d ago) — Agressive context compaction with opus-4.6:1m
-- [#12520](https://github.com/cline/cline/issues/12520) (int=7, corr=2, updated 20d ago) — fix(cli): openai-compatible provider ignores models.json contextWindow — resolve
-- [#11785](https://github.com/cline/cline/issues/11785) (int=7, corr=0, updated 25d ago) — Global Dirs differ severely, docs dont convey information efficiently
+- [#12947](https://github.com/cline/cline/issues/12947) — Reasoning Effort dropdown caps at xhigh, missing "max" advertised by DeepSeek V4 — model-capability ceiling.
+- [#12520](https://github.com/cline/cline/issues/12520) — openai-compatible provider ignores models.json contextWindow; auto-compaction fires too early — ceiling misapplied.
+- [#10980](https://github.com/cline/cline/issues/10980) — Configured 400K context for DeepSeek V4 capped at 128K — provider ceiling misapplied is a context-ceiling concern.
+- *(+3 more — see JSON for full list)*
 
-### COMPACTION-STATE-AUTHORITY01
+### CONTEXT-ACCOUNTING-TRUTH01 (2 mapped)
 
-- [#10637](https://github.com/cline/cline/issues/10637) (int=12, corr=0, updated 2d ago) — Cline auto compacts context silently even with autocompacting setting disabled
-- [#9181](https://github.com/cline/cline/issues/9181) (int=10, corr=2, updated 43d ago) — Agressive context compaction with opus-4.6:1m
+- [#10148](https://github.com/cline/cline/issues/10148) — Impossible token count displayed in context window UI — token accounting literally broken.
+- [#4389](https://github.com/cline/cline/issues/4389) — Files >300KB blocked, prompt-too-long unrecovery, full-file API sends — exactly the canonical context-accounting failures the epic targets.
 
-### GITHUB-DISTRIBUTION01
+### COMPACTION-STATE-AUTHORITY01 (2 mapped)
 
-- [#10246](https://github.com/cline/cline/issues/10246) (int=7, corr=3, updated 121d ago) — CLI: `cline` fails on startup with npm 404 for `@clinebot/agents` (missing packa
-- [#11879](https://github.com/cline/cline/issues/11879) (int=5, corr=0, updated 31d ago) — # CI/CD test coverage gaps in SDK packages — two untested code paths
+- [#10637](https://github.com/cline/cline/issues/10637) — Auto-compacts silently even with auto-compact setting disabled — silent compaction is a state-authority violation.
+- [#9181](https://github.com/cline/cline/issues/9181) — Opus-4.6:1M aggressively auto-compacts mid-execution despite ample headroom — a compaction-state-authority problem.
 
-### COST-DISPLAY-TRUTH01
+### COST-DISPLAY-TRUTH01 (2 mapped)
 
-- [#11494](https://github.com/cline/cline/issues/11494) (int=6, corr=0, updated 15d ago) — Cline cli 3 does not show cost
-- [#10596](https://github.com/cline/cline/issues/10596) (int=5, corr=2, updated 18d ago) — Cline's OpenRouter integration lacks provider pinning, inflating costs by 3-5x
+- [#11494](https://github.com/cline/cline/issues/11494) — CLI 3 does not show cost — direct cost-display defect.
+- [#10596](https://github.com/cline/cline/issues/10596) — OpenRouter provider pinning missing; requests fan out inflating cost 3-5x — cost/billing presentation.
 
-### TASKHEADER-CANONICAL-PROJECTION01
+### TEST-BASELINE-ZERO-FAILURES01 (1 mapped)
 
-- [#11018](https://github.com/cline/cline/issues/11018) (int=10, corr=3, updated 68d ago) — Unable to set custom headers anymore in OpenAi compatible (Kimi for coding setup
+- [#9333](https://github.com/cline/cline/issues/9333) — CLI ignores configured model and always uses anthropic/claude-3-7-sonnet — provider routing correctness.
 
-### BRANDING01
+## Radar (top 20)
 
-- [#12042](https://github.com/cline/cline/issues/12042) (int=9, corr=0, updated 0d ago) — macOS 27 Golden Gate Developer Beta (Apple Silicon): CLI binary is killed by AMF
+Useful upstream signal but not on the active board. Includes all `ADJACENT` candidates plus `UNRELATED` candidates whose problem statement is at least interesting.
 
-### CODE-COVERAGE-BASELINE01
+- [#5915](https://github.com/cline/cline/issues/5915) — `ADJACENT` — Cline recommends Claude 4 Sonnet in error message — model-recommendation UX.
+- [#7262](https://github.com/cline/cline/issues/7262) — `ADJACENT` — Invalid API Response on large files/PDFs — provider response parsing quality.
+- [#7403](https://github.com/cline/cline/issues/7403) — `ADJACENT` — Cline does not save config in WebStorm/VSCode — config-persistence bug, ADJACENT.
+- [#7414](https://github.com/cline/cline/issues/7414) — `ADJACENT` — Upstream labels this "Model Quality"; cannot distinguish rules-omitted vs rules-ignored without recon. Downgrade to RADAR pending recon.
+- [#8838](https://github.com/cline/cline/issues/8838) — `ADJACENT` — Plan-mode cannot answer question without Cancel — UI/UX interaction bug.
+- [#8920](https://github.com/cline/cline/issues/8920) — `ADJACENT` — [Windows specific] "Error loading webview: Error: Could not register service worker" — webview lifecycle.
+- [#9201](https://github.com/cline/cline/issues/9201) — `ADJACENT` — No chat window scrollbar after 3.49.0→3.49.1 — UI regression, NOT context accounting.
+- [#9788](https://github.com/cline/cline/issues/9788) — `ADJACENT` — [Windows only] 消息丢失, AI prompt sees empty message — webview message-pipeline bug, NOT context accounting.
+- [#10246](https://github.com/cline/cline/issues/10246) — `ADJACENT` — CLI startup npm 404 for @clinebot/agents — npm distribution packaging.
+- [#11263](https://github.com/cline/cline/issues/11263) — `ADJACENT` — Ollama infinite JSON tool loop + HTTP 4xx/5xx — tool-call parsing on local models.
+- [#11793](https://github.com/cline/cline/issues/11793) — `ADJACENT` — apply_patch fuzzy matcher O(n²) — tool performance bug.
+- [#12385](https://github.com/cline/cline/issues/12385) — `ADJACENT` — Kimi K3 repeated Invalid API Response errors — provider response parsing.
+- [#12474](https://github.com/cline/cline/issues/12474) — `ADJACENT` — Add latest Gemini models — provider-catalog update; ADJACENT only.
+- [#12863](https://github.com/cline/cline/issues/12863) — `ADJACENT` — replace_in_file targets directory / EISDIR — tool path-validation bug; ADJACENT.
+- [#6416](https://github.com/cline/cline/issues/6416) — `UNRELATED` — JetBrains multi-project: bundled node.exe file lock. NOT context accounting.
+- [#6759](https://github.com/cline/cline/issues/6759) — `UNRELATED` — [BUG] GCP vertex ai global missing claude sonnet — provider-catalog gap.
+- [#7476](https://github.com/cline/cline/issues/7476) — `UNRELATED` — JetBrains plugin fails on Windows/ARM64 with Unsupported platform — JetBrains-specific portability.
+- [#8074](https://github.com/cline/cline/issues/8074) — `UNRELATED` — devstral-2512 labeled FREE but consumes credits — provider catalog accuracy.
+- [#9668](https://github.com/cline/cline/issues/9668) — `UNRELATED` — Add API Key field to LM Studio — provider-config UI gap.
+- [#9786](https://github.com/cline/cline/issues/9786) — `UNRELATED` — Suggestion: MCP server security scanning — feature request, not current canonical work.
 
-- [#11879](https://github.com/cline/cline/issues/11879) (int=5, corr=0, updated 31d ago) — # CI/CD test coverage gaps in SDK packages — two untested code paths
+## Removed-from-board audit (previously MAP_EXISTING, now RADAR)
 
-### CODE-COVERAGE-RATCHET01
+These candidates were previously presented as evidence for an existing Cline-- epic. They are listed here only so the audit trail is complete; **none of them appears on the board**.
 
-- [#11879](https://github.com/cline/cline/issues/11879) (int=5, corr=0, updated 31d ago) — # CI/CD test coverage gaps in SDK packages — two untested code paths
+- [#5915](https://github.com/cline/cline/issues/5915) — `ADJACENT` — Cline recommends Claude 4 Sonnet in error message — model-recommendation UX.
+- [#6416](https://github.com/cline/cline/issues/6416) — `UNRELATED` — JetBrains multi-project: bundled node.exe file lock. NOT context accounting.
+- [#6759](https://github.com/cline/cline/issues/6759) — `UNRELATED` — [BUG] GCP vertex ai global missing claude sonnet — provider-catalog gap.
+- [#7262](https://github.com/cline/cline/issues/7262) — `ADJACENT` — Invalid API Response on large files/PDFs — provider response parsing quality.
+- [#7403](https://github.com/cline/cline/issues/7403) — `ADJACENT` — Cline does not save config in WebStorm/VSCode — config-persistence bug, ADJACENT.
+- [#7414](https://github.com/cline/cline/issues/7414) — `ADJACENT` — Upstream labels this "Model Quality"; cannot distinguish rules-omitted vs rules-ignored without recon. Downgrade to RADAR pending recon.
+- [#7476](https://github.com/cline/cline/issues/7476) — `UNRELATED` — JetBrains plugin fails on Windows/ARM64 with Unsupported platform — JetBrains-specific portability.
+- [#8074](https://github.com/cline/cline/issues/8074) — `UNRELATED` — devstral-2512 labeled FREE but consumes credits — provider catalog accuracy.
+- [#8838](https://github.com/cline/cline/issues/8838) — `ADJACENT` — Plan-mode cannot answer question without Cancel — UI/UX interaction bug.
+- [#8920](https://github.com/cline/cline/issues/8920) — `ADJACENT` — [Windows specific] "Error loading webview: Error: Could not register service worker" — webview lifecycle.
+- [#9201](https://github.com/cline/cline/issues/9201) — `ADJACENT` — No chat window scrollbar after 3.49.0→3.49.1 — UI regression, NOT context accounting.
+- [#9668](https://github.com/cline/cline/issues/9668) — `UNRELATED` — Add API Key field to LM Studio — provider-config UI gap.
+- [#9786](https://github.com/cline/cline/issues/9786) — `UNRELATED` — Suggestion: MCP server security scanning — feature request, not current canonical work.
+- [#9788](https://github.com/cline/cline/issues/9788) — `ADJACENT` — [Windows only] 消息丢失, AI prompt sees empty message — webview message-pipeline bug, NOT context accounting.
+- [#10246](https://github.com/cline/cline/issues/10246) — `ADJACENT` — CLI startup npm 404 for @clinebot/agents — npm distribution packaging.
+- [#10307](https://github.com/cline/cline/issues/10307) — `UNRELATED` — 403 Kimi For Coding — provider auth/policy.
+- [#10469](https://github.com/cline/cline/issues/10469) — `UNRELATED` — Newer models for DeepSeek not listed — provider-catalog gap.
+- [#10500](https://github.com/cline/cline/issues/10500) — `UNRELATED` — Cline keeps suggesting use Claude 4.5 Sonnet — model-recommendation UX.
+- [#10741](https://github.com/cline/cline/issues/10741) — `UNRELATED` — Disable auto-update in CLI; v2.18.0 issues — UX/distribution.
+- [#11018](https://github.com/cline/cline/issues/11018) — `UNRELATED` — Custom HTTP headers in OpenAI-compatible provider. "Header" ≠ TaskHeader.
+- [#11263](https://github.com/cline/cline/issues/11263) — `ADJACENT` — Ollama infinite JSON tool loop + HTTP 4xx/5xx — tool-call parsing on local models.
+- [#11785](https://github.com/cline/cline/issues/11785) — `UNRELATED` — "Global Dirs differ severely, docs dont convey" — docs/UX concern, NOT GitHub Actions.
+- [#11793](https://github.com/cline/cline/issues/11793) — `ADJACENT` — apply_patch fuzzy matcher O(n²) — tool performance bug.
+- [#11879](https://github.com/cline/cline/issues/11879) — `UNRELATED` — CI/CD test coverage gaps in SDK packages — orthogonal to coverage-baseline epic.
+- [#12042](https://github.com/cline/cline/issues/12042) — `UNRELATED` — macOS 27 AMFI kills CLI binary for code-signing violation. NOT branding; distribution/signing.
+- [#12133](https://github.com/cline/cline/issues/12133) — `UNRELATED` — Git commit --amend should not be "safe command" — tool-allowlist policy.
+- [#12385](https://github.com/cline/cline/issues/12385) — `ADJACENT` — Kimi K3 repeated Invalid API Response errors — provider response parsing.
+- [#12474](https://github.com/cline/cline/issues/12474) — `ADJACENT` — Add latest Gemini models — provider-catalog update; ADJACENT only.
+- [#12863](https://github.com/cline/cline/issues/12863) — `ADJACENT` — replace_in_file targets directory / EISDIR — tool path-validation bug; ADJACENT.
+- [#13008](https://github.com/cline/cline/issues/13008) — `UNRELATED` — CLINE 4.1.x removed compact context toggle, breaking local Ollama+Qwen — UX regression.
+- [#13160](https://github.com/cline/cline/issues/13160) — `UNRELATED` — [Windows] Claude Code API Provider strictly binds working directory — working-directory config bug.
+- [#13296](https://github.com/cline/cline/issues/13296) — `UNRELATED` — Could not consistently trigger Cline diff edit view — UI trigger bug.
 
-## Radar (top 15)
+## Method (corrected)
 
-Useful upstream signal but not added to active board. Tracked in this artifact only.
-
-- [#7262](https://github.com/cline/cline/issues/7262) (int=47, corr=2, prod=4) — Cline returning over and over again: Invalid API Response: The provider returned
-- [#8074](https://github.com/cline/cline/issues/8074) (int=27, corr=0, prod=3) — devstral-2512 is labeled FREE in Cline provider, but still consumes credits
-- [#10500](https://github.com/cline/cline/issues/10500) (int=22, corr=0, prod=3) — Cline asking to use Claude 4.5 Sonnet
-- [#12385](https://github.com/cline/cline/issues/12385) (int=21, corr=3, prod=3) — Kimi K3 model returns repeated Invalid API Response errors after first message
-- [#10469](https://github.com/cline/cline/issues/10469) (int=20, corr=0, prod=3) — Newer models for deepseek are not listed.
-- [#8838](https://github.com/cline/cline/issues/8838) (int=17, corr=0, prod=3) — In plan mode I can't answer a question unless I hit the Cancel button
-- [#10307](https://github.com/cline/cline/issues/10307) (int=17, corr=2, prod=3) — 403 Kimi For Coding is currently only available for Coding Agents such as Kimi C
-- [#9668](https://github.com/cline/cline/issues/9668) (int=15, corr=2, prod=3) — Add API Key field to LM Studio provider for authenticated servers
-- [#12863](https://github.com/cline/cline/issues/12863) (int=14, corr=3, prod=3) — replace_in_file targets directory or malformed path and fails with EISDIR
-- [#6759](https://github.com/cline/cline/issues/6759) (int=14, corr=0, prod=3) — [BUG] GCP vertex ai global does not have claude sonnet model
-- [#13296](https://github.com/cline/cline/issues/13296) (int=8, corr=2, prod=3) — Could not consistently trigger Cline diff edit view
-- [#11793](https://github.com/cline/cline/issues/11793) (int=8, corr=2, prod=3) — apply_patch fuzzy matcher is O(n²) per hunk — pegs CPU, spikes RAM, times out on
-- [#9786](https://github.com/cline/cline/issues/9786) (int=8, corr=0, prod=3) — 💡 Suggestion: MCP server security scanning before connection
-- [#12388](https://github.com/cline/cline/issues/12388) (int=7, corr=3, prod=3) — Checkpoint restore fails with "No checkpoint found at or before run N" after int
-- [#10741](https://github.com/cline/cline/issues/10741) (int=7, corr=2, prod=3) — How to disable auto-update in Cline CLI? Multiple issues with v2.18.0
-
-## Method
-
-1. Substrate validated against schema_version=1, repository=cline/cline, state=open, no forbidden fields, interactions=comments+reactions, deterministic ordering verified.
-2. All 573 rows ranked offline by raw interactions, comments, reactions, age, days-since-update, label families.
-3. Popularity 0..5 bands assigned by rank percentile (5 = top 1%, 4 = top 5%, 3 = top 15%, 2 = top 40%, 1 = top 70%, 0 = bottom 30%).
-4. Shortlist assembled as union of A (top 30 interactions) + B (top 10 recent with interactions >= 2) + C (top 5 per family) + D (titles overlapping existing canonical epics), deduped by number, trimmed to 80.
-5. Each shortlisted issue enriched via `gh issue view --repo cline/cline --json ...` to retrieve current state, body, labels, comments. All 80 still OPEN at enrichment.
-6. Six independent scores assigned per candidate (CORRECTNESS_IMPACT, PRODUCT_VALUE, CLINEMM_RELEVANCE, IMPLEMENTATION_ROI, ARCHITECTURAL_FIT, UPSTREAM_MOMENTUM).
-7. Disposition assigned by rules:
-   - `ARCHITECTURAL_FIT == 0` -> `REJECT` (architecture-fight: rejects Cline-- direction)
-   - `CLINEMM_RELEVANCE >= 5` (strong title overlap) -> `MAP_EXISTING`
-   - `CLINEMM_RELEVANCE >= 4` and `CORRECTNESS_IMPACT < 4` -> `MAP_EXISTING`
-   - `CLINEMM_RELEVANCE >= 4` and (`CORRECTNESS_IMPACT >= 4` or `PRODUCT_VALUE >= 4`) and `IMPLEMENTATION_ROI >= 3` -> `IMPORT`
-   - `CLINEMM_RELEVANCE == 0` and high-impact correctness -> `IMPORT`
-   - moderate value -> `RADAR`
-   - no clear value -> `REJECT`
-8. Manual overrides applied for `MAP_EXISTING` (e.g. #6416 JetBrains multi-project, #10410 gpt-5.5 500k context) where title-vs-body keyword matching over-classified as IMPORT.
+1. The fixed 80-candidate enriched triage artifact from `b4d7ed795` was consumed unchanged.
+2. Each candidate was re-classified semantically — meaning the actual problem statement in the body, not the keywords in the title.
+3. Each candidate received one of `EXACT_MAP` / `ADJACENT` / `UNRELATED` per the test above.
+4. Only `EXACT_MAP` produces a `MAP_EXISTING` row visible on the board.
+5. `ADJACENT` and `UNRELATED` produce `RADAR` entries in this artifact only; the board no longer cites them.
+6. Five IMPORTs were re-confirmed as genuinely distinct canonical work.
+7. `#7414` (`Clinerules are completely ignored`) was demoted from IMPORT to ADJACENT/RADAR pending a recon that distinguishes rules-omitted-from-request from rules-present-but-model-ignored. The previously-created `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` row on the board is removed because it no longer has a backing issue.
+8. `#12388` (checkpoint restore fails) was promoted from RADAR to IMPORT as additional evidence under `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` (same family as `#4388`).
 
 ## What this artifact is NOT
 
-- Not a mirror of all 659 upstream issues (573 retained in substrate).
-- Not a body/comment dump (each enriched issue retains only the short title, URL, body excerpt, and counts).
+- Not a re-rank of all 573 upstream rows (substrate unchanged).
+- Not a re-enrichment of the 80-issue shortlist (all enrichment data is the same).
 - Not an implementation commitment (no IMPORT here is auto-promoted into the immediate critical path).
 - Not a substitute for `scripts/dump-cline-issues.py` (the substrate remains the canonical JSON).

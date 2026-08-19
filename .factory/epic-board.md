@@ -212,11 +212,11 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `EPIC-CLINEMM-CODE-COVERAGE-BASELINE01` | QA | OPEN | HIGH | test-baseline-zero-failures recommended | inventory coverage seams; establish truthful exact-head baseline; publish machine-readable report |
 | `EPIC-CLINEMM-CODE-COVERAGE-RATCHET01` | QA | OPEN | HIGH | coverage-baseline01 | prevent aggregate coverage regression; thresholds increase monotonically |
 | `UP-01` | UPSTREAM | SUPERSEDED → `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | — | — | recon scope of fork vs upstream Cline; reclassified as upstream-intake substrate ACT |
-| `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | UPSTREAM | CLOSED_INITIAL_TRIAGE at `162192610` | — | none | compact upstream issue intake substrate; rank by popularity + Cline-- value; map selected candidates; first complete triage produced 5 IMPORTs, 60 MAP_EXISTING, 15 RADAR, 0 REJECT, 0 CLOSED_UPSTREAM |
+| `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | UPSTREAM | CLOSED_INITIAL_TRIAGE at `162192610` | — | none | compact upstream issue intake substrate; rank by popularity + Cline-- value; map selected candidates; first complete triage (and its semantic correction at `b4d7ed795` + correction ACT) produced 5 IMPORTs, 43 EXACT_MAPs, 32 ADJACENT/UNRELATED (RADAR), 0 REJECT, 0 CLOSED_UPSTREAM |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-SUBSTRATE01` | UPSTREAM | CLOSED at `f1837597b` | — | none | snapshot producer; SHA256 `878eb241e24150b4ecc9731e6fe8373b7e81566d8117f7f129b87f012f166cb6`; 573 retained rows; bounded selection policy; 29 unit tests |
-| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` | UPSTREAM | CLOSED at `162192610` | — | upstream-issue-intake01 | consumed substrate; built 80-issue bounded shortlist; enriched via `gh issue view`; per-issue disposition; triage artifact at `.factory/upstream/cline-upstream-triage.md` (239 lines, 14.6 KiB) |
-| `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` | DIST/REPO | OPEN | HIGH | none | git checkpoint corruption (.git/.git_disabled left by interrupted tasks, submodule breakage, large-workspace corruption, disk-space exhaustion); recon from upstream #4388 |
-| `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` | UX/PRODUCT | OPEN | MED | none | `.clinerules` (custom instructions) silently ignored by model; recon from upstream #7414 |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` | UPSTREAM | CLOSED at `b4d7ed795` (superseded by correction ACT) | — | upstream-issue-intake01 | consumed substrate; built 80-issue bounded shortlist; enriched via `gh issue view`; per-issue disposition; initial triage artifact was lexical-overlap-based and superseded by the correction ACT |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION01` | UPSTREAM | CLOSED at this commit | — | upstream-issue-intake-triage01 | semantic three-class correction (EXACT_MAP / ADJACENT / UNRELATED); 17 false mappings removed (#6416, #11018, #12042, #9181 spurious GITHUB-ACTIONS, and 13 others); corrected triage artifact at `.factory/upstream/cline-upstream-triage.md` (223 lines, 18.5 KiB) |
+| `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` | DIST/REPO | OPEN | HIGH | none | git checkpoint corruption (.git/.git_disabled left by interrupted tasks, submodule breakage, large-workspace corruption, disk-space exhaustion) + checkpoint restore failure; recon from upstream #4388 + #12388 |
 | `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` | MCP | OPEN | HIGH | none | MCP stdio servers spawn unbounded instances until crash on Windows; process-lifecycle bug; recon from upstream #7413 |
 | `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` | CONTEXT | OPEN | MED | context-accounting-truth | `.clineignore` documented as filtering file listing but does not actually exclude files from context; recon from upstream #9554 |
 | `EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01` | PROVIDERS | OPEN | MED | none | provider model list discovery broken for LM Studio API and similar OpenAI-compatible endpoints; recon from upstream #10016 |
@@ -747,47 +747,67 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 **Rule.** Popularity ≠ automatic priority. A 100-interaction feature request can still be REJECT if it conflicts with Cline-- direction.
 
-**First triage cycle.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` (closed at `162192610`) consumed snapshot SHA256 `878eb241e24150b4ecc9731e6fe8373b7e81566d8117f7f129b87f012f166cb6` (573 rows). It built a bounded shortlist of **80** candidates via union of A (top 30 interactions), B (top 10 recent with interactions >= 2), C (top 5 per high-value family), D (semantic overlap with existing epics). All 80 were enriched via `gh issue view --repo cline/cline`; all 80 still OPEN upstream. Dispositions:
+**First triage cycle.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` (closed at `b4d7ed795`, superseded by correction ACT) consumed snapshot SHA256 `878eb241e24150b4ecc9731e6fe8373b7e81566d8117f7f129b87f012f166cb6` (573 rows). It built a bounded shortlist of **80** candidates via union of A (top 30 interactions), B (top 10 recent with interactions >= 2), C (top 5 per high-value family), D (semantic overlap with existing epics). All 80 were enriched via `gh issue view --repo cline/cline`; all 80 still OPEN upstream.
 
-| Disposition | Count | Meaning |
-| --- | --- | --- |
-| `IMPORT` | 5 | genuinely distinct task; promoted to new canonical row |
-| `MAP_EXISTING` | 60 | evidence/input for an existing Cline-- task |
-| `RADAR` | 15 | useful signal, not active |
-| `REJECT` | 0 | no candidate met architecture-fight or zero-value threshold |
-| `CLOSED_UPSTREAM` | 0 | no candidate had been closed upstream between snapshot and enrichment |
+The initial triage used **lexical/keyword overlap** to map candidates to existing epics. Review identified this as systematically defective: keyword overlap was treated as semantic authority. For example "JetBrains multi-project" → `CONTEXT-ACCOUNTING-TRUTH01`, "Custom HTTP headers" → `TASKHEADER-CANONICAL-PROJECTION01`, "macOS AMFI code signing" → `BRANDING01`, "Opus-4.6:1M auto-compaction" → `COMPACTION-STATE-AUTHORITY01` AND `GITHUB-ACTIONS01`. None of these are actually evidence for the named epic; they are token-collision false positives.
 
-Triage artifact: `.factory/upstream/cline-upstream-triage.md` (239 lines, 14.6 KiB). Machine-readable companion: `.factory/upstream/cline-upstream-triage.json` (55.6 KiB).
+**Correction cycle.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION01` (this commit) applies three explicit semantic classes per candidate:
 
-**New IMPORTs from first triage.**
+- **EXACT_MAP** — the issue is the same defect/domain as an existing epic. Produces a `MAP_EXISTING` row on the board.
+- **ADJACENT** — the issue is related evidence but not the epic's core claim. Becomes `RADAR`; does not appear on the board as upstream evidence.
+- **UNRELATED** — keyword overlap was misleading; no semantic relationship. Becomes `RADAR`; recorded in the artifact audit trail only.
+
+Every retained `MAP_EXISTING` row satisfies this test: *if I removed the issue title and read only its actual problem statement, would I still choose this epic?*
+
+Dispositions after correction:
+
+| Disposition | Count (corrected) | Count (initial) | Δ |
+| --- | --- | --- | --- |
+| `IMPORT` | 5 | 5 | 0 |
+| `MAP_EXISTING` | 43 | 60 | -17 (false mappings removed) |
+| `RADAR` | 32 | 15 | +17 (false mappings downgraded) |
+| `REJECT` | 0 | 0 | 0 |
+| `CLOSED_UPSTREAM` | 0 | 0 | 0 |
+
+| Semantic class | Count |
+| --- | --- |
+| `EXACT_MAP` | 48 (43 → MAP_EXISTING on board; 5 → IMPORT) |
+| `ADJACENT` | 14 (all → RADAR) |
+| `UNRELATED` | 18 (all → RADAR) |
+
+**Known red-witness audit** (corrected):
+
+- `#6416` (JetBrains multi-project, bundled `node.exe` file lock) — UNRELATED → removed from board; downgraded to RADAR.
+- `#11018` (Custom HTTP headers in OpenAI-compatible provider; HTTP headers ≠ TaskHeader) — UNRELATED → removed from board.
+- `#12042` (macOS 27 AMFI kills CLI binary; code-signing, not branding) — UNRELATED → removed from board.
+- `#9181` (Opus-4.6:1M auto-compacts mid-execution at <200K) — EXACT_MAP → `COMPACTION-STATE-AUTHORITY01` only; spurious `GITHUB-ACTIONS01` mapping removed.
+
+Triage artifact (corrected): `.factory/upstream/cline-upstream-triage.md` (223 lines, 18.5 KiB). Machine-readable companion: `.factory/upstream/cline-upstream-triage.json` (26.3 KiB). The initial artifact at this same path was overwritten by the corrected version; the red-witness table at the top of the artifact documents the change.
+
+**IMPORTs (corrected).**
 
 | Epic | Upstream | Why |
 | --- | --- | --- |
-| `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` | [#4388](https://github.com/cline/cline/issues/4388) | git checkpoint corruption; distinct from existing canonical work |
-| `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` | [#7414](https://github.com/cline/cline/issues/7414) | `.clinerules` silently ignored by model |
-| `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` | [#7413](https://github.com/cline/cline/issues/7413) | MCP stdio process leak on Windows |
-| `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` | [#9554](https://github.com/cline/cline/issues/9554) | `.clineignore` documented filter not applied |
-| `EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01` | [#10016](https://github.com/cline/cline/issues/10016) | provider model list discovery broken (LM Studio et al.) |
+| `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` | [#4388](https://github.com/cline/cline/issues/4388) + [#12388](https://github.com/cline/cline/issues/12388) | git checkpoint corruption (`.git/.git_disabled` left by interrupted tasks, submodule breakage, large-workspace corruption, disk-space exhaustion) + checkpoint restore failure ("No checkpoint found at or before run N"); distinct repo-safety issue |
+| `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` | [#7413](https://github.com/cline/cline/issues/7413) | MCP stdio servers spawn unbounded instances until crash on Windows |
+| `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` | [#9554](https://github.com/cline/cline/issues/9554) | `.clineignore` documented as filtering file listing but actually does not exclude files from context |
+| `EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01` | [#10016](https://github.com/cline/cline/issues/10016) | provider model list discovery broken for LM Studio API and similar OpenAI-compatible endpoints |
 
-Each IMPORT epic has `RECON` as the first epistemic action; no upstream fix is ported in this ACT. None of the 5 were promoted into the immediate critical path.
+The previously-imported `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` row was removed because `#7414` (its only backing issue) was demoted from IMPORT to ADJACENT/RADAR pending a recon that distinguishes rules-omitted-from-request from rules-present-but-model-ignored (upstream labels the issue "Model Quality", which is consistent with either failure mode).
 
-**MAP_EXISTING (top evidence per epic; full list in triage artifact).**
+Each IMPORT epic has `RECON` as the first epistemic action; no upstream fix is ported. None of the 4 were promoted into the immediate critical path.
 
-- `TOOL-EXECUTION-SEMANTICS01` → [#5915](https://github.com/cline/cline/issues/5915), [#4356](https://github.com/cline/cline/issues/4356), [#4384](https://github.com/cline/cline/issues/4384)
-- `CONTEXT-ACCOUNTING-TRUTH01` → [#4389](https://github.com/cline/cline/issues/4389), [#6416](https://github.com/cline/cline/issues/6416), [#9788](https://github.com/cline/cline/issues/9788)
-- `STATIC-THINKING-PRESENTATION-PERSISTENCE01` → [#8636](https://github.com/cline/cline/issues/8636), [#10015](https://github.com/cline/cline/issues/10015), [#12079](https://github.com/cline/cline/issues/12079)
-- `TEST-BASELINE-ZERO-FAILURES01` → [#4384](https://github.com/cline/cline/issues/4384), [#12474](https://github.com/cline/cline/issues/12474), [#12431](https://github.com/cline/cline/issues/12431)
-- `COMPACTION-STATE-AUTHORITY01` → [#10637](https://github.com/cline/cline/issues/10637), [#9181](https://github.com/cline/cline/issues/9181)
-- `USER-CONTEXT-CEILING01` → [#5915](https://github.com/cline/cline/issues/5915), [#10551](https://github.com/cline/cline/issues/10551), [#10980](https://github.com/cline/cline/issues/10980)
-- `GITHUB-ACTIONS01` → [#9181](https://github.com/cline/cline/issues/9181), [#12520](https://github.com/cline/cline/issues/12520), [#11785](https://github.com/cline/cline/issues/11785)
-- `GITHUB-DISTRIBUTION01` → [#10246](https://github.com/cline/cline/issues/10246), [#11879](https://github.com/cline/cline/issues/11879)
-- `COST-DISPLAY-TRUTH01` → [#11494](https://github.com/cline/cline/issues/11494), [#10596](https://github.com/cline/cline/issues/10596)
-- `BRANDING01` → [#12042](https://github.com/cline/cline/issues/12042)
-- `CODE-COVERAGE-BASELINE01` → [#11879](https://github.com/cline/cline/issues/11879)
-- `CODE-COVERAGE-RATCHET01` → [#11879](https://github.com/cline/cline/issues/11879)
-- `TASKHEADER-CANONICAL-PROJECTION01` → [#11018](https://github.com/cline/cline/issues/11018)
+**MAP_EXISTING (corrected; only EXACT_MAP; top 3 per epic).**
 
-Full mapping per epic with all 60 candidates is in `.factory/upstream/cline-upstream-triage.md` § "Mapped to existing epics".
+- `TOOL-EXECUTION-SEMANTICS01` → [#4356](https://github.com/cline/cline/issues/4356), [#4384](https://github.com/cline/cline/issues/4384), [#10656](https://github.com/cline/cline/issues/10656)
+- `STATIC-THINKING-PRESENTATION-PERSISTENCE01` → [#8636](https://github.com/cline/cline/issues/8636), [#10015](https://github.com/cline/cline/issues/10015), [#10537](https://github.com/cline/cline/issues/10537)
+- `USER-CONTEXT-CEILING01` → [#10980](https://github.com/cline/cline/issues/10980), [#10551](https://github.com/cline/cline/issues/10551), [#12947](https://github.com/cline/cline/issues/12947)
+- `CONTEXT-ACCOUNTING-TRUTH01` → [#4389](https://github.com/cline/cline/issues/4389), [#10148](https://github.com/cline/cline/issues/10148)
+- `COMPACTION-STATE-AUTHORITY01` → [#9181](https://github.com/cline/cline/issues/9181), [#10637](https://github.com/cline/cline/issues/10637)
+- `COST-DISPLAY-TRUTH01` → [#10596](https://github.com/cline/cline/issues/10596), [#11494](https://github.com/cline/cline/issues/11494)
+- `TEST-BASELINE-ZERO-FAILURES01` → [#9333](https://github.com/cline/cline/issues/9333)
+
+The previously-listed `BRANDING01 → #12042`, `CODE-COVERAGE-BASELINE01 → #11879`, `CODE-COVERAGE-RATCHET01 → #11879`, `TASKHEADER-CANONICAL-PROJECTION01 → #11018`, `CONTEXT-ACCOUNTING-TRUTH01 → #6416/#9788`, `STATIC-THINKING-PRESENTATION-PERSISTENCE01 → #12079`, `USER-CONTEXT-CEILING01 → #5915`, `GITHUB-ACTIONS01 → #9181/#12520/#11785`, `GITHUB-DISTRIBUTION01 → #10246/#11879`, `TEST-BASELINE-ZERO-FAILURES01 → #4384/#12474/#12431` mappings were removed (keyword false positives). Full per-epic mapping with all 43 EXACT_MAP candidates is in `.factory/upstream/cline-upstream-triage.md` § "Mapped to existing epics (EXACT_MAP only)".
 
 **This ACT is not.**
 
@@ -893,6 +913,9 @@ Compact mapping so old names are preserved without duplicate work.
 | `DOGFOOD-VSIX-QUALIFICATION01` | Dogfood qualification | CLOSED |
 | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | LCD01 retirement | CLOSED at `51f2f6a9c` |
 | `ACT-CLINEMM-FACTORY-GLOBAL-EPIC-BOARD-WAVE01` | Factory epic board substrate | CLOSED at `1e6430bc15f00d08f66dc905c41edbd3f74045db` |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` | snapshot SHA256 `878eb241...` (573 rows) | CLOSED at `b4d7ed795`; **superseded** by `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION01` at this commit (lexical-overlap classifier was systematically defective) |
+| `EPIC-CLINEMM-CUSTOM-INSTRUCTIONS-HONORING01` | `#7414` recon | **REMOVED** at this commit; demoted to RADAR pending recon distinction (rules-omitted vs rules-ignored) |
+| `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION01` | snapshot SHA256 `878eb241...` (unchanged) | CLOSED at this commit; semantic three-class correction; 17 false mappings removed (#6416, #11018, #12042, #9181 spurious GITHUB-ACTIONS, +13 others); 43 EXACT_MAPs + 5 IMPORTs + 32 RADARs |
 | `ACT-CLINEMM-FACTORY-GLOBAL-TASK-CENSUS01` | Factory task census | CLOSED at `4b2b2beec059b668bd49799304b9fd78d1ef79a0` |
 | `ACT-CLINEMM-E7.1-TEMP-DIAGNOSTICS-REMOVAL01` | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | SUPERSEDED (PTAD retained DEFAULT_OFF; recon showed value) |
 | `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | repository-topology migration | CLOSED (main FF `a9f376edf` → `5637d965d`; one-worktree policy frozen) |
