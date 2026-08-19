@@ -195,6 +195,68 @@ Byte-for-byte identical to `7d2ed0a78` when the workspace-state
 PTAD toggle is OFF. Zero production behavior change in the default
 build.
 
+### 2.6 Superseded by C2-CORRECTION02-FIXUP03 (added by FIXUP03)
+
+The architecture above was **superseded** by
+`C2-CORRECTION02-FIXUP03` (commit `ead1ef8d0`). The E7.1
+architecture review of FIXUP02 identified R6 (production-semantic
+regression): `prevStateRef.current` was a parallel authority that
+desynchronized from React's pending state queue when other writers
+(W2 partial-message subscription at line 874; W3 local setter
+functions at lines 1186–1249) used the functional-updater form.
+
+FIXUP03 restored the functional-updater form for the snapshot path
+(bringing W1 back into React's queue authority) and replaced the
+inbound-bucket applied capture with a per-pushId reducer-output
+queue drained by a post-commit effect. The capture kind was
+renamed from `webview-replica` to `webview-reducer-output`, and a
+new `webview-committed` capture was added.
+
+The current (post-FIXUP03) architecture is:
+
+```ts
+const pendingAppliedByPushRef = useRef<
+  Map<string | number, { reducerOut: ExtensionState; rawWire: ExtensionState | null }>
+>(new Map())
+
+onResponse(P):
+  ... RAW capture + R5 fail-closed pushId check ...
+
+  let rawWireClone: ExtensionState | null = null
+  if (isPostTerminalAuthorityDiagnosticEnabled("webview") && stateData._ptadPushId !== undefined) {
+    rawWireClone = { ...stateData, turnState: stateData.turnState }
+  }
+
+  setState((prevState) => {
+    // React-authoritative prevState (R6 fix)
+    ... reducer runs against prevState ...
+    const newState = { ...stateData, ... }
+    pendingAppliedByPushRef.current.set(
+      stateData._ptadPushId,
+      { reducerOut: newState, rawWire: rawWireClone },
+    )
+    return newState
+  })
+
+useEffect([state], () => {                     // reducer-output drain
+  for (const [pushId, { reducerOut, rawWire }] of pendingAppliedByPushRef.current) {
+    const rawSnapForCapture = rawWire ?? reducerOut
+    recordPostTerminalAuthoritySnapshot(
+      buildWebviewSnapshot(reducerOut, rawSnapForCapture, "webview-reducer-output"),
+    )
+    pendingAppliedByPushRef.current.delete(pushId)
+  }
+})
+
+useEffect([state], () => {                     // React-committed capture
+  recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(state, state, "webview-committed"))
+})
+```
+
+See `task-state-e71-c2-correction02-fixup03-terminal-evidence.md`
+for the full architecture rationale and the R6 counterexample
+test that proves W1 reads React-authoritative prevState.
+
 ---
 
 ## 3. R5 fix — fail-closed on missing `_ptadPushId`
