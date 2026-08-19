@@ -109,10 +109,33 @@ real provider, end-to-end. The discriminator's misleading local
 anyway: it was read after `stateData.turnState` had been rewritten).
 
 The discriminator's `observations.find()` correlation issue is
-moot — the rewritten test does not use the discriminator at all;
-it reads only A (PTAD webview-raw-incoming) and F (PTAD
-webview-committed), which are already push-correlated by the
-`_ptadPushId` field that the ExtensionStateContext stamps.
+moot — the rewritten test does not use the discriminator at all.
+It reads only A (PTAD webview-raw-incoming) and F (PTAD
+webview-committed) for the final pair.
+
+Caveat (R3): in this synthetic fixture the producer does **not**
+stamp `_ptadPushId` on the wire payload, so PTAD is in fail-closed
+mode and the two captures may carry undefined push IDs.
+
+```text
+SYNTHETIC_FIXTURE_PUSH_CORRELATION = UNAVAILABLE (_ptadPushId undefined)
+
+A_F_PAIRING = controlled-sequence / latest-observation
+```
+
+This does not undermine the A==F result, because:
+
+1. The test controls the complete event sequence within one
+   `act()` call, so the chronology is exact.
+2. The fourth witness (`CONSUMER_WITNESS`) reads from a real
+   `useExtensionState()` consumer after the same controlled
+   sequence, proving the close-clean not just via PTAD captures
+   but via the live consumer path the production UI subscribes to.
+
+The push-ID correlation is available in the LIVE trace (TRACE01
+captures carry real `_ptadPushId` values), but it is not used to
+distinguish W1/W2 ordering in this synthetic GREEN-witness
+fixture.
 
 ---
 
@@ -160,6 +183,51 @@ This is the empirical close-clean fact: the production surface
 correctly commits raw truth for the simple synthetic P12-equivalent
 input. The discriminator output is preserved as a forensic witness,
 not as a live instrumentation API.
+
+---
+
+## §4.5  Bounded claim set (R2)
+
+The cleanup-evidence text — and the chat summary that introduced
+it — must avoid overstating what the synthetic GREEN-witness
+fixture actually proves. The bounded claim set is:
+
+```text
+REDUCER_SIMPLE_SEQ_GATE_DEFECT    = NOT_SUPPORTED
+LINE_652_SIMPLE_COPY_DEFECT       = NOT_SUPPORTED
+SIMPLE_W1_W2_W1_BATCH_FAILURE     = NOT_REPRODUCED
+MINIMAL_W1_W2_W1_BATCHING_HYPOTHESIS = NOT_REPRODUCED
+
+ROOT_CAUSE                        = UNKNOWN
+MISSING_LIVE_DIMENSION            = PROVEN_TO_EXIST
+GLOBAL_REPLICA_QUEUE_INTERACTION  = NOT_EXCLUDED
+```
+
+What this means:
+
+- The cleanup test proves that the **particular synthetic**
+  W1→W2→W1 batched shape (with `welcomeViewCompleted: true`,
+  default PTAD fail-closed mode, synthetic partial message
+  proto-shape, and a single `act()` call wrapping the three
+  callbacks) does **not** reproduce the live W2 boundary.
+- It does **not** globally exclude interaction between
+  `replicaRef` and React's pending-state queue in the real trace,
+  because the exact live epoch/stateVersion/message/order/timing
+  context has not yet been reconstructed.
+- React applies queued updater functions against pending state in
+  order, and batching can process multiple updates as one render
+  batch. The updater path also contains pre-existing external
+  mutations/setters, while React explicitly expects updater
+  functions to be pure. These constraints are not exercised by
+  the synthetic GREEN-witness fixture.
+- The "missing live dimension" claim is the genuine progress:
+  some live-state dimension matters that the synthetic fixture
+  does not reproduce.
+
+The next ACT
+(`LIVE-SHAPE-REPRODUCTION01`) is the rigorous attempt to
+identify that missing dimension by introducing one live-trace
+attribute at a time, with an ablation rule for each.
 
 ---
 
@@ -263,7 +331,10 @@ E71RF_T4  TURNSTATE_WRITER_AUDIT                 100%   (C0)
 E71RF_T5  REAL_PROVIDER_W2_RED                   HALT_RED_NOT_REPRODUCED
 E71RF_T6  INTERNAL_A_TO_F_DISCRIMINATOR          N/A    (no failure to discriminate)
 E71RF_T7  ROOT_CAUSE_CLASS                       UNKNOWN (unchanged from TRACE01)
-E71RF_T8  NECESSITY                              PASS   (CONTROL_NO_W2 witness)
+E71RF_T8  NECESSITY                              N/A    (RED not reproduced; cannot
+                                                              establish a necessity
+                                                              for a failure that did
+                                                              not occur)
 
 E71RF_T9  SINGLE_BOUNDARY_REPAIR                 NOT AUTHORIZED
 
@@ -303,3 +374,33 @@ E71RF_T29 PROTECTED_STASHES                      PASS
 
 It is the bounded cleanup that the post-halt review correctly required
 before any further investigation can proceed.
+
+---
+
+## §9  Final disposition
+
+```text
+RED-FIX01 =
+  CLOSED_HALTED_CLEAN
+
+  C0 writer recon                 = closed at a2ffc9bac
+  C1 real-provider RED            = halted at ec4415b6e (NOT REPRODUCED)
+  C1 production seam              = REVERTED at 24aeb6464
+  cleanup corrections             = applied at (this docs commit)
+  canonical test gate             = PASS (560/560 GREEN)
+  claim set                        = BOUNDED (§4.5)
+
+LIVE-SHAPE-REPRODUCTION01 =
+  AUTHORIZED
+
+  plan document                   = (separate docs commit, this branch)
+  isolation ladder                = E1..E10 with ablation rule
+  acceptance gate                 = LSR_T0..T17
+  allowed outcomes                = PASS_LIVE_SHAPE_CAUSAL_DIMENSION_FOUND
+                                    PASS_LIVE_SHAPE_REPRODUCTION_LADDER_PARTIAL
+  production fix                  = NOT AUTHORIZED in this ACT
+
+HEAD                            = (this docs commit's parent; +1 ahead)
+VSIX_017f68a36                  = unchanged, byte-identical
+STASHES                         = 141372c52 + 371752f71 intact
+```
