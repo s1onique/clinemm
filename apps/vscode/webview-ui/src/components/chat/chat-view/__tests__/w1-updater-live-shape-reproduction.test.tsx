@@ -24,7 +24,18 @@
  * would require updater side effects — forbidden by R20 purity).
  *
  * ============================================================================
- * VERDICT: HALT_RED_NOT_REPRODUCED
+ * VERDICT: HALT_RED_NOT_REPRODUCED (reclassified by Factory review)
+ *
+ *   Originally filed as:
+ *     W1RF_T5 TEST B/R/D/N DISCRIMINATOR  PASS (witnesses built, never needed)
+ *   Reclassified to:
+ *     W1RF_T5 TEST B/R/D/N DISCRIMINATOR  N/A  (no RED, no literal witnesses)
+ *
+ *   Reclassification rationale: a "PASS" verdict implies we acquired the
+ *   discriminator evidence. We did not — the RED never happened, so no
+ *   literal updater-time observation was performed (and per project rule
+ *   it must not be performed without purity). "PASS" is therefore
+ *   evidence over-claim; the correct gate is N/A.
  *
  *   R0: W1->W1, welcomeViewCompleted TRUE (frozen GREEN control)        PASS
  *   R1: W1->W1, welcomeViewCompleted FALSE (live = real)                PASS
@@ -59,6 +70,39 @@
  *       setOnboardingModels / setDidHydrateState calls in the
  *       functional updater) to look for a stale-closure or
  *       render-batching issue under specific update orderings.
+ *
+ * ============================================================================
+ * FACTORY REVIEW RECLASSIFICATION (2026-08-19, post-halt)
+ *
+ *   The actual RED never occurred, and this ACT did not acquire literal
+ *   updater-time B/R/D/N evidence. Earlier project work explicitly
+ *   classified literal updater-time observations as unsafe/unobservable
+ *   without violating updater purity. Claiming the discriminator PASS
+ *   added no useful evidence; the verdict line below is therefore
+ *   reclassified to N/A, not PASS.
+ *
+ *     W1RF_T5 TEST B/R/D/N DISCRIMINATOR  N/A   (no RED, no literal witnesses)
+ *
+ *   The Factory also observes that the W1 / W2 functional updaters
+ *   themselves mutate `replicaRef.current` (and W1 additionally fires
+ *   nested setter side effects) inside the updater closure. This is
+ *   an independently proven React updater-purity violation regardless
+ *   of the live W2 divergence's identity. See:
+ *
+ *     ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01
+ *
+ *   That ACT treats React purity as the defect contract (no requirement
+ *   to reproduce the live `streaming/11 → idle/3` divergence), performs
+ *   a bounded topology repair that drops updater-time external writes
+ *   to zero, and dogfoods the resulting exact-head VSIX against the
+ *   live P12 walk.
+ *
+ *   Possible dogfood outcomes:
+ *     - live W2 disappears ⇒ strong composition evidence (proven
+ *       impurity + its removal + disappearance of live failure)
+ *     - live W2 remains  ⇒ the purity repair is still valid as an
+ *       independent correctness fix; live root cause remains UNKNOWN;
+ *       continue causal investigation without reverting the repair.
  * ============================================================================
  */
 
