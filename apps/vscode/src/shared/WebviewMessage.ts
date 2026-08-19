@@ -1,5 +1,9 @@
 export interface WebviewMessage {
-	type: "grpc_request" | "grpc_request_cancel" | "clinemm.appendPostTerminalAuthorityDiagnostic"
+	type:
+		| "grpc_request"
+		| "grpc_request_cancel"
+		| "clinemm.appendPostTerminalAuthorityDiagnostic"
+		| "clinemm.appendLiveContextDimensions01"
 	grpc_request?: GrpcRequest
 	grpc_request_cancel?: GrpcCancel
 	/**
@@ -10,6 +14,26 @@ export interface WebviewMessage {
 	 * the receiving handler validates the shape before persisting.
 	 */
 	clinemm_postTerminalAuthorityDiagnosticRecords?: readonly unknown[]
+	/**
+	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
+	 * The webview flushes its LCD01 per-boundary request-site capture
+	 * ring buffer to the extension via this message type. Same typing
+	 * discipline as the PTAD append: unknown at the wire boundary;
+	 * structural validator at the receiving handler.
+	 */
+	clinemm_liveContextDimensions01Records?: readonly unknown[]
+}
+
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
+ * The extension-side message that triggers the webview to flush its
+ * LCD01 ring buffer back via `clinemm.appendLiveContextDimensions01`.
+ * Mirrors the existing `clinemm.dumpPostTerminalAuthorityDiagnostic`
+ * pattern. Used by the `cline.debug.dumpLiveContextDimensions01`
+ * command.
+ */
+export type ExtensionToWebviewLiveContextDimensions01DumpTrigger = {
+	type: "clinemm.dumpLiveContextDimensions01"
 }
 
 export type GrpcRequest = {

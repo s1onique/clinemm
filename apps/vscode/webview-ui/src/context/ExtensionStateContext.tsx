@@ -20,6 +20,7 @@ import {
 import {
 	disableLiveContextDimensions01Capture,
 	enableLiveContextDimensions01Capture,
+	getLiveContextDimensions01CaptureRecords,
 	isLiveContextDimensions01CaptureEnabled,
 	recordLiveContextDimensions01Capture,
 	type LiveContextDimensions01CorrelationIdentity,
@@ -794,6 +795,32 @@ export const ExtensionStateContextProvider: React.FC<{
 		// We do not need to remove this listener on cleanup because the
 		// whole window is torn down with the webview; the gRPC stream
 		// unsubscribe already handles the state-subscription lifecycle.
+
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
+		// LCD01 dump trigger listener. Mirrors the PTAD listener above.
+		// The extension posts `clinemm.dumpLiveContextDimensions01`; on
+		// receipt the webview flushes its LCD01 ring buffer back via
+		// `clinemm.appendLiveContextDimensions01` with the records.
+		const lcd01DumpMessageHandler = (event: MessageEvent) => {
+			const data = event.data as { type?: string } | undefined
+			if (!data || data.type !== "clinemm.dumpLiveContextDimensions01") {
+				return
+			}
+			const records = getLiveContextDimensions01CaptureRecords()
+			const api = (window as unknown as { __clineVsCodeApi?: { postMessage: (m: unknown) => void } }).__clineVsCodeApi
+			if (!api) {
+				console.error("[LCD01] webview flush skipped: __clineVsCodeApi not available")
+				return
+			}
+			api.postMessage({
+				type: "clinemm.appendLiveContextDimensions01",
+				clinemm_liveContextDimensions01Records: records,
+			})
+		}
+		window.addEventListener("message", lcd01DumpMessageHandler)
+		// Same cleanup note as PTAD: the whole window is torn down with
+		// the webview; the gRPC stream unsubscribe handles the state-
+		// subscription lifecycle.
 
 		// Subscribe to MCP button clicked events with webview type
 		mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(

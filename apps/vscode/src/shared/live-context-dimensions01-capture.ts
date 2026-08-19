@@ -5,13 +5,15 @@
  * request-site capture layer introduced by LIVE-CONTEXT-DIMENSIONS01
  * C1. This module is a SEPARATE diagnostic instrument from the
  * existing PostTerminalAuthorityDiagnostic; both may run in
- * parallel because their toggles are independent and their record
- * shapes do not overlap.
+ * parallel because their record shapes do not overlap, but they
+ * SHARE the user-facing toggle: the wire bit `_ptadEnabled` flips
+ * both ring buffers on/off. One user action enables both traces;
+ * the toggle is the proven operational path.
  *
- * SCOPE — captured here
+ * SCOPE - captured here
  *   - W1 / W2 / Q / B0 / C request-site and commit-site observations
  *
- * SCOPE — NOT captured here (LIVE_UNOBSERVABLE under §3 LC_T_PURITY)
+ * SCOPE - NOT captured here (LIVE_UNOBSERVABLE under section 3 LC_T_PURITY)
  *   - B_LITERAL, R, N
  *
  * Offline R/N replay against B + P is HYPOTHESIS_ONLY and must
@@ -31,7 +33,7 @@
  *     `associationQuality = "INTERVAL_INFERRED"` or `"NONE"`.
  *     `INTRINSIC` on a W2 record is an integrity violation.
  *   - INTERVAL_INFERRED records MUST NOT be promoted to causal
- *     identity — the preferred shape is bracketed prev/next push
+ *     identity - the preferred shape is bracketed prev/next push
  *     IDs, no scalar pseudo-ID.
  *
  * DEFAULT-OFF
@@ -44,6 +46,9 @@
  *     ExtensionStateContext + delete of the C1 test file. No
  *     production data shape, public API, or proto contract touched.
  */
+
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
+import type { TurnState } from "./ExtensionMessage"
 
 // Capture kinds (frozen at C1 commit).
 export type LiveContextDimensions01CaptureKind =
@@ -92,11 +97,35 @@ export interface LiveContextDimensions01Capture {
 	readonly capturedAt: number
 	readonly captureSeq: number
 	readonly correlation: LiveContextDimensions01CorrelationIdentity
-	readonly nativeW2: LiveContextDimensions01NativeW2Identity | undefined
-	readonly writerIdentity: LiveContextDimensions01WriterIdentity | undefined
-	readonly replicaTurnState: unknown | undefined
-	readonly hostTurnState: unknown | undefined
-	readonly committedTurnState: unknown | undefined
+	/**
+	 * W2-only: native W2 identity. REQUIRED for W2 records; FORBIDDEN
+	 * for W1, Q-w1, C, and B0-W1 records. The validator enforces the
+	 * boundary; the optional type keeps cross-field usage type-clean.
+	 */
+	readonly nativeW2?: LiveContextDimensions01NativeW2Identity
+	/**
+	 * Q-only: writer identity. REQUIRED for Q records; FORBIDDEN for
+	 * host and B0 records. Optional keeps cross-field usage type-clean.
+	 */
+	readonly writerIdentity?: LiveContextDimensions01WriterIdentity
+	/**
+	 * B0-only: sample of `replicaRef.current.turnState` at the
+	 * request site. Strongly typed as `TurnState` for forensic
+	 * fidelity. Optional because an undefined turnState is a valid
+	 * observation, not a missing payload.
+	 */
+	readonly replicaTurnState?: TurnState
+	/**
+	 * W1 / W2 host: sample of the host payload's `.turnState` at the
+	 * request site. Strongly typed as `TurnState`.
+	 */
+	readonly hostTurnState?: TurnState
+	/**
+	 * C-only: sample of the React-committed `state.turnState`.
+	 * Strongly typed as `TurnState`. Optional because an undefined
+	 * committed turnState is a valid observation.
+	 */
+	readonly committedTurnState?: TurnState
 }
 
 // Side buffer (webview-local, default-off, small).

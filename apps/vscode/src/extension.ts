@@ -8,6 +8,13 @@ import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
+// The LCD01 runtime is webview-side-only by design (the diagnostic
+// captures per-boundary observations that originate in the webview),
+// so the extension-side runtime (in VscodeWebviewProvider) is a thin
+// shim that accepts the webview-flushed records and writes them to
+// JSONL. There is no extension-side ring buffer and no extension-side
+// workspace-state toggle; LCD01 rides on the existing PTAD toggle.
 import { Logger } from "@/shared/services/Logger"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
@@ -560,6 +567,41 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[PTAD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Post-terminal diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
+		// Dump command for the LCD01 per-boundary request-site capture
+		// layer. Mirrors the PTAD dump pattern: post a dump trigger to
+		// the webview, the webview flushes its ring buffer back via
+		// clinemm.appendLiveContextDimensions01. There is no extension-
+		// side ring buffer for LCD01.
+		vscode.commands.registerCommand(commands.DumpLiveContextDimensions01, async () => {
+			try {
+				const activeWebview = WebviewProvider.getVisibleInstance()
+				if (activeWebview) {
+					const vscodeProvider = activeWebview as unknown as {
+						getWebview(): { webview: { postMessage(m: unknown): Thenable<boolean | undefined> } }
+					}
+					const view = vscodeProvider.getWebview()
+					if (view?.webview) {
+						await view.webview.postMessage({
+							type: "clinemm.dumpLiveContextDimensions01",
+						})
+					}
+				}
+				const webviewDumpPath = path.join(
+					context.globalStorageUri.fsPath,
+					"live-context-dimensions01-webview.jsonl",
+				)
+				void vscode.window.showInformationMessage(
+					`LCD01 diagnostic: webview flush requested. Records -> ${webviewDumpPath}.`,
+				)
+			} catch (err) {
+				Logger.error("[LCD01] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`LCD01 diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

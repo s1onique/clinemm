@@ -6,6 +6,10 @@ import { handleGrpcRequest, handleGrpcRequestCancel } from "@/core/controller/gr
 import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import { appendWebviewSidePostTerminalAuthorityDiagnostic } from "@/sdk/post-terminal-authority-diagnostic-runtime"
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
+// LCD01 runtime: extension-side flush sink for the webview's
+// per-boundary request-site capture ring buffer.
+import { appendWebviewSideLiveContextDimensions01 } from "@/sdk/live-context-dimensions01-runtime"
 import { telemetryService } from "@/services/telemetry"
 import type { ExtensionMessage } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
@@ -214,6 +218,19 @@ export class VscodeWebviewProvider extends WebviewProvider implements vscode.Web
 					await appendWebviewSidePostTerminalAuthorityDiagnostic(this.context, typedRecords)
 				} catch (err) {
 					Logger.error("[PTAD] webview flush failed", err)
+				}
+				break
+			}
+
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
+			// LCD01 webview flush. The shape is validated by the
+			// runtime (isLiveContextDimensions01Like) before persisting.
+			case "clinemm.appendLiveContextDimensions01": {
+				const records = message.clinemm_liveContextDimensions01Records ?? []
+				try {
+					await appendWebviewSideLiveContextDimensions01(this.context, records)
+				} catch (err) {
+					Logger.error("[LCD01] webview flush failed", err)
 				}
 				break
 			}
