@@ -11,6 +11,20 @@ import {
 	recordPostTerminalAuthoritySnapshot,
 } from "@shared/post-terminal-authority-diagnostic"
 
+// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
+// Per-boundary request-site capture (parallel to, not part of,
+// the existing PostTerminalAuthorityDiagnostic). The diagnostic is
+// default-off; toggled via the existing workspace-state
+// `_ptadEnabled` flag for symmetry with the prior instrument so a
+// single forensic run lights up BOTH instruments.
+import {
+	disableLiveContextDimensions01Capture,
+	enableLiveContextDimensions01Capture,
+	isLiveContextDimensions01CaptureEnabled,
+	recordLiveContextDimensions01Capture,
+	type LiveContextDimensions01CorrelationIdentity,
+} from "@shared/live-context-dimensions01-capture"
+
 // ============================================================================
 // ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1
 //
@@ -581,6 +595,21 @@ export const ExtensionStateContextProvider: React.FC<{
 							disablePostTerminalAuthorityDiagnostic("webview")
 						}
 
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
+						// Toggle symmetry fix: enable when `_ptadEnabled === true`,
+						// disable otherwise. The LCD01 capture rides on the same
+						// wire bit as PTAD for operationally simple dogfood (C2)
+						// toggling, but the LCD01 buffer is independent (its own
+						// enabled flag, its own record shape, its own export). When
+						// PTAD is off (production default), the LCD01 toggle is
+						// also off and the per-boundary captures are no-ops.
+						const lcd01RecorderOn = isLiveContextDimensions01CaptureEnabled()
+						if (ptadEnabled && !lcd01RecorderOn) {
+							enableLiveContextDimensions01Capture()
+						} else if (!ptadEnabled && lcd01RecorderOn) {
+							disableLiveContextDimensions01Capture()
+						}
+
 						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
 						// RAW capture + R5 fail-closed pushId check. The capture is
 						// OPT-IN: when the workspace-state PTAD toggle is OFF
@@ -627,6 +656,53 @@ export const ExtensionStateContextProvider: React.FC<{
 						// functional-updater form. React's documented queue
 						// semantics ensure each queued updater receives the prior
 						// queued result. No parallel authority.
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
+						// Per-boundary W1 capture. Emitted BEFORE the queued
+						// functional updater is constructed (R18 purity).
+						//
+						// - webview-w1-request            : intrinsic push ID + host turnState
+						// - webview-w1-request-q           : writer identity only
+						// - webview-w1-request-replica     : B0, replicaRef.current.turnState
+						//                                    sampled at the request site
+						//
+						// The capture is OPT-IN: when LCD01 is disabled
+						// (production default), recordLiveContextDimensions01Capture is
+						// a no-op and these locals are not constructed.
+						if (isLiveContextDimensions01CaptureEnabled()) {
+							const w1PushId = stateData._ptadPushId
+							const w1Correlation: LiveContextDimensions01CorrelationIdentity = {
+								associationQuality: w1PushId === undefined ? "NONE" : "INTRINSIC",
+								associatedPushId: w1PushId,
+								intervalInferred: undefined,
+							}
+							recordLiveContextDimensions01Capture({
+								kind: "webview-w1-request",
+								correlation: w1Correlation,
+								nativeW2: undefined,
+								writerIdentity: undefined,
+								replicaTurnState: undefined,
+								hostTurnState: stateData.turnState,
+								committedTurnState: undefined,
+							})
+							recordLiveContextDimensions01Capture({
+								kind: "webview-w1-request-q",
+								correlation: w1Correlation,
+								nativeW2: undefined,
+								writerIdentity: "W1_SNAPSHOT_REQUEST",
+								replicaTurnState: undefined,
+								hostTurnState: undefined,
+								committedTurnState: undefined,
+							})
+							recordLiveContextDimensions01Capture({
+								kind: "webview-w1-request-replica",
+								correlation: w1Correlation,
+								nativeW2: undefined,
+								writerIdentity: undefined,
+								replicaTurnState: replicaRef.current.turnState,
+								hostTurnState: undefined,
+								committedTurnState: undefined,
+							})
+						}
 						setState((prevState) => {
 							// Versioning logic for autoApprovalSettings
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
@@ -841,6 +917,61 @@ export const ExtensionStateContextProvider: React.FC<{
 					}
 
 					const partialMessage = convertProtoToClineMessage(protoMessage)
+					// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
+					// Per-boundary W2 capture. Emitted BEFORE the queued
+					// functional updater is constructed (R18 purity).
+					//
+					// - webview-w2-request            : native W2 identity only; the W2
+					//                                    wire does NOT carry _ptadPushId
+					//                                    (R19, R21); correlation is NONE
+					//                                    because the bracketing push IDs
+					//                                    are not observable at this call
+					//                                    site (any pre-emptive bookkeeping
+					//                                    would require writing inside the
+					//                                    updater; forbidden by R20 purity).
+					// - webview-w2-request-q           : writer identity only
+					// - webview-w2-request-replica     : B0, replicaRef.current.turnState
+					//                                    sampled at the request site
+					if (isLiveContextDimensions01CaptureEnabled()) {
+						const w2Correlation: LiveContextDimensions01CorrelationIdentity = {
+							associationQuality: "NONE",
+							associatedPushId: undefined,
+							intervalInferred: undefined,
+						}
+						const w2Native = {
+							epoch: (partialMessage as { epoch?: number } | undefined)?.epoch ?? 0,
+							seq: partialMessage?.seq ?? 0,
+							ts: partialMessage?.ts ?? 0,
+							discriminator: partialMessage?.partial === false ? "final" : "partial",
+						}
+						recordLiveContextDimensions01Capture({
+							kind: "webview-w2-request",
+							correlation: w2Correlation,
+							nativeW2: w2Native,
+							writerIdentity: undefined,
+							replicaTurnState: undefined,
+							hostTurnState: (partialMessage as { turnState?: unknown } | undefined)?.turnState,
+							committedTurnState: undefined,
+						})
+						recordLiveContextDimensions01Capture({
+							kind: "webview-w2-request-q",
+							correlation: w2Correlation,
+							nativeW2: w2Native,
+							writerIdentity: "W2_PARTIAL_REQUEST",
+							replicaTurnState: undefined,
+							hostTurnState: undefined,
+							committedTurnState: undefined,
+						})
+						recordLiveContextDimensions01Capture({
+							kind: "webview-w2-request-replica",
+							correlation: w2Correlation,
+							nativeW2: w2Native,
+							writerIdentity: undefined,
+							replicaTurnState: replicaRef.current.turnState,
+							hostTurnState: undefined,
+							committedTurnState: undefined,
+						})
+					}
 					setState((prevState) => {
 						// Route through the convergent-replica reducer: merge by ts keeping the
 						// higher seq, fence stale epochs, never let an out-of-order or duplicate
@@ -1039,6 +1170,41 @@ export const ExtensionStateContextProvider: React.FC<{
 			return
 		}
 		recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(state, state, "webview-committed"))
+	}, [state])
+
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
+	// webview-committed-c: per-React-commit observation of the
+	// committed state. Parallel to the existing webview-committed
+	// capture, but with the LCD01 record shape (carries
+	// associationQuality and the C-only committedTurnState field).
+	//
+	// Cardinality: per React commit, NOT per request. React 18+
+	// automatic batching coalesces multiple queued updates into
+	// one commit, so the committed-c record count can be strictly
+	// less than the request count. That is the intended semantics.
+	//
+	// Purity (R20): this useEffect runs AFTER React commit, never
+	// inside the queued functional updater. It is an external
+	// observer only.
+	useEffect(() => {
+		if (!isLiveContextDimensions01CaptureEnabled()) {
+			return
+		}
+		const cPushId = state._ptadPushId
+		const cCorrelation: LiveContextDimensions01CorrelationIdentity = {
+			associationQuality: cPushId === undefined ? "NONE" : "INTRINSIC",
+			associatedPushId: cPushId,
+			intervalInferred: undefined,
+		}
+		recordLiveContextDimensions01Capture({
+			kind: "webview-committed-c",
+			correlation: cCorrelation,
+			nativeW2: undefined,
+			writerIdentity: undefined,
+			replicaTurnState: undefined,
+			hostTurnState: undefined,
+			committedTurnState: state.turnState,
+		})
 	}, [state])
 
 	const refreshOpenRouterModels = useCallback(() => {
