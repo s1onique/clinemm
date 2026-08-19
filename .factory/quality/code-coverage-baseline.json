@@ -1,0 +1,4567 @@
+{
+  "bands": {
+    "gte90": 93,
+    "lt25": 110,
+    "lt50": 8,
+    "lt75": 29,
+    "lt90": 22,
+    "zero": 309
+  },
+  "baseline_name": "VITEST_COVERAGE_BASELINE",
+  "command": "cd apps/vscode && bunx vitest run --config vitest.config.ts --coverage",
+  "config": "apps/vscode/vitest.config.ts",
+  "conservation": {
+    "typecheck_diagnostics": 0,
+    "vitest_test_files": 117,
+    "vitest_tests_fail": 0,
+    "vitest_tests_pass": 1672
+  },
+  "gap_classification": {
+    "ENVIRONMENT_DEPENDENT": "VSCode hostbridge adapters and entry-points that require VSCode host.",
+    "EXCLUDED_BY_DESIGN": "Proto conversions and public exports; tested via generator equivalence or re-export only.",
+    "GENUINE_TEST_GAP": "Production source with no automated coverage in Vitest gate.",
+    "INTENTIONAL_UNSUPPORTED": "Dev-only tooling (debug-harness, mcp-oauth-test-server).",
+    "RUNNER_SCOPE_GAP": "Code tested via Mocha (not in Vitest gate). The dominant pattern (~77% of zero-coverage files).",
+    "UNKNOWN": "Files not yet classified; investigate.",
+    "totals": {
+      "ENVIRONMENT_DEPENDENT": 60,
+      "EXCLUDED_BY_DESIGN": 8,
+      "GENUINE_TEST_GAP": 2,
+      "INTENTIONAL_UNSUPPORTED": 3,
+      "RUNNER_SCOPE_GAP": 231,
+      "UNKNOWN": 5
+    }
+  },
+  "largest_gaps": [
+    {
+      "classification": "INTENTIONAL_UNSUPPORTED",
+      "note": "Debug harness / dev-only tooling",
+      "path": "apps/vscode/src/dev/debug-harness/server.ts",
+      "sub_bucket": "dev-tools",
+      "uncovered_lines": 627
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "note": "VSCode extension entry; requires VSCode host",
+      "path": "apps/vscode/src/extension.ts",
+      "sub_bucket": "extension",
+      "uncovered_lines": 282
+    },
+    {
+      "classification": "INTENTIONAL_UNSUPPORTED",
+      "note": "Debug harness / dev-only tooling",
+      "path": "apps/vscode/src/dev/mcp-oauth-test-server/server.ts",
+      "sub_bucket": "dev-tools",
+      "uncovered_lines": 267
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "note": "VSCode hostbridge adapter; requires VSCode host",
+      "path": "apps/vscode/src/hosts/vscode/terminal/VscodeTerminalProcess.ts",
+      "sub_bucket": "vscode-hostbridge",
+      "uncovered_lines": 241
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Mentions feature; tested via Mocha",
+      "path": "apps/vscode/src/core/mentions/index.ts",
+      "sub_bucket": "core-mocha",
+      "uncovered_lines": 232
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "note": "VSCode hostbridge adapter; requires VSCode host",
+      "path": "apps/vscode/src/hosts/vscode/mcp-settings-legacy-migration.ts",
+      "sub_bucket": "vscode-hostbridge",
+      "uncovered_lines": 161
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Telemetry providers; tested via Mocha",
+      "path": "apps/vscode/src/services/telemetry/providers/opentelemetry/OpenTelemetryTelemetryProvider.ts",
+      "sub_bucket": "services-mocha",
+      "uncovered_lines": 152
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Workspace utility; tested via Mocha",
+      "path": "apps/vscode/src/utils/git-worktree.ts",
+      "sub_bucket": "utils-mocha",
+      "uncovered_lines": 132
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Standalone Node entry; tested via dedicated CLI harness",
+      "path": "apps/vscode/src/standalone/cline-core.ts",
+      "sub_bucket": "standalone",
+      "uncovered_lines": 117
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Shared module; tested via consumers/Mocha",
+      "path": "apps/vscode/src/shared/combineHookSequences.ts",
+      "sub_bucket": "shared-mocha",
+      "uncovered_lines": 109
+    },
+    {
+      "classification": "UNKNOWN",
+      "note": "File not yet classified",
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/skills.ts",
+      "sub_bucket": "unclassified",
+      "uncovered_lines": 106
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Controller code; tested via Mocha suites not in Vitest",
+      "path": "apps/vscode/src/core/controller/ui/initializeWebview.ts",
+      "sub_bucket": "core-controller-mocha",
+      "uncovered_lines": 106
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Core storage/webview/workspace; tested via Mocha",
+      "path": "apps/vscode/src/core/storage/remote-config/fetch.ts",
+      "sub_bucket": "core-mocha",
+      "uncovered_lines": 106
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Workspace service; tested via Mocha",
+      "path": "apps/vscode/src/services/account/ClineAccountService.ts",
+      "sub_bucket": "services-mocha",
+      "uncovered_lines": 105
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Controller code; tested via Mocha suites not in Vitest",
+      "path": "apps/vscode/src/core/controller/state/updateSettings.ts",
+      "sub_bucket": "core-controller-mocha",
+      "uncovered_lines": 100
+    },
+    {
+      "classification": "UNKNOWN",
+      "note": "File not yet classified",
+      "path": "apps/vscode/src/core/context/context-tracking/FileContextTracker.ts",
+      "sub_bucket": "unclassified",
+      "uncovered_lines": 94
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Core prompts; tested via Mocha",
+      "path": "apps/vscode/src/core/prompts/responses.ts",
+      "sub_bucket": "core-mocha",
+      "uncovered_lines": 93
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Workspace integration; tested via Mocha",
+      "path": "apps/vscode/src/integrations/misc/extract-text.ts",
+      "sub_bucket": "integrations-mocha",
+      "uncovered_lines": 93
+    },
+    {
+      "classification": "GENUINE_TEST_GAP",
+      "note": "SDK source with no automated coverage in Vitest gate",
+      "path": "apps/vscode/src/sdk/account-service.ts",
+      "sub_bucket": "sdk",
+      "uncovered_lines": 92
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Telemetry providers; tested via Mocha",
+      "path": "apps/vscode/src/services/telemetry/providers/opentelemetry/OpenTelemetryClientProvider.ts",
+      "sub_bucket": "services-mocha",
+      "uncovered_lines": 92
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Core utility; tested via Mocha",
+      "path": "apps/vscode/src/core/locks/SqliteLockManager.ts",
+      "sub_bucket": "core-mocha",
+      "uncovered_lines": 88
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "note": "VSCode hostbridge adapter; requires VSCode host",
+      "path": "apps/vscode/src/hosts/vscode/commit-message-generator.ts",
+      "sub_bucket": "vscode-hostbridge",
+      "uncovered_lines": 88
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "note": "VSCode hostbridge adapter; requires VSCode host",
+      "path": "apps/vscode/src/hosts/vscode/vscode-to-file-migration.ts",
+      "sub_bucket": "vscode-hostbridge",
+      "uncovered_lines": 88
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "note": "VSCode hostbridge adapter; requires VSCode host",
+      "path": "apps/vscode/src/hosts/vscode/review/VscodeCommentReviewController.ts",
+      "sub_bucket": "vscode-hostbridge",
+      "uncovered_lines": 87
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "note": "Controller code; tested via Mocha suites not in Vitest",
+      "path": "apps/vscode/src/core/controller/models/refreshOcaModels.ts",
+      "sub_bucket": "core-controller-mocha",
+      "uncovered_lines": 86
+    }
+  ],
+  "per_file": [
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 65,
+      "path": "apps/vscode/src/common.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 7.36,
+      "lines_total": 95,
+      "path": "apps/vscode/src/config.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/core/api/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/core/context/context-tracking/ContextTrackerTypes.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 94,
+      "path": "apps/vscode/src/core/context/context-tracking/FileContextTracker.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/cline-rules.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 16,
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/external-rules.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 11,
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/frontmatter.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 4,
+      "lines_total": 50,
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/rule-conditionals.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 5,
+      "lines_pct": 2.79,
+      "lines_total": 179,
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/rule-helpers.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 106,
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/skills.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 4,
+      "lines_total": 25,
+      "path": "apps/vscode/src/core/context/instructions/user-instructions/workflows.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/account/accountLoginClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/account/accountLogoutClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/account/authStateChanged.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/account/getOrganizationCredits.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/account/getRedirectUrl.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/account/getUserCredits.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/account/getUserOrganizations.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/account/hicapAuthClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/controller/account/openAiCodexSignIn.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/account/openAiCodexSignOut.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/account/openrouterAuthClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/account/requestyAuthClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/account/setUserOrganization.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/account/submitLimitIncreaseRequest.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/account/subscribeToAuthStatusUpdate.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/browser/discoverBrowser.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/browser/getBrowserConnectionInfo.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/browser/getDetectedChromePath.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/browser/relaunchChromeDebugMode.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/core/controller/browser/testBrowserConnection.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/checkpoints/checkpointLatestChangesCount.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/checkpoints/checkpointRestore.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/checkpoints/checkpointViewLatestChanges.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 20,
+      "path": "apps/vscode/src/core/controller/commands/addToCline.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/controller/commands/explainWithCline.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/commands/fixWithCline.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 16,
+      "path": "apps/vscode/src/core/controller/commands/improveWithCline.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/file/copyToClipboard.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 18,
+      "path": "apps/vscode/src/core/controller/file/createHook.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 20,
+      "path": "apps/vscode/src/core/controller/file/createRuleFile.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 3.33,
+      "lines_total": 30,
+      "path": "apps/vscode/src/core/controller/file/createSkillFile.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/file/deleteHook.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/controller/file/deleteRuleFile.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 22,
+      "path": "apps/vscode/src/core/controller/file/deleteSkillFile.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/core/controller/file/getRelativePaths.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/file/ifFileExistsRelativePath.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/file/openDiskConversationHistory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 28,
+      "path": "apps/vscode/src/core/controller/file/openFile.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/file/openFileRelativePath.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/core/controller/file/openFocusChainFile.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/file/openImage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/file/openMention.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 25,
+      "path": "apps/vscode/src/core/controller/file/refreshHooks.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/file/refreshRules.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 15,
+      "path": "apps/vscode/src/core/controller/file/refreshSkills.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/file/searchCommits.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 6.38,
+      "lines_total": 47,
+      "path": "apps/vscode/src/core/controller/file/searchFiles.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/file/selectFiles.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/file/toggleAgentsRule.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 26,
+      "path": "apps/vscode/src/core/controller/file/toggleClineRule.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/file/toggleCursorRule.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/file/toggleHook.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 19,
+      "path": "apps/vscode/src/core/controller/file/toggleSkill.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/file/toggleWindsurfRule.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 20,
+      "path": "apps/vscode/src/core/controller/file/toggleWorkflow.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 2.5,
+      "lines_total": 40,
+      "path": "apps/vscode/src/core/controller/grpc-handler.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 37,
+      "path": "apps/vscode/src/core/controller/grpc-recorder/grpc-recorder.builder.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 57,
+      "path": "apps/vscode/src/core/controller/grpc-recorder/grpc-recorder.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.14,
+      "lines_total": 14,
+      "path": "apps/vscode/src/core/controller/grpc-recorder/log-file-handler.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 12.5,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/grpc-recorder/test-hooks.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/core/controller/grpc-recorder/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 5,
+      "lines_total": 20,
+      "path": "apps/vscode/src/core/controller/grpc-request-registry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/core/controller/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/marketplace/getMarketplaceCatalog.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/marketplace/installMarketplaceEntry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/marketplace/listMarketplaceInstalledEntries.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/marketplace/listMarketplaceLocalInstalledEntries.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 8,
+      "lines_pct": 3.75,
+      "lines_total": 213,
+      "path": "apps/vscode/src/core/controller/marketplace/marketplace-helpers.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/marketplace/toggleMarketplaceLocalInstalledEntry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/marketplace/uninstallMarketplaceEntry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/marketplace/uninstallMarketplaceLocalInstalledEntry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/mcp/addRemoteMcpServer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/mcp/authenticateMcpServer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/mcp/deleteMcpServer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/mcp/getLatestMcpServers.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/mcp/openMcpSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/mcp/restartMcpServer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 5,
+      "lines_total": 20,
+      "path": "apps/vscode/src/core/controller/mcp/subscribeToMcpServers.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/mcp/toggleMcpServer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/mcp/toggleToolAutoApprove.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/mcp/updateMcpTimeout.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 13,
+      "lines_pct": 100,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/models/commitModelSelection.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 20,
+      "path": "apps/vscode/src/core/controller/models/getAihubmixModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 4,
+      "lines_total": 25,
+      "path": "apps/vscode/src/core/controller/models/getClineOnboardingModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 11,
+      "path": "apps/vscode/src/core/controller/models/getLmStudioModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/models/getOllamaModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 36,
+      "path": "apps/vscode/src/core/controller/models/getSapAiCoreModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/models/getVsCodeLmModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 20,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/models/handleClinePassProviderSelection.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/listProviders.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 33,
+      "lines_pct": 73.33,
+      "lines_total": 45,
+      "path": "apps/vscode/src/core/controller/models/providerCatalogShared.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 32,
+      "lines_pct": 91.42,
+      "lines_total": 35,
+      "path": "apps/vscode/src/core/controller/models/providerSwitchNormalization.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 100,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/models/readProviderConfig.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/models/refreshBasetenModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshBasetenModelsRpc.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 18,
+      "lines_pct": 94.73,
+      "lines_total": 19,
+      "path": "apps/vscode/src/core/controller/models/refreshClineRecommendedModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/models/refreshClineRecommendedModelsRpc.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/models/refreshGroqModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshGroqModelsRpc.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshHicapModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshHuggingFaceModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/models/refreshLiteLlmModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshLiteLlmModelsRpc.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 86,
+      "path": "apps/vscode/src/core/controller/models/refreshOcaModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 14,
+      "lines_pct": 93.33,
+      "lines_total": 15,
+      "path": "apps/vscode/src/core/controller/models/refreshOpenAiModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/models/refreshOpenRouterModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshOpenRouterModelsRpc.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshRequestyModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/models/refreshVercelAiGatewayModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/models/refreshVercelAiGatewayModelsRpc.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 36,
+      "lines_pct": 92.3,
+      "lines_total": 39,
+      "path": "apps/vscode/src/core/controller/models/resolveModelInfo.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 100,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/models/resolveProviderModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 8.33,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/controller/models/subscribeToLiteLlmModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/models/subscribeToOpenRouterModels.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/models/taskApiModel.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 65,
+      "path": "apps/vscode/src/core/controller/models/updateApiConfiguration.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 22,
+      "path": "apps/vscode/src/core/controller/models/updateApiConfigurationPartial.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 19,
+      "path": "apps/vscode/src/core/controller/models/updateApiConfigurationProto.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 100,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/models/writeProviderConfig.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/ocaAccount/ocaAccountLoginClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/ocaAccount/ocaAccountLogoutClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/ocaAccount/ocaSubscribeToAuthStatusUpdate.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/remoteConfig/getRemoteConfigSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/remoteConfig/toggleRemoteConfigSetting.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/slash/condense.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 25,
+      "path": "apps/vscode/src/core/controller/slash/getAvailableSlashCommands.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/slash/reportBug.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/state/captureOnboardingProgress.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/state/checkCliInstallation.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/state/dismissBanner.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/state/flushPendingState.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/state/getAvailableTerminalProfiles.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/state/getLatestState.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/state/getProcessInfo.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 64,
+      "path": "apps/vscode/src/core/controller/state/getStateToPostToWebview.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/state/installClineCli.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/state/reasoningEffort.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/state/refreshRemoteConfig.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 16,
+      "path": "apps/vscode/src/core/controller/state/resetState.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 100,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/state/setSessionAutoApprovalOverride.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/state/setWelcomeViewCompleted.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 4.34,
+      "lines_total": 23,
+      "path": "apps/vscode/src/core/controller/state/subscribeToState.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/controller/state/testOtelConnection.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/state/testPromptUploading.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/core/controller/state/toggleFavoriteModel.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 11,
+      "lines_pct": 100,
+      "lines_total": 11,
+      "path": "apps/vscode/src/core/controller/state/togglePlanActModeProto.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/state/trackBannerEvent.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 11,
+      "lines_pct": 100,
+      "lines_total": 11,
+      "path": "apps/vscode/src/core/controller/state/updateAutoApprovalSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/state/updateCliBannerVersion.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/state/updateInfoBannerVersion.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/state/updateModelBannerVersion.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 100,
+      "path": "apps/vscode/src/core/controller/state/updateSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 61,
+      "path": "apps/vscode/src/core/controller/state/updateSettingsCli.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 40,
+      "path": "apps/vscode/src/core/controller/state/updateTaskSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/state/updateTelemetrySetting.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/state/updateTerminalConnectionTimeout.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/state/updateTerminalReuseEnabled.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 17,
+      "path": "apps/vscode/src/core/controller/task/askResponse.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/task/cancelBackgroundCommand.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/task/cancelQueuedPrompt.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/task/cancelTask.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/task/clearTask.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/task/deleteAllTaskHistory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 15,
+      "path": "apps/vscode/src/core/controller/task/deleteTasksWithIds.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/task/editMessageAndRegenerate.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/task/executeQuickWin.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/task/exportTaskWithId.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/core/controller/task/getTaskHistory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/task/getTotalTasksSize.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/task/newTask.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/task/proceedWhileRunningCommand.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/task/showTaskWithId.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/core/controller/task/taskFeedback.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/task/toggleTaskFavorite.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/core/controller/ui/getWebviewHtml.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 106,
+      "path": "apps/vscode/src/core/controller/ui/initializeWebview.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/ui/onDidShowAnnouncement.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/controller/ui/openUrl.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/ui/openWalkthrough.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/controller/ui/scrollToSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/core/controller/ui/setTerminalExecutionMode.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToAccountButtonClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToAddToInput.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToChatButtonClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToHistoryButtonClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 8.33,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToMarketplaceButtonClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToMcpButtonClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 13.33,
+      "lines_total": 15,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToPartialMessage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 16.66,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToRelinquishControl.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToSettingsButtonClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToShowWebview.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.69,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/controller/ui/subscribeToWorktreesButtonClicked.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/ui/trackIntent.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/web/checkIsImageUrl.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/web/fetchOpenGraphData.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/controller/web/openInBrowser.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/controller/worktree/checkoutBranch.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/core/controller/worktree/createWorktree.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/worktree/createWorktreeInclude.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 15,
+      "path": "apps/vscode/src/core/controller/worktree/deleteWorktree.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/core/controller/worktree/getAvailableBranches.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/core/controller/worktree/getWorktreeDefaults.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 15,
+      "path": "apps/vscode/src/core/controller/worktree/getWorktreeIncludeStatus.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 17,
+      "path": "apps/vscode/src/core/controller/worktree/listWorktrees.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 55,
+      "path": "apps/vscode/src/core/controller/worktree/mergeWorktree.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/controller/worktree/switchWorktree.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/core/controller/worktree/trackWorktreeViewOpened.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 0.94,
+      "lines_total": 106,
+      "path": "apps/vscode/src/core/hooks/HookDiscoveryCache.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 12,
+      "path": "apps/vscode/src/core/hooks/HookError.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 2.31,
+      "lines_total": 173,
+      "path": "apps/vscode/src/core/hooks/HookProcess.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 10,
+      "lines_total": 10,
+      "path": "apps/vscode/src/core/hooks/HookProcessRegistry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 1.69,
+      "lines_total": 236,
+      "path": "apps/vscode/src/core/hooks/hook-factory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/hooks/hooks-utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/core/hooks/shell-escape.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 15,
+      "path": "apps/vscode/src/core/hooks/templates.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 4.76,
+      "lines_total": 21,
+      "path": "apps/vscode/src/core/hooks/utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 80,
+      "path": "apps/vscode/src/core/ignore/ClineIgnoreController.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 88,
+      "path": "apps/vscode/src/core/locks/SqliteLockManager.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/core/locks/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 232,
+      "path": "apps/vscode/src/core/mentions/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 93,
+      "path": "apps/vscode/src/core/prompts/responses.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 101,
+      "lines_pct": 40.07,
+      "lines_total": 252,
+      "path": "apps/vscode/src/core/storage/StateManager.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 0.81,
+      "lines_total": 122,
+      "path": "apps/vscode/src/core/storage/disk.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 16,
+      "path": "apps/vscode/src/core/storage/documents-path.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/core/storage/error-messages.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 106,
+      "path": "apps/vscode/src/core/storage/remote-config/fetch.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 61,
+      "lines_pct": 61,
+      "lines_total": 100,
+      "path": "apps/vscode/src/core/storage/remote-config/sdk-control-plane.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 30,
+      "path": "apps/vscode/src/core/storage/remote-config/sdk-refresh.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 33,
+      "path": "apps/vscode/src/core/storage/remote-config/syncRemoteMcpServers.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 1.94,
+      "lines_total": 206,
+      "path": "apps/vscode/src/core/storage/remote-config/utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 20,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/storage/skill-directories.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 82,
+      "path": "apps/vscode/src/core/storage/state-migrations.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 34,
+      "lines_pct": 77.27,
+      "lines_total": 44,
+      "path": "apps/vscode/src/core/storage/utils/state-helpers.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 19,
+      "path": "apps/vscode/src/core/task/focus-chain/file-utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 43,
+      "lines_pct": 28.66,
+      "lines_total": 150,
+      "path": "apps/vscode/src/core/task/tools/subagent/AgentConfigLoader.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 10.52,
+      "lines_total": 19,
+      "path": "apps/vscode/src/core/task/tools/subagent/SubagentToolName.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 2.5,
+      "lines_total": 40,
+      "path": "apps/vscode/src/core/webview/WebviewProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/core/webview/getNonce.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/core/webview/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 50,
+      "path": "apps/vscode/src/core/workspace/MigrationReporter.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 59,
+      "path": "apps/vscode/src/core/workspace/WorkspacePathAdapter.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 16,
+      "lines_pct": 27.58,
+      "lines_total": 58,
+      "path": "apps/vscode/src/core/workspace/WorkspaceResolver.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 67,
+      "path": "apps/vscode/src/core/workspace/WorkspaceRootManager.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/core/workspace/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 13,
+      "path": "apps/vscode/src/core/workspace/utils/parseWorkspaceInlinePath.ts"
+    },
+    {
+      "classification": "INTENTIONAL_UNSUPPORTED",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 63,
+      "path": "apps/vscode/src/dev/commands/tasks.ts"
+    },
+    {
+      "classification": "INTENTIONAL_UNSUPPORTED",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 627,
+      "path": "apps/vscode/src/dev/debug-harness/server.ts"
+    },
+    {
+      "classification": "INTENTIONAL_UNSUPPORTED",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 267,
+      "path": "apps/vscode/src/dev/mcp-oauth-test-server/server.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/exports/cline.d.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 15,
+      "path": "apps/vscode/src/exports/index.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 282,
+      "path": "apps/vscode/src/extension.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 5,
+      "lines_pct": 4.46,
+      "lines_total": 112,
+      "path": "apps/vscode/src/hosts/external/AuthHandler.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/external/ExternalCommentReviewController.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/hosts/external/ExternalEditPreview.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/hosts/external/ExternalWebviewProvider.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 17,
+      "path": "apps/vscode/src/hosts/external/grpc-types.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/hosts/external/host-bridge-client-manager.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/hosts/host-provider-types.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 5,
+      "lines_pct": 21.73,
+      "lines_total": 23,
+      "path": "apps/vscode/src/hosts/host-provider.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 2,
+      "lines_pct": 8.33,
+      "lines_total": 24,
+      "path": "apps/vscode/src/hosts/vscode/DecorationController.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/hosts/vscode/VscodeDiffContentProvider.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 54,
+      "lines_pct": 59.34,
+      "lines_total": 91,
+      "path": "apps/vscode/src/hosts/vscode/VscodeEditPreview.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 58,
+      "path": "apps/vscode/src/hosts/vscode/VscodeWebviewProvider.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 34,
+      "path": "apps/vscode/src/hosts/vscode/commandUtils.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 88,
+      "path": "apps/vscode/src/hosts/vscode/commit-message-generator.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 50,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge-grpc-handler.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 29,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge-grpc-service.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 31,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/client/host-grpc-client-base.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/client/host-grpc-client.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/closeAllDiffs.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/getDocumentText.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/openDiff.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 9,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/openMultiFileDiff.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/replaceText.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/saveDocument.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/scrollDiff.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/diff/truncateDocument.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/clipboardReadText.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/clipboardWriteText.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/debugLog.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/getHostVersion.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/getIdeRedirectUri.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/getTelemetrySettings.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/openExternal.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/shutdown.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/env/subscribeToTelemetrySettings.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/testing/getWebviewHtml.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/getActiveEditor.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/getOpenTabs.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/getVisibleTabs.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/openFile.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/openSettings.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/showInputBox.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 12,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/showMessage.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/showOpenDialogue.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/showSaveDialog.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 20,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/window/showTextDocument.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/executeCommandInTerminal.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 17,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/getDiagnostics.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/getWorkspacePaths.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/openClineSidebarPanel.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/openFolder.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/openInFileExplorerPanel.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/openProblemsPanel.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/openTerminalPanel.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/saveOpenDocumentIfDirty.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/hosts/vscode/hostbridge/workspace/searchWorkspaceItems.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 161,
+      "path": "apps/vscode/src/hosts/vscode/mcp-settings-legacy-migration.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 87,
+      "path": "apps/vscode/src/hosts/vscode/review/VscodeCommentReviewController.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 2,
+      "lines_pct": 1.09,
+      "lines_total": 183,
+      "path": "apps/vscode/src/hosts/vscode/terminal/VscodeTerminalManager.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 241,
+      "path": "apps/vscode/src/hosts/vscode/terminal/VscodeTerminalProcess.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 3,
+      "lines_pct": 9.37,
+      "lines_total": 32,
+      "path": "apps/vscode/src/hosts/vscode/terminal/VscodeTerminalRegistry.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/hosts/vscode/terminal/ansiUtils.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 17,
+      "path": "apps/vscode/src/hosts/vscode/terminal/get-latest-output.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 12,
+      "lines_pct": 7.84,
+      "lines_total": 153,
+      "path": "apps/vscode/src/hosts/vscode/terminal/osc633Parser.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 18,
+      "path": "apps/vscode/src/hosts/vscode/terminal/shellPromptHeuristics.ts"
+    },
+    {
+      "classification": "ENVIRONMENT_DEPENDENT",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 88,
+      "path": "apps/vscode/src/hosts/vscode/vscode-to-file-migration.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 36,
+      "path": "apps/vscode/src/integrations/diagnostics/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/integrations/editor/CommentReviewController.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 76,
+      "lines_pct": 98.7,
+      "lines_total": 77,
+      "path": "apps/vscode/src/integrations/editor/EditPreview.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 93,
+      "path": "apps/vscode/src/integrations/misc/extract-text.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 21,
+      "path": "apps/vscode/src/integrations/misc/link-preview.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 4.16,
+      "lines_total": 24,
+      "path": "apps/vscode/src/integrations/misc/notebook-utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/integrations/misc/open-file.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 49,
+      "path": "apps/vscode/src/integrations/misc/process-files.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 2.89,
+      "lines_total": 242,
+      "path": "apps/vscode/src/integrations/openai-codex/oauth.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 11,
+      "lines_pct": 73.33,
+      "lines_total": 15,
+      "path": "apps/vscode/src/integrations/terminal/constants.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/integrations/terminal/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 8,
+      "lines_pct": 50,
+      "lines_total": 16,
+      "path": "apps/vscode/src/registry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 0.11,
+      "lines_total": 849,
+      "path": "apps/vscode/src/sdk/SdkController.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 92,
+      "path": "apps/vscode/src/sdk/account-service.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 214,
+      "lines_pct": 61.67,
+      "lines_total": 347,
+      "path": "apps/vscode/src/sdk/auth-service.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 20,
+      "lines_pct": 100,
+      "lines_total": 20,
+      "path": "apps/vscode/src/sdk/bedrock-config.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/sdk/builtin-slash-commands.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 11,
+      "lines_pct": 91.66,
+      "lines_total": 12,
+      "path": "apps/vscode/src/sdk/canonical-event-subscription.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 226,
+      "lines_pct": 75.83,
+      "lines_total": 298,
+      "path": "apps/vscode/src/sdk/cline-session-factory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 139,
+      "lines_pct": 95.2,
+      "lines_total": 146,
+      "path": "apps/vscode/src/sdk/command-job-manager.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 41,
+      "path": "apps/vscode/src/sdk/command-status-tool.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 1.76,
+      "lines_total": 113,
+      "path": "apps/vscode/src/sdk/hooks-adapter.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/sdk/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 75,
+      "lines_pct": 92.59,
+      "lines_total": 81,
+      "path": "apps/vscode/src/sdk/initial-message-sanitizer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 41,
+      "lines_pct": 75.92,
+      "lines_total": 54,
+      "path": "apps/vscode/src/sdk/legacy-state-reader.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 27,
+      "lines_pct": 52.94,
+      "lines_total": 51,
+      "path": "apps/vscode/src/sdk/legacy-task-handling.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 8,
+      "lines_pct": 100,
+      "lines_total": 8,
+      "path": "apps/vscode/src/sdk/message-id-minter.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 614,
+      "lines_pct": 83.31,
+      "lines_total": 737,
+      "path": "apps/vscode/src/sdk/message-translator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 98,
+      "lines_pct": 96.07,
+      "lines_total": 102,
+      "path": "apps/vscode/src/sdk/model-catalog/catalog.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/sdk/model-catalog/contracts.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/sdk/model-catalog/custom-model-ids.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 94,
+      "lines_pct": 78.99,
+      "lines_total": 119,
+      "path": "apps/vscode/src/sdk/model-catalog/effective-config.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 46,
+      "lines_pct": 90.19,
+      "lines_total": 51,
+      "path": "apps/vscode/src/sdk/model-catalog/fingerprint.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 10,
+      "lines_pct": 71.42,
+      "lines_total": 14,
+      "path": "apps/vscode/src/sdk/model-catalog/host-overrides.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 15,
+      "lines_pct": 100,
+      "lines_total": 15,
+      "path": "apps/vscode/src/sdk/model-catalog/model-values.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 13,
+      "lines_pct": 100,
+      "lines_total": 13,
+      "path": "apps/vscode/src/sdk/model-catalog/provider-id.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/sdk/model-catalog/sdk-provider-id.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 64,
+      "lines_pct": 98.46,
+      "lines_total": 65,
+      "path": "apps/vscode/src/sdk/model-catalog/shape-adapter.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 265,
+      "lines_pct": 75.49,
+      "lines_total": 351,
+      "path": "apps/vscode/src/sdk/model-catalog/store.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/sdk/post-terminal-authority-diagnostic-builder.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 26,
+      "lines_pct": 100,
+      "lines_total": 26,
+      "path": "apps/vscode/src/sdk/post-terminal-authority-diagnostic-runtime.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 5,
+      "lines_pct": 100,
+      "lines_total": 5,
+      "path": "apps/vscode/src/sdk/provider-credential-error.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 11,
+      "lines_pct": 100,
+      "lines_total": 11,
+      "path": "apps/vscode/src/sdk/provider-failure-telemetry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 19,
+      "lines_pct": 90.47,
+      "lines_total": 21,
+      "path": "apps/vscode/src/sdk/provider-migration.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 100,
+      "lines_total": 3,
+      "path": "apps/vscode/src/sdk/runtime-events-proxy.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 14,
+      "lines_pct": 100,
+      "lines_total": 14,
+      "path": "apps/vscode/src/sdk/sap-config.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 14,
+      "lines_pct": 58.33,
+      "lines_total": 24,
+      "path": "apps/vscode/src/sdk/sdk-api-handler.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 29,
+      "lines_pct": 96.66,
+      "lines_total": 30,
+      "path": "apps/vscode/src/sdk/sdk-checkpoints.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 105,
+      "lines_pct": 87.5,
+      "lines_total": 120,
+      "path": "apps/vscode/src/sdk/sdk-compaction-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 13,
+      "lines_pct": 100,
+      "lines_total": 13,
+      "path": "apps/vscode/src/sdk/sdk-compaction.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 136,
+      "lines_pct": 92.51,
+      "lines_total": 147,
+      "path": "apps/vscode/src/sdk/sdk-diff-edit-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 86,
+      "lines_pct": 81.9,
+      "lines_total": 105,
+      "path": "apps/vscode/src/sdk/sdk-followup-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 18,
+      "lines_pct": 100,
+      "lines_total": 18,
+      "path": "apps/vscode/src/sdk/sdk-foreground-command-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 115,
+      "lines_pct": 100,
+      "lines_total": 115,
+      "path": "apps/vscode/src/sdk/sdk-interaction-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 32,
+      "lines_pct": 94.11,
+      "lines_total": 34,
+      "path": "apps/vscode/src/sdk/sdk-mcp-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 34,
+      "lines_pct": 70.83,
+      "lines_total": 48,
+      "path": "apps/vscode/src/sdk/sdk-message-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 121,
+      "lines_pct": 90.97,
+      "lines_total": 133,
+      "path": "apps/vscode/src/sdk/sdk-mode-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 39,
+      "lines_pct": 95.12,
+      "lines_total": 41,
+      "path": "apps/vscode/src/sdk/sdk-provider-change-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 6,
+      "lines_pct": 100,
+      "lines_total": 6,
+      "path": "apps/vscode/src/sdk/sdk-session-config-builder.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 82,
+      "lines_pct": 67.76,
+      "lines_total": 121,
+      "path": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 18,
+      "lines_pct": 90,
+      "lines_total": 20,
+      "path": "apps/vscode/src/sdk/sdk-session-history-loader.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 129,
+      "lines_pct": 87.16,
+      "lines_total": 148,
+      "path": "apps/vscode/src/sdk/sdk-session-lifecycle.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 35,
+      "lines_pct": 83.33,
+      "lines_total": 42,
+      "path": "apps/vscode/src/sdk/sdk-session-rebuild-scheduler.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 80,
+      "lines_pct": 87.91,
+      "lines_total": 91,
+      "path": "apps/vscode/src/sdk/sdk-task-control-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 185,
+      "lines_pct": 69.54,
+      "lines_total": 266,
+      "path": "apps/vscode/src/sdk/sdk-task-history.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 13,
+      "lines_pct": 100,
+      "lines_total": 13,
+      "path": "apps/vscode/src/sdk/sdk-task-resume.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 75,
+      "lines_pct": 91.46,
+      "lines_total": 82,
+      "path": "apps/vscode/src/sdk/sdk-task-start-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 49,
+      "lines_pct": 72.05,
+      "lines_total": 68,
+      "path": "apps/vscode/src/sdk/sdk-telemetry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 40,
+      "lines_pct": 83.33,
+      "lines_total": 48,
+      "path": "apps/vscode/src/sdk/sdk-terminal-execution-mode-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 71,
+      "lines_pct": 92.2,
+      "lines_total": 77,
+      "path": "apps/vscode/src/sdk/sdk-tool-policies.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 50,
+      "lines_pct": 96.15,
+      "lines_total": 52,
+      "path": "apps/vscode/src/sdk/sdk-user-message-mapping.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 57,
+      "lines_pct": 100,
+      "lines_total": 57,
+      "path": "apps/vscode/src/sdk/session-auto-approval.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/sdk/session-host.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 82,
+      "lines_pct": 95.34,
+      "lines_total": 86,
+      "path": "apps/vscode/src/sdk/slash-command-expansion.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 47,
+      "lines_pct": 95.91,
+      "lines_total": 49,
+      "path": "apps/vscode/src/sdk/state-post-debouncer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 36,
+      "lines_pct": 90,
+      "lines_total": 40,
+      "path": "apps/vscode/src/sdk/task-proxy.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 8,
+      "lines_pct": 100,
+      "lines_total": 8,
+      "path": "apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 100,
+      "lines_pct": 89.28,
+      "lines_total": 112,
+      "path": "apps/vscode/src/sdk/task-state-shadow-coordinator.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 8,
+      "lines_pct": 88.88,
+      "lines_total": 9,
+      "path": "apps/vscode/src/sdk/task-state-shadow-host-msgs.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 86,
+      "lines_pct": 80.37,
+      "lines_total": 107,
+      "path": "apps/vscode/src/sdk/task-state-shadow-host-wiring.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 48,
+      "lines_pct": 80,
+      "lines_total": 60,
+      "path": "apps/vscode/src/sdk/task-state-shadow-observer.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 140,
+      "lines_pct": 98.59,
+      "lines_total": 142,
+      "path": "apps/vscode/src/sdk/task-state-shadow-recorder.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 30,
+      "lines_pct": 88.23,
+      "lines_total": 34,
+      "path": "apps/vscode/src/sdk/task-state-shadow.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 52,
+      "lines_pct": 94.54,
+      "lines_total": 55,
+      "path": "apps/vscode/src/sdk/task-telemetry-tracker.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 16,
+      "lines_pct": 84.21,
+      "lines_total": 19,
+      "path": "apps/vscode/src/sdk/telemetry-settings-sync.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 25,
+      "lines_pct": 86.2,
+      "lines_total": 29,
+      "path": "apps/vscode/src/sdk/tool-approval-denial.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 17,
+      "lines_pct": 100,
+      "lines_total": 17,
+      "path": "apps/vscode/src/sdk/turn-state-tracker.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 87.5,
+      "lines_total": 8,
+      "path": "apps/vscode/src/sdk/vscode-file-read-executor.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 10,
+      "lines_pct": 100,
+      "lines_total": 10,
+      "path": "apps/vscode/src/sdk/vscode-lm/register-vscode-lm.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 45,
+      "lines_pct": 83.33,
+      "lines_total": 54,
+      "path": "apps/vscode/src/sdk/vscode-lm/vscode-lm-format.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 48,
+      "lines_pct": 61.53,
+      "lines_total": 78,
+      "path": "apps/vscode/src/sdk/vscode-lm/vscode-lm-handler.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 190,
+      "lines_pct": 84.82,
+      "lines_total": 224,
+      "path": "apps/vscode/src/sdk/vscode-run-commands-tool.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 12,
+      "lines_total": 25,
+      "path": "apps/vscode/src/sdk/vscode-runtime-builder.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 22,
+      "lines_pct": 30.98,
+      "lines_total": 71,
+      "path": "apps/vscode/src/sdk/vscode-session-host.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 100,
+      "lines_total": 4,
+      "path": "apps/vscode/src/sdk/vscode-terminal-execution-mode.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 17,
+      "lines_pct": 54.83,
+      "lines_total": 31,
+      "path": "apps/vscode/src/sdk/webview-grpc-bridge.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 6,
+      "lines_pct": 100,
+      "lines_total": 6,
+      "path": "apps/vscode/src/sdk/workspace-root.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 6.25,
+      "lines_total": 16,
+      "path": "apps/vscode/src/services/EnvUtils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 105,
+      "path": "apps/vscode/src/services/account/ClineAccountService.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/services/auth/AuthService.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 0.69,
+      "lines_total": 143,
+      "path": "apps/vscode/src/services/auth/oca/OcaAuthService.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 0.88,
+      "lines_total": 113,
+      "path": "apps/vscode/src/services/auth/oca/providers/OcaAuthProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 12,
+      "lines_pct": 100,
+      "lines_total": 12,
+      "path": "apps/vscode/src/services/auth/oca/utils/constants.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/services/auth/oca/utils/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 3.03,
+      "lines_total": 33,
+      "path": "apps/vscode/src/services/auth/oca/utils/utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 100,
+      "lines_total": 7,
+      "path": "apps/vscode/src/services/auth/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 17,
+      "lines_pct": 7.58,
+      "lines_total": 224,
+      "path": "apps/vscode/src/services/banner/BannerService.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 34,
+      "path": "apps/vscode/src/services/browser/BrowserDiscovery.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 0.45,
+      "lines_total": 219,
+      "path": "apps/vscode/src/services/browser/BrowserSession.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 20,
+      "path": "apps/vscode/src/services/browser/UrlContentFetcher.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 6,
+      "path": "apps/vscode/src/services/browser/utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 45,
+      "lines_pct": 62.5,
+      "lines_total": 72,
+      "path": "apps/vscode/src/services/error/ClineError.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/services/error/ErrorProviderFactory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 4.76,
+      "lines_total": 21,
+      "path": "apps/vscode/src/services/error/ErrorService.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/services/error/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/services/error/providers/IErrorProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 2.7,
+      "lines_total": 37,
+      "path": "apps/vscode/src/services/error/providers/PostHogErrorProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/services/feature-flags/FeatureFlagsProviderFactory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 2.32,
+      "lines_total": 43,
+      "path": "apps/vscode/src/services/feature-flags/FeatureFlagsService.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 18.18,
+      "lines_total": 11,
+      "path": "apps/vscode/src/services/feature-flags/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/services/feature-flags/providers/IFeatureFlagsProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 21,
+      "path": "apps/vscode/src/services/feature-flags/providers/PostHogFeatureFlagsProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 74,
+      "path": "apps/vscode/src/services/glob/list-files.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 31.81,
+      "lines_total": 22,
+      "path": "apps/vscode/src/services/lg-cns-integration/webhook-hooks.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 6,
+      "lines_pct": 23.07,
+      "lines_total": 26,
+      "path": "apps/vscode/src/services/logging/distinctId.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 0.51,
+      "lines_total": 779,
+      "path": "apps/vscode/src/services/mcp/McpHub.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 3.84,
+      "lines_total": 78,
+      "path": "apps/vscode/src/services/mcp/McpOAuthManager.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 4.47,
+      "lines_total": 67,
+      "path": "apps/vscode/src/services/mcp/StreamableHttpReconnectHandler.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/services/mcp/constants.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 12,
+      "lines_pct": 52.17,
+      "lines_total": 23,
+      "path": "apps/vscode/src/services/mcp/schemas.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 50,
+      "lines_pct": 55.55,
+      "lines_total": 90,
+      "path": "apps/vscode/src/services/mcp/settingsLock.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/services/mcp/timeout.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/services/mcp/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 2.18,
+      "lines_total": 183,
+      "path": "apps/vscode/src/services/search/file-search.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 45,
+      "path": "apps/vscode/src/services/telemetry/TelemetryProviderFactory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 13,
+      "lines_pct": 5.53,
+      "lines_total": 235,
+      "path": "apps/vscode/src/services/telemetry/TelemetryService.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 15,
+      "lines_total": 20,
+      "path": "apps/vscode/src/services/telemetry/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/services/telemetry/providers/ITelemetryProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 92,
+      "path": "apps/vscode/src/services/telemetry/providers/opentelemetry/OpenTelemetryClientProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 49,
+      "path": "apps/vscode/src/services/telemetry/providers/opentelemetry/OpenTelemetryExporterFactory.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 152,
+      "path": "apps/vscode/src/services/telemetry/providers/opentelemetry/OpenTelemetryTelemetryProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 38,
+      "path": "apps/vscode/src/services/telemetry/providers/opentelemetry/otel-exporter-diagnostics.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 3.33,
+      "lines_total": 30,
+      "path": "apps/vscode/src/services/telemetry/providers/posthog/PostHogClientProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 54,
+      "path": "apps/vscode/src/services/telemetry/providers/posthog/PostHogTelemetryProvider.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 6,
+      "lines_pct": 66.66,
+      "lines_total": 9,
+      "path": "apps/vscode/src/services/telemetry/rollout-metadata.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 15,
+      "lines_pct": 21.12,
+      "lines_total": 71,
+      "path": "apps/vscode/src/services/temp/ClineTempManager.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/services/temp/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 2.89,
+      "lines_total": 69,
+      "path": "apps/vscode/src/services/uri/SharedUriHandler.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/AutoApprovalSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/shared/BrowserSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/ChatContent.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/ClineAccount.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/ClineBanner.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/ClineFeatureSetting.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 4,
+      "path": "apps/vscode/src/shared/ExtensionMessage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/FocusChainSettings.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/HistoryItem.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 50,
+      "lines_total": 8,
+      "path": "apps/vscode/src/shared/Languages.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/McpDisplayMode.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/TelemetrySetting.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/UserInfo.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/WebviewMessage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 15,
+      "lines_pct": 71.42,
+      "lines_total": 21,
+      "path": "apps/vscode/src/shared/api.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 7,
+      "path": "apps/vscode/src/shared/array.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 30,
+      "lines_total": 10,
+      "path": "apps/vscode/src/shared/clients/requesty.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/cline-rules.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 12,
+      "lines_pct": 100,
+      "lines_total": 12,
+      "path": "apps/vscode/src/shared/cline/api.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 8,
+      "lines_pct": 100,
+      "lines_total": 8,
+      "path": "apps/vscode/src/shared/cline/banner.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/cline/context.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/shared/cline/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/cline/onboarding.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/cline/recommended-models.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 21,
+      "path": "apps/vscode/src/shared/combineApiRequests.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 7.4,
+      "lines_total": 27,
+      "path": "apps/vscode/src/shared/combineCommandSequences.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 109,
+      "path": "apps/vscode/src/shared/combineHookSequences.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 5,
+      "lines_pct": 100,
+      "lines_total": 5,
+      "path": "apps/vscode/src/shared/config-types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/constants.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 9.09,
+      "lines_total": 11,
+      "path": "apps/vscode/src/shared/content-limits.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/shared/context-mentions.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/focus-chain-utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 33,
+      "path": "apps/vscode/src/shared/getApiMetrics.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 3,
+      "path": "apps/vscode/src/shared/internal/account.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/mcp.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 20,
+      "path": "apps/vscode/src/shared/messages/content.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/messages/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/messages/metrics.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/shared/model-catalog/provider-helpers.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 100,
+      "lines_total": 4,
+      "path": "apps/vscode/src/shared/multi-root/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 20,
+      "lines_total": 20,
+      "path": "apps/vscode/src/shared/net.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 38,
+      "lines_pct": 69.09,
+      "lines_total": 55,
+      "path": "apps/vscode/src/shared/post-terminal-authority-diagnostic.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 63,
+      "path": "apps/vscode/src/shared/proto-conversions/cline-message.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/proto-conversions/file/search-result-conversion.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 24,
+      "path": "apps/vscode/src/shared/proto-conversions/mcp/mcp-server-conversion.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 19,
+      "lines_pct": 57.57,
+      "lines_total": 33,
+      "path": "apps/vscode/src/shared/proto-conversions/models/api-configuration-conversion.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 4,
+      "lines_pct": 100,
+      "lines_total": 4,
+      "path": "apps/vscode/src/shared/proto-conversions/models/modelOverrides.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 3,
+      "lines_pct": 15.78,
+      "lines_total": 19,
+      "path": "apps/vscode/src/shared/proto-conversions/models/typeConversion.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/proto-conversions/models/vscode-lm-models-conversion.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 5,
+      "path": "apps/vscode/src/shared/proto-conversions/state/telemetry-setting-conversion.ts"
+    },
+    {
+      "classification": "EXCLUDED_BY_DESIGN",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/proto-conversions/web/open-graph-conversion.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 29,
+      "lines_pct": 3.8,
+      "lines_total": 762,
+      "path": "apps/vscode/src/shared/proto/cline/account.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 2.16,
+      "lines_total": 323,
+      "path": "apps/vscode/src/shared/proto/cline/browser.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 3.17,
+      "lines_total": 63,
+      "path": "apps/vscode/src/shared/proto/cline/checkpoints.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 3.44,
+      "lines_total": 58,
+      "path": "apps/vscode/src/shared/proto/cline/commands.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 50,
+      "lines_pct": 7.72,
+      "lines_total": 647,
+      "path": "apps/vscode/src/shared/proto/cline/common.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 46,
+      "lines_pct": 2.59,
+      "lines_total": 1775,
+      "path": "apps/vscode/src/shared/proto/cline/file.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 19,
+      "lines_pct": 1.7,
+      "lines_total": 1116,
+      "path": "apps/vscode/src/shared/proto/cline/hooks.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 15,
+      "lines_pct": 2.19,
+      "lines_total": 683,
+      "path": "apps/vscode/src/shared/proto/cline/marketplace.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 17,
+      "lines_pct": 2.61,
+      "lines_total": 650,
+      "path": "apps/vscode/src/shared/proto/cline/mcp.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 178,
+      "lines_pct": 2.92,
+      "lines_total": 6092,
+      "path": "apps/vscode/src/shared/proto/cline/models.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 3.52,
+      "lines_total": 85,
+      "path": "apps/vscode/src/shared/proto/cline/oca_account.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 8,
+      "lines_pct": 7.27,
+      "lines_total": 110,
+      "path": "apps/vscode/src/shared/proto/cline/remote_config.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 3.48,
+      "lines_total": 86,
+      "path": "apps/vscode/src/shared/proto/cline/slash.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 85,
+      "lines_pct": 2.4,
+      "lines_total": 3540,
+      "path": "apps/vscode/src/shared/proto/cline/state.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 11,
+      "lines_pct": 1.55,
+      "lines_total": 709,
+      "path": "apps/vscode/src/shared/proto/cline/task.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 105,
+      "lines_pct": 8.52,
+      "lines_total": 1232,
+      "path": "apps/vscode/src/shared/proto/cline/ui.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 2.67,
+      "lines_total": 112,
+      "path": "apps/vscode/src/shared/proto/cline/web.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 15,
+      "lines_pct": 2.01,
+      "lines_total": 743,
+      "path": "apps/vscode/src/shared/proto/cline/worktree.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 3.44,
+      "lines_total": 29,
+      "path": "apps/vscode/src/shared/proto/google/protobuf/field_mask.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 18,
+      "lines_pct": 3.32,
+      "lines_total": 542,
+      "path": "apps/vscode/src/shared/proto/host/diff.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 9,
+      "lines_pct": 5.8,
+      "lines_total": 155,
+      "path": "apps/vscode/src/shared/proto/host/env.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 6.12,
+      "lines_total": 49,
+      "path": "apps/vscode/src/shared/proto/host/testing.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 32,
+      "lines_pct": 3.76,
+      "lines_total": 849,
+      "path": "apps/vscode/src/shared/proto/host/window.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 26,
+      "lines_pct": 4.29,
+      "lines_total": 606,
+      "path": "apps/vscode/src/shared/proto/host/workspace.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/proto/index.cline.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/proto/index.google.protobuf.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/proto/index.google.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/proto/index.host.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/proto/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/remote-config/constants.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 22,
+      "lines_pct": 100,
+      "lines_total": 22,
+      "path": "apps/vscode/src/shared/remote-config/schema.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 13,
+      "lines_pct": 68.42,
+      "lines_total": 19,
+      "path": "apps/vscode/src/shared/services/Logger.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 7.14,
+      "lines_total": 14,
+      "path": "apps/vscode/src/shared/services/config/otel-config.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 50,
+      "lines_total": 6,
+      "path": "apps/vscode/src/shared/services/config/posthog-config.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 11,
+      "lines_pct": 100,
+      "lines_total": 11,
+      "path": "apps/vscode/src/shared/services/feature-flags/feature-flags.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 44,
+      "path": "apps/vscode/src/shared/services/worker/backfill.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 0.77,
+      "lines_total": 129,
+      "path": "apps/vscode/src/shared/services/worker/queue.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 3.12,
+      "lines_total": 32,
+      "path": "apps/vscode/src/shared/services/worker/sync.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/shared/services/worker/utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 2.77,
+      "lines_total": 72,
+      "path": "apps/vscode/src/shared/services/worker/worker.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/skills.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 100,
+      "lines_total": 2,
+      "path": "apps/vscode/src/shared/slashCommands.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 15.55,
+      "lines_total": 45,
+      "path": "apps/vscode/src/shared/storage/ClineBlobStorage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 27,
+      "lines_pct": 69.23,
+      "lines_total": 39,
+      "path": "apps/vscode/src/shared/storage/ClineFileStorage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 15.55,
+      "lines_total": 45,
+      "path": "apps/vscode/src/shared/storage/ClineStorage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 79,
+      "path": "apps/vscode/src/shared/storage/adapters.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/shared/storage/index.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 53.84,
+      "lines_total": 13,
+      "path": "apps/vscode/src/shared/storage/provider-keys.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 45,
+      "lines_pct": 100,
+      "lines_total": 45,
+      "path": "apps/vscode/src/shared/storage/state-keys.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 21,
+      "lines_pct": 95.45,
+      "lines_total": 22,
+      "path": "apps/vscode/src/shared/storage/storage-context.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 25,
+      "lines_total": 4,
+      "path": "apps/vscode/src/shared/storage/types.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 29,
+      "lines_pct": 100,
+      "lines_total": 29,
+      "path": "apps/vscode/src/shared/tools.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 100,
+      "lines_total": 1,
+      "path": "apps/vscode/src/shared/utils/cline.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 14,
+      "path": "apps/vscode/src/shared/utils/model-filters.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 7,
+      "lines_pct": 33.33,
+      "lines_total": 21,
+      "path": "apps/vscode/src/shared/utils/reasoning-support.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 20,
+      "lines_pct": 95.23,
+      "lines_total": 21,
+      "path": "apps/vscode/src/shared/vsCodeSelectorUtils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 117,
+      "path": "apps/vscode/src/standalone/cline-core.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 26,
+      "path": "apps/vscode/src/standalone/hostbridge-client.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 22,
+      "path": "apps/vscode/src/standalone/memory-monitor.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 43,
+      "path": "apps/vscode/src/standalone/protobus-service.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 25,
+      "path": "apps/vscode/src/standalone/utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 50,
+      "path": "apps/vscode/src/standalone/vscode-context-utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 19,
+      "path": "apps/vscode/src/standalone/vscode-context.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/types/cline-shared-storage.d.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/types/picomatch.d.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 100,
+      "lines_total": 0,
+      "path": "apps/vscode/src/types/ws.d.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 2,
+      "path": "apps/vscode/src/utils/announcements.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 20,
+      "lines_total": 5,
+      "path": "apps/vscode/src/utils/cli-detector.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 43,
+      "path": "apps/vscode/src/utils/env.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 17,
+      "path": "apps/vscode/src/utils/envExpansion.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 6,
+      "lines_pct": 10.52,
+      "lines_total": 57,
+      "path": "apps/vscode/src/utils/fs-info.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 6.25,
+      "lines_total": 48,
+      "path": "apps/vscode/src/utils/fs.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 132,
+      "path": "apps/vscode/src/utils/git-worktree.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 4,
+      "lines_pct": 2.56,
+      "lines_total": 156,
+      "path": "apps/vscode/src/utils/git.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 41,
+      "path": "apps/vscode/src/utils/github-url-utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 1,
+      "lines_pct": 50,
+      "lines_total": 2,
+      "path": "apps/vscode/src/utils/mcpAuth.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 40,
+      "path": "apps/vscode/src/utils/model-utils.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 12,
+      "lines_pct": 19.35,
+      "lines_total": 62,
+      "path": "apps/vscode/src/utils/path.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 3,
+      "lines_pct": 8.1,
+      "lines_total": 37,
+      "path": "apps/vscode/src/utils/powershell.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/utils/process-termination.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 10,
+      "path": "apps/vscode/src/utils/retry.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 72,
+      "lines_pct": 54.13,
+      "lines_total": 133,
+      "path": "apps/vscode/src/utils/shell.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 8,
+      "path": "apps/vscode/src/utils/storage.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 0,
+      "lines_pct": 0,
+      "lines_total": 1,
+      "path": "apps/vscode/src/utils/time.ts"
+    },
+    {
+      "classification": "RUNNER_SCOPE_GAP",
+      "lines_covered": 2,
+      "lines_pct": 2.1,
+      "lines_total": 95,
+      "path": "apps/vscode/src/utils/worktree-include.ts"
+    }
+  ],
+  "provider": "v8",
+  "reproducibility": {
+    "deterministic": true,
+    "final_hash": "971d5c7ef3e0387ba1050acb5773c6245feb66f6c03ddefe3d5e1f9255743653",
+    "summary_hash": "dfbc1cfc750cac9f7ec264f9bf599d3660d79970ad22759dc1cffb10cf8a4735"
+  },
+  "schema_version": 1,
+  "scope": {
+    "excluded_by_design": {
+      "embedded_packages": [
+        "src/packages/**"
+      ],
+      "generated": [
+        "src/generated/**"
+      ],
+      "test_infra": [
+        "src/test/**"
+      ],
+      "tests": [
+        "**/__tests__/**",
+        "**/*.test.*",
+        "**/*.spec.*"
+      ]
+    },
+    "production_file_count": 613,
+    "root": "apps/vscode",
+    "runner_scope_gaps": {
+      "bun_test_owned": "~75 files importing bun:test",
+      "mocha_test_owned": "~29 test files importing neither vitest nor bun:test",
+      "note": "Bun and Mocha test coverage is NOT in this baseline; see EPIC-CLINEMM-CODE-COVERAGE-BASELINE01 for cross-runner follow-up decision.",
+      "vitest_excluded_by_config": [
+        "src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
+        "src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
+        "src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts"
+      ]
+    }
+  },
+  "subject_head": "be76c45d6acb4f6f8c07080c29dadf54c014c186",
+  "subject_tree": "ad1da638a74d1511da36374e80093119db437227",
+  "totals": {
+    "branches": {
+      "covered": 4202,
+      "pct": 11.03,
+      "total": 38071
+    },
+    "functions": {
+      "covered": 1311,
+      "pct": 18.88,
+      "total": 6943
+    },
+    "lines": {
+      "covered": 6832,
+      "pct": 15.8,
+      "total": 43228
+    },
+    "statements": {
+      "covered": 6980,
+      "pct": 15.86,
+      "total": 43994
+    }
+  },
+  "vitest_version": "vitest/4.1.10 darwin-arm64 node-v26.0.0"
+}

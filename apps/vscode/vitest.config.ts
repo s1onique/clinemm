@@ -55,6 +55,38 @@ export default defineConfig({
 		// where the real suite lives (e.g. sdk-control-plane.test.ts), so an
 		// empty file should not fail the run.
 		passWithNoTests: true,
+		// Coverage configuration for the Vitest coverage baseline.
+		// (Established by `ACT-CLINEMM-CODE-COVERAGE-BASELINE01`.)
+		// - provider: v8 (matches Node runtime / @vitest/coverage-v8@4.1.10)
+		// - include: explicit production source universe so untested
+		//   files appear with 0% rather than being silently skipped
+		//   (v4 default behavior is "only imported files" without an
+		//   explicit include — see vitest#6956).
+		// - exclude: by-design non-product categories (not excluded to
+		//   inflate numbers; each is documented below).
+		// - reporters: text (human), json-summary (compact CI),
+		//   json (full istanbul for offline analysis).
+		// - reportsDirectory: `coverage/` (gitignored).
+		coverage: {
+			provider: "v8",
+			include: ["src/**/*.{ts,tsx}"],
+			exclude: [
+				// Tests and test fixtures
+				"**/__tests__/**",
+				"**/*.test.*",
+				"**/*.spec.*",
+				// Test infrastructure (vitest stubs, fixtures, helpers)
+				"src/test/**",
+				// Generated proto/gRPC code (auto-generated from proto/;
+				// tested through the canonical schema, not source coverage)
+				"src/generated/**",
+				// Embedded host packages (bundled by esbuild into the
+				// extension; covered by their own dedicated test process)
+				"src/packages/**",
+			],
+			reporters: ["text", "json-summary", "json"],
+			reportsDirectory: "./coverage",
+		},
 	},
 	resolve: {
 		alias: {
