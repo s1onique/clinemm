@@ -2,20 +2,21 @@
   "snapshot_sha256": "878eb241e24150b4ecc9731e6fe8373b7e81566d8117f7f129b87f012f166cb6",
   "snapshot_generated_at": "2026-08-19T10:55:25Z",
   "triage_date_initial": "2026-08-19",
-  "triage_date_corrected": "2026-08-19",
+  "triage_date_correction_01": "2026-08-19",
+  "triage_date_correction_02": "2026-08-19",
   "shortlist_size": 80,
-  "methodology_revision": "replaced keyword/lexical overlap with semantic three-class (EXACT_MAP/ADJACENT/UNRELATED)",
+  "methodology_revision": "correction 02: stricter EXACT_MAP test (same failure contract OR same causal production seam OR direct upstream reproduction)",
   "dispositions": {
     "IMPORT": 5,
-    "MAP_EXISTING": 43,
-    "RADAR": 32,
+    "MAP_EXISTING": 40,
+    "RADAR": 35,
     "REJECT": 0,
     "CLOSED_UPSTREAM": 0
   },
   "semantic_classes": {
-    "EXACT_MAP": 48,
+    "EXACT_MAP": 45,
     "ADJACENT": 14,
-    "UNRELATED": 18
+    "UNRELATED": 21
   },
   "candidates": [
     {
@@ -204,10 +205,10 @@
     },
     {
       "number": 9333,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TEST-BASELINE-ZERO-FAILURES01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "CLI ignores configured model and always uses anthropic/claude-3-7-sonnet — provider routing correctness.",
+      "semantic_class": "UNRELATED",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "CLI: displayed model ≠ actual request model sent to Requesty. Provider routing correctness defect, NOT a Vitest baseline failure. No current canonical epic covers provider-routing correctness; downgraded to RADAR.",
       "url": "https://github.com/cline/cline/issues/9333"
     },
     {
@@ -532,10 +533,10 @@
     },
     {
       "number": 12079,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Command status \"skipped\" in terminal + hangs on \"thinking\" — same family as #10015/#10537; thinking-presentation persistence.",
+      "semantic_class": "UNRELATED",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Command executes but Cline marks it \"skipped\" and hangs on \"thinking\"; restart recovers. Task-state machine transition defect (skipped → pending → skipped), NOT static \"Thinking\" presentation residue. The presentation-layer epic is about UI cache, not runtime state; this is a runtime state-machine bug. No current canonical epic; downgraded to RADAR.",
       "url": "https://github.com/cline/cline/issues/12079"
     },
     {
@@ -604,10 +605,10 @@
     },
     {
       "number": 12947,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "USER-CONTEXT-CEILING01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Reasoning Effort dropdown caps at xhigh, missing \"max\" advertised by DeepSeek V4 — model-capability ceiling.",
+      "semantic_class": "UNRELATED",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Reasoning Effort dropdown missing \"max\" option even though models.dev/DeepSeek advertise it. Reasoning-effort capability propagation, NOT context-token ceiling. Downgraded to RADAR.",
       "url": "https://github.com/cline/cline/issues/12947"
     },
     {
