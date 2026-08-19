@@ -134,14 +134,14 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			await appendWebviewSidePostTerminalAuthorityDiagnostic(context, [
 				{
 					origin: "webview",
-				captureKind: "webview-replica",
+					captureKind: "webview-committed",
 					stateVersion: 1,
 					capturedAt: Date.now(),
 					legacyPhase: "idle",
 				},
 				{
 					origin: "webview",
-				captureKind: "webview-replica",
+					captureKind: "webview-committed",
 					stateVersion: 2,
 					capturedAt: Date.now(),
 					buttonConfig: { sendingDisabled: true },
@@ -193,7 +193,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			await appendWebviewSidePostTerminalAuthorityDiagnostic(freshContext, [
 				{
 					origin: "webview",
-				captureKind: "webview-replica",
+					captureKind: "webview-committed",
 					stateVersion: 1,
 					capturedAt: Date.now(),
 					legacyPhase: "idle",

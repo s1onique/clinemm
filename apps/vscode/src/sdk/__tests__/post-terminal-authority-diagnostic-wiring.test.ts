@@ -179,14 +179,19 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			)
 		})
 
-		it("W3-2: the setState callback contains the opt-in webview capture", () => {
+		it("W3-2: the raw-incoming capture is positioned before the pure functional setState callback", () => {
 			const source = readSource(WEBVIEW_CONTEXT_PATH)
-			// The capture is positioned between setDidHydrateState(true) and return newState.
-			const setDidHydrateIdx = source.indexOf("setDidHydrateState(true)")
-			const returnIdx = source.indexOf("return newState", setDidHydrateIdx)
-			expect(setDidHydrateIdx).toBeGreaterThanOrEqual(0)
-			expect(returnIdx).toBeGreaterThan(setDidHydrateIdx)
-			const slice = source.slice(setDidHydrateIdx, returnIdx)
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
+			// The capture was relocated OUTSIDE the setState callback (between
+			// `stateData = JSON.parse(...)` and `setState((prevState) => {`)
+			// so the functional updater remains pure (no side effects).
+			// This test now pins that the raw-incoming capture precedes the
+			// setState call instead of being inside it.
+			const jsonParseIdx = source.indexOf("JSON.parse(response.stateJson)")
+			const setStateIdx = source.indexOf("setState((prevState)", jsonParseIdx)
+			expect(jsonParseIdx).toBeGreaterThanOrEqual(0)
+			expect(setStateIdx).toBeGreaterThan(jsonParseIdx)
+			const slice = source.slice(jsonParseIdx, setStateIdx)
 			expect(slice).toMatch(/isPostTerminalAuthorityDiagnosticEnabled\(\s*"webview"\s*\)/)
 			expect(slice).toMatch(/recordPostTerminalAuthoritySnapshot\(/)
 			expect(slice).toMatch(/buildWebviewSnapshot\(/)

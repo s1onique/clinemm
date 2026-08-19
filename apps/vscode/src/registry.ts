@@ -40,12 +40,6 @@ const ClineCommands = {
 	// through `vscode.commands.executeCommand` from the debug harness).
 	TogglePostTerminalAuthorityDiagnostic: prefix + ".debug.togglePostTerminalAuthorityDiagnostic",
 	DumpPostTerminalAuthorityDiagnostic: prefix + ".debug.dumpPostTerminalAuthorityDiagnostic",
-	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
-	// Dump command for the LCD01 per-boundary request-site capture layer.
-	// Shares the PTAD workspace-state toggle (single user action enables
-	// both traces) but is its own dump command so a C3/C4 run can flush
-	// the LCD01 ring buffer independently without contaminating PTAD.
-	DumpLiveContextDimensions01: prefix + ".debug.dumpLiveContextDimensions01",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

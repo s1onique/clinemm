@@ -12,7 +12,6 @@
  *   3. `captureKind` discriminates the four webview capture sites.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	clearPostTerminalAuthorityDiagnosticBoth,
 	disablePostTerminalAuthorityDiagnosticBoth,
@@ -20,6 +19,7 @@ import {
 	getPostTerminalAuthorityDiagnosticRecords,
 	recordPostTerminalAuthoritySnapshot,
 } from "@shared/post-terminal-authority-diagnostic"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { buildExtensionSnapshotFromState } from "../post-terminal-authority-diagnostic-builder"
 
 beforeEach(() => {
@@ -55,7 +55,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION01-REPLICA-TRUTH / pu
 
 	it("PTAD-2: captureKind discriminates the four webview capture sites", () => {
 		// Simulate one record per kind.
-		const kinds = ["webview-replica", "input-section", "action-buttons", "followup-route"] as const
+		const kinds = ["webview-committed", "input-section", "action-buttons", "followup-route"] as const
 		for (const captureKind of kinds) {
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
@@ -69,7 +69,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION01-REPLICA-TRUTH / pu
 		expect(records.map((r) => r.captureKind)).toEqual([...kinds])
 	})
 
-	it("PTAD-3: extension-push and webview-replica can correlate by _ptadPushId even when stateVersion=0", () => {
+	it("PTAD-3: extension-push and webview-committed can correlate by _ptadPushId even when stateVersion=0", () => {
 		// Simulate the same extension push observed by both sides.
 		const sharedPushId = 7777
 		recordPostTerminalAuthoritySnapshot(
@@ -85,7 +85,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION01-REPLICA-TRUTH / pu
 		)
 		recordPostTerminalAuthoritySnapshot({
 			origin: "webview",
-			captureKind: "webview-replica",
+			captureKind: "webview-committed",
 			stateVersion: 0, // <-- same problem on the webview side
 			_ptadPushId: sharedPushId, // <-- the push ID propagates verbatim from the wire
 			capturedAt: Date.now(),

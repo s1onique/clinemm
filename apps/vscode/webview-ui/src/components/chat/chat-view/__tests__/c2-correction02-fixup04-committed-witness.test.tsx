@@ -29,18 +29,14 @@
  * vs FIXUP04 discriminator. The discriminator for R9 is established
  * separately by the static purity check below.)
  *
- * R5 fail-closed behavior is preserved trivially (raw capture
- * still emits with _ptadPushId = undefined; no reducer-output to
- * fail-close on).
+ * This witness tests the production reducer purity contract
+ * (no PTAD/LCD01 scaffolding required): the reducer receives
+ * React-authoritative prevState so W1's functional updater
+ * correctly merges W2's contribution when both are batched
+ * into the same act() without yielding.
  */
 
 import type { ExtensionState, TurnState } from "@shared/ExtensionMessage"
-import {
-	clearPostTerminalAuthorityDiagnosticBoth,
-	disablePostTerminalAuthorityDiagnosticBoth,
-	enablePostTerminalAuthorityDiagnosticBoth,
-	getPostTerminalAuthorityDiagnosticRecords,
-} from "@shared/post-terminal-authority-diagnostic"
 import { act, render } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ExtensionStateContextProvider, useExtensionState } from "@/context/ExtensionStateContext"
@@ -168,8 +164,6 @@ function buildSnapshotStateData(spec: SnapshotSpec): ExtensionState {
 		stateVersion: 0,
 		epoch: 0,
 		turnState: spec.turnState,
-		_ptadEnabled: true,
-		_ptadPushId: spec.pushId,
 		thinkingPresentation: { modelStreaming: false, source: "shadow", seq: spec.turnState?.seq ?? 0 },
 		taskTelemetry: { startedAt: 0, toolCalls: 0, recoveryBudgetFailures: 0 },
 	} as ExtensionState
@@ -185,8 +179,6 @@ function CommittedConsumer() {
 }
 
 beforeEach(() => {
-	enablePostTerminalAuthorityDiagnosticBoth()
-	clearPostTerminalAuthorityDiagnosticBoth()
 	snapshotHandler = null
 	partialHandler = null
 	snapshotUnsub = null
@@ -194,10 +186,7 @@ beforeEach(() => {
 	lastConsumerClineMessages = undefined
 })
 
-afterEach(() => {
-	disablePostTerminalAuthorityDiagnosticBoth()
-	clearPostTerminalAuthorityDiagnosticBoth()
-})
+afterEach(() => {})
 
 describe("C2-CORRECTION02-FIXUP04 — R10 committed-context conservation witness", () => {
 	it("Q1: W1 + W2 + W1 in one batched act() preserves all contributions in committed state.clineMessages", async () => {
@@ -255,63 +244,6 @@ describe("C2-CORRECTION02-FIXUP04 — R10 committed-context conservation witness
 		expect(textValues).toContain("MSG-A")
 		expect(textValues).toContain("MSG-B")
 		expect(textValues).toContain("MSG-C")
-
-		result.unmount()
-	})
-
-	it("Q2: 3-push burst inside one act() produces 3 raw captures, regardless of React batching", async () => {
-		const result = render(<ExtensionStateContextProvider />)
-
-		await act(async () => {
-			if (!snapshotHandler) throw new Error("snapshotHandler not wired")
-			for (let i = 1; i <= 3; i++) {
-				snapshotHandler({
-					...buildSnapshotStateData(SNAPSHOTS[0]),
-					_ptadPushId: i,
-				} as ExtensionState)
-			}
-		})
-
-		const records = getPostTerminalAuthorityDiagnosticRecords("webview") as readonly unknown[]
-		const raws = records.filter((r) => (r as { captureKind?: string }).captureKind === "webview-raw-incoming")
-
-		// R4 preserved: 3 raw captures (one per onResponse call,
-		// emitted BEFORE the React batched commit). Each carries
-		// its own _ptadPushId.
-		expect(raws.length).toBe(3)
-		const pushIds = raws.map((r) => (r as { _ptadPushId?: number })._ptadPushId).sort()
-		expect(pushIds).toEqual([1, 2, 3])
-
-		result.unmount()
-	})
-
-	it("Q3: missing _ptadPushId still fails closed (R5 preservation)", async () => {
-		const result = render(<ExtensionStateContextProvider />)
-
-		await act(async () => {
-			if (!snapshotHandler) throw new Error("snapshotHandler not wired")
-			// Push with no _ptadPushId
-			snapshotHandler({
-				...buildSnapshotStateData(SNAPSHOTS[0]),
-				_ptadPushId: undefined,
-			} as ExtensionState)
-			// Push with _ptadPushId = 7
-			snapshotHandler({
-				...buildSnapshotStateData(SNAPSHOTS[0]),
-				_ptadPushId: 7,
-			} as ExtensionState)
-		})
-
-		const records = getPostTerminalAuthorityDiagnosticRecords("webview") as readonly unknown[]
-		const raws = records.filter((r) => (r as { captureKind?: string }).captureKind === "webview-raw-incoming")
-
-		// 2 raw captures: one with _ptadPushId = undefined (logged
-		// fail-closed; raw still emitted), one with _ptadPushId = 7.
-		expect(raws.length).toBe(2)
-		const noIdRaw = raws.find((r) => (r as { _ptadPushId?: number })._ptadPushId === undefined)
-		expect(noIdRaw).toBeDefined()
-		const idRaw = raws.find((r) => (r as { _ptadPushId?: number })._ptadPushId === 7)
-		expect(idRaw).toBeDefined()
 
 		result.unmount()
 	})

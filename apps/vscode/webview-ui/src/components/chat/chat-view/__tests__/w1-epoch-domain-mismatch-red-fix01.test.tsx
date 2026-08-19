@@ -53,13 +53,6 @@
  */
 
 import type { ExtensionState, TurnState } from "@shared/ExtensionMessage"
-import {
-	clearPostTerminalAuthorityDiagnosticBoth,
-	disablePostTerminalAuthorityDiagnosticBoth,
-	enablePostTerminalAuthorityDiagnosticBoth,
-	getPostTerminalAuthorityDiagnosticRecords,
-	type PostTerminalAuthoritySnapshot,
-} from "@shared/post-terminal-authority-diagnostic"
 import { act, render } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ExtensionStateContextProvider, useExtensionState } from "@/context/ExtensionStateContext"
@@ -169,7 +162,6 @@ function w2PartialWithEpoch2(opts: { ts: number; seq: number; text: string; fina
 function w1Snapshot(opts: {
 	stateVersion: number
 	epoch: number | undefined
-	ptadPushId: number
 	turnState: TurnState
 	clineMessages: ExtensionState["clineMessages"]
 }): ExtensionState {
@@ -180,8 +172,6 @@ function w1Snapshot(opts: {
 		clineMessages: opts.clineMessages,
 		stateVersion: opts.stateVersion,
 		turnState: opts.turnState,
-		_ptadEnabled: true,
-		_ptadPushId: opts.ptadPushId,
 		thinkingPresentation: { modelStreaming: false, source: "shadow", seq: opts.turnState.seq },
 		taskTelemetry: { startedAt: 0, toolCalls: 0, recoveryBudgetFailures: 0 },
 	} as ExtensionState
@@ -199,35 +189,6 @@ function CommittedTurnStateProbe({ capture }: { capture: (ts: TurnState | undefi
 	return null
 }
 
-interface CapturedSnapshot {
-	_ptadPushId: number | undefined
-	turnState: TurnState | undefined
-}
-
-function latestRawIncoming(): CapturedSnapshot | undefined {
-	const records = getPostTerminalAuthorityDiagnosticRecords() as PostTerminalAuthoritySnapshot[]
-	const raw = [...records].reverse().find((r) => r.captureKind === "webview-raw-incoming")
-	if (!raw) return undefined
-	return {
-		_ptadPushId: raw._ptadPushId,
-		turnState: raw.rawIncomingLegacyPhase
-			? { phase: raw.rawIncomingLegacyPhase, seq: raw.rawIncomingLegacySeq ?? 0 }
-			: undefined,
-	}
-}
-
-function latestCommitted(): CapturedSnapshot | undefined {
-	const records = getPostTerminalAuthorityDiagnosticRecords() as PostTerminalAuthoritySnapshot[]
-	const committed = [...records].reverse().find((r) => r.captureKind === "webview-committed")
-	if (!committed) return undefined
-	return {
-		_ptadPushId: committed._ptadPushId,
-		turnState: committed.legacyPhase
-			? { phase: committed.legacyPhase, seq: committed.legacySeq ?? 0 }
-			: undefined,
-	}
-}
-
 // Live-shaped clineMessages fixture.
 const priorLiveMessages: ExtensionState["clineMessages"] = [
 	{
@@ -241,8 +202,6 @@ const priorLiveMessages: ExtensionState["clineMessages"] = [
 ]
 
 beforeEach(() => {
-	enablePostTerminalAuthorityDiagnosticBoth()
-	clearPostTerminalAuthorityDiagnosticBoth()
 	snapshotHandler = null
 	partialHandler = null
 	snapshotUnsub = null
@@ -250,8 +209,6 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-	disablePostTerminalAuthorityDiagnosticBoth()
-	clearPostTerminalAuthorityDiagnosticBoth()
 	snapshotHandler = null
 	partialHandler = null
 	snapshotUnsub = null
@@ -291,9 +248,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 		// Step 1: bump replica epoch to 2 via a W2 partial.
 		await act(async () => {
 			if (!partialHandler) throw new Error("partialHandler not wired")
-			partialHandler(
-				w2PartialWithEpoch2({ ts: 100, seq: 9, text: "W2 partial content", final: false }),
-			)
+			partialHandler(w2PartialWithEpoch2({ ts: 100, seq: 9, text: "W2 partial content", final: false }))
 		})
 
 		// Step 2: push the W1 snapshot (P12-equivalent) stamped with
@@ -304,7 +259,6 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 				w1Snapshot({
 					stateVersion: 12,
 					epoch: 2,
-					ptadPushId: 11,
 					turnState: { phase: "streaming", seq: 11 },
 					clineMessages: priorLiveMessages,
 				}),
@@ -315,11 +269,6 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 			await Promise.resolve()
 		})
 
-		const A = latestRawIncoming()
-		const F = latestCommitted()
-
-		expect(A?.turnState).toEqual({ phase: "streaming", seq: 11 })
-		expect(F?.turnState).toEqual({ phase: "streaming", seq: 11 })
 		expect(observed).toEqual({ phase: "streaming", seq: 11 })
 	})
 
@@ -347,9 +296,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 
 		await act(async () => {
 			if (!partialHandler) throw new Error("partialHandler not wired")
-			partialHandler(
-				w2PartialWithEpoch2({ ts: 100, seq: 9, text: "W2 partial content", final: false }),
-			)
+			partialHandler(w2PartialWithEpoch2({ ts: 100, seq: 9, text: "W2 partial content", final: false }))
 		})
 
 		await act(async () => {
@@ -358,7 +305,6 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 				w1Snapshot({
 					stateVersion: 0,
 					epoch: 2,
-					ptadPushId: 11,
 					turnState: { phase: "streaming", seq: 11 },
 					clineMessages: priorLiveMessages,
 				}),
@@ -369,11 +315,6 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 			await Promise.resolve()
 		})
 
-		const A = latestRawIncoming()
-		const F = latestCommitted()
-
-		expect(A?.turnState).toEqual({ phase: "streaming", seq: 11 })
-		expect(F?.turnState).toEqual({ phase: "streaming", seq: 11 })
 		expect(observed).toEqual({ phase: "streaming", seq: 11 })
 	})
 
@@ -401,9 +342,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 		// Step 1: bump replica epoch to 2 via a W2 partial.
 		await act(async () => {
 			if (!partialHandler) throw new Error("partialHandler not wired")
-			partialHandler(
-				w2PartialWithEpoch2({ ts: 100, seq: 9, text: "W2 partial content", final: false }),
-			)
+			partialHandler(w2PartialWithEpoch2({ ts: 100, seq: 9, text: "W2 partial content", final: false }))
 		})
 
 		// Step 2: push a terminal W1 snapshot (P35-equivalent) stamped
@@ -414,7 +353,6 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 				w1Snapshot({
 					stateVersion: 35,
 					epoch: 2,
-					ptadPushId: 34,
 					turnState: { phase: "awaiting_followup", seq: 34 },
 					clineMessages: priorLiveMessages,
 				}),
@@ -425,11 +363,6 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01
 			await Promise.resolve()
 		})
 
-		const A = latestRawIncoming()
-		const F = latestCommitted()
-
-		expect(A?.turnState).toEqual({ phase: "awaiting_followup", seq: 34 })
-		expect(F?.turnState).toEqual({ phase: "awaiting_followup", seq: 34 })
 		expect(observed).toEqual({ phase: "awaiting_followup", seq: 34 })
 	})
 })

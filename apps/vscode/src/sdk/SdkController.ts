@@ -2738,6 +2738,15 @@ export class Controller {
 			// from the SAME counter that stamps messages. This lets the webview ignore stale
 			// out-of-order state pushes and fence traffic from a previous task/render. Sampled
 			// synchronously here (no await between sampling and return).
+			//
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
+			// Stamp the W1 (full-state) snapshot with the SAME minter authority the
+			// W2 (incremental partial-message) path stamps. Without these two fields,
+			// the webview reducer's older-epoch fence (`snapshotEpoch < state.epoch`)
+			// sees `snapshotEpoch=0` (from `state.epoch ?? 0`) for every state push,
+			// and drops the snapshot wholesale — including its `turnState` — once
+			// any newer-epoch W2 traffic has advanced the replica fence. Reproduced
+			// by `w1-epoch-domain-mismatch-red-fix01.test.tsx` (R0/R2 RED, R1 GREEN).
 			const minter = this.messageTranslatorState.getMinter()
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
 			// Diagnostic-only monotonic push ID. Mints a fresh value (from the shared
@@ -2753,14 +2762,6 @@ export class Controller {
 			// `docs/architecture/elm/task-state-e71-c2-live-replica-truth-evidence.md`).
 			const ptadEnabled = isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context)
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
-			//
-			// Stamp the W1 (full-state) snapshot with the SAME minter authority the
-			// W2 (incremental partial-message) path stamps. Without these two fields,
-			// the webview reducer's older-epoch fence (`snapshotEpoch < state.epoch`)
-			// sees `snapshotEpoch=0` (from `state.epoch ?? 0`) for every state push,
-			// and drops the snapshot wholesale — including its `turnState` — once
-			// any newer-epoch W2 traffic has advanced the replica fence. Reproduced
-			// by `w1-epoch-domain-mismatch-red-fix01.test.tsx` (R0/R2 RED, R1 GREEN).
 			//
 			// The single `nextSeq()` value is reused as `stateVersion` (the wire
 			// monotonic version the reducer gates same-epoch snapshots by) AND as the
@@ -2782,8 +2783,9 @@ export class Controller {
 				taskHistory: processedTaskHistory,
 				turnState: this.turnStateTracker.get(),
 				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
-				// See the rationale at `ptadPushId` (above). The snapshot MUST carry
-				// these two fields so the webview reducer can fence stale pushes.
+				// Stamp the W1 (full-state) snapshot with the canonical minter sequence +
+				// epoch (see the rationale at the call site above). The webview reducer's
+				// older-epoch fence (`snapshotEpoch < state.epoch`) depends on this.
 				stateVersion: sharedSeq,
 				epoch: minter.epoch,
 				// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A + CORRECTION02 +
@@ -2860,9 +2862,7 @@ export class Controller {
 				// counter the extension diagnostic records use, so the webview can
 				// propagate it without ever deriving it locally. When the toggle is OFF
 				// the field is undefined and the wire shape is unchanged.
-				...(ptadEnabled
-					? { _ptadEnabled: true, _ptadPushId: ptadPushId }
-					: {}),
+				...(ptadEnabled ? { _ptadEnabled: true, _ptadPushId: ptadPushId } : {}),
 			}
 			if (isPostTerminalAuthorityDiagnosticEnabled("extension")) {
 				recordPostTerminalAuthoritySnapshot(

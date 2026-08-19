@@ -11,22 +11,6 @@ import {
 	recordPostTerminalAuthoritySnapshot,
 } from "@shared/post-terminal-authority-diagnostic"
 
-// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
-// Per-boundary request-site capture (parallel to, not part of,
-// the existing PostTerminalAuthorityDiagnostic). The diagnostic is
-// default-off; toggled via the existing workspace-state
-// `_ptadEnabled` flag for symmetry with the prior instrument so a
-// single forensic run lights up BOTH instruments.
-import {
-	disableLiveContextDimensions01Capture,
-	enableLiveContextDimensions01Capture,
-	getLiveContextDimensions01CaptureRecords,
-	isLiveContextDimensions01CaptureEnabled,
-	recordLiveContextDimensions01Capture,
-	type LiveContextDimensions01CorrelationIdentity,
-	type LiveContextDimensions01NativeW2Identity,
-} from "@shared/live-context-dimensions01-capture"
-
 // ============================================================================
 // ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1
 //
@@ -597,21 +581,6 @@ export const ExtensionStateContextProvider: React.FC<{
 							disablePostTerminalAuthorityDiagnostic("webview")
 						}
 
-						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
-						// Toggle symmetry fix: enable when `_ptadEnabled === true`,
-						// disable otherwise. The LCD01 capture rides on the same
-						// wire bit as PTAD for operationally simple dogfood (C2)
-						// toggling, but the LCD01 buffer is independent (its own
-						// enabled flag, its own record shape, its own export). When
-						// PTAD is off (production default), the LCD01 toggle is
-						// also off and the per-boundary captures are no-ops.
-						const lcd01RecorderOn = isLiveContextDimensions01CaptureEnabled()
-						if (ptadEnabled && !lcd01RecorderOn) {
-							enableLiveContextDimensions01Capture()
-						} else if (!ptadEnabled && lcd01RecorderOn) {
-							disableLiveContextDimensions01Capture()
-						}
-
 						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
 						// RAW capture + R5 fail-closed pushId check. The capture is
 						// OPT-IN: when the workspace-state PTAD toggle is OFF
@@ -660,53 +629,6 @@ export const ExtensionStateContextProvider: React.FC<{
 						// functional-updater form. React's documented queue
 						// semantics ensure each queued updater receives the prior
 						// queued result. No parallel authority.
-						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
-						// Per-boundary W1 capture. Emitted BEFORE the queued
-						// functional updater is constructed (R18 purity).
-						//
-						// - webview-w1-request            : intrinsic push ID + host turnState
-						// - webview-w1-request-q           : writer identity only
-						// - webview-w1-request-replica     : B0, replicaRef.current.turnState
-						//                                    sampled at the request site
-						//
-						// The capture is OPT-IN: when LCD01 is disabled
-						// (production default), recordLiveContextDimensions01Capture is
-						// a no-op and these locals are not constructed.
-						if (isLiveContextDimensions01CaptureEnabled()) {
-							const w1PushId = stateData._ptadPushId
-							const w1Correlation: LiveContextDimensions01CorrelationIdentity = {
-								associationQuality: w1PushId === undefined ? "NONE" : "INTRINSIC",
-								associatedPushId: w1PushId,
-								intervalInferred: undefined,
-							}
-							recordLiveContextDimensions01Capture({
-								kind: "webview-w1-request",
-								correlation: w1Correlation,
-								nativeW2: undefined,
-								writerIdentity: undefined,
-								replicaTurnState: undefined,
-								hostTurnState: stateData.turnState,
-								committedTurnState: undefined,
-							})
-							recordLiveContextDimensions01Capture({
-								kind: "webview-w1-request-q",
-								correlation: w1Correlation,
-								nativeW2: undefined,
-								writerIdentity: "W1_SNAPSHOT_REQUEST",
-								replicaTurnState: undefined,
-								hostTurnState: undefined,
-								committedTurnState: undefined,
-							})
-							recordLiveContextDimensions01Capture({
-								kind: "webview-w1-request-replica",
-								correlation: w1Correlation,
-								nativeW2: undefined,
-								writerIdentity: undefined,
-								replicaTurnState: replicaRef.current.turnState,
-								hostTurnState: undefined,
-								committedTurnState: undefined,
-							})
-						}
 						setState((prevState) => {
 							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
 							// PURE functional updater — calculate-and-return only.
@@ -825,27 +747,6 @@ export const ExtensionStateContextProvider: React.FC<{
 		// webview teardown so it covers the production case too.
 
 		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
-		// LCD01 dump trigger listener. Mirrors the PTAD listener above.
-		// The extension posts `clinemm.dumpLiveContextDimensions01`; on
-		// receipt the webview flushes its LCD01 ring buffer back via
-		// `clinemm.appendLiveContextDimensions01` with the records.
-		const lcd01DumpMessageHandler = (event: MessageEvent) => {
-			const data = event.data as { type?: string } | undefined
-			if (!data || data.type !== "clinemm.dumpLiveContextDimensions01") {
-				return
-			}
-			const records = getLiveContextDimensions01CaptureRecords()
-			const api = (window as unknown as { __clineVsCodeApi?: { postMessage: (m: unknown) => void } }).__clineVsCodeApi
-			if (!api) {
-				console.error("[LCD01] webview flush skipped: __clineVsCodeApi not available")
-				return
-			}
-			api.postMessage({
-				type: "clinemm.appendLiveContextDimensions01",
-				clinemm_liveContextDimensions01Records: records,
-			})
-		}
-		window.addEventListener("message", lcd01DumpMessageHandler)
 		// Same cleanup story as PTAD: see the cleanup block below.
 
 		// Subscribe to MCP button clicked events with webview type
@@ -985,46 +886,6 @@ export const ExtensionStateContextProvider: React.FC<{
 					// - webview-w2-request-q           : writer identity only
 					// - webview-w2-request-replica     : B0, replicaRef.current.turnState
 					//                                    sampled at the request site
-					if (isLiveContextDimensions01CaptureEnabled()) {
-						const w2Correlation: LiveContextDimensions01CorrelationIdentity = {
-							associationQuality: "NONE",
-							associatedPushId: undefined,
-							intervalInferred: undefined,
-						}
-						const w2Native: LiveContextDimensions01NativeW2Identity = {
-							epoch: (partialMessage as { epoch?: number } | undefined)?.epoch ?? 0,
-							seq: partialMessage?.seq ?? 0,
-							ts: partialMessage?.ts ?? 0,
-							discriminator: partialMessage?.partial === false ? "final" : "partial",
-						}
-						recordLiveContextDimensions01Capture({
-							kind: "webview-w2-request",
-							correlation: w2Correlation,
-							nativeW2: w2Native,
-							writerIdentity: undefined,
-							replicaTurnState: undefined,
-							hostTurnState: undefined,
-							committedTurnState: undefined,
-						})
-						recordLiveContextDimensions01Capture({
-							kind: "webview-w2-request-q",
-							correlation: w2Correlation,
-							nativeW2: w2Native,
-							writerIdentity: "W2_PARTIAL_REQUEST",
-							replicaTurnState: undefined,
-							hostTurnState: undefined,
-							committedTurnState: undefined,
-						})
-						recordLiveContextDimensions01Capture({
-							kind: "webview-w2-request-replica",
-							correlation: w2Correlation,
-							nativeW2: w2Native,
-							writerIdentity: undefined,
-							replicaTurnState: replicaRef.current.turnState,
-							hostTurnState: undefined,
-							committedTurnState: undefined,
-						})
-					}
 					setState((prevState) => {
 						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
 						// PURE functional updater — calculate-and-return only.
@@ -1209,7 +1070,6 @@ export const ExtensionStateContextProvider: React.FC<{
 			// leave multiple handlers alive and a single dump request
 			// would trigger N webview->extension flushes.
 			window.removeEventListener("message", dumpMessageHandler)
-			window.removeEventListener("message", lcd01DumpMessageHandler)
 		}
 	}, [])
 
@@ -1271,9 +1131,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
 	// Render-cache sync: keeps `replicaRef.current` in lockstep with the
 	// just-committed React state. This is a downstream-of-commit effect
-	// (NOT an updater-time mutation), so it preserves React purity while
-	// preserving the LCD01 `replicaTurnState` reads at the request site
-	// (which now sample the post-commit mirror).
+	// (NOT an updater-time mutation), so it preserves React purity.
 	useEffect(() => {
 		const prevSeqByTs = new Map<number, number>()
 		for (const m of state.clineMessages ?? []) {
@@ -1291,7 +1149,7 @@ export const ExtensionStateContextProvider: React.FC<{
 	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
 	// webview-committed-c: per-React-commit observation of the
 	// committed state. Parallel to the existing webview-committed
-	// capture, but with the LCD01 record shape (carries
+
 	// associationQuality and the C-only committedTurnState field).
 	//
 	// Cardinality: per React commit, NOT per request. React 18+
@@ -1302,26 +1160,6 @@ export const ExtensionStateContextProvider: React.FC<{
 	// Purity (R20): this useEffect runs AFTER React commit, never
 	// inside the queued functional updater. It is an external
 	// observer only.
-	useEffect(() => {
-		if (!isLiveContextDimensions01CaptureEnabled()) {
-			return
-		}
-		const cPushId = state._ptadPushId
-		const cCorrelation: LiveContextDimensions01CorrelationIdentity = {
-			associationQuality: cPushId === undefined ? "NONE" : "INTRINSIC",
-			associatedPushId: cPushId,
-			intervalInferred: undefined,
-		}
-		recordLiveContextDimensions01Capture({
-			kind: "webview-committed-c",
-			correlation: cCorrelation,
-			nativeW2: undefined,
-			writerIdentity: undefined,
-			replicaTurnState: undefined,
-			hostTurnState: undefined,
-			committedTurnState: state.turnState,
-		})
-	}, [state])
 
 	const refreshOpenRouterModels = useCallback(() => {
 		ModelsServiceClient.refreshOpenRouterModelsRpc(EmptyRequest.create({}))

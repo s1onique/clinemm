@@ -121,7 +121,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			})
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
-				captureKind: "webview-reducer-output",
+				captureKind: "webview-committed",
 				stateVersion: 2,
 				capturedAt: Date.now(),
 			})
@@ -195,7 +195,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			enablePostTerminalAuthorityDiagnostic("webview")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
-				captureKind: "webview-reducer-output",
+				captureKind: "webview-committed",
 				stateVersion: sharedVersion,
 				capturedAt: Date.now() + 1,
 			})
