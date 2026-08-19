@@ -4510,6 +4510,7 @@
   },
   "schema_version": 1,
   "scope": {
+    "config_fingerprint": "95de362d43e99fb782319ce5e5de44b99417979d0db1fcc48b821e00cf3fec2a",
     "excluded_by_design": {
       "embedded_packages": [
         "src/packages/**"

@@ -389,6 +389,7 @@
 		"test:vitest": "vitest run --config vitest.config.ts",
 		"test:vitest:watch": "vitest --config vitest.config.ts",
 		"test:vitest:coverage": "vitest run --config vitest.config.ts --coverage",
+		"test:coverage:ratchet": "bun run test:vitest:coverage && python3 ../../scripts/check-code-coverage-ratchet.py --baseline ../../.factory/quality/code-coverage-baseline.json --summary ./coverage/coverage-summary.json --final ./coverage/coverage-final.json --root ../.. --vitest-config ./vitest.config.ts",
 		"test:bun": "bun scripts/run-bun-tests.ts",
 		"test:bun:unit": "bun scripts/run-bun-unit-tests.ts",
 		"test:coverage": "bun run compile-tests && vscode-test --coverage",
