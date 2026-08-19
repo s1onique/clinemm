@@ -28,12 +28,20 @@
  * contains one of the forbidden tokens is reported, and the test
  * fails if any such line is found inside the updater body.
  *
- * PRE-EXISTING RESIDUE (out of FIXUP04 scope): the updater body
- * DOES contain `setShowWelcome(...)`, `setOnboardingModels(...)`,
+ * PRE-EXISTING RESIDUE (at the time of FIXUP04): the updater body
+ * DID contain `setShowWelcome(...)`, `setOnboardingModels(...)`,
  * `setDidHydrateState(true)`, and `replicaRef.current = ...`.
- * These are PRE-EXISTING side effects that were in the file before
- * PTAD existed. The test does NOT flag them; it only flags
+ * These were PRE-EXISTING side effects that were in the file before
+ * PTAD existed. FIXUP04 did NOT flag them; it only flagged
  * PTAD-introduced side effects.
+ *
+ * POST-PURITY-REPAIR01 update (2026-08-19): the PRE-EXISTING residue
+ * described above has been REMOVED from the W1 and W2 updater bodies
+ * by ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01.
+ * The setters are now driven from post-commit useEffects, and the
+ * replica ref is recomputed post-commit. The source-level
+ * acknowledgment below remains so that a future reader can trace
+ * the residue -> removal history.
  */
 
 import { readFileSync } from "node:fs"
@@ -153,17 +161,28 @@ describe("C2-CORRECTION02-FIXUP04 — R9 static updater purity check", () => {
 		expect(violations).toEqual([])
 	})
 
-	it("S2: PRE_EXISTING_REPLICA_REF_MUTATION is acknowledged as out of scope", () => {
-		// FIXUP04 explicitly does NOT clean up `replicaRef.current = ...`
+	it("S2: PRE_EXISTING_REPLICA_REF_MUTATION is acknowledged (and now removed by PURITY-REPAIR01)", () => {
+		// FIXUP04 explicitly did NOT clean up `replicaRef.current = ...`
 		// mutations inside the W1 updater (and the W2 partial-message
-		// updater) — those are PRE-EXISTING residue from FIXUP01 and
-		// earlier. The terminal evidence must mention this.
+		// updater) — those were PRE-EXISTING residue from FIXUP01 and
+		// earlier. FIXUP04's terminal evidence mentioned this so a future
+		// reader wouldn't mistake the residual impurity for a FIXUP04-
+		// introduced defect.
 		//
-		// This test verifies that the FIXUP04 source comments acknowledge
-		// the residue honestly, so a future reader does not mistake the
-		// residual impurity for a FIXUP04-introduced defect.
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01
+		// (2026-08-19) REMOVED that residue: W1/W2 updaters no longer
+		// mutate replicaRef.current or fire nested setShowWelcome /
+		// setOnboardingModels / setDidHydrateState. The setters are
+		// driven from post-commit useEffects. The source-level
+		// acknowledgment below remains so that the FIXUP04 -> PURITY-
+		// REPAIR01 history is traceable.
 		const source = readFileSync(SOURCE_FILE, "utf-8")
 		expect(source).toContain("PRE_EXISTING")
+		// replicaRef.current is no longer mutated inside the updater
+		// bodies; it survives only in the post-commit render-cache
+		// useEffect, which is downstream of React's state queue.
 		expect(source).toContain("replicaRef.current")
+		// Acknowledge the cleanup
+		expect(source).toContain("PURITY-REPAIR01")
 	})
 })

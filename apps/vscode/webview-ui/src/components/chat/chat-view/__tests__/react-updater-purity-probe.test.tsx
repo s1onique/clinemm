@@ -14,7 +14,7 @@
  *
  *   UPDATER_EVALUATION_IS_IDEMPOTENT/PURE = false
  *
- * via THREE independent observation angles:
+ * via FIVE independent observation angles:
  *
  *   R-PURITY-1: simulating the W1 updater closure twice with the SAME
  *               (prevState, snapshot) input mutates `replicaRef.current`
@@ -38,21 +38,33 @@
  * The probe does NOT require the live `streaming/11 → idle/3` divergence
  * to manifest; the defect contract is React purity itself.
  *
- * Pre-repair baseline (this file, locked):
- *   R-PURITY-1 → RED (replicaRef mutated by eval1)
- *   R-PURITY-2 → RED (replicaRef mutated by eval1)
- *   R-PURITY-3 → RED (3 external setter calls per single logical push)
+ * Pre-repair baseline (this file, locked at C0 commit 761aeb7f3):
+ *   R-PURITY-1 → RED  (replicaRef mutated by eval1)
+ *   R-PURITY-2 → RED  (replicaRef mutated by eval1)
+ *   R-PURITY-3 → RED  (3 external setter calls per single logical push)
  *   R-PURITY-4 → PASS (wiring exists; reducer runs once per W1 push)
+ *   R-PURITY-5 → RED  (production source contains replicaRef mutation
+ *                       inside W1 updater body)
  *
- * After the bounded repair in C1 of this ACT, all four rungs must be GREEN
- * with the same input.
+ * After C1 bounded repair (this file at PURITY-REPAIR01 commit):
+ *   R-PURITY-1 → RED  (simulated pre-repair closure shape, by design —
+ *                       this rung proves the impurity pattern WOULD be
+ *                       observable IF reintroduced into the updater)
+ *   R-PURITY-2 → RED  (simulated pre-repair closure shape, by design)
+ *   R-PURITY-3 → RED  (simulated pre-repair closure shape, by design)
+ *   R-PURITY-4 → PASS (wiring still exists, post-repair)
+ *   R-PURITY-5 → GREEN (production source updater bodies contain NO
+ *                       replicaRef mutation and NO nested setter calls —
+ *                       this is the LOAD-BEARING post-repair witness)
  *
- * Verdict on disk:
- *   UPDATER_EVALUATION_IS_IDEMPOTENT/PURE = false
- *   FUNCTIONAL_UPDATER_EXTERNAL_WRITES > 0
- *   PRODUCTION_REPAIR_NEEDED = true (defect contract proven)
+ * Verdict on disk (post-repair):
+ *   FUNCTIONAL_UPDATER_EXTERNAL_WRITES = 0
+ *   PRODUCTION_REPAIR_NEEDED = false (repair complete)
  */
 
+import { readFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { ExtensionState, TurnState } from "@shared/ExtensionMessage"
 import { act, render } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -218,7 +230,54 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01 / C0
 		vi.restoreAllMocks()
 	})
 
-	it("R-PURITY-1 (RED, pre-repair): W1-style updater mutates replicaRef.current on every eval with a new stateVersion; ref write is observable as identity-not-equal", () => {
+	function resolveSource(): string {
+		const candidates = [
+			resolve(dirname(fileURLToPath(import.meta.url)), "../../../../context/ExtensionStateContext.tsx"),
+			resolve(process.cwd(), "src/context/ExtensionStateContext.tsx"),
+			resolve(process.cwd(), "../src/context/ExtensionStateContext.tsx"),
+			resolve(process.cwd(), "../../webview-ui/src/context/ExtensionStateContext.tsx"),
+		]
+		for (const p of candidates) {
+			try {
+				const s = readFileSync(p, "utf-8")
+				if (s.includes("StateServiceClient.subscribeToState")) {
+					return p
+				}
+			} catch {
+				// continue
+			}
+		}
+		throw new Error("Could not find ExtensionStateContext.tsx")
+	}
+	const SOURCE_FILE = resolveSource()
+
+	function extractUpdaterBody(source: string, startMarker: string): string {
+		const lines = source.split("\n")
+		const markerIdx = lines.findIndex((l) => l.includes(startMarker))
+		if (markerIdx === -1) throw new Error("marker not found: " + startMarker)
+		const setStateIdx = lines.findIndex((l, i) => i > markerIdx && /setState\(\(prevState\)\s*=>\s*\{/.test(l))
+		if (setStateIdx === -1) throw new Error("setState updater not found after marker")
+		let depth = 0
+		let endIdx = -1
+		for (let i = setStateIdx; i < lines.length; i++) {
+			const line = lines[i]
+			for (const ch of line) {
+				if (ch === "{") depth++
+				else if (ch === "}") {
+					depth--
+					if (depth === 0) {
+						endIdx = i
+						break
+					}
+				}
+			}
+			if (endIdx !== -1) break
+		}
+		if (endIdx === -1) throw new Error("closing brace not found")
+		return lines.slice(setStateIdx, endIdx + 1).join("\n")
+	}
+
+	it("R-PURITY-1 (RED, simulated pre-repair pattern): W1-style updater mutates replicaRef.current on every eval with a new stateVersion; ref write is observable as identity-not-equal", () => {
 		// We model the W1 functional updater exactly as it appears in
 		// ExtensionStateContext.tsx line ~708-755. The updater reads
 		// AND writes `replicaRef.current`. This is a ref write outside
@@ -312,7 +371,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01 / C0
 		expect(eval2Return.turnState?.phase).toBe("streaming")
 	})
 
-	it("R-PURITY-2 (RED, pre-repair): W2-style updater mutates replicaRef.current on first eval", () => {
+	it("R-PURITY-2 (RED, simulated pre-repair pattern): W2-style updater mutates replicaRef.current on first eval", () => {
 		// EXACT W2 updater closure (line ~1005-1017): the updater
 		// reads `before` and reassigns `replicaRef.current` outside
 		// React's state queue. The reducer is pure, but the updater
@@ -341,7 +400,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01 / C0
 		expect(replicaRef.current.seqByTs.get(100)).toBe(1)
 	})
 
-	it("R-PURITY-3 (RED, pre-repair): W1 updater closure fires nested setters (setShowWelcome, setOnboardingModels, setDidHydrateState)", () => {
+	it("R-PURITY-3 (RED, simulated pre-repair pattern): W1 updater closure fires nested setters (setShowWelcome, setOnboardingModels, setDidHydrateState)", () => {
 		// The W1 updater, in addition to mutating replicaRef, calls
 		// 3 setters OUTSIDE its return value: setShowWelcome,
 		// setOnboardingModels, setDidHydrateState. These are queued
@@ -372,7 +431,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01 / C0
 		expect(setDidHydrateState).toHaveBeenCalledTimes(1)
 	})
 
-	it("R-PURITY-4 (RED, pre-repair): full real-provider render with one W1 push invokes applyStateSnapshot (wiring smoke)", () => {
+	it("R-PURITY-4 (PASS, post-repair): full real-provider render with one W1 push invokes applyStateSnapshot (wiring smoke)", () => {
 		// Wiring smoke test: confirms that the W1 path in the real
 		// provider actually routes through applyStateSnapshot. Used as
 		// the GREEN anchor for the bounded repair: after the C1 fix,
@@ -397,5 +456,72 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01 / C0
 		const after = applySpy.mock.calls.length
 		expect(after - before).toBeGreaterThanOrEqual(1)
 		result.unmount()
+	})
+
+	it("R-PURITY-5 (post-repair): production W1 and W2 functional updater bodies contain NO replicaRef.current mutation and NO nested setter side effects", () => {
+		// Load-bearing post-repair witness. This is the canonical
+		// R-PURITY ladder rung that flips from RED to GREEN once the
+		// bounded C1 repair removes updater-time external writes.
+		const source = readFileSync(SOURCE_FILE, "utf-8")
+
+		// W1 updater: starts after the PURITY-REPAIR01 marker block.
+		const w1Body = extractUpdaterBody(source, "ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01")
+		// W2 updater: located further down. Search for the second
+		// PURITY-REPAIR01 marker by looking for the W2 path's
+		// "subscribeToPartialMessage" usage as a secondary anchor.
+		const w2AnchorIdx = source.indexOf("subscribeToPartialMessage")
+		if (w2AnchorIdx === -1) throw new Error("W2 anchor not found")
+		const linesBeforeW2 = source.slice(0, w2AnchorIdx).split("\n")
+		const w2MarkerIdx = linesBeforeW2.length - 1
+		// Walk forward from the W2 subscribeToPartialMessage call until
+		// we hit the W2 setState((prevState) => { line.
+		const lines = source.split("\n")
+		let w2SetStateIdx = -1
+		for (let i = w2MarkerIdx + 1; i < lines.length; i++) {
+			if (/setState\(\(prevState\)\s*=>\s*\{/.test(lines[i])) {
+				w2SetStateIdx = i
+				break
+			}
+		}
+		if (w2SetStateIdx === -1) throw new Error("W2 setState updater not found")
+		// Walk forward to find matching closing brace
+		let depth = 0
+		let w2EndIdx = -1
+		for (let i = w2SetStateIdx; i < lines.length; i++) {
+			for (const ch of lines[i]) {
+				if (ch === "{") depth++
+				else if (ch === "}") {
+					depth--
+					if (depth === 0) {
+						w2EndIdx = i
+						break
+					}
+				}
+			}
+			if (w2EndIdx !== -1) break
+		}
+		if (w2EndIdx === -1) throw new Error("W2 closing brace not found")
+		const w2Body = lines.slice(w2SetStateIdx, w2EndIdx + 1).join("\n")
+
+		// Forbidden tokens inside the W1 / W2 functional updater bodies:
+		const FORBIDDEN_IN_UPDATER: readonly string[] = [
+			"replicaRef.current =",
+			"setShowWelcome(",
+			"setOnboardingModels(",
+			"setDidHydrateState(",
+		]
+
+		for (const [name, body] of [
+			["W1", w1Body],
+			["W2", w2Body],
+		] as const) {
+			const violations: string = []
+			for (const token of FORBIDDEN_IN_UPDATER) {
+				if (body.includes(token)) {
+					violations.push(token)
+				}
+			}
+			expect(violations, `${name} updater body contains forbidden updater-time side effects`).toEqual([])
+		}
 	})
 })

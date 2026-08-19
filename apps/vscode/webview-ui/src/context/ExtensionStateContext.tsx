@@ -644,9 +644,11 @@ export const ExtensionStateContextProvider: React.FC<{
 						// diagnostic side effects. The updater body:
 						//   1. reads `prevState` (React-authoritative, satisfies R6)
 						//   2. calls the reducer (pure derive-next-state)
-						//   3. calls existing setShowWelcome / setOnboardingModels /
-						//      setDidHydrateState setters (PRE_EXISTING side effects,
-						//      out of FIXUP04 scope; these were there before PTAD)
+						//   3. [REMOVED in PURITY-REPAIR01] previously called
+						//      setShowWelcome / setOnboardingModels / setDidHydrateState
+						//      setters as PRE_EXISTING residue (these were out of
+						//      FIXUP04 scope but are in scope of PURITY-REPAIR01 —
+						//      they are now driven from a post-commit useEffect below)
 						//   4. returns newState
 						// Nothing else. The reducer output is NOT captured; the
 						// committed-state capture (webview-committed) is emitted
@@ -706,51 +708,72 @@ export const ExtensionStateContextProvider: React.FC<{
 							})
 						}
 						setState((prevState) => {
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
+							// PURE functional updater — calculate-and-return only.
+							// React's updater contract: the updater must be a pure
+							// function of (prevState, immutable input). No ref writes,
+							// no nested setState calls.
+							//
+							// The snapshot's transcript is routed through the convergent
+							// replica reducer, which is itself pure. The reducer's inputs
+							// are reconstructed from prevState + stateData — NOT from the
+							// mutable replicaRef. This guarantees the updater can be
+							// evaluated multiple times (or discarded by React) without
+							// observable side effects.
+							//
+							// FUNCTIONAL_UPDATER_EXTERNAL_WRITES = 0.
+
 							// Versioning logic for autoApprovalSettings
 							const incomingVersion = stateData.autoApprovalSettings?.version ?? 1
 							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
 							const shouldUpdateAutoApproval = incomingVersion > currentVersion
 
-							// Route the snapshot's transcript through the convergent-replica reducer:
-							// merge by ts/seq within the same epoch (never truncate), replace on a
-							// newer epoch, ignore stale/older snapshots. Unstamped (classic/legacy)
-							// state defaults to epoch 0 / version 0, which merges.
-							replicaRef.current = reducerApplyStateSnapshot(
-								replicaRef.current,
+							// Build the prevReplica from prevState (the canonical React-
+							// authoritative source). This replaces the prior pattern of
+							// threading replicaRef.current through the updater, which
+							// violated updater purity.
+							//
+							// seqByTs is reconstructed from prevState.clineMessages (which
+							// already carries the highest-seq copy per ts — that's an
+							// invariant the reducer maintains). This preserves the
+							// stale-partial rejection guarantee without threading the
+							// replicaRef through the updater.
+							const prevMessages = prevState.clineMessages ?? []
+							const prevSeqByTs = new Map<number, number>()
+							for (const m of prevMessages) {
+								prevSeqByTs.set(m.ts, m.seq ?? 0)
+							}
+							const prevReplica: ReplicaState = {
+								messages: prevMessages,
+								epoch: prevState.epoch ?? 0,
+								seqByTs: prevSeqByTs,
+								stateVersion: prevState.stateVersion ?? 0,
+								turnState: prevState.turnState,
+							}
+
+							const nextReplica = reducerApplyStateSnapshot(
+								prevReplica,
 								stateData.clineMessages ?? [],
 								stateData.epoch ?? 0,
 								stateData.stateVersion ?? 0,
 								stateData.turnState,
 							)
-							stateData.clineMessages = replicaRef.current.messages
-							// Use the seq-gated turnState from the replica, NOT the raw snapshot's, so a
-							// late/stale snapshot carrying an older phase (e.g. "idle") cannot revert a
-							// newer phase (e.g. "streaming") and hide the Cancel button. Falls back to
-							// undefined for classic/legacy state.
-							stateData.turnState = replicaRef.current.turnState
 
 							const newState: ExtensionState = {
 								...stateData,
+								clineMessages: nextReplica.messages,
+								turnState: nextReplica.turnState,
+								epoch: nextReplica.epoch,
+								stateVersion: nextReplica.stateVersion,
 								autoApprovalSettings: shouldUpdateAutoApproval
 									? stateData.autoApprovalSettings
 									: prevState.autoApprovalSettings,
 							}
 
-							// Update welcome screen state based on API configuration if welcome view not in progress
-							if (!newState.welcomeViewCompleted && !showWelcome) {
-								setShowWelcome(true)
-								setOnboardingModels(newState.onboardingModels)
-							} else if (newState.welcomeViewCompleted) {
-								setShowWelcome(false)
-								setOnboardingModels(undefined)
-							}
-
-							setDidHydrateState(true)
-
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP04-PURE-UPDATER-EVIDENCE:
-							// Pure updater: return newState. No PTAD or diagnostic
-							// side effects. The committed-state capture is emitted
-							// from the post-commit useEffect below.
+							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
+							// Pure return. setShowWelcome / setOnboardingModels /
+							// setDidHydrateState are now driven from a post-commit
+							// useEffect below (NOT from inside the updater).
 							return newState
 						})
 					} catch (error) {
@@ -1003,17 +1026,34 @@ export const ExtensionStateContextProvider: React.FC<{
 						})
 					}
 					setState((prevState) => {
-						// Route through the convergent-replica reducer: merge by ts keeping the
-						// higher seq, fence stale epochs, never let an out-of-order or duplicate
-						// delivery corrupt the transcript. Unstamped (classic/legacy) messages
-						// default to epoch 0 and merge by ts as before.
-						const before = replicaRef.current
-						replicaRef.current = reducerApplyMessage(before, partialMessage)
-						if (replicaRef.current === before) {
-							// Stale/ignored — no change.
+						// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
+						// PURE functional updater — calculate-and-return only.
+						//
+						// The convergent-replica reducer is invoked with inputs
+						// reconstructed from prevState (NOT from replicaRef). seqByTs
+						// is rebuilt from prevState.clineMessages, preserving the
+						// stale-partial rejection invariant without requiring
+						// updater-time ref mutation.
+						//
+						// FUNCTIONAL_UPDATER_EXTERNAL_WRITES = 0.
+						const prevMessages = prevState.clineMessages ?? []
+						const prevSeqByTs = new Map<number, number>()
+						for (const m of prevMessages) {
+							prevSeqByTs.set(m.ts, m.seq ?? 0)
+						}
+						const prevReplica: ReplicaState = {
+							messages: prevMessages,
+							epoch: prevState.epoch ?? 0,
+							seqByTs: prevSeqByTs,
+							stateVersion: prevState.stateVersion ?? 0,
+							turnState: prevState.turnState,
+						}
+						const nextReplica = reducerApplyMessage(prevReplica, partialMessage)
+						if (nextReplica === prevReplica) {
+							// Stale/ignored — return prevState identity (no change).
 							return prevState
 						}
-						return { ...prevState, clineMessages: replicaRef.current.messages }
+						return { ...prevState, clineMessages: nextReplica.messages }
 					})
 				} catch (error) {
 					console.error("Failed to process partial message:", error, protoMessage)
@@ -1207,6 +1247,45 @@ export const ExtensionStateContextProvider: React.FC<{
 			return
 		}
 		recordPostTerminalAuthoritySnapshot(buildWebviewSnapshot(state, state, "webview-committed"))
+	}, [state])
+
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
+	// Post-commit side effects. The pre-repair code fired
+	// setShowWelcome / setOnboardingModels / setDidHydrateState INSIDE
+	// the W1 functional updater, which violated React's updater
+	// purity contract. These setters are now driven from this
+	// post-commit useEffect, keyed on the relevant state fields.
+	//
+	// FUNCTIONAL_UPDATER_EXTERNAL_WRITES = 0.
+	useEffect(() => {
+		if (!state.welcomeViewCompleted && !showWelcome) {
+			setShowWelcome(true)
+			setOnboardingModels(state.onboardingModels)
+		} else if (state.welcomeViewCompleted) {
+			setShowWelcome(false)
+			setOnboardingModels(undefined)
+		}
+		setDidHydrateState(true)
+	}, [state.welcomeViewCompleted, state.onboardingModels, showWelcome])
+
+	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01:
+	// Render-cache sync: keeps `replicaRef.current` in lockstep with the
+	// just-committed React state. This is a downstream-of-commit effect
+	// (NOT an updater-time mutation), so it preserves React purity while
+	// preserving the LCD01 `replicaTurnState` reads at the request site
+	// (which now sample the post-commit mirror).
+	useEffect(() => {
+		const prevSeqByTs = new Map<number, number>()
+		for (const m of state.clineMessages ?? []) {
+			prevSeqByTs.set(m.ts, m.seq ?? 0)
+		}
+		replicaRef.current = {
+			messages: state.clineMessages ?? [],
+			epoch: state.epoch ?? 0,
+			seqByTs: prevSeqByTs,
+			stateVersion: state.stateVersion ?? 0,
+			turnState: state.turnState,
+		}
 	}, [state])
 
 	// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
