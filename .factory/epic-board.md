@@ -37,6 +37,50 @@ Rationale: linked worktrees caused agent path/branch confusion in earlier work; 
 
 ---
 
+### Remote push safety
+
+```
+REMOTE PUSH SAFETY
+
+  NORMAL REMOTE PUSH:
+    requires explicit user / ACT authority
+    fast-forward only
+    precondition: origin/main is ancestor of local main
+
+  FORCE PUSH:
+    categorically FORBIDDEN
+
+  FORBIDDEN FORMS INCLUDE:
+    git push --force
+    git push -f
+    git push --force-with-lease
+    any non-fast-forward ref update through another Git spelling
+    any API / automation operation equivalent to a force push
+
+  APPLIES TO:
+    main
+    feature branches
+    release branches
+    tags where history movement is applicable
+    humans
+    agents (including Cline / Factory / other agents)
+    CI
+    release automation
+
+  RULES:
+    an ACT may grant normal push authority
+    an ACT MUST NOT grant force-push authority
+    if published history needs correction:
+      create new commits
+      revert
+      merge / rebase locally before publication as appropriate
+      use a new branch / ref if necessary
+    DO NOT rewrite already-published remote history
+
+This is a repository safety invariant, not merely a preference. Enforcement is the `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` epic.
+
+---
+
 ## Canonical task index
 
 Every actionable Cline-- task has exactly one row here. Narrative sections below refer back to these IDs. Historical identifiers that could not be confidently mapped are kept as `NEEDS_CLASSIFICATION` rather than silently dropped.
@@ -75,6 +119,11 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `ACT-CLINEMM-GITHUB-ACTIONS-RECON01` | DIST | NEXT | HIGH | github-actions01 | recon ACT |
 | `EPIC-CLINEMM-GITHUB-DISTRIBUTION01` | DIST | OPEN | HIGH | none | publish VSIX via GitHub Release; decide GitHub Packages applicability |
 | `ACT-CLINEMM-DOGFOOD-SINGLE-WORKTREE-CLEANUP01` | DIST | P2/OPEN | LOW | one-worktree policy | remove detached temporary worktree from dogfood packaging |
+| `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` | GIT-SAFETY | NEXT | CRITICAL | none | server-side enforce block-force-push rule on GitHub; defense in depth |
+| `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` | GIT-SAFETY | NEXT | CRITICAL | git-safety-no-force-push01 | GitHub ruleset/branch protection recon + enforce; prove server-side rule |
+| `ACT-CLINEMM-PUBLISH-CURRENT-MAIN01` | DIST/REPO | OPEN | HIGH | remote-push-safety policy | fast-forward `origin/main` to current local main; requires explicit authority |
+| `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | FACTORY/REPO | CLOSED | — | — | repository-topology migration: main FF from `a9f376edf` → `5637d965d`; linked worktree removed; single-worktree topology frozen |
+| `ACT-CLINEMM-LIVE-EPOCH-REPAIR-QUALIFICATION01` | FOUNDATION/QA | CLOSED_LIVE | — | — | W1/W2 epoch repair live qualification; `PASS_LIVE_EPOCH_REPAIR` at `5637d965d` |
 | `UP-01` | UPSTREAM | NEEDS_CLASSIFICATION | LOW | — | recon: scope of fork maintenance vs upstream Cline |
 | `QA-01` | QA | NEEDS_CLASSIFICATION | LOW | — | classify exact-head dogfood / live qualification / conservation gates |
 | `QA-02` | QA | NEEDS_CLASSIFICATION | LOW | — | classify release-artifact qualification scope |
@@ -95,6 +144,8 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `C2.4-*` / `C2.5-*` / `C25-*` | FOUNDATION | CLOSED (Elmization groundwork) | — | — | historical alias |
 | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | FOUNDATION | CLOSED at `51f2f6a9c` | — | — | historical alias |
 | `ACT-CLINEMM-FACTORY-GLOBAL-EPIC-BOARD-WAVE01` | FACTORY | CLOSED at `1e6430bc15f00d08f66dc905c41edbd3f74045db` | — | — | this board's substrate commit |
+| `ACT-CLINEMM-FACTORY-GLOBAL-TASK-CENSUS01` | FACTORY | CLOSED at `4b2b2beec059b668bd49799304b9fd78d1ef79a0` | — | — | this ACT's own predecessor; 47 canonical rows at closure |
+| `ACT-CLINEMM-E7.1-TEMP-DIAGNOSTICS-REMOVAL01` | DIAG | SUPERSEDED → `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | — | — | old proposed ACT name; recon showed PTAD was valuable as generic dormant substrate, so LCD01 retired but PTAD retained DEFAULT_OFF |
 
 Legend:
 - `OPEN` — actionable, scope known.
@@ -174,16 +225,20 @@ Legend:
 
 ## Immediate critical path
 
-1. **COMPACTION-STATE-AUTHORITY01** — OPEN / LIVE_UI / HIGH
-2. **STATIC-THINKING-PRESENTATION-PERSISTENCE01** — OPEN / HIGH
-3. **TASKHEADER-CANONICAL-PROJECTION01** — OPEN / HIGH
-4. **TASKHEADER-OWNER-AWARE-TIMING01** — OPEN / HIGH
-5. **CONTEXT-ACCOUNTING-TRUTH01** — OPEN / HIGH
-6. **USER-CONTEXT-CEILING01** — OPEN / HIGH (depends on #5)
-7. **TOOL-EXECUTION-SEMANTICS01** — OPEN / HIGH
-8. **GITHUB-ACTIONS01** — OPEN / HIGH
-9. **GITHUB-DISTRIBUTION01** — OPEN / HIGH
-10. **BRANDING-ACTIVITYBAR-ICON01** — NEXT / MED
+Priority rationale: an accidental destructive force-push can destroy the evidence and commits behind every product defect. Git-safety comes before any product defect that depends on those commits remaining publishable.
+
+1. **GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01** — NEXT / CRITICAL (server-side enforcement)
+2. **PUBLISH-CURRENT-MAIN01** — OPEN / HIGH (requires explicit authority; fast-forward only)
+3. **COMPACTION-STATE-AUTHORITY01** — OPEN / LIVE_UI / HIGH
+4. **STATIC-THINKING-PRESENTATION-PERSISTENCE01** — OPEN / HIGH
+5. **TASKHEADER-CANONICAL-PROJECTION01** — OPEN / HIGH
+6. **TASKHEADER-OWNER-AWARE-TIMING01** — OPEN / HIGH
+7. **CONTEXT-ACCOUNTING-TRUTH01** — OPEN / HIGH
+8. **USER-CONTEXT-CEILING01** — OPEN / HIGH (depends on #7)
+9. **TOOL-EXECUTION-SEMANTICS01** — OPEN / HIGH
+10. **GITHUB-ACTIONS01** — OPEN / HIGH
+11. **GITHUB-DISTRIBUTION01** — OPEN / HIGH
+12. **BRANDING-ACTIVITYBAR-ICON01** — NEXT / MED
 
 ---
 
@@ -262,7 +317,14 @@ Three **semantically distinct** epics; do not collapse.
 
 **Goal.** Allow a user to set an effective operating ceiling below a model's advertised physical maximum.
 
-**Example.** physical max = 1,000,000 → user effective ceiling = 512,000.
+**Configuration modes that must be supported:**
+
+- `Auto` — use the model's physical maximum
+- explicit effective token ceiling — user-configurable value
+
+**Example.** physical model max = 1,000,000 → explicit user effective ceiling = 512,000.
+
+**Important.** `512k` is a user-configurable example / desired value. It is **NOT** a global hardcoded limit for every 1M-context model. The effective budget must satisfy `effective <= physical model maximum`, but concrete implementation must follow real source recon.
 
 **Invariant.**
 
@@ -273,7 +335,7 @@ Three **semantically distinct** epics; do not collapse.
   cumulative token usage
 ```
 
-**Dependency.** `CONTEXT-ACCOUNTING-TRUTH01` must be trustworthy enough before compaction policy is built on top of it.
+**Dependency.** `CONTEXT-ACCOUNTING-TRUTH01` must be trustworthy enough before compaction policy is built on top of it. Do not implement before context-accounting semantics are trustworthy.
 
 ### Historical context family (CTX-01..03)
 
@@ -395,9 +457,21 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **First bounded slice.** Activity Bar icon: `|| → --` (see `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`).
 
-**Conservation (do NOT change):** command IDs, settings IDs, protocol IDs, package / publisher compatibility unless separately reviewed.
+**Icon behavior.** Preserve VS Code monochrome / theming behavior (no colored branding that breaks native Activity Bar theming).
 
-**Forbidden.** Global source-wide `Cline → Cline--` replacement.
+**Compatibility baseline (do NOT change unless a separate compatibility migration is reviewed):**
+
+- publisher: `s1onique`
+- package name: `clinemm`
+- internal `cline.*` command / settings / protocol namespaces remain unchanged
+
+**Conservation.** Command IDs, settings IDs, protocol IDs, package / publisher compatibility are protected unless a separate compatibility migration is reviewed.
+
+**Forbidden.**
+
+- Global source-wide `Cline → Cline--` replacement
+- Colored branding that breaks native Activity Bar theming
+- Renaming compatibility IDs merely for cosmetic branding
 
 **Future recon scope.** Visible extension strings, welcome/about, README/screenshots, release presentation.
 
@@ -535,6 +609,10 @@ Compact mapping so old names are preserved without duplicate work.
 | `DOGFOOD-VSIX-QUALIFICATION01` | Dogfood qualification | CLOSED |
 | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | LCD01 retirement | CLOSED at `51f2f6a9c` |
 | `ACT-CLINEMM-FACTORY-GLOBAL-EPIC-BOARD-WAVE01` | Factory epic board substrate | CLOSED at `1e6430bc15f00d08f66dc905c41edbd3f74045db` |
+| `ACT-CLINEMM-FACTORY-GLOBAL-TASK-CENSUS01` | Factory task census | CLOSED at `4b2b2beec059b668bd49799304b9fd78d1ef79a0` |
+| `ACT-CLINEMM-E7.1-TEMP-DIAGNOSTICS-REMOVAL01` | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` | SUPERSEDED (PTAD retained DEFAULT_OFF; recon showed value) |
+| `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | repository-topology migration | CLOSED (main FF `a9f376edf` → `5637d965d`; one-worktree policy frozen) |
+| `ACT-CLINEMM-LIVE-EPOCH-REPAIR-QUALIFICATION01` | W1/W2 epoch repair qualification | CLOSED_LIVE at `5637d965d` (`PASS_LIVE_EPOCH_REPAIR`) |
 
 **Unknown-task policy.** If a historical ID is known to have existed but its exact contract cannot be reconstructed from current board + repository history + current source/docs, the row stays in this table as `NEEDS_CLASSIFICATION`. We do not invent scope, we do not silently omit, and we do not spend hours reconstructing now. Reclassification happens when the task becomes relevant to a real decision.
 
