@@ -27,7 +27,7 @@ import { describe, expect, it } from "vitest"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { SdkSessionLifecycleOptions } from "../sdk-session-lifecycle"
 import { emitSameTaskContinued, emitTaskCancelled, emitTaskRequested, emitTaskReset } from "../task-state-shadow-host-msgs"
-import type { TaskShadowHostWiringDeps } from "../task-state-shadow-host-wiring"
+import type { TaskShadowHostWiringDeps, TaskShadowHostWiringWithSink } from "../task-state-shadow-host-wiring"
 import { createTaskShadowHostWiring, emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
 
 const NOW = 1_700_000_000_000
@@ -37,7 +37,7 @@ type ArbiterSnapshotLike = import("../task-state-shadow-recorder").ArbiterSnapsh
 
 interface WorkloadRun {
 	readonly events: readonly CoreSessionEvent[]
-	readonly hostMsgs?: readonly ((sink: ReturnType<typeof makeSink>) => void)[]
+	readonly hostMsgs?: readonly ((wiring: TaskShadowHostWiringWithSink) => void)[]
 	readonly arbiter: (turnActive: boolean) => ArbiterSnapshotLike
 	readonly legacyPhase: () => TurnPhase
 	readonly expectedClassCounts: Readonly<Partial<Record<DivergenceClass, number>>>
