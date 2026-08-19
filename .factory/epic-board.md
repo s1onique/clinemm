@@ -128,7 +128,8 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `EPIC-CLINEMM-TYPECHECK-ZERO-BASELINE01` | QA | OPEN | HIGH | none | classify and eliminate the 41 pre-existing apps/vscode typecheck errors; typecheck ≠ test gate |
 | `EPIC-CLINEMM-CODE-COVERAGE-BASELINE01` | QA | OPEN | HIGH | test-baseline-zero-failures recommended | inventory coverage seams; establish truthful exact-head baseline; publish machine-readable report |
 | `EPIC-CLINEMM-CODE-COVERAGE-RATCHET01` | QA | OPEN | HIGH | coverage-baseline01 | prevent aggregate coverage regression; thresholds increase monotonically |
-| `UP-01` | UPSTREAM | NEEDS_CLASSIFICATION | LOW | — | recon: scope of fork maintenance vs upstream Cline |
+| `UP-01` | UPSTREAM | SUPERSEDED → `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | — | — | recon scope of fork vs upstream Cline; reclassified as upstream-intake substrate ACT |
+| `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | UPSTREAM | OPEN | HIGH | none | compact upstream issue intake substrate; rank by popularity + Cline-- value; map selected candidates |
 | `QA-01` | QA | NEEDS_CLASSIFICATION | LOW | — | classify exact-head dogfood / live qualification / conservation gates |
 | `QA-02` | QA | NEEDS_CLASSIFICATION | LOW | — | classify release-artifact qualification scope |
 | `MCP-01` | MCP | NEEDS_CLASSIFICATION | LOW | — | classify against current Cline-- MCP usage; do not import InDeep/Figma scope |
@@ -635,6 +636,70 @@ Four QA epics plus a deferred architecture epic. Quality substrate precedes long
 
 ---
 
+## Upstream intake
+
+### UPSTREAM-ISSUE-INTAKE01
+
+- ID: `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01`
+- STATUS: OPEN / HIGH
+
+**Goal.** Acquire trustworthy upstream issue metadata for offline Cline-- triage.
+
+**Substrate (committed in this repo).**
+
+```
+  scripts/dump-cline-issues.py
+    fetcher: Link-header pagination, PR exclusion, retry contract,
+    checkpoint/resume, atomic write, bounded selection policy
+  scripts/tests/test_dump_cline_issues.py
+    stdlib unittest; 29 network-free tests
+  .factory/upstream/cline-open-issues-index.json
+    compact machine-readable snapshot
+```
+
+**Snapshot contract.** Stored fields per issue: `number`, `title`, `url`, `created_at`, `updated_at`, `comments`, `reactions`, `interactions`, `labels`. **Excluded:** `body`, comment bodies, reactions breakdown, avatar URLs, assignee objects, milestone description, user profile metadata, API payload copies.
+
+**Deterministic ordering.** `interactions` DESC, `updated_at` DESC, `number` DESC.
+
+**Size policy.** Preferred ≤ 1 MiB; acceptable ≤ 2 MiB. When exceeded, a bounded selection policy is applied: top-N by interactions PLUS every issue matching high-value Cline-- keyword/label families (`context`, `compact`, `token`, `prompt`, `checkpoint`, `retry`, `recovery`, `terminal`, `tool`, `provider`, `model`, `performance`, `memory`, `mcp`, `state`, `waiting`, `task`, `install`, `release`, `vscode`). Truncation is **never silent** — `total_open_issue_count`, `committed_issue_count`, `truncated`, `selection_policy` are always recorded.
+
+**First triage ACT.** `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE01` — uses the substrate to rank upstream open issues and decide per-issue disposition:
+
+```
+  IMPORT          -- promote into a Cline-- epic/ACT
+  MAP_EXISTING    -- already covered by an existing Cline-- epic
+  RADAR           -- worth watching but not importing yet
+  REJECT          -- out of scope or value-not-worth-effort
+```
+
+**Selection dimensions for triage.**
+
+```
+  popularity           comments + reactions (interactions)
+  recency / activity   updated_at
+  correctness impact   label family, title keyword
+  Cline-- product value mapping against the current critical path
+  architectural fit    Elm/state/quality-substrate seams
+  implementation ROI    effort-to-value ratio
+  existing-board overlap against canonical rows
+  upstream momentum    active maintainer response signals
+```
+
+**Rule.** Popularity ≠ automatic priority. A 100-interaction feature request can still be REJECT if it conflicts with Cline-- direction.
+
+**This ACT is not.**
+
+- upstream issue triage itself (that's TRIAGE01)
+- importing upstream issues into Cline-- yet
+- fixing upstream issues
+- GitHub Actions work
+- force-push enforcement
+- product implementation
+
+**Historical mapping.** `UP-01` (recon: scope of fork maintenance vs upstream Cline) was reclassified into this epic at substrate ACT — the recon scope became a concrete intake substrate and a planned triage ACT.
+
+---
+
 ## Distribution / CI
 
 ### GITHUB-ACTIONS01
@@ -712,7 +777,7 @@ Compact mapping so old names are preserved without duplicate work.
 | `FACT-01` / `FACT-02` | `NEEDS_CLASSIFICATION` | preserved; classify against current Factory work |
 | `MCP-01` / `MCP-02` | `NEEDS_CLASSIFICATION` | preserved; classify against current Cline-- MCP usage only |
 | `ARCH-01` / `ARCH-02` | E8 / E9 / `EPIC-CLINEMM-ELMIZATION02` | map individually as recon proceeds |
-| `UP-01` | `NEEDS_CLASSIFICATION` | preserved; recon fork vs upstream Cline scope |
+| `UP-01` | `EPIC-CLINEMM-UPSTREAM-ISSUE-INTAKE01` | SUPERSEDED at substrate ACT; recon fork-vs-upstream scope became upstream-issue-intake epic |
 | `QA-01` / `QA-02` | exact-head dogfood + live qualification gates | preserved; classify qualification scope |
 | `LIVE-CONTEXT-DIMENSIONS01` (LCD01) | LCD01 retirement | CLOSED at `51f2f6a9c` |
 | `C2-CORRECTION02-FIXUP01..04` | LCD01 retirement | CLOSED via LCD01 retirement |
