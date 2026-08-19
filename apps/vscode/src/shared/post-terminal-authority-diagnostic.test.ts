@@ -83,7 +83,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			for (let i = 0; i < 5; i += 1) {
 				recordPostTerminalAuthoritySnapshot({
 					origin: "extension",
-				captureKind: "extension-push",
+					captureKind: "extension-push",
 					stateVersion: i,
 					capturedAt: Date.now() + i,
 				})
@@ -101,7 +101,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			for (let i = 0; i < 10; i += 1) {
 				recordPostTerminalAuthoritySnapshot({
 					origin: "extension",
-				captureKind: "extension-push",
+					captureKind: "extension-push",
 					stateVersion: i,
 					capturedAt: Date.now() + i,
 				})
@@ -121,7 +121,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			})
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
-				captureKind: "webview-replica",
+				captureKind: "webview-reducer-output",
 				stateVersion: 2,
 				capturedAt: Date.now(),
 			})
@@ -195,7 +195,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			enablePostTerminalAuthorityDiagnostic("webview")
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
-				captureKind: "webview-replica",
+				captureKind: "webview-reducer-output",
 				stateVersion: sharedVersion,
 				capturedAt: Date.now() + 1,
 			})

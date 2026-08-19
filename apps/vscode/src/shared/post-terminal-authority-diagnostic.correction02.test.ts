@@ -92,10 +92,10 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-C
 			expect(r.rawIncomingTaskTelemetry?.toolCalls).toBe(0)
 		})
 
-		it("R2: a 'webview-replica' record carries both rawIncoming* and applied* fields on the same push ID", () => {
+		it("R2: a 'webview-reducer-output' record carries both rawIncoming* and applied* fields on the same push ID", () => {
 			recordPostTerminalAuthoritySnapshot({
 				origin: "webview",
-				captureKind: "webview-replica",
+				captureKind: "webview-reducer-output",
 				stateVersion: 0,
 				_ptadPushId: 99,
 				capturedAt: Date.now(),
@@ -109,7 +109,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-C
 			const records = getPostTerminalAuthorityDiagnosticRecords("webview")
 			expect(records.length).toBe(1)
 			const r = records[0]
-			expect(r.captureKind).toBe("webview-replica")
+			expect(r.captureKind).toBe("webview-reducer-output")
 			expect(r._ptadPushId).toBe(99)
 			// Applied view
 			expect(r.appliedLegacyPhase).toBe("awaiting_followup")
@@ -278,7 +278,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-C
 				// applied view)
 				recordPostTerminalAuthoritySnapshot({
 					origin: "webview",
-					captureKind: "webview-replica",
+					captureKind: "webview-reducer-output",
 					stateVersion: 0,
 					_ptadPushId: pushId,
 					capturedAt: Date.now(),
@@ -292,7 +292,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-C
 			const records = getPostTerminalAuthorityDiagnosticRecords("webview")
 			expect(records.length).toBe(PUSHES.length * 2)
 			const raws = records.filter((r) => r.captureKind === "webview-raw-incoming")
-			const applieds = records.filter((r) => r.captureKind === "webview-replica")
+			const applieds = records.filter((r) => r.captureKind === "webview-reducer-output")
 			expect(raws.length).toBe(PUSHES.length)
 			expect(applieds.length).toBe(PUSHES.length)
 			// Every push has exactly one raw and one applied, paired by _ptadPushId
