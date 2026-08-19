@@ -614,7 +614,7 @@ export const ExtensionStateContextProvider: React.FC<{
 						//   1. reads `prevState` (React-authoritative, satisfies R6)
 						//   2. calls the reducer (pure derive-next-state)
 						//   3. calls existing setShowWelcome / setOnboardingModels /
-						//      setDidHydrateState setters (PRE-EXISTING side effects,
+						//      setDidHydrateState setters (PRE_EXISTING side effects,
 						//      out of FIXUP04 scope; these were there before PTAD)
 						//   4. returns newState
 						// Nothing else. The reducer output is NOT captured; the
