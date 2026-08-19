@@ -469,7 +469,15 @@ export class SdkInteractionCoordinator {
 	 * decision.
 	 */
 	clearPending(reason: string): void {
-		this.pendingAskResolve = undefined
+		// Resolve any pending ask-question with an empty answer. Mirrors
+		// resolvePendingAskQuestion(undefined) so callers that switched away
+		// (e.g. showTaskWithId) do not leak the old task's pending question
+		// into the new task's first user message.
+		if (this.pendingAskResolve) {
+			const askResolve = this.pendingAskResolve
+			this.pendingAskResolve = undefined
+			askResolve("")
+		}
 		if (this.pendingMistakeLimitResolve) {
 			this.pendingMistakeLimitResolve({
 				action: "continue",

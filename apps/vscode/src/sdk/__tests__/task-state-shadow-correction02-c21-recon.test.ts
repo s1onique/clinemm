@@ -15,6 +15,7 @@
  * `task-state-e5-e6-correction02-c21-recon.md` section 6.
  */
 import { readFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { TaskShadowComparator } from "../task-state-shadow"
 import { TaskShadowRecorder } from "../task-state-shadow-recorder"
@@ -22,7 +23,27 @@ import { TaskShadowRecorder } from "../task-state-shadow-recorder"
 const SDK_CONTROLLER_PATH = "apps/vscode/src/sdk/SdkController.ts"
 const TASK_START_PATH = "apps/vscode/src/sdk/sdk-task-start-coordinator.ts"
 
-const REPO_ROOT = "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-elm-architecture01"
+// Walk up from this test file until we find a `.git` directory, so the read-only
+// recon works regardless of which worktree or CI checkout the suite runs in.
+// The original implementation hardcoded a sibling-worktree path that no longer
+// exists; this resolver makes the test portable without weakening its assertion
+// contract (still reading the same production source files, by relative path).
+function findRepoRoot(): string {
+	let dir = dirname(resolve(__filename))
+	for (let i = 0; i < 16; i++) {
+		try {
+			readFileSync(resolve(dir, ".git/HEAD"))
+			return dir
+		} catch {
+			const parent = dirname(dir)
+			if (parent === dir) break
+			dir = parent
+		}
+	}
+	throw new Error("task-state-shadow-correction02-c21-recon: could not find repo root (no .git/HEAD above this file)")
+}
+
+const REPO_ROOT = findRepoRoot()
 
 describe("C2.1-A — real production ordering pins W12_MODEL=A", () => {
 	it("initTask: setTurnPhase(streaming) line is BEFORE emitTaskRequested line", () => {
