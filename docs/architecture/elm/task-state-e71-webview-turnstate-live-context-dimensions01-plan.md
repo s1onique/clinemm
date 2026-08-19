@@ -226,6 +226,42 @@ from LIVE-SHAPE §2 verbatim. The three new epistemic labels
 absence of bare `UNAVAILABLE`) are R13 additions and do not alter
 LIVE-SHAPE §2.
 
+### §1 R21/R22 plan-amendment log
+
+The freeze contract (§2 capture groups, §2 boundary guarantees,
+§6 LCD_T9, §6.5 C0/C1 hand-off) is amended by the post-C0 review:
+
+- **R21 (BLOCKING doc contradiction):** the original guarantee #4
+  asserted that every record carries `_ptadPushId`. After
+  C0-CORRECTION01 §4.4, it is empirically proven that
+  `_ptadPushId` is **NOT** on the W2 wire
+  (`rpc subscribeToPartialMessage returns stream ClineMessage`).
+  Guarantee #4 has been replaced with the **correlation identity
+  contract** — see §2 below. The W1/P and C records keep their
+  intrinsic `_ptadPushId`; W2 records use their native identity
+  (`{epoch, seq, ts, partial | final}`) with `associationQuality`
+  in `{INTERVAL_INFERRED, NONE}`; `INTRINSIC` on a W2 record is
+  a data-integrity violation under the current protocol.
+
+- **R22 (synchronized with R21):** the §2 B-group claim that
+  `prevState.turnState` is the "literal reducer arg, copied at
+  this boundary" is corrected. The literal reducer arg is
+  accessible only inside the queued updater; from outside it is
+  `LIVE_UNOBSERVABLE`. The plan now distinguishes `B_LITERAL`
+  (LIVE_UNOBSERVABLE) from `B0 — REQUEST-SITE APPROXIMATION`
+  (the only capturable B; capture kind renamed to
+  `webview-*-request-replica`). The §6.5 C0/C1 hand-off uses
+  the corrected question names
+  (`CAN_B_REQUEST_SITE_REPLICA_CAPTURE`,
+  `CAN_B_LITERAL_UPDATER_INPUT_CAPTURE`) and `LCD_T9` is now
+  composite.
+
+This amendment is docs-only and is bound to the C0-CORRECTION01
+chain. REQUIRED_PLAN_ANCESTOR_HEAD does NOT advance: the
+upper-stable floor remains `cff0218fb`; the C0 branch contains
+both R16 and the R21/R22 plan-amendment log. Authorization
+(R16+R17) is unaffected.
+
 ---
 
 ## §2  Capture groups (boundary-oriented)
@@ -246,18 +282,37 @@ these boundaries.
 
 ```text
 P — PUSH IDENTITY
-  pushId                       (must reuse existing _ptadPushId
-                                for correlation)
+  pushId                       (intrinsic _ptadPushId; W1 wire only —
+                                see R21 correlation identity contract)
   stateVersion
   snapshot epoch
 
-B — BEFORE W1 UPDATER
-  invocationOrdinalForPush     (1st, 2nd, ... updater evaluation)
-  prevState.turnState          (the literal reducer arg, copied
-                                at this boundary, NOT reconstructed)
-  replica.turnState
-  replica.epoch
-  replica.stateVersion
+B — BEFORE UPDATER (R22 epistemic split)
+  The "literal reducer input at the updater boundary" is NOT
+  empirically capturable from outside the queued updater without a
+  diagnostic side effect that violates §3 LC_T_PURITY. The plan
+  therefore distinguishes:
+
+    B_LITERAL — LITERAL UPDATER INPUT
+      prevState.turnState          (literal reducer arg — NOTREPLAY:
+                                    SAFE only by theory; ACTUAL
+                                    live capture = LIVE_UNOBSERVABLE;
+                                    may NOT be reconstructed by
+                                    reading `replicaRef.current`
+                                    at the request site, because
+                                    React's pending-state queue and
+                                    ref mutability guarantee these
+                                    can differ)
+      replica.turnState
+      replica.epoch
+      replica.stateVersion
+
+    B0 — REQUEST-SITE APPROXIMATION (the only capturable B)
+      replica.turnState            (sampled at the request site —
+                                    ONLY a useful approximation;
+                                    NOT the literal updater input;
+                                    capture kind renamed to
+                                    webview-*-request-replica)
 
 R — REDUCER OUTPUT
   incomingSnapshot.turnState   (the W1 input snapshot's turnState)
@@ -299,8 +354,45 @@ The five boundary guarantees:
    (`UNAVAILABLE_FROM_TRACE` = old TRACE gap vs. `LIVE_UNOBSERVABLE`
    = current live mechanism cannot capture safely).
    `LIVE_UNOBSERVABLE` is preferred to fabricating a value.
-4. Records are tagged with the `_ptadPushId` they belong to so
-   they can be correlated with the existing TRACE01 JSONL.
+4. **Correlation identity contract (R21):** Records preserve their
+   **strongest native correlation identity**. `_ptadPushId` is used
+   only when it is intrinsically available on the source payload.
+
+   ```text
+   W1/P:
+     _ptadPushId = INTRINSIC (stamped on the ExtensionState push wire)
+
+   C:
+     _ptadPushId = the latest committed W1 identity when retained
+                   state carries one; cardinality remains per-commit
+
+   W2:
+     _ptadPushId = NOT PRESENT ON WIRE (proven empirically — see
+                   C0-CORRECTION01 §4.4)
+     native identity = { epoch, seq, ts, partial | final }
+     associationQuality = INTERVAL_INFERRED | NONE
+     "INTRINSIC" on a W2 record = data-integrity violation under
+                   the current protocol (reserved for a future wire
+                   amendment; requires its own plan revision)
+
+   Q:
+     use the intrinsic key only where the requesting source actually
+     owns one; otherwise chronology/native identity only
+   ```
+
+   Chronological association MUST be explicitly marked as
+   **inferred** (via `associationQuality`) and MUST NOT be promoted
+   to causal identity. Analysis code that conflates a stamped
+   `associatedPushId` with literal push identity violates the
+   contract; preferred shape is
+
+   ```ts
+   {
+     associationQuality: "INTERVAL_INFERRED",
+     associatedPushId: undefined,
+     intervalInferred: { prevPushId, nextPushId }
+   }
+   ```
 5. Records carry no application-state semantic delta. Anything
    observable from the webview today remains observable; nothing
    new is exported on the public API.
@@ -570,7 +662,19 @@ LCD_T7B  STRICT_MODE_CARDINALITY       PASS            (§3 sub-gate)
 LCD_T7C  DEFAULT_OFF_EQUIVALENCE       PASS            (§3 sub-gate)
 LCD_T8   CAPTURE_AT_BOUNDARY           PASS            (no after-the-fact
                                                     reads)
-LCD_T9   PUSH_CORRELATION              PASS            (_ptadPushId reused)
+LCD_T9   PUSH_CORRELATION              COMPOSITE       (R21; see §2 corr.
+                                                    contract):
+                                                      W1_INTRINSIC   PASS
+                                                      C_INTRINSIC    PASS
+                                                                      (where
+                                                                      retained
+                                                                      state
+                                                                      carries
+                                                                      pushId)
+                                                      W2_INTRINSIC   NOT_AVAILABLE_BY_PROTOCOL
+                                                      W2_CHRONOLOGY  PASS /
+                                                                      INTERVAL_INFERRED
+                                                      FALSE_CAUSAL_ID 0
 LCD_T10  W2_CONTEXT_CAPTURE            PASS
 LCD_T11  WRITER_REQUEST_CAPTURE        PASS            (Q-group only)
 LCD_T12  REMOVAL_CONTRACT              PASS            (§5)
@@ -659,12 +763,20 @@ C0  READ-ONLY RECON                          (docs only commit)
         CAN_W2_CAPTURE                     = ?
         CAN_Q_CAPTURE                      = ?
         CAN_C_CAPTURE                      = ?
-        CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT  = ?
-        CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT  = ?
-        CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT  = ?
+        CAN_B_REQUEST_SITE_REPLICA_CAPTURE     = ?
+        CAN_B_LITERAL_UPDATER_INPUT_CAPTURE    = ?
+        CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT   = ?
+        CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT   = ?
       Anything in the second group that resolves to NO
       immediately becomes LIVE_UNOBSERVABLE; no implementation
-      experimentation is needed.
+      experimentation is needed. The B row is split into two
+      epistemic categories per R22 (§2):
+        B_REQUEST_SITE  — request-site approximation; only one
+                          safely capturable
+        B_LITERAL       — literal reducer arg at evaluation time;
+                          NOT capturable from outside the queued
+                          updater without a §3 LC_T_PURITY
+                          violation
     - freeze dedicated record schema (§5)
     - freeze enable / dump mechanism
     - commit docs only — no source delta
@@ -674,14 +786,18 @@ C0  READ-ONLY RECON                          (docs only commit)
       REQUIRED_PLAN_ANCESTOR_HEAD.
 
 C1  TEMPORARY CAPTURE                        (source + test commit)
-    - implement P    (if CAN_P_CAPTURE                      = YES)
-    - implement W2   (if CAN_W2_CAPTURE                     = YES)
-    - implement Q    (if CAN_Q_CAPTURE                      = YES)
-    - implement C    (if CAN_C_CAPTURE                      = YES)
-    - implement B    (if CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT = YES)
-    - implement R    (if CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT = YES)
-    - implement N    (if CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT = YES)
-      Otherwise: LIVE_UNOBSERVABLE for that group.
+    - implement P    (if CAN_P_CAPTURE                            = YES)
+    - implement W2   (if CAN_W2_CAPTURE                           = YES)
+    - implement Q    (if CAN_Q_CAPTURE                            = YES)
+    - implement C    (if CAN_C_CAPTURE                            = YES)
+    - implement B0   (if CAN_B_REQUEST_SITE_REPLICA_CAPTURE       = YES)
+    - skip    B_LITERAL (if CAN_B_LITERAL_UPDATER_INPUT_CAPTURE   = NO)
+    - skip    R        (if CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT    = NO)
+    - skip    N        (if CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT    = NO)
+      Otherwise: LIVE_UNOBSERVABLE for that group. Capture kinds
+      must use the renamed schema (`webview-*-request-replica`,
+      not `webview-before-*-updater`) — see C0-CORRECTION01 §5
+      and §2 R22 above.
     - add:
         - default-off witness                (LCD_T7C)
         - StrictMode witness                  (LCD_T7B)
