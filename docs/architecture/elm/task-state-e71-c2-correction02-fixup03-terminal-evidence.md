@@ -308,6 +308,27 @@ C2-CORRECTION02-FIXUP02 §6.1 is followed: future fixups that exceed
 their `PLANNED_COMMIT_CEILING` MUST call out the over-ceiling commits
 explicitly under a `CEILING_EXCEPTION` block of this shape.
 
+### 8.2 Superseded by C2-CORRECTION02-FIXUP04 (added by FIXUP04)
+
+The FIXUP03 architecture (functional updater + per-pushId reducer-
+output queue + drain effect + webview-reducer-output capture kind)
+was **superseded** by `C2-CORRECTION02-FIXUP04` (commit `8f8d78221`).
+The E7.1 architecture review of FIXUP03 identified R9 (updater
+impurity: the functional updater still mutated
+`pendingAppliedByPushRef.current`) and R10 (the Q1 test did not
+actually prove the advertised R6 counterexample).
+
+FIXUP04 removed `pendingAppliedByPushRef` and the drain effect
+entirely, restored the functional updater to a pure
+calculate-and-return function, and removed the
+`webview-reducer-output` enum member from the schema. The
+diagnostic now captures only two webview-side boundaries
+(`webview-raw-incoming` and `webview-committed`).
+
+See `task-state-e71-c2-correction02-fixup04-terminal-evidence.md`
+for the full architecture rationale and the new R10
+committed-context conservation witness that replaces the Q1 test.
+
 ---
 
 ## 9. Verdict
