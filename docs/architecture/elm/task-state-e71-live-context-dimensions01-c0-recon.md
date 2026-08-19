@@ -59,10 +59,39 @@ C1 is gated on this corrected matrix.
 ## 1. Identity
 
 ```text
-C0_ENTRY_HEAD   = 611403c10cb2b38aa496887c89f392f1c6c2be06
-                  (verbatim git rev-parse HEAD at C0 start;
-                   R17 docs commit; descendant of REQUIRED_PLAN_ANCESTOR_HEAD
-                   trivially; bound by both ancestry floors)
+C0_ENTRY_HEAD        = 611403c10cb2b38aa496887c89f392f1c6c2be06
+                       (verbatim git rev-parse HEAD at C0 start;
+                        R17 docs commit; descendant of
+                        REQUIRED_PLAN_ANCESTOR_HEAD trivially;
+                        bound by both ancestry floors)
+
+C0_HEAD              = 6f08c82ae3b244d6c92daeb79ca909c8fcac0e15
+                       (C0 docs-only commit; carries the C0
+                        recon + capture-can matrix + schema +
+                        enable/dump freeze; an own descendant
+                        of C0_ENTRY_HEAD; the C0 result, not
+                        the C0 entry — R23)
+
+C0_CORRECTION01_HEAD = 475a3de75122b6ecb9280f94f5a1c7f4b842e5ed
+                       (R18/R19/R20 corrections; C0 evidence
+                        reframed; plan left untouched in this
+                        commit; R21/R22 alignment landed
+                        separately at R21_R22_HEAD)
+
+R21_R22_HEAD         = 6449cec47de2ff03a78340767aa254c529f8a855
+                       (plan-side alignment to C0-CORRECTION01;
+                        replaced §2 guarantee #4 with the
+                        correlation identity contract; split
+                        §2 B-group into B_LITERAL/B0; LCD_T9
+                        composite)
+
+C1_REQUIRED_ANCESTOR_HEAD = 6449cec47de2ff03a78340767aa254c529f8a855
+                       (R24 — third C1 ancestry floor; frozen
+                        at the C0→C1 contract boundary; any
+                        future docs-only commit between
+                        R21_R22_HEAD and C1 execution does
+                        NOT advance this SHA; C1_ENTRY_HEAD
+                        must descend from this)
 
 AUTHORIZATION_BASE_HEAD              = f41d69d2a83aa625f0195b757df54a0805c4e65f
 INITIAL_PLAN_FREEZE_HEAD             = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
@@ -70,6 +99,25 @@ PLAN_AMENDMENT_HEAD                  = 695b608a957b8c4d9be978336e6709aec0053d7e
 IMPLEMENTATION_AUTHORIZED_FROM_HEAD  = 695b608a957b8c4d9be978336e6709aec0053d7e (lower stable floor)
 REQUIRED_PLAN_ANCESTOR_HEAD          = cff0218fbb0acbb74c7028ae100b285acdafa33e (upper stable floor)
 ```
+
+Lifecycle role distinction (R23):
+
+```text
+C0_ENTRY_HEAD        = execution entry (what `git rev-parse HEAD`
+                                 returned at C0 start)
+C0_HEAD              = C0 result (the docs-only commit that froze
+                                 the recon + capture-can matrix +
+                                 schema + enable/dump freeze)
+C0_CORRECTION01_HEAD = C0 evidence reframed (R18/R19/R20)
+R21_R22_HEAD         = plan-side alignment of C0 evidence
+
+C0_HEAD != C0_ENTRY_HEAD
+```
+
+(Note: `C0_CORRECTION01_HEAD` and `R21_R22_HEAD` SHAs above are
+reproductions of the actual git refs — `475a3de75...` and
+`6449cec47...` — as evidence this commit is descended from them;
+see the §11 invariants block and the git log for verbatim values.)
 
 ## 2. C0 ancestry gate — R16+R17
 
@@ -90,7 +138,17 @@ R17 negative-space test, re-verified at C0 start:
   REQUIRED -> 695b608a9 (pre-R16 ancestor) :  FAIL  ✓
 ```
 
-C0 closes docs-only. `C0_HEAD == C0_ENTRY_HEAD == 611403c10` (no separate code commit).
+C0 closes docs-only. **C0_HEAD != C0_ENTRY_HEAD** (R23):
+
+  C0_ENTRY_HEAD = 611403c10cb2b38aa496887c89f392f1c6c2be06
+                  (R17 commit — what `git rev-parse HEAD` returned
+                   at C0 start; frozen at C0 entry per R16+R17)
+  C0_HEAD       = 6f08c82ae3b244d6c92daeb79ca909c8fcac0e15
+                  (the docs-only commit that froze the C0 recon +
+                   capture-can matrix + schema + enable/dump freeze;
+                   an own descendant of C0_ENTRY_HEAD; the C0 result)
+
+There is no separate code commit; both commits are docs-only.
 
 ---
 
@@ -550,7 +608,12 @@ C1 may execute. It is bounded by:
     webview-w1-request-replica (B0; request-site approximation)
     webview-w2-request-replica (B0; request-site approximation)
     webview-committed-c (C)
-- Skip R and N groups; emit nothing for them; replay offline if needed.
+- Skip R and N groups; emit nothing for them. Offline replay of
+  R and N against B + P is HYPOTHESIS_ONLY — useful as a probe
+  for whether the boundary could be reconstructed, never as a
+  reproduction of what the literal queued updater evaluated.
+- DO NOT IMPLEMENT B_LITERAL, R, or N — they are
+  LIVE_UNOBSERVABLE without violating §3 LC_T_PURITY.
 - Add tests:
     - default-off witness              (LCD_T7C)
     - StrictMode witness                (LCD_T7B; W2/Q/P request-cardinality)
@@ -559,7 +622,27 @@ C1 may execute. It is bounded by:
 - VSIX NOT YET built; that is C2.
 ```
 
-C1 must descend from both `IMPLEMENTATION_AUTHORIZED_FROM_HEAD` and `REQUIRED_PLAN_ANCESTOR_HEAD` (R16+R17).
+C1 must descend from three SHAs (R24):
+
+```bash
+git merge-base --is-ancestor \
+  "$IMPLEMENTATION_AUTHORIZED_FROM_HEAD" "$C1_ENTRY_HEAD"
+
+git merge-base --is-ancestor \
+  "$REQUIRED_PLAN_ANCESTOR_HEAD"         "$C1_ENTRY_HEAD"
+
+git merge-base --is-ancestor \
+  "$C1_REQUIRED_ANCESTOR_HEAD"          "$C1_ENTRY_HEAD"
+```
+
+`C1_REQUIRED_ANCESTOR_HEAD = 6449cec47...` is the third floor; it
+proves C1 actually contains C0 ∧ C0-CORRECTION01 ∧ R21/R22
+plan alignment, not merely R16. The two original floors (R16+R17)
+remain unchanged; the third floor is **not** a SHA treadmill — it
+is a one-time pin at the C0→C1 contract boundary, exactly as
+`REQUIRED_PLAN_ANCESTOR_HEAD` was frozen once at the plan-
+completion boundary. Future docs-only commits between
+`R21_R22_HEAD` and C1 execution do NOT advance it.
 
 ---
 

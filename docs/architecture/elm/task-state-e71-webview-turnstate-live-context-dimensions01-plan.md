@@ -126,6 +126,26 @@ REQUIRED_PLAN_ANCESTOR_HEAD         = cff0218fbb0acbb74c7028ae100b285acdafa33e
                                         still see R17 as an
                                         ancestor of C0_ENTRY_HEAD.)
 
+C1_REQUIRED_ANCESTOR_HEAD            = 6449cec47de2ff03a78340767aa254c529f8a855
+                                       (R24 — the third C1
+                                        ancestry floor; frozen
+                                        once at the C0→C1
+                                        contract boundary so the
+                                        C1 gate proves C1 contains
+                                        C0 ∧ C0-CORRECTION01 ∧
+                                        R21/R22 plan alignment,
+                                        not merely R16. NOT a SHA
+                                        treadmill — like
+                                        REQUIRED_PLAN_ANCESTOR_HEAD,
+                                        this SHA does NOT advance
+                                        with future docs commits.
+                                        Any ordinary later docs
+                                        commit between R21/R22 and
+                                        C1 execution does not
+                                        change this field — C1
+                                        still sees it as an
+                                        ancestor of C1_ENTRY_HEAD.)
+
 C0_ENTRY_HEAD                        = UNKNOWN_UNTIL_C0
                                        (R16 — recorded as evidence
                                         by C0; equals `git rev-parse
@@ -185,6 +205,17 @@ Do not confuse these:
     FROM_HEAD, which was correct only because there was no
     upper anchor. With REQUIRED_PLAN_ANCESTOR_HEAD in place,
     the stronger upper anchor takes precedence.)
+
+  - C1_REQUIRED_ANCESTOR_HEAD is the third ancestry floor that
+    C1 must descend from (in addition to the lower
+    IMPLEMENTATION_AUTHORIZED_FROM_HEAD floor and the upper
+    REQUIRED_PLAN_ANCESTOR_HEAD floor). It is frozen once at
+    the C0→C1 contract boundary — R24 — and does not advance
+    with future docs commits. The three-gate model is the
+    same shape as the two-gate R16+R17 model that protects
+    C0 from a pre-R16 sibling fork; C1 is now protected
+    from a pre-C0/C0-CORRECTION01/R21 sibling fork the same
+    way.
 
 TRACE01_W2                = PROVEN
   P12 raw                 = streaming/11
@@ -638,6 +669,30 @@ LCD_T0   IMPLEMENTATION_ENTRY_IDENTITY  PASS    (C0_ENTRY_HEAD is
                                                     sibling of R16;
                                                     R16+R17)
 
+LCD_T0b  C1_REQUIRED_ANCESTOR_HEAD     FROZEN    (R24; = 6449cec47;
+                                                    third C1 ancestry
+                                                    floor; bound at
+                                                    the C0→C1
+                                                    contract boundary;
+                                                    does NOT advance
+                                                    with later docs
+                                                    commits)
+LCD_T0c  C1_ENTRY_HEAD_RECORDED         PENDING    (C1 records
+                                                    C1_ENTRY_HEAD as
+                                                    evidence; equals
+                                                    `git rev-parse HEAD`
+                                                    at C1 start;
+                                                    descendant-or-equal
+                                                    of
+                                                    IMPLEMENTATION_AUTHORIZED_FROM_HEAD,
+                                                    REQUIRED_PLAN_ANCESTOR_HEAD,
+                                                    and C1_REQUIRED_ANCESTOR_HEAD;
+                                                    R16+R17+R24)
+LCD_T0d  C1_ANCESTRY_GATE               PENDING    (R24; merge-base
+                                                    three floors; the
+                                                    same shape as C0's
+                                                    gate)
+
 LCD_T0a  C0_ENTRY_HEAD_RECORDED         PASS    (C0 records
                                                     C0_ENTRY_HEAD as
                                                     evidence; equals
@@ -786,6 +841,30 @@ C0  READ-ONLY RECON                          (docs only commit)
       REQUIRED_PLAN_ANCESTOR_HEAD.
 
 C1  TEMPORARY CAPTURE                        (source + test commit)
+    - discover C1_ENTRY_HEAD = `git rev-parse HEAD` at start
+      (recorded as evidence; R16+R17+R24)
+    - ancestry gate (R16+R17+R24) — three floors:
+        assert:
+          git merge-base --is-ancestor \
+            IMPLEMENTATION_AUTHORIZED_FROM_HEAD  C1_ENTRY_HEAD
+          git merge-base --is-ancestor \
+            REQUIRED_PLAN_ANCESTOR_HEAD         C1_ENTRY_HEAD
+          git merge-base --is-ancestor \
+            C1_REQUIRED_ANCESTOR_HEAD          C1_ENTRY_HEAD
+        The lower anchor (IMPLEMENTATION_AUTHORIZED_FROM_HEAD
+        == 695b608a9) grants authorization. The middle anchor
+        (REQUIRED_PLAN_ANCESTOR_HEAD == cff0218fb) proves the
+        branch carries the completed R16 contract — NOT a
+        pre-R16 sibling of 0888a6cdf. The new third anchor
+        (C1_REQUIRED_ANCESTOR_HEAD == 6449cec47, R24) proves
+        the branch carries C0 ∧ C0-CORRECTION01 ∧ R21/R22
+        plan alignment — NOT a pre-C0 sibling fork.
+        Any number of docs-only commits between
+        C1_REQUIRED_ANCESTOR_HEAD and C1 execution is
+        allowed; C1 is NOT invalidated by them.
+        C1_REQUIRED_ANCESTOR_HEAD itself does NOT advance
+        with those ordinary later docs commits; C1 still
+        sees it as an ancestor of C1_ENTRY_HEAD.
     - implement P    (if CAN_P_CAPTURE                            = YES)
     - implement W2   (if CAN_W2_CAPTURE                           = YES)
     - implement Q    (if CAN_Q_CAPTURE                            = YES)
@@ -939,11 +1018,20 @@ LIVE-CONTEXT-DIMENSIONS01
   LC-D observability note                 ✅ R13 (NOT_DIRECTLY_OBSERVABLE)
   T7B cardinality discipline              ✅ R14 (request vs commit cardinality)
   Capture-can matrix in C0                ✅ R14
-  C0 read-only recon                      ⏳ NEXT (docs-only commit;
-                                                records C0_ENTRY_HEAD;
-                                                populates capture-can matrix;
+  C0 read-only recon                      ✅ 6f08c82ae (docs-only commit;
+                                                C0_ENTRY_HEAD = 611403c10;
+                                                capture-can matrix populated;
                                                 R16+R17)
-  C1 temporary capture                    ⏳
+  C0-CORRECTION01 (R18/R19/R20)           ✅ 475a3de75 (C0 evidence
+                                                reframed; plan untouched
+                                                in this commit)
+  R21/R22 plan amendment                  ✅ 6449cec47 (plan aligned to
+                                                C0-CORRECTION01 evidence)
+  R23/R24 C0→C1 boundary correction      ⏳ NEXT (this commit;
+                                                C0_HEAD != C0_ENTRY_HEAD
+                                                record; C1_REQUIRED_ANCESTOR_HEAD
+                                                third-gate)
+  C1 temporary capture                    ⏳ (after R23/R24 lands)
   C2 exact-head dogfood VSIX              ⏳
   C3 user live walk                       ⏳
   C4 terminal classification              ⏳
