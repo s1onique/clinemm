@@ -272,8 +272,11 @@ R10 (real W2-conservation witness)                = FIXED + CONSUMER-PROVEN
 CAUSE_CLASS_FOR_C2_CORRECTION02  = UNKNOWN  (still requires the live dogfood walk)
 
 NEXT_ACT = live dogfood walk on the FIXUP04 HEAD VSIX.
-          The diagnostic is now React-pure, cardinality-safe, and
-          captures only the two observable boundaries (wire arrival
-          + React commit). The reviewer's call: "run the damn dogfood
-          trace" — stop iterating on instrumentation architecture.
+          The diagnostic is now PTAD-side-effect-free inside W1's
+          updater, cardinality-safe, and captures only the two
+          observable boundaries (wire arrival + React commit).
+          Global React purity is NOT_CLAIMED (pre-existing residue
+          acknowledged out of scope). The reviewer's call: "run the
+          damn dogfood trace" — stop iterating on instrumentation
+          architecture.
 ```

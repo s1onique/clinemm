@@ -48,17 +48,17 @@ CARDINALITY:
 ```text
 C2C2_FIXUP04_ENTRY_HEAD              = 6f4783937  (closure of FIXUP03)
 C2C2_FIXUP04_PLAN_HEAD               = 32e501da3
-C2C2_FIXUP04_CODE_FIX_HEAD           = f19dbacb9
+C2C2_FIXUP04_CODE_HEAD               = f19dbacb9
 C2C2_FIXUP04_TEST_HEAD               = 8f8d78221
-C2C2_FIXUP04_DOCS_HEAD               = 017f68a36
-C2C2_FIXUP04_CLOSURE_HEAD            = 017f68a36  (FIXUP04 closure head)
+C2C2_FIXUP04_VSIX_SOURCE_HEAD        = 017f68a36  (the HEAD the VSIX is bound to)
+C2C2_FIXUP04_CLOSURE_HEAD            = ed184c042  (FIXUP04 closure head — final doc-only commit)
 
-(Commit chain — 4 commits on top of C2C2_FIXUP04_ENTRY_HEAD:)
+(Commit chain — 5 commits on top of C2C2_FIXUP04_ENTRY_HEAD:)
   32e501da3  docs(elm): C2-CORRECTION02-FIXUP04 plan + source recon
   f19dbacb9  fix(elm): C2-CORRECTION02-FIXUP04 pure updater + remove webview-reducer-output
   8f8d78221  test(elm): C2-CORRECTION02-FIXUP04 new test suite
   017f68a36  docs(elm): C2-CORRECTION02-FIXUP04 terminal evidence + FIXUP03 prose refresh
-  <commit 5> docs(elm): C2-CORRECTION02-FIXUP04 record final HEAD + VSIX binding
+  ed184c042  docs(elm): C2-CORRECTION02-FIXUP04 record final HEAD + VSIX binding
 
 C2C2_FIXUP04_PLAN_DOC                = task-state-e71-c2-correction02-fixup04-plan.md
 C2C2_FIXUP04_SOURCE_RECON_DOC        = task-state-e71-c2-correction02-fixup04-source-recon.md
@@ -89,7 +89,12 @@ dist/dogfood/clinemm-4.1.10-017f68a36.vsix     (this ACT — pure-updater eviden
 
 ---
 
-## 2. R9 — pure updater (the actual contract fix)
+## 2. R9 — PTAD side-effect-free updater (the actual contract fix)
+
+FIXUP04's R9 claim is scoped narrowly: **zero NEW PTAD-introduced
+side effects inside W1's functional updater**. This is NOT a claim
+about global React purity; see §5 for the pre-existing residue
+qualification.
 
 Before FIXUP04:
 
@@ -106,7 +111,7 @@ setState((prevState) => {
     pendingAppliedByPushRef.current.set(stateData._ptadPushId, {
         reducerOut: newState,
         rawWire: rawWireClone,
-    })                                          // ← R9 impurity
+    })                                          // ← R9 PTAD side effect
     return newState
 })
 ```
@@ -118,7 +123,7 @@ After FIXUP04:
 setState((prevState) => {
     // ... reducer runs ...
     const newState = { ...stateData, ... }
-    return newState                             // ← pure updater
+    return newState                             // ← no PTAD side effects
 })
 ```
 
@@ -138,6 +143,29 @@ webview-committed    (webview side, per React commit; LATEST pushId)
 Component captures (`input-section`, `action-buttons`,
 `followup-route`) are unchanged.
 
+### 2.1 Scope of the R9 claim
+
+```text
+PTAD_SIDE_EFFECTS_IN_W1_UPDATER        = 0      (proven by S1 grep)
+FIXUP04_INTRODUCED_UPDATER_SIDE_EFFECTS = 0      (proven by diff against
+                                                  the FIXUP03 closure head)
+
+PRE_EXISTING_W1_UPDATER_SIDE_EFFECTS    = OPEN
+  replicaRef.current = reducerApplyStateSnapshot(...)   (PRE-EXISTING)
+  setShowWelcome(...)                                    (PRE-EXISTING)
+  setOnboardingModels(...)                               (PRE-EXISTING)
+  setDidHydrateState(true)                               (PRE-EXISTING)
+
+GLOBAL_W1_REACT_PURITY                  = NOT_CLAIMED
+PRE_EXISTING_REPLICA_REF_RESIDUE        = OPEN  / OUT_OF_SCOPE
+```
+
+React's documented contract is that updater functions run during
+rendering and may be invoked twice in Strict Mode to detect
+impurity. The PRE_EXISTING residue is acknowledged as out of
+FIXUP04 scope. A future ACT that wants to clean up the
+`replicaRef.current` mutation is a separate, larger piece of work.
+
 ## 3. R10 — committed-context conservation witness
 
 The new
@@ -153,18 +181,42 @@ inside ONE `act()` with NO yields. Reads `state.clineMessages` from
 a real consumer that re-renders on state changes. Asserts all three
 messages are present in the final committed view.
 
-This proves the end-to-end committed-context conservation: the W2
-partial-message contribution survives React's update queue, the
-W1 snapshot reducer correctly merges all contributions, and the
-committed view the user sees contains the full conversation.
+What Q1 proves:
 
-The test does NOT strictly distinguish FIXUP04 from FIXUP02
-(both architectures flow `clineMessages` through the shared
-`replicaRef`). The discriminator for FIXUP04 is established
-separately by the static R9 check (next section) and by code
-review: the W1 functional updater has zero side effects.
+```text
+W1_W2_W1_COMMITTED_CONSERVATION = TEST_PROVEN
+```
 
-## 4. R9 — static purity check
+The committed-context state contains all three contributions
+(MSG-A, MSG-B, MSG-C) after one batched `act()` with the W1+W2+W1
+interleaving. This is the end-to-end committed-context
+conservation test.
+
+What Q1 does NOT prove:
+
+```text
+FIXUP02_COUNTERFACTUAL_FAILURE  = NOT_PROVEN
+REACT_STATE_QUEUE_EQUIVALENCE   = NOT_CLAIMED
+```
+
+The Q1 test does NOT distinguish FIXUP04 from FIXUP02 because
+both architectures flow `clineMessages` through the shared
+`replicaRef`. The architectural justification for using functional
+updaters (each queued updater receives the result of the preceding
+queued update) is React's documented semantics, not an empirical
+test result against the FIXUP02 implementation.
+
+The discriminator for FIXUP04 is established separately by:
+
+- Code review (R6 source-proven: W1's functional updater receives
+  React-authoritative prevState; the FIXUP02 `prevStateRef` is
+  gone; all writers use the functional-updater form).
+- The static R9 purity check (S1 grep): zero NEW PTAD side
+  effects inside W1's updater.
+- React's documented queue semantics (architectural justification
+  for the functional-updater form).
+
+## 4. R9 — static PTAD-side-effect-free check
 
 `c2-correction02-fixup04-updater-purity.test.ts` reads the
 production source file and asserts:
@@ -179,8 +231,15 @@ S2: The source file acknowledges the PRE_EXISTING_REPLICA_REF_MUTATION
     residue honestly (out of FIXUP04 scope).
 ```
 
-S1 is the canonical R9 proof. S2 ensures a future reader does not
-mistake the residual impurity for a FIXUP04-introduced defect.
+S1 is the canonical R9 proof: it is **PTAD-side-effect-free**, not
+"all side effects free". The S1 grep forbids the diagnostic and
+PTAD machinery tokens but does NOT forbid the pre-existing
+`replicaRef.current` mutation or the pre-existing
+`setShowWelcome / setOnboardingModels / setDidHydrateState` setter
+calls (see §5).
+
+S2 ensures a future reader does not mistake the residual
+impurity for a FIXUP04-introduced defect.
 
 ## 5. Pre-existing residue (NOT in FIXUP04 scope)
 
@@ -209,19 +268,39 @@ replicaRef.current = reducerApplyStateSnapshot(
 )
 ```
 
-These are PRE-EXISTING mutations inside functional updaters, NOT
-introduced by PTAD. FIXUP04 does NOT attempt to clean them up. The
-terminal evidence must acknowledge this honestly:
+The W1 snapshot updater also calls pre-existing setter functions:
+
+```ts
+setShowWelcome(...)
+setOnboardingModels(...)
+setDidHydrateState(true)
+```
+
+These are PRE-EXISTING side effects inside functional updaters,
+NOT introduced by PTAD. FIXUP04 does NOT attempt to clean them up.
+The terminal evidence acknowledges this honestly:
 
 ```text
-PTAD_UPDATER_PURITY                  = PASS (zero NEW PTAD side effects
-                                           in W1's updater body)
-PRE_EXISTING_REPLICA_REF_MUTATION     = EXISTING_RESIDUE
+PTAD_SIDE_EFFECTS_IN_W1_UPDATER      = 0     (S1 grep proof)
+FIXUP04_INTRODUCED_UPDATER_SIDE_EFFECTS = 0 (diff vs FIXUP03 closure head
+                                              proves this)
+
+PRE_EXISTING_W1_UPDATER_SIDE_EFFECTS = OPEN
+  replicaRef.current = reducerApplyStateSnapshot(...)
+  setShowWelcome(...)
+  setOnboardingModels(...)
+  setDidHydrateState(true)
+
+PRE_EXISTING_REPLICA_REF_MUTATION    = EXISTING_RESIDUE
 PRE_EXISTING_REPLICA_REF_OUT_OF_SCOPE = true
+
+GLOBAL_W1_REACT_PURITY               = NOT_CLAIMED
+PRE_EXISTING_REPLICA_REF_RESIDUE     = OPEN  / OUT_OF_SCOPE
 ```
 
 If we want to claim "all updaters in this file are pure", that is
-a separate, larger ACT. FIXUP04 is not that ACT.
+a separate, larger ACT. FIXUP04 is not that ACT. The terminal
+evidence does NOT make a global React-purity claim.
 
 ---
 
@@ -330,13 +409,17 @@ NEW_BIOME_ERR  = 0
 
 ```text
 F0  writer audit identifies all setState callsites                PASS
-F1  W1 updater body has zero side effects (R9)                    PASS
+F1  W1 updater body has zero NEW PTAD side effects (R9)           PASS  (pre-existing
+                                                                     residue: see §5)
 F2  pendingAppliedByPushRef REMOVED                              PASS
 F3  webview-reducer-output enum member REMOVED                   PASS
 F4  webview-raw-incoming capture preserved at inbound             PASS
 F5  webview-committed capture preserved post-commit               PASS
-F6  committed-context conservation witness test (R10)            PASS
-F7  static R9 purity check (S1 grep)                              PASS
+F6  committed-context conservation witness test (R10)            PASS  (Q1 proves
+                                                                     conservation, NOT
+                                                                     FIXUP02 counterfactual
+                                                                     failure; see §3)
+F7  static R9 PTAD-side-effect-free check (S1 grep)              PASS
 F8  existing webview-ui tests pass (with vocab updates)          PASS  (556 = 560 - 13 + 9)
 F9  existing PTAD schema tests pass (with vocab updates)         PASS  (24)
 F10 no production wire-shape change when PTAD is OFF              PASS
@@ -344,6 +427,7 @@ F11 exact-HEAD VSIX built with fixup04 short SHA                  PASS  (017f68a
 F12 protected stashes intact                                      PASS
 F13 worktree clean                                                PASS
 F14 FIXUP03 prose refreshes prevStateRef + queue removal         PASS
+F15 R11/R12/R13 qualification correction (this commit)           PASS
 ```
 
 ---
@@ -387,34 +471,66 @@ R2 (API misuse of W3 in pure helper)              = FIXED
 R3 (head-naming in C2-CORRECTION02 terminal doc)   = FIXED
 R4 (raw per-push cardinality under batching)       = FIXED + PROVEN
 R5 (fail-closed on missing _ptadPushId)           = FIXED + PROVEN
-R6 (state-queue conservation across W1/W2/W3)     = FIXED + COUNTEREXAMPLE-PROVEN
+R6 (state-queue conservation across W1/W2/W3)     = FIXED + SOURCE-PROVEN
+                                                    (Q1 conservation test-
+                                                     proven; FIXUP02 counter-
+                                                     factual failure NOT
+                                                     proven — see §3)
 R7 (capture vocabulary freeze)                    = COLLAPSED TO TWO KINDS
 R8 (pendingRawSnapshotsRef removal)               = FIXED
-R9 (W1 updater purity, no PTAD side effects)      = FIXED + STATIC-PROVEN
+R9 (zero NEW PTAD side effects inside W1's
+    functional updater; pre-existing residue
+    acknowledged out of scope)                    = FIXED + STATIC-PROVEN
+                                                    (global React purity
+                                                     NOT_CLAIMED — see §5)
 R10 (real W2-conservation witness)                = FIXED + CONSUMER-PROVEN
 
-PRODUCTION_SEMANTIC_DELTA_ZERO      = RESTORED (FIXUP04 pure updater)
-REACT_STATE_QUEUE_EQUIVALENCE       = PROVEN
-"APPLIED" POST-COMMIT SEMANTICS     = RECONCILED (renamed to "committed")
-WEBVIEW_REDUCER_OUTPUT_REMOVED      = TRUE
-PRE_EXISTING_RESIDUE_ACKNOWLEDGED   = TRUE (PRE_EXISTING_REPLICA_REF_MUTATION)
+FIXUP04_IMPLEMENTATION                   = PASS
+PTAD_SIDE_EFFECTS_INSIDE_W1_UPDATER      = 0
+FIXUP04_INTRODUCED_UPDATER_SIDE_EFFECTS  = 0
+RAW_PER_PUSH_CAPTURE                     = PASS
+COMMITTED_PER_COMMIT_CAPTURE             = PASS
+W1_W2_W1_COMMITTED_CONSERVATION          = TEST_PROVEN
+WEBVIEW_REDUCER_OUTPUT                   = REMOVED
+LIVE_DIAGNOSTIC_FIT_FOR_PURPOSE          = YES
 
-CAUSE_CLASS_FOR_C2_CORRECTION02     = UNKNOWN  (still requires the live dogfood walk)
+PRODUCTION_SEMANTIC_DELTA_ZERO           = YES (when PTAD is OFF, byte-for-byte
+                                                identical to FIXUP03 closure)
+"APPLIED" POST-COMMIT SEMANTICS          = RECONCILED (renamed to "committed")
+WEBVIEW_REDUCER_OUTPUT_REMOVED           = TRUE
+PRE_EXISTING_RESIDUE_ACKNOWLEDGED        = TRUE
+
+GLOBAL_W1_REACT_PURITY                   = NOT_CLAIMED
+FIXUP02_COUNTERFACTUAL_FAILURE           = NOT_PROVEN
+REACT_STATE_QUEUE_EQUIVALENCE            = NOT_CLAIMED
+PRE_EXISTING_REPLICA_REF_RESIDUE         = OPEN / OUT_OF_SCOPE
+
+CAUSE_CLASS_FOR_C2_CORRECTION02          = UNKNOWN
+                                               (still requires the live dogfood walk)
 
 NEXT_ACT = live dogfood walk on the new HEAD (017f68a36) VSIX.
-          The diagnostic is now React-pure (R9), cardinality-safe
-          under React Strict Mode AND under React 18+ automatic
-          batching AND under interleaved non-gRPC state updates
-          (R6), with a real W2-conservation witness (R10).
+          The diagnostic is now PTAD-side-effect-free inside W1's
+          updater (R9), cardinality-safe under React Strict Mode
+          AND under React 18+ automatic batching AND under
+          interleaved non-gRPC state updates (R6 source-proven),
+          with a real W1+W2+W1 committed-context conservation
+          witness (R10), and on a simplified two-kind vocabulary.
 
           The reviewer's directive: "After that, I would finally
           stop reviewing instrumentation architecture and run the
           damn dogfood trace."
 ```
 
-This fixup ACT is closed. The diagnostic is now production-semantic-
-zero AND React-pure AND burst-safe AND queue-conserving AND on a
-simplified two-kind vocabulary. The live dogfood walk can produce
-architecture-grade binary boundary evidence on the diagnostic's two
-observable boundaries (wire arrival + React commit) without
-violating React's purity contract.
+This fixup ACT is closed with qualification corrections applied
+(R11/R12/R13). The diagnostic is now production-semantic-zero AND
+PTAD-side-effect-free AND burst-safe AND queue-conserving AND on a
+simplified two-kind vocabulary. The implementation is correct;
+the qualification correction in this commit ensures the evidence
+ledger does not overclaim React-purity, FIXUP02 counterfactual
+failure, or REACT_STATE_QUEUE_EQUIVALENCE that the tests and
+diff do not actually establish.
+
+The live dogfood walk can produce architecture-grade binary
+boundary evidence on the diagnostic's two observable boundaries
+(wire arrival + React commit) without violating React's purity
+contract.
