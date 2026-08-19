@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP01-REACT-UPDATER-PURITY
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION
  *
  * Production-shaped composition replay wrapped in <React.StrictMode>.
  *
@@ -9,16 +9,19 @@
  * functions to be pure; under Strict Mode the updater is invoked twice
  * and one result is discarded. That made the
  * `webview-raw-incoming(P) = exactly 1` and
- * `webview-replica(P) = exactly 1` cardinality contract un-provable
+ * `webview-reducer-output(P) = exactly 1` cardinality contract un-provable
  * under Strict Mode.
  *
- * After the fixup:
+ * After FIXUP01 + FIXUP02 + FIXUP03:
  *   - the RAW capture lives at the inbound `onResponse` boundary
  *     (BEFORE `setState` is called), so it is OUTSIDE the updater.
- *   - the APPLIED capture lives in a `useEffect` keyed on
- *     `[state._ptadPushId, state]`, ALSO outside the updater. The
- *     effect drains a per-pushId map at most once per push id, so
- *     Strict Mode retries cannot double-record.
+ *   - the REDUCER-OUTPUT capture lives in `pendingAppliedByPushRef.current`,
+ *     which is populated INSIDE the functional updater (FIXUP03 hoisted
+ *     back to React-authoritative prevState; R6). The stash is
+ *     idempotent under Strict Mode retries because the same pushId
+ *     is written with the same value twice.
+ *   - the post-commit drain effect empties the queue and emits one
+ *     `webview-reducer-output` capture per pushId.
  *
  * This test mounts the actual `ExtensionStateContext` inside
  * `<React.StrictMode>` so React double-invokes:
@@ -26,8 +29,11 @@
  *   - the `setState` updater (Strict Mode invokes the updater twice
  *     and discards one result);
  * and proves: for each `pushId` in the E1-E9 sequence, the
- * `webview-raw-incoming` and `webview-replica` capture rings hold
+ * `webview-raw-incoming` and `webview-reducer-output` capture rings hold
  * exactly ONE record each.
+ *
+ * Capture kind renamed from `webview-replica` (FIXUP01/FIXUP02) to
+ * `webview-reducer-output` (FIXUP03) per the R7 vocabulary freeze.
  */
 
 import type { ExtensionState, TurnState } from "@shared/ExtensionMessage"
@@ -180,7 +186,7 @@ describe("C2-CORRECTION02-FIXUP01 — React StrictMode cardinality", () => {
 		)
 		const applied = records.filter(
 			(r): r is { _ptadPushId?: number } =>
-				typeof r === "object" && r !== null && (r as { captureKind?: string }).captureKind === "webview-replica",
+				typeof r === "object" && r !== null && (r as { captureKind?: string }).captureKind === "webview-reducer-output",
 		)
 
 		// Exactly N raw records for N pushes (Strict Mode mounts the

@@ -1,19 +1,25 @@
 /**
- * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP02-BATCHED-PUSH-CARDINALITY
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-C2-CORRECTION02-FIXUP03-STATE-QUEUE-CONSERVATION
  *
- * R4 + R5 proof tests. Drives the production ExtensionStateContext
- * through burst deliveries (multiple onResponse calls inside the same
- * React task, with NO yield between them) and verifies:
+ * R4 + R5 proof tests, refreshed to the FIXUP03 capture vocabulary.
+ * Drives the production ExtensionStateContext through burst deliveries
+ * (multiple onResponse calls inside the same React task, with NO yield
+ * between them) and verifies:
  *
  *   1. R4 (BATCHED CARDINALITY): each wire push produces exactly one
- *      webview-raw-incoming AND exactly one webview-replica record,
- *      paired by `_ptadPushId`, even when React batches the
- *      corresponding setState calls into a single commit.
+ *      `webview-raw-incoming` AND exactly one `webview-reducer-output`
+ *      record, paired by `_ptadPushId`, even when React batches the
+ *      corresponding setState calls into a single commit. The reducer
+ *      runs INSIDE the functional updater (R6 — React-authoritative
+ *      prevState) and stashes into `pendingAppliedByPushRef.current`,
+ *      which the post-commit drain effect empties in arrival order.
  *
  *   2. R5 (FAIL-CLOSED MISSING PUSHID): when `_ptadPushId` is absent,
  *      the raw capture still emits (with `_ptadPushId = undefined`),
- *      but no applied capture is emitted and the pending map is NOT
- *      corrupted by overwriting a sentinel slot.
+ *      but no reducer-output capture is emitted (no correlation key)
+ *      and the pending map is NOT corrupted by overwriting a sentinel
+ *      slot. After FIXUP03 the pending map is `pendingAppliedByPushRef`
+ *      (NOT `pendingRawSnapshotsRef`, which R8 removed).
  *
  * The tests intentionally drive pushes WITHOUT `await Promise.resolve()`
  * between them — this is the exact regime that React 18+ automatic
@@ -135,7 +141,7 @@ function isRaw(r: unknown): r is { _ptadPushId?: number } {
 	return typeof r === "object" && r !== null && (r as { captureKind?: string }).captureKind === "webview-raw-incoming"
 }
 function isApplied(r: unknown): r is { _ptadPushId?: number } {
-	return typeof r === "object" && r !== null && (r as { captureKind?: string }).captureKind === "webview-replica"
+	return typeof r === "object" && r !== null && (r as { captureKind?: string }).captureKind === "webview-reducer-output"
 }
 
 beforeEach(() => {

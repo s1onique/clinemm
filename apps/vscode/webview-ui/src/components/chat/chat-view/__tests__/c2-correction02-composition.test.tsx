@@ -12,16 +12,27 @@
  *   1. Exactly one `webview-raw-incoming` record is appended on
  *      `_ptadPushId = P`, stamped BEFORE the reducer mutates
  *      `stateData.turnState`.
- *   2. Exactly one `webview-replica` record is appended on the SAME
- *      `_ptadPushId = P`, stamped AFTER the reducer.
- *   3. On a healthy push (E1-E5), the raw and applied records carry
- *      the same `legacyPhase` / `legacySeq`.
+ *   2. Exactly one `webview-reducer-output` record is appended on the
+ *      SAME `_ptadPushId = P`, stamped from the functional-updater's
+ *      reducer output. (Capture kind renamed from `webview-replica`
+ *      in FIXUP03; see vocabulary freeze below.)
+ *   3. On a healthy push (E1-E5), the raw and reducer-output records
+ *      carry the same `legacyPhase` / `legacySeq`.
  *   4. The C2R isolated replay proved the reducer is correct, so the
  *      production composition must surface `awaiting_followup / seq 15`
  *      on the terminal push.
  *
  * The test does NOT modify the production code; it drives the
  * production-shape flow from outside the component.
+ *
+ * FIXUP03 vocabulary freeze (R7):
+ *   - `webview-raw-incoming`     — wire-side arrival (per push)
+ *   - `webview-reducer-output`   — reducer's nextState for each pushId
+ *   - `webview-committed`        — React-committed state (per commit)
+ *
+ * The composition tests assert raw + reducer-output pairing (1:1 with
+ * pushes). The committed-capture cardinality is asserted separately
+ * by `c2-correction02-fixup03-state-queue.test.tsx`.
  */
 
 import type { ExtensionState, TurnState } from "@shared/ExtensionMessage"
@@ -203,12 +214,20 @@ describe("C2-CORRECTION02 production composition replay", () => {
 
 		const records = getPostTerminalAuthorityDiagnosticRecords("webview") as readonly PostTerminalAuthoritySnapshot[]
 
-		// 5 pushes × 2 captures each = 10 records.
-		expect(records.length).toBe(10)
-
-		// For each push ID, exactly one raw and one applied.
+		// FIXUP03: with `await Promise.resolve()` between pushes (each push
+		// gets its own React commit), the captures break down as:
+		//   - 5 raw               (one per push, stamped at inbound)
+		//   - 5 reducer-output    (one per push, drained after each commit)
+		//   - N committed         (one per [state] effect run; depends on
+		//                          Strict Mode mount count + per-commit count)
+		// The committed-capture cardinality is asserted separately in the
+		// state-queue test (FIXUP03 §3, §5). Here we only assert the
+		// raw + reducer-output pairing, which is the only thing the
+		// composition test was originally about.
 		const raws = records.filter((r) => r.captureKind === "webview-raw-incoming")
-		const applied = records.filter((r) => r.captureKind === "webview-replica")
+		const applied = records.filter((r) => r.captureKind === "webview-reducer-output")
+
+		// For each push ID, exactly one raw and one reducer-output.
 		expect(raws.length).toBe(5)
 		expect(applied.length).toBe(5)
 
@@ -218,8 +237,8 @@ describe("C2-CORRECTION02 production composition replay", () => {
 		expect(rawIds).toEqual(appliedIds)
 
 		// Terminal push (E5) must show awaiting_followup / seq 15 on BOTH
-		// raw and applied — this is the C2R pass-through invariant for
-		// the production composition.
+		// raw and reducer-output — this is the C2R pass-through invariant
+		// for the production composition.
 		const e5Raw = raws.find((r) => r._ptadPushId === 5)
 		const e5Applied = applied.find((r) => r._ptadPushId === 5)
 		expect(e5Raw?.rawIncomingLegacyPhase).toBe("awaiting_followup")
@@ -294,9 +313,9 @@ describe("C2-CORRECTION02 production composition replay", () => {
 		}
 
 		const records = getPostTerminalAuthorityDiagnosticRecords("webview") as readonly PostTerminalAuthoritySnapshot[]
-		const applied = records.filter((r) => r.captureKind === "webview-replica")
+		const applied = records.filter((r) => r.captureKind === "webview-reducer-output")
 
-		// E5 terminal push: raw == applied on this exact sequence
+		// E5 terminal push: raw == reducer-output on this exact sequence
 		// (because the reducer is correct, as proven by the C2R replay).
 		const e5Applied = applied.find((r) => r._ptadPushId === 5)
 		expect(e5Applied?.appliedLegacyPhase).toBe("awaiting_followup")
@@ -305,7 +324,7 @@ describe("C2-CORRECTION02 production composition replay", () => {
 		expect(e5Applied?.rawIncomingLegacySeq).toBe(15)
 
 		// E6 straggler (idle/seq 2): reducer rejects older seq, so
-		// the applied view stays at awaiting_followup/seq 15 from E5.
+		// the reducer-output view stays at awaiting_followup/seq 15 from E5.
 		const e6Applied = applied.find((r) => r._ptadPushId === 6)
 		expect(e6Applied?.appliedLegacyPhase).toBe("awaiting_followup")
 		expect(e6Applied?.appliedLegacySeq).toBe(15)
@@ -334,13 +353,13 @@ describe("C2-CORRECTION02 production composition replay", () => {
 
 		const records = getPostTerminalAuthorityDiagnosticRecords("webview") as readonly PostTerminalAuthoritySnapshot[]
 		const raws = records.filter((r) => r.captureKind === "webview-raw-incoming")
-		const applied = records.filter((r) => r.captureKind === "webview-replica")
+		const applied = records.filter((r) => r.captureKind === "webview-reducer-output")
 
 		expect(raws.length).toBe(PUSHES.length)
 		expect(applied.length).toBe(PUSHES.length)
 
 		for (let i = 5; i < PUSHES.length; i++) {
-			// E6-E9 raw = idle/seq 2 (wire-side); applied = awaiting_followup/seq 15
+			// E6-E9 raw = idle/seq 2 (wire-side); reducer-output = awaiting_followup/seq 15
 			// (reducer seq-gated).
 			const raw = raws.find((r) => r._ptadPushId === PUSHES[i].pushId)
 			const app = applied.find((r) => r._ptadPushId === PUSHES[i].pushId)
