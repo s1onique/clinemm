@@ -1,0 +1,2 @@
+577f625929d6cee7d79b2905eca0f91fb9095994fdd3a56fc1aff12318f8a454  /Volumes/UserData/Users/chistyakov/Downloads/post-terminal-authority-diagnostic-extension.jsonl
+70c3e309ff8f231dc6dd2a24812b824f2a9c4a42ecf35a148d75d687a935ee77  /Volumes/UserData/Users/chistyakov/Downloads/post-terminal-authority-diagnostic-webview.jsonl
