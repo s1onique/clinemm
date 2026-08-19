@@ -5,8 +5,13 @@
 
 **Sub-step:** plan (no code yet)
 
-**Verdict (this commit):** **AUTHORIZED (isolation ACT, no production
-fix in this ACT unless mechanism becomes uniquely proven)**
+**Verdict (this commit):** **CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED**
+(initial v2 verdict was "AUTHORIZED"; revised in the same ACT after
+R3 + R4 retraction from the post-C0 review). No production fix.
+No test rung was committed. The isolation ladder was determined
+to be unable to reproduce the W2 boundary from the existing
+TRACE01 evidence because every required dimension is either
+ALREADY_MATCHED (E1) or UNAVAILABLE_FROM_TRACE (E2..E10).
 
 **Entry (this ACT):** `6735738606a6fbb7a4ae885958bf111e00e8b0e4`
 (RED-FIX01 plan+corrections commit; LIVE-SHAPE plan itself is part
@@ -18,6 +23,14 @@ commit alone would omit the authorization/freeze commit.)
 ---
 
 ## §0  Mission
+
+**Status (post-C0):** ACT CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED.
+No rung in §2 was exercised (no test, no fixture change, no
+production change). The §0–§1 sections below describe the
+**would-be** mission if/when a future ACT re-opens the isolation
+ladder with new live evidence (§9 → LIVE-CONTEXT-DIMENSIONS01).
+They are preserved here as the contract the re-opened ladder
+must honor, not as a current action plan.
 
 Starting from the known-green real-provider fixture, introduce **one
 live-trace dimension at a time**. Identify the **first dimension or
@@ -211,53 +224,153 @@ E9   | YES (welcomeViewCompleted; not in captures) | n/a             | UNAVAILAB
 E10  | n/a                | n/a                  | UNAVAILABLE_FOR_TRACE
 ```
 
-**Most consequential structural finding:**
+**Most consequential structural finding (retracted — see R3 below):**
 
-The live trace's W2 boundary is **not produced by any of the W2
-hypotheses listed in the ladder (E1..E9)**. It is produced by a
-producer-side inconsistency between the `legacyPhase` field and
-the snapshot's `turnState` field. The minimal fixture faithfully
-reproduces what the webview does given that inconsistency, because
-**the webview was never the actor that emitted the streaming/11
-turnState** — it only commits what the producer shipped, and the
-producer shipped `idle/3`.
+> **RETRACTED in commit e3a0ad5b1's follow-up.** The §1.5 first
+> pass incorrectly concluded that the W2 boundary was a
+> producer-side inconsistency. It is not. See R3 retraction
+> below.
 
-This means the **webview turnState-composition boundary as
-characterized in RED-FIX01 does not exist** in the live trace.
-The boundary is on the producer side, not the webview side. The
-ACT must therefore **re-classify** before any test rung commits
-to a hypothesis:
+The original (now-retracted) finding argued:
 
 ```text
-LIVE_TRACE01_FINDING =
+LIVE_TRACE01_FINDING (RETRACTED) =
   W2 boundary = PRODUCER_SIDE
-                legacyPhase advances but stateData.turnState does not
-                → webview faithfully commits idle/3
-                → cancel button stays hidden (root cause class)
-
-WEBVIEW_TURNSTATE_COMPOSITION =
-  Not the locus of the live W2 boundary
-  → all E1..E9 rungs become UNAVAILABLE or ALREADY_MATCHED
-  → the isolation ladder as written will return
-    PASS_LIVE_SHAPE_REPRODUCTION_LADDER_PARTIAL at best
-  → the next ACT must be re-targeted to producer-side state
-    composition, not webview-side state composition
 ```
 
-The **only** rung that *could* be different from BASE is **E6
-(preceding message history)**: the live trace has 12 successive
-streaming/11 pushes all consistently committing `idle/3`, whereas
-the BASE fixture has 0 such pushes. But E6 is not a boundary on
-the **composition** of one push; it is the **repetition** of the
-producer's already-inconsistent emissions. It therefore tests
-*repetition resistance*, not composition correctness.
+This was incorrect. The `webview-raw-incoming` capture at
+`ExtensionStateContext.tsx:54` reads:
 
-The first rung this ACT should commit is therefore **E6**, with
-the explicit caveat that the question being asked is not
-"does the W2 boundary reproduce?" but "does the producer's
-already-non-streaming state survive N consecutive streaming/11
-pushes?". If E6 turns RED it is a finding about **producer
-inertia**, not webview composition.
+```ts
+const rawIncomingLegacyPhase = rawStateData.turnState?.phase
+```
+
+where `rawStateData === stateData === JSON.parse(response.stateJson)`
+(see `ExtensionStateContext.tsx:570` and `ExtensionStateContext.tsx:606`).
+That means `rawIncomingLegacyPhase` is the **wire payload** of
+`stateData.turnState.phase` — not a producer-side channel.
+
+Therefore the wire supplied `streaming/11` at P12..P23 and P30..P32.
+The webview committed `idle/3` because:
+
+```ts
+stateData.turnState = replicaRef.current.turnState
+// ExtensionStateContext.tsx:652
+```
+
+i.e., the reducer-composed replica **replaced** the wire `turnState`
+with its own seq-gated result. This is exactly the
+`reducerApplyStateSnapshot` composer that RED-FIX01 was probing.
+The WEBVIEW_LOCUS is therefore **still open and trace-supported**,
+not retired.
+
+**Retracted structural finding (corrected):**
+
+```text
+LIVE_TRACE01_FINDING (CORRECTED) =
+  W2 boundary = RAW→COMMITTED WEBVIEW BOUNDARY
+                wire supplied turnState=streaming/11
+                reducer/replica returned turnState=idle/3
+                committed = idle/3
+
+WEBVIEW_LOCUS =
+  STILL_OPEN / TRACE-SUPPORTED
+  (not retired)
+
+PRODUCER_SIDE_RECLASS =
+  RETRACTED / NOT_PROVEN
+```
+
+The producer-side `runtimeStatus` / `shadowStatus` fields in the
+extension JSONL are **distinct state channels** from `stateData.turnState`.
+Their disagreement at P12 (legacyPhase=streaming/11, runtimeStatus=idle)
+is real but does not imply that the wire `stateData.turnState` was
+`idle/3`. The wire field is independently recorded by PTAD and
+clearly says `streaming/11`.
+
+---
+
+### R4 retraction — E6 is UNAVAILABLE, not POTENTIALLY_DIFFERENT
+
+The original C0 table marked `E6` as `POTENTIALLY_DIFFERENT`
+because the live trace has 12 successive streaming/11 pushes.
+That conflated **push chronology** with **preceding message /
+replica history**. They are different experimental dimensions:
+
+```text
+E6_PRECEDING_MESSAGE_HISTORY =
+  experimental dimension: clineMessages body / replica ts/seq history
+  live evidence:         no clineMessages body in any capture
+  verdict:               UNAVAILABLE
+
+E6A_REPEATED_W1_SNAPSHOT_HISTORY =
+  experimental dimension: N consecutive W1 snapshots with
+                          identical or non-monotonic shape
+  live evidence:         yes (P12..P23 are 6 successive streaming/11
+                                  W1 snapshots, all consistently
+                                  committed idle/3)
+  verdict:               REQUIRES_OWN_RUNG / E6A
+```
+
+E6 must therefore be **UNAVAILABLE**. If a separate E6A rung is
+ever opened, it must carry its own causal rationale and cannot
+inherit the "preceding message history" semantics.
+
+---
+
+### Final C0.5 verdict table (post-retraction)
+
+```text
+rung | live value known? | different from BASE? | action
+---- | ----------------- | -------------------- | ------
+E1   | YES (stateVer=0)  | NO (BASE also uses ??0)| ALREADY_MATCHED
+E2   | NO                | n/a                   | UNAVAILABLE
+E3   | NO                | n/a                   | UNAVAILABLE
+E4   | n/a               | n/a                   | UNAVAILABLE (depends on E3)
+E5   | NO                | n/a                   | UNAVAILABLE
+E6   | NO (no clineMessages body in trace)            | UNAVAILABLE
+E7   | n/a (no partial-message body in trace)         | UNAVAILABLE_FROM_TRACE
+E8   | n/a                                            | UNAVAILABLE_FROM_TRACE
+E9   | YES (welcomeViewCompleted; not in captures)     | UNAVAILABLE_FROM_TRACE
+E10  | n/a                                            | UNAVAILABLE_FROM_TRACE
+```
+
+**FIRST_GREEN_TO_RED_DELTA = NOT_FOUND**
+
+The ladder cannot reproduce the W2 boundary from synthetic
+dimensions because the live trace lacks the dimensions required
+to reconstruct the live webview-side `setState` invocation context
+(prevState, replica epoch, replica stateVersion, partial-message
+body, queued local setState writers between raw and commit).
+
+---
+
+### What this ACT now resolves to
+
+This ACT was an **isolation ladder** plan. The ladder is now
+exhausted against the existing TRACE01 evidence. The current
+verdict is therefore:
+
+```text
+LIVE-SHAPE-REPRODUCTION01 =
+  CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED
+  (was: AUTHORIZED in plan v2)
+```
+
+It is NOT:
+
+```text
+  PASS_LIVE_SHAPE_REPRODUCTION_LADDER_PARTIAL
+```
+
+because `PARTIAL` implies at least one rung was exercised and
+returned a bounded verdict. Here every rung that *could* be
+exercised was determined to be either ALREADY_MATCHED (E1) or
+UNAVAILABLE_FROM_TRACE (E2..E10). No rung changed the BASE
+fixture. No rung was committed.
+
+The next ACT must therefore be **evidence acquisition**, not
+synthetic reproduction. See §9 for the recommended next ACT.
 
 ---
 
@@ -451,47 +564,53 @@ epoch arbitration is wrong**.
 
 ---
 
-## §4  Acceptance gate
+## §4  Acceptance gate (post-C0 retraction)
 
 ```text
 LSR_T0   ENTRY_HEAD                         6735738606a6fbb7a4ae885958bf111e00e8b0e4
-                                                  (R1 correction: the LIVE-SHAPE
-                                                  plan itself is part of the
-                                                  entry range; execution
-                                                  baseline cannot be the
-                                                  cleanup commit alone)
+                                                  (R1 correction)
 LSR_T1   TRACE01_LIVE_W2                    PROVEN
 LSR_T2   RED_FIX01_MINIMAL_FIXTURE          GREEN
 LSR_T3   PRODUCTION_DELTA                   0
 
-LSR_T4   LIVE_DIMENSION_INVENTORY           PASS   (C0 table produced)
+LSR_T4   LIVE_DIMENSION_INVENTORY           PASS   (C0 table produced,
+                                                       corrected after
+                                                       R3/R4 retraction)
 
-LSR_T5   STATEVERSION_VARIANT               RED | GREEN | ALREADY_MATCHED | UNAVAILABLE
-LSR_T6   SNAPSHOT_EPOCH_VARIANT             RED | GREEN | ALREADY_MATCHED | UNAVAILABLE
-LSR_T7   PARTIAL_EPOCH_VARIANT              RED | GREEN | ALREADY_MATCHED | UNAVAILABLE
-LSR_T8   EPOCH_RELATION_VARIANT             RED | GREEN | ALREADY_MATCHED | UNAVAILABLE
+LSR_T5   STATEVERSION_VARIANT               ALREADY_MATCHED (live trace
+                                                       stateVer=0; BASE
+                                                       also uses ??0)
 
-LSR_T9   FIRST_GREEN_TO_RED_DELTA           FOUND | NOT_FOUND
+LSR_T6   SNAPSHOT_EPOCH_VARIANT             UNAVAILABLE      (epoch not
+                                                       stamped in trace)
 
-if FOUND:
-  LSR_T10 ABLATION                          PASS   (candidate dimension
-                                                       removed → BASE GREEN)
-  LSR_T11 CAUSAL_DIMENSION                  PROVEN_FOR_FIXTURE
-  LSR_T12 LIVE_CAUSAL_DIMENSION             PROVEN only if the changed
-                                                       value itself is
-                                                       trace-derived;
-                                                       otherwise
-                                                       SYNTHETIC_MECHANISM_PROBE_ONLY
+LSR_T7   PARTIAL_EPOCH_VARIANT              UNAVAILABLE      (no partial-
+                                                       message body in
+                                                       trace)
 
-if NOT_FOUND:
-  LSR_T10..12                               N/A
-  NEXT_DIMENSION                            explicitly frozen
+LSR_T8   EPOCH_RELATION_VARIANT             UNAVAILABLE      (depends on
+                                                       E3 / E7)
 
-LSR_T13  WEBVIEW_TEST_SWEEP                 PASS
-LSR_T14  TYPES                              PASS
-LSR_T15  BIOME                              PASS
-LSR_T16  DIFF_HYGIENE                       PASS
-LSR_T17  PROTECTED_STASHES                  PASS
+LSR_T9   FIRST_GREEN_TO_RED_DELTA           NOT_FOUND
+
+→ CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED
+  LSR_T10..12 are N/A (no candidate was found to ablate)
+  LSR_T13..17 are N/A (no test rung was committed;
+                       no fixture change; no PTAD change)
+
+PRODUCER_SIDE_RECLASSIFICATION              RETRACTED / NOT_PROVEN
+TRACE01_RAW→COMMITTED_DIVERGENCE            STILL_SUPPORTED
+                                            wire supplied streaming/11
+                                            committed idle/3
+                                            (locus: webview reducer
+                                             / replica)
+CURRENT_ROOT_CAUSE                          UNKNOWN
+BOUNDARY_LOCUS                               RAW→COMMITTED WEBVIEW
+                                              BOUNDARY
+NEXT_ACT                                     LIVE-CONTEXT-DIMENSIONS01
+                                              (evidence acquisition,
+                                               NOT a fix)
+PRODUCTION_FIX                               NOT AUTHORIZED
 ```
 
 ### Allowed outcomes
@@ -529,9 +648,11 @@ No production fix in this ACT.
    dimension is isolated. The ablation step (LSR_T10) must succeed
    before LSR_T11.
 
-5. **Each rung must be GREEN or RED.** No "yellow" results; if the
-   result is ambiguous, that rung is N/A and the next rung is
-   tried.
+5. **Each rung must be GREEN, RED, ALREADY_MATCHED, or
+   UNAVAILABLE_FROM_TRACE.** No "yellow" results; if the result
+   is ambiguous, that rung is UNAVAILABLE_FROM_TRACE and the next
+   rung is tried. An `ALREADY_MATCHED` rung is NOT evidence of
+   any kind — it must not be claimed as a GREEN confirmation.
 
 6. **PTAD must remain unchanged.** This ACT does not modify the
    PTAD architecture, the `_ptadPushId` semantics, or the
@@ -591,18 +712,81 @@ into the next causal rung.
 
 ## §9  Next step after this docs commit
 
-The next step in this branch is **not yet committed**; it must be
-authorized in a separate round. When authorized, the next commit
-will be either:
+This ACT is **CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED** at the
+current commit. The next step in this branch is **not yet
+committed**; it must be authorized in a separate round.
 
-- A `test(elm)` commit containing the E1 (`stateVersion`) variant
-  of the RED-FIX01 test fixture, with full diff-hygiene and PTAD
-  invariants preserved; OR
-- A `docs(elm)` commit further bounding RED-FIX01 if the reviewer
-  requires additional qualification.
+**The next ACT is NOT a reproduction rung.** The C0 inventory
+proved that no synthetic dimension in the current ladder can
+reproduce the live W2 boundary because the live TRACE01 evidence
+lacks the dimensions that would be needed to reconstruct the live
+webview `setState` invocation context. Forcing a rung to "test
+something" when the value being tested is identical to BASE
+(ALREADY_MATCHED) or absent from the trace (UNAVAILABLE_FROM_TRACE)
+is not evidence of any kind.
 
-The exact rung (E1) is recommended as the first because it is the
-most directly observable authority dimension on the W1 path. E2/E3
-are recommended as the **second** rung because they are the
-highest-value hypothesis (the cross-stream epoch interference
-story).
+**The next ACT is evidence acquisition.** Recommended
+authorization target:
+
+```text
+ACT-CLINEMM-ELM-ARCHITECTURE01-
+E7.1-WEBVIEW-TURNSTATE-LIVE-CONTEXT-DIMENSIONS01
+```
+
+**Mission:**
+
+> Acquire only the missing dimensions necessary to explain why a
+> live `webview-raw-incoming streaming/11` becomes a committed
+> `idle/3`, without changing state semantics.
+
+**Required new observations (target list):**
+
+```text
+1. snapshot epoch
+2. replica epoch immediately before W1
+3. snapshot stateVersion
+4. replica stateVersion immediately before W1
+5. W1 updater invocation count per _ptadPushId
+6. prevState.turnState at each W1 updater invocation
+7. reducer output turnState (per invocation)
+8. returned newState.turnState (per invocation)
+9. partial-message epoch / ts / seq
+10. identity of any queued local setState writer between raw
+    and commit
+```
+
+The instrumentation must be **opt-in**, **temporary**, and carry
+an **explicit removal clause** — not another permanent
+instrumentation architecture. After the new trace exists, the
+LIVE-SHAPE-REPRODUCTION01 ladder can be **re-opened** (in a fresh
+ACT) with concrete values for dimensions that were UNAVAILABLE
+here, and the first GREEN→RED delta can be sought without
+speculation.
+
+**Why this is the correct next move:**
+
+- The current ladder has **no candidate dimension** that differs
+  from BASE. Running any rung now would be ceremonial.
+- The reviewer's recommendation: *"stop trying synthetic
+  dimensions that the trace never captured. Instrument the one
+  live raw→commit transition deeply enough to learn what
+  React/reducer state existed inside it."*
+- The boundary locus remains **RAW→COMMITTED WEBVIEW BOUNDARY** —
+  it is not retired, just unmeasured at the required granularity.
+- The producer-side reclassification is **RETRACTED / NOT_PROVEN**.
+  Do not pursue producer-side composition as the next ACT.
+
+**Honored constraints (carry forward):**
+
+- **PRODUCTION_DELTA = 0** in this ACT (already 0)
+- **PTAD_DELTA = 0** (existing PTAD remains the baseline; the new
+  ACT may extend PTAD with opt-in temporary capture kinds, but the
+  current capture kinds (`webview-raw-incoming`,
+  `webview-committed`, `action-buttons`, `input-section`) must
+  not change behavior)
+- **DIFF_CHECK = clean** for every commit
+- **PROTECTED_STASHES (141372c52, 371752f71) remain intact**
+- **VSIX = byte-identical** to `8a7f1236... (8883021 bytes)`
+- **LLM credential = NOT REQUIRED** in this ACT
+
+**No fix is authorized in this ACT or the next.**
