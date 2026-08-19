@@ -220,6 +220,8 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION03` | UPSTREAM | CLOSED at `a87ef52e6` (superseded by correction 04) | — | upstream-issue-intake-triage-correction02 | strict destination-contract test for `TOOL-EXECUTION-SEMANTICS01` (issue must materially change or validate one of the canonical telemetry outputs); 23 over-broad mappings removed and reclassified `RELATED_TOOL_RUNTIME → RADAR` with cluster assignments (terminal-timeout=9, tool-parse=5, mcp-routing=3, shell-integration=2, loop-control=2, file-edit=1, approval-ux=1) so a future `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01` can be proposed with a clear evidence table; corrected artifact at `.factory/upstream/cline-upstream-triage.md` (293 lines, 29.9 KiB) |
 | `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-TRIAGE-CORRECTION04` | UPSTREAM | CLOSED at this commit | — | upstream-issue-intake-triage-correction03 | strict destination-contract test for `STATIC-THINKING-PRESENTATION-PERSISTENCE01` (issue must demonstrate presentation-vs-runtime divergence, not a runtime stall); 5 over-broad mappings removed and reclassified `RUNTIME_THINKING_STALL → RADAR` with cluster assignments (skipped-command-stall=2, terminal-output-stall=1, model-thinking-stall=1, prompt-never-sent=1) so a future runtime-task-progression epic can be proposed with a clear evidence table; only `#8636` survives as `EXACT_PRESENTATION_MAP`; corrected artifact at `.factory/upstream/cline-upstream-triage.md` (287 lines, 25.9 KiB) |
 | `ACT-CLINEMM-TEST-BASELINE-FAILURES-RECON01` | QA | CLOSED at this commit | — | test-baseline-zero-failures01 | RED-first recon at exact head `0d2548dd5`: canonical `cd apps/vscode && bunx vitest run --config vitest.config.ts` reproduces `1667 pass / 5 fail` exactly; 5 failures classified (4 TEST_DEFECT + 1 PRODUCT_DEFECT) with causal evidence; all 5 repaired with bounded fixes (REPO_ROOT hardcoded to deleted worktree → `.git/HEAD` walker; `SdkInteractionCoordinator.clearPending` now invokes saved `pendingAskResolve("")` mirroring `resolvePendingAskQuestion(undefined)`); canonical broad suite GREEN twice (`1672 pass / 0 fail`, ~50s each) with suite-load failure for hub config noted as by-design exclusion (dedicated config passes 11/11); isolated formerly-failing tests GREEN 5/5 across runs (no flakes); no new skips, no assertion weakening, no test exclusion; replaces "pre-existing" wording with truthful exact-head state |
+| `EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01` | RUNTIME / TASK-STATE | OPEN (RADAR with `CAPTURE_INSUFFICIENT`) | HIGH pending live evidence | none | promote the previously-radar `RUNTIME_THINKING_STALL` cluster into a canonical Cline-- epic only if a future ACT obtains direct live evidence of: an asynchronous command/tool remaining `RUNNING` while the model/agent stops progressing with no actionable user continuation; the load-bearing causal boundary between "runtime lost the running job" and "the model never polled again" cannot be observed in this environment today because no Cline-- extension host was running during the original incident (the observed `status: running / jobId / elapsedMs / deadlineRemainingMs` shape was host-tool polling output, not a Cline tool result); canonical continuation seam (`command-job-manager.start` → `awaitOrSnapshot` race → `status()` race against `exitTransitions` map → `command_status` tool) is well-tested GREEN 20/20 under vitest; `backgroundCommandRunning` projection state is unwired (dead — `updateBackgroundCommandState()` defined but never called) which is a separate presentation concern, NOT a continuation defect; do NOT pre-promote the 5 `RUNTIME_THINKING_STALL` upstream issues or the 23 `RELATED_TOOL_RUNTIME` issues as EXACT_MAPs without matching failure contract |
+| `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-LIVE-RECON01` | RUNTIME / TASK-STATE | CLOSED at this commit with `CAPTURE_INSUFFICIENT` | — | runtime-task-progression01 | live evidence captured during `ACT-CLINEMM-TEST-BASELINE-FAILURES-RECON01` post-closure: the host command `bun scripts/run-bun-tests.ts` ran for 5+ min and froze log at 250264 bytes / 2503 lines; after the test-baseline ACT's bounded fixes the canonical broad suite is GREEN (1672 pass / 0 fail × 3); however, the load-bearing causal boundary for `RUNTIME-TASK-PROGRESSION01` cannot be observed in this environment because (1) no Cline-- VS Code extension host was running during the original incident — the `status: running / jobId / elapsedMs / deadlineRemainingMs` shape the user observed came from my host's `command_status` polling wrapper, not a Cline tool result, (2) no TaskHeader ever rendered `Waiting` because no Cline-- UI was active, (3) no extension-host logs exist on disk (search of `/tmp`, `/var/folders`, `~/Library/Application Support` returned empty), (4) the canonical continuation seam `command-job-manager.{start,status,cancel}` is well-tested GREEN 20/20 under vitest, (5) `backgroundCommandRunning` is unwired projection state (defined but never called) which is a separate presentation concern; verdict `CAPTURE_INSUFFICIENT` per §21 because the necessary causal boundary cannot safely be observed; **no repair performed**; future ACT must run with a live Cline-- extension host and a real model turn to obtain the live continuation failure contract |
 | `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` | DIST/REPO | OPEN | HIGH | none | git checkpoint corruption (.git/.git_disabled left by interrupted tasks, submodule breakage, large-workspace corruption, disk-space exhaustion) + checkpoint restore failure; recon from upstream #4388 + #12388 |
 | `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` | MCP | OPEN | HIGH | none | MCP stdio servers spawn unbounded instances until crash on Windows; process-lifecycle bug; recon from upstream #7413 |
 | `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` | CONTEXT | OPEN | MED | context-accounting-truth | `.clineignore` documented as filtering file listing but does not actually exclude files from context; recon from upstream #9554 |
@@ -669,6 +671,66 @@ Both regressions tests run GREEN after the bounded fix (102/102 across the four 
 - `EPIC-CLINEMM-CODE-COVERAGE-RATCHET01` (depends on coverage baseline; monotonic threshold increase).
 
 **CI parity note (per §28):** `.github/workflows/ext-vscode-test.yml` runs the unit suite (mocha, separate gate); vitest execution is local + the dedicated c2-4-c-bridge / c2-4-d-hub configs in `ci:check-all`. PARITY=PARTIAL — vitest is not yet a CI gate; recorded under `EPIC-CLINEMM-GITHUB-ACTIONS01` for future ACT.
+
+### RUNTIME-TASK-PROGRESSION01
+
+- ID: `EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01`
+- STATUS: OPEN / HIGH **but gated on live evidence** — current state is `CAPTURE_INSUFFICIENT` (see `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-LIVE-RECON01` detail below)
+
+**Goal.** When the runtime owns an asynchronous command/tool job, the task must either progress to completion (model continues polling `command_status` and consumes the terminal state), surface an explicit recoverable failure (timeout, deadline exceeded, spawn failed, cancelled), or remain actively cancellable via `cancel_command`. The TaskHeader / next-action projection must accurately reflect runtime-owned state — `Waiting` only when genuinely awaiting user input, not when a background job is still alive.
+
+**Forbidden terminal state:**
+
+```
+runtime work remains outstanding
+  AND
+next_action_owner = HUMAN / Waiting
+  AND
+no actionable user continuation exists
+```
+
+**Upstream radar cluster** (retained — NOT promoted):
+
+| Upstream issue | Cluster | Notes |
+| --- | --- | --- |
+| #12079 | command-skipped-then-stall | "Command execution shows 'skipped' in Cline terminal and hangs on 'thinking' — requires extension restart to recover" |
+| #4177 | terminal-output-missing-stall | "Cline gets stuck when terminal output is missing from executed commands, especially blocking commands" |
+| #10549 | long-running-tool-timeout-ambiguity | "'run_commands' tool silently times out at 30s with misleading error" |
+| #10015 / #10031 | skipped-command-stall (dominant) | 2 issues |
+| (cluster: model-thinking-stall) | 1 issue | runtime genuinely stuck in thinking; UI is accurate; runtime never advances |
+| (cluster: prompt-never-sent) | 1 issue | runtime never sends the next model request |
+
+These are **radar** — they are *related* upstream runtime evidence, NOT proof of any Cline-- causal defect. Promotion to EXACT_MAP requires the issue to demonstrate a direct Cline-- continuation failure (runtime loses the running job) and not merely a runtime stall where the model has no pending request.
+
+**First ACT** (closed in this commit, CAPTURE_INSUFFICIENT): `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-LIVE-RECON01`.
+
+**Canonical production seams identified** (all well-tested GREEN 20/20 under vitest):
+
+| Seam | File | Lines | Mechanism |
+| --- | --- | --- | --- |
+| JOB_CREATION | `apps/vscode/src/sdk/command-job-manager.ts` | 324, 412 | `exitTransitions.set(id, exitTransition)` |
+| JOB_REGISTRY | `apps/vscode/src/sdk/command-job-manager.ts` | 575 | `exitTransitions.delete(evictId)` — bounded FIFO eviction (terminal jobs only) |
+| RUNNING_RESPONSE | `apps/vscode/src/sdk/vscode-run-commands-tool.ts` | 625-633 | `{status: "running", jobId, elapsedMs, deadlineRemainingMs, outputTruncated, stdout}` JSON |
+| POLL_OR_WAIT | `apps/vscode/src/sdk/command-job-manager.ts` | 592-624, 609-622 | `status()` races `exitTransitions.get(job.id)` against a local ad-hoc timer; no mutable waiter list |
+| COMPLETION | `apps/vscode/src/sdk/command-job-manager.ts` | 567-578 | `active → terminal` on finalize; FIFO eviction |
+| CONTINUATION | `apps/vscode/src/sdk/command-status-tool.ts` | 100-150 | `command_status` tool is **observation-only**; model polls; runtime does NOT push |
+| TASK_STATE | `apps/vscode/src/sdk/SdkController.ts` | 831, 2037, 2113, 2675 | `isRunning` flag projection to webview |
+| TASKHEADER_PROJECTION | `apps/vscode/src/sdk/SdkController.ts` | 2673-2675 | `backgroundCommandRunning` projection — **DEAD STATE** |
+
+**Dead-state finding.** `SdkController.updateBackgroundCommandState(running, taskId)` is defined at line 2605 but has no production call sites. The webview therefore never receives `backgroundCommandRunning: true`. This is a separate presentation issue (the TaskHeader cannot show `Working` for background `run_commands` even if it wanted to) but it is **not** a continuation defect. It may be an intentional stub for forward compatibility. A future ACT may classify it `OBSOLETE_TEST` (dead code) or `INTENTIONAL_UNSUPPORTED` (stub) once intent is confirmed.
+
+**Future-ACT capture requirements** to promote this epic to `OPEN / LIVE`:
+
+1. Real Cline-- VS Code extension host must be running with an active task turn.
+2. A `run_commands` invocation must return a RUNNING payload (not a terminal payload).
+3. The model must fail to issue the next `command_status` poll (or the runtime must lose the job) **while the host process tree is still alive**.
+4. The TaskHeader must show `Waiting` (or equivalent next-action-owner = HUMAN) during that window.
+5. `exitTransitions.get(job.id)` and `job.state` must be inspectable to discriminate "runtime lost the job" from "model never polled".
+6. `command_status` logs / Cline-- output channel / webview state payloads must be available for correlation.
+
+Without all six, the ACT cannot RED-reproduce and must HALT with CAPTURE_INSUFFICIENT.
+
+**Upstream mapping policy.** The 5 `RUNTIME_THINKING_STALL` issues and the 23 `RELATED_TOOL_RUNTIME` issues remain radar. An upstream issue is mapped to this epic **only** when its failure contract satisfies the six conditions above. None do, today.
 
 ### TYPECHECK-ZERO-BASELINE01
 
