@@ -4,36 +4,110 @@
   "triage_date_initial": "2026-08-19",
   "triage_date_correction_01": "2026-08-19",
   "triage_date_correction_02": "2026-08-19",
+  "triage_date_correction_03": "2026-08-19",
   "shortlist_size": 80,
-  "methodology_revision": "correction 02: stricter EXACT_MAP test (same failure contract OR same causal production seam OR direct upstream reproduction)",
+  "methodology_revision": "correction 03: stricter destination-contract test for telemetry epics (issue must materially change or validate one of the canonical outputs)",
   "dispositions": {
     "IMPORT": 5,
-    "MAP_EXISTING": 40,
-    "RADAR": 35,
+    "MAP_EXISTING": 17,
+    "RADAR": 58,
     "REJECT": 0,
     "CLOSED_UPSTREAM": 0
   },
   "semantic_classes": {
-    "EXACT_MAP": 45,
+    "EXACT_MAP": 22,
+    "RELATED_TOOL_RUNTIME": 23,
     "ADJACENT": 14,
     "UNRELATED": 21
+  },
+  "tool_runtime_clusters": {
+    "candidates": [
+      4356,
+      4384,
+      7355,
+      8087,
+      8130,
+      8446,
+      9143,
+      9848,
+      10413,
+      10444,
+      10499,
+      10549,
+      10656,
+      10709,
+      10843,
+      10931,
+      11295,
+      11542,
+      12198,
+      12431,
+      12977,
+      13246,
+      13253
+    ],
+    "clusters": {
+      "4356": "shell-integration",
+      "4384": "file-edit",
+      "7355": "terminal-timeout",
+      "8087": "mcp-routing",
+      "8130": "tool-parse",
+      "8446": "approval-ux",
+      "9143": "terminal-timeout",
+      "9848": "tool-parse",
+      "10413": "tool-parse",
+      "10444": "shell-integration",
+      "10499": "mcp-routing",
+      "10549": "terminal-timeout",
+      "10656": "tool-parse",
+      "10709": "terminal-timeout",
+      "10843": "tool-parse",
+      "10931": "terminal-timeout",
+      "11295": "terminal-timeout",
+      "11542": "loop-control",
+      "12198": "terminal-timeout",
+      "12431": "loop-control",
+      "12977": "mcp-routing",
+      "13246": "terminal-timeout",
+      "13253": "terminal-timeout"
+    },
+    "cluster_names": {
+      "terminal-timeout": "Terminal timeout/wait lifecycle",
+      "tool-parse": "Tool-call parsing",
+      "mcp-routing": "MCP tool routing/approval/validation",
+      "file-edit": "File-edit reliability",
+      "shell-integration": "Shell/terminal integration configuration",
+      "approval-ux": "Tool-approval UX",
+      "loop-control": "Tool loop control / retry"
+    },
+    "cluster_counts": {
+      "shell-integration": 2,
+      "file-edit": 1,
+      "terminal-timeout": 9,
+      "mcp-routing": 3,
+      "tool-parse": 5,
+      "approval-ux": 1,
+      "loop-control": 2
+    }
   },
   "candidates": [
     {
       "number": 4356,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Terminal integration fails across platforms/shells (zsh+OMZ, WSL, SSH); tool-execution semantics is the canonical destination.",
-      "url": "https://github.com/cline/cline/issues/4356"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Terminal integration reliability (output capture, shell integration, WSL/SSH). Runtime reliability; not telemetry-classification.",
+      "url": "https://github.com/cline/cline/issues/4356",
+      "tool_runtime_cluster": "shell-integration"
     },
     {
       "number": 4384,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "replace_in_file/write_to_file reliability failures + diff-edit infinite loops — core tool-execution semantics territory.",
-      "url": "https://github.com/cline/cline/issues/4384"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "File-editing reliability (diff mismatch, truncation, retry loops). Runtime reliability; not telemetry-classification.",
+      "url": "https://github.com/cline/cline/issues/4384",
+      "tool_runtime_cluster": "file-edit"
     },
     {
       "number": 4388,
@@ -85,11 +159,12 @@
     },
     {
       "number": 7355,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Terminal commands timeout at 30s instead of waiting for completion — terminal-tool semantics.",
-      "url": "https://github.com/cline/cline/issues/7355"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Terminal command timeout/wait regression. Runtime wait lifecycle; not telemetry duration accounting.",
+      "url": "https://github.com/cline/cline/issues/7355",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 7403,
@@ -133,27 +208,30 @@
     },
     {
       "number": 8087,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "MCP tool IDs use ephemeral server keys, breaking routing after reconnect — MCP tool routing.",
-      "url": "https://github.com/cline/cline/issues/8087"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "MCP tool IDs use ephemeral server keys → routing breaks after reconnect/restart. Runtime routing correctness; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/8087",
+      "tool_runtime_cluster": "mcp-routing"
     },
     {
       "number": 8130,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "DeepSeek v3.2 thinking mode emits tool calls inside reasoning chain; Cline parser cannot detect — tool/tool-call semantics.",
-      "url": "https://github.com/cline/cline/issues/8130"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "DeepSeek v3.2 thinking-mode tool-call detection. Parser correctness; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/8130",
+      "tool_runtime_cluster": "tool-parse"
     },
     {
       "number": 8446,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Tool not specified in CLI tool approval request — approval-UI semantics.",
-      "url": "https://github.com/cline/cline/issues/8446"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "CLI tool approval does not display which tool is being approved. Approval UX; not telemetry success/failure source.",
+      "url": "https://github.com/cline/cline/issues/8446",
+      "tool_runtime_cluster": "approval-ux"
     },
     {
       "number": 8636,
@@ -181,11 +259,12 @@
     },
     {
       "number": 9143,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Command output could not be captured — terminal-output capture semantics.",
-      "url": "https://github.com/cline/cline/issues/9143"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Command output cannot be captured (executed but telemetry reports failure). Borderline: this directly causes a wrong success/failure classification. Conservative verdict: runtime output capture; epic would name this as a known gap but does not fix it.",
+      "url": "https://github.com/cline/cline/issues/9143",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 9181,
@@ -261,11 +340,12 @@
     },
     {
       "number": 9848,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Cline prints raw tool XML in responses and loops — tool invocation rendering.",
-      "url": "https://github.com/cline/cline/issues/9848"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Cline prints raw tool invocation XML instead of executing. Parser correctness; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/9848",
+      "tool_runtime_cluster": "tool-parse"
     },
     {
       "number": 10015,
@@ -333,19 +413,21 @@
     },
     {
       "number": 10413,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Model emits wrong thinking-tag delimiter (`<thinking>` vs `<think>`), tool parsing fails — tool/tool-call semantics.",
-      "url": "https://github.com/cline/cline/issues/10413"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Qwen thinking-tag → invalid tool-call parse. Parser correctness; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/10413",
+      "tool_runtime_cluster": "tool-parse"
     },
     {
       "number": 10444,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Configurable shell path for background exec on Windows (Git Bash etc.) — terminal-tool config.",
-      "url": "https://github.com/cline/cline/issues/10444"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Background Exec hardcodes cmd.exe on Windows (UTF-8 broken). Configuration/runtime; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/10444",
+      "tool_runtime_cluster": "shell-integration"
     },
     {
       "number": 10469,
@@ -357,11 +439,12 @@
     },
     {
       "number": 10499,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "MCP tool calls execute without approval when auto-approve is OFF — tool-execution approval semantics.",
-      "url": "https://github.com/cline/cline/issues/10499"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "MCP tools run without approval when Auto-approve is OFF. Approval correctness; borderline classification-confidence/source.",
+      "url": "https://github.com/cline/cline/issues/10499",
+      "tool_runtime_cluster": "mcp-routing"
     },
     {
       "number": 10500,
@@ -381,11 +464,12 @@
     },
     {
       "number": 10549,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "run_commands hard 30s timeout with misleading error — tool execution semantics.",
-      "url": "https://github.com/cline/cline/issues/10549"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "run_commands 30s silent timeout. Duration/runtime; not telemetry duration accounting.",
+      "url": "https://github.com/cline/cline/issues/10549",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 10551,
@@ -413,19 +497,21 @@
     },
     {
       "number": 10656,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "OpenAI Responses API tool-use pairing errors during MCP/tool execution — tool/tool-call correctness.",
-      "url": "https://github.com/cline/cline/issues/10656"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "OpenAI Native gpt-5.x reasoning/function_call pairing error. Parser correctness; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/10656",
+      "tool_runtime_cluster": "tool-parse"
     },
     {
       "number": 10709,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "OpenAI-compatible DeepSeek stuck after command status \"Skipped\" — terminal tool state.",
-      "url": "https://github.com/cline/cline/issues/10709"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "DeepSeek command becomes \"skip\" → UI stuck. Runtime state-machine; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/10709",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 10741,
@@ -437,19 +523,21 @@
     },
     {
       "number": 10843,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Local Ollama Qwen 2.5 Coder emits JSON tool calls; Cline streaming parser ignores them — tool-call parser.",
-      "url": "https://github.com/cline/cline/issues/10843"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Ollama Qwen raw JSON → parser ignores. Parser correctness; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/10843",
+      "tool_runtime_cluster": "tool-parse"
     },
     {
       "number": 10931,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Hangs on interactive CLI commands (git diff pager) — terminal-tool execution semantics.",
-      "url": "https://github.com/cline/cline/issues/10931"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Interactive CLI pager (git diff) hangs Cline. Runtime wait lifecycle; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/10931",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 10980,
@@ -477,11 +565,12 @@
     },
     {
       "number": 11295,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Deadlock on remote-SSH after terminal commands — terminal-execution deadlock.",
-      "url": "https://github.com/cline/cline/issues/11295"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Remote-SSH deadlock after terminal commands. Runtime reliability; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/11295",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 11494,
@@ -493,11 +582,12 @@
     },
     {
       "number": 11542,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "High-volume request loop under repeated tool-use completions — tool-loop semantics.",
-      "url": "https://github.com/cline/cline/issues/11542"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "High-volume request loop under repeated tool-use. Runtime loop control; borderline retry/recovery accounting.",
+      "url": "https://github.com/cline/cline/issues/11542",
+      "tool_runtime_cluster": "loop-control"
     },
     {
       "number": 11785,
@@ -549,11 +639,12 @@
     },
     {
       "number": 12198,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Hangs after skipping a terminal command execution; requires VS Code restart — terminal-tool execution.",
-      "url": "https://github.com/cline/cline/issues/12198"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Skip command → UI hangs, restart required. Runtime state-machine; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/12198",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 12385,
@@ -573,11 +664,12 @@
     },
     {
       "number": 12431,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Repeated tool call failures; conversation stops — tool-call semantics.",
-      "url": "https://github.com/cline/cline/issues/12431"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Repeated tool call failures → \"stopped\" (low-info). Runtime reliability; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/12431",
+      "tool_runtime_cluster": "loop-control"
     },
     {
       "number": 12474,
@@ -613,11 +705,12 @@
     },
     {
       "number": 12977,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Unknown MCP tool name forwarded to server instead of validated against catalog — tool-routing semantics.",
-      "url": "https://github.com/cline/cline/issues/12977"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Unknown MCP tool name forwarded → opaque error. Validation correctness; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/12977",
+      "tool_runtime_cluster": "mcp-routing"
     },
     {
       "number": 13008,
@@ -637,19 +730,21 @@
     },
     {
       "number": 13246,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Background Console run_commands has hard-coded 30s timeout — terminal tool semantics.",
-      "url": "https://github.com/cline/cline/issues/13246"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Background Console run_commands 30s hard-coded timeout. Duration/runtime; not telemetry duration accounting.",
+      "url": "https://github.com/cline/cline/issues/13246",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 13253,
-      "semantic_class": "EXACT_MAP",
-      "mapped_epic": "TOOL-EXECUTION-SEMANTICS01",
-      "disposition": "MAP_EXISTING",
-      "one_sentence": "Stuck running one command for 10 minutes — terminal execution state.",
-      "url": "https://github.com/cline/cline/issues/13253"
+      "semantic_class": "RELATED_TOOL_RUNTIME",
+      "mapped_epic": null,
+      "disposition": "RADAR",
+      "one_sentence": "Cline stuck running 1 command 10 minutes. Runtime reliability; not telemetry.",
+      "url": "https://github.com/cline/cline/issues/13253",
+      "tool_runtime_cluster": "terminal-timeout"
     },
     {
       "number": 13296,
