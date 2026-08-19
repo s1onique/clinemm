@@ -1,5 +1,16 @@
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
+import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
+import {
+	disablePostTerminalAuthorityDiagnostic,
+	enablePostTerminalAuthorityDiagnostic,
+	getPostTerminalAuthorityDiagnosticRecords,
+	isPostTerminalAuthorityDiagnosticEnabled,
+	type PostTerminalAuthorityCaptureKind,
+	type PostTerminalAuthoritySnapshot,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
+
 // ============================================================================
 // ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C1
 //
@@ -31,70 +42,6 @@ import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
 // The capture is OPT-IN: the diagnostic is a complete no-op when
 // isPostTerminalAuthorityDiagnosticEnabled("webview") === false.
 // ============================================================================
-// ============================================================================
-// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-COMPOSITION-RED-FIX01
-//
-// Test-only observation seam for the W1 composition discriminator.
-//
-// PRODUCTION: a no-op. The set is empty at runtime, the four forEach
-// loops are skipped, and the four extra local variables are
-// trivially DCE-eliminable by esbuild. No new PTAD capture kind is
-// added; `_ptadPushId` semantics are unchanged; the diagnostic
-// architecture is untouched.
-//
-// TEST: tests inject observers via
-//   __webviewTurnstateCompositionObservers.clear()
-//   __webviewTurnstateCompositionObservers.add(observer)
-// and the four observation points in the W1 functional updater
-// invoke every observer synchronously. The discriminator at C2
-// reads the four observation kinds:
-//
-//   B = replicaBefore.turnState
-//   C = replicaAfterReducer.turnState
-//   D = stateData.turnState after line 652 (the seq-gated copy)
-//   E = newState.turnState
-//
-// `A` (rawIncoming.turnState) and `F` (committedContext.turnState)
-// are already exposed by PTAD; the discriminator reads them via the
-// existing `webview-raw-incoming` / `webview-committed` capture
-// kinds. The observer carries the current rawIncoming value at each
-// checkpoint for test-side correlation, but it is NOT a substitute
-// for the canonical PTAD captures.
-//
-// This seam is intentionally local: it does not export any function
-// the production code path calls, and it does not branch on any
-// runtime condition beyond the Set's own size === 0 fast path
-// (Set.forEach on an empty Set is itself the fast path).
-// ============================================================================
-import type { TurnState } from "@shared/ExtensionMessage"
-import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
-import {
-	disablePostTerminalAuthorityDiagnostic,
-	enablePostTerminalAuthorityDiagnostic,
-	getPostTerminalAuthorityDiagnosticRecords,
-	isPostTerminalAuthorityDiagnosticEnabled,
-	type PostTerminalAuthorityCaptureKind,
-	type PostTerminalAuthoritySnapshot,
-	recordPostTerminalAuthoritySnapshot,
-} from "@shared/post-terminal-authority-diagnostic"
-
-export type WebviewTurnstateCompositionCheckpoint =
-	| "replica-before"
-	| "replica-after-reducer"
-	| "stateData-after-line652"
-	| "newState"
-
-export interface WebviewTurnstateCompositionObservation {
-	checkpoint: WebviewTurnstateCompositionCheckpoint
-	rawIncoming: TurnState | undefined
-	replicaBefore: TurnState | undefined
-	replicaAfterReducer: TurnState | undefined
-	stateDataTurnState: TurnState | undefined
-	newStateTurnState: TurnState | undefined
-}
-
-export const __webviewTurnstateCompositionObservers: Set<(obs: WebviewTurnstateCompositionObservation) => void> = new Set()
-
 function buildWebviewSnapshot(
 	newState: ExtensionState,
 	rawStateData: ExtensionState,
@@ -686,10 +633,6 @@ export const ExtensionStateContextProvider: React.FC<{
 							const currentVersion = prevState.autoApprovalSettings?.version ?? 1
 							const shouldUpdateAutoApproval = incomingVersion > currentVersion
 
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-COMPOSITION-RED-FIX01:
-							// Observation B (replicaBefore.turnState) — read before the reducer call.
-							const __replicaBeforeTurnState = replicaRef.current.turnState
-
 							// Route the snapshot's transcript through the convergent-replica reducer:
 							// merge by ts/seq within the same epoch (never truncate), replace on a
 							// newer epoch, ignore stale/older snapshots. Unstamped (classic/legacy)
@@ -701,12 +644,6 @@ export const ExtensionStateContextProvider: React.FC<{
 								stateData.stateVersion ?? 0,
 								stateData.turnState,
 							)
-
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-COMPOSITION-RED-FIX01:
-							// Observation C (replicaAfterReducer.turnState) — read after the reducer
-							// assignment, before any stateData mutation.
-							const __replicaAfterReducerTurnState = replicaRef.current.turnState
-
 							stateData.clineMessages = replicaRef.current.messages
 							// Use the seq-gated turnState from the replica, NOT the raw snapshot's, so a
 							// late/stale snapshot carrying an older phase (e.g. "idle") cannot revert a
@@ -714,40 +651,11 @@ export const ExtensionStateContextProvider: React.FC<{
 							// undefined for classic/legacy state.
 							stateData.turnState = replicaRef.current.turnState
 
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-COMPOSITION-RED-FIX01:
-							// Observation D (stateData.turnState after line 652) — the seq-gated
-							// copy that W1 commits to the new state.
-							const __stateDataTurnState = stateData.turnState
-
 							const newState: ExtensionState = {
 								...stateData,
 								autoApprovalSettings: shouldUpdateAutoApproval
 									? stateData.autoApprovalSettings
 									: prevState.autoApprovalSettings,
-							}
-
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-COMPOSITION-RED-FIX01:
-							// Observation E (newState.turnState) — the value React will commit.
-							const __newStateTurnState = newState.turnState
-
-							// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-COMPOSITION-RED-FIX01:
-							// Fire the four observation hooks (B, C, D, E) in order. In production
-							// __webviewTurnstateCompositionObservers.size === 0 so this is a no-op;
-							// in test the discriminator at C2 reads these to classify the mechanism.
-							if (__webviewTurnstateCompositionObservers.size > 0) {
-								const rawIncoming = stateData.turnState
-								const observation = (checkpoint: WebviewTurnstateCompositionCheckpoint) => ({
-									checkpoint,
-									rawIncoming,
-									replicaBefore: __replicaBeforeTurnState,
-									replicaAfterReducer: __replicaAfterReducerTurnState,
-									stateDataTurnState: __stateDataTurnState,
-									newStateTurnState: __newStateTurnState,
-								})
-								__webviewTurnstateCompositionObservers.forEach((o) => o(observation("replica-before")))
-								__webviewTurnstateCompositionObservers.forEach((o) => o(observation("replica-after-reducer")))
-								__webviewTurnstateCompositionObservers.forEach((o) => o(observation("stateData-after-line652")))
-								__webviewTurnstateCompositionObservers.forEach((o) => o(observation("newState")))
 							}
 
 							// Update welcome screen state based on API configuration if welcome view not in progress

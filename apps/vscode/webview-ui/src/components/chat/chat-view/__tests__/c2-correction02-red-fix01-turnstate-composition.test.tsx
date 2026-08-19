@@ -1,32 +1,36 @@
 /**
  * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-COMPOSITION-RED-FIX01
+ * (halted at C1+C2+C3 with HALT_RED_NOT_REPRODUCED)
  *
- * C1 + C2 + C3 in one file: real-provider RED test, A-F discriminator,
- * and necessity witness for the W2 turnState composition boundary.
+ * This test file is the closed-clean GREEN witness for the halt.
  *
- * Mounts the REAL `ExtensionStateContextProvider` (no direct reducer call,
- * no reducer mock). Wires BOTH `subscribeToState` (W1) AND
- * `subscribeToPartialMessage` (W2) so the test exercises the full W1->W2->W1
- * composition substrate.
+ * The original ACT mounted the real `ExtensionStateContextProvider`,
+ * wired both W1 (subscribeToState) and W2 (subscribeToPartialMessage),
+ * and attempted to reproduce the live W2 boundary identified by
+ * TRACE01 (P12: extension=streaming/11, raw=streaming/11, committed=idle/3).
  *
- * Discriminator (C2):
- *   A = rawIncoming.turnState                          (PTAD webview-raw-incoming)
- *   B = replicaBefore.turnState                        (RED hook)
- *   C = replicaAfterReducer.turnState                  (RED hook)
- *   D = stateData.turnState after line 652             (RED hook)
- *   E = newState.turnState                             (RED hook)
- *   F = committedContext.turnState                     (PTAD webview-committed)
+ * The real provider did NOT reproduce the boundary for the synthetic
+ * P12-equivalent input. The reducer advanced correctly, the line-652
+ * copy was correct, the returned newState was correct, and the
+ * committed context was correct. The synthetic A->F chain was
+ * healthy end-to-end.
  *
- * Necessity (C3) is satisfied structurally by the contrast between
- * RED_W2_STREAMING (the P12-equivalent: W1->W2->W1 streaming push) and
- * CONTROL_NO_W2 (the same push sequence WITHOUT a W2 interleaving between
- * the two W1 pushes).
+ * This file is preserved as a passing witness so that:
+ *   1. The simple `replicaRef + batching` story is shown empirically
+ *      closed (the production surface correctly commits `streaming/11`
+ *      for a W1->W2->W1 batched sequence).
+ *   2. The fixture and the A->F chain are documented for the next
+ *      ACT (LIVE-SHAPE-REPRODUCTION01) to extend incrementally.
  *
- * If the production architecture is correct (W2 should NOT affect
- * turnState because it never writes to it), both RED_W2_STREAMING and
- * CONTROL_NO_W2 should commit `streaming/11`. If they diverge, the
- * discriminator classifies the cause. Until the fix lands, RED_W2_STREAMING
- * is expected to FAIL (committed F = idle/3) — that failure IS the RED.
+ * Production-surface invariant: this test adds ZERO production code
+ * (the prior test-only observation seam was reverted at the cleanup
+ * commit). The discriminator reads only A (=PTAD webview-raw-incoming)
+ * and F (=PTAD webview-committed), which are push-correlated via the
+ * `_ptadPushId` field already stamped by the ExtensionStateContext.
+ *
+ * Verdict: HALT_RED_NOT_REPRODUCED / CLOSED_HALTED_CLEAN
+ *   FINAL_PRODUCTION_DELTA = 0
+ *   RED_FIX01_CANONICAL_TEST_GATE = PASS (560/560 expected green)
  */
 
 import type { ExtensionState, TurnState } from "@shared/ExtensionMessage"
@@ -39,12 +43,7 @@ import {
 } from "@shared/post-terminal-authority-diagnostic"
 import { act, render } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import {
-	__webviewTurnstateCompositionObservers,
-	ExtensionStateContextProvider,
-	useExtensionState,
-	type WebviewTurnstateCompositionObservation,
-} from "@/context/ExtensionStateContext"
+import { ExtensionStateContextProvider, useExtensionState } from "@/context/ExtensionStateContext"
 
 // ---------------------------------------------------------------------------
 // Mock StateServiceClient.subscribeToState + UiServiceClient.subscribeToPartialMessage
@@ -124,7 +123,7 @@ vi.mock("@/services/grpc-client", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Helpers: build a snapshot, fire it, read observations
+// Helpers
 // ---------------------------------------------------------------------------
 
 function makeSnapshot(overrides: Partial<ExtensionState>): ExtensionState {
@@ -176,68 +175,55 @@ function makeSnapshot(overrides: Partial<ExtensionState>): ExtensionState {
 		sessionAutonomy: { override: "none", sessionId: undefined },
 		sessionAutoApprovalArmed: "none",
 		hooksEnabled: false,
-		// PTAD must be enabled on the wire payload for the W1 onResponse to
-		// emit captures (otherwise the workspace-state toggle auto-disables).
+		// PTAD must be enabled on the wire payload for the W1 onResponse
+		// to emit captures (the workspace-state toggle auto-disables
+		// otherwise).
 		_ptadEnabled: true,
 		...overrides,
 	}
 }
 
-function fireSnapshot(stateData: ExtensionState): void {
-	if (!snapshotHandler) throw new Error("snapshotHandler not wired")
-	snapshotHandler(stateData)
+interface CapturedSnapshot {
+	_ptadPushId: number | undefined
+	turnState: TurnState | undefined
 }
 
-function firePartialMessage(protoMessage: unknown): void {
-	if (!partialHandler) throw new Error("partialHandler not wired")
-	partialHandler(protoMessage)
-}
-
-// Read the latest committed turnState from the PTAD records (capture kind F).
-function latestCommittedTurnState(): TurnState | undefined {
+function latestRawIncoming(): CapturedSnapshot | undefined {
 	const records = getPostTerminalAuthorityDiagnosticRecords() as PostTerminalAuthoritySnapshot[]
-	for (let i = records.length - 1; i >= 0; i--) {
-		if (records[i].captureKind === "webview-committed") {
-			return records[i].legacyPhase ? { phase: records[i].legacyPhase!, seq: records[i].legacySeq ?? 0 } : undefined
-		}
+	const raw = [...records].reverse().find((r) => r.captureKind === "webview-raw-incoming")
+	if (!raw) return undefined
+	return {
+		_ptadPushId: raw._ptadPushId,
+		turnState: raw.rawIncomingLegacyPhase
+			? { phase: raw.rawIncomingLegacyPhase, seq: raw.rawIncomingLegacySeq ?? 0 }
+			: undefined,
 	}
-	return undefined
 }
 
-// Read the latest raw-incoming turnState from the PTAD records (capture kind A).
-function latestRawIncomingTurnState(): TurnState | undefined {
+function latestCommitted(): CapturedSnapshot | undefined {
 	const records = getPostTerminalAuthorityDiagnosticRecords() as PostTerminalAuthoritySnapshot[]
-	for (let i = records.length - 1; i >= 0; i--) {
-		if (records[i].captureKind === "webview-raw-incoming") {
-			return records[i].rawIncomingLegacyPhase
-				? { phase: records[i].rawIncomingLegacyPhase!, seq: records[i].rawIncomingLegacySeq ?? 0 }
-				: undefined
-		}
+	const committed = [...records].reverse().find((r) => r.captureKind === "webview-committed")
+	if (!committed) return undefined
+	return {
+		_ptadPushId: committed._ptadPushId,
+		turnState: committed.legacyPhase ? { phase: committed.legacyPhase, seq: committed.legacySeq ?? 0 } : undefined,
 	}
-	return undefined
 }
 
-// ---------------------------------------------------------------------------
-// RED FIXTURE
-// ---------------------------------------------------------------------------
-
-interface ConsumerCapture {
-	committedTurnState: TurnState | undefined
-}
-
-function ConsumerCapture({ capture }: { capture: (c: ConsumerCapture) => void }): null {
+function CommittedConsumerProbe({ capture }: { capture: (ctx: { turnState: TurnState | undefined }) => void }) {
 	const ctx = useExtensionState()
-	// ctx is the spread of `...state` plus UI setters, so turnState lives at top level.
-	capture({
-		committedTurnState: (ctx as unknown as { turnState?: TurnState }).turnState,
-	})
+	capture({ turnState: (ctx as unknown as { turnState?: TurnState }).turnState })
 	return null
 }
 
-describe("RED-FIX01: W2 turnState composition RED + A-F discriminator + necessity", () => {
+// ---------------------------------------------------------------------------
+// Witnesses (all assertions are GREEN)
+// ---------------------------------------------------------------------------
+
+describe("RED-FIX01 halt witnesses: W2 boundary not reproduced by simple real-provider fixture", () => {
 	beforeEach(() => {
 		enablePostTerminalAuthorityDiagnosticBoth()
-		__webviewTurnstateCompositionObservers.clear()
+		clearPostTerminalAuthorityDiagnosticBoth()
 		snapshotHandler = null
 		partialHandler = null
 		snapshotUnsub = null
@@ -247,7 +233,6 @@ describe("RED-FIX01: W2 turnState composition RED + A-F discriminator + necessit
 	afterEach(() => {
 		clearPostTerminalAuthorityDiagnosticBoth()
 		disablePostTerminalAuthorityDiagnosticBoth()
-		__webviewTurnstateCompositionObservers.clear()
 		snapshotHandler = null
 		partialHandler = null
 		snapshotUnsub = null
@@ -255,30 +240,22 @@ describe("RED-FIX01: W2 turnState composition RED + A-F discriminator + necessit
 	})
 
 	// -----------------------------------------------------------------------
-	// RED_W2_STREAMING — the P12-equivalent
+	// W1: Simple W1->W2->W1 batched sequence (the P12-equivalent). The real
+	// provider commits streaming/11 — the intended RED does NOT reproduce.
+	// This is the canonical close-clean witness.
 	// -----------------------------------------------------------------------
-	it("RED_W2_STREAMING: reproduces the W2 boundary (incoming streaming/11, committed idle/3)", async () => {
-		const observations: WebviewTurnstateCompositionObservation[] = []
-		__webviewTurnstateCompositionObservers.add((o) => observations.push({ ...o }))
-
+	it("RED_W2_STREAMING_absent: simple W1->W2->W1 batched sequence commits streaming/11 (NOT idle/3)", async () => {
 		render(
 			<ExtensionStateContextProvider>
-				<ConsumerCapture capture={() => {}} />
+				<CommittedConsumerProbe capture={() => {}} />
 			</ExtensionStateContextProvider>,
 		)
 
-		// Wait for the subscription useEffect to wire up the handlers
 		await act(async () => {
 			await Promise.resolve()
 			await Promise.resolve()
 		})
 
-		// Push sequence: W1(E1: idle/3) -> W2(partial) -> W1(E2: streaming/11)
-		// ALL IN ONE BATCHED act() with NO yields between pushes. This is
-		// the React 18+ automatic-batching scenario that the live walk
-		// exercises (interleaved pushes arrive within one React commit
-		// window). Each push is its own functional updater queued in
-		// React's pending state queue; React commits them in order.
 		await act(async () => {
 			if (!snapshotHandler) throw new Error("snapshotHandler not wired")
 			if (!partialHandler) throw new Error("partialHandler not wired")
@@ -320,64 +297,33 @@ describe("RED-FIX01: W2 turnState composition RED + A-F discriminator + necessit
 			)
 		})
 
-		const A = latestRawIncomingTurnState()
-		const F = latestCommittedTurnState()
+		const A = latestRawIncoming()
+		const F = latestCommitted()
 
-		// Diagnostic dump (will be removed once the discriminator classification is stable)
-		const allRecords = getPostTerminalAuthorityDiagnosticRecords() as PostTerminalAuthoritySnapshot[]
-		process.stdout.write(
-			"[RED-FIX01 RED_W2_STREAMING records] " +
-				JSON.stringify(
-					allRecords.map((r) => ({
-						captureKind: r.captureKind,
-						rawIncomingLegacyPhase: r.rawIncomingLegacyPhase,
-						rawIncomingLegacySeq: r.rawIncomingLegacySeq,
-						legacyPhase: r.legacyPhase,
-						legacySeq: r.legacySeq,
-						_ptadPushId: r._ptadPushId,
-					})),
-				) +
-				"\n",
-		)
+		// Canonical close-clean assertions (GREEN):
+		// The raw incoming IS streaming/11 (the wire reaches the provider).
+		// The committed context IS streaming/11 (the W1 functional updater
+		// plus the reducer plus the line-652 seq-gated copy all correctly
+		// produced and committed the new turnState).
+		expect(A?.turnState).toEqual({ phase: "streaming", seq: 11 })
+		expect(F?.turnState).toEqual({ phase: "streaming", seq: 11 })
 
-		// RED: the W2 boundary
-		expect(A).toEqual({ phase: "streaming", seq: 11 })
-		expect(F).toEqual({ phase: "idle", seq: 3 }) // <-- the W2 failure
-
-		// Discriminator: capture B/C/D/E from the second W1 push
-		const push2Observations = observations.filter((o) => o.checkpoint !== undefined)
-		const checkpointB = push2Observations.find((o) => o.checkpoint === "replica-before")
-		const checkpointC = push2Observations.find((o) => o.checkpoint === "replica-after-reducer")
-		const checkpointD = push2Observations.find((o) => o.checkpoint === "stateData-after-line652")
-		const checkpointE = push2Observations.find((o) => o.checkpoint === "newState")
-
-		expect(checkpointB).toBeDefined()
-		expect(checkpointC).toBeDefined()
-		expect(checkpointD).toBeDefined()
-		expect(checkpointE).toBeDefined()
-
-		// Print the discriminator values for the reviewer (these classify the mechanism)
-		// eslint-disable-next-line no-console
-		console.log("[RED-FIX01 RED_W2_STREAMING discriminator]", {
-			A: A,
-			B: checkpointB?.replicaBefore,
-			C: checkpointC?.replicaAfterReducer,
-			D: checkpointD?.stateDataTurnState,
-			E: checkpointE?.newStateTurnState,
-			F: F,
-		})
+		// A == F: the simple real-provider fixture commits raw truth.
+		// This is the close-clean witness for the synthetic P12-equivalent.
+		// (No _ptadPushId assertion here: the synthetic fixture does not
+		// stamp _ptadPushId, so PTAD is in fail-closed mode and the two
+		// captures may carry undefined IDs. The A==F equality is the
+		// canonical witness, not the push-id correlation.)
+		expect(A?.turnState).toEqual(F?.turnState)
 	})
 
 	// -----------------------------------------------------------------------
-	// RED_W2_TERMINAL — the P30-equivalent
+	// W2: Terminal form. W1->W2->W1 with awaiting_followup/29.
 	// -----------------------------------------------------------------------
-	it("RED_W2_TERMINAL: reproduces the W2 boundary (incoming awaiting_followup/29, committed idle/3)", async () => {
-		const observations: WebviewTurnstateCompositionObservation[] = []
-		__webviewTurnstateCompositionObservers.add((o) => observations.push({ ...o }))
-
+	it("RED_W2_TERMINAL_absent: simple W1->W2->W1 batched sequence commits awaiting_followup/29 (NOT idle/3)", async () => {
 		render(
 			<ExtensionStateContextProvider>
-				<ConsumerCapture capture={() => {}} />
+				<CommittedConsumerProbe capture={() => {}} />
 			</ExtensionStateContextProvider>,
 		)
 
@@ -424,48 +370,23 @@ describe("RED-FIX01: W2 turnState composition RED + A-F discriminator + necessit
 			)
 		})
 
-		const A = latestRawIncomingTurnState()
-		const F = latestCommittedTurnState()
+		const A = latestRawIncoming()
+		const F = latestCommitted()
 
-		// RED: same shape, terminal phase
-		expect(A).toEqual({ phase: "awaiting_followup", seq: 29 })
-		expect(F).toEqual({ phase: "idle", seq: 3 }) // <-- the W2 failure
-
-		const checkpointB = observations.find((o) => o.checkpoint === "replica-before")
-		const checkpointC = observations.find((o) => o.checkpoint === "replica-after-reducer")
-		const checkpointD = observations.find((o) => o.checkpoint === "stateData-after-line652")
-		const checkpointE = observations.find((o) => o.checkpoint === "newState")
-
-		process.stdout.write(
-			"[RED-FIX01 RED_W2_TERMINAL discriminator] " +
-				JSON.stringify({
-					A: A,
-					B: checkpointB?.replicaBefore,
-					C: checkpointC?.replicaAfterReducer,
-					D: checkpointD?.stateDataTurnState,
-					E: checkpointE?.newStateTurnState,
-					F: F,
-				}) +
-				"\n",
-		)
+		expect(A?.turnState).toEqual({ phase: "awaiting_followup", seq: 29 })
+		expect(F?.turnState).toEqual({ phase: "awaiting_followup", seq: 29 })
+		// A == F: the simple real-provider fixture commits raw truth.
+		// (No _ptadPushId assertion; see the RED_W2_STREAMING_absent note.)
+		expect(A?.turnState).toEqual(F?.turnState)
 	})
 
 	// -----------------------------------------------------------------------
-	// CONTROL_NO_W2 — necessity witness (C3)
-	//
-	// Same push sequence as RED_W2_STREAMING but WITHOUT the W2 partial
-	// message between the two W1 snapshots. If the W2 boundary is genuine,
-	// this control must commit streaming/11. If it ALSO commits idle/3,
-	// the failure is not W2-specific and the discriminator above is
-	// inconclusive — the cause is upstream of W2.
+	// W3: Necessity (control). W1->W1 without W2. Raw == committed.
 	// -----------------------------------------------------------------------
-	it("CONTROL_NO_W2: same W1->W1 without W2 interleaving (necessity witness)", async () => {
-		const observations: WebviewTurnstateCompositionObservation[] = []
-		__webviewTurnstateCompositionObservers.add((o) => observations.push({ ...o }))
-
+	it("CONTROL_NO_W2: W1->W1 without W2 commits streaming/11 (control)", async () => {
 		render(
 			<ExtensionStateContextProvider>
-				<ConsumerCapture capture={() => {}} />
+				<CommittedConsumerProbe capture={() => {}} />
 			</ExtensionStateContextProvider>,
 		)
 
@@ -478,68 +399,82 @@ describe("RED-FIX01: W2 turnState composition RED + A-F discriminator + necessit
 			if (!snapshotHandler) throw new Error("snapshotHandler not wired")
 
 			snapshotHandler(makeSnapshot({ turnState: { phase: "idle", seq: 3 } }))
-
-			// NO W2 partial message here — that's the whole point.
-
 			snapshotHandler(makeSnapshot({ turnState: { phase: "streaming", seq: 11 } }))
 		})
 
-		const A = latestRawIncomingTurnState()
-		const F = latestCommittedTurnState()
+		const A = latestRawIncoming()
+		const F = latestCommitted()
 
-		process.stdout.write("[RED-FIX01 CONTROL_NO_W2] " + JSON.stringify({ A, F }) + "\n")
-
-		// If F != A here, the failure is NOT W2-specific and C2's
-		// discriminator alone cannot classify the cause.
-		expect(A).toEqual({ phase: "streaming", seq: 11 })
-		// (F assertion removed — we record, don't gate, the necessity)
+		expect(A?.turnState).toEqual({ phase: "streaming", seq: 11 })
+		expect(F?.turnState).toEqual({ phase: "streaming", seq: 11 })
+		expect(A?.turnState).toEqual(F?.turnState)
 	})
 
 	// -----------------------------------------------------------------------
-	// HALT gate — if RED_W2_STREAMING does not reproduce, halt.
+	// W4: Plain commit-axis consumer witness. After a W1->W2->W1 sequence,
+	// a real `useExtensionState()` consumer reads `streaming/11` from the
+	// committed context. This proves the close-clean not just via PTAD but
+	// via the consumer that the live UI actually subscribes to.
 	// -----------------------------------------------------------------------
-	it("HALT gate: confirms the W2 boundary is reproducible on this build", async () => {
-		// This test asserts the RED is present. If this passes, the W2
-		// boundary is real and reproducible on the current production
-		// surface. If it ever fails (i.e. committed === raw after the
-		// W2 interleaving), the W2 boundary has been fixed by other
-		// means and this ACT must halt with HALT_RED_NOT_REPRODUCED.
+	it("CONSUMER_WITNESS: a real useExtensionState() consumer reads streaming/11 after W1->W2->W1", async () => {
+		let observedTurnState: TurnState | undefined
+
 		render(
 			<ExtensionStateContextProvider>
-				<ConsumerCapture capture={() => {}} />
+				<CommittedConsumerProbe
+					capture={(ctx) => {
+						observedTurnState = ctx.turnState
+					}}
+				/>
 			</ExtensionStateContextProvider>,
 		)
 
 		await act(async () => {
-			fireSnapshot(makeSnapshot({ turnState: { phase: "idle", seq: 3 } }))
+			await Promise.resolve()
+			await Promise.resolve()
 		})
+
 		await act(async () => {
-			firePartialMessage({
+			if (!snapshotHandler) throw new Error("snapshotHandler not wired")
+			if (!partialHandler) throw new Error("partialHandler not wired")
+
+			snapshotHandler(makeSnapshot({ turnState: { phase: "idle", seq: 3 } }))
+			partialHandler({
 				ts: 300,
 				seq: 1,
-				epoch: 0,
-				type: "say",
-				say: "halt-gate",
+				type: 1,
+				say: 4,
+				text: "consumer-witness",
+				images: [],
+				files: [],
+				reasoning: "",
+				partial: false,
+				lastCheckpointHash: "",
+				isCheckpointCheckedOut: false,
+				isOperationOutsideWorkspace: false,
+				conversationHistoryIndex: 0,
+				conversationName: "",
 			})
-		})
-		await act(async () => {
-			fireSnapshot(
+			snapshotHandler(
 				makeSnapshot({
 					turnState: { phase: "streaming", seq: 11 },
 					clineMessages: [
-						{ ts: 300, seq: 1, epoch: 0, type: "say", say: "halt-gate" } as ExtensionState["clineMessages"][number],
+						{
+							ts: 300,
+							seq: 1,
+							type: "say",
+							say: "consumer-witness",
+						} as ExtensionState["clineMessages"][number],
 					],
 				}),
 			)
 		})
 
-		const A = latestRawIncomingTurnState()
-		const F = latestCommittedTurnState()
-		// We do NOT assert F here — this is the halt gate, not the RED.
-		// The reviewer reads the console.log above and decides whether
-		// to halt or proceed.
-		expect(A).toEqual({ phase: "streaming", seq: 11 })
-		// eslint-disable-next-line no-console
-		console.log("[RED-FIX01 HALT gate]", { A, F })
+		// Force a re-render so the consumer's capture fires with the latest state.
+		await act(async () => {
+			await Promise.resolve()
+		})
+
+		expect(observedTurnState).toEqual({ phase: "streaming", seq: 11 })
 	})
 })
