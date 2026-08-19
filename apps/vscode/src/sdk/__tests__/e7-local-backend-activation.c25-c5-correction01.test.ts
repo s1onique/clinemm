@@ -63,9 +63,9 @@ import type {
 	AgentRuntimeEvent,
 	AgentRuntimeExecutionState,
 	AgentRuntimeStateSnapshot,
+	AgentRuntimeStateSnapshot as AgentRuntimeStateSnapshotShared,
 	RecoveryState,
-} from "@cline/core"
-import type { AgentRuntimeStateSnapshot as AgentRuntimeStateSnapshotShared } from "@cline/shared"
+} from "@cline/shared"
 import type { TurnPhase } from "@shared/ExtensionMessage"
 import { describe, expect, it, vi } from "vitest"
 import type { SdkSessionHost } from "@/sdk/session-host"
@@ -480,10 +480,11 @@ describe("E7-CORRECTION01 R4 — HUB/REMOTE EXCLUSION (interface-absence proof)"
 
 	it("R4.interface_absence.a: hub/remote-shaped SdkSessionHost → runtimeSnapshot is undefined → selection takes legacy fallback", () => {
 		// Real SdkController.getArbiterSnapshot logic:
-		const sessionId = hubOrRemoteSdkHost.getSessionId?.()
+		// sessionId comes from `sessions.getActiveSession()?.sessionId`, not from the host.
+		// The hubOrRemoteSdkHost fixture intentionally omits runtimeSnapshot per the contract.
 		const canonicalSnapshot = (
 			hubOrRemoteSdkHost as { runtimeSnapshot?: (s: string | undefined) => AgentRuntimeStateSnapshotShared | undefined }
-		).runtimeSnapshot?.(sessionId)
+		).runtimeSnapshot?.(undefined)
 		const arbiter = selectTaskShadowArbiterSnapshot({
 			canonicalSnapshot,
 			currentLegacyPhase: "streaming",
@@ -510,10 +511,9 @@ describe("E7-CORRECTION01 R4 — HUB/REMOTE EXCLUSION (interface-absence proof)"
 			runtimeSnapshot: (_sessionId: string | undefined) => canonical,
 		} as unknown as SdkSessionHost
 
-		const sessionId = localSdkHost.getSessionId?.()
 		const canonicalSnapshot = (
 			localSdkHost as { runtimeSnapshot?: (s: string | undefined) => AgentRuntimeStateSnapshotShared | undefined }
-		).runtimeSnapshot?.(sessionId)
+		).runtimeSnapshot?.("e7c1_session")
 		const arbiter = selectTaskShadowArbiterSnapshot({
 			canonicalSnapshot,
 			currentLegacyPhase: "idle", // legacy phase is read ONLY in the fallback branch
@@ -526,10 +526,9 @@ describe("E7-CORRECTION01 R4 — HUB/REMOTE EXCLUSION (interface-absence proof)"
 			getSessionId: () => "e7c1_session",
 			runtimeSnapshot: (_sessionId: string | undefined) => undefined,
 		} as unknown as SdkSessionHost
-		const sessionId = localSdkHost.getSessionId?.()
 		const canonicalSnapshot = (
 			localSdkHost as { runtimeSnapshot?: (s: string | undefined) => AgentRuntimeStateSnapshotShared | undefined }
-		).runtimeSnapshot?.(sessionId)
+		).runtimeSnapshot?.("e7c1_session")
 		const arbiter = selectTaskShadowArbiterSnapshot({
 			canonicalSnapshot,
 			currentLegacyPhase: "awaiting_approval",
