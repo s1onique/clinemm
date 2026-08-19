@@ -1,0 +1,1847 @@
+{
+  "snapshot_sha256": "878eb241e24150b4ecc9731e6fe8373b7e81566d8117f7f129b87f012f166cb6",
+  "snapshot_generated_at": "2026-08-19T10:55:25Z",
+  "triage_date": "2026-08-19",
+  "shortlist_size": 80,
+  "dispositions": {
+    "IMPORT": 5,
+    "MAP_EXISTING": 60,
+    "RADAR": 15,
+    "REJECT": 0,
+    "CLOSED_UPSTREAM": 0
+  },
+  "candidates": [
+    {
+      "number": 5915,
+      "title": "\"Cline uses complex prompts and iterative task execution that may be challenging for less capable models. For best resul",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with USER-CONTEXT-CEILING01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 4,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 114,
+      "days_since_update": 14,
+      "semantic_overlaps": [
+        "USER-CONTEXT-CEILING01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/5915"
+    },
+    {
+      "number": 4356,
+      "title": "Improve Terminal Integration Reliability Across Platforms and Shell Configurations",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 4,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 94,
+      "days_since_update": 19,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/4356"
+    },
+    {
+      "number": 4384,
+      "title": "Fix File Editing Tool Reliability - replace_in_file, write_to_file, and Diff Failures",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 4,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 58,
+      "days_since_update": 31,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01",
+        "TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "url": "https://github.com/cline/cline/issues/4384"
+    },
+    {
+      "number": 8636,
+      "title": "Thinking section not displayed in v3.50.0",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 4,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 51,
+      "days_since_update": 20,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "url": "https://github.com/cline/cline/issues/8636"
+    },
+    {
+      "number": 7262,
+      "title": "Cline returning over and over again: Invalid API Response: The provider returned an empty or unparsable response",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 4,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 47,
+      "days_since_update": 10,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/7262"
+    },
+    {
+      "number": 4389,
+      "title": "Improve Context Window Management and Large File Handling",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 33,
+      "days_since_update": 80,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/4389"
+    },
+    {
+      "number": 6416,
+      "title": "Cline JetBrains plugin is unable to work with two or more open IDEA projects (Windows).",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "distinct high-value work meeting import threshold",
+        "JetBrains multi-project is a distinct surface; attach as evidence under GITHUB-DISTRIBUTION01 cross-platform note"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 31,
+      "days_since_update": 13,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/6416"
+    },
+    {
+      "number": 8074,
+      "title": "devstral-2512 is labeled FREE in Cline provider, but still consumes credits",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 27,
+      "days_since_update": 109,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/8074"
+    },
+    {
+      "number": 10500,
+      "title": "Cline asking to use Claude 4.5 Sonnet",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 22,
+      "days_since_update": 61,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/10500"
+    },
+    {
+      "number": 12385,
+      "title": "Kimi K3 model returns repeated Invalid API Response errors after first message",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 21,
+      "days_since_update": 6,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/12385"
+    },
+    {
+      "number": 10469,
+      "title": "Newer models for deepseek are not listed.",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 20,
+      "days_since_update": 68,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/10469"
+    },
+    {
+      "number": 10015,
+      "title": "Cline wants to execute this command:  Skipped, thinking",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 19,
+      "days_since_update": 59,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10015"
+    },
+    {
+      "number": 4388,
+      "title": "Fix Checkpoint System Issues",
+      "state": "OPEN",
+      "disposition": "IMPORT",
+      "rationale": [
+        "distinct high-impact correctness issue with no existing epic"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 17,
+      "days_since_update": 5,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/4388"
+    },
+    {
+      "number": 12079,
+      "title": "Command execution shows \"skipped\" in Cline terminal and hangs on \"thinking\" — requires extension restart to recover",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 17,
+      "days_since_update": 9,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12079"
+    },
+    {
+      "number": 8838,
+      "title": "In plan mode I can't answer a question unless I hit the Cancel button",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 17,
+      "days_since_update": 36,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/8838"
+    },
+    {
+      "number": 10307,
+      "title": "403 Kimi For Coding is currently only available for Coding Agents such as Kimi CLI, Claude Code, Roo Code, Kilo Code, et",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 17,
+      "days_since_update": 75,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/10307"
+    },
+    {
+      "number": 9788,
+      "title": "在windows环境下，vscode  或者cli 都出现了消息丢失，发送消息读取不到。ai提示说发送的是空消息。直接导致用不了了",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with CONTEXT-ACCOUNTING-TRUTH01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 16,
+      "days_since_update": 86,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9788"
+    },
+    {
+      "number": 9668,
+      "title": "Add API Key field to LM Studio provider for authenticated servers",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 15,
+      "days_since_update": 0,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/9668"
+    },
+    {
+      "number": 12474,
+      "title": "Add latest Gemini models: `gemini-3.6-flash` and `gemini-3.5-flash-lite` (blocked by Gemini integration update)",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 15,
+      "days_since_update": 0,
+      "semantic_overlaps": [
+        "TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12474"
+    },
+    {
+      "number": 12198,
+      "title": "Cline hangs completely after skipping a command execution, requires VS Code restart",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 15,
+      "days_since_update": 17,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12198"
+    },
+    {
+      "number": 10410,
+      "title": "gpt-5.5 fails when context reaches 500k, even though Cline believes the max context is 1M",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "distinct high-value work meeting import threshold",
+        "gpt-5.5 500k context failure is a CONTEXT-ACCOUNTING-TRUTH01 evidence; provider-model context ceiling is a canonical accounting concern"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 15,
+      "days_since_update": 39,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10410"
+    },
+    {
+      "number": 12863,
+      "title": "replace_in_file targets directory or malformed path and fails with EISDIR",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 14,
+      "days_since_update": 2,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/12863"
+    },
+    {
+      "number": 12431,
+      "title": "Cline hit repeated tool call failures. Try guiding it with a new prompt.",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 14,
+      "days_since_update": 2,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01",
+        "TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12431"
+    },
+    {
+      "number": 7355,
+      "title": "Cline does not wait for terminal command to finish",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 14,
+      "days_since_update": 4,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/7355"
+    },
+    {
+      "number": 6759,
+      "title": "[BUG] GCP vertex ai global does not have claude sonnet model",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 14,
+      "days_since_update": 7,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/6759"
+    },
+    {
+      "number": 10551,
+      "title": "OpenAI-compatible DeepSeek V4 Pro: configured 1M context capped at 128K, tool parsing/mistake-limit issues",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 14,
+      "days_since_update": 29,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "USER-CONTEXT-CEILING01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10551"
+    },
+    {
+      "number": 8130,
+      "title": "Poor support for DeepSeek v3.2's integration of thinking into tool-use",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 14,
+      "days_since_update": 157,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/8130"
+    },
+    {
+      "number": 10031,
+      "title": "Stuck on Thinking...",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 13,
+      "days_since_update": 11,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10031"
+    },
+    {
+      "number": 7414,
+      "title": "Clinerules are completely ignored",
+      "state": "OPEN",
+      "disposition": "IMPORT",
+      "rationale": [
+        "distinct high-impact correctness issue with no existing epic"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 13,
+      "days_since_update": 20,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/7414"
+    },
+    {
+      "number": 10208,
+      "title": "Stuck thinking for ever.",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 13,
+      "days_since_update": 29,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10208"
+    },
+    {
+      "number": 11263,
+      "title": "bug(ollama): Infinite JSON tool loop & HTTP 400/500 errors on non-tool/streamed models",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 13,
+      "days_since_update": 32,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/11263"
+    },
+    {
+      "number": 10637,
+      "title": "Cline auto compacts context silently even with autocompacting setting disabled",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 12,
+      "days_since_update": 2,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "COMPACTION-STATE-AUTHORITY01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10637"
+    },
+    {
+      "number": 12133,
+      "title": "Git commit --amend should not be considered a \"safe command\"",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 12,
+      "days_since_update": 13,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12133"
+    },
+    {
+      "number": 9546,
+      "title": "Stuck on \"Thinking...\" when using Sonnet 4.6",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 12,
+      "days_since_update": 44,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9546"
+    },
+    {
+      "number": 7476,
+      "title": "JetBrains plugin does not support Windows/ARM64",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with CONTEXT-ACCOUNTING-TRUTH01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 11,
+      "days_since_update": 204,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/7476"
+    },
+    {
+      "number": 9848,
+      "title": "Cline prints raw tool invocation XML in responses and gets stuck in a loop unable to complete tasks",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 10,
+      "days_since_update": 16,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9848"
+    },
+    {
+      "number": 9181,
+      "title": "Agressive context compaction with opus-4.6:1m",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 3,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 10,
+      "days_since_update": 43,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "COMPACTION-STATE-AUTHORITY01",
+        "GITHUB-ACTIONS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9181"
+    },
+    {
+      "number": 11018,
+      "title": "Unable to set custom headers anymore in OpenAi compatible (Kimi for coding setup)",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with TASKHEADER-CANONICAL-PROJECTION01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 10,
+      "days_since_update": 68,
+      "semantic_overlaps": [
+        "TASKHEADER-CANONICAL-PROJECTION01"
+      ],
+      "url": "https://github.com/cline/cline/issues/11018"
+    },
+    {
+      "number": 12042,
+      "title": "macOS 27 Golden Gate Developer Beta (Apple Silicon): CLI binary is killed by AMFI (CODE SIGNING: cs_invalid_page)",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with BRANDING01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 9,
+      "days_since_update": 0,
+      "semantic_overlaps": [
+        "BRANDING01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12042"
+    },
+    {
+      "number": 13008,
+      "title": "CLINE 4.1.x changed tool syntax again, thus breaking support with local OLLAMA + QWEN3.6 (Qwen3.6:35b-3ba) #13007",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 9,
+      "days_since_update": 6,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/13008"
+    },
+    {
+      "number": 13296,
+      "title": "Could not consistently trigger Cline diff edit view",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": -1,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/13296"
+    },
+    {
+      "number": 11793,
+      "title": "apply_patch fuzzy matcher is O(n²) per hunk — pegs CPU, spikes RAM, times out on ~15 KB files",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 52,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/11793"
+    },
+    {
+      "number": 8087,
+      "title": "MCP tool IDs use ephemeral server keys, breaking routing after reconnect/restart",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 2,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/8087"
+    },
+    {
+      "number": 9786,
+      "title": "💡 Suggestion: MCP server security scanning before connection",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 71,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/9786"
+    },
+    {
+      "number": 10537,
+      "title": "Cline v3.82.0 hangs indefinitely at \"Thinking...\" after executing terminal commands",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with STATIC-THINKING-PRESENTATION-PERSISTENCE01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 26,
+      "semantic_overlaps": [
+        "STATIC-THINKING-PRESENTATION-PERSISTENCE01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10537"
+    },
+    {
+      "number": 9201,
+      "title": "No chat window scrollbar after updating from Cline 3.49.0 to 3.49.1+",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with CONTEXT-ACCOUNTING-TRUTH01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 56,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9201"
+    },
+    {
+      "number": 10931,
+      "title": "Cline hangs indefinitely when interactive CLI commands (like default \"git diff\")",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 67,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10931"
+    },
+    {
+      "number": 9333,
+      "title": "Cline CLI ignores configured model and always uses anthropic/claude-3-7-sonnet-latest",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 111,
+      "semantic_overlaps": [
+        "TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9333"
+    },
+    {
+      "number": 10148,
+      "title": "Impossible token count in context window",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 8,
+      "days_since_update": 121,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10148"
+    },
+    {
+      "number": 12388,
+      "title": "Checkpoint restore fails with \"No checkpoint found at or before run N\" after internal continuations",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": -1,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/12388"
+    },
+    {
+      "number": 10656,
+      "title": "Latest Cline still hits OpenAI Native gpt-5.3-codex, gpt-5.4 and gpt-5.5 reasoning/function_call pairing error during MC",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 43,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01",
+        "TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10656"
+    },
+    {
+      "number": 10499,
+      "title": "MCP tool calls execute without user approval when Auto-approve is OFF",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 46,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10499"
+    },
+    {
+      "number": 7413,
+      "title": "MCP Servers launching thousands of instances until crash on windows",
+      "state": "OPEN",
+      "disposition": "IMPORT",
+      "rationale": [
+        "distinct high-value work meeting import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 228,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/7413"
+    },
+    {
+      "number": 10741,
+      "title": "How to disable auto-update in Cline CLI? Multiple issues with v2.18.0",
+      "state": "OPEN",
+      "disposition": "RADAR",
+      "rationale": [
+        "useful signal but does not meet import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 0,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 88,
+      "semantic_overlaps": [],
+      "url": "https://github.com/cline/cline/issues/10741"
+    },
+    {
+      "number": 10246,
+      "title": "CLI: `cline` fails on startup with npm 404 for `@clinebot/agents` (missing package)",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with GITHUB-DISTRIBUTION01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 121,
+      "semantic_overlaps": [
+        "GITHUB-DISTRIBUTION01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10246"
+    },
+    {
+      "number": 13253,
+      "title": "cline is stuck in running 1 command for 10 minutes , happened twice",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 0,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/13253"
+    },
+    {
+      "number": 9554,
+      "title": "Bug: .clineignore does not omit files from context as documented",
+      "state": "OPEN",
+      "disposition": "IMPORT",
+      "rationale": [
+        "distinct high-value work meeting import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 0,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9554"
+    },
+    {
+      "number": 10549,
+      "title": "'run_commands' tool silently times out at 30s with misleading error — causes agent confusion and wasted tokens on long-r",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 15,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10549"
+    },
+    {
+      "number": 12520,
+      "title": "fix(cli): openai-compatible provider ignores models.json contextWindow — resolveModelInfo ?? short-circuits on default  ",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with CONTEXT-ACCOUNTING-TRUTH01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 20,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "GITHUB-ACTIONS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12520"
+    },
+    {
+      "number": 11785,
+      "title": "Global Dirs differ severely, docs dont convey information efficiently",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with GITHUB-ACTIONS01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 25,
+      "semantic_overlaps": [
+        "GITHUB-ACTIONS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/11785"
+    },
+    {
+      "number": 10016,
+      "title": "GUI configuration shows blank/incorrect models from LM Studio API on Windows 11",
+      "state": "OPEN",
+      "disposition": "IMPORT",
+      "rationale": [
+        "distinct high-value work meeting import threshold"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 78,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10016"
+    },
+    {
+      "number": 8446,
+      "title": "Tool not specified in CLI tool approval request",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 7,
+      "days_since_update": 159,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01",
+        "GITHUB-ACTIONS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/8446"
+    },
+    {
+      "number": 12977,
+      "title": "Unknown MCP tool name is forwarded to the server and returns an opaque error instead of being validated against the conn",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 4,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12977"
+    },
+    {
+      "number": 9651,
+      "title": "Cline sends full-context max_output_tokens and overflows all large-context models (MiniMax, Qwen, OpenRouter)",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with CONTEXT-ACCOUNTING-TRUTH01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 6,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9651"
+    },
+    {
+      "number": 11494,
+      "title": "Cline cli 3 does not show cost",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with COST-DISPLAY-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 15,
+      "semantic_overlaps": [
+        "COST-DISPLAY-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/11494"
+    },
+    {
+      "number": 10980,
+      "title": "Deepseek V4 context window is limited in 128K",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 23,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "USER-CONTEXT-CEILING01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10980"
+    },
+    {
+      "number": 9143,
+      "title": "The command's output could not be captured",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with USER-CONTEXT-CEILING01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 33,
+      "semantic_overlaps": [
+        "USER-CONTEXT-CEILING01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/9143"
+    },
+    {
+      "number": 11295,
+      "title": "Deadlock on remote-SSH after terminal commands",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 62,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/11295"
+    },
+    {
+      "number": 10843,
+      "title": "[Bug]: Local Ollama models (Qwen 2.5 Coder) trapped in infinite loop emitting raw JSON instead of triggering tools due t",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 4,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 77,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10843"
+    },
+    {
+      "number": 7403,
+      "title": "Cline does not save config in Webstorm Latest and VSCode",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 0
+      },
+      "snapshot_interactions": 6,
+      "days_since_update": 240,
+      "semantic_overlaps": [
+        "TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "url": "https://github.com/cline/cline/issues/7403"
+    },
+    {
+      "number": 12947,
+      "title": "Reasoning Effort dropdown caps at \"xhigh\" - \"max\" missing from OPENAI_REASONING_EFFORT_OPTIONS though models.dev/DeepSee",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with USER-CONTEXT-CEILING01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 2,
+      "semantic_overlaps": [
+        "USER-CONTEXT-CEILING01"
+      ],
+      "url": "https://github.com/cline/cline/issues/12947"
+    },
+    {
+      "number": 13246,
+      "title": "Background Console `run_commands` has a hard-coded 30-second timeout",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 4,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/13246"
+    },
+    {
+      "number": 13160,
+      "title": "Title: [Windows] Claude Code API Provider strictly binds working directory to VS Code installation path instead of works",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with CONTEXT-ACCOUNTING-TRUTH01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 3
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 6,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/13160"
+    },
+    {
+      "number": 10596,
+      "title": "Cline's OpenRouter integration lacks provider pinning, inflating costs by 3-5x",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with COST-DISPLAY-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 18,
+      "semantic_overlaps": [
+        "COST-DISPLAY-TRUTH01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10596"
+    },
+    {
+      "number": 11542,
+      "title": "Cline enters a high-volume request loop under repeated tool-use completions",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 19,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/11542"
+    },
+    {
+      "number": 10413,
+      "title": "Invalid API Response: The provider returned an empty or unparsable response. This is a provider-side issue where the mod",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 20,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10413"
+    },
+    {
+      "number": 10444,
+      "title": "Configurable Shell Path for Background Exec on Windows (to support Git Bash / MSYS Bash for UTF-8)",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with CONTEXT-ACCOUNTING-TRUTH01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 4,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 2
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 26,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10444"
+    },
+    {
+      "number": 11879,
+      "title": "# CI/CD test coverage gaps in SDK packages — two untested code paths",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TEST-BASELINE-ZERO-FAILURES01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 0,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 31,
+      "semantic_overlaps": [
+        "TEST-BASELINE-ZERO-FAILURES01",
+        "CODE-COVERAGE-BASELINE01",
+        "CODE-COVERAGE-RATCHET01",
+        "GITHUB-ACTIONS01",
+        "GITHUB-DISTRIBUTION01"
+      ],
+      "url": "https://github.com/cline/cline/issues/11879"
+    },
+    {
+      "number": 10709,
+      "title": "OpenAI-compatible DeepSeek V4 Pro/Flash stuck after command status becomes \"Skipped\"",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "strong title overlap with TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 2,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 5,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 4,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 35,
+      "semantic_overlaps": [
+        "TOOL-EXECUTION-SEMANTICS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/10709"
+    },
+    {
+      "number": 8920,
+      "title": "[Windows specific] Cline: \"Error loading webview: Error: Could not register service worker:\" error is shown when user op",
+      "state": "OPEN",
+      "disposition": "MAP_EXISTING",
+      "rationale": [
+        "body overlap with CONTEXT-ACCOUNTING-TRUTH01; not enough distinct impact"
+      ],
+      "scores": {
+        "CORRECTNESS_IMPACT": 3,
+        "PRODUCT_VALUE": 3,
+        "CLINEMM_RELEVANCE": 4,
+        "IMPLEMENTATION_ROI": 2,
+        "ARCHITECTURAL_FIT": 3,
+        "UPSTREAM_MOMENTUM": 1
+      },
+      "snapshot_interactions": 5,
+      "days_since_update": 46,
+      "semantic_overlaps": [
+        "CONTEXT-ACCOUNTING-TRUTH01",
+        "GITHUB-ACTIONS01"
+      ],
+      "url": "https://github.com/cline/cline/issues/8920"
+    }
+  ]
+}
