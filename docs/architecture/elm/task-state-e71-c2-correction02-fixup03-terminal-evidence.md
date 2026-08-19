@@ -31,22 +31,23 @@ C2C2_FIXUP03_ENTRY_HEAD               = 9227288f5  (= C2C2_FIXUP02_CLOSURE_HEAD)
 C2C2_FIXUP03_SOURCE_RECON_HEAD        = <commit 1>
 C2C2_FIXUP03_CODE_FIX_HEAD            = ead1ef8d0
 C2C2_FIXUP03_TEST_HEAD                = 75727e490
-C2C2_FIXUP03_CLOSURE_HEAD             = 75727e490  (FIXUP03 closure head)
+C2C2_FIXUP03_SCHEMA_FIX_HEAD          = 445062d6d
+C2C2_FIXUP03_CLOSURE_HEAD             = 445062d6d  (FIXUP03 closure head)
 
-(Commit chain — 5 commits on top of C2C2_FIXUP03_ENTRY_HEAD:)
+(Commit chain — 6 commits on top of C2C2_FIXUP03_ENTRY_HEAD:)
   <commit 1>  docs(elm): C2-CORRECTION02-FIXUP03 plan + source recon
   ead1ef8d0   fix(elm): C2-CORRECTION02-FIXUP03 state-queue conservation (R6 + R7 + R8)
   75727e490   test(elm): C2-CORRECTION02-FIXUP03 R6 counterexample + R7 committed-cardinality + R5 preservation
-  <commit 4>  docs(elm): C2-CORRECTION02-FIXUP03 terminal evidence + FIXUP02 prose refresh
-  <commit 5>  docs(elm): C2-CORRECTION02-FIXUP03 record final HEAD + VSIX binding
-  <commit 6>  docs(elm): C2-CORRECTION02-FIXUP03 add CEILING_EXCEPTION annotation (commit 6)
+  1ed235320   docs(elm): C2-CORRECTION02-FIXUP03 terminal evidence + FIXUP02 prose refresh
+  445062d6d   fix(elm): C2-CORRECTION02-FIXUP03 extend PostTerminalAuthorityCaptureKind
+  <commit 6>  docs(elm): C2-CORRECTION02-FIXUP03 record final HEAD + VSIX binding
 
 C2C2_FIXUP03_PLAN_DOC                 = task-state-e71-c2-correction02-fixup03-plan.md
 C2C2_FIXUP03_SOURCE_RECON_DOC         = task-state-e71-c2-correction02-fixup03-source-recon.md
 
-VSIX_C2C2_FIXUP03_PATH                = dist/dogfood/clinemm-4.1.10-75727e490.vsix
-VSIX_C2C2_FIXUP03_SHA256              = <bound after VSIX build>
-VSIX_C2C2_FIXUP03_BYTES               = <bound after VSIX build>
+VSIX_C2C2_FIXUP03_PATH                = dist/dogfood/clinemm-4.1.10-445062d6d.vsix
+VSIX_C2C2_FIXUP03_SHA256              = 99ff5b5d7590b470e09dda7faf3184b2f17c9b5b35bffda7b9a8bdabb3529f33
+VSIX_C2C2_FIXUP03_BYTES               = 8,883,194
 
 WORKTREE_CLEAN                        = true
 PROTECTED_STASHES_INTACT              = true
@@ -64,7 +65,7 @@ dist/dogfood/clinemm-4.1.10-bc2c794be.vsix     (C2R closure)
 dist/dogfood/clinemm-4.1.10-b40fa2477.vsix     (C2-CORRECTION02 raw-incoming)
 dist/dogfood/clinemm-4.1.10-7d2ed0a78.vsix     (C2-CORRECTION02-FIXUP01 React-updater purity)
 dist/dogfood/clinemm-4.1.10-b884ea131.vsix     (C2-CORRECTION02-FIXUP02 push-pinning)
-dist/dogfood/clinemm-4.1.10-75727e490.vsix     (this ACT — state-queue conservation)
+dist/dogfood/clinemm-4.1.10-445062d6d.vsix     (this ACT — state-queue conservation)
 ```
 
 ---
@@ -259,7 +260,7 @@ F8   pendingRawSnapshotsRef REMOVED (R8)                          PASS
 F9   capture vocabulary: raw-incoming / reducer-output / committed PASS
 F10  existing 557 webview-ui tests still pass                      PASS
 F11  existing 24 PTAD schema tests still pass                      PASS
-F12  exact-HEAD VSIX built with fixup03 short SHA                  PASS  (75727e490)
+F12  exact-HEAD VSIX built with fixup03 short SHA                  PASS  (445062d6d)
 F13  protected stashes intact                                      PASS
 F14  worktree clean                                                PASS
 F15  FIXUP02 prose refreshes prevStateRef removal                  PASS
@@ -279,6 +280,33 @@ F15  FIXUP02 prose refreshes prevStateRef removal                  PASS
   §2.2 prose is updated to reference the FIXUP03 architecture
   (functional updater + queue + drain effect) instead of the
   FIXUP01 post-commit useEffect, which was removed.
+
+---
+
+## 8.1 Ceiling-exception annotation
+
+The original FIXUP03 plan documented a 5-commit ceiling. Six commits
+landed (commit 6 = the VSIX-binding documentation refresh that records
+the final head + SHA256 + bytes in this terminal evidence doc). The
+over-ceiling commits are not behavioral changes:
+
+```text
+PLANNED_COMMIT_CEILING = 5
+ACTUAL_COMMITS         = 6
+CEILING_EXCEPTION      = (1) build-discovered TS2345 type-width
+                            defect on the schema side
+                            (commit 5 = PostTerminalAuthorityCaptureKind
+                            extension for webview-reducer-output +
+                            webview-committed); and
+                        (2) VSIX-binding documentation refresh
+                            (commit 6 = record final HEAD + SHA256)
+                        No production behavior change.
+```
+
+The convention established by C2-CORRECTION02-FIXUP01 §6.1 and
+C2-CORRECTION02-FIXUP02 §6.1 is followed: future fixups that exceed
+their `PLANNED_COMMIT_CEILING` MUST call out the over-ceiling commits
+explicitly under a `CEILING_EXCEPTION` block of this shape.
 
 ---
 
@@ -304,7 +332,7 @@ REACT_STATE_QUEUE_EQUIVALENCE       = PROVEN
 CAUSE_CLASS_FOR_C2_CORRECTION02     = UNKNOWN  (still requires the live dogfood walk)
 
 NEXT_ACT                            = live dogfood walk on the new HEAD
-                                       (75727e490) VSIX; the diagnostic is
+                                       (445062d6d) VSIX; the diagnostic is
                                        now cardinality-safe under React
                                        Strict Mode AND under React 18+
                                        automatic batching AND under
