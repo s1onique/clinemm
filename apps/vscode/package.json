@@ -207,6 +207,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpLiveContextDimensions01",
+				"title": "Cline Debug: Dump Live Context Dimensions01",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"
