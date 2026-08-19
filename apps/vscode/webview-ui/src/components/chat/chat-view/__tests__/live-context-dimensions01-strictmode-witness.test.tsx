@@ -243,4 +243,86 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP
 
 		result.unmount()
 	})
+
+	it("R-strictmode-3: under React.StrictMode, ONE dump trigger dispatches EXACTLY ONE clinemm.appendLiveContextDimensions01 message (NOT 2)", async () => {
+		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP02:
+		// This is the load-bearing witness for the listener cleanup.
+		// React Strict Mode deliberately re-runs Effects with an extra
+		// setup->cleanup->setup cycle in development; without explicit
+		// removeEventListener, multiple dump handlers would be alive and
+		// ONE dump request would trigger N webview->extension flushes
+		// (and N JSONL overwrites). The C1-FIXUP02 fix added the
+		// cleanup; this test catches regressions.
+		enableLiveContextDimensions01Capture()
+
+		// Stub the VSCode API with a postMessage spy BEFORE mount
+		// so we can count outgoing flush messages.
+		const sentMessages: unknown[] = []
+		const w = window as unknown as {
+			__clineVsCodeApi?: { postMessage: (m: unknown) => void }
+		}
+		const originalApi = w.__clineVsCodeApi
+		w.__clineVsCodeApi = {
+			postMessage: (m: unknown) => {
+				sentMessages.push(m)
+			},
+		}
+
+		try {
+			const result = render(
+				<React.StrictMode>
+					<ExtensionStateContextProvider />
+				</React.StrictMode>,
+			)
+
+			// Capture some records so the dump has content.
+			enableLiveContextDimensions01Capture()
+			clearLiveContextDimensions01Capture()
+			recordLiveContextDimensions01Capture({
+				kind: "webview-w1-request",
+				correlation: {
+					associationQuality: "INTRINSIC",
+					associatedPushId: 1,
+					intervalInferred: undefined,
+				},
+				hostTurnState: { phase: "idle", seq: 1, anchorTs: 1 },
+			})
+
+			// Dispatch ONE dump trigger via the postMessage bridge.
+			// This is what the extension sends via webview.postMessage().
+			// jsdom does not deliver window.postMessage to window
+			// listeners, so dispatch a MessageEvent directly.
+			window.dispatchEvent(new MessageEvent("message", { data: { type: "clinemm.dumpLiveContextDimensions01" } }))
+
+			// Wait microtasks for the listener to handle the event.
+			await Promise.resolve()
+
+			const appendCalls = sentMessages.filter((m) => {
+				return (
+					typeof m === "object" &&
+					m !== null &&
+					(m as { type?: unknown }).type === "clinemm.appendLiveContextDimensions01"
+				)
+			})
+			expect(appendCalls.length).toBe(1)
+
+			// The first (and only) message must carry the records.
+			const first = appendCalls[0] as {
+				type: string
+				clinemm_liveContextDimensions01Records?: readonly unknown[]
+			}
+			expect(first.type).toBe("clinemm.appendLiveContextDimensions01")
+			expect(Array.isArray(first.clinemm_liveContextDimensions01Records)).toBe(true)
+			expect(first.clinemm_liveContextDimensions01Records?.length).toBe(1)
+
+			result.unmount()
+		} finally {
+			// Restore the original API surface.
+			if (originalApi) {
+				w.__clineVsCodeApi = originalApi
+			} else {
+				delete w.__clineVsCodeApi
+			}
+		}
+	})
 })

@@ -787,7 +787,11 @@ describe("LCD01 removal marker", () => {
 			throw new Error("Could not resolve live-context-dimensions01-capture.ts")
 		}
 		expect(source).toMatch(/REMOVAL CONTRACT/)
-		expect(source).toMatch(/Single-file delete/)
+		// The contract lists the files that would need to be
+		// deleted to roll back the diagnostic. After C1-FIXUP01
+		// this is no longer a single-file removal; we just check
+		// that the schema itself is referenced.
+		expect(source).toMatch(/live-context-dimensions01-capture\.ts/)
 	})
 
 	it("ExtensionStateContext imports the LCD01 module via the documented symbol set", () => {

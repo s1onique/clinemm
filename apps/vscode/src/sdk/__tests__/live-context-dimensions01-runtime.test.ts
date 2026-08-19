@@ -178,4 +178,86 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP
 			expect(parsed.correlation.associatedPushId).toBe(2)
 		})
 	})
+
+	describe("R3: strict validator rejects malformed webview input", () => {
+		async function expectZeroPersisted(records: readonly unknown[]): Promise<void> {
+			const path = await appendWebviewSideLiveContextDimensions01(context, records)
+			expect(existsSync(path)).toBe(true)
+			const text = readFileSync(path, "utf8")
+			const lines = text.split("\n").filter((l) => l.length > 0)
+			expect(lines.length).toBe(0)
+		}
+
+		it("R3-1: UNKNOWN capture kind is rejected (no record touches disk)", async () => {
+			await expectZeroPersisted([
+				{
+					kind: "webview-totally-unknown",
+					capturedAt: 1,
+					captureSeq: 1,
+					correlation: { associationQuality: "NONE", associatedPushId: undefined },
+				},
+			])
+		})
+
+		it("R3-2: W2 record with INTRINSIC association is rejected", async () => {
+			await expectZeroPersisted([
+				{
+					kind: "webview-w2-request",
+					capturedAt: 1,
+					captureSeq: 1,
+					correlation: { associationQuality: "INTRINSIC", associatedPushId: 7 },
+					nativeW2: { epoch: 1, seq: 1, ts: 1, discriminator: "partial" },
+				},
+			])
+		})
+
+		it("R3-3: non-W2 record with INTERVAL_INFERRED association is rejected", async () => {
+			await expectZeroPersisted([
+				{
+					kind: "webview-w1-request",
+					capturedAt: 1,
+					captureSeq: 1,
+					correlation: {
+						associationQuality: "INTERVAL_INFERRED",
+						associatedPushId: undefined,
+						intervalInferred: { previousPushId: 1, nextPushId: 2 },
+					},
+				},
+			])
+		})
+
+		it("R3-4: W2 record missing nativeW2 identity is rejected", async () => {
+			await expectZeroPersisted([
+				{
+					kind: "webview-w2-request",
+					capturedAt: 1,
+					captureSeq: 1,
+					correlation: { associationQuality: "NONE", associatedPushId: undefined },
+					// no nativeW2
+				},
+			])
+		})
+
+		it("R3-5: non-W2 record carrying nativeW2 identity is rejected (field exclusivity)", async () => {
+			await expectZeroPersisted([
+				{
+					kind: "webview-w1-request",
+					capturedAt: 1,
+					captureSeq: 1,
+					correlation: { associationQuality: "INTRINSIC", associatedPushId: 7 },
+					nativeW2: { epoch: 1, seq: 1, ts: 1, discriminator: "partial" },
+				},
+			])
+		})
+
+		it("R3-6: well-formed records are still persisted (positive control)", async () => {
+			emitW1(1, "idle")
+			const path = await appendWebviewSideLiveContextDimensions01(context, [
+				...getLiveContextDimensions01CaptureRecords(),
+			])
+			const text = readFileSync(path, "utf8")
+			const lines = text.split("\n").filter((l) => l.length > 0)
+			expect(lines.length).toBe(1)
+		})
+	})
 })

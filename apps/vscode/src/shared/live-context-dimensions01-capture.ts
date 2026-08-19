@@ -41,10 +41,26 @@
  *     opt-in; the webview tree, the wire, and the production code
  *     paths are byte-for-byte unchanged when disabled.
  *
- * REMOVAL CONTRACT
- *   - Single-file delete + delete of the import-and-emit-block in
- *     ExtensionStateContext + delete of the C1 test file. No
- *     production data shape, public API, or proto contract touched.
+ * REMOVAL CONTRACT (after C1-FIXUP01)
+ *   - Delete this file (`live-context-dimensions01-capture.ts`).
+ *   - Delete `apps/vscode/src/sdk/live-context-dimensions01-runtime.ts`
+ *     and its test file.
+ *   - Delete the import-and-emit block in `ExtensionStateContext.tsx`
+ *     (W1 + W2 + C capture sites AND the dump message listener).
+ *   - Delete the LCD01 dump command in `extension.ts` and the
+ *     `DumpLiveContextDimensions01` registry entry in `registry.ts`.
+ *   - Delete the `clinemm.appendLiveContextDimensions01` message-type
+ *     entries in `WebviewMessage.ts`.
+ *   - Delete the matching case in `VscodeWebviewProvider.ts`.
+ *   - Delete `live-context-dimensions01-capture.test.tsx` and
+ *     `live-context-dimensions01-strictmode-witness.test.tsx`.
+ *
+ * No production data shape, public API, or proto contract touched.
+ * When the toggle is OFF (default), this commit adds ZERO
+ * observable behavior — same wire payload, same gRPC surface, same
+ * webview render. The dump command and message types are reachable
+ * only by the dogfood user explicitly invoking
+ * `cline.debug.dumpLiveContextDimensions01`.
  */
 
 // ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1:
@@ -159,75 +175,148 @@ function isB0Kind(kind: LiveContextDimensions01CaptureKind): boolean {
 	)
 }
 
-function validateCapture(record: LiveContextDimensions01Capture): void {
+function isCaptureValid(record: LiveContextDimensions01Capture): boolean {
 	const isW2 = isW2Kind(record.kind)
 
 	if (isW2) {
 		if (record.correlation.associationQuality === "INTRINSIC") {
-			throw new Error(
-				`[LCD01] W2 record carries INTRINSIC association — ` +
-					`integrity violation under the current protocol ` +
-					`(kind=${record.kind})`,
-			)
+			return false
 		}
 		if (record.nativeW2 === undefined) {
-			throw new Error(
-				`[LCD01] W2 record missing nativeW2 identity ` +
-					`(kind=${record.kind})`,
-			)
+			return false
 		}
 	} else {
 		if (record.correlation.associationQuality === "INTERVAL_INFERRED") {
-			throw new Error(
-				`[LCD01] non-W2 record carries INTERVAL_INFERRED ` +
-					`association — INTERVAL_INFERRED is W2-only ` +
-					`(kind=${record.kind})`,
-			)
+			return false
 		}
 		if (record.nativeW2 !== undefined) {
-			throw new Error(
-				`[LCD01] non-W2 record carries nativeW2 identity — ` +
-					`nativeW2 is W2-only (kind=${record.kind})`,
-			)
+			return false
 		}
 	}
 
 	if (isQKind(record.kind)) {
 		if (record.writerIdentity === undefined) {
-			throw new Error(
-				`[LCD01] Q record missing writerIdentity ` +
-					`(kind=${record.kind})`,
-			)
+			return false
 		}
 	} else if (record.writerIdentity !== undefined) {
-		throw new Error(
-			`[LCD01] non-Q record carries writerIdentity — ` +
-				`writerIdentity is Q-only (kind=${record.kind})`,
-		)
+		return false
 	}
 
-	if (isB0Kind(record.kind)) {
-		// No shape requirement on replicaTurnState — a B0 record
-		// is a per-request-site observation; an undefined turnState
-		// at the request site is a valid observation, not a missing
-		// payload.
-	} else if (record.replicaTurnState !== undefined) {
-		throw new Error(
-			`[LCD01] non-B0 record carries replicaTurnState — ` +
-				`replicaTurnState is B0-only (kind=${record.kind})`,
-		)
+	if (!isB0Kind(record.kind) && record.replicaTurnState !== undefined) {
+		return false
 	}
 
-	if (record.kind === "webview-committed-c") {
-		// No shape requirement on committedTurnState — a C record
-		// is a per-commit observation; an undefined turnState at
-		// commit time is a valid observation, not a missing payload.
-	} else if (record.committedTurnState !== undefined) {
-		throw new Error(
-			`[LCD01] non-C record carries committedTurnState — ` +
-				`committedTurnState is C-only (kind=${record.kind})`,
-		)
+	if (record.kind !== "webview-committed-c" && record.committedTurnState !== undefined) {
+		return false
 	}
+
+	return true
+}
+
+function validateCapture(record: LiveContextDimensions01Capture): void {
+	if (!isCaptureValid(record)) {
+		// Re-run a single diagnostic so the in-process caller sees a
+		// specific reason; the boolean form above is what the
+		// extension-side trust-boundary validator uses, but the
+		// in-process form should still fail LOUDLY.
+		const isW2 = isW2Kind(record.kind)
+		if (isW2) {
+			if (record.correlation.associationQuality === "INTRINSIC") {
+				throw new Error(
+					`[LCD01] W2 record carries INTRINSIC association — ` +
+						`integrity violation under the current protocol ` +
+						`(kind=${record.kind})`,
+				)
+			}
+			if (record.nativeW2 === undefined) {
+				throw new Error(
+					`[LCD01] W2 record missing nativeW2 identity ` +
+						`(kind=${record.kind})`,
+				)
+			}
+		}
+		if (!isW2) {
+			if (record.correlation.associationQuality === "INTERVAL_INFERRED") {
+				throw new Error(
+					`[LCD01] non-W2 record carries INTERVAL_INFERRED ` +
+						`association — INTERVAL_INFERRED is W2-only ` +
+						`(kind=${record.kind})`,
+				)
+			}
+			if (record.nativeW2 !== undefined) {
+				throw new Error(
+					`[LCD01] non-W2 record carries nativeW2 identity — ` +
+						`nativeW2 is W2-only (kind=${record.kind})`,
+				)
+			}
+		}
+		if (isQKind(record.kind) && record.writerIdentity === undefined) {
+			throw new Error(
+				`[LCD01] Q record missing writerIdentity (kind=${record.kind})`,
+			)
+		}
+		if (!isQKind(record.kind) && record.writerIdentity !== undefined) {
+			throw new Error(
+				`[LCD01] non-Q record carries writerIdentity — ` +
+					`writerIdentity is Q-only (kind=${record.kind})`,
+			)
+		}
+		if (!isB0Kind(record.kind) && record.replicaTurnState !== undefined) {
+			throw new Error(
+				`[LCD01] non-B0 record carries replicaTurnState — ` +
+					`replicaTurnState is B0-only (kind=${record.kind})`,
+			)
+		}
+		if (record.kind !== "webview-committed-c" && record.committedTurnState !== undefined) {
+			throw new Error(
+				`[LCD01] non-C record carries committedTurnState — ` +
+					`committedTurnState is C-only (kind=${record.kind})`,
+			)
+		}
+	}
+}
+
+/**
+ * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP02:
+ * Public boolean validator. Used by the extension-side persistence
+ * sink to drop unknown webview input that fails the cross-field
+ * exclusivity / W2-INTRINSIC / W2-needs-nativeW2 invariants BEFORE
+ * the record touches disk. Mirrors the in-process validator but
+ * returns a boolean instead of throwing — the extension side is a
+ * trust-boundary sink for `unknown[]` postMessage payloads and a
+ * malformed record must NOT poison the JSONL output.
+ */
+export function isLiveContextDimensions01CaptureValid(record: unknown): record is LiveContextDimensions01Capture {
+	if (typeof record !== "object" || record === null) {
+		return false
+	}
+	const candidate = record as Partial<LiveContextDimensions01Capture>
+	const validKinds: ReadonlySet<string> = new Set([
+		"webview-w1-request",
+		"webview-w1-request-q",
+		"webview-w1-request-replica",
+		"webview-w2-request",
+		"webview-w2-request-q",
+		"webview-w2-request-replica",
+		"webview-committed-c",
+	])
+	if (typeof candidate.kind !== "string" || !validKinds.has(candidate.kind)) {
+		return false
+	}
+	if (typeof candidate.capturedAt !== "number") {
+		return false
+	}
+	if (typeof candidate.captureSeq !== "number") {
+		return false
+	}
+	if (typeof candidate.correlation !== "object" || candidate.correlation === null) {
+		return false
+	}
+	const aq = (candidate.correlation as { associationQuality?: unknown }).associationQuality
+	if (aq !== "INTRINSIC" && aq !== "INTERVAL_INFERRED" && aq !== "NONE") {
+		return false
+	}
+	return isCaptureValid(candidate as LiveContextDimensions01Capture)
 }
 
 // Public API.

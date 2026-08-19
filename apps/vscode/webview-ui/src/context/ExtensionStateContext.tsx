@@ -792,9 +792,13 @@ export const ExtensionStateContextProvider: React.FC<{
 			})
 		}
 		window.addEventListener("message", dumpMessageHandler)
-		// We do not need to remove this listener on cleanup because the
-		// whole window is torn down with the webview; the gRPC stream
-		// unsubscribe already handles the state-subscription lifecycle.
+		// Cleanup: the listener is removed in the useEffect cleanup
+		// below. React Strict Mode deliberately re-runs Effects with
+		// an extra setup->cleanup->setup cycle in development; without
+		// explicit removal, a StrictMode remount would leave multiple
+		// dump handlers alive and one dump request could cause multiple
+		// webview->extension flushes. The cleanup also fires on a real
+		// webview teardown so it covers the production case too.
 
 		// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP01:
 		// LCD01 dump trigger listener. Mirrors the PTAD listener above.
@@ -818,9 +822,7 @@ export const ExtensionStateContextProvider: React.FC<{
 			})
 		}
 		window.addEventListener("message", lcd01DumpMessageHandler)
-		// Same cleanup note as PTAD: the whole window is torn down with
-		// the webview; the gRPC stream unsubscribe handles the state-
-		// subscription lifecycle.
+		// Same cleanup story as PTAD: see the cleanup block below.
 
 		// Subscribe to MCP button clicked events with webview type
 		mcpButtonUnsubscribeRef.current = UiServiceClient.subscribeToMcpButtonClicked(
@@ -1160,6 +1162,13 @@ export const ExtensionStateContextProvider: React.FC<{
 				mcpServersSubscriptionRef.current()
 				mcpServersSubscriptionRef.current = null
 			}
+			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-LIVE-CONTEXT-DIMENSIONS01-C1-FIXUP02:
+			// Remove the dump-trigger window listeners. Without this,
+			// React StrictMode's setup->cleanup->setup cycle would
+			// leave multiple handlers alive and a single dump request
+			// would trigger N webview->extension flushes.
+			window.removeEventListener("message", dumpMessageHandler)
+			window.removeEventListener("message", lcd01DumpMessageHandler)
 		}
 	}, [])
 

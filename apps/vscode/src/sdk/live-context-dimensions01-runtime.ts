@@ -31,6 +31,7 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
 	getLiveContextDimensions01CaptureRecords,
+	isLiveContextDimensions01CaptureValid,
 	type LiveContextDimensions01Capture,
 } from "@shared/live-context-dimensions01-capture"
 
@@ -53,23 +54,20 @@ export interface LiveContextDimensions01RuntimeContext {
 }
 
 /**
- * Narrow structural validator: returns `true` iff the unknown input
- * has the LCD01 record shape. Casts are intentional; the gRPC layer
- * is type-erased for the postMessage path and the structural check
- * is the only sound gate.
+ * Re-export the schema's public boolean validator as the runtime's
+ * trust-boundary sink. The schema validator checks:
+ *   - the seven capture kinds (UNKNOWN kind is rejected)
+ *   - the three AssociationQuality literals
+ *   - W2 + INTRINSIC rejection
+ *   - non-W2 + INTERVAL_INFERRED rejection
+ *   - W2 without nativeW2 rejection
+ *   - non-Q + writerIdentity rejection
+ *   - non-B0 + replicaTurnState rejection
+ *   - non-C + committedTurnState rejection
+ * A malformed record must NOT poison the JSONL output.
  */
 function isLiveContextDimensions01Like(value: unknown): value is LiveContextDimensions01Capture {
-	if (typeof value !== "object" || value === null) {
-		return false
-	}
-	const candidate = value as Record<string, unknown>
-	return (
-		typeof candidate.kind === "string" &&
-		typeof candidate.capturedAt === "number" &&
-		typeof candidate.captureSeq === "number" &&
-		typeof candidate.correlation === "object" &&
-		candidate.correlation !== null
-	)
+	return isLiveContextDimensions01CaptureValid(value)
 }
 
 /**
