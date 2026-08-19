@@ -69,6 +69,17 @@
  * for this turn (no live dogfood harness here) and is recommended as
  * the FIRST step of a follow-up ACT.
  *
+ *   Factory closure correction (2026-08-19): a production delta DOES
+ *   exist in this ACT (commit 4f78fbae2: ExtensionStateContext.tsx
+ *   changed application state composition and side-effect timing). The
+ *   T18/T19/T20 closures for this turn are therefore DEFERRED, not
+ *   N/A. The exact-head VSIX has not been built, the installed binding
+ *   has not been exercised, and no fresh live qualification has been
+ *   run in this turn. The follow-up ACT must build the exact
+ *   885c2d1c1-head VSIX, install it, enable PTAD/LCD01, walk the live
+ *   P12 sequence, and compare raw turnState / B0 replica / committed
+ *   turnState to determine outcome A or B below.
+ *
  *   Possible outcomes of the dogfood (predicted):
  *     A. live W2 disappears  ⇒ strong composition evidence (proven
  *        impurity + its removal + disappearance of live failure)
@@ -532,7 +543,7 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REACT-UPDATER-PURITY-REPAIR01 / C0
 			["W1", w1Body],
 			["W2", w2Body],
 		] as const) {
-			const violations: string = []
+			const violations: string[] = []
 			for (const token of FORBIDDEN_IN_UPDATER) {
 				if (body.includes(token)) {
 					violations.push(token)
