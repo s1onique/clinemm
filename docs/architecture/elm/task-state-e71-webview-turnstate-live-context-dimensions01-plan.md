@@ -1,9 +1,11 @@
 # ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-TURNSTATE-LIVE-CONTEXT-DIMENSIONS01
 
-**STATUS:** AUTHORIZED (R12+R13 fixup applied)
+**STATUS:** AUTHORIZED (R12+R13+R14+R15 fixups applied)
 **AUTHORIZATION_BASE_HEAD:** f41d69d2a83aa625f0195b757df54a0805c4e65f (LIVE-SHAPE R10 FIXUP ancestor)
-**PLAN_FREEZE_HEAD:** dd4f08d7c348373a9dba5bf8378ebf53e2754c6f (this ACT's first plan commit)
-**IMPLEMENTATION_ENTRY_HEAD:** dd4f08d7c348373a9dba5bf8378ebf53e2754c6f (literal HEAD at C0..C4 start; R12)
+**INITIAL_PLAN_FREEZE_HEAD:** dd4f08d7c348373a9dba5bf8378ebf53e2754c6f (this ACT's first plan commit; superseded by the amendment below for execution purpose only — remains the source-of-truth for §1..§9 as originally written)
+**PLAN_AMENDMENT_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (R14 fixup commit — splits identity into 4-head chain; adds LIVE_UNOBSERVABLE / T7A/T7B/T7C / C0..C4 split)
+**IMPLEMENTATION_ENTRY_HEAD:** 695b608a957b8c4d9be978336e6709aec0053d7e (literal HEAD at C0..C4 start; R14)
+**DOGFOOD_SOURCE_HEAD:** UNKNOWN_AT_FREEZE (bound at C2 build time to the literal HEAD produced by C1; R15)
 **PRECONDITION:** LIVE-SHAPE-REPRODUCTION01 CLOSED_PARTIAL / TRACE_DIMENSIONS_EXHAUSTED
 **MISSION:** Acquire the minimum live-only evidence needed to explain why `webview-raw-incoming(streaming/11)` becomes `webview-committed(idle/3)`, **without** changing application-state semantics and **without** attempting a repair.
 
@@ -73,26 +75,46 @@ explain the divergence.
 ## §1  Frozen authority
 
 ```text
-AUTHORIZATION_BASE_HEAD   = f41d69d2a83aa625f0195b757df54a0805c4e65f
-                            (the LIVE-SHAPE R10 FIXUP commit; the
-                             predecessor whose R10 FIXUP closed the
-                             GREEN/RED vocabulary; not the execution
-                             HEAD for this ACT)
+AUTHORIZATION_BASE_HEAD    = f41d69d2a83aa625f0195b757df54a0805c4e65f
+                             (the LIVE-SHAPE R10 FIXUP commit; the
+                              predecessor whose R10 FIXUP closed the
+                              GREEN/RED vocabulary; not the execution
+                              HEAD for this ACT — R12)
 
-PLAN_FREEZE_HEAD          = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
-                            (this ACT's authorization plan commit;
-                             the source-of-truth for §1..§9 as written
-                             at freeze time)
+INITIAL_PLAN_FREEZE_HEAD   = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
+                             (this ACT's first plan commit; the
+                              source-of-truth for §1..§9 as originally
+                              written; superseded for execution
+                              purpose only by the amendment below —
+                              NOT the execution HEAD — R14)
 
-IMPLEMENTATION_ENTRY_HEAD = dd4f08d7c348373a9dba5bf8378ebf53e2754c6f
-                            (literal HEAD when implementation ACTs
-                             C0..C4 begin)
+PLAN_AMENDMENT_HEAD        = 695b608a957b8c4d9be978336e6709aec0053d7e
+                             (R14 fixup commit; introduced the 4-head
+                              identity chain, LIVE_UNOBSERVABLE
+                              vocabulary, T7A/T7B/T7C sub-gates, and
+                              the C0..C4 execution split)
+
+IMPLEMENTATION_ENTRY_HEAD  = 695b608a957b8c4d9be978336e6709aec0053d7e
+                             (literal HEAD when implementation ACTs
+                             C0..C1 begin — R14)
+
+DOGFOOD_SOURCE_HEAD        = UNKNOWN_AT_FREEZE
+                             (literal HEAD at start of C2; produced
+                              by C1's temporary-capture commit; bound
+                              to the VSIX payload/version/hash at C2
+                              build time — R15. NOT a freeze-time
+                              value; the executor records and
+                              announces it in C2.)
 
 Do not confuse these:
   - AUTHORIZATION_BASE_HEAD is the LIVE-SHAPE ancestor that this ACT
     inherits authority from.
-  - PLAN_FREEZE_HEAD == IMPLEMENTATION_ENTRY_HEAD is where
-    implementation must start.
+  - INITIAL_PLAN_FREEZE_HEAD is the commit that first froze this ACT
+    as a docs-only artifact.
+  - PLAN_AMENDMENT_HEAD == IMPLEMENTATION_ENTRY_HEAD is where
+    C0 (read-only recon) and C1 (temporary capture) must start.
+  - DOGFOOD_SOURCE_HEAD is the output of C1 and the input to C2.
+    It is not predictable at plan-freeze time.
 
 TRACE01_W2                = PROVEN
   P12 raw                 = streaming/11
@@ -300,12 +322,21 @@ LCD_T7A NEW_UPDATER_SIDE_EFFECTS = 0
   functional updater introduced or modified by this ACT.
 
 LCD_T7B STRICT_MODE_CARDINALITY = PASS
-  Under React development Strict Mode, diagnostic appends and
-  diagnostic-state changes are cardinality-stable: each
-  diagnostic event is observed exactly once in the live trace
-  per triggering request, despite Strict Mode's deliberate
-  re-invocation. (Equivalently: no diagnostic counter advances
-  more than once per underlying React updater call.)
+  Cardinality discipline, per diagnostic boundary:
+
+    - For each diagnostic boundary whose contract is
+      request-cardinality (P, W2, Q), one underlying request
+      produces exactly one forensic request-boundary record.
+    - Commit-cardinality (C) follows React commit semantics:
+      it is NOT required to be 1:1 with updater evaluations
+      or with inbound pushes. A push may produce zero or one
+      C records; multiple pushes may collapse into one C.
+    - Strict Mode's request-boundary contract holds: Strict
+      Mode must introduce no duplicate request-boundary records.
+      (Strict Mode may invoke the underlying updater function
+      more than once in development; the request-boundary
+      record is emitted at the request site, not the updater
+      site, so it is not duplicated.)
 
 LCD_T7C DEFAULT_OFF_EQUIVALENCE = PASS
   With the diagnostic enable-flag off:
@@ -427,11 +458,13 @@ E9_AUTHORITY_CHANGE             = forbidden
 ## §6  Acceptance gate
 
 ```text
-LCD_T0   IMPLEMENTATION_ENTRY_IDENTITY  PASS    (HEAD == dd4f08d7c;
+LCD_T0   IMPLEMENTATION_ENTRY_IDENTITY  PASS    (HEAD == 695b608a9;
                                                     f41d69d2a is the
-                                                    AUTHORIZATION_BASE,
-                                                    not the entry SHA —
-                                                    see §1)
+                                                    AUTHORIZATION_BASE;
+                                                    dd4f08d7c is the
+                                                    INITIAL_PLAN_FREEZE;
+                                                    neither is the entry
+                                                    SHA — see §1; R14)
 LCD_T1   TRACE01_PREDECESSOR           CLOSED_CLEAN
 LCD_T2   LIVE_SHAPE_PREDECESSOR        CLOSED_PARTIAL  (R10 FIXUP)
 LCD_T3   GREEN_RED_VOCABULARY          CANONICAL       (LIVE-SHAPE §2)
@@ -461,8 +494,13 @@ LCD_T18  EXACT_HEAD_VSIX               PASS            (8a7f1236... vs
                                                     post-ACT vsix;
                                                     diagnostic vsix must
                                                     descend from
-                                                    dd4f08d7c, NOT
-                                                    f41d69d2a — see §1)
+                                                    695b608a9
+                                                    (IMPLEMENTATION_ENTRY_HEAD)
+                                                    or any later
+                                                    descendant, NOT
+                                                    from f41d69d2a or
+                                                    dd4f08d7c — see §1;
+                                                    R14)
 LCD_T19  LIVE_TRACE_ACQUIRED           AWAIT_USER      (this ACT's primary
                                                     output)
 LCD_T20  ROOT_CAUSE_FAMILY             A|B|C|D|E|F     (LC- classification
@@ -495,34 +533,53 @@ doesn't permit.
 ```text
 C0  READ-ONLY RECON                          (docs only commit)
     - rediscover exact HEAD at execution start
-      (assert: HEAD == IMPLEMENTATION_ENTRY_HEAD == dd4f08d7c)
+      (assert: HEAD == IMPLEMENTATION_ENTRY_HEAD == 695b608a9
+       — R14)
     - inventory W1 / W2 / Q / C code boundaries
-    - identify which B / R / N values are live-observable
-      WITHOUT impurity, vs which must be marked
-      LIVE_UNOBSERVABLE
+    - populate the capture-can matrix (R14):
+        CAN_P_CAPTURE                       = ?
+        CAN_W2_CAPTURE                     = ?
+        CAN_Q_CAPTURE                      = ?
+        CAN_C_CAPTURE                      = ?
+        CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT  = ?
+        CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT  = ?
+        CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT  = ?
+      Anything in the second group that resolves to NO
+      immediately becomes LIVE_UNOBSERVABLE; no implementation
+      experimentation is needed.
     - freeze dedicated record schema (§5)
     - freeze enable / dump mechanism
     - commit docs only — no source delta
+    - produces C0_HEAD (a docs-only commit on top of 695b608a9)
 
 C1  TEMPORARY CAPTURE                        (source + test commit)
-    - implement P
-    - implement W2
-    - implement Q
-    - implement C correlation
-    - implement only safely observable B / R / N fields
-      (mark the rest LIVE_UNOBSERVABLE)
+    - implement P    (if CAN_P_CAPTURE                      = YES)
+    - implement W2   (if CAN_W2_CAPTURE                     = YES)
+    - implement Q    (if CAN_Q_CAPTURE                      = YES)
+    - implement C    (if CAN_C_CAPTURE                      = YES)
+    - implement B    (if CAN_B_CAPTURE_WITHOUT_UPDATER_EFFECT = YES)
+    - implement R    (if CAN_R_CAPTURE_WITHOUT_UPDATER_EFFECT = YES)
+    - implement N    (if CAN_N_CAPTURE_WITHOUT_UPDATER_EFFECT = YES)
+      Otherwise: LIVE_UNOBSERVABLE for that group.
     - add:
         - default-off witness                (LCD_T7C)
         - StrictMode witness                  (LCD_T7B)
         - correlation / schema tests
         - removal marker
     - VSIX NOT YET built at this stage
+    - produces C1_HEAD (a source + test commit on top of C0_HEAD)
 
 C2  EXACT-HEAD DOGFOOD VSIX                  (build commit)
     - bun run protos (if any .proto touched)  [n/a: none expected]
     - bun esbuild.mjs
-    - SHA-bind
-    - assert VSIX builds from HEAD == dd4f08d7c
+    - assert at C2 start:
+        DOGFOOD_SOURCE_HEAD = git HEAD  (literal)
+        DOGFOOD_SOURCE_HEAD descends from
+          IMPLEMENTATION_ENTRY_HEAD == 695b608a9
+        VSIX payload / version / SHA-bound tag binds to
+          DOGFOOD_SOURCE_HEAD
+      C2 does NOT pre-bake a SHA; it records and announces
+      DOGFOOD_SOURCE_HEAD = C1_HEAD.  R15.
     - install (via debug harness; per operational policy)
 
 C3  USER LIVE WALK                           (artifact commit)
@@ -602,12 +659,20 @@ LIVE-SHAPE-REPRODUCTION01                ✅ CLOSED_PARTIAL
   GREEN/RED vocabulary                    ✅ CANONICAL (R10 FIXUP)
 
 LIVE-CONTEXT-DIMENSIONS01
-  authorization plan                      ✅ dd4f08d7c
-  AUTHORIZATION_BASE_HEAD                 f41d69d2a (predecessor; not entry)
-  PLAN_FREEZE_HEAD / ENTRY_HEAD           ✅ dd4f08d7c (R12 split)
+  initial plan freeze                     ✅ dd4f08d7c (docs only)
+  R12+R13 fixup                           ✅ 695b608a9
+  R14+R15 fixup                           ✅ (this commit)
+  AUTHORIZATION_BASE_HEAD                 f41d69d2a (LIVE-SHAPE R10 FIXUP ancestor)
+  INITIAL_PLAN_FREEZE_HEAD                dd4f08d7c (superseded for execution)
+  PLAN_AMENDMENT_HEAD                     695b608a9 (R14 amendment)
+  IMPLEMENTATION_ENTRY_HEAD               ✅ 695b608a9 (R14 — what C0 starts on)
+  DOGFOOD_SOURCE_HEAD                     ⏳ produced by C1, bound at C2 (R15)
   LIVE_UNOBSERVABLE vocabulary            ✅ R13 (no bare UNAVAILABLE)
   LC-D observability note                 ✅ R13 (NOT_DIRECTLY_OBSERVABLE)
-  C0 read-only recon                      ⏳ NEXT (docs-only commit)
+  T7B cardinality discipline              ✅ R14 (request vs commit cardinality)
+  Capture-can matrix in C0                ✅ R14
+  C0 read-only recon                      ⏳ NEXT (docs-only commit;
+                                                populates capture-can matrix)
   C1 temporary capture                    ⏳
   C2 exact-head dogfood VSIX              ⏳
   C3 user live walk                       ⏳
