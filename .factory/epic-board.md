@@ -124,6 +124,10 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `ACT-CLINEMM-PUBLISH-CURRENT-MAIN01` | DIST/REPO | OPEN | HIGH | remote-push-safety policy | fast-forward `origin/main` to current local main; requires explicit authority |
 | `ACT-CLINEMM-SINGLE-WORKTREE-TRANSITION01` | FACTORY/REPO | CLOSED | — | — | repository-topology migration: main FF from `a9f376edf` → `5637d965d`; linked worktree removed; single-worktree topology frozen |
 | `ACT-CLINEMM-LIVE-EPOCH-REPAIR-QUALIFICATION01` | FOUNDATION/QA | CLOSED_LIVE | — | — | W1/W2 epoch repair live qualification; `PASS_LIVE_EPOCH_REPAIR` at `5637d965d` |
+| `EPIC-CLINEMM-TEST-BASELINE-ZERO-FAILURES01` | QA | OPEN | HIGH | none | classify and eliminate all long-standing "pre-existing" test failures until the canonical suite is green |
+| `EPIC-CLINEMM-TYPECHECK-ZERO-BASELINE01` | QA | OPEN | HIGH | none | classify and eliminate the 41 pre-existing apps/vscode typecheck errors; typecheck ≠ test gate |
+| `EPIC-CLINEMM-CODE-COVERAGE-BASELINE01` | QA | OPEN | HIGH | test-baseline-zero-failures recommended | inventory coverage seams; establish truthful exact-head baseline; publish machine-readable report |
+| `EPIC-CLINEMM-CODE-COVERAGE-RATCHET01` | QA | OPEN | HIGH | coverage-baseline01 | prevent aggregate coverage regression; thresholds increase monotonically |
 | `UP-01` | UPSTREAM | NEEDS_CLASSIFICATION | LOW | — | recon: scope of fork maintenance vs upstream Cline |
 | `QA-01` | QA | NEEDS_CLASSIFICATION | LOW | — | classify exact-head dogfood / live qualification / conservation gates |
 | `QA-02` | QA | NEEDS_CLASSIFICATION | LOW | — | classify release-artifact qualification scope |
@@ -225,20 +229,28 @@ Legend:
 
 ## Immediate critical path
 
-Priority rationale: an accidental destructive force-push can destroy the evidence and commits behind every product defect. Git-safety comes before any product defect that depends on those commits remaining publishable.
+Priority rationale: an accidental destructive force-push can destroy the evidence and commits behind every product defect. Git-safety comes before any product defect that depends on those commits remaining publishable. Quality substrate precedes long product-work cycles because a green baseline + monotonic coverage ratchet makes every subsequent Cline-- ACT cheaper to qualify.
 
 1. **GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01** — NEXT / CRITICAL (server-side enforcement)
 2. **PUBLISH-CURRENT-MAIN01** — OPEN / HIGH (requires explicit authority; fast-forward only)
-3. **COMPACTION-STATE-AUTHORITY01** — OPEN / LIVE_UI / HIGH
-4. **STATIC-THINKING-PRESENTATION-PERSISTENCE01** — OPEN / HIGH
-5. **TASKHEADER-CANONICAL-PROJECTION01** — OPEN / HIGH
-6. **TASKHEADER-OWNER-AWARE-TIMING01** — OPEN / HIGH
-7. **CONTEXT-ACCOUNTING-TRUTH01** — OPEN / HIGH
-8. **USER-CONTEXT-CEILING01** — OPEN / HIGH (depends on #7)
-9. **TOOL-EXECUTION-SEMANTICS01** — OPEN / HIGH
-10. **GITHUB-ACTIONS01** — OPEN / HIGH
-11. **GITHUB-DISTRIBUTION01** — OPEN / HIGH
-12. **BRANDING-ACTIVITYBAR-ICON01** — NEXT / MED
+3. **TEST-BASELINE-ZERO-FAILURES01** — OPEN / HIGH (default canonical gate = zero unexplained failures)
+4. **TYPECHECK-ZERO-BASELINE01** — OPEN / HIGH (test gate ≠ typecheck gate; both must be clean)
+5. **CODE-COVERAGE-BASELINE01** — OPEN / HIGH (recon before any ratchet)
+6. **CODE-COVERAGE-RATCHET01** — OPEN / HIGH (depends on #5; monotonic threshold increase)
+7. **COMPACTION-STATE-AUTHORITY01** — OPEN / LIVE_UI / HIGH
+8. **STATIC-THINKING-PRESENTATION-PERSISTENCE01** — OPEN / HIGH
+9. **TASKHEADER-CANONICAL-PROJECTION01** — OPEN / HIGH
+10. **TASKHEADER-OWNER-AWARE-TIMING01** — OPEN / HIGH
+11. **CONTEXT-ACCOUNTING-TRUTH01** — OPEN / HIGH
+12. **USER-CONTEXT-CEILING01** — OPEN / HIGH (depends on #11)
+13. **TOOL-EXECUTION-SEMANTICS01** — OPEN / HIGH
+14. **GITHUB-ACTIONS01** — OPEN / HIGH
+15. **GITHUB-DISTRIBUTION01** — OPEN / HIGH
+16. **BRANDING-ACTIVITYBAR-ICON01** — NEXT / MED
+
+Deferred (not on critical path):
+
+- **FACTORIZATION01** — DEFERRED (recon; one bounded seam at a time; no giant rewrite)
 
 ---
 
@@ -513,6 +525,113 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 ### Historical architecture family
 
 `ARCH-01`, `ARCH-02` preserved as `NEEDS_CLASSIFICATION` rows. Scope not reconstructable from current board + repository history.
+
+---
+
+## Quality substrate
+
+Four QA epics plus a deferred architecture epic. Quality substrate precedes long product-work cycles because a green baseline + monotonic coverage ratchet makes every subsequent Cline-- ACT cheaper to qualify.
+
+### TEST-BASELINE-ZERO-FAILURES01
+
+- ID: `EPIC-CLINEMM-TEST-BASELINE-ZERO-FAILURES01`
+- STATUS: OPEN / HIGH
+
+**Goal.** Default canonical test gate = zero unexplained failures.
+
+**First ACT.** `ACT-CLINEMM-TEST-BASELINE-FAILURES-RECON01` — reproduce every currently accepted baseline failure and classify each:
+
+```
+  PRODUCT_DEFECT
+  TEST_DEFECT
+  ENVIRONMENT_DEPENDENT
+  OBSOLETE_TEST
+  INTENTIONAL_UNSUPPORTED
+  NOT_REPRODUCED
+```
+
+**Then.** Fix bounded causes, remove obsolete tests where justified, isolate genuine environment-specific gates explicitly.
+
+**Forbidden.**
+
+- deleting assertions merely to get green
+- broadening baselines
+- masking failures with generic ignore / allow-failure
+
+**Policy note.** "Pre-existing" is a legitimate ACT-ownership classification; it is **not** an acceptable permanent quality policy.
+
+### TYPECHECK-ZERO-BASELINE01
+
+- ID: `EPIC-CLINEMM-TYPECHECK-ZERO-BASELINE01`
+- STATUS: OPEN / HIGH
+
+**Goal.** Default canonical typecheck = zero unexplained errors.
+
+**Why separate from TEST-BASELINE-ZERO-FAILURES01.** Test gate ≠ typecheck gate. The repo currently carries two distinct flavors of tolerated debt (e.g. `1667 pass / 5 pre-existing fail` test failures and `41 pre-existing` SDK typecheck errors). Conflating them hides half of the debt.
+
+**First ACT.** `ACT-CLINEMM-TYPECHECK-ZERO-BASELINE-RECON01` — reproduce and classify the current baseline with the same classification taxonomy as the test-baseline ACT.
+
+### CODE-COVERAGE-BASELINE01
+
+- ID: `EPIC-CLINEMM-CODE-COVERAGE-BASELINE01`
+- STATUS: OPEN / HIGH
+
+**Goal.** Establish a baseline coverage measurement **before** any ratchet is set.
+
+**Must answer first.**
+
+```
+  which workspaces / packages are covered?
+  which source paths are intentionally excluded?
+  which coverage kind: line / function / branch / statement?
+  do tests exercise production code or generated / adapter noise?
+  can reports compose across workspace test suites?
+```
+
+**Output.** Machine-readable exact-head coverage report committed alongside the ACT that produces it.
+
+**Rule.** No arbitrary initial percentage target. Recon first.
+
+### CODE-COVERAGE-RATCHET01
+
+- ID: `EPIC-CLINEMM-CODE-COVERAGE-RATCHET01`
+- STATUS: OPEN / HIGH
+
+**Invariant.**
+
+```
+  new coverage >= qualified baseline
+```
+
+(preferable to: `coverage >= arbitrary 80%`.)
+
+**Thresholds.**
+
+- thresholds increase monotonically
+- intentional threshold changes are explicit commits
+- CI must NOT silently rewrite thresholds (do not rely on `thresholds.autoUpdate` in CI)
+- per-file or changed-code policy **deferred** until `CODE-COVERAGE-BASELINE01` recon is complete
+
+### FACTORIZATION01
+
+- ID: `EPIC-CLINEMM-FACTORIZATION01`
+- STATUS: DEFERRED
+
+**Goal.** Progressively factorize Cline-- along real production seams.
+
+**Rule.**
+
+```
+  recon first
+  one bounded seam at a time
+  no giant "modularization" rewrite
+```
+
+**Rationale.** Factorization because a concrete seam reduces coupling / testing cost — not because "factorization" itself is virtuous.
+
+**Scope.** Intentionally unfrozen. Detailed design belongs to a future architectural discussion.
+
+**Next action.** Future architectural discussion only. **No ACT in this board delta.**
 
 ---
 
