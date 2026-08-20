@@ -396,39 +396,21 @@ export class MessageTranslatorState {
 	}
 
 	// -----------------------------------------------------------------------
-	// Turn-final text tracking — the SDK agent usually ends a turn with a plain
-	// text response instead of a completion tool. When a turn ends cleanly with
-	// text as its last content, that text row is retagged in place (same ts) to
-	// say:"completion_result" (act) or say:"plan_completion_result" (plan) so
-	// the webview shows the legacy-style completion feedback box.
+	// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: the prior
+	// turn-final-text candidate tracking (and the `done`-handler retag ladder
+	// it fed) has been REMOVED entirely. The runtime's `text → done` path
+	// without a `completesRun` tool observation is only reachable via the
+	// session-termination fallback (`sdk/packages/agents/src/agent-runtime.ts
+	// :1313-1327` — `finishRun("completed", finalAssistantMessage)` after the
+	// completion-reminder loop is bypassed or the loop runs out), not via
+	// canonical completion authority. Promoting that text to
+	// `completion_result` would relabel session-termination-without-
+	// completion as canonical completion — the same epistemic shape as the
+	// original LIVE bug (relabeling debugging content as a terminal answer),
+	// just visually relabeled. The only authority source for a terminal
+	// response row is now the completion tool `content_end` (which already
+	// set `terminalResponseCommittedThisTurn` at the canonical emit point).
 	// -----------------------------------------------------------------------
-
-	/** ts of the last finalized (non-partial, non-empty) text message of the current turn */
-	private turnFinalTextTs: number | undefined
-	/** Text of the message tracked by turnFinalTextTs */
-	private turnFinalText = ""
-
-	/** Remember the most recent finalized text as the candidate turn-final response. */
-	recordTurnFinalText(ts: number, text: string): void {
-		this.turnFinalTextTs = ts
-		this.turnFinalText = text
-	}
-
-	/** Forget the candidate turn-final text (tool activity means the turn didn't end on it). */
-	clearTurnFinalText(): void {
-		this.turnFinalTextTs = undefined
-		this.turnFinalText = ""
-	}
-
-	/** Take (and clear) the candidate turn-final text, if any. */
-	takeTurnFinalText(): { ts: number; text: string } | undefined {
-		if (this.turnFinalTextTs === undefined) {
-			return undefined
-		}
-		const result = { ts: this.turnFinalTextTs, text: this.turnFinalText }
-		this.clearTurnFinalText()
-		return result
-	}
 
 	// -----------------------------------------------------------------------
 	// spawn_agent tracking — aggregates parallel spawn_agent tool calls into
@@ -561,7 +543,6 @@ export class MessageTranslatorState {
 		this.attemptCompletionSeen = false
 		this.errorSeen = false
 		this.terminalResponseCommittedThisTurn = false
-		this.clearTurnFinalText()
 	}
 }
 
@@ -1354,9 +1335,9 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 					const toolName = event.toolName ?? "unknown"
 					const input = event.input
 
-					// Tool activity after a text block means that text wasn't the
-					// turn-final response — drop the retag candidate.
-					state.clearTurnFinalText()
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: no
+					// candidate-clearing is needed — the `done` handler does not
+					// synthesize a completion_result from prior text.
 
 					if (state.isToolApprovalDenied(event.toolCallId)) {
 						break
@@ -1534,11 +1515,10 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						text: finalText,
 						partial: false,
 					})
-					// Candidate for the turn-final response: if the turn ends cleanly with
-					// this text as its last content, `done` retags it as a completion row.
-					if (finalText.trim()) {
-						state.recordTurnFinalText(ts, finalText)
-					}
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: no
+					// candidate-tracking is needed any more — the `done` handler does
+					// not synthesize a completion_result from prior text. The text row
+					// remains in conversation history as a normal assistant row.
 					break
 				}
 				case "reasoning": {
@@ -1553,9 +1533,9 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						partial: false,
 					})
 					// Reasoning is presentation-only — it is NEVER promoted into a terminal
-					// completion row. The done handler's only non-completion-tool authority
-					// source is `takeTurnFinalText()`; reasoning content (whatever its
-					// audible intent) does not satisfy that. See
+					// completion row. The only authority source for terminal-response
+					// authority is the completion tool `content_end`; reasoning content
+					// (whatever its audible intent) does not satisfy that. See
 					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01 for the
 					// reasoning/text distinction and why reasoning must not be relabeled
 					// as the user-facing terminal answer.
@@ -1564,9 +1544,9 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 				case "tool": {
 					const toolName = event.toolName ?? "unknown"
 
-					// A completed tool call after a text block means that text wasn't the
-					// turn-final response — drop the retag candidate.
-					state.clearTurnFinalText()
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: no
+					// candidate-clearing needed — the `done` handler does not
+					// synthesize a completion_result from prior text.
 
 					if (state.checkDeniedToolApproval(event.toolCallId) || isKnownToolApprovalDenial(event.error)) {
 						state.clearStreamingTool()
@@ -1913,69 +1893,53 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 				state.setErrorSeen()
 			}
 
-			// Inferred completion feedback: the SDK agent normally ends a turn with a plain
-			// text response rather than a completion tool. When the turn ended cleanly and its
-			// last content was text, retag that text row in place (same ts → upserted by the
-			// message store / webview reducer) so the user gets the legacy-style "done" visual:
-			// green box in act mode, yellow plan box in plan mode. Turns
-			// that ended via the completion tool already rendered their green box at the tool's
-			// content_end; aborted/errored turns keep their plain text.
+			// Terminal-response authority is set ONLY at the completion tool
+			// `content_end` (canonical `say:"completion_result"` /
+			// `plan_completion_result` row). The `done` handler does NOT synthesize
+			// a `completion_result` from prior assistant text — that pathway was the
+			// bug class the LIVE screenshot witness identified (relabeling debugging
+			// content as a terminal answer).
 			//
-			// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: the prior
-			// three-tier fallback ladder (`takeTurnFinalText` → `takeLastAssistantFallback`
-			// → `takeOpenStreamingText`) is REMOVED. Those accessors promoted prior
-			// assistant text/reasoning or a stranded partial into a `completion_result`,
-			// which is exactly the bug class the LIVE screenshot witness identified —
-			// relabeling intermediate debugging content as a terminal answer. The canonical
-			// authority sources for a terminal response are:
+			// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: recon of
+			// `sdk/packages/agents/src/agent-runtime.ts:1313-1327` shows the
+			// `text → done, no tool` path is only reachable when the agent runtime
+			// has no `completesRun` tool registered (i.e. `requireCompletionTool
+			// === false`) OR the team `completionGuard` returns undefined. In both
+			// cases the loop ends because the runtime's session-termination fallback
+			// fires, NOT because the agent declared completion. The runtime echoes
+			// the last assistant text into `done.text` regardless of canonical
+			// completion (per `sdk/packages/agents/src/agent-runtime.ts:3334-3336`
+			// and `local-runtime-host.ts:2010-2014` which describes this exact
+			// fallback). Promoting that text to `completion_result` would relabel
+			// session-termination-without-completion as canonical completion — the
+			// same epistemic shape as the original bug, just visually relabeled.
 			//
-			//   (A) the completion tool `content_end` already committed the canonical
-			//       `completion_result` / `plan_completion_result` row at
-			//       message-translator.ts:~860 and set `attemptCompletionSeen` on the
-			//       state (and `terminalResponseCommittedThisTurn` at that emit point);
-			//   (B) `done(reason:"completed")` when the turn's LAST content was finalized
-			//       text (no tool in between) — `takeTurnFinalText()` returns the
-			//       candidate. This is the legacy "happy path" that pre-dates this ACT and
-			//       represents a turn that genuinely ended on text.
-			//
-			// NOT authority: `done.text` non-empty alone (the runtime echoes the last
-			// assistant text into `done.text` regardless of whether a completion tool was
-			// used), any prior assistant text/reasoning row, any partial streaming row.
-			// For `text → tool → done` without a completion tool — the common successful
-			// interactive shape where the model ends by reading/investigating — the
-			// runtime remains the turn owner; the prior intermediate content stays in
-			// conversation history; no green completion box is synthesized. The session-
-			// event coordinator refuses the awaiting_followup promotion (the flag stays
-			// false), and the user sees the truthful "task finished without completion
-			// declaration" state rather than a deceptive relabeling.
+			// The factory reviewer's HALT_NONTOOL_TERMINAL_AUTHORITY_NOT_PROVEN
+			// verdict applies here. The only authority source is the completion
+			// tool `content_end`; the `done` handler does NOT synthesize a
+			// terminal row. `attemptCompletionSeen === false` at `done` means
+			// either:
+			//   (1) the session/run terminated without an explicit terminal
+			//       declaration (runtime-owned, runtime keeps turn ownership); or
+			//   (2) the completion tool was registered but not invoked yet (the
+			//       agent decided to stop without calling it).
+			// Both are runtime-owned terminal states: the prior intermediate
+			// content stays in conversation history as a normal assistant row;
+			// no green completion box is synthesized; `terminalResponseCommitted
+			// ThisTurn` stays false; the coordinator refuses the awaiting_followup
+			// promotion. The user CAN still send a follow-up
+			// (`turnState.phase === "streaming"` is preserved by NOT calling
+			// `setTurnPhase`, so `turnAllowsFollowup()` returns true and
+			// `allowsQueuedSubmit()` is true — the message is routed via
+			// `sendToActiveSession(..., shouldQueue=true)` and the
+			// `pendingPromptsController` drains on the next non-error finish).
 			if (event.reason === "completed" && !state.wasAttemptCompletionSeen()) {
-				const retagCandidate = state.takeTurnFinalText()
-
-				if (retagCandidate) {
-					const retagKind = state.currentUiMode() === "plan" ? "plan_completion_result" : "completion_result"
-					messages.push({
-						ts: retagCandidate.ts,
-						type: "say",
-						say: retagKind,
-						text: retagCandidate.text,
-						partial: false,
-					})
-					// Record terminal-response authority for the session-event coordinator's
-					// invariant gate. This is the only non-completion-tool authority source
-					// we recognize: the turn genuinely ended on finalized text. See the
-					// doc block above for the rationale (CORRECTION01 vs. the prior
-					// unproven fallback ladder).
-					state.setTerminalResponseCommittedThisTurn()
-				}
-				// else: `text → tool → done` without `takeTurnFinalText()` (and without
-				// attemptCompletionSeen) — no canonical terminal response. Leave the
-				// terminalResponseCommittedThisTurn flag false. The coordinator's
-				// `wasTerminalResponseCommittedThisTurn()` gate will refuse the
-				// awaiting_followup promotion (CRA02-empty / CRA02-coord). The prior
-				// intermediate content remains in conversation history as a normal
-				// assistant text row.
+				// No canonical authority source. Do NOT synthesize a completion
+				// row from `done.text` or from prior assistant text. The prior
+				// text (if any) remains in conversation history. The flag stays
+				// false. The coordinator's `wasTerminalResponseCommittedThisTurn`
+				// gate refuses the awaiting_followup / completed promotion.
 			} else {
-				state.clearTurnFinalText()
 				// CRA03 (attempt_completion seen): the terminal completion_result was
 				// already committed at the completion tool's content_end. If we got here
 				// without one, that means content_end never arrived for the completion
@@ -2006,8 +1970,9 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 			}
 
 			finalizeDanglingCompaction(state, messages, "failed")
-			// An errored turn didn't end on its text response — no completion retag.
-			state.clearTurnFinalText()
+			// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: no
+			// candidate to clear — the `done` handler does not synthesize a
+			// completion_result from prior text.
 			if (state.isSuppressedToolApprovalDenial(event.error)) {
 				break
 			}
@@ -2490,10 +2455,10 @@ export function sdkMessagesToClineMessages(
 						}
 						break
 					case "tool_use":
-						// Tool activity after a text block means that text wasn't the
-						// turn-final response (also covers dangling tool_use blocks whose
-						// results never arrived — an aborted turn must not retag).
-						state.clearTurnFinalText()
+						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: no
+						// candidate-clearing needed — the `done` handler does not
+						// synthesize a completion_result from prior text in persisted
+						// transcript replay either.
 						pendingToolUses.set(block.id, block)
 						break
 				}

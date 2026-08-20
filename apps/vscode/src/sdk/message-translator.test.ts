@@ -1094,20 +1094,25 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 	const done = (state: MessageTranslatorState, reason: "completed" | "aborted" | "error" = "completed") =>
 		translateSessionEvent(agentEvent({ type: "done", reason, text: "", iterations: 1 }), state)
 
-	it("retags the turn-final text to plan_completion_result in plan mode", () => {
+	it("does NOT retag the turn-final text to plan_completion_result when no completion tool was observed (plan mode)", () => {
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: a text → done
+		// sequence without an explicit completion tool observation means the
+		// runtime's session-termination fallback fired (see
+		// sdk/packages/agents/src/agent-runtime.ts:1313-1327 — this path is only
+		// reachable when no `completesRun` tool is registered or the team
+		// completionGuard returns undefined). The last assistant text is not a
+		// canonical terminal response. We do NOT retag it as
+		// plan_completion_result; the runtime retains turn ownership.
 		const state = new MessageTranslatorState(undefined, undefined, () => "plan")
 		const textResult = endText(state, "Here is the plan.")
 
 		const doneResult = done(state)
 
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			ts: textResult.messages[0].ts,
-			type: "say",
-			say: "plan_completion_result",
-			text: "Here is the plan.",
-			partial: false,
-		})
+		expect(doneResult.messages).toHaveLength(0)
+		expect(doneResult.messages.filter((m) => m.say === "plan_completion_result")).toHaveLength(0)
+		// The prior text row remains in conversation history as a normal say row.
+		expect(textResult.messages[0]).toMatchObject({ type: "say", say: "text", text: "Here is the plan." })
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
 	it("does not retag when the turn ends on a tool call after the text", () => {
@@ -1173,7 +1178,14 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 		expect(done(errState).messages.filter((m) => m.say === "completion_result")).toHaveLength(0)
 	})
 
-	it("retags only the last finalized text of the turn (text → tool → text)", () => {
+	it("does NOT retag the last finalized text of the turn (text → tool → text, no completion tool)", () => {
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: even when the
+		// turn genuinely ends on finalized text with no tool in between (the
+		// shape the prior "happy path" took advantage of), the runtime's
+		// session-termination fallback for that case does NOT carry canonical
+		// completion authority. The last text is preserved in conversation
+		// history as a normal assistant text row; no completion_result is
+		// synthesized; the runtime retains turn ownership.
 		const state = new MessageTranslatorState()
 		endText(state, "Let me check the file first.")
 		translateSessionEvent(
@@ -1196,15 +1208,12 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 			}),
 			state,
 		)
-		const finalText = endText(state, "All done — the file looks good.")
+		endText(state, "All done — the file looks good.")
 
 		const doneResult = done(state)
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			ts: finalText.messages[0].ts,
-			say: "completion_result",
-			text: "All done — the file looks good.",
-		})
+		expect(doneResult.messages).toHaveLength(0)
+		expect(doneResult.messages.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
 	it("does not retag when the completion tool already rendered the green box", () => {
@@ -1450,13 +1459,25 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
-	// clearTurnOutcome() / reset() must also clear / preserve the terminal-response flag —
-	// parity with the existing attemptCompletionSeen lifecycle.
-	it("clearTurnOutcome() also clears the per-turn terminal-response authority", () => {
+	// clearTurnOutcome() must clear the terminal-response authority flag for the
+	// NEXT turn's boundary. Per CORRECTION01, the flag is set ONLY by the
+	// completion tool `content_end` (canonical `say:"completion_result"` row);
+	// `done` no longer sets it without `attemptCompletionSeen`. Reset semantics
+	// are unchanged from prior ACTs (parity with attemptCompletionSeen lifecycle).
+	it("clearTurnOutcome() clears the per-turn terminal-response authority for the next turn", () => {
 		const state = new MessageTranslatorState()
+		// Simulate the completion-tool path having committed a canonical
+		// terminal response (the only authority source). The flag stays false
+		// after `done` because the done handler does NOT synthesize a
+		// completion_result when no completion tool was observed.
 		endText(state, "Done.")
-		const doneResult = done(state)
-		expect(doneResult.messages.some((m) => m.say === "completion_result")).toBe(true)
+		done(state)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
+
+		// Force-set the flag (test seam — the completion tool's content_end
+		// sets it directly) and verify clearTurnOutcome() clears it on the
+		// next turn boundary.
+		state.setTerminalResponseCommittedThisTurn()
 		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(true)
 
 		state.clearTurnOutcome()
@@ -1465,8 +1486,7 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 
 	it("reset() (per-iteration) does NOT clear the terminal-response authority — it is turn-scoped", () => {
 		const state = new MessageTranslatorState()
-		endText(state, "Done.")
-		done(state)
+		state.setTerminalResponseCommittedThisTurn()
 		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(true)
 
 		state.reset() // simulates the next iteration_start mid-turn
@@ -1605,10 +1625,21 @@ describe("translateSessionEvent — agent_event error", () => {
 		expect(state.wasErrorSeen()).toBe(false)
 	})
 
-	it("still retags the plan completion when a recoverable mistake happened mid-turn", () => {
-		// Regression: a plan-mode turn whose blocked run_commands call fed the
-		// MistakeTracker used to end in the error phase with the plan text left
-		// as a plain say, so the plan→act toggle never auto-continued.
+	it("does NOT retag the plan completion when a recoverable mistake happened mid-turn", () => {
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: a plan-mode
+		// turn whose blocked run_commands call fed the MistakeTracker, then
+		// the model recovers and presents the plan, and the turn completes —
+		// the prior retag ladder promoted the plan text to
+		// `plan_completion_result`. That path is REMOVED: without an explicit
+		// completion tool observation, the `done` handler does not synthesize
+		// a terminal row. The plan text remains as a normal `say:"text"` row
+		// in conversation history; the runtime retains turn ownership.
+		//
+		// The prior regression the test was preventing — that the plan→act
+		// toggle never auto-continued — is preserved by the runtime-owned
+		// `turnState.phase === "streaming"` state (the user / plan→act toggle
+		// can still send the continuation as a queued follow-up via
+		// `sendToActiveSession(..., shouldQueue=true)`).
 		const state = new MessageTranslatorState(undefined, undefined, () => "plan")
 		const agentEvent = (event: Partial<AgentEvent> & { type: string }): CoreSessionEvent =>
 			({
@@ -1622,23 +1653,17 @@ describe("translateSessionEvent — agent_event error", () => {
 			state,
 		)
 		// The model recovers and presents the plan, then the turn completes.
-		const textResult = translateSessionEvent(
-			agentEvent({ type: "content_end", contentType: "text", text: "Here is the plan." }),
-			state,
-		)
+		translateSessionEvent(agentEvent({ type: "content_end", contentType: "text", text: "Here is the plan." }), state)
 		const doneResult = translateSessionEvent(
 			agentEvent({ type: "done", reason: "completed", text: "", iterations: 2 }),
 			state,
 		)
 
 		expect(state.wasErrorSeen()).toBe(false)
-		expect(doneResult.messages).toContainEqual({
-			ts: textResult.messages[0].ts,
-			type: "say",
-			say: "plan_completion_result",
-			text: "Here is the plan.",
-			partial: false,
-		})
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
+		// No completion_result synthesized from prior plan text.
+		expect(doneResult.messages.filter((m) => m.say === "plan_completion_result")).toHaveLength(0)
+		expect(doneResult.messages).toHaveLength(0)
 	})
 
 	it("records the error outcome when the turn terminates with done(reason:'error')", () => {
@@ -2077,9 +2102,12 @@ describe("translateSessionEvent — full streaming flow", () => {
 		expect(endResult.messages[0].partial).toBe(false)
 		expect(endResult.messages[0].text).toBe("Hello world!")
 
-		// 3. Done — the turn ended cleanly on a text response, so the final text row is
-		// retagged in place (same ts) to say:"completion_result" for the green
-		// "Task Completed" box (act mode is the default when no mode source is provided).
+		// 3. Done — without an explicit completion tool observation, the prior
+		// final-text retag is REMOVED (ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-
+		// CORRECTION01). The "Hello world!" text remains in conversation history
+		// as a normal `say:"text"` row; no completion_result is synthesized; the
+		// terminalResponseCommittedThisTurn flag stays false; the coordinator
+		// refuses the awaiting_followup promotion.
 		const doneResult = translateSessionEvent(
 			{
 				type: "agent_event",
@@ -2095,14 +2123,9 @@ describe("translateSessionEvent — full streaming flow", () => {
 			},
 			state,
 		)
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			ts: endResult.messages[0].ts,
-			type: "say",
-			say: "completion_result",
-			text: "Hello world!",
-			partial: false,
-		})
+		expect(doneResult.messages).toHaveLength(0)
+		expect(doneResult.messages.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 		expect(doneResult.turnComplete).toBe(true)
 	})
 

@@ -205,13 +205,17 @@ describe("SdkTaskHistory", () => {
 			{ role: "assistant", content: [{ type: "text", text: "Done!" }] },
 		])
 
-		expect(result).toMatchObject([
-			{ type: "say", say: "task", text: "add a joke", partial: false },
-			{ type: "say", say: "tool", partial: false },
-			// The turn's final text response is retagged to the inferred completion row.
-			{ type: "say", say: "completion_result", text: "Done!", partial: false },
-			{ type: "ask", ask: "completion_result", partial: false },
-		])
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: persisted
+		// transcripts have no canonical-completion signal — the prior
+		// assistant text "Done!" is NOT retagged to a `say:"completion_result"`
+		// row on history replay. (The trailing `ask:"completion_result"`
+		// webview-affordance row remains — that's a UI marker, not a terminal
+		// authority signal; it tells the webview to render the "Start New
+		// Task" button rather than a "Thinking..." spinner.)
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "task", text: "add a joke", partial: false }))
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "tool", partial: false }))
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Done!", partial: false }))
+		expect(result.filter((m) => m.say === "completion_result")).toHaveLength(0)
 		expect(result.map((message) => message.text).join("\n")).not.toContain(rawToolResult)
 		expect(JSON.parse(result[1].text ?? "{}")).toMatchObject({
 			tool: "editedExistingFile",
@@ -219,7 +223,7 @@ describe("SdkTaskHistory", () => {
 		})
 	})
 
-	it("retags only the final turn's text, styled by the mode recovered from user_input wrappers", async () => {
+	it("does NOT retag only the final turn's text (no canonical completion signal in persisted transcripts)", async () => {
 		const { history, readMessages } = makeHistory([makeSessionRecord("task-1")])
 		readMessages.mockResolvedValueOnce([
 			{ role: "user", content: '<user_input mode="plan">plan the feature</user_input>' },
@@ -230,19 +234,29 @@ describe("SdkTaskHistory", () => {
 
 		const result = await history.getClineMessages("task-1")
 
-		expect(result).toMatchObject([
-			// The <user_input mode="..."> wrapper is stripped for display but its mode
-			// styles the final turn's inferred completion row. Mid-transcript turns stay
-			// plain — history has no per-turn outcome to trust.
-			{ type: "say", say: "task", text: "plan the feature" },
-			{ type: "say", say: "text", text: "Here is the plan." },
-			{ type: "say", say: "user_feedback", text: "looks good, do it" },
-			{ type: "say", say: "completion_result", text: "Implemented." },
-			{ type: "ask", ask: "completion_result" },
-		])
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: persisted
+		// transcripts have no canonical-completion signal — neither the final
+		// "Implemented." text nor any other assistant text is retagged to a
+		// `say:"completion_result"` row on history replay. (The trailing
+		// `ask:"completion_result"` webview-affordance row remains — that's a
+		// UI marker for the "Start New Task" button, not a terminal authority
+		// signal.)
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "task", text: "plan the feature" }))
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Here is the plan." }))
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "user_feedback", text: "looks good, do it" }))
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Implemented." }))
+		expect(result.filter((m) => m.say === "completion_result")).toHaveLength(0)
 	})
 
-	it("styles the final turn's inferred completion with the plan box when the last turn ran in plan mode", async () => {
+	it("does NOT retag the final turn's text as plan_completion_result when the last turn ran in plan mode", async () => {
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: persisted
+		// transcripts have no canonical-completion signal — the session
+		// record's `status` field tells us the run ended cleanly, but it does
+		// not tell us the agent declared completion via `submit_and_exit`.
+		// Without an authoritative final-response event, the prior assistant
+		// text is NOT promoted to `plan_completion_result` on history replay.
+		// The plan text remains in conversation history as a normal
+		// `say:"text"` row; no green/plan "done" box is synthesized.
 		const { history, readMessages } = makeHistory([makeSessionRecord("task-1")])
 		readMessages.mockResolvedValueOnce([
 			{ role: "user", content: '<user_input mode="act">build it</user_input>' },
@@ -253,10 +267,9 @@ describe("SdkTaskHistory", () => {
 
 		const result = await history.getClineMessages("task-1")
 
-		expect(result).toContainEqual(
-			expect.objectContaining({ type: "say", say: "plan_completion_result", text: "Phase two plan." }),
-		)
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Phase two plan." }))
 		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Built." }))
+		expect(result.filter((m) => m.say === "plan_completion_result" || m.say === "completion_result")).toHaveLength(0)
 	})
 
 	it("hides the plan -> act auto-continuation prompt when rehydrating from history", async () => {
@@ -278,9 +291,11 @@ describe("SdkTaskHistory", () => {
 
 		expect(result.filter((m) => m.say === "user_feedback")).toHaveLength(0)
 		expect(result.map((m) => m.text).join("\n")).not.toContain("The user approved switching to act mode")
-		// The hidden prompt still carries the turn's mode: the final completion row
-		// must render as an act-mode completion, not a plan box.
-		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "completion_result", text: "Implemented." }))
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: the prior
+		// "Implemented." text is NOT retagged as completion_result. Persisted
+		// transcripts have no canonical-completion signal.
+		expect(result.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Implemented." }))
 	})
 
 	it("hides [TASK RESUMPTION] prompts when rehydrating from history", async () => {
@@ -299,12 +314,21 @@ describe("SdkTaskHistory", () => {
 
 		expect(result.filter((m) => m.say === "user_feedback")).toHaveLength(0)
 		expect(result.map((m) => m.text).join("\n")).not.toContain("[TASK RESUMPTION]")
-		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "completion_result", text: "Finished." }))
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: the prior
+		// "Finished." text is NOT retagged as completion_result.
+		expect(result.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Finished." }))
 	})
 
-	it("retags the terminal text of a session whose record says it completed", async () => {
-		// "completed" is written by the runtime host when the session is released after a
-		// clean final turn (task switch / clear / extension dispose).
+	it("does NOT retag the terminal text of a session whose record says it completed (no canonical completion signal in history)", async () => {
+		// "completed" is written by the runtime host when the session is released
+		// after a clean final turn. The session record's status tells us the
+		// run ended cleanly, but it does NOT tell us the agent declared
+		// completion via `submit_and_exit`. Persisted transcripts carry no
+		// canonical completion-tool observation, so the prior assistant text
+		// is not promoted to `completion_result` on history replay.
+		// (Live path: the completion tool `content_end` is the only authority
+		// source for a terminal response row.)
 		const { history, readMessages } = makeHistory([makeSessionRecord("task-1", { status: "completed" })])
 		readMessages.mockResolvedValueOnce([
 			{ role: "user", content: "first request" },
@@ -313,7 +337,8 @@ describe("SdkTaskHistory", () => {
 
 		const result = await history.getClineMessages("task-1")
 
-		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "completion_result", text: "Final answer." }))
+		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Final answer." }))
+		expect(result.filter((m) => m.say === "completion_result")).toHaveLength(0)
 	})
 
 	it("does not retag the terminal text of a session that did not end cleanly", async () => {
