@@ -588,6 +588,26 @@ export interface ClineMessage {
 	 */
 	epoch?: number
 	commandCompleted?: boolean
+	/**
+	 * ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01: narrow
+	 * lifecycle disposition of a `say:"command"` row, propagated from
+	 * the runtime's `AgentContentEndEvent.executionDisposition` field.
+	 *
+	 * - "executed"                  ⇒ the tool's executor was invoked. The result
+	 *                                 may still be an error; downstream
+	 *                                 status-pill rendering differentiates
+	 *                                 running / completed / executed-failed.
+	 * - "rejected_before_execution" ⇒ the runtime declined to invoke the executor
+	 *                                 (input parse error, policy deny, user
+	 *                                 reject, etc.). No approval was awaited;
+	 *                                 the row is a request-lifecycle
+	 *                                 rejection, NOT an approval-pending
+	 *                                 prompt and NOT an execution result.
+	 *
+	 * ABSENT means the translator has no signal — consumers MUST treat
+	 * absence as opaque and not synthesize either value.
+	 */
+	commandExecutionDisposition?: "executed" | "rejected_before_execution"
 	lastCheckpointHash?: string
 	isCheckpointCheckedOut?: boolean
 	isOperationOutsideWorkspace?: boolean

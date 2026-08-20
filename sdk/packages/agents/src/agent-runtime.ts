@@ -2847,6 +2847,36 @@ export class AgentRuntime {
 			}
 		}
 
+		// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01: stamp the
+		// narrow lifecycle disposition on the toolCall's metadata so the
+		// legacy content_end consumer can render the resulting row
+		// truthfully. Distinct from the structured ToolRuntimeOutcome
+		// (C1.2, populated below) — this field answers ONLY the
+		// webview's binary "did the executor run?" question.
+		//
+		// `toolExecutionInvoked` is the C1.2 closure-plan truth table
+		// authority: it is set EXACTLY once, IMMEDIATELY before the
+		// `tool.execute(...)` call (see agent-runtime.ts:2780), and
+		// false on every skip-path (preparation/validation/policy/
+		// approval/recovery/registry-miss). Reading it here is
+		// equivalent to "did this action actually reach its executor
+		// boundary?".
+		{
+			const existingMeta =
+				prepared.toolCall.metadata &&
+				typeof prepared.toolCall.metadata === "object" &&
+				!Array.isArray(prepared.toolCall.metadata)
+					? (prepared.toolCall.metadata as Record<string, unknown>)
+					: {};
+			const disposition = toolExecutionInvoked
+				? "executed"
+				: "rejected_before_execution";
+			(prepared.toolCall as { metadata?: Record<string, unknown> }).metadata = {
+				...existingMeta,
+				executionDisposition: disposition,
+			};
+		}
+
 		const message = createMessage("tool", [
 			{
 				type: "tool-result",

@@ -314,11 +314,26 @@ export const ChatRowContent = memo(
 						<span aria-hidden="true" className="codicon codicon-info text-foreground mb-[-1.5px]" />,
 						<span className="text-foreground font-bold">Advisory: repeated protocol errors</span>,
 					]
-				case "command":
+				case "command": {
+					// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01:
+					// Distinguish a row that never reached the executor
+					// (input-validation / policy / control-plane skip) from
+					// one that genuinely executed or is awaiting approval.
+					// The hardcoded approval-language heading is reserved
+					// for actions that actually awaited user authorization.
+					// Rejection before execution is a request-lifecycle event
+					// and must NOT borrow approval wording.
+					if (message.commandExecutionDisposition === "rejected_before_execution") {
+						return [
+							<TerminalIcon className="text-foreground size-2" />,
+							<span className="font-bold text-foreground">Command was rejected before execution:</span>,
+						]
+					}
 					return [
 						<TerminalIcon className="text-foreground size-2" />,
 						<span className="font-bold text-foreground">Cline wants to execute this command:</span>,
 					]
+				}
 				case "use_mcp_server":
 					const mcpServerUse = JSON.parse(message.text || "{}") as ClineAskUseMcpServer
 					return [
@@ -742,13 +757,20 @@ export const ChatRowContent = memo(
 		}, [isCommandMessage, isCommandExecuting, isExpanded, onToggleExpand, message.ts])
 
 		if (message.ask === "command" || message.say === "command") {
+			// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01: §20 — a
+			// rejected-before-execution row must NOT be classified as
+			// "Completed" downstream; the pill belongs to the lifecycle,
+			// not just `commandCompleted:true`. Surface the disposition
+			// to CommandOutputRow so the status pill matches.
+			const isCommandRejected = message.commandExecutionDisposition === "rejected_before_execution"
 			return (
 				<CommandOutputRow
 					icon={icon}
 					isBackgroundExec={vscodeTerminalExecutionMode === "backgroundExec"}
-					isCommandCompleted={isCommandCompleted}
+					isCommandCompleted={isCommandCompleted && !isCommandRejected}
 					isCommandExecuting={isCommandExecuting}
 					isCommandPending={isCommandPending}
+					isCommandRejected={isCommandRejected}
 					isOutputFullyExpanded={isOutputFullyExpanded}
 					message={message}
 					onCancelCommand={onCancelCommand}

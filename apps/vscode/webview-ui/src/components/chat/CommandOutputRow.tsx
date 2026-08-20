@@ -120,6 +120,7 @@ export const CommandOutputRow = memo(
 		isCommandExecuting = false,
 		isCommandPending = false,
 		isCommandCompleted = false,
+		isCommandRejected = false,
 		isBackgroundExec = false, // vscodeTerminalExecutionMode === "backgroundExec"
 		onCancelCommand,
 		icon,
@@ -132,6 +133,7 @@ export const CommandOutputRow = memo(
 		isCommandExecuting?: boolean
 		isCommandPending?: boolean
 		isCommandCompleted?: boolean
+		isCommandRejected?: boolean
 		isBackgroundExec?: boolean
 		onCancelCommand?: () => void
 		icon?: JSX.Element | null
@@ -198,14 +200,26 @@ export const CommandOutputRow = memo(
 									className={cn("bg-description rounded-full w-2 h-2 shrink-0", {
 										"bg-success animate-pulse": isCommandExecuting,
 										"bg-editor-warning-foreground": isCommandPending,
+										// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01:
+										// rejected-before-execution rows use a
+										// distinct dim/red dot so the status
+										// pill is visually distinct from
+										// "completed".
+										"bg-error opacity-50": isCommandRejected,
 									})}
 								/>
 								<span
 									className={cn("text-description font-medium text-base shrink-0", {
 										"text-success": isCommandExecuting,
 										"text-editor-warning-foreground": isCommandPending,
+										"text-error opacity-70": isCommandRejected,
 									})}>
-									{getCommandStatusText(isCommandExecuting, isCommandPending, isCommandCompleted)}
+									{getCommandStatusText(
+										isCommandExecuting,
+										isCommandPending,
+										isCommandCompleted,
+										isCommandRejected,
+									)}
 								</span>
 							</div>
 							<div className="flex items-center gap-2 shrink-0">
@@ -239,8 +253,8 @@ export const CommandOutputRow = memo(
 						<CommandOutputContent
 							isContainerExpanded={true}
 							isOutputFullyExpanded={isOutputFullyExpanded}
-							onToggle={() => setIsOutputFullyExpanded(!isOutputFullyExpanded)}
 							onOutputChange={onOutputChange}
+							onToggle={() => setIsOutputFullyExpanded(!isOutputFullyExpanded)}
 							output={output}
 						/>
 					)}
@@ -263,9 +277,18 @@ const CommandStatusMap = {
 	pending: "Pending",
 	completed: "Completed",
 	skipped: "Skipped",
+	// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01: §20 status-pill
+	// truth — a row that never executed must NOT show "Completed"
+	// (which reads as successful execution).
+	rejected: "Rejected",
 }
 
-function getCommandStatusText(isExecuting: boolean, isPending: boolean, isCompleted: boolean): string {
+function getCommandStatusText(isExecuting: boolean, isPending: boolean, isCompleted: boolean, isRejected: boolean): string {
+	// Lifecycle dominates completion: a row stamped as rejected before
+	// execution is finalized at the request boundary, not execution.
+	if (isRejected) {
+		return CommandStatusMap.rejected
+	}
 	if (isExecuting) {
 		return CommandStatusMap.executing
 	}

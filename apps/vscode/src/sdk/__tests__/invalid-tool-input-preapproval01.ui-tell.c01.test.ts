@@ -80,6 +80,48 @@ function contentEndEventWithError(toolName: string, toolCallId: string, error: s
 	}
 }
 
+// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01: content_end
+// helper that carries the typed lifecycle disposition populated by the
+// runtime's executePreparedTool stamp. The translator MUST preserve
+// this verbatim on the resulting ClineMessage.
+function contentEndEventWithDisposition(
+	toolName: string,
+	toolCallId: string,
+	error: string,
+	executionDisposition: "executed" | "rejected_before_execution",
+): CoreSessionEvent {
+	return {
+		type: "agent_event",
+		payload: {
+			sessionId: "session-ui-1",
+			event: {
+				type: "content_end",
+				contentType: "tool",
+				toolName,
+				toolCallId,
+				error,
+				executionDisposition,
+			} as AgentEvent,
+		},
+	}
+}
+
+function contentEndEventSuccess(toolName: string, toolCallId: string, output: string): CoreSessionEvent {
+	return {
+		type: "agent_event",
+		payload: {
+			sessionId: "session-ui-1",
+			event: {
+				type: "content_end",
+				contentType: "tool",
+				toolName,
+				toolCallId,
+				output,
+			} as AgentEvent,
+		},
+	}
+}
+
 describe("ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01-CORRECTION01 / UI-tell seam", () => {
 	// TI_UI01 — When prepareToolExecution rejects with inputParseError,
 	// executePreparedTool sets result.output.error = skipReason and
@@ -189,5 +231,74 @@ describe("ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01-CORRECTION01 / UI-tell se
 		expect(errored[0].text).toContain(COMMAND_OUTPUT_STRING)
 		expect(rejected[0].text).not.toContain(COMMAND_REQ_APP_STRING)
 		expect(errored[0].text).not.toContain(COMMAND_REQ_APP_STRING)
+	})
+
+	// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01 — translator
+	// seam tests for the new typed lifecycle disposition. The runtime
+	// stamps `executionDisposition` on toolCall.metadata; the bridge
+	// (`@cline/core/src/runtime/orchestration/runtime-event-adapter.ts`)
+	// propagates it to the legacy content_end; this translator must
+	// carry it through verbatim onto `ClineMessage`. These tests pin
+	// the translator contract extension so a future regression that
+	// drops the typed signal at the translator fails here.
+
+	it("TI_UI04_TRANSLATOR_PROPAGATES_REJECTED_DISPOSITION", () => {
+		const state = new MessageTranslatorState()
+		translateSessionEvent(contentStartEvent("run_commands", { commands: "ls" }, "call-ui-4"), state)
+		const finalized = translateSessionEvent(
+			contentEndEventWithDisposition(
+				"run_commands",
+				"call-ui-4",
+				"Invalid input for tool run_commands: expected array, received string",
+				"rejected_before_execution",
+			),
+			state,
+		)
+
+		const commandRows = finalized.messages.filter((m) => m.say === "command")
+		expect(commandRows).toHaveLength(1)
+		expect(commandRows[0].commandExecutionDisposition).toBe("rejected_before_execution")
+	})
+
+	it("TI_UI05_TRANSLATOR_PROPAGATES_EXECUTED_DISPOSITION", () => {
+		const state = new MessageTranslatorState()
+		translateSessionEvent(contentStartEvent("run_commands", { commands: ["git status"] }, "call-ui-5"), state)
+		const finalized = translateSessionEvent(
+			contentEndEventWithDisposition(
+				"run_commands",
+				"call-ui-5",
+				"git: not a repository (or any parent): '.git'",
+				"executed",
+			),
+			state,
+		)
+
+		const commandRows = finalized.messages.filter((m) => m.say === "command")
+		expect(commandRows).toHaveLength(1)
+		expect(commandRows[0].commandExecutionDisposition).toBe("executed")
+	})
+
+	it("TI_UI06_TRANSLATOR_DISTINGUISHES_EXECUTED_FROM_REJECTED_AT_IDENTICAL_ERROR_TEXT", () => {
+		// The §16 anti-text-heuristic guard at the translator seam:
+		// the same free-form error string must classify correctly
+		// based on the typed disposition field, not the text.
+		const sameError = "Invalid input for tool run_commands: unexpected shape"
+		const stateRejected = new MessageTranslatorState()
+		translateSessionEvent(contentStartEvent("run_commands", { commands: "ls" }, "arm-rej"), stateRejected)
+		const finalizedRejected = translateSessionEvent(
+			contentEndEventWithDisposition("run_commands", "arm-rej", sameError, "rejected_before_execution"),
+			stateRejected,
+		)
+		const rejectedRows = finalizedRejected.messages.filter((m) => m.say === "command")
+		expect(rejectedRows[0].commandExecutionDisposition).toBe("rejected_before_execution")
+
+		const stateExecuted = new MessageTranslatorState()
+		translateSessionEvent(contentStartEvent("run_commands", { commands: ["git status"] }, "arm-exe"), stateExecuted)
+		const finalizedExecuted = translateSessionEvent(
+			contentEndEventWithDisposition("run_commands", "arm-exe", sameError, "executed"),
+			stateExecuted,
+		)
+		const executedRows = finalizedExecuted.messages.filter((m) => m.say === "command")
+		expect(executedRows[0].commandExecutionDisposition).toBe("executed")
 	})
 })

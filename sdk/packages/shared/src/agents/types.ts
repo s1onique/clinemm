@@ -134,6 +134,39 @@ export interface AgentContentEndEvent extends AgentEventMetadata {
 	durationMs?: number;
 	/** Where a model tool is executed; absent for ordinary local tools. */
 	execution?: "client" | "provider";
+	/**
+	 * ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01: lifecycle
+	 * disposition of the tool content block, discriminated at the
+	 * runtime boundary where the fact is known. Distinct from the
+	 * structured `ToolRuntimeOutcome.failureClass`: this field is the
+	 * narrow lifecycle signal the webview needs to present a command
+	 * row truthfully — "executed" vs "rejected before execution".
+	 *
+	 * Set ONLY for `contentType: "tool"` events; omitted for text and
+	 * reasoning content, which have no execution lifecycle.
+	 *
+	 * "executed"                  ⇒ the tool's executor was invoked.
+	 *                                The result may still be an error;
+	 *                                downstream rendering differentiates
+	 *                                running / completed / executed-failed.
+	 * "rejected_before_execution" ⇒ the runtime declined to invoke the
+	 *                                executor (input parse error, policy
+	 *                                deny, user reject, etc.). No
+	 *                                approval was requested if the
+	 *                                decision happened before the
+	 *                                approval callback ran; consult the
+	 *                                structured failure class for the
+	 *                                exact reason. The webview must
+	 *                                present this as a request-lifecycle
+	 *                                rejection, NOT as an
+	 *                                approval-pending prompt and NOT
+	 *                                as an execution result.
+	 *
+	 * ABSENT for consumers and producers that pre-date the field.
+	 * Translation code MUST treat absence as opaque — do not
+	 * synthesize "executed" from absence.
+	 */
+	executionDisposition?: "executed" | "rejected_before_execution";
 }
 
 export interface AgentIterationStartEvent extends AgentEventMetadata {

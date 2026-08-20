@@ -1,6 +1,7 @@
-import { act, render, waitFor } from "@testing-library/react"
+import type { ClineMessage } from "@shared/ExtensionMessage"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { CommandOutputContent } from "./CommandOutputRow"
+import { CommandOutputContent, CommandOutputRow } from "./CommandOutputRow"
 
 vi.mock("../common/CodeBlock", () => ({
 	default: ({ source }: { source: string }) => <pre>{source}</pre>,
@@ -75,5 +76,52 @@ describe("CommandOutputContent", () => {
 
 		await act(async () => {})
 		expect(onOutputChange).not.toHaveBeenCalled()
+	})
+
+	// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01 — RCP07
+	// status-pill truth at the CommandOutputRow seam.
+	it("rejected-before-execution pill says 'Rejected' (NOT 'Completed')", () => {
+		const message: ClineMessage = {
+			ts: Date.now(),
+			type: "say",
+			say: "command",
+			text: 'git status\n<<<COMMAND OUTPUT>>>\nError: {"error":"✖ Invalid input"}',
+			commandCompleted: true,
+			commandExecutionDisposition: "rejected_before_execution",
+		}
+		render(
+			<CommandOutputRow
+				icon={null}
+				isCommandRejected={true}
+				isOutputFullyExpanded={false}
+				message={message}
+				setIsOutputFullyExpanded={vi.fn()}
+				title={null}
+			/>,
+		)
+		expect(screen.getByText("Rejected")).toBeInTheDocument()
+		expect(screen.queryByText("Completed")).toBeNull()
+	})
+
+	it("executed (success) pill still says 'Completed'", () => {
+		const message: ClineMessage = {
+			ts: Date.now(),
+			type: "say",
+			say: "command",
+			text: "git status\n<<<COMMAND OUTPUT>>>\nOn branch main",
+			commandCompleted: true,
+			commandExecutionDisposition: "executed",
+		}
+		render(
+			<CommandOutputRow
+				icon={null}
+				isCommandCompleted={true}
+				isOutputFullyExpanded={false}
+				message={message}
+				setIsOutputFullyExpanded={vi.fn()}
+				title={null}
+			/>,
+		)
+		expect(screen.getByText("Completed")).toBeInTheDocument()
 	})
 })

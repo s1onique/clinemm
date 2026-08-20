@@ -352,6 +352,7 @@ export class RuntimeEventAdapter {
 			toolCallId: string;
 			toolName: string;
 			execution?: "client" | "provider";
+			metadata?: unknown;
 		};
 		message: AgentMessage;
 	}): AgentEvent[] {
@@ -362,6 +363,25 @@ export class RuntimeEventAdapter {
 		const result = extractToolResultPart(event.message);
 		const output = result?.output;
 		const error = deriveToolError(result);
+		// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01:
+		// Propagate the narrow lifecycle disposition the runtime stamps
+		// on the toolCall's metadata. The translator must surface this
+		// as `executionDisposition` on the legacy content_end so the
+		// webview can render "executed" vs "rejected before execution"
+		// truthfully. ABSENT for producers that pre-date the field —
+		// the translator MUST treat absence as opaque (do not default
+		// to either value).
+		const dispositionRaw =
+			event.toolCall.metadata &&
+			typeof event.toolCall.metadata === "object" &&
+			!Array.isArray(event.toolCall.metadata)
+				? (event.toolCall.metadata as Record<string, unknown>)
+						.executionDisposition
+				: undefined;
+		const executionDisposition =
+			dispositionRaw === "executed" || dispositionRaw === "rejected_before_execution"
+				? dispositionRaw
+				: undefined;
 		return [
 			{
 				type: "content_end",
@@ -372,6 +392,9 @@ export class RuntimeEventAdapter {
 				error,
 				durationMs,
 				execution: event.toolCall.execution,
+				...(executionDisposition !== undefined
+					? { executionDisposition }
+					: {}),
 			},
 		];
 	}

@@ -1667,6 +1667,19 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						const commandText = extractCommandText(storedInput)
 						const outputStr = event.error ? `Error: ${event.error}` : extractToolOutputText(event.output)
 						const ts = state.clearStreamingTool()
+						// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01:
+						// Preserve the runtime's lifecycle disposition verbatim.
+						// The webview (ChatRow / CommandOutputRow) reads this
+						// field to choose between approval-pending wording,
+						// executed-completed wording, and rejected-not-executed
+						// wording. ABSENT for producers that pre-date the field;
+						// we MUST NOT default to either value (per the §18
+						// "no synthesis" rule).
+						const commandExecutionDisposition =
+							event.executionDisposition === "executed" ||
+							event.executionDisposition === "rejected_before_execution"
+								? event.executionDisposition
+								: undefined
 						messages.push({
 							ts,
 							type: "say",
@@ -1674,6 +1687,7 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 							text: outputStr ? `${commandText}\n${COMMAND_OUTPUT_STRING}\n${outputStr}` : commandText,
 							partial: false,
 							commandCompleted: true,
+							...(commandExecutionDisposition !== undefined ? { commandExecutionDisposition } : {}),
 						})
 						break
 					}

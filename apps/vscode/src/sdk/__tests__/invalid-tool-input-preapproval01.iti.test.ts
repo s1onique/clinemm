@@ -160,6 +160,15 @@ async function driveSingleToolCall(opts: {
 	tool?: AgentTool<any, any>
 	toolPolicies?: Record<string, { autoApprove?: boolean; enabled?: boolean }>
 	requestApproval?: (req: ToolApprovalRequest) => Promise<ToolApprovalResult>
+	// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01:
+	// Optional observer that receives the toolCall reference AFTER
+	// `executePreparedTool` has stamped `metadata.executionDisposition`.
+	// Uses the canonical C1.2 `onToolRuntimeOutcome` hook — the same
+	// observable seam the C1.2 ITI-3 acceptance tests use to assert
+	// against the produced `ToolRuntimeOutcome`. My producer writes
+	// the disposition BEFORE this hook fires, so reading
+	// `toolCall.metadata` here observes the post-stamp state.
+	onToolCallMetadata?: (snapshot: { toolCall: { metadata?: unknown } }) => void
 }): Promise<DriveResult> {
 	const counters = { approvalCalls: 0, executorCalls: 0 }
 	const captured: CapturedOutcome[] = []
@@ -188,10 +197,22 @@ async function driveSingleToolCall(opts: {
 			{ type: "finish", reason: "stop" },
 		],
 	])
+	const hooks: AgentRuntimeHooks = captureOutcomes(captured, counters)
+	if (opts.onToolCallMetadata) {
+		const cb = opts.onToolCallMetadata
+		const existingHook = hooks.onToolRuntimeOutcome
+		// Compose so captureOutcomes still runs (outcome captures
+		// drive the canonical C1.2 ITI-3 assertions) AND the metadata
+		// observer reads the post-stamp toolCall.
+		hooks.onToolRuntimeOutcome = async (ctx) => {
+			await existingHook?.(ctx)
+			cb({ toolCall: ctx.toolCall })
+		}
+	}
 	const runtime = new AgentRuntime({
 		model,
 		tools: [tool],
-		hooks: captureOutcomes(captured, counters),
+		hooks,
 		toolPolicies: opts.toolPolicies as never,
 		requestToolApproval: requestApproval,
 	})
@@ -482,4 +503,110 @@ describe("ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01 / production-seam closure
 			expect(out.outcome.failureClass).toBe("tool_input_invalid")
 		}
 	})
+
+	// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01 —
+	// ITI07..ITI09 production-seam closure for the typed lifecycle
+	// disposition. The runtime stamps `metadata.executionDisposition`
+	// on every toolCall at the executePreparedTool boundary based on
+	// the closure-plan `toolExecutionInvoked` authority. These tests
+	// pin the producer side of the wire field so a future
+	// regression that drops it at the producer fails here.
+	//
+	// Targets: real `createShellTool` factory (mirrors the production
+	// tool registration path used by ClineCore) so the test catches
+	// drift between the ITI mirror tool and the canonical tool.
+
+	it("ITI07_REAL_TOOL_INVALID_STAMPS_REJECTED_DISPOSITION", async () => {
+		const tool = createCanonicalRunCommandsTool()
+		tool.execute = vi.fn(async () => {
+			throw new Error("executor MUST NOT be called on rejected input")
+		})
+		const captured = trackToolCallMetadata()
+		const { captured: outcomeCaptured } = await driveSingleToolCall({
+			tool,
+			inputText: JSON.stringify({
+				commands: [{ command: "git status" }],
+				timeout: 120000,
+			}),
+			toolPolicies: { run_commands: { autoApprove: false } },
+			onToolCallMetadata: captured.recordMetadata,
+		})
+		// The canonical tool's executorCalls tracking isn't exposed;
+		// we instead observe via the runtime's outcome.
+		expect(outcomeCaptured[0].outcome.kind).toBe("failure")
+		expect(captured.lastDisposition()).toBe("rejected_before_execution")
+	})
+
+	it("ITI08_REAL_TOOL_VALID_EXECUTED_STAMPS_EXECUTED_DISPOSITION", async () => {
+		const tool = createCanonicalRunCommandsTool()
+		tool.execute = vi.fn(async () => [{ query: "ls", result: "ran", success: true }])
+		const captured = trackToolCallMetadata()
+		const { captured: outcomeCaptured } = await driveSingleToolCall({
+			tool,
+			inputText: JSON.stringify({ commands: ["ls"] }),
+			toolPolicies: { run_commands: { autoApprove: true } },
+			onToolCallMetadata: captured.recordMetadata,
+		})
+		expect(outcomeCaptured[0].outcome.kind).toBe("success")
+		expect(captured.lastDisposition()).toBe("executed")
+	})
+
+	it("ITI09_REAL_TOOL_EXECUTED_BUT_FAILED_STAMPS_EXECUTED_NOT_REJECTED", async () => {
+		// The narrow lifecycle disposition is NOT a failure taxonomy.
+		// A command that ACTUALLY EXECUTED and then returned an error
+		// must still classify as "executed" — the webview uses the
+		// status pill to differentiate error-result from
+		// not-executed. This is the runtime-side guard against
+		// confusing "tool failed" with "tool never executed".
+		const tool = createCanonicalRunCommandsTool()
+		tool.execute = vi.fn(async () => {
+			throw new Error("git: not a repository")
+		})
+		const captured = trackToolCallMetadata()
+		const { captured: outcomeCaptured } = await driveSingleToolCall({
+			tool,
+			inputText: JSON.stringify({ commands: ["git status"] }),
+			toolPolicies: { run_commands: { autoApprove: true } },
+			onToolCallMetadata: captured.recordMetadata,
+		})
+		// Failure outcome FROM EXECUTION (kind=failure) must still
+		// carry `executed` disposition because the executor ran.
+		expect(outcomeCaptured[0].outcome.kind).toBe("failure")
+		if (outcomeCaptured[0].outcome.kind === "failure") {
+			// The failureClass must NOT be tool_input_invalid — it
+			// must be the execution-failure family.
+			expect(outcomeCaptured[0].outcome.failureClass).not.toBe("tool_input_invalid")
+		}
+		expect(captured.lastDisposition()).toBe("executed")
+	})
 })
+
+// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01 / ITI
+// instrumentation helpers.
+//
+// The C1.2 boundary gate (`executePreparedTool`) is the producer of
+// `metadata.executionDisposition`. To assert the producer invariant
+// from a driver-side test without reaching into the runtime's
+// internals, we hook the C1.2 boundary by inspecting each toolCall
+// at the moment the executor's `beforeTool` hook fires (which has
+// the original `toolCall` reference). The hook records the
+// post-execution metadata state via the `afterTool`-equivalent
+// observation.
+function trackToolCallMetadata() {
+	let lastMetadata: Record<string, unknown> | undefined
+	return {
+		recordMetadata: (snapshot: { toolCall: { metadata?: unknown } }) => {
+			lastMetadata =
+				snapshot.toolCall.metadata &&
+				typeof snapshot.toolCall.metadata === "object" &&
+				!Array.isArray(snapshot.toolCall.metadata)
+					? (snapshot.toolCall.metadata as Record<string, unknown>)
+					: undefined
+		},
+		lastDisposition(): "executed" | "rejected_before_execution" | undefined {
+			if (!lastMetadata) return undefined
+			const d = lastMetadata.executionDisposition
+			return d === "executed" || d === "rejected_before_execution" ? d : undefined
+		},
+	}
+}
