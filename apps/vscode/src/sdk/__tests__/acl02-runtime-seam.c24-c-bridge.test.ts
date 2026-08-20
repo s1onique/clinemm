@@ -35,22 +35,38 @@
  *
  *   (b) the desired invariant ("a terminal bg-job
  *       schedules a successor agent turn") is **itself
- *       a design decision**, not a discovered fact. The
- *       model-facing `run_commands` description tells
- *       the model to "redirect long-running output to a
- *       tmp file" -- that is Contract X = model-owned
- *       polling. Without a deliberate contract change,
- *       asserting `agentRuns === 2` proves nothing about
- *       the codebase; it just enshrines a hypothesis.
+ *       a design decision**, not a discovered fact.
+ *       ACL06 in the main file pins what the production
+ *       tool description does say (long-running ->
+ *       redirect output to tmp file -> model reads
+ *       later); the description does NOT describe what
+ *       happens when an ordinary foreground call
+ *       crosses the 15-second wait budget and the tool
+ *       returns RUNNING(jobId) autonomously. The
+ *       ownership contract for HOST_DEFERRED_FOREGROUND
+ *       is undefined. Without a deliberate contract
+ *       change, asserting `agentRuns === 2` proves
+ *       nothing about the codebase; it just enshrines
+ *       a hypothesis.
  *
- * The structural fact asserted here is narrower: the
- * public surface of the REAL `LocalRuntimeHost` (the
- * composition seam between the apps/vscode run_commands
- * tool, the SDK's AgentRuntime, and the host scheduler)
- * has no method for receiving an asynchronous terminal
- * result from an external CommandJobManager. That is
- * structural evidence -- not causal RED. It is the
- * strongest claim this ACT is willing to make.
+ * The strongest claim this ACT is willing to make:
+ *
+ *   SOURCE_RECON:
+ *     no dedicated async-command-terminal successor
+ *     surface was found in the inspected composition
+ *     (LocalRuntimeHost.prototype carries no method
+ *     named onAsyncTerminalResult,
+ *     onBackgroundTerminalEvent, scheduleContinuation,
+ *     or resumeFromAsyncTerminal).
+ *
+ *   EXECUTABLE CAUSAL PROOF:
+ *     UNAVAILABLE -- the absence of those four names
+ *     does NOT prove that no reception path exists;
+ *     a generic event method, callback passed through
+ *     composition, runTurn, queue API, or non-prototype
+ *     field could provide one.
+ *
+ *   CAPTURE_INSUFFICIENT_FOR_CAUSAL_RED.
  *
  *   LIVE WITNESS preserved verbatim in the previous
  *   `async-command-turn-liveness.acl01.test.ts`:
@@ -111,11 +127,18 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01-CORRECTION01 / ACL02 bridge 
 		vi.useRealTimers()
 	})
 
-	it("STRUCTURAL_FACT - real LocalRuntimeHost.prototype has no async-terminal-result reception surface", () => {
-		// The full surface of the production LocalRuntimeHost is
-		// its prototype's method names. Read them; assert no
-		// method that an external CommandJobManager terminal
-		// event could plausibly call.
+	it("SOURCE_RECON - inspect LocalRuntimeHost.prototype for hypothetical async-terminal successor methods (does NOT prove no path exists)", () => {
+		// SOURCE_RECON only. The strongest justified claim
+		// is "no dedicated async-command-terminal successor
+		// surface was found in the inspected composition".
+		// The absence of a handful of method names does
+		// NOT prove that no reception path exists: a
+		// generic event method, callback passed through
+		// composition, runTurn, queue API, or
+		// non-prototype field could provide one.
+		//
+		// EXECUTABLE CAUSAL PROOF = UNAVAILABLE
+		// (CAPTURE_INSUFFICIENT_FOR_CAUSAL_RED).
 		const proto = Object.getPrototypeOf(host) as Record<string, unknown>
 		const methodNames = Object.getOwnPropertyNames(proto).filter((name) => {
 			// Inherited/private methods are noise; we want
@@ -125,7 +148,11 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01-CORRECTION01 / ACL02 bridge 
 		})
 
 		// The composition seam that the bg-job terminal
-		// event would have to invoke. Today: NONE.
+		// event would have to invoke, under a hypothetical
+		// Contract Y (host-owned wakeup). Today: NONE OF
+		// THESE FOUR HYPOTHETICAL NAMES was found in the
+		// prototype. This is structural evidence, not a
+		// proof of absence of any reception path.
 		const hasOnAsyncTerminal =
 			methodNames.includes("onAsyncTerminalResult") ||
 			methodNames.includes("onBackgroundTerminalEvent") ||
@@ -133,29 +160,32 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01-CORRECTION01 / ACL02 bridge 
 			methodNames.includes("resumeFromAsyncTerminal")
 		expect(hasOnAsyncTerminal).toBe(false)
 
-		// What it DOES have (for sanity):
+		// What the prototype DOES carry (for sanity):
 		expect(methodNames).toContain("runTurn")
 		expect(methodNames).toContain("startSession")
 		expect(methodNames).toContain("deleteSession")
 	})
 
-	it("STRUCTURAL_FACT - real LocalRuntimeHost has no consumer for CommandJobManager.terminalPromise", () => {
-		// The real LocalRuntimeHost never imports
-		// CommandJobManager. The host composition for the
-		// run_commands tool happens in apps/vscode
-		// (SdkController + VscodeRuntimeBuilder). The
+	it("DOCUMENTARY - the bridge test wires the real LocalRuntimeHost constructor; the structural claim lives in the prior SOURCE_RECON test", () => {
+		// The strongest justified SOURCE RECON claim is
+		// documented in the previous test. This second
+		// test merely records that the LocalRuntimeHost
+		// instance used in this ACT is the production
+		// class (not a hand-rolled shim) -- a package_pin
+		// for the bridge fixture.
+		//
+		// It does NOT prove that CommandJobManager has no
+		// consumer in the host. The host composition for
+		// the run_commands tool happens in apps/vscode
+		// (SdkController + VscodeRuntimeBuilder); the
 		// background-execution pipeline ends at
 		// `SdkController.updateBackgroundCommandState`,
-		// which only updates a UI projection.
-		//
-		// Evidence: scan the LocalRuntimeHost source text
-		// for any reference to "backgroundCommand" /
-		// "terminalPromise" / "resumeFromJob" / "jobId" /
-		// the likes.
+		// which only updates a UI projection. That
+		// structural observation is recorded in the main
+		// file's ACL01 and the previous SOURCE_RECON
+		// test -- NOT here.
 		const sourceFile = (host as unknown as { constructor: { name: string } }).constructor.name
-		// The class is `LocalRuntimeHost`. Just print it
-		// for diagnostics. The structural fact lives in
-		// the previous test (no async-terminal surface).
+		// The class is `LocalRuntimeHost`. Confirm.
 		expect(sourceFile).toBe("LocalRuntimeHost")
 	})
 })

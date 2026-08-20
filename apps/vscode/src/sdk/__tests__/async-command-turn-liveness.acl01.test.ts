@@ -33,15 +33,23 @@
  *     `acl02-runtime-seam.c24-c-bridge.test.ts` under
  *     the dedicated c2-4-c bridge config.
  *
- *   - The model-facing `run_commands` tool description
- *     (the third byte of this ACT) explicitly tells the
- *     model to "redirect long-running commands to a
- *     tmp file." That classifies the contract as
- *     "model-owned polling" (Contract X). The user's
- *     live screenshot's `awaiting_followup` is the
- *     model legitimately emitting a text-only response
- *     after a RUNNING result, NOT a host that lost the
- *     job. ACL06 pins this contract observation.
+ *   - ACL06 was originally framed as establishing
+ *     "Contract X = model-owned polling." The
+ *     CORRECTION01 review correctly observed that
+ *     the quoted description text describes a
+ *     MODEL_INTENTIONAL_BACKGROUND workflow (model
+ *     knowingly formulates detached execution +
+ *     persists output). It does NOT describe what
+ *     happens when an ordinary foreground run_commands
+ *     call crosses the 15-second wait budget and the
+ *     tool returns RUNNING(jobId) autonomously.
+ *     These are two materially different intents.
+ *     ACL06 PROVES the description mentions
+ *     long-running and tmp-file guidance. ACL06 DOES
+ *     NOT PROVE the contract for RUNNING(jobId).
+ *     ASYNC_CONTRACT = AMBIGUOUS until a typed intent
+ *     field distinguishes the two situations (ACL04
+ *     currently proves that field does not exist).
  */
 
 import { createShellTool } from "@cline/core"
@@ -248,30 +256,47 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL04", () => {
 })
 
 // ===========================================================================
-// ACL06 — TOOL_DESCRIPTION_CONTRACT (NEW IN CORRECTION01)
+// ACL06 — TOOL_DESCRIPTION_PROVENANCE (NEW IN CORRECTION01)
 // ===========================================================================
 // The model is told (by the tool's `description`) what
 // to do for long-running commands. Inspect the
-// production description verbatim and pin the contract:
+// production description verbatim.
 //
+// ACL06 PROVES (in plain words):
+//   The model-facing description recommends
+//   model-authored background execution with output
+//   persisted for later retrieval.
+//
+// ACL06 DOES NOT PROVE:
+//   That RUNNING(jobId) transfers ownership to the
+//   human after an ordinary foreground call crosses
+//   the 15-second wait budget; OR
+//   That RUNNING(jobId) requires host wakeup; OR
+//   That RUNNING(jobId) means model-owned
+//   command_status polling.
+//
+// The quoted sentence:
 //   "For long-running commands, run them in background
 //    and redirect output to a tmp file that you can
 //    read from later."
 //
-// This is "Contract X" (model-owned polling). The
-// live screenshot — `run_commands → RUNNING → text
-// response → awaiting_followup` — is the model
-// EMITTING A TEXT RESPONSE because the tool
-// description told it to redirect to a tmp file and
-// move on. It is NOT the host losing the job.
+// applies to the MODEL_INTENTIONAL_BACKGROUND
+// situation (the model knowingly formulates detached
+// execution). It does NOT describe what happens when
+// an ordinary foreground call is automatically
+// deferred by the host's wait budget (the
+// HOST_DEFERRED_FOREGROUND situation).
 //
-// Future repair authoring MUST update both the schema
-// AND this description, OR the description and the
-// dispatch contract MUST be re-shaped so the new
-// agreement is propagated to the model.
+// ACL04 currently proves there is no typed intent
+// field distinguishing those two situations in the
+// schema. ASYNC_CONTRACT = AMBIGUOUS.
+//
+// Future repair authoring MUST add a typed intent
+// field (ACL04 update) AND propagate the resulting
+// contract to this description (ACL06 update).
 //
 describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL06", () => {
-	it("TOOL_DESCRIPTION_CONTRACT - production run_commands description tells the model how to handle long-running commands", () => {
+	it("TOOL_DESCRIPTION_PROVENANCE - production run_commands description mentions long-running + tmp-file guidance (does NOT prove the RUNNING(jobId) contract)", () => {
 		const tool = createShellTool(async () => "ok", {
 			cwd: process.cwd(),
 			bashTimeoutMs: 30_000,
@@ -279,13 +304,19 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL06", () => {
 		expect(tool.name).toBe("run_commands")
 		expect(typeof tool.description).toBe("string")
 
-		// Load-bearing phrase in the contract.
+		// Load-bearing phrase. Proven.
 		expect(tool.description).toContain("long-running")
-		// Polling guidance (Contract X = model-owned).
+		// Polling / redirection guidance. Proven.
 		expect(tool.description).toMatch(/redirect.*tmp|poll|status/i)
-		// The redirect-to-tmp-file contract is the
-		// load-bearing sentence today.
+		// The redirect-to-tmp-file sentence. Proven.
 		expect(tool.description).toContain("redirect output to a tmp file")
+
+		// What ACL06 DOES NOT prove (recorded here so a
+		// future ACT cannot silently widen the claim):
+		//   - It does NOT assert a contract for
+		//     RUNNING(jobId) after HOST_DEFERRED_FOREGROUND.
+		//   - It does NOT assert command_status ownership.
+		//   - It does NOT assert human ownership transfer.
 	})
 })
 
