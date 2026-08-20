@@ -1,7 +1,7 @@
 import { combineApiRequests } from "@shared/combineApiRequests"
 import { combineCommandSequences } from "@shared/combineCommandSequences"
 import { combineHookSequences } from "@shared/combineHookSequences"
-import { getApiMetrics, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
+import { getApiMetrics, getLastApiReqContextInputTokens, getLastApiReqTotalTokens } from "@shared/getApiMetrics"
 import { BooleanRequest, StringRequest } from "@shared/proto/cline/common"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useMount } from "react-use"
@@ -110,6 +110,17 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 	const apiMetrics = useMemo(() => getApiMetrics(modifiedMessages), [modifiedMessages])
 
 	const lastApiReqTotalTokens = useMemo(() => getLastApiReqTotalTokens(modifiedMessages) || undefined, [modifiedMessages])
+	// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): provider-normalized
+	// context-input token count (uncached + cacheReads + cacheWrites) for the
+	// last request. This mirrors the AI SDK `inputTokens.total` contract and is
+	// the provider-independent semantic quantity that should drive the
+	// TaskHeader context-window occupancy bar. Distinct from
+	// `lastApiReqTotalTokens`, which sums input + output + cache activity and
+	// is suitable only for cost / activity telemetry, not for the bar.
+	const lastApiReqContextInputTokens = useMemo(
+		() => getLastApiReqContextInputTokens(modifiedMessages) || undefined,
+		[modifiedMessages],
+	)
 	const lastAppliedCheckpointRestoreSessionId = useRef<string | undefined>(checkpointRestoreInput?.sessionId)
 
 	useEffect(() => {
@@ -383,6 +394,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				{task ? (
 					<TaskSection
 						apiMetrics={apiMetrics}
+						lastApiReqContextInputTokens={lastApiReqContextInputTokens}
 						lastApiReqTotalTokens={lastApiReqTotalTokens}
 						messageHandlers={messageHandlers}
 						selectedModelInfo={{

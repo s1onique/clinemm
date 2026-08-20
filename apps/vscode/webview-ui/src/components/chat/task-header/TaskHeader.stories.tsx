@@ -236,6 +236,11 @@ export const HighTokenUsage: Story = {
 		cacheWrites: 5200,
 		cacheReads: 3800,
 		totalCost: 1.85,
+		// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): provider-normalized
+		// context-input token count (`tokensIn + cacheReads + cacheWrites`, the
+		// AI SDK `inputTokens.total` contract) drives the bar percentage. The
+		// billed-total remains available alongside.
+		lastApiReqContextInputTokens: 45000,
 		lastApiReqTotalTokens: 73000,
 		doesModelSupportPromptCache: true,
 		onClose: () => console.log("Close clicked"),

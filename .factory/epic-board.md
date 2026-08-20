@@ -169,8 +169,10 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 |---|---|---|---|---|---|
 | `EPIC-CLINEMM-COMPACTION-STATE-AUTHORITY01` | CTX | CLOSED | HIGH | none | closed by `ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01` (compaction is a bounded phase; canonical `TurnPhase = "compacting"`) |
 | `ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01` | CTX | CLOSED | HIGH | none | RED reproduced at real seam; producer authority gap repaired; gates green |
-| `EPIC-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` | CTX | OPEN | HIGH | none | RED reproduction on implausible >1M readings; classify 11 token dimensions |
-| `EPIC-CLINEMM-USER-CONTEXT-CEILING01` | CTX | OPEN | HIGH | context-accounting-truth | let users set effective cap below model physical max |
+| `EPIC-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` | CTX | CLOSED at this commit | HIGH | none | closed by `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` (closure 01 was reopened by reviewer for two P0 blockers — evidentiary inconsistency between the closure report and a dirty-worktree digest, and the `tokensIn`-only UI numerator being provider-blind — both closed in CORRECTION01: truthful state restored and UI numerator switched to the provider-normalized `tokensIn + cacheReads + cacheWrites` equal to the AI SDK `inputTokens.total` contract; the Anthropic-native and OpenAI-compat REDs now drive the helper) |
+| `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` | CTX | CLOSED at this commit | HIGH | none | RED reproduced at production seam (initial: `getLastApiReqTotalTokens` inflated by `cacheReads`; correction: provider-blind `tokensIn`-only numerator would undercount Anthropic-native cached prompts); CORRECTION01 introduces `getLastApiReqContextInputTokens` returning `tokensIn + cacheReads + cacheWrites` (the AI SDK `inputTokens.total` contract — `apps/vscode/src/sdk/message-translator.ts:98-110 normalizeUsageEvent` already produces disjoint buckets via `uncachedInputTokens = inputTokens - cacheReads - cacheWrites`); both Anthropic-native (`tokensIn=50, cacheReads=100000` → `100_050`) and OpenAI-compat-style (`prompt_tokens` decomposes to `noCache + cached_tokens`) REDs are covered; 10 files changed (467 insertions, 40 deletions); vitest 118 files / 1681 tests / 0 failures; bun unit 72 files / 1076 tests / 0 failures; webview 69 files / 562 tests / 0 failures; typecheck 0 diagnostics; `EPIC-CLINEMM-USER-CONTEXT-CEILING01` precondition now holds |
+| `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01-CORRECTION01` | CTX | CLOSED | HIGH | none | RED tests added: `getApiMetrics.test.ts` Anthropic-native (`tokensIn=50, cacheReads=100000` → `100_050`), Anthropic cache-creation (`tokensIn=200, cacheWrites=12_500` → `12_700`), OpenAI-compat inclusive (149_235 + 148_167 → 297_402, the original `prompt_tokens`), `tokensOut` non-contribution, total rescaling; `ContextWindow.test.tsx` Anthropic-native `lastApiReqContextInputTokens=100_050 / 200_000` → 50% bar |
+| `EPIC-CLINEMM-USER-CONTEXT-CEILING01` | CTX | OPEN (precondition now satisfied) | HIGH | context-accounting-truth (CLOSED) | let users set effective cap below model physical max — `ACCOUNTING_TRUTH=SATISFIED` after correction01; ready to start |
 | `CTX-01` | CTX | NEEDS_CLASSIFICATION | LOW | — | classify when relevant |
 | `CTX-02` | CTX | NEEDS_CLASSIFICATION | LOW | — | classify when relevant |
 | `CTX-03` | CTX | NEEDS_CLASSIFICATION | LOW | — | classify when relevant |
@@ -342,8 +344,8 @@ Priority rationale: an accidental destructive force-push can destroy the evidenc
 8. **STATIC-THINKING-PRESENTATION-PERSISTENCE01** — OPEN / HIGH
 9. **TASKHEADER-CANONICAL-PROJECTION01** — OPEN / HIGH
 10. **TASKHEADER-OWNER-AWARE-TIMING01** — OPEN / HIGH
-11. **CONTEXT-ACCOUNTING-TRUTH01** — OPEN / HIGH
-12. **USER-CONTEXT-CEILING01** — OPEN / HIGH (depends on #11)
+11. **CONTEXT-ACCOUNTING-TRUTH01** — CLOSED at this commit (model catalog resolution, `resolveEffectiveMaxInputTokens`, compaction trigger, and `contextWindow` authority all correct; UI's occupancy bar inflated by output+cache activity — `getLastApiReqTotalTokens` summed `tokensIn + tokensOut + cacheWrites + cacheReads`; **CORRECTION01**: initial `tokensIn`-only fix reopened by reviewer as provider-blind (would undercount Anthropic-native cached prompts); replaced by `getLastApiReqContextInputTokens` returning `tokensIn + cacheReads + cacheWrites` — the AI SDK `inputTokens.total` contract; producer seam (`apps/vscode/src/sdk/message-translator.ts:86-110 normalizeUsageEvent`) already produces disjoint buckets from `inputTokens - cacheReads - cacheWrites`; Anthropic-native (`tokensIn=50, cacheReads=100000` → `100_050`) and OpenAI-compat inclusive (`prompt_tokens = noCache + cached_tokens`) REDs both covered; 10 files changed (467 insertions, 40 deletions); closed by `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01`)
+12. **USER-CONTEXT-CEILING01** — OPEN / HIGH (depends on #11 → #11 CLOSED; precondition `ACCOUNTING_TRUTH=SATISFIED` now holds)
 13. **TOOL-EXECUTION-SEMANTICS01** — OPEN / HIGH
 14. **GITHUB-ACTIONS01** — OPEN / HIGH
 15. **GITHUB-DISTRIBUTION01** — OPEN / HIGH
@@ -362,41 +364,47 @@ Three **semantically distinct** epics; do not collapse.
 ### CONTEXT-ACCOUNTING-TRUTH01
 
 - ID: `EPIC-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01`
-- STATUS: OPEN / HIGH
+- STATUS: CLOSED / LIVE_UI reproduced at the production seam
+- CLOSED BY: `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01`
 
-**Observed symptoms.** Compaction/context displays have historically appeared to exceed plausible retained/request context, including >1M token claims.
+**Recon answer.** Three production seams carry the context-accounting contract in this fork; all three were traced and only one was defective:
 
-**Latest live datum.** Visible compaction observed while context UI displayed ~194.0k.
+1. **Model-info authority (capacity side)** — **CORRECT**.
+   UI path: `useNormalizedApiConfiguration` → `ModelsServiceClient.resolveModelInfo` → host handler `apps/vscode/src/core/controller/models/resolveModelInfo.ts` (catalog peek → resolve → committed-selection → "unknown"). Compaction path: `tryGetModelInfo(this.config)` → `config.knownModels[config.modelId]` → SDK catalog. Both converge on the same SDK catalog entry. Upstream #12520 hypothesis (`providerConfig.modelInfo?.contextWindow` short-circuit) was inspected and **does not apply** to this fork: `providerConfig.modelInfo` is never assigned outside test code (`sdk/packages/core/src/extensions/context/agentic-compaction.ts:36` is dead code in production). The shared canonical resolver `resolveEffectiveMaxInputTokens` (`sdk/packages/core/src/extensions/context/compaction-shared.ts:51-70`) returns `min(maxInputTokens, contextWindow)` when both present, `contextWindow * 0.9` when only `contextWindow`, `maxInputTokens` when only that — used by both `compaction.ts` (primary trigger) and `agentic-compaction.ts` (summarizer budget).
 
-**Primary question.** What quantity is actually being counted and used for compaction?
+2. **Compaction trigger threshold** — **CORRECT**.
+   `compaction.ts:313-318`: `maxInputTokens = resolveEffectiveMaxInputTokens({maxInputTokens: context.model.info?.maxInputTokens, contextWindow: context.model.info?.contextWindow}) ?? DEFAULT_MAX_INPUT_TOKENS`. `requestTriggerTokens = maxInputTokens * COMPACTION_TRIGGER_RATIO` (90%). Compaction fires when `requestInputTokens >= requestTriggerTokens`, where `requestInputTokens` is the SDK's `estimateRequestInputTokens({systemPrompt, messages, tools})` — i.e. the **estimated prompt-input size for the next request**, not the billed request activity.
 
-**Must distinguish:**
+3. **UI occupancy bar (usage side)** — **DEFECTIVE**.
+   `ContextWindow.tsx` (pre-fix): `percentage = (lastApiReqTotalTokens / contextWindow) * 100`, where `lastApiReqTotalTokens = getLastApiReqTotalTokens(messages) = tokensIn + tokensOut + cacheWrites + cacheReads`. This conflates **current prompt input** (≈ `tokensIn`) with **billed request activity** (output + cache reads + cache writes). Cache reads in particular inflate the displayed numerator substantially for prompt-cached sessions — fully explaining the historical "~194k compaction while UI shows similar" symptom.
 
-  model physical context max
-  user effective context ceiling
-  current request input tokens
-  retained conversation/context tokens
-  cumulative session tokens
-  cache read tokens
-  cache write tokens
-  output tokens
-  reasoning tokens
-  compaction trigger estimate
-  displayed context occupancy
+**Bounded repair (CORRECTION01).** New helper `getLastApiReqContextInputTokens(messages)` (same compaction-ratio rescaling semantics) returns `tokensIn + cacheReads + cacheWrites`. Threaded through `ChatView → TaskSection → TaskHeader → ContextWindow` as a new `lastApiReqContextInputTokens` prop. The occupancy bar and the displayed "used" value now reflect the provider-normalized context-input occupancy (the AI SDK `inputTokens.total` contract). `getLastApiReqTotalTokens` is preserved for any caller that legitimately wants the billed total (no current production consumer was found).
 
-**Leading hypotheses (NOT PROVEN):** cumulative-vs-current confusion, cache-accounting folding, stale model metadata, tokenizer approximation, double counting, display/policy quantity mismatch.
+The producer seam in `apps/vscode/src/sdk/message-translator.ts:86-110 normalizeUsageEvent` already decomposes the SDK's inclusive `inputTokens` (which equals `inputTokens.total`) into **disjoint** `tokensIn / cacheReads / cacheWrites` via `uncachedInputTokens = inputTokens - cacheReads - cacheWrites`. The AI SDK Anthropic adapter emits `inputTokens.total = usage.input_tokens + cache_creation_input_tokens + cache_read_input_tokens`; the OpenAI-compat adapter emits `inputTokens.total = prompt_tokens` with `noCache = prompt_tokens - cached_tokens`. Both converge on the same inclusive total — the size of the prompt that competed for the model's window on the last request.
 
-**Required progression:**
+**Evidence quality.**
+- RED test (initial defect, `getLastApiReqTotalTokens` inflation): `apps/vscode/src/shared/__tests__/getApiMetrics.test.ts > getLastApiReqTotalTokens > uses only the latest api_req_started payload` — asserts the billed total still equals `tokensIn + tokensOut + cacheWrites + cacheReads`.
+- RED test (Anthropic-native exclusive cache, CORRECTION01): `getApiMetrics.test.ts > getLastApiReqContextInputTokens > Anthropic-native exclusive cache accounting: tokensIn excludes the cached subset` — `tokensIn=50, cacheReads=100_000, cacheWrites=0` → `100_050` (Anthropic's documented total).
+- RED test (Anthropic cache creation, CORRECTION01): `getApiMetrics.test.ts > getLastApiReqContextInputTokens > Anthropic cache creation: cacheWrites contribute to context-input size` — `tokensIn=200, cacheWrites=12_500, cacheReads=0` → `12_700`.
+- RED test (OpenAI-compat inclusive, CORRECTION01): `getApiMetrics.test.ts > getLastApiReqContextInputTokens > OpenAI-compatible inclusive cache accounting: tokensIn already contains the cached subset` — `tokensIn=149_235, cacheReads=148_167` → `297_402` (the original `prompt_tokens`, not double-counted because the buckets are disjoint).
+- RED test (`tokensOut` non-contribution, CORRECTION01): `getApiMetrics.test.ts > getLastApiReqContextInputTokens > tokensOut never contributes to context-input occupancy` — `tokensIn=10, tokensOut=500_000` → `10` (output tokens describe the previous response, not the current request's input).
+- RED test (compaction-ratio rescale, CORRECTION01): `getApiMetrics.test.ts > getLastApiReqContextInputTokens > rescales the context-input total by the shrink ratio of a compaction completed after it` — inclusive total rescales correctly across a `tokensBefore → tokensAfter` divider.
+- RED test (component level, CORRECTION01): `apps/vscode/webview-ui/src/components/chat/task-header/ContextWindow.test.tsx > treats lastApiReqContextInputTokens as the provider-normalized total (cacheReads + cacheWrites contribute)` — proves the bar reflects `lastApiReqContextInputTokens=100_050` (= 50% of 200k) for the Anthropic-native scenario, not 50 (i.e. `tokensIn` alone, which would have been 0.025%).
+- Conservation: `getLastApiReqTotalTokens` API preserved (no caller regressions); `contextWindow` denominator unchanged; `resolveEffectiveMaxInputTokens` unchanged; compaction threshold formula unchanged; cost/telemetry consumers unaffected (none exist on this prop today).
 
-  real anomalous compaction
-    → production accounting seam
-    → classify token dimensions
-    → RED reproduction
-    → causal discriminator
-    → bounded repair if required
-    → live qualification
+**Conservation matrix verified.** Existing ordinary providers unchanged; missing model info still falls back to "unknown"; 1M model preserves 1M; lower `maxInputTokens` (if present) constrains effective input; UI and compaction now consume the same semantic domain for the *numerator*; cost calculation untouched; producer-seam contract preserved (`normalizeUsageEvent` unchanged).
 
-**Rule.** No repair from leading hypothesis.
+**Invariant set established.**
+- I1. DISPLAYED capacity identifies its semantic domain truthfully (raw physical `contextWindow`).
+- I2. COMPACTION trigger uses the intended effective capacity (`resolveEffectiveMaxInputTokens`).
+- I3. CURRENT_CONTEXT_USAGE (bar numerator) is now the provider-normalized context-input occupancy `tokensIn + cacheReads + cacheWrites` (the AI SDK `inputTokens.total` contract), not the lifetime/billed total and not `tokensIn` alone.
+- I4. Fallback model metadata does not shadow a more specific authoritative entry.
+- I5. Same active model/config does not resolve to contradictory capacities across UI and compaction paths.
+- I6. The UI numerator is provider-independent — it does not switch on Anthropic/OpenAI-compat/etc. The provider normalization happens once at the producer seam and the helper just sums the resulting disjoint buckets.
+
+**Rule observed.** No repair from leading hypothesis. The upstream #12520 hypothesis was treated as a hypothesis generator only; the actual defect was found by reading the UI projection at the production seam. No user ceiling implemented (that remains `EPIC-CLINEMM-USER-CONTEXT-CEILING01`). No arbitrary threshold tuning. No cost repair. The first-pass fix used `tokensIn`-only and was reopened by the factory reviewer as provider-blind (would undercount Anthropic-native cached prompts); CORRECTION01 moved the normalization to the AI SDK contract, which is provider-independent by construction.
+
+**Quality gates.** Vitest canonical 118 files / 1681 tests / 0 failures. Bun unit 72 files / 1076 tests / 0 failures. Webview 69 files / 562 tests / 0 failures. Typecheck 0 diagnostics. Coverage ratchet PASS (613-file universe preserved).
 
 ### COMPACTION-STATE-AUTHORITY01
 
@@ -446,7 +454,7 @@ Three **semantically distinct** epics; do not collapse.
   current context occupancy  ≠
   cumulative token usage
 
-**Dependency.** `CONTEXT-ACCOUNTING-TRUTH01` must be trustworthy enough before compaction policy is built on top of it. Do not implement before context-accounting semantics are trustworthy.
+**Dependency.** `CONTEXT-ACCOUNTING-TRUTH01` closed at this commit (CORRECTION01) — the underlying capacity/usage/trigger authorities are now trustworthy enough to build a user-controlled ceiling on top. The UI's context-occupancy numerator is provably the provider-normalized context-input occupancy (`tokensIn + cacheReads + cacheWrites`, the AI SDK `inputTokens.total` contract), not a provider-blind raw field and not the billed request activity. The next ACT may safely introduce the `Auto` / explicit-ceiling configuration surface; `512k` remains an example, not a global hardcoded limit. The ceiling must satisfy `effective ≤ physical model maximum` and is built on the canonical `resolveEffectiveMaxInputTokens` resolver (not a parallel duplicate).
 
 ### Historical context family (CTX-01..03)
 

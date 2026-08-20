@@ -12,6 +12,12 @@ interface TaskSectionProps {
 		totalCacheReads?: number
 		totalCost: number
 	}
+	// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): provider-normalized
+	// context-input token count of the last request (uncached + cacheReads +
+	// cacheWrites) — drives the TaskHeader's context-window occupancy bar.
+	// Distinct from `lastApiReqTotalTokens` (input + output + cache), which is
+	// suitable only for cost / activity telemetry.
+	lastApiReqContextInputTokens?: number
 	lastApiReqTotalTokens?: number
 	selectedModelInfo: {
 		supportsPromptCache: boolean
@@ -33,6 +39,7 @@ interface TaskSectionProps {
 export const TaskSection: React.FC<TaskSectionProps> = ({
 	task,
 	apiMetrics,
+	lastApiReqContextInputTokens,
 	lastApiReqTotalTokens,
 	selectedModelInfo,
 	messageHandlers,
@@ -44,6 +51,7 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 			cacheReads={apiMetrics.totalCacheReads}
 			cacheWrites={apiMetrics.totalCacheWrites}
 			doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
+			lastApiReqContextInputTokens={lastApiReqContextInputTokens}
 			lastApiReqTotalTokens={lastApiReqTotalTokens}
 			onClose={messageHandlers.handleTaskCloseButtonClick}
 			onSendMessage={messageHandlers.handleSendMessage}

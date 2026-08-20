@@ -20,6 +20,20 @@ interface ContextWindowInfoProps {
 
 interface ContextWindowProgressProps extends ContextWindowInfoProps {
 	useAutoCondense: boolean
+	// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): provider-normalized
+	// context-input token count of the last request — the disjoint sum
+	// `tokensIn + cacheReads + cacheWrites` — drives the percentage and the
+	// displayed "used" value. This mirrors the AI SDK `inputTokens.total`
+	// contract (Anthropic: `input_tokens + cache_creation + cache_read`;
+	// OpenAI-compat: `prompt_tokens` with `cached_tokens` already included) and
+	// is therefore provider-independent. It is **not** the billed request
+	// activity (`tokensIn + tokensOut + cacheWrites + cacheReads`); the latter
+	// would overstate context-window occupancy (see #11037), and would
+	// undercount Anthropic-native cached prompts if `tokensIn` alone were used.
+	lastApiReqContextInputTokens?: number
+	// Preserved for callers that want the broader request-activity total
+	// (billed dimensions). The ContextWindow does **not** use this for the
+	// percentage projection.
 	lastApiReqTotalTokens?: number
 	contextWindow?: number
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
@@ -59,7 +73,8 @@ ConfirmationDialog.displayName = "ConfirmationDialog"
 
 const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 	contextWindow = 0,
-	lastApiReqTotalTokens = 0,
+	lastApiReqContextInputTokens = 0,
+	lastApiReqTotalTokens: _lastApiReqTotalTokens = 0,
 	onSendMessage,
 	useAutoCondense,
 	tokensIn,
@@ -103,12 +118,19 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 		if (!contextWindow) {
 			return null
 		}
+		// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): the percentage is
+		// (provider-normalized context-input tokens / context window). The
+		// numerator is `tokensIn + cacheReads + cacheWrites` (the AI SDK
+		// `inputTokens.total` contract) — the actual prompt size that competed
+		// for the model's window on the last request. Output tokens describe
+		// the previous response and are deliberately excluded from the
+		// numerator.
 		return {
-			percentage: (lastApiReqTotalTokens / contextWindow) * 100,
+			percentage: (lastApiReqContextInputTokens / contextWindow) * 100,
 			max: contextWindow,
-			used: lastApiReqTotalTokens,
+			used: lastApiReqContextInputTokens,
 		}
-	}, [contextWindow, lastApiReqTotalTokens])
+	}, [contextWindow, lastApiReqContextInputTokens])
 
 	const debounceCloseHover = useCallback((e: React.MouseEvent) => {
 		e.preventDefault()

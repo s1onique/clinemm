@@ -131,3 +131,85 @@ export function getLastApiReqTotalTokens(messages: ClineMessage[]): number {
 	}
 	return 0
 }
+
+/**
+ * Gets the provider-normalized context-input token count from the last API request.
+ *
+ * This is the **provider-independent** semantic quantity that should drive the
+ * UI's context-occupancy bar (e.g. the percentage shown in the TaskHeader
+ * context indicator). It is computed as
+ *
+ *     tokensIn + cacheReads + cacheWrites
+ *
+ * where `tokensIn`, `cacheReads`, and `cacheWrites` are the **disjoint** buckets
+ * emitted by the producer seam in
+ * `apps/vscode/src/sdk/message-translator.ts::normalizeUsageEvent`
+ * (input is split into uncached, cache-read, and cache-write components).
+ *
+ * This matches the AI SDK's `inputTokens.total` contract: both
+ * `@ai-sdk/anthropic` (which emits
+ * `inputTokens.total = usage.input_tokens + cache_creation_input_tokens + cache_read_input_tokens`)
+ * and `@ai-sdk/openai-compatible` (which emits
+ * `inputTokens.total = usage.prompt_tokens` with
+ * `noCache = prompt_tokens - cached_tokens`) converge on the same inclusive
+ * total. It is **not** the billed request activity
+ * (`tokensIn + tokensOut + cacheWrites + cacheReads`) — output tokens describe
+ * the previous response, not the current request's input occupancy.
+ *
+ * Distinct from {@link getLastApiReqTotalTokens}: that one sums all four
+ * counters and is suitable only for cost / activity telemetry, not for the
+ * context-window percentage.
+ *
+ * The same compaction-ratio rescaling semantics as {@link getLastApiReqTotalTokens}
+ * apply: completed compaction dividers that postdate the last request rescale
+ * the context-input count by the same `tokensAfter / tokensBefore` ratio so
+ * the header tracks the divider without waiting for the next request to run.
+ *
+ * @param messages - An array of ClineMessage objects to process.
+ * @returns The provider-normalized context-input token count
+ *   (`tokensIn + cacheReads + cacheWrites`) from the last `api_req_started`
+ *   message, rescaled by any completed compactions that happened after it, or
+ *   0 if none found.
+ */
+export function getLastApiReqContextInputTokens(messages: ClineMessage[]): number {
+	let shrinkFraction: number | undefined
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i]
+		if (msg.type !== "say" || !msg.text) {
+			continue
+		}
+		if (msg.say === "compaction") {
+			try {
+				const { status, tokensBefore, tokensAfter } = JSON.parse(msg.text)
+				if (
+					status === "completed" &&
+					typeof tokensBefore === "number" &&
+					typeof tokensAfter === "number" &&
+					tokensBefore > 0 &&
+					tokensAfter > 0
+				) {
+					shrinkFraction = (shrinkFraction ?? 1) * (tokensAfter / tokensBefore)
+				}
+			} catch {
+				// Ignore JSON parse errors, continue searching
+			}
+		}
+		if (msg.say === "api_req_started") {
+			try {
+				const { tokensIn, cacheReads, cacheWrites } = JSON.parse(msg.text)
+				if (typeof tokensIn !== "number") {
+					continue
+				}
+				const reads = typeof cacheReads === "number" ? cacheReads : 0
+				const writes = typeof cacheWrites === "number" ? cacheWrites : 0
+				const total = tokensIn + reads + writes
+				if (total > 0) {
+					return shrinkFraction === undefined ? total : Math.ceil(total * shrinkFraction)
+				}
+			} catch {
+				// Ignore JSON parse errors, continue searching
+			}
+		}
+	}
+	return 0
+}

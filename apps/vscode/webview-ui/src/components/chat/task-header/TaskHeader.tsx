@@ -26,6 +26,12 @@ interface TaskHeaderProps {
 	cacheWrites?: number
 	cacheReads?: number
 	totalCost: number
+	// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): provider-normalized
+	// context-input token count of the last request (uncached + cacheReads +
+	// cacheWrites) — drives the ContextWindow occupancy bar. Distinct from
+	// `lastApiReqTotalTokens` (input + output + cache), which is suitable only
+	// for cost / activity telemetry.
+	lastApiReqContextInputTokens?: number
 	lastApiReqTotalTokens?: number
 	onClose: () => void
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
@@ -46,6 +52,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	cacheWrites,
 	cacheReads,
 	totalCost,
+	lastApiReqContextInputTokens,
 	lastApiReqTotalTokens,
 	onClose,
 	onSendMessage,
@@ -238,6 +245,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							cacheReads={cacheReads}
 							cacheWrites={cacheWrites}
 							contextWindow={selectedModelInfo?.contextWindow}
+							lastApiReqContextInputTokens={lastApiReqContextInputTokens}
 							lastApiReqTotalTokens={lastApiReqTotalTokens}
 							onSendMessage={onSendMessage}
 							tokensIn={tokensIn}
