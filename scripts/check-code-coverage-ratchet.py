@@ -36,12 +36,18 @@ Exit codes:
   2  baseline artifact is invalid
   3  current coverage report is invalid
   4  covered count regression (any of statements/branches/functions/lines)
-  5  source-universe regression (baseline file missing, or new product
-     file absent from current report)
+  5  source-universe regression (a baseline file existing in source is
+     absent from the current report, or a new product file is absent
+     from the current report)
   6  coverage-ignore directive increased
   7  coverage scope contract (include/exclude) changed
   8  malformed input (could not read files)
   9  internal error
+  10 REBASELINE_REQUIRED (a baseline file is absent from both the
+     current source tree AND the current coverage report, i.e. the
+     source universe has changed in a way that makes the old absolute
+     baseline potentially incomparable; a reviewed rebaseline is
+     required to restore the ratchet)
 """
 from __future__ import annotations
 
@@ -63,6 +69,7 @@ EXIT_IGNORE_DIRECTIVE_REGRESSION = 6
 EXIT_SCOPE_CONFIG_CHANGED = 7
 EXIT_MALFORMED_INPUT = 8
 EXIT_INTERNAL_ERROR = 9
+EXIT_REBASELINE_REQUIRED = 10
 
 
 # Coverage-ignore directive patterns we inventory.
@@ -336,39 +343,76 @@ def main() -> int:
     current_files = current_product_source_files(repo_root, root_relative)
     report_files = report_source_files(summary, str(repo_root))
 
-    missing_from_source: list[str] = []
-    missing_from_report: list[str] = []
+    # Three distinct classifications of source-universe mismatch:
+    #
+    #   (a) baseline file exists in current source tree but is absent
+    #       from the current coverage report
+    #         -> SCOPE_REGRESSION (the configured coverage scope is
+    #            silently excluding a file that should be measured)
+    #
+    #   (b) a new product file is in the current source tree but is
+    #       absent from the current coverage report
+    #         -> SCOPE_REGRESSION (the configured coverage scope is
+    #            silently excluding a file that should be measured)
+    #
+    #   (c) a baseline file is absent from BOTH the current source
+    #       tree and the current coverage report
+    #         -> REBASELINE_REQUIRED (the source universe has changed
+    #            in a way that makes the old absolute baseline
+    #            potentially incomparable; a reviewed rebaseline is
+    #            required to restore the ratchet)
+    #
+    # The verifier cannot know from filesystem absence alone whether a
+    # deletion was legitimate. REBASELINE_REQUIRED means "human review
+    # needed", not "deletion already proven legitimate".
+
+    missing_from_source_and_report: list[str] = []
+    missing_from_report_only: list[str] = []
     for bf in baseline_files:
         if bf not in current_files and bf not in report_files:
-            missing_from_source.append(bf)
+            missing_from_source_and_report.append(bf)
         elif bf in current_files and bf not in report_files:
-            missing_from_report.append(bf)
+            missing_from_report_only.append(bf)
 
     new_files_missing_from_report: list[str] = []
     for cf in current_files:
         if cf not in report_files and cf not in baseline_files:
             new_files_missing_from_report.append(cf)
 
-    if missing_from_source or missing_from_report or new_files_missing_from_report:
+    # REBASELINE_REQUIRED takes precedence — when the universe has
+    # shrunk, the remaining coverage data is potentially incomparable
+    # against the old absolute baseline floors.
+    if missing_from_source_and_report:
+        print("FAIL: REBASELINE_REQUIRED", file=sys.stderr)
+        print(
+            f"  - {len(missing_from_source_and_report)} baseline file(s) "
+            "absent from BOTH current source tree AND current coverage report:",
+            file=sys.stderr,
+        )
+        for p in missing_from_source_and_report[:10]:
+            print(f"      - {p}", file=sys.stderr)
+        if len(missing_from_source_and_report) > 10:
+            print(f"      ... and {len(missing_from_source_and_report) - 10} more", file=sys.stderr)
+        print(
+            "  - source universe has changed; absolute covered-count floors may be incomparable.\n"
+            "    Rebaseline (via an explicit REBASELINE review) is required to restore the ratchet.",
+            file=sys.stderr,
+        )
+        return EXIT_REBASELINE_REQUIRED
+
+    # Otherwise, ordinary scope regressions.
+    if missing_from_report_only or new_files_missing_from_report:
         print("FAIL: source-universe regression", file=sys.stderr)
-        if missing_from_source:
+        if missing_from_report_only:
             print(
-                f"  - {len(missing_from_source)} baseline file(s) missing from both source tree and current report:",
+                f"  - {len(missing_from_report_only)} baseline file(s) exist "
+                "in source tree but absent from current report:",
                 file=sys.stderr,
             )
-            for p in missing_from_source[:10]:
+            for p in missing_from_report_only[:10]:
                 print(f"      - {p}", file=sys.stderr)
-            if len(missing_from_source) > 10:
-                print(f"      ... and {len(missing_from_source) - 10} more", file=sys.stderr)
-        if missing_from_report:
-            print(
-                f"  - {len(missing_from_report)} baseline file(s) exist in source tree but absent from current report:",
-                file=sys.stderr,
-            )
-            for p in missing_from_report[:10]:
-                print(f"      - {p}", file=sys.stderr)
-            if len(missing_from_report) > 10:
-                print(f"      ... and {len(missing_from_report) - 10} more", file=sys.stderr)
+            if len(missing_from_report_only) > 10:
+                print(f"      ... and {len(missing_from_report_only) - 10} more", file=sys.stderr)
         if new_files_missing_from_report:
             print(
                 f"  - {len(new_files_missing_from_report)} new product file(s) absent from current report:",

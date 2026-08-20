@@ -381,12 +381,17 @@ class ENewProductFileMissingFromReportFails(unittest.TestCase):
         self.assertEqual(h.run(), verifier.EXIT_SCOPE_REGRESSION)
 
 
-class FLegitimateFileDeletionFails(unittest.TestCase):
-    """If a baseline file is genuinely deleted from the source tree, the
-    current_files set will not contain it AND the report won't include it
-    either (since the report was generated from the current source tree).
-    The verifier must FAIL the ratchet (forcing the baseline to be
-    rebaselined), NOT silently lower the baseline."""
+class FSourceUniverseDeletionRequiresRebaseline(unittest.TestCase):
+    """A baseline file absent from BOTH the current source tree AND the
+    current coverage report indicates the source universe has changed
+    in a way that makes the old absolute baseline potentially
+    incomparable. The verifier must return EXIT_REBASELINE_REQUIRED,
+    NOT EXIT_SCOPE_REGRESSION (which is reserved for ordinary scope
+    regressions) and NOT silently lower the baseline.
+
+    The verifier cannot know from filesystem absence alone whether the
+    deletion was legitimate. REBASELINE_REQUIRED means "human review
+    needed", not "deletion already proven legitimate"."""
 
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -397,12 +402,40 @@ class FLegitimateFileDeletionFails(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_baseline_file_missing_from_source_tree_fails(self) -> None:
+    def test_baseline_file_missing_from_source_tree_and_report(self) -> None:
         baseline = make_baseline()
         # Source tree only has 5 of 7 baseline files; report (which mirrors
         # current source state) only has 5 too. The 2 deleted baseline
         # files are absent from both source tree and report. This is the
         # canonical deletion-without-rebaseline case.
+        report = make_report(per_file=BASELINE_PER_FILE_PATHS[:5], repo_root=self.root.resolve())
+        h = _VerifierHarness(self.root, baseline, report,
+                              coverage_block="coverage: { provider: 'v8', include: ['src/**'] }")
+        self.assertEqual(h.run(), verifier.EXIT_REBASELINE_REQUIRED)
+
+
+class F2SourceFileInTreeMissingFromReport(unittest.TestCase):
+    """An orthogonal guard: a baseline file that exists in the current
+    source tree but is absent from the current coverage report MUST
+    remain EXIT_SCOPE_REGRESSION (NOT EXIT_REBASELINE_REQUIRED).
+    The REBASELINE_REQUIRED classification is reserved for files
+    that are absent from BOTH source tree AND report."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        # Source tree contains ALL baseline files, but the report only
+        # contains some of them (simulating a coverage-scope-shrink).
+        make_source_tree(list(BASELINE_PER_FILE_PATHS), self.root)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_baseline_file_in_source_but_missing_from_report(self) -> None:
+        baseline = make_baseline()
+        # Source tree has all 7 files; report only has 5 of them.
+        # The 2 missing-from-report files are STILL in the source tree,
+        # so this is ordinary scope regression, NOT a rebaseline case.
         report = make_report(per_file=BASELINE_PER_FILE_PATHS[:5], repo_root=self.root.resolve())
         h = _VerifierHarness(self.root, baseline, report,
                               coverage_block="coverage: { provider: 'v8', include: ['src/**'] }")
