@@ -127,17 +127,42 @@ export class SdkSessionEventCoordinator {
 					// (CRA03) would promote the turn to "completed" with only a partial
 					// completion_result as the user-visible terminal content. The
 					// translator sets terminalResponseCommittedThisTurn at the completion
-					// tool's content_end; if it didn't, refuse the promotion and let the
-					// runtime own the turn.
+					// tool's content_end; if it didn't, refuse the promotion.
 					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
 						this.options.setTurnPhase?.("completed")
 					} else {
+						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01:
+						// symmetric to the CPL01 "done-without-completion" liveness
+						// case. The completion tool's `content_start` was observed
+						// (so `attemptCompletionSeen === true`) but its `content_end`
+						// never arrived (or arrived without a recognized terminal
+						// result), and the agent-run termination fired
+						// `finishRun("completed")` — either via the
+						// session-termination fallback at
+						// `sdk/packages/agents/src/agent-runtime.ts:1313-1336` after
+						// the completion-reminder loop exhausted, or via an external
+						// termination that arrived between `content_start` and
+						// `content_end` (race / canceled / malformed stream). The
+						// runtime has no runnable successor: no completion-tool
+						// content_end to deliver, no retry scheduled, no completion
+						// continuation loop, no pending prompt. The only truthful
+						// projection is the same user-owned incomplete yield as CPL01:
+						// `awaiting_followup`. The completion CONTENT authority
+						// contract is UNCHANGED — no `completion_result` row is
+						// synthesized (the partial `completion_result` row that
+						// `content_start` emitted remains partial, with `partial:
+						// true`).
+						//
+						// Distinction from the original CRA03 straggler guard: the
+						// CRA03 reasoning (left runtime-owned "streaming") was about
+						// the IN-PROGRESS case, before `done` — the model could still
+						// iterate to deliver a proper `content_end`. Once `done` has
+						// fired, the run is over: there is no in-progress work to
+						// keep runtime-owned.
 						Logger.warn(
-							"[SdkController] attempt_completion declared but no terminal response committed; leaving turn runtime-owned",
+							"[SdkController] attempt_completion declared but no terminal response committed; yielding turn as awaiting_followup (liveness)",
 						)
-						// Do NOT call setTurnPhase — let the runtime keep the phase as
-						// "streaming" so the user sees a recoverable state instead of a
-						// bogus "Task Completed" surface.
+						this.options.setTurnPhase?.("awaiting_followup")
 					}
 				} else {
 					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the
@@ -146,11 +171,13 @@ export class SdkSessionEventCoordinator {
 					// a committed terminal response. Without that authority the
 					// user-visible terminal content is whatever intermediate
 					// debugging row was last — the LIVE screenshot witness. The
-					// translator falls back to the last assistant text/reasoning or
-					// stranded partial, so the common `text → tool → done` case
-					// still commits a terminal row. The CRA02-empty case (no
-					// assistant content at all) leaves the flag false and refuses
-					// the promotion.
+					// translator does NOT fall back to the last assistant
+					// text/reasoning or stranded partial: the `done` handler at
+					// `apps/vscode/src/sdk/message-translator.ts:1921-1930`
+					// explicitly does not synthesize a `completion_result` from
+					// prior text. The CRA02-empty case (no assistant content
+					// committed this turn) leaves the flag false and refuses the
+					// promotion.
 					//
 					// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: the PHASE
 					// transition is independent of the CONTENT authority. The

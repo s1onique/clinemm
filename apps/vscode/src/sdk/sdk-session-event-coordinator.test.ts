@@ -508,13 +508,28 @@ describe("SdkSessionEventCoordinator", () => {
 		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
 	})
 
-	it("CRA03-coord: attemptCompletionSeen but no committed terminal response must NOT promote to completed", async () => {
-		// CRA03 production seam: attempt_completion content_start fired (so
-		// attemptCompletionSeen is true) but content_end never arrived. The partial
-		// completion_result is the last assistant content but its `partial` flag is true.
-		// The coordinator must NOT promote to completed (which would render the bogus green
-		// box); it must also NOT promote to awaiting_followup (which would let the user
-		// send the next prompt as if the task had finished).
+	it("CRA03-coord: attemptCompletionSeen but no committed terminal response yields awaiting_followup (liveness-corrected, post-CPL04)", async () => {
+		// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01: this test
+		// was originally the CRA03 straggler guard — `attemptCompletionSeen
+		// === true`, `terminalResponseCommitted === false`, after `done`.
+		// The original assertion rejected BOTH `completed` and
+		// `awaiting_followup`, leaving the turn runtime-owned "streaming".
+		// That contract only made sense while the run was still in progress
+		// (the model could still iterate to deliver a proper `content_end`).
+		//
+		// On `done`, the agent-runtime has emitted
+		// `finishRun("completed")` — either via the session-termination
+		// fallback at `sdk/packages/agents/src/agent-runtime.ts:1313-1336`
+		// or via a terminal race. No runnable successor exists. The
+		// liveness-corrected contract is: DO NOT promote to `completed`
+		// (no terminal content was committed; the partial
+		// `completion_result` row remains partial with `partial: true`);
+		// DO yield to `awaiting_followup` (truthful user-owned incomplete
+		// yield). The completion CONTENT authority contract is unchanged
+		// — no `completion_result` row is synthesized here.
+		//
+		// This test is now structurally identical to CPL04; keep it
+		// because it documents the CRA03 → CPL04 contract evolution.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [],
@@ -528,7 +543,7 @@ describe("SdkSessionEventCoordinator", () => {
 		await coordinator.handleSessionEvent(event)
 
 		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
 	})
 
 	// ===========================================================================
@@ -615,11 +630,26 @@ describe("SdkSessionEventCoordinator", () => {
 		expect(options.setTurnPhase).toHaveBeenCalledWith("completed")
 	})
 
-	it("CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (control: text-path)", async () => {
-		// Symmetric control case. The valid text → done path with a
-		// committed terminal response (no completion tool used) transitions
-		// to `awaiting_followup` so the user can keep talking. This is the
-		// existing CRA02-committed contract for the non-tool text path.
+	it("CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (structural/synthetic control)", async () => {
+		// STRUCTURAL/SYNTHETIC CONSERVATION (not a current production path).
+		// The state combination `terminalResponseCommitted=true &&
+		// attemptCompletionSeen=false && errorSeen=false` is not reachable
+		// via the production translator: `setTerminalResponseCommittedThisTurn`
+		// is called ONLY at the completion tool's `content_end` (line 1652 of
+		// message-translator.ts, which also sets `attemptCompletionSeen`) OR
+		// at the `api_req_failed` handler (line 2024, which also sets
+		// `errorSeen`).
+		//
+		// The CPL03 control pins the coord-side dispatch independently of
+		// which producer of the terminal-row flag is the source. If a future
+		// change introduces a third producer, the dispatcher must still
+		// route the corresponding `done` event to `awaiting_followup` (the
+		// user-owned terminal phase) when no completion tool was used.
+		// The CPL01 fix confirmed the symmetric branch in the messenger
+		// (no terminal commit, no completion tool) yields `awaiting_followup`;
+		// this test confirms the `terminalResponseCommitted=true` branch
+		// also yields `awaiting_followup` (NOT `completed`) when the
+		// completion tool was NOT used.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [{ ts: 1, type: "say", say: "completion_result", text: "All done", partial: false }],
@@ -634,14 +664,31 @@ describe("SdkSessionEventCoordinator", () => {
 		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
 	})
 
-	it("CPL04: done with attempt-completion declared but NO committed terminal response stays runtime-owned (CRA03 conservation)", async () => {
-		// CRA03 straggler case: completion tool `content_start` fired but
-		// `content_end` never arrived before `done`. The model may be
-		// mid-completion and may recover on a subsequent turn — DO NOT
-		// transition to `completed` (would render the bogus green box) AND
-		// DO NOT transition to `awaiting_followup` (would let the user
-		// treat this as a terminal state when the model is still working).
-		// Leave `phase = "streaming"` so the runtime keeps ownership.
+	it("CPL04: done with attempt-completion declared but NO committed terminal response yields awaiting_followup (liveness, symmetric to CPL01)", async () => {
+		// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01: production
+		// path: completion tool's `content_start` was emitted (so
+		// `attemptCompletionSeen === true`) but its `content_end` never
+		// arrived (lost / malformed / interrupted / out-of-order). The agent
+		// run terminated via `finishRun("completed")` either through the
+		// session-termination fallback at
+		// `sdk/packages/agents/src/agent-runtime.ts:1313-1336` after the
+		// completion-reminder loop exhausted, or via an external termination
+		// that arrived between `content_start` and `content_end`.
+		//
+		// The CPL04 invariant: once `done` has fired, the run is over. There
+		// is no runnable successor — no completion-tool `content_end` to
+		// deliver, no retry scheduled, no continuation loop, no pending
+		// prompt. The only truthful projection is the same user-owned
+		// incomplete yield as CPL01: `awaiting_followup`. CRITICAL: do NOT
+		// promote to `completed` (the completion CONTENT authority contract
+		// is unchanged — a partial `completion_result` row at `content_start`
+		// is NOT a canonical terminal response).
+		//
+		// Distinction from the original CRA03 straggler guard: the CRA03
+		// reasoning (left runtime-owned "streaming") was about the
+		// IN-PROGRESS case, BEFORE `done` — the model could still iterate
+		// to deliver a proper `content_end`. Once `done` has fired, the run
+		// is over.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [],
@@ -654,10 +701,11 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		// Symmetric: neither promoted. The runtime-owned "streaming" phase
-		// is the truthful state for a CRA03 straggler.
+		// Liveness-corrected contract: no `completed` (no terminal content
+		// was committed), AND yields to `awaiting_followup` (no runnable
+		// successor exists after `done`).
 		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
 	})
 
 	it("CPL05: done with error transitions to error (conservation)", async () => {
