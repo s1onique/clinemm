@@ -17,6 +17,22 @@
 // they MUST be GREEN. After Phase 4 (ablation), case A must be RED
 // again when the generation check is removed.
 //
+// CORRECTED PHASE 2 CONTRACT (per Factory reviewer's
+// post-Phase1a design corrections):
+//
+//   1. Pass the originating generation token EXPLICITLY into
+//      startNewSession. Do not have the lifecycle capture "current"
+//      — stale A would otherwise adopt B's generation.
+//
+//   2. Do not let initTask's internal clearTask allocate a new
+//      generation. One top-level intent gets one token; internal
+//      steps inherit it.
+//
+//   3. A superseded init must NOT call global setTask(undefined).
+//      That would erase B's TaskProxy in adversarial B/D. The stale
+//      operation cleans up only resources it uniquely owns and
+//      returns.
+//
 // INVARIANT (TASK_SESSION_PAIR_INVARIANT) is asserted at every
 // settled boundary:
 //   At externally settled task-control boundaries:
@@ -184,7 +200,7 @@ function makeFixture(): AdversarialFixture {
 			build: vi.fn().mockResolvedValue({
 				providerId: "anthropic",
 				modelId: "claude-sonnet-4",
-				apiKey: "sk-test",
+				apiKey: "test-api-key-placeholder",
 				sessionId: "session-A",
 			}),
 		},
@@ -306,7 +322,7 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01",
 		fx.startOptions.sessionConfigBuilder.build.mockResolvedValueOnce({
 			providerId: "anthropic",
 			modelId: "claude-sonnet-4",
-			apiKey: "sk-test",
+			apiKey: "test-api-key-placeholder",
 			sessionId: "session-B",
 		})
 
@@ -396,7 +412,7 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01",
 		fx.startOptions.sessionConfigBuilder.build.mockResolvedValueOnce({
 			providerId: "anthropic",
 			modelId: "claude-sonnet-4",
-			apiKey: "sk-test",
+			apiKey: "test-api-key-placeholder",
 			sessionId: "session-B",
 		})
 		const initBPromise = fx.taskStart.initTask("prompt B", undefined, undefined, undefined, undefined)
@@ -445,7 +461,7 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01",
 		fx.startOptions.sessionConfigBuilder.build.mockResolvedValueOnce({
 			providerId: "anthropic",
 			modelId: "claude-sonnet-4",
-			apiKey: "sk-test",
+			apiKey: "test-api-key-placeholder",
 			sessionId: "session-B",
 		})
 		const initBPromise = fx.taskStart.initTask("prompt B", undefined, undefined, undefined, undefined)

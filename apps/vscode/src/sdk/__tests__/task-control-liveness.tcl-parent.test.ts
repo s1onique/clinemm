@@ -267,7 +267,7 @@ function makeFixture(): Fixture {
 			build: vi.fn().mockResolvedValue({
 				providerId: "anthropic",
 				modelId: "claude-sonnet-4",
-				apiKey: "sk-test",
+				apiKey: "test-api-key-placeholder",
 				sessionId: "session-B",
 			}),
 		} as never,
@@ -344,7 +344,7 @@ function makeFixture(): Fixture {
 		;(hostHandle.host.start as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ sessionId })
 		// biome-ignore lint/suspicious/noExplicitAny: focused fake for lifecycle unit test
 		await lifecycle.startNewSession({
-			config: { sessionId, providerId: "anthropic", modelId: "claude-sonnet-4", apiKey: "sk-test" },
+			config: { sessionId, providerId: "anthropic", modelId: "claude-sonnet-4", apiKey: "test-api-key-placeholder" },
 		} as any)
 		state.sessionId = sessionId
 	}
@@ -598,7 +598,7 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level Ne
 		sessionConfigBuilder.build.mockResolvedValueOnce({
 			providerId: "anthropic",
 			modelId: "claude-sonnet-4",
-			apiKey: "sk-test",
+			apiKey: "test-api-key-placeholder",
 			sessionId: "session-C",
 		})
 
