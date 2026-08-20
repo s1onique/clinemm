@@ -381,3 +381,167 @@ P2_RESIDUE=none
 
 NEXT_RECOMMENDED_ACT=EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01 (now unblocked by EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01 closure; see board §"### TASKHEADER-OWNER-AWARE-TIMING01" for the desired AGENT/HUMAN/terminal/error timing distinction)
 ```
+
+---
+
+# THCP11 closure addendum — host-compaction freshness proof
+
+Added by the review cycle after the initial MIGRATION01 closure
+commit `149fb131e`. The reviewer identified a P1 gap:
+
+> The selector encodes the host-override using
+> `currentLegacyPhase === "compacting"`, but the freshness /
+> lifetime of that authority is not pinned at the real
+> `SdkCompactionCoordinator` → `TurnStateTracker` → publication
+> seam. THCP02 only proves the frozen policy
+> (legacy-compacting → compacting), not that the legacy value
+> is fresh.
+
+THCP11 was added as a publication-seam test for that exact
+discriminator. It uses the real `SdkCompactionCoordinator` + the
+real `TurnStateTracker` the live extension host uses, and projects
+each captured snapshot through the real
+`selectTaskHeaderPresentation` selector at
+`apps/vscode/src/sdk/SdkController.ts:2935`.
+
+## THCP11 verdict: PASS
+
+All 6 discriminators green at the production seam:
+
+| Test | Property | Status |
+|---|---|---|
+| THCP11-P1a | At least one publication inside the enter/restore pair carries `phase=compacting, source=host` | ✅ PASS |
+| THCP11-P1b | The LAST state snapshot published to the webview does NOT carry `phase=compacting` | ✅ PASS |
+| THCP11-P1c | The LAST state snapshot's projection equals the entry phase (with `source=legacy`) | ✅ PASS |
+| THCP11-P1d | NO publication AFTER `restorePhase()` carries `phase=compacting` OR `source=host` | ✅ PASS |
+| THCP11-P1e | The chronology of projected phases forms a contiguous bounded block of "compacting" surrounded by non-compacting at both ends | ✅ PASS |
+| THCP11-P1f | The host-override publications' source is exactly `"host"` (not `"shadow"` or `"legacy"`) | ✅ PASS |
+
+## Captured chronology (diagnostic, from the THCP11 harness)
+
+```text
+#1: legacy=compacting           → projection={"phase":"compacting","source":"host","seq":3}
+#2: legacy=compacting           → projection={"phase":"compacting","source":"host","seq":3}
+#3: legacy=awaiting_followup    → projection={"phase":"awaiting_followup","source":"legacy","seq":4}
+```
+
+The chronology is exactly the bounded window the policy prescribes:
+host-override observably active during the in-phase work
+(`source: "host"`), then the trailing post-restore publication
+(recovered entry phase, `source: "legacy"`).
+
+## THCP11 ablation proof
+
+Commented out the `restorePhase()` call in the production
+coordinator's `finally` block. This simulates the previously-fixed
+"stale legacy compacting residue" failure mode.
+
+**Result: 2 tests RED** (THCP11-P1b, THCP11-P1c). The webview's
+last snapshot would still carry `phase = compacting` and
+`source = "host"`, exactly the live regression the prior
+ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01 closed.
+
+**Restored**: 6/6 GREEN.
+
+This confirms that the host-override lifetime is bounded by the
+**real production `enterCompactingPhase() / restorePhase()` pair**
+on the `SdkCompactionCoordinator`, not by an arbitrary value of
+the legacy tracker. The `source: "host"` claim is accurate for
+the UI consumption surface.
+
+## Files added
+
+- `apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts`
+  NEW (473 lines; 6 tests + harness + makeSessionHost).
+
+## Quality gates at THCP11 closure
+
+| Gate | Threshold | Actual | Status |
+|---|---|---|---|
+| apps/vscode vitest | ≥ 1742 | 1748 / 1748 | ✅ PASS (+6 THCP11 tests) |
+| webview vitest | ≥ 582 | 582 / 582 | ✅ PASS (unchanged) |
+| bun unit | ≥ 1076 | 1076 / 1076 | ✅ PASS (unchanged) |
+| typecheck | 0 diagnostics | 0 | ✅ PASS |
+| lint | PASS | PASS | ✅ PASS |
+| `git diff --check` | PASS | PASS | ✅ PASS |
+| E7.1 STP regression guards | 38/38 | 38/38 | ✅ PASS |
+
+## P2 observations (non-blocking, future cleanup)
+
+The reviewer noted two P2 observations that this ACT does not
+address:
+
+**(a) Duplicate projection type definition.** `TaskHeaderPresentationProjection`
+is declared both in
+`apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts` and in
+`apps/vscode/src/shared/ExtensionMessage.ts`. Structural typing
+makes this work, but it invites drift. A future cleanup should
+import the shared wire shape into the selector module.
+
+**(b) Oversized historical comments.** The selector and test files
+contain very large ACT-history comments. They are useful forensic
+scaffolding, but most could eventually collapse to a concise
+invariant:
+
+```text
+host compacting > shadow > legacy absence
+```
+
+Neither is blocking. Both are intentionally deferred as P2
+residue.
+
+## Evidence wording correction (reviewer)
+
+The reviewer's evidence wording correction stands:
+
+> "THCP01..THCP10 RED proven"
+
+The honest classification is:
+
+```text
+MIGRATION CONTRACT RED       = PROVEN
+PRE-EXISTING LIVE DEFECT RED = NOT APPLICABLE
+```
+
+The pre-implementation RED was `function does not exist`
+(publication-gap), not "existing TaskHeader rendered stale
+legacy state despite a published canonical projection". The
+latter condition could not exist until this ACT created the
+publication seam. This does not invalidate the migration —
+it just keeps evidence labels precise.
+
+The THCP11 RED, by contrast, IS a publication-seam test that
+exercises the real chronology. The reviewer correctly identified
+that THCP11's discriminator is on the host-override lifetime,
+not on the function's existence. The ablation proves THCP11 is
+load-bearing (a regression of `restorePhase()` makes 2 tests
+RED), so its evidence is real.
+
+## Final verdict
+
+```text
+ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01
+
+PUBLICATION_SEAM                = PASS
+TASKHEADER_CONSUMER_MIGRATION   = PASS
+SHADOW_AUTHORITY (causal)       = PASS
+LEGACY_ABSENCE_FALLBACK         = PASS
+SEQ_DOMAIN                      = PASS
+TIMING_CONSERVATION             = PASS
+STATIC_THINKING_CONSERVATION    = PASS
+COMPLETION_CONSERVATION         = PASS
+HOST_COMPACTION_FRESHNESS       = PASS (THCP11)
+HOST_COMPACTION_ABLATION        = PASS (2 RED on restorePhase ablation)
+
+P0 = NONE
+P1 = THCP11_HOST_COMPACTION_FRESHNESS — RESOLVED (PASS)
+P2 = duplicate type definition, oversized historical comments
+
+FINAL_VERDICT = PASS_TASKHEADER_CANONICAL_PROJECTION (with P1 host-override freshness proof)
+```
+
+The next ACT is `EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01`
+(now meaningfully unblocked by the canonical projection migration).
+This ACT does NOT redesign TaskHeader, ownership semantics, or
+background-command semantics — it still leaves those for the
+owner-aware timing epic.
