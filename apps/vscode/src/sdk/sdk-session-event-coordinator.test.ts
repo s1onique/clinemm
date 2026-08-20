@@ -93,9 +93,18 @@ describe("SdkSessionEventCoordinator", () => {
 
 	it("posts state on turn end even when the turn-complete event carries NO messages", async () => {
 		// The `done` handler emits no transcript message, so a turn-complete event has
-		// messages.length === 0 while the phase changes to completed/awaiting_followup. State must
-		// be posted on turn end regardless of message count, or the footer stays stuck on the
-		// previous phase (e.g. scroll-arrows / streaming).
+		// messages.length === 0. State must still be posted on turn end regardless of message
+		// count, or the footer stays stuck on the previous phase (e.g. scroll-arrows /
+		// streaming).
+		//
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: this test's previous
+		// assertion — `expect(setTurnPhase).toHaveBeenCalledWith("awaiting_followup")`
+		// — was the canonical terminal invariant violation. A turn that ends without a
+		// committed terminal response (no completion_result row) must NOT promote to a
+		// user-owned phase; the runtime retains ownership. Here the harness bypasses the
+		// real translator (translation is mocked with empty messages), so the
+		// translator-side fallback does not run; the coordinator correctly refuses the
+		// promotion and only the post fires.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [],
@@ -106,7 +115,8 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
 	})
 
@@ -209,6 +219,12 @@ describe("SdkSessionEventCoordinator", () => {
 		// mid-turn. The queued turn's real completion must still resolve the terminal phase —
 		// treating it as a cancel straggler leaves the phase stuck on "streaming" (endless
 		// Thinking). Only an actual cancel (phase "resumable") is preserved.
+		//
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the queued-turn path
+		// also requires a committed terminal response before promoting to
+		// awaiting_followup. In this mocked harness no messages are emitted so the
+		// translator-side fallback does not run; the coordinator refuses the promotion
+		// and only setRunning fires.
 		const { coordinator, options, event } = makeCoordinator({
 			activeSession: makeActiveSession({ isRunning: false }),
 			turnPhase: "streaming",
@@ -221,7 +237,7 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
 		expect(options.sessions.setRunning).toHaveBeenCalledWith(false)
 	})
 
@@ -389,6 +405,90 @@ describe("SdkSessionEventCoordinator", () => {
 			errorType: PROVIDER_FAILURE_ERROR_TYPE.SDK_AGENT_DONE_ERROR,
 			failurePhase: PROVIDER_FAILURE_PHASE.STREAMING,
 		})
+	})
+
+	// ===========================================================================
+	// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01
+	//
+	// Canonical terminal invariant: a coordinator `setTurnPhase("awaiting_followup")`
+	// (the user-owned terminal phase) must only fire when the translator actually
+	// committed a terminal user-facing response (say:"completion_result" /
+	// say:"plan_completion_result" / ask:"api_req_failed"). Otherwise the user sees
+	// whatever intermediate debugging content was last — the LIVE screenshot witness.
+	//
+	// The harness's `translateSessionEvent` mock bypasses the real translator and is
+	// the only place we can exercise the coordinator's invariant gate without the
+	// production translator's help. The translator-level proof lives in
+	// message-translator.test.ts (CRA02/CRA03/etc.). This block pins the COORD-side
+	// invariant.
+	// ===========================================================================
+
+	it("CRA02-coord: does NOT promote to awaiting_followup when the turn ended without a committed terminal response", async () => {
+		// text → tool → done (no attemptCompletionSeen, no completion_result committed).
+		// Translation returns 0 messages for the done event; the translator-side CRA02
+		// test pins the new "fallback completion_result" emission; here we verify the
+		// COORDINATOR honors wasTerminalResponseCommittedThisTurn() === false and refuses
+		// to flip to awaiting_followup.
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		options.messageTranslatorState.clearTurnOutcome()
+		expect(options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()).toBe(false)
+
+		await coordinator.handleSessionEvent(event)
+
+		// RED assertion: no phase flip to awaiting_followup. The coordinator must either
+		// keep "streaming" (runtime-owned) or escalate to a defined abnormal state — NOT
+		// silently promote.
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
+		// The runtime keeps ownership.
+		expect(options.setTurnPhase).not.toHaveBeenCalled()
+	})
+
+	it("CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result", async () => {
+		// Symmetric control case: when the translator committed a terminal response
+		// (CRA02 production seam), the coordinator may safely flip to awaiting_followup.
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [{ ts: 1, type: "say", say: "completion_result", text: "All done", partial: false }],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		// Simulate the translator recording the terminal-response authority.
+		options.messageTranslatorState.setTerminalResponseCommittedThisTurn()
+
+		await coordinator.handleSessionEvent(event)
+
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+	})
+
+	it("CRA03-coord: attemptCompletionSeen but no committed terminal response must NOT promote to completed", async () => {
+		// CRA03 production seam: attempt_completion content_start fired (so
+		// attemptCompletionSeen is true) but content_end never arrived. The partial
+		// completion_result is the last assistant content but its `partial` flag is true.
+		// The coordinator must NOT promote to completed (which would render the bogus green
+		// box); it must also NOT promote to awaiting_followup (which would let the user
+		// send the next prompt as if the task had finished).
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		options.messageTranslatorState.setAttemptCompletionSeen()
+		expect(options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()).toBe(false)
+
+		await coordinator.handleSessionEvent(event)
+
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
 	})
 })
 

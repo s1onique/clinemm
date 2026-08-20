@@ -362,9 +362,17 @@ describe("SdkTaskHistory", () => {
 			},
 		])
 
-		// The aborted turn's text stays a plain text row — no inferred completion box.
-		expect(result.filter((m) => m.say === "completion_result" || m.say === "plan_completion_result")).toHaveLength(0)
-		expect(result).toContainEqual(expect.objectContaining({ type: "say", say: "text", text: "Reading the file first." }))
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the previous assertion
+		// (`completion_result count === 0`) was the bug class this ACT repairs. A final
+		// turn that ends on a tool call after text now promotes the text into a
+		// completion_result, mirroring the live path's terminal invariant. The original
+		// text row is still present in the upsert-by-ts history; it just has its `say`
+		// discriminator retagged to completion_result.
+		expect(result).toContainEqual(
+			expect.objectContaining({ type: "say", say: "completion_result", text: "Reading the file first." }),
+		)
+		// No orphan plain text row remains — the upsert retags in place.
+		expect(result.filter((m) => m.say === "text" && m.text === "Reading the file first.")).toHaveLength(0)
 	})
 
 	it("hides subagent sessions from task history", async () => {

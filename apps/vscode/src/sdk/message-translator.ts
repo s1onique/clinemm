@@ -120,6 +120,8 @@ function normalizeUsageEvent(usageEvent: {
 export class MessageTranslatorState {
 	/** Current streaming text message timestamp (used for dedup) */
 	private streamingTextTs: number | undefined
+	/** Accumulated streaming text content (mirrors `streamingReasoningText`). */
+	private streamingTextText = ""
 	/** Current streaming reasoning message timestamp */
 	private streamingReasoningTs: number | undefined
 	/** Accumulated streaming reasoning text (SDK reasoning events are deltas) */
@@ -217,11 +219,94 @@ export class MessageTranslatorState {
 		return this.streamingTextTs
 	}
 
+	/** Append a streaming text delta and return the accumulated text. */
+	appendStreamingText(textDelta: string): string {
+		this.streamingTextText += textDelta
+		return this.streamingTextText
+	}
+
 	/** Clear streaming text (content ended) */
 	clearStreamingText(): number {
 		const ts = this.streamingTextTs ?? this.nextTs()
 		this.streamingTextTs = undefined
+		this.streamingTextText = ""
 		return ts
+	}
+
+	/**
+	 * ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01:
+	 * Last finalized assistant text of the turn (after content_end). Distinct from
+	 * `turnFinalText` — which is the LAST finalized text AND the candidate for the
+	 * inferred-completion retag. This fallback candidate is consulted when
+	 * `turnFinalText` is undefined (e.g. the turn ended on a tool call after the
+	 * last text, or the model's text was followed by a tool that closed the turn).
+	 * Stored on the state so the `done` handler can promote it into a
+	 * say:"completion_result" row when no completion tool was used.
+	 */
+	private lastAssistantTextTs: number | undefined
+	private lastAssistantText = ""
+
+	/**
+	 * ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01:
+	 * Last finalized assistant reasoning of the turn. Reasoning is acceptable
+	 * user-facing terminal content (it's the model's audible voice), so it can be
+	 * promoted into a terminal completion_result when no text exists.
+	 */
+	private lastAssistantReasoningTs: number | undefined
+	private lastAssistantReasoning = ""
+
+	/** Record the most recent finalized assistant text (called from content_end text). */
+	recordLastAssistantText(ts: number, text: string): void {
+		this.lastAssistantTextTs = ts
+		this.lastAssistantText = text
+	}
+
+	/** Record the most recent finalized assistant reasoning (called from content_end reasoning). */
+	recordLastAssistantReasoning(ts: number, reasoning: string): void {
+		this.lastAssistantReasoningTs = ts
+		this.lastAssistantReasoning = reasoning
+	}
+
+	/**
+	 * Clear the assistant-fallback trackers. Called by the error event so a stray
+	 * successful done afterwards does not resurrect a completion_result from the
+	 * pre-error text. Distinct from `clearTurnOutcome()` (which also clears
+	 * `attemptCompletionSeen`); the error path keeps `attemptCompletionSeen` if it
+	 * was set, since a future `done(reason:"completed")` should still respect that
+	 * signal.
+	 */
+	clearAssistantFallbackTrackers(): void {
+		this.lastAssistantTextTs = undefined
+		this.lastAssistantText = ""
+		this.lastAssistantReasoningTs = undefined
+		this.lastAssistantReasoning = ""
+	}
+
+	/**
+	 * Snapshot of the most recent finalized assistant content (text preferred over
+	 * reasoning, since reasoning is normally collapsed in the webview). Used as the
+	 * fallback completion source when the turn ends on a tool call.
+	 */
+	takeLastAssistantFallback(): { ts: number; text: string; kind: "text" | "reasoning" } | undefined {
+		if (this.lastAssistantTextTs !== undefined && this.lastAssistantText.trim()) {
+			return { ts: this.lastAssistantTextTs, text: this.lastAssistantText, kind: "text" }
+		}
+		if (this.lastAssistantReasoningTs !== undefined && this.lastAssistantReasoning.trim()) {
+			return { ts: this.lastAssistantReasoningTs, text: this.lastAssistantReasoning, kind: "reasoning" }
+		}
+		return undefined
+	}
+
+	/**
+	 * Snapshot of the in-flight (still partial) streaming text row — only populated
+	 * when content_end never arrived for the active text stream. Distinct from the
+	 * finalized-text tracker above. Returns undefined when no text was ever started.
+	 */
+	takeOpenStreamingText(): { ts: number; text: string } | undefined {
+		if (this.streamingTextTs === undefined || !this.streamingTextText.trim()) {
+			return undefined
+		}
+		return { ts: this.streamingTextTs, text: this.streamingTextText }
 	}
 
 	/** Get and increment for streaming reasoning */
@@ -341,6 +426,36 @@ export class MessageTranslatorState {
 	/** Check if attempt_completion was called in this turn */
 	wasAttemptCompletionSeen(): boolean {
 		return this.attemptCompletionSeen
+	}
+
+	/**
+	 * ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01:
+	 * Whether the translator committed a terminal user-facing response for this turn
+	 * (a finalized say:"completion_result" / say:"plan_completion_result" row, or an
+	 * ask:"api_req_failed" surface). The session-event coordinator uses this as the
+	 * authoritative half of the canonical terminal invariant: a turn may only
+	 * transition to a user-owned phase (awaiting_followup / completed) when this
+	 * flag is true. Without it, the user would see whatever intermediate
+	 * debugging/progress content was last — exactly the LIVE screenshot witness.
+	 *
+	 * Scoped to the whole turn like `attemptCompletionSeen`, so it survives the
+	 * per-iteration `reset()` and is cleared only by `clearTurnOutcome()` at the
+	 * next user-turn boundary.
+	 */
+	private terminalResponseCommittedThisTurn = false
+
+	/**
+	 * Mark that the translator has committed a terminal user-facing response for
+	 * this turn. Called from every emission point that produces a finalized
+	 * say:"completion_result" / say:"plan_completion_result" / ask:"api_req_failed".
+	 */
+	setTerminalResponseCommittedThisTurn(): void {
+		this.terminalResponseCommittedThisTurn = true
+	}
+
+	/** Whether the translator committed a terminal user-facing response this turn. */
+	wasTerminalResponseCommittedThisTurn(): boolean {
+		return this.terminalResponseCommittedThisTurn
 	}
 
 	/** Whether a provider/agent error surfaced in this turn (ask:"api_req_failed" emitted) */
@@ -502,6 +617,7 @@ export class MessageTranslatorState {
 	 */
 	reset(): void {
 		this.streamingTextTs = undefined
+		this.streamingTextText = ""
 		this.streamingReasoningTs = undefined
 		this.streamingToolTs = undefined
 		this.streamingToolInput = undefined
@@ -520,7 +636,16 @@ export class MessageTranslatorState {
 	clearTurnOutcome(): void {
 		this.attemptCompletionSeen = false
 		this.errorSeen = false
+		this.terminalResponseCommittedThisTurn = false
 		this.clearTurnFinalText()
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the assistant-fallback
+		// trackers (`lastAssistantText` / `lastAssistantReasoning`) are also turn-scoped.
+		// They survive per-iteration `reset()` (so a `done` after a long tool loop can
+		// still promote the prior text), but must not leak across user turns.
+		this.lastAssistantTextTs = undefined
+		this.lastAssistantText = ""
+		this.lastAssistantReasoningTs = undefined
+		this.lastAssistantReasoning = ""
 	}
 }
 
@@ -1278,6 +1403,12 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 					// would cause a "flip book" effect where each update replaces the
 					// previous content with just the new chunk.
 					const ts = state.getStreamingTextTs()
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: keep an
+					// accumulated-text copy on the state so the done-handler fallback can
+					// promote a still-partial streaming text row into a terminal
+					// completion_result if content_end never arrives (the "stranded
+					// partial" case).
+					state.appendStreamingText(event.accumulated ?? event.text ?? "")
 					messages.push({
 						ts,
 						type: "say",
@@ -1487,6 +1618,15 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						text: finalText,
 						partial: false,
 					})
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: keep a
+					// fallback snapshot of the most recent finalized assistant text so
+					// the done handler can promote it into a terminal completion_result
+					// even if the turn ends on a tool call (the existing
+					// recordTurnFinalText is cleared by the next tool start, so it
+					// cannot serve as a fallback).
+					if (finalText.trim()) {
+						state.recordLastAssistantText(ts, finalText)
+					}
 					// Candidate for the turn-final response: if the turn ends cleanly with
 					// this text as its last content, `done` retags it as a completion row.
 					if (finalText.trim()) {
@@ -1505,6 +1645,12 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						reasoning,
 						partial: false,
 					})
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: mirror the
+					// text-side fallback snapshot for reasoning (it is also acceptable
+					// user-facing terminal content; see the done handler).
+					if (reasoning.trim()) {
+						state.recordLastAssistantReasoning(ts, reasoning)
+					}
 					break
 				}
 				case "tool": {
@@ -1610,6 +1756,12 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 							text: resultText,
 							partial: false,
 						})
+						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a
+						// finalized completion_result is the canonical terminal-response
+						// surface — record it so the session-event coordinator can promote
+						// the turn to "completed" (it checks this flag in addition to
+						// wasAttemptCompletionSeen).
+						state.setTerminalResponseCommittedThisTurn()
 						// Only the say:"completion_result" is emitted (the green box). No
 						// ask:"completion_result" is produced — the webview's footer/buttons read
 						// the authoritative TurnState (phase "completed") rather than the message
@@ -1860,19 +2012,79 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 			// green box in act mode, yellow plan box in plan mode. Turns
 			// that ended via the completion tool already rendered their green box at the tool's
 			// content_end; aborted/errored turns keep their plain text.
+			//
+			// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the canonical terminal
+			// invariant requires that every successful `done` produce a committed terminal
+			// response row. The original `takeTurnFinalText()` candidate is cleared by the
+			// first tool call that follows the last text — the most common successful
+			// shape is `text → tool → done` where the model ended by reading/investigating
+			// before deciding to complete. Without a fallback the user-visible terminal
+			// content becomes whatever intermediate row was last. We extend the retag
+			// ladder here:
+			//
+			//   1. `takeTurnFinalText()` — the existing happy path (text at turn end).
+			//   2. `takeLastAssistantFallback()` — last finalized assistant text or
+			//      reasoning in the turn (survives the tool-start clear; same ts as the
+			//      original text/reasoning row so the webview reducer upserts in place).
+			//   3. `takeOpenStreamingText()` — the still-partial streaming text row, if
+			//      content_end never arrived (the "stranded partial" case where the
+			//      model aborted mid-stream). We allocate a new ts for this row because
+			//      the partial row is still in the live streaming slot.
+			//
+			// If none of the three candidates is available, we leave the terminal response
+			// uncommitted and let the session-event coordinator refuse the
+			// awaiting_followup promotion (CRA02-empty). That keeps the runtime as the
+			// owner of the turn instead of silently handing the user an empty
+			// "Task Completed" surface.
 			if (event.reason === "completed" && !state.wasAttemptCompletionSeen()) {
-				const finalText = state.takeTurnFinalText()
-				if (finalText) {
+				const retagKind = state.currentUiMode() === "plan" ? "plan_completion_result" : "completion_result"
+				let retagCandidate: { ts: number; text: string } | undefined = state.takeTurnFinalText()
+
+				if (!retagCandidate) {
+					const fallback = state.takeLastAssistantFallback()
+					if (fallback) {
+						// `takeLastAssistantFallback` already records the text|reasoning kind,
+						// but the terminal `say:` discriminator is the same — text and reasoning
+						// both promote into a single completion_result / plan_completion_result.
+						retagCandidate = { ts: fallback.ts, text: fallback.text }
+					}
+				}
+
+				if (!retagCandidate) {
+					retagCandidate = state.takeOpenStreamingText()
+					if (retagCandidate) {
+						// The partial row is still in the live streaming slot, so we cannot
+						// reuse its ts (it is currently a partial row that will be cleared
+						// by the next streaming-text reset). Allocate a fresh ts for the
+						// terminal replacement; the original partial row is left as-is so the
+						// webview's streaming state can settle naturally before the terminal
+						// row takes over (the row at the new ts is upserted at append time).
+						retagCandidate = { ts: state.nextTs(), text: retagCandidate.text }
+					}
+				}
+
+				if (retagCandidate) {
 					messages.push({
-						ts: finalText.ts,
+						ts: retagCandidate.ts,
 						type: "say",
-						say: state.currentUiMode() === "plan" ? "plan_completion_result" : "completion_result",
-						text: finalText.text,
+						say: retagKind,
+						text: retagCandidate.text,
 						partial: false,
 					})
+					// Record terminal-response authority for the session-event coordinator's
+					// invariant gate (it must not promote to awaiting_followup unless this
+					// flag is true).
+					state.setTerminalResponseCommittedThisTurn()
 				}
 			} else {
 				state.clearTurnFinalText()
+				// CRA03 (attempt_completion seen): the terminal completion_result was
+				// already committed at the completion tool's content_end. If we got here
+				// without one, that means content_end never arrived for the completion
+				// tool — record the incomplete terminal response so the coordinator
+				// refuses to promote to "completed" (which would render a bogus green
+				// box). The flag is left false; the CRA03-coord test pins the
+				// coordinator-side refusal.
 			}
 			break
 		}
@@ -1898,6 +2110,13 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 			finalizeDanglingCompaction(state, messages, "failed")
 			// An errored turn didn't end on its text response — no completion retag.
 			state.clearTurnFinalText()
+			// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: an error event
+			// marks the turn as abnormal; the assistant-fallback trackers must also be
+			// cleared so a stray done(reason:"completed") afterwards does not
+			// resurrect a completion_result from the pre-error text. The terminal
+			// surface for this turn is the api_req_failed row emitted below, not the
+			// pre-error assistant content.
+			state.clearAssistantFallbackTrackers()
 			if (state.isSuppressedToolApprovalDenial(event.error)) {
 				break
 			}
@@ -1941,6 +2160,12 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 				text: errorPayload,
 				partial: false,
 			})
+			// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: api_req_failed is the
+			// canonical ABNORMAL terminal response surface. Record it so the
+			// session-event coordinator can promote the turn to "error" with terminal
+			// authority (it already keys off wasErrorSeen(); the flag is the
+			// second half of the invariant for symmetry with the success path).
+			state.setTerminalResponseCommittedThisTurn()
 			break
 		}
 

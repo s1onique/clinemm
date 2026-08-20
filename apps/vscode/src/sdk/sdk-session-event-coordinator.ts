@@ -120,9 +120,42 @@ export class SdkSessionEventCoordinator {
 					// offer error recovery (Retry / Start New Task), not the followup state.
 					this.options.setTurnPhase?.("error")
 				} else if (this.options.messageTranslatorState.wasAttemptCompletionSeen()) {
-					this.options.setTurnPhase?.("completed")
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a completion tool
+					// was declared but we still need to confirm a terminal response was
+					// actually committed. Without this gate, a `done` arriving after a
+					// `content_start` for attempt_completion but BEFORE its `content_end`
+					// (CRA03) would promote the turn to "completed" with only a partial
+					// completion_result as the user-visible terminal content. The
+					// translator sets terminalResponseCommittedThisTurn at the completion
+					// tool's content_end; if it didn't, refuse the promotion and let the
+					// runtime own the turn.
+					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
+						this.options.setTurnPhase?.("completed")
+					} else {
+						Logger.warn(
+							"[SdkController] attempt_completion declared but no terminal response committed; leaving turn runtime-owned",
+						)
+						// Do NOT call setTurnPhase — let the runtime keep the phase as
+						// "streaming" so the user sees a recoverable state instead of a
+						// bogus "Task Completed" surface.
+					}
 				} else {
-					this.options.setTurnPhase?.("awaiting_followup")
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: canonical
+					// terminal invariant — a user-owned awaiting_followup promotion
+					// requires a committed terminal response (say:"completion_result" /
+					// say:"plan_completion_result"). Without it the user-visible
+					// terminal content is whatever intermediate debugging row was
+					// last — the LIVE screenshot witness. The translator falls back to
+					// the last assistant text/reasoning or stranded partial, so the
+					// common `text → tool → done` case still commits a terminal row.
+					// The CRA02-empty case (no assistant content at all) leaves the flag
+					// false and refuses the promotion — the runtime retains ownership.
+					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
+						this.options.setTurnPhase?.("awaiting_followup")
+					} else {
+						Logger.warn("[SdkController] done with no committed terminal response; leaving turn runtime-owned")
+						// Do NOT call setTurnPhase.
+					}
 				}
 
 				this.options.sessions.setRunning(false)
