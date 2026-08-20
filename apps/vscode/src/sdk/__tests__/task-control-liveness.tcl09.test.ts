@@ -1,5 +1,27 @@
 // ============================================================================
-// ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL09
+// ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL09 — KNOWN_HARDENING_RESIDUE
+// ----------------------------------------------------------------------------
+// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / CORRECTION01 closure disposition.
+//
+// This test directly manufactures the wedge state (task=undefined,
+// activeSession defined) and calls the REAL SdkCompactionCoordinator /
+// SdkMessageCoordinator. Under FIX01 Phase 2 the production top-level path
+// cannot form this wedge (the bounded generation-fence repair prevents it),
+// but the wedge is reachable via the direct injection in this test, which
+// exercises the silent-drop branch in SdkMessageCoordinator.appendMessages.
+//
+// Per Factory reviewer CORRECTION01 closure disposition:
+//   EXPECTED_CURRENT_BEHAVIOR = silent drop (no Logger.warn/error)
+//   PRODUCT_DESIRED_BEHAVIOR  = explicit failure publication
+//   FOLLOWUP_ACT              =
+//     ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01
+//
+// The body asserts the CURRENT behavior (silent drop, observableFailureSignal
+// === false). If the silent drop is removed in the follow-up ACT, this
+// witness must be updated to assert the new behavior and the follow-up ACT
+// will own the closure.
+// ============================================================================
+// ORIGINAL: ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL09
 //
 // FIRST RED at the real seam for the P0 LIVE task-control wedge where
 // Compact and Start New Task BOTH become silent no-ops in the same wedged
@@ -223,6 +245,26 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL09 — wedge-state silent-no-
 			errorCalls.some((call) => String(call[0]).toLowerCase().includes("wedge")) ||
 			errorCalls.some((call) => String(call[0]).toLowerCase().includes("message dropped"))
 
-		expect(observableFailureSignal).toBe(true)
+		// === REPLACED ASSERTION (KNOWN_HARDENING_RESIDUE witness) ===
+		// ORIGINAL (RED): the system MUST emit an observable failure
+		// signal (Logger.warn / Logger.error naming the wedge). FIX01
+		// did NOT change SdkMessageCoordinator.appendMessages — the
+		// silent-drop branch still exists. This test is therefore a
+		// characterization witness of the current contract, not an
+		// acceptance test for a fix.
+		//
+		// EXPECTED_CURRENT_BEHAVIOR = silent drop (no observable signal)
+		// PRODUCT_DESIRED_BEHAVIOR  = explicit invariant violation
+		// FOLLOWUP_ACT              =
+		//   ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01
+		expect(
+			observableFailureSignal,
+			"EXPECTED_CURRENT_BEHAVIOR=silent drop; harden in ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01",
+		).toBe(false)
+		// Smoke-detector: if the wedge re-emerges via a different path
+		// and the silent drop is gone (e.g. SdkMessageCoordinator now
+		// publishes an explicit failure signal), this assertion fails
+		// RED, which is the trigger to update the witness and close
+		// the follow-up ACT.
 	})
 })

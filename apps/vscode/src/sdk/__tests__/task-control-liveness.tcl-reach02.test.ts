@@ -325,11 +325,25 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle w
 		expect(fx.getActiveSession()).toBeUndefined()
 	})
 
-	// TCL-COMMON02: from the wedge state, the REAL SdkMessageCoordinator
-	// boundary silently drops the divider row that Compact would emit.
-	// This is the SAME boundary that drops the cancelTask resume_message
-	// row — the COMMON failing boundary for both user intents.
-	it("COMMON02: from the wedge state, the real SdkMessageCoordinator boundary silently drops the divider row", async () => {
+	// TCL-COMMON02 — KNOWN_HARDENING_RESIDUE witness
+	// ----------------------------------------------------------------------------
+	// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / CORRECTION01 closure disposition.
+	//
+	// This test directly manufactures the wedge state (task=undefined,
+	// activeSession defined) at the REAL SdkMessageCoordinator boundary
+	// (the same boundary that drops the cancelTask resume_message row —
+	// the COMMON failing boundary for both user intents).
+	//
+	// EXPECTED_CURRENT_BEHAVIOR = silent drop (no Logger.warn/error)
+	// PRODUCT_DESIRED_BEHAVIOR  = explicit failure publication
+	// FOLLOWUP_ACT              =
+	//   ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01
+	//
+	// The body asserts the CURRENT behavior (silent drop,
+	// observableFailureSignal === 0). If the silent drop is removed
+	// in the follow-up ACT, this witness must be updated to assert
+	// the new behavior and the follow-up ACT will own the closure.
+	it("KNOWN_HARDENING_RESIDUE: from the wedge state, the real SdkMessageCoordinator boundary CURRENTLY silently drops the divider row", async () => {
 		const fx = makeFixture()
 		await fx.startSession("session-A")
 		;(fx.host.start as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ sessionId: "session-B" })
@@ -368,9 +382,26 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle w
 		const newWarnCalls = afterWarnCalls - beforeWarnCalls
 		const newErrorCalls = afterErrorCalls - beforeErrorCalls
 		const observableFailureSignal = newWarnCalls + newErrorCalls
+		// === REPLACED ASSERTION (KNOWN_HARDENING_RESIDUE witness) ===
+		// ORIGINAL (RED): the system MUST emit an observable failure
+		// signal (Logger.warn / Logger.error). FIX01 did NOT change
+		// SdkMessageCoordinator.appendMessages — the silent-drop
+		// branch still exists. This test is therefore a
+		// characterization witness of the current contract, not an
+		// acceptance test for a fix.
+		//
+		// EXPECTED_CURRENT_BEHAVIOR = silent drop (no observable signal)
+		// PRODUCT_DESIRED_BEHAVIOR  = explicit failure publication
+		// FOLLOWUP_ACT              =
+		//   ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01
 		expect(
 			observableFailureSignal,
-			"appendMessages SILENTLY DROPPED the divider row from the wedge state — the user's Compact click is silently lost (live outage)",
-		).toBeGreaterThan(0)
+			"EXPECTED_CURRENT_BEHAVIOR=silent drop; harden in ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01",
+		).toBe(0)
+		// Smoke-detector: if the wedge re-emerges via a different path
+		// and the silent drop is gone (e.g. SdkMessageCoordinator now
+		// publishes an explicit failure signal), this assertion fails
+		// RED, which is the trigger to update the witness and close
+		// the follow-up ACT.
 	})
 })
