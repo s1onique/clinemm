@@ -68,6 +68,34 @@ interface CapturedSnapshot {
 	turnState: TurnState
 }
 
+/** Bookkeeping recorded by `makeHarness`'s `postStateToWebview` mock.
+ *
+ * The mock separates ATTEMPTED vs DELIVERED:
+ *   - `attempted[ordinal]` records the snapshot the production code
+ *     tried to publish (taken before the mock decides whether to
+ *     throw). It represents what `runCompaction`'s `try { await
+ *     this.options.postStateToWebview() }` SEMANTICALLY observed.
+ *   - `delivered[ordinal]` records the snapshot the production code
+ *     successfully published. It is ONLY appended after the mock
+ *     resolves normally; a `rejectPostAt` ordinal is absent from
+ *     `delivered`.
+ *
+ * The webview's "last received snapshot" is `delivered.at(-1)` — NOT
+ * `attempted.at(-1)`. Tests that conflate the two can pass even when
+ * the real webview is stuck on `compacting`. The P1-correctness
+ * boundary in CSR07+08 pins this distinction.
+ */
+interface PublicationCaptures {
+	attempted: CapturedSnapshot[]
+	delivered: CapturedSnapshot[]
+	/** 1-indexed ordinals of every ATTEMPTED call. */
+	attemptedOrdinals: number[]
+	/** 1-indexed ordinals of every DELIVERED (successfully resolved) call. */
+	deliveredOrdinals: number[]
+	/** 1-indexed ordinals of every THROWN call (subset of attempted). */
+	rejectedOrdinals: number[]
+}
+
 describe("ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01 / post-restore publication", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -168,88 +196,82 @@ describe("ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01 / post-restore publi
 		expect(last.turnState.phase).toBe("awaiting_followup")
 	})
 
-	// Probes — pin the ordinals so the failure-injection tests can target
-	// the correct call. These exist to make the publication order
-	// observable and stable. Reviewer-driven:
-	// `CSR_PROBE_*` tests should remain in the suite as documentation of
-	// the publication sequence the production code emits.
-	it("CSR_PROBE_success_ordinals: successful compaction — record the post-call sequence", async () => {
-		const observed: number[] = []
-		const observedSnapshots: { ordinal: number; phase: string }[] = []
-		const { coordinator } = makeHarness({
+	// Probes — pin the publication sequence (attempted/delivered ordinals
+	// AND their phases) as documented ground truth. Reviewer-driven:
+	// these tests assert the canonical production sequence with exact
+	// ordinals and exact phases, so downstream CSR07/CSR08 can target
+	// the right publication AND distinguish attempted from delivered.
+	it("CSR_PROBE_success: success path emits 3 attempted publications, all delivered, in canonical phase order", async () => {
+		const { coordinator, publications } = makeHarness({
 			entryPhase: "awaiting_followup",
 			entryAnchorTs: 12,
-			onPostCalls: (calls) => {
-				observed.push(...calls)
-			},
 		})
 		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
 			vi.fn().mockResolvedValue({ messages: [{ role: "user", content: "summary" }] }),
 		)
 
 		await coordinator.compactTask()
-		// Re-derive snapshots from the final state — the harness's
-		// `captured` array has full snapshots; map ordinals to phases.
-		// (We read it via a post-call callback below.)
-		const { captured } = await (async () => {
-			// Re-run harness inline so we can access captured; simpler
-			// approach: assert via `captured` returned by makeHarness.
-			const h = makeHarness({
-				entryPhase: "awaiting_followup",
-				entryAnchorTs: 12,
-			})
-			mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
-				vi.fn().mockResolvedValue({ messages: [{ role: "user", content: "summary" }] }),
-			)
-			await h.coordinator.compactTask()
-			return h
-		})()
-		for (let i = 0; i < captured.length; i++) {
-			observedSnapshots.push({ ordinal: i + 1, phase: captured[i]!.turnState.phase })
-		}
-		// Print so the next test can copy the ordinals without re-probing.
-		// eslint-disable-next-line no-console
-		console.log("CSR_PROBE_success_ordinals:", JSON.stringify(observedSnapshots))
-		expect(observed.length).toBeGreaterThan(0)
+
+		expect(publications.attemptedOrdinals).toEqual([1, 2, 3])
+		expect(publications.deliveredOrdinals).toEqual([1, 2, 3])
+		expect(publications.rejectedOrdinals).toEqual([])
+		expect(publications.attempted.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+		expect(publications.delivered.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+		// The last successfully delivered snapshot is the restored
+		// phase — what the webview finally saw.
+		expect(publications.delivered.at(-1)!.turnState.phase).toBe("awaiting_followup")
 	})
 
-	it("CSR_PROBE_failure_ordinals: failing compaction — record the post-call sequence", async () => {
-		const { captured } = await (async () => {
-			const h = makeHarness({
-				entryPhase: "awaiting_followup",
-				entryAnchorTs: 12,
-			})
-			mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(vi.fn().mockRejectedValue(new Error("probe-boom")))
-			await h.coordinator.compactTask().catch(() => {
-				/* expected */
-			})
-			return h
-		})()
-		const observed: { ordinal: number; phase: string }[] = []
-		for (let i = 0; i < captured.length; i++) {
-			observed.push({ ordinal: i + 1, phase: captured[i]!.turnState.phase })
-		}
-		// eslint-disable-next-line no-console
-		console.log("CSR_PROBE_failure_ordinals:", JSON.stringify(observed))
-		expect(captured.length).toBeGreaterThan(0)
+	it("CSR_PROBE_failure: failure path emits 4 attempted publications, all delivered (in this scenario), canonical phase order", async () => {
+		const { coordinator, publications } = makeHarness({
+			entryPhase: "awaiting_followup",
+			entryAnchorTs: 12,
+		})
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(vi.fn().mockRejectedValue(new Error("probe-boom")))
+
+		await coordinator.compactTask().catch(() => {
+			/* outer compactTask swallows the throw */
+		})
+
+		expect(publications.attemptedOrdinals).toEqual([1, 2, 3, 4])
+		expect(publications.deliveredOrdinals).toEqual([1, 2, 3, 4])
+		expect(publications.rejectedOrdinals).toEqual([])
+		expect(publications.attempted.map((s) => s.turnState.phase)).toEqual([
+			"compacting",
+			"compacting",
+			"awaiting_followup",
+			"awaiting_followup",
+		])
+		expect(publications.delivered.map((s) => s.turnState.phase)).toEqual([
+			"compacting",
+			"compacting",
+			"awaiting_followup",
+			"awaiting_followup",
+		])
 	})
 
-	it("CSR07 (success path): a post-restore publication failure MUST NOT recreate the stuck-UI regression; the failure is observable and the tracker remains restored", async () => {
+	it("CSR07 (success path): a post-restore publication failure MUST NOT recreate the stuck-UI regression; the webview actually receives the restored phase via the outer-catch's successor publication", async () => {
 		// The success-path publication ordinals (probed via CSR_PROBE_*):
-		//   #1  → entry publication (phase = compacting)
-		//   #2  → in-phase completion publication (phase = compacting)
-		//   #3  → trailing post-restore publication (phase = entry)  ← TARGET
+		//   #1  → entry publication           (phase = compacting)
+		//   #2  → in-phase completion         (phase = compacting)
+		//   #3  → trailing post-restore       (phase = entry)   ← TARGET
+		//   #4  → outer-catch successor       (phase = entry)   ← REQUIRED to deliver
+		//                                                       if #3 fails
 		//
-		// The reviewer's invariant: a publication failure at ordinal #3
-		// (the only one that carries the restored-phase snapshot) MUST NOT
-		// silently recreate the LIVE regression. The outer
-		// `compactTask` catch will run the failure-notice path; that path
-		// calls postStateToWebview one more time (ordinal #4). If the
-		// restored phase is what reaches the webview, the LIVE bug is
-		// truly closed regardless of whether the failure-path catches the
-		// #3 rejection.
+		// Reviewer's invariant: a publication failure at ordinal #3 (the
+		// only one that carries the restored-phase snapshot) MUST NOT
+		// silently recreate the LIVE regression. The contract:
+		//   - attempted ordinals = 4 (one extra from the outer-catch path)
+		//   - ordinal #3 attempted with phase = entry, then REJECTED
+		//   - successful deliveries = #1 compacting, #2 compacting,
+		//                               #4 awaiting_followup
+		//   - LAST DELIVERED phase = awaiting_followup
+		//
+		// If the post-P1 production logic were absent (no trailing #4),
+		// the webview's last received snapshot would be `compacting`
+		// and this test would RED.
 		mockLoggerError.mockClear()
-		const { coordinator, captured } = makeHarness({
+		const { coordinator, publications } = makeHarness({
 			entryPhase: "awaiting_followup",
 			entryAnchorTs: 7,
 			rejection: new Error("post-restore publication failed"),
@@ -262,46 +284,45 @@ describe("ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01 / post-restore publi
 
 		await coordinator.compactTask()
 
-		// 1. Failure observable — Logger.error captured both the inner
-		//    finally's no-op (compactionError undefined → throw, not log
-		//    here) and the outer compactTask catch.
+		// The reviewer's required structure:
+		expect(publications.attemptedOrdinals).toEqual([1, 2, 3, 4])
+		expect(publications.rejectedOrdinals).toEqual([3])
+		expect(publications.deliveredOrdinals).toEqual([1, 2, 4])
+		expect(publications.delivered.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+		// THE bug-fix invariant: the LAST successfully delivered snapshot
+		// must carry the entry phase. If this is `compacting`, the old
+		// LIVE regression is back.
+		expect(publications.delivered.at(-1)!.turnState.phase).toBe("awaiting_followup")
+
+		// Failure observable — the outer `compactTask failed:` log
+		// entry proves the #3 publication rejection reached the top
+		// boundary (and did NOT silently succeed).
 		const errCalls = mockLoggerError.mock.calls.map((c) => c.map(String).join(" "))
 		expect(errCalls.some((s) => s.includes("compactTask failed"))).toBe(true)
-
-		// 2. The OLD live regression would leave the LAST published
-		//    snapshot at phase="compacting". The post-P1 contract is
-		//    that EITHER ordinal #3's publication is observable (so the
-		//    webview sees "awaiting_followup") OR — if #3 fails — the
-		//    outer-catch #4 publication must carry the restored phase
-		//    so the webview does see it. Either way, the LAST captured
-		//    snapshot is `entryPhase`, never `compacting`.
-		const last = captured[captured.length - 1]!
-		expect(last.turnState.phase).toBe("awaiting_followup")
-
-		// 3. Safety: ordinal #3 (the post-restore) was the one that
-		//    actually rejected (ordinal-aware injection is no longer a
-		//    no-op aliasing every other call). The captured snapshot
-		//    AT ordinal #3 is recorded BEFORE the throw — that snapshot
-		//    is the restored-phase snapshot the production code intended
-		//    to ship.
-		expect(captured[2]).toBeDefined()
-		expect(captured[2]!.turnState.phase).toBe("awaiting_followup")
 	})
 
-	it("CSR08 (failure path): when the compaction implementation throws AND the trailing post-restore publication ALSO rejects, the original compaction error remains authoritative in the forensic log", async () => {
+	it("CSR08 (failure path): when the compaction implementation throws AND the trailing post-restore publication ALSO rejects, the original compaction error remains authoritative in the forensic log AND the outer-catch successor still delivers the restored phase", async () => {
 		// The failure-path publication ordinals (probed via CSR_PROBE_*):
-		//   #1  → entry publication (phase = compacting)
-		//   #2  → in-phase FAILED-row publication (phase = compacting)
-		//   #3  → trailing post-restore publication (phase = entry)  ← TARGET
-		//   #4  → outer-catch failure-notice publication (phase = entry)
+		//   #1  → entry publication           (phase = compacting)
+		//   #2  → in-phase FAILED-row         (phase = compacting)
+		//   #3  → trailing post-restore       (phase = entry)   ← TARGET (rejects)
+		//   #4  → outer-catch failure-notice  (phase = entry)   ← REQUIRED to deliver
 		//
-		// Reviewer-required invariant: with only #3 rejected, the
-		// original compaction error ("boom") must remain the one
-		// labeled `compactTask failed:` — NOT the publication rejection
-		// — and a SEPARATE log entry must surface the publication
-		// failure.
+		// Reviewer-required invariants:
+		//   A. attempted ordinals = [1, 2, 3, 4]
+		//   B. ordinal #3 attempted with phase = entry, then REJECTED
+		//   C. successful deliveries = [#1 compacting, #2 compacting,
+		//                                #4 awaiting_followup]
+		//      (the LAST DELIVERED phase is `entry`, NOT `compacting`)
+		//   D. the original compaction error "boom" is the one labeled
+		//      `compactTask failed:` (not the publication rejection)
+		//   E. the publication failure is also independently observable
+		//      as a separate log entry
+		//   F. ordinal #4 did NOT also reject (no
+		//      `failure-notice publication failed` log) — proves
+		//      the ordinal-selective injection did not alias #4.
 		mockLoggerError.mockClear()
-		const { coordinator } = makeHarness({
+		const { coordinator, publications } = makeHarness({
 			entryPhase: "awaiting_followup",
 			entryAnchorTs: 7,
 			rejection: new Error("post-restore publication failed"),
@@ -312,21 +333,25 @@ describe("ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01 / post-restore publi
 
 		await coordinator.compactTask()
 
+		// A. attempted ordinals.
+		expect(publications.attemptedOrdinals).toEqual([1, 2, 3, 4])
+		// B. #3 attempted with phase=entry, rejected.
+		expect(publications.attempted[2]!.turnState.phase).toBe("awaiting_followup")
+		expect(publications.rejectedOrdinals).toEqual([3])
+		// C. delivered: #1, #2, #4. #4 carries the restored phase so the
+		//    webview does not see a stuck "compacting".
+		expect(publications.deliveredOrdinals).toEqual([1, 2, 4])
+		expect(publications.delivered.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+
 		const errCalls = mockLoggerError.mock.calls.map((c) => c.map(String).join(" "))
-		// Original compaction error is the one labeled `compactTask failed:`.
-		// The P1 logic guarantees this: runCompaction's inner finally
-		// sees `compactionError !== undefined` and therefore only logs
-		// the publication error; the original `boom` propagates up to
-		// compactTask's catch which logs it with the canonical label.
+		// D. the original compaction error is labeled canonical.
 		expect(errCalls.some((s) => s.includes("compactTask failed") && s.includes("boom"))).toBe(true)
-		// And the publication failure is also independently observable.
+		// E. the publication failure is also independently observable.
 		expect(errCalls.some((s) => s.includes("post-restore publication failed"))).toBe(true)
-		// And the outer-catch's own `failure-notice publication failed`
-		// log (from the safety-net wrapper around emitInfo+post) was
-		// also not needed because #4 didn't reject — but if ordinal #4
-		// ALSO rejected, that path's log line would be `failure-notice
-		// publication failed`. Verify it IS NOT present to confirm the
-		// ordinal-selective injection didn't alias #4.
+		// F. log-level confirmation that the outer-catch safety-net
+		// path (#4) did not log "failure-notice publication failed" —
+		// i.e. that #4 successfully delivered the restored phase rather
+		// than ALSO rejecting.
 		expect(errCalls.some((s) => s.includes("failure-notice publication failed"))).toBe(false)
 	})
 
@@ -390,6 +415,13 @@ function makeHarness(input: {
 	// We capture the snapshots directly off the production
 	// postStateToWebview call so no constant-only assertion slips in.
 	const captured: CapturedSnapshot[] = []
+	const publications: PublicationCaptures = {
+		attempted: [],
+		delivered: [],
+		attemptedOrdinals: [],
+		deliveredOrdinals: [],
+		rejectedOrdinals: [],
+	}
 	const postCalls: number[] = []
 	const rejectPostAt = input.rejectPostAt ?? []
 
@@ -448,13 +480,25 @@ function makeHarness(input: {
 		postStateToWebview: vi.fn().mockImplementation(async () => {
 			const ordinal = postCalls.length + 1
 			postCalls.push(ordinal)
-			captured.push({ turnState: tracker.get() })
+			const snapshot: CapturedSnapshot = { turnState: tracker.get() }
+			// ATTEMPTED: every invocation records — taken BEFORE the
+			// mock decides whether to throw. The production code
+			// semantically observed this snapshot, but the webview
+			// may not have.
+			publications.attempted.push(snapshot)
+			publications.attemptedOrdinals.push(ordinal)
+			captured.push(snapshot)
 			if (input.onPostCalls) {
 				input.onPostCalls([...postCalls])
 			}
 			if (rejectPostAt.includes(ordinal)) {
+				publications.rejectedOrdinals.push(ordinal)
 				throw input.rejection ?? new Error("publication failed")
 			}
+			// DELIVERED: the publication resolved normally — the
+			// webview would have received this snapshot.
+			publications.delivered.push(snapshot)
+			publications.deliveredOrdinals.push(ordinal)
 		}),
 		getTurnState: () => tracker.get(),
 		setTurnPhase: (phase: TurnPhase, anchorTs?: number) => tracker.set(phase, anchorTs),
@@ -467,6 +511,7 @@ function makeHarness(input: {
 		options,
 		tracker,
 		captured,
+		publications,
 		phaseWhenCompactionStarted: () => sampledPhase,
 	}
 }
