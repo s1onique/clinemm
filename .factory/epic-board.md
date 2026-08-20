@@ -1214,6 +1214,128 @@ DEFERRED_POST_CENSUS
 
 ---
 
+## ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / FIX01 — RECON + PHASE 2 + PHASE 5 (bounded generation-fence repair landed)
+
+**HEAD**: `e6996ee7793520216804839764b26fe7efb9f513` (TREE `cb656bb296a709d5d981eb8c52c812854be406ae`)
+**LOCAL_AHEAD**: 9 commits ahead of `origin/main` (`c4d1db8b4`)
+**STATUS**: `CLASSIFIED_BUT_REPAIR_LANDED` — bounded generation-fence repair landed in Phase 2; Phase 4 ablation proved the fence is load-bearing; Phase 5 retargeted PARENT02 to the repaired top-level path; pending LIVE qualification (L0..L5 per ACT §42) with a freshly-installed dogfood VSIX.
+
+### Causal RED pinned at the production top-level user path
+
+**Live witness (REAL / LIVE_UI)**: `Compact` click → silent no-op; second `New Task` click eventually recovers.
+
+**TCL-PARENT01 (parental causal RED)** — `task=undefined, activeSession=session-B` after racing `initTask` against concurrent `clearTask`. The invariant spans two owners (`TaskProxy` via `SdkTaskControlCoordinator.setTask`; `activeSession` via `SdkSessionLifecycle.activeSession`); a lifecycle-only mutex cannot make the pair atomic.
+
+### Repair (bounded generation fence)
+
+- New shared authority `TaskOperationFence` at `apps/vscode/src/sdk/task-operation-fence.ts`. `begin()` / `isCurrent(token)` — explicit token carried by the originating operation.
+- `SdkSessionLifecycle.startNewSession(startInput, operationToken?)` — discriminated return `{status: "started" | "superseded", ...}`. FENCE-FIRST ordering: token check BEFORE `endActiveSession` (the P0 the reviewer flagged), then check after each awaited boundary, then LOAD-BEARING POST-START check before installing `activeSession`.
+- `SdkTaskControlCoordinator.clearTaskForOperation(token)` — internal clear that does NOT advance the fence. Used by `initTask` so the internal clear inherits the caller's token.
+- `SdkTaskStartCoordinator.initTask` / `reinitExistingTaskFromId` — capture `operationToken = fence.begin()` at entry; fence check before each shared-state commit (`createAndSetTask`, `startNewSession`, history item, `setTurnPhase("streaming")`, `fireAndForgetSend`).
+- **Hardening (CORRECTION)**: a superseded init MUST NOT call global `setTask(undefined)` (would erase newer task); it cleans up only resources it uniquely owns.
+
+### Test status (post-FIX01)
+
+| Test | Pre-FIX01 | Post-FIX01 |
+|---|---|---|
+| TCL09 (synthetic activeSession, no TaskProxy) | RED | RED — `KNOWN_HARDENING_RESIDUE` |
+| TCL-REACH01 (STRUCTURAL conservation, 6 tests) | 6 GREEN | 6 GREEN |
+| TCL-REACH02 PARENTAL (naked lifecycle) | RED | GREEN (retargeted to "fenced — no wedge produced") |
+| TCL-REACH02 COMMON01 (second New Task recovery) | GREEN | GREEN |
+| TCL-REACH02 COMMON02 (silent drop) | RED | RED — `KNOWN_HARDENING_RESIDUE` |
+| TCL-PARENT01 (top-level user path) | RED | **GREEN** |
+| TCL-PARENT02 (Compact silent no-op) | RED | **GREEN** (Phase 5: normal coordinator behavior through repaired top-level path) |
+| TCL-PARENT03 (New Task recovery from wedge) | GREEN | GREEN (retargeted: racing initTask vs clearTask no longer produces the wedge; fresh initTask produces a clean pair) |
+| ADVERSARIAL A (init A → clear) | RED | **GREEN** |
+| ADVERSARIAL B (init A → init B) | RED | **GREEN** |
+| ADVERSARIAL C (clear during host.start) | RED | **GREEN** |
+| ADVERSARIAL D (stale A after B current) | RED | **GREEN** |
+| ADVERSARIAL E (cleanup failure conserves B) | RED | **GREEN** |
+| ADVERSARIAL F (stale reinit must not terminate B) | n/a | RED at HEAD, **GREEN** post-fix |
+
+**Total**: 115 GREEN + 2 RED (both `KNOWN_HARDENING_RESIDUE`) across 10 test files.
+
+Adjacent suites (conservation):
+- `sdk-compaction-coordinator`: unchanged GREEN
+- `sdk-task-control-coordinator`: 1 mock updated for `clearTaskForOperation` delegation
+- `sdk-task-start-coordinator`: mocks updated for the discriminated return shape and the `operationToken` argument
+- `sdk-message-coordinator`: unchanged GREEN
+- `sdk-session-lifecycle`: unchanged GREEN
+
+### Phase 4 ablation (working-tree only, no commit)
+
+Temporarily disabled the POST-START fence check before `this.activeSession = {...}` (changed `if (operationToken !== undefined && !isCurrent(operationToken))` to `if (false && operationToken !== undefined && !isCurrent(operationToken))`). Result: `TCL-PARENT01` turned RED with the canonical wedge shape (`task=undefined, activeSession=defined(sessionId=session-B)`), confirming the fence is load-bearing rather than decorative. Restored immediately; no commit.
+
+### Honest domain labeling
+
+- **`FENCED DOMAIN`** = `initTask` ↔ `clearTask` / `showTaskWithId` / external `startNewSession` calls with tokens.
+- **`LEGACY REBUILD DOMAIN`** = the four `replaceActiveSession` callers (mode / terminal / provider / MCP rebuilds). NOT covered by FIX01; threading tokens through these callers is a separate follow-up ACT (P2 recon residue).
+- The optional `operationToken` parameter on `startNewSession` is the bypass for legacy callers; the discriminated return type is unchanged either way.
+
+### `KNOWN_HARDENING_RESIDUE` — file `ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01`
+
+Two tests directly manufacture the wedge by calling `compactTask` / manipulating `messages.appendMessages` with `getTask() === undefined`. They assert that the silent-drop path is observable. The causal repair (`TaskOperationFence`) prevents the wedge from forming at the production seam, but it does NOT change `SdkMessageCoordinator.appendMessages` (which still has the `if (!task) return` guard). Per the reviewer's CORRECTION04 directive: "Do not weaken the lifecycle repair just to satisfy them. They are hardening tests, not causal-repair acceptance tests. Reclassify: `KNOWN_HARDENING_RESIDUE`. They directly manufacture an invariant-violating state."
+
+Both tests remain RED and serve as a smoke-detector for the wedge if it ever re-emerges via a different path. A future `ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01` can choose to harden the message coordinator's silent-drop into an explicit failure publication; this is out of scope for FIX01.
+
+### No public/wire delta
+
+- No `proto/*.proto` change.
+- No `ExtensionMessage` change.
+- No webview state field change.
+- Internal-only orchestration correctness repair.
+
+### Files changed (cumulative, all 9 commits)
+
+| File | LoC delta |
+|---|---|
+| `apps/vscode/src/sdk/task-operation-fence.ts` | +66 (new) |
+| `apps/vscode/src/sdk/SdkController.ts` | +31 |
+| `apps/vscode/src/sdk/sdk-session-lifecycle.ts` | +138 / -1 |
+| `apps/vscode/src/sdk/sdk-task-control-coordinator.ts` | +74 / -2 |
+| `apps/vscode/src/sdk/sdk-task-start-coordinator.ts` | +110 / -3 |
+| `apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts` | +603 (A..F cases) |
+| `apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts` | +110 / -110 |
+| `apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts` | +66 / -3 (PARENTAL GREEN retargeted) |
+| `apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts` | +5 |
+| `apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts` | +4 |
+| `apps/vscode/src/sdk/sdk-task-start-coordinator.test.ts` | +39 / -4 |
+
+### Commits (all test-only except Phase 2)
+
+- `089eefa7b` test(sdk): pin parental top-level initTask race RED at production seam (TCL-PARENT01-03)
+- `2ee94160a` test(sdk): pin adversarial concurrency envelope RED at production seam (TCL-PARENT-ADVERSARIAL01)
+- `7e215278c` test(sdk): credential hygiene + corrected fence-contract doc (TCL-PARENT-ADVERSARIAL01a)
+- `bcfc1362b` test(sdk): pin ADVERSARIAL F (stale reinit must not terminate current B) RED at production seam
+- `9f3ab71ce` fix(sdk): add bounded generation-fence for task/session pair (FIX01 / Phase 2) — the only commit with production code change
+- `e6996ee77` test(sdk): retarget TCL-PARENT02 through the repaired top-level Compact path (Phase 5)
+
+### Quality gates
+
+- `apps/vscode typecheck`: 0 diagnostics
+- `git diff --check` (HEAD~5..HEAD): PASS
+- Cumulative vitest suite (the 10 affected test files): 115 GREEN + 2 RED
+- Phase 4 ablation: PARENT01 turns RED with the canonical wedge when the load-bearing fence check is disabled
+- No push, no force-push, no amend of published commits
+- Protected evidence preserved (`STASH_141372c52`, `STASH_371752f71`)
+
+### Pending: LIVE qualification
+
+After this commit, the LIVE qualification chain (L0..L5 per the original ACT §42) requires a freshly-installed dogfood VSIX with the new build, and:
+
+- **L0**: normal New Task flow
+- **L1**: provoke rapid New Task / task clear/start transition if safely possible
+- **L2**: Compact works or explicitly rejects
+- **L3**: New Task works first try
+- **L4**: first prompt starts
+- **L5**: no Idle/orphan session contradiction
+
+Per the reviewer's directive: "Do not claim natural-race reproduction if not observed." The closure verdict can move to `PASS_LIVE_TASK_CONTROL_LIVENESS` on the first dogfood cycle where the original L0..L5 reproducer is observed to behave correctly.
+
+### NEXT ACT (NOT auto-promoted)
+
+`ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01` (P2 hardening, follow-up) — see the `KNOWN_HARDENING_RESIDUE` block above. Optional; reviewer's directive does not require it.
+
 ## Board maintenance rule
 
 At the end of a meaningful ACT, update **only rows affected by that ACT**. Do not rewrite the whole board.
