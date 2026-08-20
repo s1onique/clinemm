@@ -1,0 +1,134 @@
+name: quality-floor
+# Factory ACT: ACT-CLINEMM-GITHUB-ACTIONS01
+#
+# Purpose: enforce the two canonical Cline-- quality gates that the
+# existing ext-vscode-test workflow does NOT currently cover:
+#
+#   1. Coverage ratchet (GHA05)
+#        bun run test:coverage:ratchet
+#
+#   2. Factory board markdown validator (no upstream equivalent)
+#        python3 scripts/check-epic-board-markdown.py
+#
+# The intent is CI PARITY for the locally-canonical substrate, not
+# test redesign or coverage threshold changes.
+#
+# All other gates (apps/vscode Vitest, webview Vitest, Bun unit,
+# typecheck, lint, frozen install) are already CI-enforced by
+# .github/workflows/ext-vscode-test.yml. This workflow complements
+# that workflow without duplicating it.
+#
+# Triggers (GHA08):
+#   - pull_request: branches: main
+#   - push: branches: main
+#
+# Permissions (GHA09):
+#   - contents: read (no write, no package, no PR-write)
+#
+# Frozen install (GHA06): bun install --frozen-lockfile
+# Failures fatal (GHA07): no continue-on-error; no || true; no swallow
+# Anti-silent-skip: non-zero tests assertion on ratchet output
+#
+# This workflow does NOT run under xvfb. It uses plain Node + bun only.
+
+on:
+    pull_request:
+        branches:
+            - main
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+permissions:
+    contents: read # needed to checkout code
+
+# GHA_CI Act ID is bound to ACT-CLINEMM-GITHUB-ACTIONS01 in the board.
+# Any future change to this workflow must be recorded in the board
+# (P1 contract defect policy).
+
+jobs:
+    coverage-ratchet:
+        runs-on: ubuntu-latest
+        name: Coverage Ratchet (Vitest)
+        defaults:
+            run:
+                working-directory: apps/vscode
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: 1.3.14
+
+            # GHA06: frozen install. Same lockfile as local.
+            - name: Install workspace dependencies (frozen lockfile)
+              working-directory: ${{ github.workspace }}
+              run: bun install --frozen-lockfile
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            # @cline/* are local workspace symlinks; build dist/ before
+            # the coverage reporter can resolve them.
+            - name: Build SDK packages
+              working-directory: ${{ github.workspace }}
+              run: bun run build:sdk
+
+            # The ratchet runs vitest+coverage first, then the Python
+            # verifier. The wrapper exists at apps/vscode/package.json
+            # as `test:coverage:ratchet` and produces both
+            # coverage-summary.json and coverage-final.json.
+            #
+            # The Python ratchet exits non-zero on:
+            #   - reduced covered counts (statements/branches/functions/lines)
+            #   - source-universe identity shrink
+            #   - ignore-directive count increase
+            #   - scope contract change
+            #   - malformed coverage report
+            # See scripts/check-code-coverage-ratchet.py for the full
+            # verifiable contract.
+            - name: Run coverage ratchet
+              run: bun run test:coverage:ratchet
+
+            # Anti-silent-skip guard: the ratchet logs a "Covered: N"
+            # line for each metric. If the report is empty or the
+            # artifact is missing, the script itself exits non-zero
+            # already, but belt-and-braces: assert the baseline
+            # artifact was consulted.
+            - name: Verify baseline artifact consulted
+              run: |
+                  BASELINE=.factory/quality/code-coverage-baseline.json
+                  if [ ! -f "$BASELINE" ]; then
+                    echo "ERROR: baseline artifact missing at $BASELINE"
+                    exit 1
+                  fi
+                  SIZE=$(stat -c%s "$BASELINE" 2>/dev/null || stat -f%z "$BASELINE")
+                  if [ "$SIZE" -lt 1024 ]; then
+                    echo "ERROR: baseline artifact too small ($SIZE bytes); likely truncated"
+                    exit 1
+                  fi
+                  echo "Baseline artifact present: $BASELINE ($SIZE bytes)"
+
+    board-validator:
+        runs-on: ubuntu-latest
+        name: Board Markdown Validator
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            # GHA12: fresh checkout, no caching, no developer-machine residue.
+            # Python 3 is preinstalled on ubuntu-latest.
+
+            # GHA01 / GHA10: validator is dependency-free stdlib.
+            # Validator exits non-zero on fence/table/markdown issues.
+            - name: Validate epic board markdown
+              run: python3 scripts/check-epic-board-markdown.py
+
+            # GHA07: also run the validator's own unit tests so a
+            # regression in the validator does not silently flip the
+            # gate. The ratchet / validator tests are zero-network,
+            # <100ms, and run under the existing scripts/tests layout.
+            - name: Run board validator unit tests
+              run: python3 -m pytest scripts/tests/test_check_epic_board_markdown.py -v

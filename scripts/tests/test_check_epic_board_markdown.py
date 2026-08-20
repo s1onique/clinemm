@@ -195,6 +195,53 @@ class TestTableIntegrity(unittest.TestCase):
         finally:
             p.unlink()
 
+    def test_escaped_ascii_pipe_in_cell_passes(self):
+        # Markdown table-cell escape: `\|` is a literal pipe inside a cell,
+        # not a table break. The validator must NOT count it as a separator.
+        # This is the source: "shadow\|host\|legacy" TypeScript union literal.
+        text = (
+            "# Title\n\n"
+            "## Canonical task index\n\n"
+            + CANONICAL_HEADER +
+            "| `T1` | A | OPEN | HIGH | none | source: \"shadow\\|host\\|legacy\" |\n"
+        )
+        p = _write(text)
+        try:
+            self.assertEqual(validator.check(p), 0)
+        finally:
+            p.unlink()
+
+    def test_escaped_ascii_pipe_with_multiple_escapes_passes(self):
+        # Multiple `\|` in the same cell, in the middle of a long row.
+        text = (
+            "# Title\n\n"
+            "## Canonical task index\n\n"
+            + CANONICAL_HEADER +
+            "| `T1` | A | OPEN | HIGH | none | "
+            "long cell with `a\\|b\\|c\\|d\\|e` separators "
+            "and `x\\|y\\|z` more |\n"
+        )
+        p = _write(text)
+        try:
+            self.assertEqual(validator.check(p), 0)
+        finally:
+            p.unlink()
+
+    def test_unescaped_ascii_pipe_among_escaped_still_fails(self):
+        # If a row has 1 escaped `\|` and 1 unescaped `|`, the unescaped
+        # one still breaks the table. Validator must still detect it.
+        text = (
+            "# Title\n\n"
+            "## Canonical task index\n\n"
+            + CANONICAL_HEADER +
+            "| `T1` | A | OPEN | HIGH | none | mix `a\\|b` and `c|d` |\n"
+        )
+        p = _write(text)
+        try:
+            self.assertEqual(validator.check(p), 1)
+        finally:
+            p.unlink()
+
     def test_row_missing_trailing_pipe_fails(self):
         text = (
             "# Title\n\n"

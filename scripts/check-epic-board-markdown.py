@@ -130,8 +130,10 @@ def check(path: Path) -> int:
                     f"table row at L{i + 1} does not end with | (row will break the table)"
                 )
                 continue
-            # Count pipes; flag rows with more pipes than the header (unescaped pipe inside cell)
-            pipe_count = ln.count("|")
+            # Count pipes; flag rows with more pipes than the header (unescaped pipe inside cell).
+            # Strip markdown-escaped pipes (\|) before counting: a \| still occupies one raw
+            # character but is a legitimate pipe inside a table cell, not a table break.
+            pipe_count = re.sub(r"\\\|", "", ln).count("|")
             if pipe_count > expected_pipes:
                 # Try to identify the offending cell content
                 failures.append(
