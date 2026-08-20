@@ -67,6 +67,13 @@ export interface VscodeExtraToolsOptions {
 	 * invalidate in-flight jobs).
 	 */
 	commandJobManager?: CommandJobManager
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback for the
+	 * background execution path. The host (SdkController) wires this to
+	 * `updateBackgroundCommandState` so the webview's TaskHeader and
+	 * Cancel button can arbitrate the in-flight background command.
+	 */
+	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
 }
 
 export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExtraToolsOptions): Promise<AgentTool[]> {
@@ -112,6 +119,10 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 				commandJobManager: options.commandJobManager,
 				backgroundWaitBudgetMs: DEFAULT_WAIT_BUDGET_MS,
 				backgroundExecutionDeadlineMs: DEFAULT_EXECUTION_DEADLINE_MS,
+				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: pass-through to the
+				// run_commands tool so the background state callback fires
+				// when the tool returns RUNNING / reaches a terminal state.
+				onBackgroundStateChange: options.onBackgroundStateChange,
 			}),
 		)
 		// Expose the follow-up API only for the background path —

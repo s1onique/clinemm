@@ -95,6 +95,14 @@ export interface VscodeSessionHostOptions {
 	getTerminalManager?: () => VscodeTerminalManager
 	/** Registry of in-flight foreground executions for "Proceed While Running". */
 	foregroundCommands?: SdkForegroundCommandCoordinator
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback for the
+	 * background run_commands path. The host (SdkController) wires this to
+	 * `updateBackgroundCommandState` so the webview's TaskHeader and
+	 * Cancel button can arbitrate the in-flight background command. The
+	 * host owns the projection; the session host is a pass-through.
+	 */
+	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
 }
 
 export class VscodeSessionHost implements SdkSessionHost {
@@ -167,6 +175,10 @@ export class VscodeSessionHost implements SdkSessionHost {
 						vscodeTerminalExecutionMode: getEffectiveTerminalExecutionMode(requestedTerminalExecutionMode),
 						foregroundCommands: options.foregroundCommands,
 						commandJobManager,
+						// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: pass-through to the
+						// run_commands tool so the background state callback fires
+						// when the tool returns RUNNING / reaches a terminal state.
+						onBackgroundStateChange: options.onBackgroundStateChange,
 					})
 					return {
 						...inputWithRemoteConfig,
@@ -230,6 +242,30 @@ export class VscodeSessionHost implements SdkSessionHost {
 
 	async stop(sessionId: string): Promise<void> {
 		return this.inner.stop(sessionId)
+	}
+
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: cancel every still-running
+	 * background command owned by this session. The webview's Cancel
+	 * button routes through this so the in-flight `run_commands` job
+	 * is terminated before the rest of the task. Returns the number of
+	 * jobs that were actually cancelled (skips already-terminal jobs).
+	 */
+	async cancelBackgroundCommand(): Promise<number> {
+		const activeIds = this.commandJobManager.getActiveJobIds()
+		if (activeIds.length === 0) {
+			return 0
+		}
+		const results = await Promise.all(
+			activeIds.map((jobId) => this.commandJobManager.cancel({ jobId })),
+		)
+		const cancelled = results.filter(
+			(r): r is { ok: true; state: "cancelled" } => r.ok && r.state === "cancelled",
+		).length
+		Logger.log(
+			`[VscodeSessionHost] cancelBackgroundCommand: cancelled ${cancelled}/${activeIds.length} active background command(s)`,
+		)
+		return cancelled
 	}
 
 	async dispose(reason?: string): Promise<void> {

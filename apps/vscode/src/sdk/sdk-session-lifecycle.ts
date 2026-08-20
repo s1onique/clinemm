@@ -70,6 +70,14 @@ export interface SdkSessionLifecycleOptions {
 	 */
 	consumePendingOverride?: (sessionId: string) => void
 	onDidBecomeIdle?: () => void
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback for the
+	 * background `run_commands` path. Forwarded to the host so the
+	 * run_commands tool can flip the projection when it returns RUNNING
+	 * / reaches a terminal state. The host owns the projection; the
+	 * session lifecycle is the pass-through.
+	 */
+	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
 }
 
 export class SdkSessionLifecycle {
@@ -379,6 +387,10 @@ export class SdkSessionLifecycle {
 				foregroundCommands: this.options.foregroundCommands,
 				getRemoteConfigIntegration: this.options.getRemoteConfigIntegration,
 				telemetry: this.options.telemetry,
+				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: pass-through to the
+				// host so the run_commands tool can flip the projection when
+				// it returns RUNNING / reaches a terminal state.
+				onBackgroundStateChange: this.options.onBackgroundStateChange,
 			})
 				.then((sdkHost) => {
 					this.ensureSharedHostSubscription(sdkHost)

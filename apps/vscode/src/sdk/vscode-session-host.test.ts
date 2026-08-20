@@ -161,6 +161,10 @@ describe("VscodeSessionHost telemetry wiring", () => {
 			foregroundCommands: undefined,
 			commandJobManager: expect.objectContaining({ active: expect.anything() }),
 			vscodeTerminalExecutionMode: undefined,
+			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: pass-through to the
+			// run_commands tool so the background state callback fires
+			// when the tool returns RUNNING / reaches a terminal state.
+			onBackgroundStateChange: undefined,
 		})
 		expect(result.source).toBe("vscode")
 		expect(result.config.extensions).toEqual([{ name: "remote-config" }])

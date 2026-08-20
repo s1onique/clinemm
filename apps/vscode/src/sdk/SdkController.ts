@@ -624,6 +624,11 @@ export class Controller {
 			// The SDK's built-in reader resolves relative paths against the extension
 			// host's process.cwd() (usually "/"); resolve them against the workspace instead.
 			readFileExecutor: createWorkspaceFileReadExecutor(() => this.getWorkspaceRoot()),
+			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback for the
+			// background `run_commands` path. Forwarded to the active session's
+			// host so the run_commands tool can flip the projection when it
+			// returns RUNNING / reaches a terminal state.
+			onBackgroundStateChange: (running, jobId) => this.updateBackgroundCommandState(running, jobId),
 			onSessionEvent: (event) => {
 				this.sessionEvents.handleSessionEvent(event).catch((err) => {
 					Logger.error("[SdkController] Failed to handle session event:", err)
@@ -1784,8 +1789,42 @@ export class Controller {
 		await this.taskControl.cancelTask()
 	}
 
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: cancel the in-flight
+	 * background command (if any) for the active session. Called by the
+	 * webview's Cancel button via the gRPC `cancelBackgroundCommand`
+	 * handler (see `cancelBackgroundCommand.ts`). The handler's job is
+	 * to terminate the running `run_commands` BEFORE the rest of the
+	 * task is cancelled, so the user always sees the runtime actually
+	 * settle the in-flight command rather than racing it.
+	 */
 	async cancelBackgroundCommand(): Promise<void> {
-		stubWarn("cancelBackgroundCommand")
+		const activeSession = this.sessions.getActiveSession()
+		if (!activeSession) {
+			Logger.debug("[SdkController] cancelBackgroundCommand: no active session")
+			return
+		}
+		// The active session's host is a `VscodeSessionHost` (the only
+		// client that owns a `CommandJobManager`). Cast at the seam —
+		// `SdkSessionHost` doesn't expose this method because it's
+		// host-specific to VS Code.
+		const host = activeSession.sdkHost as VscodeSessionHost & {
+			cancelBackgroundCommand?: () => Promise<number>
+		}
+		if (typeof host.cancelBackgroundCommand !== "function") {
+			Logger.debug(
+				"[SdkController] cancelBackgroundCommand: active session host does not support background command cancellation",
+			)
+			return
+		}
+		await host.cancelBackgroundCommand()
+		// The `onBackgroundStateChange` callback fires when the cancelled
+		// job's exit transition settles, resetting the projection to
+		// `false`. We mirror it here so the next `getStateToPostToWebview`
+		// doesn't return stale state if the postStateToWebview runs
+		// before the callback fires.
+		this.backgroundCommandRunning = false
+		this.backgroundCommandTaskId = undefined
 	}
 
 	/**
@@ -2607,9 +2646,29 @@ export class Controller {
 
 	// ---- Background command state ----
 
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: set the background command
+	 * projection. Called by the `onBackgroundStateChange` callback wired
+	 * to the `run_commands` background path. Posts the state to the
+	 * webview when the projection flips so the user-visible TaskHeader
+	 * (and the Cancel button's gating) reflects the in-flight command.
+	 * Idempotent: a no-op transition does NOT trigger a post.
+	 */
 	updateBackgroundCommandState(running: boolean, taskId?: string): void {
+		if (
+			this.backgroundCommandRunning === running &&
+			this.backgroundCommandTaskId === taskId
+		) {
+			return
+		}
 		this.backgroundCommandRunning = running
 		this.backgroundCommandTaskId = taskId
+		// best-effort post — the StatePostDebouncer coalesces bursts.
+		this.postStateToWebview().catch((error) => {
+			Logger.warn(
+				`[SdkController] Failed to post state after background command state change (running=${running}, taskId=${taskId}): ${error instanceof Error ? error.message : String(error)}`,
+			)
+		})
 	}
 
 	// ---- State management ----

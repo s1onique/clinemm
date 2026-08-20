@@ -96,6 +96,15 @@ export interface VscodeRunCommandsToolOptions {
 	backgroundWaitBudgetMs?: number
 	/** Execution deadline for the background path. Defaults to DEFAULT_EXECUTION_DEADLINE_MS. */
 	backgroundExecutionDeadlineMs?: number
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback for the
+	 * background execution path. Fires when the tool returns RUNNING
+	 * (with the active jobId) and again when the command reaches a terminal
+	 * state on the same call (with undefined). The host owns this seam —
+	 * the projection is wired here so the webview's TaskHeader and
+	 * Cancel button can arbitrate the in-flight background command.
+	 */
+	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -594,6 +603,22 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			}
 			const waitBudgetMs = options.backgroundWaitBudgetMs ?? DEFAULT_WAIT_BUDGET_MS
 			const executionDeadlineMs = options.backgroundExecutionDeadlineMs ?? DEFAULT_EXECUTION_DEADLINE_MS
+			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback. Fires
+			// once when the tool returns RUNNING (with the active jobId) and
+			// once when the command reaches a terminal state on the same call
+			// (with undefined). The host owns the projection — the projection
+			// is dead state until this fires.
+			const notifyBackgroundStateChange = (running: boolean, jobId: string | undefined): void => {
+				try {
+					options.onBackgroundStateChange?.(running, jobId)
+				} catch (error) {
+					Logger.warn(
+						`[VscodeRunCommands] onBackgroundStateChange callback threw (running=${running}, jobId=${jobId}): ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					)
+				}
+			}
 
 			try {
 				const start = await manager.start(
@@ -623,6 +648,11 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// observe status + jobId. Terminal results retain the
 				// existing stdout/exitCode shape for backward compatibility.
 				if (start.state === "running") {
+					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: the projection
+					// flips to true here — the host owns an in-flight
+					// background command. The webview's TaskHeader can show
+					// "Working" and the Cancel button can route the cancel.
+					notifyBackgroundStateChange(true, start.jobId)
 					const runningPayload = {
 						status: "running" as const,
 						jobId: start.jobId,
@@ -633,6 +663,11 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					}
 					return JSON.stringify(runningPayload)
 				}
+				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: terminal path —
+				// the command completed before the wait budget expired.
+				// The projection resets to false; the taskId is cleared
+				// so the next start can re-populate it.
+				notifyBackgroundStateChange(false, undefined)
 				// Terminal path. Preserve existing CommandExitError so the
 				// SDK wrapper records the existing telemetry; for success,
 				// return stdout as before.
@@ -662,6 +697,14 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 						: `[Command exited with code ${start.exitCode ?? 1}]`,
 				)
 			} catch (error) {
+				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: on any thrown error
+				// (CommandExitError, spawn_failed, etc.) the background
+				// command is no longer in-flight. Reset the projection so the
+				// host's TaskHeader / Cancel button reflect the true terminal
+				// state. The RUNNING branch above already notified true+jobId,
+				// so the caller can see the projection flip true→false on
+				// failure without a separate start-side hook.
+				notifyBackgroundStateChange(false, undefined)
 				telemetryService.captureTerminalExecution(false, "vscode", "child_process", {
 					...(error instanceof CommandExitError && { exitCode: error.exitCode }),
 					terminalExecutionMode: "backgroundExec",

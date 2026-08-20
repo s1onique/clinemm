@@ -664,6 +664,17 @@ export class CommandJobManager {
 	}
 
 	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: enumerate the active job
+	 * ids. Returns a snapshot (Array.from) so the caller can iterate
+	 * without holding a reference to the underlying `active` Map. The
+	 * host's Cancel button iterates this list to cancel every still-
+	 * running background command before tearing down the task.
+	 */
+	getActiveJobIds(): string[] {
+		return Array.from(this.active.keys())
+	}
+
+	/**
 	 * Dispose the manager: cancel every still-running job and drop all
 	 * retained state. Call from the host's session teardown.
 	 */
