@@ -55,6 +55,7 @@ import { SdkMessageCoordinator } from "../sdk-message-coordinator"
 import { SdkSessionLifecycle } from "../sdk-session-lifecycle"
 import { SdkTaskControlCoordinator, type SdkTaskControlCoordinatorOptions } from "../sdk-task-control-coordinator"
 import { SdkTaskStartCoordinator, type SdkTaskStartCoordinatorOptions } from "../sdk-task-start-coordinator"
+import { TaskOperationFence } from "../task-operation-fence"
 
 const mockCreateSessionHost = vi.hoisted(() => vi.fn())
 
@@ -147,6 +148,12 @@ function makeFixture(): AdversarialFixture {
 	const hostHandle = makeControllableHost()
 	mockCreateSessionHost.mockResolvedValue(hostHandle.host)
 
+	// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: shared fence for all
+	// three owners (lifecycle / control coordinator / start
+	// coordinator). Declared first so lifecycle's `isOperationCurrent`
+	// can reference it before controlOptions is constructed.
+	const fx_fence = new TaskOperationFence()
+
 	const lifecycle = new SdkSessionLifecycle({
 		mcpHub: {} as never,
 		requestToolApproval: vi.fn(),
@@ -154,6 +161,7 @@ function makeFixture(): AdversarialFixture {
 		onSessionEvent: vi.fn(),
 		onSendComplete: vi.fn(),
 		onSendError: vi.fn(),
+		isOperationCurrent: (token) => fx_fence.isCurrent(token),
 	})
 
 	const messages = new SdkMessageCoordinator({ getTask: () => state.task as never })
@@ -183,6 +191,9 @@ function makeFixture(): AdversarialFixture {
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		setTurnPhase: vi.fn(),
 		raiseCancelFence: vi.fn(),
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: same fence instance
+		// consumed by lifecycle, control, and start coordinators.
+		taskOperationFence: fx_fence,
 	}
 
 	const taskControl = new SdkTaskControlCoordinator(controlOptions)
@@ -196,6 +207,9 @@ function makeFixture(): AdversarialFixture {
 			updateTaskHistory: vi.fn().mockResolvedValue([]),
 			updateTaskHistoryItem: vi.fn().mockResolvedValue(undefined),
 		},
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: SAME fence instance
+		// the control coordinator consumes — see makeFixture body.
+		taskOperationFence: fx_fence,
 		sessionConfigBuilder: {
 			build: vi.fn().mockResolvedValue({
 				providerId: "anthropic",
@@ -215,6 +229,9 @@ function makeFixture(): AdversarialFixture {
 		})),
 		clearTask: vi.fn(async () => {
 			await taskControl.clearTask()
+		}),
+		clearTaskForOperation: vi.fn(async (token: number) => {
+			await taskControl.clearTaskForOperation(token)
 		}),
 		setTask: (task: unknown) => {
 			controlOptions.setTask(task as never)
@@ -503,5 +520,84 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01",
 			newDiagnostic,
 			"stale-start cleanup failure did not surface a Logger.warn/error; the failure was silently swallowed.",
 		).toBeGreaterThan(0)
+	})
+
+	// ==========================================================================
+	// ADVERSARIAL F — stale reinit must not terminate current B
+	// Per Factory reviewer's CORRECTION04 directive:
+	//   "Once operation A is stale, A must never terminate, clear,
+	//    replace, or install any session belonging to the newer
+	//    operation."
+	// Deterministic chronology:
+	//   1. reinit A begins with tokenA
+	//   2. pause A during an awaited history/messages/config step
+	//   3. init B begins; B advances generation
+	//   4. B fully becomes current: task=B, activeSession=B
+	//   5. resume A; A reaches startNewSession(A, tokenA)
+	// Expected:
+	//   - A returns superseded
+	//   - B remains active
+	//   - B host/session is NOT stopped/disposed
+	//   - task remains B, activeSession remains B
+	// Pre-correction this should RED because the current code calls
+	// `endActiveSession("startNewSession")` on the newer B session
+	// BEFORE the fence check fires.
+	// ==========================================================================
+	it("ADVERSARIAL F: stale reinit must NOT terminate current B; B's host.stop must NOT be called", async () => {
+		const fx = makeFixture()
+
+		// Step 1: A begins. The first initTask captures tokenA and
+		// proceeds to await history/config; we pause at host.start.
+		const initAPromise = fx.taskStart.initTask("prompt A", undefined, undefined, undefined, undefined)
+		await awaitInitTaskPaused()
+		expect(fx.state.task?.taskId).toBe("session-A")
+		expect(fx.lifecycle.getActiveSession()).toBeUndefined()
+
+		// Step 3-4: B begins; B's clearTask supersedes A; B fully
+		// becomes current.
+		fx.startOptions.sessionConfigBuilder.build.mockResolvedValueOnce({
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4",
+			apiKey: "test-api-key-placeholder",
+			sessionId: "session-B",
+		})
+		const initBPromise = fx.taskStart.initTask("prompt B", undefined, undefined, undefined, undefined)
+		await awaitInitTaskPaused()
+		const bResolver = fx.hostHandle.resolverQueue[1]
+		bResolver.resolve("session-B")
+		await initBPromise
+		expect(fx.state.task?.taskId).toBe("session-B")
+		expect(fx.lifecycle.getActiveSession()?.sessionId).toBe("session-B")
+
+		// Step 5: A resumes. With the corrected fence, A's
+		// startNewSession must check the fence BEFORE
+		// `endActiveSession("startNewSession")` and return
+		// `superseded` without terminating B.
+		const aResolver = fx.hostHandle.resolverQueue[0]
+		aResolver.resolve("session-A")
+		await initAPromise
+
+		// INVARIANT: B remains current; A must NOT have terminated B.
+		const taskAfter = fx.state.task
+		const activeSessionAfter = fx.lifecycle.getActiveSession() as { sessionId: string } | undefined
+		const inv = expectInvariant(taskAfter, activeSessionAfter)
+
+		expect(
+			inv.bothPresentAndEqual && taskAfter?.taskId === "session-B",
+			`TASK_SESSION_PAIR_INVARIANT violated by stale reinit A terminating B. task=${
+				taskAfter === undefined ? "undefined" : `defined(${taskAfter.taskId})`
+			}, activeSession=${activeSessionAfter === undefined ? "undefined" : `defined(${activeSessionAfter.sessionId})`}.`,
+		).toBe(true)
+
+		// B's host.stop MUST NOT have been called by stale A. (A's
+		// own post-start disposal calls host.stop with A's sessionId,
+		// which is expected and orthogonal — what we forbid is A
+		// disposing B.)
+		const stopCallsAfter = (fx.hostHandle.host.stop as ReturnType<typeof vi.fn>).mock.calls
+		const bStopCalls = stopCallsAfter.filter((call) => call[0] === "session-B").length
+		expect(
+			bStopCalls,
+			`Stale A terminated B via host.stop(sessionId="session-B"). host.stop calls with sessionId="session-B" = ${bStopCalls}. The fence must check ownership BEFORE any destructive lifecycle action.`,
+		).toBe(0)
 	})
 })
