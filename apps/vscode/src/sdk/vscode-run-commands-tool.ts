@@ -603,35 +603,12 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			}
 			const waitBudgetMs = options.backgroundWaitBudgetMs ?? DEFAULT_WAIT_BUDGET_MS
 			const executionDeadlineMs = options.backgroundExecutionDeadlineMs ?? DEFAULT_EXECUTION_DEADLINE_MS
-			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback. The
-			// host's `backgroundCommandRunning` projection MUST be derived
-			// from the manager's active-cardinality, not from per-job
-			// terminal events. The manager supports multiple concurrent
-			// active jobs; if a per-job terminal listener blindly fires
-			// (false, undefined) when ANY job completes, the projection
-			// would clear while another background job is still active.
-			//
-			// Two helper predicates translate the per-job event into a
-			// cardinality-aware projection:
-			//  - enteringRunningJob: this is a 0->1 transition (this is
-			//    the first active job), so we fire (true, jobId).
-			//  - exitingAllJobs: this is a >0->0 transition (this was the
-			//    last active job), so we fire (false, undefined).
-			// Anything in between is a no-op (the projection is already in
-			// the correct state from a previous transition).
-			const isEnteringRunningJob = (): boolean => manager.getActiveJobIds().length === 1
-			const isExitingAllJobs = (): boolean => manager.getActiveJobIds().length === 0
+			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback. Fires
+			// once when the tool returns RUNNING (with the active jobId) and
+			// once when the command reaches a terminal state on the same call
+			// (with undefined). The host owns the projection — the projection
+			// is dead state until this fires.
 			const notifyBackgroundStateChange = (running: boolean, jobId: string | undefined): void => {
-				// Cardinality gate: only fire if the transition is meaningful
-				// for the projection. The (true, jobId) signal is only
-				// meaningful at 0->1; (false, undefined) is only meaningful
-				// at >0->0. Anything else is a no-op.
-				if (running && !isEnteringRunningJob()) {
-					return
-				}
-				if (!running && !isExitingAllJobs()) {
-					return
-				}
 				try {
 					options.onBackgroundStateChange?.(running, jobId)
 				} catch (error) {
@@ -643,8 +620,9 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				}
 			}
 
+			let start: Awaited<ReturnType<typeof manager.start>> | undefined
 			try {
-				const start = await manager.start(
+				start = await manager.start(
 					{
 						command,
 						cwd: commandCwd || cwd,
@@ -671,30 +649,31 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// observe status + jobId. Terminal results retain the
 				// existing stdout/exitCode shape for backward compatibility.
 				if (start.state === "running") {
-					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: the projection
-					// flips to true here — the host owns an in-flight
-					// background command. The webview's TaskHeader can show
-					// "Working" and the Cancel button can route the cancel.
-					// The notifyBackgroundStateChange helper is
-					// cardinality-aware: if another job is already active,
-					// the projection is already true and we no-op.
-					notifyBackgroundStateChange(true, start.jobId)
-					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: attach an async
-					// listener so the projection flips back to false when the
-					// process completes asynchronously (after this tool call
-					// returns). Without this listener, the projection would
-					// stay true forever — the in-tool callback chain closes
-					// the moment the tool returns RUNNING, and the
-					// `command_status`/`cancel_command` paths are
-					// observation-only / mutating, not state-broadcasters.
-					// The terminalPromise is derived from the manager's
-					// `exitTransitions` map — it never rejects, so a
-					// no-arg `.then()` is safe. The notify helper is
-					// cardinality-aware: if other jobs are still active
-					// when this one terminal-completes, the projection
-					// stays true (no-op).
-					start.terminalPromise.then(() => {
-						notifyBackgroundStateChange(false, undefined)
+					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+					// the projection flips to true here iff this start
+					// was the 0->1 transition. The flag is captured at
+					// the manager's `active.set()` seam — race-safe under
+					// concurrent starts. If `becameActive` is false, this
+					// start was a 1->2 (or higher) transition; another
+					// job is already in flight and the projection is
+					// already true, so this is a no-op.
+					if (start.becameActive) {
+						notifyBackgroundStateChange(true, start.jobId)
+					}
+					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+					// attach an async listener so the projection flips
+					// back to false when the process completes
+					// asynchronously (after this tool call returns). The
+					// listener reads `becameIdle` from the resolved
+					// `terminalPromise` — race-safe under concurrent
+					// terminal-completions. If `becameIdle` is false,
+					// this completion was a 2->1 (or higher) transition;
+					// another job is still active and the projection must
+					// stay true (no-op).
+					start.terminalPromise.then(({ becameIdle }) => {
+						if (becameIdle) {
+							notifyBackgroundStateChange(false, undefined)
+						}
 					})
 					const runningPayload = {
 						status: "running" as const,
@@ -706,11 +685,21 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					}
 					return JSON.stringify(runningPayload)
 				}
-				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: terminal path —
-				// the command completed before the wait budget expired.
-				// The projection resets to false; the taskId is cleared
-				// so the next start can re-populate it.
-				notifyBackgroundStateChange(false, undefined)
+				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+				// terminal path — the command completed before the
+				// wait budget expired. Use the terminalPromise with
+				// `becameIdle` (race-safe transition metadata from the
+				// manager's `finalize()` seam). For fast-path commands,
+				// the promise is already resolved and the `.then()`
+				// fires in the next microtask; for slow-path commands
+				// that completed during the wait-budget race, the
+				// `.then()` fires the same way (the manager's
+				// `exitTransition` resolves before `makeStartResult`).
+				start.terminalPromise.then(({ becameIdle }) => {
+					if (becameIdle) {
+						notifyBackgroundStateChange(false, undefined)
+					}
+				})
 				// Terminal path. Preserve existing CommandExitError so the
 				// SDK wrapper records the existing telemetry; for success,
 				// return stdout as before.
@@ -740,14 +729,22 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 						: `[Command exited with code ${start.exitCode ?? 1}]`,
 				)
 			} catch (error) {
-				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: on any thrown error
-				// (CommandExitError, spawn_failed, etc.) the background
-				// command is no longer in-flight. Reset the projection so the
-				// host's TaskHeader / Cancel button reflect the true terminal
-				// state. The RUNNING branch above already notified true+jobId,
-				// so the caller can see the projection flip true→false on
-				// failure without a separate start-side hook.
-				notifyBackgroundStateChange(false, undefined)
+				// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+				// on any thrown error (CommandExitError, spawn_failed,
+				// etc.) the background command is no longer in-flight.
+				// Use the terminalPromise with `becameIdle` so the
+				// projection flip is race-safe under concurrent
+				// terminal-completions. The RUNNING branch above already
+				// attached a listener for the async case; we add another
+				// here for the catch path (errors can also fire after
+				// manager.start() returns).
+				if (start?.terminalPromise) {
+					start.terminalPromise.then(({ becameIdle }) => {
+						if (becameIdle) {
+							notifyBackgroundStateChange(false, undefined)
+						}
+					})
+				}
 				telemetryService.captureTerminalExecution(false, "vscode", "child_process", {
 					...(error instanceof CommandExitError && { exitCode: error.exitCode }),
 					terminalExecutionMode: "backgroundExec",

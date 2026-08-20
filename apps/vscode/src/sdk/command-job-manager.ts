@@ -86,6 +86,18 @@ export interface StartCommandJobOptions {
 	maxRetainedOutputChars?: number
 }
 
+/**
+ * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: terminal
+ * transition metadata. `becameIdle` is true iff this terminal
+ * completion was the >0->0 cardinality transition (this was the
+ * last active job). Captured at the manager's `finalize()` mutation
+ * seam — race-safe under concurrent terminal-completions because
+ * the check + delete happen in a single synchronous burst.
+ */
+export interface TerminalTransition {
+	becameIdle: boolean
+}
+
 export interface StartCommandJobResult {
 	jobId: string
 	state: CommandJobState
@@ -111,8 +123,24 @@ export interface StartCommandJobResult {
 	 *
 	 * Always resolves (never rejects) — the runner can attach a
 	 * `.then()` callback without a `.catch()`.
+	 *
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: the
+	 * resolved value carries `TerminalTransition` with `becameIdle`
+	 * — true iff this terminal completion was the >0->0 cardinality
+	 * transition. The runner uses this flag directly to decide
+	 * whether to fire the (false, undefined) projection, instead
+	 * of a post-hoc `getActiveJobIds()` count (which would be racy
+	 * under concurrent starts).
 	 */
-	terminalPromise: Promise<void>
+	terminalPromise: Promise<TerminalTransition>
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: was this
+	 * start a 0->1 cardinality transition? The runner uses this flag
+	 * directly to decide whether to fire the (true, jobId) projection,
+	 * instead of a post-hoc `getActiveJobIds()` count (which would be
+	 * racy under concurrent starts).
+	 */
+	becameActive: boolean
 }
 
 /** Caller-supplied input to {@link CommandJobManager.status}. */
@@ -323,6 +351,28 @@ interface CommandJob {
 	deadlineTimer?: NodeJS.Timeout
 	abortListener?: () => void
 	abortSignal?: AbortSignal
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: resolver
+	 * for the terminal-transition promise. Set by `start()` at job
+	 * creation time (BEFORE the active Map is mutated, so the
+	 * resolver is registered before the exit transition can
+	 * resolve and call `finalize()`). Called by `finalize()` with
+	 * `{ becameIdle: boolean }` after the job is removed from the
+	 * active Map. The flag is computed at the mutation seam (size
+	 * before delete) so it is race-safe.
+	 */
+	terminalTransitionResolve?: (transition: TerminalTransition) => void
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+	 * terminal-transition promise. Pre-created in `start()` so the
+	 * resolver is registered before the exit transition can fire
+	 * `finalize()`. Resolves with `{ becameIdle: boolean }` after
+	 * the job is removed from the active Map. The flag is computed
+	 * at the mutation seam (size before delete) so it is race-safe.
+	 * The runner attaches `.then(({becameIdle}) => ...)` to this
+	 * promise instead of post-hoc-querying `getActiveJobIds()`.
+	 */
+	terminalTransitionPromise?: Promise<TerminalTransition>
 } /**
  * CommandJobManager — the single host owner of command execution
  * lifetime for the VS Code extension's `run_commands` background path.
@@ -337,6 +387,16 @@ export class CommandJobManager {
 	private readonly terminal = new Map<string, CommandJob>()
 	private readonly terminalOrder: string[] = []
 	private readonly exitTransitions = new Map<string, Promise<void>>()
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+	 * terminal-transition promises keyed by jobId. Each job's
+	 * `terminalPromise` is derived from this map at start time and
+	 * is resolved from `finalize()` with `{ becameIdle: boolean }`.
+	 * The runner uses the transition flag directly to decide whether
+	 * to fire the host's `backgroundCommandRunning` projection
+	 * reset — never a post-hoc `getActiveJobIds()` count.
+	 */
+	private readonly terminalTransitions = new Map<string, Promise<TerminalTransition>>()
 
 	private readonly maxTerminalJobs: number
 	private readonly maxExecutionDeadlineMs: number
@@ -394,6 +454,26 @@ export class CommandJobManager {
 			},
 		)
 
+		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+		// set up the terminal-transition promise BEFORE the active
+		// Map mutation so the resolver is registered before the
+		// exit transition can resolve and call `finalize()`. The
+		// previous order (set up the deferred in `makeStartResult`
+		// after the race) had a race: if the child process completes
+		// synchronously (the fast-path case), the exit transition's
+		// `.then()` callback fires before `makeStartResult` runs,
+		// and the resolver is undefined when `finalize` tries to
+		// resolve it. Pre-creating the deferred here removes the
+		// race.
+		let resolveTerminalTransition!: (transition: TerminalTransition) => void
+		const terminalTransitionPromise = new Promise<TerminalTransition>((resolve) => {
+			resolveTerminalTransition = resolve
+		}).then(
+			(value) => value,
+			() => ({ becameIdle: false }) as TerminalTransition,
+		)
+		this.terminalTransitions.set(id, terminalTransitionPromise)
+
 		const job: CommandJob = {
 			id,
 			state: "running",
@@ -404,7 +484,19 @@ export class CommandJobManager {
 			process: childProcess,
 			terminationReason: "natural",
 			finalized: false,
+			terminalTransitionResolve: resolveTerminalTransition,
+			terminalTransitionPromise,
 		}
+		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: capture
+		// the cardinality transition at the manager's mutation seam.
+		// The check happens BEFORE `this.active.set` so the value is
+		// race-safe under concurrent `start()` calls — between this
+		// check and the `set` no other code can run (single-threaded JS).
+		// After this insertion, `wasBecomingActive` is true iff this
+		// was a 0->1 cardinality transition. The runner uses this
+		// flag directly instead of a post-hoc `getActiveJobIds()`
+		// count, which would be racy.
+		const wasBecomingActive = this.active.size === 0
 		this.active.set(id, job)
 
 		// Track exit; finalize using the latched terminationReason so
@@ -454,10 +546,14 @@ export class CommandJobManager {
 		// `process.exit` synchronously after spawn and the finalize()
 		// callback runs before this Promise.race resolves, so the tool
 		// sees the terminal state without spurious RUNNING.
-		return this.awaitOrSnapshot(job, effectiveWaitBudgetMs)
+		return this.awaitOrSnapshot(job, effectiveWaitBudgetMs, wasBecomingActive)
 	}
 
-	private async awaitOrSnapshot(job: CommandJob, waitBudgetMs: number): Promise<StartCommandJobResult> {
+	private async awaitOrSnapshot(
+		job: CommandJob,
+		waitBudgetMs: number,
+		wasBecomingActive: boolean,
+	): Promise<StartCommandJobResult> {
 		const remaining = Math.max(0, waitBudgetMs - (Date.now() - job.startedAtMs))
 		if (remaining > 0 && job.state === "running") {
 			// Wait for terminal transition or budget — whichever first.
@@ -480,26 +576,25 @@ export class CommandJobManager {
 				clearTimeout(timer)
 			}
 		}
-		return this.makeStartResult(job)
+		return this.makeStartResult(job, wasBecomingActive)
 	}
 
-	private makeStartResult(job: CommandJob): StartCommandJobResult {
+	private makeStartResult(job: CommandJob, wasBecomingActive: boolean): StartCommandJobResult {
 		const snap = projectResponseSnapshot(snapshot(job), job.maxResponseOutputChars)
-		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: build the terminal-state
-		// promise. The runner attaches a `.then()` listener to react to
-		// the async completion — in particular, to flip the host's
-		// `backgroundCommandRunning` projection back to false when the
-		// tool returns RUNNING but the process later completes
-		// asynchronously. The promise is derived from the existing
-		// `exitTransitions` map — the same primitive that the bounded
-		// status() poll uses — so we don't introduce a new listener list.
-		// We swallow rejections (the manager never rejects these
-		// promises; the chain is .then().catch() already) so the runner
-		// can attach a no-arg .then() without a .catch().
-		const terminalPromise = (this.exitTransitions.get(job.id) ?? Promise.resolve()).then(
-			() => undefined,
-			() => undefined,
-		)
+		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: the
+		// terminal-transition promise is pre-created in `start()`
+		// BEFORE the active Map is mutated, so the resolver is
+		// registered before the exit transition can resolve and
+		// call `finalize()`. This removes the fast-path race where
+		// the deferred didn't exist yet when finalize ran. See the
+		// creation site in `start()` for the full rationale.
+		if (!job.terminalTransitionPromise) {
+			// Defensive fallback — should never trigger in practice
+			// because the deferred is created at job construction
+			// time. If it does, return a never-resolving promise so
+			// the runner's `.then()` is a no-op rather than crashing.
+			throw new Error("terminalTransitionPromise missing on job")
+		}
 		return {
 			jobId: job.id,
 			state: job.state,
@@ -509,7 +604,8 @@ export class CommandJobManager {
 			stderr: snap.stderr,
 			outputTruncated: snap.outputTruncated,
 			process: job.process,
-			terminalPromise,
+			terminalPromise: job.terminalTransitionPromise,
+			becameActive: wasBecomingActive,
 			...(snap.exitCode !== undefined ? { exitCode: snap.exitCode } : {}),
 			...(snap.signal !== undefined ? { signal: snap.signal } : {}),
 		}
@@ -596,7 +692,25 @@ export class CommandJobManager {
 			job.abortListener = undefined
 		}
 		// Move from active → terminal (bounded FIFO).
+		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: capture
+		// the cardinality transition at the manager's mutation seam.
+		// The check happens BEFORE `this.active.delete` so the value
+		// is race-safe under concurrent terminal-completions — between
+		// this check and the delete no other code can run
+		// (single-threaded JS). After this delete, `wasBecomingIdle`
+		// is true iff this was a >0->0 cardinality transition. The
+		// runner uses this flag directly instead of a post-hoc
+		// `getActiveJobIds()` count.
+		const wasBecomingIdle = this.active.size === 1
 		this.active.delete(job.id)
+		// Resolve the terminal-transition promise with the captured
+		// flag. This is the single source of truth for the
+		// >0->0 transition identity; the runner reads the flag
+		// from the resolved value.
+		if (job.terminalTransitionResolve) {
+			job.terminalTransitionResolve({ becameIdle: wasBecomingIdle })
+			job.terminalTransitionResolve = undefined
+		}
 		this.terminal.set(job.id, job)
 		this.terminalOrder.push(job.id)
 		while (this.terminalOrder.length > this.maxTerminalJobs) {
@@ -604,6 +718,10 @@ export class CommandJobManager {
 			if (evictId) {
 				this.terminal.delete(evictId)
 				this.exitTransitions.delete(evictId)
+				// Also drop the terminal-transition promise so the
+				// map doesn't grow unbounded for the lifetime of the
+				// manager.
+				this.terminalTransitions.delete(evictId)
 			}
 		}
 	}
@@ -721,5 +839,11 @@ export class CommandJobManager {
 		this.terminal.clear()
 		this.terminalOrder.length = 0
 		this.exitTransitions.clear()
+		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: drop
+		// any terminal-transition promises. The terminal maps have
+		// been cleared by `terminate()` above (which finalizes each
+		// job), so these should be empty in practice; this is a
+		// belt-and-suspenders cleanup.
+		this.terminalTransitions.clear()
 	}
 }
