@@ -14,7 +14,12 @@
  * before the return statement, gated by the diagnostic enable flag.
  */
 
-import type { TaskHeaderTelemetryStrip, ThinkingPresentationProjection, TurnState } from "@shared/ExtensionMessage"
+import type {
+	TaskHeaderPresentationProjection,
+	TaskHeaderTelemetryStrip,
+	ThinkingPresentationProjection,
+	TurnState,
+} from "@shared/ExtensionMessage"
 import type { PostTerminalAuthoritySnapshot } from "@shared/post-terminal-authority-diagnostic"
 import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 
@@ -27,6 +32,7 @@ export interface BuildExtensionSnapshotArgs {
 		sessionId?: string
 		turnState?: TurnState
 		thinkingPresentation?: ThinkingPresentationProjection
+		taskHeaderPresentation?: TaskHeaderPresentationProjection
 		taskTelemetry?: TaskHeaderTelemetryStrip
 	}
 	shadow: ArbiterSnapshot | undefined
@@ -70,6 +76,7 @@ export function buildExtensionSnapshotFromState(args: BuildExtensionSnapshotArgs
 		legacySeq: state.turnState?.seq,
 		legacyAnchorTs: state.turnState?.anchorTs,
 		thinkingPresentation: state.thinkingPresentation,
+		taskHeaderPresentation: state.taskHeaderPresentation,
 		taskTelemetry: state.taskTelemetry,
 	}
 }

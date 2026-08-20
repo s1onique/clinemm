@@ -125,7 +125,11 @@ import {
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
-import { selectTaskShadowArbiterSnapshot, selectThinkingPresentation } from "./task-state-shadow-arbiter-mapper"
+import {
+	selectTaskHeaderPresentation,
+	selectTaskShadowArbiterSnapshot,
+	selectThinkingPresentation,
+} from "./task-state-shadow-arbiter-mapper"
 import {
 	emitHostRecovery,
 	emitSameTaskContinued,
@@ -2655,10 +2659,7 @@ export class Controller {
 	 * Idempotent: a no-op transition does NOT trigger a post.
 	 */
 	updateBackgroundCommandState(running: boolean, taskId?: string): void {
-		if (
-			this.backgroundCommandRunning === running &&
-			this.backgroundCommandTaskId === taskId
-		) {
+		if (this.backgroundCommandRunning === running && this.backgroundCommandTaskId === taskId) {
 			return
 		}
 		this.backgroundCommandRunning = running
@@ -2902,6 +2903,40 @@ export class Controller {
 					currentLegacyPhase: this.turnStateTracker.currentPhase,
 					seq: this.turnStateTracker.get().seq,
 				}),
+				// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+				//
+				// The webview-facing TaskHeader state projection. The
+				// TaskHeader state label consumer
+				// (apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx)
+				// consumes this projection (via
+				// `taskHeaderStateLabel(taskHeaderPresentation, turnState)`)
+				// instead of `turnState.phase` directly.
+				//
+				// Three-source precedence (frozen by `selectTaskHeaderPresentation`):
+				//   1. HOST COMPACTION OVERRIDE — if `currentLegacyPhase
+				//      === "compacting"`, the host is the only legitimate
+				//      authority for the `compacting` label (the canonical
+				//      shadow cannot represent this phase because
+				//      compaction is not a runtime event).
+				//   2. CANONICAL SHADOW — if `getLocalShadowPhase()` is
+				//      defined, the shadow's `turnPhase` is the authority
+				//      for 7 of the 8 phases (idle / streaming /
+				//      awaiting_approval / awaiting_followup / completed /
+				//      error / resumable) and overrides a stale legacy
+				//      `streaming`.
+				//   3. ABSENCE FALLBACK — Hub/Remote / Local pre-observation
+				//      collapses to the legacy `turnState.phase` with
+				//      `source: "legacy"`, same byte-equivalent semantics
+				//      as the E7.1 Thinking legacy branch.
+				//
+				// `seq` is the legacy `TurnStateTracker.seq` for transport-
+				// level stale-push fencing (same domain as
+				// `thinkingPresentation.seq`).
+				taskHeaderPresentation: selectTaskHeaderPresentation({
+					canonicalShadowPhase: this.getLocalShadowPhase(),
+					currentLegacyPhase: this.turnStateTracker.currentPhase,
+					seq: this.turnStateTracker.get().seq,
+				}),
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
 				// authority; this is a read-only mirror for the webview.
@@ -2939,6 +2974,7 @@ export class Controller {
 							sessionId: undefined,
 							turnState: snapshot.turnState,
 							thinkingPresentation: snapshot.thinkingPresentation,
+							taskHeaderPresentation: snapshot.taskHeaderPresentation,
 							taskTelemetry: snapshot.taskTelemetry,
 						},
 						shadow: this.getLocalShadowProjection(),

@@ -10,9 +10,15 @@
  * continues when user replies). Terminal-freeze tests cover the
  * error/resumable/completed set explicitly.
  */
-import type { TurnState } from "@shared/ExtensionMessage"
+import type { TaskHeaderPresentationProjection, TurnState } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
-import { formatElapsed, resolveElapsedDisplayMs, stateLabel, taskHeaderStateLabel } from "./taskHeaderTelemetryHelpers"
+import {
+	formatElapsed,
+	resolveElapsedDisplayMs,
+	stateLabel,
+	taskHeaderPresentationStateLabel,
+	taskHeaderStateLabel,
+} from "./taskHeaderTelemetryHelpers"
 
 describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / formatElapsed", () => {
 	it("formats sub-minute durations as mm:ss", () => {
@@ -119,5 +125,78 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / taskHeaderStateLabel", () => {
 	})
 	it("returns Unknown when TurnState is undefined (no chat-tail fallback)", () => {
 		expect(taskHeaderStateLabel(undefined)).toEqual({ label: "Unknown", glyph: "?", live: false })
+	})
+})
+
+// ============================================================================
+// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / helper tests
+// ============================================================================
+//
+// The migration ACT's consumer-side witness matrix. The new
+// `taskHeaderPresentationStateLabel` entry point reads the canonical
+// `taskHeaderPresentation` projection (when present) and falls back
+// to the legacy `turnState.phase` derivation only when the projection
+// is absent (Hub/Remote / pre-observation absence).
+//
+// These tests verify the helper-level contract. The component-level
+// proof (TaskHeader renders the migrated label) is in the SDK
+// selector suite `task-state-shadow-task-header-presentation.thcp01.test.ts`
+// and the consumer-level integration tests added next to this file.
+
+describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / taskHeaderPresentationStateLabel", () => {
+	// Build a small projection object helper
+	const projection = (
+		phase: TaskHeaderPresentationProjection["phase"],
+		source: TaskHeaderPresentationProjection["source"] = "shadow",
+		seq = 1,
+	): TaskHeaderPresentationProjection => ({ phase, source, seq })
+
+	it("THCP01 (helper): when projection says awaiting_followup, label is Waiting (not Working from stale streaming)", () => {
+		// Truthful divergence: legacy turnState is `streaming`
+		// (Working), but the canonical projection says
+		// `awaiting_followup`. The helper must follow the projection.
+		const st = { phase: "streaming" as const, seq: 1 }
+		const p = projection("awaiting_followup", "shadow", 5)
+		// We cannot import taskHeaderPresentationStateLabel at module
+		// top because the existing test file imports use a different
+		// path; the import is added below.
+		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Waiting", glyph: "\u2026", live: true })
+	})
+
+	it("THCP02 (helper): when projection says compacting (host source), label is Compacting", () => {
+		const st = { phase: "compacting" as const, seq: 7 }
+		const p = projection("compacting", "host", 7)
+		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Compacting", glyph: "\u2304", live: true })
+	})
+
+	it("THCP04 (helper): when projection says error, label is Error (not Working from stale streaming)", () => {
+		const st = { phase: "streaming" as const, seq: 1 }
+		const p = projection("error", "shadow", 9)
+		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Error", glyph: "!", live: false })
+	})
+
+	it("THCP05 (helper): when projection is undefined, falls back to legacy turnState.phase", () => {
+		// Hub/Remote host: no projection. The helper must produce the
+		// exact same legacy projection as `taskHeaderStateLabel`.
+		const st = { phase: "resumable" as const, seq: 4 }
+		expect(taskHeaderPresentationStateLabel(undefined, st)).toEqual({ label: "Paused", glyph: "\u21bb", live: false })
+	})
+
+	it("THCP05b (helper): both undefined returns Unknown (no chat-tail fallback)", () => {
+		expect(taskHeaderPresentationStateLabel(undefined, undefined)).toEqual({ label: "Unknown", glyph: "?", live: false })
+	})
+
+	it("THCP07 (helper): shadow streaming beats arbitrary legacy → Working/live", () => {
+		// Even if the legacy tracker is mid-transition (e.g. idle),
+		// the shadow's streaming must win once observed.
+		const st = { phase: "idle" as const, seq: 1 }
+		const p = projection("streaming", "shadow", 17)
+		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Working", glyph: "\u25cf", live: true })
+	})
+
+	it("THCP08 (helper): shadow completed → Complete/non-live", () => {
+		const st = { phase: "streaming" as const, seq: 1 }
+		const p = projection("completed", "shadow", 21)
+		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Complete", glyph: "\u2713", live: false })
 	})
 })

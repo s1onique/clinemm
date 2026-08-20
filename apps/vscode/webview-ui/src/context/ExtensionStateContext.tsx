@@ -18,8 +18,8 @@ import {
 // The webview does NOT have the `ArbiterSnapshot` shape on the wire (the
 // shadow lives only in the extension host), so the shadow-derived fields
 // are simply absent on the webview side. The legacy turnStateTracker,
-// thinkingPresentation, taskTelemetry, and the post-reducer `newState` are
-// captured here.
+// thinkingPresentation, taskHeaderPresentation, taskTelemetry, and the
+// post-reducer `newState` are captured here.
 //
 // ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORITY-SPLIT-TRIAGE01-C2-CORRECTION01-REPLICA-TRUTH:
 // The webview NEVER derives the push ID independently. It reads
@@ -33,7 +33,8 @@ import {
 // ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-POST-TERMINAL-AUTHORITY-SPLIT-C2-CORRECTION02-RAW-INCOMING-TRUTH:
 // This helper is the SINGLE capture-site factory. It stamps
 // `rawIncoming*` from `rawStateData` and `applied*` (and the existing
-// `legacyPhase`/`legacySeq` / `thinkingPresentation` / `taskTelemetry`)
+// `legacyPhase`/`legacySeq` / `thinkingPresentation` /
+// `taskHeaderPresentation` / `taskTelemetry`)
 // from `newState` so a single dump correlates raw + applied truth on
 // the same `_ptadPushId`. For captureKinds where one side is not
 // meaningful (e.g. `webview-raw-incoming` has no `applied*` because the
@@ -54,6 +55,7 @@ function buildWebviewSnapshot(
 	const rawIncomingLegacyPhase = rawStateData.turnState?.phase
 	const rawIncomingLegacySeq = rawStateData.turnState?.seq
 	const rawIncomingThinkingPresentation = rawStateData.thinkingPresentation
+	const rawIncomingTaskHeaderPresentation = rawStateData.taskHeaderPresentation
 	const rawIncomingTaskTelemetry = rawStateData.taskTelemetry
 
 	// The `webview-raw-incoming` capture is stamped BEFORE the reducer
@@ -82,11 +84,13 @@ function buildWebviewSnapshot(
 		appliedLegacyPhase: isRaw ? undefined : newState.turnState?.phase,
 		appliedLegacySeq: isRaw ? undefined : newState.turnState?.seq,
 		thinkingPresentation: isRaw ? undefined : newState.thinkingPresentation,
+		taskHeaderPresentation: isRaw ? undefined : newState.taskHeaderPresentation,
 		taskTelemetry: isRaw ? undefined : newState.taskTelemetry,
 		// Raw incoming view (always stamped on both raw and applied records).
 		rawIncomingLegacyPhase,
 		rawIncomingLegacySeq,
 		rawIncomingThinkingPresentation,
+		rawIncomingTaskHeaderPresentation,
 		rawIncomingTaskTelemetry,
 	}
 }

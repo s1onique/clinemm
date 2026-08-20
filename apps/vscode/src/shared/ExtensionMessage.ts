@@ -163,6 +163,51 @@ export interface ExtensionState {
 	 */
 	thinkingPresentation?: ThinkingPresentationProjection
 	/**
+	 * ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+	 *
+	 * The webview-facing TaskHeader state projection. The TaskHeader
+	 * state label consumers (TaskHeaderTelemetry.tsx →
+	 * taskHeaderStateLabel) consume this projection instead of
+	 * `turnState.phase` directly. The projection carries the full
+	 * multi-phase vocabulary (`idle` / `streaming` /
+	 * `awaiting_approval` / `awaiting_followup` / `compacting` /
+	 * `completed` / `error` / `resumable`) plus a provenance tag
+	 * (`source: "shadow" | "host" | "legacy"`).
+	 *
+	 * Source authority (frozen by the THCP01 selector contract):
+	 *
+	 *   - `"host"`    — host-owned compaction system transition. The
+	 *                   canonical shadow cannot represent this phase
+	 *                   (compaction is not a runtime event), so the
+	 *                   host is the only legitimate authority for the
+	 *                   `compacting` label.
+	 *   - `"shadow"`  — canonical @cline/agents TaskStateShadow
+	 *                   projection (`getLocalShadowPhase()`). The
+	 *                   shadow's `turnPhase` is the authority for 7 of
+	 *                   the 8 phases (idle / streaming /
+	 *                   awaiting_approval / awaiting_followup /
+	 *                   completed / error / resumable).
+	 *   - `"legacy"`  — Hub/Remote absence fallback (or Local
+	 *                   pre-observation collapse), same byte-equivalent
+	 *                   semantics as the E7.1 Thinking legacy branch.
+	 *
+	 * `seq` is stamped from `TurnStateTracker.seq` for transport-level
+	 * stale-push fencing (same domain as `thinkingPresentation.seq`).
+	 * The webview replica reducer applies the seq gating upstream;
+	 * individual THCP consumers do NOT compare `seq` directly.
+	 *
+	 * Lifecycle: stamped every `getStateToPostToWebview` push; reset
+	 * on new task. Webview consumers should treat `undefined` as the
+	 * legacy-safe state (no TaskHeader projection authority) — the
+	 * canonical producer never publishes `undefined` while a controller
+	 * is alive.
+	 *
+	 * The legacy `turnState` field is retained for non-TaskHeader
+	 * presentation concepts (button set, composer lockout, follow-up
+	 * routing) that this ACT explicitly does not migrate.
+	 */
+	taskHeaderPresentation?: TaskHeaderPresentationProjection
+	/**
 	 * Follow-up prompts submitted while the active agent turn is still running.
 	 * These are owned by the SDK pending-prompt queue and are sent after the
 	 * current turn reaches a safe continuation point.
@@ -340,6 +385,67 @@ export interface ThinkingPresentationProjection {
 	 * consumers compare `thinkingPresentation.seq` directly. The field
 	 * is preserved here so a future E7.1-2 consumer that needs it (or
 	 * a diagnostic overlay) can rely on a stable seq stamp.
+	 */
+	seq: number
+}
+
+/**
+ * ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+ *
+ * Wire shape for the webview-facing `taskHeaderPresentation` field.
+ * The TaskHeader state label consumer
+ * (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
+ * consumes this projection via `taskHeaderStateLabel(taskHeaderPresentation, turnState)`
+ * instead of `turnState.phase` directly.
+ *
+ * Three-source precedence (frozen by `selectTaskHeaderPresentation` in
+ * `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts`):
+ *
+ *   - `"host"`    — host-owned compaction system transition. The
+ *                   canonical shadow cannot represent this phase
+ *                   (compaction is not a runtime event), so the host
+ *                   is the only legitimate authority for the
+ *                   `compacting` label.
+ *   - `"shadow"`  — canonical `@cline/agents` TaskStateShadow
+ *                   projection (`getLocalShadowPhase()`). The shadow's
+ *                   `turnPhase` is the authority for 7 of the 8 phases
+ *                   (idle / streaming / awaiting_approval /
+ *                   awaiting_followup / completed / error / resumable).
+ *                   When the shadow is present its value wins over the
+ *                   legacy `turnState.phase` (T2_LEGACY_INDEPENDENCE).
+ *   - `"legacy"`  — Hub/Remote absence fallback (or Local
+ *                   pre-observation collapse), same byte-equivalent
+ *                   semantics as the E7.1 Thinking legacy branch.
+ *
+ * `seq` is stamped from `TurnStateTracker.seq` for transport-level
+ * stale-push fencing (same domain as `thinkingPresentation.seq`).
+ * The webview replica reducer applies the seq gating upstream;
+ * THCP consumers do NOT compare `seq` directly.
+ *
+ * The shape is intentionally minimal — only the facts the TaskHeader
+ * state label needs. The E7.1 contract for `thinkingPresentation`
+ * is preserved unchanged.
+ */
+export interface TaskHeaderPresentationProjection {
+	/**
+	 * The phase the TaskHeader should render. This is the canonical
+	 * multi-phase vocabulary (`idle` / `streaming` /
+	 * `awaiting_approval` / `awaiting_followup` / `compacting` /
+	 * `completed` / `error` / `resumable`).
+	 */
+	phase: TurnPhase
+	/**
+	 * Provenance of `phase`. Exactly one of `"host"` / `"shadow"` /
+	 * `"legacy"`. Consumers MAY use this for diagnostics but should
+	 * branch the same way regardless of source — the selector
+	 * already encoded the authority precedence.
+	 */
+	source: "shadow" | "host" | "legacy"
+	/**
+	 * Stamped from `TurnStateTracker.seq`. Transport-level stale-push
+	 * fencing is applied UPSTREAM by the webview replica reducer's
+	 * seq gating — THCP consumers do NOT compare
+	 * `taskHeaderPresentation.seq` directly.
 	 */
 	seq: number
 }

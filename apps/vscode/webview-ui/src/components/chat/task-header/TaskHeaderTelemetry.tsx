@@ -13,9 +13,20 @@
  *    clears `endedAt`, so the display resumes ticking after a
  *    completed/follow-up cycle, a resume, or a retry-after-error.
  *
+ * ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+ *  - State label now reads the `taskHeaderPresentation` projection
+ *    (preferred) when present, falling back to `turnState.phase` only
+ *    when the projection is absent (Hub/Remote / pre-observation).
+ *    The projection carries the host's three-source precedence
+ *    (host-owned compaction override / canonical shadow /
+ *    legacy absence fallback) so the TaskHeader no longer needs to
+ *    independently interpret stale legacy `turnState.phase` in
+ *    normal operation.
+ *
  * Compact Task Header telemetry strip. Reads the canonical
- * `taskTelemetry` (host-owned) and `turnState` (backend-owned) and
- * projects them as four compact values:
+ * `taskTelemetry` (host-owned), `taskHeaderPresentation` (host-owned),
+ * and `turnState` (backend-owned, preserved for the projection-
+ * absence fallback) and projects them as four compact values:
  *
  *   ⏱ elapsed task time   ● state   🔧 tool calls   ↻ recovery
  *
@@ -28,8 +39,12 @@
  *     not advance). A subsequent same-task continuation clears
  *     `endedAt`, so the clock resumes ticking while preserving
  *     `startedAt` and the cumulative counters.
- *   - State label: pure projection from `turnState.phase` (reuses
- *     `taskHeaderStateLabel`). NO message-tail inference.
+ *   - State label: derived from `taskHeaderPresentation` (when
+ *     present) via `taskHeaderPresentationStateLabel`. The projection
+ *     carries the host's three-source precedence; the legacy
+ *     `turnState.phase` is consulted ONLY when the projection is
+ *     absent. NO message-tail inference. NO local duplicate
+ *     `isWorking` state.
  *   - Tool count: cumulative `taskTelemetry.toolCalls` (incremented
  *     exactly once per canonical `tool-started` runtime event).
  *   - Recovery-budget-failure count: cumulative
@@ -42,20 +57,21 @@
  * Accessible: every counter has a text label and aria-label;
  * tooltips describe semantics.
  */
-import type { TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
+import type { TaskHeaderPresentationProjection, TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
 import { ClockIcon, WrenchIcon } from "lucide-react"
 import React, { useEffect, useState } from "react"
-import { formatElapsed, resolveElapsedDisplayMs, taskHeaderStateLabel } from "./taskHeaderTelemetryHelpers"
+import { formatElapsed, resolveElapsedDisplayMs, taskHeaderPresentationStateLabel } from "./taskHeaderTelemetryHelpers"
 
 interface TaskHeaderTelemetryProps {
 	telemetry: TaskHeaderTelemetryStrip | undefined
+	taskHeaderPresentation: TaskHeaderPresentationProjection | undefined
 	turnState: TurnState | undefined
 }
 
 const LIVE_TICK_MS = 1_000
 
-const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, turnState }) => {
-	const state = taskHeaderStateLabel(turnState)
+const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, taskHeaderPresentation, turnState }) => {
+	const state = taskHeaderPresentationStateLabel(taskHeaderPresentation, turnState)
 	// Local presentation timer — DOES NOT mutate telemetry authority.
 	// We re-read telemetry.startedAt/endedAt each tick so the value
 	// remains a pure projection of canonical timestamps.

@@ -10,6 +10,22 @@
  *     `resumable`, `completed` are terminal; everything else is
  *     live OR idle.
  *
+ * ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+ *   - Added `taskHeaderPresentationStateLabel` as the new preferred
+ *     entry point. It reads the canonical `taskHeaderPresentation`
+ *     projection (host-published, three-source precedence: host
+ *     compaction override / canonical shadow / legacy fallback) and
+ *     falls back to the legacy `turnState.phase` derivation only
+ *     when the projection is absent (Hub/Remote / pre-observation).
+ *   - `taskHeaderStateLabel(turnState)` is retained for backward
+ *     compatibility with the existing test matrix and stories
+ *     snapshots. It is a strict pure projection of `turnState.phase`
+ *     and is NOT the recommended entry point for new consumers —
+ *     `taskHeaderPresentationStateLabel` is.
+ *   - `stateLabel` is unchanged: it remains the pure
+ *     `TurnPhase → StateLabelProjection` mapping and is the
+ *     cumulative foundation both entry points build on.
+ *
  * Pure helpers for the Task Header telemetry strip:
  *   - `formatElapsed`: deterministic elapsed-time formatter
  *     (mm:ss / h:mm:ss / d hh:mm) with the canonical epoch as
@@ -18,10 +34,14 @@
  *     label + icon glyph.
  *   - `taskHeaderStateLabel`: convenience selector that reads the
  *     canonical TurnPhase (NOT a message-tail fallback).
+ *   - `taskHeaderPresentationStateLabel`: the preferred entry point
+ *     for new consumers. Reads `taskHeaderPresentation` (when
+ *     present) and falls back to `turnState.phase` derivation if the
+ *     projection is absent.
  *
  * No React. No DOM. No chat-derived inference.
  */
-import type { TurnPhase, TurnState } from "@shared/ExtensionMessage"
+import type { TaskHeaderPresentationProjection, TurnPhase, TurnState } from "@shared/ExtensionMessage"
 
 const MS_PER_SECOND = 1_000
 const MS_PER_MINUTE = 60 * MS_PER_SECOND
@@ -147,5 +167,40 @@ export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
  * rather than reconstructing from chat prose.
  */
 export function taskHeaderStateLabel(turnState: TurnState | undefined): StateLabelProjection {
+	return stateLabel(turnState?.phase)
+}
+
+/**
+ * ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+ *
+ * Preferred entry point for new TaskHeader consumers. Reads the
+ * canonical `taskHeaderPresentation` projection (when present) and
+ * falls back to the legacy `turnState.phase` derivation only when
+ * the projection is absent (Hub/Remote / pre-observation absence).
+ *
+ * The projection carries the three-source precedence encoded by
+ * `selectTaskHeaderPresentation`:
+ *
+ *   - host-owned compaction override (source: "host")
+ *   - canonical @cline/agents TaskStateShadow (source: "shadow")
+ *   - legacy absence fallback (source: "legacy")
+ *
+ * When the projection is present, the host has already resolved the
+ * precedence — the consumer just translates `projection.phase`
+ * through the existing `stateLabel` mapping. The legacy `turnState`
+ * is consulted ONLY when the projection is undefined, preserving
+ * byte-equivalent semantics for any consumer that has not yet
+ * received the new wire field.
+ *
+ * The function is pure. No React. No DOM. No message-tail
+ * inference. No chat-derived fallback.
+ */
+export function taskHeaderPresentationStateLabel(
+	taskHeaderPresentation: TaskHeaderPresentationProjection | undefined,
+	turnState: TurnState | undefined,
+): StateLabelProjection {
+	if (taskHeaderPresentation) {
+		return stateLabel(taskHeaderPresentation.phase)
+	}
 	return stateLabel(turnState?.phase)
 }

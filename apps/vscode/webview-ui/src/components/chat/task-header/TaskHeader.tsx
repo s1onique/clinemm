@@ -1,4 +1,9 @@
-import type { ClineMessage, TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
+import type {
+	ClineMessage,
+	TaskHeaderPresentationProjection,
+	TaskHeaderTelemetryStrip,
+	TurnState,
+} from "@shared/ExtensionMessage"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
@@ -40,6 +45,14 @@ interface TaskHeaderProps {
 	// `taskTelemetry` state field. Optional for backward compatibility
 	// with classic/legacy state — when absent the strip renders "—".
 	taskTelemetry?: TaskHeaderTelemetryStrip
+	// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+	// host-owned TaskHeader state projection (three-source precedence:
+	// host compaction override / canonical shadow / legacy fallback).
+	// The TaskHeader state label consumes this projection in
+	// preference to `turnState.phase`. Optional for backward
+	// compatibility — when absent the strip falls back to the legacy
+	// `turnState.phase` derivation.
+	taskHeaderPresentation?: TaskHeaderPresentationProjection
 	turnState?: TurnState
 }
 
@@ -57,6 +70,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	onClose,
 	onSendMessage,
 	taskTelemetry: taskTelemetryProp,
+	taskHeaderPresentation: taskHeaderPresentationProp,
 	turnState: turnStateProp,
 }) => {
 	const {
@@ -70,6 +84,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		platform,
 		turnState: turnStateFromContext,
 		taskTelemetry: taskTelemetryFromContext,
+		taskHeaderPresentation: taskHeaderPresentationFromContext,
 	} = useExtensionState()
 
 	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: prefer the prop if provided
@@ -77,6 +92,9 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// host-owned projection from the extension state.
 	const turnState = turnStateProp ?? turnStateFromContext
 	const taskTelemetry = taskTelemetryProp ?? taskTelemetryFromContext
+	// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01: same
+	// preference pattern for the new TaskHeader presentation projection.
+	const taskHeaderPresentation = taskHeaderPresentationProp ?? taskHeaderPresentationFromContext
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
@@ -186,7 +204,11 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						user has a stable, faithful lifecycle surface. Renders "-"
 						when the host has no canonical telemetry on the wire. */}
 					<div className="flex items-center justify-between gap-2 mt-0.5">
-						<TaskHeaderTelemetry telemetry={taskTelemetry} turnState={turnState} />
+						<TaskHeaderTelemetry
+							taskHeaderPresentation={taskHeaderPresentation}
+							telemetry={taskTelemetry}
+							turnState={turnState}
+						/>
 					</div>
 					<div className="flex items-center select-none grow min-w-0 gap-1 justify-between">
 						{!isTaskExpanded && (

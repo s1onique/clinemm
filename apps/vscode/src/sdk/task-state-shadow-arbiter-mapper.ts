@@ -253,3 +253,173 @@ export function selectThinkingPresentation(input: ThinkingPresentationInputs): T
 		seq: input.seq,
 	}
 }
+
+// ===========================================================================
+// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+//
+//   selectTaskHeaderPresentation
+//
+// The webview-facing TaskHeader projection. Single source of truth for
+// the `taskHeaderPresentation` field `SdkController.getStateToPostToWebview`
+// will publish alongside `turnState` and `thinkingPresentation`. The
+// TaskHeader state label
+// (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
+// consumes this projection (via
+// `taskHeaderStateLabel(taskHeaderPresentation, turnState)`) instead of
+// `turnState.phase` directly.
+//
+// Frozen contract:
+//
+//   1. HOST COMPACTION OVERRIDE
+//      if currentLegacyPhase === "compacting"
+//        → phase = "compacting"
+//        → source = "host"
+//      This is an EXPLICIT host-owned override, NOT a generic legacy
+//      fallback. `compacting` is a host-owned system transition
+//      (`SdkCompactionCoordinator.enterCompactingPhase` writes it
+//      directly to `TurnStateTracker`; the canonical shadow is
+//      structurally unaware because compaction is not a runtime
+//      event). The shadow CANNOT represent this phase, so
+//      authorising the host as the source for this one dimension is
+//      not a fallback — it is the only legitimate authority for the
+//      `compacting` label.
+//
+//   2. CANONICAL SHADOW
+//      else if canonicalShadowPhase is defined
+//        → phase = canonicalShadowPhase
+//        → source = "shadow"
+//      The canonical shadow substrate (`@cline/agents`
+//      `TaskShadowObservation.projections.turnPhase`, surfaced via
+//      `SdkController.getLocalShadowPhase()` → wiring
+//      `getLastObservedShadowPhase`) carries 7 of the 8 phases in
+//      the legacy `TurnPhase` vocabulary. The shadow's `turnPhase`
+//      is the authority for these phases — even when the legacy
+//      `turnStateTracker` disagrees (T2_LEGACY_INDEPENDENCE).
+//
+//   3. ABSENCE FALLBACK
+//      else
+//        → phase = currentLegacyPhase
+//        → source = "legacy"
+//      Hub/Remote hosts (no `taskStateShadowWiring`), Local sessions
+//      with no observed runtime event yet, and the absence-state
+//      collapse (`CONTRACT_2` in `task-state-shadow-arbiter-mapper.ts`)
+//      all collapse to the legacy fallback. Same byte-equivalent
+//      semantics as the E7.1 Thinking projection's legacy branch.
+//
+//   4. `seq` is ALWAYS the legacy `TurnStateTracker.seq` so the
+//      webview's transport-level stale-push fencing rule continues
+//      to work unchanged.
+//
+// The selector is observation-only. It does NOT mutate any Task or
+// control state. It does NOT call `TurnStateTracker.set()`. It does
+// NOT read any background-command processing state. It does NOT
+// compute any timer value. It is the single author of the
+// TaskHeader's view of the current phase.
+//
+// Companion property (T2_LEGACY_INDEPENDENCE for the shadow branch):
+//   changing `currentLegacyPhase` while the shadow is fixed does NOT
+//   change the shadow-source phase, EXCEPT when the legacy phase is
+//   `compacting` (the host override takes precedence in that one
+//   case).
+// ===========================================================================
+
+export interface TaskHeaderPresentationProjection {
+	/**
+	 * The phase the TaskHeader should render. This is the canonical
+	 * multi-phase vocabulary (`idle` / `streaming` /
+	 * `awaiting_approval` / `awaiting_followup` / `compacting` /
+	 * `completed` / `error` / `resumable`).
+	 */
+	phase: TurnPhase
+	/**
+	 * Provenance of `phase`. Exactly one of:
+	 *   - `"host"`    — host-owned compaction system transition
+	 *                   (the canonical shadow cannot represent this
+	 *                   phase; the host is the only legitimate
+	 *                   authority for the `compacting` label).
+	 *   - `"shadow"`  — canonical `@cline/agents` TaskStateShadow
+	 *                   projection (`getLocalShadowPhase()`).
+	 *   - `"legacy"`  — Hub/Remote absence fallback (or Local
+	 *                   pre-observation collapse), same byte-equivalent
+	 *                   semantics as the E7.1 Thinking legacy branch.
+	 */
+	source: "shadow" | "host" | "legacy"
+	/**
+	 * Monotonic seq stamp from `TurnStateTracker`. Carried through
+	 * unchanged so the webview's transport-level stale-push fencing
+	 * (`ExtensionStateContext` replica reducer) continues to work.
+	 * Same domain as `thinkingPresentation.seq` per the E7.1
+	 * contract.
+	 */
+	seq: number
+}
+
+export interface TaskHeaderPresentationInputs {
+	/**
+	 * The canonical shadow phase, returned by
+	 * `SdkController.getLocalShadowPhase()`. May be `undefined` for
+	 * Hub/Remote hosts and for Local sessions with no observed
+	 * runtime event yet.
+	 */
+	readonly canonicalShadowPhase: TurnPhase | undefined
+	/**
+	 * The current authoritative `TurnStateTracker` phase. Read in
+	 * TWO branches:
+	 *   - the HOST COMPACTION OVERRIDE branch (always)
+	 *   - the ABSENCE FALLBACK branch (when canonicalShadowPhase is
+	 *     undefined)
+	 * By construction, the shadow-source branch is independent of
+	 * this value.
+	 */
+	readonly currentLegacyPhase: TurnPhase
+	/**
+	 * Monotonic seq stamp from `TurnStateTracker`. The single fence
+	 * token for the entire publish batch.
+	 */
+	readonly seq: number
+}
+
+/**
+ * Pure, deterministic TaskHeader projection selector.
+ *
+ *   1. if currentLegacyPhase === "compacting"
+ *        → phase = "compacting", source = "host"
+ *   2. else if canonicalShadowPhase is defined
+ *        → phase = canonicalShadowPhase, source = "shadow"
+ *   3. else
+ *        → phase = currentLegacyPhase, source = "legacy"
+ *
+ * `seq` is always the input `seq` (TurnStateTracker.seq).
+ *
+ * NEVER throws. NEVER reads global state. NEVER mutates any
+ * Task or control state. The three-source precedence is enforced
+ * by the body shape, not by an assertion.
+ */
+export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs): TaskHeaderPresentationProjection {
+	// 1. HOST COMPACTION OVERRIDE — explicit host authority for the
+	// one phase the canonical shadow cannot represent.
+	if (input.currentLegacyPhase === "compacting") {
+		return {
+			phase: "compacting",
+			source: "host",
+			seq: input.seq,
+		}
+	}
+	// 2. CANONICAL SHADOW — the shadow's `turnPhase` is the
+	// authority for 7 of the 8 phases (idle / streaming /
+	// awaiting_approval / awaiting_followup / completed / error /
+	// resumable). It overrides a stale legacy phase when present.
+	if (input.canonicalShadowPhase !== undefined) {
+		return {
+			phase: input.canonicalShadowPhase,
+			source: "shadow",
+			seq: input.seq,
+		}
+	}
+	// 3. ABSENCE FALLBACK — Hub/Remote / Local pre-observation.
+	return {
+		phase: input.currentLegacyPhase,
+		source: "legacy",
+		seq: input.seq,
+	}
+}

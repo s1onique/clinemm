@@ -26,15 +26,22 @@
  *
  * Repo files consumed (read-only):
  *   - apps/vscode/src/shared/ExtensionMessage.ts
- *       ThinkingPresentationProjection, TaskHeaderTelemetryStrip, TurnState
+ *       ThinkingPresentationProjection, TaskHeaderPresentationProjection,
+ *       TaskHeaderTelemetryStrip, TurnState
  *   - apps/vscode/src/sdk/task-state-shadow-recorder.ts
  *       ArbiterSnapshot (execution: AgentRuntimeExecutionState; status;
  *       recoveryState; pendingToolCalls)
  *   - apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts
  *       ThinkingPresentationProjection producer
+ *       TaskHeaderPresentationProjection producer
  */
 
-import type { TaskHeaderTelemetryStrip, ThinkingPresentationProjection, TurnPhase } from "./ExtensionMessage"
+import type {
+	TaskHeaderPresentationProjection,
+	TaskHeaderTelemetryStrip,
+	ThinkingPresentationProjection,
+	TurnPhase,
+} from "./ExtensionMessage"
 
 // ============================================================================
 // INTENTIONAL DESIGN NOTE
@@ -216,6 +223,10 @@ export interface PostTerminalAuthoritySnapshot {
 	// E7.1 thinkingPresentation projection
 	readonly thinkingPresentation?: ThinkingPresentationProjection
 
+	// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+	// TaskHeader presentation projection (state label authority).
+	readonly taskHeaderPresentation?: TaskHeaderPresentationProjection
+
 	// Task telemetry (host-cumulative)
 	readonly taskTelemetry?: TaskHeaderTelemetryStrip
 
@@ -232,6 +243,15 @@ export interface PostTerminalAuthoritySnapshot {
 	 * applied) or whether the reducer mutated it.
 	 */
 	readonly rawIncomingThinkingPresentation?: ThinkingPresentationProjection
+
+	/**
+	 * ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
+	 * Raw incoming `taskHeaderPresentation`, recorded on the
+	 * `webview-raw-incoming` capture BEFORE any reducer touches the
+	 * payload. Companion to the post-reducer `taskHeaderPresentation`
+	 * field.
+	 */
+	readonly rawIncomingTaskHeaderPresentation?: TaskHeaderPresentationProjection
 
 	/**
 	 * Raw incoming `taskTelemetry`, recorded on the `webview-raw-incoming`
