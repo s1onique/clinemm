@@ -86,7 +86,12 @@ export interface SdkSessionLifecycleOptions {
 	 * `this.activeSession` after `sdkHost.start()`. A stale token
 	 * means a newer intent has superseded this operation; the
 	 * lifecycle disposes the just-started session and returns
-	 * `{ status: "superseded", ... }`.
+	 * `{ status: "superseded", startedSessionId? }`. The
+	 * `startedSessionId` is only present on the load-bearing
+	 * post-start fence path (the disposed session is observable
+	 * for logging/test purposes); pre-host fence paths carry no
+	 * extra field. `sdkHost` is never returned on `"superseded"`
+	 * because there is no live host to expose.
 	 */
 	isOperationCurrent?: (token: number) => boolean
 }
@@ -198,7 +203,7 @@ export class SdkSessionLifecycle {
 		operationToken: number,
 	): Promise<
 		| { status: "started"; startResult: StartSessionResult; sdkHost: SdkSessionHost }
-		| { status: "superseded"; startResult?: undefined; sdkHost: SdkSessionHost }
+		| { status: "superseded"; startedSessionId?: string }
 	>
 	async startNewSession(
 		startInput: Parameters<VscodeSessionHost["start"]>[0],
@@ -208,7 +213,7 @@ export class SdkSessionLifecycle {
 		operationToken?: number,
 	): Promise<
 		| { status: "started"; startResult: StartSessionResult; sdkHost: SdkSessionHost }
-		| { status: "superseded"; startResult?: undefined; sdkHost: SdkSessionHost }
+		| { status: "superseded"; startedSessionId?: string }
 	> {
 		// FENCE-FIRST (P0): the fence must reject a stale token BEFORE
 		// any destructive lifecycle action. The previous ordering
@@ -223,7 +228,7 @@ export class SdkSessionLifecycle {
 				`[SdkController] startNewSession: pre-endActiveSession supersession; operationToken=${operationToken} abandoned`,
 			)
 			// We haven't touched activeSession yet — no cleanup needed.
-			return { status: "superseded", sdkHost: undefined as unknown as SdkSessionHost }
+			return { status: "superseded" }
 		}
 
 		if (this.activeSession) {
@@ -235,7 +240,7 @@ export class SdkSessionLifecycle {
 				Logger.debug(
 					`[SdkController] startNewSession: post-endActiveSession supersession; operationToken=${operationToken} abandoned`,
 				)
-				return { status: "superseded", sdkHost: undefined as unknown as SdkSessionHost }
+				return { status: "superseded" }
 			}
 		}
 
@@ -249,7 +254,7 @@ export class SdkSessionLifecycle {
 				Logger.debug(
 					`[SdkController] startNewSession: post-waitForPendingStop supersession; operationToken=${operationToken} abandoned`,
 				)
-				return { status: "superseded", sdkHost: undefined as unknown as SdkSessionHost }
+				return { status: "superseded" }
 			}
 		}
 
@@ -264,7 +269,11 @@ export class SdkSessionLifecycle {
 			Logger.debug(
 				`[SdkController] startNewSession: pre-host.start supersession; operationToken=${operationToken} abandoned`,
 			)
-			return { status: "superseded", sdkHost }
+			// The shared host was created but no session was started,
+			// so there is no `startedSessionId` to surface. Return
+			// the closed state without exposing the host (the caller
+			// has nothing to use it for).
+			return { status: "superseded" }
 		}
 
 		const startResult = await sdkHost.start({
@@ -285,7 +294,10 @@ export class SdkSessionLifecycle {
 				`[SdkController] startNewSession: post-start supersession; disposing just-started session=${startResult.sessionId}`,
 			)
 			this.trackSessionStop(sdkHost, startResult.sessionId, "superseded-by-fence")
-			return { status: "superseded", sdkHost }
+			// The session was just started but is being disposed; we DO NOT
+			// return a live `sdkHost` (it is no longer usable). Surface the
+			// disposed sessionId so logs/tests can name the supersession.
+			return { status: "superseded", startedSessionId: startResult.sessionId }
 		}
 
 		this.activeSession = {
