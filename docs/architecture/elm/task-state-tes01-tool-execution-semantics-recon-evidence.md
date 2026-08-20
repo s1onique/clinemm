@@ -4,13 +4,41 @@
 
 - ACT: ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS01
 - ACT-TYPE: recon-only (no production source change)
-- VERDICT (provisional, awaiting reviewer): PENDING_RECON
+- VERDICT (final, reviewer Option A confirmed): PASS_RECON — RECON_COMPLETE_NO_SAFE_SEMANTIC_PROJECTION_IN_THIS_ACT
 - RECON-CLASSIFICATION: substrate supports bounded mechanism + outcome + duration projection; purpose remains UNAVAILABLE_FROM_TRACE
 - ENTRY_HEAD: `6aa97fa01ecd3a5c6492b97292e0ed8192ff743b` (Tool-Execution Semantics recon start; preserves OAT01 closure `e54a71326` + hygiene `0db0201cc` + board `1c787884c` + gate-ref `6aa97fa01`)
-- TOTAL COMMITS AHEAD OF origin/main: 4
+- TOTAL COMMITS AHEAD OF origin/main: 6 (4 from OAT01 closure; 2 from this recon: evidence doc `9469dbc11` + board `f9d8dad00`)
 - WORKTREE: clean
 - STASHES: 2/2 protected
 - RECOVERY REFS: 2/2 intact
+
+---
+
+## REVIEWER RESPONSE (added post-recon)
+
+**Reviewer**: Runtime telemetry engineer + Factory reviewer
+**Decision**: Option A. TES-RECON-01 closes as PASS_RECON with
+`RECON_COMPLETE_NO_SAFE_SEMANTIC_PROJECTION_IN_THIS_ACT`. EPIC remains
+OPEN until concrete user-facing need justifies TES-IMPL-01.
+
+### What the reviewer accepted
+
+```text
+  toolCallId       = REAL
+  toolName         = REAL
+  durationMs       = REAL
+  typed outcome    = REAL where the typed runtime outcome seam is consumed
+  mechanism        = STRUCTURAL
+  effectClass      = STRUCTURAL or UNKNOWN
+  purpose          = UNAVAILABLE_FROM_TRACE
+  retryIdentity    = UNAVAILABLE_TODAY
+```
+
+The recon closes as PASS with exact-range discipline preserved
+(2 commits, 2 doc files, 0 production/test/config delta, clean
+`git diff --check`, no untracked/unmerged residue).
+
+
 
 ## MISSION
 
@@ -1129,3 +1157,207 @@ Total = 27 vocabulary values across the projection (5 + 9 + 13 = 27,
 plus the scalar `total` and `cumulativeDurationMs`).
 
 This is the language a bounded telemetry wire field would speak.
+
+### What the reviewer corrected (P1 design-contract for future impl)
+
+The reviewer flagged **three real P1 design-contract issues** that
+must be addressed before any bounded impl ACT, plus a structural
+distinction that would otherwise slip into the wire as a defect.
+
+#### P1.1 — taxonomy too large / too close to tool names
+
+The original ACT explicitly preferred roughly `<=8` mechanism categories
+(see ACT §38). My recon froze 13 mechanism buckets:
+
+```text
+  read, search, shell, patch, edit, network, skills, human_question,
+  completion, status, cancel, mcp, other
+```
+
+This is "drifting toward a renamed tool registry rather than a useful
+semantic aggregation." The reviewer is correct: `command_status` and
+`cancel_command` are siblings of `run_commands` (they manage in-flight
+execution state) — they should not occupy top-level mechanism buckets
+alongside `read` and `execute`.
+
+**Reconciled classification**: `TES_RECON_TAXONOMY = CANDIDATE`,
+NOT `TES_RECON_TAXONOMY = FROZEN_PRODUCT_CONTRACT`. The taxonomy in
+this recon is offered as a candidate for future impl ACT, not a
+frozen contract. No production source change in this recon; therefore
+no consumer depends on it.
+
+**Recommended reconsolidation** (for any future impl ACT, not this
+recon):
+
+```text
+  read        <--  read_files
+  search      <--  search_codebase
+  mutate      <--  apply_patch, editor
+  execute     <--  run_commands, command_status, cancel_command
+  network     <--  fetch_web_content
+  human       <--  ask_question
+  completion  <--  submit_and_exit
+  delegate    <--  skills, mcp_<server>__<tool>
+  other       <--  unknown tools (first-class bucket)
+```
+
+This collapses to 9 categories (still slightly over the original
+ACT's `<=8`, but explainable: process-execution follow-up tools
+sit with their parent mechanism). Could be further collapsed to 8
+by merging `read` + `search` if the team prefers.
+
+#### P1.2 -- `effectClass` mixes two different concepts
+
+The recon document sometimes implied:
+
+```text
+shell  ->  effect=process_execution
+```
+
+and elsewhere correctly said:
+
+```text
+shell effect  ->  UNKNOWN
+```
+
+These are different axes. **Mechanism** describes technical operation;
+**side-effect** describes externally-relevant mutation.
+
+The reviewer is exactly right that the conflation would encode
+"semantic category overlap from day one."
+
+**Reconciled classification**: A future bounded projection should
+split these into two vocabularies:
+
+```text
+  mechanism:    process_execution    (<-- shell IS process execution)
+  sideEffect:   unknown              (<-- shell-side mutation is unknowable
+                                       without CommandExecutionPlan observation)
+```
+
+The substrate already has `CommandExecutionPlan.transformedInput`
+(see `sdk/packages/shared/src/llms/tools.ts:130`) which encodes the
+hardened argv; when present, side-effect can be classified from the
+hardened plan. Until then, `unknown` is the truthful state.
+
+This is the strongest reason **not** to jump straight into wire/API
+work — splitting mechanics from effects in the **contract** BEFORE
+the wire is added is much cheaper than splitting it after.
+
+#### P1.3 -- reuse existing `onToolRuntimeOutcome` seam; do not add a duplicate
+
+My recon's Option B suggested:
+
+> "new AgentRuntimeHooks field for typed outcome (host-side hook)"
+
+The reviewer correctly points out that **`AgentRuntimeHooks.onToolRuntimeOutcome`
+already exists** in `sdk/packages/shared/src/agent.ts:616`. The C1.2
+observable-seam comment is explicit:
+
+```text
+C1.2 observable seam. Fires once per tool call after the runtime
+has produced a `ToolRuntimeOutcome` for that call. Read-only
+observation; not a control plane. See `AgentToolRuntimeOutcomeHookContext`.
+```
+
+The runtime already wires it through `bootstrap.hooks` at
+`sdk/packages/core/src/runtime/host/local-runtime-host.ts:697`. The
+host simply does **not populate** `bootstrap.hooks.onToolRuntimeOutcome`
+from the VSCode-side `SdkController` today.
+
+**Reconciled classification**: Any future bounded impl ACT must
+frame the host-side work as **"bridge existing typed outcome seam
+through the host/runtime composition boundary"** -- NOT as
+**"add new AgentRuntimeHooks field"**. The Option B wording was
+architecturally wrong. This is a wording correction -- no source
+change in the recon -- but it matters for any future ACT that
+references the Option B path.
+
+The reviewer's framing aligns with the upstream division of labor:
+`@cline/agents` owns tool orchestration (including the seam),
+`@cline/core` owns stateful host/session orchestration (including
+the requestToolApproval path). The substrate is correct. The host
+bridge is the missing piece -- and it is purely additive on top of
+the existing field.
+
+### Structural distinction: attempt vs. execution cardinality
+
+The reviewer discovered a real cardinality distinction that my recon
+glossed over. Today:
+
+```text
+  TOOL ATTEMPTS  = model tool-call requests that reached
+                   requestToolApproval + toolNotFound decisions
+                   (includes user_rejected, host_policy_denied,
+                    approval_pending, runtime_skipped)
+
+  TOOL EXECUTIONS = model tool-call requests that reached the
+                   executor (produces tool-started + tool-finished
+                    events + ToolRuntimeOutcome)
+```
+
+The current `taskTelemetry.toolCalls` counts **only EXECUTIONS**.
+A naive partition of `toolCalls` by outcome would silently exclude
+the ATTEMPT axis:
+
+```text
+  toolCalls (today)  = 10         (executions only)
+  toolAttempts (NEW) = 13         (executions + denied + rejected + ...)
+
+  byOutcome execution-success = 8  (sum <= executions)
+  byOutcome execution-error   = 2  (sum <= executions)
+  byOutcome denied            = 3  (sum <= ATTEMPTS, not <= toolCalls)
+```
+
+The reviewer is correct that this deserves explicit design, not
+accidental aggregation. A future bounded impl ACT should keep
+ATTEMPT and EXECUTION cardinality on **distinct axes** with **distinct
+counters** rather than collapsing them into one `byOutcome` partition.
+
+This is another reason to defer TES-IMPL until the cardinality
+design is settled.
+
+### Reviewer's final disposition (verbatim)
+
+```text
+ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS01
+STATUS         = CLOSED_RECON
+VERDICT        = RECON_COMPLETE_NO_SAFE_SEMANTIC_PROJECTION_IN_THIS_ACT
+
+EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01
+STATUS         = OPEN
+PRIORITY       = revisit when concrete product/UI need exists
+
+PROVEN:
+  existing toolCalls scalar is truthful (TES10 NOT REPRODUCED)
+  mechanism is structurally derivable
+  typed runtime outcomes exist (C1.2 seam confirmed)
+  tool durationMs exists (runtime-event-adapter)
+  purpose is unobservable (command-string heuristics forbidden)
+  retryIdentity unavailable at host today
+
+TES-IMPL PRECONDITIONS (any future bounded impl ACT must satisfy):
+  1. concrete user-facing question that semantic telemetry answers
+  2. collapse mechanism taxonomy to bounded product categories
+     (recommend <=8 per the original ACT §38)
+  3. separate mechanism vocabulary from side-effect vocabulary
+     (i.e. split "process_execution mechanism" from "unknown side-effect")
+  4. distinguish ATTEMPT cardinality from EXECUTION cardinality
+     (do not collapse into one byOutcome partition)
+  5. bridge EXISTING `AgentRuntimeHooks.onToolRuntimeOutcome` seam
+     through the host/runtime composition boundary; do NOT add
+     a duplicate substrate field
+
+PRODUCTION_DEFECT = NONE
+
+VERDICT  = PASS_RECON
+DECISION = OPTION A
+```
+
+The reconsolidated priority-list choice leaves the next engineering
+slot to **existing board priority** rather than auto-promoting to
+TES-IMPL. The reviewer's note on `GITHUB-ACTIONS01` was an
+observation, not a prescription -- the next ACT is whichever the
+board's current priority ordering nominates.
+
+---
