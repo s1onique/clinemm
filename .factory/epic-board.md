@@ -1336,6 +1336,43 @@ Per the reviewer's directive: "Do not claim natural-race reproduction if not obs
 
 `ACT-CLINEMM-MESSAGE-COORDINATOR-INVARIANT-VIOLATION-SURFACING01` (P2 hardening, follow-up) — see the `KNOWN_HARDENING_RESIDUE` block above. Optional; reviewer's directive does not require it.
 
+### CORRECTION01 closure mechanics (per Factory reviewer)
+
+Per reviewer disposition `PASS_REPAIR_WITH_ONE_P1_CLOSURE_DEFECT`, three bounded mechanics landed after the initial closure commit:
+
+- `611a831b5` **fix(sdk): tighten StartNewSessionResult discriminated union; no fake sdkHost on "superseded"** — production code only; removes the `undefined as unknown as SdkSessionHost` cast on pre-host fence paths; `"superseded"` now carries no `sdkHost` (the caller has nothing to use it for); post-start fence path optionally carries `startedSessionId` for observability.
+- `154aad879` **test(sdk): dispose TCL09 + COMMON02 as passing KNOWN_HARDENING_RESIDUE witnesses** — test-only; both tests now assert the CURRENT silent-drop contract (with explicit `EXPECTED_CURRENT_BEHAVIOR` / `PRODUCT_DESIRED_BEHAVIOR` / `FOLLOWUP_ACT` annotation) instead of asserting that the silent drop is gone. Causal tests (PARENT01, REACH02, A–F) remain normal GREEN acceptance gates — NOT weakened.
+- `3c1d5053f` **board(epic): this ACT closed pending LIVE** — force-added the board row through `.gitignore` so the disposition is durable in Git terms.
+
+### Test status (post-CORRECTION01)
+
+| Bucket | Pre-CORRECTION01 | Post-CORRECTION01 |
+|---|---|---|
+| All 10 affected test files | 115 GREEN + 2 RED (TCL09 + COMMON02 as RED acceptance tests) | **117 GREEN + 0 RED** (TCL09 + COMMON02 disposed as passing KNOWN_HARDENING_RESIDUE witnesses) |
+| `apps/vscode typecheck` | 0 diagnostics | 0 diagnostics |
+| `git diff HEAD~9..HEAD --check` | PASS | PASS |
+
+HEAD = `3c1d5053f`. LOCAL_AHEAD = 12 commits ahead of `origin/main`.
+
+### Honest PARENT02 wording (per reviewer)
+
+PARENT02 (Phase 5 rewrite) verifies:
+
+- repaired race leaves `task=undefined` and `activeSession=undefined`;
+- calling `compactTask()` preserves that clean state;
+- no new `Logger.error` appears.
+
+It does NOT actually assert an explicit user-visible rejection. The captured warning count is not asserted, and a `Logger.warn` would not by itself prove that the webview received anything.
+
+- `COMPACT_AFTER_REPAIRED_RACE` = normal no-session coordinator branch reached; no error-level failure; clean pair invariant preserved
+- `USER_VISIBLE_COMPACT_REJECTION` = LIVE_PENDING / not proven by PARENT02
+
+That is fine. Exact-head LIVE qualification owns the UI claim.
+
+### Board validator
+
+The two pre-existing board validator failures at L204 / L207 are P2 / historical (visible in board history before FIX01 began). They MUST NOT block this ACT and are explicitly NOT fixed here.
+
 ## Board maintenance rule
 
 At the end of a meaningful ACT, update **only rows affected by that ACT**. Do not rewrite the whole board.
