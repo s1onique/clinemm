@@ -4886,6 +4886,161 @@ describe("LocalRuntimeHost", () => {
 		).toBe(true);
 	});
 
+	// CRA13: ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01 — follow-up after non-authoritative done.
+	//
+	// The completion-response-authority correction made the done handler refuse to synthesize a
+	// completion_result row when no completion tool was observed. That left the runtime-owned
+	// terminal state ("phase = streaming" preserved on the webview; `activeSession.isRunning`
+	// already false). For the user, that means the composer is visually enabled (`submitDisabled
+	// = false`) AND `turnAllowsFollowup()` returns true.
+	//
+	// But "composer enabled" is not the same as "next turn starts". The follow-up routes via
+	// `sendToActiveSession(..., shouldQueue=true)` -> `fireAndForgetSend(..., "queue")` ->
+	// `LocalRuntimeHost.runTurn` with `delivery: "queue"`. The first `runTurn` call ENQUEUES the
+	// prompt (does NOT start a turn). The auto-drain mechanism (`scheduleDrain` -> `drain` -> `send`)
+	// then re-submits the prompt WITHOUT delivery, and that second call lands in `executeTurn`.
+	//
+	// This test pins the chain end-to-end at the LocalRuntimeHost seam:
+	//   1. Session starts (canStartRun=true initially).
+	//   2. A follow-up is submitted with delivery:"queue" while the agent is idle.
+	//   3. The follow-up is initially enqueued (pendingPrompts.length === 1 immediately).
+	//   4. The auto-drain fires; the agent's continue()/run() IS called with the prompt.
+	//   5. pendingPrompts is empty after the drain.
+	//
+	// If this test fails (orphaned queue), the user sees their prompt disappear without the
+	// runtime consuming it. That's a genuine P1 behavioral defect in the corrected contract.
+	it("auto-drains a delivery:'queue' follow-up submitted to an idle interactive session (CRA13)", async () => {
+		const sessionId = "sess-cra13-queue-followup-idle";
+		const manifest = createManifest(sessionId);
+		const sessionService = {
+			ensureSessionsDir: vi.fn().mockReturnValue("/tmp"),
+			createRootSessionWithArtifacts: vi.fn().mockResolvedValue({
+				manifestPath: "/tmp/manifest-cra13.json",
+				messagesPath: "/tmp/messages-cra13.json",
+				manifest,
+			}),
+			persistSessionMessages: vi.fn(),
+			updateSessionStatus: vi.fn().mockResolvedValue({ updated: true }),
+			writeSessionManifest: vi.fn(),
+			listSessions: vi.fn().mockResolvedValue([]),
+			deleteSession: vi.fn().mockResolvedValue({ deleted: true }),
+		};
+		const runtimeBuilder = {
+			build: vi.fn().mockReturnValue({
+				tools: [],
+				shutdown: vi.fn(),
+			}),
+		};
+		// The agent is idle from the start — `canStartRun` returns true the entire
+		// time. This mirrors the post-`done(reason:"completed")` state on an
+		// interactive session that the corrected completion-response-authority
+		// contract leaves behind (activeSession.isRunning=false, agent.running=false,
+		// canStartRun=true).
+		const run = vi.fn().mockResolvedValue(createResult({ text: "first" }));
+		const continueFn = vi.fn().mockResolvedValue(createResult({ text: "next" }));
+		const manager = new RuntimeHostUnderTest({
+			distinctId,
+			sessionService: sessionService as never,
+			runtimeBuilder,
+			createAgent: () =>
+				({
+					run,
+					continue: continueFn,
+					canStartRun: vi.fn(() => true),
+					abort: vi.fn(),
+					subscribeEvents: vi.fn().mockReturnValue(() => {}),
+					getAgentId: vi.fn().mockReturnValue("agent-root-1"),
+					getConversationId: vi.fn().mockReturnValue("conv-root-1"),
+					shutdown: vi.fn().mockResolvedValue(undefined),
+					getMessages: vi.fn().mockReturnValue([]),
+					messages: [],
+				}) as never,
+		});
+		const events: Array<unknown> = [];
+		manager.subscribe((event) => {
+			events.push(event);
+		});
+
+		await manager.startSession(
+			normalizeStartInput({
+				config: createConfig({ sessionId }),
+				interactive: true,
+			}),
+		);
+
+		// Submit a follow-up with delivery:"queue" — the exact path the webview
+		// exercises when the coordinator refuses the awaiting_followup promotion
+		// (terminalResponseCommittedThisTurn=false; phase="streaming" preserved).
+		//
+		// The `await` here will resolve AFTER the auto-drain microtask fires, so by
+		// the time we read `pendingPrompts.list(...)` the queue has been drained
+		// (continue() already invoked). The thing the test pins is the FULL chain:
+		// the first runTurn call DID NOT synchronously start a turn, the prompt
+		// was queued, then auto-drained to invoke the agent's continue().
+		const enqueueResult = await manager.runTurn({
+			sessionId,
+			prompt: "queued follow-up",
+			delivery: "queue",
+		});
+
+		// The first runTurn call returns undefined (enqueued, NOT started) —
+		// this is the runTurn contract for delivery=queue.
+		expect(enqueueResult).toBeUndefined();
+
+		// Flush microtasks: enqueue -> scheduleDrain queues a microtask that
+		// calls drain(), which calls deps.send -> runTurn (no delivery) ->
+		// executeTurn -> executeAgentTurn -> agent.run() (or .continue() if
+		// the agent was already started). After runTurn's executeTurn
+		// completes, the second-line `queueMicrotask(() => drain(...))`
+		// in runTurn (line 1041) fires too — two macrotask ticks ensure
+		// the full chain has settled.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		// The agent's run() IS invoked (by the auto-drain) with the queued
+		// prompt — that's the canonical "next turn starts" contract. (The
+		// session was just started, so `shouldContinue` is false on the first
+		// execution, meaning run() is called rather than continue() — both
+		// are acceptable; the contract is that the agent receives the prompt.
+		// `formatModePrompt` wraps the user prompt in a `<user_input mode="act">`
+		// wrapper per prepareTurnInput, so the call signature is the wrapped form.)
+		expect(run).toHaveBeenCalledTimes(1);
+		expect(run.mock.calls[0]?.[0]).toContain("queued follow-up");
+		expect(continueFn).not.toHaveBeenCalled();
+
+		// pendingPrompts is empty after the auto-drain.
+		const queueAfterDrain = await manager.pendingPrompts.list({ sessionId });
+		expect(queueAfterDrain).toEqual([]);
+
+		// The pending_prompt_submitted event fires for the drain, with the
+		// queued delivery=queue semantic preserved.
+		const submittedAfterDrain = events.some((event) => {
+			if (typeof event !== "object" || event === null || !("type" in event)) {
+				return false;
+			}
+			if (event.type !== "pending_prompt_submitted") {
+				return false;
+			}
+			const payload = (event as { payload?: { prompt?: string; delivery?: string } }).payload;
+			return payload?.prompt === "queued follow-up" && payload?.delivery === "queue";
+		});
+		expect(submittedAfterDrain).toBe(true);
+
+		// The pending_prompts event also fires with the post-drain snapshot
+		// (empty queue) — proves the webview sees the queue's drained state.
+		const drainedPromptsEvent = events.find((event) => {
+			if (typeof event !== "object" || event === null || !("type" in event)) {
+				return false;
+			}
+			if (event.type !== "pending_prompts") {
+				return false;
+			}
+			const payload = (event as { payload?: { prompts?: unknown[] } }).payload;
+			return Array.isArray(payload?.prompts) && payload.prompts.length === 0;
+		});
+		expect(drainedPromptsEvent).toBeDefined();
+	});
+
 	it("updates and removes pending prompts by id", async () => {
 		const sessionId = "sess-edit-pending-queue";
 		const manifest = createManifest(sessionId);
