@@ -88,7 +88,6 @@ jobs:
             # protos`) inside the quality-checks job; we don't share
             # that job, so we generate protos here before the ratchet.
             - name: Generate protobuf sources (GHA12)
-              working-directory: ${{ github.workspace }}
               run: bun run protos
 
             # The ratchet runs vitest+coverage first, then the Python

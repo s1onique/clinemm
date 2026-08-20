@@ -295,6 +295,67 @@ class TestQualityFloorGHA13Contracts(unittest.TestCase):
             "comment).",
         )
 
+    def test_protos_step_inherits_apps_vscode_working_directory(self):
+        # GHA15: the 'Generate protobuf sources' step MUST NOT carry
+        # a working-directory override. The job-level default is
+        # 'apps/vscode', and the `protos` script is defined in
+        # apps/vscode/package.json (not root package.json). Adding a
+        # working-directory override (e.g. ${{ github.workspace }})
+        # would shift script lookup to the wrong package.json and
+        # produce 'Script not found "protos"'.
+        #
+        # This was the cause of the second exact-head RED at run
+        # 32388150403 (CORRECTION02's working-directory override was
+        # the regression; it had to be removed).
+        #
+        # The contract: between the step name 'Generate protobuf
+        # sources' and the next `- name:` line, there must be NO
+        # working-directory key.
+        text = self.text
+        lines = text.splitlines(keepends=False)
+
+        # Find the 0-based line index of the step's "- name:" line.
+        name_line_idx = None
+        for i, line in enumerate(lines):
+            if line.lstrip().startswith("- name: Generate protobuf sources"):
+                name_line_idx = i
+                break
+        self.assertIsNotNone(
+            name_line_idx,
+            "GHA15: 'Generate protobuf sources' step must exist in workflow",
+        )
+
+        # Determine the indent of the step's "- name:" line.
+        name_line = lines[name_line_idx]
+        stripped = name_line.lstrip(" \t")
+        step_indent = name_line[: len(name_line) - len(stripped)]
+
+        # Walk forward from the end of the name line, collecting body
+        # lines whose indent is strictly deeper than step_indent.
+        body_lines: list[str] = []
+        for line in lines[name_line_idx + 1 :]:
+            if line.strip() == "":
+                if not body_lines:
+                    continue
+                break
+            stripped = line.lstrip(" \t")
+            indent_len = len(line) - len(stripped)
+            if indent_len <= len(step_indent):
+                break
+            body_lines.append(line)
+        body = "\n".join(body_lines)
+        self.assertNotIn(
+            "working-directory:",
+            body,
+            "GHA15: 'Generate protobuf sources' step MUST NOT carry a "
+            "working-directory override. The job default is "
+            "'apps/vscode', and the `protos` script is only in "
+            "apps/vscode/package.json. Adding an override would make "
+            "`bun run protos` look in the wrong package.json and fail "
+            "with 'Script not found'. See run 32388150403 for the live "
+            "RED that caught this regression.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
