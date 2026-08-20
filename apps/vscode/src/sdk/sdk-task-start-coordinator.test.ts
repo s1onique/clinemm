@@ -721,6 +721,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		buildStartSessionInput: ReturnType<typeof vi.fn>
 		createHistoryItemFromSession: ReturnType<typeof vi.fn>
 		clearTask: ReturnType<typeof vi.fn>
+		clearTaskForOperation: ReturnType<typeof vi.fn>
 		createTempSessionHost: ReturnType<typeof vi.fn>
 		loadInitialMessages: ReturnType<typeof vi.fn>
 		resolveContextMentions: ReturnType<typeof vi.fn>
