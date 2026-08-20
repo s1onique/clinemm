@@ -125,9 +125,23 @@ export class SdkCompactionCoordinator {
 					await this.runCompaction(current.sdkHost, current.sessionId)
 				})
 			} catch (error) {
+				// ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01:
+				// The failure-notice row is appended to the transcript via
+				// `emitInfo` → `appendAndEmit` regardless of the trailing
+				// publication, so the user still sees it. A publication
+				// failure on this outer catch must NOT mask the already-
+				// logged original error or propagate to the caller — the
+				// UX-level failure row already landed.
 				Logger.error("[SdkController] compactTask failed:", error)
-				this.emitInfo(COMPACTION_FAILURE_MESSAGE, activeSession.sessionId)
-				await this.options.postStateToWebview()
+				try {
+					this.emitInfo(COMPACTION_FAILURE_MESSAGE, activeSession.sessionId)
+					await this.options.postStateToWebview()
+				} catch (publicationError) {
+					Logger.error(
+						"[SdkController] compactTask: failure-notice publication failed; failure row already on transcript",
+						publicationError,
+					)
+				}
 			} finally {
 				this.compactInFlight = false
 			}
@@ -146,9 +160,18 @@ export class SdkCompactionCoordinator {
 		try {
 			await this.compactDisplayedTask(displayedTaskId)
 		} catch (error) {
+			// ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01:
+			// Mirror the active-session branch above.
 			Logger.error("[SdkController] compactTask failed:", error)
-			this.emitInfo(COMPACTION_FAILURE_MESSAGE, displayedTaskId)
-			await this.options.postStateToWebview()
+			try {
+				this.emitInfo(COMPACTION_FAILURE_MESSAGE, displayedTaskId)
+				await this.options.postStateToWebview()
+			} catch (publicationError) {
+				Logger.error(
+					"[SdkController] compactTask: failure-notice publication failed; failure row already on transcript",
+					publicationError,
+				)
+			}
 		} finally {
 			this.compactInFlight = false
 		}
@@ -246,18 +269,34 @@ export class SdkCompactionCoordinator {
 		// which keeps this a bounded system-transition window rather
 		// than a new terminal state.
 		const restorePhase = this.enterCompactingPhase()
+		// ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01:
+		//
+		// Captured before the try so the `finally` block can distinguish:
+		//   success exit → the trailing post-restore publication is the
+		//                  user's only feedback that the webview actually
+		//                  saw the restored phase; a publication failure
+		//                  here is observable and must propagate.
+		//   throw exit   → the original compaction throw is authoritative;
+		//                  a publication failure here is secondary, log
+		//                  it, do NOT mask the original error.
+		let compactionError: unknown
 		try {
 			this.emitCompactionRow({ status: "started", mode: "manual" }, compactionTs, sessionId)
 			await this.options.postStateToWebview()
-			await this.runCompactionInPhase({
-				sdkHost,
-				sessionId,
-				messages,
-				messagesBefore,
-				config,
-				compactionTs,
-				updateSessionCompactionState,
-			})
+			try {
+				await this.runCompactionInPhase({
+					sdkHost,
+					sessionId,
+					messages,
+					messagesBefore,
+					config,
+					compactionTs,
+					updateSessionCompactionState,
+				})
+			} catch (error) {
+				compactionError = error
+				throw error
+			}
 		} finally {
 			restorePhase()
 			// ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01:
@@ -271,15 +310,23 @@ export class SdkCompactionCoordinator {
 			// remain stuck on the runtime-owned state until some other
 			// event happened to flush again. The publication here is
 			// unconditional on exit (success, throw, or skip) — every
-			// terminal path lands in `finally`. The trailing post is
-			// caught so a publication failure cannot mask the original
-			// compaction error: the outer `compactTask` catch in the
-			// outer try still receives the original throw unchanged.
+			// terminal path lands in `finally`.
 			try {
 				await this.options.postStateToWebview()
-			} catch {
-				// Observation — cannot let publication failures replace
-				// the authoritative throw propagated to the caller.
+			} catch (publicationError) {
+				if (compactionError === undefined) {
+					// Success exit — publication is the user's only
+					// signal that the webview saw the restore. Propagate.
+					// biome-ignore lint/correctness/noUnsafeFinally: throw is gated by `compactionError === undefined`, so it never runs while another throw is in flight.
+					throw publicationError
+				}
+				// Failure exit — the original compaction throw is
+				// authoritative. Surface the publication failure as a
+				// log entry but do NOT mask the compaction error.
+				Logger.error(
+					"[SdkController] compactTask: post-restore publication failed after a compaction error; preserving original error",
+					publicationError,
+				)
 			}
 		}
 	}
