@@ -147,8 +147,21 @@ export interface AgentContentEndEvent extends AgentEventMetadata {
 	 *
 	 * "executed"                  ⇒ the tool's executor was invoked.
 	 *                                The result may still be an error;
-	 *                                downstream rendering differentiates
-	 *                                running / completed / executed-failed.
+	 *                                downstream consumers may consult
+	 *                                the structured `error` / `output`
+	 *                                / `durationMs` fields on this
+	 *                                event to differentiate success
+	 *                                from executed-but-failed. Note:
+	 *                                the VS Code webview
+	 *                                `CommandOutputRow` status pill
+	 *                                currently renders `Completed`
+	 *                                for any `executed` row whose
+	 *                                `commandCompleted` is true (no
+	 *                                separate `Failed` pill yet);
+	 *                                presence of an error body is
+	 *                                surfaced through the existing
+	 *                                error-rendering path, not
+	 *                                through this field.
 	 * "rejected_before_execution" ⇒ the runtime declined to invoke the
 	 *                                executor (input parse error, policy
 	 *                                deny, user reject, etc.). No

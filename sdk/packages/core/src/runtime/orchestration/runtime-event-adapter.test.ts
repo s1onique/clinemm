@@ -911,6 +911,163 @@ describe("toLegacyAgentEvent — stateless helper", () => {
 });
 
 // ---------------------------------------------------------------------------
+// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01 — bridge propagation
+// of `toolCall.metadata.executionDisposition` → legacy
+// `content_end.executionDisposition`. This is the load-bearing seam between
+// the runtime producer (`@cline/agents` stamps metadata.executionDisposition
+// BEFORE tool-finished) and the message-translator consumer that surfaces
+// it as `ClineMessage.commandExecutionDisposition`.
+//
+// The translator + ChatRow + CommandOutputRow tests already prove the
+// downstream half of the chain (TI_UI04..06, RCP01..10). This block
+// pins the upstream half — the bridge itself — so a regression in
+// `translateToolFinished` cannot make every existing test group
+// stay green while the webview quietly regresses.
+// ---------------------------------------------------------------------------
+
+describe("RuntimeEventAdapter — executionDisposition propagation (RCP-BRIDGE)", () => {
+	let adapter: RuntimeEventAdapter;
+	beforeEach(() => {
+		adapter = new RuntimeEventAdapter();
+	});
+
+	function makeToolFinishedEvent(
+		toolCall: AgentToolCallPart,
+	): AgentRuntimeEvent {
+		return {
+			type: "tool-finished",
+			snapshot: makeSnapshot(),
+			iteration: 1,
+			toolCall,
+			message: {
+				id: "msg_bridge",
+				role: "tool",
+				createdAt: 0,
+				content: [
+					{
+						type: "tool-result",
+						toolCallId: toolCall.toolCallId,
+						toolName: toolCall.toolName,
+						output: "ok",
+					},
+				],
+			},
+		};
+	}
+
+	it("RCP-BRIDGE01: metadata.executionDisposition='rejected_before_execution' propagates to content_end", () => {
+		// Load-bearing positive control: the bridge MUST carry the
+		// runtime-stamped lifecycle signal to the legacy content_end.
+		// Without this, the message-translator has nothing to surface
+		// and the ChatRow has no structured signal to consult.
+		const toolCall = makeToolCall({
+			toolCallId: "call_rej_1",
+			toolName: "run_commands",
+			metadata: { executionDisposition: "rejected_before_execution" },
+		});
+		const out = adapter.translate(makeToolFinishedEvent(toolCall));
+		expect(out).toHaveLength(1);
+		expect(out[0]).toMatchObject({
+			type: "content_end",
+			contentType: "tool",
+			toolName: "run_commands",
+			toolCallId: "call_rej_1",
+			executionDisposition: "rejected_before_execution",
+		});
+	});
+
+	it("RCP-BRIDGE02: metadata.executionDisposition='executed' propagates to content_end", () => {
+		// Positive control for the executed path. Confirms the bridge
+		// does not only forward rejections — a tool whose executor was
+		// actually invoked must surface 'executed' so the translator
+		// can mark executed-completion rows correctly.
+		const toolCall = makeToolCall({
+			toolCallId: "call_exec_1",
+			toolName: "run_commands",
+			metadata: { executionDisposition: "executed" },
+		});
+		const out = adapter.translate(makeToolFinishedEvent(toolCall));
+		expect(out).toHaveLength(1);
+		expect(out[0]).toMatchObject({
+			type: "content_end",
+			contentType: "tool",
+			toolName: "run_commands",
+			toolCallId: "call_exec_1",
+			executionDisposition: "executed",
+		});
+	});
+
+	it("RCP-BRIDGE03: absent metadata omits executionDisposition (no synthesis from absence)", () => {
+		// Anti-synthesis guard. Producers that pre-date the field ship
+		// toolCall without metadata.executionDisposition; the bridge
+		// MUST NOT promote absence to either value. This matches the
+		// §16 contract: absence is opaque to downstream rendering.
+		const toolCall = makeToolCall({
+			toolCallId: "call_legacy_1",
+			toolName: "read_file",
+		});
+		const out = adapter.translate(makeToolFinishedEvent(toolCall));
+		expect(out).toHaveLength(1);
+		expect(out[0]).not.toHaveProperty("executionDisposition");
+	});
+
+	it("RCP-BRIDGE04: arbitrary/unknown metadata.executionDisposition is dropped (no promotion)", () => {
+		// Anti-arbitrary-value guard. The bridge accepts ONLY the
+		// two enum values; any other string (typo, future value,
+		// malicious payload) must be omitted, not forwarded. This
+		// keeps the translator's discriminator narrow and prevents
+		// string heuristics in downstream consumers.
+		const toolCall = makeToolCall({
+			toolCallId: "call_garbage_1",
+			toolName: "run_commands",
+			metadata: { executionDisposition: "frobnicated" },
+		});
+		const out = adapter.translate(makeToolFinishedEvent(toolCall));
+		expect(out).toHaveLength(1);
+		expect(out[0]).not.toHaveProperty("executionDisposition");
+	});
+
+	it("RCP-BRIDGE05: composition — tool-finished → translate() yields content_end with executionDisposition AND legacy fields (output/durationMs)", () => {
+		// Composition test (reviewer's "even better"): a single
+		// tool-finished event with metadata + a fake-timer pair
+		// yields the FULL content_end shape the message-translator
+		// consumes. This proves the middle half of the production
+		// chain end-to-end at the adapter layer.
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(1_700_000_000_000));
+			const toolCall = makeToolCall({
+				toolCallId: "call_comp_1",
+				toolName: "run_commands",
+				metadata: { executionDisposition: "rejected_before_execution" },
+			});
+			adapter.translate({
+				type: "tool-started",
+				snapshot: makeSnapshot(),
+				iteration: 1,
+				toolCall,
+			});
+			vi.advanceTimersByTime(42);
+			const out = adapter.translate(makeToolFinishedEvent(toolCall));
+			expect(out).toEqual([
+				{
+					type: "content_end",
+					contentType: "tool",
+					toolName: "run_commands",
+					toolCallId: "call_comp_1",
+					output: "ok",
+					error: undefined,
+					durationMs: 42,
+					executionDisposition: "rejected_before_execution",
+				},
+			]);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
 // Exhaustiveness — AgentRuntimeEvent variants
 // ---------------------------------------------------------------------------
 
