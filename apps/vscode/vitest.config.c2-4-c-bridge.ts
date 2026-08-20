@@ -33,7 +33,10 @@ export default defineConfig({
 		// Only the bridge test files. The base config does not
 		// include these (and the bridge config does not include
 		// the base tests), so the two streams are isolated.
-		include: ["src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts"],
+		include: [
+			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
+			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
+		],
 		testTimeout: 30_000,
 	},
 	resolve: {

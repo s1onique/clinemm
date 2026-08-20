@@ -1,46 +1,50 @@
 /**
  * ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01
  *
- * Reproduction tests for the `run_commands` background -> agent
- * successor-seam defect.
+ * Bounded RED reproduction of the
+ * `run_commands` background -> agent successor-seam defect.
  *
- * Live witness (this ACT):
- *   `run_commands` returns   { status: "running", jobId: "cmd_..." }
- *   background process       still alive
- *   TaskHeader               showed Waiting
- *   composer                 enabled
- *   agent progression        stopped
+ * This ACT classifies:
+ *   - the host-only projection reset (RTP00) as intact;
+ *   - the executor terminal event -> agent wakeup as
+ *     structurally missing (ACL02 RED, see companion
+ *     `acl02-runtime-seam.c24-c-bridge.test.ts`);
+ *   - the typed intent for FOREGROUND_DEFERRED vs
+ *     INTENTIONALLY_DETACHED as structurally absent (ACL04,
+ *     real-schema-pin).
  *
- * Question: after command-job termination, does the agent/runtime
- * have a causal successor path that re-enters the agent loop with
- * the terminal result? Or does the session transit to
- * awaiting_followup while a causally-owned background job is still
- * alive, with no successor scheduled?
+ * CORRECTION01 review notes (peer-reviewed):
  *
- *   ACL01 - RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED
- *   ACL02 - TERMINAL_JOB_HAS_CAUSAL_SUCCESSOR
- *   ACL03 - NO_ACTIVE_JOB_DONE_YIELDS_TO_USER
- *   ACL04 - INTENTIONAL_DETACH_TYPED_INTENT
- *   ACL10 - TERMINAL_EVENT_CARDINALITY
+ *   - ACL04 was previously a self-referential dummy-object
+ *     probe. That test was authored to pass rather than to
+ *     prove anything about production. Replaced with a
+ *     real `createShellTool(...).inputSchema` JSON-Schema
+ *     traversal that pins the strict
+ *     `additionalProperties: false` + missing `intent`
+ *     field.
  *
- * Classification (this ACT):
- *   ACL01 / ACL03 / ACL10 currently PASS  (existing
- *     runtime-task-progression / completion-liveness / job
- *     cardinality work is intact).
- *   ACL02 currently FAILS: the host's `onBackgroundStateChange`
- *     callback is wired to SdkController.updateBackgroundCommandState,
- *     which only updates a UI projection. There is no consumer
- *     that drives a successor agent turn when the background job
- *     terminates.
- *   ACL04 currently PASSes  (the typed-intent gap is observable).
+ *   - ACL02 was previously a self-referential
+ *     `onBackgroundStateChange` callback probe. That
+ *     test passed without observing the agent, the
+ *     runtime, or the scheduler. Replaced as a
+ *     structural observation here; the deeper causal
+ *     RED proof (counting `runTurn` invocations after
+ *     bg-job terminal) lives in the companion
+ *     `acl02-runtime-seam.c24-c-bridge.test.ts` under
+ *     the dedicated c2-4-c bridge config.
  *
- *   CASE B (MISSING TERMINAL CONTINUATION) is the load-bearing
- *   case.
- *   FOLLOWED BY: CASE E (OWNERSHIP UNDEFINED) — the runtime
- *     cannot tell FOREGROUND_DEFERRED from INTENTIONALLY_DETACHED
- *     via typed state.
+ *   - The model-facing `run_commands` tool description
+ *     (the third byte of this ACT) explicitly tells the
+ *     model to "redirect long-running commands to a
+ *     tmp file." That classifies the contract as
+ *     "model-owned polling" (Contract X). The user's
+ *     live screenshot's `awaiting_followup` is the
+ *     model legitimately emitting a text-only response
+ *     after a RUNNING result, NOT a host that lost the
+ *     job. ACL06 pins this contract observation.
  */
 
+import { createShellTool } from "@cline/core"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
 import { createVscodeRunCommandsTool } from "../vscode-run-commands-tool"
@@ -96,6 +100,16 @@ async function waitForJobIdle(manager: CommandJobManager, jobId: string): Promis
 	}
 }
 
+// ===========================================================================
+// ACL01 — RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED
+// ===========================================================================
+// Real CommandJobManager + real `run_commands` tool. After
+// the bg-job terminates asynchronously, the projection
+// callback MUST flip back to `false`. This is the
+// projection-only seam that was wired by
+// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01. It is intact
+// today; ACL01 confirms the projection reset still works.
+//
 describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL01", () => {
 	it("RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED - projection must reset when the background job terminates", async () => {
 		if (!isPosix) {
@@ -142,113 +156,14 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL01", () => {
 	})
 })
 
-describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL02", () => {
-	it("TERMINAL_JOB_HAS_CAUSAL_SUCCESSOR - the existing onBackgroundStateChange callback does NOT signal agent wakeup", async () => {
-		// BUG: SdkController wires onBackgroundStateChange to
-		// updateBackgroundCommandState, which only mutates a UI
-		// projection. There is no consumer that schedules a
-		// successor agent turn. This means: when the background
-		// job terminates, the agent never re-enters the loop.
-		//
-		// This test pins the gap at the EXACT canonical seam: the
-		// callback contract that the host currently exposes. The
-		// callback signature is `(running: boolean, jobId: string |
-		// undefined) => void` — and the host's only consumer is
-		// projection-update.
-		//
-		// Until a successor-mechanism is added, this test fails.
-		// When the repair lands, this test must be updated to
-		// verify the new contract.
-		if (!isPosix) {
-			return
-		}
-		const manager = new CommandJobManager()
-
-		// Capture the exact signature the host accepts.
-		type WireCallback = (running: boolean, jobId: string | undefined) => void
-
-		// The SdkController (vscode/src/sdk/SdkController.ts:635) wires
-		// onBackgroundStateChange to updateBackgroundCommandState. We
-		// simulate that consumer behaviour.
-		const uiProjection = { running: false, jobId: undefined as string | undefined }
-		const onBackgroundStateChange: WireCallback = (running, jobId) => {
-			uiProjection.running = running
-			uiProjection.jobId = jobId
-		}
-
-		const tool = createVscodeRunCommandsTool({
-			cwd: process.cwd(),
-			getTerminalManager: () => {
-				throw new Error("not used in background mode")
-			},
-			vscodeTerminalExecutionMode: "backgroundExec",
-			commandJobManager: manager,
-			backgroundWaitBudgetMs: 50,
-			backgroundExecutionDeadlineMs: 30_000,
-			onBackgroundStateChange,
-		})
-
-		try {
-			const result = await executeTool(
-				tool,
-				{ commands: [sleepCmd] },
-				{ agentId: "agent-1", conversationId: "conversation-1", iteration: 1 },
-			)
-			const parsed = JSON.parse(result[0].result)
-			expect(parsed.status).toBe("running")
-			expect(uiProjection.running).toBe(true)
-			expect(uiProjection.jobId).toBe(parsed.jobId)
-
-			// The load-bearing invariant the defect violates: after
-			// the bg job terminates, the agent must have a
-			// causal successor path. The host's only callback is
-			// UI projection. Pin the gap.
-			await waitForJobIdle(manager, parsed.jobId)
-			await new Promise((r) => setTimeout(r, 200))
-
-			expect(uiProjection.running).toBe(false)
-			expect(uiProjection.jobId).toBeUndefined()
-
-			// The defect: no successor mechanism exists. The
-			// callback's SECOND argument (the jobId) is NOT
-			// dispatched to a wakeup/coordinator/etc. The agent
-			// would have to call command_status by itself OR the
-			// user has to send a message — both are not the
-			// runtime's job.
-			//
-			// ACL02 is RED until the host exposes a successor
-			// path. The test pin is:
-			//   - the BUG is: the callback is type-narrowed to
-			//     projection-only, no wakeup parameter exists;
-			//   - the FIX would have to add an explicit
-			//     `onAsyncTerminalResult` (or equivalent) callback
-			//     that delivers the terminal result to the agent.
-			//
-			// Marker: explicitly demonstrate that the callback
-			// signature cannot carry a wakeup signal. The current
-			// project-shipped  onBackgroundStateChange only
-			// receives (running, jobId) — never a terminal
-			// result nor a session/task identifier.
-			const callbackType: WireCallback = onBackgroundStateChange
-			// Type-narrow pin: the function body of the wired
-			// callback takes only (running: boolean, jobId: string
-			// | undefined). It would have to be widened to
-			// (event: { kind: "running" | "terminal", jobId?:
-			// string, terminal?: CommandJobSnapshot }) to
-			// support a successor.
-			expect(callbackType.length).toBeGreaterThanOrEqual(0)
-			// The next assertion is the load-bearing one: the
-			// host's `onBackgroundStateChange` has NO successor
-			// consumer. We test this by checking that no
-			// scheduled microtask or fetched agent session is
-			// observable after the terminal event.
-			expect(manager.activeCount).toBe(0)
-		} finally {
-			await manager.dispose()
-		}
-	})
-})
-
+// ===========================================================================
+// ACL03 — NO_JOB_DONE_YIELDS_TO_USER (CPL conservation)
+// ===========================================================================
+// Control: fast command completes synchronously. No
+// background orphan. The terminal stdout is returned to
+// the agent inline. Conservation of
+// COMPLETION-PROTOCOL-LIVENESS01.
+//
 describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL03", () => {
 	it("NO_JOB_DONE_YIELDS_TO_USER - fast command completes synchronously, no orphaned job", async () => {
 		if (!isPosix) {
@@ -282,15 +197,107 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL03", () => {
 	})
 })
 
+// ===========================================================================
+// ACL04 — INTENTIONAL_DETACH_TYPED_INTENT (REWRITTEN IN CORRECTION01)
+// ===========================================================================
+// Real-schema proof. The review of CORRECTION00 noted
+// that the prior ACL04 inspected a self-authored dummy
+// object and could not fail under any schema change.
+//
+// Real check here: build the production
+// `createShellTool` and inspect the resulting
+// `inputSchema` JSON Schema. The
+// `additionalProperties: false` field is the
+// load-bearing structural fact: there is no room for a
+// typed `intent` field today. If a future change adds
+// such a field (e.g. `properties.intent`), this test
+// fails RED and the test author MUST update the
+// dispatching contract accordingly.
+//
+// The test does NOT assert anything about runtime
+// behavior. That is the job of the bigger picture; this
+// is a TYPED-CONTRACT freeze.
+//
 describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL04", () => {
-	it("INTENTIONAL_DETACH_TYPED_INTENT - run_commands input shape has no typed intent flag", () => {
-		const schemaProbe = {
-			commands: ["echo a"],
-		} as { commands: string[]; intent?: string }
-		expect((schemaProbe as { intent?: string }).intent).toBeUndefined()
+	it("INTENTIONAL_DETACH_TYPED_INTENT - production run_commands input schema has no typed intent field", () => {
+		const tool = createShellTool(async () => "ok", {
+			cwd: process.cwd(),
+			bashTimeoutMs: 30_000,
+		})
+		expect(tool.name).toBe("run_commands")
+
+		const schema = tool.inputSchema as Record<string, unknown>
+		expect(schema.type).toBe("object")
+
+		const properties = schema.properties as Record<string, unknown>
+		expect(Object.keys(properties).sort()).toEqual(["commands"])
+
+		const commands = properties.commands as Record<string, unknown>
+		expect(commands.type).toBe("array")
+
+		// The load-bearing assertion: the schema rejects all
+		// fields except `commands`. A typed `intent` /
+		// `detach` / `fire_and_forget` field is forbidden
+		// by the schema itself.
+		expect(schema.additionalProperties).toBe(false)
+		expect((properties as Record<string, unknown>).intent).toBeUndefined()
+		expect((properties as Record<string, unknown>).detach).toBeUndefined()
+		expect((properties as Record<string, unknown>).fire_and_forget).toBeUndefined()
+		expect((properties as Record<string, unknown>).background).toBeUndefined()
 	})
 })
 
+// ===========================================================================
+// ACL06 — TOOL_DESCRIPTION_CONTRACT (NEW IN CORRECTION01)
+// ===========================================================================
+// The model is told (by the tool's `description`) what
+// to do for long-running commands. Inspect the
+// production description verbatim and pin the contract:
+//
+//   "For long-running commands, run them in background
+//    and redirect output to a tmp file that you can
+//    read from later."
+//
+// This is "Contract X" (model-owned polling). The
+// live screenshot — `run_commands → RUNNING → text
+// response → awaiting_followup` — is the model
+// EMITTING A TEXT RESPONSE because the tool
+// description told it to redirect to a tmp file and
+// move on. It is NOT the host losing the job.
+//
+// Future repair authoring MUST update both the schema
+// AND this description, OR the description and the
+// dispatch contract MUST be re-shaped so the new
+// agreement is propagated to the model.
+//
+describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL06", () => {
+	it("TOOL_DESCRIPTION_CONTRACT - production run_commands description tells the model how to handle long-running commands", () => {
+		const tool = createShellTool(async () => "ok", {
+			cwd: process.cwd(),
+			bashTimeoutMs: 30_000,
+		})
+		expect(tool.name).toBe("run_commands")
+		expect(typeof tool.description).toBe("string")
+
+		// Load-bearing phrase in the contract.
+		expect(tool.description).toContain("long-running")
+		// Polling guidance (Contract X = model-owned).
+		expect(tool.description).toMatch(/redirect.*tmp|poll|status/i)
+		// The redirect-to-tmp-file contract is the
+		// load-bearing sentence today.
+		expect(tool.description).toContain("redirect output to a tmp file")
+	})
+})
+
+// ===========================================================================
+// ACL10 — TERMINAL_EVENT_CARDINALITY
+// ===========================================================================
+// Idempotence: `terminalPromise` resolves exactly once
+// per job, regardless of how many `.then()` consumers
+// are attached. This is the natural guard for any
+// future successor-scheduling repair (Candidate B from
+// ACT §29).
+//
 describe("ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL10", () => {
 	it("TERMINAL_EVENT_CARDINALITY - terminalPromise resolves exactly once per job", async () => {
 		if (!isPosix) {

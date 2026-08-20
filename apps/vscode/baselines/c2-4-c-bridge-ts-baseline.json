@@ -1,9 +1,1 @@
-[
-	{
-		"file": "src/sdk/task-state-shadow.ts",
-		"line": 169,
-		"col": 19,
-		"code": 2304,
-		"message": "Cannot find name 'TaskModel'."
-	}
-]
+[]

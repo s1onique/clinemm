@@ -43,6 +43,12 @@ export default defineConfig({
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
 			"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
 			"src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts",
+			// ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01-CORRECTION01:
+			// the companion ACL02 bridge test uses the alias
+			// `@cline-internal/core/runtime/host/local-runtime-host` which
+			// the base config does not have. It runs under
+			// `vitest.config.c2-4-c-bridge.ts` instead.
+			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
