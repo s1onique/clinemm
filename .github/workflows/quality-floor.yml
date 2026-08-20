@@ -97,11 +97,19 @@ jobs:
             # artifact is missing, the script itself exits non-zero
             # already, but belt-and-braces: assert the baseline
             # artifact was consulted.
-            - name: Verify baseline artifact consulted
+            #
+            # GHA13.a: this step MUST run from the repository root.
+            # The job-level defaults.run.working-directory is
+            # "apps/vscode", which would resolve the relative
+            # .factory path to the wrong place. Explicit override
+            # is mandatory (see GitHub docs on
+            # defaults.run.working-directory inheritance).
+            - name: Verify baseline artifact consulted (GHA13)
+              working-directory: ${{ github.workspace }}
               run: |
                   BASELINE=.factory/quality/code-coverage-baseline.json
                   if [ ! -f "$BASELINE" ]; then
-                    echo "ERROR: baseline artifact missing at $BASELINE"
+                    echo "ERROR: baseline artifact missing at $(pwd)/$BASELINE"
                     exit 1
                   fi
                   SIZE=$(stat -c%s "$BASELINE" 2>/dev/null || stat -f%z "$BASELINE")
@@ -109,7 +117,7 @@ jobs:
                     echo "ERROR: baseline artifact too small ($SIZE bytes); likely truncated"
                     exit 1
                   fi
-                  echo "Baseline artifact present: $BASELINE ($SIZE bytes)"
+                  echo "Baseline artifact present: $(pwd)/$BASELINE ($SIZE bytes)"
 
     board-validator:
         runs-on: ubuntu-latest
@@ -128,7 +136,19 @@ jobs:
 
             # GHA07: also run the validator's own unit tests so a
             # regression in the validator does not silently flip the
-            # gate. The ratchet / validator tests are zero-network,
-            # <100ms, and run under the existing scripts/tests layout.
+            # gate. The validator tests are zero-network, <100ms, and
+            # run under the existing scripts/tests layout.
+            #
+            # The tests are stdlib-unittest based (NOT pytest); pytest
+            # is not guaranteed on the GitHub Actions ubuntu-latest
+            # runner image and is intentionally not depended on here.
+            # `python3 -m unittest discover` is the dependency-free
+            # way to run them and matches the validator's own
+            # dependency-free claim.
             - name: Run board validator unit tests
-              run: python3 -m pytest scripts/tests/test_check_epic_board_markdown.py -v
+              working-directory: ${{ github.workspace }}
+              run: |
+                  python3 -m unittest discover \
+                    -s scripts/tests \
+                    -p 'test_check_epic_board_markdown.py' \
+                    -v
