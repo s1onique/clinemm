@@ -62,8 +62,21 @@ class TestQualityFloorGHA13Contracts(unittest.TestCase):
     """The workflow file's textual contracts must hold."""
 
     def setUp(self):
-        if not QUALITY_FLOOR.exists():
-            self.skipTest(f"quality-floor.yml not present at {QUALITY_FLOOR}")
+        # P2 hardening: previously this setUp used skipTest() if the
+        # workflow file was absent, which is fail-open behavior for
+        # the standalone verifier. If someone deletes
+        # quality-floor.yml (or it is renamed), the GHA13 contract
+        # guard must FAIL HARD rather than silently skip — that is
+        # the whole point of having a CI contract guard at all.
+        # The reviewer flagged this as a P2; addressed here before
+        # publication per the explicit C1: GO direction.
+        self.assertTrue(
+            QUALITY_FLOOR.exists(),
+            f"GHA13 contract guard FAIL: quality-floor.yml must exist "
+            f"at {QUALITY_FLOOR}. If this file was renamed or moved, "
+            f"the contract guard's path constant must be updated in "
+            f"lockstep, not skipped.",
+        )
         self.text = _read(QUALITY_FLOOR)
 
     def test_baseline_check_step_overrides_working_directory(self):
