@@ -64,8 +64,13 @@ export default defineConfig({
 		//   explicit include — see vitest#6956).
 		// - exclude: by-design non-product categories (not excluded to
 		//   inflate numbers; each is documented below).
-		// - reporters: text (human), json-summary (compact CI),
+		// - reporter: text (human), json-summary (compact CI),
 		//   json (full istanbul for offline analysis).
+		//   NOTE: Vitest v4 documents the singular `reporter` key; the
+		//   plural `reporters` is silently ignored, which made the
+		//   canonical `bun run test:coverage:ratchet` command exit
+		//   with `coverage-summary.json not found`. Fixed in
+		//   `ACT-CLINEMM-CODE-COVERAGE-REPORTER-KEY-CORRECTION01`.
 		// - reportsDirectory: `coverage/` (gitignored).
 		coverage: {
 			provider: "v8",
@@ -84,7 +89,7 @@ export default defineConfig({
 				// extension; covered by their own dedicated test process)
 				"src/packages/**",
 			],
-			reporters: ["text", "json-summary", "json"],
+			reporter: ["text", "json-summary", "json"],
 			reportsDirectory: "./coverage",
 		},
 	},

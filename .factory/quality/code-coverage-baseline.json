@@ -4510,7 +4510,7 @@
   },
   "schema_version": 1,
   "scope": {
-    "config_fingerprint": "95de362d43e99fb782319ce5e5de44b99417979d0db1fcc48b821e00cf3fec2a",
+    "config_fingerprint": "4bb40a87a065fede18a092a506ae1b7ad45abb572bbe9b29c77213a6c5eaafc5",
     "excluded_by_design": {
       "embedded_packages": [
         "src/packages/**"
@@ -4538,7 +4538,20 @@
         "src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
         "src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts"
       ]
-    }
+    },
+    "config_fingerprint_change_log": [
+      {
+        "from": "95de362d43e99fb782319ce5e5de44b99417979d0db1fcc48b821e00cf3fec2a",
+        "to": "4bb40a87a065fede18a092a506ae1b7ad45abb572bbe9b29c77213a6c5eaafc5",
+        "act": "ACT-CLINEMM-CODE-COVERAGE-REPORTER-KEY-CORRECTION01",
+        "reason": "vitest v4 reads coverage.reporter (singular); coverage.reporters is silently ignored and broke the canonical test:coverage:ratchet gate",
+        "scope_unchanged": true,
+        "include_unchanged": true,
+        "exclude_unchanged": true,
+        "totals_unchanged": true,
+        "covered_floors_preserved": true
+      }
+    ]
   },
   "subject_head": "be76c45d6acb4f6f8c07080c29dadf54c014c186",
   "subject_tree": "ad1da638a74d1511da36374e80093119db437227",
