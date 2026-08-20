@@ -180,13 +180,38 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			setCompactionStrategyGlobally(strategy)
 		}
 
-		// ACT-CLINEMM-USER-CONTEXT-CEILING01: persist the user-controlled
-		// operating context ceiling. The value is sanitized at the SDK policy
-		// seam; this handler is the single persistence authority. Undefined
-		// clears the setting (Auto). Invalid values (non-integer, ≤0) are
-		// rejected here so they cannot reach disk and silently become model
-		// metadata in a future build.
-		if (request.userContextCeiling !== undefined) {
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01 / CORRECTION01: persist the user-
+		// controlled operating context ceiling. This handler is the single
+		// persistence authority. The wire contract is two fields that share a
+		// mutually exclusive contract:
+		//   - request.userContextCeiling: a positive integer → persist it.
+		//     Absent/undefined → leave disk untouched.
+		//   - request.clearUserContextCeiling: explicitly true → clear disk
+		//     (Auto). Anything else (false / undefined) → leave disk untouched.
+		// The two fields are required because proto3 cannot distinguish
+		// "field absent" from "field set to undefined" through the existing
+		// single-value field — `UpdateSettingsRequest.create()` always
+		// initializes every field to `undefined`, so the existing
+		// `request.userContextCeiling !== undefined` check is the only way
+		// the value pathway can detect "explicitly set". The clear pathway
+		// is a sibling boolean so an explicit Auto intent cannot be confused
+		// with an absent field.
+		//
+		// CORRECTION01 P1: a request that carries BOTH a value and
+		// clear=true is a contradictory command that explicitly says "set
+		// to 512000" and "delete the persisted key" in the same atomic
+		// transaction. The proto comments say "may carry one or neither;
+		// carrying both is invalid", and the handler enforces it. Silently
+		// picking one would be an avoidable ambiguity in a public
+		// wire contract; a typed rejection lets the caller surface the
+		// contradiction and preserves the on-disk value (no partial
+		// mutation).
+		if (request.clearUserContextCeiling === true && request.userContextCeiling !== undefined) {
+			throw new Error("Cannot set and clear user context ceiling in the same request")
+		}
+		if (request.clearUserContextCeiling === true) {
+			controller.stateManager.setGlobalState("userContextCeiling", undefined)
+		} else if (request.userContextCeiling !== undefined) {
 			const ceiling = request.userContextCeiling
 			if (typeof ceiling !== "number" || !Number.isFinite(ceiling) || !Number.isInteger(ceiling) || ceiling <= 0) {
 				throw new Error(`Invalid user context ceiling value: ${ceiling}`)

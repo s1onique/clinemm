@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import type { ChangeEventHandler } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import FeatureSettingsSection from "./FeatureSettingsSection"
@@ -34,20 +35,31 @@ vi.mock("../utils/settingsHandlers", () => ({
 
 // ACT-CLINEMM-USER-CONTEXT-CEILING01: VSCodeTextField is a web component with
 // shadow DOM; mock it to a plain input so fireEvent can drive value/change.
+//
+// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: the mock now accepts
+// the `onChange` prop (which the production component actually passes;
+// see `FeatureSettingsSection.tsx` line ~267) and forwards it to the
+// underlying input. The previous mock destructured `onInput` (which the
+// production component never passes), so the change handler was
+// `undefined` and `handleCeilingChange` was never invoked — the test
+// was silently exercising the empty-string branch regardless of the
+// test setup. The same `onChange` -> native input `onChange` wiring
+// means `fireEvent.change` and `userEvent.type` both surface the typed
+// value through `event.target.value`.
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeTextField: ({
-		onInput,
+		onChange,
 		onBlur,
 		placeholder,
 		value,
 		id,
 	}: {
-		onInput?: ChangeEventHandler<HTMLInputElement>
+		onChange?: ChangeEventHandler<HTMLInputElement>
 		onBlur?: () => void
 		placeholder?: string
 		value?: string
 		id?: string
-	}) => <input id={id} onBlur={onBlur} onChange={onInput} placeholder={placeholder} value={value ?? ""} />,
+	}) => <input id={id} onBlur={onBlur} onChange={onChange} placeholder={placeholder} value={value ?? ""} />,
 }))
 
 describe("FeatureSettingsSection", () => {
@@ -143,37 +155,58 @@ describe("FeatureSettingsSection", () => {
 		expect(ceilingField?.value).toBe("512000")
 	})
 
-	it("persists an explicit positive integer ceiling on blur", () => {
+	it("persists an explicit positive integer ceiling on blur", async () => {
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: switched from
+		// `fireEvent.change` to `userEvent.type` because the controlled-input
+		// mock does not surface the typed value through `event.target.value`
+		// until React state has updated; `userEvent` properly drives the
+		// controlled flow and the test now actually exercises the
+		// positive-integer branch (the previous `fireEvent.change` form
+		// silently hit the empty-string branch).
 		mockExtensionState.value.userContextCeiling = undefined
+		const user = userEvent.setup()
 		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
 		const ceilingField = container.querySelector("#user-context-ceiling") as HTMLInputElement | null
 		expect(ceilingField).toBeTruthy()
-		// Simulate user typing a value
-		fireEvent.change(ceilingField as Element, { target: { value: "256000" } })
-		fireEvent.blur(ceilingField as Element)
+		await user.type(ceilingField as Element, "256000")
+		await user.tab() // blur via tab focus shift
 		expect(mockUpdateSetting).toHaveBeenCalledWith("userContextCeiling", 256000)
 	})
 
-	it("rejects a negative or zero ceiling and reverts to the last persisted value", () => {
+	it("rejects a negative or zero ceiling and reverts to the last persisted value", async () => {
 		mockExtensionState.value.userContextCeiling = 128_000
+		const user = userEvent.setup()
 		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
 		const ceilingField = container.querySelector("#user-context-ceiling") as HTMLInputElement | null
 		expect(ceilingField).toBeTruthy()
-		fireEvent.change(ceilingField as Element, { target: { value: "0" } })
-		fireEvent.blur(ceilingField as Element)
+		await user.clear(ceilingField as Element)
+		await user.type(ceilingField as Element, "0")
+		await user.tab()
 		// Negative / non-positive inputs must NOT be persisted; the surface
 		// reverts to the last persisted value (128_000).
 		expect(mockUpdateSetting).not.toHaveBeenCalledWith("userContextCeiling", 0)
+		// The persisted value is restored to the input by the rejection
+		// path. After the useEffect re-syncs ceilingInput from the
+		// userContextCeiling reference, the DOM reflects 128000.
 		expect(ceilingField?.value).toBe("128000")
 	})
 
-	it("persists undefined when the user clears the field (Auto)", () => {
+	it("signs the explicit clear/reset intent when the user clears the field (Auto)", async () => {
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: the clear path
+		// uses the explicit `clearUserContextCeiling` sibling field. The
+		// backend handler deletes the persisted key when this boolean is
+		// true. The previous design sent `userContextCeiling = undefined`,
+		// which is indistinguishable from "field absent" on the proto3 wire
+		// and left the persisted value intact.
 		mockExtensionState.value.userContextCeiling = 512_000
+		const user = userEvent.setup()
 		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
 		const ceilingField = container.querySelector("#user-context-ceiling") as HTMLInputElement | null
 		expect(ceilingField).toBeTruthy()
-		fireEvent.change(ceilingField as Element, { target: { value: "" } })
-		fireEvent.blur(ceilingField as Element)
-		expect(mockUpdateSetting).toHaveBeenCalledWith("userContextCeiling", undefined)
+		await user.clear(ceilingField as Element)
+		await user.tab()
+		expect(mockUpdateSetting).toHaveBeenCalledWith("clearUserContextCeiling", true)
+		// The value field must NOT be sent alongside the clear signal.
+		expect(mockUpdateSetting).not.toHaveBeenCalledWith("userContextCeiling", undefined)
 	})
 })

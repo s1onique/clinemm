@@ -168,8 +168,13 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 	const handleCeilingBlur = () => {
 		const trimmed = ceilingInput.trim()
 		if (trimmed === "") {
-			// Empty -> Auto (undefined)
-			updateSetting("userContextCeiling", undefined)
+			// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: Empty -> Auto.
+			// The clear path uses the explicit `clearUserContextCeiling`
+			// sibling field instead of `userContextCeiling = undefined`,
+			// because proto3 cannot distinguish "explicitly cleared" from
+			// "field absent" on a single-value field. The backend handler
+			// deletes the persisted key when this boolean is true.
+			updateSetting("clearUserContextCeiling", true)
 			setCeilingError(null)
 			return
 		}

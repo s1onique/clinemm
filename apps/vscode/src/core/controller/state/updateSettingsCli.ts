@@ -29,6 +29,23 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 	}
 
 	if (request.settings) {
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01 P1 (FACTORY):
+		// the wire contract is mutually exclusive: a single request may
+		// carry `user_context_ceiling` OR `clear_user_context_ceiling`,
+		// never both. Carrying both is a contradictory command that we
+		// reject with a typed error. The guard here runs BEFORE any
+		// destructuring, batch write, or dedicated handler so that a
+		// rejected request is atomic: no `setGlobalStateBatch`,
+		// no `setGlobalState`, no telemetry-side mutation. If the
+		// guard lived further down (e.g. inside the dedicated handler
+		// AFTER the batch write), an unrelated setting in the same
+		// request could be partially mutated before the throw, which
+		// would violate the atomicity contract documented in the
+		// comments and tested by `updateSettingsCli.test.ts`.
+		if (request.settings.clearUserContextCeiling === true && request.settings.userContextCeiling !== undefined) {
+			throw new Error("Cannot set and clear user context ceiling in the same request")
+		}
+
 		// Extract all special case fields that need dedicated handlers
 		// These should NOT be included in the batch update
 		const {
@@ -46,6 +63,17 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			subagentsEnabled,
 			browserSettings,
 			defaultTerminalProfile,
+			// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: extract
+			// the ceiling fields so they don't fall into `simpleSettings`
+			// and get persisted via `setGlobalStateBatch` as part of
+			// the generic batch flow. The dedicated handler below reads
+			// these extracted locals and writes them through the
+			// dedicated `setGlobalState` path. The contradiction
+			// guard above (which runs BEFORE this destructuring) has
+			// already ensured that the two fields cannot both be present
+			// in a single request.
+			userContextCeiling,
+			clearUserContextCeiling,
 			...simpleSettings
 		} = request.settings
 
@@ -127,13 +155,37 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			controller.stateManager.setGlobalState("useAutoCondense", useAutoCondense)
 		}
 
-		// ACT-CLINEMM-USER-CONTEXT-CEILING01: validate the CLI-supplied ceiling.
-		// Mirrors `updateSettings.ts`: the SDK policy resolver sanitizes the
-		// value at consumption time, but we reject clearly invalid inputs at
-		// the persistence seam so they cannot reach disk and silently become
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01 / CORRECTION01: validate and
+		// persist the CLI-supplied ceiling. Mirrors `updateSettings.ts`
+		// with the same two-field wire contract and the same
+		// mutually-exclusive invariant:
+		//   - request.settings.userContextCeiling: positive integer
+		//     → persist. Absent/undefined → leave disk untouched.
+		//   - request.settings.clearUserContextCeiling: explicitly true
+		//     → clear disk (Auto). Anything else → leave disk untouched.
+		// The sibling-boolean clear pathway is required because proto3
+		// single-value fields cannot distinguish "explicitly set to
+		// undefined" from "absent" (the create() helper initializes every
+		// field to undefined). The SDK policy resolver sanitizes the value
+		// at consumption time, but we reject clearly invalid inputs at the
+		// persistence seam so they cannot reach disk and silently become
 		// model metadata in a future build.
-		const userContextCeiling = request.settings.userContextCeiling
-		if (userContextCeiling !== undefined) {
+		//
+		// CORRECTION01 P1: the atomicity-of-rejection invariant is enforced
+		// at the TOP of the `if (request.settings)` block (see above).
+		// This duplicated guard is a defensive safety net: if the early
+		// guard is ever removed or refactored, the dedicated handler
+		// still refuses to persist a contradictory state. The early guard
+		// is what guarantees no unrelated setting in the same request can
+		// be partially mutated before the throw; this one is unlocked by
+		// that earlier throw and is therefore unreachable in normal flow.
+		if (request.settings.clearUserContextCeiling === true && request.settings.userContextCeiling !== undefined) {
+			throw new Error("Cannot set and clear user context ceiling in the same request")
+		}
+		if (request.settings.clearUserContextCeiling === true) {
+			controller.stateManager.setGlobalState("userContextCeiling", undefined)
+		} else if (request.settings.userContextCeiling !== undefined) {
+			const userContextCeiling = request.settings.userContextCeiling
 			if (
 				typeof userContextCeiling !== "number" ||
 				!Number.isFinite(userContextCeiling) ||
