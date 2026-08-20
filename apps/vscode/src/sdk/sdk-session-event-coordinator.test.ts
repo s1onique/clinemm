@@ -97,14 +97,18 @@ describe("SdkSessionEventCoordinator", () => {
 		// count, or the footer stays stuck on the previous phase (e.g. scroll-arrows /
 		// streaming).
 		//
-		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: this test's previous
-		// assertion — `expect(setTurnPhase).toHaveBeenCalledWith("awaiting_followup")`
-		// — was the canonical terminal invariant violation. A turn that ends without a
-		// committed terminal response (no completion_result row) must NOT promote to a
-		// user-owned phase; the runtime retains ownership. Here the harness bypasses the
-		// real translator (translation is mocked with empty messages), so the
-		// translator-side fallback does not run; the coordinator correctly refuses the
-		// promotion and only the post fires.
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the completion
+		// CONTENT authority contract — a `completion_result` row requires a
+		// committed terminal response. The harness bypasses the real translator
+		// (translation is mocked with empty messages), so the translator-side
+		// fallback does not run; no `completion_result` row is synthesized.
+		//
+		// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: the PHASE transition is
+		// independent of the CONTENT authority. Even with no terminal response
+		// committed, the `done-without-completion` case MUST transition to
+		// `awaiting_followup` (truthful user-owned incomplete yield) so the
+		// TaskHeader stops showing "Working". The post still fires so the
+		// webview receives the new phase.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [],
@@ -115,7 +119,9 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		// Liveness: phase transitions to `awaiting_followup` (truthful user-
+		// owned incomplete yield) AND state is posted.
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
 		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
 	})
@@ -220,11 +226,17 @@ describe("SdkSessionEventCoordinator", () => {
 		// treating it as a cancel straggler leaves the phase stuck on "streaming" (endless
 		// Thinking). Only an actual cancel (phase "resumable") is preserved.
 		//
-		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the queued-turn path
-		// also requires a committed terminal response before promoting to
-		// awaiting_followup. In this mocked harness no messages are emitted so the
-		// translator-side fallback does not run; the coordinator refuses the promotion
-		// and only setRunning fires.
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the completion
+		// CONTENT authority contract — a `completion_result` row requires a
+		// committed terminal response. In this mocked harness no messages are
+		// emitted so the translator-side fallback does not run.
+		//
+		// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: the PHASE transition is
+		// independent of the CONTENT authority. Even with no terminal response
+		// committed, the queued turn's `done-without-completion` case MUST
+		// transition to `awaiting_followup` (truthful user-owned incomplete
+		// yield) so the TaskHeader stops showing "Working" — same invariant
+		// as CPL01 but exercised through the queued-turn-clobber path.
 		const { coordinator, options, event } = makeCoordinator({
 			activeSession: makeActiveSession({ isRunning: false }),
 			turnPhase: "streaming",
@@ -237,7 +249,10 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		// Liveness: the phase MUST transition to `awaiting_followup` (the
+		// queued-turn-clobber path is the same done-without-completion case
+		// as CPL01 — both must yield to the user).
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
 		expect(options.sessions.setRunning).toHaveBeenCalledWith(false)
 	})
 
@@ -423,16 +438,33 @@ describe("SdkSessionEventCoordinator", () => {
 	// invariant.
 	// ===========================================================================
 
-	it("CRA02-coord: does NOT promote to awaiting_followup when the turn ended without a committed terminal response", async () => {
+	it("CRA02-coord: done with no committed terminal response DOES promote to awaiting_followup (liveness-corrected)", async () => {
 		// text → tool → done (no attemptCompletionSeen, no completion_result committed).
 		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: translation returns
 		// 0 messages for the done event because the only non-tool authority source
 		// (`takeTurnFinalText()`) was cleared by the tool call, and the unproven
 		// fallback ladder (`takeLastAssistantFallback` / `takeOpenStreamingText`) has
 		// been REMOVED. No `completion_result` row is synthesized from prior
-		// intermediate content. Here we verify the COORDINATOR honors
-		// `wasTerminalResponseCommittedThisTurn() === false` and refuses to flip to
-		// awaiting_followup. The runtime keeps ownership of the turn.
+		// intermediate content.
+		//
+		// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: the prior CRA02-coord
+		// contract ("do NOT promote to awaiting_followup when no terminal
+		// response is committed") left `turnState.phase = "streaming"` forever
+		// when the agent-runtime session-termination fallback fires
+		// `finishRun("completed", finalAssistantMessage)` without a completion
+		// tool. The TaskHeader state label is a pure projection from
+		// `turnState.phase`, so the user saw a stuck "Working" header with no
+		// model/tool/approval in flight.
+		//
+		// Liveness-corrected contract: a successful agent run end WITHOUT a
+		// committed terminal response is an EXPLICIT user-owned incomplete
+		// yield — phase `awaiting_followup` (the EXISTING phase-enum contract
+		// for "done-without-completion" at `ExtensionMessage.ts:355`). The
+		// completion authority contract (terminal CONTENT row requires
+		// `terminalResponseCommittedThisTurn === true`) is UNCHANGED: no
+		// `completion_result` row is synthesized here, only the phase
+		// transitions to truthfully project the runtime-owned-but-no-work
+		// state.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [],
@@ -445,13 +477,14 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		// RED assertion: no phase flip to awaiting_followup. The coordinator must either
-		// keep "streaming" (runtime-owned) or escalate to a defined abnormal state — NOT
-		// silently promote.
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		// Liveness: the phase MUST transition to `awaiting_followup`
+		// (truthful user-owned incomplete yield; `turnAllowsFollowup() === true`
+		// so the composer stays enabled and CRA13 user follow-up continues to
+		// work).
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		// Conservation: do NOT silently promote to `completed` (no completion
+		// authority was committed; CRA02 terminal-content contract preserved).
 		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
-		// The runtime keeps ownership.
-		expect(options.setTurnPhase).not.toHaveBeenCalled()
 	})
 
 	it("CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result", async () => {
@@ -496,6 +529,154 @@ describe("SdkSessionEventCoordinator", () => {
 
 		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
 		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+	})
+
+	// ===========================================================================
+	// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: forward-progress guarantee when
+	// the agent run returns normally without a canonical terminal response.
+	//
+	// The completion-response-authority ACT (CRA02/CRA03) pinned "do NOT promote
+	// to awaiting_followup" — but that contract left `turnState.phase =
+	// "streaming"` forever when the agent-runtime session-termination fallback
+	// fires `finishRun("completed", finalAssistantMessage)` without a completion
+	// tool. The TaskHeader state label is a pure projection from
+	// `turnState.phase`, so the visible "Working" header stuck indefinitely with
+	// no model/tool/approval in flight. The liveness epic reverses the runtime-
+	// owned branch into an EXPLICIT user-owned incomplete yield: phase
+	// `awaiting_followup`, which is the EXISTING phase-enum contract for
+	// "done-without-completion" (`ExtensionMessage.ts:355`).
+	//
+	// `turnAllowsFollowup()` returns true for `awaiting_followup`, so user
+	// follow-up routes through the existing follow-up coordinator (CRA13
+	// conservation). The completion-tool path is unaffected: completion
+	// authority still gates the `completed` phase AND the `completion_result`
+	// content row.
+	// ===========================================================================
+
+	it("CPL01: done with no terminal response / no attempt-completion / no error transitions to awaiting_followup (liveness)", async () => {
+		// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01 RED. Production-seam
+		// forward-progress invariant: when an interactive run ends normally
+		// without committing any terminal-response authority, the phase must
+		// transition to a user-owned state — NOT remain runtime-owned
+		// (`streaming`), because the TaskHeader state label is a pure
+		// phase projection and the user must NOT see a stuck "Working"
+		// header with no cancellable work in flight.
+		//
+		// Reaches `done(reason=completed)` via the agent-runtime session-
+		// termination fallback (`sdk/packages/agents/src/agent-runtime.ts
+		// :1313-1336`) because either (a) no `completesRun` tool was
+		// registered for this configuration, or (b) the completion-reminder
+		// loop exhausted `maxIterations` without the model calling the
+		// completion tool.
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		options.messageTranslatorState.clearTurnOutcome()
+		expect(options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()).toBe(false)
+		expect(options.messageTranslatorState.wasAttemptCompletionSeen()).toBe(false)
+		expect(options.messageTranslatorState.wasErrorSeen()).toBe(false)
+
+		await coordinator.handleSessionEvent(event)
+
+		// FORWARD-PROGRESS INVARIANT: the phase MUST transition to the
+		// existing user-owned incomplete-yield phase. `awaiting_followup`
+		// keeps the composer enabled (`turnAllowsFollowup() === true`),
+		// which is the same condition the CRA02-empty branch deliberately
+		// preserved — but now with truthful phase projection so the
+		// TaskHeader stops showing "Working" with nothing in flight.
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		// Symmetric: do NOT silently promote to `completed` (no completion
+		// authority was committed; CRA02 conservation preserved).
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
+	})
+
+	it("CPL02: done with committed terminal response AND attempt-completion transitions to completed (control: completion-tool path)", async () => {
+		// Symmetric control case. The valid completion-tool path still
+		// transitions to `completed` AND commits a `completion_result`
+		// content row. This is the existing CRA02-committed contract —
+		// pinned here so a future repair does not regress the completion
+		// authority while fixing liveness.
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [{ ts: 1, type: "say", say: "completion_result", text: "All done", partial: false }],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		options.messageTranslatorState.setAttemptCompletionSeen()
+		options.messageTranslatorState.setTerminalResponseCommittedThisTurn()
+
+		await coordinator.handleSessionEvent(event)
+
+		expect(options.setTurnPhase).toHaveBeenCalledWith("completed")
+	})
+
+	it("CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (control: text-path)", async () => {
+		// Symmetric control case. The valid text → done path with a
+		// committed terminal response (no completion tool used) transitions
+		// to `awaiting_followup` so the user can keep talking. This is the
+		// existing CRA02-committed contract for the non-tool text path.
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [{ ts: 1, type: "say", say: "completion_result", text: "All done", partial: false }],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		options.messageTranslatorState.setTerminalResponseCommittedThisTurn()
+
+		await coordinator.handleSessionEvent(event)
+
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+	})
+
+	it("CPL04: done with attempt-completion declared but NO committed terminal response stays runtime-owned (CRA03 conservation)", async () => {
+		// CRA03 straggler case: completion tool `content_start` fired but
+		// `content_end` never arrived before `done`. The model may be
+		// mid-completion and may recover on a subsequent turn — DO NOT
+		// transition to `completed` (would render the bogus green box) AND
+		// DO NOT transition to `awaiting_followup` (would let the user
+		// treat this as a terminal state when the model is still working).
+		// Leave `phase = "streaming"` so the runtime keeps ownership.
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		options.messageTranslatorState.setAttemptCompletionSeen()
+		expect(options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()).toBe(false)
+
+		await coordinator.handleSessionEvent(event)
+
+		// Symmetric: neither promoted. The runtime-owned "streaming" phase
+		// is the truthful state for a CRA03 straggler.
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
+		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+	})
+
+	it("CPL05: done with error transitions to error (conservation)", async () => {
+		// Symmetric control case. Provider-failure surfaces (ask:"api_req_failed")
+		// must transition to the existing `error` phase. Pinned so the liveness
+		// fix does not regress error recovery (Retry / Start New Task).
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		options.messageTranslatorState.setErrorSeen()
+		options.messageTranslatorState.setTerminalResponseCommittedThisTurn()
+
+		await coordinator.handleSessionEvent(event)
+
+		expect(options.setTurnPhase).toHaveBeenCalledWith("error")
 	})
 })
 

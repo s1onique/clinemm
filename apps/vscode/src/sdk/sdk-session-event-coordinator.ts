@@ -140,21 +140,48 @@ export class SdkSessionEventCoordinator {
 						// bogus "Task Completed" surface.
 					}
 				} else {
-					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: canonical
-					// terminal invariant — a user-owned awaiting_followup promotion
-					// requires a committed terminal response (say:"completion_result" /
-					// say:"plan_completion_result"). Without it the user-visible
-					// terminal content is whatever intermediate debugging row was
-					// last — the LIVE screenshot witness. The translator falls back to
-					// the last assistant text/reasoning or stranded partial, so the
-					// common `text → tool → done` case still commits a terminal row.
-					// The CRA02-empty case (no assistant content at all) leaves the flag
-					// false and refuses the promotion — the runtime retains ownership.
+					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the
+					// completion CONTENT authority contract — a `completion_result`
+					// (or `plan_completion_result`) row may ONLY be synthesized from
+					// a committed terminal response. Without that authority the
+					// user-visible terminal content is whatever intermediate
+					// debugging row was last — the LIVE screenshot witness. The
+					// translator falls back to the last assistant text/reasoning or
+					// stranded partial, so the common `text → tool → done` case
+					// still commits a terminal row. The CRA02-empty case (no
+					// assistant content at all) leaves the flag false and refuses
+					// the promotion.
+					//
+					// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: the PHASE
+					// transition is independent of the CONTENT authority. The
+					// TaskHeader state label is a pure projection from
+					// `turnState.phase` (`apps/vscode/webview-ui/src/components/
+					// chat/task-header/TaskHeaderTelemetry.tsx` + the
+					// `taskHeaderStateLabel` helper), so leaving
+					// `phase = "streaming"` for the done-without-completion case
+					// stuck the visible header on "Working" forever with no
+					// model/tool/approval in flight. The EXISTING phase-enum
+					// contract for this case is `awaiting_followup` (see
+					// `apps/vscode/src/shared/ExtensionMessage.ts:355`,
+					// "done-without-completion"). `turnAllowsFollowup()` returns
+					// true for `awaiting_followup`, so the composer stays enabled
+					// and CRA13 user follow-up auto-drain continues to work. The
+					// completion authority contract is UNCHANGED: no
+					// `completion_result` row is synthesized here.
 					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
 						this.options.setTurnPhase?.("awaiting_followup")
 					} else {
-						Logger.warn("[SdkController] done with no committed terminal response; leaving turn runtime-owned")
-						// Do NOT call setTurnPhase.
+						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: explicit
+						// user-owned incomplete yield for the done-without-
+						// completion case. The phase is no longer runtime-owned
+						// (no work is in flight) but no terminal content was
+						// committed — `awaiting_followup` truthfully projects
+						// "the agent stopped without an explicit completion
+						// declaration; the user can respond."
+						Logger.warn(
+							"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
+						)
+						this.options.setTurnPhase?.("awaiting_followup")
 					}
 				}
 
