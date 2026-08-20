@@ -555,9 +555,9 @@ function takeShellSnapshot(): ShellSnapshot {
  * model has already planned: the new shell is named in the next request (the
  * one carrying these tool results) and used by the commands it produces.
  */
-export function createVscodeRunCommandsTool(options: VscodeRunCommandsToolOptions): AgentTool {
+export function createVscodeRunCommandsTool(options: VscodeRunCommandsToolOptions): AgentTool<unknown, unknown> {
 	const state = { snapshot: takeShellSnapshot() }
-	return createShellTool(createVscodeShellExecutor(options, state), {
+	const tool = createShellTool(createVscodeShellExecutor(options, state), {
 		cwd: options.cwd,
 		bashTimeoutMs: options.bashTimeoutMs,
 		shell: () => {
@@ -565,6 +565,13 @@ export function createVscodeRunCommandsTool(options: VscodeRunCommandsToolOption
 			return state.snapshot.shell
 		},
 	})
+	// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: `createShellTool` now
+	// returns `AgentTool<RunCommandsInput, ToolOperationResult[]>`. The
+	// public surface here is intentionally `AgentTool<unknown, unknown>`
+	// because the SDK runtime treats tool inputs as `unknown` at the
+	// boundary. The narrow type is preserved on the runtime side via the
+	// `validateInput` method that the canonical schema produces.
+	return tool as AgentTool<unknown, unknown>
 }
 
 function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state: { snapshot: ShellSnapshot }): ShellExecutor {

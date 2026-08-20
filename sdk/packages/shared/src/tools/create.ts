@@ -117,6 +117,22 @@ export function createTool<TInput, TOutput>(config: {
 			: config.inputSchema,
 	);
 
+	// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: when a Zod schema is
+	// provided, auto-generate a runtime validator so AgentRuntime can
+	// reject schema-invalid input BEFORE approval (CASE A) and BEFORE
+	// executor dispatch (CASE A + safety), and route through the
+	// input-parse-error path (CASE C → Priority 3).
+	const validateInput: AgentTool<TInput, TOutput>["validateInput"] =
+		config.inputSchema instanceof z.ZodType
+			? (raw: unknown) => {
+					const result = (config.inputSchema as z.ZodTypeAny).safeParse(raw);
+					if (!result.success) {
+						return `Invalid input for tool ${config.name}: ${z.prettifyError(result.error)}`;
+					}
+					return undefined;
+				}
+			: undefined;
+
 	return {
 		name: config.name,
 		description: config.description,
@@ -126,5 +142,6 @@ export function createTool<TInput, TOutput>(config: {
 		retryable: config.retryable ?? true,
 		maxRetries: config.maxRetries ?? 3,
 		execute: config.execute,
+		validateInput,
 	};
 }

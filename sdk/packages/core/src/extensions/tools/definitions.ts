@@ -57,6 +57,7 @@ import {
 	type StructuredCommandInput,
 	type SubmitInput,
 	SubmitInputSchema,
+	type RunCommandsInput,
 } from "./schemas";
 import type {
 	ApplyPatchExecutor,
@@ -459,7 +460,7 @@ export function createShellTool(
 	config: Pick<DefaultToolsConfig, "cwd" | "bashTimeoutMs" | "telemetry"> & {
 		shell?: string | (() => string);
 	} = {},
-): AgentTool<unknown, ToolOperationResult[]> {
+): AgentTool<RunCommandsInput, ToolOperationResult[]> {
 	const timeoutMs = config.bashTimeoutMs ?? 30000;
 	const timeoutSource =
 		config.bashTimeoutMs === undefined
@@ -475,10 +476,17 @@ export function createShellTool(
 	const describe = () =>
 		buildRunCommandsDescription(getShellKind(resolveShell()), isWindows);
 
-	const tool = createTool<unknown, ToolOperationResult[]>({
+	const tool = createTool<typeof RunCommandsInputSchema, ToolOperationResult[]>({
 		name: "run_commands",
 		description: describe(),
-		inputSchema: zodToJsonSchema(RunCommandsInputSchema),
+		// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: pass the Zod
+		// schema (not the pre-converted JSON schema) so `createTool`
+		// auto-generates a `validateInput` method that rejects
+		// schema-invalid input BEFORE `requestToolApproval`. This
+		// preserves the strict canonical schema for both the
+		// model-facing display (JSON schema) and the runtime
+		// input check.
+		inputSchema: RunCommandsInputSchema,
 		timeoutMs: timeoutMs * 2,
 		retryable: false,
 		maxRetries: 0,

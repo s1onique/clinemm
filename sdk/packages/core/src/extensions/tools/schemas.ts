@@ -146,11 +146,17 @@ export const StructuredCommandEntrySchema = z.union([
 	StructuredCommandInputSchema,
 ]);
 
-export const RunCommandsInputSchema = z.object({
-	commands: z
-		.array(CommandInputSchema)
-		.describe("Array of complete shell command strings to execute."),
-});
+export const RunCommandsInputSchema = z
+	.object({
+		commands: z
+			.array(CommandInputSchema)
+			.describe("Array of complete shell command strings to execute."),
+	})
+	// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: reject unknown
+	// fields (e.g. `timeout`) so the schema is strict at runtime —
+	// matches the `additionalProperties: false` already emitted to
+	// the JSON schema sent to the model.
+	.strict();
 
 const StructuredCommandsInputSchema = z.object({
 	commands: z.array(StructuredCommandEntrySchema),

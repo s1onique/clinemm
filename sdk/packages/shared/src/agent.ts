@@ -357,6 +357,21 @@ export interface AgentTool<TInput = unknown, TOutput = unknown>
 		input: TInput,
 		context: AgentToolContext,
 	) => Promise<TOutput> | TOutput;
+	/**
+	 * Optional runtime input validator. Invoked by AgentRuntime
+	 * BEFORE `requestToolApproval`. If it throws or returns a non-empty
+	 * string, the runtime routes the call through the input-parse-error
+	 * path (no approval, no executor, classifier Priority 3 =
+	 * `failure / tool_input_invalid`).
+	 *
+	 * ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01 contract: malformed
+	 * model tool calls must NEVER reach approval or execution.
+	 *
+	 * Authoring tools via `createTool({ inputSchema: zodSchema })`
+	 * auto-generates this from the Zod schema; tools that supply a raw
+	 * JSON schema may set it explicitly.
+	 */
+	validateInput?: (input: unknown) => void | string | Promise<void | string>;
 }
 
 // =============================================================================

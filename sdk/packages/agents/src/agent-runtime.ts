@@ -2465,6 +2465,47 @@ export class AgentRuntime {
 			input = normalizeJsonLikeStringsForSchema(input, tool.inputSchema);
 		}
 
+		// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: validate input
+		// against the tool's own schema BEFORE any policy/approval/executor
+		// side effect. A schema-invalid model tool call must NEVER request
+		// approval and must NEVER invoke the executor.
+		//
+		// On validation failure we set `skipReason` and ALSO surface the
+		// message as `metadata.inputParseError` on the toolCall so the
+		// recovery classifier routes through Priority 3
+		// (`failure / tool_input_invalid`) rather than the executor-throw
+		// path (Priority 5 → `tool_execution_error`).
+		if (tool && !skipReason && typeof tool.validateInput === "function") {
+			let validationError: string | undefined;
+			try {
+				const result = await tool.validateInput(input);
+				validationError = typeof result === "string" ? result : undefined;
+			} catch (error) {
+				validationError =
+					error instanceof Error
+						? error.message
+						: `Invalid input for tool ${toolCall.toolName}: ${String(error)}`;
+			}
+			if (typeof validationError === "string" && validationError.length > 0) {
+				skipReason = validationError;
+				// Mutate the toolCall's metadata so the classifier sees
+				// `inputParseError` (Priority 3 input-parse provenance).
+				// The downstream `executePreparedTool` reads
+				// `prepared.toolCall.metadata.inputParseError` to build
+				// the RuntimeOutcomeEvidence (agent-runtime.ts:2831).
+				const existingMeta =
+					toolCall.metadata &&
+					typeof toolCall.metadata === "object" &&
+					!Array.isArray(toolCall.metadata)
+						? (toolCall.metadata as Record<string, unknown>)
+						: {};
+				(toolCall as { metadata?: Record<string, unknown> }).metadata = {
+					...existingMeta,
+					inputParseError: validationError,
+				};
+			}
+		}
+
 		let policyOverride: ToolPolicy | undefined;
 		if (tool && !skipReason) {
 			for (const hook of this.hooks.beforeTool) {
