@@ -425,10 +425,14 @@ describe("SdkSessionEventCoordinator", () => {
 
 	it("CRA02-coord: does NOT promote to awaiting_followup when the turn ended without a committed terminal response", async () => {
 		// text → tool → done (no attemptCompletionSeen, no completion_result committed).
-		// Translation returns 0 messages for the done event; the translator-side CRA02
-		// test pins the new "fallback completion_result" emission; here we verify the
-		// COORDINATOR honors wasTerminalResponseCommittedThisTurn() === false and refuses
-		// to flip to awaiting_followup.
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: translation returns
+		// 0 messages for the done event because the only non-tool authority source
+		// (`takeTurnFinalText()`) was cleared by the tool call, and the unproven
+		// fallback ladder (`takeLastAssistantFallback` / `takeOpenStreamingText`) has
+		// been REMOVED. No `completion_result` row is synthesized from prior
+		// intermediate content. Here we verify the COORDINATOR honors
+		// `wasTerminalResponseCommittedThisTurn() === false` and refuses to flip to
+		// awaiting_followup. The runtime keeps ownership of the turn.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [],
@@ -451,8 +455,11 @@ describe("SdkSessionEventCoordinator", () => {
 	})
 
 	it("CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result", async () => {
-		// Symmetric control case: when the translator committed a terminal response
-		// (CRA02 production seam), the coordinator may safely flip to awaiting_followup.
+		// Symmetric control case: when the translator committed a canonical terminal
+		// response (the completion tool `content_end`, OR the `takeTurnFinalText()`
+		// happy path when the turn ended on text), the coordinator may safely flip to
+		// awaiting_followup. This is the ONLY path that produces a successful terminal
+		// promotion.
 		const { coordinator, options, event } = makeCoordinator({
 			translation: {
 				messages: [{ ts: 1, type: "say", say: "completion_result", text: "All done", partial: false }],

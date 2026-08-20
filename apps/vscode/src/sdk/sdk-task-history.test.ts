@@ -362,17 +362,15 @@ describe("SdkTaskHistory", () => {
 			},
 		])
 
-		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the previous assertion
-		// (`completion_result count === 0`) was the bug class this ACT repairs. A final
-		// turn that ends on a tool call after text now promotes the text into a
-		// completion_result, mirroring the live path's terminal invariant. The original
-		// text row is still present in the upsert-by-ts history; it just has its `say`
-		// discriminator retagged to completion_result.
-		expect(result).toContainEqual(
-			expect.objectContaining({ type: "say", say: "completion_result", text: "Reading the file first." }),
-		)
-		// No orphan plain text row remains — the upsert retags in place.
-		expect(result.filter((m) => m.say === "text" && m.text === "Reading the file first.")).toHaveLength(0)
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: a final turn
+		// that ends on a tool call after text has NO canonical terminal response.
+		// Prior text is intermediate content (reading/investigating), not a final
+		// answer. The transcript replays as a normal assistant text row followed by
+		// a tool_use row — NO completion_result is synthesized. This matches the
+		// live path's corrected contract: the user sees truthful intermediate
+		// content in history rather than a deceptive relabeling.
+		expect(result.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(result.filter((m) => m.say === "text" && m.text === "Reading the file first.")).toHaveLength(1)
 	})
 
 	it("hides subagent sessions from task history", async () => {

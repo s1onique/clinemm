@@ -1126,20 +1126,17 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 			state,
 		)
 
-		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the previous assertion
-		// (`done().messages.length === 0`) was the bug class this ACT repairs. The
-		// canonical terminal invariant requires a successful done to commit a terminal
-		// response even when the turn ends on a tool call after the last text. The
-		// fallback path promotes the last assistant text into a completion_result
-		// (the CRA02 test below pins this exact behaviour).
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: prior text was
+		// never a canonical terminal response. After a tool call follows the text,
+		// `takeTurnFinalText()` was cleared by the tool-start; no canonical authority
+		// source remains. No completion_result is synthesized from prior intermediate
+		// content — the runtime remains the turn owner, the user does NOT see a green
+		// box relabeling debugging text as a final answer. See also CRA09 /
+		// CRA02-empty below.
 		const doneResult = done(state)
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			type: "say",
-			say: "completion_result",
-			text: "Wrapping up now.",
-			partial: false,
-		})
+		expect(doneResult.messages).toHaveLength(0)
+		expect(doneResult.messages.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
 	it("does not retag an aborted or errored turn", () => {
@@ -1148,14 +1145,17 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 		// Aborted turn: no terminal retag.
 		expect(done(state, "aborted").messages).toHaveLength(0)
 
-		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a later stray
-		// done(reason:"completed") after an abort IS a fresh terminal signal — the
-		// canonical terminal invariant requires it to commit a terminal response.
-		// The previous assertion (`messages.length === 0`) documented the bug class
-		// this ACT repairs. The post-abort fallback now promotes the prior text via
-		// takeLastAssistantFallback().
+		// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01: a stray
+		// done(reason:"completed") after an abort without an intervening tool is not
+		// in itself terminal authority — there is no `takeTurnFinalText()` candidate
+		// (the abort reset the in-flight state), no attemptCompletionSeen, and no
+		// canonical final-response event. The prior text is a normal assistant
+		// message, not a terminal response. We do NOT resurrect a completion_result
+		// from it (the factory reviewer explicitly called out the prior post-abort
+		// fallback as the same bug class as the text → tool → done case).
 		const strayDoneResult = done(state)
-		expect(strayDoneResult.messages.some((m) => m.say === "completion_result")).toBe(true)
+		expect(strayDoneResult.messages.some((m) => m.say === "completion_result")).toBe(false)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 
 		// Reset and exercise the error path.
 		const errState = new MessageTranslatorState()
@@ -1233,20 +1233,40 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 	})
 
 	// ===========================================================================
-	// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01
+	// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY01-CORRECTION01
 	//
-	// The cases below prove (and later pin) the canonical terminal invariant:
-	//   "awaiting_followup" must correspond to a committed
-	//   say:"completion_result" (or say:"plan_completion_result") row, OR
-	//   an explicit error / api_req_failed surface. Otherwise the user-visible
-	//   terminal assistant content is whatever intermediate message was last —
-	//   exactly the LIVE screenshot witness.
+	// The cases below pin the canonical terminal-content authority contract
+	// (the factory reviewer's HALT_TERMINAL_RESPONSE_AUTHORITY_NOT_PROVEN verdict
+	// on the prior three-tier fallback ladder). The contract:
+	//
+	//   * Only TWO authority sources can mark a `done(reason:"completed")` as a
+	//     successful terminal response:
+	//       (A) the completion tool `content_end` — sets `attemptCompletionSeen`
+	//           and emits `say:"completion_result"` at the canonical emit point;
+	//       (B) the `done` handler's existing happy path — the turn genuinely
+	//           ended on finalized text (`takeTurnFinalText()` is set; no tool
+	//           call in between).
+	//   * NOT authority: any prior text/reasoning row that is no longer the
+	//     turn-final candidate; any partial streaming text; any reasoning content
+	//     (presentation-only); `done.text` non-empty alone (the runtime echoes
+	//     the last assistant text into `done.text` regardless of whether a
+	//     completion tool was used).
+	//
+	// For all the "not authority" cases, the translator MUST NOT synthesize a
+	// `completion_result` row, the `terminalResponseCommittedThisTurn` flag MUST
+	// remain false, and the session-event coordinator MUST refuse the
+	// `awaiting_followup` / `completed` promotion. The runtime remains the turn
+	// owner; the user sees the truthful "task finished without completion
+	// declaration" state rather than a deceptive relabeling of intermediate
+	// debugging content as a final answer.
 	// ===========================================================================
 
-	// CRA02: text → tool → done with no attempt_completion → terminal response MUST still be committed.
-	it("CRA02: commits a fallback completion_result from the last assistant text when the turn ends on a tool", () => {
+	// CRA02: text → tool → done with no attempt_completion. Prior text is
+	// intermediate debugging content, NOT a canonical terminal response. The
+	// tool call cleared `takeTurnFinalText()`; no authority source remains.
+	it("CRA02: text → tool → done (no completion tool) does NOT synthesize a terminal response", () => {
 		const state = new MessageTranslatorState()
-		const finalText = endText(state, "Looking into the failing test now.")
+		endText(state, "Looking into the failing test now.")
 		translateSessionEvent(
 			agentEvent({
 				type: "content_start",
@@ -1270,25 +1290,19 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 
 		const doneResult = done(state)
 
-		// RED assertion: a terminal completion_result row must be committed so the webview
-		// has a real terminal answer to render. The ts must match the original text row so
-		// the message store / webview reducer upserts in place (same retag pattern as the
-		// happy path).
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			ts: finalText.messages[0].ts,
-			type: "say",
-			say: "completion_result",
-			text: "Looking into the failing test now.",
-			partial: false,
-		})
-		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(true)
+		// RED assertion: NO completion_result is synthesized. The intermediate
+		// "Looking into the failing test now." text remains in conversation
+		// history as a normal assistant text row — not relabeled as a green box.
+		expect(doneResult.messages.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(doneResult.messages).toHaveLength(0)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
-	// CRA02 plan-mode variant: same fall-back semantics for plan_completion_result.
-	it("CRA02-plan: commits a fallback plan_completion_result from the last assistant text when the turn ends on a tool (plan mode)", () => {
+	// CRA02-plan: same negative-authority contract in plan mode. Prior text is
+	// planning narration, not a canonical plan_completion_result.
+	it("CRA02-plan: text → tool → done in plan mode (no completion tool) does NOT synthesize a plan_completion_result", () => {
 		const state = new MessageTranslatorState(undefined, undefined, () => "plan")
-		const finalText = endText(state, "Plan: read the failing test.")
+		endText(state, "Plan: read the failing test.")
 		translateSessionEvent(
 			agentEvent({
 				type: "content_start",
@@ -1311,22 +1325,25 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 		)
 
 		const doneResult = done(state)
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			ts: finalText.messages[0].ts,
-			type: "say",
-			say: "plan_completion_result",
-			text: "Plan: read the failing test.",
-			partial: false,
-		})
-		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(true)
+		expect(doneResult.messages.filter((m) => m.say === "plan_completion_result")).toHaveLength(0)
+		expect(doneResult.messages).toHaveLength(0)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
-	// CRA02b: same fall-back works when the last assistant content is reasoning.
-	it("CRA02b: commits a fallback completion_result from the last reasoning row when the turn ends on a tool", () => {
+	// CRA02b: reasoning is presentation-only — NEVER promoted into a terminal
+	// completion row. Even if reasoning is the only assistant content and a tool
+	// follows it, the done handler must not synthesize a completion_result from
+	// reasoning content. The architectural distinction between ordinary
+	// assistant content and reasoning content is semantically meaningful; using
+	// reasoning as a generic completion fallback conflates the two.
+	it("CRA02b: reasoning followed by a tool + done does NOT synthesize a completion_result", () => {
 		const state = new MessageTranslatorState()
 		translateSessionEvent(
-			agentEvent({ type: "content_start", contentType: "reasoning", reasoning: "Let me think about the failing test..." }),
+			agentEvent({
+				type: "content_start",
+				contentType: "reasoning",
+				reasoning: "Let me think about the failing test...",
+			}),
 			state,
 		)
 		translateSessionEvent(
@@ -1360,15 +1377,12 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 		)
 
 		const doneResult = done(state)
-		// Reasoning is acceptable assistant content for the user-facing terminal answer.
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			type: "say",
-			say: "completion_result",
-			partial: false,
-		})
-		expect(doneResult.messages[0].text).toContain("attempted vs delivered snapshots")
-		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(true)
+		// The reasoning row remains in conversation history as a normal `say:"reasoning"`
+		// row; NO completion_result is synthesized. The user does not see reasoning
+		// content relabeled as a final completion box.
+		expect(doneResult.messages.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(doneResult.messages).toHaveLength(0)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
 	// CRA03: attempt_completion invoked but content_end never arrives + done arrives → must NOT
@@ -1410,9 +1424,12 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
-	// CRA02-streaming-only: done with an open partial text stream finalizes and retags the
-	// partial text as the terminal completion_result.
-	it("CRA02-streaming-only: done with an open partial text stream commits the text as the terminal completion_result", () => {
+	// CRA02-streaming-only: done with an open partial text stream. The partial
+	// text is intermediate streaming content, not a canonical terminal response.
+	// Even if content_end never arrived (the SDK aborted mid-stream), the partial
+	// row is NOT terminal authority — we do not synthesize a completion_result
+	// from it. The partial row remains as-is in conversation history.
+	it("CRA02-streaming-only: done with an open partial text stream does NOT synthesize a completion_result", () => {
 		const state = new MessageTranslatorState()
 		translateSessionEvent(
 			agentEvent({
@@ -1425,16 +1442,12 @@ describe("translateSessionEvent — inferred turn-final completion", () => {
 		)
 		// NO content_end for the text — the SDK aborted the stream before content_end.
 		const doneResult = done(state)
-		// RED: the partial text row must be finalized (partial=false) and retagged as
-		// completion_result so the user sees a real terminal answer, not a stuck partial.
-		expect(doneResult.messages).toHaveLength(1)
-		expect(doneResult.messages[0]).toMatchObject({
-			type: "say",
-			say: "completion_result",
-			text: "Mid-debug reasoning...",
-			partial: false,
-		})
-		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(true)
+		// RED (inverted from the prior fix): the partial text row is NOT relabeled
+		// as a completion_result. The user does not see a green box for stranded
+		// streaming content.
+		expect(doneResult.messages.filter((m) => m.say === "completion_result")).toHaveLength(0)
+		expect(doneResult.messages).toHaveLength(0)
+		expect(state.wasTerminalResponseCommittedThisTurn()).toBe(false)
 	})
 
 	// clearTurnOutcome() / reset() must also clear / preserve the terminal-response flag —
