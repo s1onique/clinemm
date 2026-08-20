@@ -260,6 +260,27 @@ export class SdkCompactionCoordinator {
 			})
 		} finally {
 			restorePhase()
+			// ACT-CLINEMM-COMPACTION-STATE-RESTORE-REGRESSION01:
+			//
+			// The success path publishes its terminal snapshot from inside
+			// `runCompactionInPhase` while the tracker is still in the
+			// `compacting` phase. The `finally` block restores the entry
+			// phase + anchor above; without this trailing publication the
+			// webview's last received snapshot would still say
+			// `phase = "compacting"` and the TaskHeader / composer would
+			// remain stuck on the runtime-owned state until some other
+			// event happened to flush again. The publication here is
+			// unconditional on exit (success, throw, or skip) — every
+			// terminal path lands in `finally`. The trailing post is
+			// caught so a publication failure cannot mask the original
+			// compaction error: the outer `compactTask` catch in the
+			// outer try still receives the original throw unchanged.
+			try {
+				await this.options.postStateToWebview()
+			} catch {
+				// Observation — cannot let publication failures replace
+				// the authoritative throw propagated to the caller.
+			}
 		}
 	}
 
