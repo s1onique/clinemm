@@ -37,6 +37,21 @@ Contracts checked:
              push: branches: main
            (GHA08 expected triggers).
 
+  GHA14    (CORRECTION02): The coverage-ratchet job MUST run
+             `bun run protos`
+           before `bun run test:coverage:ratchet`. The proto files
+           at apps/vscode/src/shared/proto/ and
+           apps/vscode/src/generated/ are gitignored (root
+           .gitignore lines 41-42); a fresh CI checkout therefore
+           has no generated protos, and any source file that
+           imports `@/shared/proto/...` (e.g. resolveModelInfo.ts)
+           fails at vitest load time with ERR_MODULE_NOT_FOUND.
+           This was the cause of the first exact-head RED at
+           GitHub Actions run 32387118587 (conclusion=failure).
+           Contract: `bun run protos` must appear in source order
+           BEFORE `bun run test:coverage:ratchet`, and inside a
+           `run:` block (not just a comment).
+
 These are textual inspections of the workflow file. They do not
 parse YAML (stdlib has no YAML parser; PyYAML is intentionally
 not depended on for the same reason that pytest is not depended
@@ -225,6 +240,60 @@ class TestQualityFloorGHA13Contracts(unittest.TestCase):
         )
         self.assertIsNotNone(push_block)
         self.assertIn("main", push_block.group(1))
+
+    def test_coverage_ratchet_generates_protos_before_ratchet(self):
+        # GHA14: the coverage-ratchet job MUST run 'bun run protos'
+        # before 'bun run test:coverage:ratchet'. The proto files at
+        # apps/vscode/src/shared/proto/ and apps/vscode/src/generated/
+        # are gitignored (root .gitignore lines 41-42), so a fresh CI
+        # checkout has no generated protos; any source file that
+        # imports `@/shared/proto/...` (e.g. resolveModelInfo.ts) then
+        # fails at vitest load time with ERR_MODULE_NOT_FOUND. This
+        # was the cause of the first exact-head RED at run 32387118587.
+        #
+        # The contract: the "Run coverage ratchet" step MUST be
+        # preceded (in source order) by a step that runs `bun run protos`.
+        text = self.text
+
+        # Find the line index of "Run coverage ratchet" step name.
+        ratchet_name_idx = text.find("- name: Run coverage ratchet")
+        self.assertNotEqual(
+            ratchet_name_idx,
+            -1,
+            "GHA14: 'Run coverage ratchet' step must exist in workflow",
+        )
+
+        # Find the most recent `bun run protos` occurrence BEFORE that line.
+        prefix = text[:ratchet_name_idx]
+        last_protos_idx = prefix.rfind("bun run protos")
+        self.assertNotEqual(
+            last_protos_idx,
+            -1,
+            "GHA14: a `bun run protos` step must appear BEFORE "
+            "`bun run test:coverage:ratchet` in the coverage-ratchet "
+            "job. Without it, fresh-checkout CI fails with "
+            "ERR_MODULE_NOT_FOUND on `@/shared/proto/...` imports. "
+            "See run 32387118587 for the live RED that caught this "
+            "precondition.",
+        )
+
+        # The `bun run protos` reference MUST be inside a `run:` block
+        # within a step (not just a comment), so it actually executes.
+        # We verify by finding the nearest preceding `run:` line and
+        # confirming the protos reference is after it.
+        run_idx = prefix.rfind("run:")
+        self.assertNotEqual(
+            run_idx,
+            -1,
+            "GHA14: 'bun run protos' must be inside a `run:` block",
+        )
+        self.assertLess(
+            run_idx,
+            last_protos_idx,
+            "GHA14: 'bun run protos' must follow a `run:` line in the "
+            "same step block (must be an executable step, not just a "
+            "comment).",
+        )
 
 
 if __name__ == "__main__":

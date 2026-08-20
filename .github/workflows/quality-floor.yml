@@ -76,6 +76,21 @@ jobs:
               working-directory: ${{ github.workspace }}
               run: bun run build:sdk
 
+            # GHA12 (CORRECTION02): apps/vscode/src/shared/proto/ and
+            # apps/vscode/src/generated/ are GITIGNORED (see root
+            # .gitignore lines 41-42). A fresh CI checkout therefore
+            # has no generated protobufs, and any source file that
+            # imports `@/shared/proto/...` (e.g. resolveModelInfo.ts)
+            # will fail with ERR_MODULE_NOT_FOUND at vitest load time.
+            # `bun run protos` regenerates these from apps/vscode/proto/.
+            # The existing ext-vscode-test.yml generates protos via
+            # `bun run ci:check-all` (which starts with `bun run
+            # protos`) inside the quality-checks job; we don't share
+            # that job, so we generate protos here before the ratchet.
+            - name: Generate protobuf sources (GHA12)
+              working-directory: ${{ github.workspace }}
+              run: bun run protos
+
             # The ratchet runs vitest+coverage first, then the Python
             # verifier. The wrapper exists at apps/vscode/package.json
             # as `test:coverage:ratchet` and produces both
