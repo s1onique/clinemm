@@ -546,7 +546,3 @@ This would require:
 This is a NEW bounded ACT, not a defect repair. It would be authored *after* the product contract is finalized, not as a continuation of this ACT.
 
 The FACTORY STOP RULE explicitly forbids treating a hypothesis ("owner-aware timing sounds nicer") as a defect to be repaired. The current implementation is not broken.
-
-
-
-
