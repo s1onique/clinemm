@@ -259,7 +259,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									className="w-full"
 									id="user-context-ceiling"
 									onBlur={handleCeilingBlur}
-									onInput={handleCeilingChange}
+									onChange={(event) => handleCeilingChange(event as Event)}
 									placeholder="Auto (leave blank)"
 									value={ceilingInput}
 								/>
