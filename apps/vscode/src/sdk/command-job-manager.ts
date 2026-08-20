@@ -98,6 +98,21 @@ export interface StartCommandJobResult {
 	process: SupervisableShellProcess
 	exitCode?: number
 	signal?: string
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: terminal-state promise.
+	 * Resolves when the job reaches a terminal state (any of
+	 * exited/deadline_exceeded/cancelled/spawn_failed). The runner
+	 * attaches a `.then()` listener to react to the async completion
+	 * — in particular, to flip the host's `backgroundCommandRunning`
+	 * projection back to false when the tool returns RUNNING but the
+	 * process later completes asynchronously. The runner's in-tool
+	 * callback chain closes the moment the tool returns, so without
+	 * this promise the projection would stay true forever.
+	 *
+	 * Always resolves (never rejects) — the runner can attach a
+	 * `.then()` callback without a `.catch()`.
+	 */
+	terminalPromise: Promise<void>
 }
 
 /** Caller-supplied input to {@link CommandJobManager.status}. */
@@ -470,6 +485,21 @@ export class CommandJobManager {
 
 	private makeStartResult(job: CommandJob): StartCommandJobResult {
 		const snap = projectResponseSnapshot(snapshot(job), job.maxResponseOutputChars)
+		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: build the terminal-state
+		// promise. The runner attaches a `.then()` listener to react to
+		// the async completion — in particular, to flip the host's
+		// `backgroundCommandRunning` projection back to false when the
+		// tool returns RUNNING but the process later completes
+		// asynchronously. The promise is derived from the existing
+		// `exitTransitions` map — the same primitive that the bounded
+		// status() poll uses — so we don't introduce a new listener list.
+		// We swallow rejections (the manager never rejects these
+		// promises; the chain is .then().catch() already) so the runner
+		// can attach a no-arg .then() without a .catch().
+		const terminalPromise = (this.exitTransitions.get(job.id) ?? Promise.resolve()).then(
+			() => undefined,
+			() => undefined,
+		)
 		return {
 			jobId: job.id,
 			state: job.state,
@@ -479,6 +509,7 @@ export class CommandJobManager {
 			stderr: snap.stderr,
 			outputTruncated: snap.outputTruncated,
 			process: job.process,
+			terminalPromise,
 			...(snap.exitCode !== undefined ? { exitCode: snap.exitCode } : {}),
 			...(snap.signal !== undefined ? { signal: snap.signal } : {}),
 		}

@@ -653,6 +653,20 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// background command. The webview's TaskHeader can show
 					// "Working" and the Cancel button can route the cancel.
 					notifyBackgroundStateChange(true, start.jobId)
+					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: attach an async
+					// listener so the projection flips back to false when the
+					// process completes asynchronously (after this tool call
+					// returns). Without this listener, the projection would
+					// stay true forever — the in-tool callback chain closes
+					// the moment the tool returns RUNNING, and the
+					// `command_status`/`cancel_command` paths are
+					// observation-only / mutating, not state-broadcasters.
+					// The terminalPromise is derived from the manager's
+					// `exitTransitions` map — it never rejects, so a
+					// no-arg `.then()` is safe.
+					start.terminalPromise.then(() => {
+						notifyBackgroundStateChange(false, undefined)
+					})
 					const runningPayload = {
 						status: "running" as const,
 						jobId: start.jobId,
