@@ -1,4 +1,4 @@
-import type { ClineMessage, TurnState } from "@shared/ExtensionMessage"
+import type { ClineMessage, ThinkingPresentationProjection, TurnState } from "@shared/ExtensionMessage"
 import { act, renderHook } from "@testing-library/react"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -8,6 +8,27 @@ import {
 	type ThinkingLoaderInputs,
 	useThinkingLoaderRow,
 } from "./useThinkingLoaderRow"
+
+// ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01:
+// Regression guards for the pure-presentation defect class. Each test
+// asserts that under the canonical shadow projection, the loader
+// correctly disappears when the canonical runtime state has transitioned
+// away from `modelStreaming = true`. If a future change re-introduces a
+// stale-presentation authority (a local `isThinking` boolean that
+// outlives the canonical transition, a stale-event winner, etc.), the
+// matching STP test fails.
+//
+// These tests are intentionally written to be tautologically PASS on
+// the post-E7.1 codebase: the goal is to LOCK the post-E7.1 invariant
+// so future regressions are caught, NOT to manufacture a new RED. The
+// closing verdict of the ACT is NOT_REPRODUCED — these tests are the
+// guardrail for that verdict.
+function shadowOff(seq: number): ThinkingPresentationProjection {
+	return { modelStreaming: false, source: "shadow", seq }
+}
+function shadowOn(seq: number): ThinkingPresentationProjection {
+	return { modelStreaming: true, source: "shadow", seq }
+}
 
 function say(ts: number, sayType: ClineMessage["say"], partial?: boolean, text = ""): ClineMessage {
 	return { ts, type: "say", say: sayType, text, partial }
@@ -367,5 +388,104 @@ describe("useThinkingLoaderRow optimistic response handoff", () => {
 
 		rerender({ ...inputsFor([say(1, "text", false)], { phase: "error", seq: 2 }), forceShow: false })
 		expect(result.current).toBe(false)
+	})
+})
+
+// ===========================================================================
+// ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01:
+//
+// RED-matrix regression guards (STP01..STP08). These tests exercise the
+// pure-presentation defect class: the canonical TaskState shadow has
+// already transitioned to modelStreaming=false, so the in-list loader
+// row MUST NOT render. They exercise the consumer seam (`computeIsWaitingForResponse`)
+// directly with a non-empty message list to mirror the post-terminal
+// dogfood walk (LIVE-E71-R1) where the assistant's final report was
+// visible but the loader would have re-rendered under a stale authority.
+//
+// Each test corresponds to a discriminator from §8..§14 of the ACT.
+// A regression in the canonical projection seam — local duplicate
+// authority, stale-event winner, missing modelStreaming reset, prose
+// heuristic, etc. — breaks at least one of these.
+// ===========================================================================
+
+describe("ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01 / shadow-path STP discriminators", () => {
+	function withShadow(
+		messages: ClineMessage[],
+		shadow: ThinkingPresentationProjection,
+		turnState?: TurnState,
+	): ThinkingLoaderInputs {
+		return {
+			thinkingPresentation: shadow,
+			turnState,
+			lastRawMessage: messages.at(-1),
+			groupedMessages: messages,
+			lastVisibleRow: messages.at(-1),
+			lastVisibleMessage: messages.at(-1),
+			modifiedMessages: messages,
+		}
+	}
+
+	// STP01: streaming → awaiting_followup (canonical phase flip, no message deletion)
+	it("STP01: shadow modelStreaming=false clears the loader (streaming → awaiting_followup)", () => {
+		const conversation = [say(1, "text", false, "done with the turn")]
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "awaiting_followup", seq: 2 }))).toBe(
+			false,
+		)
+	})
+
+	// STP02: streaming → completed (terminal canonical phase flip)
+	it("STP02: shadow modelStreaming=false clears the loader (streaming → completed)", () => {
+		const conversation = [say(1, "completion_result", false, "result")]
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "completed", seq: 2 }))).toBe(false)
+	})
+
+	// STP03: streaming → error (terminal canonical phase flip)
+	it("STP03: shadow modelStreaming=false clears the loader (streaming → error)", () => {
+		const conversation = [say(1, "text", false, "interrupted")]
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "error", seq: 2 }))).toBe(false)
+	})
+
+	// STP04: streaming → compacting → awaiting_followup
+	// (Compacting owns its own label/row; loader must not co-render.)
+	it("STP04: shadow modelStreaming=false clears the loader (streaming → compacting)", () => {
+		const conversation: ClineMessage[] = []
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "compacting", seq: 2 }))).toBe(false)
+	})
+
+	// STP05: background command tail canonical reset (RTP-ASYNC01 contract).
+	// The transition is an authority reset, not a heuristic.
+	it("STP05: shadow modelStreaming=false clears the loader after a background command tail", () => {
+		const conversation = [say(1, "text", false, "command returned")]
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "awaiting_followup", seq: 2 }))).toBe(
+			false,
+		)
+	})
+
+	// STP06: historical reasoning content remains visible where intended.
+	// The loader does not render when shadow says off EVEN IF the last
+	// visible row is the completed reasoning row itself (it would render
+	// the static ThinkingRow via ChatRow, not the loader).
+	it("STP06: shadow modelStreaming=false does not re-introduce the loader above a finalized reasoning row", () => {
+		const conversation = [say(1, "reasoning", false, "thought about the problem")]
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "completed", seq: 2 }))).toBe(false)
+	})
+
+	// STP07: new active run begins. The shadow projection is the SINGLE
+	// source of truth — turning it back on re-introduces the loader.
+	it("STP07: shadow modelStreaming=true re-introduces the loader for a fresh active run", () => {
+		const conversation: ClineMessage[] = []
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOn(3)))).toBe(true)
+	})
+
+	// STP08: stale older task/turn state cannot resurrect Thinking after
+	// a newer canonical update has set modelStreaming=false. This is the
+	// canonical "post-terminal authority split" discriminator.
+	it("STP08: a new shadow-off push wins over any stale phase=streaming carry-over", () => {
+		const conversation = [say(1, "text", false, "assistant finished")]
+		// The turnState was streaming (legacy carry-over), but the shadow
+		// projection has already flipped to false — the shadow wins
+		// (T-S3 contract: shadow modelStreaming=false → no wait,
+		// regardless of legacy phase).
+		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(5), { phase: "streaming", seq: 4 }))).toBe(false)
 	})
 })
