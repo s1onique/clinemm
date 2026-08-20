@@ -167,7 +167,8 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 
 | ID | Area | Status | Priority | Depends on | Next action |
 |---|---|---|---|---|---|
-| `EPIC-CLINEMM-COMPACTION-STATE-AUTHORITY01` | CTX | OPEN | HIGH | none | source recon: is compaction a phase or an orthogonal dimension? |
+| `EPIC-CLINEMM-COMPACTION-STATE-AUTHORITY01` | CTX | CLOSED | HIGH | none | closed by `ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01` (compaction is a bounded phase; canonical `TurnPhase = "compacting"`) |
+| `ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01` | CTX | CLOSED | HIGH | none | RED reproduced at real seam; producer authority gap repaired; gates green |
 | `EPIC-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` | CTX | OPEN | HIGH | none | RED reproduction on implausible >1M readings; classify 11 token dimensions |
 | `EPIC-CLINEMM-USER-CONTEXT-CEILING01` | CTX | OPEN | HIGH | context-accounting-truth | let users set effective cap below model physical max |
 | `CTX-01` | CTX | NEEDS_CLASSIFICATION | LOW | — | classify when relevant |
@@ -337,7 +338,7 @@ Priority rationale: an accidental destructive force-push can destroy the evidenc
 4. **CODE-COVERAGE-BASELINE01** — CLOSED at this commit (canonical Vitest coverage baseline established; lines 15.80% / statements 15.86% / functions 18.88% / branches 11.03%; 613-file universe; deterministic SHA-256; closed by `ACT-CLINEMM-CODE-COVERAGE-BASELINE01`)
 5. **CODE-COVERAGE-RATCHET01** — CLOSED at this commit (artifact-backed count + scope ratchet enforced; lines >= 6832 / statements >= 6980 / functions >= 1311 / branches >= 4202; 613-file universe; 21/21 unit tests including source-universe deletion → REBASELINE_REQUIRED (exit 10) and source-file-in-tree-missing-from-report → SCOPE_REGRESSION (exit 5, orthogonal); synthetic RED witnesses proven; closed by `ACT-CLINEMM-CODE-COVERAGE-RATCHET01` + correction01)
 6. **UPSTREAM-ISSUE-INTAKE-TRIAGE01** — NEXT / HIGH (uses substrate `ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-SUBSTRATE01` snapshot; IMPORT/MAP_EXISTING/RADAR/REJECT per upstream issue)
-7. **COMPACTION-STATE-AUTHORITY01** — OPEN / LIVE_UI / HIGH
+7. **COMPACTION-STATE-AUTHORITY01** — CLOSED at this commit (root cause: producer authority gap — `SdkCompactionCoordinator` emitted the compaction divider without writing the canonical `TurnStateTracker`; repaired by a bounded `compacting` phase; closed by `ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01`)
 8. **STATIC-THINKING-PRESENTATION-PERSISTENCE01** — OPEN / HIGH
 9. **TASKHEADER-CANONICAL-PROJECTION01** — OPEN / HIGH
 10. **TASKHEADER-OWNER-AWARE-TIMING01** — OPEN / HIGH
@@ -400,21 +401,27 @@ Three **semantically distinct** epics; do not collapse.
 ### COMPACTION-STATE-AUTHORITY01
 
 - ID: `EPIC-CLINEMM-COMPACTION-STATE-AUTHORITY01`
-- STATUS: OPEN / LIVE_UI
+- STATUS: CLOSED / LIVE_UI reproduced at the production seam
+- CLOSED BY: `ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01`
 
 **Live reproduction.** UI displays `"Compacting context..."`. TaskHeader simultaneously displays `"Waiting"`.
 
-**Evidence quality.** LIVE_UI.
+**Evidence quality.** LIVE_UI (originating report) + PRODUCTION_SEAM RED (`apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts`, CSA02: `expected 'Waiting' not to be 'Waiting'` before repair).
 
-**Invariant.**
+**Recon answer — phase, not orthogonal dimension.** The canonical runtime authority is `TurnStateTracker` (`apps/vscode/src/sdk/turn-state-tracker.ts`), projected on the wire as `TurnState.phase` and consumed by the TaskHeader through the pure `stateLabel` projection. Compaction is a *bounded, mutually exclusive* window: `SdkCompactionCoordinator` refuses to compact while a turn is running (`COMPACTION_TURN_RUNNING_MESSAGE`), so no other phase can be concurrently true. It is therefore modelled as a phase, not as a second concurrent dimension — which would have created a second authority.
 
-  active compaction
-    → next_action_owner != HUMAN
-    → TaskHeader MUST NOT present "Waiting"
+**Root cause — AUTHORITY GAP at the producer, not a projection defect.** `SdkCompactionCoordinator.runCompaction` emitted the `status: "started"` divider row and posted state to the webview, but never wrote the canonical tracker. The tracker consequently retained whatever phase the previously finished turn left behind — typically `awaiting_followup`. TaskHeader was *faithfully* projecting that stale canonical authority as `"Waiting"`. The projection was correct; the producer was silent.
 
-**Important.** Do **NOT** repair by scraping or special-casing the visible string `"Compacting context..."`.
+**Repair.**
 
-**Recon must find:** actual compaction lifecycle seam, canonical runtime state during compaction, whether compaction is a mutually exclusive task phase OR an orthogonal concurrent activity dimension. Design must follow source recon.
+- `TurnPhase` gains one semantically necessary variant, `"compacting"` (SYSTEM_TRANSITION ownership) — `apps/vscode/src/shared/ExtensionMessage.ts`.
+- `SdkCompactionCoordinator` enters `compacting` immediately *before* the divider is emitted and restores the entry phase **and anchor** in a `finally` — so success, failure, skip, and cancel all converge back. No new terminal state.
+- `SdkController` wires the coordinator to the *same* `turnStateTracker` every other coordinator uses — no second authority.
+- `stateLabel` projects `compacting → { label: "Compacting", live: true }`, reusing the existing `CompactionRow` vocabulary.
+
+**Explicitly not done (kept separate).** No string scraping of `"Compacting context..."`; no compaction-threshold tuning; no token-accounting change. Those remain `CONTEXT-ACCOUNTING-TRUTH01` / `USER-CONTEXT-CEILING01`.
+
+**Conservation.** A genuine human wait still reads `"Waiting"`; `streaming → Working`, `awaiting_approval → Approval`, `completed → Complete`, `idle → Idle` all unchanged (CSA07/CSA08).
 
 ### USER-CONTEXT-CEILING01
 
@@ -484,7 +491,7 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **Likely telemetry:** agent-active elapsed, wall elapsed if useful, tool calls, recovery count, canonical state.
 
-**Dependencies.** `TASKHEADER-CANONICAL-PROJECTION01` and `COMPACTION-STATE-AUTHORITY01` must be understood first so `"Waiting"` does not hide active compaction.
+**Dependencies.** `TASKHEADER-CANONICAL-PROJECTION01` must be understood first. `COMPACTION-STATE-AUTHORITY01` is CLOSED — `"Waiting"` no longer hides active compaction (the canonical `compacting` phase now projects as `Compacting`).
 
 ---
 

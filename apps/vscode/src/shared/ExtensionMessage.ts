@@ -348,6 +348,15 @@ export type TurnPhase =
 	| "streaming" // model producing content / tool running; Thinking + Cancel
 	| "awaiting_approval" // a tool/command/mcp/subagent approval is pending
 	| "awaiting_followup" // ask_question / plan_mode_respond / done-without-completion
+	// ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01: an internal SYSTEM
+	// TRANSITION owns the next progress step — context compaction is
+	// actively summarizing/replacing the conversation history. It is
+	// NOT model/tool work (`streaming`) and it is emphatically NOT a
+	// human wait (`awaiting_followup`): no user action is actionable
+	// while it runs. The phase is entered when the compaction divider
+	// row goes `started` and the PREVIOUS phase (and its anchor) is
+	// restored when compaction reaches any terminal status.
+	| "compacting"
 	| "completed" // attempt_completion done; Start New Task
 	| "error" // api_req_failed / fatal; Retry / recovery
 	| "resumable" // task cancelled / interrupted; Resume Task

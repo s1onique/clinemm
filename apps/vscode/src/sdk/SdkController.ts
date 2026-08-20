@@ -901,6 +901,11 @@ export class Controller {
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			postStateToWebview: () => this.postStateToWebview(),
+			// ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01: the compaction
+			// coordinator drives the SAME canonical turn-phase tracker
+			// every other coordinator uses — no second authority.
+			getTurnState: () => this.turnStateTracker.get(),
+			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
 		})
 		this.sessionEvents = new SdkSessionEventCoordinator({
 			messageTranslatorState: this.messageTranslatorState,

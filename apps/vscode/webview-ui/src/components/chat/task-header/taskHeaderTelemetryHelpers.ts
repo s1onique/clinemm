@@ -121,6 +121,14 @@ export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
 			// ticking so the user sees "how long since the task was
 			// started", not "how long since the agent last produced".
 			return { label: "Waiting", glyph: "…", live: true }
+		case "compacting":
+			// ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01: an internal
+			// SYSTEM TRANSITION owns the next progress step. This is
+			// active work, so the clock keeps ticking and the label
+			// must NOT be the human-wait "Waiting". The wording mirrors
+			// the chat surface's existing "Compacting context" divider
+			// vocabulary (CompactionRow) rather than inventing a new one.
+			return { label: "Compacting", glyph: "⌄", live: true }
 		case "completed":
 			return { label: "Complete", glyph: "✓", live: false }
 		case "error":

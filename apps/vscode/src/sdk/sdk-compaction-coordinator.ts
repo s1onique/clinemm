@@ -25,7 +25,7 @@
 // fake "Conversation Summary" instead of compacting (CLINE-2503).
 
 import type { Message as SdkMessage } from "@cline/llms"
-import type { ClineCompactionInfo, ClineMessage } from "@shared/ExtensionMessage"
+import type { ClineCompactionInfo, ClineMessage, TurnPhase, TurnState } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
@@ -57,6 +57,23 @@ export interface SdkCompactionCoordinatorOptions {
 	loadInitialMessages: (sessionHost: SdkSessionHost, taskId: string) => Promise<unknown[] | undefined>
 	getWorkspaceRoot: () => Promise<string>
 	postStateToWebview: () => Promise<void>
+	/**
+	 * ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01
+	 *
+	 * The canonical turn-phase authority (`TurnStateTracker`). Compaction
+	 * is active SYSTEM work: while it runs, the runtime — not the user —
+	 * owns the next progress step, so the canonical phase must say so.
+	 * Without this the tracker keeps whatever phase the finished turn
+	 * left behind (typically `awaiting_followup`), and the TaskHeader
+	 * truthfully projects that stale authority as "Waiting" while the
+	 * chat surface shows "Compacting context" — the observed
+	 * contradiction.
+	 *
+	 * Optional so a caller that has no tracker (tests of unrelated
+	 * behaviour) still constructs; production always supplies both.
+	 */
+	getTurnState?: () => TurnState
+	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
 }
 
 export class SdkCompactionCoordinator {
@@ -199,7 +216,8 @@ export class SdkCompactionCoordinator {
 	}
 
 	private async runCompaction(sdkHost: SdkSessionHost, sessionId: string): Promise<void> {
-		if (!sdkHost.updateSessionCompactionState) {
+		const updateSessionCompactionState = sdkHost.updateSessionCompactionState
+		if (!updateSessionCompactionState) {
 			this.emitInfo(COMPACTION_UNSUPPORTED_MESSAGE, sessionId)
 			await this.options.postStateToWebview()
 			return
@@ -219,8 +237,60 @@ export class SdkCompactionCoordinator {
 		// A live divider row, updated in place (same ts) from "started" to its
 		// terminal state — the same UX as the CLI's compaction divider.
 		const compactionTs = Date.now()
-		this.emitCompactionRow({ status: "started", mode: "manual" }, compactionTs, sessionId)
-		await this.options.postStateToWebview()
+		// ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01: the canonical phase
+		// enters `compacting` BEFORE the divider is emitted, so every
+		// consumer that samples state while the divider is visible (the
+		// TaskHeader projection included) sees runtime ownership rather
+		// than the stale phase the previous turn left behind. The entry
+		// phase + anchor are captured here and restored in `finally`,
+		// which keeps this a bounded system-transition window rather
+		// than a new terminal state.
+		const restorePhase = this.enterCompactingPhase()
+		try {
+			this.emitCompactionRow({ status: "started", mode: "manual" }, compactionTs, sessionId)
+			await this.options.postStateToWebview()
+			await this.runCompactionInPhase({
+				sdkHost,
+				sessionId,
+				messages,
+				messagesBefore,
+				config,
+				compactionTs,
+				updateSessionCompactionState,
+			})
+		} finally {
+			restorePhase()
+		}
+	}
+
+	/**
+	 * Enter the canonical `compacting` phase and return a function that
+	 * restores the phase (and anchor) that was current on entry.
+	 *
+	 * No-ops (returning a no-op restorer) when the caller supplied no
+	 * turn-state authority — this coordinator never invents a second one.
+	 */
+	private enterCompactingPhase(): () => void {
+		const getTurnState = this.options.getTurnState
+		const setTurnPhase = this.options.setTurnPhase
+		if (!getTurnState || !setTurnPhase) {
+			return () => {}
+		}
+		const entry = getTurnState()
+		setTurnPhase("compacting", entry.anchorTs)
+		return () => setTurnPhase(entry.phase, entry.anchorTs)
+	}
+
+	private async runCompactionInPhase(input: {
+		sdkHost: SdkSessionHost
+		sessionId: string
+		messages: SdkMessage[]
+		messagesBefore: number
+		config: Awaited<ReturnType<SdkSessionConfigBuilder["build"]>>
+		compactionTs: number
+		updateSessionCompactionState: NonNullable<SdkSessionHost["updateSessionCompactionState"]>
+	}): Promise<void> {
+		const { sdkHost, sessionId, messages, messagesBefore, config, compactionTs } = input
 
 		// The SDK reports the compaction's token/message counters through its
 		// status notices; capture the terminal one for the final divider.
@@ -255,7 +325,10 @@ export class SdkCompactionCoordinator {
 			if (!result.compactionState) {
 				throw new Error("Compaction did not return durable state.")
 			}
-			const persisted = await sdkHost.updateSessionCompactionState(sessionId, result.compactionState)
+			// The `updateSessionCompactionState` field in `input` carries the
+			// narrowing proof from `runCompaction`'s presence check; the call
+			// itself stays a method call so the host keeps its receiver.
+			const persisted = await input.updateSessionCompactionState.call(sdkHost, sessionId, result.compactionState)
 			if (!persisted.updated) {
 				throw new Error("Compaction sidecar could not be persisted.")
 			}
