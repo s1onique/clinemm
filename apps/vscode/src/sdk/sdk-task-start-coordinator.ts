@@ -14,6 +14,7 @@ import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import { historyItemToSessionMetadata, type SdkTaskHistory } from "./sdk-task-history"
 import type { SdkSessionHost } from "./session-host"
+import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import type { VscodeSessionHost } from "./vscode-session-host"
 
@@ -31,6 +32,14 @@ export interface SdkTaskStartCoordinatorOptions {
 	messages: SdkMessageCoordinator
 	taskHistory: SdkTaskHistory
 	sessionConfigBuilder: SdkSessionConfigBuilder
+	/**
+	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: shared task-operation
+	 * generation authority. The coordinator calls `fence.begin()` at
+	 * the top of `initTask` and `reinitExistingTaskFromId` to capture
+	 * the user's intent token, then checks `fence.isCurrent(token)`
+	 * after each awaited boundary before committing shared state.
+	 */
+	taskOperationFence: TaskOperationFence
 	buildStartSessionInput: (
 		config: SessionConfig,
 		input: {
@@ -45,6 +54,13 @@ export interface SdkTaskStartCoordinatorOptions {
 	) => StartInput
 	createHistoryItemFromSession: (sessionId: string, prompt: string, modelId?: string, cwd?: string) => HistoryItem
 	clearTask: () => Promise<void>
+	/**
+	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: internal clearTask that
+	 * runs under the operation's existing token WITHOUT advancing the
+	 * fence. The wiring MUST provide this — see the explanation at
+	 * the top of `initTask`.
+	 */
+	clearTaskForOperation: (token: number) => Promise<void>
 	setTask: (task: TaskProxy | undefined) => void
 	onAskResponse: (text?: string, images?: string[], files?: string[]) => Promise<void>
 	onCancelTask: () => Promise<void>
@@ -82,11 +98,22 @@ export class SdkTaskStartCoordinator {
 		taskSettings?: Partial<Settings>,
 	): Promise<string | undefined> {
 		Logger.log(`[SdkController] initTask called: "${prompt?.substring(0, 50)}"`)
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: capture the originating
+		// task-operation token at entry. The internal `clearTask()` below
+		// inherits this token (via `clearTaskForOperation`); only the
+		// top-level user intent advances the fence.
+		const operationToken = this.options.taskOperationFence.begin()
+		const isCurrent = () => this.options.taskOperationFence.isCurrent(operationToken)
 		let taskSessionId: string | undefined
 		let providerId: string | undefined
 		let modelId: string | undefined
 		try {
-			await this.options.clearTask()
+			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: clear under the
+			// SAME token we just allocated for this operation. A naive
+			// `this.options.clearTask()` would advance the fence and
+			// self-supersede initTask; the `clearTaskForOperation`
+			// wiring performs the same teardown without advancing.
+			await this.options.clearTaskForOperation(operationToken)
 
 			const cwd = await this.options.getWorkspaceRoot()
 			const mode = this.getCurrentMode()
@@ -133,6 +160,15 @@ export class SdkTaskStartCoordinator {
 				mode,
 			})
 
+			// FENCE: refuse to install TaskProxy B if a newer intent has
+			// superseded this operation while we awaited config/build.
+			if (!isCurrent()) {
+				Logger.debug(
+					`[SdkController] initTask: abandoning before createAndSetTask; operationToken=${operationToken} superseded`,
+				)
+				return undefined
+			}
+
 			const task = this.createAndSetTask(taskSessionId)
 			this.emitInitialTaskMessage(taskSessionId, prompt ?? "", images, files)
 
@@ -150,7 +186,26 @@ export class SdkTaskStartCoordinator {
 				Logger.error("[SdkController] Failed to post state after emitting initial task message:", error)
 			})
 
-			const { startResult, sdkHost } = await this.options.sessions.startNewSession(startInput)
+			const startResultEnvelope = await this.options.sessions.startNewSession(startInput, operationToken)
+
+			// FENCE: this is the load-bearing check. If a newer intent
+			// advanced the fence while host.start awaited, the lifecycle
+			// has already disposed the just-started session and returned
+			// "superseded". We MUST NOT call setTurnPhase, MUST NOT
+			// install TaskProxy (already installed above; the newer
+			// intent owns it now), MUST NOT fireAndForgetSend. Critically:
+			// we MUST NOT call setTask(undefined) — that would erase the
+			// newer TaskProxy installed by the superseding operation.
+			if (startResultEnvelope.status === "superseded") {
+				Logger.debug(
+					`[SdkController] initTask: post-start supersession; abandoning without mutating shared state; operationToken=${operationToken}`,
+				)
+				// Clean up only resources this operation uniquely owns.
+				// Do NOT touch shared task/session state — the superseding
+				// operation is the new authority.
+				return undefined
+			}
+			const { startResult, sdkHost } = startResultEnvelope
 			if (startResult.sessionId !== taskSessionId) {
 				Logger.warn(
 					`[SdkController] SDK returned session id ${startResult.sessionId} after requested id ${taskSessionId}`,
@@ -221,8 +276,11 @@ export class SdkTaskStartCoordinator {
 	}
 
 	async reinitExistingTaskFromId(taskId: string): Promise<void> {
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: capture the originating
+		// task-operation token at entry; internal `clearTask()` inherits it.
+		const operationToken = this.options.taskOperationFence.begin()
 		try {
-			await this.options.clearTask()
+			await this.options.clearTaskForOperation(operationToken)
 
 			const historyItem = await this.options.taskHistory.findHistoryItem(taskId)
 			if (!historyItem) {
@@ -245,12 +303,46 @@ export class SdkTaskStartCoordinator {
 			const initialMessages = await this.options.loadInitialMessages(tempManager, taskId)
 			await tempManager.dispose("readMessages")
 
-			const { startResult } = await this.options.sessions.startNewSession({
-				config,
-				interactive: true,
-				...(initialMessages ? { initialMessages: initialMessages as InitialMessages } : {}),
-				sessionMetadata: historyItemToSessionMetadata(historyItem, config.modelId),
-			})
+			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: pre-start
+			// fence check. The lifecycle will re-check internally, but
+			// defense-in-depth at the task-start coordinator prevents
+			// the lifecycle's pre-endActiveSession fence from being
+			// the only barrier against stale operations terminating a
+			// newer session.
+			if (!this.options.taskOperationFence.isCurrent(operationToken)) {
+				Logger.debug(
+					`[SdkController] reinitExistingTaskFromId: pre-start supersession; abandoning; operationToken=${operationToken}`,
+				)
+				return
+			}
+
+			const startResultEnvelope = await this.options.sessions.startNewSession(
+				{
+					config,
+					interactive: true,
+					...(initialMessages ? { initialMessages: initialMessages as InitialMessages } : {}),
+					sessionMetadata: historyItemToSessionMetadata(historyItem, config.modelId),
+				},
+				operationToken,
+			)
+
+			// FENCE: post-start supersession — abandon without mutating
+			// shared state. The newer intent (if any) owns the result.
+			if (startResultEnvelope.status === "superseded") {
+				Logger.debug(
+					`[SdkController] reinitExistingTaskFromId: post-start supersession; abandoning; operationToken=${operationToken}`,
+				)
+				return
+			}
+			const { startResult } = startResultEnvelope
+
+			// Pre-install fence check before mutating shared task state.
+			if (!this.options.taskOperationFence.isCurrent(operationToken)) {
+				Logger.debug(
+					`[SdkController] reinitExistingTaskFromId: pre-install supersession; abandoning; operationToken=${operationToken}`,
+				)
+				return
+			}
 
 			this.createAndSetTask(startResult.sessionId)
 			// ACT-CLINEMM-DOGFOOD-CORRECTION04-CORRECTION03: same canonical

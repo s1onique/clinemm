@@ -5,6 +5,7 @@ import type { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { isAbortError, type SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkTaskHistory } from "./sdk-task-history"
+import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 
 export interface SdkTaskControlCoordinatorOptions {
@@ -12,6 +13,13 @@ export interface SdkTaskControlCoordinatorOptions {
 	interactions: SdkInteractionCoordinator
 	messages: SdkMessageCoordinator
 	taskHistory: SdkTaskHistory
+	/**
+	 * Shared task-operation generation authority. The coordinator
+	 * advances the fence on `clearTask` and captures tokens on
+	 * `clearTask` / `showTaskWithId` so the user's latest intent
+	 * always wins. See `./task-operation-fence.ts` for the contract.
+	 */
+	taskOperationFence: TaskOperationFence
 	getTask: () => TaskProxy | undefined
 	setTask: (task: TaskProxy | undefined) => void
 	onAskResponse: (text?: string, images?: string[], files?: string[]) => Promise<void>
@@ -34,15 +42,15 @@ export interface SdkTaskControlCoordinatorOptions {
 }
 
 export class SdkTaskControlCoordinator {
-	/**
-	 * Generation counter for task-view mutations (showTaskWithId / clearTask).
-	 * showTaskWithId awaits several reads before installing the task proxy; a
-	 * request that loses the race to a newer mutation abandons installation at
-	 * the next fence check so the user's latest selection always wins.
-	 */
-	private taskViewGeneration = 0
-
 	constructor(private readonly options: SdkTaskControlCoordinatorOptions) {}
+
+	/**
+	 * Capture a fence check function for an external operation that
+	 * already holds a token (the result of `fence.begin()`).
+	 */
+	private isCurrent(token: number): boolean {
+		return this.options.taskOperationFence.isCurrent(token)
+	}
 
 	async cancelClineTaskOnSignOut(isClineManagedProvider: boolean): Promise<void> {
 		const activeSession = this.options.sessions.getActiveSession()
@@ -97,13 +105,51 @@ export class SdkTaskControlCoordinator {
 	}
 
 	async clearTask(): Promise<void> {
-		// Supersede any in-flight showTaskWithId so it cannot re-install a task
-		// after the user cleared the view (e.g. clicked New Task).
-		this.taskViewGeneration++
+		// Supersede any in-flight showTaskWithId / initTask so they cannot
+		// re-install a task after the user cleared the view (e.g. clicked
+		// New Task). The fence is the SAME authority that initTask and
+		// showTaskWithId check, so a single shared instance is required.
+		const token = this.options.taskOperationFence.begin()
+		await this.clearTaskForOperation(token)
+	}
+
+	/**
+	 * Internal `clearTask` that performs the same teardown under an
+	 * EXISTING operation token, without advancing the fence. Used by
+	 * `SdkTaskStartCoordinator.initTask`'s internal clear step so the
+	 * initTask's own fence token is preserved (a naive
+	 * `fence.begin()` here would self-supersede the initTask).
+	 *
+	 * External callers (the user clicking New Task / "clear view")
+	 * always go through `clearTask` which advances the fence.
+	 */
+	async clearTaskForOperation(token: number): Promise<void> {
+		// FENCE-FIRST: validate ownership BEFORE any destructive work.
+		// A stale internal clear must NOT clear pending interactions
+		// or terminate a newer operation's active session.
+		if (!this.isCurrent(token)) {
+			Logger.debug(
+				`[SdkController] clearTaskForOperation: token=${token} already superseded; abandoning without destructive action`,
+			)
+			return
+		}
+
 		this.options.interactions.clearPending("Task cleared")
 
 		await this.options.sessions.endActiveSession("clearTask")
 
+		// FENCE again after the awaited endActiveSession — a
+		// concurrent external clearTask or new initTask could have
+		// advanced the fence during the await.
+		if (!this.isCurrent(token)) {
+			Logger.debug(
+				`[SdkController] clearTaskForOperation: token=${token} superseded during endActiveSession; abandoning teardown`,
+			)
+			return
+		}
+
+		// The originating operation owns the resulting state under its
+		// own token. After the clear, the operation continues.
 		const task = this.options.getTask()
 		if (task) {
 			// SDK session persistence owns conversation history. Do not write classic
@@ -130,13 +176,13 @@ export class SdkTaskControlCoordinator {
 	 * skips mutating the task view.
 	 */
 	async showTaskWithId(taskId: string): Promise<HistoryItem | undefined> {
-		const generation = ++this.taskViewGeneration
+		const token = this.options.taskOperationFence.begin()
 		const isSuperseded = (): boolean => {
-			if (generation === this.taskViewGeneration) {
-				return false
+			const result = !this.isCurrent(token)
+			if (result) {
+				Logger.debug(`[SdkController] showTaskWithId superseded by a newer selection; skipping: ${taskId}`)
 			}
-			Logger.debug(`[SdkController] showTaskWithId superseded by a newer selection; skipping: ${taskId}`)
-			return true
+			return result
 		}
 
 		let historyItem: HistoryItem | undefined

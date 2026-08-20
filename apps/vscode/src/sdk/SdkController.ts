@@ -124,6 +124,7 @@ import {
 } from "./session-auto-approval"
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
+import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import {
 	selectTaskHeaderPresentation,
@@ -213,6 +214,14 @@ export class Controller {
 	private diffEdits: SdkDiffEditCoordinator
 	private sessionConfigBuilder: SdkSessionConfigBuilder
 	private taskHistory: SdkTaskHistory
+	/**
+	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: shared task-operation
+	 * generation authority. One instance shared between the
+	 * coordinators and the lifecycle so that "latest user intent wins"
+	 * is consistent across both TaskProxy (coordinator) and
+	 * activeSession (lifecycle). See `./task-operation-fence.ts`.
+	 */
+	private taskOperationFence: TaskOperationFence
 	private mode: SdkModeCoordinator
 	private mcpTools: SdkMcpCoordinator
 	private terminalExecutionMode: SdkTerminalExecutionModeCoordinator
@@ -412,6 +421,10 @@ export class Controller {
 		// (elapsed / tool / recovery counters). Lives across the controller
 		// lifetime so webview reconnect / React remount does not reset.
 		this.taskTelemetry = new TaskTelemetryTracker()
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: construct the shared
+		// task-operation fence BEFORE any coordinator that consumes it.
+		// One instance is shared across all participating owners.
+		this.taskOperationFence = new TaskOperationFence()
 		this.messages = new SdkMessageCoordinator({
 			getTask: () => this.task,
 			// Stamp seq/epoch on every message flowing to the webview from the shared authority.
@@ -623,6 +636,10 @@ export class Controller {
 			telemetry: this.sdkTelemetry.telemetry,
 			requestToolApproval: (request) => this.interactions.handleRequestToolApproval(request),
 			askQuestion: (question, options, context) => this.interactions.handleAskQuestion(question, options, context),
+			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: consult the shared
+			// task-operation fence before installing activeSession. This is
+			// the load-bearing check that closes the parent race window.
+			isOperationCurrent: (token) => this.taskOperationFence.isCurrent(token),
 			editorExecutor: (input, cwd, context) => this.diffEdits.executeEditorTool(input, cwd, context),
 			applyPatchExecutor: (input, cwd, context) => this.diffEdits.executeApplyPatchTool(input, cwd, context),
 			// The SDK's built-in reader resolves relative paths against the extension
@@ -847,6 +864,7 @@ export class Controller {
 			interactions: this.interactions,
 			messages: this.messages,
 			taskHistory: this.taskHistory,
+			taskOperationFence: this.taskOperationFence,
 			getTask: () => this.task,
 			setTask: (task) => {
 				this.task = task
@@ -869,11 +887,24 @@ export class Controller {
 			messages: this.messages,
 			taskHistory: this.taskHistory,
 			sessionConfigBuilder: this.sessionConfigBuilder,
+			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: share the same
+			// task-operation fence with SdkTaskControlCoordinator and
+			// SdkSessionLifecycle so the latest-user-intent-wins invariant
+			// spans all three owners.
+			taskOperationFence: this.taskOperationFence,
 			buildStartSessionInput,
 			createHistoryItemFromSession,
 			clearTask: async () => {
 				this.pendingClineAuthRetryPrompt = undefined
 				await this.taskControl.clearTask()
+			},
+			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: internal clearTask
+			// performed under the operation's token. Used by
+			// SdkTaskStartCoordinator.initTask's internal clear step so
+			// it does NOT self-supersede.
+			clearTaskForOperation: async (token: number) => {
+				this.pendingClineAuthRetryPrompt = undefined
+				await this.taskControl.clearTaskForOperation(token)
 			},
 			setTask: (task) => {
 				this.task = task

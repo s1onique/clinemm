@@ -91,6 +91,7 @@ import { SdkSessionLifecycle } from "../sdk-session-lifecycle"
 import type { SdkSessionRebuildScheduler } from "../sdk-session-rebuild-scheduler"
 import { SdkTaskControlCoordinator, type SdkTaskControlCoordinatorOptions } from "../sdk-task-control-coordinator"
 import { SdkTaskStartCoordinator, type SdkTaskStartCoordinatorOptions } from "../sdk-task-start-coordinator"
+import { TaskOperationFence } from "../task-operation-fence"
 
 const mockCreateSessionHost = vi.hoisted(() => vi.fn())
 
@@ -209,6 +210,11 @@ function makeFixture(): Fixture {
 	const hostHandle = makeControllableHost()
 	mockCreateSessionHost.mockResolvedValue(hostHandle.host)
 
+	// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: one shared fence
+	// instance per test, threaded into the control coordinator and
+	// the lifecycle (via `isOperationCurrent`).
+	const fx_shared_fence = new TaskOperationFence()
+
 	const lifecycle = new SdkSessionLifecycle({
 		mcpHub: {} as never,
 		requestToolApproval: vi.fn(),
@@ -216,6 +222,7 @@ function makeFixture(): Fixture {
 		onSessionEvent: vi.fn(),
 		onSendComplete: vi.fn(),
 		onSendError: vi.fn(),
+		isOperationCurrent: (token) => fx_shared_fence.isCurrent(token),
 	})
 
 	const messages = new SdkMessageCoordinator({ getTask: () => state.task as never })
@@ -223,6 +230,10 @@ function makeFixture(): Fixture {
 	const setTurnPhaseCalls: Array<{ phase: string }> = []
 
 	const controlOptions: SdkTaskControlCoordinatorOptions = {
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: per-test fence
+		// authority. Shared between the task control coordinator and
+		// the lifecycle via `isOperationCurrent` below.
+		taskOperationFence: fx_shared_fence,
 		sessions: lifecycle,
 		interactions: { clearPending: vi.fn() } as never,
 		messages: {
@@ -258,6 +269,9 @@ function makeFixture(): Fixture {
 			appendAndEmit: vi.fn(),
 			emitSessionEvents: vi.fn(),
 		} as never,
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: same fence the
+		// control coordinator and lifecycle consume.
+		taskOperationFence: fx_shared_fence,
 		taskHistory: {
 			findHistoryItem: vi.fn().mockResolvedValue(undefined),
 			updateTaskHistory: vi.fn().mockResolvedValue([]),
@@ -282,6 +296,9 @@ function makeFixture(): Fixture {
 		})) as never,
 		clearTask: vi.fn(async () => {
 			await taskControl.clearTask()
+		}),
+		clearTaskForOperation: vi.fn(async (token: number) => {
+			await taskControl.clearTaskForOperation(token)
 		}),
 		setTask: (task: unknown) => {
 			controlOptions.setTask(task as never)
@@ -569,19 +586,35 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level Ne
 	// they identify the same logical task, and `setTurnPhase` was
 	// called with "streaming" (the canonical boundary).
 	// =====================================================================
-	it("TCL-PARENT03: from the wedge state, the real user-facing New Task + submit prompt MUST produce a fresh task/session pair", async () => {
+	it("TCL-PARENT03: under the fence, racing initTask vs clearTask prevents the wedge; a subsequent fresh initTask produces a clean pair", async () => {
 		const fx = makeFixture()
 
-		// Build the wedge via the same parent race.
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: under the bounded
+		// generation-fence repair, racing initTask(B) against
+		// concurrent clearTask must NOT produce the wedge. The fence
+		// prevents stale A from installing activeSession after the
+		// task has been cleared.
 		const initPromise = fx.taskStart.initTask("first prompt", undefined, undefined, undefined, undefined)
 		await new Promise<void>((r) => setTimeout(r, 0))
 		await fx.taskControl.clearTask()
 		fx.hostHandle.startResolver.resolve("session-B")
 		await initPromise
-		// Sanity: wedge present.
-		expect(fx.state.task).toBeUndefined()
-		const orphanSession = fx.lifecycle.getActiveSession() as { sessionId: string } | undefined
-		expect(orphanSession).toBeDefined()
+
+		// Wedge MUST NOT be present at the production seam.
+		const taskAfterRace = fx.state.task
+		const activeSessionAfterRace = fx.lifecycle.getActiveSession() as { sessionId: string } | undefined
+		expect(
+			taskAfterRace,
+			`TaskProxy should be undefined after racing initTask vs clearTask; got ${
+				taskAfterRace === undefined ? "undefined" : `defined(${taskAfterRace.taskId})`
+			}.`,
+		).toBeUndefined()
+		expect(
+			activeSessionAfterRace,
+			`activeSession should be undefined after racing initTask vs clearTask; got ${
+				activeSessionAfterRace === undefined ? "undefined" : `defined(${activeSessionAfterRace.sessionId})`
+			}. The fence must dispose stale just-started sessions.`,
+		).toBeUndefined()
 
 		// Reset phase calls so we can assert that THIS call to
 		// initTask produced the streaming transition.

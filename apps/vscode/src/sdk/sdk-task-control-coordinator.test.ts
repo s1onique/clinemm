@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { SdkTaskControlCoordinator, type SdkTaskControlCoordinatorOptions } from "./sdk-task-control-coordinator"
+import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy } from "./task-proxy"
 
 vi.mock("@/shared/services/Logger", () => ({
@@ -461,6 +462,9 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		raiseCancelFence: vi.fn(),
 		setTurnPhase: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: required by
+		// SdkTaskControlCoordinatorOptions. Per-test fence.
+		taskOperationFence: new TaskOperationFence(),
 	} as unknown as SdkTaskControlCoordinatorOptions & {
 		sessions: SdkTaskControlCoordinatorOptions["sessions"] & {
 			getActiveSession: ReturnType<typeof vi.fn>

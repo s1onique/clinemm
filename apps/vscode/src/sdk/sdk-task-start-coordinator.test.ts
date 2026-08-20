@@ -4,6 +4,7 @@ import type { StateManager } from "@/core/storage/StateManager"
 import { isDirectory } from "@/utils/fs"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE } from "./provider-failure-telemetry"
 import { SdkTaskStartCoordinator, type SdkTaskStartCoordinatorOptions } from "./sdk-task-start-coordinator"
+import { TaskOperationFence } from "./task-operation-fence"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -29,7 +30,7 @@ describe("SdkTaskStartCoordinator", () => {
 		const sessionId = await coordinator.initTask("hello @file", ["image.png"], ["a.ts"])
 
 		expect(sessionId).toEqual(expect.any(String))
-		expect(options.clearTask).toHaveBeenCalledOnce()
+		expect(options.clearTaskForOperation).toHaveBeenCalledOnce()
 		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
 			prompt: "hello @file",
 			images: ["image.png"],
@@ -185,7 +186,7 @@ describe("SdkTaskStartCoordinator", () => {
 
 		await coordinator.reinitExistingTaskFromId("task-1")
 
-		expect(options.clearTask).toHaveBeenCalledOnce()
+		expect(options.clearTaskForOperation).toHaveBeenCalledOnce()
 		expect(options.taskHistory.findHistoryItem).toHaveBeenCalledWith("task-1")
 		expect(isDirectory).toHaveBeenCalledWith("/task-cwd")
 		expect(options.getWorkspaceRoot).not.toHaveBeenCalled()
@@ -193,15 +194,22 @@ describe("SdkTaskStartCoordinator", () => {
 		expect(options.createTempSessionHost).toHaveBeenCalledOnce()
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(tempHost, "task-1")
 		expect(tempHost.dispose).toHaveBeenCalledWith("readMessages")
-		expect(options.sessions.startNewSession).toHaveBeenCalledWith({
-			config: expect.objectContaining({ providerId: "anthropic", modelId: "model" }),
-			interactive: true,
-			initialMessages: [{ role: "user", content: "hello" }],
-			sessionMetadata: expect.objectContaining({
-				title: "old task",
-				modelId: "model",
-			}),
-		})
+		expect(options.sessions.startNewSession).toHaveBeenCalledWith(
+			{
+				config: expect.objectContaining({ providerId: "anthropic", modelId: "model" }),
+				interactive: true,
+				initialMessages: [{ role: "user", content: "hello" }],
+				sessionMetadata: expect.objectContaining({
+					title: "old task",
+					modelId: "model",
+				}),
+			},
+			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: second arg is
+			// the operation token returned by fence.begin(). Just
+			// verify it's a number; the exact value is an internal
+			// detail of the fence.
+			expect.any(Number),
+		)
 		expect(state.task?.taskId).toBe("session-123")
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
 	})
@@ -310,7 +318,7 @@ describe("SdkTaskStartCoordinator", () => {
 		// setTurnPhase may be called once (lifecycle boundary). It must
 		// NOT be called before `clearTask` ran.
 		const firstInvocationOrder = options.setTurnPhase.mock.invocationCallOrder[0]
-		const clearTaskOrder = options.clearTask.mock.invocationCallOrder[0]
+		const clearTaskOrder = options.clearTaskForOperation.mock.invocationCallOrder[0]
 		const startNewSessionOrder = options.sessions.startNewSession.mock.invocationCallOrder[0]
 		expect(firstInvocationOrder).toBeGreaterThan(clearTaskOrder)
 		expect(firstInvocationOrder).toBeGreaterThan(startNewSessionOrder)
@@ -637,6 +645,7 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		} as unknown as StateManager,
 		sessions: {
 			startNewSession: vi.fn((startInput?: { config?: { sessionId?: string } }) => ({
+				status: "started",
 				startResult: { sessionId: startInput?.config?.sessionId ?? "session-123" },
 				sdkHost,
 			})),
@@ -676,6 +685,11 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		// `clearTask()` → `set("idle")` round-trip cannot drop it.
 		setTurnPhase: vi.fn(),
 		clearTask: vi.fn().mockResolvedValue(undefined),
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: clearTaskForOperation
+		// delegates to clearTask in the test fixture (no fence advance).
+		clearTaskForOperation: vi.fn().mockResolvedValue(undefined),
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: per-test fence.
+		taskOperationFence: new TaskOperationFence(),
 		setTask: vi.fn((task) => {
 			state.task = task as { taskId: string } | undefined
 		}),

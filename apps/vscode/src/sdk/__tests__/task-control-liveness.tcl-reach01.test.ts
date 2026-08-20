@@ -46,6 +46,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SdkTaskControlCoordinator, type SdkTaskControlCoordinatorOptions } from "../sdk-task-control-coordinator"
+import { TaskOperationFence } from "../task-operation-fence"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: {
@@ -103,6 +104,9 @@ function makeCoordinator(state: CoordinatorState) {
 		state.activeSession = undefined
 		return prev
 	})
+	// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: each test owns a fresh
+	// TaskOperationFence. Required by SdkTaskControlCoordinatorOptions.
+	const fx_fence = new TaskOperationFence()
 	const options = {
 		sessions: {
 			getActiveSession: vi.fn(() => state.activeSession),
@@ -137,6 +141,7 @@ function makeCoordinator(state: CoordinatorState) {
 		raiseCancelFence: vi.fn(),
 		setTurnPhase: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		taskOperationFence: fx_fence,
 	} as unknown as SdkTaskControlCoordinatorOptions & {
 		sessions: SdkTaskControlCoordinatorOptions["sessions"] & {
 			getActiveSession: ReturnType<typeof vi.fn>

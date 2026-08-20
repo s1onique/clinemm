@@ -53,6 +53,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { SdkMessageCoordinator } from "../sdk-message-coordinator"
 import { SdkSessionLifecycle } from "../sdk-session-lifecycle"
 import { SdkTaskControlCoordinator, type SdkTaskControlCoordinatorOptions } from "../sdk-task-control-coordinator"
+import { TaskOperationFence } from "../task-operation-fence"
 
 const mockCreateSessionHost = vi.hoisted(() => vi.fn())
 
@@ -125,6 +126,9 @@ interface Fixture {
 	cancelTask: () => Promise<void>
 	startSession: (sessionId: string) => Promise<void>
 	lifecycle: SdkSessionLifecycle
+	// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: exposed so tests
+	// can capture operation tokens BEFORE calling startNewSession.
+	fence: TaskOperationFence
 }
 
 function makeFixture(): Fixture {
@@ -133,6 +137,12 @@ function makeFixture(): Fixture {
 
 	let liveTask: unknown
 
+	// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: per-test fence,
+	// shared between lifecycle and control coordinator. Without this,
+	// the production-lifecycle race would be re-mockable (i.e. not
+	// proven at the real production seam).
+	const fx_fence = new TaskOperationFence()
+
 	const lifecycle = new SdkSessionLifecycle({
 		mcpHub: {} as never,
 		requestToolApproval: vi.fn(),
@@ -140,6 +150,7 @@ function makeFixture(): Fixture {
 		onSessionEvent: vi.fn(),
 		onSendComplete: vi.fn(),
 		onSendError: vi.fn(),
+		isOperationCurrent: (token) => fx_fence.isCurrent(token),
 	})
 
 	const options: SdkTaskControlCoordinatorOptions = {
@@ -147,6 +158,8 @@ function makeFixture(): Fixture {
 		interactions: {
 			clearPending: vi.fn(),
 		} as never,
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: per-test fence.
+		taskOperationFence: fx_fence,
 		messages: {
 			appendAndEmit: vi.fn(),
 			appendMessages: vi.fn(),
@@ -188,6 +201,7 @@ function makeFixture(): Fixture {
 		cancelTask: () => coordinator.cancelTask(),
 		startSession,
 		lifecycle,
+		fence: fx_fence,
 	}
 }
 
@@ -245,32 +259,46 @@ describe("ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle w
 		expect(fx.getActiveSession()).toBeUndefined()
 	})
 
-	// PARENTAL RED: the wedge is REACHABLE at the real lifecycle seam
-	// via concurrent clearTask + startNewSession.
-	it("REACH02 PARENTAL RED: concurrent clearTask + startNewSession produces the wedge", async () => {
+	// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: under the bounded
+	// generation-fence repair, this test must observe the wedge
+	// being PREVENTED, not produced. We pass an operation token that
+	// clearTask will supersede; the post-start fence check must
+	// dispose the just-started session and return superseded.
+	it("REACH02 PARENTAL GREEN: concurrent clearTask + startNewSession is fenced — no wedge produced", async () => {
 		const fx = makeFixture()
 		await fx.startSession("session-A")
 		assertNoWedge(fx.getActiveSession(), fx.getTask(), "initial")
 
-		// Configure host.start for the second session
+		// Configure host.start for the second session.
 		;(fx.host.start as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ sessionId: "session-B" })
-		// biome-ignore lint/suspicious/noExplicitAny: focused fake for lifecycle unit test
-		const startB = fx.lifecycle.startNewSession({
-			// biome-ignore lint/suspicious/noExplicitAny: focused fake for lifecycle unit test
-			config: { sessionId: "session-B", providerId: "anthropic", modelId: "claude-sonnet-4" },
-		} as any)
+		// Capture an operation token BEFORE startNewSession. clearTask
+		// below advances the fence and supersedes this token.
+		const operationToken = fx.fence.begin()
+		const startB = fx.lifecycle.startNewSession(
+			{
+				config: {
+					sessionId: "session-B",
+					providerId: "anthropic",
+					modelId: "claude-sonnet-4",
+				},
+			} as never,
+			operationToken,
+		)
 
-		await Promise.all([fx.clearTask(), startB])
+		const [, startBResult] = await Promise.all([fx.clearTask(), startB])
 
-		// The wedge MUST be present at the real lifecycle seam.
-		// This is the canonical preimage of the live incident:
-		//   activeSession = session-B (set by startNewSession AFTER
-		//     clearTask's setTask(undefined) ran)
-		//   getTask() === undefined (cleared by the inner clearTask)
-		// Subsequent operations on this orphaned session silently fail
-		// because SdkMessageCoordinator.appendMessages' guard at
-		// sdk-message-coordinator.ts:79-82 drops the message.
-		assertNoWedge(fx.getActiveSession(), fx.getTask(), "after concurrent clearTask + startNewSession")
+		// Post-fix: the lifecycle detected supersession at the post-start
+		// fence check, disposed the just-started session, and returned
+		// `status: "superseded"`. No wedge produced.
+		expect(
+			startBResult?.status,
+			`Expected startNewSession to return "superseded" under the fence, got ${
+				startBResult?.status ?? "undefined"
+			}. The fence must dispose stale just-started sessions.`,
+		).toBe("superseded")
+		// Neither half installed: activeSession is undefined, getTask is undefined.
+		expect(fx.getActiveSession()).toBeUndefined()
+		expect(fx.getTask()).toBeUndefined()
 	})
 
 	// TCL-COMMON01: from the wedge state, the SECOND New Task click

@@ -78,6 +78,17 @@ export interface SdkSessionLifecycleOptions {
 	 * session lifecycle is the pass-through.
 	 */
 	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	/**
+	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: the originating
+	 * task-operation generation authority. The lifecycle does NOT
+	 * own a separate generation counter; it consults this single
+	 * authority via `isOperationCurrent(token)` before installing
+	 * `this.activeSession` after `sdkHost.start()`. A stale token
+	 * means a newer intent has superseded this operation; the
+	 * lifecycle disposes the just-started session and returns
+	 * `{ status: "superseded", ... }`.
+	 */
+	isOperationCurrent?: (token: number) => boolean
 }
 
 export class SdkSessionLifecycle {
@@ -166,9 +177,66 @@ export class SdkSessionLifecycle {
 
 	async startNewSession(
 		startInput: Parameters<VscodeSessionHost["start"]>[0],
-	): Promise<{ startResult: StartSessionResult; sdkHost: SdkSessionHost }> {
+		/**
+		 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: the originating
+		 * task-operation token. The lifecycle carries this through the
+		 * awaited `sdkHost.start()` boundary and refuses to install
+		 * `this.activeSession` if a newer intent has superseded this
+		 * operation. Pass-through from `SdkTaskStartCoordinator.initTask`
+		 * (and `reinitExistingTaskFromId`); SdkController wires the
+		 * token from the shared `TaskOperationFence`.
+		 *
+		 * When undefined, the fence check is skipped. This is the
+		 * legacy behavior for callers that have not yet been updated
+		 * to thread a token through (e.g. the four
+		 * `replaceActiveSession` callers — mode/terminal/provider/MCP
+		 * rebuilds). Threading tokens through those callers is a
+		 * separate follow-up ACT; the parent race targeted here is
+		 * initTask ↔ clearTask, which goes through the explicit token
+		 * path.
+		 */
+		operationToken: number,
+	): Promise<
+		| { status: "started"; startResult: StartSessionResult; sdkHost: SdkSessionHost }
+		| { status: "superseded"; startResult?: undefined; sdkHost: SdkSessionHost }
+	>
+	async startNewSession(
+		startInput: Parameters<VscodeSessionHost["start"]>[0],
+	): Promise<{ status: "started"; startResult: StartSessionResult; sdkHost: SdkSessionHost }>
+	async startNewSession(
+		startInput: Parameters<VscodeSessionHost["start"]>[0],
+		operationToken?: number,
+	): Promise<
+		| { status: "started"; startResult: StartSessionResult; sdkHost: SdkSessionHost }
+		| { status: "superseded"; startResult?: undefined; sdkHost: SdkSessionHost }
+	> {
+		// FENCE-FIRST (P0): the fence must reject a stale token BEFORE
+		// any destructive lifecycle action. The previous ordering
+		// called `endActiveSession("startNewSession")` first, allowing
+		// a stale operation to terminate the newer operation's session
+		// before its own supersession was detected. A stale operation
+		// MUST NOT terminate, clear, replace, or install any session
+		// belonging to a newer operation.
+		const isCurrent = (t: number) => this.options.isOperationCurrent?.(t) ?? true
+		if (operationToken !== undefined && !isCurrent(operationToken)) {
+			Logger.debug(
+				`[SdkController] startNewSession: pre-endActiveSession supersession; operationToken=${operationToken} abandoned`,
+			)
+			// We haven't touched activeSession yet — no cleanup needed.
+			return { status: "superseded", sdkHost: undefined as unknown as SdkSessionHost }
+		}
+
 		if (this.activeSession) {
 			await this.endActiveSession("startNewSession")
+			// FENCE again after the awaited endActiveSession — a
+			// concurrent clearTask or new initTask could have advanced
+			// the fence during the await.
+			if (operationToken !== undefined && !isCurrent(operationToken)) {
+				Logger.debug(
+					`[SdkController] startNewSession: post-endActiveSession supersession; operationToken=${operationToken} abandoned`,
+				)
+				return { status: "superseded", sdkHost: undefined as unknown as SdkSessionHost }
+			}
 		}
 
 		// Same-id starts must wait for the previous session's stop to finish;
@@ -176,6 +244,13 @@ export class SdkSessionLifecycle {
 		const requestedSessionId = startInput.config?.sessionId?.trim()
 		if (requestedSessionId) {
 			await this.waitForPendingStop(requestedSessionId)
+			// FENCE after waitForPendingStop await — defensive check.
+			if (operationToken !== undefined && !isCurrent(operationToken)) {
+				Logger.debug(
+					`[SdkController] startNewSession: post-waitForPendingStop supersession; operationToken=${operationToken} abandoned`,
+				)
+				return { status: "superseded", sdkHost: undefined as unknown as SdkSessionHost }
+			}
 		}
 
 		const autoApprovalSettings = StateManager.get().getGlobalSettingsKey("autoApprovalSettings")
@@ -183,10 +258,36 @@ export class SdkSessionLifecycle {
 
 		const sdkHost = await this.getOrCreateSharedHost()
 
+		// FENCE again after getOrCreateSharedHost await — defensive
+		// check; the host-creation path can theoretically await too.
+		if (operationToken !== undefined && !isCurrent(operationToken)) {
+			Logger.debug(
+				`[SdkController] startNewSession: pre-host.start supersession; operationToken=${operationToken} abandoned`,
+			)
+			return { status: "superseded", sdkHost }
+		}
+
 		const startResult = await sdkHost.start({
 			...startInput,
 			...(toolPolicies ? { toolPolicies } : {}),
 		})
+
+		// LOAD-BEARING POST-START FENCE: this is the critical race
+		// window the parent RED reproduces. If a newer intent (e.g.
+		// concurrent clearTask or initTask B) advanced the fence
+		// while we were awaiting host.start, dispose the just-started
+		// session via `trackSessionStop` (so `pendingStops`
+		// bookkeeping protects against same-id collision with a
+		// future start) and return `superseded`. Do NOT install
+		// `this.activeSession`.
+		if (operationToken !== undefined && !isCurrent(operationToken)) {
+			Logger.debug(
+				`[SdkController] startNewSession: post-start supersession; disposing just-started session=${startResult.sessionId}`,
+			)
+			this.trackSessionStop(sdkHost, startResult.sessionId, "superseded-by-fence")
+			return { status: "superseded", sdkHost }
+		}
+
 		this.activeSession = {
 			sessionId: startResult.sessionId,
 			startConfig: startInput.config
@@ -207,7 +308,7 @@ export class SdkSessionLifecycle {
 		// site; the store's getOverride() is pure and never consumes.
 		this.options.consumePendingOverride?.(startResult.sessionId)
 
-		return { startResult, sdkHost }
+		return { status: "started", startResult, sdkHost }
 	}
 
 	async replaceActiveSession(options: {
@@ -215,6 +316,16 @@ export class SdkSessionLifecycle {
 		startInput: Parameters<VscodeSessionHost["start"]>[0]
 		initialMessages?: Parameters<VscodeSessionHost["start"]>[0]["initialMessages"]
 		disposeReason: string
+		/**
+		 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: the originating
+		 * task-operation token. Each caller of `replaceActiveSession`
+		 * (mode switch, terminal mode change, provider change, MCP
+		 * change) allocates its own token and threads it through so
+		 * the post-start fence check can detect supersession. Optional
+		 * for now; threading this through the four callers is a
+		 * separate follow-up ACT.
+		 */
+		operationToken?: number
 	}): Promise<
 		| {
 				oldSessionId: string
@@ -234,10 +345,25 @@ export class SdkSessionLifecycle {
 		// startInput, and startNewSession waits on the pending stop for it.
 		await this.endActiveSession(options.disposeReason)
 
-		const { startResult, sdkHost } = await this.startNewSession({
-			...options.startInput,
-			...(options.initialMessages ? { initialMessages: options.initialMessages } : {}),
-		})
+		// Legacy callers (no token) take the legacy overload; new callers
+		// take the fenced overload. The two overloads have different
+		// return shapes so TypeScript can narrow correctly.
+		const result = await (options.operationToken !== undefined
+			? this.startNewSession(
+					{
+						...options.startInput,
+						...(options.initialMessages ? { initialMessages: options.initialMessages } : {}),
+					},
+					options.operationToken,
+				)
+			: this.startNewSession({
+					...options.startInput,
+					...(options.initialMessages ? { initialMessages: options.initialMessages } : {}),
+				}))
+		if (result.status === "superseded") {
+			return undefined
+		}
+		const { startResult, sdkHost } = result
 		this.setRunning(false)
 
 		return { oldSessionId, startResult, sdkHost }
