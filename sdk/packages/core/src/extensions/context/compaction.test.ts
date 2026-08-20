@@ -16,8 +16,11 @@ import {
 	createContextCompactionPrepareTurn,
 } from "./compaction";
 import {
+	applyUserContextCeiling,
+	COMPACTION_TRIGGER_RATIO,
 	createTokenEstimator,
 	estimateTokens,
+	normalizeUserContextCeiling,
 	resolveEffectiveMaxInputTokens,
 	resolveSummarizerConfig,
 	serializeMessage,
@@ -191,6 +194,150 @@ describe("resolveEffectiveMaxInputTokens", () => {
 			maxTokens: 200_000,
 		};
 		expect(resolveEffectiveMaxInputTokens(modelInfo)).toBe(200_000);
+	});
+});
+
+// ACT-CLINEMM-USER-CONTEXT-CEILING01: pure policy resolver tests.
+// These exercise the new shared helpers independently of the trigger consumer,
+// so RED families A/B/C/D/E are reproducible from a single canonical surface.
+
+describe("normalizeUserContextCeiling", () => {
+	it("returns undefined for nullish inputs (Auto)", () => {
+		expect(normalizeUserContextCeiling(undefined)).toBeUndefined();
+		expect(normalizeUserContextCeiling(null)).toBeUndefined();
+	});
+
+	it("rejects zero, negative, fractional, NaN, and Infinity", () => {
+		expect(normalizeUserContextCeiling(0)).toBeUndefined();
+		expect(normalizeUserContextCeiling(-1)).toBeUndefined();
+		expect(normalizeUserContextCeiling(-512_000)).toBeUndefined();
+		expect(normalizeUserContextCeiling(1.5)).toBeUndefined();
+		expect(normalizeUserContextCeiling(Number.NaN)).toBeUndefined();
+		expect(
+			normalizeUserContextCeiling(Number.POSITIVE_INFINITY),
+		).toBeUndefined();
+		expect(
+			normalizeUserContextCeiling(Number.NEGATIVE_INFINITY),
+		).toBeUndefined();
+	});
+
+	it("rejects non-numeric persisted values", () => {
+		expect(normalizeUserContextCeiling("512000")).toBeUndefined();
+		expect(normalizeUserContextCeiling("512k")).toBeUndefined();
+		expect(normalizeUserContextCeiling({}) as unknown).toBeUndefined();
+		expect(normalizeUserContextCeiling([]) as unknown).toBeUndefined();
+		expect(normalizeUserContextCeiling(true) as unknown).toBeUndefined();
+	});
+
+	it("accepts a positive integer token count", () => {
+		expect(normalizeUserContextCeiling(1)).toBe(1);
+		expect(normalizeUserContextCeiling(512_000)).toBe(512_000);
+		expect(normalizeUserContextCeiling(1_000_000)).toBe(1_000_000);
+	});
+});
+
+describe("applyUserContextCeiling", () => {
+	// RED family A: Auto preserves canonical behavior exactly.
+	it("Auto (no ceiling) returns the canonical model effective capacity unchanged", () => {
+		expect(applyUserContextCeiling(900_000, undefined)).toBe(900_000);
+		expect(applyUserContextCeiling(900_000, undefined)).toBe(
+			resolveEffectiveMaxInputTokens({
+				maxInputTokens: 900_000,
+				contextWindow: 1_000_000,
+			}),
+		);
+	});
+
+	// RED family B: an explicit ceiling lowers the operating capacity.
+	it("explicit ceiling below the canonical limit lowers the operating capacity", () => {
+		expect(applyUserContextCeiling(900_000, 512_000)).toBe(512_000);
+		expect(applyUserContextCeiling(360_000, 128_000)).toBe(128_000);
+	});
+
+	// RED family C: the user value must NEVER expand model/provider capacity.
+	it("explicit ceiling above the canonical limit is silently clamped", () => {
+		expect(applyUserContextCeiling(200_000, 512_000)).toBe(200_000);
+		expect(applyUserContextCeiling(64_000, 1_000_000)).toBe(64_000);
+	});
+
+	// RED family D: boundary equality/edge values use straightforward min semantics.
+	it("treats equality and ±1 boundaries with straightforward min semantics", () => {
+		expect(applyUserContextCeiling(200_000, 200_000)).toBe(200_000);
+		expect(applyUserContextCeiling(200_000, 199_999)).toBe(199_999);
+		expect(applyUserContextCeiling(200_000, 200_001)).toBe(200_000);
+	});
+
+	it("preserves the fallback (undefined) when the canonical resolver is unknown", () => {
+		expect(applyUserContextCeiling(undefined, undefined)).toBeUndefined();
+		// The user value must NOT silently become a new capacity authority when
+		// model metadata is missing; preserve the existing fallback semantics.
+		expect(applyUserContextCeiling(undefined, 512_000)).toBeUndefined();
+	});
+
+	it("normalizes invalid user values to Auto", () => {
+		expect(applyUserContextCeiling(900_000, 0)).toBe(900_000);
+		expect(applyUserContextCeiling(900_000, -1)).toBe(900_000);
+		expect(applyUserContextCeiling(900_000, 512_000.5)).toBe(900_000);
+		expect(applyUserContextCeiling(900_000, Number.NaN)).toBe(900_000);
+		expect(applyUserContextCeiling(900_000, Number.POSITIVE_INFINITY)).toBe(
+			900_000,
+		);
+		expect(applyUserContextCeiling(900_000, "512k" as unknown)).toBe(900_000);
+	});
+});
+
+describe("userContextCeiling composition with resolveEffectiveMaxInputTokens", () => {
+	// Provider/matrix RED family: 1M model (maxInput 900k) under explicit 512k
+	// must produce 512_000. This is the canonical "large model + lower ceiling"
+	// RED; if the composition regresses, downstream compaction will start
+	// firing at the model-native threshold instead of the user policy.
+	it("1M model (maxInput 900k) + 512k ceiling -> 512k", () => {
+		const modelEffective = resolveEffectiveMaxInputTokens({
+			maxInputTokens: 900_000,
+			contextWindow: 1_000_000,
+		});
+		expect(applyUserContextCeiling(modelEffective, 512_000)).toBe(512_000);
+	});
+
+	it("200k model + 512k ceiling -> 200k (cannot expand)", () => {
+		const modelEffective = resolveEffectiveMaxInputTokens({
+			maxInputTokens: 200_000,
+			contextWindow: 200_000,
+		});
+		expect(applyUserContextCeiling(modelEffective, 512_000)).toBe(200_000);
+	});
+
+	it("1M model + Auto -> canonical effective capacity", () => {
+		const modelEffective = resolveEffectiveMaxInputTokens({
+			maxInputTokens: 900_000,
+			contextWindow: 1_000_000,
+		});
+		expect(applyUserContextCeiling(modelEffective, undefined)).toBe(
+			modelEffective,
+		);
+		expect(applyUserContextCeiling(modelEffective, undefined)).toBe(900_000);
+	});
+
+	it("contextWindow=1M maxInput=800k + 900k ceiling -> 800k (capped to model)", () => {
+		const modelEffective = resolveEffectiveMaxInputTokens({
+			maxInputTokens: 800_000,
+			contextWindow: 1_000_000,
+		});
+		expect(applyUserContextCeiling(modelEffective, 900_000)).toBe(800_000);
+	});
+
+	it("contextWindow=1M maxInput=800k + 512k ceiling -> 512k", () => {
+		const modelEffective = resolveEffectiveMaxInputTokens({
+			maxInputTokens: 800_000,
+			contextWindow: 1_000_000,
+		});
+		expect(applyUserContextCeiling(modelEffective, 512_000)).toBe(512_000);
+	});
+
+	it("missing model metadata + any ceiling -> undefined (preserve fallback)", () => {
+		const modelEffective = resolveEffectiveMaxInputTokens({});
+		expect(modelEffective).toBeUndefined();
+		expect(applyUserContextCeiling(modelEffective, 512_000)).toBeUndefined();
 	});
 });
 
@@ -2772,6 +2919,209 @@ describe("createContextCompactionPrepareTurn", () => {
 		expect(result?.messages).toEqual([
 			{ role: "user", content: "Compacted at 90%" },
 		]);
+	});
+
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01 RED family E (1/3): the trigger must
+	// use the operating (ceiling-capped) capacity, not the raw model maximum.
+	// Exercises the production prepareTurn seam so the wiring is the single
+	// authority — no duplicated threshold formula elsewhere.
+	it("triggers compaction at 90 percent of a user-configured ceiling, not the model maximum", async () => {
+		const compact = vi.fn((_context: CoreCompactionContext) => ({
+			messages: [
+				{ role: "user" as const, content: "Compacted under user ceiling" },
+			],
+		}));
+		const prepareTurn = createContextCompactionPrepareTurn({
+			providerId: "anthropic",
+			modelId: "mock-model",
+			providerConfig: {
+				providerId: "anthropic",
+				modelId: "mock-model",
+			} as LlmsProviders.ProviderConfig,
+			compaction: { enabled: true, compact, userContextCeiling: 512_000 },
+			logger: undefined,
+		});
+
+		const messages: MessageWithMetadata[] = [
+			{ role: "user", content: "Boundary test under user ceiling" },
+		];
+		const systemPrompt = "You are helpful.";
+		const inputTokens = estimateRequestInputTokens({
+			systemPrompt,
+			messages,
+			tools: [],
+		});
+		// Place input above the 90% ceiling trigger (460_800) but well above
+		// 90% of the 1M model native max (900_000). If the trigger still uses
+		// the model native max, this case would NOT compact, exposing the
+		// policy regression.
+		const modelMax = 1_000_000;
+		const ceiling = 512_000;
+		const ceilingTrigger = Math.floor(ceiling * COMPACTION_TRIGGER_RATIO);
+		const finalMessages: MessageWithMetadata[] = [
+			...messages,
+			{
+				role: "assistant" as const,
+				content: [
+					{
+						type: "text" as const,
+						text: "x".repeat(
+							Math.max(1, (ceilingTrigger - inputTokens + 5) * 3),
+						),
+					},
+				],
+			},
+		];
+		const finalInputTokens = estimateRequestInputTokens({
+			systemPrompt,
+			messages: finalMessages,
+			tools: [],
+		});
+		expect(finalInputTokens).toBeGreaterThanOrEqual(ceilingTrigger);
+		expect(finalInputTokens).toBeLessThan(modelMax * COMPACTION_TRIGGER_RATIO);
+
+		const result = await prepareTurn?.({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt,
+			tools: [],
+			messages: finalMessages,
+			apiMessages: finalMessages,
+			model: {
+				id: "mock-model",
+				provider: "anthropic",
+				info: {
+					id: "mock-model",
+					maxInputTokens: modelMax,
+					contextWindow: modelMax,
+				},
+			},
+		});
+
+		// Trigger fires because finalInputTokens >= ceiling * 0.9.
+		expect(compact).toHaveBeenCalledTimes(1);
+		const context = compact.mock.calls[0]?.[0];
+		expect(context?.budget.request.maxInputTokens).toBe(ceiling);
+		expect(context?.budget.request.triggerTokens).toBe(ceilingTrigger);
+		expect(result?.messages).toEqual([
+			{ role: "user", content: "Compacted under user ceiling" },
+		]);
+	});
+
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01 RED family E (2/3): the trigger must
+	// NOT fire below the ceiling even though input is also below 90% of the
+	// model native maximum. The ceiling is the binding policy.
+	it("does not trigger compaction when input is well below the ceiling trigger", async () => {
+		// Use a tiny ceiling so we can construct a known-small request. The
+		// load-bearing invariant: input below the ceiling trigger does not
+		// fire compaction, regardless of the model native maximum.
+		const compact = vi.fn((_context: CoreCompactionContext) => ({
+			messages: [{ role: "user" as const, content: "Should not be invoked" }],
+		}));
+		const prepareTurn = createContextCompactionPrepareTurn({
+			providerId: "anthropic",
+			modelId: "mock-model",
+			providerConfig: {
+				providerId: "anthropic",
+				modelId: "mock-model",
+			} as LlmsProviders.ProviderConfig,
+			compaction: { enabled: true, compact, userContextCeiling: 4_096 },
+			logger: undefined,
+		});
+
+		const messages: MessageWithMetadata[] = [{ role: "user", content: "tiny" }];
+		const systemPrompt = "hi";
+		const inputTokens = estimateRequestInputTokens({
+			systemPrompt,
+			messages,
+			tools: [],
+		});
+		// ceiling=4096, trigger = floor(4096 * 0.9) = 3686. A few tokens of
+		// tiny input is obviously below the trigger. Sanity assertion is
+		// load-bearing for the regression test.
+		expect(inputTokens).toBeLessThan(3686);
+
+		await prepareTurn?.({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt,
+			tools: [],
+			messages,
+			apiMessages: messages,
+			model: {
+				id: "mock-model",
+				provider: "anthropic",
+				info: {
+					id: "mock-model",
+					maxInputTokens: 1_000_000,
+					contextWindow: 1_000_000,
+				},
+			},
+		});
+
+		// Below the ceiling threshold: no compaction.
+		expect(compact).not.toHaveBeenCalled();
+	});
+
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01 RED family E (3/3): Auto preserves the
+	// canonical existing behavior. The trigger must use the model effective
+	// capacity exactly when no user ceiling is configured.
+	it("Auto (no userContextCeiling) preserves the existing trigger threshold for a 1M model", async () => {
+		const compact = vi.fn((_context: CoreCompactionContext) => ({
+			messages: [{ role: "user" as const, content: "Compacted at native 90%" }],
+		}));
+		const prepareTurn = createContextCompactionPrepareTurn({
+			providerId: "anthropic",
+			modelId: "mock-model",
+			providerConfig: {
+				providerId: "anthropic",
+				modelId: "mock-model",
+			} as LlmsProviders.ProviderConfig,
+			compaction: { enabled: true, compact },
+			logger: undefined,
+		});
+
+		const messages: MessageWithMetadata[] = [
+			{ role: "user", content: "Auto boundary" },
+		];
+		const systemPrompt = "You are helpful.";
+		const inputTokens = estimateRequestInputTokens({
+			systemPrompt,
+			messages,
+			tools: [],
+		});
+		const maxInputTokens = inputTokens / 0.9;
+		await prepareTurn?.({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt,
+			tools: [],
+			messages,
+			apiMessages: messages,
+			model: {
+				id: "mock-model",
+				provider: "anthropic",
+				info: { id: "mock-model", maxInputTokens },
+			},
+		});
+
+		expect(compact).toHaveBeenCalledTimes(1);
+		const context = compact.mock.calls[0]?.[0];
+		// Backward-compatibility witness: trigger uses canonical resolver output,
+		// not the ceiling-capped value, when no user ceiling is configured.
+		expect(context?.budget.request.maxInputTokens).toBe(maxInputTokens);
+		expect(context?.budget.request.triggerTokens).toBe(
+			Math.floor(maxInputTokens * COMPACTION_TRIGGER_RATIO),
+		);
 	});
 
 	it("triggers at 81 percent when only contextWindow is available", async () => {

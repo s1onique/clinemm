@@ -273,6 +273,12 @@ const USER_SETTINGS_FIELDS = {
 	defaultTerminalProfile: { default: "default" as string },
 	hooksEnabled: { default: true as boolean },
 	useAutoCondense: { default: true as boolean },
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01: user-controlled effective context/
+	// input ceiling. Undefined = Auto (canonical model/provider effective
+	// input capacity). Persisted as a positive integer token count; the
+	// resolver sanitizes non-positive / non-integer values at consumption
+	// time, so a malformed persisted value silently degrades to Auto.
+	userContextCeiling: { default: undefined as number | undefined },
 	subagentsEnabled: { default: false as boolean },
 	worktreesEnabled: { default: false as boolean },
 	preferredLanguage: { default: "English" as string },

@@ -43,6 +43,15 @@ function isPositiveFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+function isPositiveInteger(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isFinite(value) &&
+		value > 0 &&
+		Number.isInteger(value)
+	);
+}
+
 /**
  * Resolve the model's usable prompt budget. A reported input limit is
  * authoritative but cannot exceed the context window. When the model only
@@ -67,6 +76,52 @@ export function resolveEffectiveMaxInputTokens(
 	return contextWindow === undefined
 		? undefined
 		: contextWindow * CONTEXT_WINDOW_INPUT_RATIO;
+}
+
+/**
+ * ACT-CLINEMM-USER-CONTEXT-CEILING01: Sanitize a persisted user-context ceiling.
+ *
+ * Returns a positive integer token count, or `undefined` when the user has not
+ * configured an explicit ceiling (Auto) or the stored value is malformed. The
+ * resolver never trusts caller-side validation: persisted values from older
+ * builds, hand-edited config files, or untrusted proto payloads are normalized
+ * here so downstream policy math cannot accidentally consume zero, fractional,
+ * negative, NaN, or Infinity token counts.
+ */
+export function normalizeUserContextCeiling(
+	value: unknown,
+): number | undefined {
+	if (value === undefined || value === null) {
+		return undefined;
+	}
+	return isPositiveInteger(value) ? value : undefined;
+}
+
+/**
+ * ACT-CLINEMM-USER-CONTEXT-CEILING01: Apply the user's configured operating
+ * ceiling on top of the canonical model/provider effective input capacity.
+ *
+ * Auto (no ceiling) preserves the canonical limit exactly so existing behavior
+ * is bit-for-bit unchanged. An explicit ceiling may REDUCE the operating
+ * capacity but can NEVER expand it — the user value is an operating policy,
+ * not model metadata. When the canonical resolver returns `undefined` (no
+ * authoritative model capability), the ceiling is also ignored so it cannot
+ * silently become a new capacity authority.
+ *
+ * Pure: no UI, no provider, no global state. Independently testable.
+ */
+export function applyUserContextCeiling(
+	modelEffectiveMaxInputTokens: number | undefined,
+	userCeiling: number | undefined,
+): number | undefined {
+	const sanitizedCeiling = normalizeUserContextCeiling(userCeiling);
+	if (sanitizedCeiling === undefined) {
+		return modelEffectiveMaxInputTokens;
+	}
+	if (modelEffectiveMaxInputTokens === undefined) {
+		return undefined;
+	}
+	return Math.min(modelEffectiveMaxInputTokens, sanitizedCeiling);
 }
 
 export function truncateText(text: string, limit: number): string {

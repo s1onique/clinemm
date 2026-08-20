@@ -1,5 +1,6 @@
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
-import { memo, type ReactNode } from "react"
+import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
+import { memo, type ReactNode, useEffect, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
@@ -143,12 +144,50 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		mcpDisplayMode,
 		useAutoCondense,
 		compactionStrategy,
+		userContextCeiling,
 		webSearchEnabled,
 		subagentsEnabled,
 		worktreesEnabled,
 		backgroundEditEnabled,
 		showFeatureTips,
 	} = useExtensionState()
+
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01: local input state for the ceiling
+	// text field. Empty string = Auto (undefined); a positive integer is
+	// persisted verbatim. The backend rejects invalid values; we just track
+	// the user's text input.
+	const [ceilingInput, setCeilingInput] = useState<string>(userContextCeiling !== undefined ? String(userContextCeiling) : "")
+	const [ceilingError, setCeilingError] = useState<string | null>(null)
+	// Sync local input when the persisted state changes (e.g. on first mount
+	// or when the user reverts to Auto elsewhere).
+	useEffect(() => {
+		setCeilingInput(userContextCeiling !== undefined ? String(userContextCeiling) : "")
+		setCeilingError(null)
+	}, [userContextCeiling])
+
+	const handleCeilingBlur = () => {
+		const trimmed = ceilingInput.trim()
+		if (trimmed === "") {
+			// Empty -> Auto (undefined)
+			updateSetting("userContextCeiling", undefined)
+			setCeilingError(null)
+			return
+		}
+		const parsed = Number(trimmed)
+		if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed <= 0) {
+			setCeilingError("Enter a positive integer token count, or leave blank for Auto.")
+			// Revert to last persisted value on invalid input.
+			setCeilingInput(userContextCeiling !== undefined ? String(userContextCeiling) : "")
+			return
+		}
+		setCeilingError(null)
+		updateSetting("userContextCeiling", parsed)
+	}
+
+	const handleCeilingChange = (event: Event) => {
+		const target = event.target as HTMLInputElement
+		setCeilingInput(target.value)
+	}
 
 	// State lookup for mapped features
 	const featureState: Record<string, boolean | undefined> = {
@@ -202,6 +241,31 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 										<SelectItem value="agentic">Agentic</SelectItem>
 									</SelectContent>
 								</Select>
+							</div>
+							{/* ACT-CLINEMM-USER-CONTEXT-CEILING01: user-controlled effective
+							    context/input ceiling. Empty = Auto (canonical model/provider
+							    effective input capacity). A positive integer token count
+							    lowers the operating capacity that drives auto-compaction.
+							    It can never expand the model/provider limit. */}
+							<div className="space-y-2 py-3">
+								<Label className="text-sm font-medium text-foreground" htmlFor="user-context-ceiling">
+									Context ceiling
+								</Label>
+								<p className="text-xs text-muted-foreground">
+									Auto uses the model/provider limit. Set a lower ceiling to compact earlier on very
+									large-context models.
+								</p>
+								<VSCodeTextField
+									className="w-full"
+									id="user-context-ceiling"
+									onBlur={handleCeilingBlur}
+									onInput={handleCeilingChange}
+									placeholder="Auto (leave blank)"
+									value={ceilingInput}
+								/>
+								{ceilingError && (
+									<div className="text-(--vscode-errorForeground) text-xs mt-1">{ceilingError}</div>
+								)}
 							</div>
 							<FeatureRow
 								checked={webSearchEnabled}

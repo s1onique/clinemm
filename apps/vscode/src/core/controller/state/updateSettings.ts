@@ -180,6 +180,20 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			setCompactionStrategyGlobally(strategy)
 		}
 
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01: persist the user-controlled
+		// operating context ceiling. The value is sanitized at the SDK policy
+		// seam; this handler is the single persistence authority. Undefined
+		// clears the setting (Auto). Invalid values (non-integer, ≤0) are
+		// rejected here so they cannot reach disk and silently become model
+		// metadata in a future build.
+		if (request.userContextCeiling !== undefined) {
+			const ceiling = request.userContextCeiling
+			if (typeof ceiling !== "number" || !Number.isFinite(ceiling) || !Number.isInteger(ceiling) || ceiling <= 0) {
+				throw new Error(`Invalid user context ceiling value: ${ceiling}`)
+			}
+			controller.stateManager.setGlobalState("userContextCeiling", ceiling)
+		}
+
 		// Update browser settings
 		if (request.browserSettings !== undefined) {
 			// Get current browser settings to preserve fields not in the request

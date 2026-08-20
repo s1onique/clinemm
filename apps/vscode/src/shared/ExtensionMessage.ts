@@ -244,6 +244,11 @@ export interface ExtensionState {
 	mcpResponsesCollapsed?: boolean
 	useAutoCondense?: boolean
 	compactionStrategy?: string
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01: user-controlled operating context
+	// ceiling. Undefined = Auto (canonical model/provider effective input
+	// capacity). A positive integer lowers the operating capacity that
+	// drives auto-compaction; it can never expand the model/provider limit.
+	userContextCeiling?: number
 	webSearchEnabled?: boolean
 	subagentsEnabled?: boolean
 	worktreesEnabled?: ClineFeatureSetting

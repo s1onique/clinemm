@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react"
+import type { ChangeEventHandler } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import FeatureSettingsSection from "./FeatureSettingsSection"
 
@@ -11,6 +12,10 @@ const mockExtensionState = vi.hoisted(() => ({
 		mcpDisplayMode: "rich",
 		useAutoCondense: false,
 		compactionStrategy: "basic",
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01: undefined = Auto (no explicit
+		// operating ceiling). The settings surface preserves the field so a
+		// future configured value survives a remount.
+		userContextCeiling: undefined,
 		subagentsEnabled: false,
 		worktreesEnabled: { user: true, featureFlag: true },
 		focusChainSettings: { enabled: false, remindClineInterval: 6 },
@@ -27,6 +32,24 @@ vi.mock("../utils/settingsHandlers", () => ({
 	updateSetting: (...args: unknown[]) => mockUpdateSetting(...args),
 }))
 
+// ACT-CLINEMM-USER-CONTEXT-CEILING01: VSCodeTextField is a web component with
+// shadow DOM; mock it to a plain input so fireEvent can drive value/change.
+vi.mock("@vscode/webview-ui-toolkit/react", () => ({
+	VSCodeTextField: ({
+		onInput,
+		onBlur,
+		placeholder,
+		value,
+		id,
+	}: {
+		onInput?: ChangeEventHandler<HTMLInputElement>
+		onBlur?: () => void
+		placeholder?: string
+		value?: string
+		id?: string
+	}) => <input id={id} onBlur={onBlur} onChange={onInput} placeholder={placeholder} value={value ?? ""} />,
+}))
+
 describe("FeatureSettingsSection", () => {
 	beforeEach(() => {
 		mockUpdateSetting.mockClear()
@@ -34,6 +57,7 @@ describe("FeatureSettingsSection", () => {
 			...mockExtensionState.value,
 			useAutoCondense: false,
 			compactionStrategy: "basic",
+			userContextCeiling: undefined,
 		}
 	})
 
@@ -97,5 +121,59 @@ describe("FeatureSettingsSection", () => {
 		fireEvent.click(featureTipsSwitch as Element)
 
 		expect(mockUpdateSetting).toHaveBeenCalledWith("showFeatureTips", true)
+	})
+
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01: settings surface for the user-controlled
+	// operating context ceiling. The Auto option is represented by an empty
+	// text field; an explicit numeric value is persisted as a positive integer
+	// token count. Invalid values are rejected client-side and the persisted
+	// state is unchanged.
+	it("renders the Context ceiling input with empty placeholder for Auto", () => {
+		mockExtensionState.value.userContextCeiling = undefined
+		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+		const ceilingField = container.querySelector("#user-context-ceiling")
+		expect(ceilingField).toBeTruthy()
+	})
+
+	it("renders the persisted ceiling value as the text input value", () => {
+		mockExtensionState.value.userContextCeiling = 512_000
+		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+		const ceilingField = container.querySelector("#user-context-ceiling") as HTMLInputElement | null
+		expect(ceilingField).toBeTruthy()
+		expect(ceilingField?.value).toBe("512000")
+	})
+
+	it("persists an explicit positive integer ceiling on blur", () => {
+		mockExtensionState.value.userContextCeiling = undefined
+		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+		const ceilingField = container.querySelector("#user-context-ceiling") as HTMLInputElement | null
+		expect(ceilingField).toBeTruthy()
+		// Simulate user typing a value
+		fireEvent.change(ceilingField as Element, { target: { value: "256000" } })
+		fireEvent.blur(ceilingField as Element)
+		expect(mockUpdateSetting).toHaveBeenCalledWith("userContextCeiling", 256000)
+	})
+
+	it("rejects a negative or zero ceiling and reverts to the last persisted value", () => {
+		mockExtensionState.value.userContextCeiling = 128_000
+		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+		const ceilingField = container.querySelector("#user-context-ceiling") as HTMLInputElement | null
+		expect(ceilingField).toBeTruthy()
+		fireEvent.change(ceilingField as Element, { target: { value: "0" } })
+		fireEvent.blur(ceilingField as Element)
+		// Negative / non-positive inputs must NOT be persisted; the surface
+		// reverts to the last persisted value (128_000).
+		expect(mockUpdateSetting).not.toHaveBeenCalledWith("userContextCeiling", 0)
+		expect(ceilingField?.value).toBe("128000")
+	})
+
+	it("persists undefined when the user clears the field (Auto)", () => {
+		mockExtensionState.value.userContextCeiling = 512_000
+		const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+		const ceilingField = container.querySelector("#user-context-ceiling") as HTMLInputElement | null
+		expect(ceilingField).toBeTruthy()
+		fireEvent.change(ceilingField as Element, { target: { value: "" } })
+		fireEvent.blur(ceilingField as Element)
+		expect(mockUpdateSetting).toHaveBeenCalledWith("userContextCeiling", undefined)
 	})
 })

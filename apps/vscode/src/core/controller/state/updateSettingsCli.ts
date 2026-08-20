@@ -127,6 +127,24 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			controller.stateManager.setGlobalState("useAutoCondense", useAutoCondense)
 		}
 
+		// ACT-CLINEMM-USER-CONTEXT-CEILING01: validate the CLI-supplied ceiling.
+		// Mirrors `updateSettings.ts`: the SDK policy resolver sanitizes the
+		// value at consumption time, but we reject clearly invalid inputs at
+		// the persistence seam so they cannot reach disk and silently become
+		// model metadata in a future build.
+		const userContextCeiling = request.settings.userContextCeiling
+		if (userContextCeiling !== undefined) {
+			if (
+				typeof userContextCeiling !== "number" ||
+				!Number.isFinite(userContextCeiling) ||
+				!Number.isInteger(userContextCeiling) ||
+				userContextCeiling <= 0
+			) {
+				throw new Error(`Invalid user context ceiling value: ${userContextCeiling}`)
+			}
+			controller.stateManager.setGlobalState("userContextCeiling", userContextCeiling)
+		}
+
 		// Update worktrees setting
 		if (worktreesEnabled !== undefined) {
 			controller.stateManager.setGlobalState("worktreesEnabled", worktreesEnabled)

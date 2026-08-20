@@ -916,6 +916,11 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	const compactionStrategy = readCompactionStrategyGlobally()
 	const enableCheckpoints = stateManager.getGlobalSettingsKey("enableCheckpointsSetting") ?? true
 	const useAutoCondense = input.taskSettings?.useAutoCondense ?? globalUseAutoCondense
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01: read the persisted user-controlled
+	// operating context ceiling. The SDK policy resolver sanitizes the value
+	// (positive integer), so we pass the raw stored value through and let
+	// `applyUserContextCeiling` handle invalid input (it normalizes to Auto).
+	const userContextCeiling = input.taskSettings?.userContextCeiling ?? stateManager.getGlobalSettingsKey("userContextCeiling")
 
 	// Core resolves providers against the SDK registry, which uses the SDK's
 	// own provider id spelling (e.g. "openai-compatible" rather than the
@@ -992,6 +997,11 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 					compaction: {
 						enabled: true,
 						strategy: compactionStrategy,
+						// ACT-CLINEMM-USER-CONTEXT-CEILING01: forward the user-
+						// controlled operating ceiling to the SDK compaction
+						// policy. Undefined = Auto (canonical model/provider
+						// effective input capacity).
+						...(userContextCeiling !== undefined ? { userContextCeiling } : {}),
 					},
 				}
 			: {}),

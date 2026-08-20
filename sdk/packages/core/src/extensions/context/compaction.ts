@@ -22,11 +22,13 @@ import type { ProviderConfig } from "../../types/provider-settings";
 import { runAgenticCompaction } from "./agentic-compaction";
 import { runBasicCompaction } from "./basic-compaction";
 import {
+	applyUserContextCeiling,
 	COMPACTION_TRIGGER_RATIO,
 	createTokenEstimator,
 	DEFAULT_MAX_INPUT_TOKENS,
 	DEFAULT_PRESERVE_RECENT_TOKENS,
 	DEFAULT_TARGET_RATIO,
+	normalizeUserContextCeiling,
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
 
@@ -288,6 +290,13 @@ export function createContextCompactionPrepareTurn(
 	const telemetryStrategy: TelemetryCompactionStrategy = userCompaction?.compact
 		? "custom"
 		: strategy;
+	// ACT-CLINEMM-USER-CONTEXT-CEILING01: user-controlled operating ceiling.
+	// Sanitized once per `prepareTurn` so the per-turn closure works against a
+	// trusted positive integer (or undefined for Auto). The canonical
+	// resolver output (NOT the raw model metadata) is what the ceiling caps.
+	const sanitizedUserContextCeiling = normalizeUserContextCeiling(
+		userCompaction?.userContextCeiling,
+	);
 
 	return async (context) => {
 		const effectiveMode: CoreCompactionMode = context.overflowRecovery
@@ -311,10 +320,13 @@ export function createContextCompactionPrepareTurn(
 			requestInputTokens - apiMessageTokens,
 		);
 		const maxInputTokens =
-			resolveEffectiveMaxInputTokens({
-				maxInputTokens: context.model.info?.maxInputTokens,
-				contextWindow: context.model.info?.contextWindow,
-			}) ?? DEFAULT_MAX_INPUT_TOKENS;
+			applyUserContextCeiling(
+				resolveEffectiveMaxInputTokens({
+					maxInputTokens: context.model.info?.maxInputTokens,
+					contextWindow: context.model.info?.contextWindow,
+				}),
+				sanitizedUserContextCeiling,
+			) ?? DEFAULT_MAX_INPUT_TOKENS;
 		const requestTriggerTokens = maxInputTokens * COMPACTION_TRIGGER_RATIO;
 		const messageTriggerTokens = translateRequestBudgetToMessages(
 			requestTriggerTokens,
@@ -336,6 +348,9 @@ export function createContextCompactionPrepareTurn(
 			messageTriggerTokens,
 			thresholdRatio: COMPACTION_TRIGGER_RATIO,
 			shouldCompact,
+			// ACT-CLINEMM-USER-CONTEXT-CEILING01: surface whether the trigger is
+			// operating under a user-configured ceiling; undefined = Auto.
+			userContextCeiling: sanitizedUserContextCeiling,
 			messageCount: context.messages.length,
 			apiMessageCount: context.apiMessages.length,
 			apiMessagesJsonChars: safeJsonSize(context.apiMessages),

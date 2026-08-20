@@ -160,6 +160,13 @@ export interface CoreCompactionConfig {
 	strategy?: CoreCompactionStrategy;
 	preserveRecentTokens?: number;
 	summarizer?: CoreCompactionSummarizerConfig;
+	/**
+	 * ACT-CLINEMM-USER-CONTEXT-CEILING01: user-controlled effective context/input
+	 * ceiling. Undefined means Auto (use the canonical model/provider effective
+	 * input capacity). A positive integer lowers the operating capacity that
+	 * drives auto-compaction; it can never expand the model/provider limit.
+	 */
+	userContextCeiling?: number;
 	compact?: (
 		context: CoreCompactionContext,
 	) =>
