@@ -603,12 +603,35 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			}
 			const waitBudgetMs = options.backgroundWaitBudgetMs ?? DEFAULT_WAIT_BUDGET_MS
 			const executionDeadlineMs = options.backgroundExecutionDeadlineMs ?? DEFAULT_EXECUTION_DEADLINE_MS
-			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback. Fires
-			// once when the tool returns RUNNING (with the active jobId) and
-			// once when the command reaches a terminal state on the same call
-			// (with undefined). The host owns the projection — the projection
-			// is dead state until this fires.
+			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback. The
+			// host's `backgroundCommandRunning` projection MUST be derived
+			// from the manager's active-cardinality, not from per-job
+			// terminal events. The manager supports multiple concurrent
+			// active jobs; if a per-job terminal listener blindly fires
+			// (false, undefined) when ANY job completes, the projection
+			// would clear while another background job is still active.
+			//
+			// Two helper predicates translate the per-job event into a
+			// cardinality-aware projection:
+			//  - enteringRunningJob: this is a 0->1 transition (this is
+			//    the first active job), so we fire (true, jobId).
+			//  - exitingAllJobs: this is a >0->0 transition (this was the
+			//    last active job), so we fire (false, undefined).
+			// Anything in between is a no-op (the projection is already in
+			// the correct state from a previous transition).
+			const isEnteringRunningJob = (): boolean => manager.getActiveJobIds().length === 1
+			const isExitingAllJobs = (): boolean => manager.getActiveJobIds().length === 0
 			const notifyBackgroundStateChange = (running: boolean, jobId: string | undefined): void => {
+				// Cardinality gate: only fire if the transition is meaningful
+				// for the projection. The (true, jobId) signal is only
+				// meaningful at 0->1; (false, undefined) is only meaningful
+				// at >0->0. Anything else is a no-op.
+				if (running && !isEnteringRunningJob()) {
+					return
+				}
+				if (!running && !isExitingAllJobs()) {
+					return
+				}
 				try {
 					options.onBackgroundStateChange?.(running, jobId)
 				} catch (error) {
@@ -652,6 +675,9 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// flips to true here — the host owns an in-flight
 					// background command. The webview's TaskHeader can show
 					// "Working" and the Cancel button can route the cancel.
+					// The notifyBackgroundStateChange helper is
+					// cardinality-aware: if another job is already active,
+					// the projection is already true and we no-op.
 					notifyBackgroundStateChange(true, start.jobId)
 					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: attach an async
 					// listener so the projection flips back to false when the
@@ -663,7 +689,10 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// observation-only / mutating, not state-broadcasters.
 					// The terminalPromise is derived from the manager's
 					// `exitTransitions` map — it never rejects, so a
-					// no-arg `.then()` is safe.
+					// no-arg `.then()` is safe. The notify helper is
+					// cardinality-aware: if other jobs are still active
+					// when this one terminal-completes, the projection
+					// stays true (no-op).
 					start.terminalPromise.then(() => {
 						notifyBackgroundStateChange(false, undefined)
 					})

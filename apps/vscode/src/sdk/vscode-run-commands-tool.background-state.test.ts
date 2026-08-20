@@ -28,11 +28,11 @@
  *     naturally (RTP-LONG01 — the upstream-cline issue class
  *     #10549: a fixed short timeout that kills work is observable
  *     user harm).
- *
- * If these tests are GREEN, the projection is wired and the runtime
- * either starts the next step (model polling), yields to the user
- * (Cancel button routes the cancel correctly), or surfaces an
- * explicit failure — the load-bearing progression guarantee.
+ *  5. RTP-MULTI01 — cardinality safety. `CommandJobManager` supports
+ *     multiple concurrent active jobs. The projection MUST be derived
+ *     from active-cardinality, not from per-job terminal events —
+ *     otherwise the first completing job would clear the projection
+ *     while another background job is still active.
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ToolOperationResult } from "@cline/core"
@@ -306,6 +306,142 @@ describe("createVscodeRunCommandsTool — background state callback (ACT-CLINEMM
 				{ timeout: 1_000, interval: 10 },
 			)
 			// The last call must be (false, undefined).
+			const lastCall = onBackgroundStateChange.mock.calls[onBackgroundStateChange.mock.calls.length - 1]
+			expect(lastCall).toEqual([false, undefined])
+		} finally {
+			await manager.dispose()
+		}
+	})
+
+	// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION01 RTP-MULTI01:
+	// cardinality safety. The CommandJobManager explicitly supports
+	// multiple concurrent active jobs (`getActiveJobIds()` returns
+	// Array.from(this.active.keys())). The host's
+	// `backgroundCommandRunning` projection MUST therefore be derived
+	// from the manager's active-cardinality, not from per-job
+	// terminal events — otherwise the first completing job would
+	// clear the projection while another background job is still
+	// active, leaving the webview's TaskHeader and Cancel button
+	// stuck thinking the runtime is idle.
+	//
+	// This test exercises the multi-active-job path: two jobs run
+	// concurrently. Job A completes before Job B; the projection
+	// MUST stay true while B is alive. After B also completes the
+	// projection MUST flip to false (and only THEN).
+	//
+	// Pre-fix this is RED: the terminal listener attached to A's
+	// `terminalPromise` blindly fires `(false, undefined)` the moment
+	// A finishes, regardless of B's state.
+	it("RTP-MULTI01: projection stays true while at least one background job is still active (cardinality-safe)", async () => {
+		if (!isPosix) {
+			return
+		}
+		const manager = new CommandJobManager()
+		const onBackgroundStateChange = vi.fn()
+		const tool = createVscodeRunCommandsTool({
+			cwd: process.cwd(),
+			getTerminalManager: () => {
+				throw new Error("not used in background mode")
+			},
+			vscodeTerminalExecutionMode: "backgroundExec",
+			commandJobManager: manager,
+			// Scaled timings: A finishes at ~150ms, B at ~400ms. Wait
+			// budget is ~30ms so both return RUNNING.
+			backgroundWaitBudgetMs: 30,
+			backgroundExecutionDeadlineMs: 5_000,
+			onBackgroundStateChange,
+		})
+
+		try {
+			// Start job A (sleep 0.15) and job B (sleep 0.40).
+			const resultA = await executeTool(
+				tool,
+				{ commands: ["/bin/sh -c \"sleep 0.15\""] },
+				{ agentId: "agent-1", conversationId: "conversation-1", iteration: 1 },
+			)
+			const parsedA = JSON.parse(resultA[0].result)
+			expect(parsedA.status).toBe("running")
+			const jobIdA = parsedA.jobId
+
+			const resultB = await executeTool(
+				tool,
+				{ commands: ["/bin/sh -c \"sleep 0.40\""] },
+				{ agentId: "agent-1", conversationId: "conversation-1", iteration: 1 },
+			)
+			const parsedB = JSON.parse(resultB[0].result)
+			expect(parsedB.status).toBe("running")
+			const jobIdB = parsedB.jobId
+
+			// Two jobs active: the manager's cardinality is 2.
+			expect(manager.getActiveJobIds().length).toBe(2)
+			// Only the FIRST RUNNING return should have fired
+			// `(true, jobId)` — the projection is cardinality-aware, so
+			// the second RUNNING is a no-op (projection is already true).
+			expect(onBackgroundStateChange).toHaveBeenCalledWith(true, jobIdA)
+			expect(onBackgroundStateChange).not.toHaveBeenCalledWith(true, jobIdB)
+			const callsAfterBothStarted = onBackgroundStateChange.mock.calls.length
+
+			// Wait for A to complete naturally by polling status in a
+			// tight loop. B is still alive.
+			let aStateAtCompletion: string | undefined
+			for (let i = 0; i < 200; i++) {
+				const s = await manager.status({ jobId: jobIdA, waitMs: 0 })
+				if (s.ok && s.snapshot.state !== "running") {
+					aStateAtCompletion = s.snapshot.state
+					break
+				}
+				await new Promise((r) => setTimeout(r, 5))
+			}
+			expect(aStateAtCompletion).toBe("exited")
+			// B is still alive — manager cardinality is 1.
+			const bStatusWhileAIsDone = await manager.status({ jobId: jobIdB, waitMs: 0 })
+			expect(bStatusWhileAIsDone.ok).toBe(true)
+			if (bStatusWhileAIsDone.ok) {
+				expect(bStatusWhileAIsDone.snapshot.state).toBe("running")
+			}
+			// Allow a brief window for A's terminalPromise callback to
+			// fire if it's going to (current bug: it does).
+			await new Promise((r) => setTimeout(r, 50))
+			// BUG: the projection was (false, undefined) when A's
+			// terminalPromise resolved because the implementation
+			// treats each terminal as a global idle signal. With the
+			// cardinality-safe fix, the projection MUST stay true
+			// because B is still active.
+			const falseCallsBeforeBFinishes = onBackgroundStateChange.mock.calls.filter(
+				(c) => c[0] === false,
+			)
+			expect(falseCallsBeforeBFinishes).toHaveLength(0)
+
+			// Wait for B to complete naturally. Now the projection
+			// MUST flip to false.
+			let bStateAtCompletion: string | undefined
+			for (let i = 0; i < 400; i++) {
+				const s = await manager.status({ jobId: jobIdB, waitMs: 0 })
+				if (s.ok && s.snapshot.state !== "running") {
+					bStateAtCompletion = s.snapshot.state
+					break
+				}
+				await new Promise((r) => setTimeout(r, 5))
+			}
+			expect(bStateAtCompletion).toBe("exited")
+
+			// After both jobs complete, the projection must eventually
+			// flip to false. The existing implementation blindly fires
+			// (false, undefined) when EACH job completes, so the very
+			// first call (from A) is the bug — the cardinality-safe
+			// fix should only fire on the last terminal completion.
+			// Wait for the (false, undefined) call to appear.
+			let foundFalse = false
+			for (let i = 0; i < 200; i++) {
+				if (onBackgroundStateChange.mock.calls.some((c) => c[0] === false)) {
+					foundFalse = true
+					break
+				}
+				await new Promise((r) => setTimeout(r, 5))
+			}
+			expect(foundFalse).toBe(true)
+
+			// Final state: the last call must be (false, undefined).
 			const lastCall = onBackgroundStateChange.mock.calls[onBackgroundStateChange.mock.calls.length - 1]
 			expect(lastCall).toEqual([false, undefined])
 		} finally {
