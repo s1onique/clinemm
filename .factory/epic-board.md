@@ -172,7 +172,8 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `EPIC-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` | CTX | CLOSED at this commit | HIGH | none | closed by `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` (closure 01 was reopened by reviewer for two P0 blockers — evidentiary inconsistency between the closure report and a dirty-worktree digest, and the `tokensIn`-only UI numerator being provider-blind — both closed in CORRECTION01: truthful state restored and UI numerator switched to the provider-normalized `tokensIn + cacheReads + cacheWrites` equal to the AI SDK `inputTokens.total` contract; the Anthropic-native and OpenAI-compat REDs now drive the helper) |
 | `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` | CTX | CLOSED at this commit | HIGH | none | RED reproduced at production seam (initial: `getLastApiReqTotalTokens` inflated by `cacheReads`; correction: provider-blind `tokensIn`-only numerator would undercount Anthropic-native cached prompts); CORRECTION01 introduces `getLastApiReqContextInputTokens` returning `tokensIn + cacheReads + cacheWrites` (the AI SDK `inputTokens.total` contract — `apps/vscode/src/sdk/message-translator.ts:98-110 normalizeUsageEvent` already produces disjoint buckets via `uncachedInputTokens = inputTokens - cacheReads - cacheWrites`); both Anthropic-native (`tokensIn=50, cacheReads=100000` → `100_050`) and OpenAI-compat-style (`prompt_tokens` decomposes to `noCache + cached_tokens`) REDs are covered; 10 files changed (467 insertions, 40 deletions); vitest 118 files / 1681 tests / 0 failures; bun unit 72 files / 1076 tests / 0 failures; webview 69 files / 562 tests / 0 failures; typecheck 0 diagnostics; `EPIC-CLINEMM-USER-CONTEXT-CEILING01` precondition now holds |
 | `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01-CORRECTION01` | CTX | CLOSED | HIGH | none | RED tests added: `getApiMetrics.test.ts` Anthropic-native (`tokensIn=50, cacheReads=100000` → `100_050`), Anthropic cache-creation (`tokensIn=200, cacheWrites=12_500` → `12_700`), OpenAI-compat inclusive (149_235 + 148_167 → 297_402, the original `prompt_tokens`), `tokensOut` non-contribution, total rescaling; `ContextWindow.test.tsx` Anthropic-native `lastApiReqContextInputTokens=100_050 / 200_000` → 50% bar |
-| `EPIC-CLINEMM-USER-CONTEXT-CEILING01` | CTX | OPEN (precondition now satisfied) | HIGH | context-accounting-truth (CLOSED) | let users set effective cap below model physical max — `ACCOUNTING_TRUTH=SATISFIED` after correction01; ready to start |
+| `EPIC-CLINEMM-USER-CONTEXT-CEILING01` | CTX | CLOSED | HIGH | context-accounting-truth (CLOSED) | closed by `ACT-CLINEMM-USER-CONTEXT-CEILING01` (user-controlled effective context ceiling; Auto / explicit-positive-integer modes; built on canonical `resolveEffectiveMaxInputTokens`; user value can never expand model/provider capacity; one compaction threshold formula) |
+| `ACT-CLINEMM-USER-CONTEXT-CEILING01` | CTX | CLOSED | HIGH | none | RED families A/B/C/D/E all green; new pure policy resolver `applyUserContextCeiling` / `normalizeUserContextCeiling` layered on top of the canonical `resolveEffectiveMaxInputTokens`; `CoreCompactionConfig.userContextCeiling` plumbed through `cline-session-factory.ts` to the SDK trigger (`requestTriggerTokens = operatingCapacity * 0.9`); settings UI exposes a labeled numeric input next to Auto Compact Strategy (empty = Auto, positive integer = explicit ceiling); `apps/vscode Vitest: 118 files / 1681 tests / 0 failures`; `bun unit: 72 files / 1076 tests / 0 failures`; `webview vitest: 69 files / 567 tests / 0 failures` (was 562, +5 ceiling UI); `SDK core vitest: 173 files / 2124 passed / 14 skipped / 0 failures` (was 94); `typecheck: 0 diagnostics`; `coverage ratchet: PASS` (+26 statements / +13 branches / +5 fns / +25 lines); dogfood VSIX built + installed `s1onique.clinemm@4.1.10-ac40e4399` (source head `ac40e43991189608b0c01cd15d039000fa0314ba`); no model metadata mutation; no hidden truncation; auto-condense off preserves existing behavior; summarizer (agentic-compaction) input budget intentionally NOT user-ceiling-clamped — it is the summarizer model's own context window, a separate authority |
 | `CTX-01` | CTX | NEEDS_CLASSIFICATION | LOW | — | classify when relevant |
 | `CTX-02` | CTX | NEEDS_CLASSIFICATION | LOW | — | classify when relevant |
 | `CTX-03` | CTX | NEEDS_CLASSIFICATION | LOW | — | classify when relevant |
@@ -434,16 +435,17 @@ The producer seam in `apps/vscode/src/sdk/message-translator.ts:86-110 normalize
 ### USER-CONTEXT-CEILING01
 
 - ID: `EPIC-CLINEMM-USER-CONTEXT-CEILING01`
-- STATUS: OPEN
+- STATUS: CLOSED at `ac40e43991189608b0c01cd15d039000fa0314ba` (HEAD)
+- CLOSED BY: `ACT-CLINEMM-USER-CONTEXT-CEILING01`
 
 **Goal.** Allow a user to set an effective operating ceiling below a model's advertised physical maximum.
 
-**Configuration modes that must be supported:**
+**Configuration modes supported:**
 
-- `Auto` — use the model's physical maximum
-- explicit effective token ceiling — user-configurable value
+- `Auto` — undefined = use the canonical model/provider effective input capacity (no additional user restriction; bit-for-bit preserved from `ACCOUNTING-TRUTH01`'s resolver output).
+- explicit positive integer token ceiling — `min(canonicalModelEffective, userCeiling)`. Empty UI input = Auto.
 
-**Example.** physical model max = 1,000,000 → explicit user effective ceiling = 512,000.
+**Example.** physical model max = 1,000,000 → explicit user effective ceiling = 512,000 → operating effective capacity = 512,000. Physical model capability is **not** mutated.
 
 **Important.** `512k` is a user-configurable example / desired value. It is **NOT** a global hardcoded limit for every 1M-context model. The effective budget must satisfy `effective <= physical model maximum`, but concrete implementation must follow real source recon.
 
@@ -454,7 +456,36 @@ The producer seam in `apps/vscode/src/sdk/message-translator.ts:86-110 normalize
   current context occupancy  ≠
   cumulative token usage
 
-**Dependency.** `CONTEXT-ACCOUNTING-TRUTH01` closed at this commit (CORRECTION01) — the underlying capacity/usage/trigger authorities are now trustworthy enough to build a user-controlled ceiling on top. The UI's context-occupancy numerator is provably the provider-normalized context-input occupancy (`tokensIn + cacheReads + cacheWrites`, the AI SDK `inputTokens.total` contract), not a provider-blind raw field and not the billed request activity. The next ACT may safely introduce the `Auto` / explicit-ceiling configuration surface; `512k` remains an example, not a global hardcoded limit. The ceiling must satisfy `effective ≤ physical model maximum` and is built on the canonical `resolveEffectiveMaxInputTokens` resolver (not a parallel duplicate).
+**Implementation (closed by this ACT).**
+
+- New pure policy resolver: `applyUserContextCeiling(modelEffective, userCeiling)` + `normalizeUserContextCeiling(value)` at `sdk/packages/core/src/extensions/context/compaction-shared.ts`. `modelEffective` is the existing canonical `resolveEffectiveMaxInputTokens(...)` output (NOT raw model metadata). Auto returns the canonical limit exactly; explicit ceiling lowers it; ceiling above model is silently clamped; invalid values (0 / negative / fractional / NaN / non-integer / non-numeric) normalize to Auto at the policy seam AND are rejected at the persistence seam.
+- Plumbing: `CoreCompactionConfig.userContextCeiling?: number` (`sdk/packages/core/src/types/config.ts`). `createContextCompactionPrepareTurn` reads it once per `prepareTurn` (sanitized), then composes it via `applyUserContextCeiling(resolveEffectiveMaxInputTokens({...}), sanitizedUserContextCeiling)`. The result becomes `requestTriggerTokens = operatingCapacity * 0.9` — **one threshold formula, no duplication**.
+- Persistence: new `userContextCeiling: { default: undefined as number | undefined }` field in `apps/vscode/src/shared/storage/state-keys.ts` (auto-generates `Settings.user_context_ceiling = 187` in proto + `UpdateSettingsRequest.user_context_ceiling = 46`). Handlers `updateSettings.ts` and `updateSettingsCli.ts` validate the value (positive integer) and persist; invalid values throw before reaching disk.
+- Wiring: `cline-session-factory.ts` reads `stateManager.getGlobalSettingsKey("userContextCeiling")` (with `taskSettings?.userContextCeiling` override) and forwards via `CoreSessionConfig.compaction.userContextCeiling`. Summarizer (agentic-compaction) input budget **intentionally NOT** user-ceiling-clamped — that is the summarizer model's own context window, a separate authority (provider hard validation).
+- Settings UI: `FeatureSettingsSection.tsx` adds a labeled numeric input next to Auto Compact Strategy. Empty = Auto; positive integer = explicit ceiling. Invalid inputs are rejected client-side and the persisted state is unchanged.
+- Conservation: no mutation of model metadata (`contextWindow`, `maxInputTokens`); accounting helpers untouched (`getLastApiReqContextInputTokens` / `normalizeUsageEvent` unchanged); no hidden truncation; auto-condense OFF preserves existing behavior.
+
+**Quality evidence (commit `ac40e4399`).**
+
+- canonical apps/vscode Vitest: 118 files / **1681 tests / 0 failures**
+- bun unit: 72 files / **1076 tests / 0 failures**
+- webview vitest: 69 files / **567 tests / 0 failures** (was 562, +5 ceiling UI)
+- SDK core vitest: 173 files / **2124 passed / 14 skipped / 0 failures** (was 94; +15 new RED family tests covering `normalizeUserContextCeiling`, `applyUserContextCeiling`, composition matrix, and three production `createContextCompactionPrepareTurn` RED family E tests at the wiring seam)
+- typecheck: **0 diagnostics**
+- coverage ratchet: PASS (delta **+26 statements / +13 branches / +5 functions / +25 lines**)
+- markdown guard: PASS
+
+**Dogfood qualification.**
+
+- source head: `ac40e43991189608b0c01cd15d039000fa0314ba`
+- source version: 4.1.10
+- dogfood version: 4.1.10-ac40e4399
+- artifact: `/private/tmp/dogfood-context-ceiling/clinemm-4.1.10-ac40e4399.vsix`
+- sha256: `5f4847a176cb8ee251058e2792b604407774b99718c8cab8aa758362674e6492`
+- bytes: 8,884,433
+- installed: `s1onique.clinemm@4.1.10-ac40e4399` (via `codium-cline --install-extension ... --force`)
+
+**Dependency satisfied.** `CONTEXT-ACCOUNTING-TRUTH01` (CLOSED via CORRECTION01) provided the trustworthy capacity/usage/trigger authorities; the ceiling is layered on top of `resolveEffectiveMaxInputTokens` (not a parallel duplicate). The UI's context-occupancy numerator remained the provider-normalized context-input occupancy (`tokensIn + cacheReads + cacheWrites`, the AI SDK `inputTokens.total` contract) — this ACT changes policy, not accounting.
 
 ### Historical context family (CTX-01..03)
 
