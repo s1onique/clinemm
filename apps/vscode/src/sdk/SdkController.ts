@@ -1792,6 +1792,44 @@ export class Controller {
 		// options.
 		this.messageTranslatorState.clearTurnOutcome()
 		await this.taskStart.reinitExistingTaskFromId(taskId)
+		// ACT-CLINEMM-TASKHEADER-LIVE-TIMER-ZERO-RESET01: anchor the
+		// host-owned task telemetry tracker for the resumed task
+		// identity. Mirrors the initTask anchor at line 1666. Without
+		// this, the resume seam left taskTelemetry undefined (fresh
+		// controller / host reload) or stale (existing controller),
+		// which manifested as `00:00` or the prior task's elapsed
+		// value on the TaskHeader for an actively-running task.
+		//
+		// The session id is the resumed task's id (the coordinator's
+		// `createAndSetTask(startResult.sessionId)` at line 347 uses
+		// the same id the resume was requested with). If a newer
+		// intent superseded this op while `startNewSession` was
+		// awaiting, `getActiveSession()` returns undefined or the
+		// newer session id — in either case we must not anchor the
+		// telemetry for the wrong task.
+		const sessionId = this.sessions.getActiveSession()?.sessionId
+		if (sessionId && sessionId === taskId) {
+			const historyItem = this.stateManager.getGlobalStateKey("taskHistory")?.find((item) => item.id === sessionId)
+			const persistedTs = historyItem?.ts
+			this.taskTelemetry.startTask(
+				sessionId,
+				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
+			)
+			// ACT-CLINEMM-TASKHEADER-LIVE-TIMER-ZERO-RESET01 P2 RESIDUE
+			// (NOT REPAIRED IN THIS ACT): the recovery telemetry and
+			// canonical runtime-event subscriptions are also missing
+			// on the resume seam (`attachRecoveryTelemetrySubscription`
+			// and `attachCanonicalRuntimeEventSubscription`, called
+			// from `initTask` at lines 1670 and 1675). They are
+			// outside the timer-only scope of this ACT. The
+			// canonical-event-subscription doc-comment at
+			// `canonical-event-subscription.ts:35-39` already claims
+			// `reinitExistingTaskFromId` calls
+			// `attachCanonicalRuntimeEventSubscription`; that claim
+			// is currently false and is the next P2 to repair in a
+			// bounded follow-up ACT. Timer-only scope: this fix only
+			// anchors the elapsed clock.
+		}
 	}
 
 	async cancelTask(): Promise<void> {
