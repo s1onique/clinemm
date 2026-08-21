@@ -1180,13 +1180,42 @@ FOLLOWED BY (only if Phase B passes E1):
   → The legacy-fallback contract IS preserved by the real SdkController at this seam.
   → The reviewer's HALT was based on the BOARD NARRATIVE of correction02, which (in the report's verbal description) said "TaskHeader phase = idle" for B. The actual real B snapshot is NOT that. **CASE_D_REPORT_WRONG** (per the reviewer's own classifier).
 
-**LIVE BUG LOCATION** (per the reviewer's diagnosis pathway):
+**LIVE BUG LOCATION** (per the reviewer's diagnosis pathway; P1 wording corrected per Phase-A-CORRECTION03 review):
   docs/architecture/elm/task-state-e71-c2-bc2c794be-live-trace-evidence.md lines 51-58, 88-95, 200-201:
     extension emits:   turnState.phase = awaiting_followup / seq 15
     webview applies:  turnState.phase = idle / seq 2
-  → The webview reducer applies a STALE idle/seq2 over the new awaiting_followup/seq15.
-  → This is a WEBVIEW-REDUCER straggler-replay problem, NOT an extension-side TaskHeader legacy-fallback collapse.
-  → Phase B (webview reducer seam, applyStateSnapshot at ExtensionStateContext.tsx) is the remaining candidate.
+
+  Classification (per CORRECTION03 review wording):
+    HISTORICAL_WEBVIEW_STRAGGLER_REPLAY =
+      REAL on older dogfood build (4.1.10-dfab15b3f era; lines 51-58,
+      88-95, 200-201 of the frozen C2 evidence are pre-RSP01 / pre-LTZ01
+      / pre-PHASE-A-CORRECTION0X; subsequent build-specific evidence has
+      not reproduced that same walk on current head)
+
+    CURRENT_HEAD_WEBVIEW_REDUCER_CAUSAL_MATCH =
+      HYPOTHESIS_STRONGLY_SUPPORTED
+      NOT YET REPRODUCED at the current-head production webview seam
+
+  → The webview-reducer straggler-replay was the historical root cause
+    on older dogfood builds. It is the Phase-B hypothesis on current
+    head. NOT a confirmed current-head root cause until Phase B
+    reproduces it on the EXACT current-head production apply path.
+  → Note: the production `applyStateSnapshot` / `applyTurnState` reducer
+    (apps/vscode/webview-ui/src/components/chat/chat-view/messageReducer.ts:160
+    and messageReducer.ts:66) ALREADY gates `turnState` via seq (existing
+    C2 test PASS — `idle/seq2 → awaiting_followup/seq15 → committed
+    awaiting_followup/seq15` survives). The unsealed question is whether
+    `taskHeaderPresentation` / `thinkingPresentation` / `stateVersion` /
+    `epoch` are similarly gated, or whether they are written straight
+    from `stateData` in ExtensionStateContext.tsx without monotonic
+    protection. Initial source reading (lines 689-696 of
+    ExtensionStateContext.tsx) shows: `taskHeaderPresentation` and
+    `thinkingPresentation` are NOT passed through any seq gate — they
+    come straight from the latest push via `...stateData`. This is the
+    Phase-B discriminator target.
+  → Phase B (webview reducer seam, applyStateSnapshot at
+    ExtensionStateContext.tsx, gated by seqByTs at messageReducer.ts:29)
+    is the remaining candidate. PHASE-A is closed.
 
 **STRATEGY (per Factory reviewer)**:
 
@@ -1418,6 +1447,135 @@ production helper extracted. NO new testability seam added to Controller.
     9f200b002, 357d298a7, 4e2c17474, 4ccb7a7b6, cb7943d8f, b97718287,
     a04db12b6, 0af728ac8, 378e40a37, 073342bf6, 469523e1f, 94034bb19,
     2eb5d90d2, <about to land>
+
+## AOPC02 PHASE B — CURRENT-HEAD WEBVIEW STRAGGLER-REPLAY discriminator — CLOSED CASE_D2_PARTIAL_UPDATE_FENCE_BROKEN (CAUSAL_RED = PROVEN)
+
+**ACT_ID**: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-B
+**EXIT_DISC_VERDICT**: CASE_D2_PARTIAL_UPDATE_FENCE_BROKEN — CAUSAL_RED = PROVEN at the CURRENT-HEAD production webview apply seam. Bounded repair authorized (CASE_D2 shape).
+
+**PURPOSE**: determine whether the CURRENT webview state-application seam can allow an older snapshot to overwrite a newer truthful snapshot on the three projection fields that survived the Phase-A test gate (turnState, taskHeaderPresentation, thinkingPresentation).
+
+**INHERITED PHASE-A RESULT** (REAL SdkController post-turn B):
+```
+  turnState.phase                = awaiting_followup  (seq 15)
+  turnState.seq                  = 15
+  taskHeaderPresentation.phase   = awaiting_followup
+  taskHeaderPresentation.source  = legacy
+  taskHeaderPresentation.seq     = 15
+  thinkingPresentation.modelStreaming = false
+  thinkingPresentation.source    = legacy
+  thinkingPresentation.seq       = 15
+  stateVersion                   = 5
+  epoch                          = 0
+```
+
+**STRATEGY (per Factory reviewer §1-4)**:
+- USE the real webview reducer (`applyStateSnapshot` / `applyTurnState` from `messageReducer.ts`) as wired by `ExtensionStateContext.tsx`.
+- DO NOT duplicate reducer logic locally.
+- DO NOT mount React; use the existing `react-updater-purity-probe.test.tsx` gRPC mock surface to deliver raw state pushes through the real `ExtensionStateContextProvider`.
+- Construct two valid publication generations (NEW + OLD).
+- Apply NEW, confirm committed NEW, then deliver OLD, and assert committed state MUST remain NEW on all three projection fields.
+
+**ACTUAL DISCRIMINATOR OUTCOME** (executable on current HEAD):
+```
+  PRIMARY RED: NEW then OLD (awaiting_followup/seq15/taskHeader=awaiting_followup/seq15 → idle/seq2/taskHeader=idle/seq2)
+  expected committed state after OLD:
+    turnState.phase                  = awaiting_followup    PASS (applyTurnState seq gate works)
+    turnState.seq                    = 15                   PASS
+    taskHeaderPresentation.phase     = awaiting_followup    FAIL   ← RED
+    taskHeaderPresentation.seq       = 15                   FAIL   ← RED (reverted to 2)
+    taskHeaderPresentation.source    = legacy               PASS   (same source value across both)
+    thinkingPresentation.modelStreaming = false             PASS   (modelStreaming was false in both; coincidentally stable)
+    thinkingPresentation.seq         = 15                   FAIL   ← RED (reverted to 2)
+    thinkingPresentation.source      = legacy               PASS   (same source value across both)
+    stateVersion                     = 5                    PASS   (applyStateSnapshot stateVersion branch works)
+    epoch                            = 0                    PASS
+```
+
+**CLASSIFICATION**: CASE_D2_PARTIAL_UPDATE_FENCE_BROKEN — the W1 full-snapshot reducer (`applyStateSnapshot`) correctly fences `turnState` via the `applyTurnState` seq gate, correctly fences `stateVersion` via the same-epoch lower-version branch, and correctly fences `epoch` via the epoch branch — BUT `taskHeaderPresentation` and `thinkingPresentation` are NOT on `ReplicaState` and are NOT passed through any seq gate; they are written straight from `stateData` via `...stateData` at `ExtensionStateContext.tsx:689`. A stale later-arriving snapshot can therefore stomp them.
+
+**EXACT RED PATH**:
+```
+  ExtensionStateContext.tsx:683-696 -- W1 functional updater:
+    const newState: ExtensionState = {
+      ...stateData,                                       ← taskHeaderPresentation, thinkingPresentation come from here, unsequenced
+      clineMessages: nextReplica.messages,
+      turnState: nextReplica.turnState,                   ← this IS seq-gated (line 696 reads from nextReplica.turnState which came from applyTurnState)
+      epoch: nextReplica.epoch,
+      stateVersion: nextReplica.stateVersion,
+      autoApprovalSettings: ...
+    }
+```
+
+**PRODUCER SIDE IS NOT THE BUG** — `selectTaskHeaderPresentation` (apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:398) correctly stamps `seq: input.seq` (the `TurnStateTracker.seq`) on every projection it emits. The wire shape carries the monotonic seq. The consumer side just isn't reading it.
+
+**CONTROLS PASS** (boundary preserved):
+- **CTRL-A** (OLD then NEW → NEW wins): PASS
+- **CTRL-C** (duplicate NEW → idempotent): PASS
+- **CTRL-E** (epoch=1 wholesale replaces): PASS
+- **FENCE-INSPECT**: documents per-field fence domains
+
+**REVIEWER-DIRECTED BOUNDED REPAIR** (authorized after the RED is proven; per reviewer's "Only after RED — one bounded repair ... Do NOT automatically replace all reducer timestamps, redesign message transport, add another global counter, modify LocalRuntimeHost, modify SdkController producer. Repair only the demonstrated stale-write seam."):
+
+The narrowest possible repair:
+1. Track the last accepted `taskHeaderPresentation.seq` and `thinkingPresentation.seq` on `ReplicaState` (alongside `stateVersion` and `seqByTs`).
+2. In the W1 functional updater at `ExtensionStateContext.tsx:683-696`, gate the spread of these two fields by the new seq being higher than the previous accepted seq — exactly mirroring the existing `applyTurnState` pattern.
+3. Pass them through a small pure helper in `messageReducer.ts` (e.g. `applyProjections(state, taskHeader, thinking)`) so the gate is testable independently of React.
+
+Then run the NEED/ABLATION cycle:
+- Comment out the new helper → PRIMARY RED must return (i.e. the existing Phase B test goes RED again).
+- Restore → PRIMARY RED goes GREEN again.
+
+**VALID VERDICTS PER REVIEWER**:
+- `PASS_FULL_SNAPSHOT_FENCING_REPAIRED` (target for the bounded repair commit)
+- `PASS_PARTIAL_UPDATE_FENCING_REPAIRED`
+- `PASS_PUBLICATION_DOMAIN_MISMATCH_REPAIRED`
+- `NOT_REPRODUCED` (NOT — CASE_D2 was reproduced)
+- `CAPTURE_INSUFFICIENT` (NOT — capture is full)
+- `HALT_TEST_SEAM_INVALID` (NOT — seam is real production code)
+
+**FILES CHANGED (2 files, +1 net)**:
+
+NEW:
+  apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx
+    (~480 lines, ~0.1s test runtime; uses the same vi.mock gRPC
+     surface as react-updater-purity-probe.test.tsx + a small
+     ReadProbe child that reads useExtensionState to capture the
+     committed state after each push; 7 tests total, 1 RED,
+     6 PASS as boundary evidence)
+
+MODIFIED (wording only; no production code change):
+  .factory/epic-board.md (Phase-A-CORRECTION03 LIVE BUG LOCATION
+    reclassified per reviewer wording: HISTORICAL vs CURRENT_HEAD;
+    this row appended after the Phase-A-CORRECTION03 row)
+
+**CONSERVATION** (post-test-only commit):
+  WEBVIEW_VITEST_TARGETED = 7/7 ran (1 RED = PRIMARY-RED; 6 PASS = boundaries)
+  BRIDGE_VITEST = 54/54 PASS  (untouched)
+  BASE_TYPECHECK = EXIT=0    (untouched; no production code change)
+  LINT = EXIT=0              (untouched; no production code change)
+  BOARD_VALIDATOR = OK       (2502 lines, 10 fence events)
+  DIFF_CHECK = PASS          (git diff --check empty)
+
+**PRODUCTION CODE CHANGE COUNT**: 0 lines. Phase B is the discriminator. The bounded repair is a separate commit after the RED is sealed.
+
+**CLASSIFICATION**:
+  P0 = CURRENT_HEAD_WEBVIEW_REDUCER_CAUSAL_MATCH now classified REAL (was HYPOTHESIS_STRONGLY_SUPPORTED, NOT YET REPRODUCED)
+  P1 boundary (telemetry staleness from Phase-A) = DOWNGRADED, unchanged from correction03
+  P2 residue = none added by this commit
+
+**NEXT** (HIGH-VALUE):
+1. BOUNDED REPAIR commit (gate `taskHeaderPresentation` and `thinkingPresentation` by their own `.seq` in a new `applyProjections` pure helper in `messageReducer.ts`; gate the spread in `ExtensionStateContext.tsx:683-696`)
+2. NEED/ABLATION cycle on the new helper (comment-out → RED returns → restore → GREEN)
+3. Phase C/D only if Phase B repair leaves reducer state coherent but cancel/composer/React-consumer still wrong (not expected given the discriminator's clean PASS of controls A/C/E)
+4. Final LIVE qualification cycle requires a new dogfood install on a current-build VSIX, not a `4.1.10-dfab15b3f` install
+
+**COMMIT (this commit)**:
+  HASH = <about to land>
+  MESSAGE = test(elm): ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02 PHASE B -- CURRENT-HEAD WEBVIEW STRAGGLER-REPLAY discriminator CASE_D2_PARTIAL_UPDATE_FENCE_BROKEN (CAUSAL_RED = PROVEN)
+  PUSHED = NO
+  FORCE_PUSHED = NO
+  AMENDED_PUBLISHED_COMMIT = NO
 
 
 ## Context / compaction
