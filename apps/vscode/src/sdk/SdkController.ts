@@ -127,6 +127,7 @@ import { StatePostDebouncer } from "./state-post-debouncer"
 import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import {
+	createCanonicalRestorePhaseCallback,
 	selectTaskHeaderPresentation,
 	selectTaskShadowArbiterSnapshot,
 	selectThinkingPresentation,
@@ -946,18 +947,39 @@ export class Controller {
 			// every other coordinator uses — no second authority.
 			getTurnState: () => this.turnStateTracker.get(),
 			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
-			// ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01:
-			// the bounded restore policy consults the EXISTING canonical
-			// `taskStateShadowWiring?.getLastObservedShadowPhase()` projection
-			// -- NOT a binary activity bit (rejected by Factory P0). That
-			// accessor returns the LAST `TaskState.projectTurnState(model)`
-			// projection the shadow recorder observed, mapped to the legacy
-			// `TurnPhase` via `toLegacyPhase`, or `undefined` when no
-			// observation has been recorded yet (Hub/Remote hosts without a
-			// shadow wiring, fresh install before the first runtime event).
-			// The `?.()` collapse mirrors the production pattern used by
-			// `getLocalShadowPhase()` / `getLocalShadowProjection()`.
-			getCanonicalRestorePhase: () => this.taskStateShadowWiring?.getLastObservedShadowPhase(),
+			// ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02:
+			// the bounded restore policy delegates to the canonical
+			// authority composition via `createCanonicalRestorePhaseCallback`
+			// (frozen by CLTCC13). The composition mirrors
+			// `selectTaskHeaderPresentation` (the existing architectural
+			// precedent for resolving `compacting` + `awaiting_followup`)
+			// but returns just the phase value for the legacy writer.
+			//
+			// Why this composition (not the bare
+			// `taskStateShadowWiring?.getLastObservedShadowPhase()`):
+			//
+			//   `TaskState.projectTurnState(model)` is NOT host-aware. The
+			//   canonical shadow's projection collapses
+			//   `idle + awaitingFollowup=true` to `"idle"`, losing the
+			//   user-owned `awaiting_followup` distinction the LIVE bug
+			//   family depends on. The
+			//   `selectTaskHeaderPresentation` helper at
+			//   `task-state-shadow-arbiter-mapper.ts` already documents
+			//   and applies the same fix for TaskHeader; the compaction
+			//   restore needs the same override.
+			//
+			// The composition reads the legacy `turnStateTracker.currentPhase`
+			// for the two host-owned phases (`compacting` /
+			// `awaiting_followup`) and falls back to the canonical shadow
+			// projection for the other six. When the canonical shadow is
+			// absent (Hub/Remote hosts without a shadow wiring, fresh
+			// install before the first runtime event), the helper returns
+			// `undefined`; the coordinator's `unavailable != idle` policy
+			// preserves the entry phase in that branch.
+			getCanonicalRestorePhase: createCanonicalRestorePhaseCallback({
+				getCanonicalShadowPhase: () => this.taskStateShadowWiring?.getLastObservedShadowPhase(),
+				getCurrentLegacyPhase: () => this.turnStateTracker.currentPhase,
+			}),
 		})
 		this.sessionEvents = new SdkSessionEventCoordinator({
 			messageTranslatorState: this.messageTranslatorState,

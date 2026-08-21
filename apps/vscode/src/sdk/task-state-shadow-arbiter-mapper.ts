@@ -472,3 +472,114 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 		seq: input.seq,
 	}
 }
+
+/**
+ * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02
+ *
+ * Canonical restore projection for the legacy `TurnStateTracker`
+ * after a compaction completes. Returns the `TurnPhase` that the
+ * canonical authority (canonical shadow + host-owned overrides)
+ * considers authoritative at the moment of restore, or `undefined`
+ * when no canonical observation is available.
+ *
+ * Mirrors `selectTaskHeaderPresentation` precedence (the canonical
+ * architectural precedent for resolving `compacting` +
+ * `awaiting_followup`) but produces only the phase value --
+ * `selectTaskHeaderPresentation` returns a richer projection
+ * (`source` + `seq`) for TaskHeader consumers, while this helper
+ * returns just the `TurnPhase | undefined` for the legacy
+ * `TurnStateTracker` writer.
+ *
+ *   1. if currentLegacyPhase === "compacting"
+ *        → "compacting"
+ *   2. else if currentLegacyPhase === "awaiting_followup"
+ *        → "awaiting_followup"
+ *   3. else if canonicalShadowPhase is defined
+ *        → canonicalShadowPhase
+ *   4. else
+ *        → undefined  (Factory P1: `unavailable != idle`)
+ *
+ * Why this exists:
+ *
+ * CORRECTION01 wired the compaction coordinator to
+ * `getCanonicalRestorePhase?: () => TurnPhase | undefined`. The
+ * previous incarnation bound the callback to
+ * `taskStateShadowWiring?.getLastObservedShadowPhase()`, which
+ * delegates to `TaskState.projectTurnState(model)` -- NOT the
+ * host-aware variant. That projection CANNOT distinguish
+ * `idle + awaitingFollowup=true` from `idle + awaitingFollowup=false`;
+ * both collapse to `idle`. The canonical mapper's own JSDoc at
+ * `selectTaskHeaderPresentation` above explains this gap and
+ * resolves it with an explicit HOST AWAITING_FOLLOWUP OVERRIDE
+ * branch. The compaction restore needs the SAME override.
+ *
+ * Pure: no side effects, no I/O, no allocation beyond the
+ * returned value. The body shape is the contract; no assertion
+ * enforces it. The `SdkCompactionCoordinator` honors whatever the
+ * caller passes; the caller is responsible for supplying a value
+ * produced by this selector.
+ */
+export function selectCanonicalRestorePhase(input: {
+	readonly canonicalShadowPhase: TurnPhase | undefined
+	readonly currentLegacyPhase: TurnPhase
+}): TurnPhase | undefined {
+	// 1. HOST COMPACTING OVERRIDE -- mirror
+	//    `selectTaskHeaderPresentation` step 1.
+	if (input.currentLegacyPhase === "compacting") {
+		return "compacting"
+	}
+	// 2. HOST AWAITING_FOLLOWUP OVERRIDE -- mirror step 2. The
+	//    canonical shadow's `projectTurnState(model)` cannot
+	//    produce `awaiting_followup` because that requires
+	//    `hostInteraction.awaitingFollowup`, which the canonical
+	//    shadow wiring does not propagate. The legacy
+	//    `TurnStateTracker.currentPhase` IS the authoritative
+	//    source for this user-owned phase (the session-event
+	//    coordinator writes it directly), so we read it here.
+	if (input.currentLegacyPhase === "awaiting_followup") {
+		return "awaiting_followup"
+	}
+	// 3. CANONICAL SHADOW -- mirror step 3.
+	if (input.canonicalShadowPhase !== undefined) {
+		return input.canonicalShadowPhase
+	}
+	// 4. ABSENCE -- Factory P1: `unavailable != idle`. The
+	//    coordinator preserves the entry phase in this branch.
+	return undefined
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02
+ *
+ * Factory: builds the canonical restore callback that
+ * `SdkController` wires into `getCanonicalRestorePhase`. The
+ * callback reads `canonicalShadowPhase` (the EXISTING
+ * `taskStateShadowWiring.getLastObservedShadowPhase()` projection)
+ * and `currentLegacyPhase` (the legacy `TurnStateTracker.currentPhase`)
+ * and delegates to `selectCanonicalRestorePhase` for the
+ * three-source precedence.
+ *
+ * Extracted as a small factory so the binding composition is
+ * testable end-to-end. The factory takes the two dependencies
+ * directly (not the live `taskStateShadowWiring` /
+ * `turnStateTracker`) so the test can drive the binding without
+ * spinning up a full SdkController. This satisfies the Factory
+ * reviewer's real-wiring discriminator: the binding's value source
+ * is `selectCanonicalRestorePhase({canonicalShadowPhase, currentLegacyPhase})`,
+ * not the bare canonical shadow.
+ *
+ * The factory does not duplicate `selectCanonicalRestorePhase`'s
+ * switch -- it just composes its inputs from the two existing
+ * production dependencies and returns the closure.
+ */
+export function createCanonicalRestorePhaseCallback(input: {
+	readonly getCanonicalShadowPhase: () => TurnPhase | undefined
+	readonly getCurrentLegacyPhase: () => TurnPhase
+}): () => TurnPhase | undefined {
+	const { getCanonicalShadowPhase, getCurrentLegacyPhase } = input
+	return () =>
+		selectCanonicalRestorePhase({
+			canonicalShadowPhase: getCanonicalShadowPhase(),
+			currentLegacyPhase: getCurrentLegacyPhase(),
+		})
+}
