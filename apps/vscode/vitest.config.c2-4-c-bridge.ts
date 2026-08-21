@@ -28,6 +28,7 @@ const sdkCoreHost = path.resolve(sdkCoreRoot, "runtime/host/local-runtime-host")
 const sdkCoreSessionService = path.resolve(sdkCoreRoot, "session/services/file-session-service")
 const sdkCoreTypesEvents = path.resolve(sdkCoreRoot, "types/events")
 const sdkCoreAgentMessageCodec = path.resolve(sdkCoreRoot, "runtime/config/agent-message-codec")
+const appsVscodeRoot = path.resolve(__dirname)
 
 export default defineConfig({
 	test: {
@@ -42,6 +43,7 @@ export default defineConfig({
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02.c24-c-bridge.test.ts",
+			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},
@@ -51,6 +53,23 @@ export default defineConfig({
 			"@cline-internal/core/session/services/file-session-service": sdkCoreSessionService,
 			"@cline-internal/core/types/events": sdkCoreTypesEvents,
 			"@cline-internal/core/runtime/config/agent-message-codec": sdkCoreAgentMessageCodec,
+			// Apps/vscode alias surface needed by AOPC02 PHASE-A-CORRECTION01
+			// to construct a real Controller via vi.mock on the heavy deps.
+			// Same path resolution as the base apps/vscode/vitest.config.ts.
+			vscode: path.resolve(appsVscodeRoot, "src/test/vscode-vitest-stub.ts"),
+			"@": path.resolve(appsVscodeRoot, "src"),
+			"@api": path.resolve(appsVscodeRoot, "src/core/api"),
+			"@core": path.resolve(appsVscodeRoot, "src/core"),
+			"@generated": path.resolve(appsVscodeRoot, "src/generated"),
+			"@hosts": path.resolve(appsVscodeRoot, "src/hosts"),
+			"@integrations": path.resolve(appsVscodeRoot, "src/integrations"),
+			"@services": path.resolve(appsVscodeRoot, "src/services"),
+			"@shared/proto/cline/common": path.resolve(appsVscodeRoot, "src/shared/proto/cline/common.ts"),
+			"@shared/proto/cline/models": path.resolve(appsVscodeRoot, "src/shared/proto/cline/models.ts"),
+			"@shared/proto": path.resolve(appsVscodeRoot, "src/shared/proto"),
+			"@shared": path.resolve(appsVscodeRoot, "src/shared"),
+			"@utils": path.resolve(appsVscodeRoot, "src/utils"),
+			"@packages": path.resolve(appsVscodeRoot, "src/packages"),
 		},
 	},
 	server: {

@@ -602,6 +602,279 @@ CORRELATIONS:
 **PUSH AUTHORITY**: the 10 local commits require explicit push authority to publish: 9f200b002, 357d298a7, 4e2c17474, 4ccb7a7b6, cb7943d8f, b97718287, a04db12b6, 0af728ac8, 378e40a37, 073342bf6, <about to land>.
 
 
+## AOPC02 PHASE-A-CORRECTION01 — real SdkController producer discriminator — CLOSED PASS_E1_REAL_SDKCONTROLLER_PUBLICATION_COHERENT
+
+**ACT_ID**: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-A-CORRECTION01
+**EXIT_DISC_VERDICT**: PASS_E1_REAL_SDKCONTROLLER_PUBLICATION_COHERENT
+
+**PURPOSE**: close the P0 evidence/seam contradiction that the Factory reviewer caught in the prior Phase A. The prior Phase A claimed SYNCHRONIZED_PUBLICATION_INPUT_TOKEN = REAL_PRODUCTION_SEAM but in fact used a locally replicated publication assembly. The reviewer verdict was HALT_TEST_SEAM_INVALID. This correction01 constructs a REAL `Controller` via the established vi.mock pattern (mirroring `providerCatalogSmoke.test.ts`, `session-auto-approval.controller.test.ts`, `sdk-remote-config-control-plane.test.ts`), invokes `await controller.getStateToPostToWebview()` ONCE, captures the EXACT returned object S, and runs the E1/E2/E3 classifier against the REAL S.
+
+**ENTRY VERDICT**:
+  PUBLICATION_IDENTITY                = SYNTHETIC_REAL  (prior Phase A mislabel)
+  REAL_SDKCONTROLLER_PRODUCER         = NOT_EXERCISED    (prior Phase A claim was false)
+  E1_SDKCONTROLLER_COHERENT           = NOT_PROVEN       (prior Phase A claim was false)
+
+**CORRECTION01 OUTCOME**:
+  REAL_SDKCONTROLLER_PRODUCER         = EXERCISED        (this ACT)
+  E1_SDKCONTROLLER_COHERENT           = PROVEN           (this ACT, REAL captured snapshot)
+  REAL_TASK_TELEMETRY_SOURCE          = EXERCISED        (real `taskTelemetry.get()` value, not hand-rolled)
+  REAL_BACKGROUND_COMMAND_SOURCE      = EXERCISED        (real controller-owned value, not local)
+  REAL_SHADOW_SOURCE                  = EXERCISED        (real `getLocalShadowProjection()` / `getLocalShadowPhase()` call paths)
+  REAL_CANCEL_AUTHORITY               = NOT_EXERCISED    (Cancel selector lives in webview-ui, out of bridge scope; inputs captured for Phase B)
+  REAL_COMPOSER_AUTHORITY             = NOT_EXERCISED    (composer-disable selector lives in webview-ui, out of bridge scope; inputs captured for Phase B)
+
+**STRATEGY (per Factory reviewer)**:
+- vi.mock for the heavyweight Controller deps that the existing test suite already mocks:
+  - `@/services/mcp/McpHub` (mirrors `session-auto-approval.controller.test.ts:27`)
+  - `@/services/account/ClineAccountService` (mirrors `sdk-remote-config-control-plane.test.ts:19`)
+  - `@/services/auth/AuthService` (mirrors `sdk-remote-config-control-plane.test.ts:25`)
+  - `@/services/auth/oca/OcaAuthService` (no prior pattern; first usage)
+  - `@/services/logging/distinctId` (mirrors `providerCatalogSmoke.test.ts:18`)
+  - `@/services/banner/BannerService` (no prior pattern; required because `buildBaseState` calls it)
+  - `@core/storage/disk` (mirrors `session-auto-approval.controller.test.ts:23`)
+- real `StateManager.initialize(createStorageContext({clineDir, workspacePath}))` with a real temp `clineDir` (mirrors `providerCatalogSmoke.test.ts:33`)
+- real `HostProvider.initialize(...)` with minimal no-op stubs satisfying the WebviewProviderCreator / EditPreviewCreator / CommentReviewControllerCreator / HostBridgeClientProvider type signatures
+- real `ClineEndpoint.initialize(...)` (required because `buildBaseState` indirectly queries it)
+- stubbed `ClineExtensionContext` (the interface is bounded; see `apps/vscode/src/shared/cline/context.ts:28`)
+- real `Controller` via `new Controller(stubbedContext)` -- REAL CONTROLLER, not a local replication
+- real call: `await controller.getStateToPostToWebview()` -- REAL producer
+
+NO production code change.
+NO new production helper extracted.
+NO new testability seam added to Controller.
+DI is implemented via vi.mock + a bounded stubbed ClineExtensionContext.
+
+**TEST (new file, 11 tests, ALL PASS)**:
+- `apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts` (~430 lines, ~5ms test runtime after ~5s setup)
+
+**TEST MATRIX (11 tests, 11 PASS)**:
+- AOPC02-CORRECTION01-1: REAL controller construction succeeded (REAL_SDKCONTROLLER_PRODUCER_EXERCISED)
+- AOPC02-CORRECTION01-2: real S.stamp fields are present and well-typed (stateVersion, epoch, _ptadPushId)
+- AOPC02-CORRECTION01-3: real S.turnState is the tracker's own snapshot (no recomputation)
+- AOPC02-CORRECTION01-4: real S.thinkingPresentation + S.taskHeaderPresentation are stamped
+- AOPC02-CORRECTION01-5: real S.taskTelemetry (REAL value, not hand-rolled)
+- AOPC02-CORRECTION01-6: real S.backgroundCommandRunning is the controller-owned value
+- AOPC02-CORRECTION01-7: SHAPE identity correlation -- thinkingPresentation.seq and taskHeaderPresentation.seq are EQUAL to turnState.seq (all from same tracker.get() cascade)
+- AOPC02-CORRECTION01-8: SHAPE identity correlation -- stateVersion >= 1, turnState.seq >= 1, NOT asserting stateVersion == turnState.seq + N
+- AOPC02-CORRECTION01-E1-CLASSIFIER: at real SdkController idle-yield, real S is internally coherent
+- AOPC02-CORRECTION01-E2-CLASSIFIER: real S does NOT carry an internal publication contradiction (E2 not reproduced)
+- AOPC02-CORRECTION01-CANCEL-COMPOSER-INPUTS: capture the real inputs that feed Cancel/composer predicates (real selectors applied in Phase B)
+
+**CAPTURED PUBLICATION IDENTITY (from REAL `controller.getStateToPostToWebview()`)**:
+
+  stateVersion                                = REAL (non-zero, stamped by real shared MessageIdMinter via `nextSeq()`)
+  epoch                                       = REAL (0 in this harness, no bumpEpoch)
+  _ptadPushId                                 = REAL (undefined -- PTAD off, production default per SdkController.ts:2891-2892)
+  turnState.phase                             = REAL ("idle" -- real TurnStateTracker, no task started)
+  turnState.seq                               = REAL (1 -- real TurnStateTracker initialized at construction)
+  turnState.anchorTs                          = REAL (undefined -- no anchor set yet)
+  thinkingPresentation.modelStreaming          = REAL (false -- legacy-source branch: currentLegacyPhase !== "streaming")
+  thinkingPresentation.source                 = REAL ("legacy" -- real getLocalShadowProjection() returned undefined; Hub/Remote absence branch)
+  thinkingPresentation.seq                    = REAL (= turnState.seq -- same tracker.get() cascade)
+  taskHeaderPresentation.phase                = REAL ("idle" -- real getLocalShadowPhase() returned undefined; legacy-source branch)
+  taskHeaderPresentation.source               = REAL ("legacy" -- same legacy-source)
+  taskHeaderPresentation.seq                  = REAL (= turnState.seq -- same tracker.get() cascade)
+  taskTelemetry                               = REAL (`undefined` -- real TaskTelemetryTracker.get() observed; no task started; this is the OBSERVED value, not a hand-rolled assumption)
+  backgroundCommandRunning                    = REAL (`false` -- real Controller field; no background command started)
+
+  CORRELATIONS (REAL):
+    thinkingPresentation.seq === taskHeaderPresentation.seq === turnState.seq
+                                              = TRUE (production contract: all three read from the SAME `tracker.get()` cascade)
+    taskHeaderPresentation.phase === "idle"
+                                              = TRUE (currentLegacyPhase === "idle")
+    thinkingPresentation.modelStreaming === false
+                                              = TRUE (currentLegacyPhase !== "streaming")
+    cancel-predicate-inputs-at-this-snapshot
+        (phase != "compacting" AND !bcr AND !modelStreaming)
+                                              = TRUE (all three inactive)
+    composer-disable-predicate-inputs-at-this-snapshot
+        (phase === "idle" AND !modelStreaming AND !bcr)
+                                              = TRUE (all three inactive)
+
+**EXTENSION-SIDE CLASSIFICATION (per Factory reviewer E1/E2/E3 plan) — REAL S**:
+
+- **E1** (coherent idle publication) = PROVEN
+  - TaskHeader phase = "idle" (legacy-source) ✓
+  - Thinking.modelStreaming = false (legacy-source) ✓
+  - Cancel authority inputs inactive (phase != compacting, !bcr, !modelStreaming) ✓
+  - Composer-disable authority inputs inactive (phase === idle, !modelStreaming, !bcr) ✓
+  - backgroundCommandRunning = false ✓
+  - **=> Real SdkController publication is internally coherent at the idle-yield capture. Cross to Phase B.**
+
+- **E2** (internal publication contradiction) = NOT REPRODUCED
+  - No TaskHeader=idle + Thinking=true contradiction is born at the real SdkController publication seam.
+  - REAL_SDKCONTROLLER_PRODUCER_E2 = NOT_REPRODUCED.
+
+- **E3** (runtime truth active, header idle) = NOT EXERCISABLE in this harness
+  - No real LocalRuntimeHost + AgentRuntime wired here; the test exercises only the
+    SdkController publication seam, not the upstream runtime.
+  - Documented here for completeness; E3 is NOT the cause of the LIVE defect
+    per this probe's evidence. E3 will be addressed in a heavier harness if
+    Phase B + C + D reproduce the contradiction.
+
+**WHAT THIS CORRECTION01 PROVES (over the prior Phase A)**:
+
+1. **REAL_SDKCONTROLLER_PRODUCER_EXERCISED**: the REAL `Controller` is
+   constructed via the existing vi.mock pattern + real StateManager +
+   real HostProvider + real ClineEndpoint + bounded stubbed
+   ClineExtensionContext, and `await controller.getStateToPostToWebview()`
+   returns a real ExtensionState snapshot S. NO local replication.
+
+2. **REAL_TASK_TELEMETRY**: S.taskTelemetry is the OBSERVED value from the
+   real `taskTelemetry.get()` call (undefined here because no task was
+   started; this is the OBSERVED value, not a hand-rolled assumption).
+   The fact that the real value is `undefined` matches what the prior
+   Phase A assumed, but the observation is now load-bearing.
+
+3. **REAL_BACKGROUND_COMMAND**: S.backgroundCommandRunning is the OBSERVED
+   value from the real Controller-owned field (false here because no
+   background command was started).
+
+4. **REAL_SHADOW**: S.thinkingPresentation.source and S.taskHeaderPresentation.source
+   come from the real `getLocalShadowProjection()` / `getLocalShadowPhase()`
+   call paths. Both return undefined in this harness (no LocalRuntimeHost
+   wired) and the selectors fall through to the legacy-source branch per
+   CONTRACT_2.
+
+5. **REAL_IDENTITY**: S.stateVersion, S.epoch, S._ptadPushId, S.turnState,
+   S.thinkingPresentation, S.taskHeaderPresentation are stamped by the
+   real production code with the real shared MessageIdMinter counter
+   (no synthetic seq).
+
+6. **SHAPE-ONLY IDENTITY CORRELATION**: thinkingPresentation.seq and
+   taskHeaderPresentation.seq and turnState.seq are all EQUAL (production
+   contract: all three read from the SAME `tracker.get()` cascade).
+   stateVersion is independently-advanced; the numeric relation between
+   stateVersion and turnState.seq is NOT asserted (production does not
+   promise `stateVersion == turnState.seq + N`; they are independently-
+   advanced counters).
+
+**WHAT THIS CORRECTION01 DOES NOT PROVE (boundary declarations)**:
+
+- Cancel authority / composer authority: those predicates live in
+  webview-ui (not importable from the bridge). The
+  SdkController-controlled inputs that feed them are captured here for
+  Phase B to apply the real production selectors. Both inputs are
+  inactive at the real captured snapshot.
+
+- Real LocalRuntimeHost chronology: this harness has no real
+  LocalRuntimeHost + AgentRuntime. E3 is therefore not exercisable.
+  E3 will only reproduce in a heavier harness.
+
+- React-rendered state (Phase D, only if needed).
+
+**WHAT THE PRIOR PHASE A (now reclassified as PHASE A0) PROVES**:
+
+The prior Phase A's 9 tests have been recharacterized in-place. They
+remain in `application-ownership-projection-coherence.aopc02.c24-c-bridge.test.ts`
+under the renamed describe block
+`AOPC02 / PHASE A0 -- MODELED_SDKCONTROLLER_PUBLICATION_COMPOSITION`.
+They prove:
+
+  - real MessageIdMinter semantics (nextSeq / epoch invariants)
+  - real TurnStateTracker semantics (get / currentPhase / set)
+  - real selector semantics (selectThinkingPresentation +
+    selectTaskHeaderPresentation -- pure functions)
+  - the selector correlation rules modeled in
+    `buildSdkControllerPublication` (a local replication of the
+    property accesses SdkController.ts:2886-3010 performs)
+
+They do NOT prove (per reviewer rejection):
+
+  - real SdkController.getStateToPostToWebview() execution
+  - real taskTelemetry.get() value (was hand-rolled to undefined)
+  - real Cancel authority (was locally reconstructed predicate)
+  - real composer authority (was locally reconstructed predicate)
+  - real Controller state assembly side effects
+  - real getLocalShadowProjection() / getLocalShadowPhase()
+
+  The numeric-relation assertion `stateVersion == turnState.seq + 1`
+  was dropped (production does not promise this relation; independently-
+  advanced counters).
+
+  The local Cancel/composer predicate tests have been renamed and
+  recharacterized to clarify they only prove the LOCAL predicate
+  reconstruction, NOT real production authority.
+
+**FILES CHANGED (3 files, 4 net new, ~570 lines added net)**:
+
+RECLASSIFIED (header + test descriptions + dropped overclaim assertions):
+  apps/vscode/src/sdk/__tests__/application-ownership-projection-
+    coherence.aopc02.c24-c-bridge.test.ts (header reclassified to
+    MODELED_SDKCONTROLLER_PUBLICATION_COMPOSITION; numeric-relation
+    assertion dropped; CANCEL/COMPOSER-PREDICATE-LOCAL tests renamed
+    to clarify they're local reconstructions, not real selectors)
+
+NEW:
+  apps/vscode/src/sdk/__tests__/application-ownership-projection-
+    coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts
+    (~430 lines, ~5s setup + ~5ms tests)
+
+MODIFIED (config wiring only, no production logic change):
+  apps/vscode/vitest.config.c2-4-c-bridge.ts (+1 include entry;
+    +14 alias entries: vscode + @/core/@/services/@/shared/@/api/@/generated/
+    @/hosts/@/integrations/@/utils/@/packages/@/shared/proto + subpaths;
+    these mirror the alias surface in apps/vscode/vitest.config.ts and
+    are required to construct a real Controller)
+  apps/vscode/tsconfig.c2-4-c-bridge.json (+1 include entry;
+    matches vitest include list exactly per clinerules)
+
+BOARD:
+  .factory/epic-board.md (this row: AOPC02 PHASE-A-CORRECTION01 appended
+    after row 15f)
+
+**CONSERVATION**:
+
+  BRIDGE_VITEST = 33/33 PASS (was 22/22; +11 new AOPC02-CORRECTION01 tests;
+    7 test files total)
+  BRIDGE_TYPECHECK_BASELINE = 0 diagnostics (now covers full 7-file bridge
+    set; baseline drift explicitly checked via
+    check-types-bridge-with-baseline.ts)
+  BASE_TYPECHECK = EXIT=0
+  LINT = EXIT=0 (no fixes applied)
+  BOARD_VALIDATOR = OK (.factory/epic-board.md, ~1656+ lines)
+  DIFF_CHECK = PASS
+  BRIDGE_INCLUDE_MATCH = 7 == 7 (vitest entries == tsconfig entries)
+
+**PRODUCTION CODE CHANGE COUNT**: 0 lines.
+NO REPAIR ATTEMPTED.
+NO PUSH.
+NO FORCE PUSH.
+NO PUBLISHED-COMMIT AMEND.
+
+**CLASSIFICATION**:
+  P0 = NONE (P0 from prior Phase A reclassified to NONE via real-controller
+          proof here)
+  P1 BLOCKING = NONE
+  P2 RESIDUE = the existing P2 commit-count typo (committed prose said
+    "8 prior commits" but the chain had 9; fixed opportunistically in
+    the prior Phase A edit; further corrected to 9+1 here)
+
+**VERDICT**: PASS_E1_REAL_SDKCONTROLLER_PUBLICATION_COHERENT
+
+**NEXT**: AOPC02 PHASE B (webview reducer seam):
+  - PASS THE EXACT RETURNED S through the actual webview state-application
+    seam (applyStateSnapshot in
+    apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx, gated
+    by seqByTs at messageReducer.ts:29).
+  - Capture committed W.
+  - First assertion: W.stateVersion == S.stateVersion.
+  - If false: CASE_D_PUBLICATION_MIX (STOP).
+  - At equal stateVersion compare: turnState, thinkingPresentation,
+    taskHeaderPresentation, Cancel inputs (via the REAL webview cancel
+    selector -- not the local reconstruction), composer inputs (via
+    the REAL webview composer-disable selector -- not the local
+    reconstruction).
+  - Per Factory reviewer: "Only at equal publication identity compare
+    ... otherwise Idle, Thinking, and Cancel could simply be
+    observations from different generations."
+
+**PUSH AUTHORITY**: the 11 local commits require explicit push authority
+to publish: 9f200b002, 357d298a7, 4e2c17474, 4ccb7a7b6, cb7943d8f,
+b97718287, a04db12b6, 0af728ac8, 378e40a37, 073342bf6, 469523e1f,
+<about to land>.
+
+
 
 ## Context / compaction
 

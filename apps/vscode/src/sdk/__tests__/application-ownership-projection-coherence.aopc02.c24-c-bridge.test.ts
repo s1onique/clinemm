@@ -1,56 +1,75 @@
 /**
- * ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PHASE A
+ * ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PHASE A0
+ *   (RECLASSIFIED by AOPC02 PHASE-A-CORRECTION01)
  *
- * Purpose: capture ONE real `SdkController.getStateToPostToWebview()`
- * publication snapshot at the host idle-yield instant and classify it
- * internally before any webview-side coupling is touched. This is the
- * extension-side discriminator the Factory reviewer mandated for Phase A.
+ * EVIDENCE CLASS = MODELED_SDKCONTROLLER_PUBLICATION_COMPOSITION
+ *   (previously mislabelled as REAL_PRODUCTION_SEAM; the Factory
+ *    reviewer rejected that overclaim in PHASE-A-CORRECTION01)
  *
- * SYNCHRONIZED_PUBLICATION_INPUT_TOKEN = REAL_PRODUCTION_SEAM
- *   (no synthetic seq, no synthetic currentLegacyPhase, no synthetic arbiter input).
+ *   SYNCHRONIZED_PUBLICATION_INPUT_TOKEN = SYNTHETIC_REAL
+ *     (real MessageIdMinter + real TurnStateTracker + real
+ *      selectThinkingPresentation + real selectTaskHeaderPresentation,
+ *      but the `taskTelemetry = undefined` value is hand-rolled,
+ *      `backgroundCommandRunning` is locally constructed, and the
+ *      publication assembly is a LOCAL REPLICATION of SdkController.ts
+ *      property accesses — NOT the real `getStateToPostToWebview()`
+ *      producer. There is NO real `Controller` instance here, and NO
+ *      real call into the production assembly method.)
  *
- * Per the Factory reviewer:
- *   "DO NOT let AOPC02 become another 500-line reproduction harness.
- *    The most valuable probe is conceptually tiny."
+ *   REAL_SDKCONTROLLER_PRODUCER = NOT_EXERCISED
  *
- * This Phase A test does the EXTENSION-SIDE half of that comparison.
- * It does NOT exercise the webview-side reducer, transport, or React.
- * Phase B (only if E1) is the webview-side half.
+ * What this file DOES prove (MODELED composition coherence):
+ *   - real MessageIdMinter semantics (nextSeq / epoch invariants)
+ *   - real TurnStateTracker semantics (get / currentPhase / set)
+ *   - real selector semantics (selectThinkingPresentation,
+ *     selectTaskHeaderPresentation — pure functions)
+ *   - The selector correlation rules modeled in
+ *     `buildSdkControllerPublication` (a local replication of the
+ *     property accesses SdkController.ts:2886-3010 performs)
+ *
+ * What this file does NOT prove (PHASE-A-CORRECTION01 boundary):
+ *   - real `SdkController.getStateToPostToWebview()` execution
+ *   - real `taskTelemetry.get()` value (hand-rolled to undefined here)
+ *   - real Cancel authority (locally reconstructed predicate only)
+ *   - real composer authority (locally reconstructed predicate only)
+ *   - real `Controller` constructor + state assembly side effects
+ *   - real `getLocalShadowProjection()` / `getLocalShadowPhase()`
+ *
+ *   The REAL_SDKCONTROLLER_PRODUCER discriminator lives in
+ *   `application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts`.
  *
  * ===========================================================================
- * E1/E2/E3 EXTENSION-SIDE CLASSIFIER (per Factory reviewer Phase A plan)
+ * HISTORICAL CONTEXT (for forensic reconstruction)
  * ===========================================================================
  *
- *   E1 — coherent idle publication: TaskHeader=idle, Thinking.modelStreaming=false,
- *        Cancel inactive, composer enabled. Cross to Phase B.
+ *   Originally this file claimed
+ *     SYNCHRONIZED_PUBLICATION_INPUT_TOKEN = REAL_PRODUCTION_SEAM
+ *     E1_SDKCONTROLLER_COHERENT = PROVEN
+ *     PUBLICATION_IDENTITY = REAL_PRODUCTION_SEAM
  *
- *   E2 — internal publication contradiction: TaskHeader=idle AND Thinking=true
- *        AND/OR Cancel-active. RED inside SdkController assembly; STOP.
+ *   The Factory reviewer rejected those claims in PHASE-A-CORRECTION01
+ *   with the verdict:
  *
- *   E3 — runtime truth active, header idle. TaskHeader publication RED; STOP.
- *        (E3 is structurally impossible in the LIGHTWEIGHT Phase A probe —
- *         no real runtime here. Documented for completeness.)
+ *     PUBLICATION_IDENTITY =
+ *       SYNTHETIC_REAL
  *
- * ===========================================================================
- * IDENTITY-CORRELATION ASSERTIONS (per reviewer mandate)
- * ===========================================================================
+ *     REAL_SDKCONTROLLER_PRODUCER =
+ *       NOT_EXERCISED
  *
- * Read SdkController.ts:2886-3010 (current source) and assert the PRESENT
- * contract -- not the assumed-numerically-equal one. The present contract:
- *   - stateVersion            = minter.nextSeq()         (one tick per call)
- *   - turnState.seq           = tracker.get().seq        (advances on phase transition)
- *   - thinkingPresentation.seq = tracker.get().seq       (SAME tracker.get())
- *   - taskHeaderPresentation.seq = tracker.get().seq    (SAME tracker.get())
- *   - epoch                   = minter.epoch             (advances on bumpEpoch)
- *   - _ptadPushId             = stateVersion (PTAD on) or undefined (PTAD off)
+ *     E1_SDKCONTROLLER_COHERENT =
+ *       NOT_PROVEN
  *
- * stateVersion and turnState.seq are NOT always numerically equal --
- * they are independently-advanced counters. We assert the SHAPE of the
- * captured object, not numerical equality between domains.
+ *   The Phase A0 tests below are PRESERVED (not deleted) as MODELED
+ *   composition-coherence evidence. They are NOT evidence for the REAL
+ *   SdkController producer. The earlier `Cancel/composer predicate`
+ *   tests and the `stateVersion == turnState.seq + 1` numeric-relation
+ *   test have been dropped because they (a) used locally reconstructed
+ *   predicates and (b) assumed an numeric relation the production
+ *   contract does not promise.
  *
  * STOP RULE (ACT §15):
- *   If E2 reproduces, STOP. The defect is in SdkController assembly. Do
- *   NOT investigate webview reducer, transport, or React.
+ *   Do not claim these tests as evidence for real SdkController
+ *   behavior. They are evidence ONLY for the modeled composition.
  */
 
 import type { TaskHeaderTelemetryStrip, TurnPhase } from "@shared/ExtensionMessage"
@@ -184,9 +203,9 @@ function buildSdkControllerPublication(sources: SdkControllerPublicationSources)
 // Probe.
 // ============================================================================
 
-describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / Phase A", () => {
-	describe("publication-identity source chain is REAL (no synthetic inputs)", () => {
-		it("AOPC02-PHASE-A-1: real MessageIdMinter -> stateVersion = minter.nextSeq()", () => {
+describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PHASE A0 — MODELED_SDKCONTROLLER_PUBLICATION_COMPOSITION", () => {
+	describe("real leaf source classes (no synthetic inputs)", () => {
+		it("AOPC02-PHASE-A0-1: real MessageIdMinter -> stateVersion = minter.nextSeq() in the modeled assembly", () => {
 			const sources = makePublicationSources()
 			// Pre-burn some minter ticks (mirrors prior W1 stamps).
 			sources.minter.nextSeq()
@@ -197,7 +216,7 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / Ph
 			expect(snapshot.stateVersion).toBeGreaterThan(beforeSeq)
 		})
 
-		it("AOPC02-PHASE-A-2: real TurnStateTracker -> turnState is the tracker's own snapshot", () => {
+		it("AOPC02-PHASE-A0-2: real TurnStateTracker -> turnState is the tracker's own snapshot in the modeled assembly", () => {
 			const sources = makePublicationSources()
 			const snapshot = buildSdkControllerPublication(sources)
 			// `turnState` is exactly `turnStateTracker.get()` -- no recomputation.
@@ -205,7 +224,7 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / Ph
 			expect(snapshot.turnState.seq).toBe(sources.turnStateTracker.get().seq)
 		})
 
-		it("AOPC02-PHASE-A-3: thinkingPresentation.seq + taskHeaderPresentation.seq come from the SAME tracker.get()", () => {
+		it("AOPC02-PHASE-A0-3: thinkingPresentation.seq + taskHeaderPresentation.seq come from the SAME tracker.get() in the modeled assembly", () => {
 			const sources = makePublicationSources()
 			const snapshot = buildSdkControllerPublication(sources)
 			expect(snapshot.thinkingPresentation.seq).toBe(snapshot.turnState.seq)
@@ -213,7 +232,7 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / Ph
 			expect(snapshot.thinkingPresentation.seq).toBe(snapshot.taskHeaderPresentation.seq)
 		})
 
-		it("AOPC02-PHASE-A-4: _ptadPushId aliases stateVersion when PTAD is on; undefined when off", () => {
+		it("AOPC02-PHASE-A0-4: _ptadPushId aliases stateVersion when PTAD is on; undefined when off (modeled assembly)", () => {
 			const offSources = makePublicationSources({ ptadEnabled: false })
 			const offSnapshot = buildSdkControllerPublication(offSources)
 			expect(offSnapshot._ptadPushId).toBeUndefined()
@@ -223,7 +242,7 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / Ph
 			expect(onSnapshot._ptadPushId).toBe(onSnapshot.stateVersion)
 		})
 
-		it("AOPC02-PHASE-A-5: epoch stability -- a W1 stamp does NOT advance the epoch", () => {
+		it("AOPC02-PHASE-A0-5: epoch stability -- a modeled W1 stamp does NOT advance the epoch", () => {
 			const sources = makePublicationSources()
 			const beforeEpoch = sources.minter.epoch
 			buildSdkControllerPublication(sources)
@@ -231,12 +250,17 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / Ph
 		})
 	})
 
-	describe("extension-side E1/E2/E3 classifier on a real tracker idle-yield capture", () => {
+	describe("modeled idle-yield composition coherence (NOT real SdkController evidence)", () => {
 		// Idle-yield capture instant:
 		//   Drive the tracker through one full cycle (idle -> streaming -> idle)
 		//   so its phase and seq reflect a recent terminal transition -- the
 		//   SAME profile the host presents after a deferred-RUNNING turn
 		//   (mirrors the row 15c CORRECTION03 idle-yield contract).
+		//
+		// NOTE: this only proves the MODELED composition is coherent at an
+		// idle-yield input. It does NOT prove the real SdkController producer
+		// returns a coherent idle snapshot. The real producer discriminator
+		// lives in PHASE-A-CORRECTION01.
 		function idleYieldSources(): SdkControllerPublicationSources {
 			const sources = makePublicationSources()
 			sources.turnStateTracker.set("streaming", Date.now())
@@ -244,116 +268,105 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / Ph
 			return sources
 		}
 
-		it("AOPC02-PHASE-A-E1: at idle-yield with no shadow, snapshot is internally coherent", () => {
+		it("AOPC02-PHASE-A0-E1: MODEL only -- at idle-yield the modeled snapshot is internally coherent (no contradiction among taskHeader / thinking / backgroundCommandRunning)", () => {
+			// What this proves:
+			//   Given an idle-yield tracker + idle shadow-absent input +
+			//   backgroundCommandRunning=false + taskTelemetry=undefined,
+			//   the SELECTORS (real selectThinkingPresentation +
+			//   selectTaskHeaderPresentation) + local property-access
+			//   replication produces a non-contradictory modeled snapshot.
+			// What this does NOT prove:
+			//   - real SdkController.getStateToPostToWebview() returns a
+			//     non-contradictory snapshot;
+			//   - the Cancel affordance / composer are inactive at the real
+			//     publication seam (those predicates are locally reconstructed
+			//     and may differ from production selectors);
+			//   - the real taskTelemetry.get() value is undefined (it is
+			//     hand-rolled to undefined here, which is NOT an observed value).
 			const sources = idleYieldSources()
 			const snapshot = buildSdkControllerPublication(sources)
 
-			// Publication identity MUST be set.
+			// Modeled identity MUST be set.
 			expect(typeof snapshot.stateVersion).toBe("number")
 			expect(snapshot.stateVersion).toBeGreaterThan(0)
 			expect(typeof snapshot.epoch).toBe("number")
 			expect(snapshot.epoch).toBeGreaterThanOrEqual(0)
 
-			// TaskHeader / Thinking / Cancel predicates at the seam:
-			//   - taskHeaderPresentation.phase = "idle" (legacy branch)
-			//   - thinkingPresentation.modelStreaming = false (legacy branch;
-			//     currentLegacyPhase === "streaming" is false after the
-			//     idle-yield drive above)
-			//   - backgroundCommandRunning = false (no real background job)
-			//
-			// None of these is "active" or "streaming" or "running" -- the
-			// SdkController publication at idle-yield is internally coherent.
-			// No TaskHeader/Thinking/Cancel contradiction is born here.
+			// Modeled selector outputs are non-contradictory.
 			expect(snapshot.taskHeaderPresentation.phase).toBe("idle")
 			expect(snapshot.thinkingPresentation.modelStreaming).toBe(false)
-			expect(snapshot.backgroundCommandRunning).toBe(false)
 			expect(snapshot.taskHeaderPresentation.source).toBe("legacy")
 			expect(snapshot.thinkingPresentation.source).toBe("legacy")
 
-			// Identity correlation at this single captured snapshot:
-			//   - turnState.seq == thinkingPresentation.seq == taskHeaderPresentation.seq
-			//     (all from the SAME tracker.get() call)
-			//   - stateVersion = turnState.seq + 1 -- at this single captured
-			//     instant, the W1 stamp consumed exactly ONE nextSeq tick AFTER
-			//     the most recent tracker.set() (the idle transition in
-			//     idleYieldSources()). The exact difference depends on how
-			//     many prior getStateToPostToWebview() calls have happened
-			//     since the most recent set; in this lightweight harness
-			//     that is the ONE nextSeq() consumed by buildSdkControllerPublication
-			//     itself, plus zero prior calls, so stateVersion =
-			//     turnState.seq + 1 is the expected relation.
+			// Modeled identity correlation (SHAPE only):
+			//   turnState.seq == thinkingPresentation.seq == taskHeaderPresentation.seq
+			//   (all from the SAME tracker.get() call)
+			// Numeric equality with stateVersion is NOT asserted: production
+			// does not promise `stateVersion == turnState.seq + 1` (those
+			// are independently-advanced counters).
 			expect(snapshot.turnState.seq).toBeGreaterThan(0)
 			expect(snapshot.thinkingPresentation.seq).toBe(snapshot.turnState.seq)
 			expect(snapshot.taskHeaderPresentation.seq).toBe(snapshot.turnState.seq)
-			expect(snapshot.stateVersion).toBe(snapshot.turnState.seq + 1)
+			expect(snapshot.backgroundCommandRunning).toBe(false)
 		})
 
-		it("AOPC02-PHASE-A-E1-AGAIN: re-capture returns a NEW stateVersion with the SAME publication profile (monotonic W1)", () => {
-			// Per W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01, every W1 stamp
-			// consumes a fresh seq tick. A second getStateToPostToWebview
-			// call must therefore see stateVersion strictly greater than
-			// the first, while thinkingPresentation + taskHeaderPresentation
-			// stay frozen (no new tracker.set() in between, so the legacy
-			// phase + seq both stay at "idle" / the prior terminal seq).
+		it("AOPC02-PHASE-A0-E1-AGAIN: SHAPE only -- a second modeled capture advances stateVersion strictly (no numeric equality with turnState.seq asserted)", () => {
+			// SHAPE-only invariants: every modeled assembly advances stateVersion;
+			// no new tracker.set() means tracker-driven fields stay frozen;
+			// epoch is stable across modeled calls.
+			//
+			// Does NOT assert `stateVersion == turnState.seq + N` because
+			// production does not promise that numeric relation.
 			const sources = idleYieldSources()
 			const first = buildSdkControllerPublication(sources)
 			const second = buildSdkControllerPublication(sources)
 
 			expect(second.stateVersion).toBeGreaterThan(first.stateVersion)
-			expect(second.epoch).toBe(first.epoch) // no bumpEpoch in between
+			expect(second.epoch).toBe(first.epoch)
 			expect(second.thinkingPresentation.modelStreaming).toBe(first.thinkingPresentation.modelStreaming)
 			expect(second.taskHeaderPresentation.phase).toBe(first.taskHeaderPresentation.phase)
 			expect(second.thinkingPresentation.seq).toBe(first.thinkingPresentation.seq)
 			expect(second.taskHeaderPresentation.seq).toBe(first.taskHeaderPresentation.seq)
-			// W1 stamp consumed one tick since first capture; tracker did
-			// not advance (no set() in between) -> stateVersion = turnState.seq + 2.
-			expect(second.stateVersion).toBe(second.turnState.seq + 2)
 		})
 
-		it("AOPC02-PHASE-A-CANCEL-INPUTS: at idle-yield, the cancel predicate inputs are ALL inactive", () => {
-			// The cancel predicate inputs at the publication seam are:
-			//   - taskHeaderPresentation.phase != "compacting"
-			//     (no host compaction override -- legacy phase is "idle")
-			//   - backgroundCommandRunning = false
-			//   - thinkingPresentation.modelStreaming = false
-			//
-			// All three are inactive here -> cancel predicate inputs are
-			// inactive at this publication. The contradiction
-			// "Cancel visible while TaskHeader=idle" cannot be born at the
-			// SdkController publication seam -- it must be either (a)
-			// introduced by the webview reducer commit, (b) introduced by
-			// the React rendering seam, or (c) caused by an out-of-date
-			// taskTelemetry snapshot.
+		it("AOPC02-PHASE-A0-CANCEL-PREDICATE-LOCAL: the LOCALLY RECONSTRUCTED cancel-predicate-reconstruction returns false at the modeled idle-yield snapshot (NOT real cancel authority)", () => {
+			// What this proves:
+			//   The locally reconstructed predicate (hand-rolled boolean
+			//   combination) returns false given the modeled snapshot.
+			// What this does NOT prove:
+			//   The REAL webview cancel-button selector (which may differ
+			//   from this hand-rolled predicate) is inactive at the real
+			//   SdkController publication seam. PHASE-A-CORRECTION01 will
+			//   import and apply the real production cancel selector.
 			const sources = idleYieldSources()
 			const snapshot = buildSdkControllerPublication(sources)
 
-			const cancelPredicateActive =
+			const localCancelPredicateActive =
 				snapshot.taskHeaderPresentation.phase === "compacting" ||
 				snapshot.backgroundCommandRunning ||
 				snapshot.thinkingPresentation.modelStreaming
 
-			expect(cancelPredicateActive).toBe(false)
+			expect(localCancelPredicateActive).toBe(false)
 		})
 
-		it("AOPC02-PHASE-A-COMPOSER-INPUTS: at idle-yield, composer-disable predicate inputs are ALL inactive", () => {
-			// The composer-disable predicate inputs at the publication seam.
-			// SdkController publication here is `idle` / `modelStreaming=false`
-			// / `backgroundCommandRunning=false` / `phase=idle` -- none of
-			// these is "active". composer-disable is INACTIVE -> composer is
-			// user-owned at this snapshot. If the LIVE webview shows the
-			// composer BLOCKED while the host is idle and a real follow-up
-			// could be dispatched (per row 15c CORRECTION03), the defect
-			// lives in the WEBVIEW (reducer + React), NOT in SdkController
-			// publication assembly.
+		it("AOPC02-PHASE-A0-COMPOSER-PREDICATE-LOCAL: the LOCALLY RECONSTRUCTED composer-disable-predicate returns false at the modeled idle-yield snapshot (NOT real composer authority)", () => {
+			// What this proves:
+			//   The locally reconstructed composer-disable predicate returns
+			//   false given the modeled snapshot.
+			// What this does NOT prove:
+			//   The REAL webview composer-disable selector (which may differ)
+			//   is inactive at the real SdkController publication seam.
+			//   PHASE-A-CORRECTION01 will import and apply the real production
+			//   composer selector.
 			const sources = idleYieldSources()
 			const snapshot = buildSdkControllerPublication(sources)
 
-			const composerDisableActive =
+			const localComposerDisableActive =
 				snapshot.taskHeaderPresentation.phase !== "idle" ||
 				snapshot.thinkingPresentation.modelStreaming ||
 				snapshot.backgroundCommandRunning
 
-			expect(composerDisableActive).toBe(false)
+			expect(localComposerDisableActive).toBe(false)
 		})
 	})
 })
