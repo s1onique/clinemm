@@ -77,6 +77,6 @@
 		"src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts",
 		"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
 		"src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts",
-		"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction02.c24-c-bridge.test.ts"
 	]
 }
