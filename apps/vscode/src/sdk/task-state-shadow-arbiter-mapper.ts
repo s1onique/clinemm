@@ -539,12 +539,32 @@ export function selectCanonicalRestorePhase(input: {
 	if (input.currentLegacyPhase === "awaiting_followup") {
 		return "awaiting_followup"
 	}
-	// 3. CANONICAL SHADOW -- mirror step 3.
+	// 3. TERMINAL OWNER ENTRY (idle / completed / resumable /
+	//    error) -- preserve entry. The legacy tracker IS the
+	//    authority for these phases (the session-event coordinator
+	//    writes them directly); consulting the canonical shadow
+	//    could regress a terminal state. Mirrors the
+	//    ABSENCE-FALLBACK semantics of `selectTaskHeaderPresentation`
+	//    step 4 but generalized: terminal owners ALWAYS preserve,
+	//    regardless of canonical shadow.
+	const isTerminalOwner =
+		input.currentLegacyPhase === "idle" ||
+		input.currentLegacyPhase === "completed" ||
+		input.currentLegacyPhase === "resumable" ||
+		input.currentLegacyPhase === "error"
+	if (isTerminalOwner) {
+		return input.currentLegacyPhase
+	}
+	// 4. NON-TERMINAL OWNER (streaming / awaiting_approval) +
+	//    canonical available -- bounded repair fires, write the
+	//    canonical projection.
 	if (input.canonicalShadowPhase !== undefined) {
 		return input.canonicalShadowPhase
 	}
-	// 4. ABSENCE -- Factory P1: `unavailable != idle`. The
-	//    coordinator preserves the entry phase in this branch.
+	// 5. NON-TERMINAL OWNER + canonical undefined -- preserve
+	// entry via the coordinator's `undefined -> preserve` gate.
+	// Factory P1: `unavailable != idle`; the bounded repair must
+	// NOT fire when the canonical projection is unavailable.
 	return undefined
 }
 
