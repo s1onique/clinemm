@@ -79,6 +79,13 @@ export default defineConfig({
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01 / AOC02
+			// §3: REAL SdkController producer-object discriminator lives
+			// under src/sdk/__tests__/ and shares the harness shape with
+			// AOPC02 PHASE-A-CORRECTION02. It runs under the dedicated
+			// `vitest.config.c2-4-c-bridge.ts` config and must be
+			// excluded from this base config.
+			"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

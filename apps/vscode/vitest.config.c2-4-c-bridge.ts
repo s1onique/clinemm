@@ -46,6 +46,12 @@ export default defineConfig({
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01 / AOC02
+			// §3: REAL SdkController producer-object discriminator. Uses
+			// the same harness shape as AOPC02 PHASE-A-CORRECTION02 but
+			// with FOUR captures (initial/active/waiting/post-clear) and
+			// real canonical waiting -> idle via controller.clearTask().
+			"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

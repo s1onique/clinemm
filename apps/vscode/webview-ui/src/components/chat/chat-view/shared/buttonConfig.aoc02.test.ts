@@ -18,10 +18,20 @@
  *     turnState.phase === "idle"
  *     foregroundCommandRunning === true
  *
- *   The LIVE screenshot at s1onique.clinemm@4.1.10-4fd4dda6b has
- *   TaskHeader = Idle AND Cancel visible simultaneously, while the
- *   canonical command-running ownership remains true (a foreground
- *   terminal command is in flight).
+ *   The LIVE screenshot at s1onique.clinemm@4.1.10-4fd4dda6b proves:
+ *
+ *     TaskHeader = Idle
+ *     Cancel visible
+ *
+ *   It does NOT prove the foreground-command ownership value. The
+ *   evidence label is therefore:
+ *
+ *     LIVE_FOREGROUND_COMMAND_RUNNING = UNPROVEN_FROM_SCREENSHOT
+ *
+ *   §2 ran the foregroundCommandRunning=true case as an adversarial
+ *   input -- even if fgCmd is true, the production predicate still
+ *   gives no Cancel for turnState.phase === "idle". That is the
+ *   stronger, screenshot-independent finding.
  *
  * Method:
  *
