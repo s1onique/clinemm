@@ -2036,6 +2036,134 @@ NEXT (after GATE-FIXUP)
     Open Phase C/D as a new ACT with a fresh diagnostic.
 
 
+## AOC01 — APPLICATION-OWNERSHIP-CONTROL-COHERENCE01 — webview seam LIVE-W2 discriminator — CLOSED GREEN_PRODUCTION_COHERENT (LIVE W2 contradiction requires a path this ACT does NOT exercise)
+
+**ACT_ID**: ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-AOC01
+**LIVE_BUILD**: s1onique.clinemm@4.1.10-4fd4dda6b
+**STATUS**: CLOSED / DIAGNOSTIC-ONLY (no production code modified)
+
+**PURPOSE**. Discriminate the LIVE W2 contradiction observed after the
+CASE_B1 (awaiting_followup -> Waiting) repair landed. The user
+reported the same task transitioning from truthful "Waiting" to a
+contradictory state where `TaskHeader=Idle` while `Cancel` remained
+visible (and a historical Thinking disclosure remained visible).
+This ACT asks: at the SAME committed state capture the W2 UI
+observes, can `taskHeaderPresentation.phase === "idle"` coexist
+with a Cancel predicate that returns truthy?
+
+**STRATEGY (real webview seam, per ACT §4)**.
+
+- Use the REAL `ExtensionStateContext` (real reducer, real W1/W2
+  functional updater, real `applyPresentationProjection` seq fence,
+  real `applyStateSnapshot` epoch/stateVersion fence, real
+  `incomingIsStaleSameEpochPublication` PBR04 backstop).
+- Drive a real W1 sequence that mirrors the LIVE W1->W2 transition:
+  W1-A (awaiting_followup/15, source="host") then W1-B
+  (idle/16, source="shadow") with normal seq/stateVersion advance.
+- Capture the committed state surface from a real React consumer:
+  `taskHeaderPresentation.phase`, `turnState.phase`,
+  `thinkingPresentation.modelStreaming`, plus the REAL production
+  button config computed via `getButtonConfigFromState` (the same
+  call the production `ActionButtons` use).
+- Assert the LIVE-W2 invariant: at the same committed state capture,
+  `Idle + Cancel` must NOT coexist.
+
+**DISCRIMINANT TESTS (4/4 GREEN)**.
+
+| Test | Scenario | Result |
+|------|----------|--------|
+| AOC01 | W1-A awaiting_followup -> W1-B idle, normal advance | GREEN_PRODUCTION_COHERENT |
+| AOC01-B | Stale same-epoch W1 straggler with idle phase | GREEN: stateVersion backstop preserves awaiting_followup |
+| AOC01-C | Missing `turnState` (Hub/Remote absence path) | GREEN_PRODUCTION_COHERENT |
+| AOC01-D | Idle turnState + partial tail message | GREEN_PRODUCTION_COHERENT |
+
+**VERDICT**.
+
+```
+GREEN_PRODUCTION_COHERENT for all four paths the test exercises.
+```
+
+The LIVE W2 contradiction is NOT reproducible from any of:
+
+- normal same-epoch W1 advance (awaiting_followup -> idle)
+- same-epoch stateVersion straggler
+- Hub/Remote absence path
+- partial-tail message + idle phase
+
+**DISCRIMINATOR IMPLICATIONS** (per ACT §6 mapping):
+
+```
+CASE_C1_TASKHEADER_FALSE_IDLE  : NOT REPRODUCED from the test paths.
+                                 Same-epoch normal advance keeps
+                                 the TaskHeader in sync with turnState.
+CASE_C2_CANCEL_STALE           : NOT REPRODUCED from the test paths.
+                                 The buttons path (turnState -> buttonsForPhase
+                                 -> idle -> BUTTON_CONFIGS.default) does
+                                 NOT emit Cancel when turnState.phase === "idle".
+CASE_C3_THINKING_STALE         : NOT REPRODUCED from the test paths.
+                                 thinkingPresentation.modelStreaming is
+                                 driven by the canonical shadow projection
+                                 and tracks the same publication identity.
+CASE_C4_COMMITTED_STATE_MIX    : NOT REPRODUCED from the test paths.
+                                 taskHeaderPresentation / turnState /
+                                 thinkingPresentation all carry the same
+                                 seq / stateVersion / epoch on the wire
+                                 (verified via the seq-fence + stateVersion
+                                 backstop already pinned by AOPC02 PHASE B).
+```
+
+The LIVE defect must come from a path this ACT does NOT exercise:
+
+```
+1. W2 partial message arriving AFTER the W1 push but before the
+   turnState reaches idle (a transitional state where the partial
+   is finalized but turnState is still in flight) -- the W2 path
+   goes through applyMessage which only mutates clineMessages,
+   not the projection fields. So this would not cause Idle +
+   Cancel directly; but if a stale partial message lingers past
+   its turnState, the visible Cancel button could come from
+   `BUTTON_CONFIGS.partial` via the legacy tail-walking fallback
+   IF AND ONLY IF turnState is missing on that render.
+2. A W1 push from a different in-flight task identity (epoch
+   advance without a true wholesale reset) -- the test does not
+   exercise CTRL-E transitions.
+3. A bug in SdkController.getStateToPostToWebview() that omits
+   turnState on the wire -- the test models the wire shape
+   directly, so it does not exercise the producer assembly
+   itself. This is the next ACT (AOC02) territory.
+```
+
+**FILES CHANGED (1 file, +656 lines, no production code modified)**.
+
+- `apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx`
+  (NEW, 656 lines, 4 tests -- the synchronized-snapshot discriminator)
+
+**CONSERVATION**. No production code changed. AOPC02 W1 projection
+fencing NOT reopened. CASE_B1 awaiting_followup host override
+NOT reopened. All prior tests remain GREEN.
+
+**TESTS**.
+
+- AOC01: 4/4 PASS
+- Webview full: 607/607 PASS (was 603 before this ACT; +4 new)
+- Production vitest: 1831/1831 PASS
+- Typecheck (webview + production): EXIT=0
+- Lint (biome): clean
+- git diff --check: clean
+
+**NEXT ACT (resume predicate for LIVE W2)**. The LIVE W2
+contradiction requires a path this ACT does NOT exercise.
+The next ACT (AOC02) territory is to exercise the REAL
+`SdkController.getStateToPostToWebview()` assembly to test
+whether the producer can omit `turnState` on the wire (the test
+models the wire shape directly, so the producer assembly itself
+is unproven). This is the path most likely to explain the LIVE
+contradiction.
+
+**ENTRY_HEAD** = `9dfecd447`; **CLOSING_COMMIT** = `678780acb`.
+
+---
+
 ## Context / compaction
 
 Three **semantically distinct** epics; do not collapse.
