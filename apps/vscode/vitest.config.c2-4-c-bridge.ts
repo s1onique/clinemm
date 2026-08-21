@@ -39,6 +39,7 @@ export default defineConfig({
 			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts",
+			"src/sdk/__tests__/application-ownership-projection-coherence.aopc01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

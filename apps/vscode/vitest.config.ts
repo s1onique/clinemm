@@ -69,6 +69,7 @@ export default defineConfig({
 			// `createShellTool` composition from row 15a. It runs under
 			// `vitest.config.c2-4-c-bridge.ts`.
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts",
+			"src/sdk/__tests__/application-ownership-projection-coherence.aopc01.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
