@@ -210,7 +210,11 @@ describe("SdkInteractionCoordinator", () => {
 
 		expect(coordinator.resolvePendingToolApproval("just give me an answer", "messageResponse")).toBe(false)
 		expect(recordDeniedToolApproval).not.toHaveBeenCalled()
-		expect(setTurnPhase).toHaveBeenLastCalledWith("awaiting_approval", task.messageStateHandler.getClineMessages()[0].ts)
+		expect(setTurnPhase).toHaveBeenLastCalledWith(
+			"awaiting_approval",
+			task.messageStateHandler.getClineMessages()[0].ts,
+			expect.any(String),
+		)
 
 		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
 		await expect(approvalPromise).resolves.toEqual({ approved: true })
@@ -392,7 +396,7 @@ describe("SdkInteractionCoordinator", () => {
 			partial: false,
 		})
 		// The advisory is a follow-up, not an error — input stays enabled.
-		expect(setTurnPhase).toHaveBeenCalledWith("awaiting_followup", ask.ts)
+		expect(setTurnPhase).toHaveBeenCalledWith("awaiting_followup", ask.ts, expect.any(String))
 		expect(ask.text).toContain("protocol errors")
 		expect(ask.text).not.toMatch(/claude|sonnet|opus|anthropic/i)
 
@@ -406,7 +410,7 @@ describe("SdkInteractionCoordinator", () => {
 			{ type: "ask", ask: "mistake_limit_reached" },
 			{ type: "say", say: "user_feedback", text: "try smaller steps" },
 		])
-		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming")
+		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming", undefined, expect.any(String))
 	})
 
 	it("resolves mistake-limit dismiss (noButtonClicked) as advisory continue, NOT stop", async () => {
@@ -436,7 +440,7 @@ describe("SdkInteractionCoordinator", () => {
 			kind: "advisory",
 		})
 		expect(task.messageStateHandler.getClineMessages()).toMatchObject([{ type: "ask", ask: "mistake_limit_reached" }])
-		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming")
+		expect(setTurnPhase).toHaveBeenLastCalledWith("streaming", undefined, expect.any(String))
 	})
 
 	it("resolves mistake-limit Continue (yesButtonClicked, no prompt) as advisory continue", async () => {

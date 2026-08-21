@@ -1,4 +1,9 @@
 import type { TurnPhase, TurnState } from "@shared/ExtensionMessage"
+import {
+	recordTurnStateWriterProvenance,
+	type TurnStateWriterIdentity,
+	type TurnStateWriterProvenanceRecord,
+} from "@shared/turn-state-writer-provenance"
 import type { MessageIdMinter } from "./message-id-minter"
 
 // Authoritative UI-mode tracker for the current agent turn.
@@ -52,11 +57,79 @@ export class TurnStateTracker {
 	 * Subscribers MUST NOT mutate the tracker or rely on synchronous
 	 * re-entrant `set()` calls from within a listener — observers are
 	 * fire-and-forget projections.
+	 *
+	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01:
+	 *
+	 * `set()` is a legacy alias for `setWithWriter(phase, anchorTs,
+	 * { writerId: "unknown-legacy-writer" })`. New code SHOULD call
+	 * `setWithWriter()` directly with a tagged identity from the
+	 * closed writerId union. The legacy alias preserves
+	 * byte/semantic equivalence for every pre-existing caller when
+	 * the diagnostic is disabled (WPROV06).
 	 */
 	set(phase: TurnPhase, anchorTs?: number): void {
+		this.setWithWriter(phase, anchorTs, { writerId: "unknown-legacy-writer" })
+	}
+
+	/**
+	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01:
+	 *
+	 * Tagged-authority mutation seam. Behaves identically to `set()`
+	 * with respect to the snapshot mutation and listener fan-out —
+	 * the only addition is stamping one `TurnStateWriterProvenanceRecord`
+	 * to the diagnostic ring when the diagnostic is enabled. When the
+	 * diagnostic is disabled (the production default), the stamp is
+	 * a complete no-op and this method is byte/semantic-equivalent
+	 * to `set()` (verified by WPROV06).
+	 *
+	 * The previous snapshot is read BEFORE the mutation so the
+	 * `previous.phase/seq/anchorTs` triple is the authoritative
+	 * "what was overwritten" witness. The committed snapshot is read
+	 * AFTER the mutation so the `committed` triple reflects the
+	 * post-mint seq exactly.
+	 *
+	 * `taskId` / `epoch` are optional on the identity. SdkController
+	 * stamps them when the active session is known; coordinators that
+	 * run with a generic callback can pass `undefined`.
+	 */
+	setWithWriter(phase: TurnPhase, anchorTs: number | undefined, identity: TurnStateWriterIdentity): void {
+		const previousPhase = this.phase
+		const previousSeq = this.seq
+		const previousAnchorTs = this.anchorTs
+		const requestedAnchorTs = anchorTs
+
 		this.phase = phase
 		this.anchorTs = anchorTs
 		this.seq = this.minter.nextSeq()
+
+		const record: TurnStateWriterProvenanceRecord = {
+			capturedAt: Date.now(),
+			writerId: identity.writerId,
+			taskId: identity.taskId,
+			epoch: identity.epoch,
+			previous: {
+				phase: previousPhase,
+				seq: previousSeq,
+				anchorTs: previousAnchorTs,
+			},
+			requested: {
+				phase,
+				anchorTs: requestedAnchorTs,
+			},
+			committed: {
+				phase: this.phase,
+				seq: this.seq,
+				anchorTs: this.anchorTs,
+			},
+		}
+		// Diagnostic stamp happens AFTER the snapshot mutation so
+		// the committed triple always reflects the post-mint state.
+		// The stamp is a synchronous in-process ring-buffer append
+		// with no I/O and no exceptions thrown out of the module —
+		// a stamp failure (e.g. disable-flag race) is a silent skip
+		// and cannot unwind the production caller.
+		recordTurnStateWriterProvenance(record)
+
 		for (const listener of [...this.listeners]) {
 			try {
 				listener(phase, anchorTs)

@@ -1,6 +1,7 @@
 import type { CommandExecutionPlan } from "@cline/core"
 import type { ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision } from "@cline/shared"
 import type { ClineAskQuestion, ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
+import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { ClineAskResponse } from "@shared/WebviewMessage"
 import { Logger } from "@/shared/services/Logger"
 import { MessageIdMinter } from "./message-id-minter"
@@ -98,8 +99,13 @@ export interface SdkInteractionCoordinatorOptions {
 	 * Set the authoritative UI turn phase. Called when an approval/ask is pending
 	 * (awaiting_approval / awaiting_followup) and when the user responds (back to streaming).
 	 * Optional for tests.
+	 *
+	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01: the optional
+	 * `writerId` argument tags the mutation for the diagnostic ring.
+	 * Callers that omit it preserve the legacy alias behavior
+	 * (`unknown-legacy-writer`).
 	 */
-	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
+	setTurnPhase?: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
 	/**
 	 * Invoked for manually-approved tools after the auto-approve short-circuit, BEFORE the
 	 * ask message is emitted. Used to open the edit diff preview so the user decides while
@@ -198,7 +204,7 @@ export class SdkInteractionCoordinator {
 		// Advisory is a follow-up for the user to weigh in, not a hard error.
 		// `awaiting_followup` puts the input enabled and keeps the session
 		// resumable (cf. buttonConfig.buttonsForPhase "awaiting_followup").
-		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts)
+		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts, "interaction-handle-mistake-limit")
 		await this.options.postStateToWebview()
 
 		return new Promise<MistakeLimitDecision>((resolve) => {
@@ -271,7 +277,7 @@ export class SdkInteractionCoordinator {
 			type: "status",
 			payload: { sessionId: this.options.getSessionId(), status: "running" },
 		})
-		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts)
+		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts, "interaction-handle-tool-approval")
 		await this.options.postStateToWebview()
 
 		return new Promise<{ approved: boolean; reason?: string; executionPlan?: CommandExecutionPlan }>((resolve) => {
@@ -303,7 +309,7 @@ export class SdkInteractionCoordinator {
 			type: "status",
 			payload: { sessionId: this.options.getSessionId(), status: "running" },
 		})
-		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts)
+		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts, "interaction-handle-ask-question")
 		await this.options.postStateToWebview()
 
 		return new Promise<string>((resolve) => {
@@ -326,7 +332,11 @@ export class SdkInteractionCoordinator {
 
 		if (responseType === "messageResponse") {
 			Logger.log("[SdkController] Leaving pending tool approval open and routing user message as queued follow-up")
-			this.options.setTurnPhase?.("awaiting_approval", pendingMessage?.messageTs)
+			this.options.setTurnPhase?.(
+				"awaiting_approval",
+				pendingMessage?.messageTs,
+				"interaction-resolve-tool-approval-message-response",
+			)
 			// The approval remains pending. The chat message still needs normal follow-up routing.
 			return false
 		}
@@ -342,7 +352,7 @@ export class SdkInteractionCoordinator {
 
 		// Approved or rejected by approval controls, the agent resumes its turn and returns to streaming.
 		// On rejection the agent receives the denial and continues; the SDK drives the next phase.
-		this.options.setTurnPhase?.("streaming")
+		this.options.setTurnPhase?.("streaming", undefined, "interaction-resolve-tool-approval-yes-no")
 		// The reason must state the operation did NOT happen (for edits: the file is
 		// unchanged) — raw feedback alone reads like iteration on an applied change.
 		const denialReason = buildToolApprovalDenialReason(pendingMessage?.toolName, prompt)
@@ -397,7 +407,7 @@ export class SdkInteractionCoordinator {
 		}
 
 		// User answered the follow-up — the agent resumes its turn.
-		this.options.setTurnPhase?.("streaming")
+		this.options.setTurnPhase?.("streaming", undefined, "interaction-resolve-ask-question")
 		resolve(responseText)
 		return true
 	}
@@ -429,7 +439,7 @@ export class SdkInteractionCoordinator {
 
 		const resolve = this.pendingMistakeLimitResolve
 		this.pendingMistakeLimitResolve = undefined
-		this.options.setTurnPhase?.("streaming")
+		this.options.setTurnPhase?.("streaming", undefined, "interaction-resolve-mistake-limit")
 
 		const trimmedPrompt = prompt?.trim()
 		if (trimmedPrompt) {

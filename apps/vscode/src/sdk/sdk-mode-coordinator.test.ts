@@ -670,7 +670,7 @@ describe("SdkModeCoordinator", () => {
 			type: "status",
 			payload: { sessionId: "old-session", status: "cancelled" },
 		})
-		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", resumeAppend?.[0][0].ts)
+		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", resumeAppend?.[0][0].ts, expect.any(String))
 		// The aborted turn never auto-continues (the plan was not presented), so
 		// nothing may flip the phase back to streaming afterwards.
 		expect(options.onAutoContinueStarting).not.toHaveBeenCalled()

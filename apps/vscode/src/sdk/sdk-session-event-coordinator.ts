@@ -1,4 +1,5 @@
 import type { AgentEvent, CoreSessionEvent } from "@cline/core"
+import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { refreshClineRecommendedModels } from "@/core/controller/models/refreshClineRecommendedModels"
 import type { StateManager } from "@/core/storage/StateManager"
 import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@/shared/cline/recommended-models"
@@ -34,7 +35,7 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * completed turn (completed if attempt_completion was used, else awaiting_followup), and on
 	 * error. Optional for tests.
 	 */
-	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
+	setTurnPhase?: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
 	/** Current authoritative UI turn phase, from the controller's TurnStateTracker. */
 	getTurnPhase?: () => TurnPhase
 	captureProviderApiError?: (event: ProviderFailureTelemetry) => void
@@ -79,7 +80,7 @@ export class SdkSessionEventCoordinator {
 			this.options.beginProviderFailureTelemetryTurn?.()
 			this.options.messageTranslatorState.clearTurnOutcome()
 			this.options.sessions.setRunning(true)
-			this.options.setTurnPhase?.(PROVIDER_FAILURE_PHASE.STREAMING)
+			this.options.setTurnPhase?.(PROVIDER_FAILURE_PHASE.STREAMING, undefined, "session-event-pending-prompt-submitted")
 		}
 		const zeroCostPromise = this.zeroCostForFreeClineModel(result)
 		if (zeroCostPromise) {
@@ -118,7 +119,7 @@ export class SdkSessionEventCoordinator {
 				} else if (this.options.messageTranslatorState.wasErrorSeen()) {
 					// The turn surfaced a provider error (ask:"api_req_failed" was emitted) —
 					// offer error recovery (Retry / Start New Task), not the followup state.
-					this.options.setTurnPhase?.("error")
+					this.options.setTurnPhase?.("error", undefined, "session-event-turn-complete-error")
 				} else if (this.options.messageTranslatorState.wasAttemptCompletionSeen()) {
 					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a completion tool
 					// was declared but we still need to confirm a terminal response was
@@ -129,7 +130,7 @@ export class SdkSessionEventCoordinator {
 					// translator sets terminalResponseCommittedThisTurn at the completion
 					// tool's content_end; if it didn't, refuse the promotion.
 					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
-						this.options.setTurnPhase?.("completed")
+						this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 					} else {
 						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01:
 						// symmetric to the CPL01 "done-without-completion" liveness
@@ -162,7 +163,11 @@ export class SdkSessionEventCoordinator {
 						Logger.warn(
 							"[SdkController] attempt_completion declared but no terminal response committed; yielding turn as awaiting_followup (liveness)",
 						)
-						this.options.setTurnPhase?.("awaiting_followup")
+						this.options.setTurnPhase?.(
+							"awaiting_followup",
+							undefined,
+							"session-event-turn-complete-awaiting-followup-liveness",
+						)
 					}
 				} else {
 					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the
@@ -196,7 +201,11 @@ export class SdkSessionEventCoordinator {
 					// completion authority contract is UNCHANGED: no
 					// `completion_result` row is synthesized here.
 					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
-						this.options.setTurnPhase?.("awaiting_followup")
+						this.options.setTurnPhase?.(
+							"awaiting_followup",
+							undefined,
+							"session-event-turn-complete-awaiting-followup",
+						)
 					} else {
 						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: explicit
 						// user-owned incomplete yield for the done-without-
@@ -208,7 +217,11 @@ export class SdkSessionEventCoordinator {
 						Logger.warn(
 							"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
 						)
-						this.options.setTurnPhase?.("awaiting_followup")
+						this.options.setTurnPhase?.(
+							"awaiting_followup",
+							undefined,
+							"session-event-turn-complete-resumable-straggler-preserve",
+						)
 					}
 				}
 

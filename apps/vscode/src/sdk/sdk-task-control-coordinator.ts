@@ -1,5 +1,6 @@
 import type { ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
+import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { Logger } from "@/shared/services/Logger"
 import type { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
@@ -31,7 +32,7 @@ export interface SdkTaskControlCoordinatorOptions {
 	 * previous task's phase in place hides the Resume button for interrupted
 	 * sessions opened from History (and can leak stale buttons in general).
 	 */
-	setTurnPhase: (phase: TurnPhase, anchorTs?: number) => void
+	setTurnPhase: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
 	/**
 	 * Raise the cancel fence SYNCHRONOUSLY before aborting the SDK session: bump the epoch so any
 	 * straggler events the SDK emits after the abort request carry the old epoch (and are dropped
@@ -265,11 +266,11 @@ export class SdkTaskControlCoordinator {
 			// hides the Resume button for interrupted/failed sessions.
 			const lastMessage = cleanedMessages.at(-1)
 			if (lastMessage?.type === "ask" && lastMessage.ask === "resume_completed_task") {
-				this.options.setTurnPhase("completed", lastMessage.ts)
+				this.options.setTurnPhase("completed", lastMessage.ts, "task-control-resume-ask")
 			} else if (lastMessage?.type === "ask" && lastMessage.ask === "resume_task") {
-				this.options.setTurnPhase("resumable", lastMessage.ts)
+				this.options.setTurnPhase("resumable", lastMessage.ts, "task-control-resumable-ask")
 			} else {
-				this.options.setTurnPhase("idle")
+				this.options.setTurnPhase("idle", undefined, "task-control-idle-fallback")
 			}
 
 			if (cleanedMessages.length > 0) {

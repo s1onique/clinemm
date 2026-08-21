@@ -314,7 +314,7 @@ describe("SdkTaskStartCoordinator", () => {
 		await coordinator.initTask("hello")
 
 		expect(options.setTurnPhase).toHaveBeenCalled()
-		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming", undefined, expect.any(String))
 		// setTurnPhase may be called once (lifecycle boundary). It must
 		// NOT be called before `clearTask` ran.
 		const firstInvocationOrder = options.setTurnPhase.mock.invocationCallOrder[0]
@@ -351,14 +351,14 @@ describe("SdkTaskStartCoordinator", () => {
 		await Promise.resolve()
 		await Promise.resolve()
 		// Session is still pending — the streaming assertion must NOT have fired.
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase.mock.calls.some((call) => call[0] === "streaming")).toBe(false)
 		expect(options.sessions.startNewSession).toHaveBeenCalledOnce()
 
 		// Resolve the session — now the canonical boundary has been crossed.
 		resolveStart({ startResult: { sessionId: "session-deferred" }, sdkHost: { send: vi.fn() } })
 		const sessionId = await initPromise
 		expect(sessionId).toBe("session-deferred")
-		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming", undefined, expect.any(String))
 	})
 
 	// CORRECTION02-2: exactly-one-transition sentinel.
@@ -390,7 +390,7 @@ describe("SdkTaskStartCoordinator", () => {
 
 		const sessionId = await coordinator.initTask("sync throw")
 		expect(sessionId).toBeUndefined()
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase.mock.calls.some((call) => call[0] === "streaming")).toBe(false)
 	})
 
 	// CORRECTION03-1: post-visibility proof for the new-task path.
@@ -471,7 +471,7 @@ describe("SdkTaskStartCoordinator", () => {
 		// Auth/preflight failure path: no session was created, so the
 		// streaming phase must NOT be asserted (the webview should see
 		// the error path, not a misleading "Working" badge).
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase.mock.calls.some((call) => call[0] === "streaming")).toBe(false)
 	})
 
 	it("CORRECTION01-3: setTurnPhase is NOT called when the Cline auth preflight fires", async () => {
@@ -480,7 +480,7 @@ describe("SdkTaskStartCoordinator", () => {
 		await coordinator.initTask("needs auth")
 
 		expect(options.sessions.startNewSession).not.toHaveBeenCalled()
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase.mock.calls.some((call) => call[0] === "streaming")).toBe(false)
 	})
 
 	// CORRECTION02-4: deferred-promise proof for reinitExistingTaskFromId.
@@ -511,11 +511,11 @@ describe("SdkTaskStartCoordinator", () => {
 		await Promise.resolve()
 		await Promise.resolve()
 		// Session is still pending — streaming must NOT have fired.
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase.mock.calls.some((call) => call[0] === "streaming")).toBe(false)
 
 		resolveStart({ startResult: { sessionId: "session-resumed" } })
 		await reinitPromise
-		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming", undefined, expect.any(String))
 	})
 
 	// CORRECTION02-5: the resume path also emits exactly one streaming
@@ -554,7 +554,7 @@ describe("SdkTaskStartCoordinator", () => {
 
 		await coordinator.reinitExistingTaskFromId("task-1")
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming", undefined, expect.any(String))
 	})
 
 	// CORRECTION02-6: structural witness for the single-writer invariant.

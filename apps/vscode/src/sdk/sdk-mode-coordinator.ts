@@ -3,6 +3,7 @@ import { createModeSwitchNoticeTracker, type ModeSwitchNotice, type ModeSwitchNo
 import type { ChatContent } from "@shared/ChatContent"
 import type { ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
+import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import type { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
@@ -47,7 +48,7 @@ export interface SdkModeCoordinatorOptions {
 	 * input disabled, and leaving it on "awaiting_approval" keeps dead
 	 * Approve/Reject buttons wired to an approval that was already denied.
 	 */
-	setTurnPhase: (phase: TurnPhase, anchorTs?: number) => void
+	setTurnPhase: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
 	resolveContextMentions: (text: string) => Promise<string>
 	/**
 	 * Called right before an auto-continue send kicks off a new turn. Mirrors
@@ -428,6 +429,6 @@ export class SdkModeCoordinator {
 			type: "status",
 			payload: { sessionId: oldSessionId, status: "cancelled" },
 		})
-		this.options.setTurnPhase("resumable", resumeMessage.ts)
+		this.options.setTurnPhase("resumable", resumeMessage.ts, "mode-coordinator-mode-switch-resumable")
 	}
 }

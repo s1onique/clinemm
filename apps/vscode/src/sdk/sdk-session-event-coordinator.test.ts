@@ -121,8 +121,8 @@ describe("SdkSessionEventCoordinator", () => {
 
 		// Liveness: phase transitions to `awaiting_followup` (truthful user-
 		// owned incomplete yield) AND state is posted.
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+		expect((options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "completed")).toBe(false)
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
 	})
 
@@ -138,8 +138,10 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("error")
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("error", undefined, expect.any(String))
+		expect(
+			(options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "awaiting_followup"),
+		).toBe(false)
 	})
 
 	it("marks a submitted queued prompt as a new streaming turn", async () => {
@@ -168,7 +170,7 @@ describe("SdkSessionEventCoordinator", () => {
 		expect(clearTurnOutcome).toHaveBeenCalledOnce()
 		expect(options.beginProviderFailureTelemetryTurn).toHaveBeenCalledOnce()
 		expect(options.sessions.setRunning).toHaveBeenCalledWith(true)
-		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming", undefined, expect.any(String))
 		expect(options.messages.appendAndEmit).toHaveBeenCalledWith([message], event)
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
 	})
@@ -194,7 +196,7 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("streaming", undefined, expect.any(String))
 		expect(options.messages.appendAndEmit).not.toHaveBeenCalled()
 		expect(options.postStateToWebview).toHaveBeenCalledOnce()
 	})
@@ -252,7 +254,7 @@ describe("SdkSessionEventCoordinator", () => {
 		// Liveness: the phase MUST transition to `awaiting_followup` (the
 		// queued-turn-clobber path is the same done-without-completion case
 		// as CPL01 — both must yield to the user).
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
 		expect(options.sessions.setRunning).toHaveBeenCalledWith(false)
 	})
 
@@ -481,10 +483,10 @@ describe("SdkSessionEventCoordinator", () => {
 		// (truthful user-owned incomplete yield; `turnAllowsFollowup() === true`
 		// so the composer stays enabled and CRA13 user follow-up continues to
 		// work).
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
 		// Conservation: do NOT silently promote to `completed` (no completion
 		// authority was committed; CRA02 terminal-content contract preserved).
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
+		expect((options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "completed")).toBe(false)
 	})
 
 	it("CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result", async () => {
@@ -505,7 +507,7 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
 	})
 
 	it("CRA03-coord: attemptCompletionSeen but no committed terminal response yields awaiting_followup (liveness-corrected, post-CPL04)", async () => {
@@ -542,8 +544,8 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect((options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "completed")).toBe(false)
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
 	})
 
 	// ===========================================================================
@@ -603,10 +605,10 @@ describe("SdkSessionEventCoordinator", () => {
 		// which is the same condition the CRA02-empty branch deliberately
 		// preserved — but now with truthful phase projection so the
 		// TaskHeader stops showing "Working" with nothing in flight.
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
 		// Symmetric: do NOT silently promote to `completed` (no completion
 		// authority was committed; CRA02 conservation preserved).
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
+		expect((options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "completed")).toBe(false)
 	})
 
 	it("CPL02: done with committed terminal response AND attempt-completion transitions to completed (control: completion-tool path)", async () => {
@@ -627,7 +629,7 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("completed")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("completed", undefined, expect.any(String))
 	})
 
 	it("CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (structural/synthetic control)", async () => {
@@ -661,7 +663,7 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
 	})
 
 	it("CPL04: done with attempt-completion declared but NO committed terminal response yields awaiting_followup (liveness, symmetric to CPL01)", async () => {
@@ -704,8 +706,8 @@ describe("SdkSessionEventCoordinator", () => {
 		// Liveness-corrected contract: no `completed` (no terminal content
 		// was committed), AND yields to `awaiting_followup` (no runnable
 		// successor exists after `done`).
-		expect(options.setTurnPhase).not.toHaveBeenCalledWith("completed")
-		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup")
+		expect((options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "completed")).toBe(false)
+		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
 	})
 
 	it("CPL05: done with error transitions to error (conservation)", async () => {
@@ -724,7 +726,7 @@ describe("SdkSessionEventCoordinator", () => {
 
 		await coordinator.handleSessionEvent(event)
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("error")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("error", undefined, expect.any(String))
 	})
 })
 

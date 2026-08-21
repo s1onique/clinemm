@@ -222,7 +222,7 @@ describe("SdkTaskControlCoordinator", () => {
 		expect(state.task?.messageStateHandler.getClineMessages().at(-1)).toEqual(
 			expect.objectContaining({ type: "ask", ask: "resume_task" }),
 		)
-		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", expect.any(Number))
+		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", expect.any(Number), expect.any(String))
 	})
 
 	it("sets the turn phase to resumable when showing a failed task", async () => {
@@ -238,7 +238,7 @@ describe("SdkTaskControlCoordinator", () => {
 
 		await coordinator.showTaskWithId("task-1")
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", expect.any(Number))
+		expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", expect.any(Number), expect.any(String))
 	})
 
 	it("sets the turn phase to completed when showing a completed task", async () => {
@@ -257,7 +257,7 @@ describe("SdkTaskControlCoordinator", () => {
 		expect(state.task?.messageStateHandler.getClineMessages().at(-1)).toEqual(
 			expect.objectContaining({ type: "ask", ask: "resume_completed_task" }),
 		)
-		expect(options.setTurnPhase).toHaveBeenCalledWith("completed", expect.any(Number))
+		expect(options.setTurnPhase).toHaveBeenCalledWith("completed", expect.any(Number), expect.any(String))
 	})
 
 	it("sets the turn phase to idle when showing a task with no messages", async () => {
@@ -268,7 +268,7 @@ describe("SdkTaskControlCoordinator", () => {
 
 		await coordinator.showTaskWithId("task-1")
 
-		expect(options.setTurnPhase).toHaveBeenCalledWith("idle")
+		expect(options.setTurnPhase).toHaveBeenCalledWith("idle", undefined, expect.any(String))
 	})
 
 	it("keeps the newest selection when an older open's history lookup resolves last", async () => {

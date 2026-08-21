@@ -56,8 +56,11 @@ describe("C2.1-A — real production ordering pins W12_MODEL=A", () => {
 		// These are inside SdkTaskStartCoordinator.initTask and
 		// SdkController.initTask respectively. The SdkController awaits
 		// the inner taskStart.initTask(...) before calling
-		// emitTaskRequested.
-		const setTurnPhaseMatch = taskStartSrc.match(/setTurnPhase\(\s*["']streaming["']\s*\)/)
+		// emitTaskRequested. ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-
+		// PROVENANCE01 added an optional trailing writerId arg;
+		// the chronology contract is about the relative ordering,
+		// not the trailing args.
+		const setTurnPhaseMatch = taskStartSrc.match(/setTurnPhase\(\s*["']streaming["']\s*(?:,\s*[^)]*)?\)/)
 		const emitRequestedMatch = src.match(/emitTaskRequested\(\s*\{/)
 
 		expect(setTurnPhaseMatch).not.toBeNull()

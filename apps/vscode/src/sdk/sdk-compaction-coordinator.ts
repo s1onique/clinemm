@@ -27,6 +27,7 @@
 import type { Message as SdkMessage } from "@cline/llms"
 import type { ClineCompactionInfo, ClineMessage, TurnPhase, TurnState } from "@shared/ExtensionMessage"
 import type { Mode } from "@shared/storage/types"
+import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { buildCompactionMessage, parseCompactionNoticeMetadata } from "./message-translator"
@@ -73,7 +74,7 @@ export interface SdkCompactionCoordinatorOptions {
 	 * behaviour) still constructs; production always supplies both.
 	 */
 	getTurnState?: () => TurnState
-	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
+	setTurnPhase?: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
 	/**
 	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01
 	 * + CORRECTION04
@@ -430,7 +431,7 @@ export class SdkCompactionCoordinator {
 			return () => {}
 		}
 		const entry = getTurnState()
-		setTurnPhase("compacting", entry.anchorTs)
+		setTurnPhase("compacting", entry.anchorTs, "compaction-enter")
 		const getCanonicalRestorePhase = this.options.getCanonicalRestorePhase
 		return () => {
 			// Bounded canonical-projection restore — see ACT-CLINEMM-
@@ -452,7 +453,7 @@ export class SdkCompactionCoordinator {
 			// byte-equivalent behavior.
 			const isNonTerminalOwner = entry.phase === "streaming" || entry.phase === "awaiting_approval"
 			if (!isNonTerminalOwner) {
-				setTurnPhase(entry.phase, entry.anchorTs)
+				setTurnPhase(entry.phase, entry.anchorTs, "compaction-restore-entry-preserve")
 				return
 			}
 			const canonicalRestorePhase = getCanonicalRestorePhase?.(entry.phase)
@@ -460,10 +461,10 @@ export class SdkCompactionCoordinator {
 				// Canonical projection unavailable. Preserve entry.
 				// Factory P1: `unavailable ≠ idle`. Do NOT synthesize
 				// a phase from absence of evidence.
-				setTurnPhase(entry.phase, entry.anchorTs)
+				setTurnPhase(entry.phase, entry.anchorTs, "compaction-restore-canonical-unavailable-preserve")
 				return
 			}
-			setTurnPhase(canonicalRestorePhase, entry.anchorTs)
+			setTurnPhase(canonicalRestorePhase, entry.anchorTs, "compaction-restore-canonical-resolved")
 		}
 	}
 

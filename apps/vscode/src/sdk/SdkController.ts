@@ -275,6 +275,45 @@ export class Controller {
 	private static readonly STATE_POST_DEBOUNCE_MS = 50
 	private readonly statePostDebouncer: StatePostDebouncer
 
+	/**
+	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01:
+	 *
+	 * Build a `TurnStateWriterIdentity` for an SdkController-local writer.
+	 * Stamps taskId / epoch from the active session and the shared
+	 * minter so the diagnostic ring carries the same identity the
+	 * `stateVersion`/`_ptadPushId` carry. Falls back to undefined for
+	 * either field when the active session is absent or the minter
+	 * epoch is unavailable — the record stays valid (the fields are
+	 * optional). Never throws.
+	 */
+	private writerIdentity(
+		writerId: import("@shared/turn-state-writer-provenance").TurnStateWriterId,
+		overrideTaskId?: string,
+	): import("@shared/turn-state-writer-provenance").TurnStateWriterIdentity {
+		const sessionId = overrideTaskId ?? this.sessions.getActiveSession()?.sessionId
+		const epoch = this.messageTranslatorState.getMinter().epoch
+		return {
+			writerId,
+			taskId: sessionId,
+			epoch,
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01:
+	 *
+	 * Build the `setTurnPhase(phase, anchorTs)` callback wired to
+	 * the canonical tracker for one coordinator. The returned closure
+	 * tags every mutation with the supplied writerId via
+	 * `setWithWriter` so the diagnostic ring can attribute the
+	 * mutation to that coordinator. The closure captures `this` via
+	 * the lexical arrow, matching the existing wiring contract.
+	 */
+	private turnPhaseSetterFor(writerId: import("@shared/turn-state-writer-provenance").TurnStateWriterId) {
+		return (phase: TurnPhase, anchorTs?: number) =>
+			this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId))
+	}
+
 	// Bridges SDK events to the webview's gRPC streams.
 	private grpcBridge: WebviewGrpcBridge
 
@@ -448,8 +487,8 @@ export class Controller {
 			// Share the single id/seq/epoch authority so interaction-minted ids (tool-approval
 			// asks, ask_question, user_feedback) never collide with translator-minted ids.
 			getMinter: () => this.messageTranslatorState.getMinter(),
-			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
-			// Open the diff editor preview before the approval buttons render.
+			setTurnPhase: (phase, anchorTs, writerId) =>
+				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			onToolApprovalAsk: (request) => this.diffEdits.openForApproval(request.toolCallId, request.toolName, request.input),
 			recordApprovedToolMessage: (toolCallId, messageTs) =>
 				this.messageTranslatorState.recordApprovedToolMessageTs(toolCallId, messageTs),
@@ -703,7 +742,11 @@ export class Controller {
 			onSendError: async (error, sessionId) => {
 				// A turn failed — the UI shows error recovery (Retry / Sign In / Add Credits).
 				void this.diffEdits.discardAllPreviews("turn error")
-				this.turnStateTracker.set("error")
+				this.turnStateTracker.setWithWriter(
+					"error",
+					undefined,
+					this.writerIdentity("controller-on-send-error", sessionId),
+				)
 				const errorMessage = error instanceof Error ? error.message : String(error)
 				const providerId = this.getSessionProviderId(sessionId) ?? this.getActiveProviderId()
 				const isClineAuthError =
@@ -779,15 +822,20 @@ export class Controller {
 			resetMessageTranslator: () => this.resetMessageTranslatorAndFence(),
 			postStateToWebview: () => this.postStateToWebview(),
 			getTurnPhase: () => this.turnStateTracker.currentPhase,
-			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
+			setTurnPhase: (phase, anchorTs, writerId) =>
+				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
 			rebuilds: this.sessionRebuilds,
 			onAutoContinueStarting: () => {
-				this.turnStateTracker.set("streaming")
+				this.turnStateTracker.setWithWriter(
+					"streaming",
+					undefined,
+					this.writerIdentity("followup-auto-continue-starting"),
+				)
 				this.messageTranslatorState.clearTurnOutcome()
 			},
 			onAutoContinueFailed: () => {
-				this.turnStateTracker.set("error")
+				this.turnStateTracker.setWithWriter("error", undefined, this.writerIdentity("followup-auto-continue-failed"))
 			},
 		})
 		this.mcpTools = new SdkMcpCoordinator({
@@ -850,13 +898,13 @@ export class Controller {
 			resetMessageTranslator: () => this.resetMessageTranslatorAndFence(),
 			postStateToWebview: () => this.postStateToWebview(),
 			onResumeFailed: () => {
-				this.turnStateTracker.set("error")
+				this.turnStateTracker.setWithWriter("error", undefined, this.writerIdentity("followup-on-resume-failed"))
 			},
 			onFollowUpAbandoned: () => {
 				// Settle the streaming phase askResponse pre-set, unless a turn
 				// (for example on the newly displayed task) has actually started.
 				if (this.turnStateTracker.currentPhase === "streaming" && !this.sessions.getActiveSession()?.isRunning) {
-					this.turnStateTracker.set("idle")
+					this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("followup-on-follow-up-abandoned"))
 				}
 			},
 		})
@@ -879,7 +927,8 @@ export class Controller {
 				this.messageTranslatorState.clearApprovedToolMessageTs()
 				this.messageTranslatorState.getMinter().bumpEpoch()
 			},
-			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
+			setTurnPhase: (phase, anchorTs, writerId) =>
+				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			postStateToWebview: () => this.postStateToWebview(),
 		})
 		this.taskStart = new SdkTaskStartCoordinator({
@@ -926,7 +975,8 @@ export class Controller {
 			// through this controller's shared `turnStateTracker` — no
 			// other site in this controller writes "streaming" for the
 			// new-task or resume lifecycle.
-			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
+			setTurnPhase: (phase, anchorTs, writerId) =>
+				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			captureProviderApiError: (event) => this.captureProviderFailure(event),
 			postStateToWebview: () => this.postStateToWebview(),
 		})
@@ -946,7 +996,8 @@ export class Controller {
 			// coordinator drives the SAME canonical turn-phase tracker
 			// every other coordinator uses — no second authority.
 			getTurnState: () => this.turnStateTracker.get(),
-			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
+			setTurnPhase: (phase, anchorTs, writerId) =>
+				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			// ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02:
 			// the bounded restore policy delegates to the canonical
 			// authority composition via `createCanonicalRestorePhaseCallback`
@@ -989,7 +1040,8 @@ export class Controller {
 			stateManager: this.stateManager,
 			getTask: () => this.task,
 			postStateToWebview: () => this.postStateToWebview(),
-			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
+			setTurnPhase: (phase, anchorTs, writerId) =>
+				this.turnStateTracker.setWithWriter(phase, anchorTs, this.writerIdentity(writerId ?? "unknown-legacy-writer")),
 			getTurnPhase: () => this.turnStateTracker.currentPhase,
 			captureProviderApiError: (event) => this.captureProviderFailure(event),
 			beginProviderFailureTelemetryTurn: () => this.beginProviderFailureTelemetryTurn(),
@@ -1575,7 +1627,7 @@ export class Controller {
 			},
 		]
 
-		this.turnStateTracker.set("error", failedAskTs)
+		this.turnStateTracker.setWithWriter("error", failedAskTs, this.writerIdentity("controller-emit-cline-auth-error"))
 
 		this.messages.appendAndEmit(messages, {
 			type: "status",
@@ -1640,7 +1692,7 @@ export class Controller {
 			},
 		]
 
-		this.turnStateTracker.set("error", failedAskTs)
+		this.turnStateTracker.setWithWriter("error", failedAskTs, this.writerIdentity("controller-emit-cline-balance-error"))
 
 		this.messages.appendAndEmit(messages, {
 			type: "status",
@@ -1872,7 +1924,7 @@ export class Controller {
 		// Fence first: mark resumable before aborting so any straggler events from the aborted
 		// turn land on the wrong side of the UI mode. (Full fence-before-abort epoch bump lands
 		// in S6; this sets the authoritative phase now.)
-		this.turnStateTracker.set("resumable")
+		this.turnStateTracker.setWithWriter("resumable", undefined, this.writerIdentity("controller-cancel-task"))
 		// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION02: cancellation of the
 		// currently-running task destroys only the bound override. A pre-armed
 		// intent for the next task SURVIVES this cancellation — the user may have
@@ -1986,7 +2038,7 @@ export class Controller {
 	async clearTask(): Promise<void> {
 		this.pendingClineAuthRetryPrompt = undefined
 		// No active task — UI returns to idle (input enabled, no buttons/thinking).
-		this.turnStateTracker.set("idle")
+		this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("controller-clear-task"))
 		// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION02: clearTask is the
 		// universal choke-point that covers (a) the user clicking "New Task",
 		// (b) initTask calling clearTask() before starting a new session,
@@ -2086,7 +2138,7 @@ export class Controller {
 		// scroll-arrow default). Mirrors initTask(). The webview gates turnState by seq, and the
 		// session-event coordinator will set the terminal phase (completed/awaiting_followup/error)
 		// when this turn ends.
-		this.turnStateTracker.set("streaming")
+		this.turnStateTracker.setWithWriter("streaming", undefined, this.writerIdentity("controller-ask-response"))
 		// Clear the previous turn's completion signal so this new turn's phase is computed fresh.
 		this.messageTranslatorState.clearTurnOutcome()
 		// The webview only learns the phase through a full state post. Without one here it would
@@ -2213,7 +2265,11 @@ export class Controller {
 
 			const { startResult, sdkHost } = await this.sessions.startNewSession(startInput)
 
-			this.turnStateTracker.set("streaming")
+			this.turnStateTracker.setWithWriter(
+				"streaming",
+				undefined,
+				this.writerIdentity("controller-edit-message-and-regenerate"),
+			)
 			this.messageTranslatorState.clearTurnOutcome()
 			this.resetMessageTranslatorAndFence()
 
@@ -2315,7 +2371,7 @@ export class Controller {
 			throw new Error("Checkpoint restore did not return a new session")
 		}
 
-		this.turnStateTracker.set("idle")
+		this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("controller-restore-checkpoint"))
 		this.messageTranslatorState.clearTurnOutcome()
 		this.resetMessageTranslatorAndFence()
 

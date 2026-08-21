@@ -5,6 +5,7 @@ import type { ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import type { Settings } from "@shared/storage/state-keys"
 import type { Mode } from "@shared/storage/types"
+import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { isDirectory } from "@/utils/fs"
@@ -84,7 +85,7 @@ export interface SdkTaskStartCoordinatorOptions {
 	 * that every real constructor supplies the authority, so a missing
 	 * `setTurnPhase` is a construction error, not a runtime fallback.
 	 */
-	setTurnPhase: (phase: TurnPhase, anchorTs?: number) => void
+	setTurnPhase: (phase: TurnPhase, anchorTs?: number, writerId?: TurnStateWriterId) => void
 }
 
 export class SdkTaskStartCoordinator {
@@ -239,7 +240,7 @@ export class SdkTaskStartCoordinator {
 			//   5. A subsequent `postStateToWebview()` follows below so
 			//      the webview observes the streaming phase. The order
 			//      is asserted by CORRECTION03-1.
-			this.options.setTurnPhase("streaming")
+			this.options.setTurnPhase("streaming", undefined, "task-start-init-task")
 
 			const newHistoryItem = this.options.createHistoryItemFromSession(
 				taskSessionId,
@@ -354,7 +355,7 @@ export class SdkTaskStartCoordinator {
 			// phase to the webview (the resume path makes this ordering
 			// explicit; the new-task path's identical ordering is asserted
 			// by CORRECTION03-1).
-			this.options.setTurnPhase("streaming")
+			this.options.setTurnPhase("streaming", undefined, "task-start-reinit-existing-task")
 			await this.options.postStateToWebview()
 
 			Logger.log(`[SdkController] Task resumed: ${taskId} → ${startResult.sessionId}`)

@@ -342,8 +342,13 @@ describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04 / chr
 		// the restore closure).
 		const body = loadEnterCompactingPhaseBody()
 		// The body MUST contain a top-level call to
-		// `setTurnPhase("compacting", entry.anchorTs)`.
-		const setCompactingMatch = body.match(/setTurnPhase\(\s*["']compacting["']\s*,\s*entry\.anchorTs\s*\)/)
+		// `setTurnPhase("compacting", entry.anchorTs, ...)`. The trailing
+		// writerId argument is optional in the regex (ACT-CLINEMM-
+		// LEGACY-TURNSTATE-WRITER-PROVENANCE01 added it as a tagging
+		// convenience — it does not change the chronology contract).
+		const setCompactingMatch = body.match(
+			/setTurnPhase\(\s*["']compacting["']\s*,\s*entry\.anchorTs\s*(?:,\s*["'][^"']*["'])?\s*\)/,
+		)
 		expect(setCompactingMatch).toBeTruthy()
 		if (!setCompactingMatch) return
 		// AND the restore closure (the SECOND return in the body,
@@ -420,8 +425,12 @@ describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04 / chr
 		const afterCallback = fromRestoreStripped.slice(callbackInvocationIndex)
 		expect(afterCallback).toMatch(/setTurnPhase\(/)
 		// The write MUST target canonicalRestorePhase (success
-		// branch) or entry.phase (undefined branch).
-		const writesAfterCallback = [...afterCallback.matchAll(/setTurnPhase\(([\w.]+),\s*entry\.anchorTs\)/g)]
+		// branch) or entry.phase (undefined branch). The trailing
+		// writerId argument (ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-
+		// PROVENANCE01) is ignored by this regex.
+		const writesAfterCallback = [
+			...afterCallback.matchAll(/setTurnPhase\(([\w.]+),\s*entry\.anchorTs(?:\s*,\s*["'][^"']*["'])?\)/g),
+		]
 		expect(writesAfterCallback.length).toBeGreaterThanOrEqual(1)
 		// The first write is the undefined-fallback (entry.phase);
 		// the second is the canonical-result (canonicalRestorePhase).
