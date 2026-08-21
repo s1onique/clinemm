@@ -405,10 +405,34 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		// cache (the public record's privacy allowlist strips
 		// `arbiter` from the bounded buffer; the cache is the
 		// surface for the wiring's Local-consumer cutover
-		// accessor). The shadow phase is read from the last
-		// differential record. Both are NON-MUTATING.
+		// accessor). Both are NON-MUTATING.
 		getLastObservedArbiter: () => recorder.getLastArbiter(),
-		getLastObservedShadowPhase: () => recorder.getRecords().at(-1)?.shadowPhase,
+		// ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01:
+		// The shadow phase is the comparator's CURRENT `projectTurnState`
+		// projection applied to its private `TaskModel` — i.e. the
+		// result of every observed event applied through the
+		// reducer, NOT the `shadowPhase` field on the last
+		// differential record (which is hardcoded to `"idle"` for
+		// `D00_AGREE` records because the public differential
+		// record's privacy allowlist omits the divergence payload).
+		// Reading the record's `shadowPhase` produced the LIVE
+		// contradiction where a freshly-running task (shadow
+		// `streaming`) was published as `taskHeaderPresentation.phase
+		// = "idle"` for any state that agreed with the legacy
+		// mirror. This accessor is the single source of truth for
+		// the wire's `taskHeaderPresentation` field; reading it
+		// from the comparator's current state preserves the
+		// selector's three-source precedence contract.
+		getLastObservedShadowPhase: (): import("@shared/ExtensionMessage").TurnPhase | undefined => {
+			// The comparator owns the only post-reducer view of the
+			// shadow (R2: the public `shadow` handle was retired).
+			// We delegate to its `getCurrentShadowPhase` accessor,
+			// which mirrors `@cline/agents` `projectTurnState`
+			// (selectors.ts line 47-71) on the `TaskModel` public
+			// surface so the wire field matches the shadow's own
+			// authoritative projection.
+			return comparator.getCurrentShadowPhase()
+		},
 		coordinator,
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:

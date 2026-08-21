@@ -174,4 +174,44 @@ export class TaskShadowComparator {
 	debugSnapshot(): TaskModel {
 		return this.shadow.debugSnapshot()
 	}
+
+	/**
+	 * ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01:
+	 * Returns the comparator's CURRENT shadow phase, projected into the
+	 * legacy `TurnPhase` vocabulary. This is the post-reducer truth —
+	 * i.e. the result of every accepted observation applied through
+	 * the shadow's reducer — and is the single source of truth for
+	 * the host's `taskHeaderPresentation` wire field.
+	 *
+	 * `undefined` is returned when the shadow has never observed any
+	 * event (the initial empty state). The host's `selectTaskHeaderPresentation`
+	 * selector collapses this to the legacy absence fallback.
+	 *
+	 * Read-only: does NOT mutate the shadow. Mirrors the
+	 * `@cline/agents` `projectTurnState` rule (selectors.ts
+	 * line 47-71) so the wire field matches the shadow's own
+	 * authoritative projection.
+	 */
+	getCurrentShadowPhase(): TurnPhase {
+		const model = this.shadow.debugSnapshot()
+		if (model.activity.awaitingApproval) return "awaiting_approval"
+		if (model.activity.modelStreaming || model.activity.activeToolCallIds.length > 0) return "streaming"
+		switch (model.lifecycle.kind) {
+			case "completed":
+				return "completed"
+			case "failed":
+				return "error"
+			case "resumable":
+			case "cancelled":
+				return "resumable"
+			case "running":
+				// Running lifecycle but no activity ⇒ idle
+				// (between turns; matches the shadow's documented
+				// selector rule).
+				return "idle"
+			case "idle":
+			default:
+				return "idle"
+		}
+	}
 }
