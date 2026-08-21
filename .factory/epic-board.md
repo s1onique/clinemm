@@ -2874,8 +2874,8 @@ closes without repair. **C1: GO.**
 > `test(sdk): ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01 WPROV01..06 turn-state writer provenance diagnostic`
 >
 > At write-time of this binding line, the commit literal identities were:
-> `HEAD^{commit} = 37ff39ecbf0d7293c5955da3b446b522c07964a4`
-> `HEAD^{tree}   = ea9c2fcdd955607814a470bc6b3a8ce33d070f04`
+> `HEAD^{commit} = 319955d089cdf3d873edd91e0220eee90457546e`
+> `HEAD^{tree}   = e5fb8d8216fc85d295e480c9b0f1b56d2de3237d`
 >
 > Re-validate at read-time with:
 > `git rev-parse HEAD^{commit} HEAD^{tree}` inside the commit whose subject starts with the immutable prefix above.
