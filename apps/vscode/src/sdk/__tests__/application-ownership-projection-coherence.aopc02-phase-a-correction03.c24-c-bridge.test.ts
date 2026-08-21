@@ -421,10 +421,18 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PH
 		}
 	})
 
-	it("THP-B03-HOST-COMPACTION: if B.taskHeaderPresentation.source === 'host' THEN B.taskHeaderPresentation.phase === 'compacting'", () => {
+	it("THP-B03-HOST-COMPACTION / ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1: if B.taskHeaderPresentation.source === 'host' THEN B.taskHeaderPresentation.phase ∈ {compacting, awaiting_followup}", () => {
+		// ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1:
+		// the host-override branch in selectTaskHeaderPresentation
+		// (`task-state-shadow-arbiter-mapper.ts`) now applies to BOTH
+		// "compacting" (THCP11 host-override) and "awaiting_followup"
+		// (the user-owned phase the canonical shadow cannot
+		// represent). The two host-override branches together prove
+		// that whenever `source === "host"`, the phase is one of
+		// these two host-owned labels — never anything else.
 		const proj = snapshotB.taskHeaderPresentation!
 		if (proj.source === "host") {
-			expect(proj.phase).toBe("compacting")
+			expect(["compacting", "awaiting_followup"]).toContain(proj.phase)
 		}
 	})
 
@@ -462,13 +470,20 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PH
 	// regression in selectTaskHeaderPresentation itself.
 	// ------------------------------------------------------------------------
 
-	it("POSITIVE-CONTROL: selectTaskHeaderPresentation preserves legacy phase on shadow absence", () => {
+	it("POSITIVE-CONTROL: selectTaskHeaderPresentation host-overrides awaiting_followup regardless of shadow presence (TCCC01-B1)", () => {
+		// ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1:
+		// awaiting_followup is a host-owned phase (the canonical
+		// shadow cannot represent it). The host-override branch in
+		// selectTaskHeaderPresentation now applies to it, mirroring
+		// the compaction precedent — `source === "host"`, not
+		// `"legacy"`. The user-visible phase ("awaiting_followup"
+		// → "Waiting") is unchanged.
 		const proj = selectTaskHeaderPresentation({
 			canonicalShadowPhase: undefined,
 			currentLegacyPhase: "awaiting_followup",
 			seq: 42,
 		})
-		expect(proj).toEqual({ phase: "awaiting_followup", source: "legacy", seq: 42 })
+		expect(proj).toEqual({ phase: "awaiting_followup", source: "host", seq: 42 })
 	})
 
 	it("POSITIVE-CONTROL: selectTaskHeaderPresentation overrides legacy streaming with shadow authority when shadow present", () => {

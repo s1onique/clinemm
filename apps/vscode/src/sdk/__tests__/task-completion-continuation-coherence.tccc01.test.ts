@@ -134,7 +134,7 @@ describe("ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1", () 
 		expect.soft(label.live, "Waiting must be live (elapsed clock keeps ticking while paused for follow-up)").toBe(true)
 	})
 
-	it("P2: at awaiting_followup with NO observed shadow, the selector already returns awaiting_followup via legacy fallback", () => {
+	it("P2: at awaiting_followup with NO observed shadow, the selector returns awaiting_followup via the host-override branch (mirroring compaction precedent)", () => {
 		tracker.set("awaiting_followup", 12345)
 
 		const { taskHeaderProjection, turnState } = projectPublication({
@@ -143,14 +143,19 @@ describe("ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1", () 
 		})
 
 		expect.soft(turnState.phase).toBe("awaiting_followup")
-		expect.soft(taskHeaderProjection.phase, "absence fallback MUST surface awaiting_followup").toBe("awaiting_followup")
-		expect.soft(taskHeaderProjection.source, "absence fallback source MUST be 'legacy'").toBe("legacy")
+		expect.soft(taskHeaderProjection.phase, "user-visible phase MUST surface awaiting_followup").toBe("awaiting_followup")
+		expect
+			.soft(
+				taskHeaderProjection.source,
+				"host override wins when currentLegacyPhase === awaiting_followup (matches compaction precedent)",
+			)
+			.toBe("host")
 
 		const label = taskHeaderPresentationStateLabel(taskHeaderProjection, turnState)
 		expect.soft(label.label).toBe("Waiting")
 	})
 
-	it("P3: at awaiting_followup with shadow ALSO projecting 'awaiting_followup', source = shadow (canonical wins)", () => {
+	it("P3: at awaiting_followup with shadow ALSO projecting 'awaiting_followup', the host-override branch still wins (matches compaction precedent)", () => {
 		tracker.set("awaiting_followup", 12345)
 
 		const { taskHeaderProjection } = projectPublication({
@@ -159,7 +164,12 @@ describe("ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1", () 
 		})
 
 		expect.soft(taskHeaderProjection.phase).toBe("awaiting_followup")
-		expect.soft(taskHeaderProjection.source).toBe("shadow")
+		expect
+			.soft(
+				taskHeaderProjection.source,
+				"host override wins over shadow for awaiting_followup (same as compaction precedent)",
+			)
+			.toBe("host")
 	})
 
 	it("P4: at 'completed' with shadow projecting 'completed', TaskHeader stays 'Complete' (W1 / completed-projection fencing conservation)", () => {

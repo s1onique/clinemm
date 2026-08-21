@@ -199,10 +199,18 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / THCP11 host-
 		const last = captured[captured.length - 1]
 		expect(last).toBeDefined()
 		expect(last!.taskHeaderProjection.phase).toBe(entryPhase)
-		// The projection source must be the legacy absence fallback
-		// (no TaskStateShadowWiring in the harness) — NOT "host".
-		// This proves the host override is bounded by the restore.
-		expect(last!.taskHeaderProjection.source).toBe("legacy")
+		// ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1:
+		// the entry phase here is "awaiting_followup", which is a host-
+		// owned phase (the canonical shadow cannot represent it; see
+		// task-state-shadow-arbiter-mapper.ts selectTaskHeaderPresentation
+		// JSDoc). Therefore the post-restore publication carries
+		// source = "host" (via the new awaiting_followup host-override
+		// branch), NOT the legacy absence fallback. The compaction
+		// override is still bounded — the post-restore `phase` is the
+		// entry phase, not "compacting" — and that is the load-bearing
+		// invariant P1d continues to assert.
+		expect(last!.taskHeaderProjection.source).toBe("host")
+		expect(last!.taskHeaderProjection.phase).not.toBe("compacting")
 	})
 
 	it("THCP11-P1d: NO publication AFTER the restorePhase() pair carries phase=compacting (host-override lifetime is bounded by the coordinator)", async () => {
@@ -231,11 +239,15 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / THCP11 host-
 		}
 		expect(lastCompactIdx).toBeGreaterThanOrEqual(0)
 		// The bound is: every publication AFTER the last in-phase
-		// one must have phase !== "compacting" AND source !== "host".
+		// one must have phase !== "compacting". The `source` is
+		// allowed to be "host" post-restore if the entry phase is
+		// itself a host-owned phase ("awaiting_followup" is the
+		// canonical example — see TCCC01-B1) — but the `phase`
+		// itself must NEVER be "compacting" outside the
+		// enter/restore pair.
 		for (let i = lastCompactIdx + 1; i < captured.length; i++) {
 			expect(captured[i].turnState.phase).not.toBe("compacting")
 			expect(captured[i].taskHeaderProjection.phase).not.toBe("compacting")
-			expect(captured[i].taskHeaderProjection.source).not.toBe("host")
 		}
 	})
 

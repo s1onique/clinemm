@@ -384,16 +384,53 @@ export interface TaskHeaderPresentationInputs {
  *
  *   1. if currentLegacyPhase === "compacting"
  *        → phase = "compacting", source = "host"
- *   2. else if canonicalShadowPhase is defined
+ *   2. else if currentLegacyPhase === "awaiting_followup"
+ *        → phase = "awaiting_followup", source = "host"
+ *   3. else if canonicalShadowPhase is defined
  *        → phase = canonicalShadowPhase, source = "shadow"
- *   3. else
+ *   4. else
  *        → phase = currentLegacyPhase, source = "legacy"
  *
  * `seq` is always the input `seq` (TurnStateTracker.seq).
  *
  * NEVER throws. NEVER reads global state. NEVER mutates any
- * Task or control state. The three-source precedence is enforced
- * by the body shape, not by an assertion.
+ * Task or control state. The precedence is enforced by the
+ * body shape, not by an assertion.
+ *
+ * ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 — CASE_B1
+ * bounded repair (TCCC01-B1):
+ *
+ * The two host-override branches ("compacting" + "awaiting_followup")
+ * exist because the canonical shadow's `projectTurnState(model)`
+ * (sdk/packages/agents/src/runtime/state/task-state/selectors.ts:47)
+ * CANNOT represent these two phases:
+ *
+ *   - `compacting` is an internal host-owned SYSTEM TRANSITION
+ *     (owned by `SdkCompactionCoordinator.enterCompactingPhase()` /
+ *     `restorePhase()`). It is not a runtime event.
+ *
+ *   - `awaiting_followup` is a user-owned phase. The only selector
+ *     that produces it is `projectHostTurnState(model, hostInteraction)`
+ *     which consumes a `hostInteraction.awaitingFollowup` boolean that
+ *     production code never supplies. The canonical shadow wiring
+ *     (apps/vscode/src/sdk/task-state-shadow-host-wiring.ts:445)
+ *     calls `TaskState.projectTurnState(model)` — WITHOUT the host
+ *     interaction arg — so its projection collapses to whatever
+ *     `projectTurnState` yields, which (when the model is genuinely
+ *     between turns during a follow-up ask, with no modelStreaming
+ *     and no active tooling) is `"idle"`.
+ *
+ * Without this override, the SAME publication identity carries:
+ *
+ *   buttonsForPhase(turnState, ...)   → "Continue" CTA (real authority)
+ *   taskHeaderPresentation.phase      → "idle"        (stale shadow)
+ *
+ * which is the LIVE-W2 contradiction the ACT names
+ * CASE_B1_CONTINUATION_STATE_COLLAPSED_TO_IDLE.
+ *
+ * The override mirrors the compaction precedent exactly: the host
+ * is the only legitimate authority for these two phases; the
+ * shadow's projection is acknowledged to be incomplete for them.
  */
 export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs): TaskHeaderPresentationProjection {
 	// 1. HOST COMPACTION OVERRIDE — explicit host authority for the
@@ -405,10 +442,22 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 			seq: input.seq,
 		}
 	}
-	// 2. CANONICAL SHADOW — the shadow's `turnPhase` is the
-	// authority for 7 of the 8 phases (idle / streaming /
-	// awaiting_approval / awaiting_followup / completed / error /
-	// resumable). It overrides a stale legacy phase when present.
+	// 2. HOST AWAITING_FOLLOWUP OVERRIDE — explicit host authority
+	// for the user-owned phase the canonical shadow cannot
+	// represent (TCCC01-B1 CASE_B1). See the JSDoc above.
+	if (input.currentLegacyPhase === "awaiting_followup") {
+		return {
+			phase: "awaiting_followup",
+			source: "host",
+			seq: input.seq,
+		}
+	}
+	// 3. CANONICAL SHADOW — the shadow's `turnPhase` is the
+	// authority for 6 of the 8 phases (idle / streaming /
+	// awaiting_approval / completed / error / resumable). It
+	// overrides a stale legacy phase when present. The two
+	// host-owned phases (compacting / awaiting_followup) are
+	// handled by the two host-override branches above.
 	if (input.canonicalShadowPhase !== undefined) {
 		return {
 			phase: input.canonicalShadowPhase,
@@ -416,7 +465,7 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 			seq: input.seq,
 		}
 	}
-	// 3. ABSENCE FALLBACK — Hub/Remote / Local pre-observation.
+	// 4. ABSENCE FALLBACK — Hub/Remote / Local pre-observation.
 	return {
 		phase: input.currentLegacyPhase,
 		source: "legacy",
