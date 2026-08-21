@@ -49,6 +49,11 @@ export default defineConfig({
 			// the base config does not have. It runs under
 			// `vitest.config.c2-4-c-bridge.ts` instead.
 			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01:
+			// the causal-discriminator test imports `@cline/agents` (real
+			// production class) and uses the c2-4-c-bridge fs.allow scope.
+			// It runs under `vitest.config.c2-4-c-bridge.ts` instead.
+			"src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
