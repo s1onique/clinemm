@@ -1153,6 +1153,272 @@ FOLLOWED BY (only if Phase B passes E1):
     a04db12b6, 0af728ac8, 378e40a37, 073342bf6, 469523e1f, 94034bb19,
     <about to land>
 
+## AOPC02 PHASE-A-CORRECTION03 — LOAD-BEARING-INVARIANTS discriminator — CLOSED PASS_LEGACY_FALLBACK_INVARIANTS_RED_REPORTED_BUT_NOT_REPRODUCED_CASE_D
+
+**ACT_ID**: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-A-CORRECTION03
+**EXIT_DISC_VERDICT**: PASS_LEGACY_FALLBACK_INVARIANTS (reviewer's halt CASE_D_REPORT_WRONG; actual real B is internally coherent at the legacy-fallback seam)
+
+**PURPOSE**: resolve the HALT_PRODUCTION_INVARIANT_CONTRADICTION the Factory reviewer raised against PHASE-A-CORRECTION02. The reviewer hypothesized that a real B snapshot contained `{turnState.phase = awaiting_followup, taskHeaderPresentation.phase = idle, source = legacy, seq = turnState.seq}`, which would violate the frozen `selectTaskHeaderPresentation` legacy-fallback contract (`source === "legacy" AND canonicalShadowPhase === undefined => phase === currentLegacyPhase`).
+
+**ACTUAL DISCRIMINATOR OUTCOME** (executed via the SAME real Controller active→yield fixture from PHASE-A-CORRECTION02):
+
+  REAL B snapshot capture (single-instant, real sessionEvents.handleSessionEvent + real getStateToPostToWebview):
+    B.turnState.phase                = "awaiting_followup"
+    B.taskHeaderPresentation.phase   = "awaiting_followup"  <-- NOT idle
+    B.taskHeaderPresentation.source  = "legacy"
+    B.taskHeaderPresentation.seq     = 5
+    B.thinkingPresentation.modelStreaming = false
+    B.thinkingPresentation.source    = "legacy"
+    B.thinkingPresentation.seq       = 5
+    tracker.currentPhase             = "awaiting_followup"
+    tracker.get()                    = { phase: "awaiting_followup", seq: 5 }
+    canonicalShadowPhase             = undefined
+    selector input reconstructed     = { canonicalShadowPhase: undefined, currentLegacyPhase: "awaiting_followup", seq: 5 }
+    selector output reconstructed    = { phase: "awaiting_followup", source: "legacy", seq: 5 }
+    invariant_match (B vs selector)  = TRUE on phase+source+seq
+
+  → The legacy-fallback contract IS preserved by the real SdkController at this seam.
+  → The reviewer's HALT was based on the BOARD NARRATIVE of correction02, which (in the report's verbal description) said "TaskHeader phase = idle" for B. The actual real B snapshot is NOT that. **CASE_D_REPORT_WRONG** (per the reviewer's own classifier).
+
+**LIVE BUG LOCATION** (per the reviewer's diagnosis pathway):
+  docs/architecture/elm/task-state-e71-c2-bc2c794be-live-trace-evidence.md lines 51-58, 88-95, 200-201:
+    extension emits:   turnState.phase = awaiting_followup / seq 15
+    webview applies:  turnState.phase = idle / seq 2
+  → The webview reducer applies a STALE idle/seq2 over the new awaiting_followup/seq15.
+  → This is a WEBVIEW-REDUCER straggler-replay problem, NOT an extension-side TaskHeader legacy-fallback collapse.
+  → Phase B (webview reducer seam, applyStateSnapshot at ExtensionStateContext.tsx) is the remaining candidate.
+
+**STRATEGY (per Factory reviewer)**:
+
+  - REUSE the same real Controller active→yield fixture from PHASE-A-CORRECTION02.
+    Do NOT rebuild the harness.
+  - Drive events through real `controller.sessionEvents.handleSessionEvent(event)`.
+  - Use the real `controller.turnStateTracker.currentPhase` and `tracker.get()` public getters
+    (no mutation) to reconstruct the selector inputs at the publication site
+    (SdkController.ts:3006-3008) and verify the selector reproduces B exactly.
+  - DO NOT mutate turnStateTracker / taskTelemetry / shadow comparator directly.
+  - Re-invoke the same pure `selectTaskHeaderPresentation` with the SAME inputs the
+    SdkController fed it, at the SAME controller reference, AFTER B capture.
+    This is the "spy on the selector call" discriminator the reviewer asked for,
+    except it requires no new testability seam because TurnStateTracker's public
+    getters already expose the inputs.
+
+**LOAD-BEARING INVARIANTS** (all PASS at this seam — the live bug is NOT here):
+
+  THP-B01: tracker self-consistency
+    tracker.currentPhase === tracker.get().phase   (at both A and B)         = PASS
+
+  THP-B02: publication tracker consistency
+    B.turnState.phase === tracker.get().phase
+    B.turnState.seq   === tracker.get().seq                                 = PASS
+
+  THP-B03-LEGACY-CONSERVATION (the load-bearing one the reviewer asked for):
+    if B.taskHeaderPresentation.source === "legacy"
+      then B.taskHeaderPresentation.phase === B.turnState.phase            = PASS
+    (i.e. awaiting_followup -> awaiting_followup, NOT awaiting_followup -> idle)
+
+  THP-B03-SHADOW-MAPPING:
+    if B.taskHeaderPresentation.source === "shadow"
+      then B.taskHeaderPresentation.phase === canonicalShadowPhase
+      from the SAME controller                                              = PASS (vacuous: source was legacy)
+
+  THP-B03-HOST-COMPACTION:
+    if B.taskHeaderPresentation.source === "host"
+      then B.taskHeaderPresentation.phase === "compacting"                  = PASS (vacuous: source was legacy)
+
+  THP-B04-SEQ:
+    B.taskHeaderPresentation.seq === B.thinkingPresentation.seq
+                              === B.turnState.seq                            = PASS
+
+  SPY-AT-PUBLICATION:
+    selectTaskHeaderPresentation({canonicalShadowPhase, currentLegacyPhase, seq})
+                                                reproduces B.taskHeaderPresentation
+                                                EXACTLY on phase+source+seq      = PASS
+
+**POSITIVE CONTROLS** (selector self-tests, guard against future regression in the selector itself):
+
+  selectTaskHeaderPresentation({undefined, "awaiting_followup", 42})
+                       === { phase: "awaiting_followup", source: "legacy", seq: 42 }    = PASS
+
+  selectTaskHeaderPresentation({"completed", "streaming", 7})
+                       === { phase: "completed", source: "shadow", seq: 7 }             = PASS
+
+  selectTaskHeaderPresentation({"streaming", "compacting", 9})
+                       === { phase: "compacting", source: "host", seq: 9 }              = PASS
+
+**TELEMETRY BOUNDARY DOWNGRADE** (per reviewer plan, folded into CORRECTION03):
+
+  PRIOR (correction02):
+    TELEMETRY_STALE = NOT_REPRODUCED
+
+  CORRECTION03:
+    TELEMETRY_STRUCTURALLY_VALID = PROVEN     (startedAt exists; toolCalls >= 0;
+                                              recoveryBudgetFailures >= 0;
+                                              tracker was initialized and
+                                              observation-only hooks fired)
+    TELEMETRY_STALENESS         = NOT TESTED STRONGLY
+                                          (fixture is SYNTHETIC at activeSession
+                                           creation; no real chronology. P1,
+                                           no separate cycle.)
+
+**SYNTHETIC SESSION FIXTURE BOUNDARY LABEL** (per reviewer request):
+
+  Evidence label for correction03 (and the prior correction02 / correction01):
+    REAL_SDKCONTROLLER              = YES (the real Controller is constructed)
+    REAL_SESSION_EVENT_COORDINATOR  = YES (real sessionEvents.handleSessionEvent)
+    REAL_PUBLICATION_PRODUCER       = YES (real getStateToPostToWebview)
+    SYNTHETIC_SESSION_FIXTURE       = YES
+      (activeSession installed via (controller as any).sessions.activeSession = {...},
+       not through SdkSessionLifecycle.startNewSession;
+       taskTelemetry.startTask called directly, not via initClineWithTask)
+    REAL_OWNER_TRANSITION_PATH      = YES (turnStateTracker.set is driven through
+                                          real sessionEvents.handleSessionEvent)
+
+  NOT an unrestricted REAL_PRODUCTION_CHRONOLOGY. Per reviewer:
+    "I would not make this another blocker yet, because the contradiction above
+     is sufficient to stop. But keep the evidence labeling precise."
+
+**TEST (new file, 13 tests, ALL PASS)**:
+
+  - `apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts` (~470 lines, ~5s setup + ~0ms tests, reuses the SAME Controller-construction harness as correction01/correction02)
+
+**TEST MATRIX (13 tests, 13 PASS)**:
+
+  AOPC02-CORRECTION03-A0:                   ACTIVE snapshot A captured during the streaming phase
+  THP-B01:                                  tracker.currentPhase === tracker.get().phase (at both A and B)
+  THP-B02:                                  B.turnState.phase === tracker.get().phase AND B.turnState.seq === tracker.get().seq
+  THP-B03-LEGACY-CONSERVATION:              if source==="legacy" then phase===turnState.phase (the load-bearing one)
+  THP-B03-SHADOW-MAPPING:                   if source==="shadow" then phase===canonicalShadowPhase
+  THP-B03-HOST-COMPACTION:                  if source==="host" then phase==="compacting"
+  THP-B04-SEQ:                              B.taskHeaderPresentation.seq === B.thinkingPresentation.seq === B.turnState.seq
+  SPY-AT-PUBLICATION:                       selectTaskHeaderPresentation reproduces B EXACTLY
+  POSITIVE-CONTROL:                         selector preserves legacy phase on shadow absence
+  POSITIVE-CONTROL:                         selector overrides legacy streaming with shadow authority when shadow present
+  POSITIVE-CONTROL:                         selector emits host compaction override regardless of legacy/shadow
+  REPORT-CLASSIFICATION:                    REAL B forensic record (case D_REPORT_WRONG)
+  TELEMETRY_STRUCTURALLY_VALID (downgraded): startedAt exists; toolCalls >= 0; recoveryBudgetFailures >= 0
+
+**CAPTURED PUBLICATION IDENTITY (REAL, AT POST-TURN B)**:
+
+  stateVersion                                = REAL (non-zero, advanced via real shared MessageIdMinter)
+  epoch                                       = REAL (0 in this harness, no bumpEpoch)
+  _ptadPushId                                 = REAL (undefined -- PTAD off)
+  turnState.phase                             = REAL (awaiting_followup -- real post-terminal transition; was "streaming" at A)
+  turnState.seq                               = REAL (5 -- advanced through real lifecycle)
+  thinkingPresentation.modelStreaming          = REAL (false -- legacy-source)
+  thinkingPresentation.source                 = REAL (legacy -- real getLocalShadowProjection() returned undefined; no LocalRuntimeHost wired)
+  thinkingPresentation.seq                    = REAL (5 -- same tracker.get().seq cascade)
+  taskHeaderPresentation.phase                = REAL (awaiting_followup -- NOT idle; legacy-fallback preserves currentLegacyPhase)
+  taskHeaderPresentation.source               = REAL (legacy -- real getLocalShadowPhase() returned undefined)
+  taskHeaderPresentation.seq                  = REAL (5 -- same tracker.get().seq cascade)
+  tracker.currentPhase                        = REAL (awaiting_followup)
+  tracker.get()                               = REAL ({ phase: "awaiting_followup", seq: 5, anchorTs: undefined })
+  selector input reconstructed (publication site) = REAL ({ canonicalShadowPhase: undefined, currentLegacyPhase: "awaiting_followup", seq: 5 })
+  selector output reproduced (publication site) = REAL ({ phase: "awaiting_followup", source: "legacy", seq: 5 })
+  invariant_match (B vs selector reconstruction) = TRUE on phase + source + seq
+
+**CLASSIFICATION**:
+
+  P0 from correction02 board narrative     = CASE_D_REPORT_WRONG (corrected evidence)
+  P0 from real seam at this chronology     = NONE (legacy-fallback contract preserved)
+  P1 blocking                             = NONE
+  P1 boundary (telemetry staleness)        = DOWNGRADED to TELEMETRY_STRUCTURALLY_VALID (P1 documentary; no separate cycle)
+  P2 residue                               = none added by this commit
+
+**VERDICT**: PASS_LEGACY_FALLBACK_INVARIANTS — reviewer's halt was CASE_D (report corrected); the real SdkController preserves the legacy-fallback contract at this seam.
+
+**NEXT (HIGH-VALUE)**:
+
+  AOPC02 PHASE B (webview reducer seam, applyStateSnapshot at
+  apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx, gated by
+  seqByTs at messageReducer.ts:29):
+    - PASS the EXACT REAL B through the actual webview state-application
+      seam.
+    - Capture committed W.
+    - First assertion: W.stateVersion == B.stateVersion.
+    - If false: CASE_D_PUBLICATION_MIX (STOP).
+    - At equal stateVersion, apply the REAL webview cancel selector +
+      REAL composer-disable selector (NOT the local reconstructions) to
+      the committed W.
+    - Then check whether W.turnState.phase === "awaiting_followup" AND
+      W.taskHeaderPresentation.phase === "awaiting_followup" (the
+      extension's truthful post-turn state) survives the webview reducer.
+    - If webview applies "idle" over "awaiting_followup", THAT is the
+      webview-straggler-replay problem the E71 R1 evidence predicts, and
+      the real fix lives at the webview reducer / seq-fence seam (NOT at
+      the extension controller).
+
+FOLLOWED BY (only if Phase B reproduces the E71 straggler-replay):
+  AOPC02 PHASE C (composer ownership at same committed version)
+  AOPC02 PHASE D (React consumer seam, only if state is right but UI wrong)
+
+**FILES CHANGED (3 files, +476 lines net)**:
+
+NEW:
+  apps/vscode/src/sdk/__tests__/application-ownership-projection-
+    coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts
+    (~470 lines, ~5s setup + ~0ms tests; reuses the same harness as
+     correction01/correction02 + adds 13 invariants THP-B01..B04,
+     SPY-AT-PUBLICATION, 3 positive-control selector self-tests,
+     REPORT-CLASSIFICATION forensic record, and TELEMETRY_STRUCTURALLY_VALID
+     downgrade boundary)
+
+MODIFIED (config wiring only, no production logic change):
+  apps/vscode/vitest.config.c2-4-c-bridge.ts (+1 include entry;
+    no alias changes needed)
+  apps/vscode/tsconfig.c2-4-c-bridge.json (+1 include entry;
+    matches vitest include list exactly per clinerules)
+
+BOARD:
+  .factory/epic-board.md (this row appended after the
+    PHASE-A-CORRECTION02 row)
+
+**CONSERVATION**:
+
+  BRIDGE_VITEST = 54/54 PASS  (was 41/41 in correction02; +13 new
+                                CORRECTION03 tests; 9 test files total)
+  BRIDGE_TYPECHECK_BASELINE = 0 diagnostics  (covers full 9-file bridge set;
+                                baseline drift explicitly checked via
+                                check-types-bridge-with-baseline.ts)
+  BASE_TYPECHECK = EXIT=0
+  LINT = EXIT=0  (no fixes applied on final run)
+  BOARD_VALIDATOR = OK  (.factory/epic-board.md, 2207+ lines,
+                          10 fence events)
+  DIFF_CHECK = PASS  (git diff --check empty)
+  BRIDGE_INCLUDE_MATCH = 9 == 9  (vitest entries == tsconfig entries)
+
+**PRODUCTION CODE CHANGE COUNT**: 0 lines. The new test reuses the
+established vi.mock pattern from correction02, drives events through
+the real production seam (`controller.sessionEvents.handleSessionEvent`),
+uses the real public trackers (`turnStateTracker.currentPhase` and
+`turnStateTracker.get()`) to reconstruct the selector inputs the
+SdkController fed at SdkController.ts:3006-3008, and re-invokes the
+real pure `selectTaskHeaderPresentation` with the SAME inputs to
+verify B is internally coherent. NO production code change. NO new
+production helper extracted. NO new testability seam added to Controller.
+
+**CORRECTION02 STRENGTHENED** (not weakened — invariants added, not removed):
+
+  CORRECTION02 POSTTURN02 (E1_POST_TURN: "non-active" check)   = RETAINED
+    (with same explicit "phase !== compacting" semantics)
+  CORRECTION02 POSTTURN03 (E2_POST_TURN contradiction check)   = RETAINED
+  CORRECTION02 POSTTURN04 (TELEMETRY_STALE)                   = DOWNGRADED
+    in correction03 to TELEMETRY_STRUCTURALLY_VALID (P1
+    documentary; staleness NOT tested strongly because the
+    fixture is SYNTHETIC at activeSession creation)
+  CORRECTION02 POSTTURN06/07 (SHAPE identity correlation)     = RETAINED
+
+  Per reviewer: "do not write a second emulation". Correction02 is
+  preserved; correction03 ADDS the THP-B invariants on the SAME
+  fixture without rebuilding it.
+
+**PUSH AUTHORITY** (per ACT §0 "no push unless separately authorized"):
+
+  The 13 local commits require explicit push authority to publish:
+    9f200b002, 357d298a7, 4e2c17474, 4ccb7a7b6, cb7943d8f, b97718287,
+    a04db12b6, 0af728ac8, 378e40a37, 073342bf6, 469523e1f, 94034bb19,
+    2eb5d90d2, <about to land>
+
 
 ## Context / compaction
 
