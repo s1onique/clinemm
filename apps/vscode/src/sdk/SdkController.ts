@@ -1815,20 +1815,22 @@ export class Controller {
 				sessionId,
 				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
 			)
-			// ACT-CLINEMM-TASKHEADER-LIVE-TIMER-ZERO-RESET01 P2 RESIDUE
-			// (NOT REPAIRED IN THIS ACT): the recovery telemetry and
-			// canonical runtime-event subscriptions are also missing
-			// on the resume seam (`attachRecoveryTelemetrySubscription`
-			// and `attachCanonicalRuntimeEventSubscription`, called
-			// from `initTask` at lines 1670 and 1675). They are
-			// outside the timer-only scope of this ACT. The
-			// canonical-event-subscription doc-comment at
-			// `canonical-event-subscription.ts:35-39` already claims
-			// `reinitExistingTaskFromId` calls
-			// `attachCanonicalRuntimeEventSubscription`; that claim
-			// is currently false and is the next P2 to repair in a
-			// bounded follow-up ACT. Timer-only scope: this fix only
-			// anchors the elapsed clock.
+			// ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01: attach the
+			// canonical runtime-event subscription and the recovery
+			// telemetry subscription on the resume seam so a resumed
+			// task receives the SAME authoritative subscription set as
+			// a freshly-created task. Mirrors `initTask`'s post-
+			// coordinator block (lines 1670-1675). Both attach helpers
+			// are idempotent on re-init (they dispose the previous
+			// listener before attaching a new one), so the cardinality
+			// invariant holds across repeated resumes. The
+			// `sessionId === taskId` fence above already protects
+			// against superseding intents. This closes the LTZ01 P2
+			// residue and makes the
+			// `canonical-event-subscription.ts:35-39` doc-comment
+			// accurate.
+			this.attachRecoveryTelemetrySubscription(sessionId)
+			this.attachCanonicalRuntimeEventSubscription(sessionId)
 		}
 	}
 
