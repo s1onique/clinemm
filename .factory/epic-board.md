@@ -1844,6 +1844,195 @@ PUSH AUTHORITY (per ACT §0)
 The local commits require explicit push authority to publish.
 
 
+
+## AOPC02 PHASE B REPAIR01-CORRECTION01 — GATE FIXUP — COVERAGE RATCHET (R1) + PBR04 WORDING (P2)
+
+**ACT_ID**: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-B-REPAIR01-CORRECTION01-GATE-FIXUP
+**REVIEWER_VERDICT**: PASS_REPAIR_WITH_ONE_P1_GATE_GAP
+**EXIT_DISC_VERDICT**: PASS_REPAIR_GATE_FIXUP_CLOSED — coverage ratchet
+ documented as pre-existing-environmental-blocker (cannot regress by
+ construction; webview files are outside the ratchet's root scope);
+ PBR04 wording updated to reflect the actual CORRECTION01 mechanism.
+
+================================================================
+P1 — COVERAGE RATCHET DISPOSITION (per reviewer §3)
+================================================================
+
+The canonical command was run:
+
+  cd apps/vscode && bun run test:coverage:ratchet
+
+The ratchet failed with:
+
+  error: script "test:vitest:coverage" exited with code 1
+  error: script "test:coverage:ratchet" exited with code 1
+
+Root cause: the underlying `test:vitest:coverage` invokes the
+base vitest config, which does NOT exclude the 3 aopc02-phase-a-
+correction{01,02,03}.c24-c-bridge.test.ts files. These 3 bridge
+tests fail at module-load in the base config (the base config
+lacks the `@cline-internal/core/...` alias they need; they are
+designed for the dedicated `vitest.config.c2-4-c-bridge.ts`).
+The module-load failure causes vitest to exit 1 BEFORE
+coverage-summary.json is written, so the ratchet script has
+nothing to compare against.
+
+================================================================
+MECHANICAL VERIFICATION OF PRE-EXISTING STATUS
+================================================================
+
+Verified the 3 failures predate `37e62d04e` (this ACT) by
+running `bunx vitest run` in a worktree checked out at the
+ACT-CHAIN entry commit `93b753311`:
+
+  /tmp/aopc02-pre-93b753311 (now cleaned up)
+    > bunx vitest run
+      FAIL src/sdk/__tests__/application-ownership-projection-
+           coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts
+      FAIL src/sdk/__tests__/application-ownership-projection-
+           coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts
+      FAIL src/sdk/__tests__/application-ownership-projection-
+           coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts
+      → 3 failures, same set as at the current HEAD.
+
+The 3 failures are inherited from the ACT-CHAIN commits
+2eb5d90d2 / eddfc6276 (Phase A corrections that introduced
+the bridge tests). They are by-design environmental: the base
+config lacks the @cline-internal/core/... alias. The dedicated
+vitest.config.c2-4-c-bridge.ts has the alias but only includes
+those 3 bridge tests, not the broader coverage corpus.
+
+This is a pre-existing baseline issue inherited from the ACT
+chain; it is NOT introduced by `37e62d04e` and is NOT
+ACT-owned.
+
+================================================================
+WHY THE RATCHET CANNOT REGRESS BY CONSTRUCTION
+================================================================
+
+The ratchet is invoked with `--root ../..` resolving to
+`apps/vscode`. The ratchet's source-universe inventory is
+the apps/vscode **production** source tree.
+
+ACT-CLINEMM-AOPC02-PHASE-B-REPAIR01-CORRECTION01 changed
+exactly 4 files:
+
+  1. apps/vscode/webview-ui/src/components/chat/chat-view/
+     messageReducer.ts
+     → /apps/vscode/webview-ui/** -- OUTSIDE ratchet's root scope
+  2. apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx
+     → /apps/vscode/webview-ui/** -- OUTSIDE ratchet's root scope
+  3. apps/vscode/webview-ui/src/components/chat/chat-view/
+     __tests__/aopc02-phase-b-straggler-replay.test.tsx
+     → /apps/vscode/webview-ui/** -- OUTSIDE ratchet's root scope
+  4. .factory/epic-board.md
+     → not a coverage target
+
+ZERO files in the ratchet's source-universe were modified by
+this ACT. Therefore the ratchet band counts
+(gte90/lt25/lt50/lt75/lt90/zero) CANNOT regress.
+
+The ratchet cannot produce a coverage-summary.json because of
+the pre-existing 3 module-load failures, which prevent vitest
+from writing the artifact. This is a baseline-blocker, not a
+regression.
+
+================================================================
+HONEST DISPOSITION (per reviewer §3)
+================================================================
+
+Per the reviewer's exact disposition:
+
+> "If it fails for a mechanically verified pre-existing
+>  baseline issue, record that honestly and do not invent
+>  another review cycle."
+
+Recorded honestly. NOT inventing another review cycle.
+
+The proper fix is a separate ticket to exclude the 3
+aopc02-phase-a-correction*.c24-c-bridge.test.ts files from
+the base vitest.config.ts include list (they belong in the
+dedicated bridge config). That ticket is out of scope for
+AOPC02-PHASE-B-REPAIR01-CORRECTION01 and is added to the
+FOLLOWUP list.
+
+================================================================
+FOLLOWUP (out of scope, recorded for audit)
+================================================================
+
+RATCHET-BRIDGE-EXCLUSION-FIXUP01:
+  Exclude
+  src/sdk/__tests__/application-ownership-projection-coherence.
+  aopc02-phase-a-correction{01,02,03}.c24-c-bridge.test.ts
+  from apps/vscode/vitest.config.ts.
+  These tests run under the dedicated
+  apps/vscode/vitest.config.c2-4-c-bridge.ts.
+  This will allow `bun run test:coverage:ratchet` (and
+  `bun run test:vitest:coverage`) to produce a
+  coverage-summary.json artifact and run the ratchet
+  comparison against the baseline.
+
+================================================================
+P2 — PBR04 WORDING FIX
+================================================================
+
+PBR04's test title and long comments referred to the seq-fence
+being sufficient (via applyStateSnapshot) and the straggler
+being "stale-accepted". Strictly, the whole reason CORRECTION01
+exists is that `...stateData` (the W1 spread) bypassed the
+reducer's result for the projection fields. The new explicit
+`incomingIsStaleSameEpochPublication` backstop at the W1 gate
+is what now preserves the committed projections wholesale.
+
+Test title updated:
+  was: "stale accepted (chronology gap)"
+  now: "stale rejected (publication-ordering backstop)"
+
+Open comment updated to note the W1 gate backstop (not the
+reducer's applyStateSnapshot) is what closes the gap, and to
+explain precisely why the reducer-level fence doesn't apply
+to the projection fields.
+
+Closing comment updated to refer to the W1 backstop's branch
+routing ("preserve prevState") as the source of truth.
+
+★ Non-blocking per reviewer. Done opportune with the gate-fixup.
+
+================================================================
+GATES (final, all GREEN)
+================================================================
+
+  WEBVIEW_VITEST_TARGETED (aopc02-phase-b): 11/11 PASS
+  WEBVIEW_FULL: 603/603 PASS
+  WEBVIEW_TYPECHECK: EXIT=0
+  APPS_VSCODE_TYPECHECK: EXIT=0
+  APPS_VSCODE_LINT: EXIT=0
+  WEBVIEW_BIOME_LINT (changed files): clean (info-level only)
+  BOARD_VALIDATOR: OK
+  DIFF_CHECK: PASS
+  COVERAGE_RATCHET: DOCUMENTED_PRE_EXISTING_BLOCKER
+    (mechanically verified; not introduced by this ACT;
+     cannot regress by construction; separate ticket for
+     the fix; not blocking live qualification)
+
+================================================================
+NEXT (after GATE-FIXUP)
+================================================================
+
+  LIVE QUALIFICATION on a fresh exact-build-head VSIX
+  (apps/dist/clinemm-aopc02-phase-b-repair01.vsix) installed
+  on a current-build Cline, NOT a 4.1.10-dfab15b3f install.
+
+  If LIVE cycle is clean (verify Dead UI contradiction does
+  not reproduce):
+
+    PASS_FULL_SNAPSHOT_PROJECTION_FENCING_REPAIRED_LIVE
+
+  If LIVE cycle still reproduces the contradiction:
+
+    Open Phase C/D as a new ACT with a fresh diagnostic.
+
+
 ## Context / compaction
 
 Three **semantically distinct** epics; do not collapse.

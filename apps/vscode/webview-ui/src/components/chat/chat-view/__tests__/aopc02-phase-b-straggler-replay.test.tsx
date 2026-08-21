@@ -626,7 +626,7 @@ it("AOPC02-PHASE-B-PBR03: undefined incoming projection preserves current", () =
 //   The seq-fence alone cannot disambiguate this chronology -- it
 //   requires compositing the seq fence with the publication-version
 //   (stateVersion) backstop. See AOPC02-PHASE-B-REPAIR01-CORRECTION01.
-it("AOPC02-PHASE-B-PBR04: same-epoch, equal seq, lower stateVersion -- stale accepted (chronology gap)", () => {
+it("AOPC02-PHASE-B-PBR04: same-epoch, equal seq, lower stateVersion -- stale rejected (publication-ordering backstop)", () => {
 	let committed: ExtensionState | undefined
 	function ReadProbe(): null {
 		committed = useExtensionState()
@@ -653,10 +653,16 @@ it("AOPC02-PHASE-B-PBR04: same-epoch, equal seq, lower stateVersion -- stale acc
 	expect(committed?.stateVersion).toBe(5)
 
 	// STALE straggler: equal projection.seq (15), but OLDER stateVersion (4).
-	// The seq-fence alone accepts this (15 >= 15). The stateVersion
-	// fence ALSO has rejected it -- applyStateSnapshot drops the entire
-	// transcript at the reducer when incoming.stateVersion (4) <
-	// committed.stateVersion (5), so the projection fields stay truthful.
+	// The seq-fence alone accepts this (15 >= 15). The new explicit
+	// publication-ordering backstop at the W1 gate
+	// (ExtensionStateContext.tsx:709-714) -- introduced in CORRECTION01 --
+	// is what now preserves the committed projections wholesale when
+	// stateVersion 4 < 5 AND no replica-epoch advance occurred.
+	// applyStateSnapshot at the reducer only gates the transcript
+	// (clineMessages) and turnState; it does NOT touch
+	// taskHeaderPresentation / thinkingPresentation, which are owned by
+	// the W1 gate via ...stateData spread -- exactly the gap that PBR04
+	// closes.
 	const straggler = makeBaseSnapshot({
 		turnState: makeTurnState("awaiting_followup", 15),
 		taskHeaderPresentation: makeTaskHeader("idle" as TurnPhase, 15),
@@ -667,10 +673,11 @@ it("AOPC02-PHASE-B-PBR04: same-epoch, equal seq, lower stateVersion -- stale acc
 	push(straggler)
 
 	// REQUIRED: stale straggler must NOT regress the committed
-	// taskHeaderPresentation. The stateVersion fence at applyStateSnapshot
-	// (messageReducer.ts:160+) drops the entire stale snapshot BEFORE the
-	// projection helper sees it; therefore the helper never has a chance
-	// to mis-apply the stale same-seq content. PBR04 documents this contract.
+	// taskHeaderPresentation. The W1 publication-ordering backstop
+	// (ExtensionStateContext.tsx:706-714) detects stateVersion 4 < 5 AND no
+	// replica-epoch advance, and routes the projection fields to the
+	// "preserve prevState" branch. The seq-fence helper is never asked to
+	// merge the stale same-seq content. PBR04 documents this contract.
 	expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
 	expect(committed?.stateVersion).toBe(5)
 })
