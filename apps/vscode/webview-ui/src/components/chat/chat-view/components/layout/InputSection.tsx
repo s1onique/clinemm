@@ -76,10 +76,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 	// webview-replica captures) and propagates the wire-side `_ptadPushId`
 	// verbatim so same-push correlation across the realm boundary holds
 	// even when stateVersion is 0.
-	const {
-		stateVersion: wireStateVersion,
-		_ptadPushId: wirePtadPushId,
-	} = useExtensionState()
+	const { stateVersion: wireStateVersion, _ptadPushId: wirePtadPushId } = useExtensionState()
 	useEffect(() => {
 		if (!isPostTerminalAuthorityDiagnosticEnabled("webview")) {
 			return
@@ -96,6 +93,22 @@ export const InputSection: React.FC<InputSectionProps> = ({
 			chatReducerSendingDisabled: sendingDisabled,
 			allowQueuedSubmit,
 			submitDisabled,
+			// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
+			// Stamp the composer enabled predicate and message-tail identity at the
+			// SAME committed object as sendingDisabled/allowQueuedSubmit/submitDisabled.
+			// Pure additions; production semantics unchanged when default-off.
+			composerEnabled: !submitDisabled,
+			messageTail: lastMessage
+				? {
+						ts: lastMessage.ts,
+						type: lastMessage.type,
+						ask: lastMessage.type === "ask" ? lastMessage.ask : undefined,
+						say: lastMessage.type === "say" ? lastMessage.say : undefined,
+						partial: lastMessage.partial,
+						seq: lastMessage.seq,
+						epoch: lastMessage.epoch,
+					}
+				: undefined,
 		})
 	}, [
 		turnState?.seq,

@@ -92,6 +92,24 @@ function buildWebviewSnapshot(
 		rawIncomingThinkingPresentation,
 		rawIncomingTaskHeaderPresentation,
 		rawIncomingTaskTelemetry,
+		// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
+		// Tail-identity capture on the webview-committed record (the
+		// AUTHORITATIVE React-committed view). Identity only — no bodies.
+		// Pairs with the action-buttons / input-section captures so a
+		// single dump correlates the message tail with TaskHeader /
+		// Thinking / button config at the SAME committed identity.
+		messageTail:
+			Array.isArray(newState.clineMessages) && newState.clineMessages.length > 0
+				? ((m) => ({
+						ts: m.ts,
+						type: m.type,
+						ask: m.type === "ask" ? m.ask : undefined,
+						say: m.type === "say" ? m.say : undefined,
+						partial: m.partial,
+						seq: m.seq,
+						epoch: m.epoch,
+					}))(newState.clineMessages[newState.clineMessages.length - 1])
+				: undefined,
 	}
 }
 

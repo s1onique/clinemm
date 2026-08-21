@@ -295,7 +295,7 @@ Every actionable Cline-- task has exactly one row here. Narrative sections below
 | `ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01-CLOSURE-FIX01` (final closure ACT, this ACT) | TASK-UI | **PASS_CONTINUATION_STATE_PROJECTION_REPAIRED WITH_NONBLOCKING_TEST_INFRA_RESIDUE + NONBLOCKING_ARCHITECTURAL_RESIDUE** (production-seam GREEN; AWAITING_LIVE_QUALIFICATION; VSIX BUILT + INSTALLED LOCALLY) | HIGH | taskheader-canonical-projection-migration01, thcp11, lac01 | **CLOSURE-FIX01 disposition** (per Factory reviewer): resolved (1) contradictory full-suite counts via literal vitest summary recovery, (2) coverage ratchet disposition via classification as verified pre-existing bridge config blocker, (3) incorrect push authority claim — local VSIX build + install does NOT require push. Production repair preserved unchanged (`d9a0ce3ae`). **CASE_B1_PROJECTION_RED = EXECUTABLE_PRODUCTION_SELECTOR_SEAM** (real TurnStateTracker + real MessageIdMinter + real selectTaskHeaderPresentation). CLASSIFICATION = CASE_B1_CONTINUATION_STATE_COLLAPSED_TO_IDLE. **CONTINUE_AUTHORITY = SOURCE_RECON_PROVEN**. **ROOT CAUSE (precise)**: current shadow wiring lacks host-interaction input; host-aware canonical projection already exists in selectors.ts:86-92. REPAIR (d9a0ce3ae): one bounded selector branch addition (awaiting_followup host-override mirroring compacting precedent). GREEN: 5/5 PASS. ABLATION (§24): removing branch -> P1/P2/P3 RED; restored immediately. **CONSERVATION (literal canonical vitest summary)**: apps/vscode test:vitest = `Test Files 3 failed | 137 passed (140); Tests 1830 passed | 32 skipped (1862); exit code 1`. The 3 failed Test Files are the AOPC02 bridge tests blocked by the verified pre-existing `@cline/core` stub alias in apps/vscode/vitest.config.ts (per ACT §26 / row 15d CORRECTION04); 0 Tests failed. test:vitest:c2-4-c-bridge 54/54; sdk/packages/agents 387/387; typecheck EXIT=0; lint EXIT=0; git diff --check clean. Targeted: THCP11 6/6, task-state-shadow-arbiter-mapper.c25-c5-elm02f 24/24, LAC01, RSP01 9/9, LTZ01, task-control 23/23. **NONBLOCKING TEST INFRA RESIDUE** (per CLOSURE-FIX01): `COVERAGE_RATCHET = UNAVAILABLE_DUE_TO_VERIFIED_PREEXISTING_BRIDGE_CONFIG_DEFECT`. Same failure class as AOPC02 row 15d CORRECTION04. `BASELINE_REPRODUCED = NO`. `ACT_OWNED_COVERAGE_REGRESSION = UNDETERMINED_BY_RATCHET`. `TARGETED_NEW_BRANCH_COVERAGE = PROVEN` (TCCC01-B1 P1 exercises both post-fix and ablated branches; THCP11 + c25-c5-elm02f exercise the compacting branch; AOPC02 Phase-A-CORRECTION03 exercises both branches together). **NONBLOCKING ARCHITECTURAL RESIDUE**: awaiting_followup host override entered into F3 shadow-retirement ledger with explicit deletion predicate — either prove permanently host-owned, or feed existing host-interaction signal into canonical projection and delete the compatibility override. **VSIX BUILT** (this ACT, no push required): `apps/vscode/dist/clinemm-bdeef1a29.vsix`; VSIX_BUILD_HEAD=`bdeef1a29`; VSIX_BUILD_TREE=`f0207991c6199e2c8dca5699a41c2d82894adccf`; VSIX_BYTES=8893519; VSIX_SHA256=`6b87407530063a347d3012e2a2c1a36eb7163c44f532134b51b9ad2c2fd219af`; INSTALLED_VERSION=`4.1.10` (publisher `s1onique.clinemm`, displayName `ClineMM`); installed via `codium --install-extension ... --force`. PUSH_AUTHORITY_REQUIRED_FOR_PUBLICATION=YES. PUSH_AUTHORITY_REQUIRED_FOR_LOCAL_VSIX_BUILD=NO. PUSH_AUTHORITY_REQUIRED_FOR_LOCAL_DOGFOOD=NO. IDENTITY: entry HEAD `8348b55b6`; commit #1 (RED) `341ef80dc`; commit #2 (GREEN+conservation) `d9a0ce3ae`; commit #3 (board) `728ba49a8`; commit #4 (P1 refinement) `bdeef1a29`; commit #5 (this CLOSURE-FIX01, board-only) — pending. All local-only. NEXT ACT (LIVE_QUALIFICATION01, no push authority required; VSIX already installed): natural multi-phase dogfood; verify LIVE-W3 (TaskHeader=Waiting + Continue CTA visible); verify Continue click -> same task resumes -> TaskHeader=Working -> Complete only at genuine terminal -> no stale Complete/Idle. On PASS: `PASS_CONTINUATION_STATE_PROJECTION_REPAIRED_LIVE`, `APPLICATION_USER_OWNERSHIP = PROVEN_LIVE`, resume paused `FACTORIZE-F0-INVENTORY01`. On RED: `HALT_LIVE_QUALIFICATION`. PUSH: NO. FORCE_PUSH: NO. AMENDED_PUBLISHED_COMMIT: NO. PROTECTED EVIDENCE (preserved): stash@{0} + stash@{1} + recovery/local-main-20260820 + recovery/remote-main-20260820. |
 | `ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01` | FACTORY/ARCHITECTURE | CLOSED | HIGH (process) | none | intake ACT: make `.factory/epic-board.md` unmistakably durable Git state; extract Factorize architecture review into bounded epic + ordered ACT backlog; add agent instruction preventing future board updates from being left uncommitted. **Deliverables**: (a) `.gitignore` semantics repaired — `/.factory/*` + `!/.factory/epic-board.md` so ordinary `git add` works (no `-f` needed); (b) AGENTS.md rule added (board durability + commit requirement); (c) one historical L195 board row pipe escape fixed (P1 once); (d) `EPIC-CLINEMM-FACTORIZE01` + F0..F5 + tooling + SdkController-extraction placeholder rows added; (e) validator `scripts/check-epic-board-markdown.py` returns 0; 19/19 unit tests PASS; ordinary `git add .factory/epic-board.md` works. **Source-derived doctrine captured** (FACT-001..006, FORK-001, ELM-001) — see `## Factorize doctrine` section below. **No production code touched.** |
 | `ACT-CLINEMM-RATCHET-BRIDGE-EXCLUSION-FIXUP01` | TEST_INFRASTRUCTURE_REPAIR | CLOSED (**PASS_RATCHET_BRIDGE_DOMAIN_REPAIRED**; LIVE_NOT_EXERCISED) | HIGH (canonical gate) | task-completion-continuation-coherence01 NONBLOCKING_TEST_INFRA_RESIDUE | **RED REPRODUCED** at exact head `4fd4dda6b` -- base vitest discovered 3 AOPC02 bridge-only test files (aopc02-phase-a-correction01/02/03) that required the `@cline-internal/core/...` aliases the BASE config does NOT supply. Literal failure: `TypeError: Cannot read properties of undefined (reading 'create')` at `VscodeSessionHost.create` (vscode-session-host.ts:154). Same defect also blocked the canonical `bun run test:coverage:ratchet` command (vitest exit 1 at the file-loading step before the Python ratchet stage even ran). **ROOT CAUSE (precise)**: bridge vitest config `vitest.config.c2-4-c-bridge.ts#test.include` listed 4 AOPC02 files that were MISSING from `vitest.config.ts#test.exclude` and `tsconfig.json#exclude`. The base vitest glob (`src/sdk/**/*.test.ts`) then discovered them; the base stub alias (`@cline/core` -> `cline-core-vitest-stub.ts`) lacks the `@cline-internal/core/...` mappings; module load failed at `ClineCore.create`. Same defect pattern was previously classified as `NONBLOCKING TEST INFRA RESIDUE` on EPIC-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 and AOPC02 row 15d CORRECTION04. **BOUNDED REPAIR (RBE)** -- 2 files, +18 lines, no production source change: (a) `apps/vscode/vitest.config.ts` exclude list extended with 4 AOPC02 bridge-only entries (aopc02 + 3 Phase-A-CORRECTION0N); (b) `apps/vscode/tsconfig.json` exclude list extended with the same 4 entries so base typecheck no longer attempts them. Naming pattern: bridge-only files use `*.c24-c-bridge.test.ts` / `*.c24-c-correction01.test.ts` / `*.c24-d*.test.ts`; the c24-c-only (`*.c24-c.test.ts`) and c25-c4 / c2-5-c4 suffixes are intentionally NOT in the bridge-only exclusion (different test category). **RBE01 (RED->GREEN)**: new `test-domain-config-contract.rbe01.test.ts` (234 lines, 10 tests, 0 production source) parses `vitest.config*.ts` and `tsconfig*.json` snapshots and asserts 4 structural invariants: (1) bridge vitest include is subset of base vitest exclude; (2) bridge vitest include is subset of base tsconfig exclude; (3) bridge vitest include is subset of bridge tsconfig include; (4) bridge tsconfig include is subset of bridge vitest include. RBE01 RED at entry head (2 invariants violated, 4 files missing); GREEN after repair (10/10 PASS). **RBE02 (typecheck parity)** is enforced by RBE01 invariants 3+4 (any drift between bridge vitest and bridge tsconfig fails RBE01 immediately). **ABLATION (RBE)**: temporarily reverting the 4 added excludes -> 4 failed test files (3 bridge + RBE01 contract); restored immediately, no committed ablation. **GREEN VERIFICATION**: base vitest 137/137 (1831/1831 tests, +1 file vs entry head because aopc02.c24-c-bridge now correctly excluded); base typecheck EXIT=0; bridge vitest 9/9 (54/54 tests); bridge typecheck EXIT=0 (0 diagnostics vs baseline); d-hub vitest 2/2 (15/15 tests); d-hub + c2-5-c4 typecheck baseline status UNCHANGED (pre-existing baseline drift, not introduced by this ACT); lint EXIT=0; `git diff --check` clean. **CANONICAL RATCHET GREEN**: `bun run test:coverage:ratchet` now completes to the Python script stage: `PASS: coverage ratchet holds; scope_file_count=614  report_file_count=615; statements: baseline_covered=6980 current_covered=7398 delta=418; branches: baseline_covered=4202 current_covered=4767 delta=565; functions: baseline_covered=1311 current_covered=1347 delta=36; lines: baseline_covered=6832 current_covered=7248 delta=416; ignore_directive_count: baseline=0 current=0; coverage_config_fingerprint=4bb40a87a065fede18a092a506ae1b7ad45abb572bbe9b29c77213a6c5eaafc5`. The pre-existing NONBLOCKING TEST INFRA RESIDUE on EPIC-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 is now `RESOLVED_BY_ACT-CLINEMM-RATCHET-BRIDGE-EXCLUSION-FIXUP01` -- coverage ratchet is now canonically available for every subsequent production change. **CONSERVATION (Section 11)**: base vitest unchanged +1 test file (rbe01); bridge vitest unchanged; bridge typecheck unchanged; base typecheck EXIT=0 (unchanged); d-hub + c2-5-c4 typecheck baseline drift UNCHANGED (pre-existing, unrelated); webview tests unaffected; AOPC02 Phase-B projection tests unaffected (they run under bridge config); TCCC01 continuation tests unaffected; THCP/LAC/RSP/LTZ/task-control tests unaffected. **No intentionally failing tests.** **LIVE qualification**: dogfood workload `s1onique.clinemm@4.1.10-4fd4dda6b` ran but did NOT naturally reach the LIVE-W3 Continue-seam exercise path -- this ACT was bounded to test-infrastructure only and did not invoke task interactions past file reads, command execution, and test runs. **`LIVE_NOT_EXERCISED`** (honest classification; the dogfood session did not produce the relevant Continue/Working/Complete chronology). `FACTORIZE_F0 = NOT_CHANGED` (no resume predicate satisfied here; the LIVE qualification workload for TASK-COMPLETION-CONTINUATION-COHERENCE01 remains `ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01-LIVE-QUALIFICATION01`). **IDENTITY**: entry HEAD `4fd4dda6b`; entry tree `12c4943125c2d62e66f4e92011ad7ebe2b4940a4`; final HEAD `bc115d69d`; final tree (pending commit #3 board update). COMMITS: (1) `d5a243580` RBE01 RED config-contract test; (2) `bc115d69d` bounded config repair; (3) board update (this commit). **DO NOT DO (Section 12)**: no runtime change; no TaskHeader change; no state-machine change; no coverage-baseline weakening; no blanket test exclusions; no coverage threshold reduction; no continue-on-error; no test deletion; no alias duplication to make base Vitest tolerate bridge tests. None violated. PUSH: NO. FORCE_PUSH: NO. AMENDED_PUBLISHED_COMMIT: NO. **PROTECTED EVIDENCE (preserved)**: stash@{0} + stash@{1} + recovery/local-main-20260820 + recovery/remote-main-20260820 + detached dogfood worktree off-tree (harmless). **NEXT RECOMMENDED ACT**: `ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01-LIVE-QUALIFICATION01` (re-take live qualification now that coverage ratchet is restored -- the canonical coverage evidence gate is back). |
-| `EPIC-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01` | TASK-UI | OPEN -- NOT_REPRODUCED across the exercised §2/§3/§6 chronology; LIVE remains authoritative but the AOC02 causal tree is exhausted; next useful move is LIVE synchronized-state capture on the dogfood build | HIGH (LIVE contradiction) | task-completion-continuation-coherence01 (CASE_B1, awaiting_followup host override) | **AOC01 webview-seam discriminator**: `FULL_W1_IDLE_STATE_COHERENCE=PASS`, `STALE_FULL_W1_BACKSTOP=PASS` (stateVersion backstop preserves awaiting_followup), `FULL_W1_WITH_PARTIAL_TAIL=PASS` (NOT the real partial subscription path -- AOC01-D constructs a full W1 snapshot carrying a partial tail message; `_partialHandler` is wired but never invoked), `MISSING_TURNSTATE_SYNTHETIC=OBSERVED/NOT_LOCAL-PRODUCER-PROVEN`. **AOC02 §2 Cancel-authority discriminator**: `FOREGROUND_COMMAND_CANCEL = NOT_THE_BROKEN_BOUNDARY` -- production predicate at `ActionButtons.tsx:53` returns `BUTTON_CONFIGS.default` (no Cancel) for `turnState.phase === "idle"` regardless of `foregroundCommandRunning`. **AOC02 §3 Producer-object discriminator**: `PRODUCER_MALFORMATION = NOT_REPRODUCED`, `PRESENCE_CONTRACT = GREEN`, `SAME_OBJECT_COHERENCE = GREEN` across all four captures (initial-idle, active-streaming, waiting-awaiting_followup, post-clearTask-idle), `LEGACY_FALLBACK_REACH = UNREACHABLE` (the `!turnState` fallback in `getButtonConfigFromState` is unreachable on the normal local producer path). CASE_B1 conserved through the real producer at `sWaiting`. **AOC02 §6 Real-partial-subscription discriminator**: `REAL_W2_PARTIAL_PATH = NOT_REPRODUCED` across normal chronology (W1 Waiting → real partial ts:4 → W1 Idle) AND adversarial delayed-partial chronology (W1 Waiting → W1 Idle → delayed older partial). `PARTIAL_PATH_PHASE_CONTAMINATION = NOT_REPRODUCED` (partial reducer is `applyMessage` only; does NOT call `applyTurnState`/`applyPresentationProjections`); `PARTIAL_PATH_IDLE_CANCEL_RESURRECTION = NOT_REPRODUCED`; `ADVERSARIAL_DELAYED_PARTIAL_MIX = NOT_REPRODUCED`. Both real registered callbacks (`subscribeToState` and `subscribeToPartialMessage`) genuinely invoked; convertProtoToClineMessage + reducerApplyMessage run for real inside the mounted provider. **AOC02 stop order, final state**: §2 GREEN, §3 GREEN, §6 GREEN -- all three production seams reject the LIVE contradiction. The AOC02 causal tree is exhausted: there is no currently identified seam where the LIVE `Idle + Cancel` contradiction can be reproduced. **NOT a hard claim** that no path exists; the LIVE screenshots remain authoritative and warrant a small synchronized-state capture on the dogfood build (`Idle + Cancel` window). **NO production code changed**. AOC01: 4/4 PASS; AOC02 §2: 9/9 PASS; AOC02 §3: 12/12 PASS (bridge stream, RBE01 contract gated); AOC02 §6: 4/4 PASS (webview stream); webview 620/620 (was 616/616; +4 from §6); production vitest 1831/1831; bridge vitest 66/66; typecheck EXIT=0; lint clean. Closing commits: AOC01 `678780acb`; AOC02 §2 `bda2a7626`; AOC02 §3 `b3a950554`; AOC02 §6 (this commit). **LIVE_BUILD**: s1onique.clinemm@4.1.10-4fd4dda6b. **P1 evidence corrections**: §3 wording "unreachable on the normal local producer path" re-frozen to "NOT REPRODUCED across initial / active / awaiting_followup / clearTask→idle" (exercised chronology, not global); `LIVE_FOREGROUND_COMMAND_RUNNING = UNPROVEN_FROM_SCREENSHOT` (the LIVE screenshots prove only Idle+Cancel; §2 ran foregroundCommandRunning=true as an adversarial input and produced the same GREEN verdict). |
+| `EPIC-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01` | TASK-UI | OPEN -- AOC02 causal tree exhausted; LIVE-CAPTURE01 diagnostic instrumented (default-off, opt-in via `_ptadEnabled`); awaiting dogfood-session capture | HIGH (LIVE contradiction) | task-completion-continuation-coherence01 (CASE_B1, awaiting_followup host override) | **AOC01 webview-seam discriminator**: `FULL_W1_IDLE_STATE_COHERENCE=PASS`, `STALE_FULL_W1_BACKSTOP=PASS` (stateVersion backstop preserves awaiting_followup), `FULL_W1_WITH_PARTIAL_TAIL=PASS` (NOT the real partial subscription path -- AOC01-D constructs a full W1 snapshot carrying a partial tail message; `_partialHandler` is wired but never invoked), `MISSING_TURNSTATE_SYNTHETIC=OBSERVED/NOT_LOCAL-PRODUCER-PROVEN`. **AOC02 §2 Cancel-authority discriminator**: `FOREGROUND_COMMAND_CANCEL = NOT_THE_BROKEN_BOUNDARY` -- production predicate at `ActionButtons.tsx:53` returns `BUTTON_CONFIGS.default` (no Cancel) for `turnState.phase === "idle"` regardless of `foregroundCommandRunning`. **AOC02 §3 Producer-object discriminator**: `PRODUCER_MALFORMATION = NOT_REPRODUCED`, `PRESENCE_CONTRACT = GREEN`, `SAME_OBJECT_COHERENCE = GREEN` across all four captures (initial-idle, active-streaming, waiting-awaiting_followup, post-clearTask-idle), `LEGACY_FALLBACK_REACH = NOT REPRODUCED on the exercised normal local producer chronology` (per Factory wording refinement; representative coverage is excellent but not a proof over every possible path). CASE_B1 conserved through the real producer at `sWaiting`. **AOC02 §6 Real-partial-subscription discriminator**: `REAL_W2_PARTIAL_PATH = NOT_REPRODUCED` across normal chronology (W1 Waiting → real partial ts:4 → W1 Idle) AND adversarial delayed-partial chronology (W1 Waiting → W1 Idle → delayed older partial). `PARTIAL_PATH_PHASE_CONTAMINATION = NOT_REPRODUCED` (partial reducer is `applyMessage` only; does NOT call `applyTurnState`/`applyPresentationProjections`); `PARTIAL_PATH_IDLE_CANCEL_RESURRECTION = NOT_REPRODUCED`; `ADVERSARIAL_DELAYED_PARTIAL_MIX = NOT_REPRODUCED`. Both real registered callbacks (`subscribeToState` and `subscribeToPartialMessage`) genuinely invoked; convertProtoToClineMessage + reducerApplyMessage run for real inside the mounted provider. **AOC02 stop order, final state**: §2 GREEN, §3 GREEN, §6 GREEN -- all three production seams reject the LIVE contradiction. The AOC02 causal tree is exhausted: there is no currently identified seam where the LIVE `Idle + Cancel` contradiction can be reproduced. **NOT a hard claim** that no path exists; the LIVE screenshots remain authoritative. **LIVE-CAPTURE01 diagnostic extension (see `ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01` row)**: the existing post-terminal-authority diagnostic was extended with 4 additive optional fields (`foregroundCommandRunning`, `backgroundCommandRunning`, `composerEnabled`, `messageTail`) on the `action-buttons` / `input-section` / `webview-committed` capture sites, plus a pure `classifyContradiction` predicate. The diagnostic remains DEFAULT_OFF (opt-in via the existing `_ptadEnabled` workspace-state toggle) and is REMOVABLE (the new fields are unused when the diagnostic is disabled). **NEXT LIVE STEP**: dogfood session with `_ptadEnabled=true`, reproduce the `Idle + Cancel` window, retrieve the bounded ring buffer via `getPostTerminalAuthorityDiagnosticRecords("webview")`, classify the contradiction kind (`IDLE_PLUS_CANCEL` / `IDLE_PLUS_MODEL_STREAMING` / `COMPLETED_PLUS_ACTIVE_WORK`), and pick a `CASE_L1..L5` per the LIVE-CAPTURE01 directive. **NO production code path-semantic changed**: every existing capture site preserves its prior wire-shape and reducer semantics byte-for-byte when the diagnostic is disabled; the new fields are PURELY ADDITIVE (`readonly optional`). AOC01: 4/4 PASS; AOC02 §2: 9/9 PASS; AOC02 §3: 12/12 PASS (bridge stream, RBE01 contract gated); AOC02 §6: 4/4 PASS (webview stream); LIVE-CAPTURE01: 12/12 PASS (diagnostic unit tests, production semantic contract). Webview 620/620 (was 616/616; +4 from §6); production vitest 1843/1843 (was 1831/1831; +12 from LIVE-CAPTURE01); bridge vitest 66/66; typecheck EXIT=0; lint clean. Closing commits: AOC01 `678780acb`; AOC02 §2 `bda2a7626`; AOC02 §3 `b3a950554`; AOC02 §6 `a1610b072`; LIVE-CAPTURE01 (this commit). **LIVE_BUILD**: s1onique.clinemm@4.1.10-4fd4dda6b. **P1 evidence corrections**: §3 wording "unreachable on the normal local producer path" re-frozen to "NOT REPRODUCED on the exercised normal local producer chronology" (exercised chronology, not global); `LIVE_FOREGROUND_COMMAND_RUNNING = UNPROVEN_FROM_SCREENSHOT` (the LIVE screenshots prove only Idle+Cancel; §2 ran foregroundCommandRunning=true as an adversarial input and produced the same GREEN verdict). |
 | `ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-AOC01` | TASK-UI | CLOSED (diagnostic only, no production change) | HIGH (LIVE discrimination) | task-completion-continuation-coherence01 (CASE_B1, awaiting_followup host override), aopc02-phase-b-repair01-correction01 (full snapshot fencing), ratchet-bridge-exclusion-fixup01 (coverage ratchet restored) | **VERDICT**: `PASS_RECON_WITH_ONE_P1_CAUSAL_GAP` (per Factory reviewer; corroborates initial GREEN webview result). **STRATEGY**: real `ExtensionStateContext` + real `applyPresentationProjection` seq fence + real `applyStateSnapshot` epoch/stateVersion fence + real `incomingIsStaleSameEpochPublication` PBR04 backstop; drives real W1 sequence (W1-A `awaiting_followup`/15 source=host then W1-B `idle`/16 source=shadow, normal seq/stateVersion advance); captures committed state surface from a real React consumer (`taskHeaderPresentation`, `turnState`, `thinkingPresentation`) plus the REAL production button config via `getButtonConfigFromState`. **REJECTED**: simple hypothesis that a coherent committed webview state (idle + turnState + thinking=false) naturally produces Idle + Cancel. **Caveats recorded (P1 causal gap)**: AOC01-D does not exercise real partial subscription; AOC01-C synthetic missing-turnState does not establish real SdkController omission; AOC01 Cancel result conditioned on `foregroundCommandRunning=false`. **FILES**: `apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx` (NEW, +656 lines, 4 tests). ENTRY_HEAD `9dfecd447`; CLOSING_COMMIT `678780acb`; CORRECTION_COMMIT `93c1d1ef2`. **CONSERVATION**: AOPC02 stale full-state fencing NOT reopened; TCCC01 CASE_B1 awaiting_followup host override NOT reopened; all prior tests remain GREEN. |
 | `ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-AOC02` | TASK-UI | AUTHORIZED (C1: GO); real producer + command-ownership discriminator | HIGH (LIVE discrimination) | aoc01 (webview seam green for input domain; producer-malformation hypothesis NOT promoted to most-likely), aopc02-phase-a-correction01 (real SdkController discriminator pattern), task-completion-continuation-coherence01 (CASE_B1 awaiting_followup host override) | **PURPOSE**: determine whether the REAL local `SdkController.getStateToPostToWebview()` producer can emit a state that explains the current-build LIVE transition `Waiting → Idle + Cancel`. **RULES**: no production repair before RED; stop at first RED; one bounded repair per ACT with ablation after GREEN; exercise the real local producer, do not reconstruct `ExtensionState` manually. **AOC02 STOP ORDER (per Factory, SECOND REFINEMENT — strict; stop at first RED)**: (1) §2 CANCEL AUTHORITY FIRST — find the exact production caller of `getButtonConfigFromState` and the exact `foregroundCommandRunning` value passed; if `idle + foregroundCommandRunning=true => Cancel` then classify `CASE_G_COMMAND_OWNERSHIP_NOT_PROJECTED` and STOP (defect is NOT stale Cancel; question becomes why TaskHeader says Idle while command ownership remains active). (2) §3 REAL PRODUCER OBJECT — only if §2 found no RED, exercise the real `SdkController.getStateToPostToWebview()`; capture on one object: `taskId` / session identity, `stateVersion`, `epoch`, `turnState.{phase,seq}`, `taskHeaderPresentation.{phase,seq,source}`, `thinkingPresentation.{modelStreaming,seq}`, foreground/background command ownership, `taskTelemetry`. (3) §4 PRODUCER INVARIANTS — `taskHeaderPresentation.seq === turnState.seq` and `thinkingPresentation.seq === turnState.seq` unless source contract says otherwise; legacy source requires phase agreement with `turnState.phase` unless documented host override; host source requires documented contract; `CASE_P1_PRODUCER_PHASE_MISMATCH` and `CASE_P2_PRODUCER_OMITS_TURNSTATE` STOP. (4) §5 WAITING → IDLE PRODUCER CHRONOLOGY — capture object A (awaiting_followup) and B (idle); if B contains active command ownership while phase/header are idle, classify `CASE_G_COMMAND_OWNERSHIP_NOT_PROJECTED` and STOP. (5) §6 REAL PARTIAL PATH ONLY IF NEEDED — only if §3-§5 found no RED, exercise `subscribeToState` → `subscribeToPartialMessage` through `ExtensionStateContext`; **actually call the partial handler** (do NOT simulate by embedding `partial: true` in a full snapshot); W1 Waiting → W2 partial → capture → optional next W1 Idle; `CASE_W2_PARTIAL_STATE_MIX` STOP. **§7 CLASSIFICATION**: CASE_P1_PRODUCER_PHASE_MISMATCH / CASE_P2_PRODUCER_OMITS_TURNSTATE / CASE_G_COMMAND_OWNERSHIP_NOT_PROJECTED / CASE_W2_PARTIAL_STATE_MIX / CASE_F_NOT_REPRODUCED. **§9 FIRST BROKEN BOUNDARY**: stop at first RED; do not cascade investigation. **§12 CONSERVATION**: keep AOC01 (4/4), AOPC02 stale full-state fencing, TCCC01 CASE_B1, THCP/LAC/RSP/LTZ/task-control, ratchet bridge contract GREEN. **§13 QUALITY**: if production changes, typecheck (apps/vscode + webview), lint (biome), canonical coverage ratchet (now restored per RATCHET-BRIDGE-EXCLUSION-FIXUP01 so it MUST execute), board validator, `git diff --check`. **§14 VALID VERDICTS**: PASS_PRODUCER_PHASE_COHERENCE_REPAIRED / PASS_PRODUCER_TURNSTATE_REPAIRED / PASS_COMMAND_OWNERSHIP_PROJECTION_REPAIRED / PASS_PARTIAL_STATE_MIX_REPAIRED / NOT_REPRODUCED / CAPTURE_INSUFFICIENT. |
 
@@ -2700,11 +2700,12 @@ re-frozen (per Factory reviewer's disposition in `b3a950554`) to:
   FOREGROUND_COMMAND_CANCEL     = NOT_THE_BROKEN_BOUNDARY (§2 GREEN)
   PRODUCER_MALFORMATION         = NOT_REPRODUCED              (§3 GREEN)
   PRESENCE_CONTRACT             = GREEN                       (§3 GREEN)
-  LEGACY_FALLBACK_REACH         = UNREACHABLE                 (§3 GREEN)
+  LEGACY_FALLBACK_REACH         = NOT_REPRODUCED on the exercised normal local producer chronology (§3 GREEN; wording refined per Factory)
   CASE_B1_AWAITING_FOLLOWUP     = CONSERVED                   (§3 GREEN)
   PARTIAL_PATH_PHASE_CONTAMINATION       = NOT_REPRODUCED    (§6 GREEN)
   PARTIAL_PATH_IDLE_CANCEL_RESURRECTION   = NOT_REPRODUCED    (§6 GREEN)
   ADVERSARIAL_DELAYED_PARTIAL_MIX         = NOT_REPRODUCED    (§6 GREEN)
+  LIVE_CAPTURE_DIAGNOSTIC_INSTRUMENTED    = DEFAULT_OFF, REMOVABLE, ADDITIVE (LIVE-CAPTURE01; this commit)
 ```
 
 **§6 spec (was: planned)**:
@@ -2842,6 +2843,190 @@ Strict stop order: (1) Cancel authority (§2) — STOP if RED;
 path (§6) — STOP if RED. **One first broken boundary.** If all
 four remain coherent, verdict is `NOT_REPRODUCED` and the ACT
 closes without repair. **C1: GO.**
+
+---
+
+## LIVE-CAPTURE01 — APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01 — bounded LIVE-synchronized-state recorder (default-off, removable) — AUTHORIZED (C1: GO, evidence-acquisition only)
+
+| row | ACT | domain | status | priority | parent |
+| --- | --- | --- | --- | --- | --- |
+| 299b | `ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01` | TASK-UI / DIAGNOSTIC | AUTHORIZED + INSTRUMENTED (12/12 PASS) | HIGH | `EPIC-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01` |
+
+**PURPOSE (per Factory disposition, `PASS_AOC02_NOT_REPRODUCED — NEXT = LIVE CAPTURE`)**:
+
+> We have reached the Factory threshold where more synthetic seam
+> tests are likely to slow learning. The next ACT should be a
+> **temporary, DEFAULT_OFF synchronized-state recorder** that captures
+> exactly what React sees when the impossible UI combination occurs.
+> Do not repair anything. AOC02 already exhausted: real button
+> predicate, real Controller producer, real full-state reducer,
+> real partial-message reducer. Therefore stop inventing offline
+> chronologies.
+
+### What LIVE-CAPTURE01 instrumented (this commit)
+
+The existing `post-terminal-authority-diagnostic` ring buffer
+(`apps/vscode/src/shared/post-terminal-authority-diagnostic.ts`) was
+extended with **4 additive optional fields** stamped at the existing
+production capture sites. The diagnostic itself remains:
+
+- **DEFAULT_OFF** (opt-in via the existing `_ptadEnabled` workspace-state toggle)
+- **explicitly opt-in** (no env-var; explicit workspace toggle required)
+- **REMOVABLE** (the new fields are unused when the diagnostic is disabled)
+- **zero semantic delta while disabled** (the new fields are `readonly optional`, never read by production when the gate is closed)
+- **no public protocol/wire field** (no new RPC/proto field added)
+- **no state mutation** (no functional-updater side effects added)
+- **bounded ring buffer** (DEFAULT_BUFFER_SIZE = 64; existing policy preserved)
+
+### New fields stamped (4, all `readonly optional`)
+
+```
+// interface PostTerminalAuthoritySnapshot {
+//   // ... existing fields ...
+//   readonly foregroundCommandRunning?: boolean   // ActionButtons.tsx:53 input
+//   readonly backgroundCommandRunning?: boolean   // backstop
+//   readonly composerEnabled?: boolean             // InputSection.tsx !submitDisabled
+//   readonly messageTail?: {                       // identity only, NO bodies
+//     readonly ts?: number
+//     readonly type?: string
+//     readonly ask?: string
+//     readonly say?: string
+//     readonly partial?: boolean
+//     readonly seq?: number
+//     readonly epoch?: number
+//   }
+// }
+```
+
+### Capture sites updated (3)
+
+| Site | New fields stamped |
+|---|---|
+| `action-buttons` (ActionButtons.tsx:87) | `foregroundCommandRunning`, `backgroundCommandRunning`, `messageTail` |
+| `input-section` (InputSection.tsx:96) | `composerEnabled`, `messageTail` |
+| `webview-committed` (ExtensionStateContext.tsx:1167) | `messageTail` |
+
+### Pure contradiction detector (new module-level exports)
+
+```
+// export type PostTerminalAuthorityContradictionKind =
+//   | "IDLE_PLUS_CANCEL"
+//   | "IDLE_PLUS_MODEL_STREAMING"
+//   | "COMPLETED_PLUS_ACTIVE_WORK"
+//
+// export function classifyContradiction(
+//   snapshot: PostTerminalAuthoritySnapshot,
+// ): PostTerminalAuthorityContradictionKind | null
+//
+// export function findPostTerminalAuthorityContradictions(
+//   side: "extension" | "webview",
+// ): readonly { snapshot: PostTerminalAuthoritySnapshot; kind: PostTerminalAuthorityContradictionKind }[]
+```
+
+The detector does **NOT** declare a root cause. It only marks capture
+points where the LIVE combination is reproducible. From those flags,
+the next ACT picks a `CASE_L1..L5` classification per the directive.
+
+### Test contract (D1-D6, 12/12 PASS)
+
+| Test | Pin |
+|---|---|
+| D1.1 | disabled => zero records, no new fields leak |
+| D1.2 | classifyContradiction is a pure predicate (no ring-buffer read) |
+| D2.1 | coherent Idle => no flag |
+| D2.2 | TaskHeader=waiting + thinking=true (streaming is legitimate) => null |
+| D3.1 | TaskHeader=idle + secondaryAction=cancel => IDLE_PLUS_CANCEL |
+| D3.2 | foregroundCommandRunning=true does NOT mask the Idle+Cancel flag |
+| D4.1 | TaskHeader=idle + modelStreaming=true => IDLE_PLUS_MODEL_STREAMING |
+| D4.2 | TaskHeader=completed + active work => COMPLETED_PLUS_ACTIVE_WORK |
+| D5.1 | foregroundCommandRunning / backgroundCommandRunning / composerEnabled / messageTail round-trip exactly |
+| D5.2 | missing clineMessages => messageTail undefined (no garbage) |
+| D6.1 | ring buffer bounded at 64; 65th evicts oldest |
+| BC   | snapshot with NO new fields remains well-typed (backward-compat witness) |
+
+### Files changed (this commit, LIVE-CAPTURE01)
+
+| File | Change |
+|---|---|
+| `apps/vscode/src/shared/post-terminal-authority-diagnostic.ts` | +50 lines: 4 new optional fields + `classifyContradiction` + `findPostTerminalAuthorityContradictions` |
+| `apps/vscode/src/shared/post-terminal-authority-diagnostic-aoc02-live-capture01.test.ts` | NEW, 336 lines, 12 tests (D1-D6 + BC) |
+| `apps/vscode/vitest.config.ts` | +1 include entry (next to `post-terminal-authority-diagnostic.test.ts`) |
+| `apps/vscode/webview-ui/src/components/chat/chat-view/components/layout/ActionButtons.tsx` | +27 lines: capture site stamps new fields |
+| `apps/vscode/webview-ui/src/components/chat/chat-view/components/layout/InputSection.tsx` | +14 lines: capture site stamps `composerEnabled` + `messageTail` |
+| `apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx` | +16 lines: `buildWebviewSnapshot` stamps `messageTail` on `webview-committed` records |
+| `.factory/epic-board.md` | LIVE-CAPTURE01 row + this section + EPIC row update |
+
+### Validation (this commit)
+
+| Check | Result |
+|---|---|
+| LIVE-CAPTURE01 unit tests (D1-D6 + BC) | **12/12 PASS** |
+| Existing post-terminal-authority unit tests | **10/10 PASS** (no regression) |
+| Apps/vscode vitest (full) | 138/138 files, **1843/1843 tests PASS** (was 137/137, 1831/1831; +12 from LIVE-CAPTURE01) |
+| Bridge vitest (full) | 10/10 files, 66/66 tests PASS |
+| Webview vitest (full) | 74/74 files, 620/620 tests PASS |
+| Apps/vscode typecheck (`bun run check-types`) | EXIT=0 |
+| Webview typecheck (`tsc --noEmit`) | EXIT=0 |
+| Biome lint (7 touched files) | clean (3 format fixes auto-applied) |
+
+### Conservation
+
+| Channel | Status |
+|---|---|
+| `apps/vscode/src/core/controller/...` | untouched |
+| `apps/vscode/src/sdk/...` | untouched (no SDK surface change) |
+| `apps/vscode/proto/` | untouched (no new wire field) |
+| `apps/vscode/src/shared/proto/...` | untouched |
+| `apps/vscode/src/generated/...` | untouched |
+| Production semantic for `getButtonConfigFromState` | byte-for-byte unchanged |
+| Production semantic for `applyStateSnapshot` / `applyMessage` | byte-for-byte unchanged |
+| `ActionButtons.tsx:53` Cancel derivation | unchanged (same args, same return) |
+| `InputSection.tsx:62` composer `submitDisabled` derivation | unchanged (same args, same return) |
+| Webview `<ChatLayout>` render tree | unchanged |
+| `_ptadEnabled` workspace-state toggle | unchanged (the existing opt-in path) |
+
+The 4 new fields are PURELY ADDITIVE: when the diagnostic is
+default-off, the if-guards at every capture site short-circuit
+without touching the new fields; when the diagnostic is enabled,
+the records carry the extra witness information that is required
+to disambiguate `CASE_L1..L5` from a LIVE capture.
+
+### NEXT LIVE STEP (not requiring push authority)
+
+1. Build a fresh dogfood VSIX with this commit (`bun run package`).
+2. Install on the user's `s1onique.clinemm@4.1.10-4fd4dda6b` dogfood workspace.
+3. Toggle `_ptadEnabled=true` via the existing workspace-state toggle.
+4. Reproduce the LIVE `Idle + Cancel` window naturally (do not
+   manufacture state transitions).
+5. Immediately preserve:
+   - screenshot
+   - bounded diagnostic records via
+     `getPostTerminalAuthorityDiagnosticRecords("webview")`
+   - installed version / build identity
+6. Classify each flagged record with `classifyContradiction(...)`.
+7. Inspect the SAME committed object's `foregroundCommandRunning`,
+   `backgroundCommandRunning`, `composerEnabled`, `messageTail`,
+   `taskHeaderPresentation`, `thinkingPresentation`,
+   `buttonConfig.secondaryAction`, `legacyPhase`, `legacySeq`.
+8. Pick the `CASE_L1..L5` from the directive and write
+   `ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01-RESULT01`.
+
+### Removal trigger
+
+- First useful LIVE capture: move to RESULT01 ACT.
+- Capture proves insufficient (e.g., a needed field is not
+  observable at the safe boundary): classify
+  `CASE_CAPTURE_INSUFFICIENT` and either add the missing field
+  (one bounded extension) or HALT_DIAGNOSTIC_SEMANTURE_DELTA.
+
+### Verdict (this commit)
+
+```
+LIVE_CAPTURE_DIAGNOSTIC_INSTRUMENTED = DEFAULT_OFF, REMOVABLE, ADDITIVE
+LIVE_CAPTURE_DIAGNOSTIC_12_TESTS    = PASS
+LIVE_CAPTURE_PRODUCTION_SEMANTIC    = BYTE_FOR_BYTE_UNCHANGED
+LIVE_CAPTURE_NEXT                  = DOGFOOD_SESSION_CAPTURE
+```
 
 ---
 

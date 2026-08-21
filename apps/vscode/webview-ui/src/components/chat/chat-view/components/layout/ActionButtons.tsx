@@ -27,6 +27,7 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 	const {
 		turnState,
 		foregroundCommandRunning,
+		backgroundCommandRunning,
 		stateVersion: wireStateVersion,
 		_ptadPushId: wirePtadPushId,
 	} = useExtensionState()
@@ -104,6 +105,26 @@ export const ActionButtons: React.FC<ActionButtonsProps> = ({ task, messages, ch
 					primaryAction: buttonConfig.primaryAction,
 					secondaryAction: buttonConfig.secondaryAction,
 				},
+				// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
+				// Stamp the EXACT foregroundCommandRunning value passed to
+				// getButtonConfigFromState (line 53), the backstop
+				// backgroundCommandRunning, and the message-tail identity at
+				// the SAME committed object as the button config. Pure additions;
+				// production semantics unchanged when the diagnostic is default-off.
+				foregroundCommandRunning,
+				backgroundCommandRunning,
+				messageTail:
+					messages.length > 0
+						? {
+								ts: messages[messages.length - 1].ts,
+								type: messages[messages.length - 1].type,
+								ask: messages[messages.length - 1].type === "ask" ? messages[messages.length - 1].ask : undefined,
+								say: messages[messages.length - 1].type === "say" ? messages[messages.length - 1].say : undefined,
+								partial: messages[messages.length - 1].partial,
+								seq: messages[messages.length - 1].seq,
+								epoch: messages[messages.length - 1].epoch,
+							}
+						: undefined,
 			})
 		}
 	}, [

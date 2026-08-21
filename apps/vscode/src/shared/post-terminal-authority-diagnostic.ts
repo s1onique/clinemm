@@ -290,6 +290,47 @@ export interface PostTerminalAuthoritySnapshot {
 	readonly followupRoute?: string
 	readonly pendingResponsePresent?: boolean
 	readonly pendingUserMessagePresent?: boolean
+
+	// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
+	// AOC02 §6 LIVE-synchronized-state capture. None of these fields
+	// are populated by default-off production paths; they are stamped
+	// only at the action-buttons / input-section / webview-committed
+	// capture sites. The fields are PURELY ADDITIVE — no existing
+	// semantic is re-purposed.
+	/**
+	 * The EXACT value passed as `foregroundCommandRunning` to
+	 * `getButtonConfigFromState(messages, turnState, mode, foregroundCommandRunning)`
+	 * at ActionButtons.tsx:53. The button predicate is the production
+	 * seam between committed state and rendered Cancel; capturing the
+	 * exact input is required to disambiguate Case A (buttonConfig wrong)
+	 * from Case I (chat reducer stuck) and from the LIVE `Idle + Cancel`
+	 * contradiction.
+	 */
+	readonly foregroundCommandRunning?: boolean
+	/** Backstop: whether a background command is reportedly running. */
+	readonly backgroundCommandRunning?: boolean
+	/**
+	 * Composer enabled predicate (`!submitDisabled`). Captured at
+	 * the input-section site so a single dump correlates composer
+	 * ownership with the button config / TaskHeader presentation.
+	 */
+	readonly composerEnabled?: boolean
+	/**
+	 * Identity-only tail of `clineMessages`. NO bodies, NO secrets.
+	 * Populated at every capture site that has access to the
+	 * committed `clineMessages` (action-buttons, input-section,
+	 * webview-committed). Disambiguates CASE_L5_TASK_IDENTITY_MIX
+	 * from CASE_L2_RENDER_DERIVATION_MISMATCH.
+	 */
+	readonly messageTail?: {
+		readonly ts?: number
+		readonly type?: string
+		readonly ask?: string
+		readonly say?: string
+		readonly partial?: boolean
+		readonly seq?: number
+		readonly epoch?: number
+	}
 }
 
 /**
@@ -527,6 +568,92 @@ export function classifyFullBoundary(
 		return "W3_POST_CONTEXT"
 	}
 	return "NO_DIVERGENCE"
+}
+
+// ============================================================================
+// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
+// AOC02 contradiction detector (pure predicate only)
+// ============================================================================
+//
+// The LIVE W2 contradiction is `TaskHeader=Idle` while `Cancel` is visible.
+// The synthetic seam tests (§2, §3, §6) ruled out the obvious static
+// paths; the remaining question is what committed state the LIVE render
+// actually saw. The contradiction detector is a PURE predicate over one
+// `PostTerminalAuthoritySnapshot` that flags any capture whose committed
+// UI derivation is incoherent.
+//
+// The detector does NOT declare a root cause. It only marks capture
+// points where the LIVE combination is reproducible. From those flags,
+// the next ACT picks a CASE_L1..L5 classification by comparing the
+// flagged records side-by-side.
+//
+// ACT contract (per directive §5):
+//   - TaskHeader phase == idle AND secondaryAction == cancel
+//   - TaskHeader == idle AND thinkingPresentation.modelStreaming == true
+//   - TaskHeader == completed AND (
+//       secondaryAction == cancel
+//       OR modelStreaming == true
+//     )
+//
+// ACT contract (per directive §3): TaskHeader, Thinking, button config
+// all derived from the SAME committed object. The detector consumes one
+// `PostTerminalAuthoritySnapshot` so the single-object invariant is
+// automatically preserved.
+// ============================================================================
+
+export type PostTerminalAuthorityContradictionKind =
+	| "IDLE_PLUS_CANCEL"
+	| "IDLE_PLUS_MODEL_STREAMING"
+	| "COMPLETED_PLUS_ACTIVE_WORK"
+
+/**
+ * ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
+ *
+ * Pure predicate over one `PostTerminalAuthoritySnapshot`. Returns the
+ * contradiction kind if the snapshot is incoherent; otherwise `null`.
+ * Intended to run over the bounded ring buffer AFTER the LIVE capture
+ * has been preserved, NOT in any synchronous React render path.
+ *
+ * Test contract (per directive §7):
+ *   - D2: coherent Idle => no flag
+ *   - D3: Idle + Cancel input => IDLE_PLUS_CANCEL
+ *   - D4: Idle + modelStreaming=true => IDLE_PLUS_MODEL_STREAMING
+ */
+export function classifyContradiction(snapshot: PostTerminalAuthoritySnapshot): PostTerminalAuthorityContradictionKind | null {
+	const headerPhase = snapshot.taskHeaderPresentation?.phase
+	const modelStreaming = snapshot.thinkingPresentation?.modelStreaming
+	const secondaryAction = snapshot.buttonConfig?.secondaryAction
+
+	if (headerPhase === "idle" && secondaryAction === "cancel") {
+		return "IDLE_PLUS_CANCEL"
+	}
+	if (headerPhase === "idle" && modelStreaming === true) {
+		return "IDLE_PLUS_MODEL_STREAMING"
+	}
+	if (headerPhase === "completed" && (secondaryAction === "cancel" || modelStreaming === true)) {
+		return "COMPLETED_PLUS_ACTIVE_WORK"
+	}
+	return null
+}
+
+/**
+ * ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-LIVE-CAPTURE01:
+ *
+ * Walk the bounded ring buffer and return every flagged record. Useful
+ * for LIVE post-capture forensics; not used inside any reactive path.
+ */
+export function findPostTerminalAuthorityContradictions(
+	side: "extension" | "webview",
+): readonly { snapshot: PostTerminalAuthoritySnapshot; kind: PostTerminalAuthorityContradictionKind }[] {
+	const records = getPostTerminalAuthorityDiagnosticRecords(side)
+	const flags: { snapshot: PostTerminalAuthoritySnapshot; kind: PostTerminalAuthorityContradictionKind }[] = []
+	for (const r of records) {
+		const kind = classifyContradiction(r)
+		if (kind !== null) {
+			flags.push({ snapshot: r, kind })
+		}
+	}
+	return flags
 }
 
 // ============================================================================
