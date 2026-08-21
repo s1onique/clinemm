@@ -2,6 +2,8 @@
 
 ## Identity
 
+This document contains only **immutable engineering anchors** (production source identity + build artifact identity). The current documentation tip is NOT recorded here; readers obtain it via `git rev-parse HEAD` against the committed file.
+
 - ACT_ID: `ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01`
 - EPIC_ID: `EPIC-CLINEMM-RESUME-SUBSCRIPTION-PARITY01`
 - REPOSITORY_ROOT: `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm`
@@ -10,13 +12,10 @@
 - ENTRY_TREE: `72cb592e6fc399cea7c6c29bbd3c6a47adff5a75`
 - PRODUCTION_FIX_HEAD: `6915c22ced47d9198119b3f0bf46a22e5850cdb1` (RSP01 production fix + new test + board row)
 - PRODUCTION_FIX_TREE: `397766a33d5a1d43f2015890b42e29957a8a2b10`
-- DOCS_CLOSURE_HEAD: `ae70870f6573772a6ede1b4f202af0e75a0b0cef` (initial docs closure; pre-CORRECTION01)
-- DOCS_CLOSURE_TREE: `ca5e4286a39322b6304f2e37ad57db3ed7753f0c`
-- CORRECTION01_HEAD: `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (docs-only correction; authoritative `SOURCE_HEAD` for the rebuilt VSIX)
-- CORRECTION01_TREE: `7a4c847fac2caa7f2b85b94080f6fb9d04ab1570`
-- FINAL_HEAD: `208e2f08d9a7ff43de93a812ba889ea535e8cbbf`
-- FINAL_TREE: `7a4c847fac2caa7f2b85b94080f6fb9d04ab1570`
-- WORKTREE_STATUS: clean (no dirt, no untracked; protected evidence preserved)
+- VSIX_BUILD_HEAD: `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (HEAD at the moment `vsce package` ran; established mechanically by `git rev-parse HEAD` immediately before the rebuild)
+- VSIX_BUILD_TREE: `7a4c847fac2caa7f2b85b94080f6fb9d04ab1570`
+- CLOSURE_HEAD: discover with `git rev-parse HEAD` (mutable; do not pin in this document — pinning this field would either be self-referential at commit time or require lockstep updates, both of which are excluded by CORRECTION02)
+- WORKTREE_STATUS_AT_LAST_BUILD: clean (no dirt, no untracked; protected evidence preserved)
 
 ## LIVE evidence binding (per Factory addendum; CORRECTION01 wording)
 
@@ -28,8 +27,8 @@
   - LIVE_B = REAL on `e5c6bf486`.
   - MODELED_STALE_ENDEDAT_PATH_ON_CURRENT_HEAD = **NOT_REPRODUCED**. RSP04 proves that the modeled resume chronology (observeTurnPhase("streaming") → CONTINUATION_PHASE) clears `endedAt` correctly, independent of the RSP subscription repair. **RSP04 does NOT prove that LIVE-B cannot occur on current HEAD via any other path.**
   - RSP01_CAUSAL_RELATION_TO_LIVE_B = **UNPROVEN**. The RSP01 ACT closed a subscription-lifecycle gap on the resume seam; that gap is consistent with the LIVE-B class but is not the only candidate cause for the visible symptom.
-  - CURRENT_HEAD_LIVE_B_STATUS = **NOT_LIVE_QUALIFIED**. The LIVE-B status on the post-RSP01 HEAD is pending L0-L5 LIVE qualification (install exact-head VSIX, resume an existing task, confirm `Working` and ticking timer return).
-- These observations are `REAL_LIVE_FAILURE_ON_DOGFOOD_e5c6bf486` only. The older `e5c6bf486` build was missing BOTH the LTZ01 timer anchor (closed at `287b23f81`) AND the RSP01 subscription wiring (closed at `6915c22c`) AND the CORRECTION03 coordinator setTurnPhase("streaming") assertion. Current HEAD (`208e2f08d`) has all three.
+  - CURRENT_HEAD_LIVE_B_STATUS = **NOT_LIVE_QUALIFIED**. The LIVE-B status on the post-RSP01 HEAD is pending L0-L5 LIVE qualification (install the exact-build-head VSIX identified in §"Exact-build-head dogfood (RSP01)" below, resume an existing task, confirm `Working` and ticking timer return).
+- These observations are `REAL_LIVE_FAILURE_ON_DOGFOOD_e5c6bf486` only. The older `e5c6bf486` build was missing BOTH the LTZ01 timer anchor (closed at `287b23f81`) AND the RSP01 subscription wiring (closed at `6915c22c`) AND the CORRECTION03 coordinator setTurnPhase("streaming") assertion. The current closure HEAD (discover with `git rev-parse HEAD`) has all three, because the source delta between `6915c22c` and the current closure HEAD is docs-only and `6915c22c` is the production fix that introduced all three.
 
 ## Recon
 
@@ -124,12 +123,12 @@
 - BOARD_VALIDATOR: PASS (board rows added coherently; priority-list item #12 added; no row corruption)
 - DIFF_CHECK: PASS (`git diff --check HEAD` clean)
 
-## LIVE (PENDING — exact-head VSIX built but not yet installed)
+## LIVE (PENDING — exact-build-head VSIX built but not yet installed)
 
-- VSIX_BUILD_HEAD: see §"Exact-head dogfood (RSP01)" below (the immutable source identity of the on-disk artifact; established mechanically by `git rev-parse HEAD` immediately before `vsce package`)
+- VSIX_BUILD_HEAD: see §"Exact-build-head dogfood (RSP01)" below (the immutable source identity of the on-disk artifact; established mechanically by `git rev-parse HEAD` immediately before `vsce package`)
 - ARTIFACT: `apps/dist/clinemm-rsp01.vsix`
 - BYTES: 8893368
-- SHA256: `db25315bb9a01b4b67a32ec9920f542bd72cf969877d11f8fec7ac46f93faf2a` (see §"Final-bound closure" below for the unbounded-docs-drift caveat)
+- SHA256: `db25315bb9a01b4b67a32ec9920f542bd72cf969877d11f8fec7ac46f93faf2a`
 - L0_TASK_A: pending user-side install
 - L1_RESUME_A: pending
 - L2_RUNTIME_EVENT_AFTER_RESUME: pending
@@ -138,29 +137,14 @@
 - L5_SWITCH_TO_B: pending
 - RESULT: PRODUCTION_SEAM_CLOSED (full LIVE qualification deferred to the natural-reproduction cycle)
 
-## Final-bound closure (unbounded-docs-drift caveat)
+## Final-bound closure
 
-This ACT has an inherent structural property: every docs-only commit that
-updates the closure records (SOURCE_HEAD, FINAL_HEAD, exact-head dogfood
-section) itself advances HEAD. After the latest such commit, HEAD is
-strictly greater than the HEAD identified by the records' SOURCE_HEAD.
-
-**Design choice (per Factory bounded CORRECTION01 "STOP"):** The records
-name `VSIX_BUILD_HEAD` (the HEAD at the moment `vsce package` ran) as
-the immutable source identity of the artifact. The reader is expected
-to run `git rev-parse HEAD` to learn the current closure commit; the
-records do NOT pin the current HEAD because doing so would either (a)
-be self-referential at commit time, or (b) require the records to be
-updated in lockstep with every commit, which violates the bounded
-CORRECTION01 STOP instruction.
-
-The ACT does NOT enter a self-referential rebuild loop. The bundled
-`dist/extension.js` content is identical across all docs-only commits
-in this closure window (the source delta is docs-only); the
-artifacts at `b72a94fe` (built at 6915c22c), `d434bc91` (built at
-ae70870f), and `db25315b` (built at 208e2f08d) are content-identical
-at the bundled-code level and differ only in `vsce package`'s per-build
-archive metadata.
+This document has been normalized (CORRECTION02) to contain only
+immutable engineering anchors. The previous unbounded-docs-drift
+structural concern is no longer present in the records because all
+mutable fields have been removed; the reader discovers the current
+documentation tip via `git rev-parse HEAD` rather than from a pinned
+field here.
 
 ## Board
 
@@ -168,9 +152,13 @@ archive metadata.
 
 ## Commits
 
-- COUNT = 3
-- HASHES = `6915c22ced47d9198119b3f0bf46a22e5850cdb1` (production fix + new test + board row); `ae70870f6573772a6ede1b4f202af0e75a0b0cef` (initial docs closure; pre-CORRECTION01; the first overclaim corrected by CORRECTION01); `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (CORRECTION01 — exact-head artifact rebuilt + LIVE wording correction; the docs-only correction commit that is the authoritative `SOURCE_HEAD` for the rebuilt VSIX)
-- MESSAGES = `fix(sdk): attach runtime + recovery subscriptions on resume seam (RSP01)`; `docs(act): RSP01 evidence + board closure (SOURCE_HEAD + SHA256 + LIVE binding)`; `docs(act): RSP01 CORRECTION01 — exact-head artifact rebuilt + LIVE wording`
+This section does NOT pin a specific commit count or list — both fields are mutable and self-referential. The authoritative engineering commit (the one that introduces the production change) is `PRODUCTION_FIX_HEAD` in the Identity section. To enumerate the closure commits, run:
+
+```bash
+git log --oneline <PRODUCTION_FIX_HEAD>..HEAD
+```
+
+against the committed file (this excludes the immutable engineering anchor itself).
 
 ## Pushed
 
@@ -189,11 +177,13 @@ archive metadata.
 
 ## Next recommended ACT
 
-- Re-read durable epic board at the next meaningful ACT boundary. The board entries for `EPIC-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` and `ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` will guide the reviewer to this closure evidence. The next natural follow-up is the LIVE qualification of this ACT (L0-L5 per ACT §40) on the installed exact-head VSIX (`apps/dist/clinemm-rsp01.vsix`, SHA256 `d434bc91...`). RSP04 proves only that the modeled resume chronology clears `endedAt` correctly via the existing CONTINUATION_PHASE contract; it does **not** prove that LIVE-B cannot occur on current HEAD via any other path. Current HEAD LIVE-B status: **NOT_LIVE_QUALIFIED**. If LIVE-B reproduces after installing the exact-head VSIX, that would be evidence of a separate defect class (not the subscription-lifecycle gap this ACT closed), and a future bounded ACT would investigate.
+- Re-read durable epic board at the next meaningful ACT boundary. The board entries for `EPIC-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` and `ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` will guide the reviewer to this closure evidence. The next natural follow-up is the LIVE qualification of this ACT (L0-L5 per ACT §40) on the installed exact-build-head VSIX — see the §"Exact-build-head dogfood (RSP01)" section below for the immutable artifact identity. RSP04 proves only that the modeled resume chronology clears `endedAt` correctly via the existing CONTINUATION_PHASE contract; it does **not** prove that LIVE-B cannot occur on the current closure HEAD via any other path. Current closure-HEAD LIVE-B status: **NOT_LIVE_QUALIFIED**. If LIVE-B reproduces after installing the exact-build-head VSIX, that would be evidence of a separate defect class (not the subscription-lifecycle gap this ACT closed), and a future bounded ACT would investigate.
 
-## Exact-head dogfood (RSP01) — CORRECTION01 (rebuilt at 208e2f08d)
+## Exact-build-head dogfood (RSP01)
 
-  - VSIX_BUILD_HEAD = `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (the HEAD at the moment `vsce package` ran — mechanically established by `git rev-parse HEAD` immediately before the rebuild; the artifact's source identity is bound to this commit, not to a later HEAD that may exist by the time the records are read)
+This artifact is the immutable engineering anchor for the user-side install target. It was built when `VSIX_BUILD_HEAD` was HEAD; the artifact's source identity is bound to that commit, not to any later commit. The current closure HEAD may have advanced past `VSIX_BUILD_HEAD` via docs-only commits, but the bundled `dist/extension.js` content is content-equivalent across the closure window because the source delta since `PRODUCTION_FIX_HEAD` is docs-only.
+
+  - VSIX_BUILD_HEAD = `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (HEAD at the moment `vsce package` ran; mechanically established by `git rev-parse HEAD` immediately before the rebuild)
   - VSIX_BUILD_TREE = `7a4c847fac2caa7f2b85b94080f6fb9d04ab1570`
   - SOURCE_VERSION = `4.1.10` (apps/vscode/package.json)
   - DOGFOOD_VERSION = `4.1.10`
@@ -201,27 +191,31 @@ archive metadata.
   - BYTES = `8893368`
   - SHA256 = `db25315bb9a01b4b67a32ec9920f542bd72cf969877d11f8fec7ac46f93faf2a`
   - INSTALLED_VERSION = (not installed in this ACT; user-side install is a downstream step)
-  - For the reader: `git rev-parse HEAD` at read-time will give the
-    current closure commit; the SOURCE_IDENTITY that the artifact
-    encodes is `VSIX_BUILD_HEAD` above, which is an immutable fact
-    about when `vsce package` ran, not a moving reference.
 
-The bundle `apps/vscode/dist/extension.js` was rebuilt by `bun
-esbuild.mjs` immediately after the `208e2f08d` commit to keep the
-local dogfood target in sync with the repository HEAD. The bundle
-includes both LTZ01 (timer anchor on resume) and RSP01 (runtime +
-recovery subscriptions on resume) and the CORRECTION03 coordinator
-setTurnPhase("streaming") assertion. Because `208e2f08d` differs from
-`6915c22c` only in documentation (`.factory/epic-board.md` +
-`docs/architecture/elm/resume-subscription-parity01-evidence.md`),
-the bundled `dist/extension.js` content is identical between
-production-fix HEAD and the VSIX build HEAD; the VSIX byte count is
-therefore also identical (8893368). The distinct SHA256 across
-rebuilds is per-build archive metadata (timestamps, etc.), not a
-content divergence. The original artifact at
-`b72a94fe57855dc6a323d745e3fb06d8c2eec0fb231e6a119c8b1d96bda683f9`
-(built when HEAD was `6915c22c`) and the first rebuild at
-`d434bc9112750f71730b326a1d9ef55fbb77b3abf638ea57a6a4f3b8ed247e6c`
-(built when HEAD was `ae70870f`) are NOT authoritative bound
-artifacts; both were stale-build snapshots identified as such by
-CORRECTION01 and replaced.
+The bundle `apps/vscode/dist/extension.js` was built by `bun
+esbuild.mjs` and packaged by `bunx vsce package` when HEAD was
+`VSIX_BUILD_HEAD`. The bundle includes both LTZ01 (timer anchor on
+resume, closed at `287b23f81`) and RSP01 (runtime + recovery
+subscriptions on resume, closed at `6915c22c`) and the CORRECTION03
+coordinator setTurnPhase("streaming") assertion. Because the source
+delta between `PRODUCTION_FIX_HEAD` (`6915c22c`) and
+`VSIX_BUILD_HEAD` (`208e2f08d`) is documentation-only
+(`.factory/epic-board.md` + this evidence doc), the bundled
+`dist/extension.js` content at `VSIX_BUILD_HEAD` is content-equivalent
+to the content at `PRODUCTION_FIX_HEAD`; subsequent docs-only commits
+after `VSIX_BUILD_HEAD` also leave the bundle content unchanged.
+
+The ONLY authoritative install target is:
+
+```text
+apps/dist/clinemm-rsp01.vsix
+SHA256 = db25315bb9a01b4b67a32ec9920f542bd72cf969877d11f8fec7ac46f93faf2a
+```
+
+The truthful terminology is `EXACT_BUILD_HEAD_ARTIFACT` (built at the
+commit named above); `PRODUCTION_SOURCE_EQUIVALENT_TO_FINAL_HEAD`
+(because the source delta since `PRODUCTION_FIX_HEAD` is docs-only, so
+the current closure HEAD's bundled content is content-equivalent to
+this artifact's content). Do NOT call it "exact-head" without
+qualification — that terminology implies a self-referential
+rebuild-on-every-commit loop that is excluded by CORRECTION02.
