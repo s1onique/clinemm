@@ -52,6 +52,14 @@ export default defineConfig({
 			// with FOUR captures (initial/active/waiting/post-clear) and
 			// real canonical waiting -> idle via controller.clearTask().
 			"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-RESUME01 / SCHR01:
+			// the host-layer causal discriminator drives the REAL
+			// `LocalRuntimeHost` (production class via the
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// alias) with a stub agent whose chronology mirrors the
+			// SCTR01 GREEN AgentRuntime rejection outcome. It runs under
+			// `vitest.config.c2-4-c-bridge.ts`.
+			"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

@@ -61,7 +61,10 @@
 		"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01 / AOC02
 		// §3: real SdkController producer-object discriminator.
-		"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-RESUME01 / SCHR01:
+		// host-layer causal discriminator above AgentRuntime.
+		"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts"
 	],
 	"exclude": [
 		"node_modules",

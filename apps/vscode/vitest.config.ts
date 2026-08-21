@@ -87,6 +87,15 @@ export default defineConfig({
 			// `vitest.config.c2-4-c-bridge.ts` config and must be
 			// excluded from this base config.
 			"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-RESUME01 / SCHR01:
+			// the host-layer causal discriminator drives the REAL
+			// `LocalRuntimeHost` (production class via the
+			// `@cline-internal/core/runtime/host/local-runtime-host`
+			// alias) with a stub agent whose chronology mirrors the
+			// SCTR01 GREEN AgentRuntime rejection outcome. It runs
+			// under `vitest.config.c2-4-c-bridge.ts` and must be
+			// excluded from this base config.
+			"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

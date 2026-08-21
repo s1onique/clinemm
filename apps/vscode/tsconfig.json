@@ -92,6 +92,11 @@
 		// bridge-only harness shape and runs under the dedicated
 		// `vitest.config.c2-4-c-bridge.ts` config (excluded here to
 		// match its vitest config counterpart).
-		"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-RESUME01 / SCHR01:
+		// host-layer causal discriminator above AgentRuntime. Bridge-only
+		// (requires `@cline-internal/core/runtime/host/local-runtime-host`
+		// alias declared in `tsconfig.c2-4-c-bridge.json`).
+		"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts"
 	]
 }
