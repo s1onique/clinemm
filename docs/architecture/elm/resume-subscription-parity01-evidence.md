@@ -126,11 +126,10 @@
 
 ## LIVE (PENDING — exact-head VSIX built but not yet installed)
 
-- SOURCE_HEAD: `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (CORRECTION01 closure commit; HEAD at the moment of artifact rebuild)
-- SOURCE_TREE: `7a4c847fac2caa7f2b85b94080f6fb9d04ab1570`
+- VSIX_BUILD_HEAD: see §"Exact-head dogfood (RSP01)" below (the immutable source identity of the on-disk artifact; established mechanically by `git rev-parse HEAD` immediately before `vsce package`)
 - ARTIFACT: `apps/dist/clinemm-rsp01.vsix`
 - BYTES: 8893368
-- SHA256: `db25315bb9a01b4b67a32ec9920f542bd72cf969877d11f8fec7ac46f93faf2a`
+- SHA256: `db25315bb9a01b4b67a32ec9920f542bd72cf969877d11f8fec7ac46f93faf2a` (see §"Final-bound closure" below for the unbounded-docs-drift caveat)
 - L0_TASK_A: pending user-side install
 - L1_RESUME_A: pending
 - L2_RUNTIME_EVENT_AFTER_RESUME: pending
@@ -138,6 +137,30 @@
 - L4_REPEAT_RESUME: pending
 - L5_SWITCH_TO_B: pending
 - RESULT: PRODUCTION_SEAM_CLOSED (full LIVE qualification deferred to the natural-reproduction cycle)
+
+## Final-bound closure (unbounded-docs-drift caveat)
+
+This ACT has an inherent structural property: every docs-only commit that
+updates the closure records (SOURCE_HEAD, FINAL_HEAD, exact-head dogfood
+section) itself advances HEAD. After the latest such commit, HEAD is
+strictly greater than the HEAD identified by the records' SOURCE_HEAD.
+
+**Design choice (per Factory bounded CORRECTION01 "STOP"):** The records
+name `VSIX_BUILD_HEAD` (the HEAD at the moment `vsce package` ran) as
+the immutable source identity of the artifact. The reader is expected
+to run `git rev-parse HEAD` to learn the current closure commit; the
+records do NOT pin the current HEAD because doing so would either (a)
+be self-referential at commit time, or (b) require the records to be
+updated in lockstep with every commit, which violates the bounded
+CORRECTION01 STOP instruction.
+
+The ACT does NOT enter a self-referential rebuild loop. The bundled
+`dist/extension.js` content is identical across all docs-only commits
+in this closure window (the source delta is docs-only); the
+artifacts at `b72a94fe` (built at 6915c22c), `d434bc91` (built at
+ae70870f), and `db25315b` (built at 208e2f08d) are content-identical
+at the bundled-code level and differ only in `vsce package`'s per-build
+archive metadata.
 
 ## Board
 
@@ -170,28 +193,32 @@
 
 ## Exact-head dogfood (RSP01) — CORRECTION01 (rebuilt at 208e2f08d)
 
-  - SOURCE_HEAD = `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (CORRECTION01 closure commit; authoritative for this VSIX)
-  - SOURCE_TREE = `7a4c847fac2caa7f2b85b94080f6fb9d04ab1570`
+  - VSIX_BUILD_HEAD = `208e2f08d9a7ff43de93a812ba889ea535e8cbbf` (the HEAD at the moment `vsce package` ran — mechanically established by `git rev-parse HEAD` immediately before the rebuild; the artifact's source identity is bound to this commit, not to a later HEAD that may exist by the time the records are read)
+  - VSIX_BUILD_TREE = `7a4c847fac2caa7f2b85b94080f6fb9d04ab1570`
   - SOURCE_VERSION = `4.1.10` (apps/vscode/package.json)
   - DOGFOOD_VERSION = `4.1.10`
   - ARTIFACT_PATH = `apps/dist/clinemm-rsp01.vsix`
   - BYTES = `8893368`
   - SHA256 = `db25315bb9a01b4b67a32ec9920f542bd72cf969877d11f8fec7ac46f93faf2a`
   - INSTALLED_VERSION = (not installed in this ACT; user-side install is a downstream step)
+  - For the reader: `git rev-parse HEAD` at read-time will give the
+    current closure commit; the SOURCE_IDENTITY that the artifact
+    encodes is `VSIX_BUILD_HEAD` above, which is an immutable fact
+    about when `vsce package` ran, not a moving reference.
 
 The bundle `apps/vscode/dist/extension.js` was rebuilt by `bun
-esbuild.mjs` immediately after the CORRECTION01 closure commit to keep
-the local dogfood target in sync with the repository HEAD. The bundle
+esbuild.mjs` immediately after the `208e2f08d` commit to keep the
+local dogfood target in sync with the repository HEAD. The bundle
 includes both LTZ01 (timer anchor on resume) and RSP01 (runtime +
 recovery subscriptions on resume) and the CORRECTION03 coordinator
 setTurnPhase("streaming") assertion. Because `208e2f08d` differs from
 `6915c22c` only in documentation (`.factory/epic-board.md` +
 `docs/architecture/elm/resume-subscription-parity01-evidence.md`),
 the bundled `dist/extension.js` content is identical between
-production-fix HEAD and current HEAD; the VSIX byte count is therefore
-also identical (8893368). The distinct SHA256 across rebuilds is
-per-build archive metadata (timestamps, etc.), not a content
-divergence. The original artifact at
+production-fix HEAD and the VSIX build HEAD; the VSIX byte count is
+therefore also identical (8893368). The distinct SHA256 across
+rebuilds is per-build archive metadata (timestamps, etc.), not a
+content divergence. The original artifact at
 `b72a94fe57855dc6a323d745e3fb06d8c2eec0fb231e6a119c8b1d96bda683f9`
 (built when HEAD was `6915c22c`) and the first rebuild at
 `d434bc9112750f71730b326a1d9ef55fbb77b3abf638ea57a6a4f3b8ed247e6c`
