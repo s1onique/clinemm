@@ -43,6 +43,9 @@
 			],
 			"@cline-internal/core/types/events": [
 				"../../sdk/packages/core/src/types/events"
+			],
+			"@cline-internal/core/runtime/config/agent-message-codec": [
+				"../../sdk/packages/core/src/runtime/config/agent-message-codec"
 			]
 		}
 	},

@@ -9,9 +9,9 @@
  *
  * This is RECON-ONLY and the FIRST probe of a larger async application-seam
  * ACT sequence. It does not attempt repair. Its only deliverable is a
- * SYNCHRONIZED SNAPSHOT IDENTITY captured at the moment the host has
- * yielded to idle after a REAL background-RUNNING turn (the same
- * chronology row 15c CORRECTION03 proves at the host layer).
+ * MODELED PUBLICATION COMPOSITION PROFILE captured at the moment the
+ * host has yielded to idle after a REAL background-RUNNING turn (the
+ * same chronology row 15c CORRECTION03 proves at the host layer).
  *
  * Strategy (application chain, per ACT §3):
  *
@@ -24,7 +24,7 @@
  *     (producer-bound RUNNING envelope per row 15c CORRECTION03 P0)
  *   ScriptedModel (the only mocked LLM)
  *
- *   ONE synchronized publication identity:
+ *   ONE MODELED PUBLICATION COMPOSITION:
  *
  *     runtime snapshot     <- adapter.snapshot() (equivalent to
  *                              host.runtimeSnapshot(sessionId) queried
@@ -39,28 +39,66 @@
  *                                (same call shape as SdkController.ts:3009)
  *     host session         <- host.getSession("session-A").status
  *
- *   The seq token is one and the same value the SdkController would
- *   stamp into thinkingPresentation.seq, taskHeaderPresentation.seq,
- *   stateVersion, and _ptadPushId at the single instance of
- *   getStateToPostToWebview() (per W1-epoch-domain-mismatch-red-fix01:
- *   the SAME MessageIdMinter counter is the unique publication-identity
- *   authority).
+ *   IMPORTANT QUALIFICATION (per Factory reviewer P1 overclaim rejection):
+ *
+ *     `seq = 1` below is a SYNTHETIC_LOCAL_SELECTOR_INPUT_TOKEN. It is
+ *     the same value conceptually that the production MessageIdMinter
+ *     would mint (per the W1-epoch-domain-mismatch-red-fix01 contract
+ *     that the SAME counter feeds turnState.seq, stateVersion,
+ *     _ptadPushId, thinkingPresentation.seq, and taskHeaderPresentation.seq),
+ *     but this probe does NOT prove that runtimeSnapshot, the selectors,
+ *     stateVersion, _ptadPushId, and webview-state all arose from ONE
+ *     ACTUAL production publication transaction. That synchronization
+ *     is established by AOPC02 (the NEXT ACT), which exercises the REAL
+ *     SdkController.getStateToPostToWebview() producer and pairs the
+ *     returned snapshot with the webview-side commit at the SAME
+ *     stateVersion.
+ *
+ *   SYNCHRONIZED_SELECTOR_INPUT_TOKEN = SYNTHETIC_LOCAL
+ *
+ *   Lower-boundary PROVEN by this probe (per Factory reviewer):
+ *
+ *     Real LocalRuntimeHost
+ *       + Real AgentRuntime.snapshot()
+ *       + Real mapAgentRuntimeStateSnapshotToArbiterSnapshot
+ *       + Real selectThinkingPresentation
+ *       + Real selectTaskHeaderPresentation
+ *
+ *       = coherent in the modeled composition below.
+ *
+ *   Lower-boundary UNPROVEN by this probe:
+ *
+ *     - Real SdkController assembly of thinkingPresentation,
+ *       taskHeaderPresentation, turnState, stateVersion, epoch,
+ *       _ptadPushId, host override, task/session identity, Cancel
+ *       predicates all from a single getStateToPostToWebview() call.
+ *
+ *     - SdkController has already been a source of stale publication
+ *       bugs in this fork (per the C2 fixup history); we cannot claim
+ *       a defect is ABOVE SdkController without proving SdkController
+ *       itself is internally consistent.
+ *
+ *     - Real transport / webview reducer / React commit (W2 / W3).
+ *
+ *   NEXT_UNPROVEN_BOUNDARY = real SdkController state assembly
+ *     -> transport
+ *     -> webview committed state
  *
  * Promise (bounded):
- *   At the same publication seq token, the host+canonical chain is
- *   internally coherent: agent terminal, modelStreaming=false,
- *   phase=idle, session.status=idle, pendingToolCalls=[]. This does NOT
- *   prove the LIVE webview commits these values (the W1..W3 boundary
- *   lies above this probe, at SdkController.getStateToPostToWebview()
- *   + WebviewGrpcBridge + gRPC serialize + webview reducer + React
- *   commit chain). But it proves the contradiction has to be in W1..W3,
- *   NOT in the host+canonical chain.
+ *   At one SYNTHETIC_LOCAL_SELECTOR_INPUT_TOKEN, the host + canonical
+ *   mapper/selectors composition is internally coherent: agent terminal,
+ *   modelStreaming=false, phase=idle, session.status=idle,
+ *   pendingToolCalls=[]. This does NOT prove the LIVE webview commits
+ *   these values (the W1..W3 boundary lies above this probe AND above
+ *   the unproven SdkController assembly; the LIVE Idle+Thinking+Cancel
+ *   defect can still be in SdkController, not just in W1..W3).
  *
  * Stop rule (per ACT §15):
  *   "At the same application publication identity, why can
  *    Idle + Thinking + Cancel coexist?"
- *   This probe answers the half-question: "is the host+canonical chain
- *   itself coherent at the synchronized publication identity?"
+ *   This probe answers the lower-half question: "is the host +
+ *   canonical mapper/selectors chain itself coherent in the modeled
+ *   composition?" It explicitly does NOT yet localize the defect.
  */
 
 import { mkdtempSync, rmSync } from "node:fs"
@@ -78,6 +116,7 @@ import type {
 	ITelemetryService,
 	LiveAgentRuntimeStateSnapshot,
 } from "@cline/shared"
+import { agentMessagesToMessagesWithMetadata } from "@cline-internal/core/runtime/config/agent-message-codec"
 import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtime-host"
 import { FileSessionService } from "@cline-internal/core/session/services/file-session-service"
 import type { CoreSessionEvent } from "@cline-internal/core/types/events"
@@ -283,16 +322,28 @@ class AgentRuntimeBackedAdapter {
 		return {
 			text,
 			usage,
-			// `AgentResult.messages` is `MessageWithMetadata[]`; the
-			// AgentRuntime we composed returns `AgentMessage[]`. The
-			// two interfaces disagree on `role` (`AgentMessageRole`
-			// includes `"tool"`; `MessageRole` does not). The
-			// runtime wire shape is identical; the cast through
-			// `unknown` is the type-honest way to bridge the two
-			// vocabularies. Row 15c CORRECTION03 carries the same
-			// pattern (see
-			// aco01-correction03.c24-c-bridge.test.ts:425).
-			messages: runResult.messages as unknown as never,
+			// Convert `AgentMessage[]` -> `MessageWithMetadata[]` via
+			// the REAL production helper. The two role vocabularies
+			// differ (`AgentMessageRole = "user" | "assistant" |
+			// "tool"`; `MessageRole = "user" | "assistant"`); the
+			// production helper coerces `"tool"` to `"user"` (which
+			// is fine -- `withLatestAssistantTurnMetadata` only
+			// writes `metrics` onto the LAST assistant turn and
+			// ignores tool messages; the production `SessionRuntime.
+			// buildLegacyResult` (orchestration/session-runtime-orchestrator.ts:1488)
+			// uses the same helper).
+			//
+			// This is the type-honest alternative to `as unknown as
+			// never`. Per Factory reviewer P1 hygiene: do not weaken
+			// types with `as never` to silence vocabulary mismatches;
+			// use the existing correct shape (or a typed adapter).
+			// Row 15c CORRECTION03 carries the same production helper
+			// (see aco01-correction03.c24-c-bridge.test.ts:425); both
+			// row 15c and this AOPC01 should use this helper
+			// (see the row 15d P1 finding below -- the bridge tsconfig
+			// include drift on row 15c surfaces 3 typecheck errors
+			// that this AOPC01-typed-helper avoids).
+			messages: agentMessagesToMessagesWithMetadata(runResult.messages),
 			toolCalls: [],
 			iterations: runResult.iterations,
 			finishReason,
@@ -487,6 +538,10 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC01", ()
 
 		const currentLegacyPhase: TurnPhase = sessionStatus === "running" ? "streaming" : "idle"
 
+		// SYNCHETIC_LOCAL_SELECTOR_INPUT_TOKEN -- see file header.
+		// AOPC02 (NEXT ACT) will replace this with the REAL `seq` from
+		// SdkController.turnStateTracker.get().seq (which equals the wire
+		// `stateVersion` per W1-epoch-domain-mismatch-red-fix01).
 		const seq = 1
 
 		const canonicalShadowPhase = deriveCanonicalShadowPhase(runtimeSnapshot)
@@ -521,6 +576,8 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC01", ()
 		).toBe(true)
 
 		const projectionProfile = {
+			seqTokenKind: "SYNTHETIC_LOCAL_SELECTOR_INPUT_TOKEN",
+			seq,
 			hostSessionStatus: sessionStatus,
 			arbiterStatus: arbiter.status,
 			arbiterModelStreaming: arbiter.execution.modelStreaming,
@@ -546,6 +603,6 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC01", ()
 			hostEventTypes: [...new Set(hostEvents.map((e) => e.eventType))],
 		}
 		// eslint-disable-next-line no-console
-		console.log("[AOPC01] synchronized publication profile:", projectionProfile)
+		console.log("[AOPC01] modeled publication composition profile:", projectionProfile)
 	})
 })

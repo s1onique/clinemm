@@ -27,6 +27,7 @@ const sdkCoreRoot = path.resolve(repoRoot, "sdk/packages/core/src")
 const sdkCoreHost = path.resolve(sdkCoreRoot, "runtime/host/local-runtime-host")
 const sdkCoreSessionService = path.resolve(sdkCoreRoot, "session/services/file-session-service")
 const sdkCoreTypesEvents = path.resolve(sdkCoreRoot, "types/events")
+const sdkCoreAgentMessageCodec = path.resolve(sdkCoreRoot, "runtime/config/agent-message-codec")
 
 export default defineConfig({
 	test: {
@@ -48,6 +49,7 @@ export default defineConfig({
 			"@cline-internal/core/runtime/host/local-runtime-host": sdkCoreHost,
 			"@cline-internal/core/session/services/file-session-service": sdkCoreSessionService,
 			"@cline-internal/core/types/events": sdkCoreTypesEvents,
+			"@cline-internal/core/runtime/config/agent-message-codec": sdkCoreAgentMessageCodec,
 		},
 	},
 	server: {
