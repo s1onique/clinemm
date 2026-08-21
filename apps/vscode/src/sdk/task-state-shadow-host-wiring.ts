@@ -29,7 +29,7 @@ import type { CoreSessionEvent } from "@cline/core"
 import type { AgentRunStatus, AgentRuntimeEvent, AgentRuntimeExecutionState, RecoveryState } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { SdkSessionLifecycle, SdkSessionLifecycleOptions } from "./sdk-session-lifecycle"
-import { TaskShadowComparator } from "./task-state-shadow"
+import { TaskShadowComparator, toLegacyPhase } from "./task-state-shadow"
 import { createTaskShadowObservationCoordinator, type TaskShadowCoordinator } from "./task-state-shadow-coordinator"
 import { TaskShadowReverseTranslator, type TaskShadowReverseTranslatorInput } from "./task-state-shadow-observer"
 
@@ -407,10 +407,11 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		// surface for the wiring's Local-consumer cutover
 		// accessor). Both are NON-MUTATING.
 		getLastObservedArbiter: () => recorder.getLastArbiter(),
-		// ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01:
-		// The shadow phase is the comparator's CURRENT `projectTurnState`
-		// projection applied to its private `TaskModel` — i.e. the
-		// result of every observed event applied through the
+		// ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01 / CORRECTION01:
+		// The shadow phase is the canonical `@cline/agents`
+		// `projectTurnState` projection (selectors.ts line 47-71)
+		// applied to the comparator's current `TaskModel` — i.e.
+		// the result of every observed event applied through the
 		// reducer, NOT the `shadowPhase` field on the last
 		// differential record (which is hardcoded to `"idle"` for
 		// `D00_AGREE` records because the public differential
@@ -419,19 +420,17 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		// contradiction where a freshly-running task (shadow
 		// `streaming`) was published as `taskHeaderPresentation.phase
 		// = "idle"` for any state that agreed with the legacy
-		// mirror. This accessor is the single source of truth for
-		// the wire's `taskHeaderPresentation` field; reading it
-		// from the comparator's current state preserves the
-		// selector's three-source precedence contract.
+		// mirror.
+		//
+		// CORRECTION01 delegates to the CANONICAL projection owned
+		// by `@cline/agents` rather than a host-mirrored switch.
+		// This preserves the architectural rule that stateless
+		// agent/runtime semantics live in `@cline/agents` while
+		// host apps consume them — no duplicate authority.
 		getLastObservedShadowPhase: (): import("@shared/ExtensionMessage").TurnPhase | undefined => {
-			// The comparator owns the only post-reducer view of the
-			// shadow (R2: the public `shadow` handle was retired).
-			// We delegate to its `getCurrentShadowPhase` accessor,
-			// which mirrors `@cline/agents` `projectTurnState`
-			// (selectors.ts line 47-71) on the `TaskModel` public
-			// surface so the wire field matches the shadow's own
-			// authoritative projection.
-			return comparator.getCurrentShadowPhase()
+			const model = comparator.debugSnapshot()
+			const canonical = TaskState.projectTurnState(model)
+			return toLegacyPhase(canonical)
 		},
 		coordinator,
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {

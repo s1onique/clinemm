@@ -21,6 +21,7 @@
  *        CURRENT task identity (so the elapsed display is truthful,
  *        not stale or absent).
  */
+import { TaskState } from "@cline/agents"
 import type { AgentRuntimeEvent, AgentRuntimeRecoverySnapshot, AgentRunStatus, LiveAgentRuntimeEvent } from "@cline/shared"
 import type { TurnPhase } from "@shared/ExtensionMessage"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -482,6 +483,21 @@ describe("ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01 / LAC01 — taskHeade
 			.soft(typeof live.taskTelemetryStartedAt === "number", "taskTelemetry.startedAt must be defined for the active task")
 			.toBe(true)
 		expect.soft(live.elapsedText, "elapsed display must be > 00:00 for a task running >=1s").not.toBe("00:00")
+
+		// LIVE invariant C — anti-drift contract: the host's
+		// `getLastObservedShadowPhase` MUST equal the canonical
+		// `@cline/agents` `projectTurnState` projection applied
+		// directly to the comparator's `TaskModel`. Any drift
+		// here is a duplicate-authority regression.
+		const shadowPhaseFromWiring = h.wiring.getLastObservedShadowPhase()
+		const canonicalModel = h.wiring.comparator.debugSnapshot()
+		const canonicalProjection = TaskState.projectTurnState(canonicalModel)
+		expect
+			.soft(
+				shadowPhaseFromWiring,
+				"host wiring shadow phase must equal canonical agents projectTurnState projection (anti-drift)",
+			)
+			.toBe(canonicalProjection)
 
 		// Print the final snapshot for forensic readability on RED.
 		// (commented out by default; uncomment locally if RED fires and

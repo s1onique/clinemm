@@ -123,34 +123,50 @@ canonical shadow overrides it because the selector's frozen policy is
 }
 ```
 
-## Repair
+## Repair (CORRECTION01 — canonical delegation)
 
-Added `TaskShadowComparator.getCurrentShadowPhase()` (read-only, no
-mutation) that mirrors `@cline/agents` `projectTurnState` (selectors.ts
-line 47-71) on the public `TaskModel` surface:
+The initial fix added `TaskShadowComparator.getCurrentShadowPhase()`,
+which **mirrored** the `@cline/agents` `projectTurnState` switch inside
+the host. CORRECTION01 eliminated that duplicate authority and
+delegated directly to the canonical seam:
 
 ```ts
-getCurrentShadowPhase(): TurnPhase {
-  const model = this.shadow.debugSnapshot()
-  if (model.activity.awaitingApproval) return "awaiting_approval"
-  if (model.activity.modelStreaming || model.activity.activeToolCallIds.length > 0) return "streaming"
-  switch (model.lifecycle.kind) {
-    case "completed": return "completed"
-    case "failed": return "error"
-    case "resumable":
-    case "cancelled": return "resumable"
-    case "running": return "idle"  // running with no activity ⇒ idle
-    case "idle":
-    default: return "idle"
-  }
-}
+// `task-state-shadow-host-wiring.ts` (CORRECTION01 — current)
+getLastObservedShadowPhase: (): TurnPhase | undefined => {
+  const model = comparator.debugSnapshot()
+  const canonical = TaskState.projectTurnState(model)
+  return toLegacyPhase(canonical)
+},
 ```
 
-Wired `getLastObservedShadowPhase` to delegate to it:
+The canonical seam is `TaskState.projectTurnState` from
+`@cline/agents` (re-exported via `sdk/packages/agents/src/runtime/state/index.ts`
+→ `task-state/index.ts:50-62`; defined at
+`sdk/packages/agents/src/runtime/state/task-state/selectors.ts:47-71`).
+The host already imports `TaskState` (`task-state-shadow.ts:21`); no
+new package-surface was added.
+
+The only host-side addition is `toLegacyPhase`, which maps the
+shadow's `ShadowTurnPhase` (subset of `TurnPhase`) into the legacy
+`TurnPhase` union. The shadow and legacy taxonomies are deliberately
+identical on the overlap (`task-state-shadow.ts:34-40`); the legacy
+union adds ONE host-only phase — `"compacting"` — owned by the
+compaction coordinator and never produced by the shadow.
+
+## Anti-drift contract (added in CORRECTION01)
+
+The host wiring's `getLastObservedShadowPhase` MUST equal the
+canonical `@cline/agents` `projectTurnState` projection applied
+directly to the comparator's `TaskModel`. Any drift is a
+duplicate-authority regression. This is asserted in LAC01 (LIVE
+invariant C):
 
 ```ts
-// AFTER (FIXED, GREEN on LAC01):
-getLastObservedShadowPhase: () => comparator.getCurrentShadowPhase(),
+// `task-header-live-activity-coherence.lac01.test.ts:486-500`
+const shadowPhaseFromWiring = h.wiring.getLastObservedShadowPhase()
+const canonicalModel = h.wiring.comparator.debugSnapshot()
+const canonicalProjection = TaskState.projectTurnState(canonicalModel)
+expect.soft(shadowPhaseFromWiring).toBe(canonicalProjection)
 ```
 
 ## GREEN snapshot (after repair)
@@ -168,12 +184,45 @@ getLastObservedShadowPhase: () => comparator.getCurrentShadowPhase(),
 }
 ```
 
-## Necessity / ablation
+## Necessity / ablation (both passes)
 
-Replacing the repaired line with the original
-`recorder.getRecords().at(-1)?.shadowPhase` returns LAC01 to RED. The
-defect is therefore **load-bearing** and the repair is **necessary**
+- **Pre-CORRECTION01 ablation**: replacing the repaired line with the
+  original `recorder.getRecords().at(-1)?.shadowPhase` returns LAC01
+  to RED with the original defect.
+- **CORRECTION01 ablation**: injecting `return "idle"` in
+  `getLastObservedShadowPhase` returns LAC01 to RED via the new
+  anti-drift contract:
+  ```
+  AssertionError: host wiring shadow phase must equal canonical agents
+  projectTurnState projection (anti-drift): expected 'idle' to be
+  'streaming'
+  ```
+
+The defect is therefore **load-bearing** and the repair is **necessary**
 (not a no-op).
+
+## Classification (honest reclassification per CORRECTION01)
+
+- **STATE_LIVE_DEFECT**: PROVEN (LIVE `Idle` for running task)
+- **STATE_PRODUCTION_RED**: PROVEN (LAC01 RED on HEAD pre-fix)
+- **STATE_REPAIR_NECESSITY**: PROVEN (LAC01 RED on ablation, GREEN
+  after canonical delegation)
+- **TIMER_LIVE_DEFECT**: OBSERVED (LIVE witness reported `00:00`)
+- **TIMER_PRODUCTION_RED**: NOT_REPRODUCED (production RED at the
+  same wall-clock shows `00:05`; the timer was never wrong in the
+  executable reproduction)
+- **LIVE_TIMER_CAUSE**: UNRESOLVED. The `00:00` the user saw may
+  belong to a different code path (timer reset on `clearTask` /
+  `initTask` chronology, telemetry never started, stale `startedAt`
+  from a prior task, etc.) — NOT in scope of this ACT. Tracked as
+  `LIVE_TIMER_PENDING` for a separate investigation.
+
+## Verdict
+
+- **PASS_TASKHEADER_LIVE_STATE_COHERENCE** (state-side closed)
+- **LIVE_TIMER_PENDING** (timer LIVE observation unchanged;
+  production reproduction disproves the bug for this code path; the
+  actual LIVE cause is unresolved and out of scope)
 
 ## Conservation
 
@@ -184,7 +233,9 @@ defect is therefore **load-bearing** and the repair is **necessary**
 | THCP11 publication (6)      | 6 / 6 PASS       |
 | host-wiring (5)             | 5 / 5 PASS       |
 | e7.1 thinking (6)           | 6 / 6 PASS       |
-| webview TaskHeader (72)     | 72 / 72 PASS     |
+| task-state-shadow.test      | GREEN            |
+| targeted shadow surface (11 files) | 173 / 173 PASS |
+| webview TaskHeader (72, vitest) | 72 / 72 PASS |
 | typecheck                   | 0 diagnostics    |
 | lint                        | PASS             |
 | `git diff --check`          | PASS             |
@@ -200,14 +251,21 @@ defect is therefore **load-bearing** and the repair is **necessary**
 - **THCP01/THCP11 tests**: green.
 - **No new wire field**: `taskHeaderPresentation` shape unchanged
   (`phase: TurnPhase`, `source: "host"|"shadow"|"legacy"`, `seq: number`).
+- **No duplicate phase projector**: the host consumes
+  `TaskState.projectTurnState` (canonical) rather than mirroring it
+  locally.
 
-## Files changed
+## Files changed (CORRECTION01 delta on top of initial fix)
 
-- `apps/vscode/src/sdk/task-state-shadow-host-wiring.ts` — repair
-- `apps/vscode/src/sdk/task-state-shadow.ts` — added
-  `getCurrentShadowPhase` to the comparator
+- `apps/vscode/src/sdk/task-state-shadow-host-wiring.ts` — accessor
+  now delegates to `TaskState.projectTurnState` + `toLegacyPhase`
+- `apps/vscode/src/sdk/task-state-shadow.ts` —
+  - **REMOVED** `TaskShadowComparator.getCurrentShadowPhase()`
+    (CORRECTION01 deletes the duplicate-authority mirror)
+  - **EXPORTED** `toLegacyPhase` (so the wiring can use the
+    shadow→legacy bridge without re-implementing it)
 - `apps/vscode/src/sdk/__tests__/task-header-live-activity-coherence.lac01.test.ts`
-  — new RED+GREEN test
+  — added LIVE invariant C (anti-drift contract assertion)
 - `apps/vscode/src/sdk/__tests__/task-header-live-activity-coherence.lac01.helpers.ts`
   — node-side mirror of the webview's `taskHeaderTelemetryHelpers`
   (production source of truth: `apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts`)

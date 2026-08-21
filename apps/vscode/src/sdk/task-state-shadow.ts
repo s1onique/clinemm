@@ -38,7 +38,23 @@ type TaskShadowObservation = TaskState.TaskShadowObservation
  * `TurnPhase` taxonomy. They are deliberately so: the only divergence
  * the comparator records is when the two diverge on the SAME axis.
  */
-function toLegacyPhase(s: TaskShadowObservation["projections"]["turnPhase"]): TurnPhase {
+/**
+ * Phase mapping: shadow `ShadowTurnPhase` -> legacy `TurnPhase`.
+ *
+ * The shadow taxonomy is intentionally identical to the legacy
+ * `TurnPhase` taxonomy on the overlap (Phase 14 design rule). The
+ * legacy taxonomy adds ONE host-only phase — `"compacting"` — owned
+ * by the compaction coordinator, never produced by the shadow. This
+ * map therefore is an exhaustive identity on the overlap; the
+ * `"compacting"` member exists in `TurnPhase` only so the union
+ * remains closed for downstream consumers (selectors, webview).
+ *
+ * Exported so the host wiring's `getLastObservedShadowPhase`
+ * accessor can delegate to the canonical `@cline/agents`
+ * `projectTurnState` projection and then run the shadow→legacy
+ * bridge without duplicating either piece of authority.
+ */
+export function toLegacyPhase(s: TaskShadowObservation["projections"]["turnPhase"]): TurnPhase {
 	switch (s) {
 		case "idle":
 			return "idle"
@@ -175,43 +191,4 @@ export class TaskShadowComparator {
 		return this.shadow.debugSnapshot()
 	}
 
-	/**
-	 * ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01:
-	 * Returns the comparator's CURRENT shadow phase, projected into the
-	 * legacy `TurnPhase` vocabulary. This is the post-reducer truth —
-	 * i.e. the result of every accepted observation applied through
-	 * the shadow's reducer — and is the single source of truth for
-	 * the host's `taskHeaderPresentation` wire field.
-	 *
-	 * `undefined` is returned when the shadow has never observed any
-	 * event (the initial empty state). The host's `selectTaskHeaderPresentation`
-	 * selector collapses this to the legacy absence fallback.
-	 *
-	 * Read-only: does NOT mutate the shadow. Mirrors the
-	 * `@cline/agents` `projectTurnState` rule (selectors.ts
-	 * line 47-71) so the wire field matches the shadow's own
-	 * authoritative projection.
-	 */
-	getCurrentShadowPhase(): TurnPhase {
-		const model = this.shadow.debugSnapshot()
-		if (model.activity.awaitingApproval) return "awaiting_approval"
-		if (model.activity.modelStreaming || model.activity.activeToolCallIds.length > 0) return "streaming"
-		switch (model.lifecycle.kind) {
-			case "completed":
-				return "completed"
-			case "failed":
-				return "error"
-			case "resumable":
-			case "cancelled":
-				return "resumable"
-			case "running":
-				// Running lifecycle but no activity ⇒ idle
-				// (between turns; matches the shadow's documented
-				// selector rule).
-				return "idle"
-			case "idle":
-			default:
-				return "idle"
-		}
 	}
-}
