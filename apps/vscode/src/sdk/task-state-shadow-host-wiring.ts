@@ -427,7 +427,23 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		// This preserves the architectural rule that stateless
 		// agent/runtime semantics live in `@cline/agents` while
 		// host apps consume them — no duplicate authority.
+		//
+		// CORRECTION01-FIX01 (presence guard): the canonical
+		// projection always returns a `ShadowTurnPhase` — including
+		// for a brand-new shadow whose `TaskModel` is
+		// `initialTaskModel()` (which projects to `"idle"`). But
+		// the frozen three-source selector
+		// (`selectTaskHeaderPresentation`) depends on the
+		// `host-compacting > shadow > legacy absence fallback`
+		// precedence — when the shadow has never observed
+		// anything, the legacy phase must win, not a default-idle
+		// shadow projection. We therefore return `undefined` for
+		// the absent-shadow case (presence is a host concern;
+		// phase semantics remain a `@cline/agents` concern).
 		getLastObservedShadowPhase: (): import("@shared/ExtensionMessage").TurnPhase | undefined => {
+			if (!comparator.hasObservedShadowState()) {
+				return undefined
+			}
 			const model = comparator.debugSnapshot()
 			const canonical = TaskState.projectTurnState(model)
 			return toLegacyPhase(canonical)

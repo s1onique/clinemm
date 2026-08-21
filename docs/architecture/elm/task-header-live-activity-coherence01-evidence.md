@@ -131,8 +131,11 @@ the host. CORRECTION01 eliminated that duplicate authority and
 delegated directly to the canonical seam:
 
 ```ts
-// `task-state-shadow-host-wiring.ts` (CORRECTION01 — current)
+// `task-state-shadow-host-wiring.ts` (CORRECTION01-FIX01 — current)
 getLastObservedShadowPhase: (): TurnPhase | undefined => {
+  if (!comparator.hasObservedShadowState()) {
+    return undefined
+  }
   const model = comparator.debugSnapshot()
   const canonical = TaskState.projectTurnState(model)
   return toLegacyPhase(canonical)
@@ -146,12 +149,38 @@ The canonical seam is `TaskState.projectTurnState` from
 The host already imports `TaskState` (`task-state-shadow.ts:21`); no
 new package-surface was added.
 
-The only host-side addition is `toLegacyPhase`, which maps the
-shadow's `ShadowTurnPhase` (subset of `TurnPhase`) into the legacy
-`TurnPhase` union. The shadow and legacy taxonomies are deliberately
-identical on the overlap (`task-state-shadow.ts:34-40`); the legacy
-union adds ONE host-only phase — `"compacting"` — owned by the
-compaction coordinator and never produced by the shadow.
+The only host-side additions are:
+- `toLegacyPhase` (exported) — maps the shadow's `ShadowTurnPhase`
+  (subset of `TurnPhase`) into the legacy `TurnPhase` union. The
+  shadow and legacy taxonomies are deliberately identical on the
+  overlap (`task-state-shadow.ts:34-40`); the legacy union adds ONE
+  host-only phase — `"compacting"` — owned by the compaction
+  coordinator and never produced by the shadow.
+- `TaskShadowComparator.hasObservedShadowState()` (added in
+  CORRECTION01-FIX01) — host presence seam. Returns `true` once the
+  comparator has accepted at least one observation through
+  `observeRuntimeEvent` / `observeTaskMsg` for the current shadow
+  instance; returns `false` for a brand-new shadow and after
+  `debugReset()` / `resetForNewTask()` (both of which clear the
+  observation seq).
+
+## CORRECTION01-FIX01 — shadow absence-fallback guard
+
+The canonical `projectTurnState` always returns a `ShadowTurnPhase`,
+including for a brand-new shadow whose `TaskModel` is
+`initialTaskModel()` (which projects to `"idle"`). Without a presence
+guard, `getLastObservedShadowPhase()` would collapse the frozen
+three-source selector's `host-compacting > shadow > legacy absence
+fallback` precedence — the legacy phase would never win when the
+shadow has not yet observed anything.
+
+The `hasObservedShadowState()` presence seam is a host concern
+about the lifetime of an observation session, not a projection rule.
+Phase semantics remain owned by `@cline/agents`'s `projectTurnState`.
+
+**Ablation proof**: reverting the presence guard returns LAC-ABSENCE01-a
+and LAC-ABSENCE01-c to RED with `expected 'idle' to be undefined` —
+exactly the regression the reviewer predicted.
 
 ## Anti-drift contract (added in CORRECTION01)
 
@@ -228,17 +257,20 @@ The defect is therefore **load-bearing** and the repair is **necessary**
 
 | Surface                    | Result           |
 | -------------------------- | ---------------- |
-| apps/vscode vitest          | 1801 / 1801 PASS |
+| apps/vscode vitest          | 1804 / 1804 PASS |
 | THCP01 selector (18)        | 18 / 18 PASS     |
 | THCP11 publication (6)      | 6 / 6 PASS       |
-| host-wiring (5)             | 5 / 5 PASS       |
+| host-wiring (8)             | 8 / 8 PASS       |
 | e7.1 thinking (6)           | 6 / 6 PASS       |
 | task-state-shadow.test      | GREEN            |
-| targeted shadow surface (11 files) | 173 / 173 PASS |
+| LAC01 production-seam RED+GREEN | 1 / 1 PASS  |
+| LAC-ABSENCE01 (presence seam)  | 3 / 3 PASS  |
+| targeted shadow surface (11 files) | 176 / 176 PASS |
 | webview TaskHeader (72, vitest) | 72 / 72 PASS |
 | typecheck                   | 0 diagnostics    |
 | lint                        | PASS             |
 | `git diff --check`          | PASS             |
+| coverage ratchet            | PASS (+416 stmts / +563 branches / +36 funcs / +414 lines) |
 
 ## Closed contracts — preserved
 
@@ -255,18 +287,29 @@ The defect is therefore **load-bearing** and the repair is **necessary**
   `TaskState.projectTurnState` (canonical) rather than mirroring it
   locally.
 
-## Files changed (CORRECTION01 delta on top of initial fix)
+## Files changed (CORRECTION01-FIX01 delta)
 
-- `apps/vscode/src/sdk/task-state-shadow-host-wiring.ts` — accessor
-  now delegates to `TaskState.projectTurnState` + `toLegacyPhase`
 - `apps/vscode/src/sdk/task-state-shadow.ts` —
   - **REMOVED** `TaskShadowComparator.getCurrentShadowPhase()`
     (CORRECTION01 deletes the duplicate-authority mirror)
   - **EXPORTED** `toLegacyPhase` (so the wiring can use the
     shadow→legacy bridge without re-implementing it)
+  - **ADDED** `TaskShadowComparator.hasObservedShadowState()` —
+    presence seam (host-wiring responsibility, NOT a `@cline/agents`
+    projection rule)
+- `apps/vscode/src/sdk/task-state-shadow-host-wiring.ts` —
+  - `getLastObservedShadowPhase` now delegates to
+    `TaskState.projectTurnState` AND applies the presence guard
+    via `comparator.hasObservedShadowState()` (CORRECTION01-FIX01).
 - `apps/vscode/src/sdk/__tests__/task-header-live-activity-coherence.lac01.test.ts`
   — added LIVE invariant C (anti-drift contract assertion)
+- `apps/vscode/src/sdk/__tests__/task-state-shadow-host-wiring.test.ts`
+  — added LAC-ABSENCE01 describe block (3 tests): absence-fallback
+  on fresh wiring; presence flips after canonical observation;
+  presence clears on `resetForNewTask`.
 - `apps/vscode/src/sdk/__tests__/task-header-live-activity-coherence.lac01.helpers.ts`
   — node-side mirror of the webview's `taskHeaderTelemetryHelpers`
   (production source of truth: `apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts`)
+- `docs/architecture/elm/task-header-live-activity-coherence01-evidence.md`
+  — rewritten to document CORRECTION01-FIX01 + canonical delegation
 - `.factory/epic-board.md` — EPIC + ACT row + priority list entry

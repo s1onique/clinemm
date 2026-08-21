@@ -191,4 +191,36 @@ export class TaskShadowComparator {
 		return this.shadow.debugSnapshot()
 	}
 
+	/**
+	 * ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01-CORRECTION01-FIX01:
+	 *
+	 * Presence seam (host-wiring responsibility).
+	 *
+	 * Returns `true` once the comparator has accepted at least one
+	 * observation through `observeRuntimeEvent` / `observeTaskMsg`
+	 * for the CURRENT shadow instance. Returns `false` for a brand-
+	 * new shadow (never observed) and after `debugReset()` /
+	 * `resetForNewTask()` (which both clear the observation seq).
+	 *
+	 * This is the canonical host-side answer to "has the shadow
+	 * published any shadow-driven phase for this visible task?".
+	 * The frozen three-source selector
+	 * (`selectTaskHeaderPresentation` in
+	 * `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts`)
+	 * depends on this distinction to honour the precedence rule
+	 *
+	 *   host-compacting > shadow > legacy absence fallback
+	 *
+	 * — i.e. when the shadow is absent, the legacy phase wins, not
+	 * the shadow's default "idle" projection of a never-observed
+	 * `TaskModel`.
+	 *
+	 * Does NOT touch `@cline/agents`: this is a host concern about
+	 * the lifetime of an observation session, not a projection rule.
+	 * Production phase semantics remain in `@cline/agents`'s
+	 * `projectTurnState` (selectors.ts:47-71).
+	 */
+	hasObservedShadowState(): boolean {
+		return this.seq > 0
 	}
+}

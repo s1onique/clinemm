@@ -168,3 +168,188 @@ describe("TaskShadowHostWiring — observation-only", () => {
 		expect((mod as unknown as { postStateToWebview?: unknown }).postStateToWebview).toBeUndefined()
 	})
 })
+
+/**
+ * ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01-CORRECTION01-FIX01:
+ *
+ * The frozen three-source selector (`selectTaskHeaderPresentation`)
+ * depends on the precedence
+ *
+ *   host-compacting > shadow > legacy absence fallback
+ *
+ * i.e. when the shadow has never observed anything, the legacy phase
+ * must win — not a default-idle projection of `initialTaskModel()`.
+ *
+ * LAC-ABSENCE01 pins the **presence/absence distinction** that
+ * CORRECTION01's canonical delegation would otherwise have collapsed
+ * (the canonical projection always returns a phase, including for a
+ * brand-new shadow whose `TaskModel` is `initialTaskModel()` which
+ * projects to `"idle"`).
+ *
+ * If this test is RED, the wiring has lost the presence seam and the
+ * absence fallback will silently collapse to "idle" — which is
+ * exactly the LIVE defect we just closed.
+ */
+describe("ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01-CORRECTION01-FIX01 / LAC-ABSENCE01 — shadow presence seam", () => {
+	it("LAC-ABSENCE01-a: fresh wiring (no observation yet) → getLastObservedShadowPhase() returns undefined (legacy absence fallback wins)", () => {
+		const { deps } = makeDeps()
+		const wiring = createTaskShadowHostWiring(deps)
+		// Brand new wiring: no runtime event, no host msg, no canonical
+		// subscription call. The shadow has observed nothing.
+		expect(wiring.getLastObservedShadowPhase()).toBeUndefined()
+		// Presence seam at the comparator level — host concern, not
+		// @cline/agents projection.
+		expect(wiring.comparator.hasObservedShadowState()).toBe(false)
+		wiring.dispose()
+	})
+
+	it("LAC-ABSENCE01-b: after a canonical execution-state-changed observation → getLastObservedShadowPhase() returns the canonical streaming phase", () => {
+		const { deps } = makeDeps()
+		// Wire an active session whose `sessionId` matches the canonical
+		// event's sessionId, so the coordinator's stale gate admits the
+		// event (F1: STALE on session mismatch → no shadow mutation).
+		const sessionId = "session-B"
+		const activeSessionRef: { current: { sessionId: string; isRunning: boolean } | undefined } = {
+			current: { sessionId, isRunning: true },
+		}
+		const wiring = createTaskShadowHostWiring({
+			...deps,
+			lifecycle: {
+				...deps.lifecycle,
+				getActiveSession: () => activeSessionRef.current as never,
+				setRunning: (flag: boolean) => {
+					if (activeSessionRef.current) activeSessionRef.current.isRunning = flag
+				},
+			},
+			getRuntimeStatus: () => "running",
+			getArbiterSnapshot: () => ({
+				...emptyArbiterSnapshot(),
+				execution: { modelStreaming: true, tooling: false, awaitingApproval: false },
+				status: "running",
+			}),
+		})
+		// `run-started` only promotes lifecycle to `running`; it does
+		// NOT set `activity.modelStreaming = true`. Production drives
+		// the shadow to `streaming` via the follow-up
+		// `execution-state-changed` event (with previousExecution
+		// carrying the false→true flip). Use that event so the
+		// canonical projection reflects the streaming phase that
+		// LAC01's production RED asserts.
+		wiring.observeCanonicalRuntimeEvent({
+			origin: "RUNTIME_CANONICAL",
+			sessionId,
+			event: {
+				type: "execution-state-changed",
+				snapshot: {
+					agentId: "b",
+					runId: "run-B",
+					status: "running",
+					iteration: 0,
+					messages: [],
+					pendingToolCalls: [],
+					usage: {
+						inputTokens: 0,
+						outputTokens: 0,
+						cacheReadTokens: 0,
+						cacheWriteTokens: 0,
+						totalCost: 0,
+					},
+					recovery: {
+						state: "idle",
+						tracker: {
+							state: "idle",
+							currentRepairAttempts: 0,
+							equivalentRepeatCount: 0,
+							blockedExactKeys: [],
+							blockedFamilies: [],
+						},
+						secondStage: "idle",
+						episodeFailures: 0,
+						maxEpisodeFailures: 100,
+						circuitNoticeCount: 0,
+					},
+					execution: { modelStreaming: true, tooling: false, awaitingApproval: false },
+				},
+				previousExecution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			},
+		})
+		// Presence seam flipped to true after the first observation.
+		expect(wiring.comparator.hasObservedShadowState()).toBe(true)
+		// Canonical delegation now returns the streaming phase.
+		expect(wiring.getLastObservedShadowPhase()).toBe("streaming")
+		wiring.dispose()
+	})
+
+	it("LAC-ABSENCE01-c: after resetForNewTask → presence seam is cleared (back to absence fallback)", () => {
+		const { deps } = makeDeps()
+		// Same session/arbiter wiring as LAC-ABSENCE01-b so the canonical
+		// event reaches the comparator.
+		const sessionId = "session-B"
+		const activeSessionRef: { current: { sessionId: string; isRunning: boolean } | undefined } = {
+			current: { sessionId, isRunning: true },
+		}
+		const wiring = createTaskShadowHostWiring({
+			...deps,
+			lifecycle: {
+				...deps.lifecycle,
+				getActiveSession: () => activeSessionRef.current as never,
+				setRunning: (flag: boolean) => {
+					if (activeSessionRef.current) activeSessionRef.current.isRunning = flag
+				},
+			},
+			getRuntimeStatus: () => "running",
+			getArbiterSnapshot: () => ({
+				...emptyArbiterSnapshot(),
+				execution: { modelStreaming: true, tooling: false, awaitingApproval: false },
+				status: "running",
+			}),
+		})
+		// Establish presence via a canonical observation (see LAC-ABSENCE01-b
+		// for why we use `execution-state-changed` and not `run-started`).
+		wiring.observeCanonicalRuntimeEvent({
+			origin: "RUNTIME_CANONICAL",
+			sessionId,
+			event: {
+				type: "execution-state-changed",
+				snapshot: {
+					agentId: "b",
+					runId: "run-B",
+					status: "running",
+					iteration: 0,
+					messages: [],
+					pendingToolCalls: [],
+					usage: {
+						inputTokens: 0,
+						outputTokens: 0,
+						cacheReadTokens: 0,
+						cacheWriteTokens: 0,
+						totalCost: 0,
+					},
+					recovery: {
+						state: "idle",
+						tracker: {
+							state: "idle",
+							currentRepairAttempts: 0,
+							equivalentRepeatCount: 0,
+							blockedExactKeys: [],
+							blockedFamilies: [],
+						},
+						secondStage: "idle",
+						episodeFailures: 0,
+						maxEpisodeFailures: 100,
+						circuitNoticeCount: 0,
+					},
+					execution: { modelStreaming: true, tooling: false, awaitingApproval: false },
+				},
+				previousExecution: { modelStreaming: false, tooling: false, awaitingApproval: false },
+			},
+		})
+		expect(wiring.getLastObservedShadowPhase()).toBe("streaming")
+		// After new-task reset, presence must clear so the next task's
+		// legacy phase wins until the new canonical run-started lands.
+		wiring.resetForNewTask()
+		expect(wiring.comparator.hasObservedShadowState()).toBe(false)
+		expect(wiring.getLastObservedShadowPhase()).toBeUndefined()
+		wiring.dispose()
+	})
+})
