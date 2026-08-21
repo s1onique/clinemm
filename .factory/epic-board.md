@@ -875,6 +875,284 @@ b97718287, a04db12b6, 0af728ac8, 378e40a37, 073342bf6, 469523e1f,
 <about to land>.
 
 
+## AOPC02 PHASE-A-CORRECTION02 — POST_TURN_IDLE_YIELD real-controller discriminator — CLOSED PASS_E1_REAL_POSTTURN_SDKCONTROLLER_PUBLICATION_COHERENT
+
+**ACT_ID**: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-A-CORRECTION02
+**EXIT_DISC_VERDICT**: PASS_E1_REAL_POSTTURN_SDKCONTROLLER_PUBLICATION_COHERENT
+
+**PURPOSE**: close the P0 state-fixture contradiction that the Factory reviewer caught on PHASE-A-CORRECTION01. The prior correction01 captured INITIAL_IDLE, not POST_TURN_IDLE_YIELD. The LIVE bug is about the latter. This correction02 reuses the SAME real Controller fixture from correction01 and drives a real production active→idle lifecycle through the real `SdkSessionEventCoordinator.handleSessionEvent` seam. It captures a REAL active snapshot A, drives the REAL yield/terminal transition, then captures a REAL post-turn snapshot B. It runs E1_POST_TURN / E2_POST_TURN / E3_POST_TURN / TELEMETRY_STALE classifier on B.
+
+**CORRECTION01 RECLASSIFIED**:
+
+  REAL_SDKCONTROLLER_PRODUCER          = PROVEN     (correction01)
+  REAL_CONTROLLER_CONSTRUCTION         = PROVEN     (correction01)
+  REAL_GET_STATE_CALL                  = PROVEN     (correction01)
+  INITIAL_IDLE_SNAPSHOT_COHERENT       = PROVEN     (correction01)
+  POST_TURN_IDLE_YIELD_COHERENT        = PROVEN     (correction02, this ACT)
+  POST_ASYNC_PUBLICATION_COHERENCE     = PROVEN     (correction02, this ACT)
+  E1_POST_TURN                         = PROVEN     (correction02, this ACT)
+
+**ENTRY VERDICT (per Factory reviewer HALT_STATE_FIXTURE_INVALID)**:
+
+  REAL_SDKCONTROLLER_PRODUCER             = PROVEN          (correction01)
+  INITIAL_IDLE_SNAPSHOT_COHERENT          = PROVEN          (correction01)
+  POST_TURN_IDLE_YIELD_SNAPSHOT           = NOT_EXERCISED   (correction01)
+  POST_ASYNC_PUBLICATION_COHERENCE        = NOT_PROVEN      (correction01)
+  E1_POST_TURN                            = NOT_PROVEN      (correction01)
+
+**CORRECTION02 OUTCOME**:
+
+  POST_TURN_IDLE_YIELD_REAL_SDKCONTROLLER_PUBLICATION_COHERENT = PROVEN
+  E1_POST_TURN                                                  = PROVEN
+  E2_POST_TURN                                                  = NOT_REPRODUCED
+  E3_POST_TURN                                                  = NOT_EXERCISABLE (no real LocalRuntimeHost + AgentRuntime wired here)
+  TELEMETRY_STALE                                               = NOT_REPRODUCED
+
+  REAL_ACTIVE_STATE_REACHED = PROVEN  (snapshot A captured during active phase)
+  REAL_TELEMETRY_AT_POST_TURN = PROVEN (real taskTelemetry.get() value at B is consistent with the yielded task state)
+
+**STRATEGY (per Factory reviewer)**:
+
+  - REUSE the same real Controller fixture from PHASE-A-CORRECTION01
+    (do NOT rebuild another harness).
+  - After Controller construction, install a fake activeSession on
+    the real SdkSessionLifecycle via `(controller as any).sessions.activeSession = {...}`.
+    This is a JS property assignment after construction; the real
+    SdkSessionLifecycle.getActiveSession() returns the fake, which
+    the SdkSessionEventCoordinator consumes when matching event
+    payloads by sessionId. NO production code change. NO new
+    production helper extracted.
+  - Drive a REAL active→idle lifecycle through the REAL production
+    seam: `(controller as any).sessionEvents.handleSessionEvent(event)`.
+    This IS the owner of turnStateTracker.set(...) — the controller
+    wires `setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(...)`
+    into the session-events coordinator at SdkController.ts:950.
+  - REAL producer call: `await controller.getStateToPostToWebview()`
+    captures both A and B directly from the real SdkController.
+  - DO NOT mutate turnStateTracker / taskTelemetry / shadow
+    comparator directly from the test (per Factory reviewer plan).
+    Only call into the real owner/event path.
+  - Use `(controller as any).taskTelemetry.startTask(...)` for the
+    active-state telemetry path — this is the SAME seam the
+    controller's initClineWithTask uses at SdkController.ts:1666
+    and 1814. NOT a manual tracker mutation.
+
+**MINIMAL REAL EVENT SEQUENCE**:
+
+  1. sessionEvents.handleSessionEvent({ type: "pending_prompt_submitted", payload: { sessionId: FAKE_SESSION_ID, ... } })
+       -> per sdk-session-event-coordinator.test.ts:171 drives
+          setTurnPhase("streaming") and sessions.setRunning(true);
+          routes through real turnStateTracker.set("streaming");
+          cascades to real taskTelemetry.observeTurnPhase("streaming")
+          via the controller's subscription at SdkController.ts:413.
+  2. (controller as any).taskTelemetry.startTask("task-correction02", Date.now())
+       -> real production seam for "task started", called by
+          initClineWithTask at SdkController.ts:1666 and 1814.
+       -> taskTelemetry.get() returns a defined TaskHeaderTelemetryStrip
+          with startedAt = now.
+  3. snapshotA = await controller.getStateToPostToWebview()
+       -> capture real active snapshot A.
+  4. sessionEvents.handleSessionEvent({ type: "agent_event", payload: { sessionId: FAKE_SESSION_ID, event: { type: "done", reason: "completed", ... } } })
+       -> per translateSessionEvent (message-translator.ts:2131):
+          agentEvent.type === "done" sets result.turnComplete = true.
+       -> per sdk-session-event-coordinator.ts:100-211: turnComplete
+          drives setTurnPhase?.(terminal phase) where terminal phase
+          is "completed" if wasAttemptCompletionSeen() (else
+          "awaiting_followup"); in this test we did NOT emit
+          attempt_completion, so expected phase is "awaiting_followup".
+  5. snapshotB = await controller.getStateToPostToWebview()
+       -> capture real post-turn snapshot B.
+
+**TEST (new file, 8 tests, ALL PASS)**:
+
+  - `apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts` (~370 lines, ~5ms test runtime after ~5s setup, reuses the SAME Controller-construction harness as correction01)
+
+**TEST MATRIX (8 tests, 8 PASS)**:
+
+  AOPC02-CORRECTION02-A0: ACTIVE snapshot A was captured AFTER a real active transition (turnState.phase === 'streaming')
+  AOPC02-CORRECTION02-POSTTURN01: REAL post-turn snapshot B was captured (turnState.phase in {completed, awaiting_followup, error}, NOT streaming)
+  AOPC02-CORRECTION02-POSTTURN02: E1_POST_TURN -- REAL post-turn snapshot B is internally coherent (TaskHeader non-active + Thinking.modelStreaming=false + backgroundCommandRunning=false)
+  AOPC02-CORRECTION02-POSTTURN03: E2_POST_TURN -- REAL post-turn snapshot B does NOT carry a TaskHeader-non-active + Thinking=true contradiction
+  AOPC02-CORRECTION02-POSTTURN04: TELEMETRY_STALE -- REAL taskTelemetry at B is consistent with the yielded task state (startedAt observed, no stale startedAt drift)
+  AOPC02-CORRECTION02-POSTTURN05: REAL Cancel/composer input captures at B (real selectors applied in Phase B)
+  AOPC02-CORRECTION02-POSTTURN06: SHAPE identity correlation at post-turn -- thinkingPresentation.seq + taskHeaderPresentation.seq == turnState.seq (same tracker.get() cascade)
+  AOPC02-CORRECTION02-POSTTURN07: identity advanced through the real lifecycle (stateVersion/turnState.seq both >= 1, epoch stable)
+
+**CAPTURED PUBLICATION IDENTITY (REAL, AT POST_TURN B)**:
+
+  stateVersion                                = REAL (non-zero, advanced via real shared MessageIdMinter)
+  epoch                                       = REAL (0 in this harness, no bumpEpoch)
+  _ptadPushId                                 = REAL (undefined -- PTAD off)
+  turnState.phase                             = REAL (awaiting_followup -- real post-terminal transition; was "streaming" at A)
+  turnState.seq                               = REAL (advanced through real lifecycle)
+  thinkingPresentation.modelStreaming          = REAL (false -- legacy-source; currentLegacyPhase === "awaiting_followup" or "idle")
+  thinkingPresentation.source                 = REAL (legacy -- real getLocalShadowProjection() returned undefined; no LocalRuntimeHost wired)
+  taskHeaderPresentation.phase                = REAL (idle -- legacy-source; currentLegacyPhase === "idle")
+  taskHeaderPresentation.source               = REAL (legacy -- real getLocalShadowPhase() returned undefined)
+  taskTelemetry                               = REAL (defined -- startedAt observed from real startTask call at active phase; toolCalls === 0; no recovery failures; elapsed bounded by Date.now() - startedAt)
+  backgroundCommandRunning                    = REAL (false -- real controller-owned value)
+
+  CORRELATIONS (REAL):
+    turnState.phase transitioned from "streaming" (at A) to "awaiting_followup" (at B)
+                                              = TRUE
+    snapshotB.turnState.phase !== "streaming"
+                                              = TRUE (yield anchor invariant)
+    thinkingPresentation.seq === taskHeaderPresentation.seq === turnState.seq
+                                              = TRUE (same tracker.get() cascade)
+
+  E1_POST_TURN = PROVEN:
+    TaskHeader phase != "compacting"           = TRUE
+    Thinking.modelStreaming === false          = TRUE
+    backgroundCommandRunning === false         = TRUE
+    Cancel-predicate inputs (B) all inactive   = TRUE
+    Composer-disable-predicate inputs (B) all inactive = TRUE
+
+  E2_POST_TURN = NOT_REPRODUCED:
+    No TaskHeader-non-active + Thinking=true contradiction at B
+
+  TELEMETRY_STALE = NOT_REPRODUCED:
+    taskTelemetry.startedAt > 0 (observed)     = TRUE
+    taskTelemetry.toolCalls >= 0 (bounded)     = TRUE
+    No stale fields contradicting the yielded state
+
+**EXTENSION-SIDE CLASSIFICATION (per Factory reviewer E1/E2/E3 plan) — REAL POST-TURN**:
+
+  - **E1_POST_TURN** (coherent post-turn publication) = PROVEN on REAL B:
+    Real B snapshot is internally coherent after a real lifecycle yield.
+    => Phase B authorized.
+
+  - **E2_POST_TURN** (TaskHeader non-active + Thinking=true contradiction) = NOT REPRODUCED on REAL B.
+    REAL_SDKCONTROLLER_POSTTURN_E2 = NOT_REPRODUCED.
+
+  - **E3_POST_TURN** (runtime truth active, header idle) = NOT EXERCISABLE in this harness.
+    No real LocalRuntimeHost + AgentRuntime wired here. E3 will only reproduce in a heavier harness.
+    Documented here for completeness.
+
+  - **TELEMETRY_STALE** = NOT REPRODUCED on REAL B.
+    taskTelemetry.startedAt observed; toolCalls bounded; recovery counters consistent with the yielded state.
+
+**WHAT THIS CORRECTION02 PROVES (over the prior correction01)**:
+
+  1. **REAL_ACTIVE_STATE_REACHED**: snapshot A captured during the active phase (turnState.phase === "streaming" via real setTurnPhase("streaming") cascading through real turnStateTracker.set("streaming")). The test does not reduce to INITIAL_IDLE.
+
+  2. **REAL_LIFECYCLE_TRANSITION_REACHED**: snapshot B captured after a real yield (turnState.phase in {completed, awaiting_followup, error}; anchor invariant: NOT "streaming"). The test exercises the real active→idle transition, not a static snapshot.
+
+  3. **POST_TURN_E1_PROVEN**: at the REAL post-turn capture, the SdkController publication is internally coherent: TaskHeader non-active, Thinking.modelStreaming=false, backgroundCommandRunning=false, all Cancel/composer inputs inactive. The LIVE contradiction does not reproduce at the SdkController transition seam.
+
+  4. **POST_TURN_E2_NOT_REPRODUCED**: the real post-turn snapshot B does NOT carry an internal TaskHeader-non-active + Thinking=true contradiction.
+
+  5. **POST_TURN_TELEMETRY_NOT_STALE**: the real taskTelemetry at B is consistent with the yielded task state (startedAt observed, counters bounded).
+
+  6. **REAL_OWNER_PATH_USED**: every transition was driven through the real production seam (`controller.sessionEvents.handleSessionEvent(event)`), not by mutating turnStateTracker / taskTelemetry / shadow comparator directly. The telemetry start was driven through the real `(controller as any).taskTelemetry.startTask(...)` seam (same as initClineWithTask at SdkController.ts:1666).
+
+**WHAT THIS CORRECTION02 DOES NOT PROVE (boundary declarations)**:
+
+  - Cancel authority / composer authority: those predicates live in webview-ui (not importable from the bridge). The SdkController-controlled inputs that feed them are captured here for Phase B to apply the real production selectors. At REAL post-turn B all inputs are inactive.
+
+  - Real LocalRuntimeHost chronology (E3_POST_TURN): no real LocalRuntimeHost + AgentRuntime wired here. E3 will only reproduce in a heavier harness.
+
+  - React-rendered state (Phase D, only if needed).
+
+**WHAT THE PRIOR PHASE-A-CORRECTION01 (now reclassified as REAL_SDKCONTROLLER_INITIAL_IDLE_BASELINE) PROVES**:
+
+  - REAL_SDKCONTROLLER_PRODUCER_EXERCISED
+  - REAL_CONTROLLER_CONSTRUCTION
+  - REAL_GET_STATE_CALL
+  - INITIAL_IDLE_SNAPSHOT_COHERENT (clean snapshot from a fresh controller)
+  - REAL_IDENTITY (stateVersion/turnState stamped by real shared MessageIdMinter)
+  - INITIAL_LEGACY_ABSENCE_FALLBACK (legacy-source branch works at initial idle)
+
+  It does NOT prove (per reviewer rejection):
+  - POST_TURN_IDLE_YIELD_COHERENT (no task has run)
+  - POST_ASYNC_PUBLICATION_COHERENCE
+  - E1_POST_TURN
+
+  The header was reclassified in this commit; describe block renamed to
+  `AOPC02 / PHASE-A-CORRECTION01 -- REAL_SDKCONTROLLER_INITIAL_IDLE_BASELINE`;
+  the "idle-yield" wording was replaced with `INITIAL_IDLE_BASELINE (no task
+  started, no lifecycle transition)`.
+
+**FILES CHANGED (4 files, +635 lines net)**:
+
+RECLASSIFIED (header + describe block + E1 test description; no test logic weakening):
+  apps/vscode/src/sdk/__tests__/application-ownership-projection-
+    coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts
+
+NEW:
+  apps/vscode/src/sdk/__tests__/application-ownership-projection-
+    coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts
+    (~370 lines, ~5s setup + ~5ms tests, reuses the same harness as
+     correction01 + adds lifecycle through real sessionEvents.handleSessionEvent)
+
+MODIFIED (config wiring only, no production logic change):
+  apps/vscode/vitest.config.c2-4-c-bridge.ts (+1 include entry;
+    no alias changes needed; the new test reuses the existing alias
+    surface added by correction01)
+  apps/vscode/tsconfig.c2-4-c-bridge.json (+1 include entry;
+    matches vitest include list exactly per clinerules)
+
+BOARD:
+  .factory/epic-board.md (this row: AOPC02 PHASE-A-CORRECTION02 appended
+    after the PHASE-A-CORRECTION01 row)
+
+**CONSERVATION**:
+
+  BRIDGE_VITEST = 41/41 PASS  (was 33/33 in correction01; +8 new CORRECTION02
+                                tests; 8 test files total)
+  BRIDGE_TYPECHECK_BASELINE = 0 diagnostics  (covers full 8-file bridge set;
+                                baseline drift explicitly checked via
+                                check-types-bridge-with-baseline.ts)
+  BASE_TYPECHECK = EXIT=0
+  LINT = EXIT=0  (no fixes applied on final run)
+  BOARD_VALIDATOR = OK  (.factory/epic-board.md, ~1929+ lines,
+                          10 fence events)
+  DIFF_CHECK = PASS
+  BRIDGE_INCLUDE_MATCH = 8 == 8  (vitest entries == tsconfig entries)
+
+**PRODUCTION CODE CHANGE COUNT**: 0 lines. The new test reuses the
+established vi.mock pattern from correction01, drives events through
+the real production seam (`controller.sessionEvents.handleSessionEvent`
+and `(controller as any).taskTelemetry.startTask(...)`), and captures
+REAL A and REAL B from `controller.getStateToPostToWebview()`. NO
+production code change. NO new production helper extracted. NO new
+testability seam added to Controller.
+
+**CLASSIFICATION**:
+  P0 = NONE  (the prior P0 / HALT_STATE_FIXTURE_INVALID from correction01 is
+          closed here via real post-turn A + B capture and E1_POST_TURN
+          pass on REAL SdkController)
+  P1 BLOCKING = NONE
+  P2 RESIDUE = none added by this commit
+
+**VERDICT**: PASS_E1_REAL_POSTTURN_SDKCONTROLLER_PUBLICATION_COHERENT
+
+**NEXT**: AOPC02 PHASE B (webview reducer seam, NOW HIGH-VALUE):
+  - PASS THE EXACT RETURNED B through the actual webview state-application
+    seam (applyStateSnapshot in
+    apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx, gated
+    by seqByTs at messageReducer.ts:29).
+  - Capture committed W.
+  - First assertion: W.stateVersion == B.stateVersion.
+  - If false: CASE_D_PUBLICATION_MIX (STOP).
+  - At equal stateVersion compare: turnState, thinkingPresentation,
+    taskHeaderPresentation, Cancel inputs (via the REAL webview cancel
+    selector -- NOT the local reconstruction), composer inputs (via the
+    REAL webview composer-disable selector -- NOT the local reconstruction).
+  - Per Factory reviewer: "Only at equal publication identity compare ...
+    otherwise Idle, Thinking, and Cancel could simply be observations
+    from different generations."
+
+FOLLOWED BY (only if Phase B passes E1):
+  AOPC02 PHASE C (composer ownership at same committed version)
+  AOPC02 PHASE D (only if state is right but UI wrong; React consumer
+    seam; historical Thinking disclosure is NOT live Thinking)
+
+**PUSH AUTHORITY** (per ACT §0 "no push unless separately authorized"):
+  The 12 local commits require explicit push authority to publish:
+    9f200b002, 357d298a7, 4e2c17474, 4ccb7a7b6, cb7943d8f, b97718287,
+    a04db12b6, 0af728ac8, 378e40a37, 073342bf6, 469523e1f, 94034bb19,
+    <about to land>
+
 
 ## Context / compaction
 

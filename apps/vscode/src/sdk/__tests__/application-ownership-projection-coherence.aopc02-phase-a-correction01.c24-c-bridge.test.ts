@@ -1,6 +1,7 @@
 /**
  * ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 /
- * PHASE-A-CORRECTION01 — REAL SdkController producer discriminator.
+ * PHASE-A-CORRECTION01 — REAL_SDKCONTROLLER_INITIAL_IDLE_BASELINE
+ *   (RECLASSIFIED by AOPC02 PHASE-A-CORRECTION02)
  *
  * ENTRY VERDICT = HALT_TEST_SEAM_INVALID
  *   The prior Phase A claimed SYNCHRONIZED_PUBLICATION_INPUT_TOKEN =
@@ -9,7 +10,7 @@
  *   reclassification as SYNTHETIC_REAL. This file is the bounded
  *   REAL_SDKCONTROLLER_PRODUCER discriminator that closes the gap.
  *
- * PURPOSE
+ * PURPOSE (CLOSED AT THE PRODUCER SEAM; BOUNDARY RECLASSIFIED)
  *   Per Factory reviewer Phase A plan:
  *     "Use the real current state producer:
  *        SdkController.getStateToPostToWebview()
@@ -24,6 +25,44 @@
  *   plane.test.ts), calls `await controller.getStateToPostToWebview()`
  *   ONCE, captures the EXACT returned object S, and runs the E1/E2/E3
  *   classifier against S.
+ *
+ * ====================================================================
+ * RECLASSIFICATION (AOPC02 PHASE-A-CORRECTION02)
+ * ====================================================================
+ *
+ *   Per Factory reviewer:
+ *     "The captured state is initial idle, not idle-after-a-turn /
+ *      idle-yield. The test constructs a fresh Controller, starts no
+ *      task, drives no runtime events, drives no task telemetry, and
+ *      immediately captures:
+ *
+ *        controller = new Controller(stubContext)
+ *        snapshot = await controller.getStateToPostToWebview()
+ *
+ *      The assertions then observe exactly what a brand-new controller
+ *      should contain. That proves:
+ *
+ *        REAL_SDKCONTROLLER_INITIAL_IDLE_PUBLICATION = COHERENT
+ *
+ *      It does not prove:
+ *
+ *        REAL_SDKCONTROLLER_POST_ASYNC_IDLE_YIELD_PUBLICATION = COHERENT
+ *
+ *      And the latter is the load-bearing question for the LIVE bug."
+ *
+ *   Reclassified:
+ *
+ *     REAL_SDKCONTROLLER_PRODUCER          = PROVEN          (this file)
+ *     REAL_CONTROLLER_CONSTRUCTION         = PROVEN          (this file)
+ *     REAL_GET_STATE_CALL                  = PROVEN          (this file)
+ *     INITIAL_IDLE_SNAPSHOT_COHERENT       = PROVEN          (this file)
+ *
+ *     POST_TURN_IDLE_YIELD_SNAPSHOT        = NOT_EXERCISED   (NOT proven here)
+ *     POST_ASYNC_PUBLICATION_COHERENCE     = NOT_PROVEN      (NOT proven here)
+ *     E1_POST_TURN                         = NOT_PROVEN      (NOT proven here)
+ *
+ *   The post-turn discriminator lives in
+ *   `application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts`.
  *
  * HARNESS PHILOSOPHY (per Factory reviewer)
  *   - vi.mock for the heavyweight Controller deps that the existing
@@ -41,24 +80,32 @@
  * WHAT THIS PROBE PROVES
  *   - REAL_SDKCONTROLLER_PRODUCER_EXERCISED: the real
  *     controller.getStateToPostToWebview() returned object is captured.
- *   - REAL_TASK_TELEMETRY: S.taskTelemetry is the real value returned by
- *     the controller's own TaskTelemetryTracker.get().
- *   - REAL_BACKGROUND_COMMAND: S.backgroundCommandRunning is the real
- *     controller-owned value.
- *   - REAL_SHADOW: S.thinkingPresentation.source / S.taskHeaderPresentation.source
+ *   - REAL_TASK_TELEMETRY (initial-idle observation): S.taskTelemetry is
+ *     the real value returned by the controller's own
+ *     TaskTelemetryTracker.get() AT INITIAL IDLE (no task started).
+ *   - REAL_BACKGROUND_COMMAND (initial-idle observation):
+ *     S.backgroundCommandRunning is the real controller-owned value AT
+ *     INITIAL IDLE.
+ *   - REAL_SHADOW (initial-idle absence path):
+ *     S.thinkingPresentation.source / S.taskHeaderPresentation.source
  *     come from the real getLocalShadowProjection() / getLocalShadowPhase()
- *     call paths.
+ *     call paths. Both return `undefined` here (no LocalRuntimeHost
+ *     wired); selectors fall through to the legacy-source branch per
+ *     CONTRACT_2. This proves the legacy-absence fallback works, NOT
+ *     the shadow-observation-and-then-idle transition.
  *   - REAL_IDENTITY: S.stateVersion, S.epoch, S._ptadPushId, S.turnState,
  *     S.thinkingPresentation, S.taskHeaderPresentation are stamped by the
  *     real production code with the real shared MessageIdMinter counter.
  *
  * WHAT THIS PROBE DOES NOT PROVE
+ *   - POST_TURN_IDLE_YIELD_COHERENT (no task has run; tracker has not
+ *     transitioned through streaming→terminal).
+ *   - POST_ASYNC_SNAPSHOT_COHERENT (no real active→idle transition
+ *     exercised; this is the load-bearing question for the LIVE bug).
  *   - Cancel authority / composer authority: those predicates live in
  *     webview-ui (not importable from the bridge); this probe captures
  *     the SdkController-produced inputs that feed them and lets Phase B
  *     apply the real webview selectors.
- *   - LocalRuntimeHost chronology (no real runtime here; E3 is
- *     structurally not exercisable in this harness).
  *   - The numeric relation `stateVersion == turnState.seq + N` is NOT
  *     asserted; production does not promise that. SHAPE-only invariants
  *     are asserted.
@@ -208,7 +255,7 @@ function makeStubContext(): any {
 // Probe.
 // ============================================================================
 
-describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PHASE-A-CORRECTION01 — REAL SdkController producer discriminator", () => {
+describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PHASE-A-CORRECTION01 — REAL_SDKCONTROLLER_INITIAL_IDLE_BASELINE", () => {
 	let controller: Controller
 	let snapshot: ExtensionState
 	let isolatedHomeDir: string
@@ -368,7 +415,7 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PH
 	//   completeness.
 	// ------------------------------------------------------------------------
 
-	it("AOPC02-CORRECTION01-E1-CLASSIFIER: at real SdkController idle-yield, real S is internally coherent", () => {
+	it("AOPC02-CORRECTION01-E1-CLASSIFIER: at REAL_SDKCONTROLLER_INITIAL_IDLE_BASELINE (no task started, no lifecycle transition), real S is internally coherent", () => {
 		const realE1 = {
 			taskHeaderPhaseNonActive: snapshot.taskHeaderPresentation!.phase !== "compacting",
 			thinkingModelStreamingFalse: snapshot.thinkingPresentation!.modelStreaming === false,
