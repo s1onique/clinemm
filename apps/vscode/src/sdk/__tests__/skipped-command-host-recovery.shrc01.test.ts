@@ -23,25 +23,45 @@
  *       the production orchestrator class)
  *     + real AgentRuntime (via @cline/agents, the SCTR01 seam)
  *
- *   Mocked ONLY where unavoidable:
- *     - model handler/script      → StepModel (scripted events)
- *     - run_commands executor     → vi-counter-backed execute()
- *     - user approval callback    → real `requestToolApproval` returning
- *                                   `{ approved: false, reason }` for
- *                                   SHRC01 (USER_REJECT) and
- *                                   `{ approved: true }` for the
- *                                   success control
+ *   Substituted ONLY where unavoidable (the rest is real):
+ *     - model adapter             → synthetic_real StepModel (scripted events)
+ *     - run_commands-shaped tool  → synthetic_real AgentTool.execute()
+ *                                   (counter-backed; AgentRuntime's real
+ *                                   approval + control-plane machinery still
+ *                                   runs)
+ *     - user approval decision    → synthetic_real callback injected into
+ *                                   AgentRuntime.requestToolApproval
+ *                                   ({ approved: false, reason } for
+ *                                   SHRC01 USER_REJECT,
+ *                                    { approved: true } for SHRC01_CTL)
  *     - filesystem/substrate      → isolated tmp HOME/CLINE_DIR
+ *
+ * Truthful classification:
+ *     REAL:
+ *       LocalRuntimeHost, SessionRuntime orchestrator, AgentRuntime,
+ *       AgentRuntime approval + control-plane + tool-orchestration
+ *       machinery, onToolRuntimeOutcome hook, finishRun, hook-fanout,
+ *       FileSessionService, LocalRuntimeHost markTurnIdle /
+ *       completeInteractiveTurn / runTurn / executeTurn / executeAgentTurn
+ *     SYNTHETIC_REAL:
+ *       StepModel (scripted events stand in for the provider adapter)
+ *       run_commands-shaped AgentTool.execute() (counters stand in for
+ *       the production tool implementation)
+ *       user decision callback (stands in for the VS Code approval UI)
+ *     NOT_EXERCISED:
+ *       VS Code approval UI / application seam
+ *       Compaction pipeline / prepareTurn hook (replaceMessages etc.)
  *
  * Production seam under test (composition):
  *   LocalRuntimeHost.runTurn(input) — line 994
  *     → executeTurn(session, input) — line 1708
  *       → markTurnRunning(session) — line 1749 → updateStatus("running")
  *       → executeAgentTurn(session, prompt) — line 1882
- *         → session.agent.continue(...) — REAL SessionRuntime.continue()
- *           → REAL AgentRuntime.continue()  (SCTR01 rejection loop)
- *             → REAL requestToolApproval → reject
- *             → tool outcome: failure/rejected
+ *         → session.agent.continue(...) — real SessionRuntime.continue()
+ *           → real AgentRuntime.continue()  (SCTR01 rejection loop)
+ *             → real requestToolApproval → synthetic_real user decision
+ *               → reject  → control_plane / user_rejected
+ *             → real onToolRuntimeOutcome hook fires with control_plane outcome
  *             → model observes rejection, emits terminal stop
  *             → finishRun returns AgentResult
  *       → returns AgentResult with finishReason
@@ -50,11 +70,14 @@
  *     → pendingPromptsController.drain(sessionId) — line 1041
  *
  * Discrimination matrix (per ACT §5–§7):
- *   SHRC01       — USER_REJECT: real AgentRuntime rejects the proposed
- *                  run_commands via real approval. Host must settle to
- *                  status="idle" with no residual execution flags.
- *   SHRC01-CTL   — APPROVED SUCCESS: real AgentRuntime approves and
- *                  executes run_commands. Host must settle to
+ *   SHRC01       — USER_REJECT: real AgentRuntime's real approval
+ *                  machinery rejects the synthetic_real run_commands via
+ *                  the synthetic_real user decision callback. Host must
+ *                  settle to status="idle" with no residual execution
+ *                  flags. (`executorCalls === 0`.)
+ *   SHRC01-CTL   — APPROVED SUCCESS: real AgentRuntime's real approval
+ *                  machinery approves and the synthetic_real
+ *                  run_commands execute() runs once. Host must settle to
  *                  status="idle" the same way.
  *   SHRC01-SANITY — bridge aliases resolve to the real production
  *                   LocalRuntimeHost, real SessionRuntime
@@ -71,9 +94,14 @@
  *   LocalRuntimeHost.createAgent option is supplied to wrap the real
  *   `SessionRuntime` with a custom `createAgentRuntimeImpl` that
  *   constructs the REAL `AgentRuntime` while overriding ONLY the model
- *   adapter (substituting the scripted `StepModel` for the provider-
- *   resolved adapter) and the `requestToolApproval` callback (to
- *   simulate the user).
+ *   adapter (substituting the synthetic_real scripted `StepModel` for
+ *   the provider-resolved adapter) and the `requestToolApproval`
+ *   decision (substituting the synthetic_real user decision callback
+ *   for the VS Code approval UI). Everything else stays real: the
+ *   AgentRuntime approval + control-plane + tool-orchestration machinery,
+ *   onToolRuntimeOutcome hook, finishRun, and the synthetic_real
+ *   run_commands-shaped AgentTool's execute() body — which never runs
+ *   in SHRC01 because rejection short-circuits before it.
  */
 import { existsSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -98,9 +126,10 @@ import { afterEach, describe, expect, it } from "vitest"
 const envSnapshot = { HOME: process.env.HOME, CLINE_DIR: process.env.CLINE_DIR }
 
 // ---------------------------------------------------------------------------
-// Scripted AgentModel — substitutes the provider adapter with a deterministic
-// scripted event stream. Same pattern as the SCTR01 step model so the two
-// ACTs share their model-adapter shape.
+// synthetic_real scripted AgentModel — stands in for the provider adapter
+// with a deterministic scripted event stream. Same pattern as the SCTR01
+// step model so the two ACTs share their model-adapter shape. AgentRuntime
+// itself stays real; only this adapter is synthetic_real.
 // ---------------------------------------------------------------------------
 
 class StepModel implements AgentModel {
@@ -132,17 +161,23 @@ interface CapturedOutcome {
 
 // ---------------------------------------------------------------------------
 // Build the real LocalRuntimeHost + real SessionRuntime + real AgentRuntime
-// composition. The only test seams are:
-//   - the `StepModel` (scripted events, NO provider adapter)
-//   - the `requestToolApproval` callback (simulated user decision)
-//   - the `run_commands` tool's `execute` (mocked to count invocations)
-//   - the `extraTools` start-config (injects our real `run_commands` tool)
+// composition. The test seams are:
+//   - the synthetic_real `StepModel` (scripted events stand in for the
+//     provider adapter — AgentRuntime itself stays real)
+//   - the synthetic_real `requestToolApproval` callback (simulated user
+//     decision injected into AgentRuntime; AgentRuntime's approval +
+//     control-plane machinery stays real)
+//   - the synthetic_real `run_commands`-shaped AgentTool.execute()
+//     (counter-backed; AgentRuntime's tool-orchestration machinery stays
+//     real)
+//   - the `extraTools` start-config (injects the synthetic_real
+//     run_commands-shaped tool into the host's merged toolset)
 // ---------------------------------------------------------------------------
 
 function makeRunCommandsTool(counters: RunCounters): AgentTool<{ commands: string[] }, Array<{ result: string; success: true }>> {
 	return {
 		name: "run_commands",
-		description: "Real AgentRuntime tool; executor MUST NOT run when the user rejects approval.",
+		description: "synthetic_real run_commands-shaped AgentTool; executor MUST NOT run when the user rejects approval.",
 		inputSchema: {
 			type: "object",
 			properties: { commands: { type: "array", items: { type: "string" } } },
@@ -273,9 +308,10 @@ async function buildComposedHost(opts: {
 		return { approved: true }
 	}
 
-	// runtimeBuilder returns no tools — the real `run_commands` tool is
-	// injected via `extraTools` on the start config so the host's merged
-	// toolset (line 605 of local-runtime-host.ts) carries exactly one tool.
+	// runtimeBuilder returns no tools — the synthetic_real
+	// run_commands-shaped tool is injected via `extraTools` on the start
+	// config so the host's merged toolset (line 605 of local-runtime-host.ts)
+	// carries exactly one tool.
 	const runtimeBuilder = {
 		build: async () => ({
 			tools: [],
@@ -287,10 +323,12 @@ async function buildComposedHost(opts: {
 	//   options.createAgent ?? ((config) => new SessionRuntime(config))
 	// Here we pass the real `SessionRuntime` orchestrator with a custom
 	// `createAgentRuntimeImpl` that builds the REAL `AgentRuntime` while
-	// overriding ONLY the model adapter (scripted) and the approval
-	// callback (simulated user). Everything else — hooks, prepareTurn,
-	// conversation store, mistake tracker — comes from the real
-	// `SessionRuntime` orchestration.
+	// overriding ONLY the model adapter (synthetic_real StepModel) and the
+	// approval decision (synthetic_real user callback). Everything else —
+	// hooks, prepareTurn, conversation store, mistake tracker, message
+	// builder, contribution registry — comes from the real
+	// `SessionRuntime` orchestration. AgentRuntime's approval + control-
+	// plane + tool-orchestration machinery also stays real.
 	const createAgent: NonNullable<ConstructorParameters<typeof LocalRuntimeHost>[0]["createAgent"]> = (config) => {
 		return new SessionRuntime(config, {
 			createAgentRuntimeImpl: (runtimeConfig) => {
@@ -317,7 +355,7 @@ async function buildComposedHost(opts: {
 async function makeStartConfig(sessionId: string, isolationDir: string) {
 	const tool = {
 		name: "run_commands",
-		description: "real AgentRuntime tool; passed via extraTools",
+		description: "synthetic_real run_commands-shaped AgentTool; passed via extraTools",
 		inputSchema: {
 			type: "object",
 			properties: { commands: { type: "array", items: { type: "string" } } },
@@ -332,7 +370,7 @@ async function makeStartConfig(sessionId: string, isolationDir: string) {
 		sessionId,
 		providerId: "anthropic",
 		modelId: "claude-3-5-sonnet",
-		apiKey: "test-key",
+		apiKey: "test-api-key-placeholder",
 		systemPrompt: "You are a test agent for the host+agent composition.",
 		cwd: isolationDir,
 		mode: "act" as const,
@@ -369,22 +407,26 @@ describe("ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01 —
 	// This is the load-bearing gap left by SCHR01. SCHR01 used a stub
 	// agent whose `run`/`continue` returned a clean AgentResult; this
 	// test drives the REAL AgentRuntime through the SAME real
-	// LocalRuntimeHost used in SCHR01, with a real approval callback
-	// that REJECTS the proposed `run_commands`. The two ACTs together
-	// then cover:
+	// LocalRuntimeHost used in SCHR01, with a synthetic_real approval
+	// decision that REJECTS the proposed `run_commands`. The two ACTs
+	// together then cover:
 	//
 	//   SCTR01 — AgentRuntime standalone rejection   = GREEN
 	//   SCHR01 — LocalRuntimeHost + stub agent       = GREEN
 	//   SHRC01 — LocalRuntimeHost + AgentRuntime     = THIS FILE
 	//
 	// Requirements (per ACT §5–§7):
-	//   - approval is requested once for the proposed run_commands
-	//   - executor is NEVER invoked (USER_REJECT short-circuits it)
-	//   - AgentRuntime completes with status="completed"
+	//   - real AgentRuntime's approval machinery requests approval once
+	//     for the proposed run_commands; synthetic_real user decision
+	//     rejects
+	//   - synthetic_real run_commands-shaped tool.execute() is NEVER
+	//     invoked (USER_REJECT short-circuits AgentRuntime before it)
+	//   - real AgentRuntime completes with status="completed"
 	//   - host session.status settles to "idle" (NON_TERMINAL)
-	//   - a DISTINCT second host.runTurn enters cleanly and the model
-	//     receives the second prompt (proves AgentRuntime + host
-	//     reentry composition works end-to-end)
+	//   - a DISTINCT second host.runTurn enters cleanly and the real
+	//     AgentRuntime iteration loop re-fires the same causal path
+	//     (proves AgentRuntime + host reentry composition works
+	//     end-to-end)
 	// -----------------------------------------------------------------
 	it("SHRC01: real LocalRuntimeHost + real AgentRuntime + USER_REJECT settle to idle and a second runTurn enters cleanly", async () => {
 		const sessionId = "shrc01-reject-composition"
@@ -419,17 +461,19 @@ describe("ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01 —
 		})
 
 		expect(first?.finishReason).toBe("completed")
-		// Approval WAS requested by AgentRuntime (real path), and
-		// rejection was recorded by the simulated user callback.
+		// Real AgentRuntime's approval machinery requested approval
+		// once; the synthetic_real user decision callback rejected.
 		expect(counters.approvalCalls).toBe(1)
-		// Executor MUST NOT have been invoked — the rejection
-		// short-circuits AgentRuntime before the tool's `execute`
-		// can fire. This is the SHRC01 causal proof: the real
-		// AgentRuntime rejection path lands at the host boundary
-		// with no residual tool activity.
+		// The synthetic_real run_commands-shaped tool.execute() MUST
+		// NOT have been invoked — the real AgentRuntime rejection
+		// short-circuits before the tool's execute() can fire. This
+		// is the SHRC01 causal proof: the real AgentRuntime rejection
+		// path lands at the host boundary with no residual tool
+		// activity, no matter what the synthetic_real tool
+		// implementation would have done if invoked.
 		expect(counters.executorCalls).toBe(0)
-		// The AgentRuntime recorded a `control_plane` outcome via the
-		// production `onToolRuntimeOutcome` hook. Real AgentRuntime
+		// The real AgentRuntime recorded a `control_plane` outcome
+		// via the real `onToolRuntimeOutcome` hook. Real AgentRuntime
 		// classifies USER_REJECT as `kind: "control_plane"` with
 		// `outcome: "user_rejected"` (per sdk/packages/shared/src/
 		// agents/recovery/types.ts:30-46). SCHR01 used a stub and
@@ -461,12 +505,16 @@ describe("ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01 —
 		})
 
 		expect(second?.finishReason).toBe("completed")
-		// The second turn should have requested approval AGAIN (the
-		// second scripted model step proposes run_commands again),
-		// proving the iteration loop survived the first rejection.
+		// The real AgentRuntime iteration loop re-fires the same
+		// causal path: the second turn requests approval AGAIN
+		// (the synthetic_real StepModel's TURN-2 step proposes
+		// run_commands again), proving the iteration loop survived
+		// the first rejection and that the composition's second-turn
+		// reentry is genuine.
 		expect(counters.approvalCalls).toBe(2)
-		// Executor still MUST NOT have been invoked across both turns
-		// (we use the reject callback throughout).
+		// The synthetic_real run_commands-shaped tool.execute()
+		// still MUST NOT have been invoked across both turns
+		// (the synthetic_real user decision rejects throughout).
 		expect(counters.executorCalls).toBe(0)
 
 		const after = await host.getSession(sessionId)
@@ -479,10 +527,13 @@ describe("ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01 —
 	// Per ACT §6: "Only one approved-success control is needed. Do not
 	// rebuild the full success/failure matrix already proven
 	// separately." This confirms the real composition also recovers
-	// when the user's approval is GRANTED — proving the finalization
-	// path is invariant to the approval decision.
+	// when the synthetic_real user decision is GRANTED — proving the
+	// finalization path is invariant to the approval decision. The
+	// approved-control exercises the synthetic_real run_commands-shaped
+	// AgentTool.execute() body, but it is NOT a real terminal
+	// execution (no actual commands run, no real terminal touched).
 	// -----------------------------------------------------------------
-	it("SHRC01_CTL: real LocalRuntimeHost + real AgentRuntime + APPROVED run_commands also settle to idle", async () => {
+	it("SHRC01_CTL: real LocalRuntimeHost + real AgentRuntime + synthetic_real APPROVED run_commands also settle to idle", async () => {
 		const sessionId = "shrc01-approve-composition"
 		isolationDir = mkdtempSync(join(tmpdir(), "shrc01-approve-"))
 		process.env.HOME = isolationDir
@@ -514,12 +565,20 @@ describe("ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01 —
 		})
 
 		expect(first?.finishReason).toBe("completed")
-		// Approval WAS requested and granted.
+		// Real AgentRuntime's approval machinery requested approval
+		// once; the synthetic_real user decision callback granted it.
 		expect(counters.approvalCalls).toBe(1)
-		// Executor MUST HAVE been invoked because the user approved.
+		// The synthetic_real run_commands-shaped tool.execute() MUST
+		// HAVE been invoked because the real AgentRuntime's approval
+		// machinery approved it. (This proves the composition path
+		// reaches the synthetic_real tool body — it is NOT a real
+		// terminal execution, only a synthetic_real AgentTool that
+		// returns success: true to keep the host finalization path
+		// honest.)
 		expect(counters.executorCalls).toBe(1)
-		// Tool outcome should be SUCCESS — the executor returned
-		// `success: true` items for the single command.
+		// Tool outcome should be SUCCESS — the synthetic_real
+		// run_commands-shaped tool returned success: true for the
+		// single command.
 		expect(captured).toHaveLength(1)
 		expect(captured[0].outcome.kind).toBe("success")
 
@@ -566,7 +625,7 @@ describe("ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01 —
 			{
 				providerId: "anthropic",
 				modelId: "claude-3-5-sonnet",
-				apiKey: "test-key",
+				apiKey: "test-api-key-placeholder",
 				systemPrompt: "test",
 				tools: [],
 			} as never,
