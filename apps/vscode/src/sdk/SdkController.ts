@@ -946,34 +946,18 @@ export class Controller {
 			// every other coordinator uses — no second authority.
 			getTurnState: () => this.turnStateTracker.get(),
 			setTurnPhase: (phase, anchorTs) => this.turnStateTracker.set(phase, anchorTs),
-			// ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01: the
-			// bounded restore policy consults the canonical
-			// `AgentRuntime.snapshot()` to detect the LIVE-stale split
-			// (legacy non-terminal owner paired with an idle canonical
-			// runtime). The signal is "idle" iff the canonical snapshot
-			// reports no model streaming, no tooling, no approval, and
-			// no pending tool calls. No active session (or absent
-			// snapshot) collapses to "idle" because the runtime has
-			// nothing in flight — see the arbiter mapper's CONTRACT_2
-			// in `task-state-shadow-arbiter-mapper.ts` for the same
-			// absence-collapse.
-			getRuntimeActivityState: () => {
-				const sdkHost = this.sessions?.getActiveSession()?.sdkHost
-				const sessionId = this.sessions?.getActiveSession()?.sessionId
-				const snapshot = sdkHost?.runtimeSnapshot?.(sessionId)
-				if (!snapshot) {
-					return "idle"
-				}
-				const execution = snapshot.execution
-				if (!execution) {
-					return "idle"
-				}
-				const pending = snapshot.pendingToolCalls?.length ?? 0
-				if (execution.modelStreaming || execution.tooling || execution.awaitingApproval || pending > 0) {
-					return "active"
-				}
-				return "idle"
-			},
+			// ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01:
+			// the bounded restore policy consults the EXISTING canonical
+			// `taskStateShadowWiring?.getLastObservedShadowPhase()` projection
+			// -- NOT a binary activity bit (rejected by Factory P0). That
+			// accessor returns the LAST `TaskState.projectTurnState(model)`
+			// projection the shadow recorder observed, mapped to the legacy
+			// `TurnPhase` via `toLegacyPhase`, or `undefined` when no
+			// observation has been recorded yet (Hub/Remote hosts without a
+			// shadow wiring, fresh install before the first runtime event).
+			// The `?.()` collapse mirrors the production pattern used by
+			// `getLocalShadowPhase()` / `getLocalShadowProjection()`.
+			getCanonicalRestorePhase: () => this.taskStateShadowWiring?.getLastObservedShadowPhase(),
 		})
 		this.sessionEvents = new SdkSessionEventCoordinator({
 			messageTranslatorState: this.messageTranslatorState,

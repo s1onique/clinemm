@@ -75,25 +75,48 @@ export interface SdkCompactionCoordinatorOptions {
 	getTurnState?: () => TurnState
 	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
 	/**
-	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01
+	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01
 	 *
-	 * Canonical runtime activity signal. Read at the compaction
-	 * restore boundary (`enterCompactingPhase`'s returned closure)
-	 * to detect the LIVE-stale split: a non-terminal owner phase
-	 * (`"streaming"` or `"awaiting_approval"`) on the legacy
-	 * `TurnStateTracker` paired with an idle canonical
-	 * `AgentRuntime.snapshot()`. When that combination is observed,
-	 * the restore writes the canonical user-owned terminal phase
-	 * `"awaiting_followup"` (the same phase the session-event
-	 * coordinator would have written had the turn completed
-	 * normally) instead of the stale entry phase.
+	 * Canonical authority for the legacy phase that should be written
+	 * after a compaction restores. Returns the host-derived canonical
+	 * `TurnPhase` projection, or `undefined` when no canonical
+	 * observation is available (no runtime activity seen, Hub/Remote
+	 * hosts without a shadow wiring, fresh install before the first
+	 * runtime event).
 	 *
-	 * Optional so existing callers (CLI hosts that have not yet
-	 * wired the signal, tests of unrelated behavior) continue to
-	 * see byte-equivalent restore semantics. The bounded repair is
-	 * opt-in at the call site.
+	 * Read at the compaction restore boundary
+	 * (`enterCompactingPhase`'s returned closure) to recover from the
+	 * LIVE-stale split: a non-terminal owner phase
+	 * (`"streaming"` or `"awaiting_approval"`) left over in the legacy
+	 * `TurnStateTracker` paired with a canonical authority that has
+	 * already moved on. When that combination is observed, the
+	 * restore writes the CANONICAL PHASE rather than the stale entry
+	 * phase. The canonical phase is itself a fully-resolved `TurnPhase`
+	 * (idle / awaiting_followup / completed / resumable / error /
+	 * etc.) — the bounded repair does NOT infer a phase from a binary
+	 * activity bit.
+	 *
+	 * Optional so callers that have not yet wired the canonical
+	 * projection (CLI hosts, tests of unrelated behavior) see
+	 * byte-equivalent restore semantics. When the callback is absent
+	 * or returns `undefined`, the coordinator preserves the prior
+	 * compatibility behavior (`unavailable ≠ idle`).
+	 *
+	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01 (P0):
+	 *
+	 * The previous incarnation of this option was
+	 * `getRuntimeActivityState: () => "idle" | "active"`. That shape
+	 * was rejected by Factory review — it compressed an 8-state domain
+	 * to one bit and tried to reconstruct a specific phase
+	 * (`awaiting_followup`) from it, which is not derivable from
+	 * activity alone. The canonical projection owns the
+	 * awaiting_followup vs idle distinction (it requires the
+	 * host-interaction dimension in
+	 * `TaskState.projectHostTurnState(model, hostInteraction)`). The
+	 * coordinator MUST ask the canonical authority for the resolved
+	 * phase rather than infer one.
 	 */
-	getRuntimeActivityState?: () => "idle" | "active"
+	getCanonicalRestorePhase?: () => TurnPhase | undefined
 }
 
 export class SdkCompactionCoordinator {
@@ -358,18 +381,26 @@ export class SdkCompactionCoordinator {
 	 * No-ops (returning a no-op restorer) when the caller supplied no
 	 * turn-state authority — this coordinator never invents a second one.
 	 *
-	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01:
+	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01:
 	 *
-	 * The returned closure applies the bounded restore policy. When the
-	 * caller wired `getRuntimeActivityState()` and that signal reports
-	 * `"idle"`, a stale non-terminal owner entry phase
-	 * (`"streaming"` or `"awaiting_approval"`) is re-routed to the
-	 * canonical user-owned terminal phase `"awaiting_followup"`. This
-	 * is the smallest possible repair for the LIVE `Idle + Cancel`
-	 * contradiction captured by the post-terminal-authority diagnostic
-	 * (stateVersion = _ptadPushId = 3208) — a single writer in the
-	 * canonical coordinator seam, no consumer changes, no
-	 * selector/ActionButtons/TaskHeader edits.
+	 * The returned closure applies the canonical-projection restore
+	 * policy. When the caller wired `getCanonicalRestorePhase()` AND
+	 * that callback returns a non-`undefined` `TurnPhase` AND the
+	 * entry phase was a non-terminal owner (`"streaming"` or
+	 * `"awaiting_approval"`) — the LIVE-stale split — the restore
+	 * writes the canonical projection rather than the stale entry
+	 * phase. Otherwise the restore preserves byte-equivalent
+	 * behavior:
+	 *
+	 *   * entry phase already terminal (idle / awaiting_followup /
+	 *     completed / resumable / error) → preserve entry
+	 *   * canonical projection absent / undefined → preserve entry
+	 *     (unavailable ≠ idle; Factory P1)
+	 *   * canonical projection present but entry phase already
+	 *     canonical → preserve entry (no override)
+	 *
+	 * The canonical phase is itself a fully-resolved `TurnPhase` — the
+	 * bounded repair does NOT infer one from a binary activity bit.
 	 */
 	private enterCompactingPhase(): () => void {
 		const getTurnState = this.options.getTurnState
@@ -379,19 +410,30 @@ export class SdkCompactionCoordinator {
 		}
 		const entry = getTurnState()
 		setTurnPhase("compacting", entry.anchorTs)
-		const getRuntimeActivityState = this.options.getRuntimeActivityState
+		const getCanonicalRestorePhase = this.options.getCanonicalRestorePhase
 		return () => {
-			// Bounded restore policy — see ACT-CLINEMM-COMPACTION-
-			// LEGACY-TURNSTATE-COHERENCE01. The legacy entry phase is
-			// preserved UNLESS the runtime explicitly reports idle and
-			// the entry phase was a non-terminal owner (the LIVE-stale
-			// split). Callers that have not wired
-			// `getRuntimeActivityState` keep the previous
+			// Bounded canonical-projection restore — see ACT-CLINEMM-
+			// COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01.
+			// The legacy entry phase is preserved UNLESS the canonical
+			// projection has a fully-resolved `TurnPhase` AND the entry
+			// phase was a non-terminal owner (the LIVE-stale split).
+			// Callers that have not wired `getCanonicalRestorePhase` or
+			// whose canonical projection is undefined keep the previous
 			// byte-equivalent behavior.
-			const activity = getRuntimeActivityState?.()
 			const isNonTerminalOwner = entry.phase === "streaming" || entry.phase === "awaiting_approval"
-			const restorePhase: TurnPhase = activity === "idle" && isNonTerminalOwner ? "awaiting_followup" : entry.phase
-			setTurnPhase(restorePhase, entry.anchorTs)
+			if (!isNonTerminalOwner) {
+				setTurnPhase(entry.phase, entry.anchorTs)
+				return
+			}
+			const canonicalRestorePhase = getCanonicalRestorePhase?.()
+			if (canonicalRestorePhase === undefined) {
+				// Canonical projection unavailable. Preserve entry.
+				// Factory P1: `unavailable ≠ idle`. Do NOT synthesize
+				// a phase from absence of evidence.
+				setTurnPhase(entry.phase, entry.anchorTs)
+				return
+			}
+			setTurnPhase(canonicalRestorePhase, entry.anchorTs)
 		}
 	}
 
