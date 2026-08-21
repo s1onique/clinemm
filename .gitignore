@@ -94,8 +94,13 @@ apps/examples/desktop-app/webview/.next
 apps/examples/desktop-app/webview/next-env.d.ts
 apps/examples/desktop-app/.cursor/settings.json
 
-# Factory-detached evidence (ACT-CLINEMM-FORK-BASELINE01)
-.factory/
+# Factory runtime/generated artifacts are local by default (ACT-CLINEMM-FORK-BASELINE01).
+# NOTE: Git cannot re-include a file when its parent directory itself is excluded,
+# so the .factory directory must remain traversable and only its contents ignored.
+# The canonical epic board is the exception and is durably tracked below.
+# See ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01.
+/.factory/*
+!/.factory/epic-board.md
 
 # Factory staging/backup siblings (µC-3 round 6 atomic publish)
 .factory-staging-*

@@ -23,6 +23,13 @@ Toolchain is pre-installed and persisted in the VM: generated gRPC/proto code, t
 - **Test:** `bun run test:unit` (bun-based, ~984 tests, no VS Code host needed). `bun run test:integration` (`@vscode/test-electron`, downloads a VS Code build, runs under the GUI libs) and `bun run test:e2e` (Playwright) exercise a real extension host — heavier, and the GUI libs for them are already installed.
 - One-time deps (already installed, listed here in case they must be recreated): ripgrep via `bun run download-ripgrep`; VS Code test GUI libs per `CONTRIBUTING.md` (`libnss3`, `libatk*`, `libgbm1`, `xvfb`, etc.).
 
+## Factory board durability
+
+- `.factory/epic-board.md` is **tracked durable repository state**, intentionally exempt from the `.factory/*` ignore rule (negation pattern in `.gitignore`).
+- Every ACT that changes board status or evidence **must** stage and commit `.factory/epic-board.md` before closure — do not leave board updates only in the working tree.
+- Do not use `git add -f .factory/epic-board.md` after `ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01`; ordinary `git add` must work.
+- Before claiming ACT closure, run `git status --short` and ensure no intended board delta remains unstaged.
+
 ### Desktop app (`apps/examples/desktop-app`, package `@cline/code`)
 A Tauri v2 (Rust) shell + Next.js webview + a Bun "sidecar" backend. Rust and the Tauri Linux system libs are pre-installed and persisted.
 - **Headless (no Rust/window):** run the backend and UI separately — `bun run dev:sidecar` (Bun backend on `127.0.0.1:3126`, serves `ws://.../transport`) and `bun run dev:web` (Next.js UI on `http://localhost:3125`).
