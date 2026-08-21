@@ -76,9 +76,12 @@ export interface SdkCompactionCoordinatorOptions {
 	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
 	/**
 	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01
+	 * + CORRECTION04
 	 *
 	 * Canonical authority for the legacy phase that should be written
-	 * after a compaction restores. Returns the host-derived canonical
+	 * after a compaction restores. The callback receives the CAPTURED
+	 * entry phase (the phase before compaction took ownership) as its
+	 * sole argument and returns the host-derived canonical
 	 * `TurnPhase` projection, or `undefined` when no canonical
 	 * observation is available (no runtime activity seen, Hub/Remote
 	 * hosts without a shadow wiring, fresh install before the first
@@ -102,6 +105,24 @@ export interface SdkCompactionCoordinatorOptions {
 	 * or returns `undefined`, the coordinator preserves the prior
 	 * compatibility behavior (`unavailable ≠ idle`).
 	 *
+	 * CORRECTION04 (Factory reviewer disposition): the callback MUST
+	 * receive the captured `entryPhase` as its argument. The selector
+	 * (`selectCanonicalRestorePhase`) uses THREE inputs:
+	 *
+	 *   entryPhase          -- CAPTURED before compaction
+	 *                           (governs terminal-owner preservation)
+	 *   canonicalShadowPhase -- canonical authority projection
+	 *   currentLegacyPhase  -- LIVE tracker at restore time; legitimate
+	 *                           signal only for `awaiting_followup`
+	 *                           (host-owned override during compaction)
+	 *
+	 * The coordinator passes `entryPhase` through so the selector
+	 * CANNOT confuse `entryPhase` (CAPTURED) with `currentLegacyPhase`
+	 * (LIVE). The live tracker reads `compacting` for the entire
+	 * compaction window by construction; the selector must NOT consult
+	 * `currentLegacyPhase === "compacting"`. `compacting` is a
+	 * transition marker, not a restore destination.
+	 *
 	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01 (P0):
 	 *
 	 * The previous incarnation of this option was
@@ -116,7 +137,7 @@ export interface SdkCompactionCoordinatorOptions {
 	 * coordinator MUST ask the canonical authority for the resolved
 	 * phase rather than infer one.
 	 */
-	getCanonicalRestorePhase?: () => TurnPhase | undefined
+	getCanonicalRestorePhase?: (entryPhase: TurnPhase) => TurnPhase | undefined
 }
 
 export class SdkCompactionCoordinator {
@@ -414,6 +435,15 @@ export class SdkCompactionCoordinator {
 		return () => {
 			// Bounded canonical-projection restore — see ACT-CLINEMM-
 			// COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION01.
+			//
+			// CORRECTION04 (Factory reviewer disposition): the callback
+			// receives the CAPTURED `entry.phase` as its argument. This
+			// is the coordinator's only point of contact with the
+			// selector. The selector CANNOT confuse `entryPhase`
+			// (CAPTURED before compaction) with `currentLegacyPhase`
+			// (LIVE tracker at restore time, which reads `compacting`
+			// during the callback by construction).
+			//
 			// The legacy entry phase is preserved UNLESS the canonical
 			// projection has a fully-resolved `TurnPhase` AND the entry
 			// phase was a non-terminal owner (the LIVE-stale split).
@@ -425,7 +455,7 @@ export class SdkCompactionCoordinator {
 				setTurnPhase(entry.phase, entry.anchorTs)
 				return
 			}
-			const canonicalRestorePhase = getCanonicalRestorePhase?.()
+			const canonicalRestorePhase = getCanonicalRestorePhase?.(entry.phase)
 			if (canonicalRestorePhase === undefined) {
 				// Canonical projection unavailable. Preserve entry.
 				// Factory P1: `unavailable ≠ idle`. Do NOT synthesize

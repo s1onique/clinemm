@@ -1,65 +1,86 @@
-// ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02
+// ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04
 //
 // Real-wiring RED for the production callback bound to
 // `getCanonicalRestorePhase`. Drives the actual
 // `selectCanonicalRestorePhase` helper at
 // `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts` and
 // asserts the production SdkController binding routes through
-// `createCanonicalRestorePhaseCallback` with BOTH
-// `getCanonicalShadowPhase` AND `getCurrentLegacyPhase` inputs.
+// `createCanonicalRestorePhaseCallback` with both host-derived
+// accessors AND that the coordinator passes the CAPTURED entry
+// phase through to the callback.
 //
 // =============================================================================
-// TABLE-DRIVEN CASES (replaces the verbose 28-test matrix)
+// CORRECTION04: TEMPORAL IDENTITY RESOLVED
 // =============================================================================
 //
-// The selector truth table is small (4 branches × ~3 inputs each =
-// ~12 cells). The factory's contract is "delegates both accessors
-// verbatim" (1 cell). The wiring's contract is "factory call with
-// both accessors" (1 cell). The ablation is "OLD form would lose
-// the host dimension" (1 cell). That is ~15 semantic cases total
-// — the matrix below encodes them as data so a future maintainer
-// can read the invariants in one table.
+// CORRECTION02/03 confused `entryPhase` (the CAPTURED phase
+// before compaction took ownership) with `currentLegacyPhase`
+// (the LIVE tracker value at callback time). They are not the
+// same: the coordinator writes "compacting" at entry
+// (`sdk-compaction-coordinator.ts:412`) and the live tracker
+// reads "compacting" for the entire compaction work. The
+// CORRECTION02 `compacting -> compacting` branch therefore
+// ALWAYS fired during the restore callback, blocking the
+// canonical projection from ever winning.
+//
+// CORRECTION04 fixes this by:
+//
+//   1. Adding `entryPhase` as a SEPARATE input to the selector.
+//   2. Passing it as the sole argument to the
+//      `getCanonicalRestorePhase(entryPhase)` callback (the
+//      coordinator hands over its captured value at restore
+//      time).
+//   3. Dropping the `compacting -> compacting` branch entirely.
+//      `compacting` is a transition marker, not a restore
+//      destination.
+//   4. Splitting semantic roles:
+//      - entryPhase          -> terminal-owner preservation
+//      - canonicalShadowPhase -> bounded canonical repair
+//      - currentLegacyPhase   -> host-owned `awaiting_followup`
+//                                  override ONLY (legitimate
+//                                  signal during compaction; the
+//                                  session-event coordinator
+//                                  wrote it during compaction)
+//
+// =============================================================================
+// TABLE-DRIVEN CASES (the load-bearing invariants)
+// =============================================================================
+//
+// The selector truth table is small (4 precedence branches x ~3
+// inputs each = ~12 cells). The factory's contract is "delegates
+// both accessors verbatim + receives entryPhase as argument" (1
+// cell). The wiring's contract is "factory call with both
+// accessors" (1 cell). The chronology test proves the live
+// tracker reads "compacting" during the restore callback (1
+// cell). The ablation is "OLD form would always return compacting
+// during the callback" (1 cell). That is ~16 semantic cases
+// total -- the matrix below encodes them as data.
 //
 // Reference contract -- the canonical-projection / entry-phase matrix.
 //
-//   entry.phase \ canonical | undefined | idle | awaiting_followup | completed | resumable | error
-//   ----------------------|-----------|------|-------------------|-----------|-----------|-------
-//   idle (terminal)        | preserve  | preserve | preserve    | preserve  | preserve  | preserve
-//   completed (terminal)   | preserve  | preserve | preserve    | preserve  | preserve  | preserve
-//   awaiting_followup (T)  | preserve  | preserve | preserve    | preserve  | preserve  | preserve
-//   resumable (terminal)   | preserve  | preserve | preserve    | preserve  | preserve  | preserve
-//   error (terminal)       | preserve  | preserve | preserve    | preserve  | preserve  | preserve
-//   compacting (system)    | restorePhase is never invoked with compacting
-//   streaming (non-T)      | preserve  | idle     | awaiting_fu | completed | resumable | error
-//   awaiting_approval (NT) | preserve  | idle     | awaiting_fu | completed | resumable | error
+//   entry \ canonical | undefined | idle | awaiting_followup | completed | resumable | error
+//   ------------------|-----------|------|-------------------|-----------|-----------|-------
+//   idle (terminal)   | idle      | idle | idle              | idle      | idle      | idle
+//   completed (T)     | completed | comp | comp              | completed | completed | completed
+//   resumable (T)     | resumable | resu | resu              | resumable | resumable | resumable
+//   error (T)         | error     | err  | err               | error     | error     | error
+//   awaiting_followup | preserve  | preserv| preserv          | preserve  | preserve  | preserve
+//   streaming (NT)    | streaming | idle | awaiting_followup | completed | resumable | error
+//   awaiting_approval | awaiting  | idle | awaiting_followup | completed | resumable | error
 //
-// The bounded repair fires ONLY in the cells where the entry phase
-// is a non-terminal owner AND the canonical projection is a
-// defined TurnPhase. Every other cell preserves byte-equivalent
-// behavior.
+//   Above table applies when `currentLegacyPhase == "compacting"`
+//   (the LIVE tracker during the restore callback by construction).
+//
+//   If `currentLegacyPhase == "awaiting_followup"` (host wrote
+//   during compaction), `awaiting_followup` wins regardless of
+//   entry or canonical (step 2 override).
+//
+//   If `currentLegacyPhase == idle | completed | resumable |
+//   error` (live tracker happened to be terminal), entryPhase
+//   still governs because terminal-owner preservation is keyed
+//   on `entryPhase`, not `currentLegacyPhase`.
 //
 // =============================================================================
-// CORRECTION02 BOUNDED REPAIR: production wiring
-// =============================================================================
-//
-// The canonical restore callback is rebuilt to follow the EXACT
-// same three-source precedence the TaskHeader projection
-// (`selectTaskHeaderPresentation`) uses:
-//   1. HOST COMPACTING OVERRIDE (system-owned)
-//   2. HOST AWAITING_FOLLOWUP OVERRIDE (user-owned, reads the
-//      legacy `turnStateTracker.currentPhase` because the canonical
-//      shadow cannot represent it)
-//   3. CANONICAL SHADOW PROJECTION for the 6 phases the canonical
-//      shadow CAN represent (idle / streaming / awaiting_approval /
-//      completed / error / resumable)
-//
-// Implemented by adding `selectCanonicalRestorePhase` +
-// `createCanonicalRestorePhaseCallback` to
-// `task-state-shadow-arbiter-mapper.ts` (the same file that owns
-// the analogous `selectTaskHeaderPresentation`). The
-// SdkController wires the new composition into
-// `getCanonicalRestorePhase` via the factory. The coordinator API
-// is preserved verbatim.
 
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -72,97 +93,175 @@ import { createCanonicalRestorePhaseCallback, selectCanonicalRestorePhase } from
 // PART 1: SELECTOR TRUTH TABLE -- data-driven; one entry per cell.
 // =============================================================================
 //
-// The "entry phase" matches the legacy tracker's entry phase the
-// coordinator's `enterCompactingPhase()` samples (the `entry.phase`
-// argument passed to `restorePhase()`). The "canonical" matches
-// what the canonical shadow reports (or `undefined` when absent).
-// The "expected" is the canonical restore phase the bounded repair
-// must write.
+// Columns: [label, entryPhase, canonicalShadowPhase, currentLegacyPhase, expected]
 //
-// "preserve" means: the bounded repair does NOT fire; the
-// coordinator preserves the entry phase (the prior compatibility
-// behavior). "idle" / "completed" etc. mean: the bounded repair
-// fires and writes that phase.
+// `currentLegacyPhase` is the LIVE tracker value at callback time.
+// By the production chronology, this is "compacting" for the
+// entire compaction window -- the coordinator writes it at entry
+// (sdk-compaction-coordinator.ts:412) and only the restore closure
+// moves it. Every cell in the first batch asserts the selector
+// does NOT echo "compacting" back.
 
-type Case = readonly [string, TurnPhase | undefined, TurnPhase, TurnPhase | undefined]
+type Case = readonly [string, TurnPhase, TurnPhase | undefined, TurnPhase, TurnPhase | undefined]
 
 const SELECTOR_CASES: readonly Case[] = [
-	// HOST COMPACTING OVERRIDE -- regardless of canonical shadow.
-	["host compacting override beats shadow idle", "idle", "compacting", "compacting"],
-	["host compacting override beats shadow undefined", undefined, "compacting", "compacting"],
+	// ============================================================
+	// (A) RESTORE CALLBACK CHRONOLOGY: currentLegacyPhase = "compacting"
+	// ============================================================
+	// The live tracker reads "compacting" during the callback by
+	// construction. The selector MUST NOT echo it back. The
+	// canonical projection (or entry preservation) must win.
 
-	// HOST AWAITING_FOLLOWUP OVERRIDE -- regardless of canonical shadow.
-	["host awaiting_followup override beats shadow idle", "idle", "awaiting_followup", "awaiting_followup"],
-	["host awaiting_followup override beats shadow undefined", undefined, "awaiting_followup", "awaiting_followup"],
+	// Terminal owner entries ALWAYS preserve (step 1).
+	["terminal idle + canonical undefined + live compacting -> idle", "idle", undefined, "compacting", "idle"],
+	["terminal idle + canonical idle + live compacting -> idle", "idle", "idle", "compacting", "idle"],
+	["terminal idle + canonical completed + live compacting -> idle", "idle", "completed", "compacting", "idle"],
+	["terminal completed + canonical idle + live compacting -> completed", "completed", "idle", "compacting", "completed"],
+	[
+		"terminal resumable + canonical undefined + live compacting -> resumable",
+		"resumable",
+		undefined,
+		"compacting",
+		"resumable",
+	],
+	["terminal error + canonical idle + live compacting -> error", "error", "idle", "compacting", "error"],
+	[
+		"terminal awaiting_followup + canonical idle + live compacting -> awaiting_followup",
+		"awaiting_followup",
+		"idle",
+		"compacting",
+		"awaiting_followup",
+	],
 
-	// TERMINAL ENTRY PHASES -- preserve entry ALWAYS, regardless of
-	// canonical shadow. The legacy tracker IS the authority for
-	// terminal owners (the session-event coordinator writes them
-	// directly); consulting the canonical shadow could regress a
-	// terminal state.
-	["idle entry preserved regardless of shadow", "streaming", "idle", "idle"],
-	["idle entry preserved with shadow undefined", undefined, "idle", "idle"],
-	["completed entry preserved", "idle", "completed", "completed"],
-	["completed entry preserved with shadow undefined", undefined, "completed", "completed"],
-	["resumable entry preserved", "idle", "resumable", "resumable"],
-	["error entry preserved", "idle", "error", "error"],
+	// Non-terminal entries + canonical available -> canonical wins.
+	// NOT "compacting". The bounded repair fires.
+	["streaming entry + canonical idle + live compacting -> idle", "streaming", "idle", "compacting", "idle"],
+	["streaming entry + canonical completed + live compacting -> completed", "streaming", "completed", "compacting", "completed"],
+	["streaming entry + canonical resumable + live compacting -> resumable", "streaming", "resumable", "compacting", "resumable"],
+	["streaming entry + canonical error + live compacting -> error", "streaming", "error", "compacting", "error"],
+	["streaming entry + canonical streaming + live compacting -> streaming", "streaming", "streaming", "compacting", "streaming"],
+	[
+		"streaming entry + canonical awaiting_approval + live compacting -> awaiting_approval",
+		"streaming",
+		"awaiting_approval",
+		"compacting",
+		"awaiting_approval",
+	],
+	["awaiting_approval entry + canonical idle + live compacting -> idle", "awaiting_approval", "idle", "compacting", "idle"],
+	[
+		"awaiting_approval entry + canonical completed + live compacting -> completed",
+		"awaiting_approval",
+		"completed",
+		"compacting",
+		"completed",
+	],
 
-	// NON-TERMINAL ENTRY + DEFINED CANONICAL -- bounded repair fires,
-	// writes canonical projection.
-	["streaming entry + canonical idle -> idle", "idle", "streaming", "idle"],
-	["streaming entry + canonical completed -> completed", "completed", "streaming", "completed"],
-	["streaming entry + canonical resumable -> resumable", "resumable", "streaming", "resumable"],
-	["streaming entry + canonical error -> error", "error", "streaming", "error"],
-	["streaming entry + canonical streaming -> streaming", "streaming", "streaming", "streaming"],
-	["streaming entry + canonical awaiting_approval -> awaiting_approval", "awaiting_approval", "streaming", "awaiting_approval"],
-	["awaiting_approval entry + canonical idle -> idle", "idle", "awaiting_approval", "idle"],
+	// Non-terminal entries + canonical undefined -> undefined
+	// (coordinator gate preserves entry; P1: unavailable != idle).
+	[
+		"streaming entry + canonical undefined + live compacting -> undefined (preserve)",
+		"streaming",
+		undefined,
+		"compacting",
+		undefined,
+	],
+	[
+		"awaiting_approval entry + canonical undefined + live compacting -> undefined (preserve)",
+		"awaiting_approval",
+		undefined,
+		"compacting",
+		undefined,
+	],
 
-	// P1: `unavailable != idle` -- non-terminal entry + canonical
-	// undefined returns undefined so the coordinator's
-	// `undefined -> preserve` gate fires (preserves entry; does NOT
-	// synthesize `idle`).
-	["streaming entry + canonical undefined -> undefined (preserve entry)", undefined, "streaming", undefined],
-	["awaiting_approval entry + canonical undefined -> undefined (preserve entry)", undefined, "awaiting_approval", undefined],
+	// ============================================================
+	// (B) HOST-OWNED AWAITING_FOLLOWUP OVERRIDE: currentLegacyPhase = "awaiting_followup"
+	// ============================================================
+	// A legitimate user interaction wrote awaiting_followup during
+	// compaction (the session-event coordinator fired). The live
+	// tracker reads "awaiting_followup" -- this is the ONLY host
+	// signal the live tracker carries that supersedes entry. Step
+	// 2 wins.
+	["awaiting_followup override beats terminal idle entry", "idle", "idle", "awaiting_followup", "awaiting_followup"],
+	[
+		"awaiting_followup override beats streaming entry + canonical",
+		"streaming",
+		"completed",
+		"awaiting_followup",
+		"awaiting_followup",
+	],
+	[
+		"awaiting_followup override beats non-terminal entry + canonical undefined",
+		"streaming",
+		undefined,
+		"awaiting_followup",
+		"awaiting_followup",
+	],
+	// When entry IS awaiting_followup, the override is redundant
+	// but still returns awaiting_followup (step 1 also returns it).
+	[
+		"awaiting_followup override + awaiting_followup entry -> awaiting_followup",
+		"awaiting_followup",
+		"idle",
+		"awaiting_followup",
+		"awaiting_followup",
+	],
+
+	// ============================================================
+	// (C) NON-COMPACTING / NON-OVERRIDE LIVE TRACKER (shouldn't happen
+	//     during a real callback, but the selector MUST still be
+	//     internally consistent).
+	// ============================================================
+	["streaming entry + canonical idle + live idle -> idle", "streaming", "idle", "idle", "idle"],
+	["terminal completed + canonical undefined + live idle -> completed", "completed", undefined, "idle", "completed"],
+	["terminal idle entry + canonical idle + live idle -> idle", "idle", "idle", "idle", "idle"],
 ] as const
 
-describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02 / selectCanonicalRestorePhase truth table", () => {
-	for (const [label, canonical, entry, expected] of SELECTOR_CASES) {
+describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04 / selectCanonicalRestorePhase truth table", () => {
+	for (const [label, entry, canonical, currentLegacy, expected] of SELECTOR_CASES) {
 		it(label, () => {
-			expect(selectCanonicalRestorePhase({ canonicalShadowPhase: canonical, currentLegacyPhase: entry })).toBe(expected)
+			expect(
+				selectCanonicalRestorePhase({
+					entryPhase: entry,
+					canonicalShadowPhase: canonical,
+					currentLegacyPhase: currentLegacy,
+				}),
+			).toBe(expected)
 		})
 	}
 })
 
 // =============================================================================
-// PART 2: FACTORY DELEGATES BOTH ACCESSORS VERBATIM.
+// PART 2: FACTORY CONTRACT
 // =============================================================================
+//
+// The factory returns a closure that takes `entryPhase` as its
+// sole argument. The closure reads canonicalShadowPhase +
+// currentLegacyPhase from the host-derived accessors on every
+// call (not memoized). The closure MUST NOT memoize accessors
+// (they reflect live state).
 
-describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02 / createCanonicalRestorePhaseCallback factory", () => {
-	it("factory returns undefined when canonical is undefined and entry is a non-terminal owner (P1: unavailable != idle)", () => {
-		// Factory + selector together preserve the P1 invariant:
-		// canonical undefined + non-terminal entry -> undefined.
-		// (Terminal entries ALWAYS preserve entry -- not synthesized
-		// as undefined; this is the selector's step 3.)
+describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04 / createCanonicalRestorePhaseCallback factory", () => {
+	it("factory closure takes entryPhase as the sole argument and returns the canonical restore phase", () => {
+		// entry streaming + canonical idle + live compacting (the
+		// production chronology) -> canonical idle wins (step 3).
 		const cb = createCanonicalRestorePhaseCallback({
-			getCanonicalShadowPhase: () => undefined,
-			getCurrentLegacyPhase: () => "streaming",
+			getCanonicalShadowPhase: () => "idle",
+			getCurrentLegacyPhase: () => "compacting",
 		})
-		expect(cb()).toBeUndefined()
+		expect(cb("streaming")).toBe("idle")
 	})
 
-	it("factory preserves entry for terminal-owner entries regardless of canonical shadow", () => {
-		// Terminal-owner entries ALWAYS preserve entry (selector
-		// step 3), even when canonical shadow disagrees.
+	it("factory closure preserves entry for terminal-owner entries (terminal owns restoration)", () => {
+		// terminal idle + canonical completed (would regress) + live
+		// compacting -> entry idle preserves (step 1).
 		const cb = createCanonicalRestorePhaseCallback({
 			getCanonicalShadowPhase: () => "completed",
-			getCurrentLegacyPhase: () => "idle",
+			getCurrentLegacyPhase: () => "compacting",
 		})
-		expect(cb()).toBe("idle")
+		expect(cb("idle")).toBe("idle")
 	})
 
-	it("factory reads the canonical shadow and the legacy tracker on every call (not memoized)", () => {
-		// The factory's closure must invoke both accessors per
-		// call. If either is memoized, the helper would be stale.
+	it("factory closure reads accessors on every call (no memoization)", () => {
 		let canonicalCount = 0
 		let legacyCount = 0
 		const cb = createCanonicalRestorePhaseCallback({
@@ -172,79 +271,281 @@ describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02 / cre
 			},
 			getCurrentLegacyPhase: () => {
 				legacyCount++
-				return "streaming"
+				return "compacting"
 			},
 		})
-		expect(cb()).toBe("idle")
-		expect(cb()).toBe("idle")
+		expect(cb("streaming")).toBe("idle")
+		expect(cb("streaming")).toBe("idle")
 		expect(canonicalCount).toBe(2)
 		expect(legacyCount).toBe(2)
 	})
-})
 
-// =============================================================================
-// PART 3: ABLATION -- the OLD non-host-aware binding collapses to idle.
-// =============================================================================
+	it("factory closure preserves P1 (canonical undefined + non-terminal entry -> undefined)", () => {
+		// streaming entry + canonical undefined + live compacting ->
+		// undefined (coordinator preserves entry).
+		const cb = createCanonicalRestorePhaseCallback({
+			getCanonicalShadowPhase: () => undefined,
+			getCurrentLegacyPhase: () => "compacting",
+		})
+		expect(cb("streaming")).toBeUndefined()
+	})
 
-describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02 / ablation", () => {
-	it("OLD non-host-aware binding collapses awaiting_followup to idle (the capability gap)", () => {
-		// The pre-CORRECTION02 binding at SdkController was:
-		//   getCanonicalRestorePhase: () =>
-		//     this.taskStateShadowWiring?.getLastObservedShadowPhase()
-		// Simulated here. The canonical shadow's projection (driven
-		// by `TaskState.projectTurnState(model)`) cannot produce
-		// `awaiting_followup` -- it returns `idle` for an idle
-		// runtime. The OLD binding would therefore lose the
-		// user-owned phase distinction. This is the capability gap
-		// CORRECTION02 closes.
-		const oldBinding = (canonicalShadowPhase: TurnPhase | undefined): TurnPhase | undefined => canonicalShadowPhase
-		expect(oldBinding("idle")).toBe("idle")
-		expect(oldBinding("idle")).not.toBe("awaiting_followup")
-
-		// Contrast: the CORRECTION02 factory for the same canonical
-		// shadow + a host legacy `awaiting_followup` returns the
-		// user-owned phase (via the host-override branch).
-		const newBinding = createCanonicalRestorePhaseCallback({
+	it("factory closure surfaces awaiting_followup host override during compaction", () => {
+		// The session-event coordinator wrote awaiting_followup
+		// during compaction; live tracker reads awaiting_followup;
+		// entry streaming; canonical idle -> awaiting_followup wins.
+		const cb = createCanonicalRestorePhaseCallback({
 			getCanonicalShadowPhase: () => "idle",
 			getCurrentLegacyPhase: () => "awaiting_followup",
 		})
-		expect(newBinding()).toBe("awaiting_followup")
+		expect(cb("streaming")).toBe("awaiting_followup")
 	})
 })
 
 // =============================================================================
-// PART 4: AST-LEVEL WIRING ASSERTION (replaces source-text regex inspection).
+// PART 3: CHRONOLOGY PROOF
+// =============================================================================
+//
+// This is the load-bearing test the reviewer demanded: prove that
+// during the production restore callback the live tracker reads
+// "compacting" (because the coordinator wrote it at entry). The
+// CORRECTION02 `compacting -> compacting` branch therefore would
+// always have fired during the callback, blocking the canonical
+// projection from ever winning.
+//
+// The chronology is read statically from
+// `sdk-compaction-coordinator.ts` (NOT from a behavioral test of
+// the coordinator -- the reviewer's recommendation was to settle
+// this from the source). Two invariants must hold:
+//
+//   1. `enterCompactingPhase()` writes `setTurnPhase("compacting", ...)`
+//      at the top of the function (before returning the closure).
+//   2. The restore closure reads `getCanonicalRestorePhase?.(entry.phase)`.
+//      `entry.phase` is the CAPTURED phase from line `const entry = getTurnState()`
+//      above -- NOT the live tracker.
+//   3. The restore closure does NOT call `setTurnPhase(...)` BEFORE
+//      invoking `getCanonicalRestorePhase`. (If it did, the live
+//      tracker would already be the entry phase at callback time
+//      and the `compacting -> compacting` branch would be a
+//      no-op, but the chronology still works.)
+
+describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04 / chronology proof", () => {
+	function loadEnterCompactingPhaseBody(): string {
+		const path = join("..", "..", "apps", "vscode", "src", "sdk", "sdk-compaction-coordinator.ts")
+		const source = readFileSync(path, "utf-8")
+		return extractEnterCompactingPhase(source)
+	}
+
+	it("CHRONO-1: enterCompactingPhase writes setTurnPhase('compacting', ...) BEFORE returning the restore closure", () => {
+		// Read the production source and assert the coordinator
+		// writes `compacting` synchronously at entry (not lazily in
+		// the restore closure).
+		const body = loadEnterCompactingPhaseBody()
+		// The body MUST contain a top-level call to
+		// `setTurnPhase("compacting", entry.anchorTs)`.
+		const setCompactingMatch = body.match(/setTurnPhase\(\s*["']compacting["']\s*,\s*entry\.anchorTs\s*\)/)
+		expect(setCompactingMatch).toBeTruthy()
+		if (!setCompactingMatch) return
+		// AND the restore closure (the SECOND return in the body,
+		// since the first return is the no-op for missing options)
+		// must appear AFTER the setTurnPhase call.
+		const setCompactingIndex = setCompactingMatch.index ?? 0
+		// Find all `return ()` in the body and pick the LAST one
+		// (the real closure return).
+		const returnMatches = [...body.matchAll(/return\s+\(\s*\)\s*=>/g)]
+		expect(returnMatches.length).toBeGreaterThanOrEqual(2)
+		const lastReturnIndex = returnMatches[returnMatches.length - 1].index ?? 0
+		expect(setCompactingIndex).toBeLessThan(lastReturnIndex)
+	})
+
+	it("CHRONO-2: the restore closure invokes getCanonicalRestorePhase with entry.phase as the argument (CAPTURED, not LIVE)", () => {
+		// The coordinator MUST pass `entry.phase` (the captured
+		// value) to the callback. If the coordinator passed
+		// `this.options.getTurnState()?.phase` (re-sampling the live
+		// tracker), the selector would see "compacting" and the
+		// CORRECTION02 branch would re-fire.
+		const body = loadEnterCompactingPhaseBody()
+		// Find the restore closure call to getCanonicalRestorePhase.
+		// The CORRECTION04 shape is `getCanonicalRestorePhase?.(entry.phase)`.
+		const callbackInvocationPattern = /getCanonicalRestorePhase\?\.?\(\s*([\w.]+)\s*\)/
+		const callbackInvocationMatch = body.match(callbackInvocationPattern)
+		expect(callbackInvocationMatch).toBeTruthy()
+		if (!callbackInvocationMatch) return
+		// The argument MUST be `entry.phase` -- not a fresh
+		// `getTurnState()` invocation, not any other expression.
+		expect(callbackInvocationMatch[1]).toBe("entry.phase")
+	})
+
+	it("CHRONO-3: the canonical-result setTurnPhase write happens AFTER the callback invocation", () => {
+		// The closure has the structure:
+		//
+		//   1. (terminal-owner branch): setTurnPhase(entry.phase) +
+		//      return -- BEFORE callback, never invokes the callback.
+		//   2. (non-terminal branch): const canonicalRestorePhase =
+		//      getCanonicalRestorePhase?.(entry.phase)  // BEFORE any
+		//      write -- callback fires first.
+		//   3. (undefined branch): setTurnPhase(entry.phase) +
+		//      return -- after callback fires, canonical was undefined.
+		//   4. (success branch): setTurnPhase(canonicalRestorePhase)
+		//      -- after callback fires, canonical was defined.
+		//
+		// The CORRECTION04 invariant is: the callback MUST fire
+		// BEFORE step 3 or step 4. Otherwise the live tracker would
+		// no longer read "compacting" at callback time and the
+		// selector would observe a non-compacting tracker that
+		// could itself trigger a different precedence branch.
+		//
+		// We assert: the FIRST setTurnPhase write AFTER the callback
+		// invocation is the canonical-result write (either
+		// canonicalRestorePhase or the undefined-fallback entry.phase).
+		// Both are AFTER the callback, which is the invariant.
+		const body = loadEnterCompactingPhaseBody()
+		const returnMatches = [...body.matchAll(/return\s+\(\s*\)\s*=>\s*\{/g)]
+		expect(returnMatches.length).toBeGreaterThanOrEqual(1)
+		const lastReturnIndex = returnMatches[returnMatches.length - 1].index ?? 0
+		const fromRestore = body.slice(lastReturnIndex)
+		const fromRestoreStripped = fromRestore.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
+		const callbackInvocationMatch = fromRestoreStripped.match(/getCanonicalRestorePhase\?\.?\(/)
+		expect(callbackInvocationMatch).toBeTruthy()
+		if (!callbackInvocationMatch) return
+		const callbackInvocationIndex = callbackInvocationMatch.index ?? 0
+		// Slice BEFORE the callback invocation -- this is the
+		// terminal-owner branch. There SHOULD be a setTurnPhase
+		// here (preserves entry), but it must NOT be reachable
+		// from the non-terminal path (it returns early).
+		const beforeCallback = fromRestoreStripped.slice(0, callbackInvocationIndex)
+		expect(beforeCallback).toMatch(/setTurnPhase\(/)
+		// Slice AFTER the callback invocation -- the canonical-result
+		// write. There MUST be at least one setTurnPhase here.
+		const afterCallback = fromRestoreStripped.slice(callbackInvocationIndex)
+		expect(afterCallback).toMatch(/setTurnPhase\(/)
+		// The write MUST target canonicalRestorePhase (success
+		// branch) or entry.phase (undefined branch).
+		const writesAfterCallback = [...afterCallback.matchAll(/setTurnPhase\(([\w.]+),\s*entry\.anchorTs\)/g)]
+		expect(writesAfterCallback.length).toBeGreaterThanOrEqual(1)
+		// The first write is the undefined-fallback (entry.phase);
+		// the second is the canonical-result (canonicalRestorePhase).
+		// Either is acceptable; both must write entry.anchorTs.
+		for (const match of writesAfterCallback) {
+			expect(match[1]).toMatch(/^(canonicalRestorePhase|entry\.phase)$/)
+		}
+	})
+})
+
+function extractEnterCompactingPhase(source: string): string {
+	// Extract the body of `private enterCompactingPhase(): () => void { ... }`.
+	// This is a coarse extraction: we look for the closing brace
+	// of the method. The method body is bounded by the first `{`
+	// after `enterCompactingPhase(): () => void` and the
+	// matching `}` (assumed to be followed by a top-level
+	// `private async` or `private` or end-of-class).
+	const startMatch = source.match(/private\s+enterCompactingPhase\(\)\s*:\s*\(\s*\)\s*=>\s*void\s*\{/)
+	if (!startMatch) {
+		throw new Error("enterCompactingPhase declaration not found")
+	}
+	const startIndex = startMatch.index ?? 0
+	let depth = 0
+	let i = startIndex + startMatch[0].length - 1 // position of `{`
+	for (; i < source.length; i++) {
+		const ch = source[i]
+		if (ch === "{") depth++
+		else if (ch === "}") {
+			depth--
+			if (depth === 0) break
+		}
+	}
+	return source.slice(startIndex, i + 1)
+}
+
+// =============================================================================
+// PART 4: ABLATION
+// =============================================================================
+//
+// Reverting to the CORRECTION02-era two-input selector
+// (`{canonicalShadowPhase, currentLegacyPhase}` without
+// `entryPhase` separation) collapses the chronology to "always
+// compacting". The ablation exercises the production chronology
+// (entry streaming + live compacting + canonical idle) and shows:
+//   - OLD shape: the canonical projection is unreachable because
+//     the `compacting -> compacting` branch always fires.
+//   - NEW shape: canonical idle wins.
+
+describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04 / ablation (OLD vs NEW chronology)", () => {
+	it("OLD shape (no entryPhase separation) collapses the production chronology to compacting", () => {
+		// Simulated OLD selector: the CORRECTION02 implementation
+		// that did NOT separate entryPhase. In production chronology
+		// (entry streaming, canonical idle, live compacting), the
+		// `compacting -> compacting` branch always fires.
+		const oldSelector = (input: {
+			canonicalShadowPhase: TurnPhase | undefined
+			currentLegacyPhase: TurnPhase
+		}): TurnPhase | undefined => {
+			if (input.currentLegacyPhase === "compacting") return "compacting"
+			if (input.currentLegacyPhase === "awaiting_followup") return "awaiting_followup"
+			if (input.canonicalShadowPhase !== undefined) return input.canonicalShadowPhase
+			return undefined
+		}
+		// Production chronology.
+		expect(oldSelector({ canonicalShadowPhase: "idle", currentLegacyPhase: "compacting" })).toBe("compacting")
+		// Canonical NEVER wins during the callback.
+	})
+
+	it("NEW shape (entryPhase separation) lets canonical projection win in production chronology", () => {
+		// Production chronology + CORRECTION04 selector: canonical
+		// idle wins over the live `compacting` tracker.
+		expect(
+			selectCanonicalRestorePhase({
+				entryPhase: "streaming",
+				canonicalShadowPhase: "idle",
+				currentLegacyPhase: "compacting",
+			}),
+		).toBe("idle")
+	})
+})
+
+// =============================================================================
+// PART 5: AST-LEVEL SdkController WIRING ASSERTION
 // =============================================================================
 //
 // Production SdkController wiring MUST route through
 // `createCanonicalRestorePhaseCallback` with BOTH
-// `getCanonicalShadowPhase` AND `getCurrentLegacyPhase` inputs.
-// This part uses the TypeScript Compiler API (SourceFile /
-// forEachChild / ts.factory.createCall / etc.) to walk the AST and
-// find the actual CallExpression. It is robust to:
-//   - local variable renames (no regex match on identifier text)
-//   - whitespace / formatting changes (no regex match on layout)
-//   - optional-chaining shape (`a?.b()` vs `a.b()`)
-//   - callback body restructuring (we match the structure of the
-//     factory CallExpression, not the surrounding code)
+// `getCanonicalShadowPhase` AND `getCurrentLegacyPhase` accessors.
 //
 // Reference:
 //   https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API
 //
-// The prior source-text regex inspection (CLTCC13 INSPECTION-A..E
-// Helper: read the SdkController source.
+// CORRECTION04 strengthens AST-3 to verify the accessor bodies
+// reach the right host fields (per reviewer):
+//
+//   getCanonicalShadowPhase must reach
+//     this.taskStateShadowWiring?.getLastObservedShadowPhase()
+//
+//   getCurrentLegacyPhase must reach
+//     this.turnStateTracker.currentPhase
+//
+// We verify the accessor bodies structurally via the TypeScript
+// Compiler API (no regex on body text). The structural check
+// walks the AST of each arrow body and asserts the property
+// access chain matches.
+
+function findObjectLiteralPropertyInitializer(obj: ts.ObjectLiteralExpression, propName: string): ts.Expression | undefined {
+	for (const prop of obj.properties) {
+		if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === propName) {
+			return prop.initializer
+		}
+	}
+	return undefined
+}
+
 function readSdkControllerSource(): string {
 	const path = join("..", "..", "apps", "vscode", "src", "sdk", "SdkController.ts")
 	return readFileSync(path, "utf-8")
 }
 
-// Helper: parse a source file.
-function parseSource(name: string, source: string): ts.SourceFile {
-	return ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true)
+function parseSdkController(source: string): ts.SourceFile {
+	return ts.createSourceFile("SdkController.ts", source, ts.ScriptTarget.Latest, true)
 }
 
-// Helper: find the `new SdkCompactionCoordinator({...})` initializer
-// inside the constructor. The object literal is the first argument.
 function findSdkCompactionCoordinatorArg(sf: ts.SourceFile): ts.ObjectLiteralExpression | undefined {
 	let found: ts.ObjectLiteralExpression | undefined
 	function walk(node: ts.Node) {
@@ -262,66 +563,50 @@ function findSdkCompactionCoordinatorArg(sf: ts.SourceFile): ts.ObjectLiteralExp
 	return found
 }
 
-// Helper: find a property initializer by name in an object literal.
-function findPropertyInitializer(obj: ts.ObjectLiteralExpression, propName: string): ts.Expression | undefined {
-	for (const prop of obj.properties) {
-		if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name) && prop.name.text === propName) {
-			return prop.initializer
-		}
-	}
-	return undefined
+function isArrowReturningThisMemberAccess(expr: ts.Expression, rootName: string, memberName: string): boolean {
+	// Match the AST shape produced by EITHER:
+	//   () => this.ROOT.MEMBER       (plain property access)
+	//   () => this.ROOT?.MEMBER      (optional chain)
+	//   () => this.ROOT?.MEMBER()    (optional chain + call)
+	//   () => this.ROOT.MEMBER()     (plain chain + call)
+	//
+	// All four resolve to a top-level
+	//   PropertyAccessExpression (name=MEMBER)
+	//     PropertyAccessExpression (name=ROOT)
+	//       ThisKeyword
+	//
+	// except that `MEMBER()` wraps the outer PropertyAccess in a
+	// CallExpression. We unwrap the optional CallExpression
+	// wrapper and check the inner PropertyAccess.
+	if (!ts.isArrowFunction(expr)) return false
+	const body = expr.body
+	const target = ts.isParenthesizedExpression(body) ? body.expression : body
+	// Unwrap an optional CallExpression wrapper (e.g. for `MEMBER()`).
+	const peeled = ts.isCallExpression(target) ? target.expression : target
+	if (!ts.isPropertyAccessExpression(peeled)) return false
+	if (peeled.name.text !== memberName) return false
+	const inner = peeled.expression
+	if (!ts.isPropertyAccessExpression(inner)) return false
+	if (inner.name.text !== rootName) return false
+	return inner.expression.kind === ts.SyntaxKind.ThisKeyword
 }
 
-// Helper: walk every node in the source file.
-function walkAll(sf: ts.SourceFile, cb: (node: ts.Node) => void): void {
-	function walk(node: ts.Node) {
-		cb(node)
-		ts.forEachChild(node, walk)
-	}
-	walk(sf)
-}
-
-// Helper: collect exported function declarations.
-function collectExportedFunctions(sf: ts.SourceFile): string[] {
-	const exported: string[] = []
-	walkAll(sf, (node) => {
-		if (ts.isFunctionDeclaration(node) && node.name) {
-			const hasExport = node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false
-			if (hasExport) {
-				exported.push(node.name.text)
-			}
-		}
-	})
-	return exported
-}
-
-describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02 / AST-level SdkController wiring assertion", () => {
+describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04 / AST-level SdkController wiring assertion", () => {
 	const source = readSdkControllerSource()
-	const sf = parseSource("SdkController.ts", source)
+	const sf = parseSdkController(source)
 
-	it("AST-1: SdkController constructs an SdkCompactionCoordinator with a `getCanonicalRestorePhase` option", () => {
-		// Walk the AST and find the SdkCompactionCoordinator
-		// constructor. The first argument is the options object
-		// literal. The `getCanonicalRestorePhase` property must
-		// exist on that object.
+	it("AST-1: production SdkController declares a `getCanonicalRestorePhase` option on the SdkCompactionCoordinator constructor", () => {
 		const arg = findSdkCompactionCoordinatorArg(sf)
 		expect(arg).toBeDefined()
 		if (!arg) return
-		const init = findPropertyInitializer(arg, "getCanonicalRestorePhase")
-		expect(init).toBeDefined()
+		expect(findObjectLiteralPropertyInitializer(arg, "getCanonicalRestorePhase")).toBeDefined()
 	})
 
-	it("AST-2: `getCanonicalRestorePhase` is initialized via `createCanonicalRestorePhaseCallback(...)` factory call", () => {
-		// The RHS of the `getCanonicalRestorePhase` property
-		// assignment MUST be a CallExpression whose callee is the
-		// `createCanonicalRestorePhaseCallback` identifier. Robust
-		// to local variable renames, reformat, and accessor body
-		// changes -- we match the structural shape (factory call)
-		// not the surface text.
+	it("AST-2: production SdkController initializes `getCanonicalRestorePhase` via `createCanonicalRestorePhaseCallback(...)` factory call", () => {
 		const arg = findSdkCompactionCoordinatorArg(sf)
 		expect(arg).toBeDefined()
 		if (!arg) return
-		const init = findPropertyInitializer(arg, "getCanonicalRestorePhase")
+		const init = findObjectLiteralPropertyInitializer(arg, "getCanonicalRestorePhase")
 		expect(init).toBeDefined()
 		if (!init || !ts.isCallExpression(init)) {
 			throw new Error("getCanonicalRestorePhase initializer is not a CallExpression")
@@ -332,51 +617,57 @@ describe("ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02 / AST
 		}
 	})
 
-	it("AST-3: factory call passes BOTH `getCanonicalShadowPhase` AND `getCurrentLegacyPhase` accessors", () => {
-		// The factory CallExpression's first argument is an
-		// ObjectLiteralExpression. Both properties must be
-		// present. The arrow body of each accessor is irrelevant
-		// to this test -- only the property NAME and presence
-		// matter (so the test is robust to accessor body
-		// restructuring, e.g. extracting an internal variable).
+	it("AST-3: factory call passes BOTH accessors AND accessor bodies reach the right host fields (STRENGTHENED)", () => {
+		// Strengthened per reviewer: verify accessor bodies
+		// structurally reach the right host fields, not just that
+		// the property NAMES are present. A test that only checked
+		// property names would pass even if both accessors pointed
+		// at the same field.
 		const arg = findSdkCompactionCoordinatorArg(sf)
 		expect(arg).toBeDefined()
 		if (!arg) return
-		const init = findPropertyInitializer(arg, "getCanonicalRestorePhase")
+		const init = findObjectLiteralPropertyInitializer(arg, "getCanonicalRestorePhase")
 		expect(init && ts.isCallExpression(init)).toBe(true)
 		if (!init || !ts.isCallExpression(init)) return
 		const factoryArg = init.arguments?.[0]
 		expect(factoryArg && ts.isObjectLiteralExpression(factoryArg)).toBe(true)
 		if (!factoryArg || !ts.isObjectLiteralExpression(factoryArg)) return
-		expect(findPropertyInitializer(factoryArg, "getCanonicalShadowPhase")).toBeDefined()
-		expect(findPropertyInitializer(factoryArg, "getCurrentLegacyPhase")).toBeDefined()
+
+		const canonicalInit = findObjectLiteralPropertyInitializer(factoryArg, "getCanonicalShadowPhase")
+		const legacyInit = findObjectLiteralPropertyInitializer(factoryArg, "getCurrentLegacyPhase")
+		expect(canonicalInit).toBeDefined()
+		expect(legacyInit).toBeDefined()
+		if (!canonicalInit || !legacyInit) return
+
+		// AST-level structural check: the accessor bodies must reach
+		// the right host fields.
+		expect(isArrowReturningThisMemberAccess(canonicalInit, "taskStateShadowWiring", "getLastObservedShadowPhase")).toBe(true)
+		expect(isArrowReturningThisMemberAccess(legacyInit, "turnStateTracker", "currentPhase")).toBe(true)
 	})
 
 	it("AST-4: the RHS is NOT an ArrowFunction (i.e. NOT the OLD non-host-aware bare-canonical-shadow form)", () => {
-		// Guard against accidental regression: the binding MUST
-		// be a `createCanonicalRestorePhaseCallback({...})` CallExpression
-		// (not the OLD bare `() => this.taskStateShadowWiring?.getLastObservedShadowPhase()`
-		// ArrowFunction). The structural assertion is robust to
-		// whitespace / formatting / reformat and proves the binding
-		// routes through the factory. The OLD form is detected via
-		// `ts.isArrowFunction` rather than text matching, so
-		// renames / reformat cannot bypass it.
 		const arg = findSdkCompactionCoordinatorArg(sf)
 		expect(arg).toBeDefined()
 		if (!arg) return
-		const init = findPropertyInitializer(arg, "getCanonicalRestorePhase")
+		const init = findObjectLiteralPropertyInitializer(arg, "getCanonicalRestorePhase")
 		expect(init).toBeDefined()
 		if (!init) return
 		expect(ts.isArrowFunction(init)).toBe(false)
 	})
 
 	it("AST-5: selectCanonicalRestorePhase + createCanonicalRestorePhaseCallback are exported from task-state-shadow-arbiter-mapper.ts", () => {
-		// The wiring depends on the helper existing. Assert both
-		// exports via the AST (also robust to renames / reformat).
 		const path = join("..", "..", "apps", "vscode", "src", "sdk", "task-state-shadow-arbiter-mapper.ts")
 		const mapperSource = readFileSync(path, "utf-8")
-		const mapperSf = parseSource("task-state-shadow-arbiter-mapper.ts", mapperSource)
-		const exported = collectExportedFunctions(mapperSf)
+		const mapperSf = parseSdkController(mapperSource)
+		const exported: string[] = []
+		ts.forEachChild(mapperSf, (node) => {
+			if (ts.isFunctionDeclaration(node) && node.name) {
+				const hasExport = node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false
+				if (hasExport) {
+					exported.push(node.name.text)
+				}
+			}
+		})
 		expect(exported).toContain("selectCanonicalRestorePhase")
 		expect(exported).toContain("createCanonicalRestorePhaseCallback")
 	})

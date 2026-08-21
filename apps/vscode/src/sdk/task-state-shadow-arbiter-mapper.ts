@@ -520,85 +520,143 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
  * produced by this selector.
  */
 export function selectCanonicalRestorePhase(input: {
+	readonly entryPhase: TurnPhase
 	readonly canonicalShadowPhase: TurnPhase | undefined
 	readonly currentLegacyPhase: TurnPhase
 }): TurnPhase | undefined {
-	// 1. HOST COMPACTING OVERRIDE -- mirror
-	//    `selectTaskHeaderPresentation` step 1.
-	if (input.currentLegacyPhase === "compacting") {
-		return "compacting"
-	}
-	// 2. HOST AWAITING_FOLLOWUP OVERRIDE -- mirror step 2. The
-	//    canonical shadow's `projectTurnState(model)` cannot
-	//    produce `awaiting_followup` because that requires
-	//    `hostInteraction.awaitingFollowup`, which the canonical
-	//    shadow wiring does not propagate. The legacy
-	//    `TurnStateTracker.currentPhase` IS the authoritative
-	//    source for this user-owned phase (the session-event
-	//    coordinator writes it directly), so we read it here.
+	// ============================================================
+	// CORRECTION04: temporal identity resolved
+	// ============================================================
+	//
+	// CORRECTION02/03 confused `entryPhase` (the CAPTURED phase
+	// before compaction took ownership) with `currentLegacyPhase`
+	// (the LIVE tracker value at callback time). They are not
+	// the same: the coordinator writes "compacting" at entry
+	// (`sdk-compaction-coordinator.ts:412`) and the live tracker
+	// reads "compacting" for the entire compaction work. The
+	// CORRECTION02 `compacting -> compacting` branch therefore
+	// ALWAYS fired during the restore callback, blocking the
+	// canonical projection from ever winning.
+	//
+	// The CORRECTION04 model separates three concepts:
+	//   entryPhase          -- CAPTURED before compaction (governs
+	//                           terminal-owner preservation)
+	//   canonicalShadowPhase -- canonical authority (canonical
+	//                           projection at restore time)
+	//   currentLegacyPhase  -- LIVE tracker; legitimate signal only
+	//                           for `awaiting_followup` (host-owned
+	//                           override during compaction)
+	//
+	// Precedence (CORRECTION04):
+	//
+	//   1. TERMINAL OWNER ENTRY -- preserve entry. The canonical
+	//      shadow NEVER overrides a terminal entry. The host-owned
+	//      awaiting_followup override also does not fire here:
+	//      a terminal entry is an authoritative state, not a
+	//      transition marker.
+	//   2. HOST-OWNED AWAITING_FOLLOWUP -- the live tracker reports
+	//      "awaiting_followup" only when the session-event
+	//      coordinator wrote it during compaction. That is a
+	//      user-owned override that legitimately supersedes the
+	//      entry. Return `awaiting_followup`.
+	//   3. NON-TERMINAL ENTRY + canonical available -- bounded
+	//      repair fires; write canonical projection.
+	//   4. NON-TERMINAL ENTRY + canonical undefined -- return
+	//      undefined (coordinator preserves entry; P1: unavailable
+	//      != idle).
+	//
+	// `compacting` is intentionally NOT a restore destination.
+	// It is a transition marker written by the coordinator at
+	// entry. The selector MUST NOT consult
+	// `currentLegacyPhase === "compacting"`; the live tracker
+	// reads "compacting" for the entire window by construction.
+
+	// 1. HOST-OWNED AWAITING_FOLLOWUP OVERRIDE -- the live tracker
+	//    reports awaiting_followup ONLY when the session-event
+	//    coordinator wrote it. This is a user-owned signal that
+	//    legitimately supersedes any prior state (including a
+	//    terminal idle). If the live tracker says awaiting_followup,
+	//    the user has taken ownership -- return awaiting_followup.
 	if (input.currentLegacyPhase === "awaiting_followup") {
 		return "awaiting_followup"
 	}
-	// 3. TERMINAL OWNER ENTRY (idle / completed / resumable /
-	//    error) -- preserve entry. The legacy tracker IS the
-	//    authority for these phases (the session-event coordinator
-	//    writes them directly); consulting the canonical shadow
-	//    could regress a terminal state. Mirrors the
-	//    ABSENCE-FALLBACK semantics of `selectTaskHeaderPresentation`
-	//    step 4 but generalized: terminal owners ALWAYS preserve,
-	//    regardless of canonical shadow.
+
+	// 2. TERMINAL OWNER ENTRY (idle / completed / resumable /
+	//    error) -- preserve entry ALWAYS. The canonical shadow
+	//    NEVER overrides a terminal entry; the host override above
+	//    (awaiting_followup) already fired if applicable.
 	const isTerminalOwner =
-		input.currentLegacyPhase === "idle" ||
-		input.currentLegacyPhase === "completed" ||
-		input.currentLegacyPhase === "resumable" ||
-		input.currentLegacyPhase === "error"
+		input.entryPhase === "idle" ||
+		input.entryPhase === "completed" ||
+		input.entryPhase === "resumable" ||
+		input.entryPhase === "error"
 	if (isTerminalOwner) {
-		return input.currentLegacyPhase
+		return input.entryPhase
 	}
-	// 4. NON-TERMINAL OWNER (streaming / awaiting_approval) +
-	//    canonical available -- bounded repair fires, write the
-	//    canonical projection.
+
+	// 3. AWAITING_FOLLOWUP ENTRY -- entry was awaiting_followup;
+	//    the session-event coordinator had authoritative state
+	//    awaiting user response. Preserve it.
+	if (input.entryPhase === "awaiting_followup") {
+		return "awaiting_followup"
+	}
+
+	// 4. CANONICAL SHADOW -- bounded repair fires for non-terminal
+	//    entries when the canonical projection is available.
 	if (input.canonicalShadowPhase !== undefined) {
 		return input.canonicalShadowPhase
 	}
-	// 5. NON-TERMINAL OWNER + canonical undefined -- preserve
-	// entry via the coordinator's `undefined -> preserve` gate.
-	// Factory P1: `unavailable != idle`; the bounded repair must
-	// NOT fire when the canonical projection is unavailable.
+
+	// 5. ABSENCE -- Factory P1: `unavailable != idle`. The
+	//    coordinator preserves the entry phase in this branch.
 	return undefined
 }
 
 /**
- * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION02
+ * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01-CORRECTION04
  *
  * Factory: builds the canonical restore callback that
  * `SdkController` wires into `getCanonicalRestorePhase`. The
  * callback reads `canonicalShadowPhase` (the EXISTING
- * `taskStateShadowWiring.getLastObservedShadowPhase()` projection)
- * and `currentLegacyPhase` (the legacy `TurnStateTracker.currentPhase`)
- * and delegates to `selectCanonicalRestorePhase` for the
- * three-source precedence.
+ * `taskStateShadowWiring.getLastObservedShadowPhase()` projection),
+ * `currentLegacyPhase` (the live `turnStateTracker.currentPhase`,
+ * sampled at restore time), and `entryPhase` (the CAPTURED phase
+ * before compaction took ownership -- passed by the coordinator
+ * as an argument). It delegates to `selectCanonicalRestorePhase`
+ * for the three-source precedence.
  *
  * Extracted as a small factory so the binding composition is
- * testable end-to-end. The factory takes the two dependencies
- * directly (not the live `taskStateShadowWiring` /
+ * testable end-to-end. The factory takes the two host-derived
+ * dependencies directly (not the live `taskStateShadowWiring` /
  * `turnStateTracker`) so the test can drive the binding without
- * spinning up a full SdkController. This satisfies the Factory
- * reviewer's real-wiring discriminator: the binding's value source
- * is `selectCanonicalRestorePhase({canonicalShadowPhase, currentLegacyPhase})`,
- * not the bare canonical shadow.
+ * spinning up a full SdkController. The factory then closes over
+ * `entryPhase` via the returned callback -- the coordinator
+ * supplies `entryPhase` when it invokes the callback.
  *
- * The factory does not duplicate `selectCanonicalRestorePhase`'s
- * switch -- it just composes its inputs from the two existing
- * production dependencies and returns the closure.
+ * Why `entryPhase` is a parameter and not a third factory input:
+ * the entry phase is coordinator-internal (captured at
+ * `enterCompactingPhase()` before any host read). The factory
+ * cannot know it without the coordinator passing it through. The
+ * returned closure takes `entryPhase` as a parameter; the
+ * coordinator invokes it with the captured value.
+ *
+ * `compacting` is intentionally NOT a restore destination. The
+ * factory does not consult `currentLegacyPhase` for the
+ * `compacting -> compacting` branch. `compacting` is a transition
+ * marker written by the coordinator at entry, and the live
+ * tracker reads `compacting` for the entire compaction window by
+ * construction. Any selector that returns `compacting` from
+ * `currentLegacyPhase` would always fire during the restore
+ * callback, blocking the canonical projection from ever winning.
  */
 export function createCanonicalRestorePhaseCallback(input: {
 	readonly getCanonicalShadowPhase: () => TurnPhase | undefined
 	readonly getCurrentLegacyPhase: () => TurnPhase
-}): () => TurnPhase | undefined {
+}): (entryPhase: TurnPhase) => TurnPhase | undefined {
 	const { getCanonicalShadowPhase, getCurrentLegacyPhase } = input
-	return () =>
+	return (entryPhase: TurnPhase) =>
 		selectCanonicalRestorePhase({
+			entryPhase,
 			canonicalShadowPhase: getCanonicalShadowPhase(),
 			currentLegacyPhase: getCurrentLegacyPhase(),
 		})
