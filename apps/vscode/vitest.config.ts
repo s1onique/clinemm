@@ -70,6 +70,15 @@ export default defineConfig({
 			// `vitest.config.c2-4-c-bridge.ts`.
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01:
+			// AOPC02 PHASE-A and its three Phase-A-CORRECTION0N tests
+			// require the `@cline-internal/core/...` aliases that the
+			// BASE vitest config does not provide. They run under
+			// `vitest.config.c2-4-c-bridge.ts` instead.
+			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02.c24-c-bridge.test.ts",
+			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts",
+			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts",
+			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
