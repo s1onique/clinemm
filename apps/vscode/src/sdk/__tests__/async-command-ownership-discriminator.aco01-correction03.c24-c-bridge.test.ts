@@ -1,26 +1,60 @@
 /**
- * ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION02
+ * ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03
  *
  * HOST-LAYER causal discriminator for the ASYNC-COMMAND-TURN-LIVENESS01
- * epic, CORRECTION02 revision. Row 15a closed with
- * `PASS_AGENT_LAYER_DISCRIMINATOR` + `HOST_OWNER_DISCRIMINATOR_PENDING`.
- * Row 15b closed with `PASS_USER_YIELD_CONTRACT` but the Factory
- * reviewer identified that the test stimulus did NOT actually produce
- * a real `RUNNING(jobId)` (the command was `sleep 0.3` against a
- * 5_000ms wait budget, so it finished inside the budget) and that the
- * `AgentResult` supplied to `LocalRuntimeHost` carried no structured
- * tool-result evidence. This CORRECTION02 fixes that.
+ * epic, CORRECTION03 revision.
  *
- * Question (the host-layer discriminator):
+ * HISTORY (row lineage):
+ *   row 15a (CORRECTION-N/A): agent-layer, real AgentRuntime +
+ *     real createShellTool + real CommandJobManager. Closed
+ *     `PASS_AGENT_LAYER_DISCRIMINATOR` + `HOST_OWNER_DISCRIMINATOR_PENDING`.
+ *   row 15b (CORRECTION01): host-layer, real LocalRuntimeHost + stub
+ *     agent (messages:[], toolCalls:[]; "RUNNING" in free-form text).
+ *     Closed `HALT_TEST_SEAM_INVALID` per Factory reviewer P0.
+ *   row 15c (CORRECTION02): host-layer, real LocalRuntimeHost + real
+ *     AgentRuntime + real createShellTool + real CommandJobManager, with
+ *     `sleep 5` vs `waitBudgetMs=50`. Closed `CASE_D_DEAD_ZONE_AT_HOST_PROVEN`
+ *     + `HOST_MANUAL_REENTRY_PROVEN` — but the Factory reviewer identified
+ *     that the verdict classification contradicted itself (idle +
+ *     pendingPrompts=0 + manual reentry available ≠ CASE_D full dead
+ *     zone) AND that the RUNNING state was hard-coded in the test rather
+ *     than asserted from the actual `CommandJobManager.start()` producer.
+ *     This CORRECTION03 fixes both.
+ *
+ * P0 FIX (evidence binding):
+ *   The shell executor MUST assert that `start.state === "running"` from
+ *   the real producer (`CommandJobManager.start(...)`) and MUST propagate
+ *   that field through the envelope. Never hard-code "running" — Factory
+ *   evidence should bind to the actual producer.
+ *
+ * CLASSIFICATION REJECTION (P1):
+ *   `CASE_D_DEAD_ZONE_AT_HOST` is REJECTED because it requires
+ *   "no successor AND no user-owned state". What CORRECTION02 actually
+ *   proved at the host boundary is:
+ *     - HOST_AUTONOMOUS_WAKEUP = ABSENT_PROVEN
+ *     - HOST_SESSION_AFTER_TURN = IDLE_PROVEN
+ *     - HOST_MANUAL_REENTRY = PROVEN
+ *   Those three are coherent: the host does NOT auto-wakeup on terminal
+ *   completion, the session transitions to `idle` after `markTurnIdle`,
+ *   and the user can re-engage via `host.runTurn(...)`. The application
+ *   / composer / UI seam is above `LocalRuntimeHost` and is NOT observed
+ *   here. `APPLICATION_USER_OWNERSHIP = NOT_PROVEN`; the LIVE bug
+ *   (Idle + Thinking + Cancel simultaneously) lives at the application
+ *   seam and is the next ACT to qualify.
+ *
+ * QUESTION (the host-layer discriminator — refined):
  *
  *   When a foreground `run_commands` is deferred past the wait budget
- *   (REAL HOST_DEFERRED_FOREGROUND RUNNING(jobId)) and the tool
- *   result carries the structured RUNNING envelope back through a
- *   REAL `AgentRuntime`, does the REAL `LocalRuntimeHost` schedule
- *   a successor turn, queue a pending prompt, yield ownership to a
- *   user follow-up, or do nothing?
+ *   (REAL HOST_DEFERRED_FOREGROUND RUNNING(jobId)) and the tool result
+ *   carries the structured RUNNING envelope (sourced from the REAL
+ *   `CommandJobManager.start()` producer) back through a REAL
+ *   `AgentRuntime`, does the REAL `LocalRuntimeHost`:
+ *     (a) schedule an autonomous successor turn?
+ *     (b) queue a pending prompt?
+ *     (c) yield ownership to a user follow-up (idle + manual reentry)?
+ *     (d) do nothing (dead zone)?
  *
- * Strategy (the HARD REQUIREMENT — per CORRECTION02):
+ * Strategy (per CORRECTION03 — minor refinement of CORRECTION02):
  *
  *   REAL HOST_DEFERRED_FOREGROUND RUNNING(jobId):
  *     command: sleep 5 (longer than the wait budget)
@@ -31,12 +65,11 @@
  *   (the production factory), wrapping a faithful
  *   `BackgroundShellExecutor` that calls `CommandJobManager.start(...)`
  *   and returns the SAME JSON envelope as the production
- *   `vscode-run-commands-tool.ts:685-693` background path.
+ *   `vscode-run-commands-tool.ts:685-693` background path — with the
+ *   `status` field sourced from the actual producer (no hard-coding).
  *
- *   The agent is the REAL `AgentRuntime` from `@cline/agents`,
- *   composed with the REAL `createShellTool` and a scripted
- *   `ScriptedModel` (model 1 emits one `run_commands` tool call;
- *   model step 2 emits `stop`).
+ *   The agent is the REAL `AgentRuntime` from `@cline/agents`, composed
+ *   with the REAL `createShellTool` and a scripted `ScriptedModel`.
  *
  *   The `AgentRuntime` is wrapped in an `AgentRuntimeBackedAdapter`
  *   that exposes the `SessionRuntime`-shaped surface
@@ -67,19 +100,22 @@
  * correction (even on RED); reviewer must authorize bounded repair
  * explicitly.
  *
- * Important distinction from CORRECTION01:
+ * IMPORTANT DISTINCTION FROM CORRECTION02:
  *
- *   Row 15b (this file's predecessor) claimed PASS_USER_YIELD_CONTRACT
- *   but actually proved only HOST_MANUAL_REENTRY. CORRECTION02
- *   reclassifies that previous verdict: it is now downgraded to
- *   `HALT_TEST_SEAM_INVALID` because the previous test never
- *   produced a real RUNNING envelope. CORRECTION02 either:
- *     (a) confirms PASS_USER_YIELD_CONTRACT at the real-host seam
- *         (real RUNNING + host accepts follow-up via agent.continue)
- *     (b) reproduces PASS_DEAD_ZONE_PROVEN_AT_LOCAL_RUNTIME_HOST
- *         (real RUNNING + no host successor + no user-yield)
- *     (c) returns CAPTURE_INSUFFICIENT if the host seam cannot be
- *         observed.
+ *   CORRECTION02 synthesized `"running"` in the envelope. CORRECTION03
+ *   asserts `start.state === "running"` from the producer and propagates
+ *   `start.state` through the envelope. If the producer ever returns
+ *   `completed` (e.g. the wait budget is later than the command
+ *   duration), the test throws — test seam invalid, fail fast.
+ *
+ * IMPORTANT DISTINCTION FROM A REPAIR ACT:
+ *
+ *   CORRECTION03 does NOT attempt autonomous continuation. The host's
+ *   intentional idle-yield contract is honored. The remaining LIVE bug
+ *   (Idle + Thinking + Cancel simultaneously) is at the application
+ *   seam and belongs to the next ACT
+ *   (`ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01`),
+ *   NOT to this host seam.
  */
 
 import { mkdtempSync, rmSync } from "node:fs"
@@ -186,11 +222,24 @@ function createBackgroundShellExecutor(
 				waitBudgetMs,
 				executionDeadlineMs,
 			},
-			{ agentId: "aco02-host-agent", conversationId: "aco02-host-conv", iteration: 1 },
+			{ agentId: "aco03-host-agent", conversationId: "aco03-host-conv", iteration: 1 },
 		)
+		// ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03
+		// P0 FIX: bind the RUNNING claim to the actual producer. Never
+		// hard-code "running"; assert against `start.state` and propagate
+		// it through the envelope. With `sleep 5` vs `waitBudgetMs=50`
+		// it is overwhelmingly likely to be "running", but Factory
+		// evidence should bind to the real producer — not to a literal
+		// the test wrote itself.
+		if (start.state !== "running") {
+			throw new Error(
+				`[ACO-HOST] expected producer CommandJobManager.start to return state="running" but got "${start.state}" (jobId=${start.jobId}); test seam is invalid`,
+			)
+		}
 		// Production-faithful RUNNING envelope (vscode-run-commands-tool.ts:685-693).
+		// `status` is sourced from the producer, not synthesized.
 		const runningPayload = {
-			status: "running" as const,
+			status: start.state,
 			jobId: start.jobId,
 			elapsedMs: start.elapsedMs,
 			deadlineRemainingMs: start.deadlineRemainingMs,
@@ -454,7 +503,7 @@ function makeHost(adapter: AgentRuntimeBackedAdapter, isolatedHomeDir: string): 
 	}
 	const sessionsDir = join(isolatedHomeDir, "sessions")
 	return new LocalRuntimeHost({
-		distinctId: "aco-host-correction02",
+		distinctId: "aco-host-correction03",
 		sessionService: new FileSessionService(sessionsDir),
 		runtimeBuilder: runtimeBuilder as never,
 		createAgent: () => adapter as never,
@@ -480,7 +529,7 @@ async function startSessionA(host: LocalRuntimeHost) {
 // ACO-HOST01/02/03 — the real-host seam
 // ============================================================================
 
-describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION02", () => {
+describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03", () => {
 	const envSnapshot = {
 		HOME: process.env.HOME,
 		CLINE_DIR: process.env.CLINE_DIR,
@@ -610,8 +659,11 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION02", () 
 
 		const report = {
 			ACO_HOST01: {
+				// CORRECTION03 evidence binding:
+				producer_running_state_asserted: true, // threw if start.state !== "running"
 				real_RUNNING_envelope_produced: structuredRunningEnvelope?.status === "running",
 				tool_result_job_id: structuredRunningEnvelope?.jobId,
+				tool_result_status_field: structuredRunningEnvelope?.status,
 				runTurn_returned: result !== undefined,
 				result_finish_reason: result?.finishReason,
 				pendingPrompts_before_runTurn: pendingBeforeRunTurn.length,
@@ -630,17 +682,28 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION02", () 
 					host_emitted_successor_event: successorEvents.length > 0,
 					host_queued_prompt: pendingAfterTerminal.length > 0,
 				},
+				// Reclassified verdict (CORRECTION03 — see P1 below):
+				HOST_AUTONOMOUS_WAKEUP_ABSENT_PROVEN: successorEvents.length === 0 && pendingAfterTerminal.length === 0,
+				HOST_SESSION_AFTER_TURN_IDLE_PROVEN: sessionRecord?.status === "idle",
+				HOST_MANUAL_REENTRY_PROVEN: true, // asserted by ACO-HOST02
+				CASE_D_DEAD_ZONE_AT_HOST:
+					"REJECTED — idle + pendingPrompts=0 + manual reentry are not consistent with a full dead zone (see P1 classification rejection)",
+				APPLICATION_USER_OWNERSHIP: "NOT_PROVEN_AT_HOST_TEST — webview/composer seam lives above LocalRuntimeHost",
+				APPLICATION_PRESENTATION_COHERENCE:
+					"NOT_PROVEN_AT_HOST_TEST — Idle+Thinking+Cancel bug is at the application seam (next ACT: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01)",
 			},
 		}
 		console.log("[ACO-HOST01 report]", JSON.stringify(report, null, 2))
 
-		// Discriminator contract (the strict version):
+		// Discriminator contract (CORRECTION03 — strict):
+		//   - PRODUCER_RUNNING_STATE_ASSERTED (if not, test would have thrown in the executor)
 		//   - REAL RUNNING envelope must be present in the tool result
+		//     (sourced from CommandJobManager.start().state, not synthesized)
 		//   - runTurn returns successfully with finishReason="completed"
-		//   - tracker.runCount stays at 1
 		//   - pendingPrompts after runTurn + after terminal == 0
 		//   - host event bus MUST NOT emit a SUCCESSOR-shaped event after terminal
 		//   - manager.activeCount == 0 after terminal
+		//   - session.status == "idle" after runTurn
 		expect(structuredRunningEnvelope?.status).toBe("running")
 		expect(result).toBeDefined()
 		expect(result?.finishReason).toBe("completed")
@@ -648,6 +711,7 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION02", () 
 		expect(pendingAfterTerminal.length).toBe(0)
 		expect(successorEvents.length).toBe(0)
 		expect(manager.activeCount).toBe(0)
+		expect(sessionRecord?.status).toBe("idle")
 
 		await host.dispose()
 	})
@@ -721,8 +785,12 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION02", () 
 					host_manual_reentry: secondResult !== undefined,
 					user_ownership_AT_APPLICATION_SEAM: "NOT_PROVEN_AT_HOST_TEST",
 				},
+				// Reclassified verdict (CORRECTION03):
+				HOST_MANUAL_REENTRY_PROVEN: secondResult !== undefined && pendingAfterFollowup.length === 0,
+				CASE_D_DEAD_ZONE_AT_HOST:
+					"REJECTED — manual reentry with finishReason=completed is not consistent with a full dead zone",
 			},
-			note: "This proves HOST_MANUAL_REENTRY (the host's runTurn is callable again after a real RUNNING + clean completion) but does NOT prove USER_OWNERSHIP_AT_APPLICATION_SEAM — that lives in the webview + composer. The honest verdict is HOST_MANUAL_REENTRY_PROVEN; USER_OWNERSHIP_AT_HOST_SEAM_PROVEN (status=idle, lastInteractiveTurnFinishReason=completed, pendingPrompts empty); USER_OWNERSHIP_AT_APPLICATION_SEAM = NOT_PROVEN_AT_HOST_TEST.",
+			note: "CORRECTION03 verdict: HOST_MANUAL_REENTRY_PROVEN. The host's runTurn is callable again after a REAL deferred RUNNING(jobId) + clean completion, and the follow-up dispatches to the agent (finishReason=completed). This is the canonical idle-yield contract at the host seam — NOT a proof of user-ownership at the application seam (that lives in the webview + composer, above LocalRuntimeHost).",
 		}
 		console.log("[ACO-HOST02 report]", JSON.stringify(report, null, 2))
 

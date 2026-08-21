@@ -62,10 +62,13 @@ export default defineConfig({
 			// ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION02:
 			// the corrected host-layer causal discriminator drives the
 			// REAL `LocalRuntimeHost` with a REAL deferred RUNNING(jobId)
-			// chronology (`sleep 5` vs `waitBudgetMs=50`). It uses the
-			// REAL `AgentRuntime` + REAL `createShellTool` composition
-			// from row 15a. It runs under `vitest.config.c2-4-c-bridge.ts`.
-			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction02.c24-c-bridge.test.ts",
+			// chronology (`sleep 5` vs `waitBudgetMs=50`). The `status`
+			// field in the envelope is bound to the actual
+			// `CommandJobManager.start().state` producer (not
+			// synthesized). It uses the REAL `AgentRuntime` + REAL
+			// `createShellTool` composition from row 15a. It runs under
+			// `vitest.config.c2-4-c-bridge.ts`.
+			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
