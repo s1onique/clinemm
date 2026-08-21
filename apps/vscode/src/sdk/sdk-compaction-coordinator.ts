@@ -74,6 +74,26 @@ export interface SdkCompactionCoordinatorOptions {
 	 */
 	getTurnState?: () => TurnState
 	setTurnPhase?: (phase: TurnPhase, anchorTs?: number) => void
+	/**
+	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01
+	 *
+	 * Canonical runtime activity signal. Read at the compaction
+	 * restore boundary (`enterCompactingPhase`'s returned closure)
+	 * to detect the LIVE-stale split: a non-terminal owner phase
+	 * (`"streaming"` or `"awaiting_approval"`) on the legacy
+	 * `TurnStateTracker` paired with an idle canonical
+	 * `AgentRuntime.snapshot()`. When that combination is observed,
+	 * the restore writes the canonical user-owned terminal phase
+	 * `"awaiting_followup"` (the same phase the session-event
+	 * coordinator would have written had the turn completed
+	 * normally) instead of the stale entry phase.
+	 *
+	 * Optional so existing callers (CLI hosts that have not yet
+	 * wired the signal, tests of unrelated behavior) continue to
+	 * see byte-equivalent restore semantics. The bounded repair is
+	 * opt-in at the call site.
+	 */
+	getRuntimeActivityState?: () => "idle" | "active"
 }
 
 export class SdkCompactionCoordinator {
@@ -337,6 +357,19 @@ export class SdkCompactionCoordinator {
 	 *
 	 * No-ops (returning a no-op restorer) when the caller supplied no
 	 * turn-state authority — this coordinator never invents a second one.
+	 *
+	 * ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01:
+	 *
+	 * The returned closure applies the bounded restore policy. When the
+	 * caller wired `getRuntimeActivityState()` and that signal reports
+	 * `"idle"`, a stale non-terminal owner entry phase
+	 * (`"streaming"` or `"awaiting_approval"`) is re-routed to the
+	 * canonical user-owned terminal phase `"awaiting_followup"`. This
+	 * is the smallest possible repair for the LIVE `Idle + Cancel`
+	 * contradiction captured by the post-terminal-authority diagnostic
+	 * (stateVersion = _ptadPushId = 3208) — a single writer in the
+	 * canonical coordinator seam, no consumer changes, no
+	 * selector/ActionButtons/TaskHeader edits.
 	 */
 	private enterCompactingPhase(): () => void {
 		const getTurnState = this.options.getTurnState
@@ -346,7 +379,20 @@ export class SdkCompactionCoordinator {
 		}
 		const entry = getTurnState()
 		setTurnPhase("compacting", entry.anchorTs)
-		return () => setTurnPhase(entry.phase, entry.anchorTs)
+		const getRuntimeActivityState = this.options.getRuntimeActivityState
+		return () => {
+			// Bounded restore policy — see ACT-CLINEMM-COMPACTION-
+			// LEGACY-TURNSTATE-COHERENCE01. The legacy entry phase is
+			// preserved UNLESS the runtime explicitly reports idle and
+			// the entry phase was a non-terminal owner (the LIVE-stale
+			// split). Callers that have not wired
+			// `getRuntimeActivityState` keep the previous
+			// byte-equivalent behavior.
+			const activity = getRuntimeActivityState?.()
+			const isNonTerminalOwner = entry.phase === "streaming" || entry.phase === "awaiting_approval"
+			const restorePhase: TurnPhase = activity === "idle" && isNonTerminalOwner ? "awaiting_followup" : entry.phase
+			setTurnPhase(restorePhase, entry.anchorTs)
+		}
 	}
 
 	private async runCompactionInPhase(input: {
