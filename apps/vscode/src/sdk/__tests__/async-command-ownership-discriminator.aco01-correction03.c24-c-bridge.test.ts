@@ -135,6 +135,7 @@ import type {
 	ITelemetryService,
 	LiveAgentRuntimeStateSnapshot,
 } from "@cline/shared"
+import { agentMessagesToMessagesWithMetadata } from "@cline-internal/core/runtime/config/agent-message-codec"
 import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtime-host"
 import { FileSessionService } from "@cline-internal/core/session/services/file-session-service"
 import type { CoreSessionEvent } from "@cline-internal/core/types/events"
@@ -422,7 +423,25 @@ class AgentRuntimeBackedAdapter {
 		return {
 			text,
 			usage,
-			messages: runResult.messages as AgentMessage[],
+			// Convert AgentMessage[] -> MessageWithMetadata[] via the
+			// REAL production helper (the same one SessionRuntime.
+			// buildLegacyResult uses at orchestration/session-runtime-
+			// orchestrator.ts:1518). This replaces the previous
+			// `as AgentMessage[]` cast (which circumvented the
+			// MessageWithMetadata[] -> MessageRole vocabulary check
+			// without actually doing any conversion). The helper
+			// coerces "tool" -> "user" which is what
+			// `withLatestAssistantTurnMetadata` expects (it only
+			// writes `metrics` onto the LAST assistant turn and
+			// ignores tool messages).
+			//
+			// Per Factory reviewer P1 hygiene (P1 fix once and
+			// continue, surfaced by adding
+			// aco01-correction03.c24-c-bridge.test.ts to the bridge
+			// tsconfig include list during AOPC02 step 0): do not
+			// silence vocabulary mismatches with `as never`; use
+			// the existing production-correct shape.
+			messages: agentMessagesToMessagesWithMetadata(runResult.messages),
 			toolCalls: [],
 			iterations: runResult.iterations,
 			finishReason,
@@ -676,7 +695,13 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03", () 
 				successor_events_after_terminal: successorEvents,
 				manager_activeCount_after_terminal: manager.activeCount,
 				session_status: sessionRecord?.status,
-				session_last_interactive_finish_reason: sessionRecord?.lastInteractiveTurnFinishReason,
+				// `lastInteractiveTurnFinishReason` lives on the INTERNAL
+				// `ActiveSession` shape (sdk/packages/core/src/types/
+				// session.ts:42), NOT on the public `SessionRecord` that
+				// `host.getSession(...)` returns. The diagnostic dump
+				// below captures the equivalent authoritative value via
+				// the per-run returned finishReason above.
+				session_last_interactive_finish_reason: "not_exposed_on_public_session_record_use_run_finish_reason",
 				classification_inputs: {
 					host_scheduled_successor: false,
 					host_emitted_successor_event: successorEvents.length > 0,
@@ -780,7 +805,13 @@ describe("ACT-CLINEMM-ASYNC-COMMAND-OWNERSHIP-DISCRIMINATOR01-CORRECTION03", () 
 				second_run_finish_reason: secondResult?.finishReason,
 				pending_after_followup: pendingAfterFollowup.length,
 				session_status_after_followup: sessionRecord?.status,
-				session_last_finish_reason_after_followup: sessionRecord?.lastInteractiveTurnFinishReason,
+				// `lastInteractiveTurnFinishReason` is internal `ActiveSession`
+				// only (sdk/packages/core/src/types/session.ts:42), NOT on
+				// public `SessionRecord` returned by host.getSession(...). The
+				// equivalent authoritative value above is `secondResult.
+				// finishReason` (asserted via `expect(secondResult?.
+				// finishReason).toBe("completed")` below).
+				session_last_finish_reason_after_followup: "not_exposed_on_public_session_record_use_run_finish_reason",
 				classification_inputs: {
 					host_manual_reentry: secondResult !== undefined,
 					user_ownership_AT_APPLICATION_SEAM: "NOT_PROVEN_AT_HOST_TEST",
