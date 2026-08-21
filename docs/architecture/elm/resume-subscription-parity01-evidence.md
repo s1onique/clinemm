@@ -8,16 +8,26 @@
 - BRANCH: `main`
 - ENTRY_HEAD: `287b23f81af74242929ddb932fddaea1f3b7431b` (LTZ01 closure head)
 - ENTRY_TREE: `72cb592e6fc399cea7c6c29bbd3c6a47adff5a75`
-- FINAL_HEAD: `6915c22ced47d9198119b3f0bf46a22e5850cdb1`
-- FINAL_TREE: `397766a33d5a1d43f2015890b42e29957a8a2b10`
+- PRODUCTION_FIX_HEAD: `6915c22ced47d9198119b3f0bf46a22e5850cdb1` (RSP01 production fix + new test + board row)
+- PRODUCTION_FIX_TREE: `397766a33d5a1d43f2015890b42e29957a8a2b10`
+- DOCS_CLOSURE_HEAD: `ae70870f6573772a6ede1b4f202af0e75a0b0cef` (CORRECTION01 docs-closure commit; authoritative `SOURCE_HEAD` for the rebuilt VSIX)
+- DOCS_CLOSURE_TREE: `ca5e4286a39322b6304f2e37ad57db3ed7753f0c`
+- FINAL_HEAD: `ae70870f6573772a6ede1b4f202af0e75a0b0cef`
+- FINAL_TREE: `ca5e4286a39322b6304f2e37ad57db3ed7753f0c`
 - WORKTREE_STATUS: clean (no dirt, no untracked; protected evidence preserved)
 
-## LIVE evidence binding (per Factory addendum)
+## LIVE evidence binding (per Factory addendum; CORRECTION01 wording)
 
 - LIVE_VERSION = `s1onique.clinemm@4.1.10-e5c6bf486` (state-side LAC-ABSENCE01 closure; PRE-LTZ01 + PRE-RSP01)
-- LIVE-A: TaskHeader telemetry entirely absent (timer + state + tool-count all missing). Classification: `TASK_TELEMETRY_ABSENT_OR_UNPUBLISHED`. Exact boundary unproven.
-- LIVE-B: TaskHeader showing `21:37 · Idle · 253` while Cline visibly edits code. Classification: `TELEMETRY_PRESENT_BUT_STALE_OR_TERMINAL` + `STATE_PROJECTION_STALE`. Exact boundary unproven.
-- These observations are `REAL_LIVE_FAILURE_ON_DOGFOOD_e5c6bf486` only. They DO NOT reproduce current HEAD (LTZ01 + RSP01 + CORRECTION03 all present in `6915c22c`).
+- LIVE-A: TaskHeader telemetry entirely absent (timer + state + tool-count all missing). Classification: `TASK_TELEMETRY_ABSENT_OR_UNPUBLISHED`. Exact host boundary unproven.
+  - LIVE_A = REAL on `e5c6bf486`.
+  - LTZ01 causal match = **INFERRED**, not seam-reproduced. LTZ01 may well have repaired a cause capable of producing LIVE-A, but unless that exact old screenshot was reproduced through LTZ01's seam, the LTZ01 ←→ LIVE-A causal attribution is **inference, not proof**.
+- LIVE-B: TaskHeader showing `21:37 · Idle · 253` while Cline visibly edits code. Classification: `TELEMETRY_PRESENT_BUT_STALE_OR_TERMINAL` + `STATE_PROJECTION_STALE`. Exact host boundary unproven.
+  - LIVE_B = REAL on `e5c6bf486`.
+  - MODELED_STALE_ENDEDAT_PATH_ON_CURRENT_HEAD = **NOT_REPRODUCED**. RSP04 proves that the modeled resume chronology (observeTurnPhase("streaming") → CONTINUATION_PHASE) clears `endedAt` correctly, independent of the RSP subscription repair. **RSP04 does NOT prove that LIVE-B cannot occur on current HEAD via any other path.**
+  - RSP01_CAUSAL_RELATION_TO_LIVE_B = **UNPROVEN**. The RSP01 ACT closed a subscription-lifecycle gap on the resume seam; that gap is consistent with the LIVE-B class but is not the only candidate cause for the visible symptom.
+  - CURRENT_HEAD_LIVE_B_STATUS = **NOT_LIVE_QUALIFIED**. The LIVE-B status on the post-RSP01 HEAD is pending L0-L5 LIVE qualification (install exact-head VSIX, resume an existing task, confirm `Working` and ticking timer return).
+- These observations are `REAL_LIVE_FAILURE_ON_DOGFOOD_e5c6bf486` only. The older `e5c6bf486` build was missing BOTH the LTZ01 timer anchor (closed at `287b23f81`) AND the RSP01 subscription wiring (closed at `6915c22c`) AND the CORRECTION03 coordinator setTurnPhase("streaming") assertion. Current HEAD (`ae70870f`) has all three.
 
 ## Recon
 
@@ -114,11 +124,11 @@
 
 ## LIVE (PENDING — exact-head VSIX built but not yet installed)
 
-- SOURCE_HEAD: `6915c22ced47d9198119b3f0bf46a22e5850cdb1`
-- SOURCE_TREE: `397766a33d5a1d43f2015890b42e29957a8a2b10`
+- SOURCE_HEAD: `ae70870f6573772a6ede1b4f202af0e75a0b0cef` (CORRECTION01 docs-closure commit; HEAD at the moment of artifact rebuild)
+- SOURCE_TREE: `ca5e4286a39322b6304f2e37ad57db3ed7753f0c`
 - ARTIFACT: `apps/dist/clinemm-rsp01.vsix`
 - BYTES: 8893368
-- SHA256: `b72a94fe57855dc6a323d745e3fb06d8c2eec0fb231e6a119c8b1d96bda683f9`
+- SHA256: `d434bc9112750f71730b326a1d9ef55fbb77b3abf638ea57a6a4f3b8ed247e6c`
 - L0_TASK_A: pending user-side install
 - L1_RESUME_A: pending
 - L2_RUNTIME_EVENT_AFTER_RESUME: pending
@@ -133,9 +143,9 @@
 
 ## Commits
 
-- COUNT = 1
-- HASHES = `6915c22ced47d9198119b3f0bf46a22e5850cdb1`
-- MESSAGES = `fix(sdk): attach runtime + recovery subscriptions on resume seam (RSP01)` (comprehensive body covering root cause, repair, tests, conservation, LIVE evidence binding, files changed)
+- COUNT = 2
+- HASHES = `6915c22ced47d9198119b3f0bf46a22e5850cdb1` (production fix + new test + board row); `ae70870f6573772a6ede1b4f202af0e75a0b0cef` (this evidence doc + board closure status; the docs-only closure commit that is the authoritative `SOURCE_HEAD` for the rebuilt VSIX)
+- MESSAGES = `fix(sdk): attach runtime + recovery subscriptions on resume seam (RSP01)`; `docs(act): RSP01 evidence + board closure (SOURCE_HEAD + SHA256 + LIVE binding)`
 
 ## Pushed
 
@@ -154,21 +164,30 @@
 
 ## Next recommended ACT
 
-- Re-read durable epic board at the next meaningful ACT boundary. The board entries for `EPIC-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` and `ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` will guide the reviewer to this closure evidence. The next natural follow-up is the LIVE qualification of this ACT (L0-L5 per ACT §40) on an installed exact-head VSIX. The LIVE-B frozen-timer symptom on `e5c6bf486` is **not reproducible on current HEAD** (RSP04 proves the streaming-phase observation correctly clears `endedAt` via the existing CONTINUATION_PHASE contract); the user should install `apps/dist/clinemm-rsp01.vsix` and re-run the L0-L5 cycle to confirm.
+- Re-read durable epic board at the next meaningful ACT boundary. The board entries for `EPIC-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` and `ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01` will guide the reviewer to this closure evidence. The next natural follow-up is the LIVE qualification of this ACT (L0-L5 per ACT §40) on the installed exact-head VSIX (`apps/dist/clinemm-rsp01.vsix`, SHA256 `d434bc91...`). RSP04 proves only that the modeled resume chronology clears `endedAt` correctly via the existing CONTINUATION_PHASE contract; it does **not** prove that LIVE-B cannot occur on current HEAD via any other path. Current HEAD LIVE-B status: **NOT_LIVE_QUALIFIED**. If LIVE-B reproduces after installing the exact-head VSIX, that would be evidence of a separate defect class (not the subscription-lifecycle gap this ACT closed), and a future bounded ACT would investigate.
 
-## Exact-head dogfood (RSP01)
+## Exact-head dogfood (RSP01) — CORRECTION01 (rebuilt at ae70870f)
 
-  - SOURCE_HEAD = `6915c22ced47d9198119b3f0bf46a22e5850cdb1` (RSP01 closure commit)
-  - SOURCE_TREE = `397766a33d5a1d43f2015890b42e29957a8a2b10`
+  - SOURCE_HEAD = `ae70870f6573772a6ede1b4f202af0e75a0b0cef` (CORRECTION01 docs-closure commit; authoritative for this VSIX)
+  - SOURCE_TREE = `ca5e4286a39322b6304f2e37ad57db3ed7753f0c`
   - SOURCE_VERSION = `4.1.10` (apps/vscode/package.json)
   - DOGFOOD_VERSION = `4.1.10`
   - ARTIFACT_PATH = `apps/dist/clinemm-rsp01.vsix`
   - BYTES = `8893368`
-  - SHA256 = `b72a94fe57855dc6a323d745e3fb06d8c2eec0fb231e6a119c8b1d96bda683f9`
+  - SHA256 = `d434bc9112750f71730b326a1d9ef55fbb77b3abf638ea57a6a4f3b8ed247e6c`
   - INSTALLED_VERSION = (not installed in this ACT; user-side install is a downstream step)
 
 The bundle `apps/vscode/dist/extension.js` was rebuilt by `bun
-esbuild.mjs` immediately after the commit to keep the local dogfood
-target in sync. The bundle includes both LTZ01 (timer anchor on
-resume) and RSP01 (runtime + recovery subscriptions on resume) and
-the CORRECTION03 coordinator setTurnPhase("streaming") assertion.
+esbuild.mjs` immediately after the CORRECTION01 docs commit to keep
+the local dogfood target in sync with the repository HEAD. The bundle
+includes both LTZ01 (timer anchor on resume) and RSP01 (runtime +
+recovery subscriptions on resume) and the CORRECTION03 coordinator
+setTurnPhase("streaming") assertion. Because `ae70870f` differs from
+`6915c22c` only in documentation (`.factory/epic-board.md` +
+`docs/architecture/elm/resume-subscription-parity01-evidence.md`),
+the bundled `dist/extension.js` content is identical between the two
+SHAs; the VSIX byte count is therefore also identical (8893368). The
+distinct SHA256 is per-build archive metadata (timestamps, etc.),
+not a content divergence. The original artifact at `b72a94fe57855dc6a323d745e3fb06d8c2eec0fb231e6a119c8b1d96bda683f9`
+is NOT the authoritative bound artifact; it was a stale-build snapshot
+identified as such by CORRECTION01 and replaced.
