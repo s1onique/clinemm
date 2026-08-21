@@ -251,3 +251,18 @@ behavioral seam tests analogous to LTZ01..03.
     (both state-side AND timer-side closed at this commit).
   - Companion ACT
     `ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01` -> `CLOSED`.
+
+## Exact-head dogfood
+
+  - SOURCE_HEAD = `48685b8c54d6e31a0a4bbb80490f1c6a6e7d05b3` (LTZ01 closure commit)
+  - SOURCE_TREE = the worktree at this commit
+  - SOURCE_VERSION = `4.1.10` (apps/vscode/package.json)
+  - DOGFOOD_VERSION = `4.1.10`
+  - ARTIFACT_PATH = `apps/dist/clinemm-ltz01.vsix`
+  - BYTES = `8893361`
+  - SHA256 = `3351607372b14751daec5de7195845e2af3f5fb9debdc35489585bab0226d679`
+  - INSTALLED_VERSION = (not installed in this ACT; user-side install is a downstream step)
+
+The bundle `apps/vscode/dist/extension.js` was also rebuilt by `bun
+esbuild.mjs` immediately after the commit to keep the local dogfood
+target in sync.
