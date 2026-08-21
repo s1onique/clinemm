@@ -115,6 +115,7 @@ import {
 import { Environment } from "../../../src/shared/config-types"
 import type { McpServer, McpViewTab } from "../../../src/shared/mcp"
 import {
+	applyPresentationProjections,
 	createReplicaState,
 	type ReplicaState,
 	applyMessage as reducerApplyMessage,
@@ -688,12 +689,62 @@ export const ExtensionStateContextProvider: React.FC<{
 								stateData.turnState,
 							)
 
+							// ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-B-REPAIR01+CORRECTION01:
+							// Two-layer fence for `taskHeaderPresentation` / `thinkingPresentation`:
+							//   (1) Per-field monotonic `.seq` gate via `applyPresentationProjections`
+							//       -- mirrors `applyTurnState` (messageReducer.ts:72-80) and stops a
+							//       later-arriving same-epoch straggler from downgrading the projection.
+							//   (2) Publication-ordering backstop (CORRECTION01): when the incoming
+							//       snapshot carries an older `stateVersion` than committed, the seq
+							//       domain alone cannot disambiguate chronology (PBR04), so we preserve
+							//       the committed projections wholesale.
+							//
+							// Epoch policy (CTRL-E / task-reset contract): when the replica wholesale-reset
+							// via `resetTo`, the incoming projections are the new authoritative truth and we
+							// bypass both fences -- mirrors the standard reducer same-epoch-vs-new-epoch split.
+							// CTRL-E in aopc02-phase-b-straggler-replay.test.tsx pins this.
+							const replicaAdvance = (nextReplica.epoch ?? 0) > (prevReplica.epoch ?? 0)
+							const incomingStateVersion = stateData.stateVersion ?? 0
+							const prevCommittedStateVersion = prevState.stateVersion ?? 0
+							const incomingIsStaleSameEpochPublication =
+								!replicaAdvance &&
+								incomingStateVersion !== 0 &&
+								prevCommittedStateVersion !== 0 &&
+								incomingStateVersion < prevCommittedStateVersion
+							// Bypass the helper when the replica wholesale-reset (CTRL-E) or when
+							// the publication is stale at the same-epoch backstop (PBR04). In both
+							// cases we want prevState projections preserved UNLESS the reducer itself
+							// advanced the epoch, in which case stateData projections are the new
+							// authoritative truth.
+							const gatedProjections = incomingIsStaleSameEpochPublication
+								? {
+										taskHeaderPresentation: prevState.taskHeaderPresentation,
+										thinkingPresentation: prevState.thinkingPresentation,
+									}
+								: replicaAdvance
+									? {
+											taskHeaderPresentation: stateData.taskHeaderPresentation,
+											thinkingPresentation: stateData.thinkingPresentation,
+										}
+									: applyPresentationProjections(
+											{
+												taskHeaderPresentation: prevState.taskHeaderPresentation,
+												thinkingPresentation: prevState.thinkingPresentation,
+											},
+											{
+												taskHeaderPresentation: stateData.taskHeaderPresentation,
+												thinkingPresentation: stateData.thinkingPresentation,
+											},
+										)
+
 							const newState: ExtensionState = {
 								...stateData,
 								clineMessages: nextReplica.messages,
 								turnState: nextReplica.turnState,
 								epoch: nextReplica.epoch,
 								stateVersion: nextReplica.stateVersion,
+								taskHeaderPresentation: gatedProjections.taskHeaderPresentation,
+								thinkingPresentation: gatedProjections.thinkingPresentation,
 								autoApprovalSettings: shouldUpdateAutoApproval
 									? stateData.autoApprovalSettings
 									: prevState.autoApprovalSettings,

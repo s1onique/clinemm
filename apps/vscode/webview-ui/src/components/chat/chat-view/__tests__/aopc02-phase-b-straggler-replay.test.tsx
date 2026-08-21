@@ -482,21 +482,195 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PH
 		//                                  (messageReducer.ts:66-72;
 		//                                  test c2-replay-red PASS)
 		//
-		//   taskHeaderPresentation      -- NOT seq-fenced; written straight
-		//                                  from stateData via ...stateData at
-		//                                  ExtensionStateContext.tsx:689
+		//   taskHeaderPresentation      -- NOW seq-fenced post-REPAIR01 via
+		//                                  applyPresentationProjections helper
+		//                                  gated inside the same-epoch branch
+		//                                  of the W1 functional updater
+		//                                  (ExtensionStateContext.tsx:683-720).
+		//                                  EQUAL-SEQ transitions: see PBR02.
 		//
-		//   thinkingPresentation        -- NOT seq-fenced; written straight
-		//                                  from stateData via ...stateData at
-		//                                  ExtensionStateContext.tsx:689
+		//   thinkingPresentation        -- NOW seq-fenced post-REPAIR01 via
+		//                                  the same applyPresentationProjections
+		//                                  call (independently fenced by own
+		//                                  .seq; see PBR01).
 		//
-		//   stateVersion                -- fenced by applyStateSnapshot
-		//                                  (messageReducer.ts:160+ same-epoch
-		//                                  lower-version branch)
+		//   stateVersion                -- fenced by applyStateSnapshot. Also
+		//                                  used as the publication-ordering
+		//                                  backstop for same-seq projection
+		//                                  transitions; see PBR04.
 		//
 		//   epoch                       -- fenced by applyStateSnapshot
 		//                                  (messageReducer.ts:160+ epoch
 		//                                  branch; wholesale replace on newer)
 		expect(true).toBe(true)
 	})
+})
+
+// -- PBR01: INDEPENDENT PROJECTION SKEW ---------------------------
+
+it("AOPC02-PHASE-B-PBR01: independent projection skew -- taskHeader stays seq15, thinking advances seq16", () => {
+	let committed: ExtensionState | undefined
+	function ReadProbe(): null {
+		committed = useExtensionState()
+		return null
+	}
+	render(
+		<ExtensionStateContextProvider>
+			<ReadProbe />
+		</ExtensionStateContextProvider>,
+	)
+
+	const current = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 16),
+		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+		thinkingPresentation: makeThinking(false, 14),
+		stateVersion: 5,
+		epoch: 0,
+	})
+	push(current)
+	expect(committed?.taskHeaderPresentation?.seq).toBe(15)
+	expect(committed?.thinkingPresentation?.seq).toBe(14)
+
+	const incoming = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 16),
+		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 10),
+		thinkingPresentation: makeThinking(false, 16),
+		stateVersion: 6,
+		epoch: 0,
+	})
+	push(incoming)
+
+	expect(committed?.taskHeaderPresentation?.seq).toBe(15)
+	expect(committed?.thinkingPresentation?.seq).toBe(16)
+	expect(committed?.stateVersion).toBe(6)
+})
+
+// -- PBR02: EQUAL SEQ -----------------------------------------------
+
+it("AOPC02-PHASE-B-PBR02: equal seq -- incoming accepted / idempotent", () => {
+	let committed: ExtensionState | undefined
+	function ReadProbe(): null {
+		committed = useExtensionState()
+		return null
+	}
+	render(
+		<ExtensionStateContextProvider>
+			<ReadProbe />
+		</ExtensionStateContextProvider>,
+	)
+
+	const first = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 15),
+		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+		thinkingPresentation: makeThinking(false, 15),
+		stateVersion: 5,
+		epoch: 0,
+	})
+	push(first)
+	expect(committed?.taskHeaderPresentation?.seq).toBe(15)
+
+	const second = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 15),
+		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+		thinkingPresentation: makeThinking(false, 15),
+		stateVersion: 6,
+		epoch: 0,
+	})
+	push(second)
+
+	expect(committed?.taskHeaderPresentation?.seq).toBe(15)
+	expect(committed?.thinkingPresentation?.seq).toBe(15)
+	expect(committed?.stateVersion).toBe(6)
+})
+
+// -- PBR03: UNDEFINED INCOMING PRESERVES CURRENT -------------------
+
+it("AOPC02-PHASE-B-PBR03: undefined incoming projection preserves current", () => {
+	let committed: ExtensionState | undefined
+	function ReadProbe(): null {
+		committed = useExtensionState()
+		return null
+	}
+	render(
+		<ExtensionStateContextProvider>
+			<ReadProbe />
+		</ExtensionStateContextProvider>,
+	)
+
+	const seed = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 15),
+		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+		thinkingPresentation: makeThinking(false, 15),
+		stateVersion: 5,
+		epoch: 0,
+	})
+	push(seed)
+	expect(committed?.taskHeaderPresentation?.seq).toBe(15)
+
+	const incoming = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 15),
+		stateVersion: 6,
+		epoch: 0,
+	})
+	push(incoming)
+
+	expect(committed?.taskHeaderPresentation?.seq).toBe(15)
+	expect(committed?.thinkingPresentation?.seq).toBe(15)
+})
+
+// -- PBR04: ADVERSARIAL SAME-SEQ DIFFERENT CONTENT -----------------
+
+//   Reviewer-identified gap: stateVersion may advance without
+//   projection.seq advancing, leaving a same-epoch straggler
+//   with EQUAL seq but a stale publication-version (stateVersion).
+//   The seq-fence alone cannot disambiguate this chronology -- it
+//   requires compositing the seq fence with the publication-version
+//   (stateVersion) backstop. See AOPC02-PHASE-B-REPAIR01-CORRECTION01.
+it("AOPC02-PHASE-B-PBR04: same-epoch, equal seq, lower stateVersion -- stale accepted (chronology gap)", () => {
+	let committed: ExtensionState | undefined
+	function ReadProbe(): null {
+		committed = useExtensionState()
+		return null
+	}
+	render(
+		<ExtensionStateContextProvider>
+			<ReadProbe />
+		</ExtensionStateContextProvider>,
+	)
+
+	// Current TRUTHFUL snapshot: newer stateVersion, projection.seq 15.
+	const first = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 15),
+		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+		thinkingPresentation: makeThinking(false, 15),
+		stateVersion: 5,
+		epoch: 0,
+	})
+	push(first)
+	expect(committed?.taskHeaderPresentation?.seq).toBe(15)
+	expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+	expect(committed?.thinkingPresentation?.seq).toBe(15)
+	expect(committed?.stateVersion).toBe(5)
+
+	// STALE straggler: equal projection.seq (15), but OLDER stateVersion (4).
+	// The seq-fence alone accepts this (15 >= 15). The stateVersion
+	// fence ALSO has rejected it -- applyStateSnapshot drops the entire
+	// transcript at the reducer when incoming.stateVersion (4) <
+	// committed.stateVersion (5), so the projection fields stay truthful.
+	const straggler = makeBaseSnapshot({
+		turnState: makeTurnState("awaiting_followup", 15),
+		taskHeaderPresentation: makeTaskHeader("idle" as TurnPhase, 15),
+		thinkingPresentation: makeThinking(false, 15),
+		stateVersion: 4,
+		epoch: 0,
+	})
+	push(straggler)
+
+	// REQUIRED: stale straggler must NOT regress the committed
+	// taskHeaderPresentation. The stateVersion fence at applyStateSnapshot
+	// (messageReducer.ts:160+) drops the entire stale snapshot BEFORE the
+	// projection helper sees it; therefore the helper never has a chance
+	// to mis-apply the stale same-seq content. PBR04 documents this contract.
+	expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+	expect(committed?.stateVersion).toBe(5)
 })

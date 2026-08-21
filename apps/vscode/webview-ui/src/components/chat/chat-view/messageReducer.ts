@@ -80,6 +80,82 @@ export function applyTurnState(state: ReplicaState, incoming: TurnState | undefi
 }
 
 /**
+ * ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-B-REPAIR01:
+ *
+ * Pure monotonic-merge helper for the two presentation projections that ride
+ * alongside `turnState` on a full ExtensionState snapshot: `taskHeaderPresentation`
+ * and `thinkingPresentation`. The producer selectors
+ * (`selectTaskHeaderPresentation` / `selectThinkingPresentation` in
+ * `apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts`) stamp the same
+ * `TurnStateTracker.seq` onto each projection as they stamp onto `turnState`,
+ * so each projection carries its own monotonic seq -- there is no need to
+ * invent a shared counter.
+ *
+ * Same-epoch invariant (the only domain this helper governs):
+ *
+ *   incoming.seq  < current.seq  => preserve current (stale straggler)
+ *   incoming.seq == current.seq  => accept incoming (idempotent; matches
+ *                                    CTRL-C duplicate-push contract)
+ *   incoming.seq  > current.seq  => accept incoming (advance)
+ *
+ *   incoming == undefined        => preserve current (matches applyTurnState
+ *                                    contract at line 73-74; the live wire
+ *                                    path never emits undefined for these
+ *                                    fields, but the helper is defensive
+ *                                    against partial-state payloads)
+ *
+ * Epoch scope: this helper is ONLY called inside the same-epoch branch
+ * of the W1 functional updater (see ExtensionStateContext.tsx ~line 683-720).
+ * A newer epoch wholesale-resets the projection domain via the standard
+ * `resetTo` path -- that is the established CTRL-E contract and is not
+ * changed by this helper.
+ *
+ * Returns the same reference identity on the "preserve current" branch so
+ * React callers can use referential equality to detect "no change".
+ */
+export function applyPresentationProjection<T extends { seq: number }>(
+	current: T | undefined,
+	incoming: T | undefined,
+): T | undefined {
+	if (!incoming) {
+		return current
+	}
+	if (current === undefined || incoming.seq >= current.seq) {
+		return incoming
+	}
+	return current
+}
+
+/**
+ * Apply the two presentation projections together, independently fenced by
+ * their own `.seq`. Each field moves forward on its own seq domain; the two
+ * are NOT coupled. This proves out PBR01 (independent projection skew).
+ */
+export interface PresentationProjections {
+	taskHeaderPresentation?: import("@shared/ExtensionMessage").TaskHeaderPresentationProjection | undefined
+	thinkingPresentation?: import("@shared/ExtensionMessage").ThinkingPresentationProjection | undefined
+}
+
+export function applyPresentationProjections(
+	current: PresentationProjections,
+	incoming: PresentationProjections | undefined,
+): PresentationProjections {
+	if (!incoming) {
+		return current
+	}
+	const taskHeaderPresentation = applyPresentationProjection(current.taskHeaderPresentation, incoming.taskHeaderPresentation)
+	const thinkingPresentation = applyPresentationProjection(current.thinkingPresentation, incoming.thinkingPresentation)
+	const currentTaskHeaderRef = current.taskHeaderPresentation
+	const currentThinkingRef = current.thinkingPresentation
+	const taskHeaderChanged = taskHeaderPresentation !== currentTaskHeaderRef
+	const thinkingChanged = thinkingPresentation !== currentThinkingRef
+	if (!taskHeaderChanged && !thinkingChanged) {
+		return current
+	}
+	return { taskHeaderPresentation, thinkingPresentation }
+}
+
+/**
  * Apply one incoming ClineMessage (from the partial-message stream OR from within a state
  * snapshot). Returns the same state object when the message is stale/ignored, or a new state
  * when it changes the transcript.

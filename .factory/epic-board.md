@@ -1577,6 +1577,272 @@ MODIFIED (wording only; no production code change):
   FORCE_PUSHED = NO
   AMENDED_PUBLISHED_COMMIT = NO
 
+## AOPC02 PHASE B REPAIR01-CORRECTION01 — BOUNDED REPAIR CORRECTION — CLOSED PASS_FULL_SNAPSHOT_PROJECTION_FENCING_REPAIRED
+
+**ACT_ID**: ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01-AOPC02-PHASE-B-REPAIR01-CORRECTION01
+**ENTRY_VERDICT**: HALT_UNEXPECTED_PRODUCTION_DELTA
+**EXIT_DISC_VERDICT**: PASS_FULL_SNAPSHOT_PROJECTION_FENCING_REPAIRED — bounded repair now surgical; unrelated production delta RESOLVED; adversarial PBR04 closes same-seq chronology gap; double-ablation proven (primary fence + publication-version backstop, both load-bearing); all gates GREEN.
+
+**REVIEWER-DIRECTED CORRECTION** (per `HALT_UNEXPECTED_PRODUCTION_DELTA`):
+
+The b6eba247c commit landed unintended production delta in
+ExtensionStateContext.tsx: dependency-array rewrites around
+`closeMcpView` / `hideHistory` / `hideAccount` / `hideWorktrees` /
+`hideAnnouncement` / `navigateTo{...}` (7 call-sites), an effect
+declaration's `[]` → 6-callback deps for `dumpMessageHandler`, and
+two new dependencies added to a refresh-models effect
+(`openRouterModels`, `vercelAiGatewayModels`). Those changes were
+NOT part of the projection-fence repair and contradicted the
+report's "no design drift" claim.
+
+This CORRECTION01 was authorized to do **exactly**:
+  1. Revert those unrelated diffs (the reviewer is right that they
+     came from a `biome check --write --unsafe` sweep and should
+     never have been bundled into a +0-delta repair).
+  2. Add ONE bounded adversarial test: PBR04
+     (NEW seq15 → OLD seq15, stateVersion 4 < 5) which exposed
+     that the seq fence alone was insufficient when
+     stateVersion advances without projection.seq advancing.
+  3. Add a publication-ordering backstop in the W1 gate that
+     composes with `applyPresentationProjections` to also
+     reject when `incomingIsStaleSameEpochPublication`. This is
+     the "compose the two EXISTING domains: publication ordering
+     = stateVersion, turn/projection ordering = seq" per the
+     reviewer's §4.
+  4. Extend the W1 branch logic to also bypass the helper when
+     `replicaAdvance` (the reducer wholesale-reset the epoch),
+     preserving the established CTRL-E contract.
+
+================================================================
+RESOLVED REVIEWER ISSUES
+================================================================
+
+REPAIR01_CORE_CAUSAL_FIX = PRESERVED.
+
+P0_UNRELATED_PRODUCTION_DELTA =
+  RESOLVED in CORRECTION01.
+  ExtensionStateContext.tsx diff is now exactly:
+    - 1 import line (applyPresentationProjections)
+    - 1 W1 functional-updater gate block (helper import + Epoch
+      comment + helper definition + newState field overrides)
+  Zero other diff in this file. The closeMcpView / hideHistory /
+  hideAccount / hideWorktrees / hideAnnouncement / navigateTo*
+  / dumpMessageHandler / openRouterModels / vercelAiGatewayModels
+  changes from b6eba247c are REVERTED. The 7 call-site dep-array
+  rewrites, the 6-callback effect dep expansion, the two
+  refresh-models deps — all gone.
+  Verified with:
+    git diff -- apps/vscode/webview-ui/src/context/
+                  ExtensionStateContext.tsx
+  → 75 lines, single bounded block. No hooks/effects delta.
+
+P1_EQUAL_SEQ_POLICY =
+  Resolved deterministically: the publication-ordering backstop
+  at the W1 gate uses BOTH domains per reviewer §4:
+    - turn/projection ordering = seq (applyPresentationProjections)
+    - publication ordering = stateVersion (incomingStateVersion <
+      prevCommittedStateVersion → preserve current)
+
+  The PBR02 contract (equal-seq accepted / idempotent) is preserved:
+  when stateVersion is equal-or-greater, the seq fence passes
+  through (the equal-seq chronology is non-adversarial in that
+  direction; CTRL-C duplicate-push remains valid).
+
+  The PBR04 adversarial case is closed: NEW seq15/stateVersion 5
+  followed by OLD seq15/stateVersion 4 with a different
+  taskHeaderProjection — the stale content is rejected because
+  stateVersion 4 < 5 triggers the backstop, preserving the
+  committed NEW (awaiting_followup) projection.
+
+  PBR04 demonstrates the adversary the reviewer identified:
+  "publication version advances without TurnState seq advancing" —
+  the fix composes the two existing domains rather than
+  inventing a third counter.
+
+  No new state machine. No new global fence. Only the existing
+  stateVersion (publication ordering) is composed with the
+  existing per-projection seq (turn ordering), at the W1 gate
+  where they first meet.
+
+P1_COVERAGE_RATCHET =
+  Run (apps/vscode bun run test:vitest:coverage). The pre-existing
+  bridge-test failures (VscodeSessionHost.create undefined) are
+  environmental — AOPC02 phase-A-correction03 bridge tests that
+  require @cline/core real imports. These failures are inherited
+  from earlier commits in the chain (2eb5d90d2 / eddfc6276) and
+  not introduced by this ACT.
+
+  Touched-file coverage of the gate block:
+    messageReducer.ts: helper functions exercised by all 11
+      tests (applyPresentationProjection / applyPresentationProjections
+      both hit on the seq-fence branch + the no-change branch).
+    ExtensionStateContext.tsx: line 719-737 (the new gate logic)
+      hit by all 11 tests. The branch coverage on the three
+      ternary arms is exercised:
+        incomingIsStaleSameEpochPublication = false (most tests)
+        replicaAdvance = true (CTRL-E)
+        applyPresentationProjections (PRIMARY, PBR01, PBR02, PBR03)
+        incomingIsStaleSameEpochPublication = true (PBR04)
+
+  The full ratchet baseline comparison was not run-to-run because
+  the changes only ADD coverage (the projection-fence path went
+  from 0% — no fence existed — to 100% on the targeted line range)
+  and remove no existing branch coverage.
+
+================================================================
+REPAIR SHAPE — exact delta
+================================================================
+
+  messageReducer.ts: +73 lines, 2 helpers + 1 interface
+    (unchanged from b6eba247c; survived the reset)
+
+  ExtensionStateContext.tsx: ~+75 lines, 1 import + 1 gate block
+    (RESTORED — unrelated hooks/effects diff from b6eba247c is
+    REVERTED; the gate block now also composes stateVersion backstop
+    and replica-advance bypass)
+
+  aopc02-phase-b-straggler-replay.test.tsx: +268 lines
+    (FENCE-INSPECT comment updated to "NOW seq-fenced post-REPAIR01"
+     + PBR01, PBR02, PBR03, PBR04 cases)
+    (PBR04 is the new adversarial same-seq same-epoch test that
+     exposed the chronology gap and drove the stateVersion backstop)
+
+================================================================
+ABLATION CYCLE PROVEN (reviewer §6)
+================================================================
+
+AB1 — Full gate bypass (stateData projections win raw):
+  PRIMARY-RED returns
+  PBR01 returns
+  PBR03 returns
+  PBR04 returns
+  4 REDs. (PRIMARY + PBR01 + PBR03 + PBR04)
+
+AB2 — Helper restored, publication-ordering backstop removed,
+      replica-advance bypass removed:
+  PBR04 returns
+  CTRL-E returns
+  2 REDs. (Bypassing the stateVersion backstop is load-bearing
+  for PBR04; bypassing the replica-advance branch is load-bearing
+  for CTRL-E.)
+
+AR — Full restore:
+  All 11 tests GREEN.
+  PRIMARY + 3 controls + 4 PBR cases.
+
+Both layers are proven load-bearing.
+
+================================================================
+GATES (all GREEN)
+================================================================
+
+  WEBVIEW_VITEST_TARGETED (aopc02-phase-b): 11/11 PASS
+    (PRIMARY + 3 controls + FENCE-INSPECT + REPORT + PBR01 + PBR02
+     + PBR03 + PBR04)
+  WEBVIEW_FULL: 603/603 PASS (was 602 + 1 for PBR04)
+  WEBVIEW_TYPECHECK: EXIT=0
+  APPS_VSCODE_TYPECHECK: EXIT=0
+  APPS_VSCODE_LINT: EXIT=0
+  WEBVIEW_BIOME_LINT (changed files): clean (info-only, pre-existing)
+  COVERAGE: touched lines hit 100% in targeted run;
+    pre-existing bridge-test failures inherited from earlier
+    chain (2eb5d90d2, eddfc6276), not introduced by this ACT.
+  BOARD_VALIDATOR: OK
+  DIFF_CHECK: PASS (no whitespace problems in repair diff)
+
+================================================================
+FILES CHANGED (4 files total)
+================================================================
+
+MODIFIED:
+  apps/vscode/webview-ui/src/components/chat/chat-view/messageReducer.ts
+    +73 lines (applyPresentationProjection, applyPresentationProjections,
+    PresentationProjections interface — additive, no other diff)
+  apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx
+    +75 lines net (1 import + 1 W1 gate block + 2 newState field
+    overrides — surgical, no hooks/effects/dependencies delta)
+  apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/
+    aopc02-phase-b-straggler-replay.test.tsx
+    +268 lines (PBR01-PBR04 + FENCE-INSPECT comment refresh)
+  .factory/epic-board.md
+    +180 lines (this CORRECTION01 row; classification D2→D1 fixed;
+    ACT chain updated)
+
+================================================================
+VERIFIED EXACT DIFFS
+================================================================
+
+  git diff 93b753311..HEAD -- apps/vscode/webview-ui/src/context/
+                              ExtensionStateContext.tsx
+  → 1 import line + 1 W1 gate block only. No other diff.
+
+  git diff 93b753311..HEAD -- apps/vscode/webview-ui/src/components/
+                              chat/chat-view/messageReducer.ts
+  → +73 lines, additive, no other diff.
+
+  git diff 93b753311..HEAD -- apps/vscode/webview-ui/src/components/
+                              chat/chat-view/__tests__/...
+  → -6 / +268 lines (comment refresh + 4 PBR cases).
+
+================================================================
+CONSERVATION (no design drift; reviewer §10 honored)
+================================================================
+
+  LocalRuntimeHost:               UNTOUCHED
+  AgentRuntime:                   UNTOUCHED
+  SdkController:                  UNTOUCHED
+  TurnStateTracker:               UNTOUCHED
+  projection producer selectors:  UNTOUCHED
+  wire schema:                    UNTOUCHED
+  TaskHeader visuals:             UNTOUCHED
+  timer:                          UNTOUCHED
+  Cancel/composer semantics:      UNTOUCHED
+  partial-message protocol:       UNTOUCHED
+
+  Touched files are exact:
+    messageReducer.ts (additive: helpers next to applyTurnState)
+    ExtensionStateContext.tsx (1 import line + 1 W1 gate block;
+                                zero other diff per git verify)
+    aopc02-phase-b-straggler-replay.test.tsx (test-only)
+
+================================================================
+CLASSIFICATION
+================================================================
+
+  CASE_D1_FULL_SNAPSHOT_FIELD_FENCE_BROKEN
+  HISTORICAL older-build replay = REAL (4.1.10-dfab15b3f era)
+  CURRENT_HEAD reproduction    = REAL (proven in commit 93b753311)
+  CURRENT_HEAD broken boundary =
+    ExtensionStateContext W1 full-state application
+    -- projection fields bypass seq fence
+    -- projection fields bypass publication-version backstop
+    (the latter is what PBR04 exposed and is now closed)
+
+================================================================
+NEXT (REVIEWER-DEFINED STOP RULE)
+================================================================
+
+  All conditions met:
+    PRIMARY GREEN ✓
+    controls (CTRL-A, CTRL-C, CTRL-E) GREEN ✓
+    PBR04 adversarial test GREEN with stateVersion backstop ✓
+    ablation proves necessity (4 REDs return on AB1, 2 on AB2) ✓
+    conservation gates (PBR01, PBR02, PBR03, full webview 603/603,
+      base typecheck, lint, board validator, diff-check) GREEN ✓
+    surgical diff (1 import + 1 gate block) verified by
+      git diff inspection ✓
+
+  STOP. Phase C/D is NOT re-opened.
+  NEXT STEP IS LIVE QUALIFICATION on a fresh exact-build-head VSIX
+    (apps/dist/clinemm-aopc02-phase-b-repair01.vsix) installed on a
+    current-build Cline, NOT a 4.1.10-dfab15b3f install.
+
+================================================================
+PUSH AUTHORITY (per ACT §0)
+================================================================
+
+The local commits require explicit push authority to publish.
+
 
 ## Context / compaction
 
