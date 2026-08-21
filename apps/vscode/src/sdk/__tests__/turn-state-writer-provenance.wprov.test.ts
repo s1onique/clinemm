@@ -308,3 +308,160 @@ describe("WPROV06: set() byte/semantic-equivalent to setWithWriter(..., unknown-
 		expect(getTurnStateWriterProvenanceRecords().length).toBe(0)
 	})
 })
+
+describe("WPROV07: mechanical inventory — every production writerId is mapped; no dead union IDs", () => {
+	// ACT-CLINEMM-LEGACY-TURNSTATE-WRITER-PROVENANCE01 §3 (Recon)
+	// requires an exhaustive writer table. WPROV07 mechanically
+	// reconciles the union against the production source so the
+	// cardinality contradiction cannot recur.
+	//
+	// Convention: the writerId is ALWAYS the LAST string literal in
+	// every setTurnPhase(phase, anchor?, writerId?) call. Phase
+	// values like "streaming" / "awaiting_approval" are constant
+	// strings in @shared/ExtensionMessage, NOT in the union.
+	// We assert:
+	//   1. Every last-position string literal that is kebab-case
+	//      appears in the union.
+	//   2. Every union member (except the unknown-legacy-writer
+	//      sentinel) appears at least once in the last position.
+	//   3. The exact cardinality is logged for the CI artifact.
+
+	it("WPROV07.1: writerId union fully reconciles with production call sites", async () => {
+		const { readFile } = await import("node:fs/promises")
+
+		const diagSrc = await readFile("src/shared/turn-state-writer-provenance.ts", "utf8")
+		const unionIds = new Set<string>()
+		const unionRe = /\|\s*"([a-z][^"]+)"/g
+		let m: RegExpExecArray | null
+		while ((m = unionRe.exec(diagSrc)) !== null) {
+			unionIds.add(m[1])
+		}
+
+		const sdkFiles = [
+			"src/sdk/SdkController.ts",
+			"src/sdk/sdk-interaction-coordinator.ts",
+			"src/sdk/sdk-session-event-coordinator.ts",
+			"src/sdk/sdk-task-start-coordinator.ts",
+			"src/sdk/sdk-task-control-coordinator.ts",
+			"src/sdk/sdk-mode-coordinator.ts",
+			"src/sdk/sdk-compaction-coordinator.ts",
+		]
+		const usedIds = new Set<string>()
+		let callSites = 0
+		for (const file of sdkFiles) {
+			const src = await readFile(file, "utf8")
+			// Match the START of any setTurnPhase( call. Handles three forms:
+			//   setTurnPhase?.(          (bare, closure-internal)
+			//   this.options.setTurnPhase?.(  (coordinator internal)
+			//   setTurnPhase(           (closure-local variable)
+			// The walker then balances parens to the matching close.
+			const startRe = /(?:this\.)?options?\.?setTurnPhase\??\s*(?:\.\s*)?\(|(?<![".\w])setTurnPhase\(/g
+			let sm: RegExpExecArray | null
+			while ((sm = startRe.exec(src)) !== null) {
+				const startIdx = sm.index
+				let depth = 1
+				let j = startIdx + sm[0].length
+				const args: string[] = []
+				let lastWriterIdArgIdx = -1
+				while (j < src.length && depth > 0) {
+					const c = src[j]
+					if (c === '"' || c === "'" || c === "`") {
+						const end = findStringEnd(src, j, c)
+						const lit = src.slice(j + 1, end)
+						args.push(lit)
+						lastWriterIdArgIdx = args.length - 1
+						j = end + 1
+						continue
+					}
+					if (c === "(") depth++
+					if (c === ")") {
+						depth--
+						if (depth === 0) break
+					}
+					j++
+				}
+				// Convention: the writerId is the LAST string literal in the args.
+				if (lastWriterIdArgIdx >= 0) {
+					const last = args[lastWriterIdArgIdx]
+					if (/^[a-z][a-z0-9-]+$/.test(last)) {
+						usedIds.add(last)
+						callSites++
+					}
+				}
+				startRe.lastIndex = j + 1
+			}
+		}
+		const controllerSrc = await readFile("src/sdk/SdkController.ts", "utf8")
+		// Walk every setWithWriter( call in SdkController and read its
+		// writerIdentity("...") literal — exact-args matching, paren-balanced.
+		const cRe = /setWithWriter\s*\(/g
+		let cm: RegExpExecArray | null
+		while ((cm = cRe.exec(controllerSrc)) !== null) {
+			let depth = 1
+			let j = cm.index + cm[0].length
+			const args: string[] = []
+			while (j < controllerSrc.length && depth > 0) {
+				const c = controllerSrc[j]
+				if (c === '"' || c === "'" || c === "`") {
+					const end = findStringEnd(controllerSrc, j, c)
+					args.push(controllerSrc.slice(j + 1, end))
+					j = end + 1
+					continue
+				}
+				if (c === "(") depth++
+				if (c === ")") {
+					depth--
+					if (depth === 0) break
+				}
+				j++
+			}
+			const last = args[args.length - 1]
+			if (last !== undefined && /^[a-z][a-z0-9-]+$/.test(last)) {
+				usedIds.add(last)
+				callSites++
+			}
+			cRe.lastIndex = j + 1
+		}
+
+		const SENTINEL = "unknown-legacy-writer"
+		const usedNonSentinel = new Set([...usedIds].filter((id) => id !== SENTINEL))
+		const unionNonSentinel = new Set([...unionIds].filter((id) => id !== SENTINEL))
+		const missingFromUnion = [...usedNonSentinel].filter((id) => !unionNonSentinel.has(id)).sort()
+		const deadUnionIds = [...unionNonSentinel].filter((id) => !usedNonSentinel.has(id)).sort()
+		// eslint-disable-next-line no-console
+		console.log(
+			`WPROV07 inventory: production writerIds=${usedIds.size} ` +
+				`(non-sentinel=${usedNonSentinel.size}); union writerIds=${unionIds.size} ` +
+				`(non-sentinel=${unionNonSentinel.size}); call sites=${callSites}`,
+		)
+		expect(missingFromUnion).toEqual([])
+		expect(deadUnionIds).toEqual([])
+	})
+
+	it("WPROV07.2: every writerId is kebab-case ASCII and <= 80 chars", async () => {
+		const { readFile } = await import("node:fs/promises")
+		const diagSrc = await readFile("src/shared/turn-state-writer-provenance.ts", "utf8")
+		const unionRe = /\|\s*"([a-z][^"]+)"/g
+		let m: RegExpExecArray | null
+		const ids: string[] = []
+		while ((m = unionRe.exec(diagSrc)) !== null) ids.push(m[1])
+		for (const id of ids) {
+			expect(id).toMatch(/^[a-z][a-z0-9-]+$/)
+			expect(id.length).toBeLessThanOrEqual(80)
+		}
+		expect(ids).toContain("unknown-legacy-writer")
+	})
+})
+
+function findStringEnd(src: string, startQuoteAt: number, quote: string): number {
+	let end = startQuoteAt + 1
+	while (end < src.length) {
+		if (src[end] === "\\" && end + 1 < src.length) {
+			end += 2
+			continue
+		}
+		if (src[end] === quote) return end
+		end++
+	}
+	return end
+}
