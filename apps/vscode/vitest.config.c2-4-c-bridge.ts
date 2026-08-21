@@ -26,6 +26,7 @@ const repoRoot = path.resolve(__dirname, "../..")
 const sdkCoreRoot = path.resolve(repoRoot, "sdk/packages/core/src")
 const sdkCoreHost = path.resolve(sdkCoreRoot, "runtime/host/local-runtime-host")
 const sdkCoreSessionService = path.resolve(sdkCoreRoot, "session/services/file-session-service")
+const sdkCoreTypesEvents = path.resolve(sdkCoreRoot, "types/events")
 
 export default defineConfig({
 	test: {
@@ -37,6 +38,7 @@ export default defineConfig({
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
 			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts",
+			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},
@@ -44,6 +46,7 @@ export default defineConfig({
 		alias: {
 			"@cline-internal/core/runtime/host/local-runtime-host": sdkCoreHost,
 			"@cline-internal/core/session/services/file-session-service": sdkCoreSessionService,
+			"@cline-internal/core/types/events": sdkCoreTypesEvents,
 		},
 	},
 	server: {
