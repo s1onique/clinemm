@@ -28,6 +28,7 @@ const sdkCoreHost = path.resolve(sdkCoreRoot, "runtime/host/local-runtime-host")
 const sdkCoreSessionService = path.resolve(sdkCoreRoot, "session/services/file-session-service")
 const sdkCoreTypesEvents = path.resolve(sdkCoreRoot, "types/events")
 const sdkCoreAgentMessageCodec = path.resolve(sdkCoreRoot, "runtime/config/agent-message-codec")
+const sdkCoreSessionRuntimeOrchestrator = path.resolve(sdkCoreRoot, "runtime/orchestration/session-runtime-orchestrator")
 const appsVscodeRoot = path.resolve(__dirname)
 
 export default defineConfig({
@@ -60,6 +61,15 @@ export default defineConfig({
 			// SCTR01 GREEN AgentRuntime rejection outcome. It runs under
 			// `vitest.config.c2-4-c-bridge.ts`.
 			"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts",
+			// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01:
+			// the real composition discriminator: REAL LocalRuntimeHost
+			// + REAL SessionRuntime + REAL AgentRuntime. The only seams
+			// are the scripted model, the simulated user approval, and
+			// the tool's `execute` mock. Closes the load-bearing P1 gap
+			// from the SCHR01 review: that ACT proved the host's generic
+			// post-completed-`AgentResult` finalization, but did NOT
+			// exercise the real AgentRuntime inside the host.
+			"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
 		],
 		testTimeout: 30_000,
 	},
@@ -69,6 +79,10 @@ export default defineConfig({
 			"@cline-internal/core/session/services/file-session-service": sdkCoreSessionService,
 			"@cline-internal/core/types/events": sdkCoreTypesEvents,
 			"@cline-internal/core/runtime/config/agent-message-codec": sdkCoreAgentMessageCodec,
+			// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01:
+			// resolves to the REAL SessionRuntime orchestrator class
+			// (sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts).
+			"@cline-internal/core/runtime/orchestration/session-runtime-orchestrator": sdkCoreSessionRuntimeOrchestrator,
 			// Apps/vscode alias surface needed by AOPC02 PHASE-A-CORRECTION01
 			// to construct a real Controller via vi.mock on the heavy deps.
 			// Same path resolution as the base apps/vscode/vitest.config.ts.

@@ -97,6 +97,10 @@
 		// host-layer causal discriminator above AgentRuntime. Bridge-only
 		// (requires `@cline-internal/core/runtime/host/local-runtime-host`
 		// alias declared in `tsconfig.c2-4-c-bridge.json`).
-		"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts"
+		"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts",
+		// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01:
+		// real composition discriminator. Bridge-only (same alias
+		// surface as SCHR01).
+		"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts"
 	]
 }

@@ -96,6 +96,10 @@ export default defineConfig({
 			// under `vitest.config.c2-4-c-bridge.ts` and must be
 			// excluded from this base config.
 			"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts",
+			// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01:
+			// the real composition discriminator. Same bridge-only
+			// surface as SCHR01; excluded from this base config.
+			"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

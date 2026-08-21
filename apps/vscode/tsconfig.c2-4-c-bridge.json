@@ -46,6 +46,9 @@
 			],
 			"@cline-internal/core/runtime/config/agent-message-codec": [
 				"../../sdk/packages/core/src/runtime/config/agent-message-codec"
+			],
+			"@cline-internal/core/runtime/orchestration/session-runtime-orchestrator": [
+				"../../sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator"
 			]
 		}
 	},
@@ -64,7 +67,12 @@
 		"src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-RESUME01 / SCHR01:
 		// host-layer causal discriminator above AgentRuntime.
-		"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts"
+		"src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts",
+		// ACT-CLINEMM-SKIPPED-COMMAND-HOST-RECOVERY01-COMPOSITION01 / SHRC01:
+		// real composition discriminator: REAL LocalRuntimeHost +
+		// REAL SessionRuntime + REAL AgentRuntime closing the P1 gap
+		// from the SCHR01 review.
+		"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts"
 	],
 	"exclude": [
 		"node_modules",
