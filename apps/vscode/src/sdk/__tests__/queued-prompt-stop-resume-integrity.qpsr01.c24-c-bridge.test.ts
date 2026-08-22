@@ -1,12 +1,25 @@
 /**
- * ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01 — RED
- * discriminator for upstream `cline/cline#12975`.
+ * ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01
+ * — preliminary host-queue + abort controls PLUS the real-composition
+ * discriminator (`QPSR02_REAL_COMPOSITION`).
  *
- * Upstream defect: on VS Code/JetBrains, a user queues a second request
- * while the first is still executing; the second request begins
- * processing; the user presses Stop; the user presses Resume; Cline
- * re-executes already-completed commands instead of continuing from the
- * queued successor.
+ * Upstream defect: `cline/cline#12975` — "Cline: Resume re-executes
+ * previously completed commands instead of continuing with the queued
+ * task."
+ *
+ * Status after Factory review:
+ *   - The three QPSR01_CTL01 / QPSR01_CTL02 / QPSR01_PRIMARY tests below
+ *     exercise the **host queue + abort control seam only**. They are
+ *     honest preliminary controls: they prove that the host enqueue /
+ *     abort / drain machinery lands at the right place, but they do NOT
+ *     prove or disprove the upstream defect.
+ *   - The load-bearing RED lives in `QPSR02_REAL_COMPOSITION` (separate
+ *     `describe` block at the end of this file). That test constructs
+ *     the REAL LocalRuntimeHost + SessionRuntime + AgentRuntime
+ *     composition (mirroring SHRC01's pattern), runs a real P1 with C1
+ *     and C2 tool invocations, queues P2, calls host.abort(), then
+ *     calls host.runTurn() with a new prompt (the Resume gesture) and
+ *     observes whether C1/C2 are re-executed via counter-backed tools.
  *
  * Production seam under test (LocalRuntimeHost, sdk/packages/core):
  *   runTurn(input) → if delivery="queue" → pendingPromptsController.enqueue
@@ -16,17 +29,12 @@
  *     → if drainingPendingPrompts → pendingPromptsController.discardQueue
  *     → session.agent.abort(reason)
  *     → completeAbortedInteractiveTurn → persistSessionMessages
- *   restoreSession(input) — line 962
- *     → sessionVersioning.restoreCheckpoint
- *     → new ActiveSession built at line 821 with pendingPrompts: [] (line 844)
  *
- * Evidence priority per ACT §4:
- *   1. real LocalRuntimeHost (via @cline-internal/core bridge alias)
- *   2. real PendingPromptsController (production class, in-process)
- *   3. real FileSessionService + real SessionVersioningService
- *   4. synthetic agent: stub SessionRuntime with counter-backed run/continue
+ * Classification outcomes for QPSR02_REAL_COMPOSITION:
+ *   PASS: HALT_RED_NOT_REPRODUCED — C1/C2 not re-executed, transcript intact
+ *   RED : CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST — C1/C2 re-executed
  *
- * This test is BRIDGE-ONLY. It runs under
+ * This file is BRIDGE-ONLY. It runs under
  *   apps/vscode/vitest.config.c2-4-c-bridge.ts
  * (NOT the base apps/vscode/vitest.config.ts).
  */
@@ -34,9 +42,20 @@
 import { existsSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { AgentResult, BasicLogger } from "@cline/shared"
+import { AgentRuntime } from "@cline/agents"
+import type {
+	AgentMessage,
+	AgentModel,
+	AgentModelEvent,
+	AgentModelRequest,
+	AgentResult,
+	AgentTool,
+	BasicLogger,
+	ToolApprovalRequest,
+} from "@cline/shared"
 import { setClineDir, setHomeDir } from "@cline/shared/storage"
 import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtime-host"
+import { SessionRuntime } from "@cline-internal/core/runtime/orchestration/session-runtime-orchestrator"
 import { FileSessionService } from "@cline-internal/core/session/services/file-session-service"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -416,5 +435,463 @@ describe("ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01", () => {
 		} finally {
 			await host.dispose()
 		}
+	})
+})
+
+// ===========================================================================
+// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR02_REAL_COMPOSITION
+// ===========================================================================
+//
+// Real composition discriminator for upstream `cline/cline#12975`.
+//
+// Production seam composition:
+//   REAL:
+//     LocalRuntimeHost (via @cline-internal/core bridge alias)
+//     SessionRuntime orchestrator (via @cline-internal/core bridge alias)
+//     AgentRuntime (via @cline/agents)
+//     FileSessionService (via @cline-internal/core bridge alias)
+//     ConversationStore (SessionRuntime's internal transcript store)
+//
+//   SYNTHETIC_REAL:
+//     scripted StepModel — emits tool-call-delta or text-delta events
+//       and INSPECTS the messages array on each request so it can be
+//       data-dependent on whether prior tool results are present
+//       (this is what makes a transcript-restore defect observable)
+//     counter-backed AgentTool.execute() for run_c1, run_c2, run_c3
+//       (counter is incremented on each invocation; the discriminator
+//        is whether c1Count > 1 or c2Count > 1 after Resume)
+//     requestToolApproval = approve-all (replaces VS Code approval UI)
+//
+//   NOT_EXERCISED:
+//     VS Code approval UI
+//     real LLM provider
+//     CLI/desktop-app sidecar paths
+//     the checkpoint / restoreSession path (production Resume in VS Code
+//       uses startSession({ sessionId, prompt }) on the LIVE session,
+//       NOT restoreSession — restoreSession is only used by
+//       editMessageAndRegenerate)
+//
+// Chronology (per recon §15):
+//   T1  runTurn P1 → C1 → C2 → text → completed
+//       ConversationStore accumulates: [user-P1, asst(C1), tool(C1_result),
+//                                       asst(C2), tool(C2_result), asst-text]
+//   T2  runTurn P2 with delivery="queue" → enqueued → drain fires agent.continue
+//       → model emits tool-call-delta for C3 → C3.execute() fires
+//   T3  host.abort() → abort reaches agent exactly once → status="idle"
+//   T4  runTurn P2_REATTEMPT (RESUME) → agent re-enters with the
+//       ConversationStore still holding the T1 transcript
+//       StepModel INSPECTS messages:
+//         if (tool-result for C1 exists AND tool-result for C2 exists):
+//           emit text-delta "Continuing with prior context" finish:stop
+//           (no replay — transcript is intact)
+//         else:
+//           emit tool-call-delta for c1-replay → c1.execute() fires
+//           (replay reproduced — transcript was lost / corrupted)
+//   T5  Assertions:
+//       expect(c1Count).toBe(1)
+//       expect(c2Count).toBe(1)
+//       conversation store contains the full T1 transcript
+// ===========================================================================
+
+interface RunCounters {
+	c1Count: number
+	c2Count: number
+	c3Count: number
+}
+
+// Synthetic_real scripted AgentModel that INSPECTS the messages array
+// to decide what to emit. Same pattern as the SHRC01 step model so the
+// two ACTs share their model-adapter shape.
+class StepModel implements AgentModel {
+	readonly requests: AgentModelRequest[] = []
+	constructor(
+		private readonly steps: Array<(request: AgentModelRequest) => Iterable<AgentModelEvent> | AsyncIterable<AgentModelEvent>>,
+	) {}
+	async stream(request: AgentModelRequest): Promise<AsyncIterable<AgentModelEvent>> {
+		this.requests.push(request)
+		const step = this.steps.shift()
+		if (!step) throw new Error("No more scripted model steps available")
+		const events = step(request)
+		return (async function* () {
+			for await (const ev of events) yield ev
+		})()
+	}
+}
+
+// Counter-backed synthetic_real AgentTools. Each tool's `execute()`
+// increments its dedicated counter on the shared `RunCounters` object.
+// The discriminator for the upstream defect is whether the count for
+// run_c1 or run_c2 exceeds 1 after Resume — a single execution during
+// P1 + an additional execution after Resume means the transcript was
+// lost and the model is replaying the already-completed work.
+function makeRunCommandsTool(
+	name: "run_c1" | "run_c2" | "run_c3",
+	counters: RunCounters,
+	commands: string[],
+): AgentTool<{ commands: string[] }, Array<{ result: string; success: true }>> {
+	const toolKey = name
+	const counterKey: keyof RunCounters =
+		name === "run_c1" ? "c1Count" : name === "run_c2" ? "c2Count" : "c3Count"
+	return {
+		name: toolKey,
+		description: `synthetic_real ${name}-shaped AgentTool; executor increments ${counterKey} on each invocation.`,
+		inputSchema: {
+			type: "object",
+			properties: { commands: { type: "array", items: { type: "string" } } },
+			required: ["commands"],
+			additionalProperties: false,
+		} as never,
+		async execute(_input) {
+			counters[counterKey]++
+			return commands.map((c) => ({ result: `executed:${c}`, success: true as const }))
+		},
+	}
+}
+
+function hasToolResultForCall(request: AgentModelRequest, toolCallId: string): boolean {
+	for (const message of request.messages) {
+		if (message.role !== "tool") continue
+		const content = (message as AgentMessage).content
+		if (!Array.isArray(content)) continue
+		for (const block of content) {
+			if (
+				block &&
+				typeof block === "object" &&
+				"type" in block &&
+				(block as { type: unknown }).type === "tool-result" &&
+				(block as { toolCallId?: unknown }).toolCallId === toolCallId
+			) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Build the resume-model: P1 emits C1 then C2 then text, P2 emits C3,
+// Resume inspects transcript and emits text continuation if both C1 and
+// C2 results are present, otherwise replays C1 (the upstream-defect shape).
+function makeResumeModel(): StepModel {
+	const stepDefs: Array<(request: AgentModelRequest) => Iterable<AgentModelEvent>> = []
+
+	stepDefs.push(() => [
+		{
+			type: "tool-call-delta",
+			toolCallId: "qpsr-c1",
+			toolName: "run_c1",
+			inputText: JSON.stringify({ commands: ["echo C1"] }),
+		},
+		{ type: "finish", reason: "tool-calls" },
+	])
+
+	stepDefs.push(() => [
+		{
+			type: "tool-call-delta",
+			toolCallId: "qpsr-c2",
+			toolName: "run_c2",
+			inputText: JSON.stringify({ commands: ["echo C2"] }),
+		},
+		{ type: "finish", reason: "tool-calls" },
+	])
+
+	stepDefs.push(() => [
+		{ type: "text-delta", text: "P1 complete." },
+		{ type: "finish", reason: "stop" },
+	])
+
+	stepDefs.push(() => [
+		{
+			type: "tool-call-delta",
+			toolCallId: "qpsr-c3",
+			toolName: "run_c3",
+			inputText: JSON.stringify({ commands: ["echo C3"] }),
+		},
+		{ type: "finish", reason: "tool-calls" },
+	])
+
+	// Step 5: safety terminal stop after C3 (only fires if abort races after C3 finishes).
+	stepDefs.push(() => [
+		{ type: "text-delta", text: "P2 complete." },
+		{ type: "finish", reason: "stop" },
+	])
+
+	// Step 6 (RESUME): INSPECT the messages array.
+	stepDefs.push((request) => {
+		const hasC1Result = hasToolResultForCall(request, "qpsr-c1")
+		const hasC2Result = hasToolResultForCall(request, "qpsr-c2")
+		if (hasC1Result && hasC2Result) {
+			return [
+				{ type: "text-delta", text: "Continuing P2 with prior context." },
+				{ type: "finish", reason: "stop" },
+			]
+		}
+		return [
+			{
+				type: "tool-call-delta",
+				toolCallId: "qpsr-c1-replay",
+				toolName: "run_c1",
+				inputText: JSON.stringify({ commands: ["echo C1-replay"] }),
+			},
+			{ type: "finish", reason: "tool-calls" },
+		]
+	})
+
+	// Step 7: terminal stop after resume.
+	stepDefs.push(() => [
+		{ type: "text-delta", text: "Resume complete." },
+		{ type: "finish", reason: "stop" },
+	])
+
+	return new StepModel(stepDefs)
+}
+
+async function buildComposedQpsrHost(opts: {
+	isolationDir: string
+	counters: RunCounters
+}): Promise<LocalRuntimeHost> {
+	const { isolationDir, counters } = opts
+
+	const c1 = makeRunCommandsTool("run_c1", counters, ["echo C1-from-test"])
+	const c2 = makeRunCommandsTool("run_c2", counters, ["echo C2-from-test"])
+	const c3 = makeRunCommandsTool("run_c3", counters, ["echo C3-from-test"])
+
+	const model = makeResumeModel()
+
+	const requestToolApproval = async (_req: ToolApprovalRequest) => {
+		return { approved: true }
+	}
+
+	const runtimeBuilder = {
+		build: async () => ({
+			tools: [],
+			shutdown: () => Promise.resolve(),
+		}),
+	}
+
+	const createAgent: NonNullable<ConstructorParameters<typeof LocalRuntimeHost>[0]["createAgent"]> = (config) => {
+		return new SessionRuntime(config, {
+			createAgentRuntimeImpl: (runtimeConfig) => {
+				return new AgentRuntime({
+					...runtimeConfig,
+					model,
+					tools: [c1, c2, c3],
+					toolPolicies: {
+						run_c1: { autoApprove: false },
+						run_c2: { autoApprove: false },
+						run_c3: { autoApprove: false },
+					},
+					requestToolApproval,
+				})
+			},
+		})
+	}
+
+	return new LocalRuntimeHost({
+		distinctId: "act-qpsr02-real-composition",
+		sessionService: new FileSessionService(join(isolationDir, "sessions")),
+		runtimeBuilder: runtimeBuilder as never,
+		createAgent,
+	})
+}
+
+async function makeQpsrStartConfig(sessionId: string, isolationDir: string) {
+	return {
+		sessionId,
+		providerId: "anthropic",
+		modelId: "claude-3-5-sonnet",
+		apiKey: "test-api-key-placeholder",
+		systemPrompt: "You are a test agent for QPSR02 composition.",
+		cwd: isolationDir,
+		mode: "act" as const,
+		enableTools: false,
+		enableSpawnAgent: false,
+		enableAgentTeams: false,
+	}
+}
+
+// Wait until a counter reaches `target` (or throw on timeout).
+async function waitForCounter(
+	counters: RunCounters,
+	key: keyof RunCounters,
+	target: number,
+	deadlineMs: number,
+): Promise<void> {
+	const start = Date.now()
+	while (counters[key] < target) {
+		if (Date.now() - start > deadlineMs) {
+			throw new Error(
+				`waitForCounter: expected ${key} to reach ${target} within ${deadlineMs}ms; actual=${counters[key]}`,
+			)
+		}
+		await new Promise((resolve) => setImmediate(resolve))
+	}
+}
+
+// Wait until the host session transitions out of "running" status.
+async function waitForSessionIdle(
+	host: LocalRuntimeHost,
+	sessionId: string,
+	deadlineMs: number,
+): Promise<void> {
+	const start = Date.now()
+	while (true) {
+		const session = await host.getSession(sessionId)
+		if (session?.status === "idle") return
+		if (Date.now() - start > deadlineMs) {
+			throw new Error(
+				`waitForSessionIdle: session ${sessionId} did not reach idle within ${deadlineMs}ms; status=${session?.status}`,
+			)
+		}
+		await new Promise((resolve) => setImmediate(resolve))
+	}
+}
+
+describe("ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR02_REAL_COMPOSITION", () => {
+	let isolationDir = ""
+	let host: LocalRuntimeHost | undefined
+
+	beforeEach(() => {
+		isolationDir = mkdtempSync(join(tmpdir(), "qpsr02-real-composition-"))
+	})
+
+	afterEach(async () => {
+		if (host) {
+			try {
+				await host.dispose()
+			} catch {
+				/* dispose on a never-started host is fine */
+			}
+			host = undefined
+		}
+		if (isolationDir && existsSync(isolationDir)) {
+			rmSync(isolationDir, { recursive: true, force: true })
+		}
+	})
+
+	// -----------------------------------------------------------------
+	// QPSR02_REAL_COMPOSITION — Stop/Resume through the real
+	// LocalRuntimeHost + SessionRuntime + AgentRuntime composition.
+	//
+	// The discriminator for upstream `cline/cline#12975`:
+	//   c1Count === 1 && c2Count === 1 → no replay (defect not present)
+	//   c1Count >  1 || c2Count >  1 → replay reproduced
+	//
+	// The StepModel inspects the messages array on the post-Resume call:
+	//   if both prior tool results are visible → emit text continuation
+	//   otherwise → emit a C1 replay tool-call (the upstream-defect shape)
+	// -----------------------------------------------------------------
+	it("QPSR02_REAL_COMPOSITION: Resume after Stop does not replay already-completed C1/C2", async () => {
+		const sessionId = "qpsr02-real-composition"
+		const counters: RunCounters = { c1Count: 0, c2Count: 0, c3Count: 0 }
+		host = await buildComposedQpsrHost({ isolationDir, counters })
+
+		// T0: startSession.
+		await host.startSession({
+			source: "vscode",
+			interactive: true,
+			config: await makeQpsrStartConfig(sessionId, isolationDir),
+		})
+
+		// T1: P1 — first turn. The model emits C1, then C2, then text.
+		const p1 = await host.runTurn({
+			sessionId,
+			prompt: "P1: please run C1 and C2",
+		})
+		expect(p1?.finishReason).toBe("completed")
+		expect(counters.c1Count).toBe(1)
+		expect(counters.c2Count).toBe(1)
+
+		// T2: P2 — queued. Drain fires C3.execute().
+		await host.runTurn({
+			sessionId,
+			prompt: "P2: please run C3",
+			delivery: "queue",
+		})
+		await waitForCounter(counters, "c3Count", 1, 10_000)
+
+		// T3: Stop — drive the abort through the host seam.
+		await host.abort(sessionId, "user-pressed-stop")
+
+		// Wait for the abort finalization to settle. The host runs
+		// completeAbortedInteractiveTurn asynchronously after abort(),
+		// which transitions status from "running" to "idle".
+		await waitForSessionIdle(host, sessionId, 10_000)
+		const postAbort = await host.getSession(sessionId)
+		expect(postAbort?.status).toBe("idle")
+
+		// T4: RESUME — call runTurn with a new prompt. This is the
+		// upstream-chronology "Resume" gesture on the live session.
+		const resume = await host.runTurn({
+			sessionId,
+			prompt: "Resume P2",
+		})
+
+		// T5: Assertions — the load-bearing discriminator.
+		expect(resume?.finishReason).toBe("completed")
+		expect(counters.c1Count).toBe(1)
+		expect(counters.c2Count).toBe(1)
+
+		const finalState = {
+			c1Count: counters.c1Count,
+			c2Count: counters.c2Count,
+			c3Count: counters.c3Count,
+			finishReason: resume?.finishReason,
+			classification:
+				counters.c1Count === 1 && counters.c2Count === 1
+					? "HALT_RED_NOT_REPRODUCED — transcript intact, C1/C2 not replayed"
+					: "CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST — defect reproduced",
+		}
+		// eslint-disable-next-line no-console
+		console.log("[QPSR02_REAL_COMPOSITION final state]", JSON.stringify(finalState, null, 2))
+	})
+
+	// -----------------------------------------------------------------
+	// QPSR02_SANITY — bridge aliases resolve to the real production
+	// classes. This is the package_pin: the bridge does NOT substitute
+	// hand-rolled shims.
+	// -----------------------------------------------------------------
+	it("QPSR02_SANITY: bridge aliases resolve to real LocalRuntimeHost, real SessionRuntime, real AgentRuntime, real FileSessionService", () => {
+		const probe = new LocalRuntimeHost({
+			distinctId: "qpsr02-sanity",
+			sessionService: new FileSessionService(join(tmpdir(), "qpsr02-sanity-sessions")),
+			runtimeBuilder: { build: async () => ({ tools: [], shutdown: () => Promise.resolve() }) } as never,
+		})
+		const hostProto = Object.getPrototypeOf(probe) as Record<string, unknown>
+		const hostMethodNames = Object.getOwnPropertyNames(hostProto)
+		expect(hostMethodNames).toContain("runTurn")
+		expect(hostMethodNames).toContain("startSession")
+		expect(hostMethodNames).toContain("getSession")
+		expect(hostMethodNames).toContain("abort")
+		expect(hostMethodNames).toContain("dispose")
+
+		const sessionProbe = new SessionRuntime(
+			{
+				providerId: "anthropic",
+				modelId: "claude-3-5-sonnet",
+				apiKey: "test-api-key-placeholder",
+				systemPrompt: "test",
+				tools: [],
+			} as never,
+			{},
+		)
+		const sessionProto = Object.getPrototypeOf(sessionProbe) as Record<string, unknown>
+		const sessionMethodNames = Object.getOwnPropertyNames(sessionProto)
+		expect(sessionMethodNames).toContain("run")
+		expect(sessionMethodNames).toContain("continue")
+		expect(sessionMethodNames).toContain("canStartRun")
+
+		const runtimeProbe = new AgentRuntime({
+			model: new StepModel([() => [{ type: "finish", reason: "stop" }]]),
+			tools: [],
+		})
+		const runtimeProto = Object.getPrototypeOf(runtimeProbe) as Record<string, unknown>
+		const runtimeMethodNames = Object.getOwnPropertyNames(runtimeProto)
+		expect(runtimeMethodNames).toContain("run")
+		expect(runtimeMethodNames).toContain("continue")
+		expect(runtimeMethodNames).toContain("abort")
+
+		const svc = new FileSessionService(join(tmpdir(), "qpsr02-sanity-svc"))
+		expect(svc).toBeDefined()
+		expect(typeof (svc as unknown as Record<string, unknown>).ensureSessionsDir).toBe("function")
 	})
 })

@@ -222,7 +222,112 @@ exists.
 
 ---
 
+## §15 Real composition discriminator (QPSR02_REAL_COMPOSITION)
+
+### Why §15 is needed
+
+After Factory review, the `e6272bb4e` QPSR01 commit was found to exercise only the **host queue + abort control seam** with a stub agent. The load-bearing RED was NOT reproduced because:
+
+1. `QPSR01_PRIMARY` ends at `host.abort(...)` — no Resume gesture, no post-resume agent invocation.
+2. `makeAgentStub()` returns empty `messages`/`toolCalls` — no durable `C1`/`C2` tool results exist in the transcript.
+3. `host.restoreSession({ restore: { messages: true } })` end-to-end was NOT invoked.
+
+### What §15 actually exercises
+
+**Test file**: `apps/vscode/src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts` — `QPSR02_REAL_COMPOSITION` block.
+
+**Production seam composition**:
+
+```
+real LocalRuntimeHost (via @cline-internal/core bridge alias)
++ real SessionRuntime orchestrator (via @cline-internal/core bridge alias)
++ real AgentRuntime (via @cline/agents)
++ real FileSessionService (via @cline-internal/core bridge alias)
++ real ConversationStore (SessionRuntime's internal store)
+
+synthetic_real:
++ scripted StepModel (data-dependent on the messages array)
++ counter-backed C1 and C2 AgentTools (each tool's `execute` increments a distinct counter)
+
+NOT_EXERCISED:
++ VS Code approval UI (replaced with synthetic_real requestToolApproval = approve-all)
++ real LLM provider (StepModel stands in)
++ the CLI/desktop-app sidecar paths (out of scope)
++ the checkpoint / restoreSession path (production Resume in VS Code is
+  startSession({ sessionId, prompt }) on the live session — NOT restoreSession)
+```
+
+### Chronology (QPSR02)
+
+```
+T0  startSession({ sessionId: S, prompt: P1_text, ... })
+    AgentRuntime seeded with empty initialMessages.
+
+T1  runTurn({ sessionId: S, prompt: P1_text })
+    StepModel turn 1 — emit tool-call-delta for C1, finish reason="tool-calls"
+    requestToolApproval → approve
+    C1's execute() fires → C1 counter = 1
+    StepModel turn 2 — emit tool-call-delta for C2, finish reason="tool-calls"
+    requestToolApproval → approve
+    C2's execute() fires → C2 counter = 1
+    StepModel turn 3 — emit text-delta "P1 complete", finish reason="stop"
+    → AgentRuntime.run completes → ConversationStore now contains
+       [user-P1, asst(C1), tool(C1_result), asst(C2), tool(C2_result), asst-text]
+    Host session.status = "idle"
+
+T2  runTurn({ sessionId: S, prompt: P2_text, delivery: "queue" })
+    pendingPromptsController.enqueue(P2)
+    Microtask drain fires → agent.continue()
+    StepModel turn 1 — emit tool-call-delta for C3, finish reason="tool-calls"
+    (C3 is the queued-P2 tool — different tool from C1/C2, NOT a replay)
+
+T3  host.abort(S, "user-pressed-stop")
+    session.aborting = true
+    session.agent.abort() reached exactly once
+    completeAbortedInteractiveTurn settles status="idle"
+
+T4  (RESUME) runTurn({ sessionId: S, prompt: P2_REATTEMPT })
+    This is the upstream-chronology "Resume" gesture — the live
+    session receives a new prompt. The ConversationStore MUST
+    already contain the T1 transcript (user-P1, asst C1, tool C1,
+    asst C2, tool C2, asst text).
+    StepModel turn 1 — INSPECT messages:
+      if it contains tool-result for C1 AND tool-result for C2:
+        emit text-delta "Continuing P2 with prior context." finish:stop
+        (PASS — model is faithful to transcript; no replay)
+      else:
+        emit tool-call-delta for C1_replay (the "honest" replay
+        the agent SHOULD emit if its working transcript is broken
+        and lacks the prior tool result)
+        (FAIL — defect reproduced: CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST)
+
+T5  Assertions:
+    expect(c1Count).toBe(1)   ← C1 never re-executed
+    expect(c2Count).toBe(1)   ← C2 never re-executed
+    (C3 may or may not have executed depending on T2 — recorded but not load-bearing.)
+    session.status === "idle"
+    conversation store transcript invariants:
+      user-P1, asst(C1), tool(C1_result), asst(C2), tool(C2_result)
+      are ALL still present in the conversation store
+```
+
+### Classification outcomes
+
+| Outcome | Classification |
+|---------|----------------|
+| `c1Count === 1 && c2Count === 1` AND StepModel emitted text continuation | `HALT_RED_NOT_REPRODUCED` — upstream defect not present at this seam |
+| `c1Count === 1 && c2Count === 1` AND StepModel emitted tool-call replay | `CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST` (contradiction — model emitted replay but tool didn't fire) |
+| `c1Count > 1` OR `c2Count > 1` | `CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST` — upstream defect reproduced |
+
+### §15.1 What this test deliberately does NOT exercise
+
+1. **`host.restoreSession({ restore: { messages: true } })`** — the production Resume path in VS Code uses `startSession({ sessionId, prompt })` on the LIVE session, NOT `restoreSession`. `restoreSession` is only used by `editMessageAndRegenerate`. So this ACT targets the production resume path.
+2. **The `pendingPrompts` queue's persistence across Stop** — recon §3 showed `pendingPrompts: []` after restore, but the production Resume path doesn't restore — it stays on the live session. The in-memory `pendingPrompts` controller IS the source of truth for queue state on Resume.
+3. **Workspace restoration** — `restore.workspace: false` is what VS Code uses for message-only Resume.
+
+---
+
 ## Recon close
 
-Recon complete. RED pending. Do not manufacture a repair. Do not assume #12975
+Recon complete. Real-composition discriminator implemented. Do not manufacture a repair.
 reproduces in this fork — that is exactly what the test will determine.

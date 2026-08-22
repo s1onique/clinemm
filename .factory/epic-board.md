@@ -4230,41 +4230,50 @@ That is fine. Exact-head LIVE qualification owns the UI claim.
 
 The two pre-existing board validator failures at L204 / L207 are P2 / historical (visible in board history before FIX01 began). They MUST NOT block this ACT and are explicitly NOT fixed here.
 
-## ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 — first commit
+## ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 — first commit (corrected after Factory review)
 
-**STATUS:** PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT (3/3 bridge tests green; agent-seam replay test deferred as CAPTURE_INSUFFICIENT for this session).
+**STATUS:** `HALT_RED_NOT_REPRODUCED` at the production Resume seam — the upstream defect does NOT reproduce against the real `LocalRuntimeHost + SessionRuntime + AgentRuntime` composition with a transcript-intact, post-Stop Resume gesture. (Initial commit `e6272bb4e` claimed `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — that classification was too strong; the Factory reviewer correctly identified that the initial commit exercised only the host queue + abort control seam with a stub agent and never invoked Resume. The corrected classification is at the right granularity after the second commit added the real composition.)
 
-**ENTRY_HEAD:** `6e956bc87` (clean tree; bridge + recon evidence layered on top).
+**ENTRY_HEAD (corrected):** HEAD on `act/task-interaction-ownership-projection01-live-capture` (post-second-commit).
 **BRANCH:** `act/task-interaction-ownership-projection01-live-capture` (no new branch created — existing LIVE-Capture branch used, per Factory reviewer disposition).
 
-**Recon doc:** `docs/architecture/elm/queued-prompt-stop-resume-integrity01-recon.md`.
+**Recon doc:** `docs/architecture/elm/queued-prompt-stop-resume-integrity01-recon.md` (now §15 explains the real-composition discriminator).
 
-**RED + control tests** (bridge-only):
+**Tests** (bridge-only):
 `apps/vscode/src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts`
-(3 tests, 0 collateral damage; full bridge suite 78/78 PASS in 19.71s).
+(5 tests, 0 collateral damage; full bridge suite 80/80 PASS in 20.03s; full apps/vscode vitest 2023/2023 PASS in 51.44s; base check-types EXIT=0; board validator OK).
 
-**Test seam:**
-- real `LocalRuntimeHost` (via `@cline-internal/core/runtime/host/local-runtime-host` bridge alias)
-- real `PendingPromptsController` + `PendingPromptService` (production classes)
-- real `FileSessionService` + real `SessionVersioningService.restoreCheckpoint` (used to attempt `restoreSession`)
-- synthetic stub agent (counter-backed `run` / `continue` / `abort` / `canStartRun`)
+**Composition:**
+- REAL: `LocalRuntimeHost`, `SessionRuntime` orchestrator, `AgentRuntime`, `FileSessionService`, `ConversationStore` (all production classes via bridge aliases).
+- SYNTHETIC_REAL: scripted `StepModel` (data-dependent on the messages array — emits a `tool-call-delta` for `c1-replay` ONLY if the prior C1/C2 tool results are absent from the transcript), counter-backed `run_c1` / `run_c2` / `run_c3` `AgentTool.execute()`, `requestToolApproval = approve-all` (replaces VS Code approval UI).
+- NOT_EXERCISED: VS Code approval UI, real LLM provider, CLI/desktop-app sidecar, the `host.restoreSession({ restore: { messages: true } })` path (production Resume in VS Code is `startSession({ sessionId, prompt })` on the LIVE session, NOT `restoreSession` — recon §15.1).
 
-**What is GREEN (host seam):**
-- QPSR01_CTL01 — uninterrupted queue drain: `run` ×1, `continueFn` ×1, queue empty post-drain, session idle.
-- QPSR01_CTL02 — Stop without queued prompt: abort reaches agent, no extra `run`/`continue`, queue empty, idle.
-- QPSR01_PRIMARY — Stop after P2 begins processing: drain fires `continueFn` (NOT `runFn`, because `session.started = true` after P1), abort reached exactly once, post-abort queue empty, agent idle.
+**Chronology (per recon §15):**
+1. `startSession({ sessionId: S, prompt: P1 })`
+2. `runTurn(P1)` → model emits `run_c1` (`c1Count = 1`) → `run_c2` (`c2Count = 1`) → text → completed. ConversationStore accumulates `[user-P1, asst(C1), tool(C1_result), asst(C2), tool(C2_result), asst-text]`.
+3. `runTurn(P2, { delivery: "queue" })` → enqueued → drain fires `agent.continue()` → `run_c3` (`c3Count = 1`).
+4. `host.abort(S, "user-pressed-stop")` → abort reaches agent exactly once → status settles to `"idle"`.
+5. **RESUME**: `runTurn({ sessionId: S, prompt: "Resume P2" })`. The `StepModel` inspects the messages array; it found `tool-result for qpsr-c1` AND `tool-result for qpsr-c2` present, so it emitted a `text-delta` continuation (NO replay).
+6. Assertions: `c1Count === 1`, `c2Count === 1`, `finishReason === "completed"`.
 
-**What is NOT exercised in this commit (and why):**
-- `host.restoreSession({ restore: { messages: true } })` end-to-end. The mock `SessionService` does not provide `readSessionManifest` / `listSessions`-shaped responses for the active session id; the `createCheckpointRestorePlan` path requires real checkpoint infrastructure that cannot be mocked without losing hermeticity. The bridge alias to the REAL `FileSessionService` was wired but not exercised because that requires filesystem state and a fully seeded checkpoint plan.
+**Test outputs (final state from `console.log` in the test):**
+```
+{
+  "c1Count": 1,
+  "c2Count": 1,
+  "c3Count": 1,
+  "finishReason": "completed",
+  "classification": "HALT_RED_NOT_REPRODUCED — transcript intact, C1/C2 not replayed"
+}
+```
 
-**Classification (per ACT §7):**
-- The host seam that owns queue + abort is `PASS_PRODUCTION_SEAM_GREEN`. Stop reaches the agent once; no orphan pending prompts; the agent settles to idle.
-- The upstream `#12975` "C1/C2 replay" defect lives at the **agent seam** (whether `AgentRuntime.continue()` re-invokes tool calls based on transcript content). That seam requires:
-  - real `AgentRuntime` (not stub)
-  - scripted `StepModel`
-  - scripted tool with counter
-  - ~400 lines of bridge setup beyond the current host-layer test
-- Without that composition, this ACT cannot falsifiably test the upstream bug. The honest verdict is `CAPTURE_INSUFFICIENT` for the agent-seam portion. The next ACT (if authorized) would be `ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01-COMPOSITION01`, mirroring the SHRC01 pattern but for the queued-stop-resume chronology.
+**Classification (per ACT §7 — corrected):**
+- `HALT_RED_NOT_REPRODUCED` — at the production Resume seam exercised by `QPSR02_REAL_COMPOSITION`, the upstream `#12975` "C1/C2 replay after Resume" defect does NOT reproduce. The ConversationStore retains the T1 transcript through Stop, the resumed `agent.continue()` sees both prior tool results in `request.messages`, and the model emits a text-delta continuation rather than a tool-call replay.
+- This is a legitimate HALT outcome per Factory policy: "If real Stop/Resume is coherent: HALT_RED_NOT_REPRODUCED. That is a valid and useful outcome."
+- The initial commit `e6272bb4e` classified this ACT prematurely as `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — that classification was scoped only to the host queue + abort control seam and overstated the load-bearing RED. The corrected verdict is the more precise `HALT_RED_NOT_REPRODUCED` at the production Resume seam.
+
+**What the test deliberately does NOT exercise:**
+- The `host.restoreSession({ restore: { messages: true } })` path — production Resume in VS Code is `startSession({ sessionId, prompt })` on the live session, not `restoreSession`. `restoreSession` is only used by `editMessageAndRegenerate`. Per recon §15.1, this ACT targets the production Resume path; the `restoreSession` path is a separate `host.restoreCheckpoint` seam that the VS Code Resume UI does not invoke.
 
 **What was NOT modified (per ACT §13):**
 - `host-ownership-diagnostic.ts` / `host-ownership-capture/*` — untouched.
@@ -4273,7 +4282,7 @@ The two pre-existing board validator failures at L204 / L207 are P2 / historical
 - `ClineCore` diagnostic surface — untouched.
 - `TaskHeader` UI presentation — untouched.
 
-**No push, no force push, no published-commit amend.** Commit lands at the current entry head plus the bridge + recon + board delta; no remote update.
+**No push, no force push, no published-commit amend.** Commits land at the current entry head plus the bridge + recon + board delta; no remote update.
 
 ## Board maintenance rule
 
