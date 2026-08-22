@@ -125,6 +125,7 @@ import type {
 	ResolvedStartSessionInput,
 	RestoreSessionInput,
 	RestoreSessionResult,
+	HostOwnershipFactsSnapshot,
 	RuntimeHost,
 	RuntimeHostSubscribeOptions,
 	SendSessionInput,
@@ -1196,6 +1197,35 @@ export class LocalRuntimeHost implements RuntimeHost {
 		const active = this.sessions.get(sessionId)
 		if (!active) return undefined
 		return active.agent.snapshot?.()
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+	 * Read-only diagnostic accessor for the six host-ownership facts
+	 * that the LIVE-T1 reproduction needs. Mirrors the production
+	 * `getActiveRuntimeSnapshot` shape: returns `undefined` for
+	 * missing-sessionId / unknown-session; reads only from the in-memory
+	 * `ActiveSession` and the `SessionRuntime`; never mutates any field;
+	 * never inserts state-post events; never schedules timers.
+	 *
+	 * The optional DIAGNOSTIC_DERIVATION_ONLY `candidateAwaitingFollowup`
+	 * field is computed by the diagnostic consumer (the
+	 * `host-ownership-diagnostic` module) -- this method exposes raw
+	 * facts only, so the diagnostic remains the single source of the
+	 * derivation formula and can be replaced without re-releasing the
+	 * host.
+	 */
+	captureHostOwnershipFacts(sessionId: string | undefined): HostOwnershipFactsSnapshot | undefined {
+		if (!sessionId) return undefined
+		const active = this.sessions.get(sessionId)
+		if (!active) return undefined
+		return {
+			lastInteractiveTurnFinishReason: active.lastInteractiveTurnFinishReason,
+			sessionStatus: active.status,
+			pendingPromptCount: active.pendingPrompts.length,
+			drainingPendingPrompts: active.drainingPendingPrompts,
+			agentCanStartRun: active.agent.canStartRun?.() ?? false,
+		}
 	}
 
 	async listSessions(limit = 200): Promise<SessionRecord[]> {

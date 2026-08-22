@@ -5,6 +5,7 @@ import type {
 	ITelemetryService,
 	LiveAgentRuntimeStateSnapshot,
 } from "@cline/shared";
+import type { HostOwnershipFactsSnapshot } from "./runtime/host/runtime-host";
 import {
 	ClineCoreAutomationController,
 	createClineCoreAutomationExtensionContext,
@@ -711,6 +712,27 @@ export class ClineCore {
 			return undefined
 		}
 		return this.host.getActiveRuntimeSnapshot(sessionId)
+	}
+	/**
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+	 * Optional diagnostic accessor for the six host-ownership facts the
+	 * LIVE-T1 reproduction needs. Mirrors `getActiveRuntimeSnapshot`
+	 * shape: returns `undefined` for missing-sessionId / unknown-session /
+	 * host-absent-method. Read-only: never mutates runtime/session state.
+	 *
+	 * Surface stability: DIAGNOSTIC_ONLY -- temporary instrumentation,
+	 * deleted in its entirety at the first of (root cause classified,
+	 * capture insufficient, successor evidence supersedes this
+	 * diagnostic).
+	 */
+	captureHostOwnershipFacts(
+		sessionId: string | undefined,
+	): HostOwnershipFactsSnapshot | undefined {
+		if (!sessionId) return undefined
+		if (!this.host.captureHostOwnershipFacts) {
+			return undefined
+		}
+		return this.host.captureHostOwnershipFacts(sessionId)
 	}
 	/**
 	 * Updates the AI model used by an active session.

@@ -70,6 +70,7 @@ import { createProviderCatalog, toSdkProviderConfig } from "./model-catalog/cata
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
+import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { isPostTerminalAuthorityDiagnosticWorkspaceEnabled } from "./post-terminal-authority-diagnostic-runtime"
 import {
@@ -3187,6 +3188,17 @@ export class Controller {
 					}),
 				)
 			}
+			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+			// Synchronized host-ownership capture at the SAME `stateVersion` +
+			// `_ptadPushId` identity as the PTAD snapshot above. No-op when
+			// the diagnostic is disabled. Read-only: no mutation, no
+			// message/wire field, no state-post event. The captured
+			// snapshot lives in the diagnostic ring buffer only.
+			captureHostOwnershipFactsAtStatePost(
+				snapshot.stateVersion,
+				ptadPushId,
+				this.sessions.getActiveSession(),
+			)
 			return snapshot
 		} catch (error) {
 			Logger.error("[SdkController] Failed to get state for webview:", error)

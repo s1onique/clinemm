@@ -14,6 +14,7 @@ import {
 	type CoreSessionEvent,
 	type EditorExecutor,
 	type HookEventPayload,
+	type HostOwnershipFactsSnapshot,
 	type ITelemetryService,
 	type PendingPromptMutationResult,
 	type PendingPromptsDeleteInput,
@@ -396,5 +397,17 @@ export class VscodeSessionHost implements SdkSessionHost {
 	 */
 	runtimeSnapshot(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined {
 		return this.inner.getActiveRuntimeSnapshot(sessionId)
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+	 * Diagnostic accessor for the six host-ownership facts. Delegates to
+	 * `ClineCore.captureHostOwnershipFacts` (the canonical proxy chain
+	 * ClineCore -> LocalRuntimeHost -> ActiveSession). Returns
+	 * `undefined` when `sessionId` is missing or the underlying core is
+	 * not the local one. Read-only: never mutates runtime/session state.
+	 */
+	captureHostOwnershipFacts(sessionId: string | undefined): HostOwnershipFactsSnapshot | undefined {
+		return this.inner.captureHostOwnershipFacts(sessionId)
 	}
 }

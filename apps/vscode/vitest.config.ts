@@ -12,6 +12,8 @@ export default defineConfig({
 			"src/shared/vsCodeSelectorUtils.test.ts",
 			"src/shared/post-terminal-authority-diagnostic.test.ts",
 			"src/shared/post-terminal-authority-diagnostic-aoc02-live-capture01.test.ts",
+			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01
+			"src/shared/host-ownership-diagnostic.live-capture01.test.ts",
 			"src/shared/proto-conversions/models/**/*.test.ts",
 			"src/core/storage/remote-config/**/*.test.ts",
 			"src/core/controller/state/**/*.test.ts",

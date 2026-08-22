@@ -1,5 +1,6 @@
 import type * as LlmsProviders from "@cline/llms";
 import type {
+	AgentFinishReason,
 	AgentMode,
 	AgentResult,
 	AgentRuntimeEvent,
@@ -358,6 +359,25 @@ export interface RestoreSessionResult {
  * Callers must normalize broad local config into `RuntimeSessionConfig`
  * plus optional named `localRuntime` bootstrap fields before invoking a host.
  */
+
+/**
+ * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+ * Raw, read-only host-side facts used to classify the
+ * LIVE-T1 / forward-progress-ownership truth table. The six
+ * raw fields are host-side observations; `candidateAwaitingFollowup`
+ * is DIAGNOSTIC_DERIVATION_ONLY and MUST NOT be consumed by the
+ * canonical TaskHeader projection.
+ */
+export interface HostOwnershipFactsSnapshot {
+	readonly lastInteractiveTurnFinishReason?: AgentFinishReason;
+	readonly sessionStatus?: string;
+	readonly sessionIsRunning?: boolean;
+	readonly pendingPromptCount?: number;
+	readonly drainingPendingPrompts?: boolean;
+	readonly agentCanStartRun?: boolean;
+	readonly candidateAwaitingFollowup?: boolean;
+}
+
 export interface RuntimeHost {
 	readonly runtimeAddress?: string;
 	startSession(input: StartSessionInput): Promise<StartSessionResult>;
@@ -460,6 +480,27 @@ export interface RuntimeHost {
 	getActiveRuntimeSnapshot?(
 		sessionId: string | undefined,
 	): import("@cline/shared").LiveAgentRuntimeStateSnapshot | undefined;
+
+	/**
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+	 * Read-only, optional diagnostic accessor for the six host-ownership
+	 * facts the LIVE-T1 reproduction needs. Returns `undefined` when:
+	 *   * `sessionId` is missing,
+	 *   * the session is not active on the host,
+	 *   * the host does not implement this method (Hub/Remote omit it by
+	 *     design -- same absence semantic as `getActiveRuntimeSnapshot?`).
+	 *
+	 * Read-only: never mutates runtime/session state, never inserts
+	 * state-post events, never schedules timers, never affects any
+	 * pendingPrompts / drainingPendingPrompts / canStartRun flag.
+	 *
+	 * The optional DIAGNOSTIC_DERIVATION_ONLY `candidateAwaitingFollowup`
+	 * field is a HYPOTHESIS_ONLY derivation; production projection paths
+	 * do not read it.
+	 */
+	captureHostOwnershipFacts?(
+		sessionId: string | undefined,
+	): HostOwnershipFactsSnapshot | undefined;
 }
 
 export type RuntimeHostMode = "auto" | "local" | "hub" | "remote";
