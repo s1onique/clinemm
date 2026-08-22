@@ -84,6 +84,18 @@ export default defineConfig({
 			// real TaskShadowHostWiring + real
 			// subscribeCanonicalRuntimeEventsToShadow.
 			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts",
+			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-RUNTIME-SHADOW-REACTIVATION01-CORRECTION01
+			// / RSR01-CORRECTION01: production-source RED at the reinit
+			// attachment seam. Verifies the actual production body of
+			// `attachCanonicalRuntimeEventSubscription` and
+			// `reinitExistingTaskFromId` (extracted via brace-matching,
+			// executed via `new Function(body)`) reaches the canonical
+			// subscription with the correct (sdkHost, wiring, sessionId)
+			// triple when the `sessionId === taskId` fence passes, and
+			// skips when it fails. DOES NOT call
+			// `subscribeCanonicalRuntimeEventsToShadow` on behalf of
+			// production; production must earn the call.
+			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

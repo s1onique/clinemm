@@ -79,7 +79,10 @@
 		// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-RUNTIME-SHADOW-REACTIVATION01
 		// / RSR01: production-seam RED at the canonical runtime-event ↔
 		// shadow reactivation boundary.
-		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts"
+		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts",
+		// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-RUNTIME-SHADOW-REACTIVATION01-CORRECTION01
+		// / RSR01-CORRECTION01: production-source RED at the reinit attachment seam.
+		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts"
 	],
 	"exclude": [
 		"node_modules",
