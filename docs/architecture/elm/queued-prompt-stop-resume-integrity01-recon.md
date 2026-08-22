@@ -327,7 +327,119 @@ T5  Assertions:
 
 ---
 
+## §15.2 QPSR03_PRODUCTION_CHRONOLOGY (Factory reviewer disposition closure)
+
+After the Factory reviewer's `HALT_TEST_SEAM_INVALID` disposition against `e5a699695`, the third commit (`e6272bb4e` + `e5a699695` + QPSR03) closed both P0s:
+
+### P0 #1 closure — upstream-precise queue precondition
+
+QPSR02 submitted P2 only AFTER P1 finished, so the `delivery: "queue"`
+label never had to exercise the genuine queue path. QPSR03 enforces the
+upstream chronology by:
+
+1. Starting P1 WITHOUT awaiting completion
+2. Waiting for `c1Count === 1` (C1 has executed, agent is mid-iteration)
+3. THEN submitting P2 with `delivery: "queue"` (canStartRun() === false)
+4. Requiring the `pending_prompts` event (with P2 in `prompts[]` and
+   `delivery === "queue"`) to fire BEFORE the drain
+5. Awaiting P1, which triggers the queue drain
+6. Requiring the `pending_prompt_submitted` event to fire with P2
+
+The queue precondition (`!canStartRun() && interactive → "queue"`) is
+genuinely exercised. Witness #2 (`p2EnqueueObserved >= 1`) and Witness #3
+(`p2DrainCount >= 1`) together prove it.
+
+### P0 #2 closure — production Resume entrypoint
+
+Production Resume (per `SdkFollowupCoordinator.resumeSessionFromTask`)
+is THREE steps:
+
+```
+1. prepareTaskResumeStartInput → loadInitialMessages(host, taskId)
+2. sessions.startNewSession({ ...resumeStart, interactive: true })
+3. fireAndForgetSend(sdkHost, sessionId, prompt) → sdkHost.send → host.runTurn
+```
+
+QPSR02 bypassed steps (1) and (2) and only exercised step (3) on the
+LIVE first-host session. QPSR03 mirrors production exactly:
+
+| QPSR03 action | Production mirror |
+|---|---|
+| `firstHost.readLiveSessionMessages(sessionId)` | `loadInitialMessages(sessionHost, taskId)` |
+| `firstHost.dispose()` | `clearTaskForOperation(token)` |
+| Construct SECOND `LocalRuntimeHost` against SAME `FileSessionService` | Lifecycle creates fresh `SdkSessionHost` against shared session backend |
+| `secondHost.startSession({ sessionId, initialMessages, ... })` | `sessions.startNewSession({ ...resumeStart, interactive: true })` |
+| `secondHost.runTurn({ sessionId, prompt: "Resume P2" })` | `fireAndForgetSend(sdkHost, sessionId, prompt)` → `sdkHost.send` → `host.runTurn` |
+
+Witness #4 proves the production Resume entrypoint is exercised end to
+end (not the simplified live-session `runTurn` shortcut).
+
+### Tool deferral
+
+C3's executor races its release-promise against the abort signal passed
+through `AgentToolContext.signal`. Without the signal, the deferred
+executor would block `executeTurn` from returning forever; `agent.abort()`
+flips the signal which unblocks the executor and lets `executeTurn` throw,
+which `runTurn`'s try/catch catches and routes through
+`completeAbortedInteractiveTurn` (status: "idle"). This lets the test
+deterministically land Stop while C3 is the current tool — mirroring
+the upstream issue's exact failure window.
+
+### Chronology (QPSR03)
+
+```
+T0  startSession({ sessionId: S })           // no prompt
+T1  runTurn({ sessionId: S, prompt: P1 })   // NOT awaited
+    StepModel: C1 → C2 → text → completed
+    ConversationStore: [user-P1, asst(C1), tool(C1), asst(C2), tool(C2), asst-text]
+    Witness #1: waitForCounterAtLeast(c1Count, 1) → c1Count === 1
+                session.status === "running"
+T2  runTurn({ sessionId: S, prompt: P2, delivery: "queue" })
+    pendingPromptsController.enqueue(P2)
+    Witness #2: pending_prompts event with P2 in prompts[]
+                session canStartRun() is FALSE → queue is real
+T3  await p1Promise → P1 completes → canStartRun() flips TRUE
+    scheduleDrain → drain → runTurn → C3.execute() (deferred)
+    Witness #3: pending_prompt_submitted event for P2
+                c3Count >= 1 (C3 currently executing)
+T4  firstHost.abort(sessionId, "user-pressed-stop")
+    session.aborting = true
+    session.agent.abort(reason) → abortController.signal aborted
+    C3.execute() unblocks via signal
+    executeTurn throws → completeAbortedInteractiveTurn → status: "idle"
+    Witness #4 prep: readLiveSessionMessages(sessionId) → initialMessages
+    Witness #4 prep: firstHost.dispose() (release C3 first)
+T5  new secondHost = new LocalRuntimeHost(...)
+    Witness #4: secondHost.startSession({ initialMessages, ... })
+    Witness #4: secondHost.runTurn({ sessionId, prompt: "Resume P2" })
+                → resume-only StepModel → inspects initialMessages
+                → tool-result for C1 + C2 are present
+                → emits text-delta "Continuing P2 with prior context."
+                → no replay
+T6  expect(c1Count) === 1
+    expect(c2Count) === 1
+    expect(p2EnqueueObserved) >= 1
+    expect(p2DrainCount) >= 1
+    expect(finishReason) === "completed"
+```
+
+### Classification outcomes (QPSR03)
+
+| Outcome | Classification |
+|---|---|
+| `c1Count === 1 && c2Count === 1` AND `p2EnqueueObserved >= 1` AND `p2DrainCount >= 1` | `HALT_RED_NOT_REPRODUCED` — full upstream-chronology + production-Resume seam. Transcript conservation survives Stop→Resume. |
+| `c1Count > 1` OR `c2Count > 1` | `CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST` — defect reproduced. The resumed Session emitted a C1 tool call because the loaded transcript lacked the prior C1/C2 tool results. |
+
+### §15.2.1 What this test deliberately does NOT exercise
+
+1. **The `host.restoreSession({ restore: { messages: true } })` path** — recon §15.1 covers this. Production Resume uses `startSession-with-history`, NOT `restoreSession`. QPSR03 mirrors the production path exactly.
+2. **Workspace restoration** — `restore.workspace: false` is what VS Code uses for message-only Resume; not relevant to the queue + transcript conservation discriminator.
+3. **The CLI / desktop-app sidecar paths** — out of scope; QPSR03 mirrors the VS Code path.
+4. **The full SdkController** — QPSR03 mirrors the production Resume entrypoint semantics (`loadInitialMessages` + `startNewSession` + `fireAndForgetSend`) using only `LocalRuntimeHost` methods. The SdkController is a thin wrapper around these primitives; if the seam fails at the `LocalRuntimeHost` level, the SdkController cannot recover.
+
+---
+
 ## Recon close
 
-Recon complete. Real-composition discriminator implemented. Do not manufacture a repair.
+Recon complete. Real-composition discriminators implemented (QPSR01 host controls + QPSR02 real composition + QPSR03 production-Resume entrypoint). Do not manufacture a repair.
 reproduces in this fork — that is exactly what the test will determine.

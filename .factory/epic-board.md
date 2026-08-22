@@ -4232,32 +4232,59 @@ The two pre-existing board validator failures at L204 / L207 are P2 / historical
 
 ## ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 — first commit (corrected after Factory review)
 
-**STATUS:** `HALT_RED_NOT_REPRODUCED` at the production Resume seam — the upstream defect does NOT reproduce against the real `LocalRuntimeHost + SessionRuntime + AgentRuntime` composition with a transcript-intact, post-Stop Resume gesture. (Initial commit `e6272bb4e` claimed `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — that classification was too strong; the Factory reviewer correctly identified that the initial commit exercised only the host queue + abort control seam with a stub agent and never invoked Resume. The corrected classification is at the right granularity after the second commit added the real composition.)
+**STATUS:** `HALT_RED_NOT_REPRODUCED` at the production Resume seam — the upstream defect does NOT reproduce against the real `LocalRuntimeHost + SessionRuntime + AgentRuntime` composition with a transcript-intact, post-Stop Resume gesture under the upstream chronology. (Initial commit `e6272bb4e` claimed `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — too strong; the second commit `e5a699695` corrected to `HALT_RED_NOT_REPRODUCED` but the Factory reviewer's `HALT_TEST_SEAM_INVALID` disposition flagged two P0 gaps (queue precondition, Resume entrypoint); the third commit added `QPSR03_PRODUCTION_CHRONOLOGY` to close both gaps.)
 
-**ENTRY_HEAD (corrected):** HEAD on `act/task-interaction-ownership-projection01-live-capture` (post-second-commit).
+**ENTRY_HEAD (corrected, third commit):** HEAD on `act/task-interaction-ownership-projection01-live-capture` (post-third-commit).
 **BRANCH:** `act/task-interaction-ownership-projection01-live-capture` (no new branch created — existing LIVE-Capture branch used, per Factory reviewer disposition).
 
 **Recon doc:** `docs/architecture/elm/queued-prompt-stop-resume-integrity01-recon.md` (now §15 explains the real-composition discriminator).
 
 **Tests** (bridge-only):
 `apps/vscode/src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts`
-(5 tests, 0 collateral damage; full bridge suite 80/80 PASS in 20.03s; full apps/vscode vitest 2023/2023 PASS in 51.44s; base check-types EXIT=0; board validator OK).
+(6 tests, 0 collateral damage; full bridge suite 81/81 PASS; full apps/vscode vitest 2023/2023 PASS in 51.44s; base check-types EXIT=0; board validator OK).
+
+The new `QPSR03_PRODUCTION_CHRONOLOGY` test (third commit) closes the two P0s the Factory reviewer flagged against `e5a699695`:
+- **Witness #1** — P1 is provably active when P2 is submitted (c1Count === 1 before queue submission).
+- **Witness #2** — P2 enqueue is observed via the host's `pending_prompts` event surface (NOT inferred from the `delivery:"queue"` label).
+- **Witness #3** — P2 drain is observed via `pending_prompt_submitted` AFTER P1 finishes, AND C3 has begun executing.
+- **Witness #4** — Resume enters through the PRODUCTION entrypoint: `readLiveSessionMessages` → fresh-host `startSession({ initialMessages })` → `runTurn`. This mirrors `SdkFollowupCoordinator.resumeSessionFromTask` exactly (the lifecycle does NOT just call `runTurn` on the live session; it reloads the transcript into a fresh session).
+
+C3 is wrapped in a deferred executor that races its release-promise against `AgentToolContext.signal`, so `agent.abort()` (called by `host.abort`) deterministically interrupts C3 mid-tool. This lets the test land Stop while C3 is the current tool — mirroring the upstream issue's exact failure window.
 
 **Composition:**
 - REAL: `LocalRuntimeHost`, `SessionRuntime` orchestrator, `AgentRuntime`, `FileSessionService`, `ConversationStore` (all production classes via bridge aliases).
 - SYNTHETIC_REAL: scripted `StepModel` (data-dependent on the messages array — emits a `tool-call-delta` for `c1-replay` ONLY if the prior C1/C2 tool results are absent from the transcript), counter-backed `run_c1` / `run_c2` / `run_c3` `AgentTool.execute()`, `requestToolApproval = approve-all` (replaces VS Code approval UI).
 - NOT_EXERCISED: VS Code approval UI, real LLM provider, CLI/desktop-app sidecar, the `host.restoreSession({ restore: { messages: true } })` path (production Resume in VS Code is `startSession({ sessionId, prompt })` on the LIVE session, NOT `restoreSession` — recon §15.1).
 
-**Chronology (per recon §15):**
+**Chronology (per recon §15, §15.2):**
+
+*QPSR01 (host queue + abort controls only):*
 1. `startSession({ sessionId: S, prompt: P1 })`
+2. `runTurn(P1)` → completed.
+3. `runTurn(P2, { delivery: "queue" })` → enqueued → drain fires `agent.continue()` → completed.
+4. `host.abort(S, "user-pressed-stop")` → status settles to `"idle"`.
+
+*QPSR02 (real composition, simplified Resume):*
+1. `startSession({ sessionId: S, prompt: P1 })` (no prompt — agent bootstrapped idle).
 2. `runTurn(P1)` → model emits `run_c1` (`c1Count = 1`) → `run_c2` (`c2Count = 1`) → text → completed. ConversationStore accumulates `[user-P1, asst(C1), tool(C1_result), asst(C2), tool(C2_result), asst-text]`.
 3. `runTurn(P2, { delivery: "queue" })` → enqueued → drain fires `agent.continue()` → `run_c3` (`c3Count = 1`).
 4. `host.abort(S, "user-pressed-stop")` → abort reaches agent exactly once → status settles to `"idle"`.
-5. **RESUME**: `runTurn({ sessionId: S, prompt: "Resume P2" })`. The `StepModel` inspects the messages array; it found `tool-result for qpsr-c1` AND `tool-result for qpsr-c2` present, so it emitted a `text-delta` continuation (NO replay).
+5. **RESUME** (simplified): `runTurn({ sessionId: S, prompt: "Resume P2" })`. The `StepModel` inspects the messages array; it found `tool-result for qpsr-c1` AND `tool-result for qpsr-c2` present, so it emitted a `text-delta` continuation (NO replay).
 6. Assertions: `c1Count === 1`, `c2Count === 1`, `finishReason === "completed"`.
 
-**Test outputs (final state from `console.log` in the test):**
+*QPSR03 (real composition, upstream chronology, production Resume entrypoint — third commit):*
+1. `startSession({ sessionId: S })` (no prompt).
+2. `runTurn(P1)` started WITHOUT awaiting completion. **Witness #1**: wait until `c1Count === 1` AND `session.status === "running"` (P1 is provably active).
+3. **Witness #2**: `runTurn({ sessionId: S, prompt: P2, delivery: "queue" })` submitted while P1 is still executing. The host emits `pending_prompts` with P2 in `prompts[]` AND `delivery === "queue"`. The queue precondition (`!canStartRun() && interactive → "queue"`) is genuinely exercised.
+4. `await p1Promise` → P1 completes → `canStartRun()` flips TRUE → `scheduleDrain` → `drain` → `runTurn` → `run_c3.execute()` (deferred, blocks on release-vs-abort-signal race). **Witness #3**: `pending_prompt_submitted` event observed for P2; `c3Count >= 1` (C3 currently executing).
+5. `firstHost.abort(S, "user-pressed-stop")` → `session.aborting = true` → `agent.abort(reason)` → `abortController.signal` aborted → `run_c3.execute()` unblocks → `executeTurn` throws → `completeAbortedInteractiveTurn` → status `"idle"`. **This is the upstream Stop window.**
+6. **Witness #4 prep**: `firstHost.readLiveSessionMessages(S)` → `initialMessages`. `firstHost.dispose()`.
+7. **Witness #4**: construct SECOND `LocalRuntimeHost` against the SAME `FileSessionService` → `secondHost.startSession({ sessionId: S, initialMessages, ... })` → `secondHost.runTurn({ sessionId: S, prompt: "Resume P2" })`. The resume-only `StepModel` inspects `initialMessages` and emits text continuation (NO replay).
+8. Assertions: `c1Count === 1`, `c2Count === 1`, `p2EnqueueObserved >= 1`, `p2DrainCount >= 1`, `finishReason === "completed"`.
+
+**Test outputs (final state from `console.log` in the QPSR02 + QPSR03 tests):**
 ```
+[QPSR02_REAL_COMPOSITION]
 {
   "c1Count": 1,
   "c2Count": 1,
@@ -4265,12 +4292,32 @@ The two pre-existing board validator failures at L204 / L207 are P2 / historical
   "finishReason": "completed",
   "classification": "HALT_RED_NOT_REPRODUCED — transcript intact, C1/C2 not replayed"
 }
+
+[QPSR03_PRODUCTION_CHRONOLOGY]
+{
+  "c1Count": 1,
+  "c2Count": 1,
+  "c3Count": 1,
+  "p2EnqueueObserved": 1,
+  "p2DrainCount": 1,
+  "finishReason": "completed",
+  "preResume": {
+    "c1Count": 1,
+    "c2Count": 1,
+    "c3Count": 1,
+    "p2EnqueueObserved": 1,
+    "p2DrainCount": 1
+  },
+  "classification": "HALT_RED_NOT_REPRODUCED — C1/C2 durable transcript conservation across Stop→Resume"
+}
 ```
 
-**Classification (per ACT §7 — corrected):**
-- `HALT_RED_NOT_REPRODUCED` — at the production Resume seam exercised by `QPSR02_REAL_COMPOSITION`, the upstream `#12975` "C1/C2 replay after Resume" defect does NOT reproduce. The ConversationStore retains the T1 transcript through Stop, the resumed `agent.continue()` sees both prior tool results in `request.messages`, and the model emits a text-delta continuation rather than a tool-call replay.
+**Classification (per ACT §7 — corrected, third commit):**
+- `HALT_RED_NOT_REPRODUCED` — at the production Resume seam exercised by `QPSR03_PRODUCTION_CHRONOLOGY`, the upstream `#12975` "C1/C2 replay after Resume" defect does NOT reproduce under the upstream chronology (P2 submitted while P1 is executing) AND the production Resume entrypoint (`loadInitialMessages` + `startNewSession({initialMessages})` + `runTurn`). The ConversationStore retains the T1 transcript through Stop, the second host's startSession-with-history bootstrap loads the transcript, and the resumed `agent.continue()` sees both prior tool results in `request.messages` and emits a text-delta continuation rather than a tool-call replay.
 - This is a legitimate HALT outcome per Factory policy: "If real Stop/Resume is coherent: HALT_RED_NOT_REPRODUCED. That is a valid and useful outcome."
-- The initial commit `e6272bb4e` classified this ACT prematurely as `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — that classification was scoped only to the host queue + abort control seam and overstated the load-bearing RED. The corrected verdict is the more precise `HALT_RED_NOT_REPRODUCED` at the production Resume seam.
+- The initial commit `e6272bb4e` classified this ACT prematurely as `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — that classification was scoped only to the host queue + abort control seam and overstated the load-bearing RED.
+- The second commit `e5a699695` corrected to `HALT_RED_NOT_REPRODUCED` but the Factory reviewer's `HALT_TEST_SEAM_INVALID` disposition flagged two P0 gaps (queue precondition not exercised; Resume entrypoint bypassed). The third commit's `QPSR03_PRODUCTION_CHRONOLOGY` closes both gaps.
+- Net verdict: `HALT_RED_NOT_REPRODUCED` (transcript conservation survives Stop→Resume under the upstream chronology AND the production Resume entrypoint).
 
 **What the test deliberately does NOT exercise:**
 - The `host.restoreSession({ restore: { messages: true } })` path — production Resume in VS Code is `startSession({ sessionId, prompt })` on the live session, not `restoreSession`. `restoreSession` is only used by `editMessageAndRegenerate`. Per recon §15.1, this ACT targets the production Resume path; the `restoreSession` path is a separate `host.restoreCheckpoint` seam that the VS Code Resume UI does not invoke.
