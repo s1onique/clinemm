@@ -15,18 +15,25 @@ import { useProviderListings } from "./useProviderListings"
  *
  * ACT-CLINEMM-COST-DISPLAY-TRUTH01 — Conservative-when-unknown contract:
  *
- *   known show          → "show"
+ *   known show          → "show"   (only path that authorizes a spend claim)
  *   known hide          → "hide"
  *   known subscription  → "subscription"
- *   unknown / loading   → "hide"  (suppress cost, do not claim spend)
+ *   unknown / loading   → "hide"   (suppress cost, do not claim spend)
+ *   unknown future value → "hide"  (forward-compatibility: the wire
+ *                                    `usage_cost_display` is a `string`,
+ *                                    not a closed enum; a future SDK
+ *                                    value must NOT silently default to
+ *                                    metered. Allowlist-only.)
  *
- * That last case is the load-bearing one. `"show"` is NOT a safe
- * fallback because asserting a charged dollar amount while billing
- * semantics are unresolved is materially misleading for flat-rate
- * providers (e.g. ClinePass) — the reference price is not the user's
- * per-task spend. The catalog hook (`useProviderListings`) exposes an
- * explicit `isLoading` flag; we consult it directly rather than
- * inferring readiness from an empty list.
+ * "Show" is an explicit allowlist, not a default. Asserting a charged
+ * dollar amount while billing semantics are unknown — whether due to
+ * a still-loading catalog or a future SDK value this fork does not yet
+ * know — is materially misleading for flat-rate providers (e.g.
+ * ClinePass). The reference price is not the user's per-task spend.
+ *
+ * The catalog hook (`useProviderListings`) exposes an explicit
+ * `isLoading` flag; we consult it directly rather than inferring
+ * readiness from an empty list.
  *
  * Return union is `"show" | "hide" | "subscription"` (widened from the
  * 2-valued `"show" | "hide"` of pre-ACT main). Renderers must gate
@@ -59,10 +66,16 @@ export function useProviderUsageCostDisplay(providerId: string | undefined): Web
 		if (!listing) {
 			return "hide"
 		}
+		// Allowlist `"show"` only. The wire field is `string`, so any
+		// forward value (e.g. `"credits-included"`, `"quota"`,
+		// `"enterprise-flat-rate"`) must NOT default to metered.
 		const raw = listing.usageCostDisplay
-		if (raw === "hide" || raw === "subscription") {
-			return raw
+		if (raw === "show") {
+			return "show"
 		}
-		return "show"
+		if (raw === "subscription") {
+			return "subscription"
+		}
+		return "hide"
 	}, [providers, isLoading, providerId])
 }
