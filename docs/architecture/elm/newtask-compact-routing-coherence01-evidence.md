@@ -186,3 +186,75 @@ preserving the discriminator as durable evidence that:
     (the webview's existing contract test for the alias routing)
   - commit 7b8798c99 (the deliberate "make /newtask an alias of /compact"
     commit that documented this behavior in the production code)
+
+---
+
+## 11. CORRECTION01 — verdict reclassification (added at `6d3a01be9`)
+
+The Factory reviewer flagged `HALT_VERDICT_CONTRADICTION`: the original
+verdict `NOT_REPRODUCED` is incompatible with `REPRODUCED=YES`. The
+narrative above argues that the routing is DELIBERATE (commit 7b8798c99)
+and therefore not "actionable", but deliberate architectural divergence
+from the documented product contract is still a product-contract violation
+— RED was reproduced literally, so the verdict cannot be `NOT_REPRODUCED`.
+
+### Reclassification
+
+  ORIGINAL_VERDICT       = NOT_REPRODUCED (actionable sense)
+  CORRECTED_VERDICT      = REPRODUCED_ARCHITECTURAL_ENABLEMENT_REQUIRED
+  REPAIR_DISPOSITION     = HALT_REPAIR_OUT_OF_SCOPE
+  PRODUCT_CONTRACT       = VIOLATED (upstream docs/core-workflows/using-commands.mdx:
+                             "/newtask creates a fresh task with distilled context";
+                             this fork's /newtask does NOT honor this)
+  FIRST_BROKEN_BOUNDARY  = webview slash routing at
+                             apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts:103-128
+                             collapses new-task intent into compact-current intent at
+                             the single dispatch predicate
+
+### Why this is the correct verdict
+
+  - The upstream product contract says `/newtask` creates a fresh task
+    with distilled context (see cline/cline#13157 for the user report).
+  - This fork's `/newtask` mutates the current task in place (it routes
+    to the condense RPC).
+  - The fork therefore violates the product contract — REGARDLESS of
+    whether the violation is deliberate (commit 7b8798c99).
+  - "Deliberate" means "the engineering team chose this implementation";
+    it does NOT mean "this is not a bug".
+  - A bounded repair is structurally impossible within the original
+    ACT's constraints (every candidate path violates one of the
+    bounded-repair prohibitions). That is a valid ACT outcome
+    (`HALT_REPAIR_OUT_OF_SCOPE`), but it does not equal `NOT_REPRODUCED`.
+
+### Softened claim
+
+  The original evidence calls `controller.initTask` "the SOLE production
+  seam that honors true new-task-with-context semantics". That claim
+  exceeds what this ACT actually proved. This ACT proves:
+    (a) `controller.initTask` exists at apps/vscode/src/core/controller/task/newTask.ts:72,
+    (b) it is reachable via `TaskServiceClient.newTask` from the webview
+        button flow (`executeButtonAction("new_task")`),
+    (c) the slash-command dispatch predicate does NOT route to it.
+  It does NOT mechanically inventory ALL callers of `controller.initTask`
+  or `TaskServiceClient.newTask` (e.g., from other button flows, from
+  the SDK adapter layer, from any other codepath). The claim is
+  softened to "the IDENTIFIED EXISTING new-task-with-context seam";
+  exhaustive enumeration is the first bounded scope of the followup
+  ACT `ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01`.
+
+### Followup
+
+  `ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01` is opened
+  (see canonical task index in .factory/epic-board.md). Recon-only ACT:
+  (1) inventory all callers of `controller.initTask` and
+  `TaskServiceClient.newTask` with hard evidence; (2) trace
+  SdkCompactionCoordinator to determine if any internal seam produces
+  a summary string that could feed `controller.initTask(...)`; (3)
+  compare bounded designs A/B/C/D (A: internal host-side
+  distill-and-handoff; B: reuse existing completed-task "new task with
+  context" machinery; C: typed slash intent routed through an existing
+  internal task service; D: small internal summary-return seam, no
+  public wire delta); (4) freeze `/compact` + `/smol` as same-task
+  controls; (5) decide whether ANY design fits within the original ACT
+  constraints or whether a new ACT budget is needed. NO production
+  code change in this ACT.
