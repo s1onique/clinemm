@@ -8,6 +8,10 @@ import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
+import {
+	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
+	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
+} from "@/sdk/turn-state-writer-provenance-runtime"
 import { Logger } from "@/shared/services/Logger"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
@@ -560,6 +564,36 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[PTAD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Post-terminal diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-TURNSTATE-WRITER-PROVENANCE-COMMAND-SURFACE01:
+		// Debug commands for the legacy TurnState writer-provenance
+		// diagnostic. Default off. The toggle flips a workspace-state
+		// flag and the dump flushes the bounded ring to a single JSONL
+		// file under globalStorageUri (the contract path is
+		// <globalStorageUri.fsPath>/turn-state-writer-provenance.jsonl,
+		// NOT a hard-coded ~/.cline/data path — see the runtime
+		// docstring for the actual on-disk resolution). No webview
+		// counterpart — the tracked state is host-only.
+		vscode.commands.registerCommand(commands.ToggleTurnStateWriterProvenanceDiagnostic, async () => {
+			const next = await toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)
+			const status = next ? "ENABLED" : "DISABLED"
+			Logger.log(`[TSWPD] Workspace toggle → ${status}`)
+			void vscode.window.showInformationMessage(
+				`Turn-state writer-provenance diagnostic: ${status}. Legacy TurnStateTracker mutations will ${
+					next ? "now be recorded" : "stop being recorded (existing records preserved)"
+				}.`,
+			)
+		}),
+		vscode.commands.registerCommand(commands.DumpTurnStateWriterProvenanceDiagnostic, async () => {
+			try {
+				const filePath = await dumpExtensionSideTurnStateWriterProvenanceDiagnostic(context)
+				void vscode.window.showInformationMessage(`Turn-state writer-provenance diagnostic: → ${filePath}.`)
+			} catch (err) {
+				Logger.error("[TSWPD] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Turn-state writer-provenance dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

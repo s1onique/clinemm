@@ -40,6 +40,12 @@ const ClineCommands = {
 	// through `vscode.commands.executeCommand` from the debug harness).
 	TogglePostTerminalAuthorityDiagnostic: prefix + ".debug.togglePostTerminalAuthorityDiagnostic",
 	DumpPostTerminalAuthorityDiagnostic: prefix + ".debug.dumpPostTerminalAuthorityDiagnostic",
+	// ACT-CLINEMM-TURNSTATE-WRITER-PROVENANCE-COMMAND-SURFACE01:
+	// Debug commands for the legacy TurnState writer-provenance diagnostic.
+	// Default off. The toggle flips a workspace-state flag and the dump
+	// serializes the bounded ring to <globalStorageUri>/turn-state-writer-provenance.jsonl.
+	ToggleTurnStateWriterProvenanceDiagnostic: prefix + ".debug.toggleTurnStateWriterProvenanceDiagnostic",
+	DumpTurnStateWriterProvenanceDiagnostic: prefix + ".debug.dumpTurnStateWriterProvenanceDiagnostic",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

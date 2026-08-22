@@ -207,6 +207,16 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.toggleTurnStateWriterProvenanceDiagnostic",
+				"title": "Cline: Toggle Turn State Writer Provenance Diagnostic",
+				"category": "Cline"
+			},
+			{
+				"command": "cline.debug.dumpTurnStateWriterProvenanceDiagnostic",
+				"title": "Cline: Dump Turn State Writer Provenance Diagnostic",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

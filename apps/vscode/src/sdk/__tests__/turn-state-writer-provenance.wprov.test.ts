@@ -21,10 +21,19 @@
  *            disabled. When enabled, the legacy `set()` records the
  *            writer as `unknown-legacy-writer` (the explicit sentinel).
  *
+ * ACT-CLINEMM-TURNSTATE-WRITER-PROVENANCE-COMMAND-SURFACE01 adds:
+ *   CMD01..05: command-surface wiring — manifest contribution,
+ *            registry constants, runtime registration, toggle calls
+ *            the existing enable/disable seam, dump calls the
+ *            existing get/export seam, default-off posture preserved.
+ *
  * This is a diagnostic test, NOT a product RED. The directive forbids
  * synthesizing these as production REDs.
  */
 
+import { existsSync, mkdtempSync, readFileSync, readFileSync as readFileSyncFs, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
 import {
 	clearTurnStateWriterProvenanceDiagnostic,
 	disableTurnStateWriterProvenanceDiagnostic,
@@ -39,6 +48,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { MessageIdMinter } from "../message-id-minter"
 import { TurnStateTracker } from "../turn-state-tracker"
+import {
+	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
+	isTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
+	type TurnStateWriterProvenanceDiagnosticContext,
+	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
+} from "../turn-state-writer-provenance-runtime"
 
 afterEach(() => {
 	disableTurnStateWriterProvenanceDiagnostic()
@@ -450,6 +465,247 @@ describe("WPROV07: mechanical inventory — every production writerId is mapped;
 			expect(id.length).toBeLessThanOrEqual(80)
 		}
 		expect(ids).toContain("unknown-legacy-writer")
+	})
+})
+
+// =============================================================================
+// ACT-CLINEMM-TURNSTATE-WRITER-PROVENANCE-COMMAND-SURFACE01
+//
+// Command-surface contract tests. The diagnostic's backend ring and
+// enable/disable/dump seams already exist (WPROV01..07); what was
+// missing was the VS Code command surface that lets an operator
+// reach those seams from the Command Palette. These tests pin:
+//   CMD01: package.json contributes both command IDs.
+//   CMD02: runtime registers both command IDs (extension.ts).
+//   CMD03: toggle calls the existing provenance enable/disable seam.
+//   CMD04: dump calls the existing provenance get/export seam.
+//   CMD05: command registration does not enable the diagnostic by default.
+//
+// CMD03 + CMD04 are runtime exercises against the same fake-context
+// pattern used by post-terminal-authority-diagnostic-runtime.test.ts.
+// CMD01 + CMD02 + CMD05 are source-only witnesses (parse the
+// registered files and assert presence/absence of the contract).
+// =============================================================================
+
+const COMMAND_REGISTRY_PATH = resolve(__dirname, "../../registry.ts")
+const COMMAND_PACKAGE_JSON_PATH = resolve(__dirname, "../../../package.json")
+const COMMAND_EXTENSION_PATH = resolve(__dirname, "../../extension.ts")
+
+function readCommandSource(path: string): string {
+	return readFileSyncFs(path, "utf8")
+}
+
+function fakeTswpdContext(storagePath: string): TurnStateWriterProvenanceDiagnosticContext {
+	const store = new Map<string, unknown>()
+	return {
+		workspaceState: {
+			get: ((key: string) => store.get(key)) as TurnStateWriterProvenanceDiagnosticContext["workspaceState"]["get"],
+			update: async (key: string, value: unknown) => {
+				if (value === undefined) {
+					store.delete(key)
+				} else {
+					store.set(key, value)
+				}
+			},
+		},
+		globalStorageUri: { fsPath: storagePath },
+		subscriptions: [],
+	}
+}
+
+describe("CMD01: package.json contributes both command IDs", () => {
+	it("CMD01.1: toggle command is declared in package.json with palette-searchable title", () => {
+		const pkg = readCommandSource(COMMAND_PACKAGE_JSON_PATH)
+		expect(pkg).toContain("cline.debug.toggleTurnStateWriterProvenanceDiagnostic")
+		expect(pkg).toMatch(
+			/"command":\s*"cline\.debug\.toggleTurnStateWriterProvenanceDiagnostic"[\s\S]*?"title":\s*"[^"]*[Tt]urn [Ss]tate [Ww]riter [Pp]rovenance[^"]*"/,
+		)
+	})
+
+	it("CMD01.2: dump command is declared in package.json with palette-searchable title", () => {
+		const pkg = readCommandSource(COMMAND_PACKAGE_JSON_PATH)
+		expect(pkg).toContain("cline.debug.dumpTurnStateWriterProvenanceDiagnostic")
+		expect(pkg).toMatch(
+			/"command":\s*"cline\.debug\.dumpTurnStateWriterProvenanceDiagnostic"[\s\S]*?"title":\s*"[^"]*[Dd]ump [Tt]urn [Ss]tate [Ww]riter [Pp]rovenance[^"]*"/,
+		)
+	})
+})
+
+describe("CMD02: registry exposes both command constants and extension.ts registers them", () => {
+	it("CMD02.1: registry declares both constants with the correct id-suffix", () => {
+		const registry = readCommandSource(COMMAND_REGISTRY_PATH)
+		expect(registry).toContain("ToggleTurnStateWriterProvenanceDiagnostic")
+		expect(registry).toContain("DumpTurnStateWriterProvenanceDiagnostic")
+		expect(registry).toMatch(/prefix\s*\+\s*"\.debug\.toggleTurnStateWriterProvenanceDiagnostic"/)
+		expect(registry).toMatch(/prefix\s*\+\s*"\.debug\.dumpTurnStateWriterProvenanceDiagnostic"/)
+	})
+
+	it("CMD02.2: extension.ts registers both commands via vscode.commands.registerCommand", () => {
+		const ext = readCommandSource(COMMAND_EXTENSION_PATH)
+		expect(ext).toMatch(/vscode\.commands\.registerCommand\([^)]*commands\.ToggleTurnStateWriterProvenanceDiagnostic/s)
+		expect(ext).toMatch(/vscode\.commands\.registerCommand\([^)]*commands\.DumpTurnStateWriterProvenanceDiagnostic/s)
+	})
+})
+
+describe("CMD03: toggle calls the existing provenance enable/disable seam", () => {
+	let tmp: string
+	let context: ReturnType<typeof fakeTswpdContext>
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), "tswpd-cmd-toggle-"))
+		context = fakeTswpdContext(tmp)
+		disableTurnStateWriterProvenanceDiagnostic()
+		clearTurnStateWriterProvenanceDiagnostic()
+	})
+
+	afterEach(() => {
+		if (existsSync(tmp)) {
+			rmSync(tmp, { recursive: true, force: true })
+		}
+		disableTurnStateWriterProvenanceDiagnostic()
+		clearTurnStateWriterProvenanceDiagnostic()
+	})
+
+	it("CMD03.1: workspace state default is OFF (undefined → false)", () => {
+		expect(isTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)).toBe(false)
+	})
+
+	it("CMD03.2: toggle flips the workspace flag AND the in-process enabled flag", async () => {
+		const next1 = await toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)
+		expect(next1).toBe(true)
+		expect(isTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)).toBe(true)
+		expect(isTurnStateWriterProvenanceDiagnosticEnabled()).toBe(true)
+
+		const next2 = await toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)
+		expect(next2).toBe(false)
+		expect(isTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)).toBe(false)
+		expect(isTurnStateWriterProvenanceDiagnosticEnabled()).toBe(false)
+	})
+
+	it("CMD03.3: post-toggle ring captures exactly the expected writer site", async () => {
+		await toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)
+		const tracker = new TurnStateTracker(new MessageIdMinter())
+		tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		expect(getTurnStateWriterProvenanceRecords().length).toBe(1)
+		expect(getTurnStateWriterProvenanceRecords()[0]!.writerId).toBe("task-start-init-task")
+	})
+})
+
+describe("CMD04: dump calls the existing provenance get/export seam", () => {
+	let tmp: string
+	let context: ReturnType<typeof fakeTswpdContext>
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), "tswpd-cmd-dump-"))
+		context = fakeTswpdContext(tmp)
+		disableTurnStateWriterProvenanceDiagnostic()
+		clearTurnStateWriterProvenanceDiagnostic()
+	})
+
+	afterEach(() => {
+		if (existsSync(tmp)) {
+			rmSync(tmp, { recursive: true, force: true })
+		}
+		disableTurnStateWriterProvenanceDiagnostic()
+		clearTurnStateWriterProvenanceDiagnostic()
+	})
+
+	it("CMD04.1: dump produces an empty JSONL file when no records were captured", async () => {
+		const filePath = await dumpExtensionSideTurnStateWriterProvenanceDiagnostic(context)
+		expect(existsSync(filePath)).toBe(true)
+		expect(filePath).toContain("turn-state-writer-provenance.jsonl")
+		expect(readFileSync(filePath, "utf8")).toBe("")
+	})
+
+	it("CMD04.2: dump serializes every captured record with writerId/seq identity", async () => {
+		enableTurnStateWriterProvenanceDiagnostic()
+		const tracker = new TurnStateTracker(new MessageIdMinter())
+		tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		tracker.setWithWriter("idle", undefined, { writerId: "controller-clear-task" })
+		const filePath = await dumpExtensionSideTurnStateWriterProvenanceDiagnostic(context)
+		expect(existsSync(filePath)).toBe(true)
+		const lines = readFileSync(filePath, "utf8")
+			.split("\n")
+			.filter((l) => l.length > 0)
+		expect(lines.length).toBe(2)
+		const records = lines.map((l) => JSON.parse(l))
+		expect(records[0].writerId).toBe("task-start-init-task")
+		expect(records[0].committed.phase).toBe("streaming")
+		expect(records[1].writerId).toBe("controller-clear-task")
+		expect(records[1].committed.phase).toBe("idle")
+	})
+
+	it("CMD04.3: dump creates the globalStorage directory on a fresh install", async () => {
+		const freshDir = join(tmp, "fresh-install", "does-not-exist")
+		const freshContext = fakeTswpdContext(freshDir)
+		expect(existsSync(freshDir)).toBe(false)
+		enableTurnStateWriterProvenanceDiagnostic()
+		const tracker = new TurnStateTracker(new MessageIdMinter())
+		tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		const filePath = await dumpExtensionSideTurnStateWriterProvenanceDiagnostic(freshContext)
+		expect(existsSync(freshDir)).toBe(true)
+		expect(existsSync(filePath)).toBe(true)
+	})
+
+	it("CMD04.4: dump reads through the existing shared getRecords() seam (no private state)", async () => {
+		const tracker = new TurnStateTracker(new MessageIdMinter())
+		enableTurnStateWriterProvenanceDiagnostic()
+		tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		disableTurnStateWriterProvenanceDiagnostic()
+		const recordsBefore = getTurnStateWriterProvenanceRecords().length
+		expect(recordsBefore).toBe(1)
+		const filePath = await dumpExtensionSideTurnStateWriterProvenanceDiagnostic(context)
+		const lines = readFileSync(filePath, "utf8")
+			.split("\n")
+			.filter((l) => l.length > 0)
+		expect(lines.length).toBe(1)
+	})
+})
+
+describe("CMD05: command registration does not enable the diagnostic by default", () => {
+	let tmp: string
+	let context: ReturnType<typeof fakeTswpdContext>
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), "tswpd-cmd-default-"))
+		context = fakeTswpdContext(tmp)
+		disableTurnStateWriterProvenanceDiagnostic()
+		clearTurnStateWriterProvenanceDiagnostic()
+	})
+
+	afterEach(() => {
+		if (existsSync(tmp)) {
+			rmSync(tmp, { recursive: true, force: true })
+		}
+		disableTurnStateWriterProvenanceDiagnostic()
+		clearTurnStateWriterProvenanceDiagnostic()
+	})
+
+	it("CMD05.1: a fresh workspace reports the diagnostic OFF (workspace-state undefined)", () => {
+		expect(isTurnStateWriterProvenanceDiagnosticWorkspaceEnabled(context)).toBe(false)
+		expect(isTurnStateWriterProvenanceDiagnosticEnabled()).toBe(false)
+	})
+
+	it("CMD05.2: turnstate mutations before any toggle produce zero records (production path)", () => {
+		const tracker = new TurnStateTracker(new MessageIdMinter())
+		tracker.setWithWriter("streaming", undefined, { writerId: "task-start-init-task" })
+		tracker.setWithWriter("idle", undefined, { writerId: "controller-clear-task" })
+		expect(getTurnStateWriterProvenanceRecords()).toEqual([])
+		expect(getTurnStateWriterProvenanceSeq()).toBe(0)
+	})
+
+	it("CMD05.3: source-only — runtime does NOT auto-enable on import", () => {
+		// A fresh import context must NOT call enable...() at module top-level.
+		// Re-parse the runtime source and strip the toggle function body so
+		// the in-function enable call (which IS correct) does not match.
+		const runtimePath = resolve(__dirname, "../turn-state-writer-provenance-runtime.ts")
+		const src = readCommandSource(runtimePath)
+		const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "")
+		const stripped = noComments.replace(
+			/export async function\s+toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled[\s\S]*?\n\}\n/,
+			"",
+		)
+		expect(stripped).not.toMatch(/enableTurnStateWriterProvenanceDiagnostic\s*\(/)
 	})
 })
 
