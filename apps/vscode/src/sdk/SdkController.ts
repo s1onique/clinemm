@@ -915,23 +915,30 @@ export class Controller {
 					this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("followup-on-follow-up-abandoned"))
 				}
 			},
-			// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
-			// Close D2c_PATH_ASYMMETRY. The follow-up resume seam
-			// (`SdkFollowupCoordinator.resumeSessionFromTask`) creates a new
-			// `SessionRuntime` under the same logical session id via
+			// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION02:
+			// Close D2c_PATH_ASYMMETRY with the real identity fence.
+			//
+			// The follow-up resume seam
+			// (`SdkFollowupCoordinator.resumeSessionFromTask`) creates a
+			// new `SessionRuntime` under the same logical session id via
 			// `sessions.startNewSession(...)`. The lifecycle disposes the
 			// previous agent's listeners as part of that call, so the
-			// canonical subscription's listener pool — last attached at the
-			// prior session's start — becomes stale. Re-attach via the
-			// same seam used by `reinitExistingTaskFromId`.
-			// `attachCanonicalRuntimeEventSubscription` resolves
-			// `this.sessions.getActiveSession()` (both sdkHost AND
-			// sessionId) at call time, so concurrent session replacements
-			// are bound to the actually-current session — never to a
-			// stale sdkHost from a different session id.
-			onCanonicalRuntimeRebind: () => {
+			// canonical subscription's listener pool — last attached at
+			// the prior session's start — becomes stale. Re-attach via
+			// the same seam used by `reinitExistingTaskFromId`.
+			//
+			// CORRECTION02 contract (replaces the earlier "attach whoever
+			// is currently active" no-arg callback): the coordinator
+			// passes the RESUMED session id; this body re-attaches only
+			// if `getActiveSession().sessionId` AT CALL TIME still
+			// matches that resumed id. If a concurrent user intent has
+			// taken over the active session between `startNewSession`
+			// resolving and the callback firing, the ids will disagree
+			// and we skip the re-attach (the new intent owns the active
+			// slot — attaching here would steal its listener pool).
+			onCanonicalRuntimeRebind: (resumedSessionId) => {
 				const activeSessionId = this.sessions.getActiveSession()?.sessionId
-				if (activeSessionId) {
+				if (activeSessionId && activeSessionId === resumedSessionId) {
 					this.attachCanonicalRuntimeEventSubscription(activeSessionId)
 				}
 			},

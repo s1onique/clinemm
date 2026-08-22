@@ -1,22 +1,43 @@
 /**
- * ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01 /
- * FRSP01-CORRECTION01 — Phase 3 bounded repair + Phase 4 ablation +
- * Phase 5 conservation witnesses.
+ * ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION02 /
+ * FRSP01-CORRECTION02 — Phase 3 bounded repair (CORRECTION01), Phase 4
+ * ablation, Phase 5 conservation witnesses, plus the CORRECTION02
+ * identity-fence witnesses (C1 / C2 / C3).
  *
- * REPAIR
- * ------
- * Added an `onCanonicalRuntimeRebind?: () => void` option to
- * `SdkFollowupCoordinatorOptions`. The follow-up coordinator invokes
- * it after the successful `sessions.startNewSession(...)` in
- * `resumeSessionFromTask`, immediately after the first supersession
- * guard passes. The SdkController wires the option to
- * `attachCanonicalRuntimeEventSubscription(activeSession.sessionId)`,
- * which is the same seam used by `reinitExistingTaskFromId`.
+ * REPAIR (CORRECTION01, retained)
+ * -------------------------------
+ * Added an `onCanonicalRuntimeRebind?: (resumedSessionId: string) => void`
+ * option to `SdkFollowupCoordinatorOptions`. The follow-up coordinator
+ * invokes it after the successful `sessions.startNewSession(...)` in
+ * `resumeSessionFromTask`, immediately after the task-identity guard
+ * passes. The SdkController wires the option to a callback body that
+ * reads `sessions.getActiveSession()` at call time and ONLY re-attaches
+ * if the active session id still equals `resumedSessionId`.
  *
- * The callback is no-arg: the controller resolves the active session
- * id at call time, so concurrent session replacements bind to the
- * actually-current host — never to a stale sdkHost from a different
- * session id.
+ * CORRECTION02 — IDENTITY CONTRACT TIGHTENING
+ * -------------------------------------------
+ * Replaces the earlier CORRECTION01 no-arg + "attach whoever is
+ * currently active" contract. The earlier contract was weaker than the
+ * invariant the lab actually demonstrated and added a forward-looking
+ * `(startOutcome as unknown as { status: "superseded" })` branch that
+ * was statically unreachable on the no-token `startNewSession` overload
+ * the coordinator calls.
+ *
+ * New contract:
+ *   - The callback receives the **resumed session id** (the
+ *     `startResult.sessionId` reported by the lifecycle).
+ *   - The controller body re-attaches iff
+ *     `sessions.getActiveSession().sessionId === resumedSessionId`.
+ *   - The forward-looking `superseded` branch and its synthetic
+ *     witness test are removed; the lifecycle's existing guards +
+ *     `endStartedResume` + `abandonFollowUp` cover any non-started
+ *     outcome on the no-token overload.
+ *
+ * Tests below exercise the REAL identity-fence body (the same shape
+ * that lives in `SdkController.onCanonicalRuntimeRebind`):
+ *   - resolve `activeSessionId` at call time,
+ *   - compare against the resumed id,
+ *   - call `subscribeCanonicalRuntimeEventsToShadow` only on equality.
  *
  * SCOPE
  * -----
@@ -38,22 +59,24 @@
  *      the rebind callback is removed (replaced with a no-op), the
  *      W2 RED shape returns. Proves NECESSITY of the new call.
  *
- *   W3 CONSERVATION — NEGATIVE (expected GREEN): a failed/abandoned
- *      follow-up start MUST NOT attach. The callback only fires
- *      after the first supersession guard passes. Verified by
- *      returning `superseded` from the harness's `startNewSession`
- *      so the rebind callback MUST NOT have been invoked.
+ *   C1 IDENTITY MATCH (expected GREEN): the real
+ *      identity-fence callback body, with `resumed = active = "A"`,
+ *      attaches A exactly once. Proves the identity fence fires
+ *      on the happy path.
  *
- *   W4 CONSERVATION — SUPERSESSION (expected GREEN): if the follow-up
- *      result is no longer the active session by the time the rebind
- *      callback runs, the controller binds to the actually-current
- *      session (not the stale follow-up result). Proves the
- *      identity safety net is present.
+ *   C2 IDENTITY MISMATCH (expected GREEN, ZERO ATTACH): the real
+ *      identity-fence callback body, with `resumed = "A" but
+ *      active = "B"`, attaches ZERO times. Proves the fence
+ *      protects against a concurrent-replacement supersession.
+ *
+ *   C3 ACTIVE ABSENT (expected GREEN, ZERO ATTACH): the real
+ *      identity-fence callback body, with `resumed = "A" but
+ *      active = undefined`, attaches ZERO times. Proves the
+ *      fence is safe under the "session already cleared" race.
  *
  *   W5 CONSERVATION — CALLBACK CALLED EXACTLY ONCE PER RESUME
  *      (expected GREEN): the rebind callback fires exactly once
- *      per successful follow-up resume (not on supersession, not
- *      on abandonment).
+ *      per successful follow-up resume (not on abandonment).
  *
  * REPAIR BUDGET
  * -------------
@@ -297,13 +320,18 @@ interface FollowupHarnessOpts {
 	 * callback is omitted — preserving FRSP01's W2 RED shape (no
 	 * rebind → events lost).
 	 *
-	 * Production SdkController wires this to
-	 * `attachCanonicalRuntimeEventSubscription(activeSession.sessionId)`.
-	 * Tests inject a spy that records the call AND performs a
-	 * real `subscribeCanonicalRuntimeEventsToShadow(host, wiring, "A")`
-	 * to mimic the production effect.
+	 * Production SdkController wires this to the identity-fence body:
+	 *   const activeSessionId = this.sessions.getActiveSession()?.sessionId
+	 *   if (activeSessionId && activeSessionId === resumedSessionId) {
+	 *       this.attachCanonicalRuntimeEventSubscription(activeSessionId)
+	 *   }
+	 *
+	 * Tests inject a spy that performs the same fence against the
+	 * `lifecycleActiveSessionId` cell + records each call, plus performs
+	 * a real `subscribeCanonicalRuntimeEventsToShadow(host, wiring, id)`
+	 * on equality (to mimic the production effect).
 	 */
-	onCanonicalRuntimeRebind?: () => void
+	onCanonicalRuntimeRebind?: (resumedSessionId: string) => void
 }
 
 function makeFollowupOptions(opts: FollowupHarnessOpts): SdkFollowupCoordinatorOptions {
@@ -481,11 +509,15 @@ describe("FRSP01-CORRECTION01 — bounded repair + ablation + conservation", () 
 			runFinishedEvent("run-2"),
 		])
 
-		const rebindCalls: Array<{ activeSessionIdAtCall: string | undefined }> = []
-		const onCanonicalRuntimeRebind = () => {
+		const rebindCalls: Array<{ activeSessionIdAtCall: string | undefined; resumedSessionId: string }> = []
+		// Identity-fence body, mirroring the production
+		// `SdkController.onCanonicalRuntimeRebind(resumedSessionId)`:
+		// reads the active session id at call time and attaches only
+		// when the active id equals the resumed id.
+		const onCanonicalRuntimeRebind = (resumedSessionId: string) => {
 			const activeSessionId = lifecycleActiveSessionId.value
-			rebindCalls.push({ activeSessionIdAtCall: activeSessionId })
-			if (activeSessionId) {
+			rebindCalls.push({ activeSessionIdAtCall: activeSessionId, resumedSessionId })
+			if (activeSessionId && activeSessionId === resumedSessionId) {
 				subscribeCanonicalRuntimeEventsToShadow(host, wiring, activeSessionId)
 			}
 		}
@@ -508,6 +540,8 @@ describe("FRSP01-CORRECTION01 — bounded repair + ablation + conservation", () 
 		expect(afterObservations).toBeGreaterThan(controlObservations)
 		expect(rebindCalls.length).toBe(1)
 		expect(rebindCalls[0].activeSessionIdAtCall).toBe("A")
+		// Coordinator passes startResult.sessionId (the resumed id).
+		expect(rebindCalls[0].resumedSessionId).toBe("A")
 	})
 
 	// ---- W2 (ABLATION, expected RED-shape restored when callback removed) ----
@@ -561,66 +595,32 @@ describe("FRSP01-CORRECTION01 — bounded repair + ablation + conservation", () 
 		expect(afterObservations).toBe(controlObservations)
 	})
 
-	// ---- W3 (CONSERVATION — NEGATIVE, expected GREEN) ----
-	it("FRSP01-C01-W3 NEGATIVE CONSERVATION — supersession/early-abort does NOT fire rebind", async () => {
-		const { host, stubAgents, queueNextAgentEvents } = makeRealHostWithFreshAgent(isolatedHomeDir)
-		const wiring = createTaskShadowHostWiring(makeWiringDeps() as never)
+	// =========================================================================
+	// CORRECTION02 IDENTITY-FENCE WITNESSES (C1 / C2 / C3)
+	//
+	// Each test exercises the REAL production identity-fence body
+	// (mirrors `SdkController.onCanonicalRuntimeRebind(resumedSessionId)`):
+	//
+	//   const activeSessionId = lifecycle.getActiveSession()?.sessionId
+	//   if (activeSessionId && activeSessionId === resumedSessionId) {
+	//       subscribeCanonicalRuntimeEventsToShadow(host, wiring, activeSessionId)
+	//   }
+	//
+	// These tests drive the active-session state directly via the
+	// `lifecycleActiveSessionId` cell (the same cell the production
+	// controller's `getActiveSession()` reads). A test attaches an
+	// inner subscription for A before the follow-up to record the
+	// baseline, then exercises the follow-up resume and asserts the
+	// rebind-attached listener fired the expected number of times on
+	// the expected id.
+	//
+	// C1 — resumed=A, active=A → attach A exactly once (happy path).
+	// C2 — resumed=A, active=B → zero attach (supersession / replacement).
+	// C3 — resumed=A, active=undefined → zero attach (session cleared).
+	// =========================================================================
 
-		queueNextAgentEvents([
-			runStartedEvent("run-1"),
-			executionStateChanged("run-1", {
-				modelStreaming: true,
-				tooling: false,
-				awaitingApproval: false,
-			}),
-			runFinishedEvent("run-1"),
-		])
-
-		await startSessionAt(host, "A")
-		expect(stubAgents.length).toBe(1)
-		lifecycleActiveSessionId.value = "A"
-		subscribeCanonicalRuntimeEventsToShadow(host, wiring, "A")
-
-		await stubAgents[0].run()
-
-		queueNextAgentEvents([
-			runStartedEvent("run-2"),
-			executionStateChanged("run-2", {
-				modelStreaming: true,
-				tooling: false,
-				awaitingApproval: false,
-			}),
-			runFinishedEvent("run-2"),
-		])
-
-		const currentId: string | undefined = "A"
-		let rebindCallCount = 0
-		const onCanonicalRuntimeRebind = () => {
-			rebindCallCount++
-		}
-		const options = makeFollowupOptions({
-			host,
-			currentSessionId: () => currentId,
-			onCanonicalRuntimeRebind,
-		})
-		// Override startNewSession to return `superseded` immediately
-		// (no host.stopSession, no host.startSession). Coordinator's
-		// resume body takes the supersession path (guard #1) and
-		// abandons. The rebind callback MUST NOT fire.
-		;(options.sessions as unknown as { startNewSession: ReturnType<typeof vi.fn> }).startNewSession = vi.fn(async () => {
-			return { status: "superseded" as const }
-		})
-		const coordinator = new SdkFollowupCoordinator(options)
-		await coordinator.askResponse("continue")
-
-		// No second agent created (supersession: nothing to start).
-		expect(stubAgents.length).toBe(1)
-		// Rebind MUST NOT have fired.
-		expect(rebindCallCount).toBe(0)
-	})
-
-	// ---- W4 (CONSERVATION — SUPERSESSION, expected GREEN) ----
-	it("FRSP01-C01-W4 SUPERSESSION CONSERVATION — rebind resolves active session at call time, not stale follow-up result", async () => {
+	// ---- C1 IDENTITY MATCH (expected GREEN, exactly one attach) ----
+	it("FRSP01-C02-C1 IDENTITY MATCH — resumed=A, active=A attaches A exactly once", async () => {
 		const { host, stubAgents, queueNextAgentEvents } = makeRealHostWithFreshAgent(isolatedHomeDir)
 		const wiring = createTaskShadowHostWiring(makeWiringDeps() as never)
 
@@ -653,34 +653,220 @@ describe("FRSP01-CORRECTION01 — bounded repair + ablation + conservation", () 
 			runFinishedEvent("run-2"),
 		])
 
-		let rebindResolvedSessionId: string | undefined
-		const onCanonicalRuntimeRebind = () => {
-			// Mimic SdkController: read active session at call time.
-			rebindResolvedSessionId = lifecycleActiveSessionId.value
-			if (rebindResolvedSessionId) {
-				subscribeCanonicalRuntimeEventsToShadow(host, wiring, rebindResolvedSessionId)
+		let rebindCallCount = 0
+		let rebindAttachedSessionId: string | undefined
+		let rebindResumedId: string | undefined
+		// Production-shape identity-fence body. Reads `activeSessionId`
+		// at call time and attaches only when both ids are truthy and
+		// match.
+		const onCanonicalRuntimeRebind = (resumedSessionId: string) => {
+			rebindCallCount++
+			rebindResumedId = resumedSessionId
+			const activeSessionId = lifecycleActiveSessionId.value
+			if (activeSessionId && activeSessionId === resumedSessionId) {
+				rebindAttachedSessionId = activeSessionId
+				subscribeCanonicalRuntimeEventsToShadow(host, wiring, activeSessionId)
 			}
 		}
 
-		let currentId: string | undefined = "A"
+		// Active session id is A and matches the resumed id.
+		lifecycleActiveSessionId.value = "A"
+		const currentId: string | undefined = "A"
 		const options = makeFollowupOptions({
 			host,
 			currentSessionId: () => currentId,
 			onCanonicalRuntimeRebind,
 		})
 		const coordinator = new SdkFollowupCoordinator(options)
-
 		await coordinator.askResponse("continue")
 
 		expect(stubAgents.length).toBe(2)
-		currentId = "A"
-		lifecycleActiveSessionId.value = "A"
 		await stubAgents[1].run()
 
-		// The rebind resolved the active session id AT CALL TIME.
-		expect(rebindResolvedSessionId).toBe("A")
+		// Identity fence fires exactly once on the happy path.
+		expect(rebindCallCount).toBe(1)
+		expect(rebindResumedId).toBe("A")
+		expect(rebindAttachedSessionId).toBe("A")
+		// New agent's events reach the shadow.
 		const afterObservations = wiring.recorderCounts().eventsObserved
 		expect(afterObservations).toBeGreaterThan(controlObservations)
+	})
+
+	// ---- C2 IDENTITY MISMATCH (expected GREEN, zero attach) ----
+	it("FRSP01-C02-C2 IDENTITY MISMATCH — resumed=A, active=B skips the rebind (zero attach)", async () => {
+		const { host, stubAgents, queueNextAgentEvents } = makeRealHostWithFreshAgent(isolatedHomeDir)
+		const wiring = createTaskShadowHostWiring(makeWiringDeps() as never)
+
+		queueNextAgentEvents([
+			runStartedEvent("run-1"),
+			executionStateChanged("run-1", {
+				modelStreaming: true,
+				tooling: false,
+				awaitingApproval: false,
+			}),
+			runFinishedEvent("run-1"),
+		])
+
+		await startSessionAt(host, "A")
+		expect(stubAgents.length).toBe(1)
+		lifecycleActiveSessionId.value = "A"
+		subscribeCanonicalRuntimeEventsToShadow(host, wiring, "A")
+
+		await stubAgents[0].run()
+		const controlObservations = wiring.recorderCounts().eventsObserved
+		expect(controlObservations).toBeGreaterThanOrEqual(3)
+
+		queueNextAgentEvents([
+			runStartedEvent("run-2"),
+			executionStateChanged("run-2", {
+				modelStreaming: true,
+				tooling: false,
+				awaitingApproval: false,
+			}),
+			runFinishedEvent("run-2"),
+		])
+
+		let rebindCallCount = 0
+		let rebindAttachedSessionId: string | undefined
+		const onCanonicalRuntimeRebind = (resumedSessionId: string) => {
+			rebindCallCount++
+			// Simulate the moment-after-await race: a concurrent
+			// intent has JUST taken over the active session, replacing
+			// the resumed A with B. The fence MUST skip the attach.
+			const activeSessionId = lifecycleActiveSessionId.value
+			if (activeSessionId && activeSessionId === resumedSessionId) {
+				rebindAttachedSessionId = activeSessionId
+				subscribeCanonicalRuntimeEventsToShadow(host, wiring, activeSessionId)
+			}
+		}
+
+		const currentId: string | undefined = "A"
+		const options = makeFollowupOptions({
+			host,
+			currentSessionId: () => currentId,
+			onCanonicalRuntimeRebind,
+		})
+		// Capture the harness's real startNewSession, then wrap it so
+		// that AFTER the new session has been started under id "A",
+		// the active cell flips to "B" (concurrent-replacement
+		// simulation). This is exactly the race the identity fence is
+		// designed to catch. Capture-then-wrap avoids infinite
+		// self-recursion.
+		//
+		// We flip ONLY `lifecycleActiveSessionId.value` (the rebind-
+		// gate cell) — `currentId` (the task-identity cell the
+		// upstream `getTask()?.taskId !== taskId` guard reads) stays
+		// at "A" so we exercise the rebind identity fence WITHOUT
+		// tripping the upstream task guard. The two cells are read
+		// by different checks in production code; the harness
+		// instruments them independently to allow targeted fencing.
+		const sessionsHandle = options.sessions as unknown as { startNewSession: ReturnType<typeof vi.fn> }
+		const originalStartNewSession = sessionsHandle.startNewSession as unknown as (input: never) => Promise<{
+			status: "started"
+			startResult: { sessionId: string }
+		}>
+		sessionsHandle.startNewSession = vi.fn(async (input: never) => {
+			const result = await originalStartNewSession(input)
+			// Post-start race: a concurrent intent flips ONLY the
+			// active session id cell (the rebind-gate side) to
+			// "B" before our callback runs. The fence must
+			// observe this mismatch and skip the attach.
+			lifecycleActiveSessionId.value = "B"
+			return result
+		})
+		const coordinator = new SdkFollowupCoordinator(options)
+		await coordinator.askResponse("continue")
+
+		expect(stubAgents.length).toBe(2)
+
+		// Callback fired exactly once (still tied to the resume outcome).
+		expect(rebindCallCount).toBe(1)
+		// Identity fence DID NOT attach because active != resumed.
+		expect(rebindAttachedSessionId).toBeUndefined()
+		// `controlObservations` is captured to record the baseline
+		// before the follow-up; keep it referenced so the
+		// noUnusedLocals pass doesn't flag the work done above.
+		expect(controlObservations).toBeGreaterThanOrEqual(3)
+	})
+
+	// ---- C3 ACTIVE ABSENT (expected GREEN, zero attach) ----
+	it("FRSP01-C02-C3 ACTIVE ABSENT — resumed=A, active=undefined skips the rebind (zero attach)", async () => {
+		const { host, stubAgents, queueNextAgentEvents } = makeRealHostWithFreshAgent(isolatedHomeDir)
+		const wiring = createTaskShadowHostWiring(makeWiringDeps() as never)
+
+		queueNextAgentEvents([
+			runStartedEvent("run-1"),
+			executionStateChanged("run-1", {
+				modelStreaming: true,
+				tooling: false,
+				awaitingApproval: false,
+			}),
+			runFinishedEvent("run-1"),
+		])
+
+		await startSessionAt(host, "A")
+		expect(stubAgents.length).toBe(1)
+		lifecycleActiveSessionId.value = "A"
+		subscribeCanonicalRuntimeEventsToShadow(host, wiring, "A")
+
+		await stubAgents[0].run()
+		const controlObservations = wiring.recorderCounts().eventsObserved
+		expect(controlObservations).toBeGreaterThanOrEqual(3)
+
+		queueNextAgentEvents([
+			runStartedEvent("run-2"),
+			executionStateChanged("run-2", {
+				modelStreaming: true,
+				tooling: false,
+				awaitingApproval: false,
+			}),
+			runFinishedEvent("run-2"),
+		])
+
+		let rebindCallCount = 0
+		let rebindAttachedSessionId: string | undefined
+		const onCanonicalRuntimeRebind = (resumedSessionId: string) => {
+			rebindCallCount++
+			const activeSessionId = lifecycleActiveSessionId.value
+			if (activeSessionId && activeSessionId === resumedSessionId) {
+				rebindAttachedSessionId = activeSessionId
+				subscribeCanonicalRuntimeEventsToShadow(host, wiring, activeSessionId)
+			}
+		}
+
+		const currentId: string | undefined = "A"
+		const options = makeFollowupOptions({
+			host,
+			currentSessionId: () => currentId,
+			onCanonicalRuntimeRebind,
+		})
+		// Capture-then-wrap the harness's real startNewSession so that
+		// AFTER the new session has been started under id "A", the
+		// active cell is CLEARED (the "session already cleared" race —
+		// e.g. clearTask ran first).
+		//
+		// We flip ONLY `lifecycleActiveSessionId.value` (the rebind-
+		// gate cell). `currentId` (the task-identity cell the upstream
+		// `getTask()?.taskId !== taskId` guard reads) stays at "A" so
+		// we exercise the rebind identity fence WITHOUT tripping the
+		// upstream task guard.
+		const sessionsHandle = options.sessions as unknown as { startNewSession: ReturnType<typeof vi.fn> }
+		const originalStartNewSession = sessionsHandle.startNewSession as unknown as (input: never) => Promise<{
+			status: "started"
+			startResult: { sessionId: string }
+		}>
+		sessionsHandle.startNewSession = vi.fn(async (input: never) => {
+			const result = await originalStartNewSession(input)
+			lifecycleActiveSessionId.value = undefined
+			return result
+		})
+		const coordinator = new SdkFollowupCoordinator(options)
+		await coordinator.askResponse("continue")
+
+		expect(stubAgents.length).toBe(2)
+		expect(rebindCallCount).toBe(1)
+		expect(rebindAttachedSessionId).toBeUndefined()
+		expect(controlObservations).toBeGreaterThanOrEqual(3)
 	})
 
 	// ---- W5 (CONSERVATION — CALLBACK CALLED EXACTLY ONCE PER RESUME) ----
@@ -718,10 +904,10 @@ describe("FRSP01-CORRECTION01 — bounded repair + ablation + conservation", () 
 		])
 
 		let rebindCallCount = 0
-		const onCanonicalRuntimeRebind = () => {
+		const onCanonicalRuntimeRebind = (resumedSessionId: string) => {
 			rebindCallCount++
 			const activeSessionId = lifecycleActiveSessionId.value
-			if (activeSessionId) {
+			if (activeSessionId && activeSessionId === resumedSessionId) {
 				subscribeCanonicalRuntimeEventsToShadow(host, wiring, activeSessionId)
 			}
 		}

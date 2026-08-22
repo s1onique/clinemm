@@ -51,7 +51,7 @@ export interface SdkFollowupCoordinatorOptions {
 	 */
 	onFollowUpAbandoned: () => void
 	/**
-	 * ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
+	 * ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION02:
 	 * Called after a successful `sessions.startNewSession(...)` in the
 	 * follow-up resume seam. The VS Code-side adapter (SdkController)
 	 * uses this to re-bind the canonical runtime-event subscription
@@ -62,21 +62,20 @@ export interface SdkFollowupCoordinatorOptions {
 	 * OLD `SessionRuntime` instance — events from the new agent
 	 * were lost).
 	 *
-	 * Called exactly once per successful follow-up resume. Not
-	 * called when `startNewSession` returns `superseded` (the
+	 * Called exactly once per successful follow-up resume (the
 	 * supersession guards in `resumeSessionFromTask` already handle
-	 * that case via `endStartedResume` + `abandonFollowUp`).
+	 * any non-started outcome via `endStartedResume` +
+	 * `abandonFollowUp`).
 	 *
-	 * The callback SHOULD resolve the active `sdkHost` AND
-	 * `sessionId` at the moment it runs (not capture them from the
-	 * resume call's local variables), so concurrent session
-	 * replacements are attached to whichever session is actually
-	 * current. Passing them as a parameter would create a
-	 * mismatch window if the active session changed during the
-	 * await between `startNewSession` resolving and this callback
-	 * running.
+	 * The coordinator passes the **resumed session id** (the
+	 * `startResult.sessionId` reported by the lifecycle). The
+	 * controller decides whether to re-attach by comparing it
+	 * against the currently-active session id AT CALL TIME — if the
+	 * active session has changed between the `startNewSession`
+	 * resolution and the callback firing, the controller skips the
+	 * re-attach (a different user intent owns the active session).
 	 */
-	onCanonicalRuntimeRebind?: () => void
+	onCanonicalRuntimeRebind?: (resumedSessionId: string) => void
 }
 
 export class SdkFollowupCoordinator {
@@ -233,28 +232,7 @@ export class SdkFollowupCoordinator {
 			interactive: true,
 		})
 
-		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
-		// Lifecycle supersession guard. The current `startNewSession`
-		// overload (no token, line 210) is typed as always returning
-		// "started", so this branch is statically unreachable today.
-		// It is included as DEFENSIVE — if a future change threads a
-		// task-operation token through this call site (mirroring
-		// `reinitExistingTaskFromId`), the lifecycle may return
-		// "superseded", and the rebind callback MUST NOT fire for a
-		// superseded session (there is no live sdkHost to bind to;
-		// rebinding would attach to whichever session is currently
-		// active, which is the newer intent's session, not the
-		// follow-up's). The abandoned-followup path handles cleanup.
-		if ((startOutcome as unknown as { status: "superseded" }).status === "superseded") {
-			Logger.log(`[SdkController] Resume startNewSession superseded for ${taskId}; abandoning follow-up without rebind`)
-			await this.abandonFollowUp(`Resume startNewSession superseded for ${taskId}; cancelled follow-up`)
-			return
-		}
-
-		const { startResult, sdkHost } = startOutcome as {
-			startResult: { sessionId: string }
-			sdkHost: SdkSessionHost
-		}
+		const { startResult, sdkHost } = startOutcome
 
 		if (this.options.getTask()?.taskId !== taskId) {
 			await this.endStartedResume(sdkHost, startResult.sessionId)
@@ -262,17 +240,35 @@ export class SdkFollowupCoordinator {
 			return
 		}
 
-		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
+		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION02:
 		// Re-bind the canonical runtime-event subscription to the
 		// newly-active session. Without this, the canonical subscription's
 		// listener pool remains bound to the OLD `SessionRuntime` (which
 		// was disposed by `sessions.startNewSession`'s internal
-		// `endActiveSession("startNewSession")`), so canonical events from
-		// the new agent are lost. The callback (no-arg) resolves the
-		// active session at call time, so concurrent session replacements
-		// are attached to whichever session is actually current at that
-		// moment. Called exactly once per successful follow-up resume.
-		this.options.onCanonicalRuntimeRebind?.()
+		// `endActiveSession("startNewSession")`), so canonical events
+		// from the new agent are lost.
+		//
+		// The coordinator passes the RESUMED session id reported by the
+		// lifecycle. The controller's callback body is the identity
+		// fence: it only re-attaches if `sessions.getActiveSession()` at
+		// call time still matches `startResult.sessionId`. If a newer
+		// user intent has superseded this follow-up resume between the
+		// `await startNewSession(...)` boundary and this callback
+		// firing, the active session id will NOT match and the rebind is
+		// skipped (the new intent's session owns the active slot).
+		//
+		// The earlier "superseded branch" + "no-arg callback" shape was
+		// removed in CORRECTION02: the no-token `startNewSession`
+		// overload this coordinator calls is typed as returning
+		// `status: "started"` only — the speculative `superseded`
+		// branch was statically unreachable on the production contract,
+		// and the "bind whoever is currently active" no-arg contract
+		// could re-attach a stale rebind to the wrong session under
+		// any future concurrent-replacement path.
+		//
+		// Called exactly once per successful follow-up resume that
+		// passes the task-identity guard above.
+		this.options.onCanonicalRuntimeRebind?.(startResult.sessionId)
 
 		try {
 			if (historyItem) {
