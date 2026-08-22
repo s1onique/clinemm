@@ -55,6 +55,11 @@ import { ClineError } from "@/services/error/ClineError"
 import { McpHub } from "@/services/mcp/McpHub"
 import { telemetryService } from "@/services/telemetry"
 import type { ClineExtensionContext } from "@/shared/cline"
+import {
+	disableHostOwnershipDiagnostic,
+	enableHostOwnershipDiagnostic,
+	isHostOwnershipDiagnosticEnabled,
+} from "@/shared/host-ownership-diagnostic"
 import { toLegacyApiProvider } from "@/shared/model-catalog/provider-helpers"
 import { ShowMessageRequest, ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
@@ -65,20 +70,15 @@ import { AuthService, LogoutReason } from "./auth-service"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
+import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
+import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
 import { createProviderCatalog, toSdkProviderConfig } from "./model-catalog/catalog"
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
-import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { isPostTerminalAuthorityDiagnosticWorkspaceEnabled } from "./post-terminal-authority-diagnostic-runtime"
-import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
-import {
-	disableHostOwnershipDiagnostic,
-	enableHostOwnershipDiagnostic,
-	isHostOwnershipDiagnosticEnabled,
-} from "@/shared/host-ownership-diagnostic"
 import {
 	PROVIDER_FAILURE_ERROR_TYPE,
 	PROVIDER_FAILURE_PHASE,
@@ -913,6 +913,26 @@ export class Controller {
 				// (for example on the newly displayed task) has actually started.
 				if (this.turnStateTracker.currentPhase === "streaming" && !this.sessions.getActiveSession()?.isRunning) {
 					this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("followup-on-follow-up-abandoned"))
+				}
+			},
+			// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
+			// Close D2c_PATH_ASYMMETRY. The follow-up resume seam
+			// (`SdkFollowupCoordinator.resumeSessionFromTask`) creates a new
+			// `SessionRuntime` under the same logical session id via
+			// `sessions.startNewSession(...)`. The lifecycle disposes the
+			// previous agent's listeners as part of that call, so the
+			// canonical subscription's listener pool — last attached at the
+			// prior session's start — becomes stale. Re-attach via the
+			// same seam used by `reinitExistingTaskFromId`.
+			// `attachCanonicalRuntimeEventSubscription` resolves
+			// `this.sessions.getActiveSession()` (both sdkHost AND
+			// sessionId) at call time, so concurrent session replacements
+			// are bound to the actually-current session — never to a
+			// stale sdkHost from a different session id.
+			onCanonicalRuntimeRebind: () => {
+				const activeSessionId = this.sessions.getActiveSession()?.sessionId
+				if (activeSessionId) {
+					this.attachCanonicalRuntimeEventSubscription(activeSessionId)
 				}
 			},
 		})

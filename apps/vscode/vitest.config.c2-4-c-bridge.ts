@@ -107,6 +107,17 @@ export default defineConfig({
 			// confirms D2c_PATH_ASYMMETRY behaviorally. GREEN means
 			// HALT_RED_NOT_REPRODUCED.
 			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
+			// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01
+			// / FRSP01-CORRECTION01: Phase 3 bounded repair +
+			// Phase 4 ablation + Phase 5 conservation. Same harness as
+			// FRSP01, but with the new `onCanonicalRuntimeRebind`
+			// callback option injected to mimic production's
+			// SdkController wiring. W1 (REPAIR GREEN), W2 (ABLATION
+			// RED-shape restored), W3 (negative conservation: supersession
+			// does NOT fire rebind), W4 (supersession conservation: rebind
+			// resolves active session at call time), W5 (callback
+			// called exactly once per successful resume).
+			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

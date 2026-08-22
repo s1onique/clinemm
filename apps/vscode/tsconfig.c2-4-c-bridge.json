@@ -85,7 +85,11 @@
 		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01 / FRSP01:
 		// Phase 1 behavioral RED at the production follow-up resume seam.
-		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts"
+		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
+		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01
+		// / FRSP01-CORRECTION01: Phase 3 bounded repair + Phase 4
+		// ablation + Phase 5 conservation.
+		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts"
 	],
 	"exclude": [
 		"node_modules",

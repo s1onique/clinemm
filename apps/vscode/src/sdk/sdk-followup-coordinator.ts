@@ -50,6 +50,33 @@ export interface SdkFollowupCoordinatorOptions {
 	 * askResponse pre-set, for the same reason as onResumeFailed.
 	 */
 	onFollowUpAbandoned: () => void
+	/**
+	 * ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
+	 * Called after a successful `sessions.startNewSession(...)` in the
+	 * follow-up resume seam. The VS Code-side adapter (SdkController)
+	 * uses this to re-bind the canonical runtime-event subscription
+	 * to the newly-active `sdkHost/sessionId`, closing the
+	 * D2c_PATH_ASYMMETRY (the follow-up resume path previously
+	 * bypassed `attachCanonicalRuntimeEventSubscription`, leaving the
+	 * canonical subscription's listener pool bound to the
+	 * OLD `SessionRuntime` instance — events from the new agent
+	 * were lost).
+	 *
+	 * Called exactly once per successful follow-up resume. Not
+	 * called when `startNewSession` returns `superseded` (the
+	 * supersession guards in `resumeSessionFromTask` already handle
+	 * that case via `endStartedResume` + `abandonFollowUp`).
+	 *
+	 * The callback SHOULD resolve the active `sdkHost` AND
+	 * `sessionId` at the moment it runs (not capture them from the
+	 * resume call's local variables), so concurrent session
+	 * replacements are attached to whichever session is actually
+	 * current. Passing them as a parameter would create a
+	 * mismatch window if the active session changed during the
+	 * await between `startNewSession` resolving and this callback
+	 * running.
+	 */
+	onCanonicalRuntimeRebind?: () => void
 }
 
 export class SdkFollowupCoordinator {
@@ -201,16 +228,51 @@ export class SdkFollowupCoordinator {
 
 		Logger.log(`[SdkController] Resuming with ${resumeStart.initialMessages?.length ?? 0} initial messages`)
 
-		const { startResult, sdkHost } = await this.options.sessions.startNewSession({
+		const startOutcome = await this.options.sessions.startNewSession({
 			...resumeStart,
 			interactive: true,
 		})
+
+		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
+		// Lifecycle supersession guard. The current `startNewSession`
+		// overload (no token, line 210) is typed as always returning
+		// "started", so this branch is statically unreachable today.
+		// It is included as DEFENSIVE — if a future change threads a
+		// task-operation token through this call site (mirroring
+		// `reinitExistingTaskFromId`), the lifecycle may return
+		// "superseded", and the rebind callback MUST NOT fire for a
+		// superseded session (there is no live sdkHost to bind to;
+		// rebinding would attach to whichever session is currently
+		// active, which is the newer intent's session, not the
+		// follow-up's). The abandoned-followup path handles cleanup.
+		if ((startOutcome as unknown as { status: "superseded" }).status === "superseded") {
+			Logger.log(`[SdkController] Resume startNewSession superseded for ${taskId}; abandoning follow-up without rebind`)
+			await this.abandonFollowUp(`Resume startNewSession superseded for ${taskId}; cancelled follow-up`)
+			return
+		}
+
+		const { startResult, sdkHost } = startOutcome as {
+			startResult: { sessionId: string }
+			sdkHost: SdkSessionHost
+		}
 
 		if (this.options.getTask()?.taskId !== taskId) {
 			await this.endStartedResume(sdkHost, startResult.sessionId)
 			await this.abandonFollowUp(`Task changed during resume start for ${taskId}; cancelled follow-up`)
 			return
 		}
+
+		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01:
+		// Re-bind the canonical runtime-event subscription to the
+		// newly-active session. Without this, the canonical subscription's
+		// listener pool remains bound to the OLD `SessionRuntime` (which
+		// was disposed by `sessions.startNewSession`'s internal
+		// `endActiveSession("startNewSession")`), so canonical events from
+		// the new agent are lost. The callback (no-arg) resolves the
+		// active session at call time, so concurrent session replacements
+		// are attached to whichever session is actually current at that
+		// moment. Called exactly once per successful follow-up resume.
+		this.options.onCanonicalRuntimeRebind?.()
 
 		try {
 			if (historyItem) {
