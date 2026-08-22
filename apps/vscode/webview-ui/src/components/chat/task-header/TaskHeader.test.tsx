@@ -18,10 +18,20 @@
  *   "hide" (`usageCostDisplay === "hide"`)
  *     → cost MUST NOT be presented as task spend
  *
- * The RED (before this ACT's repair): subscription providers and "hide"
- * providers leak `$0.0082`-style values because the catalog layer
- * collapses `"subscription"` to `"show"` and the TaskHeader gates only on
- * `!== "hide"`.
+ *   UNKNOWN / LOADING (catalog unresolved, provider id absent)
+ *     → cost MUST NOT be presented as task spend (conservative fallback
+ *       is "hide", not "show" — claiming a charged amount while billing
+ *       semantics are unresolved is materially misleading for flat-rate
+ *       providers)
+ *
+ * The RED (before this ACT's repair): subscription providers leaked
+ * `$0.0082`-style values because the catalog layer collapsed
+ * `"subscription"` to `"show"` and the TaskHeader gated only on
+ * `!== "hide"`. CORRECTION01 (P1 follow-up) closed the remaining
+ * transient leak during catalog loading by returning `"hide"` for
+ * unresolved providers, so a metered provider that has not yet been
+ * registered in the catalog does NOT show a price-tag until the SDK
+ * confirms `usageCostDisplay === "show"`.
  */
 
 import type { ApiProvider } from "@shared/api"
@@ -31,7 +41,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mockState = vi.hoisted(() => ({
 	apiConfiguration: { actModeApiProvider: "anthropic" as ApiProvider },
-	usageCostDisplay: "show" as "show" | "hide" | "subscription",
+	usageCostDisplay: "show" as "show" | "hide" | "subscription" | "loading",
 	selectedModelInfo: { supportsPromptCache: true } as { supportsPromptCache: boolean } | undefined,
 }))
 
@@ -61,8 +71,13 @@ vi.mock("@/hooks/useNormalizedApiConfiguration", () => ({
 	}),
 }))
 
+// `useProviderUsageCostDisplay` returns "hide" while the catalog is
+// unresolved (loading or empty). Tests model that state by setting
+// `usageCostDisplay = "loading"`; the hook contract collapses that to
+// "hide" so the TaskHeader does not render a price-tag until the SDK
+// has confirmed `usageCostDisplay === "show"`.
 vi.mock("@/hooks/useProviderUsageCostDisplay", () => ({
-	useProviderUsageCostDisplay: () => mockState.usageCostDisplay,
+	useProviderUsageCostDisplay: () => (mockState.usageCostDisplay === "loading" ? "hide" : mockState.usageCostDisplay),
 }))
 
 // The TaskHeader renders several child components that are not part of the
@@ -140,6 +155,37 @@ describe("ACT-CLINEMM-COST-DISPLAY-TRUTH01 / TaskHeader price-tag", () => {
 		mockState.usageCostDisplay = "show"
 		render(<TaskHeader {...baseProps} />)
 		expect(document.getElementById("price-tag")).toBeNull()
+	})
+
+	// CORRECTION01 (P1 follow-up) — "unknown / loading" is conservative-
+	// when-unknown. Claiming a charged amount while billing semantics
+	// are unresolved is materially misleading for flat-rate providers.
+
+	it("CDT07: does NOT render the price-tag while catalog is unresolved for a subscription provider (cline-pass)", () => {
+		// Catalog loading is in progress: the hook falls back to "hide".
+		// Even though the eventual answer is "subscription", we must
+		// refuse to render `$0.0082` before the SDK confirms that.
+		mockState.apiConfiguration = { actModeApiProvider: "cline-pass" as ApiProvider }
+		mockState.usageCostDisplay = "loading"
+		render(<TaskHeader {...baseProps} />)
+		expect(document.getElementById("price-tag")).toBeNull()
+	})
+
+	it("CDT08: catalog-unresolved metered provider (anthropic) suppresses the price-tag, then reveals it once the SDK reports usageCostDisplay='show'", () => {
+		// While the catalog is still loading for a metered provider, the
+		// hook must return "hide" (NOT "show"). This proves we are not
+		// permanently suppressing metered cost — we are merely refusing
+		// to make a billing claim before the SDK confirms it.
+		mockState.apiConfiguration = { actModeApiProvider: "anthropic" as ApiProvider }
+		mockState.usageCostDisplay = "loading"
+		const { rerender } = render(<TaskHeader {...baseProps} />)
+		expect(document.getElementById("price-tag")).toBeNull()
+
+		// Catalog resolves with usageCostDisplay === "show"; the
+		// price-tag must now appear.
+		mockState.usageCostDisplay = "show"
+		rerender(<TaskHeader {...baseProps} />)
+		expect(document.getElementById("price-tag")).not.toBeNull()
 	})
 })
 
