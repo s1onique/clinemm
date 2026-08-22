@@ -74,7 +74,7 @@ describe("ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01 / NDHA", () =>
 	// via the existing controller.initTask seam.
 	//
 	it("NDHA01: /newtask routes to handoffWithContext and creates a new task identity (RED)", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in compaction commands", 2000)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 2500)
 
 		// /newtask must remain in the dispatch predicate (intercept window).
 		const dispatchHasNewtask = interceptBlock.match(/messageToSend\s*===\s*"\/newtask"/)
@@ -93,13 +93,11 @@ describe("ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01 / NDHA", () =>
 		expect(condenseCallLine).not.toBeNull()
 
 		// The handoff handler must create a fresh task identity via
-		// controller.initTask (NOT mutate the current task via controller.compactTask).
+		// controller.initTask. Use a regex that targets an actual statement,
+		// not a code comment that mentions the API name.
 		expect(ControllerHandoffSource).not.toBe("")
-		expect(ControllerHandoffSource).toMatch(/controller\.initTask\s*\(/)
+		expect(ControllerHandoffSource).toMatch(/taskId\s*=\s*await\s+controller\.initTask\s*\(/)
 		expect(ControllerHandoffSource).toMatch(/String\.create\s*\(\s*\{\s*value:\s*taskId/)
-		// The handoff handler MUST NOT call controller.compactTask (would
-		// mutate current task as the terminal effect, violating NDHA06).
-		expect(ControllerHandoffSource).not.toMatch(/controller\.compactTask\s*\(/)
 	})
 
 	function readBlock(source: string, startMarker: string, maxChars = 4000): string {
@@ -113,22 +111,48 @@ describe("ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01 / NDHA", () =>
 	// NDHA02 -- CONTROL: /compact still routes to condense RPC at the same seam.
 	//
 	it("NDHA02 (CONTROL): /compact still routes to the condense RPC", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in compaction commands", 2000)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 2500)
 		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/compact"/)
 		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\s*\(/)
-		// /compact MUST NOT reach the new handoff RPC.
-		expect(interceptBlock).not.toMatch(/TaskServiceClient\.handoffWithContext\s*\(/)
+		// /compact MUST NOT be co-dispatched with the new handoff RPC. The
+		// /newtask branch IS allowed to reference handoffWithContext (that is
+		// the new repair). What is forbidden is /compact dispatching to it.
+		// Pin by reading the post-/-newtask-block code: the /compact branch
+		// must NOT exist after the /newtask dispatch.
+		const newtaskBlockEnd = interceptBlock.indexOf("TaskServiceClient.handoffWithContext")
+		const condenseCallPos = interceptBlock.indexOf("SlashServiceClient.condense")
+		expect(newtaskBlockEnd).toBeGreaterThan(-1)
+		expect(condenseCallPos).toBeGreaterThan(-1)
+		// The condense call appears AFTER the /newtask dispatch in the file,
+		// proving they are sibling branches (not /compact reaching handoff).
+		expect(condenseCallPos).toBeGreaterThan(newtaskBlockEnd)
 	})
 
 	//
 	// NDHA03 -- CONTROL: /smol still routes to condense RPC at the same seam.
 	//
 	it("NDHA03 (CONTROL): /smol still routes to the condense RPC", () => {
-		const interceptBlock = readBlock(HookSource, "Intercept the built-in compaction commands", 2000)
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands", 2500)
 		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/smol"/)
 		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\s*\(/)
-		// /smol MUST NOT reach the new handoff RPC.
-		expect(interceptBlock).not.toMatch(/TaskServiceClient\.handoffWithContext\s*\(/)
+		// /smol is co-dispatched with /compact (same predicate). /smol MUST NOT
+		// be co-dispatched with /newtask. Pin by checking the /smol literal
+		// is in the SAME predicate as /compact, NOT /newtask.
+		const smolMatch = interceptBlock.match(/messageToSend\s*===\s*"\/smol"/)
+		expect(smolMatch).not.toBeNull()
+		// The /compact predicate must include /smol alongside it (within 40 chars).
+		expect(interceptBlock).toMatch(
+			/messageToSend\s*===\s*"\/compact"[\s\S]{0,40}messageToSend\s*===\s*"\/smol"|messageToSend\s*===\s*"\/smol"[\s\S]{0,40}messageToSend\s*===\s*"\/compact"/,
+		)
+		// The /smol literal must NOT appear in the /newtask branch (i.e. between
+		// the /newtask predicate and the closing brace of its branch). Take the
+		// region from the /newtask predicate up to the next sibling dispatch.
+		const newtaskPredicatePos = interceptBlock.indexOf('messageToSend === "/newtask"')
+		expect(newtaskPredicatePos).toBeGreaterThan(-1)
+		const nextDispatchPos = interceptBlock.indexOf('messageToSend === "/compact"', newtaskPredicatePos)
+		const newtaskBranch = interceptBlock.slice(newtaskPredicatePos, nextDispatchPos)
+		// /smol MUST NOT be referenced inside the /newtask branch.
+		expect(newtaskBranch).not.toMatch(/"\/smol"/)
 	})
 	//
 	// NDHA04 -- HANDOFF QUALITY: the handoff payload carries the structural
@@ -169,11 +193,14 @@ describe("ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01 / NDHA", () =>
 	// on the active session (current task remains as historical record).
 	//
 	it("NDHA06 (NO-MUTATION): handoff handler does not call controller.compactTask or persist a sidecar on the active session", () => {
-		expect(ControllerHandoffSource).not.toMatch(/controller\.compactTask\s*\(/)
-		expect(ControllerHandoffSource).not.toMatch(/updateSessionCompactionState\s*\(/)
+		// Strip comments from the source before checking negative matches,
+		// so comments that mention prohibited API names don't false-match.
+		const codeOnly = ControllerHandoffSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
+		expect(codeOnly).not.toMatch(/controller\.compactTask\s*\(/)
+		expect(codeOnly).not.toMatch(/updateSessionCompactionState\s*\(/)
 		// The handler must NOT call the SdkCompactionCoordinator (which
 		// mutates the active session's compaction sidecar).
-		expect(ControllerHandoffSource).not.toMatch(/this\.compaction\.compactTask\s*\(/)
+		expect(codeOnly).not.toMatch(/this\.compaction\.compactTask\s*\(/)
 	})
 
 	//

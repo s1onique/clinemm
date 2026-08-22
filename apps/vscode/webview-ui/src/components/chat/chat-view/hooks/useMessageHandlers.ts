@@ -100,19 +100,29 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 				messageToSend = `${prefix} ${formattedQuote} ${suffix} ${messageToSend}`
 			}
 
-			// Intercept the built-in compaction commands when an active task exists.
-			// `/compact` (and its aliases `/smol` and `/newtask`) must run a real
-			// SDK manual compaction via the condense RPC — sending the literal
-			// text to the model would make it improvise a fake summary instead of
-			// compacting the context window (CLINE-2503). `/newtask` aliases
-			// compaction because condensing achieves its goal (continue working
-			// with a fresh, summarized context) without the legacy new_task tool.
-			// With no active task there is nothing to compact, so fall through to
-			// normal new-task handling.
-			if (
-				messages.length > 0 &&
-				(messageToSend === "/compact" || messageToSend === "/smol" || messageToSend === "/newtask")
-			) {
+			// Intercept the built-in slash commands when an active task exists.
+			// ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01: /newtask
+			// now honors the documented product contract (fresh task + distilled
+			// context) by routing to TaskServiceClient.handoffWithContext, which
+			// generates the handoff on the host and creates a fresh task via
+			// controller.initTask. /compact and /smol still share the condense
+			// RPC's same-task compaction contract (CLINE-2503).
+			if (messages.length > 0 && messageToSend === "/newtask") {
+				// Clear the input before awaiting the RPC — handoff resolves only
+				// after the host generates the summary and creates the new task,
+				// and the typed command lingering in the field the whole time
+				// reads as if the send didn't register.
+				setInputValue("")
+				setActiveQuote(null)
+				await TaskServiceClient.handoffWithContext(EmptyRequest.create({})).catch((err) =>
+					console.error("Failed to handoff with context:", err),
+				)
+				if ("disableAutoScrollRef" in chatState) {
+					;(chatState as any).disableAutoScrollRef.current = false
+				}
+				return
+			}
+			if (messages.length > 0 && (messageToSend === "/compact" || messageToSend === "/smol")) {
 				// Clear the input before awaiting the RPC — condense resolves only
 				// after compaction finishes, and the typed command lingering in the
 				// field the whole time reads as if the send didn't register.

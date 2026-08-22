@@ -9,12 +9,14 @@ const askResponse = vi.fn().mockResolvedValue(undefined)
 const clearTask = vi.fn().mockResolvedValue(undefined)
 const condense = vi.fn().mockResolvedValue(undefined)
 const trackIntent = vi.fn().mockResolvedValue(undefined)
+const handoffWithContext = vi.fn().mockResolvedValue({ value: "task-B" })
 
 vi.mock("@/services/grpc-client", () => ({
 	TaskServiceClient: {
 		newTask: (req: unknown) => newTask(req),
 		askResponse: (req: unknown) => askResponse(req),
 		clearTask: (req: unknown) => clearTask(req),
+		handoffWithContext: (req: unknown) => handoffWithContext(req),
 	},
 	SlashServiceClient: {
 		condense: (req: unknown) => condense(req),
@@ -105,6 +107,8 @@ describe("useMessageHandlers — send routing", () => {
 		clearTask.mockResolvedValue(undefined)
 		condense.mockReset()
 		condense.mockResolvedValue(undefined)
+		handoffWithContext.mockReset()
+		handoffWithContext.mockResolvedValue({ value: "task-B" })
 		trackIntent.mockReset()
 		trackIntent.mockResolvedValue(undefined)
 		mockTurnState = undefined
@@ -139,7 +143,7 @@ describe("useMessageHandlers — send routing", () => {
 		expect(trackIntent).not.toHaveBeenCalled()
 	})
 
-	it("routes the /newtask alias to the condense RPC as well", async () => {
+	it("routes the /newtask slash command to the handoffWithContext RPC (ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01)", async () => {
 		mockTurnState = { phase: "completed", seq: 7 }
 		const { result } = renderHook(() => useMessageHandlers(completedConversation, makeChatState(completedConversation)))
 
@@ -147,8 +151,11 @@ describe("useMessageHandlers — send routing", () => {
 			await result.current.handleSendMessage("/newtask", [], [])
 		})
 
-		expect(condense).toHaveBeenCalledTimes(1)
-		expect(condense).toHaveBeenCalledWith(expect.objectContaining({ value: "compact" }))
+		expect(handoffWithContext).toHaveBeenCalledTimes(1)
+		expect(handoffWithContext).toHaveBeenCalledWith({})
+		// /newtask MUST NOT reach the condense RPC anymore — that is the bug
+		// this ACT repairs (fresh task + distilled context, not same-task compaction).
+		expect(condense).not.toHaveBeenCalled()
 		expect(newTask).not.toHaveBeenCalled()
 		expect(askResponse).not.toHaveBeenCalled()
 		expect(trackIntent).not.toHaveBeenCalled()

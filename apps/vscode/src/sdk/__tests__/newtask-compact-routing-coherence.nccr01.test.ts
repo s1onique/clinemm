@@ -83,19 +83,36 @@
  *   "new_task" ask message carries the prior task's distilled text
  *   that the user authored via the model's summarization turn).
  *
- * RED (NCCR01): /newtask reaches the condense RPC at the production
- *               routing seam.
- * CONTROL (NCCR02): /compact reaches the condense RPC at the same seam.
- * CONTROL (NCCR03): /smol reaches the condense RPC at the same seam.
- * INTENT (NCCR04): The catalog declares /newtask to be an alias of /compact.
- * SEAM (NCCR05): controller.initTask is the ONLY existing new-task creation
- *                seam; reachable via TaskServiceClient.newTask from the
- *                webview button flow, NOT from any slash-command dispatch.
- * BOUNDED (NCCR06): The bounded-repair budget forbids a slash-side fix
- *                   that honors the original contract without violating
- *                   the repair constraints.
+ * POST-REPAIR REWRITE (ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01):
  *
- * STOP after first causal RED.
+ *   This discriminator is REWRITTEN to assert the NEW post-repair contract.
+ *   The original NCCR01 RED is now a GREEN — the bug is repaired — so the
+ *   same file at the same production source files is repurposed to encode
+ *   the post-repair invariants. The followup ACT added:
+ *
+ *     - TaskService.handoffWithContext(EmptyRequest) -> String RPC method
+ *     - SdkController.handoffWithContext() (host-side handler)
+ *     - webview dispatch predicate branching /newtask from /compact,/smol
+ *     - apps/vscode/src/sdk/handoff-summary.ts (pure summary generator)
+ *
+ *   The discriminator below proves:
+ *
+ *     POST-NCCR01: /newtask reaches the handoffWithContext RPC (not condense)
+ *     POST-NCCR02: /compact still reaches the condense RPC
+ *     POST-NCCR03: /smol still reaches the condense RPC
+ *     POST-NCCR04: the catalog still documents /newtask alongside /compact
+ *     POST-NCCR05: controller.initTask is the fresh-task identity seam,
+ *                  reused by both TaskServiceClient.newTask (button flow) and
+ *                  TaskServiceClient.handoffWithContext (slash flow)
+ *     POST-NCCR06: the bounded-repair budget now PASSES — the missing
+ *                  distillation primitive exists at handoff-summary.ts and
+ *                  the /newtask slash command reaches controller.initTask
+ *                  via the new handoff RPC
+ *
+ *   These are GREEN assertions of the post-repair contract; the original
+ *   REDs are encoded by the new RED file at
+ *   apps/vscode/src/sdk/__tests__/newtask-distillation-handoff-architecture.ndha01.test.ts
+ *   which proves the production seam before the bounded production repair.
  */
 
 import * as fs from "node:fs"
@@ -121,135 +138,103 @@ function readBlock(source: string, startMarker: string, maxChars = 4000): string
 	return source.slice(start, start + maxChars)
 }
 
-describe("ACT-CLINEMM-NEWTASK-COMPACT-ROUTING-COHERENCE01 / NCCR", () => {
+describe("ACT-CLINEMM-NEWTASK-COMPACT-ROUTING-COHERENCE01 / NCCR (POST-REPAIR)", () => {
 	//
-	// NCCR01 -- RED at the production routing seam
+	// POST-NCCR01 -- /newtask reaches the handoffWithContext RPC, not condense.
 	//
-	// The webview hook intercepts /newtask (alongside /compact and /smol)
-	// and calls SlashServiceClient.condense. The condense RPC is the SDK
-	// manual-compaction entry point -- it does NOT create a new task. The
-	// intercepted value is hardcoded to "compact", meaning the literal
-	// call is also typed as compact semantics.
-	//
-	it("NCCR01: /newtask reaches the condense RPC at the production routing seam (RED)", () => {
-		const interceptBlock = readBlock(
-			HookSource,
-			"Intercept the built-in compaction commands when an active task exists.",
-			1200,
-		)
-		// The dispatch predicate must include /newtask alongside /compact and /smol.
-		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/compact"/)
-		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/smol"/)
+	it("POST-NCCR01: /newtask now reaches handoffWithContext (repaired contract)", () => {
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 2000)
+		// The new dispatch branch must reach TaskServiceClient.handoffWithContext.
 		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/newtask"/)
-		// And the intercept target must be the condense RPC, not the new-task RPC.
-		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\(/)
-		// The condense call is hardcoded to "compact" -- proving the literal
-		// command's intent is collapsed to compaction, not handoff.
-		expect(interceptBlock).toMatch(/value:\s*"compact"/)
-		// The /newtask branch must NOT reach TaskServiceClient.newTask
-		// from within this intercept block.
+		expect(interceptBlock).toMatch(/TaskServiceClient\.handoffWithContext\s*\(/)
+		// /newtask MUST NOT reach TaskServiceClient.newTask in the slash path
+		// (the button flow's executeButtonAction branch is separate).
 		expect(interceptBlock).not.toMatch(/TaskServiceClient\.newTask\(/)
 	})
 
 	//
-	// NCCR02 -- CONTROL: /compact reaches the condense RPC.
+	// POST-NCCR02 -- /compact still reaches condense RPC (same-task control).
 	//
-	it("NCCR02 (CONTROL): /compact reaches the condense RPC at the same seam", () => {
-		const interceptBlock = readBlock(
-			HookSource,
-			"Intercept the built-in compaction commands when an active task exists.",
-			1200,
-		)
+	it("POST-NCCR02 (CONTROL): /compact still reaches the condense RPC", () => {
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 2500)
 		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/compact"/)
 		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\(/)
 	})
 
 	//
-	// NCCR03 -- CONTROL: /smol reaches the condense RPC.
+	// POST-NCCR03 -- /smol still reaches condense RPC (same-task control).
 	//
-	it("NCCR03 (CONTROL): /smol reaches the condense RPC at the same seam", () => {
-		const interceptBlock = readBlock(
-			HookSource,
-			"Intercept the built-in compaction commands when an active task exists.",
-			1200,
-		)
+	it("POST-NCCR03 (CONTROL): /smol still reaches the condense RPC", () => {
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 2500)
 		expect(interceptBlock).toMatch(/messageToSend\s*===\s*"\/smol"/)
 		expect(interceptBlock).toMatch(/SlashServiceClient\.condense\(/)
 	})
 
 	//
-	// NCCR04 -- INTENT: the catalog declares /newtask to be an alias of /compact.
+	// POST-NCCR04 -- INTENT: the catalog still declares /newtask alongside
+	// /compact and /smol. The catalog description may evolve as the product
+	// semantics evolve; the presence of all three spellings is the pinned
+	// invariant.
 	//
-	it("NCCR04 (INTENT): slashCommands catalog declares /newtask is an alias of /compact", () => {
+	it("POST-NCCR04 (INTENT): the catalog still lists /newtask alongside /compact and /smol", () => {
 		const catalogBlock = readBlock(CatalogSource, "BASE_SLASH_COMMANDS", 1500)
 		expect(catalogBlock).toMatch(/name:\s*"newtask"/)
-		// The catalog comment explicitly justifies the alias with the SDK runtime
-		// having no `new_task` tool.
-		expect(catalogBlock).toMatch(/\/newtask.*alias.*\/compact|alias.*\/compact/)
-		expect(catalogBlock).toMatch(/legacy\s+new_task\s+tool/)
-		// And the menu description matches the alias semantics.
-		expect(catalogBlock).toMatch(/Condenses the current task/)
+		expect(catalogBlock).toMatch(/name:\s*"compact"/)
+		expect(catalogBlock).toMatch(/name:\s*"smol"/)
 	})
 
 	//
-	// NCCR05 -- SEAM: controller.initTask is the ONLY new-task-with-context
-	// creation seam. It is reachable from the webview button flow
-	// (TaskServiceClient.newTask), NOT from any slash-command dispatch.
+	// POST-NCCR05 -- SEAM: controller.initTask is the SOLE fresh-task
+	// identity seam. It is reached by BOTH TaskServiceClient.newTask (button
+	// flow, ask:new_task ask response) and TaskServiceClient.handoffWithContext
+	// (slash flow, /newtask dispatch).
 	//
-	it("NCCR05 (SEAM): controller.initTask is the only new-task creation seam; unreachable from slash dispatch", () => {
-		// The controller's newTask handler calls controller.initTask and returns the new taskId.
+	it("POST-NCCR05 (SEAM): controller.initTask is the sole fresh-task seam; reached by both newTask and handoffWithContext", () => {
+		// The existing button-flow handler reaches controller.initTask.
 		expect(ControllerNewTaskSource).toMatch(/controller\.initTask\(/)
 		expect(ControllerNewTaskSource).toMatch(/taskId\s*=\s*await\s+controller\.initTask\(/)
-
-		// The condense handler is a thin wrapper over controller.compactTask -- it does
-		// NOT call controller.initTask and therefore does NOT create a new task.
+		// The condense handler remains exclusively a compaction entry point.
 		expect(ControllerCondenseSource).toMatch(/controller\.compactTask\(\)/)
+		// The condense handler does NOT create a new task.
 		expect(ControllerCondenseSource).not.toMatch(/controller\.initTask\(/)
-
-		// The webview intercept block must not reach the newTask RPC.
-		const interceptBlock = readBlock(
-			HookSource,
-			"Intercept the built-in compaction commands when an active task exists.",
-			1200,
+		// The handoff handler reuses controller.initTask (handover path).
+		const handoffSource = fs.readFileSync(
+			path.join(REPO_ROOT, "apps/vscode/src/core/controller/task/handoffWithContext.ts"),
+			"utf8",
 		)
-		expect(interceptBlock).not.toMatch(/TaskServiceClient\.newTask\(/)
+		expect(handoffSource).toMatch(/controller\.initTask\(/)
+		// Both newTask and handoffWithContext are wired through TaskService.
+		expect(HookSource).toMatch(/TaskServiceClient\.newTask\(/)
+		expect(HookSource).toMatch(/TaskServiceClient\.handoffWithContext\(/)
 	})
 
 	//
-	// NCCR06 -- BOUNDED-REPAIR BUDGET: structural absence of a distillation
-	// primitive that could feed controller.initTask from a slash command.
+	// POST-NCCR06 -- BOUNDED-REPAIR BUDGET: the missing distillation
+	// primitive now exists at apps/vscode/src/sdk/handoff-summary.ts and
+	// is the only LLM-touching seam in the /newtask path. The /newtask
+	// slash command now reaches controller.initTask via the new
+	// handoffWithContext RPC, satisfying the original product contract
+	// without resurrecting the legacy `new_task` AgentTool.
 	//
-	// The CLI's `compactCurrentSession` mutates the current session in place
-	// and does not expose a handoff summary. The SDK's `SdkCompactionCoordinator`
-	// does the same. No production seam in the current codebase produces a
-	// "distilled context text" string suitable for passing to
-	// `controller.initTask(text, ...)`. A bounded repair that honored the
-	// original product contract would require introducing such a primitive,
-	// redesigning the slash framework, or re-adding the `new_task` AgentTool
-	// -- all forbidden by the bounded-repair constraints.
-	//
-	it("NCCR06 (BOUNDED): no distillation primitive exists that could feed controller.initTask from a slash command", () => {
-		// The controller's condense handler is exclusively a compaction entry point.
-		expect(ControllerCondenseSource).toMatch(/compactTask\(\)/)
-		// The condense handler returns Empty -- i.e., it returns nothing for the
-		// caller to use as a handoff summary.
-		expect(ControllerCondenseSource).toMatch(/Empty\.create\(\)/)
-		// The /newtask intercept hardcodes the literal "compact" value, proving
-		// the intercept never intends to thread a handoff payload back.
-		const interceptBlock = readBlock(
-			HookSource,
-			"Intercept the built-in compaction commands when an active task exists.",
-			1200,
+	it("POST-NCCR06 (BOUNDED): the missing distillation primitive now exists; /newtask reaches controller.initTask via the new RPC", () => {
+		// The new distillation helper exists and exports the structural handoff.
+		const handoffSource = fs.readFileSync(path.join(REPO_ROOT, "apps/vscode/src/sdk/handoff-summary.ts"), "utf8")
+		expect(handoffSource).toMatch(/export\s+(?:async\s+)?function\s+generateHandoffSummary\b/)
+		expect(handoffSource).toMatch(/goal:/)
+		expect(handoffSource).toMatch(/completedWork:/)
+		expect(handoffSource).toMatch(/relevantFiles:/)
+		expect(handoffSource).toMatch(/nextSteps:/)
+		expect(handoffSource).toMatch(/keyDecisions:/)
+		// The handoff handler wires the helper into the new-task creation seam.
+		const handoffHandlerSource = fs.readFileSync(
+			path.join(REPO_ROOT, "apps/vscode/src/core/controller/task/handoffWithContext.ts"),
+			"utf8",
 		)
-		expect(interceptBlock).toMatch(/value:\s*"compact"/)
-		// The intercept does not import or reference the new-task RPC.
-		expect(interceptBlock).not.toMatch(/TaskServiceClient\.newTask\(/)
-
-		// And the catalog's documented justification is the structural reason
-		// a bounded fix is impossible without violating the repair constraints:
-		// the SDK runtime has no `new_task` tool to drive distillation.
-		const catalogBlock = readBlock(CatalogSource, "BASE_SLASH_COMMANDS", 1500)
-		expect(catalogBlock).toMatch(/legacy\s+new_task\s+tool/)
+		expect(handoffHandlerSource).toMatch(/generateHandoffSummary\s*\(/)
+		expect(handoffHandlerSource).toMatch(/controller\.initTask\s*\(/)
+		// The proto file declares the new RPC method.
+		const protoSource = fs.readFileSync(path.join(REPO_ROOT, "apps/vscode/proto/cline/task.proto"), "utf8")
+		expect(protoSource).toMatch(/rpc\s+handoffWithContext\s*\(\s*EmptyRequest\s*\)\s+returns\s+\(\s*String\s*\)/)
 	})
 
 	//
@@ -264,21 +249,11 @@ describe("ACT-CLINEMM-NEWTASK-COMPACT-ROUTING-COHERENCE01 / NCCR", () => {
 		expect(ControllerCondenseSource).toMatch(/controller\.compactTask\(\)/)
 	})
 
-	it("CONSERVATION: the intercept block keeps /compact, /smol, /newtask co-routed (current contract)", () => {
-		const interceptBlock = readBlock(
-			HookSource,
-			"Intercept the built-in compaction commands when an active task exists.",
-			1200,
-		)
-		// All three spellings must remain in the same predicate -- any future
-		// repair that unaliases them MUST update this contract test, not
-		// silently drift.
-		const compactMatch = interceptBlock.match(/messageToSend\s*===\s*"\/compact"/)
-		const smolMatch = interceptBlock.match(/messageToSend\s*===\s*"\/smol"/)
-		const newtaskMatch = interceptBlock.match(/messageToSend\s*===\s*"\/newtask"/)
-		expect(compactMatch).not.toBeNull()
-		expect(smolMatch).not.toBeNull()
-		expect(newtaskMatch).not.toBeNull()
+	it('CONSERVATION: the /compact-and-/smol branch still hardcodes value:"compact" (same-task semantics)', () => {
+		const interceptBlock = readBlock(HookSource, "Intercept the built-in slash commands when an active task exists.", 2500)
+		// The condense call site must still carry value:"compact".
+		const condenseCall = interceptBlock.match(/SlashServiceClient\.condense\([\s\S]{0,200}value:\s*"compact"/)
+		expect(condenseCall).not.toBeNull()
 	})
 
 	it("CONSERVATION: the /newtask-with-context seam remains the button flow (TaskServiceClient.newTask -> controller.initTask)", () => {

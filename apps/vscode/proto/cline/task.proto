@@ -27,6 +27,13 @@ service TaskService {
   rpc deleteTasksWithIds(StringArrayRequest) returns (Empty);
   // Creates a new task with the given text and optional images
   rpc newTask(NewTaskRequest) returns (String);
+  // ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01:
+  // Distills the active session's transcript into a handoff summary and
+  // creates a fresh task whose initial prompt is the summary. Used by the
+  // /newtask slash command, which restores the documented product contract
+  // (/newtask = fresh task + distilled context) without reusing the condense
+  // RPC's same-task compaction semantics. Returns the new task id.
+  rpc handoffWithContext(EmptyRequest) returns (String);
   // Shows a task with the specified ID
   rpc showTaskWithId(StringRequest) returns (TaskResponse);
   // Opens the on-disk session directory (messages json, logs) for the task with the given ID
