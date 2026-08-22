@@ -714,22 +714,31 @@ export class ClineCore {
 		return this.host.getActiveRuntimeSnapshot(sessionId)
 	}
 	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
-	 * Internal-only proxy that reads six raw host-ownership facts via the
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
+	 * Provisional proxy that reads six raw host-ownership facts via the
 	 * `LocalRuntimeHost.captureHostOwnershipFacts` class method.
 	 *
-	 * NOT a public SDK surface -- `HostOwnershipFactsSnapshotInternal`
-	 * is NOT re-exported from `sdk/packages/core/src/index.ts`. This method
-	 * is reachable only through the in-package `ClineCore` class, not
-	 * through any externally-consumed interface.
+	 * PUBLIC API DELTA: yes. Adds ClineCore.captureHostOwnershipFacts.
+	 * Surface stability: PROVISIONAL -- temporary diagnostic, deleted
+	 * in its entirety at the first of (root cause classified, capture
+	 * insufficient, successor evidence supersedes this diagnostic).
+	 *
+	 * The return type `HostOwnershipFactsSnapshotInternal` is NOT
+	 * re-exported from `sdk/packages/core/src/index.ts`, so the type is
+	 * package-internal. However, the method itself IS a public method
+	 * on the public `ClineCore` class. This honest PUBLIC API DELTA
+	 * label matches the existing `getActiveRuntimeSnapshot` precedent
+	 * (see this file's `getActiveRuntimeSnapshot` docstring at lines
+	 * 685-706). It is the explicitly authorized temporary surface, NOT
+	 * a visibility game.
+	 *
+	 * Removal sequence is documented in the board row for
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01.
 	 *
 	 * Read-only: never mutates runtime/session state. Returns `undefined`
 	 * when `sessionId` is missing, the session is not active, or the host
 	 * does not implement `captureHostOwnershipFacts` (Hub/Remote omit it
 	 * by design).
-	 *
-	 * REMOVAL TRIGGER: first of (root cause classified, capture
-	 * insufficient, successor evidence supersedes this diagnostic).
 	 */
 	captureHostOwnershipFacts(
 		sessionId: string | undefined,

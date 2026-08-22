@@ -283,7 +283,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 	 * caller.
 	 */
 	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
 	 * Host-specific internal accessor that reads six raw host-ownership
 	 * facts from the underlying `ClineCore` via its internal
 	 * `captureHostOwnershipFacts(sessionId)` class method.
@@ -293,11 +293,18 @@ export class VscodeSessionHost implements SdkSessionHost {
 	 * diagnostic consumer reaches the method through duck-typing on
 	 * the concrete `VscodeSessionHost` class.
 	 *
+	 * SYNCHRONOUS by design (CORRECTION02). The capture path must not
+	 * cross an `await` boundary between the snapshot identity stamp
+	 * and the host-facts read; this method returns the raw facts (or
+	 * `undefined`) directly. The underlying
+	 * `ClineCore.captureHostOwnershipFacts(sessionId)` is itself
+	 * synchronous, so the chain stays synchronous end-to-end.
+	 *
 	 * Read-only. Returns `undefined` when `sessionId` is missing, the
 	 * session is not active, or the underlying host omits the method
 	 * (Hub/Remote). Never mutates runtime/session state.
 	 */
-	async readHostFacts(sessionId: string | undefined): Promise<HostOwnershipHostFacts | undefined> {
+	readHostFacts(sessionId: string | undefined): HostOwnershipHostFacts | undefined {
 		if (!sessionId) return undefined
 		return this.inner.captureHostOwnershipFacts(sessionId) ?? undefined
 	}

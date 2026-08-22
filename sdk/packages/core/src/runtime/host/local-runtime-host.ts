@@ -1200,13 +1200,20 @@ export class LocalRuntimeHost implements RuntimeHost {
 	}
 
 	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
-	 * Internal-only read accessor for the six raw host-ownership facts.
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
+	 * Provisional class method on `LocalRuntimeHost` that reads six raw
+	 * host-ownership facts.
 	 *
-	 * IMPORTANT: this method exists as a class method on `LocalRuntimeHost`
-	 * ONLY. It is NOT on the `RuntimeHost` interface -- consumers reading
-	 * via the interface see `undefined`. This keeps the temporary diagnostic
-	 * out of the shared execution contract while still allowing
+	 * PUBLIC API DELTA: yes. Adds `LocalRuntimeHost.captureHostOwnershipFacts`
+	 * as a class method (NOT on the `RuntimeHost` interface). Surface
+	 * stability: PROVISIONAL -- temporary diagnostic, deleted in its
+	 * entirety at the first of (root cause classified, capture
+	 * insufficient, successor evidence supersedes this diagnostic).
+	 *
+	 * Consumers reading via the `RuntimeHost` interface see `undefined`.
+	 * This keeps the temporary diagnostic out of the SHARED execution
+	 * contract (other `RuntimeHost` implementations like Hub/Remote are
+	 * unaffected) while still allowing
 	 * `ClineCore.captureHostOwnershipFacts` to read it via duck typing
 	 * (the class declares the method even though the interface doesn't).
 	 *
@@ -1215,6 +1222,10 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * diagnostic consumes as "observation unavailable" -- the correlated
 	 * row is still written, but with `observationAvailable: false` and
 	 * the six raw fields undefined.
+	 *
+	 * SYNCHRONOUS by design (CORRECTION02). No `await`, no `Promise`.
+	 * The capture chain must not cross a microtask boundary between the
+	 * snapshot identity stamp and the host-facts read.
 	 *
 	 * Read-only: never mutates runtime/session state, never inserts
 	 * state-post events, never schedules timers.

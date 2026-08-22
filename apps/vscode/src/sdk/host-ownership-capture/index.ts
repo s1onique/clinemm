@@ -1,22 +1,41 @@
 /**
- * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+ * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02
  *
- * Captures the six host-ownership facts at the SAME state-post
- * identity (`stateVersion` + `_ptadPushId`) as the existing PTAD
- * snapshot. Wraps the diagnostic ring-buffer with a synchronous,
- * opt-in side channel that lives next to the existing
- * `recordPostTerminalAuthoritySnapshot(...)` call site.
+ * T0 host-ownership diagnostic capture helper. Synchronous end-to-end:
+ * identity is stamped, host facts are read, and the ring is appended
+ * inside ONE JavaScript turn with NO microtask boundary.
  *
- * The function is a pure, no-side-effects composer: it reads through
- * `sdkHost.captureHostOwnershipFacts?.(sessionId)` (the new
- * `@cline/core` accessor added for this ACT) and the
- * `SdkSessionLifecycle` host-side mirror `isRunning`, then records
- * the assembled snapshot into the diagnostic ring buffer.
+ * The previous CORRECTION01 used `async`/`await` everywhere. The await
+ * of an already-resolved Promise yields execution to the microtask
+ * queue; that introduced a microtask boundary between the snapshot
+ * identity stamp and the host-facts read, which means the same labels
+ * could end up stamped onto a later observation. CORRECTION02 restores
+ * the synchronous chain so the record is genuinely
+ * "snapshot identity -> host facts -> ring append" in one turn.
  *
- * Never read by production projection. Privacy-safe: no message
- * prose, no tool arguments/outputs, no model output, no API payloads.
+ * Hard constraints (per Factory C1: GO EVIDENCE):
+ *   - DEFAULT_OFF
+ *   - explicitly opt-in (call `enableHostOwnershipDiagnostic()`)
+ *   - bounded (default 64 records; settable for tests)
+ *   - removable (single boolean enables/disables; no production state
+ *     depends on the read path)
+ *   - zero semantic delta while disabled
+ *   - no public product API surface beyond the explicitly-labeled
+ *     `RuntimeHost.captureHostOwnershipFacts?` interface method and
+ *     `ClineCore.captureHostOwnershipFacts` class method (both carry
+ *     `PUBLIC API DELTA: yes / PROVISIONAL` JSDoc, matching the
+ *     existing `getActiveRuntimeSnapshot` precedent).
+ *   - no message/protocol field
+ *   - no mutation of runtime/session state
+ *   - no timers, no polling state machine
+ *
+ * Removal trigger (per Factory §12):
+ *   first of (root cause classified, capture insufficient,
+ *   successor evidence supersedes this diagnostic) -- then this module
+ *   is deleted in its entirety.
  */
 
+import type { AgentFinishReason } from "@cline/shared"
 import type { ActiveSession as VscodeActiveSession } from "@/sdk/cline-session-factory"
 import {
 	recordHostOwnershipFacts,
@@ -32,15 +51,20 @@ import {
  * of `cancelBackgroundCommand`. Hub/Remote hosts that don't extend the
  * local shape will read as `undefined` and produce correlated unavailable
  * rows.
+ *
+ * SYNCHRONOUS by design (CORRECTION02). The probe must read host facts
+ * and return them without crossing an `await` boundary; the underlying
+ * `LocalRuntimeHost.captureHostOwnershipFacts` is already synchronous
+ * and the chain stays synchronous end-to-end.
  */
 export interface HostOwnershipProbe {
 	readonly readHostFacts?: (
 		sessionId: string | undefined,
-	) => Promise<HostOwnershipHostFacts | undefined> | HostOwnershipHostFacts | undefined
+	) => HostOwnershipHostFacts | undefined
 }
 
 export interface HostOwnershipHostFacts {
-	readonly lastInteractiveTurnFinishReason?: import("@cline/shared").AgentFinishReason
+	readonly lastInteractiveTurnFinishReason?: AgentFinishReason
 	readonly sessionStatus?: string
 	readonly pendingPromptCount?: number
 	readonly drainingPendingPrompts?: boolean
@@ -53,24 +77,37 @@ export interface CaptureHostOwnershipFactsArgs {
 	readonly taskId?: string
 	readonly epoch?: number
 	readonly sessionId: string | undefined
-	readonly sessionIsRunning: boolean
+	readonly sessionIsRunning: boolean | undefined
 	readonly probe: HostOwnershipProbe | undefined
 }
 
 /**
- * Synchronously capture and record the host-ownership facts. No-op
- * when the diagnostic is disabled or any of the required reads
- * returns `undefined`. The composed snapshot's `capturedAt` is the
- * call-time `Date.now()`; the `_ptadPushId` is forwarded verbatim
- * from the caller so the PTAD-synchronized identity holds.
+ * Append one record to the diagnostic ring. SYNCHRONOUS end-to-end:
+ *
+ *   disable-check -> probe check -> probe.readHostFacts() -> ring.append
+ *
+ * No `await`, no `Promise`. The probe is invoked synchronously and its
+ * return value is stamped onto the ring in the same JavaScript turn.
+ *
+ * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
+ * The `sessionId` parameter is now genuinely "available from the same
+ * state-post invocation as the identity fields" -- NOT from a
+ * later-obtained `ActiveSession.sdkHost`. The caller (`captureFromActiveSession`
+ * OR the new `captureIdentityOnly` path) is responsible for ensuring
+ * that identity and sessionId come from the same synchronous tuple.
+ *
+ * When the diagnostic is disabled, no record is appended.
+ * When the probe is absent OR `probe.readHostFacts` is absent OR the
+ * probe returns `undefined`, a correlated `observationAvailable: false`
+ * row is appended (identity fields stamped verbatim, six raw facts
+ * undefined). This is the CORRECTION01 absence-explicit contract.
  */
-export async function captureAndRecordHostOwnershipFacts(args: CaptureHostOwnershipFactsArgs): Promise<void> {
+export function captureAndRecordHostOwnershipFacts(args: CaptureHostOwnershipFactsArgs): void {
 	if (!isHostOwnershipDiagnosticEnabled()) return
-	const observationAvailable = !!args.probe && typeof args.probe.readHostFacts === "function"
-	let rawFacts: HostOwnershipHostFacts | undefined
-	if (observationAvailable && args.probe) {
-		rawFacts = await args.probe.readHostFacts(args.sessionId)
-	}
+
+	const probeHasRead = !!args.probe && typeof args.probe.readHostFacts === "function"
+	const rawFacts = probeHasRead && args.probe ? args.probe.readHostFacts(args.sessionId) : undefined
+
 	const enriched: HostOwnershipFactsSnapshot = {
 		stateVersion: args.stateVersion,
 		_ptadPushId: args._ptadPushId,
@@ -93,18 +130,46 @@ export async function captureAndRecordHostOwnershipFacts(args: CaptureHostOwners
 
 /**
  * Helper for callers that have the `SdkSessionLifecycle`-tracked
- * `ActiveSession` in hand and do not want to extract the
- * `sessionIsRunning` + `sdkHost` fields themselves.
+ * `ActiveSession` in hand. SYNCHRONOUS end-to-end (CORRECTION02).
+ *
+ * Behavior matrix:
+ *   - diagnostic disabled           -> no record
+ *   - activeSession undefined       -> correlated observationAvailable=false
+ *                                       row stamped with identity fields
+ *   - activeSession.sdkHost absent  -> correlated observationAvailable=false
+ *                                       row stamped with identity fields
+ *   - successful probe read         -> observationAvailable=true row
+ *
+ * NEVER synthesizes host facts (lastInteractiveTurnFinishReason, status,
+ * pendingPromptCount, drainingPendingPrompts, agentCanStartRun). When the
+ * probe is absent or returns undefined, those fields are undefined.
  */
-export async function captureFromActiveSession(
+export function captureFromActiveSession(
 	stateVersion: number,
 	_ptadPushId: number | undefined,
 	taskId: string | undefined,
 	epoch: number | undefined,
 	activeSession: VscodeActiveSession | undefined,
-): Promise<void> {
-	if (!activeSession) return
-	await captureAndRecordHostOwnershipFacts({
+): void {
+	if (!activeSession) {
+		// CORRECTION02 P1 fix: emit a correlated unavailable row using the
+		// identity fields the caller already has. The diagnostic ring is
+		// allowed to record `observationAvailable: false` rows -- they
+		// prove that the capture ran at this identity even when the host
+		// session was absent.
+		captureAndRecordHostOwnershipFacts({
+			stateVersion,
+			_ptadPushId,
+			taskId,
+			epoch,
+			sessionId: undefined,
+			sessionIsRunning: undefined,
+			probe: undefined,
+		})
+		return
+	}
+
+	captureAndRecordHostOwnershipFacts({
 		stateVersion,
 		_ptadPushId,
 		taskId,

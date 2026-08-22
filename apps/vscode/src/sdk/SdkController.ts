@@ -3206,13 +3206,15 @@ export class Controller {
 					}),
 				)
 			}
-			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
 			// Synchronized host-ownership capture at the SAME `stateVersion` +
 			// `_ptadPushId` + `taskId` + `epoch` identity as the PTAD snapshot
-			// above. No-op when the diagnostic is disabled. Read-only: no
+			// above. SYNCHRONOUS end-to-end (no `await` boundary between
+			// identity stamp and host-facts read).
+			// No-op when the diagnostic is disabled. Read-only: no
 			// mutation, no message/wire field, no state-post event. The
 			// captured snapshot lives in the diagnostic ring buffer only.
-			await captureHostOwnershipFactsAtStatePost(
+			captureHostOwnershipFactsAtStatePost(
 				snapshot.stateVersion,
 				ptadPushId,
 				snapshot.currentTaskItem?.id,

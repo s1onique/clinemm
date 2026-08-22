@@ -174,3 +174,59 @@ First of:
 Removal sequence is unchanged from LIVE-CAPTURE01; the only difference
 is that `runtime-host.ts` keeps the `HostOwnershipFactsSnapshotInternal`
 interface (internal to `@cline/core` only).
+
+
+---
+
+# CORRECTION02 (supersedes CORRECTION01)
+
+**Disposition**: ADDRESSES 2 P0 + 1 P1 FROM CORRECTION01 REVIEW.
+
+**Reviewer halt**: `HALT_CAPTURE_TEMPORAL_BINDING_AND_PUBLIC_SURFACE_NOT_CLOSED`.
+
+## What changed
+
+| Reviewer finding | Resolution |
+|------------------|------------|
+| **P0 #1**: `await` of an already-resolved Promise yields execution; the capture path crossed a microtask boundary between snapshot identity stamp and host-facts read — the same labels could end up stamped onto a later observation. | **Restored synchronous capture end-to-end.** `HostOwnershipProbe.readHostFacts` returns sync; `VscodeSessionHost.readHostFacts` returns sync; `captureAndRecordHostOwnershipFacts` returns `void`; `captureFromActiveSession` returns `void`. The capture path is now a single JavaScript turn with no microtask boundary. New TEMPORAL BINDING test mutates an external marker inside the probe synchronously and asserts the marker is observed BEFORE `captureAndRecordHostOwnershipFacts` returns. |
+| **P0 #2**: `ClineCore.captureHostOwnershipFacts()` is a public method on the public `ClineCore` class, which is documented as the app-facing session API. CORRECTION01's "reachable only through the in-package ClineCore class" was a visibility game. | **Added explicit `PUBLIC API DELTA: yes / PROVISIONAL` labeling** on both `ClineCore.captureHostOwnershipFacts` and `LocalRuntimeHost.captureHostOwnershipFacts`, matching the existing `ClineCore.getActiveRuntimeSnapshot` precedent (PUBLIC API DELTA: yes, PROVISIONAL). The honest acknowledgment is that this method is a public API surface delta. Removal sequence is documented in the board row. |
+| **P1**: `captureFromActiveSession(..., undefined)` produced no row, contradicting the documented "missing session => correlated unavailable row" claim. | When `activeSession === undefined` AND the diagnostic is enabled, `captureFromActiveSession` now writes a correlated `observationAvailable: false` row stamped with `stateVersion` + `_ptadPushId` + `taskId` + `epoch`. No host facts are synthesized. |
+
+## Quality gates (CORRECTION02)
+
+* bun run check-types   0 diagnostics
+* bun run lint          PASS
+* bun run test:unit     1076/1076 PASS
+* bun run test:vitest   2023/2023 PASS (2 new: synchronous-signature + temporal-binding)
+
+## New tests (CORRECTION02)
+
+In `apps/vscode/src/sdk/host-ownership-capture.live-capture01.test.ts`:
+
+* `SYNCHRONOUS signature: returns void, not Promise` — asserts the helper's return type is `void`, not `Promise<void>`.
+* `TEMPORAL BINDING: probe mutation is observed synchronously inside the helper call` — the load-bearing structural test. Mutates an external marker inside the probe and asserts the marker is observed BEFORE the helper returns. With any `await` boundary, the marker would still be `false` when the helper returns; the next microtask would set it. The assertion proves the boundary is gone.
+
+Plus the P1 fix test:
+
+* `captureFromActiveSession: P1 fix - missing activeSession writes correlated unavailable row` — `stateVersion`/`_ptadPushId`/`taskId`/`epoch` are stamped verbatim, `sessionId` is undefined, `observationAvailable` is `false`.
+
+## Reviewer invariants preserved from CORRECTION01
+
+```
+OPERATOR COMMAND SURFACE     = PRESENT (toggle + dump commands + package.json + registry)
+TOGGLE DEFAULT-OFF           = PROVEN (workspace-state key, fresh install returns false)
+DUMP JSONL                   = PRESENT (globalStorageUri/host-ownership-diagnostic.jsonl)
+IDENTITY FIELDS IN ARTIFACT  = PROVEN (stateVersion + _ptadPushId + taskId + sessionId + epoch)
+UNAVAILABLE PROBE ROW        = PROVEN (correlated observationAvailable=false)
+TASKSHADOW DUPLICATION       = REMOVED (recorder + coordinator + host-wiring cleaned)
+OBSERVATION LOCAL SEAM       = PRESERVED (VscodeSessionHost.readHostFacts is host-only, NOT on SdkSessionHost interface)
+@cline/core BARREL UNCHANGED = PROVEN (HostOwnershipFactsSnapshotInternal NOT re-exported)
+RUNTIMEHOST INTERFACE UNCHANGED = PROVEN (no captureHostOwnershipFacts? added)
+NO PROTO/WIRE CHANGE         = PROVEN
+```
+
+## What is honest now (vs CORRECTION01)
+
+CORRECTION01 claimed "no public API" while leaving `ClineCore.captureHostOwnershipFacts` on the public app-facing class. CORRECTION02 fixes that by **explicitly labeling** the method as a PROVISIONAL public API delta, matching the existing `getActiveRuntimeSnapshot` precedent. The barrel export does not change; the `RuntimeHost` interface does not change; the new method is on a public class with an honest label.
+
+Removal is unchanged: first of (root cause classified, capture insufficient, successor evidence supersedes this diagnostic). When that fires, both the method and the diagnostic module are deleted in their entirety.
