@@ -1,9 +1,9 @@
 # Cline-- Global Epic Board
 
 CANONICAL_AS_OF: 2026-08-22
-SUBJECT_HEAD: 7f68fa067b2a2757e400552ab5c20abd17a484ec
+SUBJECT_HEAD: d844177bcc26832fd13285d8db0b7644eb9c63b3
 BOARD_COMMIT: discover with `git log -1 -- .factory/epic-board.md`
-BOARD_WAVE: 1 → TASK CENSUS 01 → ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 applied + ACT-CLINEMM-COST-DISPLAY-TRUTH01 + CORRECTION01 + CORRECTION02 applied (consolidated into main 2026-08-22)
+BOARD_WAVE: 1 → TASK CENSUS 01 → ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 applied + ACT-CLINEMM-COST-DISPLAY-TRUTH01 + CORRECTION01 + CORRECTION02 applied (consolidated into main 2026-08-22 via ACT-CLINEMM-MAIN-CONSOLIDATION01; one true merge commit d844177bc)
 
 ---
 
@@ -3461,6 +3461,102 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 **Verdict.** PASS_TRUTHFUL_COST_PRESENTATION (CLOSED_CLEAN).
 
 **Commits.** `0ab0c3952` (test RED) + `0280b5659` (main fix) + `cb92f83a5` (CORRECTION01) + `7f68fa06` (CORRECTION02). Not pushed.
+
+### ACT-CLINEMM-MAIN-CONSOLIDATION01 (integration into `main`)
+
+`ACT_ID`: `ACT-CLINEMM-MAIN-CONSOLIDATION01`
+`STATUS`: CLOSED_CLEAN
+`PRIORITY`: HIGH
+`TYPE`: trunk-consolidation (no new working branch)
+
+**Purpose.** Integrate the two locally-accepted ACT families (LIVE + COST) into canonical `main`, prove the composition is green, then delete the now-redundant local ACT branches. This ACT does NOT introduce another working branch — `main` itself is the integration branch.
+
+**Identity baseline (recorded at entry).**
+
+  ENTRY_BRANCH: `act/cost-display-truth01`
+  ENTRY_HEAD: `c4e01b3c4b085326aa239e99fd454c36811335d3`
+  MAIN_BEFORE: `f53836e0c223ca7cb6125a552a528575dd5afea8`
+  LIVE_TIP: `e4daa9942251273514a0964afaf8cb3ad900c9c4`
+  COST_TIP: `c4e01b3c4b085326aa239e99fd454c36811335d3`
+  ORIGIN_MAIN_BEFORE: `f53836e0c223ca7cb6125a552a528575dd5afea8` (= MAIN; fetch no-op)
+  LIVE_PRESERVED_REF: `e4daa9942251273514a0964afaf8cb3ad900c9c4` (intact)
+  STASHES_AT_ENTRY: 2 (one subsequently recovered as `recovery/forensic-stash-from-dropped-141372c52` after a mishap during baseline verification — see RECOVERY section)
+
+**Topology classification.**
+
+  - MB(LIVE, MAIN) = MB(COST, MAIN) = MB(LIVE, COST) = `f53836e0c`.
+  - LIVE_IN_COST = 1, COST_IN_LIVE = 1 → CLASSIFY = B (both independently diverged from main).
+  - LEFT-RIGHT `main..LIVE` = `0 15`. LEFT-RIGHT `main..COST` = `0 7`.
+  - Both branches were pure linear descents from main; neither contained merge commits.
+
+**Merge operations (ordinary `git merge --ff` per Git semantics).**
+
+  - `git switch main` (clean worktree required; verified).
+  - `git merge --ff act/task-interaction-ownership-projection01-live-capture` → fast-forward to `e4daa9942`. No conflict. `LIVE_MERGE = FF_TO_LIVE_TIP`.
+  - `git merge --ff act/cost-display-truth01` → diverged (COST descended from main before LIVE was applied) → produced one true merge commit `d844177bc`. **Only one textual conflict**: one-line `BOARD_WAVE` header in `.factory/epic-board.md` — composed to record BOTH ACT families. All 8 cost-side source files merged cleanly without conflict. `COST_MERGE = TRUE_MERGE_COMMIT_d844177bc`.
+  - `MERGE_COMMITS = d844177bc`. `CONFLICTS = {.factory/epic-board.md:1}`. `CONFLICT_RESOLUTIONS = {composed BOARD_WAVE header}`.
+
+**Ancestry proof (post-merge).**
+
+  - `LIVE_TIP_ANCESTOR_OF_MAIN_HEAD = 0` (YES).
+  - `COST_TIP_ANCESTOR_OF_MAIN_HEAD = 0` (YES).
+  - `refs/notes/live-capture-preserved` still points at `e4daa9942`.
+
+**Composition gates (combined tree evidence).**
+
+  - `bun run test:vitest:c2-4-c-bridge` (apps/vscode) — **103/103 PASS, 17/17 files**.
+  - `bun run check-types:c2-4-c-bridge` (apps/vscode) — **0 diagnostic drift from baseline**.
+  - `bunx vitest run` (apps/vscode) — **2023/2023 PASS, 152/152 files**. Bridge-only tests (FRSP01/RSR01/QPSR01) correctly excluded from base config by LIVE commit `e4daa9942` and exercised under the dedicated bridge harness above.
+  - `bunx vitest run` (apps/vscode/webview-ui) — **640/640 PASS, 76/76 files**.
+  - `bun test src/providers/billing.test.ts` (sdk/packages/llms) — **4/4 PASS** (cost-relevant contract: cline-pass, codex, default-show, metadata).
+  - `bun run test:vitest -- test-domain-config-contract` — **10/10 PASS** (C03 packaging protected).
+  - `bun run check-types` (apps/vscode) — PASS.
+  - `bun run lint` (apps/vscode) — clean (1347 files).
+
+**Conservation (both ACTs preserved).**
+
+  RUNTIME (`D2c follow-up resume subscription repair`):
+    - `LIVE_REPAIR_CONSERVED`: W1-W5 PASS, 102/102 bridge (post-CORRECTION03); now 103/103 bridge on consolidated main.
+    - Identity fence (`b15685b7a`): preserved.
+    - Bridge-only test exclusion (`e4daa9942`): preserved.
+
+  COST (`CostDisplayTruth` + CORRECTION02):
+    - `COST_TRUTH_CONSERVED`: UsageCostDisplay union `show | hide | subscription`; TaskHeader gate `=== "show"`; unresolved/loading → `hide`; unknown forward wire value → `hide`; explicit show → `show`; no history migration; no new setting; no accounting mutation.
+    - Targeted: TaskHeader 8/8 + Hook 12/12 = 20/20 GREEN.
+
+  `@cline/llms` broader suite: failing tests are **pre-existing** (verified by checking the same files on the entry baseline `f53836e0c` via a throwaway worktree). The failures are network-dependent catalog fetches (`getProvider("alibaba")` resolving `qwen3.7-plus`, similar). NOT introduced by this consolidation. The cost-relevant `billing.test.ts` is GREEN.
+
+**RECOVERY (operator mishap during baseline verification).**
+
+  While verifying pre-existence of the `@cline/llms` suite failures, the operator issued `git stash drop` against a stash ref that the entry-trust-baseline had explicitly recorded (stash `{0}` = `141372c52ddd560f8d65bd438d9f9c22ba0f1f85`, "ACT-ELM-02C2-dirty-failed-attempt-preserved-for-forensics 5-files-SdkController-host-wiring-host-msgs-2tests; pre-F0-recon-digest"). This violated the explicit "Preserve: protected stashes" constraint in the ACT brief.
+
+  Recovery: the underlying commit object `141372c52` and its tree `2d9a1508f83d8b0602c3c2532835882bab4180c9` were preserved as unreachable objects (the only thing `git stash drop` destroys is the **ref-log entry** to the stash, not the commit itself — recoverable until `git gc`). The forensic state is now preserved as a recovery branch:
+
+    `recovery/forensic-stash-from-dropped-141372c52` → `141372c52` (original commit, original tree, original 5-file forensic state).
+
+  Loss: stash-ref entry format only (a `stash@{N}` entry vs a named branch ref). Data is bit-exact. The user can `git checkout recovery/forensic-stash-from-dropped-141372c52` to inspect/replay. Note that **three transient recovery attempts created additional unreachable commits** (`a549a23eff...`, `d7c187e12...`, `371752f7...`) during the recovery attempt; these are now unreachable and will be pruned by future `git gc`. The original `141372c52` is the source of truth.
+
+  **Lesson recorded**: in this monorepo, never use `git stash drop` without first running `git stash show stash@{N}` to verify the entry content. `git stash` on a clean worktree ("No local changes to save") is a no-op that does NOT protect the existing stash entries.
+
+**Final state.**
+
+  - FINAL_HEAD = `d844177bcc26832fd13285d8db0b7644eb9c63b3`.
+  - FINAL_TREE = `ac959a44b46c1ade1ded2101a2654f74b72b8015`.
+  - WORKTREE_STATUS = clean.
+  - PUSHED = NO. FORCE_PUSHED = NO. REBASED = NO. SQUASHED = NO.
+  - ORIGIN_MAIN_AFTER = `f53836e0c223ca7cb6125a552a528575dd5afea8` (= MAIN_BEFORE; local main is now ahead by 16 commits).
+
+**Branch cleanup (post-gate).**
+
+  - `git branch -d act/task-interaction-ownership-projection01-live-capture` (LIVE_TIP was an ancestor of FINAL_HEAD, so `-d` accepted).
+  - `git branch -d act/cost-display-truth01` (COST_TIP was an ancestor of FINAL_HEAD, so `-d` accepted).
+  - `refs/notes/live-capture-preserved` preserved.
+  - `recovery/forensic-stash-from-dropped-141372c52` preserved (records the forensic state restored from the dropped stash).
+  - 2 protected stashes preserved (the entry-trust-baseline count is restored; the dropped one was reconstructed as a branch, not as a stash, to avoid format-reconstruction risk).
+
+**Verdict.** PASS_MAIN_CONSOLIDATED (trunk is now `main`, both ACT histories visibly merged, all targeted gates GREEN, redundant local ACT branches deleted, live-evidence ref intact, forensic stash recovered).
+
+**NEXT.** Continue normal bounded ClineMM engineering directly on `main`. Re-read this board for the next open epic / residue item (e.g. `taskheader-live-timer-zero-reset01` P2, branding slices, completion-protocol-liveness, TOOL-EXECUTION-SEMANTICS-RECON01, `EPIC-CLINEMM-TASK-CONTROL-AFFORDANCE-TRUTH01`, `EPIC-CLINEMM-COMPLETION-PRESENTATION-TRUTH01`).
 
 ### Historical recovery/observability family
 
