@@ -138,6 +138,12 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// (e.g. ChatGPT Plus/Pro subscription) are filtered out here. This
 	// mirrors the CLI's `shouldShowCliUsageCost` consumer and removes the
 	// previous extension-side hard-coded "openai-codex" check.
+	//
+	// ACT-CLINEMM-COST-DISPLAY-TRUTH01: the gate now also filters out
+	// `"subscription"` billing modes (e.g. ClinePass), whose
+	// token-derived reference prices are NOT the user's actual per-task
+	// spend. The webview must only render the price-tag when the SDK
+	// confirms the provider is genuinely metered (i.e. `=== "show"`).
 	const usageCostDisplay = useProviderUsageCostDisplay(modeFields.apiProvider)
 	const isCostAvailable =
 		(totalCost &&
@@ -147,7 +153,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		(modeFields.apiProvider !== "vscode-lm" &&
 			modeFields.apiProvider !== "ollama" &&
 			modeFields.apiProvider !== "lmstudio" &&
-			usageCostDisplay !== "hide")
+			usageCostDisplay === "show")
 
 	// Event handlers
 	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])

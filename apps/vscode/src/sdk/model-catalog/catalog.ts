@@ -52,9 +52,16 @@ const DEFAULT_MODEL_CATALOG_CONFIG: ModelCatalogConfig = {
  * extension's {@link UsageCostDisplay} type. The SDK function takes a
  * provider id (not metadata) and consults its own registry; we forward
  * the id and trust the answer rather than re-parsing the metadata bag.
+ *
+ * ACT-CLINEMM-COST-DISPLAY-TRUTH01: previously this collapsed every
+ * non-`"hide"` value to `"show"`, which silently erased the SDK's
+ * `"subscription"` class (e.g. ClinePass). Renderers downstream then
+ * showed token-derived reference prices as if they were literal task
+ * cost. The answer is now passed through verbatim; consumers gate on
+ * `=== "show"` instead of `!== "hide"`.
  */
 function readUsageCostDisplay(providerId: string): UsageCostDisplay {
-	return resolveProviderUsageCostDisplay(providerId) === "hide" ? "hide" : "show"
+	return resolveProviderUsageCostDisplay(providerId)
 }
 
 function makeCacheKey(providerId: ProviderId, fingerprint: Fingerprint): CacheKey {
