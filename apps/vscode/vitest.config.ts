@@ -108,6 +108,23 @@ export default defineConfig({
 			// synthetic stub agent). Bridge-only — same alias
 			// requirement as SCHR01/SHRC01.
 			"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 /
+			// FRSP01-C03: bounded P0 cleanup of the test-domain configuration
+			// leak. The four files below are bridge-only (require the
+			// `@cline-internal/core/...` resolve.aliases declared in
+			// `vitest.config.c2-4-c-bridge.ts` only). They were added to
+			// the dedicated bridge vitest config but the corresponding
+			// BASE vitest excludes were left out, so the BASE vitest glob
+			// (`src/sdk/**/*.test.ts`) discovers them and fails to load
+			// (`Cannot find package '@cline-internal/core/...'`). They run
+			// under `vitest.config.c2-4-c-bridge.ts` and are excluded from
+			// the base vitest domain by this ACT. (Mirror entry in
+			// `apps/vscode/tsconfig.json` `exclude` array — keep them in sync;
+			// the RBE01 contract enforces this invariant.)
+			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts",
+			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
+			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
+			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

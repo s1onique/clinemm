@@ -104,6 +104,22 @@
 		"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
 		// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
 		// Stop/Resume integrity discriminator. Bridge-only.
-		"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 /
+		// FRSP01-C03: bounded P0 cleanup of the test-domain configuration
+		// leak that blocked `vscode:prepublish` from producing an exact-
+		// head VSIX bound to the C02 runtime repair. The four files
+		// below are bridge-only (require the `@cline-internal/core/...`
+		// aliases declared in `tsconfig.c2-4-c-bridge.json` only) and
+		// were added to the dedicated bridge vitest config but the
+		// corresponding BASE tsconfig/vitest excludes were left out,
+		// so the BASE tsc emits TS2307 × 6 and the BASE vitest glob
+		// emits `Cannot find package '@cline-internal/core/...'`. They
+		// run under `vitest.config.c2-4-c-bridge.ts` and are excluded
+		// from the base packaging/tsconfig domain by this ACT.
+		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts",
+		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
+		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
+		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts"
 	]
 }
