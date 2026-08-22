@@ -2,6 +2,22 @@
 
 VERDICT: PASS_NEWTASK_DISTILLATION_HANDOFF_REPAIRED
 
+CORRECTION HISTORY (closed at C3):
+- CORRECTION01 (commit `505159b1c`): replaced placeholder fallback with
+  real LLM-backed distillation (`createHandlerAsync` from `@cline/llms`).
+- CORRECTION02 (commit `e342f536c`): removed module-scoped
+  ProviderConfig slot; production provider is now request-scoped via
+  `createSdkHandoffSummaryProvider(providerConfig)` (closure capture,
+  no module state). Two concurrent /newtask calls remain provider-isolated.
+- CORRECTION03 (this commit): bound the handoff to one source-session
+  identity. The handler captures `sourceSessionId` at entry and
+  revalidates `controller.sessions.getActiveSession()?.sessionId`
+  AFTER each await. If identity drifts, the handler fail-closes (empty
+  taskId, no `controller.initTask`) — never commits a fresh task from
+  a stale source. No mutex, no AsyncLocalStorage, no generation
+  counters — just the existing `getActiveSession()` accessor and a
+  per-invocation captured string.
+
 This ACT is the bounded production repair of the documented /newtask
 product contract (fresh task + distilled context from current
 conversation), which was violated in this fork by commit 7b8798c99
@@ -145,7 +161,7 @@ one new RPC method on existing TaskService with `Empty → String`
 |---|---|
 | I1 existing new-task creation seam exists | ✓ CS4/CS5 |
 | I2 summary can be generated without mandatory same-task mutation | ✓ apps/vscode/src/sdk/handoff-summary.ts (pure) |
-| I3 no public protocol expansion required | ✓ new RPC method only, no new message types |
+| I3 protocol delta truthful (additive method on existing service, no new message types, no new fields) | ✓ TaskService.handoffWithContext(EmptyRequest) -> String |
 | I4 new task identity is observable/testable | ✓ taskSessionId = createSessionId() at sdk-task-start-coordinator.ts:148 |
 | I5 /compact and /smol controls can remain unchanged | ✓ they keep their condense RPC routing |
 ## 6. BOUNDED PRODUCTION REPAIR
@@ -156,7 +172,7 @@ one new RPC method on existing TaskService with `Empty → String`
 |---|---|
 | apps/vscode/proto/cline/task.proto | +7 lines: new RPC method handoffWithContext(EmptyRequest) -> String |
 | apps/vscode/src/core/controller/task/handoffWithContext.ts | NEW: gRPC handler, reads active session transcript, generates handoff, calls controller.initTask |
-| apps/vscode/src/sdk/handoff-summary.ts | NEW: pure helper, generateHandoffSummary(messages, {provider?}), pluggable provider for test seam, all 5 required structural markers |
+| apps/vscode/src/sdk/handoff-summary.ts | NEW: pure helper, `createSdkHandoffSummaryProvider(providerConfig)` factory (CORRECTION02 closure-capture) + `generateHandoffSummary({messages}, {provider: REQUIRED})` orchestrator; 5 required structural markers |
 | apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts | dispatch predicate splits /newtask from /compact,/smol |
 | apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.test.tsx | mock handoffWithContext, update /newtask assertion |
 
@@ -170,7 +186,12 @@ one new RPC method on existing TaskService with `Empty → String`
 ### 6.3 Public API delta
 
 - webview gets `TaskServiceClient.handoffWithContext(request)` (generated client method)
-- No new exports from any SDK package
+- Within the apps/vscode monorepo, `toSdkProviderConfig` in
+  `apps/vscode/src/sdk/model-catalog/catalog.ts` is now exported (was
+  private to that file in pre-CORRECTION01). It is consumed by
+  `apps/vscode/src/sdk/SdkController.ts` and `apps/vscode/src/core/controller/task/handoffWithContext.ts`.
+  No new exports from any published SDK package (`@cline/llms`,
+  `@cline/shared`, etc.) — only within the apps/vscode boundary.
 - No new contract surface for external consumers (the proto file changes are additive)
 
 ### 6.4 Intent delta
@@ -179,10 +200,18 @@ The webview hook's `useMessageHandlers.handleSendMessage` dispatch predicate at 
 
 ### 6.5 Summary delta
 
-NEW pure helper at `apps/vscode/src/sdk/handoff-summary.ts` exports:
+Pure helper at `apps/vscode/src/sdk/handoff-summary.ts` exports:
 - `interface HandoffSummaryProvider` (pluggable)
-- `fallbackHandoffSummaryProvider` (deterministic, emits all 5 markers)
-- `function generateHandoffSummary({messages, abortSignal}, {provider?})` (pure)
+- `function withProxyAwareFetch(config)` (stateless proxy injection helper)
+- `function createSdkHandoffSummaryProvider(providerConfig)` (CORRECTION02
+  factory: closure-captures config, calls `createHandlerAsync` from
+  `@cline/llms` against the supplied `ProviderConfig`; no module state)
+- `const HANDOFF_SUMMARY_PROMPT` (5-section distillation prompt)
+- `function serializeTranscript(messages)` (pure transcript serializer)
+- `function generateHandoffSummary({messages, abortSignal}, {provider})`
+  (pure orchestrator; CORRECTION02: `provider` is REQUIRED, no implicit
+  default — a module default would be a shared mutable surface unsafe
+  across await boundaries)
 
 ### 6.6 Task creation delta
 

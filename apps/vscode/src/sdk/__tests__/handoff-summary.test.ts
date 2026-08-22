@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01+02
+ * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01+02+03
  *
  * SYNTHETIC_REAL_HANDLER_COMPOSITION tests for the /newtask handoff
  * distillation contract. The handler under test is the REAL
@@ -25,6 +25,19 @@
  *          its ProviderConfig in closure and consults no module state.
  *   HCR11  PROD-ABLATION: a placeholder production provider yields
  *          initTask with placeholder garbage (the CORRECTION01 bug class).
+ *   HCR12  STABLE-SOURCE: same-Controller, source session A does not drift
+ *          during the awaits -> handoff commits successfully (CORRECTION03
+ *          GREEN control).
+ *   HCR13  READ-MESSAGES-SWITCH: source session drifts A->B during
+ *          readMessages -> no initTask, empty taskId (CORRECTION03 PRIMARY
+ *          RED target).
+ *   HCR14  LLM-SWITCH: source session drifts A->B during LLM distillation
+ *          -> no initTask, empty taskId (CORRECTION03 SECONDARY RED
+ *          target).
+ *   HCR15  SAME-CONTROLLER REUSE: two sequential handoffs on the same
+ *          Controller both succeed when the source session is stable
+ *          throughout (no-drift case under repeated use; HCR13/HCR14
+ *          cover the drift cases).
  */
 
 import type { ProviderConfig, Message as SdkMessage } from "@cline/llms"
@@ -402,4 +415,117 @@ describe("handoff-summary (CORRECTION01+02 host seam)", () => {
 		expect(summary).not.toContain("refactor A")
 		expect(summary).not.toContain("run tests")
 	})
+
+	//
+	// HCR12 (STABLE SOURCE): same-Controller, single source session A,
+	// session does NOT change during the awaits -> handoff succeeds,
+	// controller.initTask called once with the A-distilled handoff.
+	//
+	it("HCR12 (STABLE-SOURCE): single-Controller handoff with stable source session A succeeds", async () => {
+		const handler = makeMockHandler({ text: expectedLlmHandoff("A") })
+		createHandlerAsyncMock.mockResolvedValue(handler)
+		const controller = makeMutableController({ activeMarker: "A" }) as unknown as any
+		const result = await handoffWithContext(controller, EmptyRequest.create({}))
+		expect(createHandlerAsyncMock).toHaveBeenCalledTimes(1)
+		expect(controller.initTask).toHaveBeenCalledTimes(1)
+		const [prompt] = controller.initTask.mock.calls[0]
+		expect(prompt).toContain("refactor A")
+		expect(result.value).toBe("task-B")
+	})
+
+	//
+	// HCR13 (READ-MESSAGES-SWITCH): same-Controller, source session
+	// changes from A to B during the readMessages await -> handoff
+	// aborts, no controller.initTask, empty taskId.
+	//
+	it("HCR13 (READ-MESSAGES-SWITCH): source session drifts A->B during readMessages -> abort, no initTask", async () => {
+		const handler = makeMockHandler({ text: expectedLlmHandoff("A") })
+		createHandlerAsyncMock.mockResolvedValue(handler)
+		const controller = makeMutableController({ activeMarker: "A" }) as unknown as any
+		controller.sessions.getActiveSession = () => {
+			const marker = controller.__activeMarker
+			return {
+				sessionId: `session-${marker}`,
+				sdkHost: {
+					readMessages: async () => {
+						const transcript = makeTranscript()
+						queueMicrotask(() => {
+							controller.__activeMarker = "B"
+						})
+						return transcript
+					},
+				},
+			}
+		}
+		const result = await handoffWithContext(controller, EmptyRequest.create({}))
+		expect(createHandlerAsyncMock).not.toHaveBeenCalled()
+		expect(controller.initTask).not.toHaveBeenCalled()
+		expect(result.value).toBe("")
+	})
+
+	//
+	// HCR14 (LLM-SWITCH): same-Controller, source session changes from
+	// A to B during the LLM distillation await -> handoff aborts
+	// before controller.initTask, empty taskId.
+	//
+	it("HCR14 (LLM-SWITCH): source session drifts A->B during LLM distillation -> abort, no initTask", async () => {
+		let streamResolve: (v: unknown) => void = () => {}
+		const streamPromise = new Promise<unknown>((r) => (streamResolve = r))
+		const streamDeferred = { promise: streamPromise, resolve: streamResolve }
+		createHandlerAsyncMock.mockImplementation(() =>
+			streamDeferred.promise.then(() => makeMockHandler({ text: expectedLlmHandoff("A") })),
+		)
+		const controller = makeMutableController({ activeMarker: "A" }) as unknown as any
+		const p = handoffWithContext(controller, EmptyRequest.create({}))
+		await new Promise((r) => setTimeout(r, 0))
+		controller.__activeMarker = "B"
+		streamDeferred.resolve(undefined)
+		const result = await p
+		expect(controller.initTask).not.toHaveBeenCalled()
+		expect(result.value).toBe("")
+	})
+
+	//
+	// HCR15 (SAME-CONTROLLER CONCURRENT SUCCESS): two sequential
+	// /newtask calls on the SAME Controller with a stable source
+	// session both commit successfully. Proves the revalidation guards
+	// (CORRECTION03) do not break the stable case under repeated use
+	// of the same Controller. HCR13/HCR14 cover the drift cases; this
+	// test covers the no-drift case under same-Controller reuse.
+	//
+	it("HCR15 (SAME-CONTROLLER REUSE): two sequential handoffs on the same Controller both succeed when source session is stable", async () => {
+		const handler = makeMockHandler({ text: expectedLlmHandoff("A") })
+		createHandlerAsyncMock.mockResolvedValue(handler)
+		const controller = makeMutableController({ activeMarker: "A" }) as unknown as any
+		const resultA = await handoffWithContext(controller, EmptyRequest.create({}))
+		expect(resultA.value).toBe("task-B")
+		const resultB = await handoffWithContext(controller, EmptyRequest.create({}))
+		expect(resultB.value).toBe("task-B")
+		expect(controller.initTask).toHaveBeenCalledTimes(2)
+	})
 })
+
+/**
+ * Mutable controller: an `__activeMarker` field on the controller object
+ * controls which session the synthetic harness reports as active. This
+ * lets HCR13/HCR14/HCR15 simulate active-session transitions during the
+ * handler's awaits.
+ */
+function makeMutableController(opts: { activeMarker: string }): any {
+	const transcript = makeTranscript()
+	const providerConfig = makeProviderConfig(opts.activeMarker)
+	const ctrl: any = {
+		__activeMarker: opts.activeMarker,
+		initTask: vi.fn().mockResolvedValue("task-B"),
+		compactTask: vi.fn(),
+		task: { handleWebviewAskResponse: vi.fn() },
+		getActiveSessionProviderConfig: () => providerConfig,
+	}
+	ctrl.sessions = {
+		getActiveSession: () => ({
+			sessionId: `session-${ctrl.__activeMarker}`,
+			sdkHost: { readMessages: async () => transcript },
+		}),
+	}
+	return ctrl
+}
