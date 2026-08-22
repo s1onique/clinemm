@@ -189,7 +189,7 @@ preserving the discriminator as durable evidence that:
 
 ---
 
-## 11. CORRECTION01 — verdict reclassification (added at `6d3a01be9`)
+## 11. CORRECTION01 — verdict reclassification (added at `6cc4508a5`)
 
 The Factory reviewer flagged `HALT_VERDICT_CONTRADICTION`: the original
 verdict `NOT_REPRODUCED` is incompatible with `REPRODUCED=YES`. The
