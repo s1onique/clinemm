@@ -106,7 +106,7 @@ The truth table for "who owns forward progress right now" is:
 | `compacting` | n/a | n/a | **Compacting** (host override) |
 | terminal (completed / error / resumable) | false | n/a | **Complete / Error / Paused** |
 
-The live capture row `toolCalls 186→190, legacy=idle, runtime=idle, shadow=idle` lands in the **last meaningful row** — "gap-bridge case: queued drain in flight".
+The live capture row `toolCalls 186→190, legacy=idle, runtime=idle, shadow=idle` is **CONSISTENT WITH** the "gap-bridge case: queued drain in flight" row from architecture alone. That row is **NOT** proven to be the actual cause; the classifier is unproven until runtime evidence closes Q4. Background command completion tail and recovery continuation under a non-`completed` finishReason remain plausible alternative classifications.
 
 The cleanest host-owned signal for that row is: **whether a queued-prompt drain is in flight or imminent**. That signal is `session.drainingPendingPrompts === true || session.pendingPrompts.length > 0` (combined with `LocalRuntimeHost.session.agent.canStartRun()` which is true when no run is in flight but queued prompts are drainable).
 
@@ -151,7 +151,7 @@ The truth table for the canonical TaskHeader projection under this discriminator
 | no task     | false            | none           | Idle |
 | n/a         | n/a              | compacting     | Compacting (host override) |
 
-The critical row is **`task exists + awaitingFollowup=false + no stronger phase`** — that's the LIVE-T1 gap-bridge case. The honest answer requires runtime evidence that a queued drain is in fact in flight during the user's observed `toolCalls` tick, not architecture-only inference.
+The critical row is **`task exists + awaitingFollowup=false + no stronger phase`** — that's the LIVE-T1 gap-bridge case. The honest answer requires runtime evidence that a queued drain is in fact in flight during the user's observed `toolCalls` tick, not architecture-only inference. Architecturally this row is consistent with the LIVE-T1 symptom, but until the runtime signals are observed we cannot rule out the other plausible causes (background command completion tail, recovery continuation under non-`completed` finishReason).
 
 ## Why the host-side `awaitingFollowup` must be produced in `LocalRuntimeHost` (or its SdkSessionLifecycle adapter), not in the consumer
 
