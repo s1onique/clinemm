@@ -225,3 +225,140 @@ captured writer-provenance contradiction captured at taskId=1787358662798_o2lwn.
 
   apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts
     new file, 408 lines, 10 tests
+
+---
+
+## §15. CORRECTION01 — Real production-seam proof (added at CORRECTION01 closure)
+
+Per Factory reviewer disposition `HALT_REPAIR_TARGET_PHASE_UNPROVEN`:
+
+P0-1: the executable GREEN in the original ARETC01 used a local
+      `epochTransitionReseed` helper that *models* the production
+      contract. The P0-1..P0-4 structural witnesses only check source
+      location; they do NOT prove runtime behavior. ABL01 ablates the
+      test helper, not the production repair.
+
+P0-2: unconditional `idle` reseed is asserted by CTL02 but the test
+      encodes the proposed target rather than deriving it from a
+      canonical owner. There is no authority-level proof that every
+      caller of `resetMessageTranslatorAndFence()` transitions to
+      `idle` as the truthful immediate phase.
+
+P1:   coverage ratchet NOT executed despite production source changes.
+
+CORRECTION01 PROOF (new file
+`apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01-c01-real-seam.test.ts`,
+6 tests, all PASS):
+
+  C01-P0-1       source-level: production body contains the bounded
+                 reseed line (writer identity, phase, order vs bumpEpoch)
+  C01-PRIMARY    runtime-level: the LITERAL production body, compiled
+                 via `new Function(body)` and executed against real
+                 MessageIdMinter + MessageTranslatorState +
+                 TurnStateTracker + writerIdentity harness, flips the
+                 tracker from epoch-E `streaming` to epoch-(E+1) `idle`
+                 with a fresh seq
+  C01-CTL01      runtime-level: ordinary ask-response, no production
+                 seam call, streaming remains valid (no regression)
+  C01-CTL02      runtime-level: epoch transition without ask-response,
+                 the production body still reseeds to `idle` (generic)
+  C01-ABLATION   runtime-level: when the production reseed line is
+                 removed (source patch), C01-PRIMARY + C01-P0-1 RED
+                 (LIVE-proven bug returns at the real seam)
+  C01-UNION      counter-drift protection: writer identity literal
+                 IS in the closed TurnStateWriterId union
+
+PRODUCTION ABLATION CYCLE (executed):
+
+  Step 1: production source had the reseed line.
+          Real-seam tests: 6/6 PASS (C01-P0-1, C01-PRIMARY, CTL01,
+          CTL02, ABLATION, UNION).
+  Step 2: comment out the reseed line in SdkController.ts.
+          Real-seam tests: 2/6 RED (C01-P0-1 detects removal;
+          C01-PRIMARY reproduces the LIVE RED at the real seam).
+  Step 3: restore the reseed line in SdkController.ts.
+          Real-seam tests: 6/6 PASS (back to baseline).
+
+This proves the production repair is NECESSARY (without it, the LIVE
+bug returns at the real seam) and SUFFICIENT (with it, the seam
+behaves as expected) — exactly the bounded proof CORRECTION01 required.
+
+TARGET-PHASE AUTHORITY RECON (mat per `resetMessageTranslatorAndFence()`
+caller):
+
+  Path 1 (line 822 - SdkModeCoordinator constructor callback) -
+    `mode-switch-resumable`:
+      after `resetMessageTranslator()` at sdk-mode-coordinator.ts:307,
+      if `autoContinue=true` then `onAutoContinueStarting()` writes
+      `streaming`; if `autoContinue=false` no further writer. The
+      truthful immediate phase = `idle`.
+
+  Path 2 (line 898 - SdkFollowupCoordinator constructor callback) -
+    `autoContinueStart` at sdk-followup-coordinator.ts:134:
+      after `resetMessageTranslator()`, `fireAndForgetSend` is called;
+      canonical state will move to `streaming` via runtime event flow.
+      Truthful immediate phase = `idle`.
+
+  Path 3 (line 898 - SdkFollowupCoordinator) - `resumeSessionFromTask`
+    at sdk-followup-coordinator.ts:242:
+      after `resetMessageTranslator()`, send the resume prompt;
+      canonical state will move to `streaming` via runtime event flow.
+      Truthful immediate phase = `idle`.
+
+  Path 4 (line 922 - SdkTaskControlCoordinator) - `clearTaskForOperation`
+    at sdk-task-control-coordinator.ts:163:
+      `SdkController.clearTask` writes `idle` at line 2041 FIRST, then
+      delegates to `clearTaskForOperation` which calls
+      `resetMessageTranslator`. Tracker already `idle`; reseed is
+      idempotent. Truthful immediate phase = `idle`.
+
+  Path 5 (line 922 - SdkTaskControlCoordinator) - `showTaskWithId`
+    at sdk-task-control-coordinator.ts:236:
+      after `resetMessageTranslator()`, loads messages and installs
+      a task proxy; canonical state settles via resume event flow.
+      Truthful immediate phase = `idle`.
+
+  Path 6 (line 2274 - SdkController.editMessageAndRegenerate):
+      writes `streaming` at line 2268 BEFORE `resetMessageTranslator`
+      at line 2274. After reseed, tracker is `idle`. Canonical state
+      quickly moves to `streaming` as soon as the new session starts.
+      Truthful immediate phase = `idle`.
+
+  Path 7 (line 2376 - SdkController.restoreCheckpoint):
+      writes `idle` at line 2374 BEFORE `resetMessageTranslator`
+      at line 2376. Idempotent. Truthful immediate phase = `idle`.
+
+  Separate epoch-advance path: `raiseCancelFence` at line 928:
+      bumps epoch directly (NOT through `resetMessageTranslatorAndFence`).
+      `SdkController.cancelTask` writes `resumable` at line 1927
+      BEFORE `taskControl.cancelTask()` calls `raiseCancelFence`.
+      Tracker holds `resumable`. Cancel path does NOT have a stale-
+      streaming risk (the `resumable` write happens BEFORE the bump,
+      so any epoch-E streaming was already overwritten). OUT OF
+      SCOPE for this ACT (per reviewer mandate: "do not reopen
+      writer provenance, ask-response classification, compaction, UI,
+      or the LIVE capture").
+
+CONCLUSION: `idle` is universally truthful as the immediate phase
+after `resetMessageTranslatorAndFence()` for all 7 caller paths. No
+per-class projection needed.
+
+QUALITY GATES at CORRECTION01 closure:
+
+  Targeted real-seam tests:
+    apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01-c01-real-seam.test.ts
+    6/6 PASS with production line present; 2/6 RED with production
+    line commented out (PROVEN PRODUCTION ABLATION)
+
+  Full apps/vscode vitest: 1963/1963 PASS (baseline 1947 + 10
+  ARETC01 + 6 CORRECTION01)
+  Webview: 620/620 PASS (unchanged)
+  Typecheck: EXIT=0
+  Lint: PASS
+  Coverage ratchet: PASS (statements +507, branches +606, functions
+    +60, lines +503; all above baseline; coverage_config_fingerprint
+    unchanged)
+  Board validator: clean
+  Git diff --check: clean
+
+VALID VERDICT: PASS_EPOCH_TURNSTATE_RESEED_REPAIRED
