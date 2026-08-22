@@ -77,6 +77,13 @@ export default defineConfig({
 			// Discriminator for upstream `cline/cline#12975` —
 			// Stop/Resume must not replay already-completed work.
 			"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-RUNTIME-SHADOW-REACTIVATION01
+			// / RSR01: production-seam RED at the canonical runtime-event ↔
+			// shadow reactivation boundary. Real LocalRuntimeHost +
+			// per-call fresh stub agent (resume creates a new agent) +
+			// real TaskShadowHostWiring + real
+			// subscribeCanonicalRuntimeEventsToShadow.
+			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

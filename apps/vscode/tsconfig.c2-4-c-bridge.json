@@ -75,7 +75,11 @@
 		"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
 		// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
 		// Stop/Resume integrity discriminator.
-		"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-RUNTIME-SHADOW-REACTIVATION01
+		// / RSR01: production-seam RED at the canonical runtime-event ↔
+		// shadow reactivation boundary.
+		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts"
 	],
 	"exclude": [
 		"node_modules",
