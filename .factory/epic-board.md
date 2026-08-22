@@ -4232,7 +4232,9 @@ The two pre-existing board validator failures at L204 / L207 are P2 / historical
 
 ## ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 — first commit (corrected after Factory review)
 
-**STATUS:** `HALT_RED_NOT_REPRODUCED` at the production Resume seam — the upstream defect does NOT reproduce against the real `LocalRuntimeHost + SessionRuntime + AgentRuntime` composition with a transcript-intact, post-Stop Resume gesture under the upstream chronology. (Initial commit `e6272bb4e` claimed `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — too strong; the second commit `e5a699695` corrected to `HALT_RED_NOT_REPRODUCED` but the Factory reviewer's `HALT_TEST_SEAM_INVALID` disposition flagged two P0 gaps (queue precondition, Resume entrypoint); the third commit added `QPSR03_PRODUCTION_CHRONOLOGY` to close both gaps.)
+**STATUS:** `CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST = NOT_REPRODUCED` (narrowed per Factory reviewer disposition). At the core Stop→Resume composition (real `LocalRuntimeHost + SessionRuntime + AgentRuntime`, transcript-intact, post-Stop Resume, upstream chronology P2-while-P1-running, production Resume entrypoint `readLiveSessionMessages` → fresh-host `startSession({ initialMessages })` → `runTurn`), the loss-of-completed-tool-result-blocks causal hypothesis for upstream #12975 is ruled out at this seam. The broader provider-dependent behavioral replay (framing, span selection, salience, reconstructed user turns, etc.) remains NOT_EXERCISED by this test. The synthetic StepModel collapses the upstream question to one specific causal hypothesis; this is a necessary, not sufficient, result for the global "upstream defect absent at this fork" claim.
+
+(Initial commit `e6272bb4e` claimed `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — too strong. The second commit `e5a699695` corrected to `HALT_RED_NOT_REPRODUCED` but the Factory reviewer's `HALT_TEST_SEAM_INVALID` disposition flagged two P0 gaps (queue precondition, Resume entrypoint). The third commit added `QPSR03_PRODUCTION_CHRONOLOGY` to close both P0s. Per the reviewer's most recent narrowing, the verdict is now `CASE_Q2 = NOT_REPRODUCED` rather than the global `HALT_RED_NOT_REPRODUCED`.)
 
 **ENTRY_HEAD (corrected, third commit):** HEAD on `act/task-interaction-ownership-projection01-live-capture` (post-third-commit).
 **BRANCH:** `act/task-interaction-ownership-projection01-live-capture` (no new branch created — existing LIVE-Capture branch used, per Factory reviewer disposition).
@@ -4249,7 +4251,7 @@ The new `QPSR03_PRODUCTION_CHRONOLOGY` test (third commit) closes the two P0s th
 - **Witness #3** — P2 drain is observed via `pending_prompt_submitted` AFTER P1 finishes, AND C3 has begun executing.
 - **Witness #4** — Resume enters through the PRODUCTION entrypoint: `readLiveSessionMessages` → fresh-host `startSession({ initialMessages })` → `runTurn`. This mirrors `SdkFollowupCoordinator.resumeSessionFromTask` exactly (the lifecycle does NOT just call `runTurn` on the live session; it reloads the transcript into a fresh session).
 
-C3 is wrapped in a deferred executor that races its release-promise against `AgentToolContext.signal`, so `agent.abort()` (called by `host.abort`) deterministically interrupts C3 mid-tool. This lets the test land Stop while C3 is the current tool — mirroring the upstream issue's exact failure window.
+C3 is wrapped in a deferred executor that races its release-promise against `AgentToolContext.signal`, so `agent.abort()` (called by `host.abort`) deterministically interrupts C3 mid-tool. **Caveat**: C3's executor itself returns `success:true` when abort wins — it does NOT throw. This is a structural mirror of the failure timing, NOT a faithful reproduction of the production executeTurn throw path. What the test really proves is the *window*: C3 executor entered (`c3Count === 1`), Stop landed before release, the host's own `abort()` machinery drove status to `"idle"`. See recon §15.2 for the full caveat.
 
 **Composition:**
 - REAL: `LocalRuntimeHost`, `SessionRuntime` orchestrator, `AgentRuntime`, `FileSessionService`, `ConversationStore` (all production classes via bridge aliases).
@@ -4277,7 +4279,7 @@ C3 is wrapped in a deferred executor that races its release-promise against `Age
 2. `runTurn(P1)` started WITHOUT awaiting completion. **Witness #1**: wait until `c1Count === 1` AND `session.status === "running"` (P1 is provably active).
 3. **Witness #2**: `runTurn({ sessionId: S, prompt: P2, delivery: "queue" })` submitted while P1 is still executing. The host emits `pending_prompts` with P2 in `prompts[]` AND `delivery === "queue"`. The queue precondition (`!canStartRun() && interactive → "queue"`) is genuinely exercised.
 4. `await p1Promise` → P1 completes → `canStartRun()` flips TRUE → `scheduleDrain` → `drain` → `runTurn` → `run_c3.execute()` (deferred, blocks on release-vs-abort-signal race). **Witness #3**: `pending_prompt_submitted` event observed for P2; `c3Count >= 1` (C3 currently executing).
-5. `firstHost.abort(S, "user-pressed-stop")` → `session.aborting = true` → `agent.abort(reason)` → `abortController.signal` aborted → `run_c3.execute()` unblocks → `executeTurn` throws → `completeAbortedInteractiveTurn` → status `"idle"`. **This is the upstream Stop window.**
+5. `firstHost.abort(S, "user-pressed-stop")` → `session.aborting = true` → `agent.abort(reason)` → `abortController.signal` aborted → `run_c3.execute()`'s gate unblocks via signal (executor returns success:true — synthetic, see recon §15.2 caveat; NOT a faithful reproduction of the production executeTurn throw). The host's `abort()` machinery itself drives `completeAbortedInteractiveTurn` → status `"idle"`. **This is the upstream Stop window.**
 6. **Witness #4 prep**: `firstHost.readLiveSessionMessages(S)` → `initialMessages`. `firstHost.dispose()`.
 7. **Witness #4**: construct SECOND `LocalRuntimeHost` against the SAME `FileSessionService` → `secondHost.startSession({ sessionId: S, initialMessages, ... })` → `secondHost.runTurn({ sessionId: S, prompt: "Resume P2" })`. The resume-only `StepModel` inspects `initialMessages` and emits text continuation (NO replay).
 8. Assertions: `c1Count === 1`, `c2Count === 1`, `p2EnqueueObserved >= 1`, `p2DrainCount >= 1`, `finishReason === "completed"`.
@@ -4312,12 +4314,27 @@ C3 is wrapped in a deferred executor that races its release-promise against `Age
 }
 ```
 
-**Classification (per ACT §7 — corrected, third commit):**
-- `HALT_RED_NOT_REPRODUCED` — at the production Resume seam exercised by `QPSR03_PRODUCTION_CHRONOLOGY`, the upstream `#12975` "C1/C2 replay after Resume" defect does NOT reproduce under the upstream chronology (P2 submitted while P1 is executing) AND the production Resume entrypoint (`loadInitialMessages` + `startNewSession({initialMessages})` + `runTurn`). The ConversationStore retains the T1 transcript through Stop, the second host's startSession-with-history bootstrap loads the transcript, and the resumed `agent.continue()` sees both prior tool results in `request.messages` and emits a text-delta continuation rather than a tool-call replay.
-- This is a legitimate HALT outcome per Factory policy: "If real Stop/Resume is coherent: HALT_RED_NOT_REPRODUCED. That is a valid and useful outcome."
-- The initial commit `e6272bb4e` classified this ACT prematurely as `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — that classification was scoped only to the host queue + abort control seam and overstated the load-bearing RED.
-- The second commit `e5a699695` corrected to `HALT_RED_NOT_REPRODUCED` but the Factory reviewer's `HALT_TEST_SEAM_INVALID` disposition flagged two P0 gaps (queue precondition not exercised; Resume entrypoint bypassed). The third commit's `QPSR03_PRODUCTION_CHRONOLOGY` closes both gaps.
-- Net verdict: `HALT_RED_NOT_REPRODUCED` (transcript conservation survives Stop→Resume under the upstream chronology AND the production Resume entrypoint).
+**Classification (per ACT §7 — corrected, third commit, narrowed per Factory reviewer disposition):**
+
+```
+CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST = NOT_REPRODUCED
+C1/C2_TOOL_RESULT_DURABILITY_ACROSS_RESUME      = PROVEN
+P2_QUEUE_ENQUEUE                                 = PROVEN
+P2_QUEUE_DRAIN                                   = PROVEN
+PRODUCTION_RESUME_BOOTSTRAP                      = SYNTHETIC_REAL_COMPOSITION_PROVEN
+UPSTREAM_BEHAVIORAL_REPLAY                       = NOT_FULLY_DISCRIMINATED
+C3_ABORT_RESULT_SEMANTICS                        = SYNTHETIC  (returns success:true; production executeTurn-throw path NOT faithfully reproduced)
+```
+
+- **At this seam** (real composition, transcript-intact, post-Stop Resume, upstream chronology, production Resume entrypoint), the ConversationStore retains the T1 transcript through Stop, the second host's startSession-with-history bootstrap loads the transcript, and the resumed `agent.continue()` sees both prior tool results in `request.messages` and emits a text-delta continuation rather than a tool-call replay.
+- **What the test proves**: the loss-of-completed-tool-result-blocks causal hypothesis for upstream `#12975` is ruled out at the core Stop→Resume composition.
+- **What the test does NOT prove**: that a real provider cannot choose to replay given a preserved history (framing, span selection, salience, reconstructed user turns, etc.). Those hypotheses are not exercised by the synthetic StepModel.
+- The QPSR03 discriminator is necessary, not sufficient, for the global "upstream defect absent at this fork" claim.
+- C3 abort semantics are synthetic: the deferred executor returns `success:true` on either path (release or signal-abort); it does NOT throw. The host's own `abort()` machinery does drive `completeAbortedInteractiveTurn` → status `"idle"`, which is the load-bearing observation. `c3Count === 1` means C3 executor *entered*, not that it completed.
+- **Initial commit `e6272bb4e`** classified this ACT prematurely as `PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT` — too strong, scoped only to the host queue + abort control seam.
+- **Second commit `e5a699695`** corrected to `HALT_RED_NOT_REPRODUCED` — global verdict overclaim flagged by Factory reviewer (`HALT_TEST_SEAM_INVALID`).
+- **Third commit's `QPSR03_PRODUCTION_CHRONOLOGY`** closes both P0 gaps (queue precondition not exercised; Resume entrypoint bypassed) and narrows the verdict to `CASE_Q2 = NOT_REPRODUCED`.
+- **Net verdict (narrowed)**: `CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST = NOT_REPRODUCED` at the core Stop→Resume composition. Real-provider replay: NOT_EXERCISED.
 
 **What the test deliberately does NOT exercise:**
 - The `host.restoreSession({ restore: { messages: true } })` path — production Resume in VS Code is `startSession({ sessionId, prompt })` on the live session, not `restoreSession`. `restoreSession` is only used by `editMessageAndRegenerate`. Per recon §15.1, this ACT targets the production Resume path; the `restoreSession` path is a separate `host.restoreCheckpoint` seam that the VS Code Resume UI does not invoke.
@@ -4330,6 +4347,47 @@ C3 is wrapped in a deferred executor that races its release-promise against `Age
 - `TaskHeader` UI presentation — untouched.
 
 **No push, no force push, no published-commit amend.** Commits land at the current entry head plus the bridge + recon + board delta; no remote update.
+
+## ACT closure — STOP THIS BUG FAMILY
+
+Per Factory reviewer disposition (post-`8f7190932` narrowing):
+
+```
+ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01
+
+VERDICT =
+  NOT_REPRODUCED_AT_CORE_TRANSCRIPT_RESUME_COMPOSITION
+
+PROVEN =
+  queued P2 chronology
+  queue enqueue/dequeue
+  Stop while P2 current
+  fresh-session Resume bootstrap
+  completed C1/C2 tool results survive
+  C1/C2 execute once
+
+NOT_PROVEN =
+  absence of upstream replay under a real provider/model
+
+PRODUCTION_DELTA = NONE
+
+NEXT =
+  STOP THIS BUG FAMILY
+
+NO_QPSR04
+NO_PRODUCTION_REPAIR
+```
+
+The investigation is closed as a successful negative. The fork preserves
+completed tool-result history across the exact queued-P2 → Stop →
+fresh-session Resume lifecycle, so transcript loss at that boundary is
+not the reproduced cause of upstream `#12975`. Real-provider replay
+remains NOT_EXERCISED and is out of scope for this ACT family.
+
+The fourth commit (`pending`) is a bounded evidence-correction-only
+patch (board wording refinement, recon §15.2 caveat, test-file SEMANTIC
+NOTE comment on the C3 deferred tool). No new test. No new ACT. No
+review cycle beyond what the reviewer explicitly requested.
 
 ## Board maintenance rule
 

@@ -20,6 +20,33 @@
  *     and C2 tool invocations, queues P2, calls host.abort(), then
  *     calls host.runTurn() with a new prompt (the Resume gesture) and
  *     observes whether C1/C2 are re-executed via counter-backed tools.
+ *   - `QPSR03_PRODUCTION_CHRONOLOGY` (third commit) closes the two P0
+ *     gaps the Factory reviewer flagged against `e5a699695`:
+ *     (1) P1 is provably active when P2 is submitted (queue
+ *         precondition genuinely exercised, not bypassed).
+ *     (2) Resume enters through the production Resume entrypoint
+ *         (readLiveSessionMessages → fresh-host
+ *         startSession({initialMessages}) → runTurn), not the
+ *         simplified live-session `runTurn` shortcut.
+ *
+ * Final classification (narrowed per Factory reviewer disposition):
+ *   CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST = NOT_REPRODUCED
+ *   C1/C2_TOOL_RESULT_DURABILITY_ACROSS_RESUME     = PROVEN
+ *   P2_QUEUE_ENQUEUE                                = PROVEN
+ *   P2_QUEUE_DRAIN                                  = PROVEN
+ *   PRODUCTION_RESUME_BOOTSTRAP                     = SYNTHETIC_REAL_COMPOSITION_PROVEN
+ *   UPSTREAM_BEHAVIORAL_REPLAY                      = NOT_FULLY_DISCRIMINATED
+ *   C3_ABORT_RESULT_SEMANTICS                       = SYNTHETIC
+ *
+ * The QPSR03 discriminator collapses the upstream #12975 question to
+ * one specific causal hypothesis (loss of completed tool-result blocks
+ * during Stop → history reload → fresh session bootstrap). A GREEN on
+ * this discriminator rules out that hypothesis at this seam. It does
+ * NOT prove that a real provider cannot choose to replay given a
+ * preserved history (framing, span selection, salience, reconstructed
+ * user turns — none of which this test exercises). The QPSR03
+ * discriminator is necessary, not sufficient, for the global
+ * "upstream defect absent at this fork" claim.
  *
  * Production seam under test (LocalRuntimeHost, sdk/packages/core):
  *   runTurn(input) → if delivery="queue" → pendingPromptsController.enqueue
@@ -821,7 +848,7 @@ describe("ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR02_REAL_COMPOS
 			finishReason: resume?.finishReason,
 			classification:
 				counters.c1Count === 1 && counters.c2Count === 1
-					? "HALT_RED_NOT_REPRODUCED — transcript intact, C1/C2 not replayed"
+					? "QPSR02 preliminary control PASS — transcript intact at simplified live-session Resume seam (real composition proven; production Resume entrypoint deferred to QPSR03)"
 					: "CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST — defect reproduced",
 		}
 		// eslint-disable-next-line no-console
@@ -1082,7 +1109,7 @@ async function buildComposedQpsr03Host(opts: {
 	const c3: AgentTool<{ commands: string[] }, Array<{ result: string; success: true }>> = {
 		name: "run_c3",
 		description:
-			"synthetic_real deferred run_c3-shaped AgentTool; executor waits for release() or abort signal before returning.",
+			"synthetic_real deferred run_c3-shaped AgentTool; executor waits for release() or abort signal before returning. SEMANTIC NOTE: this tool's executor returns success:true on either path — it does NOT throw on abort. The abort signal unblocks the gate so the executor returns quickly, but the production executeTurn-throw-→-completeAbortedInteractiveTurn path is NOT faithfully reproduced. What IS reproduced: (a) C3 executor entered (c3Count >= 1), (b) Stop landed before release, (c) host.abort() drove session.status to 'idle' via the real LocalRuntimeHost.completeAbortedInteractiveTurn path.",
 		inputSchema: {
 			type: "object",
 			properties: { commands: { type: "array", items: { type: "string" } } },
@@ -1095,10 +1122,11 @@ async function buildComposedQpsr03Host(opts: {
 				entered = true
 				onC3Enter()
 			}
-			// Race the release promise against the abort signal so that
-			// upstream Stop can interrupt C3 cleanly via the same
-			// `agent.abort()` path that real tools use. Whichever wins
-			// first resolves the gate.
+			// Race the release promise against the abort signal so the
+			// upstream `agent.abort()` (driven by host.abort()) unblocks
+			// the gate. Whichever wins first resolves the race and the
+			// executor returns success:true (NOT throwing — see SEMANTIC
+			// NOTE in the description above).
 			const signal = context?.signal
 			if (signal) {
 				await Promise.race([
@@ -1508,7 +1536,7 @@ describe("ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR03_PRODUCTION_
 				preResume,
 				classification:
 					counters.c1Count === 1 && counters.c2Count === 1
-						? "HALT_RED_NOT_REPRODUCED — C1/C2 durable transcript conservation across Stop→Resume"
+						? "CASE_Q2 = NOT_REPRODUCED — C1/C2 durable transcript conservation at core Stop→Resume composition (real-provider replay NOT_EXERCISED)"
 						: "CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST — defect reproduced",
 			}
 			// eslint-disable-next-line no-console

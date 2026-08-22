@@ -374,16 +374,29 @@ LIVE first-host session. QPSR03 mirrors production exactly:
 Witness #4 proves the production Resume entrypoint is exercised end to
 end (not the simplified live-session `runTurn` shortcut).
 
-### Tool deferral
+### Tool deferral (C3) — semantic note
 
 C3's executor races its release-promise against the abort signal passed
-through `AgentToolContext.signal`. Without the signal, the deferred
-executor would block `executeTurn` from returning forever; `agent.abort()`
-flips the signal which unblocks the executor and lets `executeTurn` throw,
-which `runTurn`'s try/catch catches and routes through
-`completeAbortedInteractiveTurn` (status: "idle"). This lets the test
-deterministically land Stop while C3 is the current tool — mirroring
-the upstream issue's exact failure window.
+through `AgentToolContext.signal`. The race is *structural*: it lets the
+test deterministically land Stop while C3 is the current tool, mirroring
+the upstream issue's exact failure window. **Important caveat**: the C3
+executor itself does NOT throw on abort — it returns
+`{ result: "executed:...", success: true }` once either the release gate
+or the abort signal resolves. This is a synthetic_real seam, not a
+faithful reproduction of `completeAbortedInteractiveTurn`'s throw path.
+What the test really proves is the *window*: c3Count >= 1 means C3
+executor *entered* the tool under the queue-drained run, while the Stop
+signal lands before the executor can be released. The actual
+production-interrupted-tool semantics (executeTurn throw →
+completeAbortedInteractiveTurn → status:"idle") are exercised by the host's
+`abort()` machinery itself, which we DO call (`firstHost.abort(S,
+"user-pressed-stop")`) and which DOES drive the host to `"idle"` — that is
+the load-bearing observation, not the C3 executor's return shape.
+
+So:
+- `c3Count === 1` means C3 executor entered; not that it completed.
+- The host-abort → status:"idle" transition is what proves C3 was
+  Stop'd mid-tool at the host seam.
 
 ### Chronology (QPSR03)
 
@@ -405,8 +418,9 @@ T3  await p1Promise → P1 completes → canStartRun() flips TRUE
 T4  firstHost.abort(sessionId, "user-pressed-stop")
     session.aborting = true
     session.agent.abort(reason) → abortController.signal aborted
-    C3.execute() unblocks via signal
-    executeTurn throws → completeAbortedInteractiveTurn → status: "idle"
+    C3.execute()'s gate unblocks via signal (executor returns success:true
+                                              — synthetic, see §15.2 caveat)
+    completeAbortedInteractiveTurn runs → status: "idle"
     Witness #4 prep: readLiveSessionMessages(sessionId) → initialMessages
     Witness #4 prep: firstHost.dispose() (release C3 first)
 T5  new secondHost = new LocalRuntimeHost(...)
@@ -425,9 +439,33 @@ T6  expect(c1Count) === 1
 
 ### Classification outcomes (QPSR03)
 
+The QPSR03 result collapses into a precise, NOT over-broad classification
+(FACTORY REVIEWER DISPOSITION):
+
+```
+CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST = NOT_REPRODUCED
+C1/C2_TOOL_RESULT_DURABILITY_ACROSS_RESUME     = PROVEN
+P2_QUEUE_ENQUEUE                                = PROVEN
+P2_QUEUE_DRAIN                                  = PROVEN
+PRODUCTION_RESUME_BOOTSTRAP                     = SYNTHETIC_REAL_COMPOSITION_PROVEN
+UPSTREAM_BEHAVIORAL_REPLAY                      = NOT_FULLY_DISCRIMINATED
+```
+
+The synthetic StepModel collapses the upstream #12975 behavioral question
+to one specific causal hypothesis (loss of completed tool-result blocks
+during Stop → history reload → fresh session bootstrap). A GREEN on this
+discriminator means that hypothesis is ruled out at this seam. It does
+NOT mean a real provider cannot choose to replay given a preserved
+history (e.g. framing, span selection, salience, reconstructed user
+turns — none of which this test exercises). The QPSR03 discriminator is
+necessary, not sufficient, for the global "upstream defect absent at this
+fork" claim.
+
+Discriminator outcomes:
+
 | Outcome | Classification |
 |---|---|
-| `c1Count === 1 && c2Count === 1` AND `p2EnqueueObserved >= 1` AND `p2DrainCount >= 1` | `HALT_RED_NOT_REPRODUCED` — full upstream-chronology + production-Resume seam. Transcript conservation survives Stop→Resume. |
+| `c1Count === 1 && c2Count === 1` AND `p2EnqueueObserved >= 1` AND `p2DrainCount >= 1` | `CASE_Q2 = NOT_REPRODUCED`. Transcript/result-loss replay not reproduced at the core Stop→Resume composition. Broader provider-dependent replay remains NOT_EXERCISED. |
 | `c1Count > 1` OR `c2Count > 1` | `CASE_Q2_TRANSCRIPT_RESTORE_REPLAYS_TOOL_REQUEST` — defect reproduced. The resumed Session emitted a C1 tool call because the loaded transcript lacked the prior C1/C2 tool results. |
 
 ### §15.2.1 What this test deliberately does NOT exercise
@@ -441,5 +479,36 @@ T6  expect(c1Count) === 1
 
 ## Recon close
 
-Recon complete. Real-composition discriminators implemented (QPSR01 host controls + QPSR02 real composition + QPSR03 production-Resume entrypoint). Do not manufacture a repair.
-reproduces in this fork — that is exactly what the test will determine.
+Recon complete. Real-composition discriminators implemented (QPSR01 host controls + QPSR02 real composition + QPSR03 production-Resume entrypoint under upstream chronology with production Resume entrypoint). Do not manufacture a repair.
+
+**Final verdict (narrowed per Factory reviewer disposition):**
+
+```
+ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01
+VERDICT = NOT_REPRODUCED_AT_CORE_TRANSCRIPT_RESUME_COMPOSITION
+
+PROVEN = queued P2 chronology, queue enqueue/dequeue,
+         Stop while P2 current, fresh-session Resume bootstrap,
+         completed C1/C2 tool results survive, C1/C2 execute once
+NOT_PROVEN = absence of upstream replay under a real provider/model
+PRODUCTION_DELTA = NONE
+NEXT = STOP THIS BUG FAMILY
+NO_QPSR04
+NO_PRODUCTION_REPAIR
+```
+
+The synthetic StepModel collapses the upstream #12975 behavioral question
+to one specific causal hypothesis (loss of completed tool-result blocks
+during Stop → history reload → fresh session bootstrap). A GREEN on this
+discriminator means that hypothesis is ruled out at this seam. It does
+NOT mean a real provider cannot choose to replay given a preserved
+history (framing, span selection, salience, reconstructed user turns —
+none of which this test exercises). The QPSR03 discriminator is
+necessary, not sufficient, for the global "upstream defect absent at this
+fork" claim.
+
+The investigation is closed as a successful negative. The fork preserves
+completed tool-result history across the exact queued-P2 → Stop →
+fresh-session Resume lifecycle, so transcript loss at that boundary is
+not the reproduced cause of upstream `#12975`. Real-provider replay
+remains NOT_EXERCISED and is out of scope for this ACT family.
