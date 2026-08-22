@@ -1,9 +1,9 @@
 # Cline-- Global Epic Board
 
 CANONICAL_AS_OF: 2026-08-22
-SUBJECT_HEAD: 1e6430bc15f00d08f66dc905c41edbd3f74045db
+SUBJECT_HEAD: 0280b5659aa6e21ef3d54e8fbbe7d11c5c5d25d3
 BOARD_COMMIT: discover with `git log -1 -- .factory/epic-board.md`
-BOARD_WAVE: 1 → TASK CENSUS 01
+BOARD_WAVE: 1 → TASK CENSUS 01 → ACT-CLINEMM-COST-DISPLAY-TRUTH01 applied
 
 ---
 
@@ -3407,7 +3407,7 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 ### COST-DISPLAY-TRUTH01
 
 - ID: `EPIC-CLINEMM-COST-DISPLAY-TRUTH01`
-- STATUS: OPEN
+- STATUS: CLOSED / TRUTHFUL_BILLING_PRESENTATION
 
 **Symptom.** Dollar estimates such as `"$0.0082"` are misleading when the user is on a flat-rate / subscription access path.
 
@@ -3420,7 +3420,35 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **If billing mode is not observable:** support explicit display policy / user override rather than inventing billing knowledge.
 
-**Rule.** Do not implement in this ACT.
+**Closed at:** ACT-CLINEMM-COST-DISPLAY-TRUTH01 (branch `act/cost-display-truth01`, HEAD `0280b5659`)
+
+**Reproduction (RED).** ClinePass metadata already carries `usageCostDisplay = "subscription"` from `@cline/llms` (`sdk/packages/llms/src/providers/builtins.ts:682`). The catalog layer (`apps/vscode/src/sdk/model-catalog/catalog.ts:56-58`) collapsed every non-`"hide"` value to `"show"`, so the TaskHeader price-tag rendered `"$0.0082"` for ClinePass sessions. RED proven at the TaskHeader seam via `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.test.tsx > CDT02`.
+
+**Causal classification.** C2_PROVIDER_ID_IS_AVAILABLE_BUT_PRESENTATION_IS_PROVIDER_AGNOSTIC — the catalog `UsageCostDisplay` type and its `readUsageCostDisplay` mapper dropped `"subscription"`; downstream renderers had no way to distinguish subscription from metered.
+
+**Repair (bounded, one place).**
+
+  - `apps/vscode/src/sdk/model-catalog/contracts.ts` — widen `UsageCostDisplay` to `"show" | "hide" | "subscription"`.
+  - `apps/vscode/src/sdk/model-catalog/catalog.ts` — `readUsageCostDisplay` forwards SDK answer verbatim.
+  - `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts` — widen return union.
+  - `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx:142-156` — gate the price-tag on `usageCostDisplay === "show"` (one-character semantic flip).
+  - `apps/vscode/proto/cline/models.proto` — doc comment lists the three wire values.
+  - `sdk/packages/llms/src/providers/billing.test.ts` — explicit cline-pass contract test added.
+
+**Conservation.**
+
+  - METERED_COST_DISPLAY = CONSERVED (anthropic, openai-native, cline-credits still render; CDT01 + 626/626 webview + 1993/1993 vscode + 664/664 @cline/llms).
+  - FLAT_RATE_FALSE_SPEND = REMOVED (ClinePass no longer leaks reference prices; CDT02 RED→GREEN).
+  - TOKEN_USAGE = CONSERVED (usage.totalCost untouched; only rendering gate moved).
+  - REFERENCE_ECONOMICS = PRESERVED_IF_REQUIRED (SDK still reports it; only the *charge* claim is suppressed).
+  - HISTORICAL_POLICY = UNCHANGED. `HistoryItem` carries no `apiProvider`; per brief §12 historical `HistoryPreview` / `HistoryViewItem` cost chips remain on stored values. No migration, no field added.
+  - CLI_PARITY = N/A (CLI already correct via `shouldShowCliUsageCost` which returns `=== "show"`). `shouldShowCliUsageCoveredBySubscription` exists but has zero consumers; no architectural expansion.
+
+**Necessity / ablation.** Reverting the gate change returns the same CDT02 RED (`"$0.0082"` leaks for cline-pass); restoring fixes it. The semantic discriminator is the load-bearing fix.
+
+**Verdict.** PASS_TRUTHFUL_COST_PRESENTATION.
+
+**Commits.** `0ab0c3952` (test RED) + `0280b5659` (fix). Not pushed.
 
 ### Historical recovery/observability family
 
