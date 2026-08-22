@@ -2866,10 +2866,26 @@ export class Controller {
 	 * mode rebuild, new-session follow-up). Bumping the epoch BEFORE the new state is pushed
 	 * means any straggler message/state from the previous task or render carries an older epoch
 	 * and is dropped by the webview. Order matters: bump synchronously here, before any await.
+	 *
+	 * ACT-CLINEMM-ASK-RESPONSE-EPOCH-TURNSTATE-COHERENCE01 (CASE_B):
+	 *
+	 * The legacy TurnStateTracker does NOT track epoch internally. Without a
+	 * coordinated reseed here, a `streaming` phase minted in epoch E by any
+	 * legitimate writer (controller-ask-response, controller-edit-message-and-
+	 * regenerate, task-start-init-task, ...) would survive into epoch E+1 and
+	 * be published to the webview alongside the canonical `idle` runtime/shadow
+	 * state — exactly the LIVE contradiction captured at taskId=1787358662798_o2lwn
+	 * (PTAD stale legacySeq=3878, writerId=controller-ask-response, writerEpoch=2,
+	 * bad_state_epoch=3). The reseed writes `idle` to the tracker with a
+	 * dedicated writer identity so the post-boundary tracker phase agrees with
+	 * the canonical state. The reseed is intentionally a one-shot invalidation
+	 * (not a fence that compares epochs per read); the next conversation writer
+	 * (task-start-init-task, etc.) will re-assert whatever phase is appropriate.
 	 */
 	resetMessageTranslatorAndFence(): void {
 		this.messageTranslatorState.reset()
 		this.messageTranslatorState.getMinter().bumpEpoch()
+		this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("controller-epoch-transition-reseed"))
 	}
 
 	async getStateToPostToWebview(): Promise<ExtensionState> {

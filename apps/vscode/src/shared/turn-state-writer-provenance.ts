@@ -97,6 +97,7 @@ export type TurnStateWriterId =
 	| "controller-clear-task"
 	| "controller-ask-response"
 	| "controller-edit-message-and-regenerate"
+	| "controller-epoch-transition-reseed"
 	| "controller-restore-checkpoint"
 	| "unknown-legacy-writer"
 
