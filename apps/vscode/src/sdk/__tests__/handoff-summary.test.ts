@@ -1,29 +1,33 @@
 /**
- * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01
+ * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01+02
  *
- * Real host-seam tests for the /newtask handoff distillation contract.
- * Drives the REAL handoffWithContext handler with a realistic Controller
- * harness, mocking the SDK LLM gateway at the createHandlerAsync boundary.
+ * SYNTHETIC_REAL_HANDLER_COMPOSITION tests for the /newtask handoff
+ * distillation contract. The handler under test is the REAL
+ * handoffWithContext; the Controller is a hand-built synthetic harness;
+ * the SDK LLM gateway is mocked at the createHandlerAsync boundary.
  * No source-regex assertions for the primary proofs; every assertion
  * captures observable runtime behaviour.
  *
  * Coverage:
- *   HCR01  Real GREEN: handler invokes LLM, then controller.initTask with
+ *   HCR01  REAL GREEN: handler invokes LLM, then controller.initTask with
  *          a distilled handoff carrying the five structural facts.
- *   HCR02  Identity: returned taskId differs from active sessionId;
- *          no compactTask call; no task.handleWebviewAskResponse.
- *   HCR03  Failure: LLM error -> controller.initTask NOT called, RPC returns
- *          empty taskId.
+ *   HCR02  Identity: returned taskId differs from active sessionId.
+ *   HCR03  Failure: LLM error -> controller.initTask NOT called.
  *   HCR04  No-active-session control: handler returns empty without LLM.
  *   HCR05  No-provider control: handler returns empty without LLM.
- *   HCR06  Production ablation: placeholder-only provider reverts HCR01 to
- *          RED (handoff does NOT carry the five facts).
- *   HCR07  ProviderConfig slot clears after success and failure.
- *   HCR08  Empty transcript -> no LLM, no initTask.
- *   HCR09  Production provider is the SDK-LLM-backed one, NOT a placeholder.
+ *   HCR06  Provider ablation: placeholder-only provider fails HCR01.
+ *   HCR07  Request isolation: two concurrent calls remain provider-isolated
+ *          even when interleaved (CORRECTION02 PRIMARY RED).
+ *   HCR08  Clear-race: one request finishing cannot clear another
+ *          request's provider context (CORRECTION02 SECONDARY RED).
+ *   HCR09  Empty transcript -> no LLM, no initTask.
+ *   HCR10  Production factory: createSdkHandoffSummaryProvider captures
+ *          its ProviderConfig in closure and consults no module state.
+ *   HCR11  PROD-ABLATION: a placeholder production provider yields
+ *          initTask with placeholder garbage (the CORRECTION01 bug class).
  */
 
-import type { Message as SdkMessage } from "@cline/llms"
+import type { ProviderConfig, Message as SdkMessage } from "@cline/llms"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const createHandlerAsyncMock = vi.fn()
@@ -41,13 +45,7 @@ vi.mock("@/shared/services/Logger", () => ({
 
 import { EmptyRequest } from "@shared/proto/cline/common"
 import { handoffWithContext } from "@/core/controller/task/handoffWithContext"
-import {
-	generateHandoffSummary,
-	getActiveProviderConfig,
-	setActiveProviderConfig,
-	summarizeViaSdkHandler,
-	withProxyAwareFetch,
-} from "@/sdk/handoff-summary"
+import { createSdkHandoffSummaryProvider, generateHandoffSummary, withProxyAwareFetch } from "@/sdk/handoff-summary"
 
 interface MockHandler {
 	createMessage: (prompt: string, messages: Array<{ role: "user" | "assistant"; content: string }>) => AsyncGenerator<unknown>
@@ -76,30 +74,41 @@ function makeTranscript(): SdkMessage[] {
 	]
 }
 
-function expectedLlmHandoff(): string {
+function expectedLlmHandoff(marker: string): string {
 	return [
-		"goal: refactor X",
-		"completedWork: refactored X",
-		"relevantFiles: F",
-		"nextSteps: run tests",
-		"keyDecisions: use Y approach",
+		`goal: refactor ${marker}`,
+		`completedWork: refactored ${marker}`,
+		`relevantFiles: F${marker}`,
+		`nextSteps: run tests ${marker}`,
+		`keyDecisions: use ${marker} approach`,
 	].join("\n")
+}
+
+function makeProviderConfig(marker: string): ProviderConfig {
+	return {
+		providerId: "anthropic",
+		modelId: `claude-sonnet-4-6-${marker}`,
+		apiKey: `test-api-key-placeholder-${marker}`,
+		fetch: globalThis.fetch,
+	}
 }
 
 function makeController(opts: {
 	transcript?: SdkMessage[]
 	hasActiveSession?: boolean
-	hasProvider?: boolean
+	hasProvider?: boolean | ProviderConfig
 	newTaskId?: string
+	providerMarker?: string
 }): any {
 	const transcript = opts.transcript ?? makeTranscript()
 	const newTaskId = opts.newTaskId ?? "task-B"
+	const providerMarker = opts.providerMarker ?? "A"
 	const sessions = {
 		getActiveSession: () =>
 			opts.hasActiveSession === false
 				? undefined
 				: {
-						sessionId: "session-A",
+						sessionId: `session-${providerMarker}`,
 						sdkHost: { readMessages: async () => transcript },
 					},
 	}
@@ -111,30 +120,25 @@ function makeController(opts: {
 		initTask,
 		compactTask,
 		task: { handleWebviewAskResponse },
-		getActiveSessionProviderConfig: () =>
-			opts.hasProvider === false
-				? undefined
-				: ({
-						providerId: "anthropic",
-						modelId: "claude-sonnet-4-6",
-						apiKey: "test-key",
-						fetch: globalThis.fetch,
-					} as unknown as ReturnType<typeof withProxyAwareFetch>),
+		getActiveSessionProviderConfig: () => {
+			if (opts.hasProvider === false) return undefined
+			if (opts.hasProvider !== undefined && opts.hasProvider !== true) return opts.hasProvider
+			return makeProviderConfig(providerMarker)
+		},
 	}
 }
 
-describe("handoff-summary (CORRECTION01 host seam)", () => {
+describe("handoff-summary (CORRECTION01+02 host seam)", () => {
 	beforeEach(() => {
 		createHandlerAsyncMock.mockReset()
-		setActiveProviderConfig(undefined)
 	})
 
 	afterEach(() => {
-		setActiveProviderConfig(undefined)
+		createHandlerAsyncMock.mockReset()
 	})
 
 	it("HCR01 (REAL GREEN): handler drives real LLM call, then calls controller.initTask with the distilled handoff text", async () => {
-		const handler = makeMockHandler({ text: expectedLlmHandoff() })
+		const handler = makeMockHandler({ text: expectedLlmHandoff("A") })
 		createHandlerAsyncMock.mockResolvedValue(handler)
 		const controller = makeController({}) as unknown as any
 		const result = await handoffWithContext(controller, EmptyRequest.create({}))
@@ -147,16 +151,16 @@ describe("handoff-summary (CORRECTION01 host seam)", () => {
 		expect(prompt).toMatch(/relevantFiles:/)
 		expect(prompt).toMatch(/nextSteps:/)
 		expect(prompt).toMatch(/keyDecisions:/)
-		expect(prompt).toContain("refactor X")
-		expect(prompt).toContain("refactored X")
-		expect(prompt).toContain("F")
-		expect(prompt).toContain("run tests")
-		expect(prompt).toContain("Y approach")
+		expect(prompt).toContain("refactor A")
+		expect(prompt).toContain("refactored A")
+		expect(prompt).toContain("FA")
+		expect(prompt).toContain("run tests A")
+		expect(prompt).toContain("A approach")
 		expect(result.value).toBe("task-B")
 	})
 
 	it("HCR02 (IDENTITY): returned taskId differs from active sessionId; no compactTask / sidecar mutation", async () => {
-		const handler = makeMockHandler({ text: expectedLlmHandoff() })
+		const handler = makeMockHandler({ text: expectedLlmHandoff("A") })
 		createHandlerAsyncMock.mockResolvedValue(handler)
 		const controller = makeController({}) as unknown as any
 		const result = await handoffWithContext(controller, EmptyRequest.create({}))
@@ -191,7 +195,7 @@ describe("handoff-summary (CORRECTION01 host seam)", () => {
 		expect(result.value).toBe("")
 	})
 
-	it("HCR06 (ABLATION): a placeholder-only provider makes the handoff fail the HCR01 contract", async () => {
+	it("HCR06 (ABLATION): a placeholder-only provider fails the HCR01 contract", async () => {
 		const placeholderProvider = {
 			summarize: async () =>
 				[
@@ -215,25 +219,127 @@ describe("handoff-summary (CORRECTION01 host seam)", () => {
 		const summary = await generateHandoffSummary({ messages: transcript }, { provider: placeholderProvider })
 		expect(summary).toMatch(/goal:/)
 		expect(summary).toMatch(/completedWork:/)
-		expect(summary).not.toContain("refactor X")
+		expect(summary).not.toContain("refactor A")
 		expect(summary).not.toContain("run tests")
 	})
 
-	it("HCR07 (SLOT-LIFETIME): ProviderConfig slot is cleared after the call (success and failure)", async () => {
-		const handler = makeMockHandler({ text: expectedLlmHandoff() })
-		createHandlerAsyncMock.mockResolvedValue(handler)
-		const controller = makeController({}) as unknown as any
-		await handoffWithContext(controller, EmptyRequest.create({}))
-		expect(getActiveProviderConfig()).toBeUndefined()
-		createHandlerAsyncMock.mockReset()
-		const failingHandler = makeMockHandler({ throwMessage: "boom" })
-		createHandlerAsyncMock.mockResolvedValue(failingHandler)
-		const controller2 = makeController({}) as unknown as any
-		await handoffWithContext(controller2, EmptyRequest.create({}))
-		expect(getActiveProviderConfig()).toBeUndefined()
+	//
+	// HCR07 (CORRECTION02 PRIMARY RED): two concurrent /newtask calls
+	// remain provider-isolated even when their LLM streams interleave
+	// adversarially. The CORRECTION01 module-scoped slot exposed the
+	// wrong config under this ordering; the CORRECTION02 closure-captured
+	// provider fixes it.
+	//
+	it("HCR07 (CONCURRENT ISOLATION): two interleaved /newtask calls use their OWN provider configs", async () => {
+		const handlerA = makeMockHandler({ text: expectedLlmHandoff("A") })
+		const handlerB = makeMockHandler({ text: expectedLlmHandoff("B") })
+		// Use deferred createMessage handlers so we can deterministically
+		// interleave A and B's LLM streams.
+		const streamA: { resolve?: (value: unknown) => void; promise: Promise<unknown> } = {
+			promise: Promise.resolve(),
+		}
+		const streamB: { resolve?: (value: unknown) => void; promise: Promise<unknown> } = {
+			promise: Promise.resolve(),
+		}
+		streamA.promise = new Promise<unknown>((r) => (streamA.resolve = r))
+		streamB.promise = new Promise<unknown>((r) => (streamB.resolve = r))
+		// createHandlerAsync is called TWICE — once per request. The
+		// returned handler's createMessage returns the appropriate
+		// deferred. We capture the ProviderConfig each call received
+		// (via mockImplementation) and assert post-hoc.
+		const capturedConfigs: ProviderConfig[] = []
+		createHandlerAsyncMock.mockImplementation((cfg: ProviderConfig) => {
+			capturedConfigs.push(cfg)
+			const marker = cfg.modelId?.endsWith("-B") ? "B" : "A"
+			const deferred = marker === "A" ? streamA : streamB
+			return deferred.promise.then(() => (marker === "A" ? handlerA : handlerB))
+		})
+		const controllerA = makeController({ providerMarker: "A" }) as unknown as any
+		const controllerB = makeController({ providerMarker: "B" }) as unknown as any
+		const aPromise = handoffWithContext(controllerA, EmptyRequest.create({}))
+		const bPromise = handoffWithContext(controllerB, EmptyRequest.create({}))
+		// Flush microtasks so both have entered their LLM streams
+		// (createHandlerAsync was called twice; streams are deferred).
+		await new Promise((r) => setTimeout(r, 0))
+		// Adversarial ordering: release B first. In the CORRECTION01
+		// slot impl, B's stream resolves while A is still waiting on
+		// the slot — A would then read undefined or A's stale value.
+		streamB!.resolve!(undefined)
+		await new Promise((r) => setTimeout(r, 0))
+		streamA!.resolve!(undefined)
+		await Promise.all([aPromise, bPromise])
+		// Each invocation called createHandlerAsync with its OWN config.
+		expect(createHandlerAsyncMock).toHaveBeenCalledTimes(2)
+		expect(capturedConfigs).toHaveLength(2)
+		const cfgA = capturedConfigs.find((c) => c.modelId === "claude-sonnet-4-6-A")
+		const cfgB = capturedConfigs.find((c) => c.modelId === "claude-sonnet-4-6-B")
+		expect(cfgA).toBeDefined()
+		expect(cfgB).toBeDefined()
+		expect(cfgA?.apiKey).toBe("test-api-key-placeholder-A")
+		expect(cfgB?.apiKey).toBe("test-api-key-placeholder-B")
+		// Each handler called initTask with its OWN distilled handoff.
+		expect(controllerA.initTask).toHaveBeenCalledTimes(1)
+		expect(controllerB.initTask).toHaveBeenCalledTimes(1)
+		const [promptA] = controllerA.initTask.mock.calls[0]
+		const [promptB] = controllerB.initTask.mock.calls[0]
+		expect(promptA).toContain("refactor A")
+		expect(promptA).toContain("run tests A")
+		expect(promptA).not.toContain("refactor B")
+		expect(promptB).toContain("refactor B")
+		expect(promptB).toContain("run tests B")
+		expect(promptB).not.toContain("refactor A")
 	})
 
-	it("HCR08 (NO-MESSAGES): empty transcript -> no LLM call, no initTask, empty taskId", async () => {
+	//
+	// HCR08 (CORRECTION02 SECONDARY RED): when request A finishes and
+	// runs its post-summary code, it must not clear request B's
+	// provider context. The CORRECTION01 module-scoped slot exposed
+	// this race when A's `finally { setActiveProviderConfig(undefined) }`
+	// ran while B was still consuming the slot.
+	//
+	it("HCR08 (CLEAR-RACE): A finishing and clearing does not affect B's in-flight LLM call", async () => {
+		const handlerA = makeMockHandler({ text: expectedLlmHandoff("A") })
+		const streamB: { resolve?: (value: unknown) => void; promise: Promise<unknown> } = {
+			promise: Promise.resolve(),
+		}
+		streamB.promise = new Promise<unknown>((r) => (streamB.resolve = r))
+		const capturedConfigs: ProviderConfig[] = []
+		createHandlerAsyncMock.mockImplementation((cfg: ProviderConfig) => {
+			capturedConfigs.push(cfg)
+			const marker = cfg.modelId?.endsWith("-B") ? "B" : "A"
+			if (marker === "A") return Promise.resolve(handlerA)
+			return streamB.promise.then(() => makeMockHandler({ text: expectedLlmHandoff("B") }))
+		})
+		const controllerA = makeController({ providerMarker: "A" }) as unknown as any
+		const controllerB = makeController({ providerMarker: "B" }) as unknown as any
+		const aPromise = handoffWithContext(controllerA, EmptyRequest.create({}))
+		const bPromise = handoffWithContext(controllerB, EmptyRequest.create({}))
+		// Let A complete entirely. In the CORRECTION01 slot impl,
+		// A's finally would clear activeProviderConfig while B is
+		// still awaiting it (B's createHandlerAsync was called but
+		// B's stream is deferred).
+		await aPromise
+		streamB!.resolve!(undefined)
+		await bPromise
+		expect(createHandlerAsyncMock).toHaveBeenCalledTimes(2)
+		expect(capturedConfigs).toHaveLength(2)
+		const cfgA = capturedConfigs.find((c) => c.modelId === "claude-sonnet-4-6-A")
+		const cfgB = capturedConfigs.find((c) => c.modelId === "claude-sonnet-4-6-B")
+		// B still saw its OWN config — not undefined, not A's.
+		expect(cfgB).toBeDefined()
+		expect(cfgB?.apiKey).toBe("test-api-key-placeholder-B")
+		expect(cfgA?.apiKey).toBe("test-api-key-placeholder-A")
+		expect(controllerA.initTask).toHaveBeenCalledTimes(1)
+		expect(controllerB.initTask).toHaveBeenCalledTimes(1)
+		const [promptA] = controllerA.initTask.mock.calls[0]
+		const [promptB] = controllerB.initTask.mock.calls[0]
+		expect(promptA).toContain("refactor A")
+		expect(promptA).not.toContain("refactor B")
+		expect(promptB).toContain("refactor B")
+		expect(promptB).not.toContain("refactor A")
+	})
+
+	it("HCR09 (NO-MESSAGES): empty transcript -> no LLM call, no initTask, empty taskId", async () => {
 		const controller = makeController({ transcript: [] }) as unknown as any
 		const result = await handoffWithContext(controller, EmptyRequest.create({}))
 		expect(createHandlerAsyncMock).not.toHaveBeenCalled()
@@ -241,24 +347,35 @@ describe("handoff-summary (CORRECTION01 host seam)", () => {
 		expect(result.value).toBe("")
 	})
 
-	it("HCR09 (GUARD): the default production provider is the SDK-LLM-backed one, NOT a placeholder", () => {
-		expect(summarizeViaSdkHandler).toBeDefined()
-		expect(typeof summarizeViaSdkHandler.summarize).toBe("function")
-		const source = summarizeViaSdkHandler.summarize.toString()
-		expect(source).toMatch(/createHandlerAsync/)
-		expect(source).not.toMatch(/see source task history on disk/)
-		expect(source).not.toMatch(/continued from source session/)
+	//
+	// HCR10: The production factory captures ProviderConfig in closure
+	// (no module state). The returned provider consults no global
+	// slot.
+	//
+	it("HCR10 (FACTORY): createSdkHandoffSummaryProvider captures its config in closure and consults no module state", async () => {
+		const cfg = makeProviderConfig("Z")
+		const provider = createSdkHandoffSummaryProvider(withProxyAwareFetch(cfg))
+		expect(provider).toBeDefined()
+		expect(typeof provider.summarize).toBe("function")
+		const handler = makeMockHandler({ text: expectedLlmHandoff("Z") })
+		createHandlerAsyncMock.mockResolvedValue(handler)
+		const summary = await provider.summarize({ messages: makeTranscript() })
+		expect(summary).toContain("refactor Z")
+		// The mocked createHandlerAsync received the original config (the
+		// factory closed over it; withProxyAwareFetch spread the original
+		// fields through).
+		expect(createHandlerAsyncMock).toHaveBeenCalledTimes(1)
+		const [passedCfg] = createHandlerAsyncMock.mock.calls[0]
+		expect(passedCfg.providerId).toBe("anthropic")
+		expect(passedCfg.modelId).toBe("claude-sonnet-4-6-Z")
+		expect(passedCfg.apiKey).toBe("test-api-key-placeholder-Z")
 	})
 
 	//
-	// HCR10: ABLATION at the production provider — when the production
-	// provider is replaced by a placeholder (the CORRECTION01 bug shape),
-	// the handler still calls controller.initTask (no failure surfaces),
-	// and the handoff text the new task receives is the placeholder
-	// garbage — proving the CORRECTION01 bug class is detectable by the
-	// HCR01 contract.
+	// HCR11 (PROD-ABLATION): a placeholder production provider yields
+	// initTask with placeholder garbage (the CORRECTION01 bug class).
 	//
-	it("HCR10 (PROD-ABLATION): a placeholder production provider yields initTask with placeholder garbage (the CORRECTION01 bug class)", async () => {
+	it("HCR11 (PROD-ABLATION): a placeholder production provider yields initTask with placeholder garbage", async () => {
 		const placeholderProvider = {
 			summarize: async () =>
 				[
@@ -282,7 +399,7 @@ describe("handoff-summary (CORRECTION01 host seam)", () => {
 		const summary = await generateHandoffSummary({ messages: transcript }, { provider: placeholderProvider })
 		expect(summary).toMatch(/goal:/)
 		expect(summary).toMatch(/completedWork:/)
-		expect(summary).not.toContain("refactor X")
+		expect(summary).not.toContain("refactor A")
 		expect(summary).not.toContain("run tests")
 	})
 })

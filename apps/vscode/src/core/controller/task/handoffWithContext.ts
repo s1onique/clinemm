@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01
+ * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01+02
  *
  * gRPC handler for TaskService.handoffWithContext(EmptyRequest) -> String.
  *
@@ -13,13 +13,16 @@
  * CORRECTION01 flow:
  *   1. Read the active session's transcript via `sdkHost.readMessages`.
  *   2. Resolve the active session's `ProviderConfig` (SDK shape) via the
- *      Controller accessor and write it into the handoff-summary slot.
- *   3. Invoke `generateHandoffSummary` (production provider: real LLM
- *      call through `createHandlerAsync`). On any LLM failure, surface
- *      an explicit failure (no fake handoff, no task creation).
- *   4. Pass the resulting handoff text to `controller.initTask`, the
- *      existing new-task creation seam. Clear the ProviderConfig slot
- *      in a finally block so it cannot leak into a later call.
+ *      Controller accessor.
+ *   3. Build a REQUEST-SCOPED production provider via
+ *      `createSdkHandoffSummaryProvider(providerConfig)` (CORRECTION02:
+ *      no module-scoped slot — the config is captured in closure, so two
+ *      concurrent /newtask invocations remain provider-isolated).
+ *   4. Invoke `generateHandoffSummary` (real LLM call through
+ *      `createHandlerAsync`). On any LLM failure, surface an explicit
+ *      failure (no fake handoff, no task creation).
+ *   5. Pass the resulting handoff text to `controller.initTask`, the
+ *      existing new-task creation seam.
  *
  * Returns the new taskId (String). Returns an empty string if the host
  * has no active session, no provider configured, or the LLM call fails —
@@ -32,7 +35,7 @@
 
 import type { Message as SdkMessage } from "@cline/llms"
 import { EmptyRequest, String } from "@shared/proto/cline/common"
-import { generateHandoffSummary, setActiveProviderConfig, withProxyAwareFetch } from "@/sdk/handoff-summary"
+import { createSdkHandoffSummaryProvider, generateHandoffSummary, withProxyAwareFetch } from "@/sdk/handoff-summary"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from ".."
 
@@ -102,16 +105,17 @@ export async function handoffWithContext(controller: Controller, _request: Empty
 		return String.create({ value: "" })
 	}
 
-	setActiveProviderConfig(withProxyAwareFetch(providerConfig))
+	// CORRECTION02: build a request-scoped provider so each invocation
+	// captures its own ProviderConfig in closure. Two concurrent
+	// /newtask calls remain provider-isolated; no module state.
+	const provider = createSdkHandoffSummaryProvider(withProxyAwareFetch(providerConfig))
+
 	let handoffText = ""
 	try {
-		handoffText = await generateHandoffSummary({ messages })
+		handoffText = await generateHandoffSummary({ messages }, { provider })
 	} catch (error) {
 		Logger.error("[handoffWithContext] Handoff distillation failed:", error)
 		return String.create({ value: "" })
-	} finally {
-		// Clear the slot so a subsequent call must explicitly re-resolve.
-		setActiveProviderConfig(undefined)
 	}
 
 	if (!handoffText) {
@@ -120,8 +124,8 @@ export async function handoffWithContext(controller: Controller, _request: Empty
 	}
 
 	// Reuse the existing new-task creation seam. controller.initTask returns
-	// the new taskId and is the SOLE production seam that allocates a fresh
-	// sessionId via SdkTaskStartCoordinator.
+	// the new taskId and is an identified existing new-task creation seam
+	// (see EPIC RECON — CS5; not claimed SOLE without exhaustive inventory).
 	const taskId = await controller.initTask(handoffText, undefined, undefined, undefined, undefined)
 	return String.create({ value: taskId || "" })
 }
