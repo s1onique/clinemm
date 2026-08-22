@@ -72,7 +72,10 @@
 		// real composition discriminator: REAL LocalRuntimeHost +
 		// REAL SessionRuntime + REAL AgentRuntime closing the P1 gap
 		// from the SCHR01 review.
-		"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts"
+		"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
+		// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
+		// Stop/Resume integrity discriminator.
+		"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

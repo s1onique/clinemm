@@ -102,6 +102,12 @@ export default defineConfig({
 			// the real composition discriminator. Same bridge-only
 			// surface as SCHR01; excluded from this base config.
 			"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
+			// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
+			// Stop/Resume integrity discriminator (REAL LocalRuntimeHost +
+			// REAL PendingPromptsController + REAL SessionVersioningService;
+			// synthetic stub agent). Bridge-only — same alias
+			// requirement as SCHR01/SHRC01.
+			"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

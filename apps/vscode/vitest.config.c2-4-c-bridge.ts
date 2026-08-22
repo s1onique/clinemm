@@ -70,6 +70,13 @@ export default defineConfig({
 			// post-completed-`AgentResult` finalization, but did NOT
 			// exercise the real AgentRuntime inside the host.
 			"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
+			// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
+			// real LocalRuntimeHost + real PendingPromptsController +
+			// real FileSessionService + real SessionVersioningService;
+			// synthetic stub agent (counter-backed run/continue/abort).
+			// Discriminator for upstream `cline/cline#12975` —
+			// Stop/Resume must not replay already-completed work.
+			"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

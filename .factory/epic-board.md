@@ -4230,6 +4230,51 @@ That is fine. Exact-head LIVE qualification owns the UI claim.
 
 The two pre-existing board validator failures at L204 / L207 are P2 / historical (visible in board history before FIX01 began). They MUST NOT block this ACT and are explicitly NOT fixed here.
 
+## ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 — first commit
+
+**STATUS:** PASS_PRODUCTION_SEAM_GREEN_HOST_QUEUE_ABORT (3/3 bridge tests green; agent-seam replay test deferred as CAPTURE_INSUFFICIENT for this session).
+
+**ENTRY_HEAD:** `6e956bc87` (clean tree; bridge + recon evidence layered on top).
+**BRANCH:** `act/task-interaction-ownership-projection01-live-capture` (no new branch created — existing LIVE-Capture branch used, per Factory reviewer disposition).
+
+**Recon doc:** `docs/architecture/elm/queued-prompt-stop-resume-integrity01-recon.md`.
+
+**RED + control tests** (bridge-only):
+`apps/vscode/src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts`
+(3 tests, 0 collateral damage; full bridge suite 78/78 PASS in 19.71s).
+
+**Test seam:**
+- real `LocalRuntimeHost` (via `@cline-internal/core/runtime/host/local-runtime-host` bridge alias)
+- real `PendingPromptsController` + `PendingPromptService` (production classes)
+- real `FileSessionService` + real `SessionVersioningService.restoreCheckpoint` (used to attempt `restoreSession`)
+- synthetic stub agent (counter-backed `run` / `continue` / `abort` / `canStartRun`)
+
+**What is GREEN (host seam):**
+- QPSR01_CTL01 — uninterrupted queue drain: `run` ×1, `continueFn` ×1, queue empty post-drain, session idle.
+- QPSR01_CTL02 — Stop without queued prompt: abort reaches agent, no extra `run`/`continue`, queue empty, idle.
+- QPSR01_PRIMARY — Stop after P2 begins processing: drain fires `continueFn` (NOT `runFn`, because `session.started = true` after P1), abort reached exactly once, post-abort queue empty, agent idle.
+
+**What is NOT exercised in this commit (and why):**
+- `host.restoreSession({ restore: { messages: true } })` end-to-end. The mock `SessionService` does not provide `readSessionManifest` / `listSessions`-shaped responses for the active session id; the `createCheckpointRestorePlan` path requires real checkpoint infrastructure that cannot be mocked without losing hermeticity. The bridge alias to the REAL `FileSessionService` was wired but not exercised because that requires filesystem state and a fully seeded checkpoint plan.
+
+**Classification (per ACT §7):**
+- The host seam that owns queue + abort is `PASS_PRODUCTION_SEAM_GREEN`. Stop reaches the agent once; no orphan pending prompts; the agent settles to idle.
+- The upstream `#12975` "C1/C2 replay" defect lives at the **agent seam** (whether `AgentRuntime.continue()` re-invokes tool calls based on transcript content). That seam requires:
+  - real `AgentRuntime` (not stub)
+  - scripted `StepModel`
+  - scripted tool with counter
+  - ~400 lines of bridge setup beyond the current host-layer test
+- Without that composition, this ACT cannot falsifiably test the upstream bug. The honest verdict is `CAPTURE_INSUFFICIENT` for the agent-seam portion. The next ACT (if authorized) would be `ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01-COMPOSITION01`, mirroring the SHRC01 pattern but for the queued-stop-resume chronology.
+
+**What was NOT modified (per ACT §13):**
+- `host-ownership-diagnostic.ts` / `host-ownership-capture/*` — untouched.
+- `post-terminal-authority-diagnostic.ts` / PTAD ring — untouched.
+- `turn-state-writer-provenance.ts` / writer-provenance ring — untouched.
+- `ClineCore` diagnostic surface — untouched.
+- `TaskHeader` UI presentation — untouched.
+
+**No push, no force push, no published-commit amend.** Commit lands at the current entry head plus the bridge + recon + board delta; no remote update.
+
 ## Board maintenance rule
 
 At the end of a meaningful ACT, update **only rows affected by that ACT**. Do not rewrite the whole board.
