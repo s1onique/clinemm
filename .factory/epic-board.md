@@ -1,9 +1,9 @@
 # Cline-- Global Epic Board
 
 CANONICAL_AS_OF: 2026-08-22
-SUBJECT_HEAD: 1e6430bc15f00d08f66dc905c41edbd3f74045db
+SUBJECT_HEAD: 7f68fa067b2a2757e400552ab5c20abd17a484ec
 BOARD_COMMIT: discover with `git log -1 -- .factory/epic-board.md`
-BOARD_WAVE: 1 → TASK CENSUS 01 → ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 applied
+BOARD_WAVE: 1 → TASK CENSUS 01 → ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 applied + ACT-CLINEMM-COST-DISPLAY-TRUTH01 + CORRECTION01 + CORRECTION02 applied (consolidated into main 2026-08-22)
 
 ---
 
@@ -3401,7 +3401,7 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 ### COST-DISPLAY-TRUTH01
 
 - ID: `EPIC-CLINEMM-COST-DISPLAY-TRUTH01`
-- STATUS: OPEN
+- STATUS: CLOSED_CLEAN / TRUTHFUL_BILLING_PRESENTATION
 
 **Symptom.** Dollar estimates such as `"$0.0082"` are misleading when the user is on a flat-rate / subscription access path.
 
@@ -3414,7 +3414,53 @@ Preserved as `NEEDS_CLASSIFICATION` rows in the canonical task index. Scope not 
 
 **If billing mode is not observable:** support explicit display policy / user override rather than inventing billing knowledge.
 
-**Rule.** Do not implement in this ACT.
+**Closed at:** ACT-CLINEMM-COST-DISPLAY-TRUTH01 + CORRECTION01 + CORRECTION02 (branch `act/cost-display-truth01`, HEAD `7f68fa06`)
+
+**Reproduction (RED).** ClinePass metadata already carries `usageCostDisplay = "subscription"` from `@cline/llms` (`sdk/packages/llms/src/providers/builtins.ts:682`). The catalog layer (`apps/vscode/src/sdk/model-catalog/catalog.ts:56-58`) collapsed every non-`"hide"` value to `"show"`, so the TaskHeader price-tag rendered `"$0.0082"` for ClinePass sessions. RED proven at the TaskHeader seam via `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.test.tsx > CDT02`.
+
+**Causal classification.** C2_PROVIDER_ID_IS_AVAILABLE_BUT_PRESENTATION_IS_PROVIDER_AGNOSTIC — the catalog `UsageCostDisplay` type and its `readUsageCostDisplay` mapper dropped `"subscription"`; downstream renderers had no way to distinguish subscription from metered.
+
+**Main repair (bounded, one place).**
+
+  - `apps/vscode/src/sdk/model-catalog/contracts.ts` — widen `UsageCostDisplay` to `"show" | "hide" | "subscription"`.
+  - `apps/vscode/src/sdk/model-catalog/catalog.ts` — `readUsageCostDisplay` forwards SDK answer verbatim.
+  - `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts` — widen return union.
+  - `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx:142-156` — gate the price-tag on `usageCostDisplay === "show"` (one-character semantic flip).
+  - `apps/vscode/proto/cline/models.proto` — doc comment lists the three wire values.
+  - `sdk/packages/llms/src/providers/billing.test.ts` — explicit cline-pass contract test added.
+
+**CORRECTION01 (P1 follow-up from reviewer).** Original repair still defaulted `useProviderUsageCostDisplay` to `"show"` while the catalog was loading. For a ClinePass session that meant the price-tag could render `"$0.0082"` for the brief window between component mount and SDK catalog resolution — exactly the claim this ACT exists to prevent.
+
+  - `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts` — consult `useProviderListings().isLoading` explicitly; fall back to `"hide"` for: providerId undefined, `isLoading`, empty providers, listing not found. Only a recognized provider with `usageCostDisplay === "show"` returns `"show"`; the metered-conservative default is now strictly narrower than before.
+  - New hook-level test file `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts` — 8 cases; ablation confirmed 4/8 RED with the old hook.
+  - `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.test.tsx` — added CDT07 (subscription + unresolved → no tag) and CDT08 (metered + unresolved → no tag → resolves to `"show"` → tag appears); cleaned the stale "subscription AND hide providers leaked" comment to reflect that only the subscription class was leaking pre-repair.
+
+**CORRECTION02 (P1 follow-up from reviewer, second pass).** CORRECTION01's hook still returned `"show"` for any `usageCostDisplay` value other than `"hide"` or `"subscription"`. The wire field is `string`, not a closed protobuf enum, so a future SDK value this fork doesn't yet know — e.g. `"credits-included"`, `"quota"`, `"enterprise-flat-rate"` — would silently default to metered, reintroducing the same false-spend class this ACT exists to prevent.
+
+  - `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts` — last-resort branch flipped: only explicit `"show"` authorizes a spend claim; `"subscription"` passes through; everything else (including future values, empty string, unknown shape) returns `"hide"`. Hook invariant: **"Only an explicit `"show"` authorization may produce a dollar spend claim. Everything else fails closed."**
+  - `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts` — flipped the one forward-compat case (`unknown-future-value` → `"hide"`), added 4 explicit forward-value cases (`credits-included`, `enterprise-flat-rate`, `quota`, empty string). Ablation: 5/12 RED on the old hook, all 12 GREEN on the fix. Positive known-`"show"` case preserved so metered display conservation is unambiguous.
+
+**Conservation.**
+
+  - METERED_COST_DISPLAY = CONSERVED (anthropic, openai-native, cline-credits still render; CDT01 + CDT08-resolved-phase + "returns 'show' for a known metered provider" hook case + 640/640 webview + 1993/1993 vscode + 664/664 @cline/llms).
+  - FLAT_RATE_FALSE_SPEND = REMOVED_INCLUDING_LOADING_WINDOW_AND_FUTURE_WIRE_VALUES (ClinePass no longer leaks reference prices in any catalog state OR under any future SDK value; CDT02 RED→GREEN, CDT07 GREEN, hook tests 4/4 conservative-state paths GREEN + 5/5 forward-value paths GREEN).
+  - TOKEN_USAGE = CONSERVED (usage.totalCost untouched; only rendering gate moved).
+  - REFERENCE_ECONOMICS = PRESERVED_IF_REQUIRED (SDK still reports it; only the *charge* claim is suppressed).
+  - HISTORICAL_POLICY = UNCHANGED. `HistoryItem` carries no `apiProvider`; per brief §12 historical `HistoryPreview` / `HistoryViewItem` cost chips remain on stored values. No migration, no field added.
+  - CLI_PARITY = N/A (CLI already correct via `shouldShowCliUsageCost` which returns `=== "show"`). `shouldShowCliUsageCoveredBySubscription` exists but has zero consumers; no architectural expansion.
+  - LOADING_FALLBACK = CONSERVATIVE (was non-conservative; flipped from `"show"` to `"hide"` for every unresolved case).
+  - FORWARD_WIRE_VALUE_FALLBACK = CONSERVATIVE (was non-conservative default to `"show"` for any value not explicitly `"hide"`/`"subscription"`; now allowlist-only — only explicit `"show"` authorizes a spend claim).
+
+**Necessity / ablation.**
+
+  - Reverting the main gate change reproduces CDT02 RED (`"$0.0082"` leaks for cline-pass).
+  - Reverting only the CORRECTION01 hook fix reproduces 4/8 RED in `useProviderUsageCostDisplay.test.ts` (loading, empty, missing-listing, undefined-id) and reintroduces the brief false-spend window before catalog resolution.
+  - Reverting only the CORRECTION02 hook fix reproduces 5/12 RED in `useProviderUsageCostDisplay.test.ts` (the flipped forward-compat case + the 4 new forward-value cases), re-exposing the false-spend path under any future SDK `usageCostDisplay` value the fork doesn't yet know.
+  - All three confirm their respective fixes are load-bearing.
+
+**Verdict.** PASS_TRUTHFUL_COST_PRESENTATION (CLOSED_CLEAN).
+
+**Commits.** `0ab0c3952` (test RED) + `0280b5659` (main fix) + `cb92f83a5` (CORRECTION01) + `7f68fa06` (CORRECTION02). Not pushed.
 
 ### Historical recovery/observability family
 
