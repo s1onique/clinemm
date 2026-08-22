@@ -96,6 +96,17 @@ export default defineConfig({
 			// `subscribeCanonicalRuntimeEventsToShadow` on behalf of
 			// production; production must earn the call.
 			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
+			// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01 / FRSP01:
+			// Phase 1 behavioral RED at the production follow-up resume
+			// seam. Real LocalRuntimeHost + per-call fresh stub agent +
+			// real SdkFollowupCoordinator + real
+			// CanonicalRuntimeShadowSubscription. Drives
+			// `coordinator.tryResumeSessionFromTask(task, prompt)` for
+			// the SAME sessionId (not a manual re-attach); observes
+			// whether the new agent's events reach the shadow. RED
+			// confirms D2c_PATH_ASYMMETRY behaviorally. GREEN means
+			// HALT_RED_NOT_REPRODUCED.
+			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
 		],
 		testTimeout: 30_000,
 	},
