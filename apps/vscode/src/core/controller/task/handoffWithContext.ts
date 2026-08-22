@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01
+ * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01
  *
  * gRPC handler for TaskService.handoffWithContext(EmptyRequest) -> String.
  *
@@ -10,20 +10,29 @@
  *   /compact  = same-task compaction (handled by condense RPC)
  *   /smol     = same-task compaction alias (handled by condense RPC)
  *
- * The handler reads the active session's transcript, generates a structured
- * handoff summary via the SDK summary helper, and creates a fresh task
- * whose initial prompt is the summary. The CURRENT task identity is NOT
- * mutated — there is no `controller.compactTask()` call here; the prior
- * task's history remains as a historical record. (NDHA06 no-mutation
- * invariant.)
+ * CORRECTION01 flow:
+ *   1. Read the active session's transcript via `sdkHost.readMessages`.
+ *   2. Resolve the active session's `ProviderConfig` (SDK shape) via the
+ *      Controller accessor and write it into the handoff-summary slot.
+ *   3. Invoke `generateHandoffSummary` (production provider: real LLM
+ *      call through `createHandlerAsync`). On any LLM failure, surface
+ *      an explicit failure (no fake handoff, no task creation).
+ *   4. Pass the resulting handoff text to `controller.initTask`, the
+ *      existing new-task creation seam. Clear the ProviderConfig slot
+ *      in a finally block so it cannot leak into a later call.
  *
- * Returns the new taskId (String), mirroring the existing
- * `controller.initTask` return contract.
+ * Returns the new taskId (String). Returns an empty string if the host
+ * has no active session, no provider configured, or the LLM call fails —
+ * in all three cases `controller.initTask` is NOT called.
+ *
+ * The CURRENT task identity is NOT mutated — there is no
+ * `controller.compactTask()` call here; the prior task's history
+ * remains as a historical record. (NDHA06 no-mutation invariant.)
  */
 
 import type { Message as SdkMessage } from "@cline/llms"
 import { EmptyRequest, String } from "@shared/proto/cline/common"
-import { generateHandoffSummary } from "@/sdk/handoff-summary"
+import { generateHandoffSummary, setActiveProviderConfig, withProxyAwareFetch } from "@/sdk/handoff-summary"
 import { Logger } from "@/shared/services/Logger"
 import type { Controller } from ".."
 
@@ -43,9 +52,10 @@ function extractMessages(raw: unknown): SdkMessage[] {
 
 /**
  * Produce a fresh task whose initial prompt is a handoff summary of the
- * current session's transcript. Returns the new taskId (empty string if
- * the host has no active session to hand off from, so the webview can
- * surface the no-active-session case to the user without crashing).
+ * current session's transcript. Returns the new taskId. Returns an empty
+ * string if distillation cannot proceed (no active session, no provider,
+ * LLM failure, no messages); in every failure case `controller.initTask`
+ * is NOT called.
  */
 export async function handoffWithContext(controller: Controller, _request: EmptyRequest): Promise<String> {
 	const activeSession = (
@@ -79,7 +89,35 @@ export async function handoffWithContext(controller: Controller, _request: Empty
 		return String.create({ value: "" })
 	}
 
-	const handoffText = await generateHandoffSummary({ messages })
+	// Resolve the active session's ProviderConfig (SDK shape). This is
+	// the SAME provider the active session is using, so the distillation
+	// call has access to the API key, base URL, and proxy-aware fetch.
+	const providerConfig = (
+		controller as unknown as {
+			getActiveSessionProviderConfig?: () => ReturnType<typeof withProxyAwareFetch> | undefined
+		}
+	).getActiveSessionProviderConfig?.()
+	if (!providerConfig) {
+		Logger.warn("[handoffWithContext] No active ProviderConfig; cannot distill handoff; returning empty taskId")
+		return String.create({ value: "" })
+	}
+
+	setActiveProviderConfig(withProxyAwareFetch(providerConfig))
+	let handoffText = ""
+	try {
+		handoffText = await generateHandoffSummary({ messages })
+	} catch (error) {
+		Logger.error("[handoffWithContext] Handoff distillation failed:", error)
+		return String.create({ value: "" })
+	} finally {
+		// Clear the slot so a subsequent call must explicitly re-resolve.
+		setActiveProviderConfig(undefined)
+	}
+
+	if (!handoffText) {
+		Logger.warn("[handoffWithContext] Handoff text was empty after distillation; returning empty taskId")
+		return String.create({ value: "" })
+	}
 
 	// Reuse the existing new-task creation seam. controller.initTask returns
 	// the new taskId and is the SOLE production seam that allocates a fresh

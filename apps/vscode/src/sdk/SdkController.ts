@@ -20,6 +20,7 @@ import {
 	setTelemetryOptOutGlobally,
 	type UserInstructionConfigService,
 } from "@cline/core"
+import type { ProviderConfig } from "@cline/llms"
 import { formatDisplayUserInput, type RemoteConfig, type RemoteConfigBundle } from "@cline/shared"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import type { ApiConfiguration } from "@shared/api"
@@ -65,7 +66,7 @@ import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
-import { createProviderCatalog } from "./model-catalog/catalog"
+import { createProviderCatalog, toSdkProviderConfig } from "./model-catalog/catalog"
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
@@ -1083,6 +1084,34 @@ export class Controller {
 
 	getProviderCatalog(): ProviderCatalog {
 		return this.providerCatalog
+	}
+
+	/**
+	 * ACT-CLINEMM-NEWTASK-DISTILLATION-HANDOFF-ARCHITECTURE01-CORRECTION01:
+	 * resolve the active session's `ProviderConfig` (in SDK shape) so the
+	 * `/newtask` handoff distillation LLM call can drive the same handler
+	 * the active session is using. Returns undefined if there is no active
+	 * session or no configured provider.
+	 *
+	 * The conversion uses the existing `toSdkProviderConfig` helper, which
+	 * is the canonical host->SDK adapter (used by `cline-session-factory.ts`
+	 * to construct session start configs). The selection (modelId) is
+	 * resolved for the current chat mode.
+	 */
+	getActiveSessionProviderConfig(): ProviderConfig | undefined {
+		const providerId = this.getSessionProviderId()
+		if (!providerId) {
+			return undefined
+		}
+		const effectiveConfig = this.providerConfigStore.read(parseProviderId(providerId))
+		const mode = this.getCurrentMode()
+		const selection = this.providerConfigStore.readSelection(parseProviderId(providerId), mode)
+		return toSdkProviderConfig(effectiveConfig, selection)
+	}
+
+	private getCurrentMode(): "plan" | "act" {
+		const modeValue = this.stateManager.getGlobalSettingsKey("mode")
+		return modeValue === "plan" ? "plan" : "act"
 	}
 
 	invalidateProviderListings(): void {

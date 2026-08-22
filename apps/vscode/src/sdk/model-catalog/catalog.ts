@@ -140,7 +140,7 @@ function createProviderModelsCache(options: ProviderModelsCacheOptions) {
 	}
 }
 
-function toSdkProviderConfig(config: EffectiveProviderConfig, selection: ModelSelection | undefined): ProviderConfig {
+export function toSdkProviderConfig(config: EffectiveProviderConfig, selection: ModelSelection | undefined): ProviderConfig {
 	return {
 		providerId: toSdkProviderId(config.providerId),
 		modelId: selection?.modelId ?? "",
