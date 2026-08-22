@@ -217,6 +217,16 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.toggleHostOwnershipDiagnostic",
+				"title": "Cline: Toggle Host Ownership Diagnostic",
+				"category": "Cline"
+			},
+			{
+				"command": "cline.debug.dumpHostOwnershipDiagnostic",
+				"title": "Cline: Dump Host Ownership Diagnostic",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

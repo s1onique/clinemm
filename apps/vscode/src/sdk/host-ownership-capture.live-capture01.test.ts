@@ -1,17 +1,24 @@
 /**
- * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01
+ * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01
  *
- * Tests for the synchronized capture helper. Verifies:
+ * Tests for the synchronized capture helper. Drives the EXACT 5-field
+ * identity roundtrip through the real capture path (NOT bypassing it).
+ * Verifies:
+ *
  *   - no-op when diagnostic disabled,
- *   - no-op when sdkHost.captureHostOwnershipFacts absent,
- *   - records the assembled snapshot at the SAME `_ptadPushId` as the
- *     PTAD identity when present,
+ *   - no-op when probe absent (writes correlated unavailable row)
+ *   - no-op when probe.readHostFacts absent (writes correlated
+ *     unavailable row),
+ *   - exact five-field identity roundtrip (stateVersion + _ptadPushId +
+ *     taskId + sessionId + epoch),
  *   - sessionIsRunning from the host-side mirror is included,
- *   - candidateAwaitingFollowup is stamped as DIAGNOSTIC_DERIVATION_ONLY.
+ *   - candidateAwaitingFollowup is stamped as DIAGNOSTIC_DERIVATION_ONLY,
+ *   - captureFromActiveSession no-ops on missing activeSession,
+ *   - records show observationAvailable=true on success and
+ *     observationAvailable=false on absent host.
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest"
-
 import {
 	disableHostOwnershipDiagnostic,
 	enableHostOwnershipDiagnostic,
@@ -22,28 +29,28 @@ import {
 import {
 	captureAndRecordHostOwnershipFacts,
 	captureFromActiveSession,
+	type HostOwnershipProbe,
+	type HostOwnershipHostFacts,
 } from "./host-ownership-capture"
-import type { SdkSessionHost } from "./session-host"
+import type { ActiveSession as VscodeActiveSession } from "@/sdk/cline-session-factory"
 
-function makeSdkHost(opts: { implements?: boolean } = { implements: true }): SdkSessionHost {
+function makeProbe(
+	opts: { implements?: boolean; facts?: HostOwnershipHostFacts } = { implements: true },
+): HostOwnershipProbe {
+	if (opts.implements === false) return {}
 	return {
-		runtimeSnapshot: () => undefined,
-		captureHostOwnershipFacts: opts.implements
-			? (sessionId: string | undefined) =>
-					sessionId
-						? {
-								lastInteractiveTurnFinishReason: "completed",
-								sessionStatus: "idle",
-								pendingPromptCount: 0,
-								drainingPendingPrompts: false,
-								agentCanStartRun: true,
-							}
-						: undefined
-				: undefined,
-	} as unknown as SdkSessionHost
+		readHostFacts: async (_sessionId: string | undefined) =>
+			opts.facts ?? {
+				lastInteractiveTurnFinishReason: "completed",
+				sessionStatus: "idle",
+				pendingPromptCount: 0,
+				drainingPendingPrompts: false,
+				agentCanStartRun: true,
+			},
+	}
 }
 
-describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / captureAndRecordHostOwnershipFacts", () => {
+describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01 / captureAndRecordHostOwnershipFacts", () => {
 	beforeEach(() => {
 		disableHostOwnershipDiagnostic()
 		clearHostOwnershipDiagnostic()
@@ -53,50 +60,114 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / c
 		clearHostOwnershipDiagnostic()
 	})
 
-	it("no-op when diagnostic disabled", () => {
-		captureAndRecordHostOwnershipFacts({
+	it("no-op when diagnostic disabled", async () => {
+		await captureAndRecordHostOwnershipFacts({
 			stateVersion: 100,
 			_ptadPushId: 5,
 			sessionId: "s1",
 			sessionIsRunning: false,
-			sdkHost: makeSdkHost(),
+			probe: makeProbe(),
 		})
 		expect(isHostOwnershipDiagnosticEnabled()).toBe(false)
 		expect(getHostOwnershipDiagnostic()).toEqual([])
 	})
 
-	it("no-op when sdkHost.captureHostOwnershipFacts is absent (Hub/Remote hosts)", () => {
+	it("writes correlated unavailable row when probe is absent (no probe passed)", async () => {
 		enableHostOwnershipDiagnostic()
-		captureAndRecordHostOwnershipFacts({
+		await captureAndRecordHostOwnershipFacts({
 			stateVersion: 100,
 			_ptadPushId: 5,
+			taskId: "task-A",
 			sessionId: "s1",
+			epoch: 7,
 			sessionIsRunning: false,
-			sdkHost: makeSdkHost({ implements: false }),
+			probe: undefined,
 		})
-		expect(getHostOwnershipDiagnostic()).toEqual([])
+		const got = getHostOwnershipDiagnostic()
+		expect(got).toHaveLength(1)
+		expect(got[0].observationAvailable).toBe(false)
+		expect(got[0].stateVersion).toBe(100)
+		expect(got[0]._ptadPushId).toBe(5)
+		expect(got[0].taskId).toBe("task-A")
+		expect(got[0].sessionId).toBe("s1")
+		expect(got[0].epoch).toBe(7)
+		expect(got[0].lastInteractiveTurnFinishReason).toBeUndefined()
 	})
 
-	it("records the snapshot with `_ptadPushId` identity preserved", () => {
+	it("writes correlated unavailable row when probe has no readHostFacts method", async () => {
 		enableHostOwnershipDiagnostic()
-		captureAndRecordHostOwnershipFacts({
+		await captureAndRecordHostOwnershipFacts({
+			stateVersion: 100,
+			_ptadPushId: 5,
+			taskId: "task-A",
+			sessionId: "s1",
+			epoch: 7,
+			sessionIsRunning: false,
+			probe: makeProbe({ implements: false }),
+		})
+		const got = getHostOwnershipDiagnostic()
+		expect(got).toHaveLength(1)
+		expect(got[0].observationAvailable).toBe(false)
+	})
+
+	// CORRECTION01: exact five-field identity roundtrip through the REAL helper
+	it("exact five-field identity roundtrip through real capture helper", async () => {
+		enableHostOwnershipDiagnostic()
+		await captureAndRecordHostOwnershipFacts({
+			stateVersion: 1234,
+			_ptadPushId: 56,
+			taskId: "task-A",
+			epoch: 7,
+			sessionId: "session-S",
+			sessionIsRunning: true,
+			probe: makeProbe(),
+		})
+		const got = getHostOwnershipDiagnostic()
+		expect(got).toHaveLength(1)
+		expect(got[0].stateVersion).toBe(1234)
+		expect(got[0]._ptadPushId).toBe(56)
+		expect(got[0].taskId).toBe("task-A")
+		expect(got[0].epoch).toBe(7)
+		expect(got[0].sessionId).toBe("session-S")
+	})
+
+	it("records observationAvailable=true + candidateAwaitingFollowup on success", async () => {
+		enableHostOwnershipDiagnostic()
+		await captureAndRecordHostOwnershipFacts({
 			stateVersion: 100,
 			_ptadPushId: 42,
 			sessionId: "s1",
 			sessionIsRunning: true,
-			sdkHost: makeSdkHost(),
+			probe: makeProbe(),
 		})
 		const got = getHostOwnershipDiagnostic()
 		expect(got).toHaveLength(1)
-		expect(got[0]._ptadPushId).toBe(42)
+		expect(got[0].observationAvailable).toBe(true)
 		expect(got[0].sessionIsRunning).toBe(true)
 		expect(got[0].lastInteractiveTurnFinishReason).toBe("completed")
 		expect(got[0].candidateAwaitingFollowup).toBe(true)
 	})
 
-	it("captureFromActiveSession no-ops on missing activeSession", () => {
+	it("captureFromActiveSession no-ops on missing activeSession", async () => {
 		enableHostOwnershipDiagnostic()
-		captureFromActiveSession(1, 1, undefined)
+		await captureFromActiveSession(1, 1, undefined, undefined, undefined)
 		expect(getHostOwnershipDiagnostic()).toEqual([])
+	})
+
+	it("captureFromActiveSession passes the activeSession.sdkHost as probe", async () => {
+		enableHostOwnershipDiagnostic()
+		const fakeSession = {
+			sessionId: "session-S",
+			isRunning: true,
+			sdkHost: makeProbe(),
+		} as unknown as VscodeActiveSession
+		await captureFromActiveSession(1234, 56, "task-A", 7, fakeSession)
+		const got = getHostOwnershipDiagnostic()
+		expect(got).toHaveLength(1)
+		expect(got[0].stateVersion).toBe(1234)
+		expect(got[0]._ptadPushId).toBe(56)
+		expect(got[0].taskId).toBe("task-A")
+		expect(got[0].epoch).toBe(7)
+		expect(got[0].sessionId).toBe("session-S")
 	})
 })

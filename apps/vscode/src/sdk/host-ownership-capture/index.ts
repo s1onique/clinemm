@@ -17,7 +17,6 @@
  * prose, no tool arguments/outputs, no model output, no API payloads.
  */
 
-import type { SdkSessionHost } from "@/sdk/session-host"
 import type { ActiveSession as VscodeActiveSession } from "@/sdk/cline-session-factory"
 import {
 	recordHostOwnershipFacts,
@@ -26,12 +25,36 @@ import {
 	type HostOwnershipFactsSnapshot,
 } from "@/shared/host-ownership-diagnostic"
 
+/**
+ * The shape of the host-specific probe. This is intentionally a duck-typed
+ * local interface, NOT `SdkSessionHost` -- the host ownership observation
+ * is host-only (`VscodeSessionHost.readHostFacts`) following the precedent
+ * of `cancelBackgroundCommand`. Hub/Remote hosts that don't extend the
+ * local shape will read as `undefined` and produce correlated unavailable
+ * rows.
+ */
+export interface HostOwnershipProbe {
+	readonly readHostFacts?: (
+		sessionId: string | undefined,
+	) => Promise<HostOwnershipHostFacts | undefined> | HostOwnershipHostFacts | undefined
+}
+
+export interface HostOwnershipHostFacts {
+	readonly lastInteractiveTurnFinishReason?: import("@cline/shared").AgentFinishReason
+	readonly sessionStatus?: string
+	readonly pendingPromptCount?: number
+	readonly drainingPendingPrompts?: boolean
+	readonly agentCanStartRun?: boolean
+}
+
 export interface CaptureHostOwnershipFactsArgs {
 	readonly stateVersion: number
 	readonly _ptadPushId?: number
+	readonly taskId?: string
+	readonly epoch?: number
 	readonly sessionId: string | undefined
 	readonly sessionIsRunning: boolean
-	readonly sdkHost: SdkSessionHost
+	readonly probe: HostOwnershipProbe | undefined
 }
 
 /**
@@ -41,18 +64,28 @@ export interface CaptureHostOwnershipFactsArgs {
  * call-time `Date.now()`; the `_ptadPushId` is forwarded verbatim
  * from the caller so the PTAD-synchronized identity holds.
  */
-export function captureAndRecordHostOwnershipFacts(args: CaptureHostOwnershipFactsArgs): void {
+export async function captureAndRecordHostOwnershipFacts(args: CaptureHostOwnershipFactsArgs): Promise<void> {
 	if (!isHostOwnershipDiagnosticEnabled()) return
-	const rawFacts = args.sdkHost.captureHostOwnershipFacts?.(args.sessionId)
-	if (!rawFacts) return
+	const observationAvailable = !!args.probe && typeof args.probe.readHostFacts === "function"
+	let rawFacts: HostOwnershipHostFacts | undefined
+	if (observationAvailable && args.probe) {
+		rawFacts = await args.probe.readHostFacts(args.sessionId)
+	}
 	const enriched: HostOwnershipFactsSnapshot = {
-		...rawFacts,
-		sessionIsRunning: args.sessionIsRunning,
-		candidateAwaitingFollowup: deriveCandidateAwaitingFollowup({
-			...rawFacts,
-			sessionIsRunning: args.sessionIsRunning,
-		}),
+		stateVersion: args.stateVersion,
 		_ptadPushId: args._ptadPushId,
+		taskId: args.taskId,
+		epoch: args.epoch,
+		sessionId: args.sessionId,
+		sessionIsRunning: args.sessionIsRunning,
+		observationAvailable: rawFacts !== undefined,
+		...rawFacts,
+		candidateAwaitingFollowup: rawFacts
+			? deriveCandidateAwaitingFollowup({
+					...rawFacts,
+					sessionIsRunning: args.sessionIsRunning,
+				})
+			: undefined,
 		capturedAt: Date.now(),
 	}
 	recordHostOwnershipFacts(enriched)
@@ -63,17 +96,21 @@ export function captureAndRecordHostOwnershipFacts(args: CaptureHostOwnershipFac
  * `ActiveSession` in hand and do not want to extract the
  * `sessionIsRunning` + `sdkHost` fields themselves.
  */
-export function captureFromActiveSession(
+export async function captureFromActiveSession(
 	stateVersion: number,
 	_ptadPushId: number | undefined,
+	taskId: string | undefined,
+	epoch: number | undefined,
 	activeSession: VscodeActiveSession | undefined,
-): void {
+): Promise<void> {
 	if (!activeSession) return
-	captureAndRecordHostOwnershipFacts({
+	await captureAndRecordHostOwnershipFacts({
 		stateVersion,
 		_ptadPushId,
+		taskId,
+		epoch,
 		sessionId: activeSession.sessionId,
 		sessionIsRunning: activeSession.isRunning,
-		sdkHost: activeSession.sdkHost,
+		probe: activeSession.sdkHost as unknown as HostOwnershipProbe,
 	})
 }

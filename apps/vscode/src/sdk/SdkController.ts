@@ -73,6 +73,12 @@ import { createProviderConfigStore } from "./model-catalog/store"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { isPostTerminalAuthorityDiagnosticWorkspaceEnabled } from "./post-terminal-authority-diagnostic-runtime"
+import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
+import {
+	disableHostOwnershipDiagnostic,
+	enableHostOwnershipDiagnostic,
+	isHostOwnershipDiagnosticEnabled,
+} from "@/shared/host-ownership-diagnostic"
 import {
 	PROVIDER_FAILURE_ERROR_TYPE,
 	PROVIDER_FAILURE_PHASE,
@@ -2936,6 +2942,18 @@ export class Controller {
 					disablePostTerminalAuthorityDiagnostic("extension")
 				}
 			}
+			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+			// Sync the extension-side host-ownership diagnostic enable with the
+			// workspace-state flag, mirroring the PTAD pattern above.
+			if (isHostOwnershipDiagnosticWorkspaceEnabled(this.context)) {
+				if (!isHostOwnershipDiagnosticEnabled()) {
+					enableHostOwnershipDiagnostic()
+				}
+			} else {
+				if (isHostOwnershipDiagnosticEnabled()) {
+					disableHostOwnershipDiagnostic()
+				}
+			}
 			syncTelemetrySettingFromSharedGlobalSettings(this.stateManager)
 			const { getStateToPostToWebview: buildBaseState } = await import("@core/controller/state/getStateToPostToWebview")
 			const state = await buildBaseState({
@@ -3188,15 +3206,17 @@ export class Controller {
 					}),
 				)
 			}
-			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
+			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
 			// Synchronized host-ownership capture at the SAME `stateVersion` +
-			// `_ptadPushId` identity as the PTAD snapshot above. No-op when
-			// the diagnostic is disabled. Read-only: no mutation, no
-			// message/wire field, no state-post event. The captured
-			// snapshot lives in the diagnostic ring buffer only.
-			captureHostOwnershipFactsAtStatePost(
+			// `_ptadPushId` + `taskId` + `epoch` identity as the PTAD snapshot
+			// above. No-op when the diagnostic is disabled. Read-only: no
+			// mutation, no message/wire field, no state-post event. The
+			// captured snapshot lives in the diagnostic ring buffer only.
+			await captureHostOwnershipFactsAtStatePost(
 				snapshot.stateVersion,
 				ptadPushId,
+				snapshot.currentTaskItem?.id,
+				snapshot.epoch,
 				this.sessions.getActiveSession(),
 			)
 			return snapshot

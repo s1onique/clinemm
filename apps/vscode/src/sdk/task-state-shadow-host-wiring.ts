@@ -27,7 +27,6 @@
 import { TaskState } from "@cline/agents"
 import type { CoreSessionEvent } from "@cline/core"
 import type { AgentRunStatus, AgentRuntimeEvent, AgentRuntimeExecutionState, RecoveryState } from "@cline/shared"
-import type { HostOwnershipFactsSnapshot } from "@/shared/host-ownership-diagnostic"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { SdkSessionLifecycle, SdkSessionLifecycleOptions } from "./sdk-session-lifecycle"
 import { TaskShadowComparator, toLegacyPhase } from "./task-state-shadow"
@@ -247,25 +246,6 @@ export interface TaskShadowHostWiringDeps {
 	 */
 	readonly getCanonicalRuntimeAvailable?: () => boolean
 	readonly getRuntimeStatus?: () => AgentRunStatus
-	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Optional read-only diagnostic accessor for the six host-ownership
-	 * facts the LIVE-T1 reproduction needs. Returns `undefined` when:
-	 *   * the host does not implement `captureHostOwnershipFacts?`
-	 *     (Hub/Remote omit it by design),
-	 *   * the session id is missing or the session is not active,
-	 *   * the dependency is omitted (e.g. tests that don't exercise the
-	 *     diagnostic path).
-	 *
-	 * The shadow wiring reads this accessor only at the recorder
-	 * boundary (synchronously, on every observation) and only when the
-	 * diagnostic is enabled (gated by `isHostOwnershipDiagnosticEnabled`).
-	 * When disabled / absent / returns-undefined, the recorder leaves
-	 * `record.hostOwnershipFacts` undefined. Production projection paths
-	 * NEVER read `record.hostOwnershipFacts`.
-	 */
-	readonly getHostOwnershipFacts?: () => HostOwnershipFactsSnapshot | undefined
-	readonly isHostOwnershipDiagnosticEnabled?: () => boolean
 	readonly now: () => number
 	readonly onInvariantViolation?: (record: TaskShadowDifferentialRecord, violations: readonly unknown[]) => void
 }
@@ -301,15 +281,6 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 		getArbiterSnapshot: deps.getArbiterSnapshot,
 		getActiveSessionId: () => deps.lifecycle.getActiveSession()?.sessionId,
 		getRuntimeStatus: () => deps.getRuntimeStatus?.() ?? "idle",
-		// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-		// optional diagnostic. Reads from deps.getHostOwnershipFacts?
-		// (optional) ONLY when deps.isHostOwnershipDiagnosticEnabled?.()
-		// returns true. When disabled / absent / returns-undefined, the
-		// recorder leaves `record.hostOwnershipFacts` undefined.
-		getHostOwnershipFacts: () => {
-			if (deps.isHostOwnershipDiagnosticEnabled?.() !== true) return undefined
-			return deps.getHostOwnershipFacts?.()
-		},
 		onInvariantViolation: (record, violations) => {
 			if (deps.onInvariantViolation && record) {
 				try {

@@ -125,7 +125,7 @@ import type {
 	ResolvedStartSessionInput,
 	RestoreSessionInput,
 	RestoreSessionResult,
-	HostOwnershipFactsSnapshot,
+	HostOwnershipFactsSnapshotInternal,
 	RuntimeHost,
 	RuntimeHostSubscribeOptions,
 	SendSessionInput,
@@ -1200,22 +1200,26 @@ export class LocalRuntimeHost implements RuntimeHost {
 	}
 
 	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Read-only diagnostic accessor for the six host-ownership facts
-	 * that the LIVE-T1 reproduction needs. Mirrors the production
-	 * `getActiveRuntimeSnapshot` shape: returns `undefined` for
-	 * missing-sessionId / unknown-session; reads only from the in-memory
-	 * `ActiveSession` and the `SessionRuntime`; never mutates any field;
-	 * never inserts state-post events; never schedules timers.
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+	 * Internal-only read accessor for the six raw host-ownership facts.
 	 *
-	 * The optional DIAGNOSTIC_DERIVATION_ONLY `candidateAwaitingFollowup`
-	 * field is computed by the diagnostic consumer (the
-	 * `host-ownership-diagnostic` module) -- this method exposes raw
-	 * facts only, so the diagnostic remains the single source of the
-	 * derivation formula and can be replaced without re-releasing the
-	 * host.
+	 * IMPORTANT: this method exists as a class method on `LocalRuntimeHost`
+	 * ONLY. It is NOT on the `RuntimeHost` interface -- consumers reading
+	 * via the interface see `undefined`. This keeps the temporary diagnostic
+	 * out of the shared execution contract while still allowing
+	 * `ClineCore.captureHostOwnershipFacts` to read it via duck typing
+	 * (the class declares the method even though the interface doesn't).
+	 *
+	 * Hub/Remote hosts that don't implement this method will return
+	 * `undefined` from `ClineCore.captureHostOwnershipFacts`, which the
+	 * diagnostic consumes as "observation unavailable" -- the correlated
+	 * row is still written, but with `observationAvailable: false` and
+	 * the six raw fields undefined.
+	 *
+	 * Read-only: never mutates runtime/session state, never inserts
+	 * state-post events, never schedules timers.
 	 */
-	captureHostOwnershipFacts(sessionId: string | undefined): HostOwnershipFactsSnapshot | undefined {
+	captureHostOwnershipFacts(sessionId: string | undefined): HostOwnershipFactsSnapshotInternal | undefined {
 		if (!sessionId) return undefined
 		const active = this.sessions.get(sessionId)
 		if (!active) return undefined

@@ -71,13 +71,6 @@ const PRIVACY_ALLOWED_KEYS = new Set([
 	"recoveryBudgetFailures",
 	"taskEpochOrOpaqueTaskKey",
 	"runtimeStatus",
-	// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	// host-ownership diagnostic snapshot is privacy-safe by construction
-	// (no message prose, no tool args/outputs, no model output, no API
-	// payloads, no control keys). The HostOwnershipFactsSnapshot type
-	// contains only the six raw host-side facts and the derivation
-	// hypothesis boolean. Permit it through the privacy allowlist.
-	"hostOwnershipFacts",
 	"classification",
 	"arbitration",
 ])

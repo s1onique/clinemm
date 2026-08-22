@@ -5,7 +5,6 @@ import type {
 	ITelemetryService,
 	LiveAgentRuntimeStateSnapshot,
 } from "@cline/shared";
-import type { HostOwnershipFactsSnapshot } from "./runtime/host/runtime-host";
 import {
 	ClineCoreAutomationController,
 	createClineCoreAutomationExtensionContext,
@@ -39,6 +38,7 @@ import type {
 
 import { CronService } from "./cron/service/cron-service";
 import type { RuntimeCapabilities } from "./runtime/capabilities";
+import type { HostOwnershipFactsSnapshotInternal } from "./runtime/host/runtime-host";
 import { normalizeRuntimeCapabilities } from "./runtime/capabilities";
 import { listSessionHistory } from "./runtime/host/history";
 import { createRuntimeHost } from "./runtime/host/host";
@@ -714,25 +714,40 @@ export class ClineCore {
 		return this.host.getActiveRuntimeSnapshot(sessionId)
 	}
 	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Optional diagnostic accessor for the six host-ownership facts the
-	 * LIVE-T1 reproduction needs. Mirrors `getActiveRuntimeSnapshot`
-	 * shape: returns `undefined` for missing-sessionId / unknown-session /
-	 * host-absent-method. Read-only: never mutates runtime/session state.
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+	 * Internal-only proxy that reads six raw host-ownership facts via the
+	 * `LocalRuntimeHost.captureHostOwnershipFacts` class method.
 	 *
-	 * Surface stability: DIAGNOSTIC_ONLY -- temporary instrumentation,
-	 * deleted in its entirety at the first of (root cause classified,
-	 * capture insufficient, successor evidence supersedes this
-	 * diagnostic).
+	 * NOT a public SDK surface -- `HostOwnershipFactsSnapshotInternal`
+	 * is NOT re-exported from `sdk/packages/core/src/index.ts`. This method
+	 * is reachable only through the in-package `ClineCore` class, not
+	 * through any externally-consumed interface.
+	 *
+	 * Read-only: never mutates runtime/session state. Returns `undefined`
+	 * when `sessionId` is missing, the session is not active, or the host
+	 * does not implement `captureHostOwnershipFacts` (Hub/Remote omit it
+	 * by design).
+	 *
+	 * REMOVAL TRIGGER: first of (root cause classified, capture
+	 * insufficient, successor evidence supersedes this diagnostic).
 	 */
 	captureHostOwnershipFacts(
 		sessionId: string | undefined,
-	): HostOwnershipFactsSnapshot | undefined {
+	): HostOwnershipFactsSnapshotInternal | undefined {
 		if (!sessionId) return undefined
-		if (!this.host.captureHostOwnershipFacts) {
+		// Duck-typed read -- `this.host` is typed as `RuntimeHost` which
+		// does NOT declare `captureHostOwnershipFacts`. The local
+		// `LocalRuntimeHost` class declares the method as a class member;
+		// Hub/Remote hosts do not.
+		const hostWithProbe = this.host as RuntimeHost & {
+			captureHostOwnershipFacts?: (
+				sessionId: string | undefined,
+			) => HostOwnershipFactsSnapshotInternal | undefined
+		}
+		if (typeof hostWithProbe.captureHostOwnershipFacts !== "function") {
 			return undefined
 		}
-		return this.host.captureHostOwnershipFacts(sessionId)
+		return hostWithProbe.captureHostOwnershipFacts(sessionId)
 	}
 	/**
 	 * Updates the AI model used by an active session.

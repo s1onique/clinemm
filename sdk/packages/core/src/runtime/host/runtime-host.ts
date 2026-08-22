@@ -5,7 +5,7 @@ import type {
 	AgentResult,
 	AgentRuntimeEvent,
 	AgentRuntimeRecoverySnapshot,
-	RuntimeConfigExtensionKind,
+	RuntimeConfigExtensionKind
 } from "@cline/shared";
 import type { HookEventPayload } from "../../hooks";
 import type { CheckpointEntry } from "../../hooks/checkpoint-hooks";
@@ -355,29 +355,28 @@ export interface RestoreSessionResult {
 }
 
 /**
+ * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01
+ * Host-ownership diagnostic shape. NOT re-exported from
+ * `sdk/packages/core/src/index.ts` -- it is intentionally internal to
+ * the package, accessed only by `ClineCore.captureHostOwnershipFacts`
+ * and consumed by the apps/vscode diagnostic via `VscodeSessionHost.readHostFacts`.
+ *
+ * REMOVAL TRIGGER: first of (root cause classified, capture
+ * insufficient, successor evidence supersedes this diagnostic).
+ */
+export interface HostOwnershipFactsSnapshotInternal {
+	readonly lastInteractiveTurnFinishReason?: AgentFinishReason;
+	readonly sessionStatus?: string;
+	readonly pendingPromptCount?: number;
+	readonly drainingPendingPrompts?: boolean;
+	readonly agentCanStartRun?: boolean;
+}
+
+/**
  * RuntimeHost is the transport/runtime boundary for core session execution.
  * Callers must normalize broad local config into `RuntimeSessionConfig`
  * plus optional named `localRuntime` bootstrap fields before invoking a host.
  */
-
-/**
- * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
- * Raw, read-only host-side facts used to classify the
- * LIVE-T1 / forward-progress-ownership truth table. The six
- * raw fields are host-side observations; `candidateAwaitingFollowup`
- * is DIAGNOSTIC_DERIVATION_ONLY and MUST NOT be consumed by the
- * canonical TaskHeader projection.
- */
-export interface HostOwnershipFactsSnapshot {
-	readonly lastInteractiveTurnFinishReason?: AgentFinishReason;
-	readonly sessionStatus?: string;
-	readonly sessionIsRunning?: boolean;
-	readonly pendingPromptCount?: number;
-	readonly drainingPendingPrompts?: boolean;
-	readonly agentCanStartRun?: boolean;
-	readonly candidateAwaitingFollowup?: boolean;
-}
-
 export interface RuntimeHost {
 	readonly runtimeAddress?: string;
 	startSession(input: StartSessionInput): Promise<StartSessionResult>;
@@ -480,27 +479,6 @@ export interface RuntimeHost {
 	getActiveRuntimeSnapshot?(
 		sessionId: string | undefined,
 	): import("@cline/shared").LiveAgentRuntimeStateSnapshot | undefined;
-
-	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Read-only, optional diagnostic accessor for the six host-ownership
-	 * facts the LIVE-T1 reproduction needs. Returns `undefined` when:
-	 *   * `sessionId` is missing,
-	 *   * the session is not active on the host,
-	 *   * the host does not implement this method (Hub/Remote omit it by
-	 *     design -- same absence semantic as `getActiveRuntimeSnapshot?`).
-	 *
-	 * Read-only: never mutates runtime/session state, never inserts
-	 * state-post events, never schedules timers, never affects any
-	 * pendingPrompts / drainingPendingPrompts / canStartRun flag.
-	 *
-	 * The optional DIAGNOSTIC_DERIVATION_ONLY `candidateAwaitingFollowup`
-	 * field is a HYPOTHESIS_ONLY derivation; production projection paths
-	 * do not read it.
-	 */
-	captureHostOwnershipFacts?(
-		sessionId: string | undefined,
-	): HostOwnershipFactsSnapshot | undefined;
 }
 
 export type RuntimeHostMode = "auto" | "local" | "hub" | "remote";

@@ -33,7 +33,6 @@
 import { TaskState } from "@cline/agents"
 import type { AgentRunStatus, AgentRuntimeEvent } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
-import type { HostOwnershipFactsSnapshot } from "@/shared/host-ownership-diagnostic"
 import { TaskShadowComparator, type TaskShadowDivergence } from "./task-state-shadow"
 import type { TaskShadowRuntimeOrigin } from "./task-state-shadow-host-wiring"
 import {
@@ -123,18 +122,6 @@ export interface TaskShadowCoordinatorDeps {
 	readonly getArbiterSnapshot: () => ArbiterSnapshot
 	readonly getActiveSessionId: () => string | undefined
 	readonly getRuntimeStatus: () => AgentRunStatus
-	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Optional diagnostic accessor for the six host-ownership facts.
-	 * Returns `undefined` when:
-	 *   * the host does not implement `captureHostOwnershipFacts?`,
-	 *   * the session is not active,
-	 *   * the dependency is omitted.
-	 *
-	 * Read-only; never mutates runtime/session state. Production
-	 * projection paths never read the stamped diagnostic.
-	 */
-	readonly getHostOwnershipFacts?: () => HostOwnershipFactsSnapshot | undefined
 	readonly onInvariantViolation?: (
 		record: ReturnType<TaskShadowRecorder["getRecords"]>[number] | undefined,
 		violations: readonly TaskInvariantViolation[],
@@ -478,12 +465,6 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 			observationRecoveryBudgetFailures: recoveryBudgetFailures,
 			taskEpochOrOpaqueTaskKey,
 			runtimeStatus: deps.getRuntimeStatus(),
-			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-			// optional diagnostic. Reads through deps.getHostOwnershipFacts?
-			// (optional). When the dep is absent / returns undefined / is
-			// disabled, the recorder leaves `record.hostOwnershipFacts`
-			// undefined. Production projection paths never read it.
-			hostOwnershipFacts: deps.getHostOwnershipFacts?.(),
 			arbiter,
 			classificationOverride: overrideClassification,
 			arbitrationOverride: overrideClassification === "D11_HOST_PREENGAGED" ? "BOTH_VALID_DIFFERENT_PROJECTION" : undefined,

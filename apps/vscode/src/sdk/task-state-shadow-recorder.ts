@@ -31,7 +31,6 @@ import { TaskState } from "@cline/agents"
 import type { AgentRunStatus, AgentRuntimeExecutionState, RecoveryState } from "@cline/shared"
 import type { TurnPhase } from "@/shared/ExtensionMessage"
 import type { TaskShadowDivergence } from "./task-state-shadow"
-import type { HostOwnershipFactsSnapshot } from "@/shared/host-ownership-diagnostic"
 import type { TaskShadowRuntimeOrigin } from "./task-state-shadow-host-wiring"
 
 type TaskInvariantViolation = TaskState.TaskInvariantViolation
@@ -86,15 +85,6 @@ export interface TaskShadowDifferentialRecord {
 	readonly taskEpochOrOpaqueTaskKey?: string
 	/** Optional runtime status carry-through. */
 	readonly runtimeStatus?: AgentRunStatus
-	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Optional diagnostic snapshot of the six host-ownership facts at
-	 * the SAME `seq` + `timestamp` as this record. Populated only when
-	 * the host-ownership diagnostic is enabled. NEVER consumed by
-	 * projection paths. Privacy-safe: contains no message prose, no
-	 * tool arguments/outputs, no model output, no API payloads.
-	 */
-	readonly hostOwnershipFacts?: HostOwnershipFactsSnapshot
 	readonly classification: DivergenceClass
 	readonly arbitration?: ArbitrationOutcome
 }
@@ -125,15 +115,6 @@ export interface TaskShadowRecordInput {
 	readonly taskEpochOrOpaqueTaskKey?: string
 	/** Optional runtime status carry-through from the host wiring. */
 	readonly runtimeStatus?: AgentRunStatus
-	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Optional diagnostic snapshot of the six host-ownership facts.
-	 * Populated only when the host-ownership diagnostic is enabled.
-	 * When omitted (disabled / absent / returns-undefined), the
-	 * recorder leaves `record.hostOwnershipFacts` undefined.
-	 * Production projection paths NEVER read this field.
-	 */
-	readonly hostOwnershipFacts?: HostOwnershipFactsSnapshot
 	/**
 	 * Canonical arbiter projections read from `AgentRuntime.snapshot()`.
 	 * Always supplied by the host wiring — the recorder never reads
@@ -364,7 +345,6 @@ export class TaskShadowRecorder {
 			recoveryBudgetFailures: input.observationRecoveryBudgetFailures,
 			taskEpochOrOpaqueTaskKey: input.taskEpochOrOpaqueTaskKey,
 			runtimeStatus: input.runtimeStatus,
-			hostOwnershipFacts: input.hostOwnershipFacts,
 			classification,
 			arbitration,
 		}

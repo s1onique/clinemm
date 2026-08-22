@@ -46,6 +46,12 @@ const ClineCommands = {
 	// serializes the bounded ring to <globalStorageUri>/turn-state-writer-provenance.jsonl.
 	ToggleTurnStateWriterProvenanceDiagnostic: prefix + ".debug.toggleTurnStateWriterProvenanceDiagnostic",
 	DumpTurnStateWriterProvenanceDiagnostic: prefix + ".debug.dumpTurnStateWriterProvenanceDiagnostic",
+	// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+	// Debug commands for the temporary host-ownership diagnostic. Default
+	// off. The toggle flips a workspace-state flag; the dump serializes
+	// the bounded ring to <globalStorageUri>/host-ownership-diagnostic.jsonl.
+	ToggleHostOwnershipDiagnostic: prefix + ".debug.toggleHostOwnershipDiagnostic",
+	DumpHostOwnershipDiagnostic: prefix + ".debug.dumpHostOwnershipDiagnostic",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

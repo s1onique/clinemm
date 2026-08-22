@@ -196,7 +196,8 @@
 				"!!src/core/storage/utils/state-helpers.ts",
 				"!!src/extension.ts",
 				"!!src/sdk/post-terminal-authority-diagnostic-runtime.ts",
-				"!!src/sdk/turn-state-writer-provenance-runtime.ts"
+				"!!src/sdk/turn-state-writer-provenance-runtime.ts",
+				"!!src/sdk/host-ownership-diagnostic-runtime.ts"
 			],
 			"plugins": [
 				"src/dev/grit/use-cache-service.grit"

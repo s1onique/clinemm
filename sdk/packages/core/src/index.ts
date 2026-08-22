@@ -497,7 +497,6 @@ export type {
 	PendingPromptsUpdateInput,
 	RestoreSessionInput,
 	RestoreSessionResult,
-	HostOwnershipFactsSnapshot,
 	RuntimeHost,
 	RuntimeHost as SessionHost,
 	RuntimeHostMode,

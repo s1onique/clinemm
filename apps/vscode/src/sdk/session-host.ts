@@ -19,7 +19,6 @@ import type {
 	SessionRecord,
 	StartSessionInput,
 	StartSessionResult,
-	HostOwnershipFactsSnapshot,
 } from "@cline/core"
 import type { AgentResult, AgentRuntimeEvent, AgentRuntimeRecoverySnapshot, AgentRuntimeStateSnapshot } from "@cline/shared"
 
@@ -103,25 +102,6 @@ export interface SdkSessionHost {
 	 * method.
 	 */
 	runtimeSnapshot?(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined
-	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Optional read-only diagnostic accessor for the six host-ownership
-	 * facts the LIVE-T1 reproduction needs. Delegates to the underlying
-	 * `ClineCore.captureHostOwnershipFacts` (which itself delegates to
-	 * `LocalRuntimeHost.captureHostOwnershipFacts`).
-	 *
-	 * Optional. Implementations that don't surface the canonical session
-	 * state (Hub/Remote) MUST omit this method. The method-absent and
-	 * returns-undefined cases collapse to a single "host ownership
-	 * observation unavailable for this host" value at the consumer via
-	 * `?.()` -- same absence semantic as `runtimeSnapshot?`.
-	 *
-	 * Surface stability: DIAGNOSTIC_ONLY -- temporary instrumentation,
-	 * deleted in its entirety at the first of (root cause classified,
-	 * capture insufficient, successor evidence supersedes this
-	 * diagnostic).
-	 */
-	captureHostOwnershipFacts?(sessionId: string | undefined): HostOwnershipFactsSnapshot | undefined
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
 }
 

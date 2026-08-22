@@ -1,6 +1,18 @@
 # ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01
 
-**Disposition**: TEMPORARY INSTRUMENTATION SHIPPED, AWAITING LIVE CAPTURE.
+**Disposition**: HALT_CAPTURE_NOT_OPERABLE_OR_IDENTITY_BOUND at LIVE-CAPTURE01 head
+`2d1b044d3`. CORRECTION01 (`feat(act): bind capture identity + operator
+surface + remove public SDK API`) addresses the three P0 blockers
+(discarded identity, missing operator surface, public API contradiction)
+and the P1 (D3 not testing the real helper). See
+`docs/architecture/elm/task-interaction-ownership-projection01-live-capture01-correction01.md`
+for the full disposition.
+
+After CORRECTION01: temporary instrumentation is OPERABLE (toggle +
+dump via VS Code commands), IDENTITY-BOUND (stateVersion + _ptadPushId
++ taskId + sessionId + epoch stamped on every record), ABSENCE-EXPLICIT
+(`observationAvailable: boolean`), and OBSERVATION-LOCAL (no public
+`@cline/core` re-export of the diagnostic shape).
 
 **Parent ACT**: `ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01` (RECON — IN_PROGRESS).
 **Predecessor**: `ACT-CLINEMM-CANONICAL-TASK-ACTIVITY-OWNERSHIP01` (HALTED at Factory review with disposition `HALT_TASK_LIFETIME_NOT_ACTIVITY_AUTHORITY`).

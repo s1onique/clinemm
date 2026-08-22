@@ -1,10 +1,17 @@
 /**
- * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01
+ * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01
  *
  * T0 host-ownership diagnostic. Captures the six host-side facts that
- * the LIVE-T1 symptom reproduction needs (per recon, dc3e2a129), at
- * the SAME publication identity as the existing PTAD snapshot
- * (`stateVersion` + `_ptadPushId`):
+ * the LIVE-T1 symptom reproduction needs (per recon, dc3e2a129),
+ * stamped at the SAME publication identity as the existing PTAD
+ * snapshot:
+ *
+ *   stateVersion + _ptadPushId  (PTAD correlation key, mandatory)
+ *   sessionId                   (host session identity when present)
+ *   taskId                      (visible task identity when present)
+ *   epoch                       (epoch when present)
+ *
+ * Plus the six raw host-side facts:
  *
  *   lastInteractiveTurnFinishReason
  *   session.status
@@ -13,12 +20,23 @@
  *   drainingPendingPrompts
  *   agent.canStartRun()
  *
- * Plus an optional DIAGNOSTIC_DERIVATION_ONLY `candidateAwaitingFollowup`
+ * Plus the DIAGNOSTIC_DERIVATION_ONLY `candidateAwaitingFollowup`
  * field, computed from the raw host facts as a HYPOTHESIS_ONLY formula
  * for forensic comparison only. NEVER participates in production
  * projection (see ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01
  * recon doc §"Provisional working-vs-waiting truth table (NOT FROZEN)"
  * for why the formula is not yet trustworthy).
+ *
+ * CORRECTION01 changes vs LIVE-CAPTURE01:
+ *   - Every stored record now carries `stateVersion`, `_ptadPushId`,
+ *     `taskId`, `sessionId`, `epoch`. The prior version silently
+ *     discarded these identity fields, which made the artifact unable
+ *     to satisfy the ACT-required proof row.
+ *   - Added explicit `observationAvailable: boolean`. When the host /
+ *     session observation is unavailable (Hub/Remote host without
+ *     `captureHostOwnershipFacts?`, or session lookup failed), the
+ *     helper STILL writes a row with the identity + `observationAvailable=false`
+ *     + all six raw fields undefined. Never silently drops a row.
  *
  * Hard constraints (per Factory guidance, C1: GO EVIDENCE):
  *   - DEFAULT_OFF
@@ -27,7 +45,8 @@
  *   - removable (single boolean enables/disables; no production state
  *     depends on the read path)
  *   - zero semantic delta while disabled
- *   - no public product API (NO state field, NO wire field)
+ *   - no public product API (NO state field, NO wire field, NO @cline/core
+ *     public surface)
  *   - no message/protocol field
  *   - no mutation of runtime/session state
  *   - no side effects inside functional React updaters
@@ -45,12 +64,33 @@ const DEFAULT_BUFFER_SIZE = 64
 
 /**
  * Raw host-side facts, as observed at the SAME state-post identity
- * (`stateVersion` + `_ptadPushId`) as the rest of the PTAD snapshot.
- * Every field is optional so a partial read (e.g. session has been
- * disposed, host accessor absent on a non-LocalRuntimeHost) records
- * as `undefined` rather than synthesizing a default value.
+ * (`stateVersion` + `_ptadPushId` + `taskId` + `sessionId` + `epoch`)
+ * as the rest of the PTAD snapshot.
+ *
+ * The identity fields are stamped verbatim from the caller; the raw
+ * six facts are recorded as `undefined` when the host observation
+ * returned nothing (so the analyzer can distinguish "observation was
+ * unavailable" from "observation returned null").
  */
 export interface HostOwnershipFactsSnapshot {
+	// === IDENTITY (always stamped, even when observation is unavailable) ===
+	readonly stateVersion: number
+	readonly _ptadPushId?: number
+	readonly sessionId?: string
+	readonly taskId?: string
+	readonly epoch?: number
+
+	// === OBSERVATION AVAILABILITY ===
+	/**
+	 * True when the helper successfully observed the host-side session
+	 * and recorded raw facts. False when the host did not implement
+	 * `captureHostOwnershipFacts?` (Hub/Remote), the session id was
+	 * missing, or the session lookup failed. The six raw fields below
+	 * are `undefined` when this is false.
+	 */
+	readonly observationAvailable: boolean
+
+	// === RAW HOST-SIDE FACTS (six, all undefined when unavailable) ===
 	/** Last user-interactive turn's `AgentFinishReason`. Stale through the idle gap. */
 	readonly lastInteractiveTurnFinishReason?: AgentFinishReason
 	/** `@cline/core` `ActiveSession.status`. Flips to "idle" at `markTurnIdle`. */
@@ -74,29 +114,8 @@ export interface HostOwnershipFactsSnapshot {
 	 */
 	readonly candidateAwaitingFollowup?: boolean
 
-	/**
-	 * Correlates this snapshot with the rest of the PTAD capture on
-	 * the same `_ptadPushId`. Set by the caller; the diagnostic does
-	 * not mint the id.
-	 */
-	readonly _ptadPushId?: number
 	/** Wall-clock at capture. Diagnostic-only; not authoritative. */
 	readonly capturedAt: number
-}
-
-/**
- * Identity fields kept identical to `PostTerminalAuthoritySnapshot` so
- * the analyzer can join on `stateVersion` + `_ptadPushId` without a
- * separate key. The diagnostic intentionally does NOT re-export or
- * subclass the PTAD type -- it remains a side-channel that the analyzer
- * correlates on identity fields.
- */
-export interface HostOwnershipIdentity {
-	readonly stateVersion: number
-	readonly _ptadPushId?: number
-	readonly taskId?: string
-	readonly sessionId?: string
-	readonly epoch?: number
 }
 
 // =============================================================================
@@ -166,7 +185,7 @@ export function getHostOwnershipDiagnostic(): HostOwnershipFactsSnapshot[] {
  * `DIAGNOSTIC_DERIVATION_ONLY` field. Production projection paths do
  * NOT import this function and do NOT read the field.
  *
- * The formula (from the recon doc, NOT frozen):
+ * The formula (from the recon, NOT frozen):
  *
  *   awaitingFollowup =
  *     (lastInteractiveTurnFinishReason === "completed")    // user-owned previous turn
@@ -179,7 +198,10 @@ export function getHostOwnershipDiagnostic(): HostOwnershipFactsSnapshot[] {
  *   )
  */
 export function deriveCandidateAwaitingFollowup(
-	facts: Omit<HostOwnershipFactsSnapshot, "candidateAwaitingFollowup" | "capturedAt" | "_ptadPushId">,
+	facts: Omit<
+		HostOwnershipFactsSnapshot,
+		"stateVersion" | "_ptadPushId" | "sessionId" | "taskId" | "epoch" | "observationAvailable" | "candidateAwaitingFollowup" | "capturedAt"
+	>,
 ): boolean | undefined {
 	if (facts.lastInteractiveTurnFinishReason === undefined) return undefined
 	const previousTurnWasUserOwned = facts.lastInteractiveTurnFinishReason === "completed"

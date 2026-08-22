@@ -9,6 +9,10 @@ import {
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
 import {
+	dumpExtensionSideHostOwnershipDiagnostic,
+	toggleHostOwnershipDiagnosticWorkspaceEnabled,
+} from "@/sdk/host-ownership-diagnostic-runtime"
+import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
 } from "@/sdk/turn-state-writer-provenance-runtime"
@@ -594,6 +598,31 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[TSWPD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Turn-state writer-provenance dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+		// Debug commands for the host-ownership diagnostic. Default off;
+		// toggle flips workspace-state flag, dump flushes the ring to
+		// JSONL under globalStorageUri.
+		vscode.commands.registerCommand(commands.ToggleHostOwnershipDiagnostic, async () => {
+			const next = await toggleHostOwnershipDiagnosticWorkspaceEnabled(context)
+			const status = next ? "ENABLED" : "DISABLED"
+			Logger.log(`[HOHOD] Workspace toggle → ${status}`)
+			void vscode.window.showInformationMessage(
+				`Host-ownership diagnostic: ${status}. Host-side observation will ${
+					next ? "now be captured at the state-post boundary" : "stop being captured (existing records preserved)"
+				}.`,
+			)
+		}),
+		vscode.commands.registerCommand(commands.DumpHostOwnershipDiagnostic, async () => {
+			try {
+				const filePath = await dumpExtensionSideHostOwnershipDiagnostic(context)
+				void vscode.window.showInformationMessage(`Host-ownership diagnostic: → ${filePath}.`)
+			} catch (err) {
+				Logger.error("[HOHOD] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Host-ownership dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

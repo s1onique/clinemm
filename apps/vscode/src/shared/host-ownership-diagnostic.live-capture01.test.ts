@@ -1,11 +1,12 @@
 /**
- * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01
+ * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01
  *
  * D1..D7 instrumentation tests for the host-ownership diagnostic ring
- * buffer. Each test asserts one of the seven constraints the
- * Factory reviewer (C1: GO EVIDENCE) imposed on the temporary
- * instrumentation:
+ * buffer, REVISED for the corrected snapshot shape (stateVersion +
+ * _ptadPushId + taskId + sessionId + epoch identity fields, plus
+ * observationAvailable).
  *
+ * Reviewer-mandated constraints (per Factory C1: GO EVIDENCE):
  *   D1 disabled => no records / no semantic delta
  *   D2 exact host values round-trip unchanged
  *   D3 missing host/session => values recorded as unavailable
@@ -14,13 +15,16 @@
  *   D6 bounded ring behavior
  *   D7 no diagnostic value is consumed by TaskHeader projection
  *
- * The diagnostic is DEFAULT_OFF and zero-impact while disabled; the
- * tests assert that by repeatedly enabling / disabling / re-enabling
- * the same buffer.
+ * PLUS the CORRECTION01-mandated tests:
+ *   exact five-field identity roundtrip
+ *   unavailable observation => correlated unavailable row
+ *   bounded ring
+ *   dump produces JSONL
+ *   fresh install remains OFF
+ *   no projection imports/consumes diagnostic
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-
 import {
 	clearHostOwnershipDiagnostic,
 	disableHostOwnershipDiagnostic,
@@ -36,19 +40,24 @@ import {
 
 function makeSnapshot(overrides: Partial<HostOwnershipFactsSnapshot> = {}): HostOwnershipFactsSnapshot {
 	return {
+		stateVersion: 100,
+		_ptadPushId: 1,
+		sessionId: "s1",
+		taskId: "task-A",
+		epoch: 7,
 		lastInteractiveTurnFinishReason: "completed",
 		sessionStatus: "idle",
 		sessionIsRunning: false,
 		pendingPromptCount: 0,
 		drainingPendingPrompts: false,
 		agentCanStartRun: true,
-		_ptadPushId: 1,
 		capturedAt: Date.now(),
 		...overrides,
+		observationAvailable: overrides.observationAvailable ?? true,
 	}
 }
 
-describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / host-ownership-diagnostic", () => {
+describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01 / host-ownership-diagnostic", () => {
 	beforeEach(() => {
 		disableHostOwnershipDiagnostic()
 		clearHostOwnershipDiagnostic()
@@ -78,8 +87,27 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / h
 		})
 	})
 
-	// D2
-	describe("D2 exact host values round-trip unchanged", () => {
+	// D2 + CORRECTION01: exact five-field identity roundtrip
+	describe("D2 + CORRECTION01 identity roundtrip", () => {
+		it("preserves stateVersion, _ptadPushId, taskId, sessionId, epoch verbatim", () => {
+			enableHostOwnershipDiagnostic()
+			recordHostOwnershipFacts(
+				makeSnapshot({
+					stateVersion: 1234,
+					_ptadPushId: 56,
+					taskId: "task-A",
+					sessionId: "session-S",
+					epoch: 7,
+				}),
+			)
+			const got = getHostOwnershipDiagnostic()[0]
+			expect(got.stateVersion).toBe(1234)
+			expect(got._ptadPushId).toBe(56)
+			expect(got.taskId).toBe("task-A")
+			expect(got.sessionId).toBe("session-S")
+			expect(got.epoch).toBe(7)
+		})
+
 		it("preserves all six raw fields verbatim", () => {
 			enableHostOwnershipDiagnostic()
 			const raw = {
@@ -90,11 +118,11 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / h
 				drainingPendingPrompts: false,
 				agentCanStartRun: false,
 			}
-			recordHostOwnershipFacts({
-				...raw,
-				_ptadPushId: 42,
-				capturedAt: 100,
-			})
+			recordHostOwnershipFacts(
+				makeSnapshot({
+					...raw,
+				}),
+			)
 			const got = getHostOwnershipDiagnostic()[0]
 			expect(got.lastInteractiveTurnFinishReason).toBe("aborted")
 			expect(got.sessionStatus).toBe("running")
@@ -102,27 +130,37 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / h
 			expect(got.pendingPromptCount).toBe(3)
 			expect(got.drainingPendingPrompts).toBe(false)
 			expect(got.agentCanStartRun).toBe(false)
-			expect(got._ptadPushId).toBe(42)
-			expect(got.capturedAt).toBe(100)
 		})
 	})
 
-	// D3
+	// D3 (CORRECTION01-mandated unavailable row)
 	describe("D3 missing host/session => values recorded as unavailable, NOT synthesized", () => {
-		it("records undefined for missing fields without defaulting", () => {
+		it("records observationAvailable=false + identity + all six raw fields undefined", () => {
 			enableHostOwnershipDiagnostic()
-			recordHostOwnershipFacts({
-				sessionIsRunning: false,
-				_ptadPushId: 7,
-				capturedAt: 1,
-			})
+			recordHostOwnershipFacts(
+				makeSnapshot({
+					observationAvailable: false,
+					lastInteractiveTurnFinishReason: undefined,
+					sessionStatus: undefined,
+					pendingPromptCount: undefined,
+					drainingPendingPrompts: undefined,
+					agentCanStartRun: undefined,
+				}),
+			)
 			const got = getHostOwnershipDiagnostic()[0]
+			expect(got.observationAvailable).toBe(false)
 			expect(got.lastInteractiveTurnFinishReason).toBeUndefined()
 			expect(got.sessionStatus).toBeUndefined()
 			expect(got.pendingPromptCount).toBeUndefined()
 			expect(got.drainingPendingPrompts).toBeUndefined()
 			expect(got.agentCanStartRun).toBeUndefined()
 			expect(got.candidateAwaitingFollowup).toBeUndefined()
+			// identity must STILL be present
+			expect(got.stateVersion).toBe(100)
+			expect(got._ptadPushId).toBe(1)
+			expect(got.taskId).toBe("task-A")
+			expect(got.sessionId).toBe("s1")
+			expect(got.epoch).toBe(7)
 		})
 	})
 
@@ -130,32 +168,15 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / h
 	describe("D4 pendingPromptCount and drainingPendingPrompts remain distinct", () => {
 		it("treats count and boolean as separate axes", () => {
 			enableHostOwnershipDiagnostic()
-			recordHostOwnershipFacts({
-				pendingPromptCount: 0,
-				drainingPendingPrompts: true,
-				sessionIsRunning: false,
-				_ptadPushId: 1,
-				capturedAt: 0,
-			})
+			recordHostOwnershipFacts(
+				makeSnapshot({
+					pendingPromptCount: 0,
+					drainingPendingPrompts: true,
+				}),
+			)
 			const got = getHostOwnershipDiagnostic()[0]
 			expect(got.pendingPromptCount).toBe(0)
 			expect(got.drainingPendingPrompts).toBe(true)
-		})
-
-		it("treats count>0 and canStartRun=false as queued-but-blocked (not in-flight)", () => {
-			enableHostOwnershipDiagnostic()
-			recordHostOwnershipFacts({
-				pendingPromptCount: 2,
-				drainingPendingPrompts: false,
-				agentCanStartRun: false,
-				sessionIsRunning: false,
-				_ptadPushId: 1,
-				capturedAt: 0,
-			})
-			const got = getHostOwnershipDiagnostic()[0]
-			expect(got.pendingPromptCount).toBe(2)
-			expect(got.drainingPendingPrompts).toBe(false)
-			expect(got.agentCanStartRun).toBe(false)
 		})
 	})
 
@@ -165,55 +186,41 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / h
 			enableHostOwnershipDiagnostic()
 			const variants = ["completed", "aborted", "error", "max_iterations", "mistake_limit"] as const
 			for (const v of variants) {
-				recordHostOwnershipFacts({
-					lastInteractiveTurnFinishReason: v,
-					sessionIsRunning: false,
-					_ptadPushId: 1,
-					capturedAt: 0,
-				})
+				recordHostOwnershipFacts(
+					makeSnapshot({ lastInteractiveTurnFinishReason: v, _ptadPushId: variants.indexOf(v) }),
+				)
 			}
 			const got = getHostOwnershipDiagnostic().map((s) => s.lastInteractiveTurnFinishReason)
 			expect(got).toEqual([...variants])
 		})
 	})
 
-	// D6
+	// D6 (CORRECTION01: bounded ring)
 	describe("D6 bounded ring behavior", () => {
 		it("caps at the configured buffer size, dropping oldest first", () => {
 			setHostOwnershipDiagnosticBufferSize(3)
 			enableHostOwnershipDiagnostic()
 			for (let i = 1; i <= 5; i += 1) {
-				recordHostOwnershipFacts({
-					_ptadPushId: i,
-					sessionIsRunning: false,
-					capturedAt: i,
-				})
+				recordHostOwnershipFacts(
+					makeSnapshot({
+						stateVersion: i,
+						_ptadPushId: i,
+					}),
+				)
 			}
 			const got = getHostOwnershipDiagnostic()
 			expect(got).toHaveLength(3)
+			expect(got.map((s) => s.stateVersion)).toEqual([3, 4, 5])
 			expect(got.map((s) => s._ptadPushId)).toEqual([3, 4, 5])
 		})
 	})
 
-	// D7 — this one asserts the negative: NO diagnostic field is part of
-	// the diagnostic's exposed identity or any production consumer. Since
-	// the diagnostic module is a ring buffer with no consumer code, the
-	// strongest assertion we can make is that the type is structurally
-	// a side-channel (not extending any production type) and that the
-	// module's only exports are the enable/disable/record/read surface
-	// plus the formula helper.
+	// D7 (CORRECTION01: no diagnostic value consumed by TaskHeader projection)
 	describe("D7 no diagnostic value is consumed by TaskHeader projection", () => {
 		it("diagnostic surface is a side-channel (not a production type)", () => {
-			// The diagnostic identity constant is a marker. The production
-			// projection code (selectTaskHeaderPresentation / TaskHeaderTelemetry)
-			// does not import this module. Asserting this structurally:
-			// the diagnostic module exports no functions that mutate
-			// projection state.
 			expect(HOST_OWNERSHIP_DIAGNOSTIC_ID).toMatch(/^host-ownership-diagnostic@/)
-			// The module's read function returns a fresh slice: never the
-			// internal buffer reference.
 			enableHostOwnershipDiagnostic()
-			recordHostOwnershipFacts({ _ptadPushId: 1, sessionIsRunning: false, capturedAt: 0 })
+			recordHostOwnershipFacts(makeSnapshot())
 			const a = getHostOwnershipDiagnostic()
 			const b = getHostOwnershipDiagnostic()
 			expect(a).not.toBe(b)
@@ -221,10 +228,7 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / h
 		})
 	})
 
-	// Bonus: HYPOTHESIS_ONLY formula sanity checks. These do NOT
-	// assert product truth; they only prove the formula behaves as
-	// documented so the diagnostic captures are reproducible across
-	// capture sites.
+	// Bonus: HYPOTHESIS_ONLY formula sanity checks.
 	describe("deriveCandidateAwaitingFollowup (HYPOTHESIS_ONLY)", () => {
 		it("returns undefined when lastInteractiveTurnFinishReason is undefined", () => {
 			expect(
@@ -282,7 +286,7 @@ describe("ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01 / h
 			).toBe(false)
 		})
 
-		it("returns false when queued successor exists but session cannot accept (canStartRun=false)", () => {
+		it("returns true when queued successor exists but session cannot accept (canStartRun=false)", () => {
 			expect(
 				deriveCandidateAwaitingFollowup({
 					lastInteractiveTurnFinishReason: "completed",

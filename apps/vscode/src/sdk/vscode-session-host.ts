@@ -14,7 +14,6 @@ import {
 	type CoreSessionEvent,
 	type EditorExecutor,
 	type HookEventPayload,
-	type HostOwnershipFactsSnapshot,
 	type ITelemetryService,
 	type PendingPromptMutationResult,
 	type PendingPromptsDeleteInput,
@@ -104,6 +103,19 @@ export interface VscodeSessionHostOptions {
 	 * host owns the projection; the session host is a pass-through.
 	 */
 	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+}
+
+/**
+ * Host-only shape returned by `VscodeSessionHost.readHostFacts`. Lives
+ * here, NOT in `@cline/core` -- keeping the temporary diagnostic out of
+ * the shared execution contract.
+ */
+export interface HostOwnershipHostFacts {
+	readonly lastInteractiveTurnFinishReason?: import("@cline/shared").AgentFinishReason
+	readonly sessionStatus?: string
+	readonly pendingPromptCount?: number
+	readonly drainingPendingPrompts?: boolean
+	readonly agentCanStartRun?: boolean
 }
 
 export class VscodeSessionHost implements SdkSessionHost {
@@ -252,6 +264,44 @@ export class VscodeSessionHost implements SdkSessionHost {
 	 * is terminated before the rest of the task. Returns the number of
 	 * jobs that were actually cancelled (skips already-terminal jobs).
 	 */
+	/**
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+	 * Host-specific internal accessor that reads six raw host-ownership
+	 * facts from the underlying `ClineCore` session state. Returns
+	 * `undefined` when:
+	 *   * `sessionId` is missing,
+	 *   * the underlying core has no active session for that id,
+	 *   * the host does not implement this method (Hub/Remote omit it
+	 *     by design -- same absence semantic as `cancelBackgroundCommand`).
+	 *
+	 * Read-only: never mutates runtime/session state, never inserts
+	 * state-post events, never schedules timers.
+	 *
+	 * NOT on the `SdkSessionHost` interface -- host-only extension to
+	 * keep the temporary diagnostic out of the shared execution contract.
+	 * See `apps/vscode/src/sdk/host-ownership-capture/index.ts` for the
+	 * caller.
+	 */
+	/**
+	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
+	 * Host-specific internal accessor that reads six raw host-ownership
+	 * facts from the underlying `ClineCore` via its internal
+	 * `captureHostOwnershipFacts(sessionId)` class method.
+	 *
+	 * NOT on the `SdkSessionHost` interface -- host-only extension
+	 * following the precedent of `cancelBackgroundCommand`. The
+	 * diagnostic consumer reaches the method through duck-typing on
+	 * the concrete `VscodeSessionHost` class.
+	 *
+	 * Read-only. Returns `undefined` when `sessionId` is missing, the
+	 * session is not active, or the underlying host omits the method
+	 * (Hub/Remote). Never mutates runtime/session state.
+	 */
+	async readHostFacts(sessionId: string | undefined): Promise<HostOwnershipHostFacts | undefined> {
+		if (!sessionId) return undefined
+		return this.inner.captureHostOwnershipFacts(sessionId) ?? undefined
+	}
+
 	async cancelBackgroundCommand(): Promise<number> {
 		const activeIds = this.commandJobManager.getActiveJobIds()
 		if (activeIds.length === 0) {
@@ -399,15 +449,4 @@ export class VscodeSessionHost implements SdkSessionHost {
 		return this.inner.getActiveRuntimeSnapshot(sessionId)
 	}
 
-	/**
-	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01:
-	 * Diagnostic accessor for the six host-ownership facts. Delegates to
-	 * `ClineCore.captureHostOwnershipFacts` (the canonical proxy chain
-	 * ClineCore -> LocalRuntimeHost -> ActiveSession). Returns
-	 * `undefined` when `sessionId` is missing or the underlying core is
-	 * not the local one. Read-only: never mutates runtime/session state.
-	 */
-	captureHostOwnershipFacts(sessionId: string | undefined): HostOwnershipFactsSnapshot | undefined {
-		return this.inner.captureHostOwnershipFacts(sessionId)
-	}
 }
