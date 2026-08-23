@@ -247,7 +247,14 @@ function resolveExtensionRoot(): string | undefined {
 		// load this file before `vscode` is activated).
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const vscode = require("vscode") as typeof import("vscode")
-		return vscode?.extensions?.getExtension?.("claude-dev")?.extensionUri?.fsPath
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-LOCATOR-CORRECTION01:
+		// Look up by canonical registry identity (`publisher.name`) so the
+		// ClineMM fork (s1onique.clinemm) finds itself under its own ID
+		// instead of the upstream "claude-dev" identity. The previous
+		// hardcoded literal returned `undefined` for the fork and forced
+		// the V1 fallback for every command — V2 stayed dormant even
+		// when the helper binary was present.
+		return vscode?.extensions?.getExtension?.(ExtensionRegistryInfo.id)?.extensionUri?.fsPath
 	} catch {
 		return undefined
 	}
