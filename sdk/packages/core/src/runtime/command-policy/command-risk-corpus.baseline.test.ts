@@ -155,6 +155,12 @@ describe("Group A — baseline freeze: evaluateCommandPolicy in 'safe-only' mode
 		expect(byId.get("r0-find-bare")).toBe("allow");
 		expect(byId.get("r0-find-type-name")).toBe("allow");
 		expect(byId.get("r0-find-not-path")).toBe("allow");
+		// CORRECTION01: shell-glob forms are ASK (not ALLOW).
+		// These assertions lock the negative posture until the V2
+		// parser-quote provenance integration lands.
+		expect(byId.get("r0-find-glob-ask-name")).toBe("ask");
+		expect(byId.get("r0-find-glob-ask-path")).toBe("ask");
+		expect(byId.get("r0-find-glob-ask-start")).toBe("ask");
 		// R5 catastrophic + wrappers are all ASK.
 		expect(byId.get("r5-rm-rf-home")).toBe("ask");
 		expect(byId.get("wrap-bash-c-rm-home")).toBe("ask");

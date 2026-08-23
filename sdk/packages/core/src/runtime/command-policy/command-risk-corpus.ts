@@ -203,18 +203,56 @@ export const CORPUS: ReadonlyArray<CorpusCase> = [
 	{
 		id: "r0-find-type-name",
 		family: "R0-readonly",
-		command: "find . -type f -name *.ts",
+		command: "find . -type f -name log.txt",
 		requiredDecision: "allow",
 		requiredDisposition: "auto-approve-eligible",
-		notes: "find with predicates only; stdout-only",
+		notes:
+			"find with predicates only; LITERAL name (CORRECTION01: shell-glob patterns correctly ASK)",
 	},
 	{
 		id: "r0-find-not-path",
 		family: "R0-readonly",
-		command: "find . -type d -name command-risk* -not -path ./node_modules/*",
+		command:
+			"find . -type d -name command-risk -and -path ./src",
 		requiredDecision: "allow",
 		requiredDisposition: "auto-approve-eligible",
-		notes: "find with predicates and -not; observational",
+		notes:
+			"find with predicates and -and; LITERAL paths (CORRECTION01: shell-glob patterns correctly ASK)",
+	},
+	{
+		// CORRECTION01: shell-expansion boundary negative corpus.
+		// Glob-bearing source text is correctly ASK at the V1 regex
+		// layer because the rule cannot prove the post-expansion
+		// argv remains predicate-only. Users needing globs require
+		// either (a) shell-quoting the pattern with provenance
+		// tracked through the parser or (b) V2 AST token-quote
+		// provenance integration. Until that lands, the V1 safe
+		// allowlist deliberately refuses to bless these forms.
+		id: "r0-find-glob-ask-name",
+		family: "R0-readonly",
+		command: "find . -name *.ts",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"unquoted shell glob in -name pattern: shell expands *.ts before find sees argv; ASK until quote provenance proven",
+	},
+	{
+		id: "r0-find-glob-ask-path",
+		family: "R0-readonly",
+		command: "find . -path */node_modules/*",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"unquoted shell glob in -path pattern: shell expands path glob; ASK until quote provenance proven",
+	},
+	{
+		id: "r0-find-glob-ask-start",
+		family: "R0-readonly",
+		command: "find *",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"glob in starting path: attacker-controlled filenames become starting paths; ASK",
 	},
 
 	// -------------------- R1 — bounded build / test --------------------

@@ -317,11 +317,27 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 		}
 	});
 
-	it("find: predicate-only / stdout-only forms match (REVIEW STANDARD audit-cleared)", () => {
+	it("find: predicate-only / stdout-only forms match (REVIEW STANDARD audit-cleared, CORRECTION01 shell-expansion boundary)", () => {
 		// Per GNU findutils, find has stdout-only actions (-print, -print0,
 		// -printf, -ls, -quit, -prune) and action-capable forms (-delete,
 		// -exec, -execdir, -ok, -okdir, -fls, -fprint, -fprint0, -fprintf).
 		// We enumerate ONLY the stdout-only + pure-predicate forms here.
+		//
+		// CORRECTION01 (2026-08-24, Factory review): the rule classifies
+		// PRE-shell source text. Shell pathname expansion happens AFTER
+		// regex matching and BEFORE find sees its argv. A pre-expansion
+		// wildcard like `*.ts` may be expanded by the shell to whatever
+		// names match in the current directory — an attacker can plant
+		// filenames that turn a benign-looking source command into
+		// action-bearing argv. V1 deliberately avoids this trust boundary:
+		//   - starting paths: literal POSIX paths, no glob metachars
+		//   - pattern-bearing predicates (-name/-iname/-path/-ipath/
+		//     -regex/-iregex): LITERAL patterns only in V1; users who
+		//     need globs must use V2 parser-quote provenance.
+		//
+		// All test cases below use LITERAL patterns only. See the
+		// "REJECTED find shell-glob forms" describe block for the
+		// negative regression family.
 		for (const cmd of [
 			"find",
 			"find .",
@@ -339,12 +355,25 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 			"find . -type f",
 			"find . -type d",
 			"find . -type l",
-			"find . -name *.ts",
-			"find . -iname *.ts",
-			"find . -path */node_modules/*",
-			"find . -ipath */FOO/*",
-			"find . -regex .*\\.ts$",
-			"find . -iregex .*\\.ts$",
+			// -name / -iname: LITERAL name only (no globs)
+			"find . -name foo.ts",
+			"find . -iname FOO",
+			"find . -name command-risk",
+			// -path / -ipath: LITERAL path only (no globs)
+			"find . -path ./node_modules",
+			"find . -path ./foo/bar/baz.ts",
+			// -regex / -iregex: regex chars that are NOT shell metachars
+			// (POSIX shell metachars: * ? [ ] { } \ ~ at word start).
+			// Regex syntax . + ( ) | ^ $ is NOT expanded by the shell,
+			// so we allow it.
+			"find . -regex .ts$",
+			"find . -regex foo.bar",
+			"find . -regex .+ts$",
+			"find . -regex ^foo",
+			"find . -iregex .ts$",
+			"find . -iregex foo.bar",
+			"find . -iregex .+ts$",
+			"find . -iregex ^foo",
 			"find . -perm 644",
 			"find . -perm -u+w",
 			"find . -perm +u+w",
@@ -386,10 +415,9 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 			"find . -not -name foo",
 			"find . -name foo -and -type f",
 			"find . -name foo -or -name bar",
-			"find . -type d -name command-risk* -not -path ./node_modules/*",
-			"find . -type f -name *.ts -not -path */node_modules/*",
+			"find . -type d -name command-risk -and -path ./src",
 			"find . -type f -size +1M -maxdepth 3",
-			"find /tmp -type f -mtime +7 -name *.log",
+			"find /tmp -type f -mtime +7 -name log.txt",
 		]) {
 			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
 			expect(m?.source).toBe("host_safe_find");
@@ -628,6 +656,79 @@ describe("findSafeRuleMatch — REJECTED find actions (mutation / execution)", (
 	];
 
 	for (const [cmd, _why] of REJECTED_FIND) {
+		it(`rejects "${cmd}"`, () => {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m).toBeUndefined();
+		});
+	}
+});
+
+describe("findSafeRuleMatch — REJECTED find shell-glob forms (CORRECTION01 shell-expansion boundary)", () => {
+	// GNU find(1) explicitly warns: "Patterns containing metacharacters
+	// must be quoted so the shell does not expand them before find sees
+	// them." The rule classifies PRE-shell source text; shell pathname
+	// expansion happens AFTER regex matching. An attacker who can plant
+	// filenames in the working directory can therefore change the argv
+	// that find sees. V1 refuses to bless glob-bearing source: the
+	// pattern-bearing predicates and starting paths must be LITERAL.
+	//
+	// Every fixture below must be REJECTED by host_safe_find (match
+	// returns undefined). The fixtures are split into three families:
+	//   1. Starting paths with shell glob metacharacters
+	//   2. Pattern-bearing predicates with shell glob metacharacters
+	//   3. Combined / adversarial forms
+	//
+	// The "glob metacharacter" set per POSIX: * ? [ ] { } ~ (tilde at
+	// word start). Backslash is also a shell escape but our character
+	// class disallows it.
+	const REJECTED_FIND_GLOB = [
+		// === Family 1: starting paths with shell-glob metachars ===
+		["find *", "starting path is bare *"],
+		["find ./*", "starting path has embedded glob"],
+		["find src/*", "starting path ends with glob"],
+		["find *foo", "starting path starts with glob"],
+		["find foo*", "starting path contains glob"],
+		["find foo?", "starting path has ?"],
+		["find foo[ab]", "starting path has []"],
+		["find foo{bar,baz}", "starting path has {}"],
+		["find ~", "tilde triggers shell tilde expansion"],
+		["find ~/subdir", "tilde prefix"],
+		// === Family 2: pattern-bearing predicates with globs ===
+		["find . -name *.ts", "unquoted -name with *"],
+		["find . -iname *.ts", "unquoted -iname with *"],
+		["find . -name foo*", "unquoted -name with trailing *"],
+		["find . -iname foo*", "unquoted -iname with trailing *"],
+		["find . -name *foo*", "unquoted -name with multiple globs"],
+		["find . -name foo?", "unquoted -name with ?"],
+		["find . -name foo[ab]", "unquoted -name with []"],
+		["find . -name foo{bar}", "unquoted -name with {}"],
+		["find . -path */node_modules/*", "unquoted -path with two globs"],
+		["find . -path ./node_modules/*", "unquoted -path with trailing glob"],
+		["find . -path */node_modules", "unquoted -path with leading glob"],
+		["find . -ipath */FOO/*", "unquoted -ipath with globs"],
+		// === -regex / -iregex: globs rejected; pure-regex chars OK ===
+		["find . -regex *.ts", "unquoted -regex with *"],
+		["find . -regex .*.ts", "unquoted -regex with multiple *"],
+		["find . -regex .?ts$", "unquoted -regex with ?"],
+		["find . -regex .[abc]ts$", "unquoted -regex with []"],
+		["find . -regex .(foo|bar)", "unquoted -regex with parens OK if no globs"],
+		// (note: -regex patterns with PURE regex syntax . + ( ) | ^ $ are ALLOWED)
+		// === Family 3: combined / adversarial ===
+		["find . -name foo* -delete", "glob + mutation (defense in depth)"],
+		["find . -name *.ts -exec rm {} ;", "glob + execute (defense in depth)"],
+		["find * -delete", "glob starting path + mutation"],
+		["find . -path */node_modules -name *.ts", "multiple glob predicates"],
+		// The user's exact recon chain (with quotes) — already ASK
+		// because of the redirect+pipe (OPAQUE_SHELL_TOKENS) — would
+		// also be ASK at this layer if the quotes were stripped,
+		// because the bare `*` patterns trigger shell expansion.
+		[
+			"find . -type d -name command-risk* -not -path ./node_modules/* -not -path ./dist/* -not -path ./out/*",
+			"user's recon chain, unquoted: glob-bearing predicates correctly ASK",
+		],
+	];
+
+	for (const [cmd, _why] of REJECTED_FIND_GLOB) {
 		it(`rejects "${cmd}"`, () => {
 			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
 			expect(m).toBeUndefined();

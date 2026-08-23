@@ -298,11 +298,15 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	{
 		source: "host_safe_ls",
 		// ls: directory/file information query. ls(1) documents its
-		// job as "list information about the FILEs". No documented
-		// option invokes an external program, writes outside stdout,
-		// broadens authority, or has other authority-broadening
-		// effect per the REVIEW STANDARD at the top of this file.
-		// Every option is purely visual / formatting / filtering.
+		// job as "list information about the FILEs". ls has no
+		// filesystem-mutating command mode in the reviewed
+		// GNU/Coreutils surface: no documented option invokes an
+		// external program, broadens authority, or has other
+		// authority-broadening effect per the REVIEW STANDARD at
+		// the top of this file. (ls writes diagnostics to stderr,
+		// not stdout, when something goes wrong; that's normal Unix
+		// behavior, not a filesystem mutation.) Every reviewed
+		// option is purely visual / formatting / filtering.
 		//
 		// The rule allows any sequence of:
 		//   (a) reviewed short options (single-letter from the
@@ -327,20 +331,54 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		// stdout-only + pure-predicate forms here. Any invocation
 		// containing a mutating or executing action MUST NOT match.
 		//
+		// SHELL EXPANSION BOUNDARY (CORRECTION01, 2026-08-24):
+		// The rule classifies the PRE-shell source text. Shell
+		// pathname expansion happens AFTER regex matching and
+		// BEFORE find sees its argv. A pre-expansion wildcard like
+		// `*.ts` may be expanded by the shell to whatever names
+		// happen to match in the current directory — an attacker
+		// can plant filenames that turn a benign-looking source
+		// command into action-bearing argv (or even a parse error).
+		// GNU find(1) explicitly warns that patterns containing
+		// metacharacters must be quoted so the shell does not
+		// expand them before find sees them. V1 deliberately
+		// avoids this trust boundary:
+		//
+		//   - starting paths must be literal POSIX paths with
+		//     no glob metacharacters (* ? [ ] { });
+		//   - the pattern-bearing predicates (-name, -iname,
+		//     -path, -ipath, -regex, -iregex) accept ONLY the
+		//     character set that excludes glob metacharacters;
+		//   - users who need globs must use the V2 parser-bound
+		//     structured AST path (which proves quote provenance)
+		//     or shell-quote the pattern and explicitly opt into
+		//     this rule through the policy layer's quoting-aware
+		//     parser integration.
+		//
+		// The user's exact recon chain (`find ... -name 'command-risk*'
+		// -not -path './node_modules/*' ... 2>/dev/null | head -20`)
+		// contains unquoted glob metacharacters AND a redirect; both
+		// correctly keep the invocation ASK at the V1 regex layer.
+		// Per the engineer's plan, that is the next ACT
+		// (ACT-CLINEMM-COMMAND-RISK-R0-HARMLESS-REDIRECT-PRECISION01)
+		// plus a future glob-quoting-aware refinement.
+		//
 		// Review summary per option (REVIEW STANDARD at top):
 		//   Global options:
 		//     -H / -L / -P        symlink handling mode
 		//     -E                  extended regex (BSD)
 		//     -X                  stay on current filesystem
 		//     -s / -d / -x        BSD alternate invocation flags
-		//     -f <path>           alternate starting path
+		//     -f <path>           alternate starting path (literal)
 		//   Starting paths (positional; non-option tokens before
-		//   predicates):
-		//     . | path | absolute path
+		//   predicates) - LITERAL ONLY, NO GLOB METACHARS:
+		//     . | path | absolute path | relative dir path
+		//     character class: [-A-Za-z0-9_\/.,+:%@]
 		//   Predicates (tests / operators) - pure observation:
-		//     -name / -iname PAT          glob pattern (find's own)
-		//     -path / -ipath PAT          path pattern
-		//     -regex / -iregex PAT        regex
+		//     -name / -iname PAT          pattern (LITERAL or
+		//                                 regex; no shell glob)
+		//     -path / -ipath PAT          pattern (LITERAL; no glob)
+		//     -regex / -iregex PAT        regex (no shell glob)
 		//     -type [bcdflpsw]            file type
 		//     -perm [-+]MODE              permission bits
 		//     -user UNAME / -uid N
@@ -376,9 +414,13 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		//   -fprint FILE                 writes names to FILE
 		//   -fprint0 FILE                writes names to FILE (NUL)
 		//   -fprintf FILE FMT            writes formatted to FILE
+		//   any starting path containing * ? [ ] { }  (shell glob)
+		//   any -name/-iname/-path/-ipath/-regex/-iregex pattern
+		//     containing * ? [ ] { } (shell glob; V2 parser-quote
+		//     provenance required to bless these)
 		//   any unknown predicate / action   ASK (no wildcard)
 		pattern:
-			/^\s*find(?:\s+-(?:H|L|P|E|X|s|d|x))?(?:\s+-f\s+[-A-Za-z0-9_\/.,+:%^]+)?(?:\s+(?:--|(?![-])[-A-Za-z0-9_\/.,+:%^*?\[\]{}]+))*?(?:\s+(?:-name\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-iname\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-path\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-ipath\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-regex\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|\\\$]+|-iregex\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|\\\$]+|-type\s+[bcdflpsw]|-perm\s+[-+a-zA-Z0-7]+|-user\s+[-A-Za-z0-9_\/.,+:%^]+|-uid\s+\d+|-group\s+[-A-Za-z0-9_\/.,+:%^]+|-gid\s+\d+|-size\s+[+-]?\d+[ckbwMG]?|-atime\s+[+-]?\d+|-ctime\s+[+-]?\d+|-mtime\s+[+-]?\d+|-amin\s+[+-]?\d+|-cmin\s+[+-]?\d+|-mmin\s+[+-]?\d+|-newer\s+[-A-Za-z0-9_\/.,+:%^]+|-anewer\s+[-A-Za-z0-9_\/.,+:%^]+|-cnewer\s+[-A-Za-z0-9_\/.,+:%^]+|-newerXY\s+[a-z]\s+[-A-Za-z0-9_\/.,+:%^]+|-empty|-readable|-writable|-executable|-true|-false|-links\s+\d+|-inum\s+\d+|-fstype\s+[A-Za-z0-9_]+|-nogroup|-nouser|-depth|-xdev|-mindepth\s+\d+|-maxdepth\s+\d+|-prune|-print0?|-ls|-printf\s+[-A-Za-z0-9_\/.,+:%^%\\]+|-quit|-not|-and|-or))*\s*$/u,
+			/^\s*find(?:\s+-(?:H|L|P|E|X|s|d|x))?(?:\s+-f\s+[-A-Za-z0-9_\/.,+:%@]+)?(?:\s+(?:--|(?![-])[-A-Za-z0-9_\/.,+:%@]+))*?(?:\s+(?:-name\s+[-A-Za-z0-9_\/.,+:%@]+|-iname\s+[-A-Za-z0-9_\/.,+:%@]+|-path\s+[-A-Za-z0-9_\/.,+:%@]+|-ipath\s+[-A-Za-z0-9_\/.,+:%@]+|-regex\s+[-A-Za-z0-9_\/.,+:%@~()|\\.\$\^]+|-iregex\s+[-A-Za-z0-9_\/.,+:%@~()|\\.\$\^]+|-type\s+[bcdflpsw]|-perm\s+[-+a-zA-Z0-7]+|-user\s+[-A-Za-z0-9_\/.,+:%@]+|-uid\s+\d+|-group\s+[-A-Za-z0-9_\/.,+:%@]+|-gid\s+\d+|-size\s+[+-]?\d+[ckbwMG]?|-atime\s+[+-]?\d+|-ctime\s+[+-]?\d+|-mtime\s+[+-]?\d+|-amin\s+[+-]?\d+|-cmin\s+[+-]?\d+|-mmin\s+[+-]?\d+|-newer\s+[-A-Za-z0-9_\/.,+:%@]+|-anewer\s+[-A-Za-z0-9_\/.,+:%@]+|-cnewer\s+[-A-Za-z0-9_\/.,+:%@]+|-newerXY\s+[a-z]\s+[-A-Za-z0-9_\/.,+:%@]+|-empty|-readable|-writable|-executable|-true|-false|-links\s+\d+|-inum\s+\d+|-fstype\s+[A-Za-z0-9_]+|-nogroup|-nouser|-depth|-xdev|-mindepth\s+\d+|-maxdepth\s+\d+|-prune|-print0?|-ls|-printf\s+[-A-Za-z0-9_\/.,+:%@~%\\]+|-quit|-not|-and|-or))*\s*$/u,
 	},
 ];
 
