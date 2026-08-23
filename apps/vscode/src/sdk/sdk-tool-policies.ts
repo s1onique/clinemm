@@ -232,11 +232,17 @@ export function evaluateCommandToolApproval(
 	const riskVerdict = evaluateCommandRiskWithParser({
 		toolInput,
 		hostAuthorization,
-		// Cast at the trust boundary. The host adapter has already
-		// validated that this value came from `MvdanShHelper.invoke()`;
-		// the helper enforces SHA-256 digest + protocol version +
-		// structural validation. `unknown` keeps the V2 type
-		// identifier out of this host source (PROVENANCE INVARIANT).
+		// Cast at the trust boundary. This function is a pure
+		// host-policy function: it does NOT authenticate provenance
+		// itself. The PROVENANCE INVARIANT is enforced by the
+		// production call graph — the trusted host adapter
+		// (`SdkController.ts`) is the ONLY entry point that
+		// constructs this value, and it awaits
+		// `MvdanShHelper.invoke()` (whose digest + protocol version
+		// + structural validation make it tamper-evident).
+		// `unknown` keeps the V2 type identifier out of this host
+		// source (the parser-provenance invariant forbids the
+		// literal "ParsedShell" in host source files).
 		parserResult: parserResult as never,
 	})
 	if (riskVerdict.disposition === "never-auto-approve") {
@@ -503,12 +509,16 @@ export function evaluateCommandToolApprovalWithPlan(
 	const risk = evaluateCommandRiskWithParser({
 		toolInput,
 		hostAuthorization,
-		// Cast at the trust boundary. The host adapter (VSCode
-		// `SdkController`) has already validated that this value
-		// came from `MvdanShHelper.invoke()`; the helper enforces
-		// SHA-256 digest + protocol version + structural validation.
+		// Cast at the trust boundary. This function is a pure
+		// host-policy function: it does NOT authenticate provenance
+		// itself. The PROVENANCE INVARIANT is enforced by the
+		// production call graph — `SdkController.ts` is the ONLY
+		// entry point that constructs this value, and it awaits
+		// `MvdanShHelper.invoke()` (whose digest + protocol version
+		// + structural validation make it tamper-evident).
 		// `unknown` keeps the V2 type identifier out of this host
-		// source (PROVENANCE INVARIANT).
+		// source (the parser-provenance invariant forbids the
+		// literal "ParsedShell" in host source files).
 		parserResult: options?.parserResult as never,
 	})
 	if (risk.disposition === "never-auto-approve") {

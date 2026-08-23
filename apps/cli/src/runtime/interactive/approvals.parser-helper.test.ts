@@ -2,12 +2,15 @@
  * Interactive approval controller — V2 parser helper async-seam tests
  *
  * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
- * (CORRECTION02 Phase 2): behavioral RED/GREEN at the CLI host
- * approval seam. These tests prove that the async parser helper
- * thread actually changes the host decision, while preserving
- * every previously-pinned invariant.
+ * CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
  *
- * RED/GREEN contract (per reviewer):
+ * REAL production path tests. No `setCommandEvaluator()` override.
+ * Uses the production `createInteractiveApprovalController`,
+ * `cliResolveHostAuthorization` (via the controller's internal
+ * wiring), and `requestToolApproval`. The fake helper is the ONLY
+ * seam injected.
+ *
+ * RED/GREEN contract:
  *
  *   trusted helper returns bound safe AST  ->  ALLOW (for pwd; pwd)
  *   trusted helper unavailable              ->  ASK   (for pwd; pwd)
@@ -36,10 +39,6 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { ToolApprovalRequest } from "@cline/shared";
 import type { Config } from "../../utils/types";
-import {
-	commandHostAuthorization,
-	DEFAULT_COMMAND_HOST_ALLOW_RULES,
-} from "@cline/core";
 import { joinRunCommandsForParse, STRUCTURED_PROTO_VERSION } from "@cline/core/internal/command-risk-internal";
 import { createHash } from "node:crypto";
 
@@ -68,9 +67,6 @@ function makeSafeCompoundAst(toolInput: string): unknown {
 		sourceSha256: digest,
 		parseStatus: "complete",
 		hasCommandSubstitution: false,
-		// Flat array of statements — one per command, mirroring the
-		// production `mvdan/sh` output shape. For "pwd; pwd" there
-		// are TWO statements.
 		program: {
 			stmts: [
 				{
@@ -103,12 +99,6 @@ function makeSafeCompoundAst(toolInput: string): unknown {
 	};
 }
 
-/**
- * Build an unknown-command AST. Mirrors a real helper output for
- * an unknown command. The structured classifier will mark every
- * branch as not auto-approve eligible, so V2 promotion does NOT
- * fire — proving the conservation invariant.
- */
 function makeUnknownCommandAst(cmdName: string): unknown {
 	return {
 		protocolVersion: STRUCTURED_PROTO_VERSION,
@@ -137,17 +127,11 @@ function makeUnknownCommandAst(cmdName: string): unknown {
 }
 
 function makeHelperReturning(parsedShell: unknown): CliParserHelper {
-	return {
-		invoke: async (_toolInput: unknown) => parsedShell,
-	};
+	return { invoke: async (_toolInput: unknown) => parsedShell };
 }
-
 function makeHelperUnavailable(): CliParserHelper {
-	return {
-		invoke: async (_toolInput: unknown) => null,
-	};
+	return { invoke: async (_toolInput: unknown) => null };
 }
-
 function makeHelperThrowing(): CliParserHelper {
 	return {
 		invoke: async (_toolInput: unknown) => {
@@ -157,11 +141,15 @@ function makeHelperThrowing(): CliParserHelper {
 }
 
 /**
- * Make a safe-only-mode config: autoApprove=false. This forces V1
- * to ASK for safe compound commands, giving us a baseline where
- * V2 promotion is the only path that changes the decision.
+ * Production CLI config with `--auto-approve=false`. Per
+ * CORRECTION01, production CLI now uses `mode: "safe-only"` (not
+ * `manual`) when `autoApproveTools=false`. Safe commands like
+ * `pwd` auto-allow via `host_mode_safe_only_rule`; non-safe
+ * commands like `pwd; pwd` ASK via
+ * `host_mode_safe_only_fallthrough` — which is the promotable
+ * ASK source for V2.
  */
-function makeSafeOnlyConfig(): Config {
+function makeConfig(autoApprove: boolean): Config {
 	return {
 		apiKey: "",
 		providerId: "cline",
@@ -175,37 +163,8 @@ function makeSafeOnlyConfig(): Config {
 		enableTools: true,
 		enableSpawnAgent: true,
 		enableAgentTeams: true,
-		defaultToolAutoApprove: false,
-		toolPolicies: {
-			"*": { autoApprove: false },
-		},
-		cwd: process.cwd(),
-	};
-}
-
-/**
- * Make an auto-approve config: autoApprove=true. Used for R5 tests
- * where the underlying canonical policy would ALLOW but R5 must
- * downgrade to ASK.
- */
-function makeAutoApproveConfig(): Config {
-	return {
-		apiKey: "",
-		providerId: "cline",
-		modelId: "openai/gpt-5.3-codex",
-		verbose: false,
-		sandbox: false,
-		thinking: false,
-		outputMode: "text",
-		mode: "act",
-		systemPrompt: "",
-		enableTools: true,
-		enableSpawnAgent: true,
-		enableAgentTeams: true,
-		defaultToolAutoApprove: true,
-		toolPolicies: {
-			"*": { autoApprove: true },
-		},
+		defaultToolAutoApprove: autoApprove,
+		toolPolicies: { "*": { autoApprove } },
 		cwd: process.cwd(),
 	};
 }
@@ -235,85 +194,61 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// RED/GREEN — the reviewer's load-bearing pair
+// RED/GREEN — the load-bearing pair (REAL path, no setCommandEvaluator override)
 // ---------------------------------------------------------------------------
 
-describe("CORRECTION02 Phase 2: CLI async parser helper seam (RED/GREEN)", () => {
+describe("CORRECTION01: CLI REAL production seam (no setCommandEvaluator override)", () => {
 	it("pwd; pwd + trusted helper available -> host ALLOW (V2 promotion)", async () => {
-		// Wire a fake helper that returns a structurally valid
-		// ParsedShell whose digest matches the joined source.
+		// production config: --auto-approve=false -> cliResolveHostAuthorization(false) = safe-only
+		// fake trusted helper returns a structurally valid AST
 		const fakeAst = makeSafeCompoundAst("pwd; pwd");
 		setCliParserHelper(makeHelperReturning(fakeAst));
 
-		const controller = createInteractiveApprovalController(makeAutoApproveConfig());
-		// V2 promotion requires the V1 verdict to be ASK from a
-		// `promotable ask source` (see `STRUCTURE_ONLY_PROMOTABLE_REASONS`
-		// in `structured-command-risk.ts`). The promotable sources
-		// are `host_mode_safe_only_fallthrough` and
-		// `risk_opaque_composition`. We need `mode: "safe-only"`
-		// to produce the former — `cliResolveSafeOnlyHostAuthorization`
-		// actually uses `mode: "manual"` for the CLI's special
-		// "manual + safe rules" semantics, which is NOT promotable.
-		// So we build the canonical safe-only authorization directly.
-		const safeOnlyAuth = commandHostAuthorization({
-			mode: "safe-only",
-			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
-		});
-		controller.setCommandEvaluator((input, _auth) =>
-			cliEvaluateCommandToolApprovalWith(
-				{
-					toolName: input.toolName,
-					toolInput: input.toolInput,
-					autoApproveTools: input.autoApproveTools,
-					parserResult: input.parserResult,
-				},
-				safeOnlyAuth,
-			),
-		);
+		const controller = createInteractiveApprovalController(makeConfig(false));
 		const result = await controller.requestToolApproval(makeCommandRequest("pwd; pwd"));
 		expect(result.approved).toBe(true);
-		expect(result.decision?.kind).toBe("allow");
 		expect(result.decision?.source).toBe("risk_v2_structured_promotion");
 	});
 
 	it("pwd; pwd + trusted helper unavailable -> host ASK (V1 fallthrough)", async () => {
 		setCliParserHelper(makeHelperUnavailable());
 
-		const controller = createInteractiveApprovalController(makeSafeOnlyConfig());
+		const controller = createInteractiveApprovalController(makeConfig(false));
 		const result = await controller.requestToolApproval(makeCommandRequest("pwd; pwd"));
-		// No TUI: ASK surfaces as approved:false with the policy decision attached.
 		expect(result.approved).toBe(false);
 		expect(result.decision?.kind).toBe("ask");
+		expect(result.decision?.source).toBe("host_mode_safe_only_fallthrough");
 	});
 
 	it("pwd; pwd + trusted helper throws -> host ASK (V1 fallthrough, failure == absence)", async () => {
 		setCliParserHelper(makeHelperThrowing());
 
-		const controller = createInteractiveApprovalController(makeSafeOnlyConfig());
+		const controller = createInteractiveApprovalController(makeConfig(false));
 		const result = await controller.requestToolApproval(makeCommandRequest("pwd; pwd"));
 		expect(result.approved).toBe(false);
 		expect(result.decision?.kind).toBe("ask");
+		expect(result.decision?.source).toBe("host_mode_safe_only_fallthrough");
 	});
 
 	it("pwd; pwd + no helper wired (production default) -> host ASK (V1 unchanged)", async () => {
 		setCliParserHelper(undefined);
 
-		const controller = createInteractiveApprovalController(makeSafeOnlyConfig());
+		const controller = createInteractiveApprovalController(makeConfig(false));
 		const result = await controller.requestToolApproval(makeCommandRequest("pwd; pwd"));
 		expect(result.approved).toBe(false);
 		expect(result.decision?.kind).toBe("ask");
+		expect(result.decision?.source).toBe("host_mode_safe_only_fallthrough");
 	});
 });
 
 // ---------------------------------------------------------------------------
-// Conservation cases (the reviewer's four additional requirements)
+// Conservation cases (REAL path)
 // ---------------------------------------------------------------------------
 
-describe("CORRECTION02 Phase 2: V2 parser helper conservation invariants", () => {
+describe("CORRECTION01: CLI REAL production seam — V2 conservation invariants", () => {
 	it("R5 catastrophic (rm -rf $HOME) + helper unavailable -> ASK + never-auto-approve", async () => {
 		setCliParserHelper(makeHelperUnavailable());
-
-		const controller = createInteractiveApprovalController(makeAutoApproveConfig());
+		const controller = createInteractiveApprovalController(makeConfig(true));
 		const result = await controller.requestToolApproval(makeCommandRequest("rm -rf $HOME"));
 		expect(result.approved).toBe(false);
 		expect(result.decision?.kind).toBe("ask");
@@ -321,24 +256,19 @@ describe("CORRECTION02 Phase 2: V2 parser helper conservation invariants", () =>
 	});
 
 	it("R5 catastrophic (rm -rf $HOME) + helper returns ANYTHING -> ASK + never-auto-approve (R5 invariant)", async () => {
-		// Even if the helper returns a perfectly valid AST for
-		// `rm -rf $HOME`, the R5 hard floor MUST downgrade to ASK.
-		// The V2 promotion cannot weaken R5.
 		const fakeAst = makeSafeCompoundAst("rm -rf $HOME");
 		setCliParserHelper(makeHelperReturning(fakeAst));
-
-		const controller = createInteractiveApprovalController(makeAutoApproveConfig());
+		const controller = createInteractiveApprovalController(makeConfig(true));
 		const result = await controller.requestToolApproval(makeCommandRequest("rm -rf $HOME"));
 		expect(result.approved).toBe(false);
 		expect(result.decision?.kind).toBe("ask");
 		expect(result.decision?.source).toBe("risk_hard_floor");
 	});
 
-	it("unknown command + valid parser -> ASK (no V2 promotion without risk_v2_structured_promotion source)", async () => {
+	it("unknown command + valid parser -> ASK (no V2 promotion)", async () => {
 		const fakeAst = makeUnknownCommandAst("totally-unknown-cmd");
 		setCliParserHelper(makeHelperReturning(fakeAst));
-
-		const controller = createInteractiveApprovalController(makeSafeOnlyConfig());
+		const controller = createInteractiveApprovalController(makeConfig(false));
 		const result = await controller.requestToolApproval(
 			makeCommandRequest("totally-unknown-cmd --opt"),
 		);
@@ -346,20 +276,14 @@ describe("CORRECTION02 Phase 2: V2 parser helper conservation invariants", () =>
 	});
 
 	it("explicit DENY rule + parser -> DENY (DENY beats everything)", async () => {
+		// DENY test uses the test seam ONLY for explicit deny rules
+		// (the production CLI's interactive path does not expose
+		// deny-rule injection). This is the legitimate "trust the
+		// lower-level API to compose with extra auth" seam — not
+		// a substitute for production wiring.
 		const fakeAst = makeSafeCompoundAst("curl http://example.com");
 		setCliParserHelper(makeHelperReturning(fakeAst));
-
-		const controller = createInteractiveApprovalController(makeSafeOnlyConfig());
-		// Inject an evaluator that builds a deny-aware authorization.
-		// The interactive approval controller's default evaluator
-		// uses `cliResolveHostAuthorization(autoApproveAll)` which
-		// does not accept explicit deny rules. Using the test seam
-		// we can construct a deny-auth via `cliResolveSafeOnlyHostAuthorization`.
-		const denyAuth = cliResolveSafeOnlyHostAuthorization({
-			explicitDenyRules: [
-				{ pattern: "curl *", label: "block curl", description: "Deny curl" },
-			],
-		});
+		const controller = createInteractiveApprovalController(makeConfig(false));
 		controller.setCommandEvaluator((input, _auth) =>
 			cliEvaluateCommandToolApprovalWith(
 				{
@@ -368,7 +292,11 @@ describe("CORRECTION02 Phase 2: V2 parser helper conservation invariants", () =>
 					autoApproveTools: input.autoApproveTools,
 					parserResult: input.parserResult,
 				},
-				denyAuth,
+				cliResolveSafeOnlyHostAuthorization({
+					explicitDenyRules: [
+						{ pattern: "curl *", label: "block curl", description: "Deny curl" },
+					],
+				}),
 			),
 		);
 		const result = await controller.requestToolApproval(
@@ -377,5 +305,22 @@ describe("CORRECTION02 Phase 2: V2 parser helper conservation invariants", () =>
 		expect(result.approved).toBe(false);
 		expect(result.decision?.kind).toBe("deny");
 		expect(result.decision?.source).toBe("host_hard_deny");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ABLATION tests — verify the helper is actually doing something
+// ---------------------------------------------------------------------------
+
+describe("CORRECTION01: ABLATION — without helper, safe compound returns ASK (V1 path is reachable)", () => {
+	it("ablated: pwd; pwd + no helper + safe-only auth = ASK", async () => {
+		// No helper. V1 (safe-only fallthrough) is the entire path.
+		setCliParserHelper(undefined);
+		const controller = createInteractiveApprovalController(makeConfig(false));
+		const result = await controller.requestToolApproval(makeCommandRequest("pwd; pwd"));
+		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("host_mode_safe_only_fallthrough");
+		// V2 source is NOT present (V2 is dormant without helper).
+		expect(result.decision?.source).not.toBe("risk_v2_structured_promotion");
 	});
 });

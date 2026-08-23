@@ -7,6 +7,7 @@
 
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
+import type { CommandDecision, CommandHostAuthorization } from "@cline/core"
 import {
 	type CompareCheckpointResult,
 	createRestoredCheckpointMetadata,
@@ -22,6 +23,7 @@ import {
 } from "@cline/core"
 import { MvdanShHelper } from "@cline/core/internal/parser-helper-runtime"
 import type { ProviderConfig } from "@cline/llms"
+import type { CommandExecutionPlan } from "@cline/shared"
 import { formatDisplayUserInput, type RemoteConfig, type RemoteConfigBundle } from "@cline/shared"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import type { ApiConfiguration } from "@shared/api"
@@ -238,6 +240,109 @@ export function getSdkControllerParserHelper(): MvdanShHelper {
 
 export function setSdkControllerParserHelper(helper: MvdanShHelper | undefined): void {
 	sdkControllerParserHelper = helper ?? new MvdanShHelper()
+}
+
+/**
+ * Build the SdkController-owned `evaluateCommandToolApproval` callback.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
+ *
+ * This is the SAME callback the production `Controller` constructor
+ * registers at line ~573. The callback body is identical to what the
+ * `Controller` class uses, with the host-owned async boundary +
+ * snapshot invariant + try/catch wrapping the helper invocation.
+ *
+ * Extracted into a named exported function so tests can exercise the
+ * ACTUAL callback composition (not a mirrored one) by passing the
+ * test's chosen helper, host authorization, and tool input. The
+ * production `Controller` constructor calls this with
+ * `() => sdkControllerParserHelper`; tests inject a fake via the
+ * `setSdkControllerParserHelper` test seam.
+ *
+ * The function returns `undefined` for non-command tools (the
+ * coordinator's standard ToolPolicy path handles them) and a
+ * `CommandDecision`-shaped result for command tools.
+ */
+export function buildSdkControllerEvaluateCommandToolApproval(options: {
+	/** Resolve the host authorization. Production uses the session override path. */
+	resolveHostAuthorization: (
+		toolName: string,
+		requestInput: unknown,
+	) => {
+		hostAuthorization: CommandHostAuthorization
+		toolInput: unknown
+	}
+	/** Override the helper. Production uses `() => sdkControllerParserHelper`. */
+	getHelper: () => MvdanShHelper
+	/** Override cancel_command handling. Production uses `evaluateCancelCommandToolApproval`. */
+	evaluateCancel?: (
+		toolInput: unknown,
+		hostAuthorization: CommandHostAuthorization,
+	) => {
+		approved: boolean
+		decision: CommandDecision
+	}
+}) {
+	return async (request: {
+		toolName: string
+		input: unknown
+	}): Promise<
+		| {
+				approved: boolean
+				decision?: CommandDecision
+				executionPlan?: CommandExecutionPlan
+		  }
+		| undefined
+	> => {
+		if (!isCommandTool(request.toolName)) {
+			return undefined
+		}
+		const { hostAuthorization, toolInput } = options.resolveHostAuthorization(request.toolName, request.input)
+		if (request.toolName === "cancel_command") {
+			const cancelFn = options.evaluateCancel ?? evaluateCancelCommandToolApproval
+			const cancelResult = cancelFn(toolInput, hostAuthorization)
+			return {
+				approved: cancelResult.approved,
+				decision: cancelResult.decision,
+				executionPlan: undefined,
+			}
+		}
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+		// CORRECTION02 Phase 2 (async seam + snapshot invariant):
+		// the trusted parser helper is invoked EXACTLY ONCE here,
+		// at the host-owned async boundary, on a frozen snapshot
+		// of `toolInput`. The same captured value is then passed
+		// synchronously to the pure policy evaluator. When the
+		// helper is unavailable / fails / times out / returns
+		// malformed response, V2 stays dormant and V1 is preserved
+		// unchanged.
+		const frozenToolInput = toolInput
+		let parserResult: unknown
+		const helper = options.getHelper()
+		try {
+			parserResult = await helper.invoke(frozenToolInput)
+		} catch {
+			// The helper is asynchronous infrastructure. ANY thrown
+			// error is treated identically to V2 absence: we pass
+			// `undefined` to the policy evaluator and the V1 path
+			// is authoritative.
+			parserResult = undefined
+		}
+		const result = evaluateCommandToolApprovalWithPlan(frozenToolInput, hostAuthorization, {
+			// The trusted parser helper is the ONLY sanctioned
+			// source of this value. We pass it through, cast only
+			// at the trust boundary (the helper enforces the
+			// runtime provenance barrier — see
+			// `MvdanShHelper.invoke` and `validateResponse`).
+			parserResult: parserResult as never,
+		})
+		return {
+			approved: result.approved,
+			decision: result.decision,
+			executionPlan: result.executionPlan,
+		}
+	}
 }
 
 export class Controller {
@@ -570,90 +675,38 @@ export class Controller {
 			// atomic evaluation that carries both authority and execution constraints.
 			// This eliminates the race between shouldAutoApproveTool (authority)
 			// and buildCommandExecutionPlan (constraints) across the approval UI.
-			evaluateCommandToolApproval: async (request) => {
-				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
-				// For command tools: atomic single-pass evaluation via canonical policy.
-				if (!isCommandTool(request.toolName)) {
-					return undefined // Non-command tools use coordinator's standard ToolPolicy path.
-				}
-				const persisted = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
-				const sessionId = this.sessions.getActiveSession()?.sessionId
-				const override = this.sessionAutoApproval.getOverride(sessionId)
-				// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01:
-				// When the ephemeral session override is "all", project the
-				// host authorization to { mode: "all", explicitAllowRules }.
-				// Option B: skip human approval but retain hardened envelopes
-				// whenever a command has a known safe execution profile. Only
-				// unmatched commands fall through to bare host_mode_all. This
-				// also makes execution_plan_invalid reachable on planner failure.
-				// Hard DENY at step 1 still wins.
-				// Model escalation (requires_approval=true) is suppressed via
-				// stripRequiresApproval so the user's explicit session authority
-				// is not silently downgraded by an advisory model hint.
-				let hostAuthorization = getCommandHostAuthorization(request.toolName, persisted, this.mcpHub)
-				let toolInput = request.input
-				if (override === "all") {
-					// Compose over the base auth we just computed; this preserves
-					// explicitDenyRules (CORRECTION02 fix — see resolveSessionHostAuthorization).
-					const sessionHostAuth = resolveSessionHostAuthorization(hostAuthorization, override)
-					if (sessionHostAuth) {
-						hostAuthorization = sessionHostAuth
+			evaluateCommandToolApproval: buildSdkControllerEvaluateCommandToolApproval({
+				resolveHostAuthorization: (_toolName, requestInput) => {
+					const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
+					const persisted = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
+					const sessionId = this.sessions.getActiveSession()?.sessionId
+					const override = this.sessionAutoApproval.getOverride(sessionId)
+					// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01:
+					// When the ephemeral session override is "all", project the
+					// host authorization to { mode: "all", explicitAllowRules }.
+					// Option B: skip human approval but retain hardened envelopes
+					// whenever a command has a known safe execution profile. Only
+					// unmatched commands fall through to bare host_mode_all. This
+					// also makes execution_plan_invalid reachable on planner failure.
+					// Hard DENY at step 1 still wins.
+					// Model escalation (requires_approval=true) is suppressed via
+					// stripRequiresApproval so the user's explicit session authority
+					// is not silently downgraded by an advisory model hint.
+					let hostAuthorization = getCommandHostAuthorization(_toolName, persisted, this.mcpHub)
+					let toolInput = requestInput
+					if (override === "all") {
+						// Compose over the base auth we just computed; this preserves
+						// explicitDenyRules (CORRECTION02 fix — see resolveSessionHostAuthorization).
+						const sessionHostAuth = resolveSessionHostAuthorization(hostAuthorization, override)
+						if (sessionHostAuth) {
+							hostAuthorization = sessionHostAuth
+						}
+						toolInput = stripRequiresApproval(requestInput)
 					}
-					toolInput = stripRequiresApproval(request.input)
-				}
-				// CORRECTION02: cancel_command is a job-control capability,
-				// not a shell command. It must NOT funnel through the
-				// canonical command-policy normalizer (which would return
-				// ASK on unparseable input regardless of host mode, even
-				// mode `all`). Dispatch to the dedicated job-control
-				// authority function, which respects the same host mode
-				// matrix as run_commands but evaluates the jobId input
-				// shape directly.
-				if (request.toolName === "cancel_command") {
-					const cancelResult = evaluateCancelCommandToolApproval(toolInput, hostAuthorization)
-					return {
-						approved: cancelResult.approved,
-						decision: cancelResult.decision,
-						// cancel_command has no execution plan — it is a
-						// control signal, not a shell command.
-						executionPlan: undefined,
-					}
-				}
-				// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
-				// CORRECTION02 Phase 2 (async seam + snapshot invariant):
-				// the trusted parser helper is invoked EXACTLY ONCE here,
-				// at the host-owned async boundary, on a frozen snapshot
-				// of `toolInput`. The same captured value is then passed
-				// synchronously to the pure policy evaluator. When the
-				// helper is unavailable / fails / times out / returns
-				// malformed response, V2 stays dormant and V1 is preserved
-				// unchanged.
-				const frozenToolInput = toolInput
-				let parserResult: unknown
-				const helper = sdkControllerParserHelper
-				try {
-					parserResult = await helper.invoke(frozenToolInput)
-				} catch {
-					// The helper is asynchronous infrastructure. ANY thrown
-					// error is treated identically to V2 absence: we pass
-					// `undefined` to the policy evaluator and the V1 path
-					// is authoritative.
-					parserResult = undefined
-				}
-				const result = evaluateCommandToolApprovalWithPlan(frozenToolInput, hostAuthorization, {
-					// The trusted parser helper is the ONLY sanctioned
-					// source of this value. We pass it through, cast only
-					// at the trust boundary (the helper enforces the
-					// runtime provenance barrier — see
-					// `MvdanShHelper.invoke` and `validateResponse`).
-					parserResult: parserResult as never,
-				})
-				return {
-					approved: result.approved,
-					decision: result.decision,
-					executionPlan: result.executionPlan,
-				}
-			},
+					return { hostAuthorization, toolInput }
+				},
+				getHelper: () => sdkControllerParserHelper,
+			}),
 			getCwd: () => this.lastKnownWorkspaceRoot,
 		})
 		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:

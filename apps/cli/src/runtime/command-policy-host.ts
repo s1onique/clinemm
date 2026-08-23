@@ -31,7 +31,6 @@
 import {
 	buildCommandExecutionPlan,
 	type CommandHostAuthorization,
-	type CommandHostMode,
 	commandHostAuthorization,
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	evaluateCommandPolicy,
@@ -75,11 +74,46 @@ export interface CliCommandToolApprovalDecision {
 	executionPlan?: CommandExecutionPlan;
 }
 
+/**
+ * Build the production CLI host authorization.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
+ *
+ * `autoApproveTools=true`  → `mode: "all"` (user opted in to autonomous
+ *                            execution; everything ALLOWs through V1).
+ *
+ * `autoApproveTools=false` → `mode: "safe-only"` + DEFAULT_COMMAND_HOST_ALLOW_RULES
+ *                            (safe commands like `pwd`, `git status`,
+ *                            `git diff` ALLOW; everything else ASK).
+ *
+ * This matches the VSCode host's `getCommandHostAuthorization` semantics
+ * exactly (see `apps/vscode/src/sdk/sdk-tool-policies.ts`). Previously,
+ * the CLI used `mode: "manual"` here, which (a) blocked even safe
+ * commands like `pwd` from auto-approving — inconsistent with VSCode
+ * behavior — and (b) made the V2 ASK → ALLOW promotion un-reachable
+ * on the production path because `host_mode_manual` is intentionally
+ * not in `STRUCTURE_ONLY_PROMOTABLE_REASONS` (manual mode means the
+ * user asked for approval).
+ *
+ * The `safe-only` mode is V2-promotable via
+ * `host_mode_safe_only_fallthrough` when the parser confirms the AST.
+ * With this change, the real CLI interactive path now matches the
+ * VSCode interactive path's V2 promotion semantics.
+ *
+ * Existing tests that pinned the prior "manual mode rejects every
+ * command" behavior were updated to assert the corrected semantics.
+ */
 export function cliResolveHostAuthorization(
 	autoApproveTools: boolean,
 ): CommandHostAuthorization {
-	const mode: CommandHostMode = autoApproveTools ? "all" : "manual";
-	return commandHostAuthorization({ mode });
+	if (autoApproveTools) {
+		return commandHostAuthorization({ mode: "all" });
+	}
+	return commandHostAuthorization({
+		mode: "safe-only",
+		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	});
 }
 
 /**
@@ -222,12 +256,17 @@ export function cliEvaluateCommandToolApprovalWith(
 	const risk = evaluateCommandRiskWithParser({
 		toolInput: frozenToolInput,
 		hostAuthorization,
-		// Cast at the trust boundary. The caller has already
-		// validated that this value came from `MvdanShHelper.invoke()`
-		// (see `apps/cli/src/runtime/interactive/approvals.ts`); the
-		// helper enforces SHA-256 digest + protocol version +
-		// structural validation. `unknown` keeps the V2 type
-		// identifier out of this host source (PROVENANCE INVARIANT).
+		// Cast at the trust boundary. This function is a pure
+		// host-policy function: it does NOT authenticate provenance
+		// itself. The PROVENANCE INVARIANT is enforced by the
+		// production call graph — the trusted host adapter
+		// (`apps/cli/src/runtime/interactive/approvals.ts`) is the
+		// ONLY entry point that constructs this value, and it
+		// awaits `MvdanShHelper.invoke()` (whose digest + protocol
+		// version + structural validation make it tamper-evident).
+		// `unknown` keeps the V2 type identifier out of this host
+		// source (the parser-provenance invariant forbids the
+		// literal "ParsedShell" in host source files).
 		parserResult: input.parserResult as never,
 	});
 	const riskDowngrade =

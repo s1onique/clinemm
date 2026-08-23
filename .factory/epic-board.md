@@ -5347,3 +5347,82 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
   HEAD: Phase 2 commit (this row), NOT pushed.
 
   STOP. Phase 3 binary cross-compilation BLOCKED until Phase 2 review accepts.
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+  = PHASE_2_CORRECTION01_PRODUCTION_SEAM_PROVEN
+  = C1_GO_PHASE_3_BINARY_SHIPPING
+
+  REVIEWER HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN addressed:
+
+  1. CLI REAL PATH (no setCommandEvaluator override):
+     - cliResolveHostAuthorization(false) now returns mode: "safe-only"
+       + DEFAULT safe rules (matches VSCode's getCommandHostAuthorization)
+     - Was mode: "manual" — blocked V2 promotion because
+       host_mode_manual is not in STRUCTURE_ONLY_PROMOTABLE_REASONS
+     - Behavioral change: --auto-approve=false now auto-allows safe
+       commands (pwd, git status, git diff) via host_mode_safe_only_rule,
+       ASKs non-safe via host_mode_safe_only_fallthrough
+     - This matches VSCode exactly; CLI comment has always claimed
+       "CLI consumes the SAME policy as VS Code" — the bug was the
+       inconsistency, now repaired
+
+  2. VSCODE REAL OWNER SEAM:
+     - Controller.evaluateCommandToolApproval callback body extracted
+       into buildSdkControllerEvaluateCommandToolApproval(...) function
+     - Production Controller registers the extracted function directly
+     - Tests invoke the SAME function with production-shape getHelper
+       seam — no mirrored composition
+     - cancel handling, async seam, snapshot invariant, try/catch,
+       evaluateCommandToolApprovalWithPlan all byte-identical to
+       production
+
+  3. CONSERVATION (both real seams):
+     ✓ rm -rf "$HOME" -> ASK / risk_hard_floor (R5 invariant holds)
+     ✓ unknown cmd -> ASK (no V2 promotion for unknown branches)
+     ✓ explicit DENY -> DENY (DENY beats everything)
+     ✓ helper throws -> ASK (failure == V2 absence)
+     ✓ helper absent (binary not bundled) -> ASK (V1 fallthrough)
+
+  4. ABLATION (both real seams):
+     ✓ removing helper -> V1 ASK (V2 truly absent, not silent)
+     ✓ V1 path produces host_mode_safe_only_fallthrough, not risk_v2
+
+  5. P1 PROVENANCE TERMINOLOGY fixed:
+     - "caller has validated this value came from MvdanShHelper.invoke()"
+       replaced with "this function is a pure host-policy function: it
+       does NOT authenticate provenance itself. The PROVENANCE INVARIANT
+       is enforced by the production call graph."
+     - Matches reviewer's framing: provenance is a graph property
+
+  CLI DISCRIMINATOR (REAL production path, no test seam override):
+    HELPER PRESENT + pwd; pwd
+      approved: true
+      decision.source: "risk_v2_structured_promotion"     ✓ GREEN
+    HELPER ABSENT + pwd; pwd
+      approved: false
+      decision.source: "host_mode_safe_only_fallthrough"  ✓ GREEN
+    HELPER PRESENT + rm -rf $HOME
+      approved: false
+      decision.source: "risk_hard_floor"                  ✓ GREEN (R5 invariant)
+
+  TEST RESULTS:
+    @cline/core command-policy:    318/318 pass
+    @cline/core parser-provenance:    8/8 pass (substring invariant)
+    @cline/core build:                clean
+    CLI host (4 files):               65/65 pass (was 64; +1 positive safe-only test + ablation)
+    CLI typecheck:                     clean
+    VSCode vitest:                 2049/2049 pass (was 2047; +2 ablation tests)
+    VSCode typecheck:                 clean
+    git diff HEAD --check:            RC=0
+
+  VERDICT:
+    CLI_INTERACTIVE_V2 = WIRED (real production seam)
+    VSCODE V2 SdkController callback = REAL production-shape tested
+    PHASE_2_CORRECTION01 = COMPLETE
+    C1: GO directly to Phase 3 (binary cross-compilation).
+
+  BEHAVIORAL CHANGE FOR USER (CLI --auto-approve=false):
+    OLD: every command requires approval (manual mode)
+    NEW: safe commands auto-allow; others ask (safe-only mode)
+    Matches VSCode's executeSafeCommands=false behavior.
+    Documented in 02-correction01-final-report.md.

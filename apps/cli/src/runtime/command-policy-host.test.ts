@@ -21,9 +21,17 @@ describe("CLI host adapter — cliResolveHostAuthorization", () => {
 		expect(auth.mode).toBe("all");
 	});
 
-	it("autoApproveTools=false => host mode 'manual'", () => {
+	it("autoApproveTools=false => host mode 'safe-only' + default safe allow rules", () => {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+		// CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
+		// the CLI used `mode: "manual"` here historically, which made V2
+		// promotion unreachable on the real interactive path because
+		// `host_mode_manual` is not in `STRUCTURE_ONLY_PROMOTABLE_REASONS`.
+		// Production CLI now matches VSCode: `mode: "safe-only"` +
+		// DEFAULT safe rules, so safe commands (pwd, git status, git
+		// diff) auto-allow and everything else asks.
 		const auth = cliResolveHostAuthorization(false);
-		expect(auth.mode).toBe("manual");
+		expect(auth.mode).toBe("safe-only");
 	});
 });
 
@@ -53,13 +61,34 @@ describe("CLI host adapter — cliEvaluateCommandToolApproval", () => {
 		expect(result.approved).toBe(false);
 	});
 
-	it("autoApproveTools=false + ANY command + model=false => rejected (manual mode)", () => {
+	it("autoApproveTools=false + non-safe command (npm install) + model=false => ASK (safe-only fallthrough)", () => {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+		// CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
+		// production CLI now uses `mode: "safe-only"` (not `manual`)
+		// when `autoApproveTools=false`. Safe commands like `pwd`,
+		// `git status`, `git diff` auto-allow; non-safe commands
+		// like `npm install` ASK via `host_mode_safe_only_fallthrough`.
+		// This matches VSCode's `getCommandHostAuthorization` and
+		// makes the V2 ASK → ALLOW promotion reachable on the real
+		// CLI interactive path.
+		const result = cliEvaluateCommandToolApproval({
+			toolName: "run_commands",
+			toolInput: { command: "npm install", requires_approval: false },
+			autoApproveTools: false,
+		});
+		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("host_mode_safe_only_fallthrough");
+	});
+
+	it("autoApproveTools=false + safe command (pwd) + model=false => ALLOW (safe-only rule matched)", () => {
+		// New positive test for the corrected CLI auth semantics.
 		const result = cliEvaluateCommandToolApproval({
 			toolName: "run_commands",
 			toolInput: { command: "pwd", requires_approval: false },
 			autoApproveTools: false,
 		});
-		expect(result.approved).toBe(false);
+		expect(result.approved).toBe(true);
+		expect(result.decision?.source).toBe("host_mode_safe_only_rule");
 	});
 
 	it("missing model hint does NOT downgrade (but R5 hard floor still fires)", () => {
@@ -238,16 +267,25 @@ describe("CLI host adapter — CORRECTION04: per-command execution plan", () => 
 		expect(result.executionPlan!.commands).toHaveLength(2);
 	});
 
-	it("manual-mode ASK carries plan (user approval path preserves execution constraints)", () => {
+	it("safe-only fallthrough ASK carries plan (user approval path preserves execution constraints)", () => {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+		// CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
+		// production CLI now uses `mode: "safe-only"` (not `manual`)
+		// when `autoApproveTools=false`. A non-safe command like
+		// `npm install` hits safe-only fallthrough → ASK; the plan
+		// travels with the decision so the TUI approver can re-emit
+		// it on user YES. Previously this test pinned the manual-mode
+		// ASK path; the assertion is the same in shape.
 		const result = cliEvaluateCommandToolApproval({
 			toolName: "run_commands",
-			toolInput: { command: "pwd", requires_approval: false },
+			toolInput: { command: "npm install", requires_approval: false },
 			autoApproveTools: false,
 		});
-		// CORRECTION04: plan is no longer conditional on ALLOW. manual
-		// mode means ASK for everything; the plan travels with the
-		// decision so the TUI approver can re-emit it on user YES.
+		// CORRECTION04: plan is no longer conditional on ALLOW. safe-only
+		// fallthrough means ASK; the plan travels with the decision
+		// so the TUI approver can re-emit it on user YES.
 		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("host_mode_safe_only_fallthrough");
 		expect(result.executionPlan).toBeDefined();
 	});
 });

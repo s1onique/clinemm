@@ -112,23 +112,27 @@ describe("CORRECTION04: ASK -> user YES preserves CommandExecutionPlan", () => {
 		};
 	}
 
-	it("ASK on git diff -> user YES -> plan re-emitted (hardened argv survives)", async () => {
-		// safe-only mode forces ASK on the model-escalation path but
-		// also positively matches the safe-rule allow list, so the
-		// canonical policy attaches a SafeExecutionProfile. The plan
-		// travels through the user approval flow and the runtime
-		// substitutes hardened argv.
+	it("ASK on git diff with model escalation -> user YES -> plan re-emitted (hardened argv survives)", async () => {
+		// CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
+		// production CLI now uses `mode: "safe-only"` (not `manual`).
+		// `git diff --stat` positively matches the safe-rule allow
+		// list, so the canonical policy auto-approves with
+		// `host_mode_safe_only_rule`. To exercise the ASK → user YES
+		// path, we add `requires_approval: true` (model escalation):
+		// the rule still matches (positive SafeExecutionProfile) but
+		// the model hint downgrades ALLOW → ASK. The plan travels
+		// through the user approval flow.
 		const controller = createInteractiveApprovalController(makeConfig(false));
 		// TUI approver approves WITHOUT supplying a plan; the controller
 		// must re-emit the pending plan that the canonical command
 		// policy produced before ASK was decided.
 		controller.setToolApprover(async () => ({ approved: true }));
-		const request = makeCommandRequest({ command: "git diff --stat" });
+		const request = makeCommandRequest({
+			command: "git diff --stat",
+			requires_approval: true,
+		});
 		const result = await controller.requestToolApproval(request);
 		expect(result.approved).toBe(true);
-		// In manual mode without explicit allow rules the canonical
-		// policy returns ASK with a mirrored (no-profile) plan. The
-		// runtime will still substitute it (equals raw byte-for-byte).
 		// The hardened-argv assertion is exercised by the
 		// command-policy-host.test.ts safe-only test below.
 		expect(result.executionPlan).toBeDefined();
@@ -140,7 +144,12 @@ describe("CORRECTION04: ASK -> user YES preserves CommandExecutionPlan", () => {
 			approved: false,
 			reason: "user said no",
 		}));
-		const request = makeCommandRequest({ command: "git diff --stat" });
+		// Use git diff --stat WITH model escalation so the canonical
+		// policy returns ASK (not ALLOW) and routes to TUI.
+		const request = makeCommandRequest({
+			command: "git diff --stat",
+			requires_approval: true,
+		});
 		const result = await controller.requestToolApproval(request);
 		expect(result.approved).toBe(false);
 		expect(result.executionPlan).toBeUndefined();
