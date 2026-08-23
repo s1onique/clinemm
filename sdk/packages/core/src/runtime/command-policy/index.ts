@@ -81,3 +81,21 @@ export {
 	type EvaluateCommandRiskInput,
 	type RiskDecision,
 } from "./command-risk";
+
+// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-ASSISTED01:
+// V2 structured classifier. Hosts may pass a parser result to
+// `evaluateCommandRisk` to opt into structural analysis. When
+// omitted, V1 behavior is preserved unchanged.
+export {
+	evaluateStructuredCommandRisk,
+	joinRunCommandsForParse,
+	type ParsedShell,
+	type ShellDialect,
+	type StructuredAnalysis,
+	type StructuredCmd,
+	type StructuredProgram,
+	type StructuredRisk,
+	type StructuredStmt,
+	type StructuredStmtRisk,
+	STRUCTURED_PROTO_VERSION,
+} from "./structured-command-risk";

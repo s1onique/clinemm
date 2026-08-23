@@ -50,6 +50,10 @@ import {
 import { isOpaqueShellRendered } from "./command-safe-rules";
 import { normalizeRunCommandsInput } from "../../extensions/tools/helpers";
 import type { StructuredCommandInput } from "../../extensions/tools/schemas";
+import {
+	evaluateStructuredCommandRisk,
+	isStructureOnlyPromotableAsk,
+} from "./structured-command-risk";
 
 /**
  * The structured risk verdict returned by `evaluateCommandRisk`.
@@ -85,6 +89,20 @@ export interface EvaluateCommandRiskInput {
 	toolInput: unknown;
 	/** Host authorization (mode + rules). */
 	hostAuthorization: CommandHostAuthorization;
+	/**
+	 * Optional V2 parser result. When provided and structurally
+	 * valid, V2 may PROMOTE a V1 ASK to ALLOW or STRENGTHEN a V1
+	 * ASK to never-auto-approve. When null or absent, V2 is a no-op
+	 * (V1 behavior is preserved unchanged).
+	 *
+	 * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-ASSISTED01:
+	 * The parser result is a V2-only signal; the canonical command
+	 * policy and V1 hard floor NEVER consult it. The V2 layer sits
+	 * ON TOP of V1 and may only promote / strengthen, never weaken.
+	 *
+	 * Default: undefined (V2 disabled).
+	 */
+	parserResult?: import("./structured-command-risk").ParsedShell | null;
 }
 
 /* ---------------------------------------------------------------------- *
@@ -121,7 +139,27 @@ interface HardFloorMatch {
 	description: string;
 }
 
-const R5_HARD_FLOOR_RULES: ReadonlyArray<HardFloorMatch> = [
+/**
+ * Exported R5 hard-floor rule shape. ACT-CLINEMM-COMMAND-RISK-
+ * CLASSIFICATION02-CORRECTION01: the family union is part of the
+ * reason-text contract; new families MUST be reviewed before they
+ * appear in telemetry.
+ */
+export type CommandRiskHardFloorFamily = HardFloorMatch["family"];
+
+/**
+ * Canonical V1 R5 catastrophic hard floor rule set.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION01:
+ * Exported so downstream classifiers (e.g. the V2 structured classifier
+ * in `structured-command-risk.ts`) consume this SINGLE source of truth
+ * rather than maintain a duplicated copy. Mutation here MUST go
+ * through a corpus case + a review note.
+ *
+ * The fields are FROZEN by ACT §10: family names are part of the
+ * telemetry reason contract (`risk:hard-floor:<family>`).
+ */
+export const R5_HARD_FLOOR_RULES: ReadonlyArray<HardFloorMatch> = [
 	// HOME destruction
 	//
 	// The patterns are SUBSTRING matches, not anchored. This is
@@ -213,6 +251,36 @@ const R5_HARD_FLOOR_RULES: ReadonlyArray<HardFloorMatch> = [
 		description: "piped tee to /etc/, /boot/, /var/",
 	},
 ];
+
+/**
+ * Canonical V1 R5 catastrophic hard-floor matcher.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION01:
+ * Exposed for downstream classifiers (V2 structured classifier,
+ * future R5 audit tooling) so they consume the SINGLE V1 source
+ * of truth. The match contract is identical to the in-function
+ * loop in `evaluateCommandRisk` — every rule is a SUBSTRING match
+ * (not anchored), the same way V1 scans each rendered command.
+ *
+ * Returns:
+ *   - the FIRST rule that matches (priority: declaration order),
+ *     or null when no rule matches.
+ *   - rules are returned as `{ family, hard }` (the canonical
+ *     family name + whether it forces never-auto-approve).
+ *
+ * The pattern field is intentionally not returned — downstream
+ * code must not depend on the regex source.
+ */
+export function findCommandRiskHardFloor(
+	rendered: string,
+): { readonly family: CommandRiskHardFloorFamily; readonly hard: boolean } | null {
+	for (const rule of R5_HARD_FLOOR_RULES) {
+		if (rule.pattern.test(rendered)) {
+			return { family: rule.family, hard: rule.hard };
+		}
+	}
+	return null;
+}
 
 /* ---------------------------------------------------------------------- *
  * Main entry point                                                        *
@@ -374,6 +442,70 @@ export function evaluateCommandRisk(
 		finalDisposition = "ask";
 		finalSource = "risk_parse_failed";
 		reasons.push("command could not be parsed");
+	}
+
+	// 5d. V2 structured analysis (ACT-CLINEMM-COMMAND-RISK-
+	//     CLASSIFICATION02-PARSER-ASSISTED01 + CORRECTION01).
+	//     Layered ON TOP of V1:
+	//
+	//     - May PROMOTE V1 ASK -> ALLOW only when ALL gates hold:
+	//         (a) v2.promoteToAllow is set (the V2 classifier has
+	//             structurally classified every reachable branch as
+	//             auto-approve eligible);
+	//         (b) the V1 ASK is STRUCTURE-ONLY
+	//             (isStructureOnlyPromotableAsk(finalSource));
+	//         (c) the V1 ASK was specifically caused by an opaque
+	//             shell composition token in the rendered input
+	//             (`opaqueCommands.length > 0`). Without this gate,
+	//             `unknown_command --opt` (no opaque token, just an
+	//             unknown binary) would be promotable when the AST
+	//             arbitrarily claims the inner is `pwd`;
+	//         (d) finalDisposition is not already never-auto-approve
+	//             (V2 may NEVER promote a hard-floor disposition
+	//             back to ALLOW).
+	//     - May STRENGTHEN V1 ASK -> never-auto-approve when:
+	//         (a) parser result is bound to source (parseConfidence
+	//             === "complete" in v2);
+	//         (b) v2.downgradeToNeverAutoApprove is set;
+	//         (c) the V1 disposition is ASK or ALLOW (V2 never
+	//             weakens a DENY or never-auto-approve).
+	//     - NEVER weakens V1's verdict.
+	if (input.parserResult !== undefined) {
+		const v2 = evaluateStructuredCommandRisk({
+			toolInput: input.toolInput,
+			parserResult: input.parserResult,
+		});
+		const v2SourceBound = v2.parseConfidence === "complete";
+		const v2StructureCausedAsk =
+			v2.promoteToAllow &&
+			finalDecision === "ask" &&
+			finalDisposition !== "never-auto-approve" &&
+			isStructureOnlyPromotableAsk(finalSource) &&
+			opaqueCommands.length > 0;
+		if (v2StructureCausedAsk) {
+			// Load-bearing monotonicity invariant: V2 may NEVER
+			// promote a V1 never-auto-approve disposition back to
+			// ALLOW, even if the parser fixture claims the input is
+			// safe. The `disposition !== "never-auto-approve"`
+			// guard above enforces this.
+			finalDecision = "allow";
+			finalDisposition = "auto-approve-eligible";
+			finalSource = "risk_v2_structured_promotion";
+			reasons.push(...v2.reasons);
+		} else if (v2.downgradeToNeverAutoApprove && v2SourceBound) {
+			// V2 may strengthen ASK or ALLOW (ALLOW→ASK+never-auto-approve,
+			// matching V1's R5 floor pattern), BUT only when the
+			// parser result is bound to source. An unbound AST
+			// cannot be trusted to surface R5.
+			if (finalDecision === "ask") {
+				finalDisposition = "never-auto-approve";
+			} else if (finalDecision === "allow") {
+				finalDecision = "ask";
+				finalDisposition = "never-auto-approve";
+				finalSource = "risk_v2_structured_strengthen";
+			}
+			reasons.push(...v2.reasons);
+		}
 	}
 
 	if (reasons.length === 0) {
