@@ -5009,3 +5009,100 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION02
     (SHA-256 binding is integrity, not authentication; production
      must enforce host-only construction of ParsedShell.)
     mvdan/sh candidate = v3.13.1 (zsh promotion remains disabled).
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01
+
+  = PASS_V2_FRAMEWORK_HARDENED + PASS_PUBLIC_API_NARROWED
+
+  V2 classifier framework is ship-safe. The load-bearing proof is
+  PROVENANCE, not the helper binary itself.
+
+  ACTION:
+    1. sha256Hex: replaced `globalThis.require("crypto")` with
+       `import { createHash } from "node:crypto"` — universal repo
+       pattern. Works under Bun, Node, bundled VS Code extension
+       host, bundled CLI. Fixes reviewer P1.
+    2. Public API narrowing: `EvaluateCommandRiskInput` (public) has
+       NO `parserResult` field. New `EvaluateCommandRiskInternalInput`
+       has the field but is exported only via deep import
+       `@cline/core/internal/command-risk-internal`. Public
+       `@cline/core` index no longer re-exports V2 types
+       (`ParsedShell`, `StructuredAnalysis`,
+       `evaluateStructuredCommandRisk`, `STRUCTURED_PROTO_VERSION`).
+       Reviewer non-blocking residue #1 RESOLVED.
+    3. New internal entry point `evaluateCommandRiskWithParser` is
+       the ONLY place in @cline/core that consults a parser result.
+       `evaluateCommandRisk` is V1-only by construction (no parserResult).
+    4. Both host adapters (CLI + VSCode) use the internal entry point
+       with `parserResult: undefined`. Today V2 is dormant; behavior
+       is identical to V1.
+    5. Trusted helper capability `MvdanShHelper` shipped in
+       `parser-helper/runtime.ts`. Spawns helper directly (no shell,
+       argv execution, bounded stdin/stdout, timeout). The helper
+       binary itself is NOT yet built; default locator returns null.
+       Helper-binary ACT drops in the binaries.
+
+  PROVENANCE INVARIANT (load-bearing):
+    raw toolInput → trusted host adapter → MvdanShHelper.invoke →
+    locally launched pinned helper binary → host constructs ParsedShell →
+    evaluateCommandRiskWithParser.
+    NO path from model / MCP / webview / gRPC / remote to ParsedShell.
+
+  This invariant is pinned by `parser-provenance.test.ts`:
+    (1) public EvaluateCommandRiskInput has no parserResult field
+    (2) compile-time rejection of parserResult on public type
+    (3) runtime: public eval ignores any injected parserResult
+    (4) internal eval accepts parserResult (when bound)
+    (5) host adapters use the internal entry point with undefined
+    (6) host adapters do not import ParsedShell from a public path
+    (7) public @cline/core index does NOT export V2 internal types
+
+  V1 independence pinned by `v1-independence.test.ts`:
+    6 R5 catastrophic cases × 4 entry-point variants = 24 tests.
+    Every variant stays ASK + never-auto-approve. V1 catastrophe
+    floor is the SAFETY FLOOR — independent of V2.
+
+  TEST RESULTS:
+    @cline/core command-policy:  307/307 pass (was 271 + 36 new)
+    @cline/core full unit suite: 2267/2267 pass (14 skipped)
+    CLI host:                     41/41 pass
+    VSCode SDK host:              64/64 pass
+    @cline/core build:            clean
+    CLI typecheck:                clean
+    VSCode typecheck:             clean
+    git diff HEAD --check:        RC=0 (clean)
+
+  Class: PASS_V2_FRAMEWORK_HARDENED + PASS_PUBLIC_API_NARROWED.
+         PARSER_PROVENANCE = NOT_YET_PROVEN (deferred until helper
+         binary lands; today V2 is dormant so no ParsedShell
+         reaches the classifier).
+
+  P1 frozen for parser-helper-binary ACT:
+    1. Build mvdan/sh v3.13.1 helper binary (Go).
+    2. Cross-compile darwin-arm64, darwin-amd64, linux-amd64,
+       linux-arm64, win32-x64.
+    3. Vendor binaries at
+       `<package_root>/bin/parser-helper/<platform>/cline-parser-helper`.
+    4. Update VSIX packaging; verify exact-head VSIX contains the
+       exact helper (compose SHA-256 evidence).
+    5. Replace `parserResult: undefined` in host adapters with
+       `await MvdanShHelper.invoke(toolInput)` calls.
+    6. Re-run all 2267 + 41 + 64 + 307 tests with the live helper.
+
+  REVIEWER NON-BLOCKING RESIDUE:
+    #1 (V2 protocol over-export) — RESOLVED via public-API narrowing.
+    #2 (structured-command-risk → command-risk → structured-command-risk
+        module cycle via findCommandRiskHardFloor) — DEFERRED. Tests
+        pass; refactor to a tiny dependency-neutral matcher module is
+        non-trivial and out of scope for this shipping ACT.
+
+  STOP RULE REACHED:
+    "Stop when this composition is executable evidence:
+       trusted host input → trusted parser helper invocation seam →
+       bound AST (when binary is dropped in) → canonical V2 classifier →
+       CLI + VSCode, AND
+       untrusted callers cannot inject AST,
+       helper absent → V1 unchanged,
+       safe compound: currently ASK; will be ALLOW when helper binary lands,
+       dangerous compound: remains protected."
+    Reached.
