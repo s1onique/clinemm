@@ -155,6 +155,7 @@ import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
 import { TurnStateTracker } from "./turn-state-tracker"
+import { emitV2Capture } from "./v2-capture"
 import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
 import { VscodeSessionHost } from "./vscode-session-host"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
@@ -254,8 +255,35 @@ function resolveExtensionRoot(): string | undefined {
 		// hardcoded literal returned `undefined` for the fork and forced
 		// the V1 fallback for every command — V2 stayed dormant even
 		// when the helper binary was present.
-		return vscode?.extensions?.getExtension?.(ExtensionRegistryInfo.id)?.extensionUri?.fsPath
+		const ext = vscode?.extensions?.getExtension?.(ExtensionRegistryInfo.id)
+		const resolved = ext?.extensionUri?.fsPath
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+		// CORRECTION01 — C1 is a PROCESS-SCOPE event (fires once per
+		// helper construction, not per request). Explicit scope tag
+		// prevents the AsyncLocalStorage request context from being
+		// inherited here, which would corrupt per-request correlation.
+		emitV2Capture({
+			codePoint: "extensionRoot.resolve.v2",
+			scope: "process",
+			data: {
+				resolved: typeof resolved === "string" && resolved.length > 0,
+				extensionId: ExtensionRegistryInfo.id,
+			},
+		})
+		return resolved
 	} catch {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+		// CORRECTION01 — same process-scope semantics on the failure
+		// path. Capture failure honestly (best-effort; never throws).
+		emitV2Capture({
+			codePoint: "extensionRoot.resolve.v2",
+			scope: "process",
+			data: {
+				resolved: false,
+				extensionId: ExtensionRegistryInfo.id,
+				resolveError: true,
+			},
+		})
 		return undefined
 	}
 }
@@ -355,14 +383,59 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 		const frozenToolInput = toolInput
 		let parserResult: unknown
 		const helper = options.getHelper()
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+		// C2_3 — observe the helper acquire+invoke boundary entirely from
+		// the host side. We CANNOT distinguish "binary missing" from
+		// "spawn failed" from "validate failed" with the public API; that
+		// is recorded honestly as `result: "null"` so the post-mortem
+		// knows the ambiguity exists (CAPTURE_INSUFFICIENT_TO_DISTINGUISH_…).
+		// We deliberately do NOT add a diagnostic API to `@cline/core`
+		// for this capture.
+		emitV2Capture({
+			codePoint: "parserHelper.acquire-invoke.v2",
+			data: {
+				entered: true,
+			},
+		})
+		let invokeResult: "success" | "null" | "exception" = "null"
 		try {
 			parserResult = await helper.invoke(frozenToolInput)
+			invokeResult = parserResult == null ? "null" : "success"
 		} catch {
 			// The helper is asynchronous infrastructure. ANY thrown
 			// error is treated identically to V2 absence: we pass
 			// `undefined` to the policy evaluator and the V1 path
 			// is authoritative.
 			parserResult = undefined
+			invokeResult = "exception"
+		}
+		emitV2Capture({
+			codePoint: "parserHelper.acquire-invoke.v2",
+			data: {
+				entered: false,
+				result: invokeResult,
+			},
+		})
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+		// CORRECTION01 — C4 only emits on the success path. The helper
+		// runtime itself already enforced digest equality upstream
+		// (otherwise `MvdanShHelper.invoke` would have returned null and
+		// invokeResult would not be "success"). We therefore record the
+		// trust-boundary state honestly: `helperValidationPassed: true`
+		// means "the result we hold passed the helper's runtime
+		// checks", and `sourceDigestPresent` only confirms the digest
+		// field is present (we do NOT recompute the equality here).
+		if (invokeResult === "success" && parserResult && typeof parserResult === "object") {
+			const validated = parserResult as Record<string, unknown>
+			emitV2Capture({
+				codePoint: "parserResult.validate.v2",
+				data: {
+					protocolVersion: validated.protocolVersion,
+					parseStatus: validated.parseStatus,
+					helperValidationPassed: true,
+					sourceDigestPresent: typeof validated.sourceSha256 === "string",
+				},
+			})
 		}
 		const result = evaluateCommandToolApprovalWithPlan(frozenToolInput, hostAuthorization, {
 			// The trusted parser helper is the ONLY sanctioned
@@ -371,6 +444,18 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 			// runtime provenance barrier — see
 			// `MvdanShHelper.invoke` and `validateResponse`).
 			parserResult: parserResult as never,
+		})
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+		// C7 — host composition outcome. Note that the structured
+		// classifier result is observed at the SDK adapter boundary
+		// (sdk-tool-policies.ts) where the V2 promotion branch is
+		// reachable; here we only observe the final composed decision.
+		emitV2Capture({
+			codePoint: "hostDecision.compose.v2",
+			data: {
+				finalDecision: result.decision?.kind,
+				finalSource: result.decision?.source,
+			},
 		})
 		return {
 			approved: result.approved,

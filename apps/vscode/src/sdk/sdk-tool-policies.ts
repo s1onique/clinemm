@@ -28,6 +28,7 @@ type TrustedParserEvidence = unknown
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { McpHub } from "@/services/mcp/McpHub"
 import type { SessionAutoApprovalOverride } from "./session-auto-approval"
+import { emitV2Capture } from "./v2-capture"
 
 /**
  * Build SDK `toolPolicies` for tools governed by Cline's auto-approval UI.
@@ -118,6 +119,7 @@ export function getCommandHostAuthorization(
 	settings: AutoApprovalSettings,
 	_mcpHub?: McpHub,
 ): CommandHostAuthorization {
+	let resolved: CommandHostAuthorization
 	if (isCommandTool(toolName)) {
 		// `cancel_command` is mutating (terminates a process tree) but
 		// has no command-shaped input. It must follow the user's
@@ -131,18 +133,33 @@ export function getCommandHostAuthorization(
 		// prompt. The executeSafeCommands toggle is therefore the
 		// authoritative gate: off -> ASK; on -> ALLOW.
 		if (settings.actions.executeSafeCommands) {
-			return commandHostAuthorization({
+			resolved = commandHostAuthorization({
 				mode: "safe-only",
 				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
 			})
+		} else {
+			resolved = commandHostAuthorization({ mode: "manual" })
 		}
-		return commandHostAuthorization({ mode: "manual" })
+	} else {
+		// For non-command tools, the auto-approve toggle is a
+		// simple boolean. We only return the authorization mode when
+		// the tool is a command tool; callers should not use this
+		// function for non-command tools.
+		resolved = commandHostAuthorization({ mode: "manual" })
 	}
-	// For non-command tools, the auto-approve toggle is a
-	// simple boolean. We only return the authorization mode when
-	// the tool is a command tool; callers should not use this
-	// function for non-command tools.
-	return commandHostAuthorization({ mode: "manual" })
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+	// C5 — capture the resolved host authorization mode at its actual
+	// owner. This is the load-bearing input the V2 promotion branch
+	// consults; if it is not "safe-only" the branch cannot fire.
+	emitV2Capture({
+		codePoint: "approval.authorization.v2",
+		data: {
+			toolName,
+			mode: resolved.mode,
+			hasExplicitAllowRules: (resolved.explicitAllowRules?.length ?? 0) > 0,
+		},
+	})
+	return resolved
 }
 
 /**
@@ -244,6 +261,22 @@ export function evaluateCommandToolApproval(
 		// source (the parser-provenance invariant forbids the
 		// literal V2 type identifier in host source files).
 		parserResult: parserResult as never,
+	})
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+	// C6 — observe the structured classifier verdict at the seam where
+	// the V2 promotion branch is reachable. We capture both the V1
+	// lattice verdict and the V2 overlay so post-mortem can distinguish
+	// "host did not authorize promotion" from "structurally not
+	// promotable" without going inside the SDK.
+	emitV2Capture({
+		codePoint: "commandRisk.structured.v2",
+		data: {
+			preV2Decision: result.decision.kind,
+			preV2Source: result.decision.source,
+			structuredDecision: riskVerdict.decision,
+			structuredSource: riskVerdict.source,
+			structuredDisposition: riskVerdict.disposition,
+		},
 	})
 	if (riskVerdict.disposition === "never-auto-approve") {
 		return {

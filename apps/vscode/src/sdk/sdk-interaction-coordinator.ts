@@ -9,6 +9,7 @@ import { buildToolApprovalAskMessage } from "./message-translator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { isCommandTool } from "./sdk-tool-policies"
 import { buildToolApprovalDenialReason } from "./tool-approval-denial"
+import { emitV2Capture, newV2CorrelationId, v2CommandDigest, withV2CaptureContext } from "./v2-capture"
 
 /**
  * =============================================================================
@@ -221,6 +222,48 @@ export class SdkInteractionCoordinator {
 	}
 
 	async handleRequestToolApproval(request: ToolApprovalRequest): Promise<{
+		approved: boolean
+		reason?: string
+		decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
+		executionPlan?: CommandExecutionPlan
+	}> {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+		// CORRECTION01 — request-scoped capture context. AsyncLocalStorage
+		// propagates correlationId + commandDigest to every code point
+		// that fires inside the async callback chain, so C2_3/C4/C5/C6/C7
+		// automatically inherit the request identity set by C0.
+		const correlationId = newV2CorrelationId()
+		const commandDigest = v2CommandDigest(request.input)
+		const isCommand = isCommandTool(request.toolName)
+		// C0 — heartbeat at the EARLIEST observable entry point before any
+		// branching. If an approval card appears but this heartbeat is
+		// missing, the instrumented callback was never reached (C0).
+		emitV2Capture({
+			codePoint: "approval.entry.v2",
+			correlationId,
+			commandDigest,
+			data: {
+				toolName: request.toolName,
+				isCommand,
+			},
+		})
+		try {
+			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
+			// CORRECTION01 — wrap the request body in the AsyncLocalStorage
+			// context so downstream emitters inherit the correlation pair.
+			return await withV2CaptureContext({ correlationId, commandDigest }, () => this.runRequestToolApproval(request))
+		} finally {
+			// T — terminal record, exactly once per request. Emitted at every
+			// return path so the trace is always paired.
+			emitV2Capture({
+				codePoint: "approval.terminal.v2",
+				correlationId,
+				commandDigest,
+			})
+		}
+	}
+
+	private async runRequestToolApproval(request: ToolApprovalRequest): Promise<{
 		approved: boolean
 		reason?: string
 		decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
