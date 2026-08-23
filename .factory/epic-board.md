@@ -5185,3 +5185,87 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01-CORRECTION01
     ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
     can now proceed (the architecture proof is complete; only the
     cross-platform binary build remains).
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+
+  = PHASE_1_ASYNC_SEAM_RECON_COMPLETE
+  = PHASE_2_BEHAVIORAL_HOST_RED_GREEN_PENDING
+  = PHASE_3_CROSS_PLATFORM_BINARY_BUILD_HOLD
+
+  PHASE 1 (recon) — reviewer's load-bearing question:
+    Where can the trusted parser be awaited exactly once so
+    both CLI and VSCode obtain a host-owned ParsedShell
+    without duplicating parser authority or destabilizing
+    existing synchronous policy consumers?
+
+  ARCHITECTURAL DECISION: Approach (C)
+    Single await per approval request, host-owned.
+    Helper is invoked at the host adapter layer where
+    authority is decided. parserResult is then passed
+    synchronously into evaluateCommandRiskWithParser.
+
+    CLI path:
+      requestToolApproval (async, utils/approval.ts)
+        -> requestTerminalToolApproval (async)
+          -> cliEvaluateCommandToolApprovalWith
+            + await mvdanShHelper.invoke(toolInput)
+            -> parserResult passes into evaluateCommandRiskWithParser
+
+    VSCode path:
+      handleRequestToolApproval (async, sdk-interaction-coordinator.ts)
+        -> await evaluateCommandToolApproval callback (sdk-controller.ts)
+          -> await mvdanShHelper.invoke(request.input)
+          -> parserResult passes into evaluateCommandToolApprovalWithPlan
+            -> evaluateCommandRiskWithParser (sync)
+
+  WHY NOT OTHER APPROACHES:
+    A) Make approval evaluation async end-to-end:
+       Unnecessary churn; sync surface stays pure.
+
+    B) Parse earlier (input normalization):
+       Requires parser injection at input boundary; couples
+       parser lifetime to input pipeline; harder to test.
+
+    D) WASM parser:
+       Different binary distribution story. mvdan/sh 3.13.1
+       vetted coverage is what we promise. WASM port may lag.
+
+  CONCRETE EDIT LIST FOR PHASE 2 (NOT YET MADE):
+    1. sdk-interaction-coordinator.ts:81 — widen callback to
+       accept Promise<...> | ... (mirrors SDK capability type).
+    2. SdkController.ts:545 — async callback, await helper.invoke.
+    3. sdk-interaction-coordinator.ts:225 — await the callback.
+    4. CLI interactive controller — wire helper identically.
+    5. parser-helper/runtime.ts detectPlatform() — return null
+       on unsupported platforms, not throw.
+    6. parser-helper/runtime.ts inferDialect() — no change;
+       bash-only documented as scaffolding.
+
+  RED/GREEN CONTRACT FOR PHASE 2:
+    Required first test before any binary build:
+      trusted helper available  -> host ALLOW for pwd; pwd
+      trusted helper unavailable -> host ASK for pwd; pwd
+    Same pair for CLI.
+    Only when both pairs are RED on buggy sync version and
+    GREEN on async-seam-corrected version may Phase 3 begin.
+
+  REVIEWER P1s (in scope for Phase 2):
+    detectPlatform() throws on unsupported platform -> fix
+    inferDialect() always bash -> document, no fix
+    Module cycle via findCommandRiskHardFloor -> DEFERRED
+
+  TEST RESULTS (after CORRECTION01, unchanged):
+    @cline/core command-policy:    316/316 pass
+    @cline/core parser-helper:        8/8 pass
+    CLI host:                         45/45 pass
+    VSCode SDK host:                  70/70 pass
+    VSCode full vitest suite:        2039/2039 pass
+    @cline/core build:                clean
+    CLI typecheck:                     clean
+    git diff HEAD --check:            RC=0
+
+  HEAD: 6a6ccbde7 (working tree clean, NOT pushed)
+
+  STOP RULE: no Phase 2 code until Phase 1 review accepts the
+  architectural decision. No Phase 3 binaries until Phase 2
+  RED/GREEN passes.
