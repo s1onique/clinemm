@@ -87,7 +87,16 @@ export type CommandDecisionSource =
 	| "host_hard_deny"
 	| "model_escalation"
 	| "execution_plan_invalid"
-	| "unknown_input";
+	| "unknown_input"
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
+	// The R5 catastrophic hard floor is a DOWNGRADE-only layer
+	// above the canonical lattice. When the canonical policy
+	// produced ALLOW and the risk layer positively matched an
+	// R5 catastrophic family, the verdict is downgraded to ASK
+	// with this source so the user/operator can see that the
+	// ASK is from the catastrophic-class guard, not a generic
+	// fallthrough.
+	| "risk_hard_floor";
 
 export interface CommandDecision {
 	kind: CommandDecisionKind;

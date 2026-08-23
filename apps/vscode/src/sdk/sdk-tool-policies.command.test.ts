@@ -76,17 +76,18 @@ describe("command tool: vscode shouldAutoApproveTool authority", () => {
 	})
 
 	describe("host ALLOW host mode can be set when user explicitly opts in", () => {
-		it("explicit host: ALLOW mode + dangerous command + model=false => ALLOW", () => {
-			// This is the legitimate "execute all commands" / YOLO case.
-			// The user explicitly authorized all commands.
-			// The model can still escalate.
+		it("explicit host: ALLOW mode + R5 catastrophic command + model=false => ASK + risk_hard_floor", () => {
+			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
+			// Even in all-mode (YOLO), an R5 catastrophic command
+			// (rm -rf /) is downgraded to ASK + risk_hard_floor.
 			const hostAuth = commandHostAuthorization({ mode: "all" })
 			const { approved, decision } = evaluateCommandToolApproval(
 				{ command: "rm -rf /", requires_approval: false },
 				hostAuth,
 			)
-			expect(approved).toBe(true)
-			expect(decision.kind).toBe("allow")
+			expect(approved).toBe(false)
+			expect(decision.kind).toBe("ask")
+			expect(decision.source).toBe("risk_hard_floor")
 		})
 
 		it("explicit host ALLOW + model=true => ASK (escalation)", () => {

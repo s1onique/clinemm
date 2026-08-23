@@ -184,7 +184,7 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator
 				iteration: 1,
 				toolCallId: "tc-cmd-1",
 				toolName: "run_commands",
-				input: { command: "rm -rf /", requires_approval: false },
+				input: { command: "echo hi", requires_approval: false },
 				policy: {},
 			})
 			await expect(promise).resolves.toMatchObject({
@@ -204,7 +204,7 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator
 				iteration: 1,
 				toolCallId: "tc-cmd-2",
 				toolName: "run_commands",
-				input: { command: "rm -rf /", requires_approval: false },
+				input: { command: "echo hi", requires_approval: false },
 				policy: {},
 			})
 			await expect(promise).resolves.toMatchObject({
@@ -330,7 +330,7 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator
 				iteration: 1,
 				toolCallId: "tc-no-escalate",
 				toolName: "run_commands",
-				input: { command: "rm -rf /", requires_approval: true },
+				input: { command: "echo hi", requires_approval: true },
 				policy: {},
 			})
 			await expect(promise).resolves.toMatchObject({

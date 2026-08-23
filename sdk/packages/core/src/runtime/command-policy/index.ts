@@ -55,9 +55,7 @@ export {
 	OPAQUE_SHELL_TOKENS,
 } from "./command-safe-rules";
 
-export {
-	buildCommandExecutionPlan,
-} from "./command-execution-plan";
+export { buildCommandExecutionPlan } from "./command-execution-plan";
 
 export {
 	applySafeExecutionProfileToCommand,
@@ -69,3 +67,17 @@ export {
 	type SafeExecutionProfile,
 	type SafeExecutionProfileKind,
 } from "./safe-execution-profile";
+
+// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
+// re-export the R5 hard floor entry point so the VSCode host
+// adapter's stub (`apps/vscode/src/test/cline-core-vitest-stub.ts`)
+// can import it from this single index. The CLI host adapter
+// imports from the top-level `@cline/core` index, which already
+// exports these; the VSCode path needs them at the
+// `runtime/command-policy` subpath because the vitest stub
+// re-exports command-policy symbols from there.
+export {
+	evaluateCommandRisk,
+	type EvaluateCommandRiskInput,
+	type RiskDecision,
+} from "./command-risk";

@@ -125,10 +125,18 @@ describe("VS Code adapter - invariant: model cannot downgrade host authority", (
 		})
 	}
 
-	it("all-mode (user explicitly opted in) + dangerous + model=false => ALLOW", () => {
+	it("all-mode (user explicitly opted in) + dangerous R5 command + model=false => R5 hard floor downgrades to ASK", () => {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
+		// Even in all-mode (YOLO), an R5 catastrophic command
+		// (rm -rf /) is downgraded to ASK with disposition
+		// never-auto-approve. The motivating ClineMM incident
+		// surface is VSCodium (i.e. THIS host), so this wiring is
+		// the load-bearing safety invariant.
 		const auth = commandHostAuthorization({ mode: "all" })
-		const { approved } = evaluateCommandToolApproval({ command: "rm -rf /", requires_approval: false }, auth)
-		expect(approved).toBe(true)
+		const result = evaluateCommandToolApproval({ command: "rm -rf /", requires_approval: false }, auth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("ask")
+		expect(result.decision.source).toBe("risk_hard_floor")
 	})
 
 	it("all-mode + dangerous + model=true => ASK (model escalation)", () => {
@@ -144,6 +152,75 @@ describe("VS Code adapter - invariant: model cannot downgrade host authority", (
 		})
 		const { approved } = evaluateCommandToolApproval({ command: "rm -rf /", requires_approval: false }, auth)
 		expect(approved).toBe(false)
+	})
+})
+
+describe("ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01: VSCode host consumes the R5 hard floor", () => {
+	// The motivating ClineMM incident was in VSCodium, not CLI.
+	// The R5 hard floor must therefore downgrade ALLOW to ASK on
+	// the VSCode path too. These tests prove parity with the
+	// CLI host adapter (apps/cli/src/runtime/command-policy-host.ts).
+
+	const R5_FIXTURES: ReadonlyArray<{ id: string; command: string }> = [
+		{ id: "r5-rm-rf-home-quoted", command: 'rm -rf "$HOME"' },
+		{ id: "r5-rm-rf-tilde", command: "rm -rf ~" },
+		{ id: "r5-rm-rf-home-docs", command: 'rm -rf "$HOME"/Documents' },
+		{ id: "r5-rm-rf-root", command: "rm -rf /" },
+		{ id: "r5-rm-rf-volumes", command: "rm -rf /Volumes/Backup" },
+		{ id: "r5-rm-rf-dotdot", command: "rm -rf .." },
+		{ id: "r5-rm-rf-ssh", command: "rm -rf ~/.ssh" },
+	]
+
+	for (const fx of R5_FIXTURES) {
+		it(`all-mode + ${fx.id} + model=false => R5 hard floor downgrades to ASK`, () => {
+			const auth = commandHostAuthorization({ mode: "all" })
+			const result = evaluateCommandToolApproval({ command: fx.command, requires_approval: false }, auth)
+			expect(result.approved, `${fx.id} approved`).toBe(false)
+			expect(result.decision.kind, `${fx.id} kind`).toBe("ask")
+			expect(result.decision.source, `${fx.id} source`).toBe("risk_hard_floor")
+		})
+	}
+
+	it("all-mode + safe-only-allowlisted command (git diff) => ALLOW (R5 floor must not trigger on safe commands)", () => {
+		const auth = commandHostAuthorization({
+			mode: "all",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+		})
+		const result = evaluateCommandToolApproval({ command: "git diff --stat", requires_approval: false }, auth)
+		// git diff --stat is allowlisted by DEFAULT_COMMAND_HOST_ALLOW_RULES
+		// and is NOT in the R5 catastrophic families. The R5 floor
+		// must not interfere with safe-only positive allow rules.
+		expect(result.approved).toBe(true)
+		expect(result.decision.source).not.toBe("risk_hard_floor")
+	})
+
+	it("all-mode + R5 plan-bearing path also downgrades and preserves executionPlan", () => {
+		// The R5 floor must compose with the plan-bearing path:
+		//   - canonical ALLOW + R5 match => ASK
+		//   - the plan is still built (so a user-approved ASK
+		//     runs hardened if the user does approve).
+		const auth = commandHostAuthorization({ mode: "all" })
+		const result = evaluateCommandToolApprovalWithPlan({ command: 'rm -rf "$HOME"', requires_approval: false }, auth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("ask")
+		expect(result.decision.source).toBe("risk_hard_floor")
+		// `rm -rf "$HOME"` is not in any safe rule, so the plan
+		// mirrors the raw input without a profile.
+		expect(result.executionPlan).toBeDefined()
+	})
+
+	it("explicit deny rule takes precedence over the R5 floor (DENY beats ASK)", () => {
+		// The R5 floor is a DOWNGRADE-only layer. If an explicit
+		// deny rule matches, the canonical policy says DENY
+		// first, and the R5 floor never runs. The host_hard_deny
+		// source is preserved.
+		const auth: CommandHostAuthorization = commandHostAuthorization({
+			mode: "all",
+			explicitDenyRules: [{ source: "unit_test_evil", pattern: /^\s*rm\s+-rf/u }],
+		})
+		const result = evaluateCommandToolApproval({ command: "rm -rf /", requires_approval: false }, auth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.source).toBe("host_hard_deny")
 	})
 })
 

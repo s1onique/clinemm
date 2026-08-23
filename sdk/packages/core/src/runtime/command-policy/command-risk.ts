@@ -85,13 +85,6 @@ export interface EvaluateCommandRiskInput {
 	toolInput: unknown;
 	/** Host authorization (mode + rules). */
 	hostAuthorization: CommandHostAuthorization;
-	/**
-	 * Optional: HOME directory used to resolve `~` / `$HOME` in the
-	 * hard floor. If omitted, the floor is a pure literal/pattern
-	 * match — the corpus cases are all literal so the floor still
-	 * matches.
-	 */
-	homeDirectory?: string;
 }
 
 /* ---------------------------------------------------------------------- *

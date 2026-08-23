@@ -7,6 +7,7 @@ import {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	type EvaluatedCommand,
 	evaluateCommandPolicy,
+	evaluateCommandRisk,
 } from "@cline/core"
 import type { CommandExecutionPlan } from "@cline/shared"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
@@ -153,6 +154,32 @@ export function evaluateCommandToolApproval(
 		toolInput,
 		hostAuthorization,
 	})
+
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
+	// Layer the R5 catastrophic hard floor on top of the canonical
+	// policy verdict. `evaluateCommandRisk` is a DOWNGRADE-only
+	// layer — it can downgrade an ALLOW to ASK when the command
+	// argv positively matches a catastrophic family, but it never
+	// weakens an existing ASK or DENY. The hard floor is
+	// identical to the CLI's. The motivating ClineMM incident
+	// surface is VSCodium (i.e. this host), not CLI, so this
+	// wiring is the load-bearing safety invariant.
+	if (
+		result.decision.kind === "allow" &&
+		evaluateCommandRisk({
+			toolInput,
+			hostAuthorization,
+		}).disposition === "never-auto-approve"
+	) {
+		return {
+			approved: false,
+			decision: {
+				kind: "ask",
+				reason: "R5 catastrophic hard floor: never auto-approve",
+				source: "risk_hard_floor",
+			},
+		}
+	}
 
 	return {
 		approved: result.decision.kind === "allow",
@@ -338,6 +365,34 @@ export function evaluateCommandToolApprovalWithPlan(
 				source: "execution_plan_invalid",
 				reason: "required hardened execution plan could not be constructed",
 			},
+		}
+	}
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
+	// Layer the R5 catastrophic hard floor on top of the canonical
+	// policy verdict. `evaluateCommandRisk` is a DOWNGRADE-only
+	// layer — it can downgrade an ALLOW to ASK when the command
+	// argv positively matches a catastrophic family, but it never
+	// weakens an existing ASK or DENY. The hard floor is
+	// identical to the CLI's. The motivating ClineMM incident
+	// surface is VSCodium (i.e. this host), not CLI, so this
+	// wiring is the load-bearing safety invariant. The execution
+	// plan is preserved so a user-approved ASK still runs
+	// hardened.
+	if (result.decision.kind === "allow") {
+		const risk = evaluateCommandRisk({
+			toolInput,
+			hostAuthorization,
+		})
+		if (risk.disposition === "never-auto-approve") {
+			return {
+				approved: false,
+				decision: {
+					kind: "ask",
+					reason: "R5 catastrophic hard floor: never auto-approve",
+					source: "risk_hard_floor",
+				},
+				executionPlan,
+			}
 		}
 	}
 	// ALLOW or ASK.

@@ -165,7 +165,9 @@ export {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	type EvaluateCommandPolicyInput,
 	type EvaluateCommandPolicyResult,
+	type EvaluateCommandRiskInput,
 	evaluateCommandPolicy,
+	evaluateCommandRisk,
 	findSafeRuleMatch,
 	isMoreRestrictive,
 	isOpaqueShellRendered,
@@ -176,6 +178,7 @@ export {
 	type NormalizedFailure,
 	OPAQUE_SHELL_TOKENS,
 	parseCommandModelHints,
+	type RiskDecision,
 	renderNormalizedCommand,
 } from "../../../../sdk/packages/core/src/runtime/command-policy"
 export { projectSessionMessagesForDisplay } from "../../../../sdk/packages/core/src/session/display-messages"
