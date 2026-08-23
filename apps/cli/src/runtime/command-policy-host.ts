@@ -35,6 +35,7 @@ import {
 	commandHostAuthorization,
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	evaluateCommandPolicy,
+	evaluateCommandRisk,
 } from "@cline/core";
 import type { CommandExecutionPlan } from "@cline/shared";
 
@@ -127,6 +128,21 @@ export function cliEvaluateCommandToolApprovalWith(
 		hostAuthorization,
 	});
 
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01: layer the R5
+	// catastrophic hard floor on top of the canonical policy verdict.
+	// `evaluateCommandRisk` is a DOWNGRADE-only layer — it can
+	// downgrade an ALLOW to ASK + never-auto-approve when the
+	// command argv positively matches a catastrophic family, but
+	// it never weakens an existing ASK or DENY. This is the
+	// production wiring of the bounded V1 classifier.
+	const risk = evaluateCommandRisk({
+		toolInput: input.toolInput,
+		hostAuthorization,
+	});
+	const riskDowngrade =
+		result.decision.kind === "allow" &&
+		risk.disposition === "never-auto-approve";
+
 	// Plan construction: DENY discards it because nothing executes.
 	// For ALLOW/ASK, build the plan. If plan construction fails
 	// (invalid input, cardinality mismatch) and a safe profile is
@@ -165,6 +181,27 @@ export function cliEvaluateCommandToolApprovalWith(
 	}
 
 	if (result.decision.kind === "allow") {
+		// Risk downgrade: the canonical policy granted ALLOW (the
+		// user opted in to autonomous execution), but the V1
+		// classifier positively identified a catastrophic
+		// argv shape. The hard floor downgrades the verdict to
+		// ASK + never-auto-approve. The plan is still built
+		// (and, on user approval, executed hardened) so a
+		// user who deliberately types their HOME directory
+		// and confirms via the TUI approver can still run the
+		// command under the hard floor.
+		if (riskDowngrade) {
+			return {
+				approved: false,
+				reason: risk.reasons.join("; "),
+				decision: {
+					kind: "ask",
+					reason: risk.reasons.join("; "),
+					source: "risk_hard_floor",
+				},
+				executionPlan,
+			};
+		}
 		return {
 			approved: true,
 			reason: result.decision.reason,

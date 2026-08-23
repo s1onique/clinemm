@@ -466,6 +466,11 @@ export {
 } from "./runtime/command-policy";
 export { buildCommandExecutionPlan } from "./runtime/command-policy/command-execution-plan";
 export {
+	evaluateCommandRisk,
+	type EvaluateCommandRiskInput,
+	type RiskDecision,
+} from "./runtime/command-policy/command-risk";
+export {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
 	SAFE_GIT_DIFF_PROFILE,

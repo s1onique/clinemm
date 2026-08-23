@@ -26,7 +26,13 @@ function makeConfig(wildcardAutoApprove: boolean): Config {
 }
 
 describe("CLI production controller — command policy wiring", () => {
-	it("autoApproveTools=true + dangerous command + model=false => approved (CLI YOLO)", async () => {
+	it("autoApproveTools=true + dangerous R5 command + model=false => R5 hard floor downgrades to ASK", async () => {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01: even with
+		// autoApproveTools=true and model=false, an R5 catastrophic
+		// command (rm -rf /) MUST be downgraded to ASK with
+		// disposition never-auto-approve. The user opted in to
+		// autonomous execution, but the hard floor is a
+		// higher-priority safety invariant than YOLO mode.
 		const config = makeConfig(true);
 		const controller = createInteractiveApprovalController(config);
 
@@ -40,7 +46,8 @@ describe("CLI production controller — command policy wiring", () => {
 			iteration: 0,
 			toolCallId: "test-call",
 		});
-		expect(result.approved).toBe(true);
+		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("risk_hard_floor");
 	});
 
 	it("autoApproveTools=true + dangerous command + model=true => rejected (model escalation)", async () => {
@@ -77,7 +84,7 @@ describe("CLI production controller — command policy wiring", () => {
 		expect(result.approved).toBe(false);
 	});
 
-	it("autoApproveTools=true + execute_command alias => same as run_commands", async () => {
+	it("autoApproveTools=true + execute_command alias => same as run_commands (R5 hard floor fires)", async () => {
 		const config = makeConfig(true);
 		const controller = createInteractiveApprovalController(config);
 
@@ -91,7 +98,8 @@ describe("CLI production controller — command policy wiring", () => {
 			iteration: 0,
 			toolCallId: "test-call",
 		});
-		expect(result.approved).toBe(true);
+		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("risk_hard_floor");
 	});
 
 	it("non-command tools retain legacy autoApproveAll behavior", async () => {

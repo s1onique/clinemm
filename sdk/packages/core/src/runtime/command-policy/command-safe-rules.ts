@@ -154,6 +154,76 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		pattern:
 			/^\s*git\s+log(?:\s+(?:-n\s+\d+|--oneline|--stat|--no-color|--pretty=(?:oneline|short|medium|full|fuller|reference|email|raw|tformat)|--format=(?:oneline|short|medium|full|fuller|reference|email|raw|tformat)|-[0-9]+))*$/u,
 	},
+	{
+		source: "host_safe_git_rev_parse",
+		// git rev-parse: object-name / path resolver. Pure read-only.
+		//   --abbrev-ref=<n>    shorten branch name to n chars; observational
+		//   --short=<n>         shorten commit SHA to n chars
+		//   --verify            verify a single object exists; observational
+		//   --show-toplevel     print working tree root
+		//   --show-prefix       print working subdir relative to root
+		//   --git-dir           print .git directory
+		//   --git-common-dir    print shared .git directory
+		//   --is-inside-work-tree, --is-inside-git-dir, --is-bare-repository,
+		//                       --is-shallow-repository: boolean checks
+		//   --absolute-git-dir  print absolute path to .git
+		//   -<n>                short numeric form of --short=<n>
+		//
+		// Explicitly REJECTED:
+		//   --parseopt          interacts with command-parsing machinery
+		//   --exec-path         writes/queries; not a pure resolver
+		//   any unknown --foo   ASK
+		pattern:
+			/^\s*git\s+rev-parse(?:\s+(?:--abbrev-ref=\d+|--short(?:=\d+)?|--verify|--show-toplevel|--show-prefix|--git-dir|--git-common-dir|--is-inside-work-tree|--is-inside-git-dir|--is-bare-repository|--is-shallow-repository|--absolute-git-dir|-[0-9]+))*(?:\s+[A-Za-z0-9_./-]+)?$/u,
+	},
+	{
+		source: "host_safe_git_show",
+		// git show: object inspection. Same envelope as git diff for
+		// external-helper avoidance. We explicitly enumerate the
+		// safe options; --ext-diff/--textconv/--output are still
+		// rejected by the same review standard as the diff rule.
+		//
+		//   HEAD, refs, SHAs    object selector (whitespace-stable)
+		//   --stat              diffstat per commit
+		//   --name-only         list changed paths
+		//   --name-status       list changed paths with status
+		//   --no-color, --color=<a|n>   visual only
+		//   --no-ext-diff       disable external diff driver
+		//   --no-textconv       disable textconv filters
+		//   --pretty=<reviewed> same finite set as git log
+		//   --format=<reviewed> same finite set as git log
+		//
+		// Explicitly REJECTED (same review standard):
+		//   --ext-diff          invokes external diff driver
+		//   --textconv          runs textconv filters (external programs)
+		//   --output, --output= writes to a file outside stdout
+		//   --no-index          compares arbitrary filesystem paths outside
+		//                       the working tree; broader authority
+		//   any unknown --foo   ASK
+		pattern:
+			/^\s*git\s+show(?:\s+(?:--stat|--name-only|--name-status|--no-color|--color=(?:always|auto|never)|--no-ext-diff|--no-textconv|--pretty=(?:oneline|short|medium|full|fuller|reference|email|raw|tformat)|--format=(?:oneline|short|medium|full|fuller|reference|email|raw|tformat)|[A-Za-z0-9_./-]+))*$/u,
+	},
+	{
+		source: "host_safe_git_rev_list",
+		// git rev-list: object-listing. Pure read-only, no external
+		// helper invocation.
+		//
+		//   HEAD, refs, SHAs     object selector
+		//   --max-count=<n>      limit to n commits
+		//   -n <n>               short form of --max-count
+		//   --count              print the number of commits
+		//   --no-color, --color=<a|n>   visual only
+		//
+		// Explicitly REJECTED:
+		//   --stdin              reads from stdin (variable input)
+		//   --all                all refs (broader scope; per-host policy)
+		//   --since/--until/--after/--before  date filtering
+		//                       (these are observational but multiply
+		//                       the matching surface; V2 may revisit)
+		//   any unknown --foo    ASK
+		pattern:
+			/^\s*git\s+rev-list(?:\s+(?:--max-count=\d+|-n\s+\d+|--count|--no-color|--color=(?:always|auto|never)))*(?:\s+[A-Za-z0-9_./-]+)?$/u,
+	},
 ];
 
 /**

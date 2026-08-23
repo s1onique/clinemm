@@ -28,16 +28,23 @@ describe("CLI host adapter — cliResolveHostAuthorization", () => {
 });
 
 describe("CLI host adapter — cliEvaluateCommandToolApproval", () => {
-	it("autoApproveTools=true + dangerous command + model=false => approved (user opted in)", () => {
+	it("autoApproveTools=true + dangerous R5 command + model=false => R5 hard floor downgrades to ASK (never-auto-approve)", () => {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01: even with
+		// autoApproveTools=true and model=false, an R5 catastrophic
+		// command (rm -rf /) is downgraded to ASK with disposition
+		// never-auto-approve. The user opted in to autonomous
+		// execution, but the hard floor is a higher-priority
+		// safety invariant than YOLO mode.
 		const result = cliEvaluateCommandToolApproval({
 			toolName: "run_commands",
 			toolInput: { command: "rm -rf /", requires_approval: false },
 			autoApproveTools: true,
 		});
-		expect(result.approved).toBe(true);
+		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("risk_hard_floor");
 	});
 
-	it("autoApproveTools=true + dangerous command + model=true => rejected (model escalation)", () => {
+	it("autoApproveTools=true + dangerous R5 command + model=true => rejected (model escalation)", () => {
 		const result = cliEvaluateCommandToolApproval({
 			toolName: "run_commands",
 			toolInput: { command: "rm -rf /", requires_approval: true },
@@ -55,25 +62,35 @@ describe("CLI host adapter — cliEvaluateCommandToolApproval", () => {
 		expect(result.approved).toBe(false);
 	});
 
-	it("missing model hint does NOT downgrade", () => {
+	it("missing model hint does NOT downgrade (but R5 hard floor still fires)", () => {
+		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01: the R5 hard
+		// floor is independent of the model hint. Even with no
+		// model hint and autoApproveTools=true, a catastrophic
+		// R5 command (rm -rf /) MUST be downgraded to ASK with
+		// disposition never-auto-approve.
 		const result = cliEvaluateCommandToolApproval({
 			toolName: "run_commands",
 			toolInput: { command: "rm -rf /" },
 			autoApproveTools: true,
 		});
-		expect(result.approved).toBe(true);
+		expect(result.approved).toBe(false);
+		expect(result.decision?.kind).toBe("ask");
+		expect(result.decision?.source).toBe("risk_hard_floor");
 	});
 
-	it("malformed model hint does NOT downgrade", () => {
+	it("malformed model hint does NOT downgrade (but R5 hard floor still fires)", () => {
 		const result = cliEvaluateCommandToolApproval({
 			toolName: "run_commands",
 			toolInput: { command: "rm -rf /", requires_approval: "yes" },
 			autoApproveTools: true,
 		});
-		expect(result.approved).toBe(true);
+		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("risk_hard_floor");
 	});
 
 	it("execute_command alias is treated the same", () => {
+		// Both run_commands and execute_command route through the
+		// R5 hard floor identically.
 		const a = cliEvaluateCommandToolApproval({
 			toolName: "run_commands",
 			toolInput: { command: "rm -rf /", requires_approval: false },
@@ -85,6 +102,8 @@ describe("CLI host adapter — cliEvaluateCommandToolApproval", () => {
 			autoApproveTools: true,
 		});
 		expect(a.approved).toBe(b.approved);
+		expect(a.approved).toBe(false);
+		expect(a.decision?.source).toBe("risk_hard_floor");
 	});
 
 	it("unparseable input does NOT auto-approve", () => {
