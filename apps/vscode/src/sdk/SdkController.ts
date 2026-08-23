@@ -21,7 +21,7 @@ import {
 	setTelemetryOptOutGlobally,
 	type UserInstructionConfigService,
 } from "@cline/core"
-import { MvdanShHelper } from "@cline/core/internal/parser-helper-runtime"
+import { defaultParserHelperLocator, MvdanShHelper } from "@cline/core/internal/parser-helper-runtime"
 import type { ProviderConfig } from "@cline/llms"
 import type { CommandExecutionPlan } from "@cline/shared"
 import { formatDisplayUserInput, type RemoteConfig, type RemoteConfigBundle } from "@cline/shared"
@@ -224,22 +224,50 @@ function historyItemToTaskResponse(item: HistoryItem): TaskResponse {
  * on any failure), and threads it into the pure policy evaluator. The
  * helper is the ONLY sanctioned path to a `ParsedShell`.
  *
- * Today `MvdanShHelper.binaryPath()` returns `null` because the helper
- * binary is not yet built. V2 stays dormant. When the binary ACT
- * lands, the helper binary path will become non-null and V2 will be
- * wired automatically.
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * Phase 3: production wires the helper with `consumerRoot` set to
+ * the VSCode extension's install dir (`<extension-root>/bin/`).
+ * The extension ships a mirror of the parser-helper binaries at
+ * `bin/parser-helper/<platform>/` (populated by
+ * `scripts/sync-parser-helper.mjs` at build time). The SDK's
+ * `defaultParserHelperLocator` checks the consumer mirror first
+ * (so the dev-time workspace symlink layout works) and falls back
+ * to the SDK package root (so the npm-published `@cline/core`
+ * layout works).
  *
  * Tests can override via `setSdkControllerParserHelper(helper)` to
  * inject a fake. The default value is the production singleton.
  */
-let sdkControllerParserHelper: MvdanShHelper = new MvdanShHelper()
+let sdkControllerParserHelper: MvdanShHelper | null = null
+
+function resolveExtensionRoot(): string | undefined {
+	try {
+		// Lazy-require `vscode` so module-level evaluation does not
+		// throw outside the extension host (e.g. in tests that
+		// load this file before `vscode` is activated).
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const vscode = require("vscode") as typeof import("vscode")
+		return vscode?.extensions?.getExtension?.("claude-dev")?.extensionUri?.fsPath
+	} catch {
+		return undefined
+	}
+}
+
+function buildProductionHelper(): MvdanShHelper {
+	const extensionRoot = resolveExtensionRoot()
+	const locator = defaultParserHelperLocator({ consumerRoot: extensionRoot })
+	return new MvdanShHelper(locator)
+}
 
 export function getSdkControllerParserHelper(): MvdanShHelper {
+	if (!sdkControllerParserHelper) {
+		sdkControllerParserHelper = buildProductionHelper()
+	}
 	return sdkControllerParserHelper
 }
 
 export function setSdkControllerParserHelper(helper: MvdanShHelper | undefined): void {
-	sdkControllerParserHelper = helper ?? new MvdanShHelper()
+	sdkControllerParserHelper = helper ?? buildProductionHelper()
 }
 
 /**
@@ -705,7 +733,7 @@ export class Controller {
 					}
 					return { hostAuthorization, toolInput }
 				},
-				getHelper: () => sdkControllerParserHelper,
+				getHelper: () => sdkControllerParserHelper ?? buildProductionHelper(),
 			}),
 			getCwd: () => this.lastKnownWorkspaceRoot,
 		})

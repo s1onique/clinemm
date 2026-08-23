@@ -50,7 +50,8 @@ import {
 	setActiveRuntimeAbort,
 	setActiveRuntimeCleanup,
 } from "./active-runtime";
-import { createInteractiveApprovalController } from "./interactive/approvals";
+import { createInteractiveApprovalController, setCliParserHelper } from "./interactive/approvals";
+import { MvdanShHelper, defaultParserHelperLocator } from "@cline/core/internal/parser-helper-runtime";
 import { runInteractiveChatCommand } from "./interactive/chat-command-runner";
 import { createInteractiveConfigDataLoader } from "./interactive/config-data";
 import {
@@ -239,6 +240,21 @@ export async function runInteractive(
 	};
 
 	const enableChatCommands = true;
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	// Phase 3: wire the production CLI parser helper. The CLI does
+	// not currently expose a user-visible safe-only flag
+	// (--auto-approve=false is documented as "require approval
+	// before each tool call"), so V2 promotion is dormant under
+	// explicit manual mode. The helper is still wired so that:
+	//   - the V2 strengthen path can fire on R5-shaped inner
+	//     commands even under --auto-approve=true (the AST
+	//     strengthens ASK → ASK + never-auto-approve);
+	//   - the production CLI is structurally identical to
+	//     VSCode for the async-seam audit point.
+	// The SDK's defaultParserHelperLocator walks the SDK package
+	// root for the binary; the CLI does not need a consumer-root
+	// mirror because `@cline/core`'s bin/ ships with the SDK.
+	setCliParserHelper(new MvdanShHelper(defaultParserHelperLocator()));
 	const {
 		autoApproveAllRef,
 		setInteractiveAutoApprove,

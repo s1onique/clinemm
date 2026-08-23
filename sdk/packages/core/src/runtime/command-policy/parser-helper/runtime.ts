@@ -41,6 +41,9 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
 	joinRunCommandsForParse,
@@ -76,16 +79,11 @@ export type HelperPlatform =
 /**
  * Locate the parser-helper binary for the current platform.
  *
- * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01:
  * The helper binary is vendored at
- * `<package_root>/bin/parser-helper/<platform>/`.
- * When the helper-binary ACT ships, this is the layout it MUST use.
- *
- * For this ACT the binary is NOT YET BUILT. `binaryPath()` returns
- * `null` and V2 stays dormant. The capability is wired so the next
- * ACT
- * (ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01)
- * only has to drop in the binary files.
+ * `<package_root>/bin/parser-helper/<platform>/cline-parser-helper`
+ * (or `.exe` on win32-x64). The package root is the directory that
+ * contains `@cline/core`'s `package.json`.
  *
  * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
  * CORRECTION02 (Phase 2, P1): on an unsupported host platform,
@@ -96,7 +94,34 @@ export type HelperPlatform =
  *
  * `defaultParserHelperLocator()` therefore MUST NOT throw on
  * unsupported platforms.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * Phase 3: the resolver tries TWO locations in order:
+ *
+ *   1. The SDK package root (via `node_modules/@cline/core/...`)
+ *      for CLI / Node consumers and for installed (npm-published)
+ *      VSCode extensions.
+ *   2. A consumer-side mirror at `<consumerRoot>/bin/parser-helper/`,
+ *      used by the VSCode extension in development where the SDK
+ *      is a workspace symlink and the runtime may walk to
+ *      `node_modules/@cline/core` but the actual `bin/` files live
+ *      under `<extension-root>/bin/`. The VSCode host adapter
+ *      passes the consumer root via `defaultParserHelperLocator({ consumerRoot })`.
+ *
+ * If neither location yields a binary, `binaryPath()` returns
+ * `null` and V2 stays dormant. This is the same failure mode as
+ * "unsupported platform" — V1 is preserved.
  */
+export interface ParserHelperLocatorOptions {
+	/**
+	 * Optional consumer-side root. When provided, the resolver
+	 * also checks `<consumerRoot>/bin/parser-helper/<platform>/cline-parser-helper[.exe]`.
+	 * Used by the VSCode host adapter to locate the dev-time
+	 * mirror without bundling-time coupling.
+	 */
+	consumerRoot?: string;
+}
+
 export interface ParserHelperLocator {
 	/** Returns the absolute path to the helper binary, or `null` if not available. */
 	binaryPath(): string | null;
@@ -108,23 +133,122 @@ export interface ParserHelperLocator {
 	readonly platform: HelperPlatform;
 }
 
-export function defaultParserHelperLocator(): ParserHelperLocator {
+export function defaultParserHelperLocator(
+	options: ParserHelperLocatorOptions = {},
+): ParserHelperLocator {
 	const platform = detectPlatform();
+	// Cache the resolution attempt so we only walk the filesystem
+	// once per process. The path itself is returned lazily because
+	// the binary may be added at runtime in some test scenarios.
+	let cachedPath: string | null | undefined;
+	const ext = platform === "win32-x64" ? ".exe" : "";
+	const resolveBinary = (): string | null => {
+		if (cachedPath !== undefined) return cachedPath;
+		if (platform === null) {
+			cachedPath = null;
+			return null;
+		}
+		const candidates: string[] = [];
+		const sdkRoot = resolveClineCorePackageRoot();
+		if (sdkRoot !== null) {
+			candidates.push(
+				path.join(
+					sdkRoot,
+					"bin",
+					"parser-helper",
+					platform,
+					`cline-parser-helper${ext}`,
+				),
+			);
+		}
+		if (options.consumerRoot) {
+			candidates.push(
+				path.join(
+					options.consumerRoot,
+					"bin",
+					"parser-helper",
+					platform,
+					`cline-parser-helper${ext}`,
+				),
+			);
+		}
+		for (const candidate of candidates) {
+			try {
+				const stat = fs.statSync(candidate);
+				if (stat.isFile()) {
+					cachedPath = candidate;
+					return candidate;
+				}
+			} catch {
+				// continue to next candidate
+			}
+		}
+		cachedPath = null;
+		return null;
+	};
 	return {
 		platform,
-		binaryPath() {
-			// The next ACT ships binaries at this layout:
-			// <package_root>/bin/parser-helper/<platform>/cline-parser-helper
-			// (or .exe on win32-x64). Today, this directory does not
-			// exist (and `detectPlatform()` may have returned `null` on
-			// an unsupported host platform), so we return `null` and V2
-			// stays dormant.
-			if (platform === null) {
-				return null;
-			}
-			return null;
-		},
+		binaryPath: resolveBinary,
 	};
+}
+
+/**
+ * Resolve the `@cline/core` package root at runtime.
+ *
+ * Walks up from `import.meta.url` looking for a directory containing
+ * `package.json` whose `name` field equals `@cline/core`. This works
+ * for both un-bundled (CLI, Node tests) and bundled (VSCode
+ * extension.js) consumers:
+ *
+ *   - CLI / Node: `import.meta.url` is the SDK source file, the
+ *     walk terminates at `sdk/packages/core/package.json`.
+ *   - VSCode: `import.meta.url` is the bundled extension.js in the
+ *     extension's install dir; the walk descends into
+ *     `node_modules/@cline/core/` first.
+ *
+ * Returns `null` when the package root cannot be located. Callers
+ * MUST treat `null` identically to an unsupported platform (V1
+ * preserved, V2 dormant).
+ */
+function resolveClineCorePackageRoot(): string | null {
+	const startDir = path.dirname(fileURLToPath(import.meta.url));
+	let dir = startDir;
+	// Bound the walk to a small depth — under normal layouts the
+	// package root is within a handful of `..` hops.
+	for (let i = 0; i < 12; i++) {
+		const candidate = path.join(dir, "package.json");
+		try {
+			const raw = fs.readFileSync(candidate, "utf8");
+			const pkg = JSON.parse(raw) as { name?: unknown };
+			if (pkg && pkg.name === "@cline/core") {
+				return dir;
+			}
+		} catch {
+			// missing or unreadable — keep walking
+		}
+		const parent = path.dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	// Second pass: descend into a sibling `node_modules/@cline/core`
+	// subtree from the extension's install root. This handles the
+	// bundled-VSCode case where `import.meta.url` is somewhere
+	// outside `@cline/core`'s normal src tree.
+	const nmCandidate = path.join(startDir, "node_modules", "@cline", "core");
+	try {
+		const stat = fs.statSync(nmCandidate);
+		if (stat.isDirectory()) {
+			const pkgCandidate = path.join(nmCandidate, "package.json");
+			const raw = fs.readFileSync(pkgCandidate, "utf8");
+			const pkg = JSON.parse(raw) as { name?: unknown };
+			if (pkg && pkg.name === "@cline/core") {
+				return nmCandidate;
+			}
+		}
+	} catch {
+		// ignore
+	}
+	return null;
 }
 
 function detectPlatform(): HelperPlatform {

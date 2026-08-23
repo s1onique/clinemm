@@ -5508,3 +5508,117 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
   VERDICT:
     PHASE_2_CORRECTION02 = COMPLETE
     C1: GO directly to Phase 3 (binary cross-compilation).
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+  = PHASE_3_BINARY_SHIPPED_PASS
+  = C2: SHIP PARSER HELPER BINARY (RECORDED SHA-256 BINDINGS)
+  = C1: REVIEW VSIX + BINARY INTEGRATION EVIDENCE
+
+  Reviewer HALT_CLI_EXPLICIT_NO_AUTO_APPROVE_CONTRACT_BROKEN + production-seam
+  gaps CLOSED in Phase 2 CORRECTION02. Phase 3 authorization granted.
+  Phase 3 delivered executable production evidence:
+
+  1. Helper RE-QUALIFIED on mvdan/sh v3.13.1 (reviewer required;
+     prior probe used v3.12.0). Source rewrites against v3.13.1
+     AST surface (BinaryCmd/Subshell/CallExpr/Block). Protocol
+     v2 output shape now matches sdk/.../parser-helper/protocol.ts
+     exactly (protocolVersion:2, sourceSha256, hasCommandSubstitution,
+     program, errors).
+
+  2. CORPUS QUALIFICATION (51 cases):
+       parsed cleanly        : 49
+       parse_status counts   : {complete: 49, failed: 2}
+       commandSubstitution   : 3
+       opaque marker present : 5
+       per-call latency mean : 2871.1us (p95 4592us, max 4711us)
+       BoundedTimeoutMs budget: 500_000us (well under)
+
+  3. CROSS-COMPILED for the supported target matrix:
+       darwin-amd64  218e528607ef8e6a7acc7e957807ed1063b38e8543895c9be688e26aacf5988c
+       darwin-arm64  ce169663762c823440b864840c71115103f0d5afc146ca40f29e04c4d4239964
+       linux-amd64   2ca83beb5451f1729215a4d03940066dcb2e6effb672bd8c7969b3748aee8b76
+       linux-arm64   54d0064e30593841e5714cff041f6e48784924576103e678054cf5404829f218
+       win32-x64     33d4377fa6e9d546ac0528d9923a25ef661d5b190de11bf831ab22d6a8be1754
+
+  4. VENDORED at sdk/packages/core/bin/parser-helper/<platform>/.
+     package.json "files" extended with "bin" so npm publishes
+     the vendor directory.
+
+  5. RUNTIME LOCATOR walks up from import.meta.url looking for
+     SDK package root (package.json name === "@cline/core").
+     Two-location fallback: SDK package root then node_modules/
+     @cline/core (bundled-VSCode case). Optional consumerRoot
+     for the VSCode dev mirror. null on any failure -> V2 dormant,
+     V1 preserved.
+
+  6. PRODUCTION HOST WIRING:
+     - VSCode SdkController: lazy-init MvdanShHelper with
+       defaultParserHelperLocator({ consumerRoot: extensionRoot }).
+     - CLI runInteractive(): setCliParserHelper(new MvdanShHelper
+       (defaultParserHelperLocator())) before controller creation.
+     - Consumer-side mirror script: scripts/sync-parser-helper.mjs
+       (VSCode) wraps sdk/packages/core/scripts/copy-parser-helper-to-apps.mjs.
+
+  7. REAL-BINARY RED→GREEN EVIDENCE (reviewer's required gate):
+     - SDK parser-helper/runtime.real-binary.test.ts: 8 tests
+       (binary at expected layout, pwd;pwd two-cmd AST,
+        echo $(...) hasCommandSubstitution, bash -c wrapper,
+        rm -rf $HOME no parse failure, redirect captured,
+        malformed -> failed, sourceSha256 64-hex)
+     - CLI approvals.real-helper.test.ts: 6 tests
+       (safe-only + pwd;pwd -> ALLOW risk_v2_structured_promotion,
+        --auto-approve=false + pwd;pwd -> ASK host_mode_manual [load-bearing],
+        --auto-approve=true + rm -rf -> ASK risk_hard_floor,
+        git status && rm -rf -> ASK risk_hard_floor,
+        pwd > ~/.ssh/authorized_keys -> ASK never-auto-approve,
+        --auto-approve=false + pwd -> ASK host_mode_manual)
+
+  8. VSIX PACKAGING:
+       $ vsce package --no-dependencies --out /tmp/clinemm-phase3-final.vsix
+       DONE Packaged: 50 files, 13.52 MB
+       Binary extraction: ./extension/bin/parser-helper/<platform>/...
+       SHA-256s match source bindings.
+       Live binary extraction test: parses pwd;pwd correctly.
+
+  9. TEST RESULTS:
+       @cline/core command-policy:    326/326 pass (was 318)
+       @cline/core parser-provenance:    8/8 pass
+       @cline/core build:                clean
+       CLI host (5 files):               72/72 pass (was 66)
+       CLI typecheck:                     clean
+       VSCode vitest:                 2049/2049 pass
+       VSCode typecheck:                 clean
+       git diff HEAD --check:            RC=0
+
+  10. VERIFIED STOP RULE:
+        trusted command request
+          -> packaged exact-platform helper
+          -> direct no-shell spawn (CGO_ENABLED=0, spawn with shell:false)
+          -> validated + source-bound AST (protocolVersion + digest)
+          -> canonical V2 classifier
+          -> real VSCode safe-only decision
+        PLUS:
+          helper failure/unavailability -> V1 unchanged (verified by
+          structural validator + attack suite; 318 attack tests pass).
+        PLUS:
+          exact-head VSIX contains expected helper with recorded SHA-256.
+
+  11. NOT TOUCHED (per reviewer stop rule):
+        - CLI safe-only UX/flag (follow-up work)
+        - Variable / dataflow analysis (future ACT)
+        - Zsh promotion (kept disabled; v3.13.1 parses zsh but
+          runtime refuses to promote zsh to ALLOW)
+        - V3 shell semantics (out of scope)
+        - Command-policy cleanup (out of scope)
+
+  VERDICT:
+    PHASE_3 = COMPLETE
+    PARSER_HELPER_BINARY = SHIPPED
+    VSCODE V2 = PRODUCTION-READY
+    CLI V2   = DORMANT (by design, per CORRECTION02)
+
+    TRUST STATE:
+      HEAD: this commit, NOT pushed
+      Working tree: clean (after staging)
+      Branch: main
+      origin/main: unchanged
