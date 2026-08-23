@@ -4610,3 +4610,80 @@ NEXT =
 NO_NEW_FACTORY_DOCKER_REQUIRED
 NO_NEW_LICENSE
 NO_NEW_DEPENDENCY
+
+## ACT closure — V1 CORRECTION01: VSCode host parity (P0 closed)
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01
+
+VERDICT =
+  PASS_COMMAND_RISK_CLASSIFIER_V1 (full product parity)
+
+REVIEWER_DISPOSITION =
+  PASS_WITH_P0_HOST_GAP → RESOLVED
+
+P0_DELIVERABLE =
+  apps/vscode/src/sdk/sdk-tool-policies.ts now wires
+  evaluateCommandRisk into BOTH evaluateCommandToolApproval
+  and evaluateCommandToolApprovalWithPlan. The wiring is
+  identical to the CLI host adapter's wiring: DOWNGRADE-only
+  on ALLOW, preserves the execution plan so a user-approved
+  ASK still runs hardened, never weakens an existing ASK or DENY.
+
+  New `risk_hard_floor` member of CommandDecisionSource
+  documents the source at the lattice level.
+
+P1_DEFECT =
+  The unused `homeDirectory` field on EvaluateCommandRiskInput
+  was removed. The V1 hard floor operates on literal rendered
+  text; runtime path resolution is V2.
+
+P1_DOC_FIX =
+  apps/vscode/src/test/cline-core-vitest-stub.ts now re-exports
+  evaluateCommandRisk, EvaluateCommandRiskInput, RiskDecision
+  from the runtime/command-policy subpath so the VSCode vitest
+  config's @cline/core alias sees the symbol.
+  sdk/packages/core/src/runtime/command-policy/index.ts
+  re-exports them for the same reason.
+
+TEST_FIXES =
+  sdk-tool-policies.command-policy.test.ts: 1 test updated to
+  V1 contract; 9 R5 regression tests added.
+  sdk-tool-policies.command.test.ts: 1 test updated to V1
+  contract (rm -rf / in all-mode is now ASK + risk_hard_floor).
+  sdk-interaction-coordinator.session-autonomy.test.ts: 3
+  tests used `rm -rf /` as the "ordinary-not-hard-denied"
+  test command; replaced with `echo hi` to preserve the
+  session-override semantics without conflating with R5.
+
+PRODUCTION_DELTA =
+  apps/vscode/src/sdk/sdk-tool-policies.ts
+  apps/vscode/src/test/cline-core-vitest-stub.ts
+  apps/vscode/src/sdk/sdk-tool-policies.command-policy.test.ts
+  apps/vscode/src/sdk/sdk-tool-policies.command.test.ts
+  apps/vscode/src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts
+  sdk/packages/core/src/runtime/command-policy/command-policy-types.ts
+  sdk/packages/core/src/runtime/command-policy/command-risk.ts
+  sdk/packages/core/src/runtime/command-policy/index.ts
+
+TESTS =
+  2182/2182 @cline/core
+  48/48 sdk-tool-policies.command-policy.test.ts (was 39)
+  23/23 sdk-interaction-coordinator.session-autonomy.test.ts
+    (was 23; 3 timeouts fixed by non-R5 test commands)
+  2033/2033 apps/vscode full vitest suite
+  1076/1076 clinemm test:bun:unit
+  apps/vscode tsc --noEmit clean
+
+EVIDENCE =
+  .factory/evidence/act-command-risk-classification01/03-correction01-final-report.md
+
+BOARD =
+  EPIC-CLINEMM-COMMAND-RISK-CLASSIFICATION01: PASS (full parity)
+
+NEXT =
+  - V2 parser (mvdan/sh) for per-command variable / cwd /
+    compound analysis (closes the 5 honest-ASK cases)
+  - R0 utility expansion (git stash list, kubectl get,
+    helm template, etc.)
+  - Dogfood with auto-approve enabled: prove R0 stays
+    frictionless and an R5 command prompts instead of executing
