@@ -259,7 +259,7 @@ describe("V2+V1 composition — V2 failure modes preserve V1", () => {
 		const r = evaluateCommandRisk({
 			toolInput: 'echo "$(rm -rf "$HOME")"',
 			hostAuthorization: SAFE,
-			parserResult: mkParsed('echo "$(rm -rf "$HOME")"', 
+			parserResult: mkParsed('echo "$(rm -rf "$HOME")"',
 				[
 					{
 						kind: "cmd",

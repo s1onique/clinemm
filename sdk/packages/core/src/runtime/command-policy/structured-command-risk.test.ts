@@ -127,7 +127,7 @@ describe("V2 structured classifier — failure contract (ACT §18)", () => {
 	it("treats command substitution as opaque (ask minimum)", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'echo "$(rm -rf "$HOME")"',
-			parserResult: mkParsed('echo "$(rm -rf "$HOME")"', 
+			parserResult: mkParsed('echo "$(rm -rf "$HOME")"',
 				[
 					{
 						kind: "cmd",
@@ -230,8 +230,6 @@ describe("V2 structured classifier — risk-maximum aggregates to never-auto-app
 				},
 			]),
 		});
-		// debug
-		console.log("DBG aggregate:", r.aggregate, "stmts:", r.perStatement);
 		expect(r.parseConfidence).toBe("complete");
 		expect(r.aggregate).toBe("never-auto-approve");
 		expect(r.downgradeToNeverAutoApprove).toBe(true);
@@ -486,7 +484,7 @@ describe("V2 structured classifier — dialect handling", () => {
 	it("zsh dialect → still classified, parser results honored", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: "pwd",
-			parserResult: mkParsed("pwd", 
+			parserResult: mkParsed("pwd",
 				[{ kind: "cmd", cmd: mkCmd("pwd") }],
 				{ dialect: "zsh" as ShellDialect },
 			),
@@ -497,7 +495,7 @@ describe("V2 structured classifier — dialect handling", () => {
 	it("posix dialect → sh -c 'git status' still classified", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: "sh -c 'git status'",
-			parserResult: mkParsed("sh -c 'git status'", 
+			parserResult: mkParsed("sh -c 'git status'",
 				[
 					{
 						kind: "cmd",
@@ -517,7 +515,7 @@ describe("V2 structured classifier — dialect handling", () => {
 	it("unknown dialect → bash-conservative fallback", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: "pwd",
-			parserResult: mkParsed("pwd", 
+			parserResult: mkParsed("pwd",
 				[{ kind: "cmd", cmd: mkCmd("pwd") }],
 				{ dialect: "unknown" as ShellDialect },
 			),
