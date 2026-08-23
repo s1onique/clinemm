@@ -185,6 +185,216 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 			expect(m?.source).toBe("host_safe_git_branch");
 		}
 	});
+
+	it("ls: ordinary listing forms match (REVIEW STANDARD audit-cleared)", () => {
+		// Every documented ls option is observational: it does NOT invoke
+		// external helpers, write outside stdout, broaden authority, or
+		// have other authority-broadening effect. ls is intrinsically
+		// read-only per ls(1) documentation.
+		for (const cmd of [
+			// Bare
+			"ls",
+			// Single short options
+			"ls -l",
+			"ls -A",
+			"ls -1",
+			"ls -d",
+			"ls -F",
+			"ls -h",
+			"ls -i",
+			"ls -L",
+			"ls -m",
+			"ls -n",
+			"ls -p",
+			"ls -q",
+			"ls -r",
+			"ls -s",
+			"ls -S",
+			"ls -t",
+			"ls -u",
+			"ls -U",
+			"ls -X",
+			// Bundled short options
+			"ls -la",
+			"ls -lh",
+			"ls -lAh",
+			"ls -alF",
+			// Path arguments
+			"ls /etc",
+			"ls /tmp",
+			"ls /var/log",
+			"ls .",
+			"ls ..",
+			"ls path/*",
+			"ls /etc /tmp /var",
+			"ls -- /tmp",
+			// Long options
+			"ls --all",
+			"ls --almost-all",
+			"ls --author",
+			"ls --directory",
+			"ls --dired",
+			"ls --classify",
+			"ls --file-type",
+			"ls --format=long",
+			"ls --format=commas",
+			"ls --format=vertical",
+			"ls --format=across",
+			"ls --full-time",
+			"ls --group-directories-first",
+			"ls --no-group",
+			"ls --human-readable",
+			"ls --si",
+			"ls --dereference-command-line",
+			"ls --dereference-command-line-symlink-to-dir",
+			"ls --hyperlink",
+			"ls --hyperlink=always",
+			"ls --hyperlink=auto",
+			"ls --hyperlink=never",
+			"ls --indicator-style=slash",
+			"ls --indicator-style=file-type",
+			"ls --indicator-style=classify",
+			"ls --indicator-style=none",
+			"ls --inode",
+			"ls --kibibytes",
+			"ls --dereference",
+			"ls --numeric-uid-gid",
+			"ls --literal",
+			"ls --reverse",
+			"ls --recursive",
+			"ls --size",
+			"ls --sort=time",
+			"ls --sort=size",
+			"ls --sort=extension",
+			"ls --sort=name",
+			"ls --sort=width",
+			"ls --sort=version",
+			"ls --sort=none",
+			"ls --time=atime",
+			"ls --time=ctime",
+			"ls --time=mtime",
+			"ls --time=birth",
+			"ls --time=access",
+			"ls --time=use",
+			"ls --time=modification",
+			"ls --time=creation",
+			"ls --time=status",
+			"ls --time-style=long-iso",
+			"ls --time-style=full-iso",
+			"ls --time-style=iso",
+			"ls --time-style=locale",
+			"ls --time-style=+%H:%M:%S",
+			"ls --tabsize=4",
+			"ls --tabsize=8",
+			"ls --zero",
+			"ls --quote-name",
+			"ls --quoting-style=literal",
+			"ls --quoting-style=shell",
+			"ls --quoting-style=c",
+			"ls --quoting-style=escape",
+			"ls --show-control-chars",
+			"ls --hide-control-chars",
+			"ls --context",
+			"ls --help",
+			"ls --version",
+			"ls --color",
+			"ls --color=always",
+			"ls --color=auto",
+			"ls --color=never",
+			"ls --ignore=*.bak",
+			"ls --ignore=*.tmp",
+			"ls --hide=*.bak",
+			"ls --hide=*.tmp",
+			"ls --block-size=K",
+			"ls --block-size=M",
+			"ls --block-size=G",
+			"ls -la --human-readable --color=auto",
+			"ls -la /etc /tmp",
+			"ls -la --ignore=*.log",
+		]) {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m?.source).toBe("host_safe_ls");
+		}
+	});
+
+	it("find: predicate-only / stdout-only forms match (REVIEW STANDARD audit-cleared)", () => {
+		// Per GNU findutils, find has stdout-only actions (-print, -print0,
+		// -printf, -ls, -quit, -prune) and action-capable forms (-delete,
+		// -exec, -execdir, -ok, -okdir, -fls, -fprint, -fprint0, -fprintf).
+		// We enumerate ONLY the stdout-only + pure-predicate forms here.
+		for (const cmd of [
+			"find",
+			"find .",
+			"find /",
+			"find /tmp",
+			"find /etc",
+			"find ..",
+			"find -H .",
+			"find -L .",
+			"find -P .",
+			"find -E .",
+			"find -X .",
+			"find -f .",
+			"find -f /tmp",
+			"find . -type f",
+			"find . -type d",
+			"find . -type l",
+			"find . -name *.ts",
+			"find . -iname *.ts",
+			"find . -path */node_modules/*",
+			"find . -ipath */FOO/*",
+			"find . -regex .*\\.ts$",
+			"find . -iregex .*\\.ts$",
+			"find . -perm 644",
+			"find . -perm -u+w",
+			"find . -perm +u+w",
+			"find . -user root",
+			"find . -uid 1000",
+			"find . -group root",
+			"find . -gid 1000",
+			"find . -size +1M",
+			"find . -size -100c",
+			"find . -size 0",
+			"find . -atime +7",
+			"find . -ctime -1",
+			"find . -mtime 0",
+			"find . -amin +60",
+			"find . -cmin -10",
+			"find . -mmin 5",
+			"find . -newer /tmp/marker",
+			"find . -empty",
+			"find . -readable",
+			"find . -writable",
+			"find . -executable",
+			"find . -true",
+			"find . -false",
+			"find . -links 2",
+			"find . -inum 12345",
+			"find . -fstype ext4",
+			"find . -nogroup",
+			"find . -nouser",
+			"find . -depth",
+			"find . -xdev",
+			"find . -mindepth 1",
+			"find . -maxdepth 3",
+			"find . -prune",
+			"find . -print",
+			"find . -print0",
+			"find . -ls",
+			"find . -printf %p\\n",
+			"find . -quit",
+			"find . -not -name foo",
+			"find . -name foo -and -type f",
+			"find . -name foo -or -name bar",
+			"find . -type d -name command-risk* -not -path ./node_modules/*",
+			"find . -type f -name *.ts -not -path */node_modules/*",
+			"find . -type f -size +1M -maxdepth 3",
+			"find /tmp -type f -mtime +7 -name *.log",
+		]) {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m?.source).toBe("host_safe_find");
+		}
+	});
 });
 
 describe("findSafeRuleMatch — REJECTED git diff options (helper-invocation / out-of-scope)", () => {
@@ -362,6 +572,62 @@ describe("findSafeRuleMatch — REJECTED git branch options (mutation / out-of-s
 	];
 
 	for (const [cmd, _why] of REJECTED_BRANCH) {
+		it(`rejects "${cmd}"`, () => {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m).toBeUndefined();
+		});
+	}
+});
+
+describe("findSafeRuleMatch — REJECTED ls options", () => {
+	// ls has no mutating options, but the rule must still reject any
+	// undocumented long option (no wildcard).
+	const REJECTED_LS = [
+		["ls --totally-unknown", "unknown long option"],
+		["ls --whatever", "unknown long option"],
+		["ls --output=/tmp/foo.txt", "would write to a file"],
+		["ls --help-anything", "unknown long option"],
+		["ls -E", "unknown short option (-E is BSD-specific)"],
+		["ls -O", "unknown short option"],
+		["ls -P", "unknown short option (BSD)"],
+	];
+
+	for (const [cmd, _why] of REJECTED_LS) {
+		it(`rejects "${cmd}"`, () => {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m).toBeUndefined();
+		});
+	}
+});
+
+describe("findSafeRuleMatch — REJECTED find actions (mutation / execution)", () => {
+	// GNU find has action-capable primitives that mutate the filesystem or
+	// execute external programs. None of these may match a safe rule.
+	// The `command-guard.ts` layer ALSO blocks these via a separate
+	// file-editing blocklist; here we test that the safe-rule engine
+	// returns ASK (no match) so they remain ASK even when bypassed.
+	const REJECTED_FIND = [
+		// Mutating
+		["find . -delete", "`find -delete` deletes matched files"],
+		["find /tmp -name foo -delete", "mutating form"],
+		// Executing
+		["find . -exec rm {} ;", "`find -exec` executes arbitrary utility"],
+		["find . -exec rm {} +", "`find -exec` with batching"],
+		["find . -execdir rm {} ;", "`find -execdir` executes in target dir"],
+		["find . -execdir rm {} +", "`find -execdir` with batching"],
+		["find . -ok rm {} ;", "`find -ok` interactive execute"],
+		["find . -okdir rm {} ;", "`find -okdir` interactive execute"],
+		// File-writing actions
+		["find . -fls /tmp/out.txt", "`-fls FILE` writes to FILE"],
+		["find . -fprint /tmp/out.txt", "`-fprint FILE` writes to FILE"],
+		["find . -fprint0 /tmp/out.txt", "`-fprint0 FILE` writes to FILE"],
+		["find . -fprintf /tmp/out.txt %p", "`-fprintf FILE` writes to FILE"],
+		// Unknown
+		["find . -totally-unknown", "unknown option"],
+		["find . --whatever", "unknown option"],
+	];
+
+	for (const [cmd, _why] of REJECTED_FIND) {
 		it(`rejects "${cmd}"`, () => {
 			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
 			expect(m).toBeUndefined();

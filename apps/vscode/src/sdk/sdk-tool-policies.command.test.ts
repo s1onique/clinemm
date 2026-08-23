@@ -101,19 +101,19 @@ describe("command tool: vscode shouldAutoApproveTool authority", () => {
 	describe("model can only escalate", () => {
 		it("safe-only host + model=true => ASK", () => {
 			const hostAuth = getCommandHostAuthorization("run_commands", SAFE_ENABLED)
-			const { approved } = evaluateCommand({ command: "ls", requires_approval: true }, hostAuth)
+			const { approved } = evaluateCommand({ command: "head", requires_approval: true }, hostAuth)
 			expect(approved).toBe(false)
 		})
 
 		it("safe-only host + model=false => ASK (no downgrade)", () => {
 			const hostAuth = getCommandHostAuthorization("run_commands", SAFE_ENABLED)
-			const { approved } = evaluateCommand({ command: "ls", requires_approval: false }, hostAuth)
+			const { approved } = evaluateCommand({ command: "head", requires_approval: false }, hostAuth)
 			expect(approved).toBe(false)
 		})
 
 		it("safe-only host + model=missing => ASK (no downgrade)", () => {
 			const hostAuth = getCommandHostAuthorization("run_commands", SAFE_ENABLED)
-			const { approved } = evaluateCommand({ command: "ls" }, hostAuth)
+			const { approved } = evaluateCommand({ command: "head" }, hostAuth)
 			expect(approved).toBe(false)
 		})
 	})
@@ -122,7 +122,7 @@ describe("command tool: vscode shouldAutoApproveTool authority", () => {
 		// The corrected architecture does NOT auto-approve by executable
 		// name. In safe-only mode, the host ALLOWS only commands that
 		// match an explicit positive rule. `pwd` is in the default safe
-		// rule set, so it auto-approves; arbitrary `ls` does not.
+		// rule set, so it auto-approves; arbitrary `head` does not (was `ls`; `ls` is now positively matched by `host_safe_ls` — see ACT-CLINEMM-COMMAND-RISK-R0-READONLY-RECON-EXPANSION02).
 
 		it("execute_safe_commands=true + pwd (default safe rule) => ALLOW", () => {
 			const hostAuth = getCommandHostAuthorization("run_commands", SAFE_ENABLED)
@@ -130,9 +130,9 @@ describe("command tool: vscode shouldAutoApproveTool authority", () => {
 			expect(approved).toBe(true)
 		})
 
-		it("execute_safe_commands=true + arbitrary ls (no rule match) => ASK", () => {
+		it("execute_safe_commands=true + arbitrary head (no rule match) => ASK", () => {
 			const hostAuth = getCommandHostAuthorization("run_commands", SAFE_ENABLED)
-			const { approved } = evaluateCommand({ command: "ls", requires_approval: false }, hostAuth)
+			const { approved } = evaluateCommand({ command: "head", requires_approval: false }, hostAuth)
 			expect(approved).toBe(false)
 		})
 

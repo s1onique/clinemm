@@ -134,6 +134,24 @@ export const SAFE_GIT_BRANCH_PROFILE: SafeExecutionProfile = {
 	commandSuffix: [],
 };
 
+export const SAFE_LS_PROFILE: SafeExecutionProfile = {
+	kind: "pwd",
+	source: "host_safe_ls_profile",
+	description:
+		"Run ls with no overlay. ls is intrinsically read-only (no helper invocation, no fs write); no per-subcommand suffix needed. The git-family hardening flags (-c core.* / core.hooksPath=/dev/null) are git-specific and would BREAK ls if applied; they are not used here. ls has no standard --no-pager flag; pager output for a read-only listing is acceptable.",
+	commandPrefix: [],
+	commandSuffix: [],
+};
+
+export const SAFE_FIND_PROFILE: SafeExecutionProfile = {
+	kind: "pwd",
+	source: "host_safe_find_profile",
+	description:
+		"Run find with no overlay. find is intrinsically read-only when invoked with stdout-only actions; no per-subcommand suffix needed. The git-family hardening flags would BREAK find's argument parsing (they would be interpreted as starting paths); they are not used here. find has no standard --no-pager flag; pager output for a read-only listing is acceptable.",
+	commandPrefix: [],
+	commandSuffix: [],
+};
+
 export function getSafeExecutionProfileForSource(
 	source: string,
 ): SafeExecutionProfile | undefined {
@@ -148,6 +166,10 @@ export function getSafeExecutionProfileForSource(
 			return SAFE_GIT_LOG_PROFILE;
 		case "host_safe_git_branch":
 			return SAFE_GIT_BRANCH_PROFILE;
+		case "host_safe_ls":
+			return SAFE_LS_PROFILE;
+		case "host_safe_find":
+			return SAFE_FIND_PROFILE;
 		default:
 			return undefined;
 	}

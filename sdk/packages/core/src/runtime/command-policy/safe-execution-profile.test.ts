@@ -17,10 +17,12 @@ import { describe, expect, it } from "vitest";
 import {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
+	SAFE_FIND_PROFILE,
 	SAFE_GIT_BRANCH_PROFILE,
 	SAFE_GIT_DIFF_PROFILE,
 	SAFE_GIT_LOG_PROFILE,
 	SAFE_GIT_STATUS_PROFILE,
+	SAFE_LS_PROFILE,
 	SAFE_PWD_PROFILE,
 } from "./safe-execution-profile";
 
@@ -223,6 +225,48 @@ describe("applySafeExecutionProfileToCommand — token positions", () => {
 	it("getSafeExecutionProfileForSource returns SAFE_GIT_BRANCH_PROFILE for host_safe_git_branch", () => {
 		expect(getSafeExecutionProfileForSource("host_safe_git_branch")).toBe(
 			SAFE_GIT_BRANCH_PROFILE,
+		);
+	});
+
+	it("ls: intrinsic profile (no overlay); git-family hardening would BREAK ls", () => {
+		const out = applySafeExecutionProfileToCommand(
+			"ls -la /etc",
+			SAFE_LS_PROFILE,
+		) as string;
+		// ls is intrinsically read-only; the profile applies NO overlay.
+		// The git-family hardening flags (-c core.*, core.hooksPath=/dev/null)
+		// are git-specific and would BREAK ls if applied (ls has no -c
+		// option that takes core.* config); the profile description
+		// documents this non-application.
+		expect(out).toBe("ls -la /etc");
+		expect(out).not.toContain("core.pager=cat");
+		expect(out).not.toContain("core.hooksPath=/dev/null");
+		expect(out).not.toContain("--no-ext-diff");
+	});
+
+	it("find: intrinsic profile (no overlay); git-family hardening would BREAK find's arg parser", () => {
+		const out = applySafeExecutionProfileToCommand(
+			"find . -type f -name *.ts",
+			SAFE_FIND_PROFILE,
+		) as string;
+		// find is intrinsically read-only when invoked with stdout-only
+		// actions; the profile applies NO overlay. The git-family
+		// hardening flags would BREAK find's argument parsing (they
+		// would be interpreted as starting paths).
+		expect(out).toBe("find . -type f -name *.ts");
+		expect(out).not.toContain("core.pager=cat");
+		expect(out).not.toContain("core.hooksPath=/dev/null");
+	});
+
+	it("getSafeExecutionProfileForSource returns SAFE_LS_PROFILE for host_safe_ls", () => {
+		expect(getSafeExecutionProfileForSource("host_safe_ls")).toBe(
+			SAFE_LS_PROFILE,
+		);
+	});
+
+	it("getSafeExecutionProfileForSource returns SAFE_FIND_PROFILE for host_safe_find", () => {
+		expect(getSafeExecutionProfileForSource("host_safe_find")).toBe(
+			SAFE_FIND_PROFILE,
 		);
 	});
 });

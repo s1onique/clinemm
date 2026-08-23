@@ -295,6 +295,91 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		pattern:
 			/^\s*git\s+branch(?:\s+(?:--list|-a|--all|-r|--remotes|--show-current|--no-color|--color=(?:always|auto|never)|-vv?a?|--no-abbrev))*(?:\s+--points-at\s+[A-Za-z0-9_./-]+)?\s*$/u,
 	},
+	{
+		source: "host_safe_ls",
+		// ls: directory/file information query. ls(1) documents its
+		// job as "list information about the FILEs". No documented
+		// option invokes an external program, writes outside stdout,
+		// broadens authority, or has other authority-broadening
+		// effect per the REVIEW STANDARD at the top of this file.
+		// Every option is purely visual / formatting / filtering.
+		//
+		// The rule allows any sequence of:
+		//   (a) reviewed short options (single-letter from the
+		//       enumerated set; bundled like -la is also OK);
+		//   (b) reviewed long options (with optional `=<value>` for
+		//       the few that take a value);
+		//   (c) zero or more POSIX path arguments.
+		//
+		// Sensitive-path policy (e.g. ~/.ssh) is a SEPARATE dimension
+		// not addressed here. See the board row for
+		// ACT-CLINEMM-COMMAND-RISK-R0-READONLY-RECON-EXPANSION02.
+		pattern:
+			/^\s*ls(?:\s+(?:-[1aAbBcCdDfFgGhHiIkLlLmnNopqrRsStTuUwWxXzZNQ]+|--all|--almost-all|--author|--escape|--block-size=[-A-Za-z0-9_\/.,+:%^]+|--ignore-backups|--color(?:=(?:always|auto|never))?|--directory|--dired|--classify(?:=(?:always|auto|never))?|--file-type|--format=(?:across|horizontal|commas|long|single-column|verbose|vertical)|--full-time|--group-directories-first|--no-group|--human-readable|--si|--dereference-command-line|--dereference-command-line-symlink-to-dir|--hide=[-A-Za-z0-9_\/.,+:%^*?]+|--hyperlink(?:=(?:always|auto|never))?|--indicator-style=(?:none|slash|file-type|classify)|--inode|--ignore=[-A-Za-z0-9_\/.,+:%^*?]+|--kibibytes|--dereference|--numeric-uid-gid|--literal|--reverse|--recursive|--size|--sort=(?:none|size|time|version|extension|name|width)|--time=(?:access|atime|use|ctime|status|mtime|modification|birth|creation)|--time-style=[-A-Za-z0-9_:,.,+^%]+|--tabsize=\d+|--zero|--quote-name|--quoting-style=(?:literal|locale|shell|shell-always|shell-escape|shell-escape-always|c|escape)|--show-control-chars|--hide-control-chars|--context|--help|--version))*(?:\s+(?:--|(?![-])[-A-Za-z0-9_\/.,+:%^@~*$?][-A-Za-z0-9_\/.,+:%^@~*$?]*))*$/u,
+	},
+	{
+		source: "host_safe_find",
+		// find: predicates + stdout-only observation. Per GNU
+		// findutils, find has two categories of action: stdout-only
+		// (-print, -print0, -printf, -ls, -quit, -prune) and
+		// action-capable (-delete, -exec, -execdir, -ok, -okdir,
+		// -fls, -fprint, -fprint0, -fprintf). We enumerate ONLY the
+		// stdout-only + pure-predicate forms here. Any invocation
+		// containing a mutating or executing action MUST NOT match.
+		//
+		// Review summary per option (REVIEW STANDARD at top):
+		//   Global options:
+		//     -H / -L / -P        symlink handling mode
+		//     -E                  extended regex (BSD)
+		//     -X                  stay on current filesystem
+		//     -s / -d / -x        BSD alternate invocation flags
+		//     -f <path>           alternate starting path
+		//   Starting paths (positional; non-option tokens before
+		//   predicates):
+		//     . | path | absolute path
+		//   Predicates (tests / operators) - pure observation:
+		//     -name / -iname PAT          glob pattern (find's own)
+		//     -path / -ipath PAT          path pattern
+		//     -regex / -iregex PAT        regex
+		//     -type [bcdflpsw]            file type
+		//     -perm [-+]MODE              permission bits
+		//     -user UNAME / -uid N
+		//     -group GNAME / -gid N
+		//     -size [+-]N[ckbwMG]         size
+		//     -[acm]time [+-]N            time predicates
+		//     -[acm]min [+-]N             minute predicates
+		//     -newer FILE                 newer than
+		//     -anewer FILE                accessed newer than
+		//     -cnewer FILE                ctime newer than
+		//     -newerXY REF                time comparison
+		//     -empty                      empty file/dir
+		//     -readable / -writable / -executable
+		//     -true / -false
+		//     -links N
+		//     -inum N
+		//     -fstype TYPE
+		//     -nogroup / -nouser
+		//     -depth / -xdev
+		//     -mindepth N / -maxdepth N
+		//     -prune                      observational subtree-skip
+		//     -print / -print0 / -ls      stdout-only observation
+		//     -printf FMT                 stdout-only formatted
+		//     -quit
+		//     -not / -and / -or           boolean composition
+		//
+		// Explicitly REJECTED (action-capable; mutating/executing):
+		//   -delete                      deletes matched files
+		//   -exec / -execdir ... ;       executes arbitrary utility
+		//   -exec / -execdir ... {} +    executes utility w/ batching
+		//   -ok / -okdir ... ;           interactive execute
+		//   -fls FILE                    writes ls output to FILE
+		//   -fprint FILE                 writes names to FILE
+		//   -fprint0 FILE                writes names to FILE (NUL)
+		//   -fprintf FILE FMT            writes formatted to FILE
+		//   any unknown predicate / action   ASK (no wildcard)
+		pattern:
+			/^\s*find(?:\s+-(?:H|L|P|E|X|s|d|x))?(?:\s+-f\s+[-A-Za-z0-9_\/.,+:%^]+)?(?:\s+(?:--|(?![-])[-A-Za-z0-9_\/.,+:%^*?\[\]{}]+))*?(?:\s+(?:-name\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-iname\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-path\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-ipath\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|]+|-regex\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|\\\$]+|-iregex\s+[-A-Za-z0-9_\/.,+:%^*?\[\]{}()|\\\$]+|-type\s+[bcdflpsw]|-perm\s+[-+a-zA-Z0-7]+|-user\s+[-A-Za-z0-9_\/.,+:%^]+|-uid\s+\d+|-group\s+[-A-Za-z0-9_\/.,+:%^]+|-gid\s+\d+|-size\s+[+-]?\d+[ckbwMG]?|-atime\s+[+-]?\d+|-ctime\s+[+-]?\d+|-mtime\s+[+-]?\d+|-amin\s+[+-]?\d+|-cmin\s+[+-]?\d+|-mmin\s+[+-]?\d+|-newer\s+[-A-Za-z0-9_\/.,+:%^]+|-anewer\s+[-A-Za-z0-9_\/.,+:%^]+|-cnewer\s+[-A-Za-z0-9_\/.,+:%^]+|-newerXY\s+[a-z]\s+[-A-Za-z0-9_\/.,+:%^]+|-empty|-readable|-writable|-executable|-true|-false|-links\s+\d+|-inum\s+\d+|-fstype\s+[A-Za-z0-9_]+|-nogroup|-nouser|-depth|-xdev|-mindepth\s+\d+|-maxdepth\s+\d+|-prune|-print0?|-ls|-printf\s+[-A-Za-z0-9_\/.,+:%^%\\]+|-quit|-not|-and|-or))*\s*$/u,
+	},
 ];
 
 /**
