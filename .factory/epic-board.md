@@ -5269,3 +5269,81 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
   STOP RULE: no Phase 2 code until Phase 1 review accepts the
   architectural decision. No Phase 3 binaries until Phase 2
   RED/GREEN passes.
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+  = PHASE_2_ASYNC_SEAM_IMPLEMENTATION_COMPLETE
+  = PHASE_3_CROSS_PLATFORM_BINARY_BUILD_HOLD
+
+  PHASE 2 (implementation) — accepted by reviewer; executed:
+
+  1. detectplatform() P1 fix:
+     - returns null on unsupported platforms, not throw
+     - helper unavailable -> V1 (uniform failure contract)
+     - 2 new tests
+
+  2. CLI async seam:
+     - parserResult threaded through cliEvaluateCommandToolApproval{,With}
+     - TrustedParserEvidence = unknown alias preserves PROVENANCE INVARIANT
+     - interactive approval controller awaits helper.invoke(frozenToolInput)
+     - snapshot invariant: same captured toolInput for helper + policy
+     - try/catch wraps helper (any throw -> V2 dormant)
+     - getCliParserHelper / setCliParserHelper test seams
+
+  3. VSCode async seam:
+     - parserResult threaded through evaluateCommandToolApproval{,WithPlan}
+     - TrustedParserEvidence = unknown alias preserves PROVENANCE INVARIANT
+     - SdkController evaluateCommandToolApproval callback is now async
+     - snapshot invariant + try/catch identical to CLI
+     - getSdkControllerParserHelper / setSdkControllerParserHelper test seams
+     - sdk-interaction-coordinator accepts Promise<...> callback (mirrors SDK capability)
+     - handleRequestToolApproval awaits the callback
+
+  4. Latent bug fixed (CORRECTION01):
+     - V2 promotion path used risk as unknown as CommandDecision
+     - RiskDecision has decision/source, not kind/source
+     - Now builds a real CommandDecision shape
+     - Caught by the first RED/GREEN test
+
+  5. Type system:
+     - CommandDecisionSource includes risk_v2_structured_promotion
+     - vitest config aliases @cline/core/internal/parser-helper-runtime
+
+  RED/GREEN tests (the load-bearing pair):
+
+  CLI: 8 tests in approvals.parser-helper.test.ts
+    ✓ pwd; pwd + trusted helper -> host ALLOW (V2 promotion)
+    ✓ pwd; pwd + trusted helper unavailable -> host ASK
+    ✓ pwd; pwd + trusted helper throws -> host ASK (failure == absence)
+    ✓ pwd; pwd + no helper -> host ASK (V1 unchanged)
+    ✓ R5 (rm -rf $HOME) + helper unavailable -> ASK + never-auto-approve
+    ✓ R5 + helper returns ANYTHING -> ASK + never-auto-approve (R5 invariant)
+    ✓ unknown cmd + valid parser -> ASK (no V2 promotion)
+    ✓ explicit DENY + parser -> DENY (DENY beats everything)
+
+  VSCode: 8 tests in sdk-interaction-coordinator.parser-helper.test.ts
+    ✓ pwd; pwd + trusted helper -> ALLOW (V2 promotion)
+    ✓ pwd; pwd + trusted helper unavailable -> ASK
+    ✓ pwd; pwd + trusted helper throws -> ASK (failure == absence)
+    ✓ pwd; pwd + no helper -> ASK (V1 unchanged)
+    ✓ R5 + helper unavailable -> ASK + never-auto-approve
+    ✓ R5 + helper returns ANYTHING -> ASK + never-auto-approve (R5 invariant)
+    ✓ unknown cmd + valid parser -> ASK (no V2 promotion)
+    ✓ explicit DENY + parser -> DENY (DENY beats everything)
+
+  Test results:
+    @cline/core command-policy:    318/318 pass
+    @cline/core parser-provenance:    8/8 pass (substring invariant)
+    @cline/core build:                clean
+    CLI host (4 files):               62/62 pass (8 new)
+    CLI typecheck:                     clean
+    VSCode vitest:                 2047/2047 pass (8 new)
+    VSCode typecheck:                 clean
+    git diff HEAD --check:            RC=0
+
+  CLI non-interactive classification (per reviewer Phase 1 caveat):
+    CLI_INTERACTIVE_V2 = GREEN
+    CLI_ACP_PATH = V1_ONLY  (ergonomic/parity defect, not safety regression)
+
+  HEAD: Phase 2 commit (this row), NOT pushed.
+
+  STOP. Phase 3 binary cross-compilation BLOCKED until Phase 2 review accepts.

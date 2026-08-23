@@ -55,13 +55,23 @@ import {
 	type ParserHelperRequest,
 } from "./protocol";
 
-/** Detected platform string, in the format used by the binary vendor layout. */
+/**
+ * Detected platform string, in the format used by the binary vendor layout.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01:
+ * `null` is a FIRST-CLASS value: an unsupported host platform means
+ * "helper unavailable" — V2 stays dormant, V1 is preserved, the
+ * approval pipeline does NOT throw. This is the explicit override
+ * of the prior behavior, where `detectPlatform()` raised and would
+ * bubble out of `defaultParserHelperLocator()` during construction.
+ */
 export type HelperPlatform =
 	| "darwin-arm64"
 	| "darwin-amd64"
 	| "linux-amd64"
 	| "linux-arm64"
-	| "win32-x64";
+	| "win32-x64"
+	| null;
 
 /**
  * Locate the parser-helper binary for the current platform.
@@ -76,11 +86,25 @@ export type HelperPlatform =
  * ACT
  * (ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01)
  * only has to drop in the binary files.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * CORRECTION02 (Phase 2, P1): on an unsupported host platform,
+ * `binaryPath()` returns `null` and `platform === null` instead of
+ * throwing. The V2 failure contract is:
+ *
+ *     helper unavailable -> parserResult = undefined -> V1
+ *
+ * `defaultParserHelperLocator()` therefore MUST NOT throw on
+ * unsupported platforms.
  */
 export interface ParserHelperLocator {
 	/** Returns the absolute path to the helper binary, or `null` if not available. */
 	binaryPath(): string | null;
-	/** The platform this locator targets. */
+	/**
+	 * The platform this locator targets. `null` when the host
+	 * platform is not in the supported matrix — V2 is dormant in
+	 * that case, by the failure contract above.
+	 */
 	readonly platform: HelperPlatform;
 }
 
@@ -92,7 +116,12 @@ export function defaultParserHelperLocator(): ParserHelperLocator {
 			// The next ACT ships binaries at this layout:
 			// <package_root>/bin/parser-helper/<platform>/cline-parser-helper
 			// (or .exe on win32-x64). Today, this directory does not
-			// exist, so we return null and V2 stays dormant.
+			// exist (and `detectPlatform()` may have returned `null` on
+			// an unsupported host platform), so we return `null` and V2
+			// stays dormant.
+			if (platform === null) {
+				return null;
+			}
 			return null;
 		},
 	};
@@ -106,7 +135,14 @@ function detectPlatform(): HelperPlatform {
 	if (p === "linux" && (a === "x64" || a === "ia32")) return "linux-amd64";
 	if (p === "linux" && a === "arm64") return "linux-arm64";
 	if (p === "win32" && (a === "x64" || a === "ia32")) return "win32-x64";
-	throw new Error(`MvdanShHelper: unsupported platform ${p}/${a}; V2 disabled`);
+	// CORRECTION02 P1: return null, do NOT throw.
+	// The V2 failure contract requires `helper unavailable -> V1`.
+	// A throw here would bubble out of `defaultParserHelperLocator()`
+	// during construction and break the async seam at every host
+	// (CLI, VSCode). The locator then reports `platform === null`,
+	// `binaryPath() === null`, and `MvdanShHelper.invoke` returns
+	// `null` — preserving V1 behavior.
+	return null;
 }
 
 /**

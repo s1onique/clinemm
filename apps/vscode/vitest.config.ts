@@ -185,6 +185,15 @@ export default defineConfig({
 				__dirname,
 				"../../sdk/packages/core/src/runtime/command-policy/command-risk-internal.ts",
 			),
+			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+			// CORRECTION02 Phase 2: the trusted parser helper module.
+			// Same aliasing strategy as `command-risk-internal` —
+			// resolve to the source path directly so vitest picks
+			// up the live TypeScript rather than the dist bundle.
+			"@cline/core/internal/parser-helper-runtime": path.resolve(
+				__dirname,
+				"../../sdk/packages/core/src/runtime/command-policy/parser-helper/runtime.ts",
+			),
 			"@cline/core": path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts"),
 			"@cline/llms": path.resolve(__dirname, "node_modules/@cline/llms/dist/index.js"),
 			// Map @cline/shared subpath exports explicitly. The bare "@cline/shared"

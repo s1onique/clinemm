@@ -4,7 +4,10 @@ import type {
 	ToolApprovalResult,
 } from "@cline/shared";
 import type { Config } from "../../utils/types";
-import { cliEvaluateCommandToolApproval } from "../command-policy-host";
+import {
+	cliEvaluateCommandToolApprovalWith,
+	cliResolveHostAuthorization,
+} from "../command-policy-host";
 import {
 	applyInteractiveAutoApproveOverride,
 	cloneToolPolicies,
@@ -36,6 +39,44 @@ const pendingExecutionPlans = new WeakMap<
 	CommandExecutionPlan
 >();
 
+/**
+ * Type of the trusted parser helper capability. Only the method
+ * `invoke(toolInput)` is consumed at this async seam; the helper
+ * is constructed per-host-process elsewhere (CLI: a single module-
+ * level singleton or injected by `setCliParserHelper` for tests).
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * (CORRECTION02 Phase 2): the CLI host adapter invokes this
+ * capability ONCE per approval request, captures the result (or
+ * `null` on any failure), and threads it into the pure policy
+ * evaluator. The helper is the ONLY sanctioned path to a
+ * `ParsedShell`.
+ */
+export interface CliParserHelper {
+	invoke(toolInput: unknown): Promise<unknown>;
+}
+
+/**
+ * Module-level parser helper for production. Tests can override via
+ * `setCliParserHelper` to inject a fake. The default value is
+ * `undefined`, which means V2 stays dormant and the CLI behaves
+ * identically to the prior (CORRECTION01) baseline.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01:
+ * when the binary ACT lands, production wires a real `MvdanShHelper`
+ * here via `setCliParserHelper(helper)`. Until then, `undefined` is
+ * correct and safe.
+ */
+let cliParserHelper: CliParserHelper | undefined;
+
+export function getCliParserHelper(): CliParserHelper | undefined {
+	return cliParserHelper;
+}
+
+export function setCliParserHelper(helper: CliParserHelper | undefined): void {
+	cliParserHelper = helper;
+}
+
 export function createInteractiveApprovalController(config: Config) {
 	const autoApproveAllRef = {
 		current: config.toolPolicies["*"]?.autoApprove !== false,
@@ -47,8 +88,16 @@ export function createInteractiveApprovalController(config: Config) {
 	};
 
 	// CORRECTION04 test seam: inject a custom command evaluator for tests.
+	// The evaluator type matches `cliEvaluateCommandToolApprovalWith`
+	// (the lower-level entry point) so tests can simulate either a
+	// pre-built authorization or the full composition path.
 	const commandEvaluatorRef: {
-		current: typeof cliEvaluateCommandToolApproval | null,
+		current:
+			| ((
+					input: Parameters<typeof cliEvaluateCommandToolApprovalWith>[0],
+					auth: Parameters<typeof cliEvaluateCommandToolApprovalWith>[1],
+			  ) => ReturnType<typeof cliEvaluateCommandToolApprovalWith>)
+			| null;
 	} = { current: null };
 
 	const setInteractiveAutoApprove = (enabled: boolean) => {
@@ -72,13 +121,46 @@ export function createInteractiveApprovalController(config: Config) {
 		// will substitute for the raw model input at the execution
 		// boundary. The plan is preserved across the user approval flow.
 		if (COMMAND_TOOL_NAMES.has(request.toolName)) {
+			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+			// CORRECTION02 Phase 2 (async seam + snapshot invariant):
+			// the trusted parser helper is invoked EXACTLY ONCE here,
+			// at the host-owned async boundary, on a frozen snapshot
+			// of `request.input`. The same captured value is then
+			// passed synchronously to the pure policy evaluator.
+			// When the helper is unavailable / fails / times out /
+			// returns malformed response, V2 stays dormant and V1 is
+			// preserved unchanged.
+			const frozenToolInput = request.input;
+			let parserResult: unknown = undefined;
+			const helper = cliParserHelper;
+			if (helper) {
+				try {
+					parserResult = await helper.invoke(frozenToolInput);
+				} catch {
+					// The helper is asynchronous infrastructure. ANY
+					// thrown error is treated identically to V2 absence:
+					// we pass `undefined` to the policy evaluator and
+					// the V1 path is authoritative.
+					parserResult = undefined;
+				}
+			}
 			// CORRECTION04 test seam: use injected evaluator if present.
-			const evaluateCommand = commandEvaluatorRef.current || cliEvaluateCommandToolApproval;
-			const result = evaluateCommand({
-				toolName: request.toolName,
-				toolInput: request.input,
-				autoApproveTools: autoApproveAllRef.current,
-			});
+			const evaluateCommand = commandEvaluatorRef.current || cliEvaluateCommandToolApprovalWith;
+			const hostAuthorization = cliResolveHostAuthorization(autoApproveAllRef.current);
+			const result = evaluateCommand(
+				{
+					toolName: request.toolName,
+					toolInput: frozenToolInput,
+					autoApproveTools: autoApproveAllRef.current,
+					// The trusted parser helper is the ONLY sanctioned
+					// source of this value. We pass it through, cast
+					// only at the trust boundary (the helper enforces
+					// the runtime provenance barrier — see
+					// `MvdanShHelper.invoke` and `validateResponse`).
+					parserResult: parserResult as never,
+				},
+				hostAuthorization,
+			);
 			// CORRECTION04 DENY preservation: if the canonical evaluator
 			// returned DENY, do NOT route to TUI. Nothing executes.
 			if (result.decision?.kind === "deny") {
@@ -178,10 +260,17 @@ export function createInteractiveApprovalController(config: Config) {
 		tuiAskQuestion: refs.tuiAskQuestion,
 		/**
 		 * CORRECTION04 test seam: inject a custom command evaluator.
-		 * The evaluator is used instead of cliEvaluateCommandToolApproval
-		 * for command tool requests. Pass null to restore default behavior.
+		 * The evaluator is used instead of `cliEvaluateCommandToolApprovalWith`
+		 * for command tool requests. Pass null to restore default
+		 * behavior.
+		 *
+		 * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+		 * (CORRECTION02 Phase 2): the type changed from the public
+		 * `cliEvaluateCommandToolApproval` (1-arg) to the lower-level
+		 * `cliEvaluateCommandToolApprovalWith` (2-arg) so tests can
+		 * simulate the full composition including the parser result.
 		 */
-		setCommandEvaluator: (fn: typeof cliEvaluateCommandToolApproval | null) => {
+		setCommandEvaluator: (fn: typeof commandEvaluatorRef.current) => {
 			commandEvaluatorRef.current = fn;
 		},
 	};

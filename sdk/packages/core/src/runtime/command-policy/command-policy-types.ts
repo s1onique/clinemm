@@ -96,7 +96,16 @@ export type CommandDecisionSource =
 	// with this source so the user/operator can see that the
 	// ASK is from the catastrophic-class guard, not a generic
 	// fallthrough.
-	| "risk_hard_floor";
+	| "risk_hard_floor"
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+	// V2 structured-classifier promotion. When the host-owned
+	// `MvdanShHelper` produces a structurally-complete AST and the
+	// structured classifier confirms every reachable branch is
+	// auto-approve eligible, a V1 ASK may be promoted to ALLOW with
+	// this source. This is the ONLY path through which a V1 ASK
+	// becomes ALLOW — V2 cannot weaken ASK, DENY, or any
+	// never-auto-approve disposition.
+	| "risk_v2_structured_promotion";
 
 export interface CommandDecision {
 	kind: CommandDecisionKind;

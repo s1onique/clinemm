@@ -61,4 +61,28 @@ describe("parser-helper/runtime — ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PA
 		});
 		expect(helper.binaryPath()).toBe("/opt/cline/parser-helper");
 	});
+
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	// CORRECTION02 P1: unsupported host platform does NOT throw. The
+	// locator reports `platform === null`, `binaryPath() === null`,
+	// and `invoke()` returns `null`. The approval pipeline MUST NOT
+	// observe a thrown error here — V2 failure must look identical to
+	// V2 absence.
+	it("unsupported platform: locator reports platform === null and binaryPath() === null", () => {
+		const helper = new MvdanShHelper({
+			platform: null,
+			binaryPath: () => null,
+		});
+		expect(helper.platform).toBeNull();
+		expect(helper.binaryPath()).toBeNull();
+	});
+
+	it("unsupported platform: invoke returns null (no throw, V2 dormant)", async () => {
+		const helper = new MvdanShHelper({
+			platform: null,
+			binaryPath: () => null,
+		});
+		const r = await helper.invoke("pwd; pwd");
+		expect(r).toBeNull();
+	});
 });

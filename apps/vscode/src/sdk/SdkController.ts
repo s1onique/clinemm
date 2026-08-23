@@ -20,6 +20,7 @@ import {
 	setTelemetryOptOutGlobally,
 	type UserInstructionConfigService,
 } from "@cline/core"
+import { MvdanShHelper } from "@cline/core/internal/parser-helper-runtime"
 import type { ProviderConfig } from "@cline/llms"
 import { formatDisplayUserInput, type RemoteConfig, type RemoteConfigBundle } from "@cline/shared"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
@@ -211,6 +212,33 @@ function historyItemToTaskResponse(item: HistoryItem): TaskResponse {
 // ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
+
+/**
+ * Trusted parser helper capability (module-level singleton).
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * (CORRECTION02 Phase 2): the VSCode host adapter invokes this
+ * capability ONCE per approval request, captures the result (or `null`
+ * on any failure), and threads it into the pure policy evaluator. The
+ * helper is the ONLY sanctioned path to a `ParsedShell`.
+ *
+ * Today `MvdanShHelper.binaryPath()` returns `null` because the helper
+ * binary is not yet built. V2 stays dormant. When the binary ACT
+ * lands, the helper binary path will become non-null and V2 will be
+ * wired automatically.
+ *
+ * Tests can override via `setSdkControllerParserHelper(helper)` to
+ * inject a fake. The default value is the production singleton.
+ */
+let sdkControllerParserHelper: MvdanShHelper = new MvdanShHelper()
+
+export function getSdkControllerParserHelper(): MvdanShHelper {
+	return sdkControllerParserHelper
+}
+
+export function setSdkControllerParserHelper(helper: MvdanShHelper | undefined): void {
+	sdkControllerParserHelper = helper ?? new MvdanShHelper()
+}
 
 export class Controller {
 	// SDK session state and the coordinators that drive it.
@@ -542,7 +570,7 @@ export class Controller {
 			// atomic evaluation that carries both authority and execution constraints.
 			// This eliminates the race between shouldAutoApproveTool (authority)
 			// and buildCommandExecutionPlan (constraints) across the approval UI.
-			evaluateCommandToolApproval: (request) => {
+			evaluateCommandToolApproval: async (request) => {
 				const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 				// For command tools: atomic single-pass evaluation via canonical policy.
 				if (!isCommandTool(request.toolName)) {
@@ -591,7 +619,35 @@ export class Controller {
 						executionPlan: undefined,
 					}
 				}
-				const result = evaluateCommandToolApprovalWithPlan(toolInput, hostAuthorization)
+				// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+				// CORRECTION02 Phase 2 (async seam + snapshot invariant):
+				// the trusted parser helper is invoked EXACTLY ONCE here,
+				// at the host-owned async boundary, on a frozen snapshot
+				// of `toolInput`. The same captured value is then passed
+				// synchronously to the pure policy evaluator. When the
+				// helper is unavailable / fails / times out / returns
+				// malformed response, V2 stays dormant and V1 is preserved
+				// unchanged.
+				const frozenToolInput = toolInput
+				let parserResult: unknown
+				const helper = sdkControllerParserHelper
+				try {
+					parserResult = await helper.invoke(frozenToolInput)
+				} catch {
+					// The helper is asynchronous infrastructure. ANY thrown
+					// error is treated identically to V2 absence: we pass
+					// `undefined` to the policy evaluator and the V1 path
+					// is authoritative.
+					parserResult = undefined
+				}
+				const result = evaluateCommandToolApprovalWithPlan(frozenToolInput, hostAuthorization, {
+					// The trusted parser helper is the ONLY sanctioned
+					// source of this value. We pass it through, cast only
+					// at the trust boundary (the helper enforces the
+					// runtime provenance barrier — see
+					// `MvdanShHelper.invoke` and `validateResponse`).
+					parserResult: parserResult as never,
+				})
 				return {
 					approved: result.approved,
 					decision: result.decision,

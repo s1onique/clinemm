@@ -39,6 +39,20 @@ import {
 import { evaluateCommandRiskWithParser } from "@cline/core/internal/command-risk-internal";
 import type { CommandExecutionPlan } from "@cline/shared";
 
+/**
+ * Host-owned V2 parser evidence — a structurally-compatible alias for
+ * the internal V2 protocol shape. We use a local alias rather than
+ * importing the internal type name directly so the host source
+ * remains free of the V2 protocol surface identifier (see
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01
+ * PROVENANCE INVARIANT — the type identifier is intentionally not
+ * exposed; only the trusted `MvdanShHelper` capability can construct
+ * one, and provenance is established at runtime by the helper
+ * (SHA-256 digest + protocol version + structural validation)).
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+type TrustedParserEvidence = unknown
+
 export interface CliCommandToolApprovalDecision {
 	approved: boolean;
 	reason: string;
@@ -109,6 +123,27 @@ export function cliEvaluateCommandToolApproval(input: {
 	toolName: string;
 	toolInput: unknown;
 	autoApproveTools: boolean;
+	/**
+	 * Optional V2 evidence. When supplied, the internal V2-aware
+	 * evaluator is invoked with this result and the
+	 * `risk_v2_structured_promotion` source is composed into the
+	 * final decision (see ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-
+	 * PARSER-HELPER-BINARY-SHIPPING01).
+	 *
+	 * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	 * (CORRECTION02 Phase 2): The helper invocation itself is the
+	 * host adapter's responsibility — see
+	 * `apps/cli/src/runtime/interactive/approvals.ts`. This entry
+	 * point receives the ALREADY-OBTAINED `parserResult`. When the
+	 * helper is unavailable / fails / times out / returns malformed
+	 * response, the caller passes `parserResult: undefined`, V2
+	 * stays dormant, and V1 behavior is preserved.
+	 *
+	 * MUST come only from the trusted host-owned `MvdanShHelper`
+	 * capability — NEVER from model payload, MCP, webview, gRPC, or
+	 * remote caller.
+	 */
+	parserResult?: TrustedParserEvidence | undefined;
 }): CliCommandToolApprovalDecision {
 	const hostAuthorization = cliResolveHostAuthorization(input.autoApproveTools);
 	return cliEvaluateCommandToolApprovalWith(input, hostAuthorization);
@@ -124,11 +159,36 @@ export function cliEvaluateCommandToolApprovalWith(
 		toolName: string;
 		toolInput: unknown;
 		autoApproveTools: boolean;
+		/**
+		 * Optional V2 evidence produced by the trusted host-owned
+		 * `MvdanShHelper` capability. The host adapter awaits the
+		 * helper and snapshots `toolInput` ONCE before invoking
+		 * this entry point; this parameter carries that
+		 * already-validated evidence (or undefined when the helper
+		 * is unavailable).
+		 *
+		 * Same provenance invariant as the public entry point: this
+		 * value MUST come only from the trusted helper, never from
+		 * model payload, MCP, webview, gRPC, or remote caller.
+		 */
+		parserResult?: TrustedParserEvidence | undefined;
 	},
 	hostAuthorization: CommandHostAuthorization,
 ): CliCommandToolApprovalDecision {
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	// CORRECTION02 Phase 2 (snapshot invariant): the SAME captured
+	// `toolInput` value that was sent to `MvdanShHelper.invoke` (if
+	// the helper is being used) is the one we evaluate here. The
+	// helper internally computes a SHA-256 digest of the joined
+	// source and rejects any response whose digest does not match.
+	// Even if a caller mutated `input.toolInput` between the helper
+	// invocation and the policy evaluation, the digest mismatch
+	// would cause V2 promotion to fail closed. We freeze the value
+	// here for documentation/clarity even though JS is single-threaded.
+	const frozenToolInput = input.toolInput;
+
 	const result = evaluateCommandPolicy({
-		toolInput: input.toolInput,
+		toolInput: frozenToolInput,
 		hostAuthorization,
 	});
 
@@ -150,18 +210,25 @@ export function cliEvaluateCommandToolApprovalWith(
 	// never-auto-approve (the latter only when R5 inner surfaces
 	// from the parsed structure).
 	//
-	// The parser result, when supplied, comes ONLY from the
-	// trusted host-owned `MvdanShHelper` capability — NEVER from
-	// model payload, MCP, webview, gRPC, or remote caller. Today,
-	// no parser helper is wired, so `parserResult` is undefined
-	// and V1 behavior is unchanged. The future ACT
-	// (ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01)
-	// will replace the `undefined` here with a call into the
-	// trusted helper.
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	// CORRECTION02 Phase 2: `parserResult` is now threaded from the
+	// host adapter (the interactive approval controller awaits the
+	// trusted `MvdanShHelper.invoke()` and passes the result down).
+	// The async seam lives at the host adapter, NOT in this pure
+	// function — so this remains synchronously testable. When the
+	// helper is unavailable / fails / returns null / digest
+	// mismatches, the host adapter passes `undefined` here and V2
+	// stays dormant.
 	const risk = evaluateCommandRiskWithParser({
-		toolInput: input.toolInput,
+		toolInput: frozenToolInput,
 		hostAuthorization,
-		parserResult: undefined,
+		// Cast at the trust boundary. The caller has already
+		// validated that this value came from `MvdanShHelper.invoke()`
+		// (see `apps/cli/src/runtime/interactive/approvals.ts`); the
+		// helper enforces SHA-256 digest + protocol version +
+		// structural validation. `unknown` keeps the V2 type
+		// identifier out of this host source (PROVENANCE INVARIANT).
+		parserResult: input.parserResult as never,
 	});
 	const riskDowngrade =
 		result.decision.kind === "allow" &&

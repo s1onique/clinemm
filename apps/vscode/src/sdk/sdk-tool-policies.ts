@@ -10,6 +10,21 @@ import {
 } from "@cline/core"
 import { evaluateCommandRiskWithParser } from "@cline/core/internal/command-risk-internal"
 import type { CommandExecutionPlan } from "@cline/shared"
+
+/**
+ * Host-owned V2 parser evidence — a structurally-compatible alias for
+ * the internal `TrustedParserEvidence` type. We use a local alias rather than
+ * importing the internal type name directly so the host source
+ * remains free of the V2 protocol surface identifier (see
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01
+ * PROVENANCE INVARIANT — the type identifier is intentionally not
+ * exposed; only the trusted `MvdanShHelper` capability can construct
+ * one, and provenance is established at runtime by the helper
+ * (SHA-256 digest + protocol version + structural validation)).
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+type TrustedParserEvidence = unknown
+
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { McpHub } from "@/services/mcp/McpHub"
 import type { SessionAutoApprovalOverride } from "./session-auto-approval"
@@ -148,6 +163,22 @@ export function getCommandHostAuthorization(
 export function evaluateCommandToolApproval(
 	toolInput: unknown,
 	hostAuthorization: CommandHostAuthorization,
+	/**
+	 * Optional V2 evidence (TrustedParserEvidence) produced by the trusted
+	 * host-owned `MvdanShHelper` capability. The host adapter
+	 * (VSCode `SdkController`) awaits the helper and snapshots
+	 * `toolInput` ONCE before invoking this entry point; this
+	 * parameter carries that already-validated `TrustedParserEvidence` (or
+	 * `undefined` when the helper is unavailable).
+	 *
+	 * MUST come only from the trusted host-owned `MvdanShHelper`
+	 * capability — NEVER from model payload, MCP, webview, gRPC, or
+	 * remote caller.
+	 *
+	 * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	 * (CORRECTION02 Phase 2).
+	 */
+	parserResult?: TrustedParserEvidence | undefined,
 ): { approved: boolean; decision: CommandDecision } {
 	// Always enforce dangerous classification for host safety
 	const result = evaluateCommandPolicy({
@@ -183,6 +214,15 @@ export function evaluateCommandToolApproval(
 	// (ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01)
 	// will replace `undefined` with the trusted helper's result.
 	//
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	// CORRECTION02 Phase 2: `parserResult` is now threaded from the
+	// host adapter (the SdkController callback awaits the trusted
+	// `MvdanShHelper.invoke()` and passes the result down via this
+	// optional parameter). The async seam lives at the host adapter,
+	// NOT in this pure function. When the helper is unavailable /
+	// fails / returns null / digest mismatches, the host adapter
+	// passes `undefined` here and V2 stays dormant.
+	//
 	// CORRECTION01 (HALT_PROVENANCE_GAP): the V2-aware evaluator is
 	// invoked UNCONDITIONALLY — not only when the canonical verdict
 	// is ALLOW. V2 may PROMOTE a structure-only V1 ASK to ALLOW when
@@ -192,7 +232,12 @@ export function evaluateCommandToolApproval(
 	const riskVerdict = evaluateCommandRiskWithParser({
 		toolInput,
 		hostAuthorization,
-		parserResult: undefined,
+		// Cast at the trust boundary. The host adapter has already
+		// validated that this value came from `MvdanShHelper.invoke()`;
+		// the helper enforces SHA-256 digest + protocol version +
+		// structural validation. `unknown` keeps the V2 type
+		// identifier out of this host source (PROVENANCE INVARIANT).
+		parserResult: parserResult as never,
 	})
 	if (riskVerdict.disposition === "never-auto-approve") {
 		return {
@@ -367,6 +412,22 @@ export interface EvaluateCommandToolApprovalWithPlanOptions {
 	 * to simulate a planner failure (e.g., cardinality mismatch).
 	 */
 	buildExecutionPlanOverride?: (toolInput: unknown, commands: readonly EvaluatedCommand[]) => CommandExecutionPlan | undefined
+	/**
+	 * Optional V2 evidence (TrustedParserEvidence) produced by the trusted
+	 * host-owned `MvdanShHelper` capability. The host adapter
+	 * (VSCode `SdkController`) awaits the helper and snapshots
+	 * `toolInput` ONCE before invoking this entry point; this
+	 * parameter carries that already-validated `TrustedParserEvidence` (or
+	 * `undefined` when the helper is unavailable).
+	 *
+	 * MUST come only from the trusted host-owned `MvdanShHelper`
+	 * capability — NEVER from model payload, MCP, webview, gRPC, or
+	 * remote caller.
+	 *
+	 * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	 * (CORRECTION02 Phase 2).
+	 */
+	parserResult?: TrustedParserEvidence | undefined
 }
 
 export function evaluateCommandToolApprovalWithPlan(
@@ -424,6 +485,15 @@ export function evaluateCommandToolApprovalWithPlan(
 	// `parserResult: undefined` keeps V2 dormant. The future ACT
 	// will replace this with the trusted helper's result.
 	//
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	// CORRECTION02 Phase 2: `parserResult` is now threaded from
+	// the host adapter (the SdkController callback awaits the
+	// trusted `MvdanShHelper.invoke()` and passes the result down
+	// via `options.parserResult`). The async seam lives at the
+	// host adapter, NOT in this pure function. When the helper is
+	// unavailable / fails / returns null / digest mismatches, the
+	// host adapter passes `undefined` here and V2 stays dormant.
+	//
 	// CORRECTION01 (HALT_PROVENANCE_GAP): the V2-aware evaluator is
 	// invoked UNCONDITIONALLY — not only when the canonical verdict
 	// is ALLOW. V2 may PROMOTE a structure-only V1 ASK to ALLOW when
@@ -433,7 +503,13 @@ export function evaluateCommandToolApprovalWithPlan(
 	const risk = evaluateCommandRiskWithParser({
 		toolInput,
 		hostAuthorization,
-		parserResult: undefined,
+		// Cast at the trust boundary. The host adapter (VSCode
+		// `SdkController`) has already validated that this value
+		// came from `MvdanShHelper.invoke()`; the helper enforces
+		// SHA-256 digest + protocol version + structural validation.
+		// `unknown` keeps the V2 type identifier out of this host
+		// source (PROVENANCE INVARIANT).
+		parserResult: options?.parserResult as never,
 	})
 	if (risk.disposition === "never-auto-approve") {
 		return {
@@ -452,10 +528,22 @@ export function evaluateCommandToolApprovalWithPlan(
 	// is here so the helper-binary ACT just has to drop in a parser
 	// result. The `risk_v2_structured_promotion` source is the ONLY
 	// path through which a V1 ASK may be promoted to ALLOW.
+	//
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+	// CORRECTION02 Phase 2: build a real `CommandDecision` shape
+	// (`kind: "allow" | "ask" | "deny"`, `source`, `reason`) instead
+	// of casting the `RiskDecision`. The previous
+	// `risk as unknown as CommandDecision` cast did NOT add a `kind`
+	// field, so any consumer reading `decision.kind` would see
+	// `undefined`. With V2 promotion actually firing, this matters.
 	if (result.decision.kind === "ask" && risk.source === "risk_v2_structured_promotion" && risk.decision === "allow") {
 		return {
 			approved: true,
-			decision: risk as unknown as CommandDecision,
+			decision: {
+				kind: "allow",
+				source: "risk_v2_structured_promotion",
+				reason: risk.reasons.join("; "),
+			},
 			executionPlan,
 		}
 	}

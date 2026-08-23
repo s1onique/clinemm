@@ -170,7 +170,10 @@ describe("CORRECTION04 DENY: hard DENY must not reach TUI approver", () => {
 			return { approved: true }; // spy would approve if called
 		});
 		// Inject an explicit DENY evaluator for run_commands with curl.
-		controller.setCommandEvaluator(() => ({
+		// CORRECTION02 Phase 2: the test seam signature widened to
+		// match `cliEvaluateCommandToolApprovalWith(input, auth)` so
+		// tests can simulate the full composition path.
+		controller.setCommandEvaluator((_input, _auth) => ({
 			approved: false,
 			reason: "curl is denied",
 			decision: {

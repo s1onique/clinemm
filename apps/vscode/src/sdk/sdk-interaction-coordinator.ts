@@ -79,6 +79,14 @@ export interface SdkInteractionCoordinatorOptions {
 	 *   - DENY   => { approved: false, decision.kind: "deny" }
 	 */
 	evaluateCommandToolApproval?: (request: ToolApprovalRequest) =>
+		| Promise<
+				| {
+						approved: boolean
+						decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
+						executionPlan?: CommandExecutionPlan
+				  }
+				| undefined
+		  >
 		| {
 				approved: boolean
 				decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
@@ -222,7 +230,7 @@ export class SdkInteractionCoordinator {
 		// Call the atomic evaluator ONLY for command tools. Non-command tools
 		// use the standard ToolPolicy.autoApprove semantics unchanged.
 		const isCommand = isCommandTool(request.toolName)
-		const commandEval = isCommand ? this.options.evaluateCommandToolApproval?.(request) : undefined
+		const commandEval = isCommand ? await this.options.evaluateCommandToolApproval?.(request) : undefined
 
 		if (commandEval !== undefined) {
 			// Command tool: use canonical lattice result.
