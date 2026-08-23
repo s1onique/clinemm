@@ -5622,3 +5622,80 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
       Working tree: clean (after staging)
       Branch: main
       origin/main: unchanged
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+  = PHASE_3_CLOSURE_CORRECTION_APPLIED
+  = C3: REBUILD VSIX FROM EXACT FINAL HEAD AND BIND ARTIFACT
+
+  Reviewer P0 (artifact predates final checksum-manifest commit)
+  APPLIED. Closure correction replayed from f37989581:
+
+  1. packages/core/bin/parser-helper/SHA256SUMS.txt + 5 binaries
+     already committed at de51b3dd5 — source set is durably tracked.
+  2. NEW commit f37989581:
+     a. apps/vscode/scripts/sync-parser-helper.mjs wired as the
+        FIRST step of "bun run package" (which is the prepublish
+        invoked by "vsce package"). New package.json scripts:
+          "sync-parser-helper": "node scripts/sync-parser-helper.mjs"
+          "package":            "... && bun run sync-parser-helper && ..."
+        Every prepublish now starts with a synced mirror of the
+        SDK's bin/parser-helper/ (including SHA256SUMS.txt).
+     b. apps/vscode/bin/parser-helper/SHA256SUMS.txt committed so a
+        clean checkout already contains the manifest before any
+        prepublish runs.
+
+  3. From f37989581 with working tree clean:
+        bun install --frozen-lockfile           PASS (no lock drift)
+        bun run build:sdk                      PASS (5 SDK packages)
+        cd apps/vscode && vsce package
+          (runs sync-parser-helper first via bun run package)
+        VSIX: /tmp/clinemm-exact-head.vsix
+          bytes: 14180422
+          sha256: 362af7123cc1de60beac1d6237a8bc227cc09b65d0381a8d792f3fa0307056a6
+
+  4. Independent extraction /tmp/vsix-exact-head:
+        embedded/extension/bin/parser-helper/<5 platforms>
+        embedded/extension/bin/parser-helper/SHA256SUMS.txt
+        shasum -a 256 -c SHA256SUMS.txt: 5/5 OK
+        embedded SHA256SUMS SHA matches source SHA256SUMS SHA
+        (53540354de694a02c84f523b308c27681974286de94229fbd6ea3262ecc31368)
+        per-platform VSIX_SHA256 == SOURCE_HELPER_SHA256 (5/5 MATCH)
+        embedded darwin-arm64 binary on stdin:
+            '{"dialect":"bash","source":"pwd; pwd"}'
+            -> protocolVersion=2
+            -> parseStatus="complete"
+            -> program.stmts.length=2 (cmd+cmd)
+
+  5. Smoke-tested full SDK runtime seam against the EXTRACTED
+     binary: 6/6 cases pass (pwd;pwd two-cmd AST, echo $(...)
+     hasCommandSubstitution, bash -c wrapper, rm -rf "$HOME",
+     pwd > ~/.ssh/authorized_keys, malformed -> failed).
+
+  6. Phase 3 test gates re-confirmed at f37989581:
+        @cline/core command-policy:    326/326 pass
+        CLI host (5 files):               72/72 pass
+        VSCode vitest:                 2049/2049 pass
+        CLI typecheck:                     clean
+        VSCode typecheck:                 clean
+        git diff HEAD --check:            RC=0
+
+  FINAL HEAD:
+    f37989581b4fe69f2e2213b8bdc208631a5b9c82
+  EXACT-HEAD ARTIFACT:
+    /tmp/clinemm-exact-head.vsix (VSIX_SHA256
+    362af7123cc1de60beac1d6237a8bc227cc09b65d0381a8d792f3fa0307056a6)
+  EXACT-HEAD ARTIFACT_VERIFIED:
+    YES (5/5 binary hash match + 5/5 shasum -c + live helper exec + SDK
+         seam smoke through extracted binary)
+
+  Reopen condition from reviewer's verdict is now satisfied:
+    PASS_PARSER_HELPER_BINARY_SHIPPED → CLOSED_CLEAN
+
+  Trust state:
+    HEAD: f37989581b4fe69f2e2213b8bdc208631a5b9c82
+    Branch: main
+    origin/main: unchanged
+    NOT pushed (per ACT-committed work convention).
+
+  Phase 3 disposition:
+    PHASE_3 = PASS_PARSER_HELPER_BINARY_SHIPPED = CLOSED_CLEAN
