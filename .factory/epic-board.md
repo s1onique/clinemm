@@ -4687,3 +4687,292 @@ NEXT =
     helm template, etc.)
   - Dogfood with auto-approve enabled: prove R0 stays
     frictionless and an R5 command prompts instead of executing
+
+## ACT closure — V2 parser-assisted command-risk classifier (framework + HALT_SHIPPING)
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-ASSISTED01
+
+VERDICT =
+  PASS_COMMAND_RISK_CLASSIFIER_V2 (classifier framework) +
+  HALT_SHIPPING_SCOPE_EXPANSION (parser helper binary cross-
+  platform production shipping).
+
+PURPOSE =
+  Improve ClineMM command approval beyond V1's bounded regex/
+  opaque-token classifier by understanding real shell structure.
+  V2 has two parts: (1) a structured AST classifier framework
+  that consumes parser-produced JSON projections; (2) a parser
+  helper binary (mvdan/sh v3.12.0) that produces those projections.
+
+DECISION =
+  SELECTED_PARSER = mvdan/sh v3.12.0 (BSD-3-Clause, Go) for the
+  AST contract. Selected over Morbig (GPL-3.0, POSIX-only) and
+  tree-sitter-bash (syntax-only, MIT) because mvdan/sh has a
+  mature typed AST, supports Bash 5.2 + POSIX + mksh +
+  experimental zsh, and is BSD-3 licensed.
+
+  SELECTED_SHIPPING_MODEL = HALT_SHIPPING_SCOPE_EXPANSION. The V2
+  ACT ships the classifier framework (which is the load-bearing
+  V2 production code) and a frozen evidence-frozen helper
+  binary probe. Production cross-platform shipping of the helper
+  is a follow-up ACT (CI cross-compile matrix, per-platform SHA256
+  pinning, VSIX resource embedding, runtime fallback).
+
+  V2 classifier framework wired into `evaluateCommandRisk` as
+  OPTIONAL `parserResult?: ParsedShell | null` parameter. When
+  undefined (production default), V2 is a no-op and V1 behavior
+  is preserved EXACTLY. When a future ACT wires the helper
+  binary, the SAME entry point picks up structural classification.
+
+RECON =
+  .factory/evidence/act-command-risk-classification02/00-recon-report.md
+
+PROBE =
+  Frozen helper binary at
+  .factory/evidence/act-command-risk-classification02/v2-mvdan-sh-probe
+  SHA256 777647763a6a1c0f9435247c0a82999de522e1dfb1ed14fbf8b16bd23518170a
+  (darwin-arm64, mvdan/sh v3.12.0, single-purpose stdin→stdout JSON)
+
+DECISION_RECORD =
+  .factory/evidence/act-command-risk-classification02/01-decision-record.md
+
+CORPUS =
+  V2 corpus at
+  .factory/evidence/act-command-risk-classification02/v2-corpus.tsv
+  (50 cases). Probe ran on all 50: 48/50 parse cleanly; 2
+  deliberate malformed inputs correctly reported as
+  parseStatus="failed".
+  Probe results: v2-probe-results.jsonl. Probe summary:
+  v2-probe-summary.txt.
+
+PRODUCTION_DELTA =
+  sdk/packages/core/src/runtime/command-policy/structured-command-risk.ts
+    (new — AST consumer classifier)
+  sdk/packages/core/src/runtime/command-policy/structured-command-risk.test.ts
+    (new — 33 standalone V2 tests)
+  sdk/packages/core/src/runtime/command-policy/structured-command-risk-integration.test.ts
+    (new — 12 V2+V1 integration tests)
+  sdk/packages/core/src/runtime/command-policy/command-risk.ts
+    (modified — wired V2 layer into evaluateCommandRisk with
+    monotone V1-conservation invariants; parserResult param is
+    OPTIONAL)
+  sdk/packages/core/src/runtime/command-policy/index.ts
+    (modified — export V2 types)
+  sdk/packages/core/src/index.ts
+    (modified — export V2 types from @cline/core top-level)
+
+V1_CONSERVATION =
+  V1 R5 hard floor UNCHANGED. CLI / VSCode host adapters UNCHANGED.
+  All V1 corpus cases still resolve to V1 verdict. The V2 layer
+  sits ON TOP of V1 and may only promote ASK→ALLOW or strengthen
+  ASK→never-auto-approve, NEVER weaken V1.
+
+TESTS =
+  262/262 in src/runtime/command-policy/ (33 V2 standalone +
+   12 V2+V1 integration + 217 V1)
+  41/41 @cline/cli command-policy-host
+  64/64 apps/vscode sdk-tool-policies.command-policy +
+  sdk-tool-policies.command
+  3 pre-existing @cline/core typecheck errors (unrelated to V2)
+  No new typecheck/lint failures introduced
+
+SAFETY_INVARIANTS =
+  A-F + G all enforced (ACT §10 architecture rule). V2 promotes
+  only when parserResult is provided AND parse complete AND
+  every child is auto-approve eligible AND no unresolved
+  execution construct exists. V2 NEVER promotes a V1 never-
+  auto-approve disposition back to ALLOW (gated by
+  `finalDisposition !== "never-auto-approve"` check).
+
+PERFORMANCE =
+  Probe latency: mean 6.9ms per parse call (mostly process spawn
+  cost). V2 classifier (pure JS) < 1ms per call.
+
+EVIDENCE =
+  .factory/evidence/act-command-risk-classification02/
+    00-recon-report.md
+    01-decision-record.md
+    02-final-report.md
+    v2-corpus.tsv
+    v2-probe-results.jsonl
+    v2-probe-summary.txt
+    v2-mvdan-sh-probe (SHA256-pinned darwin-arm64 binary)
+    tmp-probes/mvdan-sh-probe/
+      probe.go (parser reference implementation, BSD-3)
+      go.mod (mvdan.cc/sh/v3 v3.12.0)
+      run.sh (corpus driver)
+      inspect.py (corpus inspector)
+      results/ (corpus + run output)
+
+PARSER_ASSISTED_V2_STATE =
+  PARSER_ASSISTED_V2 = GREEN_AT_FRAMEWORK +
+                        HALTED_AT_PRODUCTION_SHIPPING
+
+  selected_parser: mvdan/sh v3.12.0
+  selected_version: 3.12.0
+  license: BSD-3-Clause
+  dialect_policy: bash-default; posix/mksh/wsl → bash;
+                  powershell/cmd → no-parser ASK
+  safe_compound_gain: pwd; pwd ASK→ALLOW (RED reproduced)
+  catastrophic_compound: git status && rm -rf "$HOME" → ASK +
+                          never-auto-approve (RED reproduced)
+  unresolved_constructs: eval, cd, opaque (if/while/for/case/
+                          function) → ASK minimum
+  parser_differential_findings: 0 disagreements
+  shipping_model: HALT_SHIPPING_SCOPE_EXPANSION (helper binary
+                  deferred to follow-up ACT)
+  latency: probe mean 6.9ms; classifier < 1ms
+  v1_fallback_conservation: PROVEN (V1 floor fires when
+                             parserResult undefined)
+
+NO_NEW_FACTORY_DOCKER_REQUIRED
+NO_NEW_LICENSE (BSD-3-Clause; mvdan/sh permissively licensed)
+NO_NEW_PRODUCTION_DEPENDENCY (classifier framework is pure JS;
+  helper binary is an evidence artifact, not a packaged dep)
+
+NO_PUSH
+
+NEXT =
+  ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING
+  Wire the mvdan/sh v3.12.0 helper binary into the production
+  cross-platform VSIX build pipeline: CI cross-compile matrix
+  (darwin arm64/amd64, linux amd64/arm64), per-platform SHA256
+  pinning table, per-platform VSIX resource embedding (follow
+  download-ripgrep.mjs precedent), Node.js child-process adapter
+  with bounded timeouts (100ms) and graceful fallback, wire
+  adapter into CLI/VSCode host adapters via the parserResult
+  parameter, verify end-to-end that pwd; pwd auto-approves in
+  production while direct catastrophic commands remain ASK +
+  never-auto-approve, validate interactive UX latency.
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION01
+
+  = HALT_V2_SAFETY_CONTRACT_INVALID
+
+  The shipping halt is correct (cross-platform helper deferred).
+  The mvdan/sh v3.12.0 parser choice is correct.
+  But the V2 classifier framework itself has 4 P0 safety defects:
+    P0 #1  redirects declared but unevaluated (sensitive-target
+           writes via `>` become ALLOW)
+    P0 #2  parser result not bound to source (unrelated AST can
+           authorize)
+    P0 #3  promotion gate too broad (any V1 ASK overridable, not
+           only shell-opacity ASK)
+    P0/P1  V1 R5 + safe-rule regexes duplicated with active drift
+           (V1 already includes `gcloud`, V2 includes `docker`+
+           `netrc`; they will continue to diverge)
+
+  P0 #1 and P0 #3 reproduced with concrete attack fixtures.
+  P0 #2 incidentally protected today by V1 hard floor only.
+
+  Immutable baseline comparison DONE — see evidence:
+    96 fail / 2 error PROVEN pre-existing at ENTRY_HEAD via fresh
+    git worktree (94 unique failure identities shared, 0 entry-only,
+    0 candidate-only). V2 introduces ZERO test regressions.
+
+  State: V2 source files remain in working tree, NOT COMMITTED.
+  Pushed: NO. Force-pushed: NO. Rebased: NO.
+
+  NEXT_ACT =
+    ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION01
+    Bounded rewrite of safety boundary:
+      1. Bind parser result to source via SHA-256(joined source).
+      2. Reject any AST whose sourceDigest doesn't match input.
+      3. Treat redirects as part of command risk
+         (max over cmd + redirect-target).
+      4. Restrict promotion to ASK caused by shell opacity only.
+      5. Replace duplicated V1 regexes with shared canonical imports.
+      6. Remove unknown→bash dialect mapping (unknown→ASK).
+      7. Add P0 attack regression suite.
+      8. Rerun immutable baseline comparison.
+
+  EVIDENCE =
+    .factory/evidence/act-command-risk-classification02-correction01/
+      00-summary.md
+      01-baseline-identity.md
+      02-p0-defects-verified.md
+      03-attack-fixtures.md
+      v2-entry-tests.log      (full bun output, immutable baseline)
+      v2-candidate-tests.log  (full bun output, with V2)
+      entry-failures-norm.txt (94 normalized failure identities)
+      candidate-failures-norm.txt (94 normalized failure identities)
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION01
+
+  = PASS_V2_FRAMEWORK_HARDENED
+
+  All four P0 safety defects fixed; P1 defects corrected.
+  Immutable baseline identity comparison RE-RUN:
+    ENTRY (d830548a5): 473 pass / 96 fail / 2 errors
+    CANDIDATE (with V2 + CORRECTION01): 527 pass / 96 fail / 2 errors
+    normalized failure identities:
+      entry=94 / candidate=94 / shared=94
+      entry_only=0 / candidate_only=0
+    PRE_EXISTING_BASELINE_PROVEN (re-confirmed).
+
+  Attack regression suite (9 tests) FROZEN in
+  structured-command-risk-attack.test.ts:
+    P0 #1 redirect: pwd > ~/.ssh/authorized_keys  -> NEVER-ALLOW-APPROVE
+                   git status > ~/.ssh/authorized_keys -> NEVER-ALLOW-APPROVE
+                   pwd > /etc/hosts -> NEVER-ALLOW-APPROVE
+    P0 #2 source-bind bypass: wrong digest + R5 -> V1 R5 floor saves
+    P0 #3 broad promotion: unknown-binary (no opaque token) + safe AST
+                          -> ASK (no promotion)
+    P1 protocol mismatch (v1) -> ASK
+    P1 zsh dialect -> ASK (no promotion)
+    P1 unknown dialect -> ASK (no promotion)
+    GREEN: pwd; pwd with correct binding -> ALLOW
+
+  CORRECTION01 changes:
+    1. Bumped STRUCTURED_PROTO_VERSION: 1 -> 2; added sourceSha256
+       field to ParsedShell (REQUIRED for v2).
+    2. Added `sha256Hex` (Bun + Node fallback) for source binding.
+    3. verifySourceBinding: rejects any AST whose sourceSha256 does
+       not match SHA-256 of joinRunCommandsForParse(toolInput).joined.
+    4. classifyRedirect: classifies redirect op + path. Sensitive
+       write targets (~/.ssh, ~/.aws, /etc, /boot, /var, ~/.kube,
+       ~/.gcloud, ~/.docker, ~/.netrc) -> NEVER-ALLOW-APPROVE.
+    5. Restricted promotion dialect: bash/posix/mksh only. zsh and
+       unknown -> no promotion.
+    6. Restricted promotion ASK reasons via isStructureOnlyPromotableAsk:
+       only host_mode_safe_only_fallthrough + risk_opaque_composition
+       are admissible. model_escalation, risk_unknown_input,
+       risk_parse_failed, risk_hard_floor, host_mode_manual -> NOT
+       promotable.
+    7. Added structural-opaque guard at caller level: opaqueCommands
+       count > 0 must hold for V2 promotion. This is the discriminator
+       that prevents `unknown-binary` from being promoted when AST
+       falsely claims safe branches.
+    8. Deleted duplicated R5_HARD_FLOOR_FAMILIES and V1_SAFE_RULES.
+       V2 now uses canonical findCommandRiskHardFloor (exported from
+       command-risk.ts) and findSafeRuleMatch (from command-safe-rules).
+    9. Exported R5_HARD_FLOOR_RULES + CommandRiskHardFloorFamily +
+       findCommandRiskHardFloor from command-risk.ts as canonical V1
+       primitives (V1 in-function loop unchanged).
+   10. Wrapper handling accurately labelled: bounded literal R5
+       strengthening; SAFE_WRAPPER_PROMOTION = NOT IMPLEMENTED; no
+       recursive parser invocation.
+
+  V1 conservation:
+    217 V1 command-policy tests pass unchanged. No new typecheck
+    errors. 0 lint errors.
+
+  Classifier state on success:
+    V2_FRAMEWORK = GREEN_FOR_COMMIT
+
+  Parser production state:
+    PARSER_HELPER_SHIPPING = HALT_SHIPPING_SCOPE_EXPANSION
+    (mvdan/sh v3.12.0 helper binary NOT YET integrated in production;
+     this ACT ships only the framework contract. Production shipping
+     is a follow-up ACT.)
+
+  EVIDENCE =
+    .factory/evidence/act-command-risk-classification02-correction01/
+      00-summary.md
+      01-baseline-identity.md
+      02-p0-defects-verified.md
+      03-attack-fixtures.md
+      v2-entry-tests.log      (full bun output, immutable baseline)
+      v2-candidate-tests.log  (full bun output, with V2 CORRECTION01)
+      entry-failures-norm.txt (94 normalized failure identities)
+      candidate-failures-norm.txt (94 normalized failure identities)

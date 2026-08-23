@@ -471,6 +471,19 @@ export {
 	type RiskDecision,
 } from "./runtime/command-policy/command-risk";
 export {
+	evaluateStructuredCommandRisk,
+	joinRunCommandsForParse,
+	type ParsedShell,
+	type ShellDialect,
+	type StructuredAnalysis,
+	type StructuredCmd,
+	type StructuredProgram,
+	type StructuredRisk,
+	type StructuredStmt,
+	type StructuredStmtRisk,
+	STRUCTURED_PROTO_VERSION,
+} from "./runtime/command-policy/structured-command-risk";
+export {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
 	SAFE_GIT_DIFF_PROFILE,
