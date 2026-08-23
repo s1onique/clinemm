@@ -362,10 +362,18 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 			// -path / -ipath: LITERAL path only (no globs)
 			"find . -path ./node_modules",
 			"find . -path ./foo/bar/baz.ts",
-			// -regex / -iregex: regex chars that are NOT shell metachars
-			// (POSIX shell metachars: * ? [ ] { } \ ~ at word start).
-			// Regex syntax . + ( ) | ^ $ is NOT expanded by the shell,
-			// so we allow it.
+			// -regex / -iregex: V1 deliberately accepts ONLY characters that
+			// are NEITHER pathname-expansion metacharacters (* ? [ ]
+			// { }) NOR shell control/operator syntax (| & ; < > ( )
+			// ` $ \ ~ etc.). Pure-regex syntax `.`, `+`, `^`, `$`,
+			// `\` is allowed because the shell passes it through
+			// unchanged and find itself interprets it. Raw `(`, `)`,
+			// `|` are reserved shell operators (subshell grouping
+			// and pipe) — even in `-regex` arguments — so V1 does
+			// NOT bless them. Users who need alternation or
+			// capture-group syntax in `-regex` require V2 parser-
+			// quote provenance integration; until that lands, V1
+			// takes the conservative path.
 			"find . -regex .ts$",
 			"find . -regex foo.bar",
 			"find . -regex .+ts$",
@@ -726,6 +734,29 @@ describe("findSafeRuleMatch — REJECTED find shell-glob forms (CORRECTION01 she
 			"find . -type d -name command-risk* -not -path ./node_modules/* -not -path ./dist/* -not -path ./out/*",
 			"user's recon chain, unquoted: glob-bearing predicates correctly ASK",
 		],
+		// === CORRECTION02: shell operator/control chars in -regex / -iregex ===
+		// ( ) | are reserved shell operators (subshell grouping, pipe).
+		// Even inside -regex / -iregex, raw forms are NOT a single argv
+		// element — bash does not pass `.(foo|bar)` as one argument.
+		// V1 refuses these forms; users needing alternation or grouping
+		// require V2 parser-quote provenance integration.
+		[
+			"find . -regex (foo|bar).ts",
+			"raw ()| in -regex is shell operator syntax",
+		],
+		["find . -regex foo|bar", "raw | in -regex is pipe"],
+		["find . -regex (foo)", "raw () in -regex is subshell grouping"],
+		[
+			"find . -iregex (foo|bar).ts",
+			"raw ()| in -iregex is shell operator syntax",
+		],
+		["find . -iregex foo|bar", "raw | in -iregex is pipe"],
+		["find . -iregex (foo)", "raw () in -iregex is subshell grouping"],
+		// Note: these forms WOULD be ALLOW'd if the user actually
+		// shell-quoted them, e.g. `find . -regex '(foo|bar).ts'` —
+		// but quoted forms trip OPAQUE_SHELL_TOKENS (parentheses are
+		// in the list) and so are ASK at V1 anyway. The V2 parser-
+		// quote provenance integration is the path to bless these.
 	];
 
 	for (const [cmd, _why] of REJECTED_FIND_GLOB) {
