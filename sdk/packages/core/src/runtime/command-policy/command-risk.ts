@@ -42,14 +42,14 @@
  *   - ./.factory/evidence/act-command-risk-classification01/01-decision-record.md
  */
 
-import { renderNormalizedCommand } from "./command-model-hints";
-import {
-	evaluateCommandPolicy,
-	type CommandHostAuthorization,
-} from "./command-policy";
-import { isOpaqueShellRendered } from "./command-safe-rules";
 import { normalizeRunCommandsInput } from "../../extensions/tools/helpers";
 import type { StructuredCommandInput } from "../../extensions/tools/schemas";
+import { renderNormalizedCommand } from "./command-model-hints";
+import {
+	type CommandHostAuthorization,
+	evaluateCommandPolicy,
+} from "./command-policy";
+import { isOpaqueShellRendered } from "./command-safe-rules";
 import {
 	evaluateStructuredCommandRisk,
 	isStructureOnlyPromotableAsk,
@@ -89,20 +89,35 @@ export interface EvaluateCommandRiskInput {
 	toolInput: unknown;
 	/** Host authorization (mode + rules). */
 	hostAuthorization: CommandHostAuthorization;
+}
+
+/**
+ * Trusted-internal input shape that ADDITIONALLY carries a parser result.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+ * This type is DELIBERATELY NOT EXPORTED from `@cline/core` index.
+ * The V2 parser result is a HOST-OWNED CAPABILITY — only the trusted
+ * host adapter (CLI `cliEvaluateCommandToolApprovalWith`, VSCode
+ * `evaluateCommandToolApproval`) is allowed to construct it. External
+ * callers must use `evaluateCommandRisk(...)` (no parserResult field),
+ * which is V1-only by construction and provably safe: even if an
+ * attacker controls `toolInput`, they cannot inject a fake safe AST
+ * because the public surface does not accept one.
+ *
+ * The internal entry point `evaluateCommandRiskWithParser(...)` is
+ * exported only through `./command-risk-internal` so the trusted
+ * host adapters can import it explicitly while the public surface
+ * stays narrow.
+ */
+export interface EvaluateCommandRiskInternalInput
+	extends EvaluateCommandRiskInput {
 	/**
-	 * Optional V2 parser result. When provided and structurally
-	 * valid, V2 may PROMOTE a V1 ASK to ALLOW or STRENGTHEN a V1
-	 * ASK to never-auto-approve. When null or absent, V2 is a no-op
-	 * (V1 behavior is preserved unchanged).
-	 *
-	 * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-ASSISTED01:
-	 * The parser result is a V2-only signal; the canonical command
-	 * policy and V1 hard floor NEVER consult it. The V2 layer sits
-	 * ON TOP of V1 and may only promote / strengthen, never weaken.
-	 *
-	 * Default: undefined (V2 disabled).
+	 * V2 parser result. MUST come from a trusted host-owned parser
+	 * capability. Untrusted callers have no path to supply this.
 	 */
-	parserResult?: import("./structured-command-risk").ParsedShell | null;
+	readonly parserResult?:
+		| import("./structured-command-risk").ParsedShell
+		| null;
 }
 
 /* ---------------------------------------------------------------------- *
@@ -271,9 +286,10 @@ export const R5_HARD_FLOOR_RULES: ReadonlyArray<HardFloorMatch> = [
  * The pattern field is intentionally not returned — downstream
  * code must not depend on the regex source.
  */
-export function findCommandRiskHardFloor(
-	rendered: string,
-): { readonly family: CommandRiskHardFloorFamily; readonly hard: boolean } | null {
+export function findCommandRiskHardFloor(rendered: string): {
+	readonly family: CommandRiskHardFloorFamily;
+	readonly hard: boolean;
+} | null {
 	for (const rule of R5_HARD_FLOOR_RULES) {
 		if (rule.pattern.test(rendered)) {
 			return { family: rule.family, hard: rule.hard };
@@ -288,6 +304,37 @@ export function findCommandRiskHardFloor(
 
 export function evaluateCommandRisk(
 	input: EvaluateCommandRiskInput,
+): RiskDecision {
+	return evaluateCommandRiskWithParser(input);
+}
+
+/**
+ * Trusted-internal entry point that accepts an OPTIONAL V2 parser result.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+ * This function is the ONLY place in `@cline/core` that consults a
+ * parser result. It is exported via the narrow `./command-risk-internal`
+ * module so trusted host adapters (CLI / VSCode) can opt in to V2,
+ * but the PUBLIC `@cline/core` entry point does NOT re-export it.
+ *
+ * Untrusted callers — model, MCP, webview, proto, remote — have no
+ * code path that reaches this function with a `parserResult` argument.
+ * Their path ends at `evaluateCommandRisk(...)`, which is V1-only by
+ * construction.
+ *
+ * Authority / Provenance contract:
+ *   - `parserResult` MUST be constructed by a trusted host-owned
+ *     capability (e.g. `MvdanShHelper.invoke()` from
+ *     `./parser-helper/runtime`). It MUST NOT be accepted from any
+ *     untrusted caller.
+ *   - SHA-256 binding (`sourceSha256`) provides integrity correlation
+ *     between the AST and the source bytes; it does NOT provide
+ *     authentication. Authentication comes from "this AST was
+ *     constructed by code we trust, in our process, from a pinned
+ *     helper binary we vetted."
+ */
+export function evaluateCommandRiskWithParser(
+	input: EvaluateCommandRiskInternalInput,
 ): RiskDecision {
 	// 1. Canonical policy composition. This is the source of truth
 	//    for the ALLOW/ASK/DENY lattice. We never weaken its verdict.

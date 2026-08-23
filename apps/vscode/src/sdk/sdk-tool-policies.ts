@@ -7,8 +7,8 @@ import {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	type EvaluatedCommand,
 	evaluateCommandPolicy,
-	evaluateCommandRisk,
 } from "@cline/core"
+import { evaluateCommandRiskWithParser } from "@cline/core/internal/command-risk-internal"
 import type { CommandExecutionPlan } from "@cline/shared"
 import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import type { McpHub } from "@/services/mcp/McpHub"
@@ -157,18 +157,26 @@ export function evaluateCommandToolApproval(
 
 	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
 	// Layer the R5 catastrophic hard floor on top of the canonical
-	// policy verdict. `evaluateCommandRisk` is a DOWNGRADE-only
-	// layer — it can downgrade an ALLOW to ASK when the command
-	// argv positively matches a catastrophic family, but it never
-	// weakens an existing ASK or DENY. The hard floor is
-	// identical to the CLI's. The motivating ClineMM incident
+	// policy verdict. `evaluateCommandRiskWithParser` is a
+	// DOWNGRADE-only layer — it can downgrade an ALLOW to ASK when
+	// the command argv positively matches a catastrophic family,
+	// but it never weakens an existing ASK or DENY. The hard floor
+	// is identical to the CLI's. The motivating ClineMM incident
 	// surface is VSCodium (i.e. this host), not CLI, so this
 	// wiring is the load-bearing safety invariant.
+	//
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+	// uses the trusted-internal `evaluateCommandRiskWithParser`
+	// (imported from `@cline/core/internal/command-risk-internal`).
+	// `parserResult: undefined` keeps V2 dormant. The future ACT
+	// (ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01)
+	// will replace `undefined` with the trusted helper's result.
 	if (
 		result.decision.kind === "allow" &&
-		evaluateCommandRisk({
+		evaluateCommandRiskWithParser({
 			toolInput,
 			hostAuthorization,
+			parserResult: undefined,
 		}).disposition === "never-auto-approve"
 	) {
 		return {
@@ -369,19 +377,25 @@ export function evaluateCommandToolApprovalWithPlan(
 	}
 	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
 	// Layer the R5 catastrophic hard floor on top of the canonical
-	// policy verdict. `evaluateCommandRisk` is a DOWNGRADE-only
-	// layer — it can downgrade an ALLOW to ASK when the command
-	// argv positively matches a catastrophic family, but it never
-	// weakens an existing ASK or DENY. The hard floor is
-	// identical to the CLI's. The motivating ClineMM incident
+	// policy verdict. `evaluateCommandRiskWithParser` is a
+	// DOWNGRADE-only layer — it can downgrade an ALLOW to ASK when
+	// the command argv positively matches a catastrophic family,
+	// but it never weakens an existing ASK or DENY. The hard floor
+	// is identical to the CLI's. The motivating ClineMM incident
 	// surface is VSCodium (i.e. this host), not CLI, so this
 	// wiring is the load-bearing safety invariant. The execution
 	// plan is preserved so a user-approved ASK still runs
 	// hardened.
+	//
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+	// uses the trusted-internal `evaluateCommandRiskWithParser`.
+	// `parserResult: undefined` keeps V2 dormant. The future ACT
+	// will replace this with the trusted helper's result.
 	if (result.decision.kind === "allow") {
-		const risk = evaluateCommandRisk({
+		const risk = evaluateCommandRiskWithParser({
 			toolInput,
 			hostAuthorization,
+			parserResult: undefined,
 		})
 		if (risk.disposition === "never-auto-approve") {
 			return {

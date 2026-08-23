@@ -177,6 +177,14 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: {
+			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+			// the trusted-internal deep import path. Defined FIRST so
+			// vite-resolve picks this exact match before the bare
+			// `@cline/core` alias below redirects it to the stub.
+			"@cline/core/internal/command-risk-internal": path.resolve(
+				__dirname,
+				"../../sdk/packages/core/src/runtime/command-policy/command-risk-internal.ts",
+			),
 			"@cline/core": path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts"),
 			"@cline/llms": path.resolve(__dirname, "node_modules/@cline/llms/dist/index.js"),
 			// Map @cline/shared subpath exports explicitly. The bare "@cline/shared"

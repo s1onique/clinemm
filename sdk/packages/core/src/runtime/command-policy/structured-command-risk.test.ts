@@ -30,13 +30,13 @@ import { describe, expect, it } from "vitest";
 import {
 	evaluateStructuredCommandRisk,
 	joinRunCommandsForParse,
-	sha256Hex,
-	STRUCTURED_PROTO_VERSION,
 	type ParsedShell,
 	type ShellDialect,
+	STRUCTURED_PROTO_VERSION,
 	type StructuredCmd,
 	type StructuredProgram,
 	type StructuredStmt,
+	sha256Hex,
 } from "./structured-command-risk";
 
 function mkCmd(
@@ -127,7 +127,8 @@ describe("V2 structured classifier — failure contract (ACT §18)", () => {
 	it("treats command substitution as opaque (ask minimum)", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'echo "$(rm -rf "$HOME")"',
-			parserResult: mkParsed('echo "$(rm -rf "$HOME")"',
+			parserResult: mkParsed(
+				'echo "$(rm -rf "$HOME")"',
 				[
 					{
 						kind: "cmd",
@@ -164,8 +165,8 @@ describe("V2 structured classifier — safe compounds promoted to ALLOW", () => 
 		expect(r.promoteToAllow).toBe(true);
 		expect(r.downgradeToNeverAutoApprove).toBe(false);
 		expect(r.perStatement.length).toBe(2);
-		expect(r.perStatement[0]!.risk).toBe("auto-approve-eligible");
-		expect(r.perStatement[1]!.risk).toBe("auto-approve-eligible");
+		expect(r.perStatement[0]?.risk).toBe("auto-approve-eligible");
+		expect(r.perStatement[1]?.risk).toBe("auto-approve-eligible");
 	});
 
 	it("git status && git diff → auto-approve-eligible", () => {
@@ -219,7 +220,7 @@ describe("V2 structured classifier — safe compounds promoted to ALLOW", () => 
  * ---------------------------------------------------------------------- */
 
 describe("V2 structured classifier — risk-maximum aggregates to never-auto-approve", () => {
-	it("git status && rm -rf \"$HOME\" → never-auto-approve (max over and-tree)", () => {
+	it('git status && rm -rf "$HOME" → never-auto-approve (max over and-tree)', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'git status && rm -rf "$HOME"',
 			parserResult: mkParsed('git status && rm -rf "$HOME"', [
@@ -266,7 +267,7 @@ describe("V2 structured classifier — risk-maximum aggregates to never-auto-app
 		expect(r.aggregate).toBe("never-auto-approve");
 	});
 
-	it("echo ok; rm -rf \"$HOME\" → never-auto-approve", () => {
+	it('echo ok; rm -rf "$HOME" → never-auto-approve', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'echo ok; rm -rf "$HOME"',
 			parserResult: mkParsed('echo ok; rm -rf "$HOME"', [
@@ -277,7 +278,7 @@ describe("V2 structured classifier — risk-maximum aggregates to never-auto-app
 		expect(r.aggregate).toBe("never-auto-approve");
 	});
 
-	it("true && rm -rf \"$HOME\" → never-auto-approve", () => {
+	it('true && rm -rf "$HOME" → never-auto-approve', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'true && rm -rf "$HOME"',
 			parserResult: mkParsed('true && rm -rf "$HOME"', [
@@ -299,8 +300,8 @@ describe("V2 structured classifier — risk-maximum aggregates to never-auto-app
 describe("V2 structured classifier — wrappers (bash -c, sh -c)", () => {
 	it("bash -c 'rm -rf \"$HOME\"' → never-auto-approve (inner R5 detected)", () => {
 		const r = evaluateStructuredCommandRisk({
-			toolInput: 'bash -c \'rm -rf "$HOME"\'',
-			parserResult: mkParsed('bash -c \'rm -rf "$HOME"\'', [
+			toolInput: "bash -c 'rm -rf \"$HOME\"'",
+			parserResult: mkParsed("bash -c 'rm -rf \"$HOME\"'", [
 				{
 					kind: "cmd",
 					cmd: mkCmd("bash", ["-c", 'rm -rf "$HOME"'], {
@@ -313,7 +314,7 @@ describe("V2 structured classifier — wrappers (bash -c, sh -c)", () => {
 		});
 		expect(r.aggregate).toBe("never-auto-approve");
 		expect(r.downgradeToNeverAutoApprove).toBe(true);
-		expect(r.perStatement[0]!.source).toContain("wrapper");
+		expect(r.perStatement[0]?.source).toContain("wrapper");
 	});
 
 	it("sh -c 'git status' → ask (wrapper inner not recursively classified)", () => {
@@ -333,13 +334,13 @@ describe("V2 structured classifier — wrappers (bash -c, sh -c)", () => {
 		expect(r.aggregate).toBe("ask");
 		expect(r.promoteToAllow).toBe(false);
 		expect(r.downgradeToNeverAutoApprove).toBe(false);
-		expect(r.perStatement[0]!.source).toContain("inner-not-classified");
+		expect(r.perStatement[0]?.source).toContain("inner-not-classified");
 	});
 
 	it("bash -c 'git status && rm -rf \"$HOME\"' → never-auto-approve", () => {
 		const r = evaluateStructuredCommandRisk({
-			toolInput: 'bash -c \'git status && rm -rf "$HOME"\'',
-			parserResult: mkParsed('bash -c \'git status && rm -rf "$HOME"\'', [
+			toolInput: "bash -c 'git status && rm -rf \"$HOME\"'",
+			parserResult: mkParsed("bash -c 'git status && rm -rf \"$HOME\"'", [
 				{
 					kind: "cmd",
 					cmd: mkCmd("bash", ["-c", 'git status && rm -rf "$HOME"'], {
@@ -359,15 +360,17 @@ describe("V2 structured classifier — wrappers (bash -c, sh -c)", () => {
  * ---------------------------------------------------------------------- */
 
 describe("V2 structured classifier — opaque constructs (if/while/for/case/function)", () => {
-	it("if true; then rm -rf \"$HOME\"; fi → ask minimum (no auto-approve)", () => {
+	it('if true; then rm -rf "$HOME"; fi → ask minimum (no auto-approve)', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'if true; then rm -rf "$HOME"; fi',
-			parserResult: mkParsed('if true; then rm -rf "$HOME"; fi', [{ kind: "opaque" }]),
+			parserResult: mkParsed('if true; then rm -rf "$HOME"; fi', [
+				{ kind: "opaque" },
+			]),
 		});
 		expect(r.aggregate).toBe("ask");
 		expect(r.promoteToAllow).toBe(false);
 		expect(r.downgradeToNeverAutoApprove).toBe(false);
-		expect(r.perStatement[0]!.source).toBe("opaque-construct");
+		expect(r.perStatement[0]?.source).toBe("opaque-construct");
 	});
 
 	it("while true; do pwd; done → ask minimum", () => {
@@ -378,10 +381,12 @@ describe("V2 structured classifier — opaque constructs (if/while/for/case/func
 		expect(r.aggregate).toBe("ask");
 	});
 
-	it("function f() { rm -rf \"$HOME\"; } → ask minimum", () => {
+	it('function f() { rm -rf "$HOME"; } → ask minimum', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'function f() { rm -rf "$HOME"; }',
-			parserResult: mkParsed('function f() { rm -rf "$HOME"; }', [{ kind: "opaque" }]),
+			parserResult: mkParsed('function f() { rm -rf "$HOME"; }', [
+				{ kind: "opaque" },
+			]),
 		});
 		expect(r.aggregate).toBe("ask");
 	});
@@ -392,7 +397,7 @@ describe("V2 structured classifier — opaque constructs (if/while/for/case/func
  * ---------------------------------------------------------------------- */
 
 describe("V2 structured classifier — special command names", () => {
-	it("eval \"$X\" → ask minimum (eval is opaque)", () => {
+	it('eval "$X" → ask minimum (eval is opaque)', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'eval "$X"',
 			parserResult: mkParsed('eval "$X"', [
@@ -400,10 +405,10 @@ describe("V2 structured classifier — special command names", () => {
 			]),
 		});
 		expect(r.aggregate).toBe("ask");
-		expect(r.perStatement[0]!.source).toBe("eval-opaque");
+		expect(r.perStatement[0]?.source).toBe("eval-opaque");
 	});
 
-	it("cd \"$HOME\" → ask minimum (cd is not auto-approve)", () => {
+	it('cd "$HOME" → ask minimum (cd is not auto-approve)', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'cd "$HOME"',
 			parserResult: mkParsed('cd "$HOME"', [
@@ -411,10 +416,10 @@ describe("V2 structured classifier — special command names", () => {
 			]),
 		});
 		expect(r.aggregate).toBe("ask");
-		expect(r.perStatement[0]!.source).toBe("cd-not-auto-approve-eligible");
+		expect(r.perStatement[0]?.source).toBe("cd-not-auto-approve-eligible");
 	});
 
-	it("cd \"$HOME\" && rm -rf . → ask (cd alone is ask; . is not R5)", () => {
+	it('cd "$HOME" && rm -rf . → ask (cd alone is ask; . is not R5)', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'cd "$HOME" && rm -rf .',
 			parserResult: mkParsed('cd "$HOME" && rm -rf .', [
@@ -437,7 +442,7 @@ describe("V2 structured classifier — special command names", () => {
 		});
 		expect(r.aggregate).toBe("never-auto-approve");
 		expect(r.downgradeToNeverAutoApprove).toBe(true);
-		expect(r.perStatement[0]!.source).toContain("home-destruction");
+		expect(r.perStatement[0]?.source).toContain("home-destruction");
 	});
 
 	it("rm -rf /Volumes/UserData → never-auto-approve (root-destruction family)", () => {
@@ -448,7 +453,7 @@ describe("V2 structured classifier — special command names", () => {
 			]),
 		});
 		expect(r.aggregate).toBe("never-auto-approve");
-		expect(r.perStatement[0]!.source).toContain("root-destruction");
+		expect(r.perStatement[0]?.source).toContain("root-destruction");
 	});
 });
 
@@ -457,7 +462,7 @@ describe("V2 structured classifier — special command names", () => {
  * ---------------------------------------------------------------------- */
 
 describe("V2 structured classifier — variable assignments", () => {
-	it("target=\"$HOME\"; rm -rf \"$target\" → ask (V2 cannot resolve $target statically)", () => {
+	it('target="$HOME"; rm -rf "$target" → ask (V2 cannot resolve $target statically)', () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: 'target="$HOME"; rm -rf "$target"',
 			parserResult: mkParsed('target="$HOME"; rm -rf "$target"', [
@@ -484,10 +489,9 @@ describe("V2 structured classifier — dialect handling", () => {
 	it("zsh dialect → still classified, parser results honored", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: "pwd",
-			parserResult: mkParsed("pwd",
-				[{ kind: "cmd", cmd: mkCmd("pwd") }],
-				{ dialect: "zsh" as ShellDialect },
-			),
+			parserResult: mkParsed("pwd", [{ kind: "cmd", cmd: mkCmd("pwd") }], {
+				dialect: "zsh" as ShellDialect,
+			}),
 		});
 		expect(r.aggregate).toBe("auto-approve-eligible");
 	});
@@ -495,7 +499,8 @@ describe("V2 structured classifier — dialect handling", () => {
 	it("posix dialect → sh -c 'git status' still classified", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: "sh -c 'git status'",
-			parserResult: mkParsed("sh -c 'git status'",
+			parserResult: mkParsed(
+				"sh -c 'git status'",
 				[
 					{
 						kind: "cmd",
@@ -515,10 +520,9 @@ describe("V2 structured classifier — dialect handling", () => {
 	it("unknown dialect → bash-conservative fallback", () => {
 		const r = evaluateStructuredCommandRisk({
 			toolInput: "pwd",
-			parserResult: mkParsed("pwd",
-				[{ kind: "cmd", cmd: mkCmd("pwd") }],
-				{ dialect: "unknown" as ShellDialect },
-			),
+			parserResult: mkParsed("pwd", [{ kind: "cmd", cmd: mkCmd("pwd") }], {
+				dialect: "unknown" as ShellDialect,
+			}),
 		});
 		expect(r.aggregate).toBe("auto-approve-eligible");
 	});

@@ -14,6 +14,9 @@
 		"src/hub/index.ts",
 		"src/hub/daemon/entry.ts",
 		"src/services/telemetry/index.ts",
-		"src/services/feature-flags/posthog.ts"
+		"src/services/feature-flags/posthog.ts",
+		"src/runtime/command-policy/command-risk-internal.ts",
+		"src/runtime/command-policy/parser-helper/protocol.ts",
+		"src/runtime/command-policy/parser-helper/runtime.ts"
 	]
 }

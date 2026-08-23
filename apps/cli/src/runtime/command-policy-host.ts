@@ -35,8 +35,8 @@ import {
 	commandHostAuthorization,
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	evaluateCommandPolicy,
-	evaluateCommandRisk,
 } from "@cline/core";
+import { evaluateCommandRiskWithParser } from "@cline/core/internal/command-risk-internal";
 import type { CommandExecutionPlan } from "@cline/shared";
 
 export interface CliCommandToolApprovalDecision {
@@ -88,12 +88,16 @@ export function cliResolveSafeOnlyHostAuthorization(options?: {
 	 * Explicit deny rules to inject for testing. Each rule's pattern is
 	 * a string that will be compiled to a RegExp (prefix match).
 	 */
-	explicitDenyRules?: ReadonlyArray<{ pattern: string; label: string; description: string }>;
+	explicitDenyRules?: ReadonlyArray<{
+		pattern: string;
+		label: string;
+		description: string;
+	}>;
 }): CommandHostAuthorization {
 	const denyRules = options?.explicitDenyRules?.map((r) => ({
 		source: r.label,
 		pattern: new RegExp(`^${r.pattern.replace(/\*/g, ".*")}`),
-	}))
+	}));
 	return commandHostAuthorization({
 		mode: "manual",
 		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
@@ -135,9 +139,29 @@ export function cliEvaluateCommandToolApprovalWith(
 	// command argv positively matches a catastrophic family, but
 	// it never weakens an existing ASK or DENY. This is the
 	// production wiring of the bounded V1 classifier.
-	const risk = evaluateCommandRisk({
+	//
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+	// uses the trusted-internal `evaluateCommandRiskWithParser`
+	// (imported from `@cline/core/internal/command-risk-internal`).
+	// The `parserResult` field is OPTIONAL: when undefined, V2 is
+	// dormant and behavior is identical to the public
+	// `evaluateCommandRisk`. When defined, V2 may promote a
+	// structure-only V1 ASK to ALLOW or strengthen V1 ASK to
+	// never-auto-approve (the latter only when R5 inner surfaces
+	// from the parsed structure).
+	//
+	// The parser result, when supplied, comes ONLY from the
+	// trusted host-owned `MvdanShHelper` capability — NEVER from
+	// model payload, MCP, webview, gRPC, or remote caller. Today,
+	// no parser helper is wired, so `parserResult` is undefined
+	// and V1 behavior is unchanged. The future ACT
+	// (ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01)
+	// will replace the `undefined` here with a call into the
+	// trusted helper.
+	const risk = evaluateCommandRiskWithParser({
 		toolInput: input.toolInput,
 		hostAuthorization,
+		parserResult: undefined,
 	});
 	const riskDowngrade =
 		result.decision.kind === "allow" &&
@@ -167,7 +191,9 @@ export function cliEvaluateCommandToolApprovalWith(
 	// CORRECTION04 P0: if a safe execution profile is required but the
 	// plan could not be constructed, fail closed rather than allowing
 	// raw input to execute.
-	const requiresPlan = result.commands.some((c) => c.safeExecutionProfile !== undefined);
+	const requiresPlan = result.commands.some(
+		(c) => c.safeExecutionProfile !== undefined,
+	);
 	if (requiresPlan && !executionPlan) {
 		return {
 			approved: false,

@@ -4,7 +4,7 @@
  * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-ASSISTED01
  *
  * These tests prove the V2 structured classifier is correctly
- * COMPOSED on top of V1 in `evaluateCommandRisk()`. When a parser
+ * COMPOSED on top of V1 in `evaluateCommandRiskWithParser()`. When a parser
  * result is provided:
  *
  *   - V1 still produces a verdict (V1 floor scans the rendered
@@ -20,18 +20,17 @@
  */
 
 import { describe, expect, it } from "vitest";
-
-import { evaluateCommandRisk } from "./command-risk";
-import { DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
 import { commandHostAuthorization } from "./command-policy-types";
 import {
+	evaluateCommandRiskWithParser,
 	joinRunCommandsForParse,
-	sha256Hex,
-	STRUCTURED_PROTO_VERSION,
 	type ParsedShell,
+	STRUCTURED_PROTO_VERSION,
 	type StructuredCmd,
 	type StructuredStmt,
-} from "./structured-command-risk";
+	sha256Hex,
+} from "./command-risk-internal";
+import { DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
 
 function mkCmd(
 	name: string,
@@ -88,7 +87,7 @@ const SAFE = commandHostAuthorization({
 
 describe("V2+V1 composition — V1 conservation when parserResult is undefined", () => {
 	it("V1 verdict is preserved when parserResult is omitted", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: "pwd; pwd",
 			hostAuthorization: SAFE,
 		});
@@ -97,7 +96,7 @@ describe("V2+V1 composition — V1 conservation when parserResult is undefined",
 	});
 
 	it("V1 R5 floor still fires when parserResult is omitted", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: 'rm -rf "$HOME"',
 			hostAuthorization: ALL,
 		});
@@ -107,7 +106,7 @@ describe("V2+V1 composition — V1 conservation when parserResult is undefined",
 	});
 
 	it("explicitly-null parserResult is treated as no-parser (V1 path)", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: "pwd; pwd",
 			hostAuthorization: SAFE,
 			parserResult: null,
@@ -123,7 +122,7 @@ describe("V2+V1 composition — V1 conservation when parserResult is undefined",
 
 describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms safe", () => {
 	it("pwd; pwd → ALLOW (V2 promotion, the ergonomic RED)", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: "pwd; pwd",
 			hostAuthorization: SAFE,
 			parserResult: mkParsed("pwd; pwd", [
@@ -137,7 +136,7 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 	});
 
 	it("git status && git diff → ALLOW (V2 promotion)", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: "git status && git diff",
 			hostAuthorization: SAFE,
 			parserResult: mkParsed("git status && git diff", [
@@ -153,13 +152,16 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 	});
 
 	it("multi-command array input [pwd, pwd] → ALLOW (V2 promotion)", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ["pwd", "pwd"],
 			hostAuthorization: SAFE,
-			parserResult: mkParsed(["pwd", "pwd"], [
-				{ kind: "cmd", cmd: mkCmd("pwd") },
-				{ kind: "cmd", cmd: mkCmd("pwd") },
-			]),
+			parserResult: mkParsed(
+				["pwd", "pwd"],
+				[
+					{ kind: "cmd", cmd: mkCmd("pwd") },
+					{ kind: "cmd", cmd: mkCmd("pwd") },
+				],
+			),
 		});
 		expect(r.decision).toBe("allow");
 		expect(r.disposition).toBe("auto-approve-eligible");
@@ -171,8 +173,8 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
  * ---------------------------------------------------------------------- */
 
 describe("V2+V1 composition — V2 strengthen ASK → never-auto-approve when AST sees R5", () => {
-	it("git status && rm -rf \"$HOME\" → ASK + never-auto-approve", () => {
-		const r = evaluateCommandRisk({
+	it('git status && rm -rf "$HOME" → ASK + never-auto-approve', () => {
+		const r = evaluateCommandRiskWithParser({
 			toolInput: 'git status && rm -rf "$HOME"',
 			hostAuthorization: SAFE,
 			parserResult: mkParsed('git status && rm -rf "$HOME"', [
@@ -188,7 +190,7 @@ describe("V2+V1 composition — V2 strengthen ASK → never-auto-approve when AS
 	});
 
 	it("V2 strengthens ALLOW → ASK + never-auto-approve (matches V1 R5 pattern)", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: 'git status && rm -rf "$HOME"',
 			hostAuthorization: ALL,
 			parserResult: mkParsed('git status && rm -rf "$HOME"', [
@@ -210,7 +212,7 @@ describe("V2+V1 composition — V2 strengthen ASK → never-auto-approve when AS
 
 describe("V2+V1 composition — V2 NEVER weakens V1's verdict", () => {
 	it("V1 R5 never-auto-approve cannot be promoted to ALLOW even when parser sees only safe branches", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: 'rm -rf "$HOME"',
 			hostAuthorization: ALL,
 			parserResult: mkParsed('rm -rf "$HOME"', [
@@ -228,7 +230,7 @@ describe("V2+V1 composition — V2 NEVER weakens V1's verdict", () => {
 
 describe("V2+V1 composition — V2 failure modes preserve V1", () => {
 	it("parser unavailable (null) → V1 only", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: "pwd; pwd",
 			hostAuthorization: SAFE,
 			parserResult: null,
@@ -237,7 +239,7 @@ describe("V2+V1 composition — V2 failure modes preserve V1", () => {
 	});
 
 	it("parser failed → V1 only", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: "this is malformed && || ;",
 			hostAuthorization: SAFE,
 			parserResult: {
@@ -256,10 +258,11 @@ describe("V2+V1 composition — V2 failure modes preserve V1", () => {
 	});
 
 	it("command substitution present → V2 conservative ASK (no promotion)", () => {
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: 'echo "$(rm -rf "$HOME")"',
 			hostAuthorization: SAFE,
-			parserResult: mkParsed('echo "$(rm -rf "$HOME")"',
+			parserResult: mkParsed(
+				'echo "$(rm -rf "$HOME")"',
 				[
 					{
 						kind: "cmd",

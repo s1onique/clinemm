@@ -75,14 +75,16 @@
  *   - It does not promote V1 ASK from non-shell-structure sources.
  */
 
-import { findSafeRuleMatch, isOpaqueShellRendered, DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
+import { createHash } from "node:crypto";
 import { normalizeRunCommandsInput } from "../../extensions/tools/helpers";
 import type { StructuredCommandInput } from "../../extensions/tools/schemas";
 import { renderNormalizedCommand } from "./command-model-hints";
+import { findCommandRiskHardFloor } from "./command-risk";
 import {
-	findCommandRiskHardFloor,
-	type CommandRiskHardFloorFamily,
-} from "./command-risk";
+	DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	findSafeRuleMatch,
+	isOpaqueShellRendered,
+} from "./command-safe-rules";
 
 /* ---------------------------------------------------------------------- *
  * Narrow projection types (match the Go probe's JSON shape)              *
@@ -164,23 +166,44 @@ export interface StructuredProgram {
 
 export type StructuredStmt =
 	| { readonly kind: "cmd"; readonly cmd: StructuredCmd }
-	| { readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt }
-	| { readonly kind: "or"; readonly left: StructuredStmt; readonly rhs: StructuredStmt }
-	| { readonly kind: "pipe"; readonly left: StructuredStmt; readonly rhs: StructuredStmt }
+	| {
+			readonly kind: "and";
+			readonly left: StructuredStmt;
+			readonly rhs: StructuredStmt;
+	  }
+	| {
+			readonly kind: "or";
+			readonly left: StructuredStmt;
+			readonly rhs: StructuredStmt;
+	  }
+	| {
+			readonly kind: "pipe";
+			readonly left: StructuredStmt;
+			readonly rhs: StructuredStmt;
+	  }
 	| { readonly kind: "subshell"; readonly inner: StructuredStmt }
 	| { readonly kind: "opaque" };
 
 export interface StructuredCmd {
 	readonly name: string;
 	readonly args: ReadonlyArray<string>;
-	readonly assigns: ReadonlyArray<{ readonly name: string; readonly value: string }>;
-	readonly redirects: ReadonlyArray<{ readonly op: string; readonly path: string }>;
+	readonly assigns: ReadonlyArray<{
+		readonly name: string;
+		readonly value: string;
+	}>;
+	readonly redirects: ReadonlyArray<{
+		readonly op: string;
+		readonly path: string;
+	}>;
 	readonly isWrapper: boolean;
 	readonly wrapperOf: ShellDialect | "";
 	readonly inner: string;
 }
 
-export type StructuredRisk = "auto-approve-eligible" | "ask" | "never-auto-approve";
+export type StructuredRisk =
+	| "auto-approve-eligible"
+	| "ask"
+	| "never-auto-approve";
 
 /**
  * Structured analysis verdict.
@@ -222,38 +245,27 @@ export interface StructuredStmtRisk {
  * against `toolInput`. The computation is exposed so test fixtures
  * can fabricate matching `ParsedShell` values.
  *
- * Bun's built-in crypto is preferred for performance. A small Node
- * `require("crypto")` fallback is provided so the module remains
- * usable in non-bun test runners (vitest, etc.).
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+ * Replaced the previous `globalThis.require("crypto")` fallback with
+ * the canonical `@cline/core` cross-runtime hash primitive
+ * (`node:crypto` ESM import). This is the same pattern used by every
+ * other SHA-256 / HMAC consumer in the SDK (see
+ * `extensions/config/runtime-commands.ts`,
+ * `extensions/mcp/oauth.ts`, `services/plugin-install.ts`,
+ * `hub/discovery/index.ts`, `logging/early-logger.ts`,
+ * `cron/store/sqlite-cron-store.ts`, etc.). The previous fallback
+ * relied on `globalThis.require` being a function, which is not
+ * guaranteed in the bundled VS Code extension host (pure ESM, no
+ * CommonJS require on globalThis) — meaning V2 promotion would have
+ * thrown at runtime in production the moment a parser result was
+ * supplied. The new implementation works under:
+ *   - Bun (via node:crypto builtin)
+ *   - Node.js (via node:crypto builtin)
+ *   - Bundled VS Code extension host (Node runtime, ESM)
+ *   - Bundled CLI (Bun-built ESM, runs on Node)
  */
 export function sha256Hex(input: string): string {
-	const bunGlobal = (globalThis as unknown as { Bun?: { CryptoHasher?: unknown } }).Bun;
-	if (bunGlobal?.CryptoHasher) {
-		const HasherCtor = bunGlobal.CryptoHasher as new (algo: string) => {
-			update(s: string): void;
-			digest(fmt: string): string;
-		};
-		const h = new HasherCtor("sha256");
-		h.update(input);
-		return h.digest("hex");
-	}
-	const nodeRequire = (globalThis as unknown as {
-		require?: (id: string) => unknown;
-	}).require;
-	if (typeof nodeRequire === "function") {
-		const crypto = nodeRequire("crypto") as {
-			createHash(algo: string): {
-				update(s: string): unknown;
-				digest(fmt: string): string;
-			};
-		};
-		const hash = crypto.createHash("sha256");
-		hash.update(input);
-		return hash.digest("hex") as string;
-	}
-	throw new Error(
-		"sha256Hex: no crypto implementation available in this runtime",
-	);
+	return createHash("sha256").update(input).digest("hex");
 }
 
 /**
@@ -298,7 +310,9 @@ const STRUCTURE_ONLY_PROMOTABLE_REASONS: ReadonlySet<string> = new Set([
  * compound verdict, the most-specific ASK reason in
  * `RiskDecision.reasons`).
  */
-export function isStructureOnlyPromotableAsk(reason: string | undefined): boolean {
+export function isStructureOnlyPromotableAsk(
+	reason: string | undefined,
+): boolean {
 	if (reason === undefined) {
 		return false;
 	}
@@ -317,16 +331,25 @@ export function isStructureOnlyPromotableAsk(reason: string | undefined): boolea
  * analyzer catches `pwd > ~/.ssh/authorized_keys` that V1 cannot
  * see because it does not reason about AST.
  */
-const SENSITIVE_WRITE_TARGETS: ReadonlyArray<{ readonly pattern: RegExp; readonly family: string }> = [
+const SENSITIVE_WRITE_TARGETS: ReadonlyArray<{
+	readonly pattern: RegExp;
+	readonly family: string;
+}> = [
 	// SSH material: any write into the .ssh directory is treated as
 	// a key-overwrite attempt.
 	{ family: "redirect-sensitive-write-ssh", pattern: /^~\/\.ssh\//u },
 	{ family: "redirect-sensitive-write-ssh", pattern: /^\/?\.ssh\//u },
 	// AWS / GCloud / kube / docker / netrc credentials and config
 	{ family: "redirect-sensitive-write-credentials", pattern: /^~\/\.aws\//u },
-	{ family: "redirect-sensitive-write-credentials", pattern: /^~\/\.gcloud\//u },
+	{
+		family: "redirect-sensitive-write-credentials",
+		pattern: /^~\/\.gcloud\//u,
+	},
 	{ family: "redirect-sensitive-write-credentials", pattern: /^~\/\.kube\//u },
-	{ family: "redirect-sensitive-write-credentials", pattern: /^~\/\.docker\//u },
+	{
+		family: "redirect-sensitive-write-credentials",
+		pattern: /^~\/\.docker\//u,
+	},
 	{ family: "redirect-sensitive-write-credentials", pattern: /^~\/\.netrc$/u },
 	{ family: "redirect-sensitive-write-credentials", pattern: /^\/?\.aws\//u },
 	{ family: "redirect-sensitive-write-credentials", pattern: /^\/?\.kube\//u },
@@ -349,9 +372,10 @@ const SENSITIVE_WRITE_TARGETS: ReadonlyArray<{ readonly pattern: RegExp; readonl
  *     cannot promote.
  *   - Unknown operators fall back to ASK minimum (conservative).
  */
-export function classifyRedirect(
-	redirect: { readonly op: string; readonly path: string },
-): { readonly family: string } | null {
+export function classifyRedirect(redirect: {
+	readonly op: string;
+	readonly path: string;
+}): { readonly family: string } | null {
 	const op = redirect.op.trim();
 	if (op === "<" || op === "<<") {
 		return null;
@@ -450,7 +474,10 @@ export function evaluateStructuredCommandRisk(args: {
 	}
 
 	// 3. Parse failure: V2 is a no-op. Preserve V1 behavior.
-	if (parserResult.parseStatus !== "complete" || parserResult.program === null) {
+	if (
+		parserResult.parseStatus !== "complete" ||
+		parserResult.program === null
+	) {
 		return {
 			parseConfidence: "failed",
 			perStatement: [],
@@ -475,9 +502,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
-			reasons: [
-				`structured analysis skipped (${bindingFailure})`,
-			],
+			reasons: [`structured analysis skipped (${bindingFailure})`],
 		};
 	}
 
@@ -490,9 +515,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
-			reasons: [
-				"structured analysis opaque (command substitution present)",
-			],
+			reasons: ["structured analysis opaque (command substitution present)"],
 		};
 	}
 
@@ -516,8 +539,7 @@ export function evaluateStructuredCommandRisk(args: {
 	//    auto-approve-eligible. The caller in `command-risk.ts`
 	//    adds the ASK-source admissibility check
 	//    (`isStructureOnlyPromotableAsk`).
-	const promote =
-		dialectCapable && aggregate === "auto-approve-eligible";
+	const promote = dialectCapable && aggregate === "auto-approve-eligible";
 	const downgrade = aggregate === "never-auto-approve";
 
 	const reasons: string[] = [];
@@ -586,7 +608,7 @@ function classifyStmt(
 function classifyCmd(
 	cmd: StructuredCmd,
 	index: number,
-	dialect: ShellDialect,
+	_dialect: ShellDialect,
 ): StructuredStmtRisk {
 	// CORRECTION01 STEP 7: redirects participate in risk. Walk
 	// every redirect FIRST; a sensitive write redirect escalates to
@@ -722,7 +744,11 @@ function renderArgv(cmd: StructuredCmd): string {
 }
 
 function maxRisk(risks: ReadonlyArray<StructuredRisk>): StructuredRisk {
-	const order: StructuredRisk[] = ["auto-approve-eligible", "ask", "never-auto-approve"];
+	const order: StructuredRisk[] = [
+		"auto-approve-eligible",
+		"ask",
+		"never-auto-approve",
+	];
 	let max: StructuredRisk = "auto-approve-eligible";
 	for (const r of risks) {
 		if (order.indexOf(r) > order.indexOf(max)) {
@@ -768,7 +794,10 @@ function collectR5LeafSources(
 	const out: string[] = [];
 	for (const s of perStmt) {
 		if (s.risk === "never-auto-approve") {
-			if (s.source.startsWith("aggregated-") || s.source.startsWith("subshell:")) {
+			if (
+				s.source.startsWith("aggregated-") ||
+				s.source.startsWith("subshell:")
+			) {
 				// The leaf detail is not directly recoverable from the
 				// stmt record (we don't carry child sources). The leaf
 				// surfaces via a synthetic "aggregated" string instead.
@@ -799,9 +828,10 @@ function collectR5LeafSources(
  * same matcher.
  */
 
-export function joinRunCommandsForParse(
-	input: unknown,
-): { joined: string; hadMultiple: boolean } {
+export function joinRunCommandsForParse(input: unknown): {
+	joined: string;
+	hadMultiple: boolean;
+} {
 	let normalized: ReadonlyArray<string | StructuredCommandInput> = [];
 	try {
 		normalized = normalizeRunCommandsInput(input);

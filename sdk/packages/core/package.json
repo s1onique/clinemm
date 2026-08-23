@@ -34,6 +34,14 @@
 		"./services/feature-flags/posthog": {
 			"types": "./dist/services/feature-flags/posthog.d.ts",
 			"import": "./dist/services/feature-flags/posthog.js"
+		},
+		"./internal/command-risk-internal": {
+			"types": "./dist/runtime/command-policy/command-risk-internal.d.ts",
+			"import": "./dist/runtime/command-policy/command-risk-internal.js"
+		},
+		"./internal/parser-helper-runtime": {
+			"types": "./dist/runtime/command-policy/parser-helper/runtime.d.ts",
+			"import": "./dist/runtime/command-policy/parser-helper/runtime.js"
 		}
 	},
 	"scripts": {

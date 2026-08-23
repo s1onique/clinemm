@@ -19,6 +19,13 @@ export default defineConfig({
 				replacement: resolve(rootDir, "../../sdk/packages/core/src/index.ts"),
 			},
 			{
+				find: /^@cline\/core\/internal\/command-risk-internal$/,
+				replacement: resolve(
+					rootDir,
+					"../../sdk/packages/core/src/runtime/command-policy/command-risk-internal.ts",
+				),
+			},
+			{
 				find: /^@cline\/core\/(.+)$/,
 				replacement: resolve(rootDir, "../../sdk/packages/core/src/$1"),
 			},
@@ -37,10 +44,6 @@ export default defineConfig({
 			{
 				find: /^@cline\/agents$/,
 				replacement: resolve(rootDir, "../../sdk/packages/agents/src/index.ts"),
-			},
-			{
-				find: /^@cline\/core$/,
-				replacement: resolve(rootDir, "../../sdk/packages/core/src/index.ts"),
 			},
 			{
 				find: /^@cline\/shared$/,

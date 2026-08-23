@@ -26,29 +26,25 @@
  */
 
 import { describe, expect, it } from "vitest";
-
-import { evaluateCommandRisk } from "./command-risk";
-import { DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
 import { commandHostAuthorization } from "./command-policy-types";
 import {
+	evaluateCommandRiskWithParser,
 	joinRunCommandsForParse,
-	sha256Hex,
-	STRUCTURED_PROTO_VERSION,
 	type ParsedShell,
+	STRUCTURED_PROTO_VERSION,
 	type StructuredCmd,
 	type StructuredProgram,
 	type StructuredStmt,
-} from "./structured-command-risk";
+	sha256Hex,
+} from "./command-risk-internal";
+import { DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
 
 const SAFE = commandHostAuthorization({
 	mode: "safe-only",
 	explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
 });
 
-function bashProgram(
-	stmts: StructuredStmt[],
-	toolInput: unknown,
-): ParsedShell {
+function bashProgram(stmts: StructuredStmt[], toolInput: unknown): ParsedShell {
 	const program: StructuredProgram = { stmts };
 	const { joined } = joinRunCommandsForParse(toolInput);
 	return {
@@ -79,7 +75,7 @@ const pwdCmd: StructuredCmd = {
 describe("CORRECTION01 P0 #1 — redirects participate in risk", () => {
 	it("pwd > ~/.ssh/authorized_keys MUST NOT be ALLOW", () => {
 		const ti = { command: "pwd", args: [] };
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: bashProgram(
@@ -106,7 +102,7 @@ describe("CORRECTION01 P0 #1 — redirects participate in risk", () => {
 
 	it("git status > ~/.ssh/authorized_keys MUST NOT be ALLOW", () => {
 		const ti = { command: "git", args: ["status"] };
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: bashProgram(
@@ -132,7 +128,7 @@ describe("CORRECTION01 P0 #1 — redirects participate in risk", () => {
 
 	it("pwd > /etc/hosts MUST NOT be ALLOW", () => {
 		const ti = { command: "pwd", args: [] };
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: bashProgram(
@@ -158,18 +154,19 @@ describe("CORRECTION01 P0 #1 — redirects participate in risk", () => {
 });
 
 describe("CORRECTION01 P0 #2 — parser result is bound to source", () => {
-	it("wrong source digest + rm -rf \"$HOME\" + safe AST MUST stay ASK/never-auto-approve", () => {
+	it('wrong source digest + rm -rf "$HOME" + safe AST MUST stay ASK/never-auto-approve', () => {
 		const ti = { command: "rm", args: ["-rf", '"$HOME"'] };
 		const parser: ParsedShell = {
 			protocolVersion: STRUCTURED_PROTO_VERSION,
 			dialect: "bash",
-			sourceSha256: "wrong-digest-0000000000000000000000000000000000000000000000000000000000000000",
+			sourceSha256:
+				"wrong-digest-0000000000000000000000000000000000000000000000000000000000000000",
 			parseStatus: "complete",
 			hasCommandSubstitution: false,
 			program: { stmts: [{ kind: "cmd", cmd: pwdCmd }] },
 			errors: [],
 		};
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: parser,
@@ -181,7 +178,7 @@ describe("CORRECTION01 P0 #2 — parser result is bound to source", () => {
 describe("CORRECTION01 P0 #3 — promotion gate is structure-only", () => {
 	it("unknown binary (no opaque token) + safe AST MUST NOT be ALLOW", () => {
 		const ti = { command: "totally-unknown-binary", args: ["--something"] };
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: bashProgram([{ kind: "cmd", cmd: pwdCmd }], ti),
@@ -206,10 +203,15 @@ describe("CORRECTION01 P1 — protocol / dialect gates", () => {
 			sourceSha256: sha256Hex(joined),
 			parseStatus: "complete",
 			hasCommandSubstitution: false,
-			program: { stmts: [{ kind: "cmd", cmd: pwdCmd }, { kind: "cmd", cmd: pwdCmd }] },
+			program: {
+				stmts: [
+					{ kind: "cmd", cmd: pwdCmd },
+					{ kind: "cmd", cmd: pwdCmd },
+				],
+			},
 			errors: [],
 		};
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: parser,
@@ -226,10 +228,15 @@ describe("CORRECTION01 P1 — protocol / dialect gates", () => {
 			sourceSha256: sha256Hex(joined),
 			parseStatus: "complete",
 			hasCommandSubstitution: false,
-			program: { stmts: [{ kind: "cmd", cmd: pwdCmd }, { kind: "cmd", cmd: pwdCmd }] },
+			program: {
+				stmts: [
+					{ kind: "cmd", cmd: pwdCmd },
+					{ kind: "cmd", cmd: pwdCmd },
+				],
+			},
 			errors: [],
 		};
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: parser,
@@ -246,10 +253,15 @@ describe("CORRECTION01 P1 — protocol / dialect gates", () => {
 			sourceSha256: sha256Hex(joined),
 			parseStatus: "complete",
 			hasCommandSubstitution: false,
-			program: { stmts: [{ kind: "cmd", cmd: pwdCmd }, { kind: "cmd", cmd: pwdCmd }] },
+			program: {
+				stmts: [
+					{ kind: "cmd", cmd: pwdCmd },
+					{ kind: "cmd", cmd: pwdCmd },
+				],
+			},
 			errors: [],
 		};
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: parser,
@@ -265,11 +277,14 @@ describe("CORRECTION01 P1 — protocol / dialect gates", () => {
 describe("CORRECTION01 GREEN — primary gain still holds", () => {
 	it("pwd; pwd with correct binding IS promoted to ALLOW", () => {
 		const ti = "pwd; pwd";
-		const r = evaluateCommandRisk({
+		const r = evaluateCommandRiskWithParser({
 			toolInput: ti,
 			hostAuthorization: SAFE,
 			parserResult: bashProgram(
-				[{ kind: "cmd", cmd: pwdCmd }, { kind: "cmd", cmd: pwdCmd }],
+				[
+					{ kind: "cmd", cmd: pwdCmd },
+					{ kind: "cmd", cmd: pwdCmd },
+				],
 				ti,
 			),
 		});

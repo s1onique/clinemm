@@ -470,19 +470,14 @@ export {
 	type EvaluateCommandRiskInput,
 	type RiskDecision,
 } from "./runtime/command-policy/command-risk";
-export {
-	evaluateStructuredCommandRisk,
-	joinRunCommandsForParse,
-	type ParsedShell,
-	type ShellDialect,
-	type StructuredAnalysis,
-	type StructuredCmd,
-	type StructuredProgram,
-	type StructuredRisk,
-	type StructuredStmt,
-	type StructuredStmtRisk,
-	STRUCTURED_PROTO_VERSION,
-} from "./runtime/command-policy/structured-command-risk";
+// V2 structured-classifier types (ParsedShell, ShellDialect,
+// StructuredAnalysis, etc.) are DELIBERATELY NOT re-exported from the
+// public `@cline/core` index. They live in the internal
+// `./runtime/command-policy/command-risk-internal` module so only
+// trusted host adapters (CLI, VSCode) can reach them. The V2 protocol
+// is an internal capability, not a public API.
+// See ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01
+// for the provenance invariant.
 export {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,

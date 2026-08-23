@@ -181,6 +181,12 @@ export {
 	type RiskDecision,
 	renderNormalizedCommand,
 } from "../../../../sdk/packages/core/src/runtime/command-policy"
+// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+// the trusted-internal V2 entry point. Re-exported from
+// `command-risk-internal.ts` so the stub exposes the symbol for
+// vitest alias resolution under
+// `@cline/core/internal/command-risk-internal`.
+export { evaluateCommandRiskWithParser } from "../../../../sdk/packages/core/src/runtime/command-policy/command-risk-internal"
 export { projectSessionMessagesForDisplay } from "../../../../sdk/packages/core/src/session/display-messages"
 
 // Real file-read executor (dependency-light: node:fs/node:path + @cline/shared/storage)

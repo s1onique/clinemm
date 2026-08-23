@@ -73,6 +73,27 @@ const builds: Parameters<typeof Bun.build>[0][] = [
 		outdir: "./dist/services/feature-flags",
 		...buildConfig,
 	},
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+	// the trusted-internal command-risk entry point. NOT exported from
+	// the public `@cline/core` index. Reachable only via the explicit
+	// `@cline/core/internal/command-risk-internal` deep import which
+	// only the trusted host adapters (CLI, VSCode) use.
+	{
+		entrypoints: ["./src/runtime/command-policy/command-risk-internal.ts"],
+		outdir: "./dist/runtime/command-policy",
+		...buildConfig,
+	},
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:
+	// the trusted parser-helper host-owned capability. NOT exported from
+	// the public `@cline/core` index. Reachable only via the explicit
+	// `@cline/core/internal/parser-helper-runtime` deep import.
+	{
+		entrypoints: [
+			"./src/runtime/command-policy/parser-helper/runtime.ts",
+		],
+		outdir: "./dist/runtime/command-policy/parser-helper",
+		...buildConfig,
+	},
 	// The plugin sandbox bootstrap runs in an isolated child process via
 	// SubprocessSandbox and must be emitted as a separate executable entrypoint.
 	{
