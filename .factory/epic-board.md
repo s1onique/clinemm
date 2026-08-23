@@ -4543,3 +4543,70 @@ Each row should preferably contain: `ID`, `STATUS`, `PRIORITY` (if useful), `PUR
 Avoid giant prose. If an item is closed, preserve enough identity to avoid re-litigation. If evidence contradicts a board row, **evidence wins**; the board row becomes P2 stale metadata.
 
 **Post-census maintenance.** When a new task is discussed, add a single row to the canonical task index at the next meaningful ACT boundary. When an old forgotten task surfaces, add one delta. Do **not** trigger another global archaeology exercise.
+
+## ACT closure — V1 bounded command-risk classifier (GREEN)
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01
+
+VERDICT =
+  PASS_COMMAND_RISK_CLASSIFIER_V1
+
+PURPOSE =
+  Make routine command approval less painful (R0 utility gap) while
+  making destructive commands materially harder to auto-approve
+  (R5 catastrophic hard floor, even in CLI --auto-approve / YOLO).
+
+DECISION =
+  SELECTED_PARSER = EXISTING (host-owned bounded positive matcher +
+  OPAQUE_SHELL_TOKENS guard). No new shell parser introduced.
+  Decision record:
+    .factory/evidence/act-command-risk-classification01/01-decision-record.md
+
+RECON =
+  .factory/evidence/act-command-risk-classification01/00-recon-report.md
+
+CORPUS =
+  53 cases (R0=12, R1=1, R2=1, R3=2, R4=6, R5=11, R5b=1, wrapper=16,
+  compound=3) in
+    sdk/packages/core/src/runtime/command-policy/command-risk-corpus.ts
+  V1 honest-ASKs two wrapper cases (variable / cwd resolution beyond
+  argv shape) and three compound cases (opaque-token aggregate).
+
+PRODUCTION_DELTA =
+  sdk/packages/core/src/runtime/command-policy/command-risk.ts (new)
+  sdk/packages/core/src/runtime/command-policy/command-risk-corpus.ts
+  sdk/packages/core/src/runtime/command-policy/command-risk-corpus.baseline.test.ts
+  sdk/packages/core/src/runtime/command-policy/command-risk-corpus.v1-contract.test.ts
+  sdk/packages/core/src/runtime/command-policy/command-safe-rules.ts
+    (added host_safe_git_rev_parse, host_safe_git_show,
+     host_safe_git_rev_list)
+  sdk/packages/core/src/index.ts (exported evaluateCommandRisk,
+    RiskDecision, EvaluateCommandRiskInput)
+  apps/cli/src/runtime/command-policy-host.ts (wired R5 hard floor;
+    downgrade-only layer on top of evaluateCommandPolicy)
+  apps/cli/src/runtime/command-policy-host.test.ts (5 tests updated)
+  apps/cli/src/runtime/command-policy-host.integration.test.ts
+    (2 tests updated)
+
+SAFETY_INVARIANTS =
+  A-F enforced; G (max-risk across compound branches) honest-ASK in V1
+  due to canonical policy aggregate semantics; V2 candidate.
+
+TESTS =
+  217/217 in src/runtime/command-policy/
+  2182/2182 in @cline/core full suite
+  41/41 in @cline/cli command-policy-host
+  ablation test proves canonical policy alone allows R5 in mode:all
+
+COMMIT =
+  1a3f79a20 feat(safety): R5 hard floor + R0 utility gap for command approval
+  NO PUSH.
+
+NEXT =
+  - V1F01: apply R5 hard floor to VSCode host adapter
+  - V2: introduce mvdan/sh as a pinned helper binary for per-command
+    parsing (closes the var/cwd/compound honest-ASK gap)
+
+NO_NEW_FACTORY_DOCKER_REQUIRED
+NO_NEW_LICENSE
+NO_NEW_DEPENDENCY
