@@ -4976,3 +4976,36 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION01
       v2-candidate-tests.log  (full bun output, with V2 CORRECTION01)
       entry-failures-norm.txt (94 normalized failure identities)
       candidate-failures-norm.txt (94 normalized failure identities)
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-CORRECTION02
+
+  = PASS_PATCH_HYGIENE_RECONCILED
+
+  Reviewer flagged: claimed `git diff --check = clean` contradicted
+  attached digest (5 trailing-whitespace + + 1 DBG residue in new V2
+  test files). P0 evidence contradiction; mechanical correction only.
+
+  ACTION:
+    - stripped 5 trailing-whitespace lines in structured-command-risk
+      .test.ts (130, 489, 500, 520) and structured-command-risk
+      -integration.test.ts (262)
+    - removed 1 `console.log("DBG aggregate:", ...)` and its `//
+      debug` comment from structured-command-risk.test.ts
+    - single commit: db1e11c29
+      chore(safety): strip trailing whitespace + remove debug residue
+
+  VERIFY (post):
+    git diff HEAD~4..HEAD --check = clean (RC=0)
+    git diff HEAD --check       = clean (RC=0)
+    @cline/core command-policy   = 271/271 pass
+    CLI host                     = 41/41 pass
+    VSCode host                  = 64/64 pass
+    DBG/debug residue in command-policy/* = 0
+
+  Class: PATCH_HYGIENE = pass; whitespace_errors = 0.
+
+  P1 frozen for parser-helper shipping:
+    PARSER_RESULT_PROVENANCE = NOT_YET_PROVEN
+    (SHA-256 binding is integrity, not authentication; production
+     must enforce host-only construction of ParsedShell.)
+    mvdan/sh candidate = v3.13.1 (zsh promotion remains disabled).
