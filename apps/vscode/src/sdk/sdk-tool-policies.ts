@@ -242,7 +242,7 @@ export function evaluateCommandToolApproval(
 		// + structural validation make it tamper-evident).
 		// `unknown` keeps the V2 type identifier out of this host
 		// source (the parser-provenance invariant forbids the
-		// literal "ParsedShell" in host source files).
+		// literal V2 type identifier in host source files).
 		parserResult: parserResult as never,
 	})
 	if (riskVerdict.disposition === "never-auto-approve") {
@@ -518,7 +518,7 @@ export function evaluateCommandToolApprovalWithPlan(
 		// + structural validation make it tamper-evident).
 		// `unknown` keeps the V2 type identifier out of this host
 		// source (the parser-provenance invariant forbids the
-		// literal "ParsedShell" in host source files).
+		// literal V2 type identifier in host source files).
 		parserResult: options?.parserResult as never,
 	})
 	if (risk.disposition === "never-auto-approve") {

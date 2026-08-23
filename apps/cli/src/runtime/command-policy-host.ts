@@ -31,6 +31,7 @@
 import {
 	buildCommandExecutionPlan,
 	type CommandHostAuthorization,
+	type CommandHostMode,
 	commandHostAuthorization,
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	evaluateCommandPolicy,
@@ -77,43 +78,64 @@ export interface CliCommandToolApprovalDecision {
 /**
  * Build the production CLI host authorization.
  *
+ * CLI CONTRACT (documented in `apps/cli/README.md`):
+ *
+ *   --auto-approve false
+ *     ⇒ "Require approval before each tool call"
+ *     ⇒ EVERY command asks the user, even safe ones like `pwd`.
+ *     ⇒ Implementation: `mode: "manual"` (NOT promotable to ALLOW
+ *       by the parser; the user explicitly opted out of auto-approval).
+ *
+ *   --auto-approve true | --yolo
+ *     ⇒ Skip tool approval prompts entirely.
+ *     ⇒ Implementation: `mode: "all"` (every command ALLOWs through V1).
+ *
+ * The CLI does NOT currently expose a user-visible safe-only flag
+ * (the analog of VSCode's `executeSafeCommands`). Therefore there is
+ * no CLI configuration that opts into the V2 ASK → ALLOW promotion
+ * gate. The promotion framework IS proven (VSCode exercises it
+ * end-to-end) but on the CLI it stays dormant under explicit manual
+ * mode — the parser can never override an explicit user NO.
+ *
  * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
- * CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
+ * CORRECTION02 (Phase 2 reviewer HALT_CLI_EXPLICIT_NO_AUTO_APPROVE_CONTRACT_BROKEN):
  *
- * `autoApproveTools=true`  → `mode: "all"` (user opted in to autonomous
- *                            execution; everything ALLOWs through V1).
+ * The previous CORRECTION01 rewrote
+ * `autoApproveTools=false → mode: "safe-only"`, claiming it "matches
+ * VSCode's executeSafeCommands=false". That was wrong:
  *
- * `autoApproveTools=false` → `mode: "safe-only"` + DEFAULT_COMMAND_HOST_ALLOW_RULES
- *                            (safe commands like `pwd`, `git status`,
- *                            `git diff` ALLOW; everything else ASK).
+ *   - VSCode's `executeSafeCommands=false` is the LITERAL DISABLED
+ *     state for safe-command auto-approval — it does NOT auto-run
+ *     safe commands; it explicitly does the opposite.
+ *   - VSCode has a SEPARATE `executeAllCommands` setting for
+ *     "run everything" mode. The CLI's `--auto-approve false`
+ *     must NOT silently become VSCode's "executeSafeCommands"
+ *     semantic just to make V2 promotion reachable.
  *
- * This matches the VSCode host's `getCommandHostAuthorization` semantics
- * exactly (see `apps/vscode/src/sdk/sdk-tool-policies.ts`). Previously,
- * the CLI used `mode: "manual"` here, which (a) blocked even safe
- * commands like `pwd` from auto-approving — inconsistent with VSCode
- * behavior — and (b) made the V2 ASK → ALLOW promotion un-reachable
- * on the production path because `host_mode_manual` is intentionally
- * not in `STRUCTURE_ONLY_PROMOTABLE_REASONS` (manual mode means the
- * user asked for approval).
+ * This function is therefore restored to its prior behavior:
+ * `autoApproveTools=false → mode: "manual"`. Tests that pinned
+ * the corrected semantics (`pwd → ALLOW`) are reverted to pin the
+ * documented contract (`pwd → ASK`).
  *
- * The `safe-only` mode is V2-promotable via
- * `host_mode_safe_only_fallthrough` when the parser confirms the AST.
- * With this change, the real CLI interactive path now matches the
- * VSCode interactive path's V2 promotion semantics.
+ * V2 state on the CLI:
  *
- * Existing tests that pinned the prior "manual mode rejects every
- * command" behavior were updated to assert the corrected semantics.
+ *   CLI_INTERACTIVE_V2 = FRAMEWORK_PROVEN_BUT_DORMANT
+ *   CLI_ACP_PATH       = V1_ONLY (per CORRECTION01 documentation)
+ *
+ * If/when a user-visible CLI safe-only flag is added (follow-up
+ * work, NOT in this ACT), it should construct the auth via
+ * `cliResolveSafeOnlyHostAuthorization()` below, which:
+ *
+ *   - Uses `mode: "safe-only"` + `DEFAULT_COMMAND_HOST_ALLOW_RULES`.
+ *   - Is V2-promotable via `host_mode_safe_only_fallthrough` when
+ *     the parser confirms the AST.
+ *   - Hard-DENY and R5 invariants still win (V2 cannot weaken them).
  */
 export function cliResolveHostAuthorization(
 	autoApproveTools: boolean,
 ): CommandHostAuthorization {
-	if (autoApproveTools) {
-		return commandHostAuthorization({ mode: "all" });
-	}
-	return commandHostAuthorization({
-		mode: "safe-only",
-		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
-	});
+	const mode: CommandHostMode = autoApproveTools ? "all" : "manual";
+	return commandHostAuthorization({ mode });
 }
 
 /**
@@ -148,6 +170,65 @@ export function cliResolveSafeOnlyHostAuthorization(options?: {
 	}));
 	return commandHostAuthorization({
 		mode: "manual",
+		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+		explicitDenyRules: denyRules,
+	});
+}
+
+/**
+ * Build a TRUE safe-only host authorization (`mode: "safe-only"`)
+ * with the canonical DEFAULT_COMMAND_HOST_ALLOW_RULES attached.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+ * CORRECTION02 (Phase 2 reviewer HALT_CLI_EXPLICIT_NO_AUTO_APPROVE_CONTRACT_BROKEN):
+ *
+ * This is the helper that the V2 ASK → ALLOW promotion gate
+ * actually requires. It is NOT currently wired into the production
+ * `cliResolveHostAuthorization(autoApproveTools)` path because the
+ * CLI does NOT yet expose a user-visible safe-only flag (per
+ * `apps/cli/README.md`). The CLI's documented `--auto-approve false`
+ * flag means "require approval before each tool call" (manual mode
+ * for every command), which is correctly preserved by the
+ * CORRECTION02-reverted `cliResolveHostAuthorization(false)`.
+ *
+ * This helper exists to:
+ *
+ *   1. Prove that the V2 promotion framework is structurally wired
+ *      on the CLI (test-only at present).
+ *   2. Provide a single drop-in auth constructor for a future
+ *      user-visible CLI safe-only flag (follow-up work, NOT in
+ *      this ACT), should one be added.
+ *
+ * Behavior:
+ *
+ *   safe-only + pwd               → ALLOW (matches DEFAULT safe rule)
+ *   safe-only + pwd; pwd + parser  → ALLOW (V2 promotes fallthrough)
+ *   safe-only + pwd; pwd no parser → ASK (V1 fallthrough)
+ *   safe-only + unknown           → ASK (V1 fallthrough)
+ *   safe-only + R5 (rm -rf $HOME)  → ASK + never-auto-approve
+ *                                    (R5 invariant ALWAYS wins)
+ *   safe-only + explicit DENY     → DENY (DENY ALWAYS wins)
+ *
+ * Hard-DENY and R5 invariants are invariant across modes. The
+ * parser NEVER weakens them.
+ */
+export function cliResolveTrueSafeOnlyHostAuthorization(options?: {
+	/**
+	 * Explicit deny rules to inject for testing. Each rule's pattern is
+	 * a string that will be compiled to a RegExp (prefix match).
+	 */
+	explicitDenyRules?: ReadonlyArray<{
+		pattern: string;
+		label: string;
+		description: string;
+	}>;
+}): CommandHostAuthorization {
+	const denyRules = options?.explicitDenyRules?.map((r) => ({
+		source: r.label,
+		pattern: new RegExp(`^${r.pattern.replace(/\*/g, ".*")}`),
+	}));
+	return commandHostAuthorization({
+		mode: "safe-only",
 		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
 		explicitDenyRules: denyRules,
 	});
@@ -266,7 +347,7 @@ export function cliEvaluateCommandToolApprovalWith(
 		// version + structural validation make it tamper-evident).
 		// `unknown` keeps the V2 type identifier out of this host
 		// source (the parser-provenance invariant forbids the
-		// literal "ParsedShell" in host source files).
+		// literal V2 type identifier in host source files).
 		parserResult: input.parserResult as never,
 	});
 	const riskDowngrade =

@@ -5426,3 +5426,85 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
     NEW: safe commands auto-allow; others ask (safe-only mode)
     Matches VSCode's executeSafeCommands=false behavior.
     Documented in 02-correction01-final-report.md.
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+  = PHASE_2_CORRECTION02_CLI_CONTRACT_PRESERVED
+  = C1_GO_PHASE_3_BINARY_SHIPPING
+
+  Reviewer HALT_CLI_EXPLICIT_NO_AUTO_APPROVE_CONTRACT_BROKEN addressed.
+
+  The CORRECTION01 repair (real production seam) was structurally
+  sound but VIOLATED the documented `--auto-approve false` contract.
+  I was wrong to call it "matches VSCode executeSafeCommands=false" —
+  that setting is the LITERAL DISABLED state for safe-command auto-
+  approval, not its activation.
+
+  WHAT LANDED (CORRECTION02):
+
+  1. CLI production auth semantics RESTORED:
+     cliResolveHostAuthorization(false) returns mode: "manual" again.
+     --auto-approve=false means "require approval before each tool
+     call" — every command asks the user, even safe ones like pwd.
+
+  2. Reviewer's VSCode analogy was wrong:
+     VSCode executeSafeCommands=false is OFF, not ON. executeAllCommands
+     is the separate "run everything" toggle. CLI --auto-approve=false
+     is the OFF state, not the safe-only gate. Reverted.
+
+  3. NEW cliResolveTrueSafeOnlyHostAuthorization helper:
+     mode: "safe-only" + DEFAULT safe rules. This is what V2 promotion
+     actually requires. NOT wired into production (no user-visible
+     safe-only CLI flag exists). Test-only proof that the V2 framework
+     is structurally wired on the CLI and awaits a future user-visible
+     flag to activate.
+
+  4. CLI tests rewritten to PIN the documented contract:
+     --auto-approve=false + pwd        -> ASK / host_mode_manual
+     --auto-approve=false + pwd; pwd   -> ASK / host_mode_manual
+                                          (LOAD-BEARING: V2 stays dormant)
+     --auto-approve=false + git status -> ASK / host_mode_manual
+     --auto-approve=false + R5         -> ASK / risk_hard_floor
+     --auto-approve=true  + R5         -> ASK / risk_hard_floor
+
+  5. Framework-proof tests via safe-only helper (V2 reachable when
+     user explicitly opts in via a future safe-only flag):
+     safe-only + pwd; pwd + helper -> ALLOW (V2 promotion fires)
+
+  6. Provenance wording tightened (sub-string clean):
+     "literal V2 type identifier" (was "literal 'ParsedShell'" which
+     violated the parser-provenance substring invariant test).
+
+  CLI DISCRIMINATOR (REAL production path):
+    HELPER PRESENT + pwd;pwd + --auto-approve=false
+      approved: false
+      decision.source: "host_mode_manual"          ✓ GREEN (manual mode wins)
+    HELPER PRESENT + pwd + --auto-approve=false
+      approved: false
+      decision.source: "host_mode_manual"          ✓ GREEN (V2 dormant for safe too)
+    HELPER PRESENT + rm -rf $HOME + --auto-approve=true
+      approved: false
+      decision.source: "risk_hard_floor"           ✓ GREEN (R5 invariant holds)
+
+  LOAD-BEARING PIN TEST:
+    manual ASK + trusted parser safe AST
+      = ASK / host_mode_manual
+      != ALLOW / risk_v2_structured_promotion
+
+  V2 STATE:
+    CLI_INTERACTIVE_V2 = FRAMEWORK_PROVEN_BUT_DORMANT
+      (V2 structurally wired, awaits user-visible safe-only flag)
+    CLI_ACP_PATH       = V1_ONLY (per CORRECTION01 documentation)
+    VSCODE V2          = WIRED (real SdkController callback, real auth)
+
+  TEST RESULTS:
+    @cline/core command-policy:    318/318 pass
+    @cline/core parser-provenance:    8/8 pass (substring invariant clean)
+    @cline/core build:                clean
+    CLI host (4 files):               66/66 pass (was 65; +1 framework-proof)
+    CLI typecheck:                     clean
+    VSCode vitest:                 2049/2049 pass
+    VSCode typecheck:                 clean
+
+  VERDICT:
+    PHASE_2_CORRECTION02 = COMPLETE
+    C1: GO directly to Phase 3 (binary cross-compilation).

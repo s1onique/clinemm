@@ -67,33 +67,15 @@ describe("CLI production controller — command policy wiring", () => {
 		expect(result.approved).toBe(false);
 	});
 
-	it("autoApproveTools=false + non-safe command (npm install) + model=false => ASK (safe-only fallthrough)", async () => {
+	it("autoApproveTools=false + ANY command + model=false => rejected (documented CLI contract)", async () => {
 		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
-		// CORRECTION01 (Phase 2 reviewer HALT_PHASE2_PRODUCTION_SEAM_NOT_PROVEN):
-		// production CLI now uses `mode: "safe-only"` (not `manual`)
-		// when `autoApproveTools=false`. Safe commands like `pwd`,
-		// `git status`, `git diff` auto-allow via
-		// `host_mode_safe_only_rule`; non-safe commands like
-		// `npm install` ASK via `host_mode_safe_only_fallthrough`.
-		const config = makeConfig(false);
-		const controller = createInteractiveApprovalController(config);
-
-		const result = await controller.requestToolApproval({
-			toolName: "run_commands",
-			input: { command: "npm install", requires_approval: false },
-			policy: { autoApprove: false },
-			sessionId: "test-session",
-			agentId: "test-agent",
-			conversationId: "test-conv",
-			iteration: 0,
-			toolCallId: "test-call",
-		});
-		expect(result.approved).toBe(false);
-		expect(result.decision?.source).toBe("host_mode_safe_only_fallthrough");
-	});
-
-	it("autoApproveTools=false + safe command (pwd) + model=false => ALLOW (safe-only rule matched)", async () => {
-		// New positive test for the corrected CLI auth semantics.
+		// CORRECTION02 (Phase 2 reviewer HALT_CLI_EXPLICIT_NO_AUTO_APPROVE_CONTRACT_BROKEN):
+		// `--auto-approve false` is documented as
+		// "Require approval before each tool call". This production
+		// path test confirms that even a safe command (`pwd`) ASKs
+		// the user when `--auto-approve false` is active. The V2
+		// parser is NOT allowed to manufacture auto-approval from
+		// an explicit manual-mode opt-out.
 		const config = makeConfig(false);
 		const controller = createInteractiveApprovalController(config);
 
@@ -107,8 +89,8 @@ describe("CLI production controller — command policy wiring", () => {
 			iteration: 0,
 			toolCallId: "test-call",
 		});
-		expect(result.approved).toBe(true);
-		expect(result.decision?.source).toBe("host_mode_safe_only_rule");
+		expect(result.approved).toBe(false);
+		expect(result.decision?.source).toBe("host_mode_manual");
 	});
 
 	it("autoApproveTools=true + execute_command alias => same as run_commands (R5 hard floor fires)", async () => {
