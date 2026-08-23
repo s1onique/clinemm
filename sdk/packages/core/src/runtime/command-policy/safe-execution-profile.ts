@@ -125,6 +125,15 @@ export const SAFE_GIT_LOG_PROFILE: SafeExecutionProfile = {
 	commandSuffix: DIFF_FAMILY_SUFFIX,
 };
 
+export const SAFE_GIT_BRANCH_PROFILE: SafeExecutionProfile = {
+	kind: "git_observational",
+	source: "host_safe_git_branch_profile",
+	description:
+		"Run git branch under hardened globals: pager disabled, fsmonitor/hooks/pager neutralized via -c overrides. No diff-specific suffix because git branch is observational/list mode and --no-ext-diff/--no-textconv are diff-family options, not branch-list options.",
+	commandPrefix: GIT_GLOBAL_HARDENING,
+	commandSuffix: [],
+};
+
 export function getSafeExecutionProfileForSource(
 	source: string,
 ): SafeExecutionProfile | undefined {
@@ -137,6 +146,8 @@ export function getSafeExecutionProfileForSource(
 			return SAFE_GIT_DIFF_PROFILE;
 		case "host_safe_git_log":
 			return SAFE_GIT_LOG_PROFILE;
+		case "host_safe_git_branch":
+			return SAFE_GIT_BRANCH_PROFILE;
 		default:
 			return undefined;
 	}

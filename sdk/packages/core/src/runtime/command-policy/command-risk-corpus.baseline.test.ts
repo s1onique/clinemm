@@ -60,6 +60,20 @@ describe("Group A — baseline freeze: findSafeRuleMatch vs corpus", () => {
 		expect(r0show?.matchedSource).toBe("host_safe_git_show");
 		const r0revlist = baseline.find((b) => b.id === "r0-git-rev-list");
 		expect(r0revlist?.matchedSource).toBe("host_safe_git_rev_list");
+		// V1 added `host_safe_git_branch` to the safe allowlist.
+		// These corpus entries pin the post-V1 snapshot.
+		const r0BranchShowCurrent = baseline.find(
+			(b) => b.id === "r0-git-branch-show-current",
+		);
+		expect(r0BranchShowCurrent?.matchedSource).toBe("host_safe_git_branch");
+		const r0BranchList = baseline.find((b) => b.id === "r0-git-branch-list");
+		expect(r0BranchList?.matchedSource).toBe("host_safe_git_branch");
+		const r0BranchAll = baseline.find((b) => b.id === "r0-git-branch-all");
+		expect(r0BranchAll?.matchedSource).toBe("host_safe_git_branch");
+		const r0BranchRemotes = baseline.find(
+			(b) => b.id === "r0-git-branch-remotes",
+		);
+		expect(r0BranchRemotes?.matchedSource).toBe("host_safe_git_branch");
 	});
 });
 
@@ -115,6 +129,10 @@ describe("Group A — baseline freeze: evaluateCommandPolicy in 'safe-only' mode
 		expect(byId.get("r0-git-rev-parse")).toBe("allow");
 		expect(byId.get("r0-git-show")).toBe("allow");
 		expect(byId.get("r0-git-rev-list")).toBe("allow");
+		expect(byId.get("r0-git-branch-show-current")).toBe("allow");
+		expect(byId.get("r0-git-branch-list")).toBe("allow");
+		expect(byId.get("r0-git-branch-all")).toBe("allow");
+		expect(byId.get("r0-git-branch-remotes")).toBe("allow");
 		// R5 catastrophic + wrappers are all ASK.
 		expect(byId.get("r5-rm-rf-home")).toBe("ask");
 		expect(byId.get("wrap-bash-c-rm-home")).toBe("ask");

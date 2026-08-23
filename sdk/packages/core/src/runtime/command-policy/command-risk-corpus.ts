@@ -136,6 +136,38 @@ export const CORPUS: ReadonlyArray<CorpusCase> = [
 		requiredDisposition: "auto-approve-eligible",
 		notes: "object listing",
 	},
+	{
+		id: "r0-git-branch-show-current",
+		family: "R0-readonly",
+		command: "git branch --show-current",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "pure query; prints current branch name",
+	},
+	{
+		id: "r0-git-branch-list",
+		family: "R0-readonly",
+		command: "git branch",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "default listing mode; observational",
+	},
+	{
+		id: "r0-git-branch-all",
+		family: "R0-readonly",
+		command: "git branch -a",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "list local + remote-tracking; observational",
+	},
+	{
+		id: "r0-git-branch-remotes",
+		family: "R0-readonly",
+		command: "git branch -r",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "list remote-tracking only; observational",
+	},
 
 	// -------------------- R1 — bounded build / test --------------------
 	// V1 keeps the rule engine bounded — adding "all `bun test` is safe"

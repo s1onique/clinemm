@@ -133,6 +133,58 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 			expect(m?.source).toBe("host_safe_git_log");
 		}
 	});
+
+	it("git branch: finite allowlisted list / query forms match", () => {
+		// Every command in this list is asserted to match
+		// `host_safe_git_branch`. Each option is individually reviewed
+		// against the REVIEW STANDARD at the top of command-safe-rules.ts.
+		// NOTE: --format=<fmt> is DELIBERATELY REJECTED. git-branch(1)
+		// documents it as git-for-each-ref interpolation; the previous
+		// "git log --pretty preset names" allowlist was inaccurate
+		// (those names are NOT valid git-branch --format directives
+		// and produce literal text output). Rejection cases are in the
+		// REJECTED git branch options describe below.
+		for (const cmd of [
+			// Bare / --list : default listing; pure observation.
+			"git branch",
+			"git branch --list",
+			// --all / -a : local + remote-tracking
+			"git branch --all",
+			"git branch -a",
+			// --remotes / -r : remote-tracking only
+			"git branch --remotes",
+			"git branch -r",
+			// --show-current : print current branch name
+			"git branch --show-current",
+			// --points-at <object> : list branches at object
+			"git branch --points-at HEAD",
+			"git branch --points-at main",
+			"git branch --points-at 1234567",
+			"git branch --points-at feature/foo",
+			"git branch --list --points-at HEAD",
+			"git branch --show-current --points-at HEAD",
+			// Color / visual-only
+			"git branch --no-color",
+			"git branch --color=always",
+			"git branch --color=auto",
+			"git branch --color=never",
+			"git branch --show-current --no-color",
+			"git branch -r --no-color",
+			// Verbose list modes (observational)
+			"git branch -v",
+			"git branch -vv",
+			"git branch -vva",
+			// --no-abbrev : observational
+			"git branch --no-abbrev",
+			// Composed combinations
+			"git branch --list -a",
+			"git branch -a --no-color",
+			"git branch --list --no-color",
+		]) {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m?.source).toBe("host_safe_git_branch");
+		}
+	});
 });
 
 describe("findSafeRuleMatch — REJECTED git diff options (helper-invocation / out-of-scope)", () => {
@@ -201,6 +253,115 @@ describe("findSafeRuleMatch — REJECTED git status options", () => {
 	];
 
 	for (const [cmd] of REJECTED_STATUS) {
+		it(`rejects "${cmd}"`, () => {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m).toBeUndefined();
+		});
+	}
+});
+
+describe("findSafeRuleMatch — REJECTED git branch options (mutation / out-of-scope)", () => {
+	// git branch has documented create / delete / rename / copy / upstream
+	// mutation forms. None of these may match a safe rule. Per
+	// REVIEW STANDARD (command-safe-rules.ts top), the rule engine must
+	// return undefined for these.
+	const REJECTED_BRANCH = [
+		// Create
+		["git branch foo", "create new branch (positional name)"],
+		["git branch foo HEAD", "create new branch at start-point"],
+		// Delete
+		["git branch -d foo", "delete branch (safe)"],
+		["git branch -D foo", "delete branch (force)"],
+		["git branch --delete foo", "delete branch (long form)"],
+		// Rename / move
+		["git branch -m old new", "rename branch"],
+		["git branch -M old new", "rename branch (force)"],
+		["git branch --move old new", "rename branch (long form)"],
+		// Copy
+		["git branch -c old new", "copy branch"],
+		["git branch -C old new", "copy branch (force)"],
+		["git branch --copy old new", "copy branch (long form)"],
+		// Upstream mutation
+		["git branch --set-upstream-to=origin/main", "upstream mutation"],
+		["git branch -u origin/main foo", "upstream mutation"],
+		["git branch --unset-upstream foo", "upstream mutation"],
+		// Description editor (writes)
+		["git branch --edit-description foo", "writes to refs"],
+		// Tracking on creation (only valid with create form)
+		["git branch --track origin/main foo", "create-tracking"],
+		["git branch --no-track origin/main foo", "create-tracking override"],
+		// Broader-scope predicates (V2 may revisit)
+		["git branch --contains HEAD", "broader commit-set predicate"],
+		["git branch --merged", "broader commit-set predicate"],
+		["git branch --no-merged", "broader commit-set predicate"],
+		// --format=<fmt> is DELIBERATELY REJECTED. git-branch(1) uses
+		// git-for-each-ref interpolation; the finite "log pretty preset"
+		// allowlist previously in this rule was inaccurate (those names
+		// are NOT valid git-branch --format directives and produce
+		// literal text output). Per Factory review P1, we reject all
+		// --format forms (including the previously-allowed preset names
+		// and arbitrary for-each-ref interpolation). Users wanting
+		// custom formatting should invoke `git for-each-ref` directly
+		// (also ASK today).
+		["git branch --format=%H", "git-for-each-ref interpolation rejected"],
+		[
+			"git branch --format=%(refname:short)",
+			"git-for-each-ref interpolation rejected",
+		],
+		[
+			"git branch --format=oneline",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=short",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=medium",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=full",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=fuller",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=reference",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=email",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=raw",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		[
+			"git branch --format=tformat",
+			"log pretty preset; not a valid git-branch --format directive",
+		],
+		["git branch --format=evil", "unknown format directive"],
+		// Unknown options (no wildcard fallback)
+		["git branch --totally-unknown", "unknown option"],
+		["git branch --whatever", "unknown option"],
+		// --points-at requires the object token; bare flag must reject.
+		["git branch --points-at", "missing required object token"],
+		["git branch --list --points-at", "missing required object token"],
+		// Positional before any flag (would-be create)
+		["git branch foo --list", "positional before flag"],
+		// Short flag we did not review (-z = --null; serialization)
+		["git branch -z", "short flag outside reviewed set"],
+		// Composition with --all followed by name (create-via-list-all)
+		["git branch -a foo", "create-via-all (positional after options)"],
+		// Color value outside reviewed set
+		["git branch --color=evil", "color value outside reviewed set"],
+	];
+
+	for (const [cmd, _why] of REJECTED_BRANCH) {
 		it(`rejects "${cmd}"`, () => {
 			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
 			expect(m).toBeUndefined();

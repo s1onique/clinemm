@@ -224,6 +224,77 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		pattern:
 			/^\s*git\s+rev-list(?:\s+(?:--max-count=\d+|-n\s+\d+|--count|--no-color|--color=(?:always|auto|never)))*(?:\s+[A-Za-z0-9_./-]+)?$/u,
 	},
+	{
+		source: "host_safe_git_branch",
+		// git branch: list / query modes. Pure observation of the
+		// branch state. git-branch(1) explicitly distinguishes the
+		// listing/query subcommands from create / delete / rename /
+		// copy / upstream-mutation modes. We enumerate ONLY the
+		// read-only forms here. Any form that creates, deletes,
+		// renames, copies, or mutates branch tracking MUST NOT match.
+		//
+		// Review summary per option (REVIEW STANDARD at top of file):
+		//
+		//   (bare) / --list       default listing; pure observation.
+		//   -a / --all            list local + remote-tracking.
+		//   -r / --remotes        list remote-tracking only.
+		//   --show-current        print current branch name; pure query.
+		//   --points-at <object>  list branches at object; observational.
+		//                          The <object> token is constrained to
+		//                          the same reviewed character class as
+		//                          the other rule's refs/SHAs.
+		//   --no-color            disable color; visual only.
+		//   --color=<a|n>         visual only.
+		//   -v / -vv / -vva       verbose list mode; observational.
+		//   --no-abbrev           observational.
+		//
+		//   --format=<fmt>        DELIBERATELY REJECTED. git-branch(1)
+		//                          documents `--format=<format>` as the
+		//                          git-for-each-ref interpolation format
+		//                          (e.g. `%(refname:short)`,
+		//                          `%(HEAD)`, `%(upstream:track)`). The
+		//                          token set is wide and arbitrary; a
+		//                          naive enumeration of `git log --pretty`
+		//                          preset names (oneline/short/medium/
+		//                          full/fuller/reference/email/raw/tformat)
+		//                          is NOT the same thing — those are
+		//                          log/pretty presets, not branch-format
+		//                          directives, and they produce literal
+		//                          text output rather than meaningful
+		//                          branch formatting. Rather than allow
+		//                          a misleading allowlist, we reject
+		//                          --format entirely; users who want
+		//                          custom formatting can invoke through
+		//                          `git for-each-ref` explicitly (which
+		//                          also has no host-proven rule and is
+		//                          ASK today).
+		//
+		// Explicitly REJECTED (per REVIEW STANDARD; these are the
+		// MUTATING forms the rule must NOT match):
+		//   <name>                create a new branch. Any positional
+		//                          after the options block is rejected by
+		//                          the pattern's optional [object] token
+		//                          which only follows --points-at.
+		//   <name> <start>        create at start-point; same reason.
+		//   -d / -D / --delete    delete.
+		//   -m / -M / --move      rename.
+		//   -c / -C / --copy      copy.
+		//   -u / --set-upstream-to=<u>
+		//                          upstream mutation.
+		//   --unset-upstream      upstream mutation.
+		//   --edit-description    writes to refs.
+		//   --track / --no-track  valid only with create form; rejected
+		//                          because the create form is rejected.
+		//   --contains / --merged / --no-merged
+		//                          broader scope (commits sets); V2 may
+		//                          revisit; ASK today.
+		//   --format=<fmt>        git-for-each-ref interpolation;
+		//                          REJECTED to avoid a misleading
+		//                          allowlist.
+		//   any unknown --foo     ASK (no wildcard).
+		pattern:
+			/^\s*git\s+branch(?:\s+(?:--list|-a|--all|-r|--remotes|--show-current|--no-color|--color=(?:always|auto|never)|-vv?a?|--no-abbrev))*(?:\s+--points-at\s+[A-Za-z0-9_./-]+)?\s*$/u,
+	},
 ];
 
 /**

@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
+	SAFE_GIT_BRANCH_PROFILE,
 	SAFE_GIT_DIFF_PROFILE,
 	SAFE_GIT_LOG_PROFILE,
 	SAFE_GIT_STATUS_PROFILE,
@@ -200,6 +201,29 @@ describe("applySafeExecutionProfileToCommand — token positions", () => {
 		expect(out).toContain("log");
 		expect(out).toContain("--oneline");
 		expect(out).toContain("-5");
+	});
+
+	it("git branch: hardening prefix only, NO diff-family suffix", () => {
+		const out = applySafeExecutionProfileToCommand(
+			"git branch --show-current",
+			SAFE_GIT_BRANCH_PROFILE,
+		) as string;
+		// Hardening prefix must be applied.
+		expect(out).toContain("--no-pager");
+		expect(out).toContain("core.pager=cat");
+		expect(out).toContain("core.fsmonitor=false");
+		expect(out).toContain("core.hooksPath=/dev/null");
+		// Diff-family suffix MUST NOT appear for git branch: --no-ext-diff
+		// and --no-textconv are diff-family options, not branch-list
+		// options. git-branch(1) does not consume them.
+		expect(out).not.toContain("--no-ext-diff");
+		expect(out).not.toContain("--no-textconv");
+	});
+
+	it("getSafeExecutionProfileForSource returns SAFE_GIT_BRANCH_PROFILE for host_safe_git_branch", () => {
+		expect(getSafeExecutionProfileForSource("host_safe_git_branch")).toBe(
+			SAFE_GIT_BRANCH_PROFILE,
+		);
 	});
 });
 
