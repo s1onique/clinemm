@@ -405,3 +405,59 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		expect(result.executionPlan).toBeUndefined();
 	});
 });
+
+describe("CLI host adapter — CORRECTION01: V2 ASK -> ALLOW host composition", () => {
+	// V2 promotion seam is composed into the CLI decision. Today
+	// parserResult is undefined (V2 dormant), so safe-compound
+	// commands remain ASK. These tests pin the composition order:
+	// DENY > R5 > canonical ASK -> ALLOW (only via
+	// risk_v2_structured_promotion source).
+
+	it("safe compound (pwd; pwd) stays ASK today (V2 dormant)", () => {
+		const result = cliEvaluateCommandToolApproval({
+			toolName: "run_commands",
+			toolInput: "pwd; pwd",
+			autoApproveTools: false,
+		});
+		expect(result.approved).toBe(false);
+		expect(result.decision.kind).toBe("ask");
+	});
+
+	it("R5 catastrophic (rm -rf $HOME) returns ASK + never-auto-approve even in --auto-approve", () => {
+		const result = cliEvaluateCommandToolApproval({
+			toolName: "run_commands",
+			toolInput: "rm -rf $HOME",
+			autoApproveTools: true,
+		});
+		expect(result.approved).toBe(false);
+		expect(result.decision.kind).toBe("ask");
+		expect(result.decision.source).toBe("risk_hard_floor");
+	});
+
+	it("unknown command stays ASK (no V2 promotion without risk_v2_structured_promotion source)", () => {
+		const result = cliEvaluateCommandToolApproval({
+			toolName: "run_commands",
+			toolInput: "totally-unknown-cmd --opt",
+			autoApproveTools: false,
+		});
+		expect(result.approved).toBe(false);
+		expect(result.decision.kind).toBe("ask");
+	});
+
+	it("explicit deny rule beats R5 floor (DENY preserved)", () => {
+		const denyAuth = cliResolveSafeOnlyHostAuthorization({
+			explicitDenyRules: [{ pattern: "rm -rf *", label: "unit_test_evil", description: "test" }],
+		});
+		const result = cliEvaluateCommandToolApprovalWith(
+			{
+				toolName: "run_commands",
+				toolInput: "rm -rf /",
+				autoApproveTools: true,
+			},
+			denyAuth,
+		);
+		expect(result.approved).toBe(false);
+		expect(result.decision.kind).toBe("deny");
+		expect(result.decision.source).toBe("host_hard_deny");
+	});
+});

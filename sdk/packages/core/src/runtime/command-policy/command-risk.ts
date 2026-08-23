@@ -302,10 +302,35 @@ export function findCommandRiskHardFloor(rendered: string): {
  * Main entry point                                                        *
  * ---------------------------------------------------------------------- */
 
+/**
+ * Public V1-only entry point.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01-CORRECTION01:
+ * The public `evaluateCommandRisk` MUST be V1-only by construction at
+ * RUNTIME, not just at the TypeScript type layer. This function
+ * deliberately reconstructs a fresh internal input with only the two
+ * documented public fields and `parserResult` explicitly set to
+ * `undefined`, so any caller-supplied `parserResult` (e.g. via a
+ * TypeScript `as any` escape hatch or a plain JS object) is
+ * PROVABLY ignored at runtime.
+ *
+ * Provenance barrier (runtime): the public wrapper strips all
+ * excess runtime properties by reconstructing the input object
+ * before delegating. No JavaScript caller can reach the V2-aware
+ * evaluator through this entry point.
+ */
 export function evaluateCommandRisk(
 	input: EvaluateCommandRiskInput,
 ): RiskDecision {
-	return evaluateCommandRiskWithParser(input);
+	return evaluateCommandRiskWithParser({
+		toolInput: input.toolInput,
+		hostAuthorization: input.hostAuthorization,
+		// CRITICAL: do NOT spread `input`. Any other runtime property
+		// on the caller's object (e.g. parserResult, parserResultAlias)
+		// is dropped at this boundary. V2 is unreachable from the
+		// public surface.
+		parserResult: undefined,
+	});
 }
 
 /**
@@ -317,10 +342,12 @@ export function evaluateCommandRisk(
  * module so trusted host adapters (CLI / VSCode) can opt in to V2,
  * but the PUBLIC `@cline/core` entry point does NOT re-export it.
  *
- * Untrusted callers — model, MCP, webview, proto, remote — have no
- * code path that reaches this function with a `parserResult` argument.
- * Their path ends at `evaluateCommandRisk(...)`, which is V1-only by
- * construction.
+ * CORRECTION01 (HALT_PROVENANCE_GAP): the public `evaluateCommandRisk`
+ * no longer forwards its input object directly to this function. It
+ * reconstructs a fresh internal input with `parserResult: undefined`,
+ * making the public boundary V1-only by construction at runtime.
+ * Untrusted callers cannot reach this function through the public
+ * surface even if they bypass TypeScript types.
  *
  * Authority / Provenance contract:
  *   - `parserResult` MUST be constructed by a trusted host-owned

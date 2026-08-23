@@ -155,6 +155,17 @@ export function evaluateCommandToolApproval(
 		hostAuthorization,
 	})
 
+	// DENY precedence: an explicit hard host DENY rule (e.g. an
+	// admin-defined `^rm -rf` block) takes precedence over the R5
+	// hard floor and over any V2 promotion. The user-configured
+	// deny must win.
+	if (result.decision.kind === "deny") {
+		return {
+			approved: false,
+			decision: result.decision,
+		}
+	}
+
 	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
 	// Layer the R5 catastrophic hard floor on top of the canonical
 	// policy verdict. `evaluateCommandRiskWithParser` is a
@@ -171,14 +182,19 @@ export function evaluateCommandToolApproval(
 	// `parserResult: undefined` keeps V2 dormant. The future ACT
 	// (ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01)
 	// will replace `undefined` with the trusted helper's result.
-	if (
-		result.decision.kind === "allow" &&
-		evaluateCommandRiskWithParser({
-			toolInput,
-			hostAuthorization,
-			parserResult: undefined,
-		}).disposition === "never-auto-approve"
-	) {
+	//
+	// CORRECTION01 (HALT_PROVENANCE_GAP): the V2-aware evaluator is
+	// invoked UNCONDITIONALLY — not only when the canonical verdict
+	// is ALLOW. V2 may PROMOTE a structure-only V1 ASK to ALLOW when
+	// every reachable AST branch is auto-approve eligible. Without
+	// this composition, safe compound commands (e.g. `pwd; pwd`)
+	// would never reach the V2 promotion gate.
+	const riskVerdict = evaluateCommandRiskWithParser({
+		toolInput,
+		hostAuthorization,
+		parserResult: undefined,
+	})
+	if (riskVerdict.disposition === "never-auto-approve") {
 		return {
 			approved: false,
 			decision: {
@@ -186,6 +202,22 @@ export function evaluateCommandToolApproval(
 				reason: "R5 catastrophic hard floor: never auto-approve",
 				source: "risk_hard_floor",
 			},
+		}
+	}
+
+	// V2-aware ASK -> ALLOW promotion. Today this never fires because
+	// parserResult is undefined (V2 dormant), but the structural seam
+	// is here so the helper-binary ACT just has to drop in a parser
+	// result. The `risk_v2_structured_promotion` source is the ONLY
+	// path through which a V1 ASK may be promoted to ALLOW.
+	if (
+		result.decision.kind === "ask" &&
+		riskVerdict.source === "risk_v2_structured_promotion" &&
+		riskVerdict.decision === "allow"
+	) {
+		return {
+			approved: true,
+			decision: riskVerdict as unknown as CommandDecision,
 		}
 	}
 
@@ -391,25 +423,44 @@ export function evaluateCommandToolApprovalWithPlan(
 	// uses the trusted-internal `evaluateCommandRiskWithParser`.
 	// `parserResult: undefined` keeps V2 dormant. The future ACT
 	// will replace this with the trusted helper's result.
-	if (result.decision.kind === "allow") {
-		const risk = evaluateCommandRiskWithParser({
-			toolInput,
-			hostAuthorization,
-			parserResult: undefined,
-		})
-		if (risk.disposition === "never-auto-approve") {
-			return {
-				approved: false,
-				decision: {
-					kind: "ask",
-					reason: "R5 catastrophic hard floor: never auto-approve",
-					source: "risk_hard_floor",
-				},
-				executionPlan,
-			}
+	//
+	// CORRECTION01 (HALT_PROVENANCE_GAP): the V2-aware evaluator is
+	// invoked UNCONDITIONALLY — not only when the canonical verdict
+	// is ALLOW. V2 may PROMOTE a structure-only V1 ASK to ALLOW when
+	// every reachable AST branch is auto-approve eligible. Without
+	// this composition, safe compound commands (e.g. `pwd; pwd`)
+	// would never reach the V2 promotion gate.
+	const risk = evaluateCommandRiskWithParser({
+		toolInput,
+		hostAuthorization,
+		parserResult: undefined,
+	})
+	if (risk.disposition === "never-auto-approve") {
+		return {
+			approved: false,
+			decision: {
+				kind: "ask",
+				reason: "R5 catastrophic hard floor: never auto-approve",
+				source: "risk_hard_floor",
+			},
+			executionPlan,
 		}
 	}
-	// ALLOW or ASK.
+
+	// V2-aware ASK -> ALLOW promotion. Today this never fires because
+	// parserResult is undefined (V2 dormant), but the structural seam
+	// is here so the helper-binary ACT just has to drop in a parser
+	// result. The `risk_v2_structured_promotion` source is the ONLY
+	// path through which a V1 ASK may be promoted to ALLOW.
+	if (result.decision.kind === "ask" && risk.source === "risk_v2_structured_promotion" && risk.decision === "allow") {
+		return {
+			approved: true,
+			decision: risk as unknown as CommandDecision,
+			executionPlan,
+		}
+	}
+
+	// ALLOW or ASK (V1 path).
 	return {
 		approved: result.decision.kind === "allow",
 		decision: result.decision,

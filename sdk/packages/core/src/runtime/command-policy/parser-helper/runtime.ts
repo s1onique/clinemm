@@ -51,7 +51,6 @@ import {
 	BoundedStdoutChars,
 	BoundedTimeoutMs,
 	PARSER_HELPER_PROTOCOL_VERSION,
-	type ParsedShellJSON,
 	type ParserHelperDialect,
 	type ParserHelperRequest,
 } from "./protocol";
@@ -229,21 +228,88 @@ function validateResponse(
 	raw: string,
 	expectedDigest: string,
 ): ParsedShell | null {
-	let json: ParsedShellJSON;
+	let json: unknown;
 	try {
-		json = JSON.parse(raw) as ParsedShellJSON;
+		json = JSON.parse(raw);
 	} catch {
 		return null;
 	}
 	if (!json || typeof json !== "object") return null;
-	if (json.protocolVersion !== PARSER_HELPER_PROTOCOL_VERSION) return null;
-	if (typeof json.sourceSha256 !== "string") return null;
-	if (json.sourceSha256 !== expectedDigest) return null;
-	if (json.parseStatus !== "complete" && json.parseStatus !== "failed") {
+	const j = json as Record<string, unknown>;
+	if (j.protocolVersion !== PARSER_HELPER_PROTOCOL_VERSION) return null;
+	if (typeof j.sourceSha256 !== "string") return null;
+	if (j.sourceSha256 !== expectedDigest) return null;
+	if (j.parseStatus !== "complete" && j.parseStatus !== "failed") {
 		return null;
 	}
-	if (typeof json.hasCommandSubstitution !== "boolean") return null;
-	if (!Array.isArray(json.errors)) return null;
+	if (typeof j.hasCommandSubstitution !== "boolean") return null;
+	if (!Array.isArray(j.errors)) return null;
 
-	return json as unknown as ParsedShell;
+	// CORRECTION01 P1: structurally validate the nested AST.
+	// Without this, a helper that returns a malformed `program`
+	// (e.g. `program: { stmts: "not-an-array" }`) would pass
+	// top-level validation and throw later in the classifier when
+	// it tries to walk `.program.stmts`. We validate the narrow
+	// shape we consume and reject anything else.
+	if (!isValidProgram(j.program)) return null;
+
+	return j as unknown as ParsedShell;
+}
+
+function isValidProgram(program: unknown): boolean {
+	if (program === null) return true; // allowed when parseStatus is "failed"
+	if (typeof program !== "object") return false;
+	const p = program as Record<string, unknown>;
+	if (!Array.isArray(p.stmts)) return false;
+	for (const stmt of p.stmts) {
+		if (!isValidStmt(stmt)) return false;
+	}
+	return true;
+}
+
+function isValidStmt(stmt: unknown): boolean {
+	if (typeof stmt !== "object" || stmt === null) return false;
+	const s = stmt as Record<string, unknown>;
+	switch (s.kind) {
+		case "cmd":
+			return isValidCmd(s.cmd);
+		case "and":
+		case "or":
+		case "pipe":
+			return isValidStmt(s.left) && isValidStmt(s.rhs);
+		case "subshell":
+			return isValidStmt(s.inner);
+		case "opaque":
+			return true;
+		default:
+			return false;
+	}
+}
+
+function isValidCmd(cmd: unknown): boolean {
+	if (typeof cmd !== "object" || cmd === null) return false;
+	const c = cmd as Record<string, unknown>;
+	if (typeof c.name !== "string") return false;
+	if (!Array.isArray(c.args)) return false;
+	if (!Array.isArray(c.assigns)) return false;
+	if (!Array.isArray(c.redirects)) return false;
+	if (typeof c.isWrapper !== "boolean") return false;
+	if (typeof c.wrapperOf !== "string") return false;
+	if (typeof c.inner !== "string") return false;
+	for (const arg of c.args) {
+		if (typeof arg !== "string") return false;
+	}
+	for (const a of c.assigns) {
+		if (typeof a !== "object" || a === null) return false;
+		const ar = a as Record<string, unknown>;
+		if (typeof ar.name !== "string") return false;
+		if (typeof ar.value !== "string") return false;
+	}
+	for (const r of c.redirects) {
+		if (typeof r !== "object" || r === null) return false;
+		const rr = r as Record<string, unknown>;
+		if (typeof rr.op !== "string") return false;
+		if (typeof rr.path !== "string") return false;
+	}
+	return true;
 }

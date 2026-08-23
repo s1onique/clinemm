@@ -424,4 +424,80 @@ describe("CORRECTION02: cancel_command has dedicated job-control authority (NOT 
 		expect(result.approved).toBe(true)
 		expect(result.decision.kind).toBe("allow")
 	})
+
+	describe("CORRECTION01: V2 ASK -> ALLOW host composition", () => {
+		// V2 promotion seam is composed into the host decision. Today
+		// parserResult is undefined (V2 dormant), so safe-compound
+		// commands remain ASK. These tests pin the composition order:
+		// DENY > R5 > canonical ASK -> ALLOW (only via
+		// risk_v2_structured_promotion source). They also exercise the
+		// ABLATION: removing the new ASK->ALLOW branch from the host
+		// would not change behavior today (V2 dormant) but the seam
+		// must be present so the helper-binary ACT only has to drop
+		// in a parserResult.
+
+		it("safe compound (pwd; pwd) stays ASK today (V2 dormant, parserResult undefined)", () => {
+			const auth = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			})
+			const result = evaluateCommandToolApproval({ command: "pwd; pwd", requires_approval: false }, auth)
+			// V1's safe-only fallthrough: pwd; pwd does not match a
+			// single-command safe rule (compound). ASK.
+			expect(result.approved).toBe(false)
+			expect(result.decision.kind).toBe("ask")
+		})
+
+		it("R5 catastrophic (rm -rf $HOME) returns ASK + never-auto-approve", () => {
+			const auth = commandHostAuthorization({ mode: "all" })
+			const result = evaluateCommandToolApproval({ command: "rm -rf $HOME", requires_approval: false }, auth)
+			expect(result.approved).toBe(false)
+			expect(result.decision.kind).toBe("ask")
+			expect(result.decision.source).toBe("risk_hard_floor")
+		})
+
+		it("unknown command stays ASK in safe-only mode", () => {
+			const auth = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			})
+			const result = evaluateCommandToolApproval({ command: "totally-unknown-cmd --opt", requires_approval: false }, auth)
+			expect(result.approved).toBe(false)
+			expect(result.decision.kind).toBe("ask")
+		})
+
+		it("manual mode ASK is preserved (host mode manual never auto-approves)", () => {
+			const auth = commandHostAuthorization({ mode: "manual" })
+			const result = evaluateCommandToolApproval({ command: "git status", requires_approval: false }, auth)
+			expect(result.approved).toBe(false)
+			expect(result.decision.kind).toBe("ask")
+			expect(result.decision.source).toBe("host_mode_manual")
+		})
+
+		it("explicit deny rule beats R5 floor (DENY preserved over ASK downgrade)", () => {
+			const auth = commandHostAuthorization({
+				mode: "all",
+				explicitDenyRules: [{ source: "unit_test_evil", pattern: /^\s*rm\s+-rf/u }],
+			})
+			const result = evaluateCommandToolApproval({ command: "rm -rf /", requires_approval: false }, auth)
+			expect(result.approved).toBe(false)
+			// DENY must beat the R5 floor: source stays host_hard_deny.
+			expect(result.decision.source).toBe("host_hard_deny")
+		})
+
+		it("parser absent => safe compound stays ASK (proves the host only composes V2 ASK->ALLOW when risk source === risk_v2_structured_promotion)", () => {
+			const auth = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			})
+			// With parserResult undefined, V2 is dormant. pwd; pwd is ASK.
+			const result = evaluateCommandToolApproval({ command: "pwd; pwd", requires_approval: false }, auth)
+			expect(result.approved).toBe(false)
+			// The source is the V1 safe-only fallthrough, not
+			// risk_v2_structured_promotion. (The helper-binary ACT will
+			// replace undefined with a parserResult; only then can the
+			// ASK->ALLOW promotion fire.)
+			expect(result.decision.source).not.toBe("risk_v2_structured_promotion")
+		})
+	})
 })

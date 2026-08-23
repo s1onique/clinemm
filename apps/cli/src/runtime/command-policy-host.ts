@@ -239,6 +239,32 @@ export function cliEvaluateCommandToolApprovalWith(
 			executionPlan,
 		};
 	}
+
+	// ASK path.
+	//
+	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01-CORRECTION01
+	// (HALT_PROVENANCE_GAP): V2 ASK -> ALLOW promotion is now
+	// composed here. Today `parserResult: undefined` keeps V2 dormant,
+	// but the structural seam is in place so the helper-binary ACT
+	// (PARSER-HELPER-BINARY-SHIPPING01) just has to drop in a parser
+	// result. The `risk_v2_structured_promotion` source is the ONLY
+	// path through which a V1 ASK may be promoted to ALLOW.
+	if (
+		risk.source === "risk_v2_structured_promotion" &&
+		risk.decision === "allow"
+	) {
+		return {
+			approved: true,
+			reason: risk.reasons.join("; "),
+			decision: {
+				kind: "allow",
+				reason: risk.reasons.join("; "),
+				source: "risk_v2_structured_promotion",
+			},
+			executionPlan,
+		};
+	}
+
 	// ASK: hand the plan to the TUI approver.
 	return {
 		approved: false,

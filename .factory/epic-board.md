@@ -5106,3 +5106,82 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01
        safe compound: currently ASK; will be ALLOW when helper binary lands,
        dangerous compound: remains protected."
     Reached.
+
+ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01-CORRECTION01
+
+  = PASS_PROVENANCE_RUNTIME_GAP_CLOSED
+  = PASS_HOST_V2_PROMOTION_COMPOSED
+  = PASS_MALFORMED_AST_VALIDATION
+  = READY_FOR_BINARY_BUILD_ACT
+
+  P0 #1 (REVIEWER): public runtime boundary forwarded caller objects,
+  so a forged parserResult via `as any` could reach V2 promotion.
+
+    FIX: public evaluateCommandRisk now reconstructs the input
+    object with parserResult: undefined. Any caller-supplied
+    parserResult (TypeScript `as any`, plain JS, etc.) is provably
+    dropped at runtime. RED/GREEN test in parser-provenance.test.ts
+    constructs a forged AST with the EXACT correct digest for
+    "pwd; pwd" and asserts the public surface returns ASK
+    (V1 safe-only fallthrough), not ALLOW (V2 promotion).
+
+    TEST:
+      REVERTED public wrapper (object forwarding) -> 1 fail
+      RESTORED public wrapper (input reconstruction) -> 8 pass
+
+  P0 #2 (REVIEWER): VSCode host only consulted V2-aware evaluator
+  when canonical verdict was ALLOW; CLI had only a downgrade path.
+  So a V1 ASK (e.g. safe-only fallthrough on "pwd; pwd") never
+  reached the V2 promotion gate.
+
+    FIX: both evaluateCommandToolApproval (VSCode) and
+    cliEvaluateCommandToolApprovalWith (CLI) now invoke the V2-aware
+    evaluator UNCONDITIONALLY and compose the
+    risk_v2_structured_promotion source into the product decision.
+
+    Ordering (highest precedence first):
+      1. Explicit hard host DENY rule — preserved.
+      2. R5 catastrophic hard floor — never-auto-approve ASK.
+      3. V2 ASK -> ALLOW promotion (only when risk.source ===
+         risk_v2_structured_promotion AND canonical verdict is ASK).
+      4. V1 path (canonical verdict).
+
+  P1 (REVIEWER): validateResponse() only checked top-level fields
+  and `program` shape; a malformed nested AST could pass and throw
+  later in the classifier.
+
+    FIX: validateResponse() now recursively validates the narrow
+    AST shape (isValidProgram, isValidStmt, isValidCmd). 8 new
+    tests in parser-helper/runtime.structural.test.ts cover
+    all malformed shapes plus the structurally-valid path.
+
+  NEW HOST COMPOSITION TESTS (10 tests):
+    VSCode: 6 tests pinning safe compound ASK, R5 catastrophic
+    never-auto-approve, unknown command ASK, manual mode ASK
+    preserved, explicit deny beats R5 floor, parser absent proof.
+    CLI: 4 tests with the same composition invariants.
+
+  REVIEWER NON-BLOCKING RESIDUES:
+    #1 (V2 protocol over-export) — RESOLVED in PARSER-HELPER-SHIPPING01.
+    #2 (command-policy ↔ structured-command-risk module cycle via
+       findCommandRiskHardFloor) — DEFERRED. Tests pass; refactor
+       is non-trivial and out of scope.
+    "internal export" is encapsulation, not authentication
+    (reviewer noted) — KNOWN. Encapsulation-by-convention holds;
+    the runtime provenance barrier (P0 #1 fix) is what actually
+    prevents injection, not the deep-import indirection.
+
+  TEST RESULTS (post-CORRECTION01):
+    @cline/core command-policy:    316/316 pass
+    @cline/core parser-helper:        8/8 pass (structural tests)
+    CLI host:                         45/45 pass
+    VSCode SDK host:                  70/70 pass
+    VSCode full vitest suite:        2039/2039 pass
+    @cline/core build:                clean
+    CLI typecheck:                     clean
+    git diff HEAD --check:            RC=0
+
+  NEXT:
+    ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
+    can now proceed (the architecture proof is complete; only the
+    cross-platform binary build remains).
