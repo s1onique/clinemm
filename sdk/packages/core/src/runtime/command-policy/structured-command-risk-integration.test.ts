@@ -228,14 +228,63 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 		expect(r.source).toBe("risk_v2_structured_promotion");
 	});
 
+	// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01:
+	// HONEST SYNTHETIC PARSER-BOUND TEST using SEMANTIC argv (no
+	// quote characters in `cmd.args`). The previous fixture above
+	// embedded the literal quotes (`["'---BRANCH---'"]`) which the
+	// real parser never emits -- it strips quotes before assigning
+	// the argv. With the corrected V2 argv-semantic echo classifier
+	// in place, this fixture shape now exercises the production
+	// code path: `renderArgv` produces "echo ---BRANCH---" (no
+	// quotes) which the V1 source-text regex does NOT match, but
+	// the new argv-semantic classifier DOES match. The promotion
+	// still fires. This is the corrected synthetic mirror of the
+	// REAL_PRODUCTION_SEAM test in
+	// `structured-command-risk.real-binary.test.ts`.
+	it("SYNTHETIC PARSER-BOUND EXACT COMMAND (CORRECTED): user's 5-leaf && chain with semantic argv → ALLOW", () => {
+		const liveCmd =
+			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v";
+		const r = evaluateCommandRiskWithParser({
+			toolInput: liveCmd,
+			hostAuthorization: SAFE,
+			parserResult: mkParsed(liveCmd, [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("git", ["status", "--short"]) },
+					rhs: {
+						kind: "and",
+						left: { kind: "cmd", cmd: mkCmd("echo", ["---BRANCH---"]) },
+						rhs: {
+							kind: "and",
+							left: {
+								kind: "cmd",
+								cmd: mkCmd("git", ["branch", "--show-current"]),
+							},
+							rhs: {
+								kind: "and",
+								left: { kind: "cmd", cmd: mkCmd("echo", ["---REMOTES---"]) },
+								rhs: {
+									kind: "cmd",
+									cmd: mkCmd("git", ["remote", "-v"]),
+								},
+							},
+						},
+					},
+				},
+			]),
+		});
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
+		expect(r.source).toBe("risk_v2_structured_promotion");
+	});
+
 	// Mixed-risk control: same chain, but with a mutating leaf appended.
 	// MUST stay ASK. This is the load-bearing adversarial control that
 	// proves the V2 promotion does not extend to mutating neighbors.
 	// Classification: SYNTHETIC_REAL / STRUCTURAL — same caveat as the
 	// green test above; AST fixture hand-constructed.
 	it("SYNTHETIC PARSER-BOUND MIXED-RISK CONTROL: 5-leaf chain + git branch -D → ASK (mutating leaf blocks)", () => {
-		const evilCmd =
-			"git status --short && git branch -D __CLINEMM_SENTINEL__";
+		const evilCmd = "git status --short && git branch -D __CLINEMM_SENTINEL__";
 		const r = evaluateCommandRiskWithParser({
 			toolInput: evilCmd,
 			hostAuthorization: SAFE,

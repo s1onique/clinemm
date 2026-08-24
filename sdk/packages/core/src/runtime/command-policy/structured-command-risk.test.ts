@@ -29,6 +29,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	evaluateStructuredCommandRisk,
+	isSafeStructuredEchoArgv,
 	joinRunCommandsForParse,
 	type ParsedShell,
 	type ShellDialect,
@@ -212,6 +213,138 @@ describe("V2 structured classifier — safe compounds promoted to ALLOW", () => 
 		});
 		expect(r.aggregate).toBe("auto-approve-eligible");
 		expect(r.promoteToAllow).toBe(true);
+	});
+});
+
+/* ---------------------------------------------------------------------- *
+ * argv-semantic echo classifier                                          *
+ *                                                                     *
+ * ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01. *
+ *                                                                     *
+ * These tests exercise the V2 argv-semantic echo classifier with       *
+ * synthetic ParsedShell fixtures whose `cmd.args` match what the real  *
+ * parser emits (no quote characters preserved -- quotes are shell     *
+ * syntax, not argument bytes).                                         *
+ * ---------------------------------------------------------------------- */
+
+describe("V2 structured classifier — argv-semantic echo (CORRECTION01)", () => {
+	it("echo '---BRANCH---' → auto-approve-eligible (semantic argv, no quotes)", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo '---BRANCH---'",
+			parserResult: mkParsed("echo '---BRANCH---'", [
+				{ kind: "cmd", cmd: mkCmd("echo", ["---BRANCH---"]) },
+			]),
+		});
+		expect(r.aggregate).toBe("auto-approve-eligible");
+		expect(r.promoteToAllow).toBe(true);
+		expect(r.perStatement[0]?.source).toBe("host_safe_echo_parsed_argv");
+	});
+
+	it("echo ---BRANCH--- → auto-approve-eligible (bare hyphen literal)", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo ---BRANCH---",
+			parserResult: mkParsed("echo ---BRANCH---", [
+				{ kind: "cmd", cmd: mkCmd("echo", ["---BRANCH---"]) },
+			]),
+		});
+		expect(r.aggregate).toBe("auto-approve-eligible");
+		expect(r.promoteToAllow).toBe(true);
+	});
+
+	it('echo "---BRANCH---" → auto-approve-eligible (double-quoted literal)', () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: 'echo "---BRANCH---"',
+			parserResult: mkParsed('echo "---BRANCH---"', [
+				{ kind: "cmd", cmd: mkCmd("echo", ["---BRANCH---"]) },
+			]),
+		});
+		expect(r.aggregate).toBe("auto-approve-eligible");
+		expect(r.promoteToAllow).toBe(true);
+	});
+
+	it("echo -n hello → auto-approve-eligible (option + body)", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo -n hello",
+			parserResult: mkParsed("echo -n hello", [
+				{ kind: "cmd", cmd: mkCmd("echo", ["-n", "hello"]) },
+			]),
+		});
+		expect(r.aggregate).toBe("auto-approve-eligible");
+		expect(r.promoteToAllow).toBe(true);
+	});
+
+	it("echo (no args) → auto-approve-eligible", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo",
+			parserResult: mkParsed("echo", [{ kind: "cmd", cmd: mkCmd("echo") }]),
+		});
+		expect(r.aggregate).toBe("auto-approve-eligible");
+		expect(r.promoteToAllow).toBe(true);
+	});
+
+	it("echo $HOME → ask (arg contains $ placeholder)", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo $HOME",
+			parserResult: mkParsed("echo $HOME", [
+				{ kind: "cmd", cmd: mkCmd("echo", ["?"]) },
+			]),
+		});
+		expect(r.aggregate).toBe("ask");
+		expect(r.promoteToAllow).toBe(false);
+	});
+
+	it('echo "$HOME" → ask (arg starts with ${ marker)', () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: 'echo "$HOME"',
+			parserResult: mkParsed('echo "$HOME"', [
+				{ kind: "cmd", cmd: mkCmd("echo", ["${...}"]) },
+			]),
+		});
+		expect(r.aggregate).toBe("ask");
+		expect(r.promoteToAllow).toBe(false);
+	});
+
+	it("echo $(pwd) → ask (already caught upstream by hasCommandSubstitution)", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo $(pwd)",
+			parserResult: mkParsed(
+				"echo $(pwd)",
+				[{ kind: "cmd", cmd: mkCmd("echo", ["$(...)"]) }],
+				{ hasCommandSubstitution: true },
+			),
+		});
+		expect(r.parseConfidence).toBe("partial");
+		expect(r.promoteToAllow).toBe(false);
+	});
+
+	it("echo '---BRANCH---' && git status --short → auto-approve-eligible (the LIVE bug)", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo '---BRANCH---' && git status --short",
+			parserResult: mkParsed("echo '---BRANCH---' && git status --short", [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("echo", ["---BRANCH---"]) },
+					rhs: { kind: "cmd", cmd: mkCmd("git", ["status", "--short"]) },
+				},
+			]),
+		});
+		expect(r.aggregate).toBe("auto-approve-eligible");
+		expect(r.promoteToAllow).toBe(true);
+	});
+
+	it("echo '---BRANCH---' && git branch -D X → ask (mutating leaf blocks)", () => {
+		const r = evaluateStructuredCommandRisk({
+			toolInput: "echo '---BRANCH---' && git branch -D X",
+			parserResult: mkParsed("echo '---BRANCH---' && git branch -D X", [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("echo", ["---BRANCH---"]) },
+					rhs: { kind: "cmd", cmd: mkCmd("git", ["branch", "-D", "X"]) },
+				},
+			]),
+		});
+		expect(r.aggregate).toBe("ask");
+		expect(r.promoteToAllow).toBe(false);
 	});
 });
 
@@ -588,5 +721,66 @@ describe("V2 structured classifier — joinRunCommandsForParse", () => {
 	it("returns empty joined for empty input", () => {
 		const r = joinRunCommandsForParse("");
 		expect(r.joined).toBe("");
+	});
+});
+
+/* ---------------------------------------------------------------------- *
+ * Helper: isSafeStructuredEchoArgv                                       *
+ *                                                                     *
+ * ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01. *
+ * ---------------------------------------------------------------------- */
+
+describe("isSafeStructuredEchoArgv -- argv-semantic echo classifier", () => {
+	it("empty argv is safe (echo with no args)", () => {
+		expect(isSafeStructuredEchoArgv([])).toBe(true);
+	});
+
+	it("plain literal word is safe (echo hello)", () => {
+		expect(isSafeStructuredEchoArgv(["hello"])).toBe(true);
+	});
+
+	it("hyphenated literal is safe (echo ---BRANCH---)", () => {
+		expect(isSafeStructuredEchoArgv(["---BRANCH---"])).toBe(true);
+	});
+
+	it("multi-word literal is safe (echo 'hello world')", () => {
+		expect(isSafeStructuredEchoArgv(["hello world"])).toBe(true);
+	});
+
+	it("single arg with -n flag and body is safe (echo -n hello)", () => {
+		expect(isSafeStructuredEchoArgv(["-n", "hello"])).toBe(true);
+	});
+
+	it("glob char as a parsed literal is safe data (echo '*')", () => {
+		// Per ACT §11: a trusted parsed literal argv word may safely
+		// contain many characters that would have required quoting
+		// in raw shell source. The parser produced a literal `*`,
+		// not a glob expansion target.
+		expect(isSafeStructuredEchoArgv(["*"])).toBe(true);
+	});
+
+	it("arg containing $ is unsafe (echo $HOME)", () => {
+		// The parser emits a placeholder for unbraced parameter refs.
+		expect(isSafeStructuredEchoArgv(["?"])).toBe(false);
+	});
+
+	it('arg starting with ${ is unsafe (echo "$HOME")', () => {
+		expect(isSafeStructuredEchoArgv(["${...}"])).toBe(false);
+	});
+
+	it("arg containing $( is unsafe (echo $(pwd))", () => {
+		// This is also caught upstream by hasCommandSubstitution,
+		// but we keep this as defense-in-depth.
+		expect(isSafeStructuredEchoArgv(["$(...)"])).toBe(false);
+	});
+
+	it("arg containing backtick is unsafe (echo `pwd`)", () => {
+		expect(isSafeStructuredEchoArgv(["`pwd`"])).toBe(false);
+	});
+
+	it("any one unsafe arg poisons the whole argv", () => {
+		expect(isSafeStructuredEchoArgv(["safe", "$HOME", "also-safe"])).toBe(
+			false,
+		);
 	});
 });
