@@ -553,13 +553,15 @@ export function evaluateCommandRiskWithParser(
 		const v2SourceBound = v2.parseConfidence === "complete";
 		// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01.
 		// ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01.
+		// ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01-CORRECTION01
+		// (reviewer disposition HALT_PARSER_PROVEN_PROMOTION_BYPASSES_PATH_AUTHORITY).
 		// Parser-proven positive provenance: when V2's per-stmt
 		// classification reports a parser-proven source label
 		// (every arg of the leaf is `static` per the Go helper's AST
-		// classification), V2 can promote a V1 ASK to ALLOW even if
-		// the V1 ASK was caused by V1's restrictive quoted-character
-		// class (NOT by opaque-shell composition). This is the
-		// principal Phase 2 win.
+		// classification), V2 can promote a V1 ASK to ALLOW ONLY
+		// when the V1 ASK was caused by shell/source-text
+		// conservatism (NOT by host filesystem authority). This is
+		// the principal Phase 2 win.
 		//
 		// The single source of truth for which source labels
 		// qualify is `PARSER_PROVEN_SOURCE_LABELS` in
@@ -574,7 +576,14 @@ export function evaluateCommandRiskWithParser(
 		//   (b) v2 source is bound to source (parseConfidence === "complete");
 		//   (c) V1 disposition is not already never-auto-approve (V2
 		//       may NEVER promote a hard-floor disposition back to ALLOW);
-		//   (d) parser helper protocol version is 3+ -- enforced at the
+		//   (d) the V1 ASK reason is a STRUCTURE-ONLY reason (V2 may
+		//       NOT override host authority). Concretely: V1 source
+		//       labels like `host_workspace_realpath_authority`,
+		//       `host_workspace_path_authority`, `host_mode_manual`,
+		//       and any model-escalation/deny source MUST remain
+		//       ASK when V2 sees a parser-proven leaf. Static shell
+		//       syntax is NOT filesystem authority.
+		//   (e) parser helper protocol version is 3+ -- enforced at the
 		//       per-stmt layer; under v2 the runtime injects
 		//       ["unknown"]* which prevents the parser-proven branch
 		//       from activating in the first place.
@@ -585,6 +594,17 @@ export function evaluateCommandRiskWithParser(
 			hasParserProvenLeaf &&
 			v2SourceBound &&
 			finalDisposition !== "never-auto-approve" &&
+			// CORRECTION01 reviewer fix:
+			// refuse to override authority-bearing V1 ASK reasons.
+			// isStructureOnlyPromotableAsk encapsulates the positive
+			// version of this rule: only `host_mode_safe_only_fallthrough`
+			// and `risk_opaque_composition` are eligible for promotion.
+			// This single condition gates BOTH the parser-proven branch
+			// (above) and the structure-caused-ASK branch (below)
+			// against authority-bypass. Adding new authority-bearing
+			// ASK sources later has no effect here as long as they
+			// remain outside `STRUCTURE_ONLY_PROMOTABLE_REASONS`.
+			isStructureOnlyPromotableAsk(finalSource) &&
 			v2.promoteToAllow;
 		if (isParserProvenPromotion) {
 			finalDecision = "allow";

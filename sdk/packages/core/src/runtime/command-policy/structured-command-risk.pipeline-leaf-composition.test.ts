@@ -43,11 +43,20 @@
  * classification precision issues are DEFERRED to a separate ACT.
  */
 
-import { existsSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	realpathSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { arch as processArch, platform as processPlatform } from "node:process";
 import { fileURLToPath } from "node:url";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { commandHostAuthorization } from "./command-policy-types";
 import {
@@ -56,6 +65,7 @@ import {
 } from "./command-risk-internal";
 import { DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
 import { MvdanShHelper } from "./parser-helper/runtime";
+import { buildPathAuthorityEvidence } from "./path-authority-evidence-builder";
 import type {
 	ParsedShell,
 	StructuredCmd,
@@ -719,8 +729,25 @@ describe("structured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture co
 	});
 
 	// -- protocolVersion gates --
+	//
+	// ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01-CORRECTION01 P2:
+	// the comments above the v3 case were previously contradictory --
+	// production uses `protocolVersion >= 3` (so v3 IS accepted in
+	// principle) AND `STRUCTURED_PROTO_VERSION === 4` (so v3 is NOT
+	// accepted by `evaluateStructuredCommandRisk`'s gate at line ~578).
+	// The earlier comments conflated these. The fix: the structured
+	// classifier explicitly accepts 4 (current) and 2 (legacy fail-
+	// closed); anything else (including 3) returns "skipped" with a
+	// reason containing the protocol number. The dispatch gate in
+	// `classifyCmd` uses `protocolVersion >= 3` as a SECONDARY gate
+	// but is unreachable from v3 because the primary gate rejects it
+	// first.
 
 	it("ASK: `head -30` synthetic with protocolVersion=2 stays ASK (v2 injects [unknown])", () => {
+		// v2 is legacy; runtime injects ["unknown"]* so the
+		// parser-proven branch fail-closes even if v2 itself is
+		// admitted by `parserResult.protocolVersion !== STRUCTURED_PROTO_VERSION
+		// && parserResult.protocolVersion !== 2`.
 		const cmd = "head -30";
 		const parsed = mkReaderShell(cmd, "head", ["-30"], ["unknown"], [], 2);
 		const r = evaluateCommandRiskWithParser({
@@ -728,17 +755,11 @@ describe("structured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture co
 			hostAuthorization: SAFE,
 			parserResult: parsed,
 		});
-		// v2 injects [unknown] provenance; the parser-proven branch
-		// must NOT activate.
 		expect(r.decision).toBe("ask");
 	});
 
 	it("ALLOW: `head -30` synthetic with protocolVersion=4 -> ALLOW (v4 is current)", () => {
-		// After CORRECTION01's v3->v4 protocol bump (parent ACT),
-		// v3 is now legacy (no longer accepted by the structured
-		// classifier's protocol version gate at line ~578). Only v4
-		// (current) and v2 (legacy, fail-closed via unknown
-		// injection) are accepted.
+		// v4 is the current protocol (STRUCTURED_PROTO_VERSION).
 		const cmd = "head -30";
 		const parsed = mkReaderShell(cmd, "head", ["-30"], ["static"], [], 4);
 		const r = evaluateCommandRiskWithParser({
@@ -750,10 +771,15 @@ describe("structured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture co
 		expect(r.disposition).toBe("auto-approve-eligible");
 	});
 
-	it("ASK: `head -30` synthetic with protocolVersion=3 stays ASK (v3 is now legacy post-CORRECTION01)", () => {
-		// v3 is no longer accepted after the CORRECTION01 v3->v4
-		// bump; the structured classifier returns "skipped" which
-		// preserves V1 behavior (ASK).
+	it("ASK: `head -30` synthetic with protocolVersion=3 stays ASK (v3 unsupported post-CORRECTION01)", () => {
+		// CORRECTION01 bumped v3 -> v4. The structured classifier's
+		// accept-set is now {2, 4}; v3 returns "skipped" with
+		// perStatement=[] and promoteToAllow=false, so V1 behavior
+		// is preserved (ASK).
+		//
+		// The `protocolVersion >= 3` secondary gate in `classifyCmd`
+		// is unreachable for v3 because the primary gate at the top
+		// of `evaluateStructuredCommandRisk` returns "skipped" first.
 		const cmd = "head -30";
 		const parsed = mkReaderShell(cmd, "head", ["-30"], ["static"], [], 3);
 		const r = evaluateCommandRiskWithParser({
@@ -764,3 +790,279 @@ describe("structured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture co
 		expect(r.decision).toBe("ask");
 	});
 });
+
+/* ---------------------------------------------------------------------- *
+ * Section J: REAL host-bound authority preservation                       *
+ * ---------------------------------------------------------------------- *
+ *
+ * ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01-CORRECTION01
+ *
+ * Reviewer-flagged P0 (HALT_PARSER_PROVEN_PROMOTION_BYPASSES_PATH_AUTHORITY):
+ *   The previous C2 implementation of the parser-proven promotion gate
+ *   generalized from `s.source === "host_safe_echo_parser_proven"` to
+ *   `isParserProvenSource(s.source)` WITHOUT also gating on the V1 ASK
+ *   reason. As a result, a command whose V1 ASK came from
+ *   `host_workspace_realpath_authority` (path-authority rejection)
+ *   could be promoted to ALLOW when at least one leaf had a
+ *   parser-proven source label.
+ *
+ * The C2-CORRECTION01 fix:
+ *   `isParserProvenPromotion` now also requires
+ *   `isStructureOnlyPromotableAsk(finalSource)`. This is the SAME
+ *   gate the existing `v2StructureCausedAsk` branch uses, and the
+ *   `STRUCTURE_ONLY_PROMOTABLE_REASONS` set enumerates ONLY
+ *   `{host_mode_safe_only_fallthrough, risk_opaque_composition}`.
+ *
+ *   Therefore V1 ASK reasons that are NOT in the set are
+ *   non-promotable:
+ *     - host_workspace_realpath_authority
+ *     - host_workspace_path_authority
+ *     - host_mode_manual
+ *     - model_escalation
+ *     - host_hard_deny
+ *     - any explicit-deny source
+ *   Static shell syntax is NOT filesystem authority.
+ *
+ * Section J exercises this contract end-to-end:
+ *   1. Build a real temp filesystem fixture (project + symlink +
+ *      outside dir).
+ *   2. Drive `MvdanShHelper.invoke(...) -> evaluateCommandRiskWithParser(...)`
+ *      with REAL host-supplied `WorkspacePathAuthorityEvidence`.
+ *   3. Verify the four discriminator cases the reviewer requested:
+ *      - inside-workspace + valid path evidence     -> ALLOW
+ *      - missing path evidence                       -> ASK (host_workspace_realpath_authority)
+ *      - outside-workspace operand                   -> ASK (host_workspace_realpath_authority)
+ *      - symlink escape (project-internal symlink -> outside target)
+ *                                               -> ASK (host_workspace_realpath_authority)
+ *
+ * Each rejection case MUST have `decision === "ask"` AND
+ * `source === "host_workspace_realpath_authority"` AND NOT be
+ * promoted by V2.
+ *
+ * Also retained (the reviewer's requirement):
+ *   - `echo hello | head -30`         -> ALLOW (no filesystem authority)
+ *   - `pwd && head -30`               -> ALLOW (no filesystem authority)
+ *   - `pwd && git status && head -30` -> ALLOW (no filesystem authority)
+ *
+ * Evidence classification: REAL_PRODUCTION_SEAM.
+ */
+
+describe(
+	"structured-command-risk -- REAL host-bound authority preservation (CORRECTION01)",
+	() => {
+		let TMP_ROOT: string;
+		let PROJECT_DIR: string;
+		let OUTSIDE_DIR: string;
+		let PROJECT_INSIDE_FILE: string;
+		let SYMLINK_INSIDE_PROJECT: string;
+		let helper: MvdanShHelper;
+
+		beforeAll(() => {
+			TMP_ROOT = mkdtempSync(join(tmpdir(), "cline-pipeline-leaf-correction01-"));
+			PROJECT_DIR = join(TMP_ROOT, "project");
+			OUTSIDE_DIR = join(TMP_ROOT, "outside");
+			mkdirSync(PROJECT_DIR, { recursive: true });
+			mkdirSync(join(PROJECT_DIR, "inside"), { recursive: true });
+			mkdirSync(OUTSIDE_DIR, { recursive: true });
+
+			PROJECT_INSIDE_FILE = join(PROJECT_DIR, "inside", "ok.ts");
+			SYMLINK_INSIDE_PROJECT = join(PROJECT_DIR, "outside-link");
+			writeFileSync(PROJECT_INSIDE_FILE, "// inside\n");
+			writeFileSync(join(OUTSIDE_DIR, "secret.txt"), "// outside\n");
+
+			// The adversarial symlink: project-internal path that
+			// lexically looks inside but realpath-resolves to a
+			// directory outside the project. A path-bearing leaf
+			// (`ls <this-symlink>`) SHOULD hit the host_workspace_realpath_authority
+			// gate, NOT be promoted by V2 parser-proven.
+			symlinkSync(OUTSIDE_DIR, SYMLINK_INSIDE_PROJECT, "dir");
+
+			helper = new MvdanShHelper({
+				platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
+				binaryPath: () => HELPER_PATH as string,
+			});
+		});
+
+		afterAll(() => {
+			if (TMP_ROOT && existsSync(TMP_ROOT)) {
+				rmSync(TMP_ROOT, { recursive: true, force: true });
+			}
+		});
+
+		/**
+		 * Build a host authorization with real PathAuthorityEvidence
+		 * for the given command. Calls into the production
+		 * `buildPathAuthorityEvidence` helper which calls
+		 * `fs.realpathSync` on every operand and the workspace root,
+		 * then packages the canonical path/contained result.
+		 *
+		 * Returns the authorization struct + the eval result.
+		 */
+		async function evaluateWithRealEvidence(command: string) {
+			const result = buildPathAuthorityEvidence({
+				workspaceRoots: [PROJECT_DIR],
+				cwd: PROJECT_DIR,
+				command: { command },
+			});
+			if (!result.ok) {
+				throw new Error(
+					`buildPathAuthorityEvidence failed: reason=${result.reason}`,
+				);
+			}
+			const auth = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: [PROJECT_DIR],
+				cwd: PROJECT_DIR,
+				pathAuthorityEvidence: result.evidence,
+			});
+			const parsed = await helper.invoke({ command });
+			return evaluateCommandRiskWithParser({
+				toolInput: command,
+				hostAuthorization: auth,
+				parserResult: parsed ?? undefined,
+			});
+		}
+
+		/** Same as evaluateWithRealEvidence but WITHOUT evidence. */
+		async function evaluateWithoutEvidence(command: string) {
+			const auth = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: [PROJECT_DIR],
+				cwd: PROJECT_DIR,
+				// pathAuthorityEvidence deliberately omitted.
+			});
+			const parsed = await helper.invoke({ command });
+			return evaluateCommandRiskWithParser({
+				toolInput: command,
+				hostAuthorization: auth,
+				parserResult: parsed ?? undefined,
+			});
+		}
+
+		// -- ALLOW cases: no filesystem authority --
+
+		it("ALLOW: `echo hello | head -30` (no filesystem authority)", async () => {
+			const r = await evaluateWithRealEvidence("echo hello | head -30");
+			expect(r.decision).toBe("allow");
+			expect(r.disposition).toBe("auto-approve-eligible");
+		});
+
+		it("ALLOW: `pwd && head -30` (no filesystem authority)", async () => {
+			const r = await evaluateWithRealEvidence("pwd && head -30");
+			expect(r.decision).toBe("allow");
+			expect(r.disposition).toBe("auto-approve-eligible");
+		});
+
+		it("ALLOW: `pwd && git status && head -30` (no filesystem authority)", async () => {
+			const r = await evaluateWithRealEvidence(
+				"pwd && git status && head -30",
+			);
+			expect(r.decision).toBe("allow");
+			expect(r.disposition).toBe("auto-approve-eligible");
+		});
+
+		// -- Host-bound authority preservation: ALLOW for inside-workspace + valid evidence --
+
+		it("GREEN: `ls ${PROJECT_INSIDE_FILE} | head -30` (inside-workspace + real evidence) -> ALLOW", async () => {
+			const r = await evaluateWithRealEvidence(
+				`ls ${PROJECT_INSIDE_FILE} | head -30`,
+			);
+			// `ls` matches `host_safe_ls` and the host-supplied
+			// realpath evidence verifies the operand resolves
+			// inside PROJECT_DIR. The right leaf (`head -30`) is
+			// parser-proven stdin-only. Both leaves safe -> ALLOW.
+			expect(r.decision).toBe("allow");
+			expect(r.disposition).toBe("auto-approve-eligible");
+		});
+
+		// -- Host-bound authority preservation: ASK for missing evidence --
+		// (per-command case; the pipe case is documented separately below)
+
+		it("RED: `ls ${PROJECT_INSIDE_FILE}` (no path evidence supplied) -> ASK (NOT promoted by V2)", async () => {
+			const r = await evaluateWithoutEvidence(
+				`ls ${PROJECT_INSIDE_FILE}`,
+			);
+			// V1 emits host_workspace_realpath_authority (CORRECTION02).
+			// V2 parser-proven must NOT override authority-derived ASK.
+			expect(r.decision).toBe("ask");
+			expect(r.source).toBe("host_workspace_realpath_authority");
+			// CRITICAL: source must NOT be `risk_v2_structured_promotion`
+			// (this would mean V2 promoted across authority).
+			expect(r.source).not.toBe("risk_v2_structured_promotion");
+			expect(r.disposition).not.toBe("auto-approve-eligible");
+		});
+
+		// NOTE on pipe + missing evidence:
+		//   The pipe case `ls <path> | head -30` (missing evidence)
+		//   currently ALLOWs in safe-only mode because V1 treats the
+		//   pipe as one opaque shape whose rendered surface
+		//   contains `|` (opaque to V1's regex matcher). V1 emits
+		//   `host_mode_safe_only_fallthrough`, which IS in the
+		//   structure-only-promotable set, so V2 may promote.
+		//   That's a V1 limitation (pipes are not pre-split before
+		//   the R0 path-authority gate fires), explicitly OUT OF
+		//   SCOPE for this ACT per reviewer disposition. The
+		//   discriminator for this ACT is the per-command case
+		//   covered above, where `host_workspace_realpath_authority`
+		//   IS emitted and V2 correctly preserves it.
+		//
+		//   Closing the pipe case requires either V1 to
+		//   pre-split pipes for the R0 gate or V2 to recognize
+		//   that a `host_safe_*` match on ANY perStatement
+		//   constituent of a pipe is authority-bearing when no
+		//   evidence is supplied. Both are larger architectural
+		//   changes deferred to a follow-up ACT.
+
+		// -- Host-bound authority preservation: ASK for outside-workspace operand --
+
+		it("RED: `ls ${OUTSIDE_DIR}` (outside-workspace operand with REAL evidence) -> ASK", async () => {
+			const r = await evaluateWithRealEvidence(`ls ${OUTSIDE_DIR}`);
+			// V1 realpath evidence flags the operand as
+			// `resolved-but-outside-roots`; policy ASK's.
+			// V2 must NOT override.
+			expect(r.decision).toBe("ask");
+			expect(r.source).toBe("host_workspace_realpath_authority");
+			expect(r.source).not.toBe("risk_v2_structured_promotion");
+		});
+
+		// -- Host-bound authority preservation: ASK for symlink escape --
+
+		it("RED: `ls ${SYMLINK_INSIDE_PROJECT}` (project-internal symlink => outside) -> ASK", async () => {
+			// This is the adversarial case the reviewer identified.
+			// `realpathSync` resolves the symlink to OUTSIDE_DIR.
+			// V1 lexical containment would have passed this (the
+			// symlink lexically lives under PROJECT_DIR); V2
+			// realpath gates it.
+			const r = await evaluateWithRealEvidence(
+				`ls ${SYMLINK_INSIDE_PROJECT}`,
+			);
+			expect(r.decision).toBe("ask");
+			expect(r.source).toBe("host_workspace_realpath_authority");
+			expect(r.source).not.toBe("risk_v2_structured_promotion");
+		});
+
+		// -- Host-bound authority preservation: misaligned/mismatched operand --
+
+		it("RED: `ls /etc/passwd` (operand not inside any workspace root) -> ASK", async () => {
+			const r = await evaluateWithRealEvidence(`ls /etc/passwd`);
+			expect(r.decision).toBe("ask");
+			expect(r.source).toBe("host_workspace_realpath_authority");
+			expect(r.source).not.toBe("risk_v2_structured_promotion");
+		});
+
+		// -- Standalone stdin-only reader is unaffected --
+
+		it("ALLOW (standalone): `head -30` even with evidence -> ALLOW (no path operand)", async () => {
+			// Stdin-only reader has zero path operands; it does NOT
+			// trigger the R0 path-authority gate regardless of
+			// evidence presence. Promotion is permitted (no
+			// authority dependency).
+			const r = await evaluateWithRealEvidence("head -30");
+			expect(r.decision).toBe("allow");
+			expect(r.disposition).toBe("auto-approve-eligible");
+		});
+	},
+);
+
