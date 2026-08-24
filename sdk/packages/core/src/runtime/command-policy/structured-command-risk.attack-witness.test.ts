@@ -353,31 +353,35 @@ describeWithHelper(
 		});
 
 		// ----------------------------------------------------------------
-		// Section D: PARSER-PROVEN POSITIVE PROVENANCE TARGET (RED until shellStatic lands).
+		// Section D: CURRENT_STATE_WITNESS -- parser-proven positive
+		// provenance TARGET recorded but not asserted GREEN.
 		//
 		// Each form below contains quoted literal data whose visible
 		// characters fall outside V1's host_safe_echo quoted class
 		// (e.g. `{`, `}`, `*`, `?`, `[`, `]`, `<`, `>`, `)`, `$`, `` ` ``).
 		// Under containment (V2 parsed-argv ALLOW removed), each of these
-		// returns ASK by design.
+		// returns ASK by design. The test body asserts the current
+		// conservative verdict (ASK), NOT the target shape.
 		//
-		// When CORRECTION02 lands via
-		// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01, the Go helper
-		// emits per-arg `shellStatic` provenance from the original
-		// mvdan/sh AST + quote context. V2 then ALLOWs any single-command
-		// echo whose every arg is `shellStatic: true`. The 19 forms
-		// below will turn GREEN at that point.
+		// When ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 lands and
+		// the Go helper emits per-arg `shellStatic` provenance from
+		// the original mvdan/sh AST + quote context, V2 will ALLOW
+		// any single-command echo whose every arg is
+		// `shellStatic: true`. At that point the assertion in this
+		// section will flip from `r.decision === "ask"` to
+		// `r.decision === "allow" && r.disposition === "auto-approve-eligible"`,
+		// and the section becomes a real GREEN regression guard.
+		//
+		// Per Factory review (P2 documentary correction): this section
+		// is NOT literally RED today. It is the current-state witness
+		// for the future ALLOW target. Run it via:
+		//   bunx vitest run --config vitest.config.ts -t "Section D:"
 		//
 		// Each paired form has a MUST ASK sibling in Section A above
 		// (e.g. echo ~ ↔ echo '~', echo * ↔ echo '*', etc.) to keep
 		// the bidirectional contract visible in one file.
-		//
-		// Run this section explicitly via:
-		//   bunx vitest run --config vitest.config.ts -t "Section D:"
-		// (Factory reviewer: "isolate it under a non-default RED
-		// target"; under containment these stay RED by design.)
 		// ----------------------------------------------------------------
-		describe("Section D: parser-proven positive provenance target (RED until shellStatic lands)", () => {
+		describe("Section D: parser-proven positive provenance target (CURRENT_STATE_WITNESS / TARGET shape recorded but not asserted)", () => {
 			const mustAllowParserProven: ReadonlyArray<{ src: string; why: string }> =
 				[
 					// Quoted procsub / brace / param / arith / cmd-subst / glob.
@@ -482,7 +486,7 @@ describeWithHelper(
 					//     "GREEN once shellStatic lands" instead of "RED".
 					expect(
 						r.decision === "ask",
-						`Section D TARGET (currently ASK under containment, will become ALLOW once shellStatic lands): expected ASK for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+						`Section D CURRENT_STATE_WITNESS: asserts the current ASK verdict; flips to ALLOW when parser-proven shellStatic provenance lands. Expected ASK for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
 					).toBe(true);
 				});
 			}

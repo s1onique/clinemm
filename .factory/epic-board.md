@@ -5755,7 +5755,7 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
     - single-command echo forms containing parens, braces, dollars, globs, arith expressions inside single quotes
 
   **ARCHITECTURAL CONCLUSION** (preserved across both Halts): the string-blacklist on parser-projected argv is **not** a positive provenance proof. The right abstraction is parser-proven static-literal provenance (mvdan/sh `WordPart` kinds: Lit / SglQuoted / DblQuoted-of-statics ⇒ static; ParamExp / CmdSubst / ArithmExp / ProcSubst / ExtGlob / unquoted-brace / unquoted-glob ⇒ not-static). **P1 (CORRECTION01 review) fixed**: the new attack-witness test file throws on a supported platform where the helper binary is absent, instead of silently passing. **CORRECTION01 SOURCE CODE STATUS**: the source fix in `structured-command-risk.ts` (`host_safe_echo_parsed_argv` branch + `isSafeStructuredEchoArgv` helper) REMAINS IN PLACE on `main` for now. **DO NOT dogfood `apps/vscode/dist/clinemm-4.1.10.vsix`** (built at the unsafe source HEAD). **DO NOT start** `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01`. **DO start** CORRECTION02 (next row). |
-| `ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02` | SAFETY / R0-COMMAND-POLICY | CONTAINMENT LANDED; parser-proven shellStatic implementation deferred to ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01 (string-blacklist on parser-projected argv is unsound for unquoted glob/brace in compound) | **CLOSURE STATUS (HALT_GO_SOURCE_UNAVAILABLE → CONTAIN, per Factory reviewer `4 → 2`)**: |
+| `ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02` | SAFETY / R0-COMMAND-POLICY | CONTAINMENT: PASS_CONTAINMENT_CLEAN (Factory review 79bd93ee9); PRECISION_REPAIR: BLOCKED_ON_PARSER_HELPER_SOURCE — see ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01 (string-blacklist on parser-projected argv is unsound for unquoted glob/brace in compound) | **CLOSURE STATUS (HALT_GO_SOURCE_UNAVAILABLE → CONTAIN, per Factory reviewer `4 → 2`)**: |
 **Containment landed on `main`:**
   - DELETED the V2 `host_safe_echo_parsed_argv` ALLOW branch in `classifyCmd` (`structured-command-risk.ts:686-748`).
   - DELETED the `isSafeStructuredEchoArgv` helper (`structured-command-risk.ts:810-866`).
@@ -5764,7 +5764,7 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
     - **Section A (default suite, GREEN)**: 23 MUST ASK forms. 18 were GREEN before, 5 newly GREEN because the bypass is closed.
     - **Section C (default suite, GREEN)**: 3 containment ASK forms (user LIVE 5-leaf chain, simple compound, all-quoted-literal compound) that ASK by design under containment.
     - **Section B1 (default suite, GREEN)**: 3 single-command quoted-hyphen echo forms that ALLOW via V1 `host_safe_echo` regex unchanged.
-    - **Section D (RED target, isolated via `-t "Section D:"`)**: 19 forms that need parser-proven `shellStatic` provenance to ALLOW. Currently ASK under containment; assertion text documents the single edit needed when CORRECTION02 proper lands (flip `r.decision === "ask"` to `r.decision === "allow" && r.disposition === "auto-approve-eligible"`).
+    - **Section D (CURRENT_STATE_WITNESS, isolated via `-t "Section D:"`)**: 19 forms that need parser-proven `shellStatic` provenance to ALLOW. The test body asserts the current ASK verdict (NOT the target shape); Section D is therefore GREEN today, not RED. Future CORRECTION02 proper will flip the assertions to `r.decision === "allow" && r.disposition === "auto-approve-eligible"` and the section becomes a real GREEN regression guard. (Factory review P2 documentary correction: the term "RED target" is reserved for sections that fail the default suite; Section D is the current-state witness for the future ALLOW target.)
   - REVISED the structural + integration + real-binary test expectations to match the containment regime (V2 aggregate ASK on compound echo; LIVE 5-leaf chain ASK; the 2 MUST ASK bypasses now ASK).
 **Authority delta**:
   - 2 MUST ASK bypasses CLOSED (was: ALLOW; now: ASK). Examples: `echo '---BRANCH---' && echo *`, `echo '---BRANCH---' && echo {a,b}`.
@@ -5779,32 +5779,62 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
 **DO NOT start** `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01`.
 **DO start** the row immediately below (`ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01`).
 |
-| `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | OPEN | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02 (parser-proven shellStatic provenance requires extending the Go helper, but the Go source for the vendored binaries at `sdk/packages/core/bin/parser-helper/` is not in this checkout) | **SOLE EPISTEMIC PURPOSE**: reconstruct the vendored `cline-parser-helper` Go source from scratch against `mvdan.cc/sh/v3` v3.13.1 (the version pinned at the helper-bundling commit `a3c8d49b7`), commit it as a buildable artifact under the SDK repo (no longer "vendored-only"), and extend the helper to emit per-arg `shellStatic` provenance per the frozen CORRECTION02 contract. |
-**CONSTRAINTS**:
+| `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | OPEN | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02 / PRECISION_REPAIR (parser-proven shellStatic provenance requires extending the Go helper; the Go source for the vendored binaries at `sdk/packages/core/bin/parser-helper/` is not in this checkout) | **SOLE EPISTEMIC PURPOSE**: reconstruct the vendored `cline-parser-helper` Go source from scratch against `mvdan.cc/sh/v3` v3.13.1 (the version pinned at the helper-bundling commit `a3c8d49b7`), commit it as a buildable artifact under the SDK repo (no longer "vendored-only"), prove behavioral equivalence with the existing protocol-v2 binaries against a frozen oracle corpus, then establish a reproducible source→binary chain capable of carrying future `shellStatic` provenance. **DO NOT implement the TypeScript precision repair in the same first commit.** |
 
-  - the binary is a SECURITY-CRITICAL EXECUTABLE; its source must live in this repo going forward (Phase 3 committed only the compiled binaries, which was a process mistake now closed by this ACT).
-  - reconstruction must use only public, well-documented APIs of `mvdan.cc/sh/v3` v3.13.1 (the version pinned at `a3c8d49b7`).
-  - reconstruction must reproduce the EXISTING protocol output for all non-shellStatic fields (verified by replaying the 47-case attack witness against the rebuilt binary), then ADD the per-arg `shellStatic` field as a backward-compatible protocol v3 extension.
-  - parser-proven `shellStatic` per WordPart class, per frozen CORRECTION02 contract:
-    - `SglQuoted`                                   ⇒ STATIC
-    - `DblQuoted`-of-static-parts (recursively)      ⇒ STATIC
-    - unquoted `Lit`                                ⇒ STATIC only if not brace-expandable, not a pathname pattern, not tilde-expandable
-    - `ParamExp`, `CmdSubst`, `ArithmExp`           ⇒ DYNAMIC
-    - `ProcSubst`, `ExtGlob`                        ⇒ DYNAMIC
-  - uncertainty (any new WordPart kind, any new helper-version mismatch) ⇒ `shellStatic: false` (fail closed).
-**PROGRESSION** (one bounded cycle):
-  1. Recon exact `mvdan.cc/sh/v3` v3.13.1 AST shapes for the 6 paired discriminators and the 19 Section D forms.
-  2. Hand-author `parser-helper-src/main.go` from scratch (mvdan.cc/sh v3.13.1 + io.EOF-style stdin/stdout JSON protocol + per-arg shellStatic).
-  3. Cross-compile for the existing 5-platform matrix (darwin arm64/amd64, linux arm64/amd64, win32-x64). Record new SHA-256SUMS.txt.
-  4. Replay the 47-case attack witness against the rebuilt binary: 47/47 GREEN.
-  5. Add a CI guard: the helper binary SHA must match the recorded SUMS (otherwise test suite fails).
-  6. Then start `ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02` proper: implement the V2 echo ALLOW on `every arg shellStatic === true`; flip Section D assertions to `r.decision === "allow" && r.disposition === "auto-approve-eligible"`; 47/47 GREEN.
-  7. Conservation gates: `@cline/core` command-policy tests, CLI command-policy-host, VSCode sdk-tool-policies.
-  8. Rebuild SDK + extension + VSIX.
-  9. Installed dogfood: exact five-leaf LIVE chain → auto-run; mixed-risk sentinel → approval, reject.
+**PHASE 1 — freeze the five existing binaries as oracle (NEVER overwrite during rebuild)**: for each platform (darwin arm64, darwin amd64, linux arm64, linux amd64, win32-x64) record:
+
+  - platform, binary path
+  - file size, SHA-256
+  - `protocolVersion === 2` (assert via direct invocation)
+
+Then build a representative black-box input corpus (pwd, `pwd; pwd`, `git status && git diff --stat`, `echo '---BRANCH---'`, `echo *`, `echo '*'`, `echo {a,b}`, `echo '{a,b}'`, `echo "$HOME"`, `echo <(pwd)`, `bash -c 'pwd'`, `find . -name '*.ts'`, redirect cases, malformed source) and capture each binary's normalized output as `REFERENCE_PROTOCOL_V2`. This becomes the equivalence oracle.
+
+**PHASE 2 — reconstruct source in-repo**. Layout:
+
+```
+sdk/packages/core/parser-helper-src/
+  go.mod
+  go.sum
+  main.go
+  projection.go
+  protocol.go
+  cross-compile.sh
+  README.md
+```
+
+Pin exactly: `mvdan.cc/sh/v3` v3.13.1 (the version frozen at `a3c8d49b7`). mvdan's parser exposes the exact `WordPart` classes we will need later (`Lit`, `SglQuoted`, `DblQuoted`, `ParamExp`, `CmdSubst`, `ArithmExp`, `ProcSubst`, `ExtGlob`) so the source can be authored against a stable public API.
+
+**PHASE 3 — v2 behavioral equivalence FIRST** (BEFORE adding `shellStatic`): the reconstructed helper must reproduce the existing protocol output field-for-field against `REFERENCE_PROTOCOL_V2`. Run all load-bearing corpus cases through both old binary and new binary. If mismatch → `HALT_V2_ORACLE_MISMATCH`. Do NOT casually declare the old binaries wrong just because the rewrite differs.
+
+**PHASE 4 — reproducible build surface + CI guard**. Cross-compile the same 5 targets from tracked source. Record in `cross-compile.sh` and `README.md`:
+
+```
+SOURCE_HEAD (the commit SHA the binaries were built from)
+Go version
+mvdan.cc/sh/v3 version
+GOOS / GOARCH / CGO_ENABLED
+flags
+binary SHA-256
+```
+
+Permanent invariant becomes: **`NO VENDORED PARSER BINARY WITHOUT TRACKED BUILDABLE SOURCE`**. This is arguably the biggest architectural value of this ACT.
+
+**P1 EVIDENCE HYGIENE** (carried from Factory review of 79bd93ee9): unify the real-binary test missing-helper semantics across the suite:
+
+```
+supported shipped platform + helper absent → FAIL
+unsupported platform                                 → explicit SKIP
+```
+
+Apply this rule consistently to `structured-command-risk.real-binary.test.ts` (which still has the old `if (!HELPER_PATH) return;` per-test pattern — silently reports GREEN when the helper is missing on a supported platform), and to any other real-binary test file in the repo. One bounded cleanup, inside this ACT.
+
+**FUTURE CORRECTION02 proper** (NOT this ACT; will be its own row once Phase 4 lands): widen the helper protocol to add per-arg `shellStatic` provenance per the frozen contract (`SglQuoted` ⇒ STATIC; `DblQuoted`-of-static-parts recursively ⇒ STATIC; unquoted `Lit` ⇒ STATIC only if not brace-expandable, not pathname-pattern, not tilde-expandable; `ParamExp`, `CmdSubst`, `ArithmExp` ⇒ DYNAMIC; `ProcSubst`, `ExtGlob` ⇒ DYNAMIC; uncertainty ⇒ `shellStatic: false` fail-closed). Flip the Section D assertions from `r.decision === "ask"` to `r.decision === "allow" && r.disposition === "auto-approve-eligible"`. Produce a temporary RED witness first by flipping Section D to ALLOW expectations BEFORE implementing `shellStatic` (so the implementation ACT has an honest target to drive against), then turn it GREEN.
+
 **REJECTED** options (per Factory reviewer):
+
   - **Option 1 (recover source from another location)**: rejected — checked branches, reflogs, stashes, `git fsck`, the working disk, and the user home directory; no Go source remains anywhere. Continuing open-ended source hunting violates the Factory speed rule.
   - **Option 3 (TS-side post-processor over flattened JSON)**: rejected architecturally — the helper protocol narrow projection (deliberate security boundary; see `parser-helper/protocol.ts:8-14`) has already thrown away the WordPart provenance by the time TS sees it. The 6 paired forms (`echo ~` vs `echo '~'`, etc.) are byte-identical in the JSON. Only the Go helper, working on the original mvdan AST, can recover `shellStatic`.
+
 **PHASE-3 PROCESS NOTE** (must close): a security-critical executable whose source is not in the repo should never have been accepted as a durable production artifact. The reconstruction ACT closes that provenance gap permanently, not merely gets CORRECTION02 moving again.
 |
 1. **Probe done** (commit `b3d285cd0`): ran the vendored mvdan/sh helper against 16 attack shapes (procsub, arith, param, brace, glob, quote-protected variants). Result: `cmd.args` carries literal text for `<(quoted)`, `{...}`, `*`, `*.ts`, `/(etc)/passwd*` and these are the exploitable shapes; `cmd.args` carries the placeholder `?` for unbraced `$HOME`, `${HOME}`, `$((...))`, and these are accidentally caught by the `?` rejection in CORRECTION01 (not principled).
