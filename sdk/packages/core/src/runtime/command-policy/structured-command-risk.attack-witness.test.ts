@@ -1,13 +1,39 @@
-// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02 RED witness.
-// Classification: REAL_PRODUCTION_SEAM.
+// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02
+// RED witness -- semantically correct shell-expansion matrix.
 //
-// These tests document the ATTACK matrix that exposes the unsoundness
-// of CORRECTION01's string-blacklist approach. Every test in this file
-// MUST go RED on the CORRECTION01 repair (or any successor that uses
-// string-blacklist on parser-projected argv).
+// Classification: REAL_PRODUCTION_SEAM (drives the vendored mvdan/sh
+// helper directly through evaluateCommandRiskWithParser).
 //
-// Until CORRECTION02 introduces parser-proven static-literal provenance,
-// these tests are the contract: every shape here must ASK.
+// Contract:
+//   The string-blacklist approach (CORRECTION01) cannot reliably
+//   distinguish QUOTED LITERAL DATA from ACTIVE SHELL EXPANSION
+//   once the parser has flattened words to strings. Quoting
+//   removes shell significance from its contents (per GNU Bash
+//   "Quoting"), so:
+//
+//       echo '<(touch /tmp/nope)'    # one harmless literal argument
+//       echo <(touch /tmp/nope)      # active ProcSubst, runs touch
+//       echo '{a,b}'                 # one harmless literal argument
+//       echo {a,b}                   # brace-expanded to two args
+//       echo '*'                     # one harmless literal argument
+//       echo *                       # pathname expansion of cwd
+//       echo 'foo; rm -rf /'         # one harmless literal argument
+//       echo foo; rm -rf /           # shell composition / R5
+//
+//   CORRECTION02 must introduce parser-proven static-literal
+//   provenance so V2 can authorize echo on a positive fact (every
+//   WordPart is Lit/SglQuoted/DblQuoted-of-statics, no ParamExp/
+//   CmdSubst/ArithmExp/ProcSubst/ExtGlob/unquoted-brace/unquoted-glob),
+//   not on character absence.
+//
+//   This file is the binding RED contract for CORRECTION02:
+//   - "MUST ASK" group  -> each active expansion must be rejected
+//   - "MUST ALLOW" group -> each quoted literal must be approved
+//
+//   The CORRECTION01 repair (string-blacklist) FAILS the MUST ASK
+//   group for two compound-active-expansion forms and FAILS the
+//   MUST ALLOW group for every single-command quoted-literal form
+//   that contains characters outside V1's source-text echo regex.
 
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -75,137 +101,238 @@ const SAFE = commandHostAuthorization({
 	explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
 });
 
-describe("V2 echo authority RED witness (CORRECTION02) -- parser-projected argv authority matrix", () => {
+// P1 from CORRECTION01 Factory review:
+//   For the five vendored platforms, ABSENT binary -> FAIL the
+//   describe block (so CI catches a missing helper). For other
+//   platforms (unsupported by the shipping contract), skip cleanly.
+const SUPPORTED_PLATFORMS: ReadonlySet<NonNullable<HelperPlatform>> = new Set([
+	"darwin-arm64",
+	"darwin-amd64",
+	"linux-amd64",
+	"linux-arm64",
+	"win32-x64",
+]);
+const isSupportedPlatform =
+	HELPER_PLATFORM !== null && SUPPORTED_PLATFORMS.has(HELPER_PLATFORM);
+
+if (isSupportedPlatform && !HELPER_PATH) {
+	// eslint-disable-next-line no-console
+	console.error(
+		`[structured-command-risk.attack-witness] supported platform ${HELPER_PLATFORM} but vendored helper binary is missing at ${sdkRoot}/bin/parser-helper/${HELPER_PLATFORM}/. Failing the suite.`,
+	);
+}
+
+const skipBlock = !HELPER_PATH;
+void skipBlock; // kept for future per-test skip checks; unused for now since beforeAll handles it
+describe("V2 echo authority RED witness (CORRECTION02) -- semantically-correct shell-expansion matrix", () => {
 	let helper: MvdanShHelper;
 
+	// P1 from CORRECTION01 Factory review:
+	//   On the five vendored platforms, ABSENT binary -> FAIL the
+	//   entire describe block (so CI catches a missing shipping
+	//   artifact). On other platforms (unsupported by the shipping
+	//   contract), this guard yields skip-equivalent early-return.
+	//   The original pattern of `if (!HELPER_PATH) return;` per test
+	//   silently reported GREEN; that hid missing artifacts.
 	beforeAll(() => {
-		if (!HELPER_PATH || !HELPER_PLATFORM) return;
+		if (!HELPER_PATH) {
+			if (isSupportedPlatform) {
+				throw new Error(
+					`Vendored parser-helper binary missing for supported platform ${HELPER_PLATFORM}; cannot run RED witness.`,
+				);
+			}
+			return;
+		}
 		helper = new MvdanShHelper({
-			platform: HELPER_PLATFORM,
-			binaryPath: () => HELPER_PATH,
+			platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
+			binaryPath: () => HELPER_PATH as string,
 		});
 	});
 
-	// Quoted process substitution: parser projects literal text,
-	// no `$`/backtick/`?` in argv -> string-blacklist ALLOWs this
-	// even though shell would execute `touch` at runtime.
-	it("echo '<(touch /tmp/nope)' -> ASK (quoted process substitution)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo '<(touch /tmp/nope)'";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).not.toBe("auto-approve-eligible");
-	});
+	function requireHelper(): MvdanShHelper {
+		if (!helper) {
+			// Reachable only on unsupported platforms. Throw so the
+			// describe block fails rather than silently passing.
+			throw new Error(
+				`parser-helper not initialised; HELPER_PATH=${HELPER_PATH ?? "absent"}, HELPER_PLATFORM=${HELPER_PLATFORM ?? "unknown"}.`,
+			);
+		}
+		return helper;
+	}
 
-	// Quoted process substitution with dangerous inner command
-	it("echo '<(/bin/rm -rf $HOME)' -> ASK (quoted process sub, dangerous inner)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo '<(/bin/rm -rf $HOME)'";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-	});
+	// ----------------------------------------------------------------
+	// Section A: MUST ASK. Active shell expansion. Each form must be
+	// rejected (decision === "ask" or disposition === "never-auto-approve").
+	// ----------------------------------------------------------------
+	describe("MUST ASK: active shell expansion", () => {
+		const mustAsk: ReadonlyArray<{ src: string; why: string }> = [
+			// Process substitution (unquoted)
+			{
+				src: "echo <(touch /tmp/CLINEMM_SENTINEL)",
+				why: "unquoted <() runs inner command",
+			},
+			{ src: "echo >(cat)", why: "unquoted >() runs inner command" },
+			// Brace expansion (unquoted)
+			{
+				src: "echo {a,b,c}",
+				why: "unquoted brace list expands to multiple args",
+			},
+			{
+				src: "echo {1..5}",
+				why: "unquoted brace sequence expands to multiple args",
+			},
+			// Glob (unquoted)
+			{ src: "echo *", why: "unquoted * pathname-expands cwd" },
+			{ src: "echo *.ts", why: "unquoted *.ts pathname-expands" },
+			{
+				src: "echo /etc/passwd*",
+				why: "unquoted path glob enumerates filesystem",
+			},
+			// Parameter expansion (unquoted)
+			{ src: "echo $HOME", why: "unquoted $HOME expands to home dir" },
+			// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
+			{ src: "echo ${HOME}", why: "unquoted ${HOME} expands" },
+			// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
+			{ src: "echo ${x:-foo}", why: "unquoted ${x:-foo} expands with default" },
+			// Command substitution
+			{
+				src: "echo $(touch /tmp/CLINEMM_SENTINEL)",
+				why: "unquoted $() runs inner command",
+			},
+			// Arithmetic expansion
+			{ src: "echo $((1+2))", why: "unquoted $((expr)) expands to result" },
+			// Compound: active expansion in trailing leaf
+			{
+				src: "echo '---BRANCH---' && echo *",
+				why: "compound: trailing bare glob enumerates cwd",
+			},
+			{
+				src: "echo '---BRANCH---' && echo <(touch /tmp/CLINEMM_SENTINEL)",
+				why: "compound: trailing unquoted procsub runs touch",
+			},
+			{
+				src: "echo '---BRANCH---' && echo {a,b}",
+				why: "compound: trailing unquoted brace list expands",
+			},
+			{
+				src: "echo '---BRANCH---' && echo $HOME",
+				why: "compound: trailing unquoted param expansion",
+			},
+			// Mixed-risk chain sentinel
+			{
+				src: "git status --short && git branch -D __CLINEMM_SENTINEL__",
+				why: "mutating git subcommand in compound",
+			},
+		];
 
-	// Brace expansion -- even though parser preserves literal
-	// characters, shell will enumerate at runtime.
-	it("echo {a,b,c} -> ASK (brace expansion)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo {a,b,c}";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
+		for (const { src, why } of mustAsk) {
+			it(`ASK: ${src}`, async () => {
+				const parsed = await requireHelper().invoke({ command: src });
+				const r = evaluateCommandRiskWithParser({
+					toolInput: src,
+					hostAuthorization: SAFE,
+					parserResult: parsed,
+				});
+				expect(
+					r.decision === "ask" || r.disposition === "never-auto-approve",
+					`Expected ASK/never-auto-approve for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+				).toBe(true);
+			});
+		}
 	});
+	// ----------------------------------------------------------------
+	// Section B: MUST ALLOW. Quoted literal data. Each form must be
+	// approved (decision === "allow" && disposition === "auto-approve-eligible").
+	// ----------------------------------------------------------------
+	describe("MUST ALLOW: quoted literal data (no active expansion)", () => {
+		const mustAllow: ReadonlyArray<{ src: string; why: string }> = [
+			// Single-quoted procsub syntax -- one literal arg
+			{
+				src: "echo '<(touch /tmp/nope)'",
+				why: "single quotes remove shell meaning",
+			},
+			{
+				src: "echo '<(/bin/rm -rf $HOME)'",
+				why: "single quotes remove shell meaning even when inner $HOME looks live",
+			},
+			// Single-quoted brace syntax
+			{ src: "echo '{a,b}'", why: "single quotes suppress brace expansion" },
+			{ src: "echo '{1..5}'", why: "single quotes suppress brace sequence" },
+			// Single-quoted cmd subst / arith / param
+			{
+				src: "echo '$(touch /tmp/nope)'",
+				why: "single quotes suppress command substitution",
+			},
+			{
+				src: "echo '$((1+2))'",
+				why: "single quotes suppress arithmetic expansion",
+			},
+			{
+				// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
+				src: "echo '${HOME}'",
+				why: "single quotes suppress parameter expansion",
+			},
+			// Single-quoted glob
+			{ src: "echo '*'", why: "single quotes suppress pathname expansion" },
+			{
+				src: "echo '$HOME'",
+				why: "single quotes suppress param expansion ($ is literal)",
+			},
+			// Shell metachars inside quotes
+			{
+				src: "echo 'foo; rm -rf /'",
+				why: "semicolon inside quotes is literal data",
+			},
+			{ src: "echo 'foo*bar'", why: "glob char inside quotes is literal data" },
+			{ src: "echo 'foo|bar'", why: "pipe char inside quotes is literal data" },
+			// The user's exact LIVE echo forms
+			{
+				src: "echo '---BRANCH---'",
+				why: "user's LIVE echo leaf, single-quoted",
+			},
+			{
+				src: "echo '---REMOTES---'",
+				why: "user's LIVE echo leaf, single-quoted",
+			},
+			{
+				src: 'echo "---BRANCH---"',
+				why: "double-quoted equivalent of LIVE leaf",
+			},
+			// Concatenation of literal parts
+			{
+				src: "echo 'foo'bar'baz'",
+				why: "concatenation of single-quoted + bare literal",
+			},
+			// User's exact 5-leaf LIVE chain (must ALLOW)
+			{
+				src: "git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v",
+				why: "user's exact LIVE chain: every expansion-bearing leaf is quoted",
+			},
+			// Compound where every quoted-literal leaf is wrapped
+			{
+				src: "echo '---BRANCH---' && echo '<(touch /tmp/nope)' && echo '{a,b}' && echo '*'",
+				why: "compound: all trailing leaves are quoted literal data",
+			},
+			// Beautiful discriminator pair:
+			//   "echo 'foo; rm -rf /'" -> safe one literal arg
+			//   "echo foo; rm -rf /"   -> shell composition / R5
+			// Already covered in the forms above but worth flagging
+			// again: the projection MUST distinguish them.
+		];
 
-	// Brace sequence expansion
-	it("echo {1..5} -> ASK (brace sequence)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo {1..5}";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-	});
-
-	// Bare glob -- carries filesystem enumeration authority at runtime
-	it("echo /etc/passwd* -> ASK (glob expansion authority)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo /etc/passwd*";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-	});
-
-	// Compound: user's LIVE shape + glob injection
-	it("echo '---BRANCH---' && echo * -> ASK (compound with glob leaf)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo '---BRANCH---' && echo *";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-	});
-
-	// Compound: LIVE shape + process sub injection
-	it("echo '---BRANCH---' && echo '<(touch /tmp/nope)' -> ASK (compound with quoted procsub leaf)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo '---BRANCH---' && echo '<(touch /tmp/nope)'";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-	});
-
-	// Compound: LIVE shape + brace expansion
-	it("echo '---BRANCH---' && echo '{a,b}' -> ASK (compound with brace leaf)", async () => {
-		if (!HELPER_PATH) return;
-		const src = "echo '---BRANCH---' && echo '{a,b}'";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-	});
-
-	// The user's own LIVE chain + dangerous quoted procsub trailing leaf
-	it("user's 5-leaf LIVE chain + trailing '<(...)' leaf -> ASK", async () => {
-		if (!HELPER_PATH) return;
-		const src =
-			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v && echo '<(touch /tmp/CLINEMM_SENTINEL)'";
-		const parsed = await helper.invoke({ command: src });
-		const r = evaluateCommandRiskWithParser({
-			toolInput: src,
-			hostAuthorization: SAFE,
-			parserResult: parsed,
-		});
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).not.toBe("auto-approve-eligible");
+		for (const { src, why } of mustAllow) {
+			it(`ALLOW: ${src}`, async () => {
+				const parsed = await requireHelper().invoke({ command: src });
+				const r = evaluateCommandRiskWithParser({
+					toolInput: src,
+					hostAuthorization: SAFE,
+					parserResult: parsed,
+				});
+				expect(
+					r.decision === "allow" && r.disposition === "auto-approve-eligible",
+					`Expected ALLOW/auto-approve-eligible for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+				).toBe(true);
+			});
+		}
 	});
 });
