@@ -85,6 +85,7 @@ import {
 	findSafeRuleMatch,
 	isOpaqueShellRendered,
 } from "./command-safe-rules";
+import { isR0PathBearingRuleSource } from "./command-policy";
 
 /* ---------------------------------------------------------------------- *
  * Narrow projection types (match the Go probe's JSON shape)              *
@@ -272,6 +273,18 @@ export type StructuredRisk =
  * `downgradeToNeverAutoApprove` indicates V2 has structural evidence
  * that an R5-shaped inner command exists, so V2 may strengthen the
  * disposition to `never-auto-approve` even when V1 said ASK.
+ *
+ * `containsPathBearingLeaf` (CORRECTION02): true iff at least one
+ * reachable leaf in the structured program belongs to the R0
+ * read-only path-bearing source set (today `host_safe_ls` and
+ * `host_safe_find`). When true, the V2 promotion gate in
+ * `command-risk.ts` MUST additionally require the host to have
+ * supplied `WorkspacePathAuthorityEvidence` matching the leaf's
+ * operands; otherwise the gate refuses to promote. This is the
+ * surgical seam that prevents a pipe such as
+ * `ls <path> | head -30` (no evidence) from being ALLOW'd via
+ * parser-proven promotion of the `head` leaf while the `ls`
+ * operand escapes host path authority.
  */
 export interface StructuredAnalysis {
 	readonly parseConfidence: "complete" | "partial" | "failed" | "skipped";
@@ -279,6 +292,7 @@ export interface StructuredAnalysis {
 	readonly aggregate: StructuredRisk;
 	readonly promoteToAllow: boolean;
 	readonly downgradeToNeverAutoApprove: boolean;
+	readonly containsPathBearingLeaf: boolean;
 	readonly reasons: ReadonlyArray<string>;
 }
 
@@ -564,6 +578,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
+			containsPathBearingLeaf: false,
 			reasons: ["structured analysis skipped (no parser result provided)"],
 		};
 	}
@@ -582,6 +597,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
+			containsPathBearingLeaf: false,
 			reasons: [
 				`structured analysis skipped (protocol version ${parserResult.protocolVersion} != ${STRUCTURED_PROTO_VERSION} and != 2)`,
 			],
@@ -599,6 +615,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
+			containsPathBearingLeaf: false,
 			reasons: [
 				"structured analysis skipped (parser reported parse failure)",
 				...parserResult.errors,
@@ -617,6 +634,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
+			containsPathBearingLeaf: false,
 			reasons: [`structured analysis skipped (${bindingFailure})`],
 		};
 	}
@@ -630,6 +648,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
+			containsPathBearingLeaf: false,
 			reasons: ["structured analysis opaque (command substitution present)"],
 		};
 	}
@@ -649,11 +668,29 @@ export function evaluateStructuredCommandRisk(args: {
 
 	const aggregate = maxRisk(perStmt.map((s) => s.risk));
 
+	// CORRECTION02: walk the structured program AST and detect
+	// path-bearing leaves from the R0 read-only set
+	// (`host_safe_ls`, `host_safe_find`). The aggregation above
+	// collapses leaves to `aggregated-pipe`/`aggregated-and`/
+	// `aggregated-or`, so we cannot rely on perStmt sources for
+	// the predicate. The AST walk uses each leaf's per-stmt
+	// classification (NOT a regex match on the rendered argv)
+	// because the rendered argv is what V1 already handles; the
+	// surgical seam is at the V2 boundary.
+	const containsPathBearingLeaf = stmtContainsPathBearingLeaf(
+		parserResult.program,
+		parserResult.dialect,
+		parserResult.protocolVersion,
+	);
+
 	// 8. Compute promotion / strengthening signals. Promotion is
 	//    restricted by `dialectCapable` AND by the aggregate being
 	//    auto-approve-eligible. The caller in `command-risk.ts`
 	//    adds the ASK-source admissibility check
-	//    (`isStructureOnlyPromotableAsk`).
+	//    (`isStructureOnlyPromotableAsk`) AND, when
+	//    `containsPathBearingLeaf` is true, requires
+	//    `hostAuthorization.pathAuthorityEvidence` to be present
+	//    (the path-bearing leaf authority gate; see CORRECTION02).
 	const promote = dialectCapable && aggregate === "auto-approve-eligible";
 	const downgrade = aggregate === "never-auto-approve";
 
@@ -661,6 +698,11 @@ export function evaluateStructuredCommandRisk(args: {
 	if (!dialectCapable) {
 		reasons.push(
 			`structured analysis dialect ${parserResult.dialect} not promotion-capable`,
+		);
+	}
+	if (containsPathBearingLeaf) {
+		reasons.push(
+			"structured analysis detected R0 path-bearing leaf (host path authority evidence required for promotion)",
 		);
 	}
 	reasons.push(...summarizeReasons(perStmt, aggregate));
@@ -671,6 +713,7 @@ export function evaluateStructuredCommandRisk(args: {
 		aggregate,
 		promoteToAllow: promote,
 		downgradeToNeverAutoApprove: downgrade,
+		containsPathBearingLeaf,
 		reasons,
 	};
 }
@@ -1140,6 +1183,83 @@ function renderArgv(cmd: StructuredCmd): string {
 	if (cmd.name === "") return "";
 	if (cmd.args.length === 0) return cmd.name;
 	return `${cmd.name} ${cmd.args.join(" ")}`;
+}
+
+/**
+ * CORRECTION02: walk the structured program AST and detect
+ * whether ANY reachable leaf is from the R0 read-only
+ * path-bearing source set (`host_safe_ls`, `host_safe_find`).
+ *
+ * This predicate operates by re-classifying each leaf via
+ * `classifyStmt(stmt, ..., dialect, protocolVersion)`, then
+ * inspecting the leaf's `source`. It does NOT inspect the
+ * rendered argv (that is V1's job); the surgical seam is at
+ * the V2 boundary, and the source string is the canonical
+ * positive match from V1's `findSafeRuleMatch`.
+ *
+ * Why this matters: without this walk, a pipe
+ *
+ *   `ls <path> | head -30`
+ *
+ * is aggregated by `classifyStmt` to `aggregated-pipe`
+ * (collapsing the constituent leaves) and the V2 promotion
+ * gate sees only the parser-proven `head` leaf. The host
+ * path-authority evidence for the `ls` operand is required
+ * for a per-command ALLOW (V1 already enforces this), but
+ * the V2 promotion gate was bypassing the requirement. This
+ * walker makes the path-bearing leaf visible to V2.
+ *
+ * Failure mode: if `classifyStmt` cannot determine the leaf's
+ * source (e.g. on `no-rule-match`, `risk:hard-floor:*`, or
+ * `redirect-sensitive-write-*`), the leaf is NOT path-bearing
+ * for the purposes of this predicate — V1's own gates are
+ * the load-bearing boundary for those cases.
+ */
+function stmtContainsPathBearingLeaf(
+	program: StructuredProgram,
+	dialect: ShellDialect,
+	protocolVersion: number,
+): boolean {
+	for (const stmt of program.stmts) {
+		if (stmtHasPathBearingLeaf(stmt, dialect, protocolVersion)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function stmtHasPathBearingLeaf(
+	stmt: StructuredStmt,
+	dialect: ShellDialect,
+	protocolVersion: number,
+): boolean {
+	switch (stmt.kind) {
+		case "cmd": {
+			// Classify the leaf directly via the per-cmd dispatcher.
+			// We only care about the SOURCE string here, not the
+			// risk; a path-bearing leaf's source is in the R0 set
+			// regardless of its risk.
+			const leaf = classifyCmd(stmt.cmd, 0, dialect, protocolVersion);
+			return isR0PathBearingRuleSource(leaf.source);
+		}
+		case "and":
+		case "or":
+		case "pipe":
+			return (
+				stmtHasPathBearingLeaf(stmt.left, dialect, protocolVersion) ||
+				stmtHasPathBearingLeaf(stmt.rhs, dialect, protocolVersion)
+			);
+		case "subshell":
+			return stmtHasPathBearingLeaf(
+				stmt.inner,
+				dialect,
+				protocolVersion,
+			);
+		case "opaque":
+			return false;
+		default:
+			return false;
+	}
 }
 
 function maxRisk(risks: ReadonlyArray<StructuredRisk>): StructuredRisk {

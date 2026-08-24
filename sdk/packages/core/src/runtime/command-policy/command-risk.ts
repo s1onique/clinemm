@@ -590,6 +590,24 @@ export function evaluateCommandRiskWithParser(
 		const hasParserProvenLeaf = v2.perStatement.some((s) =>
 			isParserProvenSource(s.source),
 		);
+		// CORRECTION02: detect whether any reachable leaf in the
+		// structured program is from the R0 read-only path-bearing
+		// source set (`host_safe_ls`, `host_safe_find`). When true,
+		// the parser-proven promotion gate refuses to promote
+		// unless the host has supplied `pathAuthorityEvidence`
+		// (the same gate V1 applies per-command for these leaves).
+		// This closes the new positive-V2-capability bypass where
+		// `ls <path> | head -30` (no evidence) was ALLOW-able via
+		// the parser-proven `head` leaf alone: V1 sees the pipe as
+		// one opaque shape and emits `host_mode_safe_only_fallthrough`
+		// (which IS in the promotable set), and V2 saw a
+		// parser-proven `head` leaf. The walk in
+		// `stmtContainsPathBearingLeaf` makes the path-bearing leaf
+		// visible to V2 regardless of how deeply it is nested in a
+		// pipe/and/or/subshell.
+		const pathBearingLeafRequiresEvidence =
+			v2.containsPathBearingLeaf &&
+			input.hostAuthorization.pathAuthorityEvidence === undefined;
 		const isParserProvenPromotion =
 			hasParserProvenLeaf &&
 			v2SourceBound &&
@@ -605,6 +623,17 @@ export function evaluateCommandRiskWithParser(
 			// ASK sources later has no effect here as long as they
 			// remain outside `STRUCTURE_ONLY_PROMOTABLE_REASONS`.
 			isStructureOnlyPromotableAsk(finalSource) &&
+			// CORRECTION02 path-authority-evidence gate:
+			// refuse to promote when any reachable leaf is from the
+			// R0 path-bearing set and the host has NOT supplied
+			// path authority evidence. The host is the source of
+			// truth for path authority (CORRECTION02); V2 cannot
+			// infer containment from the parser's static argv.
+			// When evidence IS supplied, the per-command ALLOW
+			// contract is honored (the path-bearing leaf authority
+			// gate is delegated to V1's per-command resolution
+			// path, which already validates the evidence).
+			!pathBearingLeafRequiresEvidence &&
 			v2.promoteToAllow;
 		if (isParserProvenPromotion) {
 			finalDecision = "allow";
@@ -615,11 +644,21 @@ export function evaluateCommandRiskWithParser(
 		// Existing structure-caused-ASK promotion (CORRECTION01). Unchanged
 		// in Phase 2; the parser-proven path does NOT take this branch
 		// because its finalSource has already been overwritten above.
+		//
+		// CORRECTION02: same path-bearing-evidence gate as
+		// `isParserProvenPromotion` applies. Without this gate, the
+		// v2StructureCausedAsk branch would still ALLOW a pipe
+		// `ls <path> | head -30` (no evidence) whenever the V1
+		// verdict for the pipe was an opaque-shell composition ASK
+		// (i.e. `risk_opaque_composition`). The hasParserProvenLeaf
+		// guard was insufficient because the `head` leaf is parser-
+		// proven even when its sibling `ls` is path-bearing.
 		const v2StructureCausedAsk =
 			v2.promoteToAllow &&
 			finalDecision === "ask" &&
 			finalDisposition !== "never-auto-approve" &&
 			isStructureOnlyPromotableAsk(finalSource) &&
+			!pathBearingLeafRequiresEvidence &&
 			opaqueCommands.length > 0;
 		if (v2StructureCausedAsk) {
 			// Load-bearing monotonicity invariant: V2 may NEVER

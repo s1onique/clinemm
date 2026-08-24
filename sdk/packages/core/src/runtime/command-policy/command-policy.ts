@@ -537,6 +537,27 @@ function isR0ReadonlyRuleSource(source: string): boolean {
 	return R0_READONLY_PATH_BEARING_SOURCES.has(source);
 }
 
+/**
+ * CORRECTION02: export the predicate so the V2 structured
+ * classifier (`structured-command-risk.ts`) can also recognize
+ * path-bearing leaves in pipe/and/or composition. Before this
+ * export, only V1's per-command resolution could consult the
+ * R0 set; the V2 aggregator returned `aggregated-pipe` /
+ * `aggregated-and` / `aggregated-or`, hiding the constituent
+ * leaves. A pipe `ls <path> | head -30` was therefore ALLOW-able
+ * via parser-proven promotion of the `head` leaf even when no
+ * path-authority evidence existed for the `ls` operand, because
+ * V1 sees the pipe as one opaque shape and emits
+ * `host_mode_safe_only_fallthrough` (which IS in the promotable
+ * set), and V2 sees a parser-proven `head` leaf.
+ *
+ * This is the surgical seam that closes the new positive-V2-
+ * capability bypass without changing V1's pipe handling.
+ */
+export function isR0PathBearingRuleSource(source: string): boolean {
+	return R0_READONLY_PATH_BEARING_SOURCES.has(source);
+}
+
 export { buildCommandExecutionPlan } from "./command-execution-plan";
 export {
 	type CommandModelHint,

@@ -298,7 +298,49 @@ describeWithHelper("structured-command-risk -- REAL parser-helper 2>/dev/null ne
  */
 
 describe("structured-command-risk -- SYNTHETIC_REAL redirect fixture contract", () => {
-	it("ALLOW: `ls 2>/dev/null` with parser-proven fd=2 + pathProvenance=static", () => {
+	it("ALLOW: `ls 2>/dev/null` with parser-proven fd=2 + pathProvenance=static + host path evidence", () => {
+		const cmd = "ls -la .factory/evidence/ 2>/dev/null";
+		const parsed = mkRedirectShell(cmd, "ls", ["-la", ".factory/evidence/"], [
+			{ op: ">", path: "/dev/null", fd: 2, pathProvenance: "static" },
+		]);
+		// CORRECTION02: the V2 promotion gate refuses to promote
+		// when a path-bearing leaf (`host_safe_ls`) is present
+		// AND the host has not supplied `pathAuthorityEvidence`.
+		// When evidence IS supplied, the per-command ALLOW
+		// contract is honored.
+		const evidenceAwareAuth = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [process.cwd()],
+			cwd: process.cwd(),
+			pathAuthorityEvidence: {
+				roots: [process.cwd()],
+				cwd: process.cwd(),
+				operands: [
+					{
+						operand: ".factory/evidence/",
+						resolvedRealPath: `${process.cwd()}/.factory/evidence/`,
+						contained: true,
+						reason: "resolved-and-contained",
+					},
+				],
+			},
+		});
+		const r = evaluateCommandRiskWithParser({
+			toolInput: cmd,
+			hostAuthorization: evidenceAwareAuth,
+			parserResult: parsed,
+		});
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
+	});
+
+	it("ASK (CORRECTION02): `ls 2>/dev/null` without host path evidence stays ASK", () => {
+		// Pre-CORRECTION02 this asserted ALLOW (the unsafe
+		// behaviour HALT_PIPELINE_PATH_AUTHORITY_BYPASS). The
+		// V2 promotion gate now refuses to promote when a
+		// path-bearing leaf is present and the host has not
+		// supplied path authority evidence.
 		const cmd = "ls -la .factory/evidence/ 2>/dev/null";
 		const parsed = mkRedirectShell(cmd, "ls", ["-la", ".factory/evidence/"], [
 			{ op: ">", path: "/dev/null", fd: 2, pathProvenance: "static" },
@@ -308,8 +350,8 @@ describe("structured-command-risk -- SYNTHETIC_REAL redirect fixture contract", 
 			hostAuthorization: SAFE,
 			parserResult: parsed,
 		});
-		expect(r.decision).toBe("allow");
-		expect(r.disposition).toBe("auto-approve-eligible");
+		expect(r.decision).toBe("ask");
+		expect(r.source).not.toBe("risk_v2_structured_promotion");
 	});
 
 	it("ALLOW: `git status 2>/dev/null` with parser-proven fd=2 + pathProvenance=static", () => {
