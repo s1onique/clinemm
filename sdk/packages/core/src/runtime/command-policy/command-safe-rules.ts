@@ -348,7 +348,8 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		// contains only POSIX literal text characters and excludes
 		// every shell metacharacter that could enable command
 		// substitution, variable expansion, globbing, redirection, or
-		// pipe composition. Specifically EXCLUDED:
+		// pipe composition. Specifically EXCLUDED from the BARE class
+		// (unquoted):
 		//
 		//   $        variable expansion or $(...) command substitution
 		//   backtick backtick command substitution
@@ -359,6 +360,10 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		//   | & ;    composition operators
 		//   < >      redirection
 		//   =        potential variable assignment
+		//   -        leading option marker (defense-in-depth; options
+		//            like --evil, -X are explicitly REJECTED here
+		//            rather than relying on the upstream
+		//            OPAQUE_SHELL_TOKENS guard to catch them)
 		//
 		// Any token containing those characters falls through to ASK.
 		// Defense-in-depth: V2's `hasCommandSubstitution` gate
@@ -366,6 +371,13 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		// backtick forms even if the regex is bypassed. The opaque
 		// token guard (`OPAQUE_SHELL_TOKENS`) catches all
 		// composition/redirect operators before any rule match.
+		//
+		// Quoted-literal classes (`'...'` and `"..."`) retain `-`
+		// because that character has no shell-meaning inside a
+		// single-quoted POSIX literal and minimal meaning inside a
+		// double-quoted one (no expansion of `-`). This is what makes
+		// the user's exact live forms `echo '---BRANCH---'` and
+		// `echo '---REMOTES---'` ALLOW-able.
 		//
 		// The argument may be either:
 		//   - a single-quoted POSIX literal: '...' (inner class excludes
@@ -382,7 +394,7 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		// `echo backtick-cmdsubst`, `echo *`, `echo foo > file`,
 		// `echo foo | bar`, etc.
 		pattern:
-			/^\s*echo(?:\s+-n)?(?:\s+(?:[A-Za-z0-9 _.,:;/+@%^]+|'(?:[A-Za-z0-9 _.,:;/+@%^-]*)'|"(?:[A-Za-z0-9 _.,:;/+@%^-]*)"))?\s*$/u,
+			/^\s*echo(?:\s+-n)?(?:\s+(?:[A-Za-z0-9 _.,:/+@%^]+|'(?:[A-Za-z0-9 _.,:/+@%^-]*)'|"(?:[A-Za-z0-9 _.,:/+@%^-]*)"))?\s*$/u,
 	},
 	{
 		source: "host_safe_ls",

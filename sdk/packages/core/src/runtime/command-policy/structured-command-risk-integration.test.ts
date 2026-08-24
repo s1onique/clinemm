@@ -169,14 +169,29 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 
 	// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01
 	//
-	// EXACT LIVE HEAD DOGFOOD: the user's literal first command in the
-	// live chat session. With `host_safe_git_remote` and `host_safe_echo`
-	// added, every reachable leaf now positively matches. V2 promotion
-	// fires; the chain auto-runs.
+	// SYNTHETIC PARSER-BOUND EXACT COMMAND: the user's literal first
+	// command in the live chat session, hand-constructed into a
+	// ParsedShell fixture via `mkParsed()`. This is NOT a LIVE test;
+	// it does NOT exercise the real parser helper. Classification:
+	// SYNTHETIC_REAL / STRUCTURAL. The load-bearing GREEN assertion
+	// it makes is that the V2 promotion gate fires correctly when
+	// every leaf is positively matched — proof that the V2 engine +
+	// the new rules cohere. With `host_safe_git_remote` and
+	// `host_safe_echo` added, every reachable leaf now positively
+	// matches. The aggregate becomes auto-approve-eligible and
+	// `risk_v2_structured_promotion` fires.
 	//
-	// This is the load-bearing GREEN test that closes the R0 leaf-
-	// coverage gap the engineer review identified.
-	it("LIVE EXACT HEAD: user's 5-leaf && chain → ALLOW (V2 promotion)", () => {
+	// EVIDENCE GAP: this synthetic test is the only level of evidence
+	// produced by this ACT. To upgrade to REAL_PRODUCTION_SEAM or
+	// LIVE, the helper binary would have to drive the parser and the
+	// evaluator would have to run against the rebuilt SDK bundle in a
+	// way that round-trips a real shell string through mvdan/sh. The
+	// `live-qualification.mjs` harness does drive the rebuilt SDK
+	// dist, but it supplies the AST fixture directly rather than
+	// going through a parser helper (the parser helper shipping ACT
+	// is a separate follow-up). Until that round-trip exists, the
+	// evidence above is STRUCTURAL only.
+	it("SYNTHETIC PARSER-BOUND EXACT COMMAND: user's 5-leaf && chain → ALLOW (V2 promotion)", () => {
 		const liveCmd =
 			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v";
 		const r = evaluateCommandRiskWithParser({
@@ -216,7 +231,9 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 	// Mixed-risk control: same chain, but with a mutating leaf appended.
 	// MUST stay ASK. This is the load-bearing adversarial control that
 	// proves the V2 promotion does not extend to mutating neighbors.
-	it("LIVE ADVERSARIAL CONTROL: same 5-leaf chain + git branch -D → ASK (mutating leaf blocks)", () => {
+	// Classification: SYNTHETIC_REAL / STRUCTURAL — same caveat as the
+	// green test above; AST fixture hand-constructed.
+	it("SYNTHETIC PARSER-BOUND MIXED-RISK CONTROL: 5-leaf chain + git branch -D → ASK (mutating leaf blocks)", () => {
 		const evilCmd =
 			"git status --short && git branch -D __CLINEMM_SENTINEL__";
 		const r = evaluateCommandRiskWithParser({
