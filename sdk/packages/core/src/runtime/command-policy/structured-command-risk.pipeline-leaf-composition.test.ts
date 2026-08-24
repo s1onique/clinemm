@@ -877,6 +877,22 @@ describe(
 			// gate, NOT be promoted by V2 parser-proven.
 			symlinkSync(OUTSIDE_DIR, SYMLINK_INSIDE_PROJECT, "dir");
 
+			// Canonicalize the project root and the inside-file at
+			// the FIXTURE BOUNDARY (mirroring what a real host does
+			// before passing values to `commandHostAuthorization`).
+			// macOS resolves /var -> /private/var; the policy compares
+			// roots + cwd by canonical-form set-equality against the
+			// evidence's already-canonicalized roots + cwd. Without
+			// canonicalization here, the test would fail
+			// HALT_PATH_EVIDENCE_CONTEXT_NOT_BOUND spuriously because
+			// the auth's cwd is "/var/..." but evidence.roots[0] is
+			// "/private/var/...". This is host-construction hygiene;
+			// the policy is pure and never canonicalizes.
+			PROJECT_DIR = realpathSync(PROJECT_DIR);
+			OUTSIDE_DIR = realpathSync(OUTSIDE_DIR);
+			PROJECT_INSIDE_FILE = realpathSync(PROJECT_INSIDE_FILE);
+			SYMLINK_INSIDE_PROJECT = realpathSync(SYMLINK_INSIDE_PROJECT);
+
 			helper = new MvdanShHelper({
 				platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
 				binaryPath: () => HELPER_PATH as string,
@@ -1145,6 +1161,12 @@ describe(
 			writeFileSync(join(OUTSIDE_DIR, "secret.txt"), "// outside\n");
 			symlinkSync(OUTSIDE_DIR, SYMLINK_INSIDE_PROJECT, "dir");
 
+			// Canonicalize at the fixture boundary (see Section J).
+			PROJECT_DIR = realpathSync(PROJECT_DIR);
+			OUTSIDE_DIR = realpathSync(OUTSIDE_DIR);
+			PROJECT_INSIDE_FILE = realpathSync(PROJECT_INSIDE_FILE);
+			SYMLINK_INSIDE_PROJECT = realpathSync(SYMLINK_INSIDE_PROJECT);
+
 			helper = new MvdanShHelper({
 				platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
 				binaryPath: () => HELPER_PATH as string,
@@ -1360,6 +1382,11 @@ describe(
 			writeFileSync(INSIDE_FILE, "// inside\n");
 			writeFileSync(join(OUTSIDE_DIR, "secret.txt"), "// outside\n");
 			symlinkSync(OUTSIDE_DIR, SYMLINK_INSIDE_PROJECT, "dir");
+
+			// Canonicalize at the fixture boundary (see Section J).
+			PROJECT_DIR = realpathSync(PROJECT_DIR);
+			INSIDE_FILE = realpathSync(INSIDE_FILE);
+			SYMLINK_INSIDE_PROJECT = realpathSync(SYMLINK_INSIDE_PROJECT);
 			helper = new MvdanShHelper({
 				platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
 				binaryPath: () => HELPER_PATH as string,
@@ -1457,6 +1484,96 @@ describe(
 			// evidence builder contract. CORRECTION03 fires the
 			// gate.
 			const r = await evaluate(cmd, evidence)
+			expect(r.decision).toBe("ask")
+			expect(r.source).not.toBe("risk_v2_structured_promotion")
+		})
+
+		// (CORRECTION04) Authority-context binding. The
+		// reviewer's required adversarial discriminator added
+		// two more RED cases: stale-roots and stale-cwd. Pre-
+		// CORRECTION04 the binder checked only operand identity
+		// and would have ALLOW'd, allowing capability reuse
+		// across root sets.
+		//
+		// (B) same operand + evidence from broader roots ->
+		//     ASK (HALT_PATH_EVIDENCE_CONTEXT_NOT_BOUND)
+
+		it("(B) RED (CORRECTION04 HALT): stale-roots reuse -> ASK", async () => {
+			// Build evidence under a BROADER root set, then
+			// hand it to a NARROWER host authorization. The
+			// operand identity is the same and the operand is
+			// contained per the broader root set, but the
+			// structured program is being run under the narrower
+			// authorization. Without authority-context binding,
+			// the binder would ALLOW (capability reuse across
+			// root sets -- the
+			// HALT_PATH_EVIDENCE_CONTEXT_NOT_BOUND attack).
+			const cmd = `ls ${INSIDE_FILE} | head -30`
+			// Build evidence under a broader root set that
+			// includes the project root.
+			const broaderRoots = [tmpdir(), PROJECT_DIR].sort()
+			const built = buildPathAuthorityEvidence({
+				workspaceRoots: broaderRoots,
+				cwd: PROJECT_DIR,
+				command: { command: cmd },
+			})
+			if (!built.ok) {
+				throw new Error(`expected broader-context evidence to build: ${built.reason}`)
+			}
+			// The CURRENT (narrower) authorization uses ONLY
+			// [PROJECT_DIR] as its root; the evidence was
+			// constructed under broaderRoots. CORRECTION04 must
+			// catch the roots-list mismatch.
+			const parsed = await helper.invoke({ command: cmd })
+			const r = await evaluateCommandRiskWithParser({
+				toolInput: cmd,
+				hostAuthorization: commandHostAuthorization({
+					mode: "safe-only",
+					explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+					workspaceRoots: [PROJECT_DIR],
+					cwd: PROJECT_DIR,
+					pathAuthorityEvidence: built.evidence,
+				}),
+				parserResult: parsed ?? undefined,
+			})
+			expect(r.decision).toBe("ask")
+			expect(r.source).not.toBe("risk_v2_structured_promotion")
+		})
+
+		it("(C) RED (CORRECTION04 HALT): stale-cwd reuse -> ASK", async () => {
+			// Build evidence against a foreign cwd but forge an
+			// otherwise-valid operand entry whose resolvedRealPath
+			// is identical to the structured operand's
+			// authoritative resolution. The CURRENT authorization
+			// has cwd = PROJECT_DIR; the evidence carries cwd =
+			// <foreign>. CORRECTION04 must catch the cwd
+			// mismatch.
+			const cmd = `ls ${INSIDE_FILE} | head -30`
+			const foreignCwd = tmpdir()
+			const forged = {
+				roots: [PROJECT_DIR],
+				cwd: foreignCwd,
+				operands: [
+					{
+						operand: INSIDE_FILE,
+						resolvedRealPath: INSIDE_FILE,
+						contained: true,
+						reason: "resolved-and-contained" as const,
+					},
+				],
+			}
+			const parsed = await helper.invoke({ command: cmd })
+			const r = await evaluateCommandRiskWithParser({
+				toolInput: cmd,
+				hostAuthorization: commandHostAuthorization({
+					mode: "safe-only",
+					explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+					workspaceRoots: [PROJECT_DIR],
+					cwd: PROJECT_DIR,
+					pathAuthorityEvidence: forged,
+				}),
+				parserResult: parsed ?? undefined,
+			})
 			expect(r.decision).toBe("ask")
 			expect(r.source).not.toBe("risk_v2_structured_promotion")
 		})

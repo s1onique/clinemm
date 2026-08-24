@@ -591,20 +591,29 @@ export function evaluateCommandRiskWithParser(
 		const hasParserProvenLeaf = v2.perStatement.some((s) =>
 			isParserProvenSource(s.source),
 		);
-		// CORRECTION03: bind the structured-program R0 path-bearing
-		// operands to the host's canonical path-authority evidence.
-		// The CORRECTION02 `containsPathBearingLeaf` boolean was a
-		// mere presence check and left a residual
+		// CORRECTION03 + CORRECTION04: bind the structured-program
+		// R0 path-bearing operands to the host's canonical
+		// path-authority evidence. The CORRECTION02
+		// `containsPathBearingLeaf` boolean was a mere presence
+		// check and left a residual
 		// HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND bypass:
-		// an unrelated valid evidence record (e.g. one whose operands
-		// belong to a different command) satisfied the presence test
-		// and unlocked promotion. CORRECTION03 closes this by
-		// requiring per-operand identity + canonical containment
-		// binding (delegated to V1's
-		// `evaluateCommandRealpathConformance`).
+		// an unrelated valid evidence record (e.g. one whose
+		// operands belong to a different command) satisfied the
+		// presence test and unlocked promotion. CORRECTION03
+		// closes this by requiring per-operand identity +
+		// canonical containment binding. CORRECTION04 extends
+		// this by binding the evidence's authority CONTEXT
+		// (its `roots` set and `cwd`) to the current host
+		// authorization's `workspaceRoots` and `cwd` -- a stale
+		// evidence record whose roots match a broader scope than
+		// the current authorization would otherwise satisfy a
+		// weaker binder. This closes
+		// HALT_PATH_EVIDENCE_CONTEXT_NOT_BOUND.
 		const pathBearingEvidenceBound = pathBearingOperandsBound(
 			v2.pathBearingOperands,
 			input.hostAuthorization.pathAuthorityEvidence,
+			input.hostAuthorization.workspaceRoots,
+			input.hostAuthorization.cwd,
 		);
 		const pathBearingEvidenceMissing = v2.pathBearingOperands.length > 0 &&
 			input.hostAuthorization.pathAuthorityEvidence === undefined;
@@ -710,42 +719,55 @@ export function evaluateCommandRiskWithParser(
 
 /* ---------------------------------------------------------------------- *
  * CORRECTION03: R0 path-bearing operand/evidence binding                *
+ * CORRECTION04: evidence authority-context binding                      *
  * ---------------------------------------------------------------------- *
  *
  * Bind structured-program R0 leaf operands to the host's
  * canonical `WorkspacePathAuthorityEvidence`. The contract:
  *
- *   For every entry `e` in `pathBearingOperands`:
- *     1. Every operand in `e.operands` MUST have a matching
- *        entry in `evidence.operands[*]` whose `operand` field
- *        equals the operand VERBATIM (operand identity). The
- *        match is by IDENTITY, not by index: the host may have
- *        supplied evidence for operands that the structured
- *        program does not actually use (the host is authorized
- *        to over-supply). The structured program MUST NOT use
- *        any operand the host did not authorize.
+ *   1. Evidence authority-context binding (CORRECTION04): the
+ *      evidence's `roots` set and `cwd` MUST match the current
+ *      host authorization's `workspaceRoots` and `cwd` by
+ *      canonical-form set-equality. This rejects stale/reused
+ *      evidence that was constructed under a different
+ *      authority context: the same operand resolved inside a
+ *      broader or otherwise different root set would carry
+ *      `contained: true` per its OWN root set, but the
+ *      structured program is actually being run under the
+ *      current authorization's authority. This is the load-
+ *      bearing dimension that pre-CORRECTION04 left open as
+ *      `HALT_PATH_EVIDENCE_CONTEXT_NOT_BOUND`.
+ *
+ *   2. Operand identity binding (CORRECTION03): for every
+ *      entry `e` in `pathBearingOperands`, every operand in
+ *      `e.operands` MUST have a matching entry in
+ *      `evidence.operands[*]` whose `operand` field equals the
+ *      operand VERBATIM (operand identity). The match is by
+ *      IDENTITY, not by index: the host may have supplied
+ *      evidence for operands that the structured program does
+ *      not actually use (the host is authorized to over-
+ *      supply). The structured program MUST NOT use any
+ *      operand the host did not authorize.
  *
  *   Identity is the same rule V1's per-command path gate uses
  *   (`command-policy.ts` lines 333-345) -- verbatim string
  *   equality with the extracted operand. This rejects evidence
  *   records forged for a different command.
  *
- *     2. The matching entry MUST have `contained: true` AND
- *        `resolvedRealPath !== null` (resolution + containment
- *        authorized). Resolution failures (`resolvedRealPath:
- *        null`) fail closed per the evidence contract.
+ *     3. Canonical containment: the matching entry MUST have
+ *        `contained: true` AND `resolvedRealPath !== null`
+ *        (resolution + containment authorized). Resolution
+ *        failures (`resolvedRealPath: null`) fail closed per
+ *        the evidence contract.
  *
  *   The host MAY supply evidence for operands the structured
- *   program does not use; the binder ignores those (the host
- *   is authorized to over-supply). The structured program MUST
- *   NOT consume an operand the host did not authorize (this is
- *   the load-bearing identity check).
+ *   program does not use; the binder ignores those. The
+ *   structured program MUST NOT consume an operand the host
+ *   did not authorize.
  *
- * This closes HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND:
- * the pre-CORRECTION03 gate fired on mere *presence* of any
- * evidence object (capability aliasing); CORRECTION03 fires on
- * per-operand identity + canonical containment + canonical
- * resolution.
+ * This closes
+ *   CORRECTION03: HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND
+ *   CORRECTION04: HALT_PATH_EVIDENCE_CONTEXT_NOT_BOUND
  */
 export function pathBearingOperandsBound(
 	pathBearingOperands: ReadonlyArray<{
@@ -753,6 +775,8 @@ export function pathBearingOperandsBound(
 		readonly operands: ReadonlyArray<string>;
 	}>,
 	evidence: WorkspacePathAuthorityEvidence | undefined,
+	currentRoots: ReadonlyArray<string> | undefined,
+	currentCwd: string | undefined,
 ): boolean {
 	if (pathBearingOperands.length === 0) {
 		return true;
@@ -760,11 +784,24 @@ export function pathBearingOperandsBound(
 	if (evidence === undefined) {
 		return false;
 	}
+	// (CORRECTION04) Authority-context binding. The evidence's
+	// `roots` set and `cwd` MUST match the current host
+	// authorization by canonical-form set-equality. Comparing
+	// to a list rather than a set catches ordering changes
+	// (the host is responsible for canonical ordering at
+	// construction time; `buildPathAuthorityEvidence` emits
+	// sorted roots, so a list-equal comparison is the canonical
+	// representation).
+	if (!canonicalRootsEqual(currentRoots, evidence.roots)) {
+		return false;
+	}
+	if (currentCwd !== evidence.cwd) {
+		return false;
+	}
 	// Build a lookup by operand identity. Host evidence entries
-	// are assumed to be unique by `.operand` (the host builds one
-	// entry per extracted path operand in V1's
-	// `extractPathOperands` flow). If the host supplied duplicate
-	// entries for the same operand, we use the FIRST one.
+	// are assumed to be unique by `.operand`. If the host
+	// supplied duplicate entries for the same operand, we use
+	// the FIRST one.
 	const byOperand = new Map<string, (typeof evidence.operands)[number]>();
 	for (const e of evidence.operands) {
 		if (!byOperand.has(e.operand)) {
@@ -788,6 +825,39 @@ export function pathBearingOperandsBound(
 			if (ev.contained !== true) {
 				return false;
 			}
+		}
+	}
+	return true;
+}
+
+/**
+ * Canonical-form set-equality for workspace root lists.
+ *
+ * Two root lists are canonical-equal iff both are undefined
+ * (the host has not declared workspace authority), OR both
+ * are defined, have the same length, and every element at the
+ * same index is byte-equal. The host is responsible for
+ * emitting canonical order at construction time; the SDK
+ * sorts `roots` inside `buildPathAuthorityEvidence` so the
+ * canonical representation is the ONE that the host builders
+ * produce. Using list-equality (rather than set-equality)
+ * catches ordering drift -- a host that reorders its roots
+ * between authorization and evidence construction would
+ * otherwise satisfy a loose set check.
+ */
+function canonicalRootsEqual(
+	a: ReadonlyArray<string> | undefined,
+	b: ReadonlyArray<string>,
+): boolean {
+	if (a === undefined) {
+		return false; // host authority declares no roots but evidence has roots
+	}
+	if (a.length !== b.length) {
+		return false;
+	}
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) {
+			return false;
 		}
 	}
 	return true;
