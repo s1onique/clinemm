@@ -86,7 +86,15 @@ export interface WorkspacePathOperandEvidence {
 		| "realpath-failed-enoent"
 		| "realpath-failed-eacces"
 		| "realpath-failed-eloop"
-		| "realpath-failed-other";
+		| "realpath-failed-other"
+		/**
+		 * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+		 * The operand resolved (realpath succeeded) but is NOT a
+		 * directory. Used for `cd` workspace-transition operands
+		 * whose resolved target is a regular file or other
+		 * non-directory filesystem object.
+		 */
+		| "realpath-failed-not-a-directory";
 }
 
 /**

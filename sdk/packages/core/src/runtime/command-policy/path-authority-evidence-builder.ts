@@ -49,10 +49,11 @@
  * fail-closed posture per CORRECTION02).
  */
 
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { isAbsolute, resolve as resolvePath } from "node:path";
 
 import { normalizeRunCommandsInput } from "../../extensions/tools/helpers";
+import { renderNormalizedCommand } from "./command-model-hints";
 import {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	findSafeRuleMatch,
@@ -86,6 +87,17 @@ type OperandReason = WorkspacePathOperandEvidence["reason"];
 export function safeRealpathSync(
 	operand: string,
 	cwd: string | null,
+	options?: {
+		/**
+		 * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+		 * When true, the resolved canonical path MUST be a
+		 * directory (`statSync().isDirectory()`). Non-directory
+		 * resolutions return `resolvedRealPath: null` with
+		 * reason `realpath-failed-not-a-directory`. Used for
+		 * `cd` workspace-transition operands.
+		 */
+		expectDirectory?: boolean;
+	},
 ):
 	| {
 			resolvedRealPath: string;
@@ -109,9 +121,9 @@ export function safeRealpathSync(
 	} catch {
 		return { resolvedRealPath: null, reason: "realpath-failed-other" };
 	}
+	let canonical: string;
 	try {
-		const canonical = realpathSync(resolved);
-		return { resolvedRealPath: canonical, reason: "resolved-and-contained" };
+		canonical = realpathSync(resolved);
 	} catch (err) {
 		const code = (err as NodeJS.ErrnoException)?.code;
 		switch (code) {
@@ -126,6 +138,29 @@ export function safeRealpathSync(
 				return { resolvedRealPath: null, reason: "realpath-failed-other" };
 		}
 	}
+	// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+	// Directory-type check for cd operands. After realpath
+	// resolution, we stat the canonical path and confirm it is a
+	// directory. A regular file (e.g. `cd /path/to/file.ts`)
+	// returns fail-closed. We do NOT use a directory-check
+	// `realpathSync` variant because the existing `realpathSync`
+	// already resolves symlinks correctly; `statSync` after
+	// realpath gives us the post-symlink file type.
+	if (options?.expectDirectory === true) {
+		let isDir: boolean;
+		try {
+			isDir = statSync(canonical).isDirectory();
+		} catch {
+			return { resolvedRealPath: null, reason: "realpath-failed-other" };
+		}
+		if (!isDir) {
+			return {
+				resolvedRealPath: null,
+				reason: "realpath-failed-not-a-directory",
+			};
+		}
+	}
+	return { resolvedRealPath: canonical, reason: "resolved-and-contained" };
 }
 
 /**
@@ -350,8 +385,35 @@ export function buildPathAuthorityEvidence(
 		);
 		const source = safeMatch?.source ?? "";
 		const operands = extractR0PathOperands(command, source);
+		// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+		// cd workspace-transition operands MUST resolve to a
+		// directory (not a regular file or other non-directory
+		// filesystem object). The directory check fires when
+		// (a) the V2 mirror dispatches to the cd case
+		//     (`source === "host_safe_cd_workspace_transition"`),
+		// OR
+		// (b) the rendered command text starts with `cd ` and the
+		//     operand sits at the cd-target position (index 1) and
+		//     has the absolute path shape (the same shape
+		//     contract enforced by V2's
+		//     `isParserProvenAbsoluteStaticCd` validator).
+		//
+		// The (b) clause catches the COMPOUND case `cd <abs> &&
+		// pwd` where V1's safe-rule matcher returns null (the
+		// `&&` makes the whole string opaque). Without (b), the
+		// cd target's evidence entry would be
+		// `resolved-and-contained` for any path-shaped operand
+		// (regular file or directory), letting V2's promotion
+		// gate mis-promote `cd <regular-file> && pwd`.
+		const rendered = renderNormalizedCommandForCdShape(command);
+		const cdShapeTargets = collectCdShapeTargets(rendered);
 		for (const op of operands) {
-			const resolved = safeRealpathSync(op, canonicalCwd);
+			const expectDirectory =
+				source === "host_safe_cd_workspace_transition" ||
+				cdShapeTargets.has(op);
+			const resolved = safeRealpathSync(op, canonicalCwd, {
+				expectDirectory,
+			});
 			if (resolved.resolvedRealPath === null) {
 				operandEvidence.push({
 					operand: op,
@@ -384,4 +446,83 @@ export function buildPathAuthorityEvidence(
 			operands: operandEvidence,
 		},
 	};
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01.
+ *
+ * Render the normalized command back to its string surface for
+ * lexical cd-shape inspection. The structural `NormalizedCommand`
+ * type is either a string or a `{command, args}` typed shape;
+ * `renderNormalizedCommand` is the canonical renderer used by
+ * the V1 safe-rule engine.
+ */
+function renderNormalizedCommandForCdShape(command: NormalizedCommand): string {
+	try {
+		return renderNormalizedCommand(command).trim();
+	} catch {
+		return "";
+	}
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01.
+ *
+ * Lexical scan: identify operands in the rendered command that
+ * LOOK like cd targets, so the evidence builder can apply the
+ * directory-type check to those operands (and ONLY those).
+ *
+ * This is the lexical mirror of V2's
+ * `isParserProvenAbsoluteStaticCd` validator. It does NOT
+ * consult the parsed AST; it inspects the rendered command text
+ * directly. Shape contract:
+ *
+ *   - the rendered text starts with `cd ` (after trim)
+ *   - the operand sits at index 1 of the token stream
+ *   - the operand begins with `/`
+ *   - the operand does not begin with `-` (no flag-merge)
+ *   - the operand is not `--`
+ *
+ * Returns a Set of strings -- the operands that satisfy the
+ * shape contract. Empty set when the rendered command is not a
+ * cd-shape.
+ *
+ * Note: this is INTENTIONALLY a different layer from V2's
+ * parser-proven validator. The validator gates the positive
+ * classification (cd is auto-approve-eligible iff parser-proven
+ * static + absolute + exactly1 operand + no flags); the
+ * lexical mirror here gates ONLY the directory-type check on
+ * the host-side evidence record. The two layers combined
+ * ensure:
+ *
+ *   - V2 positive cd leaves (parser-proven) -> directory check
+ *   - V2 negative cd leaves (dynamic, multi-operand, etc.) ->
+ *     no special directory enforcement, the standard path
+ *     authority applies
+ *
+ * Fail-closed: when the rendered text is empty / non-cd-shaped,
+ * the returned set is empty and the directory check does not
+ * fire.
+ */
+function collectCdShapeTargets(rendered: string): Set<string> {
+	const out = new Set<string>();
+	if (rendered.length === 0) {
+		return out;
+	}
+	const tokens = rendered.split(/\s+/u).filter((t) => t.length > 0);
+	if (tokens.length < 2) {
+		return out;
+	}
+	if (tokens[0] !== "cd") {
+		return out;
+	}
+	const target = tokens[1]!;
+	if (target === "--" || target.startsWith("-")) {
+		return out;
+	}
+	if (!target.startsWith("/")) {
+		return out;
+	}
+	out.add(target);
+	return out;
 }

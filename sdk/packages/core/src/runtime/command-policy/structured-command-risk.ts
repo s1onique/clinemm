@@ -309,6 +309,16 @@ export interface StructuredAnalysis {
 		readonly source: string;
 		readonly operands: ReadonlyArray<string>;
 	}>;
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+	 * Number of `host_safe_cd_workspace_transition` statements in
+	 * the program. When > 0, Wave 1 grammar requires the entire
+	 * program to be a single `&&`-chain at the top level (no
+	 * `;`-sequence, no `||`, no subshell wrapping). Surfaced for
+	 * diagnostics and for the V2 promotion gate's
+	 * `cwdCompositionEligible` check.
+	 */
+	readonly cwdTransitionCount: number;
 	readonly reasons: ReadonlyArray<string>;
 }
 
@@ -595,6 +605,7 @@ export function evaluateStructuredCommandRisk(args: {
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
 			pathBearingOperands: [],
+			cwdTransitionCount: 0,
 			reasons: ["structured analysis skipped (no parser result provided)"],
 		};
 	}
@@ -614,6 +625,7 @@ export function evaluateStructuredCommandRisk(args: {
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
 			pathBearingOperands: [],
+			cwdTransitionCount: 0,
 			reasons: [
 				`structured analysis skipped (protocol version ${parserResult.protocolVersion} != ${STRUCTURED_PROTO_VERSION} and != 2)`,
 			],
@@ -632,6 +644,7 @@ export function evaluateStructuredCommandRisk(args: {
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
 			pathBearingOperands: [],
+			cwdTransitionCount: 0,
 			reasons: [
 				"structured analysis skipped (parser reported parse failure)",
 				...parserResult.errors,
@@ -651,6 +664,7 @@ export function evaluateStructuredCommandRisk(args: {
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
 			pathBearingOperands: [],
+			cwdTransitionCount: 0,
 			reasons: [`structured analysis skipped (${bindingFailure})`],
 		};
 	}
@@ -665,6 +679,7 @@ export function evaluateStructuredCommandRisk(args: {
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
 			pathBearingOperands: [],
+			cwdTransitionCount: 0,
 			reasons: ["structured analysis opaque (command substitution present)"],
 		};
 	}
@@ -683,6 +698,38 @@ export function evaluateStructuredCommandRisk(args: {
 	);
 
 	const aggregate = maxRisk(perStmt.map((s) => s.risk));
+
+	// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+	// If the program contains any `host_safe_cd_workspace_transition`
+	// statements, the cd's effective-cwd propagation is ONLY
+	// defined along the `&&` success edge (Wave 1 grammar).
+	// Refuse V2 promotion when:
+	//   - the program has more than one top-level statement
+	//     (`cd X ; RHS` -- bash would normally retain cwd, but
+	//      Wave 1 deliberately does NOT model `;` state).
+	//   - the AST contains an `or` node whose right side might
+	//     run under the old cwd (RHS runs on cd FAILURE).
+	//   - the AST contains a `subshell` node wrapping a cd.
+	//
+	// The only structure that promotes is a single top-level
+	// statement that is a pure `and` chain whose leftmost leaf
+	// is the cd transition. Multi-leaf `and` chains
+	// (`cd && A && B`) are also fine because each `&&` is the
+	// success edge.
+	//
+	// `cwdCompositionEligible` is the gate. The
+	// `cwdTransitionCount` is also exposed on the analysis
+	// object for diagnostics and downstream tests.
+	//
+	// NOTE: perStatement only carries aggregated source labels
+	// (`aggregated-and`, `aggregated-or`, ...) at the outer
+	// composition nodes. The underlying cd transition's source
+	// label is NEVER visible at the perStatement layer. We must
+	// walk the AST directly to count cwd transitions.
+	const cwdTransitionCount = countCwdTransitions(parserResult.program);
+	const cwdCompositionEligible =
+		cwdTransitionCount === 0 ||
+		isCwdAndComposition(parserResult.program);
 
 	// CORRECTION03: walk the structured program AST and collect
 	// every reachable R0 read-only path-bearing leaf's source +
@@ -707,13 +754,28 @@ export function evaluateStructuredCommandRisk(args: {
 	//    `hostAuthorization.pathAuthorityEvidence` whose entries
 	//    bind to these operands verbatim AND whose containment +
 	//    resolution status authorize each operand (CORRECTION03).
-	const promote = dialectCapable && aggregate === "auto-approve-eligible";
+	//
+	//    ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+	//    Promotion is ALSO restricted by `cwdCompositionEligible`.
+	//    When the program contains a cd transition, the structure
+	//    connecting cd to its downstream leaves MUST be a single
+	//    `&&`-chain at the top level; otherwise the cwd-propagation
+	//    contract is undefined (Wave 1) and we refuse promotion.
+	const promote =
+		dialectCapable &&
+		aggregate === "auto-approve-eligible" &&
+		cwdCompositionEligible;
 	const downgrade = aggregate === "never-auto-approve";
 
 	const reasons: string[] = [];
 	if (!dialectCapable) {
 		reasons.push(
 			`structured analysis dialect ${parserResult.dialect} not promotion-capable`,
+		);
+	}
+	if (!cwdCompositionEligible && cwdTransitionCount > 0) {
+		reasons.push(
+			`structured analysis: cd workspace-transition present but program is not a single &&-chain (Wave 1 grammar; cwd propagation only via && success edge)`,
 		);
 	}
 	if (pathBearingOperands.length > 0) {
@@ -735,6 +797,7 @@ export function evaluateStructuredCommandRisk(args: {
 		promoteToAllow: promote,
 		downgradeToNeverAutoApprove: downgrade,
 		pathBearingOperands,
+		cwdTransitionCount,
 		reasons,
 	};
 }
@@ -984,6 +1047,48 @@ function isParserProvenFindArgs(cmd: StructuredCmd): boolean {
  * unconditionally so the validator stays simple and the policy
  * is local.
  */
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01.
+ *
+ * Parser-proven positive `cd` shape validator. Permits ONLY:
+ *   - name == "cd"
+ *   - exactly one operand
+ *   - the operand starts with `/` (POSIX-absolute path; CDPATH is
+ *     NOT consulted for absolute pathnames per bash docs)
+ *   - the operand does NOT start with `-` (no flag-merge)
+ *   - the operand is not `--`
+ *
+ * The outer dispatcher's gate has already verified
+ * `cmd.argProvenance.length === 1 && cmd.argProvenance[0] === "static"`
+ * (the parser-proven positive-provenance promotion contract),
+ * zero redirects, zero assigns. This validator adds the
+ * cd-specific shape on top of that contract.
+ *
+ * Anything else (e.g. `cd -L`, `cd -P`, `cd -`, `cd ../foo`,
+ * `cd "$DIR"`, `cd ~/x`, `cd`, `cd a b`) is rejected -- the
+ * outer dispatcher will fall through to the cd-not-auto-approve
+ * branch which emits ASK.
+ */
+function isParserProvenAbsoluteStaticCd(cmd: StructuredCmd): boolean {
+	if (cmd.name !== "cd") {
+		return false;
+	}
+	if (cmd.args.length !== 1) {
+		return false;
+	}
+	const target = cmd.args[0]!;
+	if (target.startsWith("-")) {
+		return false;
+	}
+	if (target === "--") {
+		return false;
+	}
+	if (!target.startsWith("/")) {
+		return false;
+	}
+	return true;
+}
+
 function isParserProvenStdinOnlyHead(args: ReadonlyArray<string>): boolean {
 	let i = 0;
 	while (i < args.length) {
@@ -1101,6 +1206,22 @@ export const PARSER_PROVEN_SOURCE_LABELS: ReadonlySet<string> = new Set([
 	// signal which branch satisfied the promotion gate (the
 	// parent V1 label continues to mean "regex-class V1 allow").
 	"host_safe_find_parser_proven_static_patterns",
+	// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+	// parser-proven `cd <absolute-static-dir>` workspace
+	// transition. The host authority (realpath + workspace
+	// containment + directory-type) is verified at the policy's
+	// path-authority gate via `pathBearingOperandsBound`. This
+	// label tells the V2 promotion gate that the cd leaf is
+	// parser-proven and SAFE in the same sense as
+	// `host_safe_echo_parser_proven`.
+	//
+	// This label is added to a parallel set
+	// `WORKSPACE_TRANSITION_SOURCES` (below) so the
+	// path-bearing operand walker collects the cd target as a
+	// path authority operand. It is NOT added to
+	// `R0_READONLY_PATH_BEARING_SOURCES` in `command-policy.ts`
+	// because cd is a STATE TRANSITION, not a read-only leaf.
+	"host_safe_cd_workspace_transition",
 ]);
 
 /**
@@ -1109,6 +1230,136 @@ export const PARSER_PROVEN_SOURCE_LABELS: ReadonlySet<string> = new Set([
  */
 export function isParserProvenSource(source: string): boolean {
 	return PARSER_PROVEN_SOURCE_LABELS.has(source);
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+ * Source labels that emit a workspace STATE TRANSITION (cd's
+ * effective cwd change) as opposed to a read-only leaf. The
+ * path-bearing operand collector includes these labels so the
+ * cd target is bound to host path-authority evidence
+ * (`resolvedRealPath !== null && contained === true`).
+ *
+ * Distinct from `R0_READONLY_PATH_BEARING_SOURCES` in
+ * `command-policy.ts`: cd is a transition, not a read-only leaf,
+ * so it does NOT participate in the existing R0 read-only
+ * path-bearing gate. It does, however, need the same host-evidence
+ * binding contract -- the cd target must be a real directory
+ * inside the workspace, OR the policy downgrades to ASK.
+ */
+export const WORKSPACE_TRANSITION_SOURCES: ReadonlySet<string> = new Set([
+	"host_safe_cd_workspace_transition",
+]);
+
+/**
+ * Returns true iff the source label is a workspace-transition
+ * source. See {@link WORKSPACE_TRANSITION_SOURCES}.
+ */
+export function isWorkspaceTransitionSource(source: string): boolean {
+	return WORKSPACE_TRANSITION_SOURCES.has(source);
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01.
+ *
+ * Program-shape predicate: returns true iff the program is a
+ * `cd && X && Y && ...` style chain (a single top-level statement
+ * whose kind is `and`, possibly with `and` recursively on either
+ * side). Wave 1 cwd-propagation is defined ONLY along the `&&`
+ * success edge.
+ *
+ * - `cd && pwd` -> and(cd, pwd) -> true
+ * - `cd && find . | head -20` -> and(cd, pipe(find, head)) -> true
+ *   (the right side of the top-level `and` is a pipe, which is
+ *    fine because the pipe's left operand is `find`, and `find`
+ *    runs under the post-cd effective cwd)
+ * - `cd && A && B` -> and(cd, and(A, B)) -> true
+ * - `cd || find .` -> or(cd, find) -> false
+ * - `cd ; find .` -> [cd, find] -> false (two top-level stmts)
+ * - `(cd && find .)` -> subshell(and(...)) -> false (Wave 1 does
+ *   not model subshell cwd propagation; this is an explicit
+ *   precision loss in §5.)
+ *
+ * The check is a SHAPE predicate only -- it does not consult the
+ * `perStatement` risk array, so it does NOT recurse into and-out-of
+ * cd sources. That is intentional: a `cd && A` chain where `A`
+ * happens to be `cd /elsewhere` is NOT covered by this ACT
+ * (multiple cwd transitions in one chain), so the predicate will
+ * return false and the V2 promotion gate will refuse promotion.
+ * Future ACTs may extend this.
+ */
+function isCwdAndComposition(program: StructuredProgram): boolean {
+	if (program.stmts.length !== 1) {
+		// Multi-statement sequence (e.g. `cd ; pwd`): out of Wave 1.
+		return false;
+	}
+	return isPureAndChain(program.stmts[0]!);
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01.
+ *
+ * Count every `host_safe_cd_workspace_transition` leaf in the
+ * AST. Uses `classifyCmd` directly on each `cmd` node so the
+ * source label is available (the `perStatement` aggregation
+ * hides it behind `aggregated-*` labels for outer composition
+ * nodes).
+ */
+function countCwdTransitions(program: StructuredProgram): number {
+	let n = 0;
+	for (const stmt of program.stmts) {
+		n += countCwdInStmt(stmt);
+	}
+	return n;
+}
+
+function countCwdInStmt(stmt: StructuredStmt): number {
+	switch (stmt.kind) {
+		case "cmd": {
+			// Reuse the cd-classification shape predicate (NOT the
+			// full dispatcher) so we count AST-level cd
+			// transitions even when the OUTER composition would
+			// hide them from the perStatement aggregation.
+			if (stmt.cmd.name === "cd" && isParserProvenAbsoluteStaticCd(stmt.cmd)) {
+				return 1;
+			}
+			return 0;
+		}
+		case "and":
+		case "or":
+		case "pipe":
+			return (
+				countCwdInStmt(stmt.left) + countCwdInStmt(stmt.rhs)
+			);
+		case "subshell":
+			return countCwdInStmt(stmt.inner);
+		case "opaque":
+		default:
+			return 0;
+	}
+}
+
+function isPureAndChain(stmt: StructuredStmt): boolean {
+	switch (stmt.kind) {
+		case "and":
+			return (
+				isPureAndChain(stmt.left) && isPureAndChain(stmt.rhs)
+			);
+		case "cmd":
+			return true;
+		case "pipe":
+			// `find . | head -20` after `cd`: the pipe's left
+			// operand runs in the post-cd cwd, the right is
+			// stdin-only. Both sides are pure-leaves (cmd).
+			return (
+				isPureAndChain(stmt.left) && isPureAndChain(stmt.rhs)
+			);
+		case "or":
+		case "subshell":
+		case "opaque":
+		default:
+			return false;
+	}
 }
 
 function classifyCmd(
@@ -1182,6 +1433,42 @@ function classifyCmd(
 	}
 
 	if (cmd.name === "cd") {
+		// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+		// parser-proven positive `cd` workspace transition. The
+		// outer dispatcher's parser-proven gate (below) has already
+		// verified protocolVersion >= 3, zero redirects, zero
+		// assigns, and `argProvenance.every(p => p === "static")`.
+		// This inner validator adds the cd-specific shape:
+		//   - exactly one operand
+		//   - zero argv options
+		//   - operand starts with `/` (POSIX-absolute)
+		//   - operand is NOT a flag-merge candidate (rejected
+		//     unconditionally)
+		//
+		// Containment + realpath-canonicalization + directory-type
+		// are HOST authority (see
+		// `path-authority-evidence-builder.ts`); the policy emits
+		// the parser-proven label and trusts the host evidence to
+		// either authorize or ASK.
+		//
+		// Wave 1 (this ACT):
+		//   - cd <absolute-static-dir>
+		//
+		// Explicitly REJECTED:
+		//   - any option flag (`cd -L`, `cd -P`, `cd -`)
+		//   - relative target (`cd ../foo`)
+		//   - dynamic target (`cd "$DIR"`, `cd ~/x`)
+		//   - zero / multiple operands (`cd`, `cd a b`)
+		//   - any redirect (`cd /x 2>/dev/null`)
+		//   - any assignment (`CDPATH=x cd /y`)
+		if (isParserProvenAbsoluteStaticCd(cmd)) {
+			return {
+				statementIndex: index,
+				kind: "cmd",
+				risk: "auto-approve-eligible",
+				source: "host_safe_cd_workspace_transition",
+			};
+		}
 		return {
 			statementIndex: index,
 			kind: "cmd",
@@ -1413,11 +1700,16 @@ function collectFromStmt(
 		case "cmd": {
 			// Classify the leaf via the per-cmd dispatcher and only
 			// record it when the leaf's source is in the R0
-			// path-bearing set. We do NOT inspect the rendered argv;
-			// the source string is the canonical positive match from
-			// V1's `findSafeRuleMatch`.
+			// path-bearing set (OR a workspace-transition set).
+			// We do NOT inspect the rendered argv; the source string
+			// is the canonical positive match from
+			// `findSafeRuleMatch` (R0) or the parser-proven cd
+			// dispatcher (workspace transitions).
 			const leaf = classifyCmd(stmt.cmd, 0, dialect, protocolVersion);
-			if (isR0PathBearingRuleSource(leaf.source)) {
+			if (
+				isR0PathBearingRuleSource(leaf.source) ||
+				isWorkspaceTransitionSource(leaf.source)
+			) {
 				const operands = extractPathOperandsFromStructured(
 					stmt.cmd,
 					leaf.source,
@@ -1478,6 +1770,17 @@ function extractPathOperandsFromStructured(
 			// same label dispatches to `extractFindSearchRoots`;
 			// this function mirrors that contract.
 			return extractFindOperandsStructured(cmd);
+		case "host_safe_cd_workspace_transition":
+			// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+			// The cd workspace-transition target is a SINGLE path
+			// operand (Wave 1 grammar). The dispatcher has already
+			// verified exactly-1-operand + absolute + static; we
+			// return it as a singleton path-authority operand for
+			// host-evidence binding. The V1 lexical mirror
+			// `extractR0PathOperands(cmd, "host_safe_cd_workspace_transition")`
+			// (added in the corresponding V1 side) returns the
+			// same singleton shape.
+			return [cmd.args[0] ?? ""];
 		default:
 			return extractGenericOperandsStructured(cmd);
 	}

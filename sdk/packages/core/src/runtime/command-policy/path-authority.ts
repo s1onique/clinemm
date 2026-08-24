@@ -290,6 +290,25 @@ export function extractR0PathOperands(
 			// causing `realpath-failed-enoent` ASK on
 			// parser-proven quoted patterns.
 			return extractFindSearchRoots(tokens);
+		case "host_safe_cd_workspace_transition":
+			// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+			// cd's authority operand is the single target
+			// directory. Wave 1 grammar: exactly one operand,
+			// absolute, no options. We strip the leading `cd`
+			// token and return the remaining (single) token
+			// when its shape matches the parser-proven gate
+			// already enforced upstream. Tokens beginning with
+			// `-` (options like `-L`/`-P`/`-`) are REJECTED
+			// here so the evidence builder does not bind
+			// `--` or option-flags as cd targets.
+			//
+			// Generic fallback `extractPathOperands` would have
+			// included `--` if the source text happened to
+			// contain one, which would force ASK via
+			// `realpath-failed-enoent`. The dispatcher already
+			// rejects `--` and option-flags, but the lexical
+			// mirror is defense-in-depth.
+			return extractCdTargetOperands(tokens);
 		default:
 			// ls / future R0 families use the generic shape.
 			return extractPathOperands(command);
@@ -481,6 +500,44 @@ function extractHeadTailPathOperands(
 		break;
 	}
 	return out;
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01.
+ *
+ * V1 lexical mirror of `extractR0PathOperands(cmd,
+ * "host_safe_cd_workspace_transition")`. Returns the SINGLE cd
+ * target when its shape matches the parser-proven gate (already
+ * enforced upstream): exactly one operand, no options, not `--`,
+ * absolute pathname. Returns `[]` for any shape mismatch so the
+ * evidence builder does NOT bind a malformed cd target to host
+ * path authority (which would force a `realpath-failed-enoent`
+ * ASK).
+ */
+function extractCdTargetOperands(
+	tokens: ReadonlyArray<string>,
+): string[] {
+	// First token must be `cd`. Tokens[0] === "cd" is the
+	// canonical prefix for our V1 mirrored shape contract.
+	if (tokens.length === 0 || tokens[0] !== "cd") {
+		return [];
+	}
+	if (tokens.length !== 2) {
+		// Multiple operands (`cd a b`) or `cd` alone -- not in
+		// Wave 1 grammar.
+		return [];
+	}
+	const target = tokens[1]!;
+	if (target === "--" || target.startsWith("-")) {
+		// `cd -`, `cd -L`, `cd -P`, `cd --`, etc. -- not in
+		// Wave 1 grammar.
+		return [];
+	}
+	if (!target.startsWith("/")) {
+		// Relative paths excluded by ACT grammar.
+		return [];
+	}
+	return [target];
 }
 
 /**

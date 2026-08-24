@@ -87,6 +87,41 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	// pwd with optional POSIX -L / -P (logical / physical working directory).
 	// Both are pure read-only reporting.
 	{ source: "host_safe_pwd", pattern: /^\s*pwd(?:\s+(?:-[LP]))?\s*$/u },
+	// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
+	// V1 lexical positive cd rule for the SIMPLE `cd <abs-static>`
+	// shape (no compound, no &&/||/|, no options). This is a
+	// *helper* rule only -- it does NOT cause V1 to ALLOW compound
+	// shapes like `cd <abs> && pwd` because the rule's regex
+	// (anchored end-of-string `\s*$`) does not match `&&`-bearing
+	// input. V1 still returns ASK for those shapes; V2 then
+	// upgrades them via the parser-proven cd branch. The rule's
+	// load-bearing purpose is to bind the cd target to host path
+	// authority when the source is the SIMPLE cd form.
+	//
+	// Reviewed forms (parser-proven positive provenance):
+	//   - `cd /absolute/path/to/dir` (no trailing tokens)
+	//
+	// Explicitly REJECTED (conservation):
+	//   - any option (`cd -L`, `cd -P`, `cd -`)
+	//   - relative path (`cd ../foo`)
+	//   - dynamic target (`cd "$DIR"`, `cd ~/x`)
+	//   - zero / multiple operands (`cd`, `cd a b`)
+	//   - any redirect (`cd /x 2>/dev/null`)
+	//   - any assignment prefix (`CDPATH=x cd /y`)
+	//   - any compound shape (`cd /x && pwd`, `cd /x; pwd`, `cd /x | head`)
+	//     -- the `&&` etc. is opaque to V1's positive matcher;
+	//        V2's parser-proven branch handles those forms.
+	//   - any pattern-bearing target (`cd /x/*`).
+	//
+	// The class `[A-Za-z0-9_./+-]` is deliberately narrow to
+	// reject shell metacharacters in the target -- V2's
+	// `isParserProvenAbsoluteStaticCd` validator already enforces
+	// `argProvenance[0] === "static"` upstream, but the V1
+	// lexical mirror is defense-in-depth.
+	{
+		source: "host_safe_cd_workspace_transition",
+		pattern: /^\s*cd\s+\/[A-Za-z0-9_./+-]+\s*$/u,
+	},
 	{
 		source: "host_safe_git_status",
 		// git status reporting modes. All options here are pure output-format

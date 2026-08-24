@@ -363,10 +363,23 @@ describeWithHelper("ACT-...CD-CWD... A. parser probe (real helper)", () => {
 });
 
 // =====================================================================
-// B. RED reproduction (real helper, real evidence) -- today
+// B. RED reproduction (real helper, real evidence) -- frozen at C1
 // =====================================================================
+//
+// These tests capture the C1 frozen RED state. After the C2
+// production repair, the exact same inputs now classify as ALLOW
+// (the bug is closed). The Section B block documents the
+// pre-fix classification for posterity. Each test asserts BOTH
+// (a) the C1 frozen decision (=ASK, captured in the
+//     `c1Decision` / `c1Disposition` references in comments)
+//     AND
+// (b) the C2 GREEN decision (=ALLOW, the actual current behavior).
+//
+// The "TODAY: ASK" comments document the C1 state for the
+// production-bug reader. The C2 production repair closed both
+// RED-A (no positive cd rule) and RED-B (no cwd propagation).
 
-describeWithHelper("ACT-...CD-CWD... B. RED reproduction (today)", () => {
+describeWithHelper("ACT-...CD-CWD... B. C1-frozen RED reproduction (today ALLOW after C2)", () => {
 	let helper: MvdanShHelper;
 
 	beforeAll(() => {
@@ -381,7 +394,7 @@ describeWithHelper("ACT-...CD-CWD... B. RED reproduction (today)", () => {
 		});
 	});
 
-	it("RED-A: cd <inside> && pwd -> ASK today (no positive cd rule)", async () => {
+	it("cd <inside> && pwd -> ALLOW (C1 was ASK; C2 closed RED-A + RED-B)", async () => {
 		const cmd = `cd ${CORE_DIR} && pwd`;
 		const parsed = await helper.invoke({ command: cmd });
 		expect(parsed).not.toBeNull();
@@ -390,12 +403,12 @@ describeWithHelper("ACT-...CD-CWD... B. RED reproduction (today)", () => {
 			hostAuthorization: evaluateWithRealpathEvidence(cmd),
 			parserResult: parsed as ParsedShell,
 		});
-		// TODAY: ASK. After C2 production repair: ALLOW.
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).toBe("ask");
+		// C1: ASK. C2: ALLOW. Bug closed.
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
 	});
 
-	it("RED-B: cd <inside> && find . -name '*.test.ts' -> ASK today (no cwd propagation)", async () => {
+	it("cd <inside> && find . -name '*.test.ts' -> ALLOW (C1 was ASK; C2 closed RED-B)", async () => {
 		const cmd = `cd ${CORE_DIR} && find . -name "*.test.ts"`;
 		const parsed = await helper.invoke({ command: cmd });
 		expect(parsed).not.toBeNull();
@@ -404,12 +417,12 @@ describeWithHelper("ACT-...CD-CWD... B. RED reproduction (today)", () => {
 			hostAuthorization: evaluateWithRealpathEvidence(cmd),
 			parserResult: parsed as ParsedShell,
 		});
-		// TODAY: ASK. After C2 production repair: ALLOW.
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).toBe("ask");
+		// C1: ASK. C2: ALLOW. Bug closed.
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
 	});
 
-	it("RED-B-pipe: cd <inside> && find . | head -20 -> ASK today", async () => {
+	it("cd <inside> && find . | head -20 -> ALLOW (C1 was ASK; C2 closed RED-B + pipe)", async () => {
 		const cmd = `cd ${CORE_DIR} && find . -name "*.test.ts" | head -20`;
 		const parsed = await helper.invoke({ command: cmd });
 		expect(parsed).not.toBeNull();
@@ -418,9 +431,9 @@ describeWithHelper("ACT-...CD-CWD... B. RED reproduction (today)", () => {
 			hostAuthorization: evaluateWithRealpathEvidence(cmd),
 			parserResult: parsed as ParsedShell,
 		});
-		// TODAY: ASK. After C2 production repair: ALLOW.
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).toBe("ask");
+		// C1: ASK. C2: ALLOW. Bug closed.
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
 	});
 });
 
