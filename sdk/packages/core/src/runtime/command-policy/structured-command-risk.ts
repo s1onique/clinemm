@@ -824,6 +824,128 @@ function isParserProvenStdinOnlyReader(cmd: StructuredCmd): boolean {
 }
 
 /**
+ * ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01
+ *
+ * Parser-proven find argv-shape validator. Permits only:
+ *   - one or more SEARCH ROOTS (non-option tokens before the first
+ *     `-`-prefixed token, OR tokens after `--`)
+ *   - zero or more `-name PATTERN` / `-iname PATTERN`
+ *     / `-path PATTERN` / `-ipath PATTERN` predicates whose
+ *     PATTERN operand is parser-proven `static`. The caller's
+ *     outer gate has already verified `cmd.argProvenance.length
+ *     === cmd.args.length && cmd.argProvenance.every(p => p ===
+ *     "static")`, so the predicate argument's static status is a
+ *     direct lookup into `cmd.argProvenance[]`.
+ *
+ * Conservative predicates/options beyond the test profile are
+ * rejected (ASK). Specifically we reject any argv-token that
+ * we cannot account for: `-delete`, `-exec ...`, `-ok ...`,
+ * `-print0`, `-printf`, `-f`, `-L`, `-H`, `-P`, `-x` (xdev),
+ * `-maxdepth`, `-mindepth`, `-type`, `-mtime`, `-newer`,
+ * `-prune`, `-quit`, `-fls`, `-ls`, `-mount`, `-regextype`,
+ * `-regex`, `-iregex`, etc. The set is intentionally narrow:
+ * find's full option set is the focus of a separate (out-of-
+ * scope) ACT.
+ *
+ * `-[i]name / -[i]path` WITHOUT a following pattern operand is
+ * rejected. `-[i]name PATTERN PATTERN2` (two patterns for one
+ * predicate) is rejected because POSIX find treats the second
+ * token as the start of a logical-OR predicate (which our
+ * positive profile does not cover). Reject any token whose
+ * position immediately after a pattern-bearing predicate has
+ * `argProvenance === "static"` BUT is itself not the pattern
+ * operand -- that is, the second pattern of an OR clause, which
+ * we cannot reason about soundly.
+ *
+ * Path-bearing authority binds the SEARCH ROOTS only (see
+ * `extractFindOperandsStructured` and the V1 mirror
+ * `extractFindSearchRoots`). The pattern operands are find
+ * expression operands, NOT files that find opens by name.
+ *
+ * The outer caller's gate has already pinned `argProvenance ===
+ * "static"` for every operand of this command, so this validator
+ * does NOT re-check per-arg provenance. We do, however, pin the
+ * predicate-argument interpretation:
+ *
+ *   - The PATTERN slot of a `-[i]name`/`-[i]path` predicate is
+ *     exactly `args[i+1]`; no flag-merge with the predicate
+ *     (e.g. `-name*.ts` is rejected because every option is its
+ *     own argv token at the parser-proven layer).
+ */
+function isParserProvenFindArgs(cmd: StructuredCmd): boolean {
+	if (cmd.name !== "find") {
+		return false;
+	}
+	if (cmd.argProvenance === undefined) {
+		return false;
+	}
+	let i = 0;
+	// Phase 1: consume search roots. `--` is the option
+	// terminator; tokens after `--` are roots. Roots are tokens
+	// up to (but not including) the first `-`-prefixed token.
+	let sawDoubleDash = false;
+	while (i < cmd.args.length) {
+		const a = cmd.args[i]!;
+		if (sawDoubleDash) {
+			// Anything after `--` must be a search root. We
+			// don't enforce a count limit; the rule layer's
+			// command-safe regex bounds this in V1.
+			i++;
+			continue;
+		}
+		if (a === "--") {
+			sawDoubleDash = true;
+			i++;
+			continue;
+		}
+		if (a.startsWith("-")) {
+			break;
+		}
+		i++;
+	}
+	if (!sawDoubleDash && i === 0) {
+		// No search root provided (e.g. `find -name '*.ts'`).
+		// GNU find defaults to `.`, but our positive profile
+		// requires an explicit root so the evidence binder can
+		// resolve it. Reject to force ASK.
+		return false;
+	}
+	// Phase 2: consume predicates. Only `-name`, `-iname`,
+	// `-path`, `-ipath` followed by exactly one static pattern
+	// operand are permitted. Any other option is rejected.
+	while (i < cmd.args.length) {
+		const a = cmd.args[i]!;
+		const patternPredicates = new Set([
+			"-name",
+			"-iname",
+			"-path",
+			"-ipath",
+		]);
+		if (!patternPredicates.has(a)) {
+			// Any other option / token is unmodeled; ASK.
+			return false;
+		}
+		// Pattern operand must exist.
+		if (i + 1 >= cmd.args.length) {
+			return false;
+		}
+		// Caller has asserted every provenance is "static".
+		// We additionally verify the PATTERN slot is exactly
+		// the next argv slot (the argument to the predicate),
+		// not a second pattern (which find would interpret as
+		// a logical-OR continuation).
+		const patternArg = cmd.args[i + 1]!;
+		if (patternArg.startsWith("-")) {
+			// Pattern operand looks like another option --
+			// malformed; reject.
+			return false;
+		}
+		i += 2;
+	}
+	return true;
+}
+
+/**
  * `head` stdin-only argv validator.
  *
  * Reviewed forms (ALL parser-proven `static` by caller's gate):
@@ -959,6 +1081,12 @@ export const PARSER_PROVEN_SOURCE_LABELS: ReadonlySet<string> = new Set([
 	// (ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01).
 	"host_safe_head_parser_proven_stdin_only",
 	"host_safe_tail_parser_proven_stdin_only",
+	// ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01:
+	// parser-proven find with quoted-static pattern operands.
+	// Distinguished from `host_safe_find` so the V2 walker can
+	// signal which branch satisfied the promotion gate (the
+	// parent V1 label continues to mean "regex-class V1 allow").
+	"host_safe_find_parser_proven_static_patterns",
 ]);
 
 /**
@@ -1144,6 +1272,23 @@ function classifyCmd(
 				source: `host_safe_${cmd.name}_parser_proven_stdin_only`,
 			};
 		}
+		// ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01:
+		// parser-proven `find` with quoted-static pattern
+		// operands. The leaf source label is distinct from
+		// `host_safe_find` so the V2 walker can signal which
+		// branch satisfied the promotion gate; both labels are
+		// dispatched to the same find-specific authority-
+		// operand extractor (search roots only) so the
+		// R0 path-bearing gate treats them as the SAME
+		// authority family.
+		if (isParserProvenFindArgs(cmd)) {
+			return {
+				statementIndex: index,
+				kind: "cmd",
+				risk: "auto-approve-eligible",
+				source: "host_safe_find_parser_proven_static_patterns",
+			};
+		}
 	}
 
 	const rendered = renderArgv(cmd);
@@ -1308,9 +1453,71 @@ function extractPathOperandsFromStructured(
 		case "host_safe_head_path":
 		case "host_safe_tail_path":
 			return extractHeadTailOperandsStructured(cmd);
+		case "host_safe_find":
+			// V1 lexical shape contract preserved. Adjusting the
+			// V1 contract is a separate ACT.
+			return extractGenericOperandsStructured(cmd);
+		case "host_safe_find_parser_proven_static_patterns":
+			// ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01:
+			// Find authority operands are only the search roots.
+			// The V1 lexical `extractR0PathOperands` for this
+			// same label dispatches to `extractFindSearchRoots`;
+			// this function mirrors that contract.
+			return extractFindOperandsStructured(cmd);
 		default:
 			return extractGenericOperandsStructured(cmd);
 	}
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01
+ *
+ * Structured-cmd find authority-operand extractor. Mirrors V1's
+ * `extractFindSearchRoots`: returns ONLY the search roots.
+ * Like the V1 mirror it skips well-known find global-options
+ * (no value: -H / -L / -P / -X / -E / -d / -s / -x) and breaks
+ * at the first predicate/action-sentinel `-`-prefixed token.
+ *
+ * The set of find's no-value global options is duplicated here
+ * (and in `path-authority.ts`) because the V1 lexical side and
+ * the V2 structural side derive operands independently --
+ * both MUST agree on the same authority shape so the
+ * host-evidence binder can verify identity.
+ */
+const STRUCTURED_FIND_GLOBAL_NO_VALUE_OPTIONS: ReadonlySet<string> = new Set([
+	"-H",
+	"-L",
+	"-P",
+	"-X",
+	"-E",
+	"-d",
+	"-s",
+	"-x",
+]);
+
+function extractFindOperandsStructured(cmd: StructuredCmd): ReadonlyArray<string> {
+	const out: string[] = [];
+	let sawDoubleDash = false;
+	for (const a of cmd.args) {
+		if (sawDoubleDash) {
+			out.push(a);
+			continue;
+		}
+		if (a === "--") {
+			sawDoubleDash = true;
+			continue;
+		}
+		if (a.startsWith("-")) {
+			if (STRUCTURED_FIND_GLOBAL_NO_VALUE_OPTIONS.has(a)) {
+				continue;
+			}
+			// First predicate/action-sentinel token reached;
+			// search-root list ends here.
+			break;
+		}
+		out.push(a);
+	}
+	return out;
 }
 
 /**

@@ -114,11 +114,36 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01 -- ext
 				extractPathOperands(cmd),
 			);
 		});
-		it("falls back to generic for find", () => {
+		it("V1 host_safe_find: keeps OLD generic-fallback shape (predicate arg included)", () => {
+			// ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01:
+			// The V1 `host_safe_find` source keeps the historical
+			// generic-fallback operand shape (predicate arguments
+			// are authority operands for the V1 lexical gate --
+			// the corpus fixtures pin this). Adjusting the V1
+			// shape is a separate ACT. The new V2 parser-proven
+			// source `host_safe_find_parser_proven_static_patterns`
+			// is the only label that uses the precise roots-only
+			// extractor.
 			const cmd = "find /etc -name foo";
-			expect(extractR0PathOperands(cmd, "host_safe_find")).toEqual(
-				extractPathOperands(cmd),
-			);
+			expect(extractR0PathOperands(cmd, "host_safe_find")).toEqual([
+				"/etc",
+				"foo",
+			]);
+		});
+
+		it("V2 parser-proven find source: roots-only (search roots, no pattern args)", () => {
+			// The V2 parser-proven find branch uses the precise
+			// find-specific extractor: pattern strings are NOT
+			// authority operands even when parser-proven static,
+			// because they are find expression operands (find
+			// predicate arguments), not files find opens by name.
+			const cmd = "find /etc -name foo";
+			expect(
+				extractR0PathOperands(
+					cmd,
+					"host_safe_find_parser_proven_static_patterns",
+				),
+			).toEqual(["/etc"]);
 		});
 		it("falls back to generic for unknown source", () => {
 			const cmd = "git status";

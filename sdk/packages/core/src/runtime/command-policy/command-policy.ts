@@ -575,6 +575,16 @@ function aggregateSource(
  * today is:
  *   - `host_safe_ls`            (parent ACT)
  *   - `host_safe_find`          (parent ACT)
+ *   - `host_safe_find_parser_proven_static_patterns`
+ *                              (ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01;
+ *                               parser-proven V2 branch for `find`
+ *                               with quoted-static pattern operands.
+ *                               Same authority operands as
+ *                               `host_safe_find` -- the search
+ *                               roots only -- and dispatched to the
+ *                               same find-specific extractor case
+ *                               in both `extractR0PathOperands` and
+ *                               `extractPathOperandsFromStructured`)
  *   - `host_safe_cat`           (READER ACT)
  *   - `host_safe_head_path`     (READER ACT; stdin-only head
  *                                is a separate V2 path)
@@ -592,6 +602,7 @@ function aggregateSource(
 const R0_READONLY_PATH_BEARING_SOURCES: ReadonlySet<string> = new Set([
 	"host_safe_ls",
 	"host_safe_find",
+	"host_safe_find_parser_proven_static_patterns",
 	"host_safe_cat",
 	"host_safe_head_path",
 	"host_safe_tail_path",

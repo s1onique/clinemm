@@ -276,7 +276,7 @@ describeWithHelper(
 			}
 		});
 
-		it('RED: find . -name "*.test.ts" -path "*command-policy*" -> ASK', async () => {
+		it('CONSERVATION (no-evidence): find . -name "*.test.ts" -path "*command-policy*" -> ASK', async () => {
 			const cmd = 'find . -name "*.test.ts" -path "*command-policy*"';
 			const parsed = await helper.invoke({ command: cmd });
 			expect(parsed).not.toBeNull();
@@ -289,6 +289,11 @@ describeWithHelper(
 				hostAuthorization: SAFE_NO_EVIDENCE,
 				parserResult: parsed,
 			});
+			// Without evidence, the path-bearing gate refuses
+			// to promote even parser-proven leaves. The
+			// conservation invariant is: path-bearing commands
+			// always ASK in the absence of canonical
+			// workspace-bound evidence.
 			expect(r.decision).toBe("ask");
 			expect(r.disposition).not.toBe("auto-approve-eligible");
 		});
@@ -316,7 +321,7 @@ describeWithHelper(
 			]);
 		});
 
-		it('RED (pipeline): find . -name "*.test.ts" -path "*command-policy*" | head -20 -> ASK', async () => {
+		it('CONSERVATION (no-evidence pipeline): find . -name "*.test.ts" -path "*command-policy*" | head -20 -> ASK', async () => {
 			const cmd = 'find . -name "*.test.ts" -path "*command-policy*" | head -20';
 			const parsed = await helper.invoke({ command: cmd });
 			expect(parsed).not.toBeNull();
@@ -327,11 +332,13 @@ describeWithHelper(
 				hostAuthorization: SAFE_NO_EVIDENCE,
 				parserResult: parsed,
 			});
+			// Same conservation invariant for the pipeline
+			// form: path-bearing gate refuses without evidence.
 			expect(r.decision).toBe("ask");
 			expect(r.disposition).not.toBe("auto-approve-eligible");
 		});
 
-		it('RED (with path-authority evidence): same command -> ASK today, ALLOW post-C2', async () => {
+		it('GREEN (with path-authority evidence, full pipeline): quoted find | head -> ALLOW + auto-approve-eligible', async () => {
 			const cmd = 'find . -name "*.test.ts" -path "*command-policy*" | head -20';
 			const parsed = await helper.invoke({ command: cmd });
 			expect(parsed).not.toBeNull();
@@ -372,11 +379,18 @@ describeWithHelper(
 				hostAuthorization: SAFE_WITH_EVIDENCE,
 				parserResult: parsed,
 			});
-			// Today (RED): ASK because V1 host_safe_find regex forbids
-			// '*' in -name/-path operands. The path-authority gate does
-			// not rescue the command from V1's regex rejection.
-			expect(r.decision).toBe("ask");
-			expect(r.disposition).not.toBe("auto-approve-eligible");
+			// GREEN (post-C2): the V2 parser-proven promotion branch
+			// sees `find` with all-static argProvenance, the per-cmd
+			// validator accepts the argv shape (only `-name PATTERN`
+			// and `-path PATTERN` predicates), the find-specific
+			// authority-operand extractor returns only the search
+			// root `.` (NOT the quoted pattern strings), and the
+			// R0 path-bearing gate binds `.` to the evidence's
+			// resolved canonical workspace path. The full pipeline
+			// promotes the pipe-find-leaf to ALLOW +
+			// auto-approve-eligible.
+			expect(r.decision).toBe("allow");
+			expect(r.disposition).toBe("auto-approve-eligible");
 		});
 
 		it("CONSERVATION: find . -name *.ts (unquoted glob) -> ASK", async () => {
@@ -464,28 +478,45 @@ describeWithHelper(
 		// so C2 must add a find-specific operand extractor OR the
 		// probe must be updated to assert the new shape. We pin
 		// both as observable evidence so the C2 fix is mechanical.
-		it("PROBE: extractR0PathOperands for host_safe_find on quoted-find", async () => {
+		it("PROBE: extractR0PathOperands for parser-proven find drops pattern operands", async () => {
 			const { extractR0PathOperands } = await import(
 				"./path-authority"
 			);
 			const cmd = 'find . -name "*.test.ts" -path "*command-policy*"';
-			const operands = extractR0PathOperands(cmd, "host_safe_find");
+			const operands = extractR0PathOperands(
+				cmd,
+				"host_safe_find_parser_proven_static_patterns",
+			);
 
-			// Pre-C2 invariant: generic extractor treats EVERY
-			// non-option token as a path candidate, so the
-			// returned list includes the pattern strings.
-			// C2 will introduce a find-specific case that returns
-			// ONLY the search roots. Record the current shape so
-			// the C2 transition is a precise swap.
-			expect(operands).toContain(".");
-			expect(operands.length).toBeGreaterThanOrEqual(1);
+			// C2 invariant: the parser-proven V2 find source
+			// uses the precise find-specific extractor. The
+			// pattern strings are NOT authority operands (they
+			// are find expression predicates, not files).
+			expect(operands).toEqual(["."]);
 
-			// Pattern strings are present in the generic extraction;
-			// the find-specific C2 extractor must drop them.
-			const containsPattern =
-				operands.includes("*.test.ts") ||
-				operands.includes("*command-policy*");
-			expect(typeof containsPattern).toBe("boolean");
+			// V1 (`host_safe_find`) keeps the historical
+			// generic-fallback shape (operand list includes the
+			// quoted pattern strings) -- this is preserved so the
+			// V1 corpus fixtures continue to pass. The V2
+			// source's precise shape is the bounded C2 fix.
+			const operandsV1 = extractR0PathOperands(cmd, "host_safe_find");
+			expect(operandsV1).toEqual(['.', '"*.test.ts"', '"*command-policy*"']);
+		});
+
+		it("PROBE: extractR0PathOperands for parser-proven find (multi-root variant)", async () => {
+			const { extractR0PathOperands } = await import(
+				"./path-authority"
+			);
+			// Multiple search roots: find processes each in
+			// argv order. All are authority operands;
+			// pattern strings after the first option are NOT.
+			const cmd =
+				"find src lib -name '*.ts' -path '*/test/*' -name '*.tsx'";
+			const operands = extractR0PathOperands(
+				cmd,
+				"host_safe_find_parser_proven_static_patterns",
+			);
+			expect(operands).toEqual(["src", "lib"]);
 		});
 
 		it("PROBE: path-authority-evidence-builder for quoted-find with canonical context", async () => {
@@ -500,7 +531,7 @@ describeWithHelper(
 			});
 			// P1: buildPathAuthorityEvidence must succeed (with
 			// canonical evidence) for the test workspace. If it
-			// fails, the R0 path-bearing gate cannot fire — and
+			// fails, the R0 path-bearing gate cannot fire -- and
 			// ANY future C2 promotion that relies on path
 			// authority is moot.
 			expect(result.ok).toBe(true);
@@ -509,6 +540,26 @@ describeWithHelper(
 					`buildPathAuthorityEvidence failed: ${result.reason}`,
 				);
 			}
+			// C2: the evidence record contains the search root `.` as a
+			// resolved, contained operand. The V1 evidence builder
+			// additionally enumerates the pattern strings via the
+			// generic fallback (since the bash-quoted find does
+			// not match any V1 safe rule), and those extra entries
+			// fail realpath; this is harmless to the path-bearing
+			// binder because the V2 walker only emits structured
+			// operands through the per-source extractor
+			// (find-specific -> search roots only), and the binder
+			// only requires every leaf operand to have a bound
+			// evidence entry -- presence of extra unrelated
+			// evidence entries does not affect binding. We pin the
+			// load-bearing observable: search root `.` is resolved
+			// AND contained.
+			const rootEvidence = result.evidence!.operands.find(
+				(o) => o.operand === ".",
+			);
+			expect(rootEvidence).toBeDefined();
+			expect(rootEvidence!.resolvedRealPath).not.toBeNull();
+			expect(rootEvidence!.contained).toBe(true);
 		});
 	},
 );
@@ -518,8 +569,28 @@ describeWithHelper(
 // =====================================================================
 
 describe("structured-command-risk - synthetic-TS find-proven-pattern", () => {
-	it("SYNTHETIC-TS: find . -name '*.ts' all-static -> ALLOW post-C2 (RED today)", () => {
+	it("SYNTHETIC-TS NO-EVIDENCE: find . -name '*.ts' all-static -> ASK (path gate refuses)", () => {
 		const cmd = "find . -name '*.ts'";
+		const parsed = mkFindShell(cmd, [".", "-name", "*.ts"], [
+			"static",
+			"static",
+			"static",
+		]);
+		const r = evaluateCommandRiskWithParser({
+			toolInput: cmd,
+			hostAuthorization: SAFE_NO_EVIDENCE,
+			parserResult: parsed,
+		});
+		// V2 promotion requires path-bearing evidence. Without
+		// evidence the gate refuses (the parser-proven branch
+		// returns auto-approve-eligible, but `promoteToAllow`
+		// is downgraded by `pathBearingEvidenceMissing`).
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
+	});
+
+	it('SYNTHETIC-TS NO-EVIDENCE: find . -name "*.ts" all-static -> ASK (path gate refuses)', () => {
+		const cmd = 'find . -name "*.ts"';
 		const parsed = mkFindShell(cmd, [".", "-name", "*.ts"], [
 			"static",
 			"static",
@@ -534,20 +605,47 @@ describe("structured-command-risk - synthetic-TS find-proven-pattern", () => {
 		expect(r.disposition).not.toBe("auto-approve-eligible");
 	});
 
-	it('SYNTHETIC-TS: find . -name "*.ts" all-static -> ALLOW post-C2 (RED today)', () => {
-		const cmd = 'find . -name "*.ts"';
+	it("SYNTHETIC-TS WITH-EVIDENCE: find . -name '*.ts' all-static -> ALLOW + auto-approve-eligible", () => {
+		const cmd = "find . -name '*.ts'";
 		const parsed = mkFindShell(cmd, [".", "-name", "*.ts"], [
 			"static",
 			"static",
 			"static",
 		]);
+		// Synthetic path-bearing evidence for `.` resolved to a
+		// canonical workspace path. Bound to workspaceRoots + cwd
+		// per CORRECTION04.
+		const SYNTHETIC_ROOT = "/tmp/synthetic-workspace-root";
+		const evidence = {
+			roots: [SYNTHETIC_ROOT],
+			cwd: SYNTHETIC_ROOT,
+			operands: [
+				{
+					operand: ".",
+					resolvedRealPath: SYNTHETIC_ROOT,
+					contained: true,
+					reason: "resolved-and-contained" as const,
+				},
+			],
+		};
+		const SAFE_WITH_EVIDENCE = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [SYNTHETIC_ROOT],
+			cwd: SYNTHETIC_ROOT,
+			pathAuthorityEvidence: evidence,
+		});
 		const r = evaluateCommandRiskWithParser({
 			toolInput: cmd,
-			hostAuthorization: SAFE_NO_EVIDENCE,
+			hostAuthorization: SAFE_WITH_EVIDENCE,
 			parserResult: parsed,
 		});
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).not.toBe("auto-approve-eligible");
+		// Post-C2 GREEN: V2 promotion succeeds when the V2
+		// classifier emits a parser-proven find leaf AND the
+		// structured-extracted search root `.` is bound to the
+		// evidence record.
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
 	});
 
 	it("SYNTHETIC-TS CONSERVATION: find . -name *.ts (dynamic) -> ASK", () => {

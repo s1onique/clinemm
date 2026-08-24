@@ -222,7 +222,7 @@ export function extractPathOperands(command: NormalizedCommand): string[] {
  * treats as a path candidate. That mismatch would make the V1
  * path-bearing gate fire on a count number, count it as a
  * non-resolving operand (`realpath-failed-enoent`), and downgrade
- * the command to ASK — defeating the entire purpose of adding the
+ * the command to ASK -- defeating the entire purpose of adding the
  * new rules.
  *
  * Per-source dispatch lets each R0 family enumerate the operands
@@ -232,7 +232,15 @@ export function extractPathOperands(command: NormalizedCommand): string[] {
  *   head    | non-option tokens AFTER the reviewed options
  *   tail    | same as head
  *   ls      | generic (current behavior)
- *   find    | generic (current behavior)
+ *   find    | ONLY the search roots BEFORE the first option
+ *           | (`-name`/`-path`/etc); pattern operands are find
+ *           | expression operands, NOT files that find opens
+ *           | by name. ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01
+ *           | adds parser-proven promotion for static quoted
+ *           | patterns; the V2 walker classifies that branch with
+ *           | source label
+ *           | `host_safe_find_parser_proven_static_patterns`,
+ *           | which is dispatched to the SAME find-specific case.
  *   *       | generic fallback
  *
  * The dispatcher is a single switch on the source label; adding a
@@ -261,11 +269,123 @@ export function extractR0PathOperands(
 			return extractHeadTailPathOperands(tokens);
 		case "host_safe_tail_path":
 			return extractHeadTailPathOperands(tokens);
+		case "host_safe_find":
+			// V1 lexical behavior preserved. The V1
+			// authority-shape contract for `find` includes
+			// the predicate argument as an authority operand
+			// (matching the `host_safe_find` regex's positional
+			// shape contract used by every existing corpus
+			// entry). Adjusting that V1 contract is a separate
+			// ACT.
+			return extractPathOperands(command);
+		case "host_safe_find_parser_proven_static_patterns":
+			// ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01:
+			// `find`'s authority operands are ONLY the search
+			// roots. Tokens after the first `-[i]name`/
+			// `-[i]path`/etc. are find EXPRESSION operands
+			// (predicates and their arguments), not files that
+			// find opens by name. The generic extractor would
+			// have erroneously included the pattern strings
+			// (`'*.ts'`, `'*/src/*.ts'`) as authority operands,
+			// causing `realpath-failed-enoent` ASK on
+			// parser-proven quoted patterns.
+			return extractFindSearchRoots(tokens);
 		default:
-			// ls / find / future R0 families use the generic
-			// shape (skip `-`-prefixed tokens and `--`).
+			// ls / future R0 families use the generic shape.
 			return extractPathOperands(command);
 	}
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01
+ *
+ * Find-specific path-operand extractor. Returns ONLY the
+ * SEARCH ROOTS -- the tokens that `find` opens as filesystem
+ * hierarchies. Pattern strings passed to `-[i]name`/`-[i]path`
+ * are find EXPRESSION operands (predicates), NOT files; they
+ * must never be authority operands, even when bash-quoted-static,
+ * because including them here would let `realpath-failed-enoent`
+ * cause ASK on parser-proven quoted patterns.
+ *
+ * GNU `find` argv grammar (bounded):
+ *
+ *   find [global-options] [starting-point...] [expression]
+ *
+ * `global-options` (no value): -H / -L / -P / -X / -E / -d / -s / -x.
+ * These do NOT consume a following token. They may appear
+ * anywhere an option is valid (start of argv, after other
+ * global options, etc.).
+ *
+ * `starting-point` (root): a non-option token. After the first
+ * non-option token, options between roots terminate the root
+ * list.
+ *
+ * `expression`: a sequence of `( tests, actions, operators )`.
+ * Tests/actions begin with `-` and may consume a following
+ * argument token. Once any test/action is seen, we are
+ * definitely in expression territory.
+ *
+ * `--` is the end-of-options terminator; after it, the
+ * remainder of argv is roots.
+ *
+ * Lexical approximation:
+ *   - First token: `find` (skip).
+ *   - Tokens: skip well-known find global-options (no value).
+ *     Collect non-option tokens as roots.
+ *     Break on `--` (then collect rest as roots).
+ *     Break on any OTHER `-`-prefixed token (a predicate/action
+ *     boundary).
+ *
+ * Why this differs from the prior generic extractor: the
+ * prior extractor treated ALL non-option tokens as paths
+ * regardless of position, which erroneously included the
+ * PATTERN strings of `-[i]name`/`-[i]path` predicates.
+ * Promoted pattern: the `find` argv grammar is small enough
+ * to model precisely here without parsing the AST.
+ */
+const FIND_GLOBAL_NO_VALUE_OPTIONS: ReadonlySet<string> = new Set([
+	"-H",
+	"-L",
+	"-P",
+	"-X",
+	"-E",
+	"-d",
+	"-s",
+	"-x",
+]);
+
+function extractFindSearchRoots(tokens: ReadonlyArray<string>): string[] {
+	const out: string[] = [];
+	let i = 1;
+	let sawDoubleDash = false;
+	while (i < tokens.length) {
+		const t = tokens[i]!;
+		if (sawDoubleDash) {
+			out.push(t);
+			i++;
+			continue;
+		}
+		if (t === "--") {
+			sawDoubleDash = true;
+			i++;
+			continue;
+		}
+		if (t.startsWith("-")) {
+			// Skip well-known global options that take no value
+			// (`-L`, `-H`, ...). These can appear at any option-
+			// valid position without consuming a following token.
+			if (FIND_GLOBAL_NO_VALUE_OPTIONS.has(t)) {
+				i++;
+				continue;
+			}
+			// Any other `-`-prefixed token is a predicate or
+			// action; root-list ends here.
+			break;
+		}
+		out.push(t);
+		i++;
+	}
+	return out;
 }
 
 /**
