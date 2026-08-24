@@ -304,7 +304,7 @@ describe("CLI host adapter — CORRECTION04: per-command execution plan", () => 
 		// attached so the runtime can substitute the input shape if a
 		// future safe-only CLI toggle adds explicit allow rules.
 		expect(result.executionPlan).toBeDefined();
-		expect(result.executionPlan!.commands).toHaveLength(1);
+		expect(result.executionPlan?.commands).toHaveLength(1);
 	});
 
 	it("all-mode + dangerous command + model=true => ASK with mirrored plan", () => {
@@ -321,11 +321,11 @@ describe("CLI host adapter — CORRECTION04: per-command execution plan", () => 
 		// equals the input byte-for-byte.
 		expect(result.approved).toBe(false);
 		expect(result.executionPlan).toBeDefined();
-		expect(result.executionPlan!.commands).toHaveLength(1);
+		expect(result.executionPlan?.commands).toHaveLength(1);
 		expect(
-			result.executionPlan!.commands[0]!.matchedRuleSource,
+			result.executionPlan?.commands[0]?.matchedRuleSource,
 		).toBeUndefined();
-		expect(result.executionPlan!.transformedInput).toMatchObject({
+		expect(result.executionPlan?.transformedInput).toMatchObject({
 			command: "rm -rf /",
 		});
 	});
@@ -342,7 +342,7 @@ describe("CLI host adapter — CORRECTION04: per-command execution plan", () => 
 		// matchedRuleSource / profileSource.
 		expect(result.executionPlan).toBeDefined();
 		expect(
-			result.executionPlan!.commands[0]!.matchedRuleSource,
+			result.executionPlan?.commands[0]?.matchedRuleSource,
 		).toBeUndefined();
 	});
 
@@ -356,7 +356,7 @@ describe("CLI host adapter — CORRECTION04: per-command execution plan", () => 
 		});
 		expect(result.approved).toBe(true);
 		expect(result.executionPlan).toBeDefined();
-		expect(result.executionPlan!.commands).toHaveLength(2);
+		expect(result.executionPlan?.commands).toHaveLength(2);
 	});
 
 	it("manual-mode ASK carries plan (user approval path preserves execution constraints)", () => {
@@ -395,7 +395,7 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		expect(result.approved).toBe(false);
 		expect(result.executionPlan).toBeDefined();
 		const hardened = (
-			result.executionPlan!.transformedInput as {
+			result.executionPlan?.transformedInput as {
 				command: string;
 			}
 		).command;
@@ -407,7 +407,7 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		expect(hardened).toContain("--no-textconv");
 		expect(hardened).not.toBe("git diff --stat");
 		// Provenance:
-		const entry = result.executionPlan!.commands[0]!;
+		const entry = result.executionPlan?.commands[0]!;
 		expect(entry.matchedRuleSource).toBe("host_safe_git_diff");
 		expect(entry.profileSource).toBe("host_safe_git_diff_profile");
 	});
@@ -427,7 +427,7 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		expect(result.approved).toBe(true);
 		expect(result.executionPlan).toBeDefined();
 		expect(
-			(result.executionPlan!.transformedInput as { command: string }).command,
+			(result.executionPlan?.transformedInput as { command: string }).command,
 		).toContain("--no-ext-diff");
 	});
 
@@ -450,7 +450,7 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		expect(result.decision.kind).toBe("ask"); // Not DENY: user may approve
 		expect(result.executionPlan).toBeDefined();
 		expect(
-			result.executionPlan!.commands[0]!.matchedRuleSource,
+			result.executionPlan?.commands[0]?.matchedRuleSource,
 		).toBeUndefined();
 	});
 
