@@ -1,4 +1,5 @@
-import type { CommandExecutionPlan } from "@cline/core"
+import type { CommandExecutionPlan, CommandHostAuthorization } from "@cline/core"
+import { isReformulatable, REFORMULATION_REASON_CODE } from "@cline/core/runtime/command-policy"
 import type { ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision } from "@cline/shared"
 import type { ClineAskQuestion, ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
@@ -78,6 +79,15 @@ export interface SdkInteractionCoordinatorOptions {
 	 *   - ALLOW  => { approved: true, decision.kind: "allow", executionPlan }
 	 *   - ASK    => { approved: false, decision.kind: "ask", executionPlan }
 	 *   - DENY   => { approved: false, decision.kind: "deny" }
+	 *
+	 * ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+	 * The optional `hostAuthorization` field carries the ACTUAL evaluated
+	 * `CommandHostAuthorization` (mode + workspace roots + realpath evidence).
+	 * Hosts SHOULD supply it; the coordinator uses it for the reformulation
+	 * eligibility check (item 3 of the predicate: `mode === "safe-only"`
+	 * MUST come from the evaluated authorization, not an assumed UI
+	 * / config setting). Tests and older mocks that omit it fall back
+	 * to "no reformulation" — this is the safe-by-default path.
 	 */
 	evaluateCommandToolApproval?: (request: ToolApprovalRequest) =>
 		| Promise<
@@ -85,6 +95,7 @@ export interface SdkInteractionCoordinatorOptions {
 						approved: boolean
 						decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
 						executionPlan?: CommandExecutionPlan
+						hostAuthorization?: CommandHostAuthorization
 				  }
 				| undefined
 		  >
@@ -92,6 +103,7 @@ export interface SdkInteractionCoordinatorOptions {
 				approved: boolean
 				decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
 				executionPlan?: CommandExecutionPlan
+				hostAuthorization?: CommandHostAuthorization
 		  }
 		| undefined
 	/** @deprecated Use `evaluateCommandToolApproval`. Ignored when that is set for command tools. */
@@ -187,6 +199,24 @@ export class SdkInteractionCoordinator {
 		  }
 		| undefined
 
+	// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01
+	//
+	// One-shot reformulation slot, keyed by (agentId, conversationId).
+	// Armed when a command-tool evaluation was reformulatable and the
+	// coordinator returned `{ approved: false, reason: <prose> }` WITHOUT
+	// opening the approval UI. Consumed BEFORE the next command-tool
+	// evaluation in the same (agentId, conversationId) so that command
+	// receives ordinary policy (likely ASK, possibly ALLOW).
+	//
+	// This is a BOUNDED_CONVERSATION_CONTINUATION, not a semantic-intent
+	// chain. The slot never bleeds across conversations and is cleared
+	// by `clearPending` on session teardown.
+	private pendingReformulationSlot?: {
+		agentId: string
+		conversationId: string
+		reasonCode: string
+	}
+
 	constructor(private readonly options: SdkInteractionCoordinatorOptions) {}
 
 	async handleConsecutiveMistakeLimitReached(context: ConsecutiveMistakeLimitContext): Promise<MistakeLimitDecision> {
@@ -273,6 +303,30 @@ export class SdkInteractionCoordinator {
 		// Call the atomic evaluator ONLY for command tools. Non-command tools
 		// use the standard ToolPolicy.autoApprove semantics unchanged.
 		const isCommand = isCommandTool(request.toolName)
+
+		// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+		// Consume the one-shot reformulation slot BEFORE evaluating, when this
+		// proposal belongs to the same (agentId, conversationId) as the slot's
+		// arming turn. The next proposal receives ordinary policy regardless of
+		// whether it itself is reformulatable — the slot is one-shot per
+		// causally-connected rejection continuation.
+		//
+		// `reformulationBlockedForThisCall` short-circuits the reformulation
+		// branch below so a consumed slot cannot immediately re-arm on the
+		// very next proposal. The block is scoped to this single call; the
+		// proposal AFTER that is free to reformulate again if it qualifies.
+		let reformulationBlockedForThisCall = false
+		if (
+			isCommand &&
+			this.pendingReformulationSlot &&
+			this.pendingReformulationSlot.agentId === request.agentId &&
+			this.pendingReformulationSlot.conversationId === request.conversationId
+		) {
+			this.pendingReformulationSlot = undefined
+			reformulationBlockedForThisCall = true
+			Logger.log(`[SdkController] Reformulation slot consumed for tool=${request.toolName}`)
+		}
+
 		const commandEval = isCommand ? await this.options.evaluateCommandToolApproval?.(request) : undefined
 
 		if (commandEval !== undefined) {
@@ -282,6 +336,60 @@ export class SdkInteractionCoordinator {
 			if (commandEval.decision?.kind === "deny") {
 				Logger.log(`[SdkController] Hard DENY for tool=${request.toolName}; no approval UI`)
 				return { approved: false, reason: commandEval.decision.reason }
+			}
+			// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+			// Reformulation short-circuit. The reformulation classifier
+			// (from `@cline/core/runtime/command-policy`) returns a
+			// non-null prose reason only when:
+			//   1. canonical decision.kind === "ask"
+			//   2. canonical decision.source === "host_mode_safe_only_fallthrough"
+			//   3. hostAuthorization.mode === "safe-only" (from the actual
+			//      evaluated authorization, NOT an assumed UI / config state)
+			//   4. containsUnquotedShellPattern(rawInput) === true
+			//
+			// On a match we short-circuit with `{ approved: false, reason }`
+			// (identical in shape to the DENY short-circuit above) WITHOUT
+			// opening the approval UI, AND we arm a one-shot slot keyed by
+			// (agentId, conversationId) that the NEXT command-tool proposal
+			// in the same conversation will consume BEFORE evaluating.
+			//
+			// `reformulationBlockedForThisCall` (set when this call has just
+			// consumed a slot) gates the branch so the next proposal receives
+			// ordinary policy even if its own content would also qualify.
+			//
+			// Slot consumption is handled at the top of this method.
+			if (!reformulationBlockedForThisCall && commandEval.decision?.kind === "ask" && commandEval.hostAuthorization) {
+				// Narrow `decision` to the discriminant shape the
+				// reformulation classifier expects. `kind === "ask"`
+				// does not auto-narrow `source` from `string` to the
+				// discriminated union, so we construct a fresh
+				// CommandDecision that the classifier can consume
+				// type-safely. We carry the runtime evidence by
+				// re-asserting `source` (it IS one of the union
+				// members; the production wiring guarantees this).
+				const decisionForClassifier = {
+					kind: "ask" as const,
+					reason: commandEval.decision.reason,
+					source: commandEval.decision.source as Parameters<typeof isReformulatable>[0]["source"],
+				}
+				const reason = isReformulatable(decisionForClassifier, request.input, commandEval.hostAuthorization)
+				if (reason !== null) {
+					Logger.log(`[SdkController] Reformulation short-circuit for tool=${request.toolName}`)
+					emitV2Capture({
+						codePoint: "commandSafety.reformulation.v1",
+						data: {
+							reasonCode: REFORMULATION_REASON_CODE,
+							attempt: 1,
+							maxAttempts: 1,
+						},
+					})
+					this.pendingReformulationSlot = {
+						agentId: request.agentId,
+						conversationId: request.conversationId,
+						reasonCode: REFORMULATION_REASON_CODE,
+					}
+					return { approved: false, reason }
+				}
 			}
 			if (commandEval.approved) {
 				Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
@@ -560,6 +668,11 @@ export class SdkInteractionCoordinator {
 			this.pendingToolApprovalResolve({ approved: false, reason })
 			this.pendingToolApprovalResolve = undefined
 		}
+		// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+		// Drop the pending reformulation slot on session teardown so a
+		// later re-instantiation (or a new conversation in the same
+		// controller) starts without a stale armed slot.
+		this.pendingReformulationSlot = undefined
 	}
 
 	/**

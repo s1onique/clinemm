@@ -194,6 +194,16 @@ export default defineConfig({
 				__dirname,
 				"../../sdk/packages/core/src/runtime/command-policy/parser-helper/runtime.ts",
 			),
+			// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+			// The reformulation classifier is reachable through the
+			// `@cline/core/runtime/command-policy` deep import. Same
+			// aliasing strategy as the trusted-internal paths above —
+			// resolve to the live TypeScript source so vitest sees the
+			// current classifier code rather than the bundled stub.
+			"@cline/core/runtime/command-policy": path.resolve(
+				__dirname,
+				"../../sdk/packages/core/src/runtime/command-policy/index.ts",
+			),
 			"@cline/core": path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts"),
 			"@cline/llms": path.resolve(__dirname, "node_modules/@cline/llms/dist/index.js"),
 			// Map @cline/shared subpath exports explicitly. The bare "@cline/shared"

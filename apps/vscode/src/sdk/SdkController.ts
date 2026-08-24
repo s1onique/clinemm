@@ -363,6 +363,13 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 				approved: boolean
 				decision?: CommandDecision
 				executionPlan?: CommandExecutionPlan
+				// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+				// The Coordinator's reformulation branch reads
+				// `hostAuthorization.mode` to verify the actual
+				// evaluated safe-only mode. Optional: the
+				// Coordinator's safe-by-default path fires when
+				// omitted (no reformulation).
+				hostAuthorization?: CommandHostAuthorization
 		  }
 		| undefined
 	> => {
@@ -469,6 +476,16 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 			approved: result.approved,
 			decision: result.decision,
 			executionPlan: result.executionPlan,
+			// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+			// The Coordinator's reformulation branch reads the
+			// evaluated `hostAuthorization` to verify `mode ===
+			// "safe-only"` from the actual auth object (not an
+			// assumed UI / config setting). When omitted the
+			// Coordinator falls back to the safe-by-default path
+			// (no reformulation). The Coordinator handles the
+			// optional field, and the rest of the wiring is
+			// unchanged.
+			hostAuthorization,
 		}
 	}
 }

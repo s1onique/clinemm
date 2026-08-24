@@ -135,3 +135,22 @@ export {
 	type StructuredStmt,
 	type StructuredStmtRisk,
 } from "./structured-command-risk";
+
+// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+// Bounded, source-level reformulation classifier. Hosts invoke
+// `isReformulatable(decision, rawInput, hostAuthorization)` to decide
+// whether an avoidably-unsafe command can be short-circuited back to
+// the agent as bounded guidance without opening the approval UI.
+//
+// The classifier is intentionally narrow: it recognizes only the
+// known-bad form of the source text (an unquoted shell pathname-
+// expansion metacharacter in a reviewed `find` pattern position).
+// Adding new reason families (e.g. UNQUOTED_REDIRECT) is a future
+// ACT; V1 ships exactly this one.
+export {
+	containsUnquotedShellPattern,
+	extractShellSource,
+	isReformulatable,
+	REFORMULATION_MODEL_FACING_MESSAGE,
+	REFORMULATION_REASON_CODE,
+} from "./reformulation-classifier";

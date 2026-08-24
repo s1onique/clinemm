@@ -1,7 +1,11 @@
 import type { AgentEvent } from "@cline/shared"
 import { describe, expect, it, vi } from "vitest"
 import { MessageTranslatorState, translateSessionEvent } from "./message-translator"
-import { buildMistakeLimitAdvisoryText, SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
+import {
+	buildMistakeLimitAdvisoryText,
+	SdkInteractionCoordinator,
+	type SdkInteractionCoordinatorOptions,
+} from "./sdk-interaction-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { createTaskProxy } from "./task-proxy"
 import { DEFAULT_TOOL_APPROVAL_DENIAL_REASON, EDIT_TOOL_APPROVAL_DENIAL_REASON } from "./tool-approval-denial"
@@ -810,6 +814,397 @@ describe("SdkInteractionCoordinator", () => {
 			})
 			await expect(promise).resolves.toMatchObject({ approved: true, decision: { kind: "allow" }, executionPlan })
 			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+	})
+
+	// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01
+	//
+	// Production-seam RED/GREEN for the reformulation protocol. The
+	// reformulation branch is a host-composition short-circuit: when the
+	// canonical command policy returns ASK with
+	// `source === "host_mode_safe_only_fallthrough"` AND a deterministic
+	// source-level probe proves the raw toolInput contains an unquoted
+	// shell-pattern glob metacharacter in a reviewed pattern position,
+	// the coordinator returns `{ approved: false, reason: <bounded prose> }`
+	// WITHOUT opening the approval UI. A one-shot slot keyed by
+	// `(agentId, conversationId)` arms on this short-circuit and is
+	// consumed on the next run_commands proposal in the same conversation.
+	describe("ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01: REFORMULATE branch", () => {
+		const REFACTOR_INPUT = { command: "find . -name *.ts", requires_approval: false }
+		const REFACTOR_ASK_DECISION = {
+			kind: "ask" as const,
+			reason: "safe-only mode did not match any host safe rule",
+			source: "host_mode_safe_only_fallthrough" as const,
+		}
+		const REFACTOR_EXECUTION_PLAN = { transformedInput: REFACTOR_INPUT, commands: [] }
+
+		function makeCoordinator(options: {
+			sessionId: string
+			conversationId: string
+			evaluateCommandToolApproval?: NonNullable<SdkInteractionCoordinatorOptions["evaluateCommandToolApproval"]>
+		}) {
+			const task = createTaskProxy(options.sessionId, vi.fn(), vi.fn())
+			const messages = new SdkMessageCoordinator({ getTask: () => task })
+			const coordinator = new SdkInteractionCoordinator({
+				messages,
+				getSessionId: () => options.sessionId,
+				postStateToWebview: vi.fn(),
+				recordApprovedToolMessage: vi.fn(),
+				evaluateCommandToolApproval:
+					options.evaluateCommandToolApproval ??
+					(vi.fn().mockReturnValue({
+						approved: false,
+						decision: REFACTOR_ASK_DECISION,
+						executionPlan: REFACTOR_EXECUTION_PLAN,
+					}) as NonNullable<SdkInteractionCoordinatorOptions["evaluateCommandToolApproval"]>),
+			})
+			return { task, coordinator }
+		}
+
+		it("RED: today, ASK with unquoted-shell-pattern source opens the approval UI", async () => {
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-red-1",
+				conversationId: "conversation-refactor-red",
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-refactor-red",
+				iteration: 1,
+				toolCallId: "tool-refactor-red-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(promise).resolves.toMatchObject({ approved: false })
+		})
+
+		it("GREEN 1: reformulatable ASK is short-circuited; no approval UI; agent receives bounded reason", async () => {
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-green-1",
+				conversationId: "conversation-refactor-green-1",
+				evaluateCommandToolApproval: vi.fn().mockReturnValue({
+					approved: false,
+					decision: REFACTOR_ASK_DECISION,
+					executionPlan: REFACTOR_EXECUTION_PLAN,
+					hostAuthorization: { mode: "safe-only" },
+				}),
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-refactor-green-1",
+				iteration: 1,
+				toolCallId: "tool-refactor-green-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			const result = await promise
+			expect(result.approved).toBe(false)
+			expect(result.reason).toContain("Host safety policy rejected this command before execution")
+			expect(result.reason).toContain("preventing shell pathname expansion")
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("GREEN 2: next run_commands in same conversation consumes slot, runs ordinary policy", async () => {
+			const reformEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: REFACTOR_ASK_DECISION,
+				executionPlan: REFACTOR_EXECUTION_PLAN,
+				hostAuthorization: { mode: "safe-only" },
+			})
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-green-2",
+				conversationId: "conversation-refactor-green-2",
+				evaluateCommandToolApproval: reformEval,
+			})
+			const first = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-refactor-green-2",
+				iteration: 1,
+				toolCallId: "tool-refactor-green-2-a",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await expect(first).resolves.toMatchObject({ approved: false })
+			const second = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-refactor-green-2",
+				iteration: 2,
+				toolCallId: "tool-refactor-green-2-b",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(second).resolves.toMatchObject({ approved: false })
+			expect(reformEval).toHaveBeenCalledTimes(2)
+		})
+
+		it("GREEN 3: a later unsafe proposal in the same conversation may reformulate again", async () => {
+			const reformEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: REFACTOR_ASK_DECISION,
+				executionPlan: REFACTOR_EXECUTION_PLAN,
+				hostAuthorization: { mode: "safe-only" },
+			})
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-green-3",
+				conversationId: "conversation-refactor-green-3",
+				evaluateCommandToolApproval: reformEval,
+			})
+			const a = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-refactor-green-3",
+				iteration: 1,
+				toolCallId: "tool-refactor-green-3-a",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await expect(a).resolves.toMatchObject({ approved: false })
+
+			const b = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-refactor-green-3",
+				iteration: 2,
+				toolCallId: "tool-refactor-green-3-b",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(b).resolves.toMatchObject({ approved: false })
+
+			const c = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-refactor-green-3",
+				iteration: 3,
+				toolCallId: "tool-refactor-green-3-c",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			const cResult = await c
+			expect(cResult.approved).toBe(false)
+			expect(cResult.reason).toContain("preventing shell pathname expansion")
+		})
+
+		it("GREEN 4: slot does NOT cross conversation boundaries", async () => {
+			const sharedEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: REFACTOR_ASK_DECISION,
+				executionPlan: REFACTOR_EXECUTION_PLAN,
+				hostAuthorization: { mode: "safe-only" },
+			})
+			const { task: task1, coordinator: coord1 } = makeCoordinator({
+				sessionId: "session-refactor-conv-A",
+				conversationId: "conversation-A",
+				evaluateCommandToolApproval: sharedEval,
+			})
+			const { task: task2, coordinator: coord2 } = makeCoordinator({
+				sessionId: "session-refactor-conv-B",
+				conversationId: "conversation-B",
+				evaluateCommandToolApproval: sharedEval,
+			})
+			const a = coord1.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-A",
+				iteration: 1,
+				toolCallId: "tool-A-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await expect(a).resolves.toMatchObject({ approved: false })
+
+			const b = coord2.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-B",
+				iteration: 1,
+				toolCallId: "tool-B-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			const bResult = await b
+			expect(bResult.approved).toBe(false)
+			expect(bResult.reason).toContain("preventing shell pathname expansion")
+			expect(task1.messageStateHandler.getClineMessages()).toHaveLength(0)
+			expect(task2.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("clearPending() drops the pending reformulation slot", async () => {
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-clear-1",
+				conversationId: "conversation-clear",
+				evaluateCommandToolApproval: vi.fn().mockReturnValue({
+					approved: false,
+					decision: REFACTOR_ASK_DECISION,
+					executionPlan: REFACTOR_EXECUTION_PLAN,
+					hostAuthorization: { mode: "safe-only" },
+				}),
+			})
+			const a = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-clear",
+				iteration: 1,
+				toolCallId: "tool-clear-1-a",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await expect(a).resolves.toMatchObject({ approved: false })
+			coordinator.clearPending("test teardown")
+			const b = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-clear",
+				iteration: 2,
+				toolCallId: "tool-clear-1-b",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			const bResult = await b
+			expect(bResult.approved).toBe(false)
+			expect(bResult.reason).toContain("preventing shell pathname expansion")
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("NEGATIVE: DENY decision is unchanged by the reformulation branch", async () => {
+			const denyEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: { kind: "deny", reason: "dangerous command", source: "host_hard_deny" },
+				hostAuthorization: { mode: "safe-only" },
+			})
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-neg-deny",
+				conversationId: "conversation-neg-deny",
+				evaluateCommandToolApproval: denyEval,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-neg-deny",
+				iteration: 1,
+				toolCallId: "tool-neg-deny-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await expect(promise).resolves.toEqual({ approved: false, reason: "dangerous command" })
+			expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+		})
+
+		it("NEGATIVE: ASK from a non-safe-only source does NOT reformulate", async () => {
+			const realpathEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: {
+					kind: "ask",
+					reason: "realpath authority failed",
+					source: "host_workspace_realpath_authority",
+				},
+				executionPlan: REFACTOR_EXECUTION_PLAN,
+				hostAuthorization: { mode: "safe-only" },
+			})
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-neg-realpath",
+				conversationId: "conversation-neg-realpath",
+				evaluateCommandToolApproval: realpathEval,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-neg-realpath",
+				iteration: 1,
+				toolCallId: "tool-neg-realpath-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(promise).resolves.toMatchObject({ approved: false })
+		})
+
+		it("NEGATIVE: ask from safe-only fallthrough for a QUOTED pattern does NOT reformulate", async () => {
+			const quotedEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: REFACTOR_ASK_DECISION,
+				executionPlan: { transformedInput: { command: "find . -name '*.ts'" }, commands: [] },
+				hostAuthorization: { mode: "safe-only" },
+			})
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-neg-quoted",
+				conversationId: "conversation-neg-quoted",
+				evaluateCommandToolApproval: quotedEval,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-neg-quoted",
+				iteration: 1,
+				toolCallId: "tool-neg-quoted-1",
+				toolName: "run_commands",
+				input: { command: "find . -name '*.ts'" },
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(promise).resolves.toMatchObject({ approved: false })
+		})
+
+		it("NEGATIVE: host mode != safe-only does NOT reformulate", async () => {
+			const manualEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: REFACTOR_ASK_DECISION,
+				executionPlan: REFACTOR_EXECUTION_PLAN,
+				hostAuthorization: { mode: "manual" },
+			})
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-neg-mode",
+				conversationId: "conversation-neg-mode",
+				evaluateCommandToolApproval: manualEval,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-neg-mode",
+				iteration: 1,
+				toolCallId: "tool-neg-mode-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(promise).resolves.toMatchObject({ approved: false })
+		})
+
+		it("ABLATION: when hostAuthorization is omitted, reformulation is skipped (safe-by-default)", async () => {
+			const noAuthEval = vi.fn().mockReturnValue({
+				approved: false,
+				decision: REFACTOR_ASK_DECISION,
+				executionPlan: REFACTOR_EXECUTION_PLAN,
+				// hostAuthorization intentionally omitted
+			})
+			const { task, coordinator } = makeCoordinator({
+				sessionId: "session-refactor-abl",
+				conversationId: "conversation-abl",
+				evaluateCommandToolApproval: noAuthEval,
+			})
+			const promise = coordinator.handleRequestToolApproval({
+				agentId: "agent",
+				conversationId: "conversation-abl",
+				iteration: 1,
+				toolCallId: "tool-abl-1",
+				toolName: "run_commands",
+				input: REFACTOR_INPUT,
+				policy: {},
+			})
+			await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+			expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+			await expect(promise).resolves.toMatchObject({ approved: false })
 		})
 	})
 

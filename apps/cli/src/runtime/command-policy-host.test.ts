@@ -16,6 +16,7 @@ import {
 	cliEvaluateCommandToolApprovalWith,
 	cliResolveHostAuthorization,
 	cliResolveSafeOnlyHostAuthorization,
+	cliResolveTrueSafeOnlyHostAuthorization,
 } from "./command-policy-host";
 
 // ACT-CLINEMM-COMMAND-APPROVAL-SPLIT-UNDEFINED-REGRESSION01
@@ -616,3 +617,55 @@ describe("CLI host adapter — CORRECTION01: V2 ASK -> ALLOW host composition", 
 		expect(result.decision.source).toBe("host_hard_deny");
 	});
 });
+
+// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01
+//
+// CLI_REFORMULATION = NOT_IMPLEMENTED for this first production slice.
+//
+// The reformulation protocol is implemented in the VSCode host adapter
+// (`apps/vscode/src/sdk/sdk-interaction-coordinator.ts`). CLI parity is
+// feasible because the CLI TUI uses the same `{ approved, reason }`
+// shape and upstream's `approval.ts` flows the denial through to the
+// agent as a normal tool result. However, shipping CLI parity in this
+// ACT would double the failure surface (CLI approval harness, TUI
+// approver wiring, async denial delivery) without proportional value;
+// parity is a deferred follow-up.
+//
+// The test below pins the ABSENT behavior so future parity work is
+// explicit. It does NOT block the ACT closure.
+describe("ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01: CLI parity", () => {
+	it("CLI_REFORMULATION = NOT_IMPLEMENTED: CLI does NOT reformulate today", () => {
+		// `find . -name *.ts` in safe-only mode is ASK at the canonical
+		// policy. The CLI host adapter returns that ASK decision with a
+		// plain (non-reformulation) reason. The CLI TUI surfaces the
+		// approval UI as today.
+		const result = cliEvaluateCommandToolApprovalWith(
+			{
+				toolName: "run_commands",
+				toolInput: "find . -name *.ts",
+				autoApproveTools: false,
+			},
+			cliResolveTrueSafeOnlyHostAuthorization(),
+		)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("ask")
+		// The CLI host adapter does NOT use the reformulation classifier
+		// today; the decision reason is the canonical safe-only fallthrough.
+		// It does NOT contain the reformulation prose marker.
+		const reason = result.reason ?? ""
+		expect(reason).not.toContain("preventing shell pathname expansion")
+		expect(reason).not.toContain("Host safety policy rejected this command before execution")
+	})
+
+	it("CLI canonical source is host_mode_safe_only_fallthrough for the unquoted pattern", () => {
+		const result = cliEvaluateCommandToolApprovalWith(
+			{
+				toolName: "run_commands",
+				toolInput: "find . -name *.ts",
+				autoApproveTools: false,
+			},
+			cliResolveTrueSafeOnlyHostAuthorization(),
+		)
+		expect(result.decision.source).toBe("host_mode_safe_only_fallthrough")
+	})
+})

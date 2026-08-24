@@ -42,6 +42,10 @@
 		"./internal/parser-helper-runtime": {
 			"types": "./dist/runtime/command-policy/parser-helper/runtime.d.ts",
 			"import": "./dist/runtime/command-policy/parser-helper/runtime.js"
+		},
+		"./runtime/command-policy": {
+			"types": "./dist/runtime/command-policy/index.d.ts",
+			"import": "./dist/runtime/command-policy/index.js"
 		}
 	},
 	"scripts": {

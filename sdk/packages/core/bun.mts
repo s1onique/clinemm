@@ -94,6 +94,16 @@ const builds: Parameters<typeof Bun.build>[0][] = [
 		outdir: "./dist/runtime/command-policy/parser-helper",
 		...buildConfig,
 	},
+	// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
+	// the command-policy subpath that the VSCode host adapter imports
+	// the reformulation classifier from. Distinct from the package
+	// root so we do not widen the public surface; reachable only via
+	// the explicit `@cline/core/runtime/command-policy` deep import.
+	{
+		entrypoints: ["./src/runtime/command-policy/index.ts"],
+		outdir: "./dist/runtime/command-policy",
+		...buildConfig,
+	},
 	// The plugin sandbox bootstrap runs in an isolated child process via
 	// SubprocessSandbox and must be emitted as a separate executable entrypoint.
 	{
