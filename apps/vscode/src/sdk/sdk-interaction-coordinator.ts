@@ -1,5 +1,5 @@
 import type { CommandExecutionPlan, CommandHostAuthorization } from "@cline/core"
-import { isReformulatable, REFORMULATION_REASON_CODE } from "@cline/core/runtime/command-policy"
+import { isReformulatable, REFORMULATION_REASON_CODE } from "@cline/core/internal/reformulation-classifier"
 import type { ConsecutiveMistakeLimitContext, ConsecutiveMistakeLimitDecision } from "@cline/shared"
 import type { ClineAskQuestion, ClineMessage, TurnPhase } from "@shared/ExtensionMessage"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"

@@ -17,6 +17,7 @@
 		"src/services/feature-flags/posthog.ts",
 		"src/runtime/command-policy/command-risk-internal.ts",
 		"src/runtime/command-policy/parser-helper/protocol.ts",
-		"src/runtime/command-policy/parser-helper/runtime.ts"
+		"src/runtime/command-policy/parser-helper/runtime.ts",
+		"src/runtime/command-policy/reformulation-classifier-internal.ts"
 	]
 }

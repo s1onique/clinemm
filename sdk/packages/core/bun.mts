@@ -95,12 +95,19 @@ const builds: Parameters<typeof Bun.build>[0][] = [
 		...buildConfig,
 	},
 	// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
-	// the command-policy subpath that the VSCode host adapter imports
-	// the reformulation classifier from. Distinct from the package
-	// root so we do not widen the public surface; reachable only via
-	// the explicit `@cline/core/runtime/command-policy` deep import.
+	// The narrow internal entrypoint that the VSCode host adapter
+	// imports the reformulation classifier from. Distinct from the
+	// package root so we do NOT widen the public surface; the public
+	// `@cline/core` index does NOT re-export this module. Reachable
+	// only via the explicit
+	// `@cline/core/internal/reformulation-classifier` deep import,
+	// mirroring the established
+	// `@cline/core/internal/command-risk-internal` and
+	// `@cline/core/internal/parser-helper-runtime` precedent.
 	{
-		entrypoints: ["./src/runtime/command-policy/index.ts"],
+		entrypoints: [
+			"./src/runtime/command-policy/reformulation-classifier-internal.ts",
+		],
 		outdir: "./dist/runtime/command-policy",
 		...buildConfig,
 	},

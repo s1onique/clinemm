@@ -196,13 +196,16 @@ export default defineConfig({
 			),
 			// ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01:
 			// The reformulation classifier is reachable through the
-			// `@cline/core/runtime/command-policy` deep import. Same
-			// aliasing strategy as the trusted-internal paths above —
-			// resolve to the live TypeScript source so vitest sees the
-			// current classifier code rather than the bundled stub.
-			"@cline/core/runtime/command-policy": path.resolve(
+			// narrow `@cline/core/internal/reformulation-classifier`
+			// deep import (mirroring the trusted-internal entrypoint
+			// pattern established by `command-risk-internal` and
+			// `parser-helper-runtime`). Same aliasing strategy as
+			// those trusted-internal paths — resolve to the live
+			// TypeScript source so vitest sees the current
+			// classifier code rather than the bundled stub.
+			"@cline/core/internal/reformulation-classifier": path.resolve(
 				__dirname,
-				"../../sdk/packages/core/src/runtime/command-policy/index.ts",
+				"../../sdk/packages/core/src/runtime/command-policy/reformulation-classifier-internal.ts",
 			),
 			"@cline/core": path.resolve(__dirname, "src/test/cline-core-vitest-stub.ts"),
 			"@cline/llms": path.resolve(__dirname, "node_modules/@cline/llms/dist/index.js"),

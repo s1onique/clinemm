@@ -43,9 +43,9 @@
 			"types": "./dist/runtime/command-policy/parser-helper/runtime.d.ts",
 			"import": "./dist/runtime/command-policy/parser-helper/runtime.js"
 		},
-		"./runtime/command-policy": {
-			"types": "./dist/runtime/command-policy/index.d.ts",
-			"import": "./dist/runtime/command-policy/index.js"
+		"./internal/reformulation-classifier": {
+			"types": "./dist/runtime/command-policy/reformulation-classifier-internal.d.ts",
+			"import": "./dist/runtime/command-policy/reformulation-classifier-internal.js"
 		}
 	},
 	"scripts": {
