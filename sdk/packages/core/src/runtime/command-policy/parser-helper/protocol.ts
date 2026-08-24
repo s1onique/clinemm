@@ -125,6 +125,26 @@ export interface StructuredCmdJSON {
 	readonly redirects: ReadonlyArray<{
 		readonly op: string;
 		readonly path: string;
+		/**
+		 * ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01.
+		 *
+		 * Parser-proven explicit file descriptor. ABSENT on legacy
+		 * v2/v3 responses. `null` when the source omitted the fd
+		 * prefix (e.g. `>foo` means stdout). Small non-negative
+		 * integer otherwise (e.g. 1 for `1>foo`, 2 for `2>foo`).
+		 *
+		 * See runtime.ts `isValidCmd` for the bounded integer range
+		 * accepted from the wire.
+		 */
+		readonly fd?: number | null;
+		/**
+		 * ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01.
+		 *
+		 * Parser-proven staticness of the redirect target word.
+		 * ABSENT on legacy v2/v3 responses. Same triple as
+		 * `ArgProvenance`.
+		 */
+		readonly pathProvenance?: ArgProvenance;
 	}>;
 	readonly isWrapper: boolean;
 	readonly wrapperOf: ParserHelperDialect | "";

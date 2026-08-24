@@ -141,11 +141,39 @@ func projectCallExpr(call *syntax.CallExpr, stmtRedirs []*syntax.Redirect, sourc
 		argProvenance = append(argProvenance, string(classifyWordProvenance(w, source)))
 	}
 
-	redirects := make([]map[string]string, 0)
+	redirects := make([]map[string]any, 0)
 	for _, r := range stmtRedirs {
-		redirects = append(redirects, map[string]string{
-			"op":   r.Op.String(),
-			"path": projectWord(r.Word),
+		// ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01:
+		// per-redirect provenance. Each redirect now carries:
+		//   - fd:              explicit file descriptor (number)
+		//                     or null when source omitted the prefix
+		//                     (e.g. `>foo` means stdout / implicit 1).
+		//   - pathProvenance:  parser-proven staticness of the target
+		//                     word ("static" | "dynamic" | "unknown").
+		// Both fields are emitted from the ORIGINAL mvdan AST (never
+		// reconstructed from source text). The TS classifier's
+		// `isAuthorityNeutralStderrDiscard` predicate requires both
+		// fields to be present and positive.
+		var fdPtr *int
+		if r.N != nil {
+			// r.N.Value is a digit string (mvdan only accepts
+			// single-digit fd numbers in source positions; see
+			// mvdan.cc/sh/v3/syntax Parser for the grammar).
+			var v int
+			if _, err := fmt.Sscanf(r.N.Value, "%d", &v); err == nil {
+				fdPtr = &v
+			} else {
+				// Defensive: if the fd Lit cannot be parsed as
+				// a digit, fall back to nil. The TS predicate
+				// treats nil as non-neutral (fail-closed).
+				fdPtr = nil
+			}
+		}
+		redirects = append(redirects, map[string]any{
+			"op":             r.Op.String(),
+			"path":           projectWord(r.Word),
+			"fd":             fdPtr, // nil for explicit-null, omitted via omitempty in some encoders
+			"pathProvenance": string(classifyWordProvenance(r.Word, source)),
 		})
 	}
 

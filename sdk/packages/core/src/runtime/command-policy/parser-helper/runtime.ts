@@ -528,6 +528,31 @@ function isValidCmd(cmd: unknown): boolean {
 		const rr = r as Record<string, unknown>;
 		if (typeof rr.op !== "string") return false;
 		if (typeof rr.path !== "string") return false;
+		// Protocol v4 adds per-redirect provenance. If either field
+		// is present, BOTH must be valid (and the fd must be a
+		// small positive integer or null; pathProvenance must be
+		// one of the three valid strings). Absent on v2/v3
+		// responses; the classifier fails closed when missing.
+		//
+		// ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01.
+		if (rr.fd !== undefined || rr.pathProvenance !== undefined) {
+			if (rr.fd !== null && rr.fd !== undefined && typeof rr.fd !== "number") {
+				return false;
+			}
+			if (typeof rr.fd === "number") {
+				if (!Number.isInteger(rr.fd)) return false;
+				// fd is a small non-negative integer (Unix file
+				// descriptors are 0-9 in standard shell syntax).
+				if (rr.fd < 0 || rr.fd > 9) return false;
+			}
+			if (
+				rr.pathProvenance !== "static" &&
+				rr.pathProvenance !== "dynamic" &&
+				rr.pathProvenance !== "unknown"
+			) {
+				return false;
+			}
+		}
 	}
 	// Protocol v3 adds argProvenance. If present, it MUST be a string
 	// array of the same length as `args` and contain only the three

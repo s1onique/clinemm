@@ -59,7 +59,16 @@ if (!existsSync(v3Path)) {
 const v2 = JSON.parse(readFileSync(V2_PATH, "utf8"));
 const v3 = JSON.parse(readFileSync(V3_PATH, "utf8"));
 
-const COMPAT_STRIP = new Set(["protocolVersion", "argProvenance"]);
+const COMPAT_STRIP = new Set([
+	"protocolVersion",
+	"argProvenance",
+	// ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01: v4
+	// helpers also additively carry fd + pathProvenance on each
+	// redirect. The v2 wire contract still holds; the strip
+	// continues to assert additive-only evolution.
+	"fd",
+	"pathProvenance",
+]);
 function stripCompat(obj) {
 	if (Array.isArray(obj)) return obj.map(stripCompat);
 	if (obj && typeof obj === "object") {

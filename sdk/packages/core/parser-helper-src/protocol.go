@@ -2,18 +2,32 @@
 // the parser helper. This is the same surface that lives in TypeScript at
 // sdk/packages/core/src/runtime/command-policy/parser-helper/protocol.ts.
 //
-// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01.
+// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01
+//   + ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01.
 //
-// SCOPE (this ACT, Phase 2):
+// SCOPE (this file's history):
 //
-//   - Add per-arg shell-provenance provenance to the wire format
-//     (`argProvenance: "static" | "dynamic" | "unknown"`) while
-//     preserving the v2 surface (every existing field is unchanged).
-//   - Bump PARSER_HELPER_PROTOCOL_VERSION to 3. v2 callers that read
-//     v3 responses simply ignore the additive `argProvenance` field;
-//     v3 callers that read v2 responses treat every arg as
-//     `unknown` (fail-closed; see the classifier's protocolVersion
-//     gate).
+//   - Phase 2 (PROVENANCE01): added per-arg shell-provenance provenance
+//     to the wire format (`argProvenance: "static" | "dynamic" | "unknown"`)
+//     while preserving the v2 surface (every existing field is unchanged).
+//     Bumped PARSER_HELPER_PROTOCOL_VERSION to 3.
+//
+//   - STDERR-DEVNULL-NEUTRAL01: adds per-redirect fd + pathProvenance
+//     provenance to the wire format. Each redirect now carries:
+//
+//       fd              number | null   (explicit file descriptor or nil
+//                                       if the source omitted the prefix)
+//       pathProvenance  "static" | "dynamic" | "unknown"
+//                                       (parser-proven staticness of the
+//                                       redirect target word)
+//
+//     This is purely additive: v3 callers ignore the new fields; v4
+//     callers treat v3 responses as fail-closed for the neutral-redirect
+//     branch (the classifier's predicate requires both fields to be
+//     present and explicit).
+//
+//     Bumped PARSER_HELPER_PROTOCOL_VERSION to 4.
+//
 //   - DO NOT change expansion authority. The host does NOT resolve
 //     cmd-subst / param-exp / arith / procsub. Provenance is
 //     classifier-side information only.
@@ -24,8 +38,9 @@ package main
 // sdk/packages/core/src/runtime/command-policy/structured-command-risk.ts.
 //
 // v2 = frozen compatibility oracle.
-// v3 = v2 projection + argProvenance (this ACT).
-const PARSER_HELPER_PROTOCOL_VERSION = 3
+// v3 = v2 projection + argProvenance.
+// v4 = v3 projection + redirect fd + redirect pathProvenance.
+const PARSER_HELPER_PROTOCOL_VERSION = 4
 
 // Dialect accepted on stdin. The legacy binary only honors bash for v2;
 // v3 retains the same single-dialect surface.

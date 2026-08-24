@@ -417,6 +417,52 @@ const SENSITIVE_WRITE_TARGETS: ReadonlyArray<{
 ];
 
 /**
+ * Authority-neutral stderr-discard predicate.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01.
+ *
+ * Returns true iff the redirect is parser-proven to be:
+ *
+ *   - explicit file descriptor 2 (`2>...`)
+ *   - truncate-write operator (`>`, not `>>`, not `>&`)
+ *   - target is the literal bytes "/dev/null"
+ *   - target provenance is "static" (parser-proven no expansion)
+ *
+ * When all four hold the redirect contributes ZERO authority. The
+ * command's risk classification is identical to a sibling without the
+ * redirect: `rm -rf "$HOME" 2>/dev/null` is R5-mutating; `ls -la 2>/dev/null`
+ * is safe-read; `git status 2>/dev/null` is safe-read.
+ *
+ * FAIL-CLOSED contract (any one disqualifies -> not neutral):
+ *
+ *   - `fd` absent (legacy v2/v3 helper response) -> not neutral
+ *   - `fd !== 2` -> not neutral (stdout, fd=1, fd=0, anything else)
+ *   - `op !== ">"` -> not neutral (append, dup, here-string)
+ *   - `path !== "/dev/null"` -> not neutral
+ *   - `pathProvenance` absent -> not neutral
+ *   - `pathProvenance !== "static"` -> not neutral
+ *   - `pathProvenance === "dynamic"` -> not neutral (must be parser-proven static)
+ *   - `pathProvenance === "unknown"` -> not neutral
+ *
+ * The narrow 2>/dev/null contract is the ONLY shape this predicate
+ * blesses. `>/dev/null`, `1>/dev/null`, `2>>/dev/null`, `2>errors.txt`,
+ * `2>"$NULL_PATH"`, `2>&1`, `&>/dev/null`, `>&/dev/null` are all NOT
+ * neutral.
+ */
+export function isAuthorityNeutralStderrDiscard(redirect: {
+	readonly op: string;
+	readonly path: string;
+	readonly fd?: number | null;
+	readonly pathProvenance?: "static" | "dynamic" | "unknown";
+}): boolean {
+	if (redirect.fd !== 2) return false;
+	if (redirect.op !== ">") return false;
+	if (redirect.path !== "/dev/null") return false;
+	if (redirect.pathProvenance !== "static") return false;
+	return true;
+}
+
+/**
  * Classify a single AST redirect. Returns null when the redirect is
  * safe to ignore, or `{ family }` when V2 must escalate.
  *
@@ -428,10 +474,18 @@ const SENSITIVE_WRITE_TARGETS: ReadonlyArray<{
  *     We do not yet have a bounded write-target allowlist, so we
  *     cannot promote.
  *   - Unknown operators fall back to ASK minimum (conservative).
+ *
+ * ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01: callers MUST
+ * filter out authority-neutral stderr-discard redirects via
+ * `isAuthorityNeutralStderrDiscard` BEFORE invoking this function. The
+ * classifier does not check neutrality itself -- partitioning is the
+ * caller's responsibility so the policy is local to the call site.
  */
 export function classifyRedirect(redirect: {
 	readonly op: string;
 	readonly path: string;
+	readonly fd?: number | null;
+	readonly pathProvenance?: "static" | "dynamic" | "unknown";
 }): { readonly family: string } | null {
 	const op = redirect.op.trim();
 	if (op === "<" || op === "<<") {
@@ -676,7 +730,16 @@ function classifyCmd(
 	// CORRECTION01 STEP 7: redirects participate in risk. Walk
 	// every redirect FIRST; a sensitive write redirect escalates to
 	// never-auto-approve even if the command itself would be safe.
+	//
+	// ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01: a
+	// parser-proven authority-neutral stderr-discard (explicit `2>`
+	// + `>` + literal `/dev/null` + parser-proven static target)
+	// contributes ZERO authority. We skip those redirects entirely;
+	// the base command's risk is unchanged.
 	for (const redirect of cmd.redirects) {
+		if (isAuthorityNeutralStderrDiscard(redirect)) {
+			continue;
+		}
 		const r = classifyRedirect(redirect);
 		if (r !== null) {
 			// Sensitive-write / opaque-op cases take precedence.
@@ -749,8 +812,9 @@ function classifyCmd(
 	// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01.
 	//
 	// Parser-proven positive provenance branch. Activates ONLY when
-	// the parser helper speaks protocol v3 (i.e. the authoritative
-	// `argProvenance` array is present). When that gate is open:
+	// the parser helper speaks protocol v3 or newer (i.e. the
+	// authoritative `argProvenance` array is present). When that
+	// gate is open:
 	//
 	//   cmd.name === "echo"
 	//   AND no redirects
@@ -758,7 +822,7 @@ function classifyCmd(
 	//     -> auto-approve-eligible
 	//
 	// Fail-closed requirements (any one disqualifies):
-	//   - protocolVersion !== 3 (v2 or older)
+	//   - protocolVersion < 3 (v2 or older)
 	//   - argProvenance is missing (defensive; the validator also
 	//     rejects missing-argProvenance on v3 responses, but the
 	//     classifier must not crash if it sees a future variant)
@@ -780,11 +844,20 @@ function classifyCmd(
 	// Fail-closed under v2: the runtime injects ["unknown"]* for v2
 	// responses (see parser-helper/runtime.ts `injectUnknownProvenance`),
 	// so `every(p => p === "static")` is false under v2 and the branch
-	// never activates. The `protocolVersion === 3` check is an
+	// never activates. The `protocolVersion >= 3` check is an
 	// additional belt for direct callers of `classifyCmd` that bypass
 	// the runtime's injection.
+	//
+	// ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01: the
+	// protocol version check is widened from `=== 3` to `>= 3` so
+	// the same promotion contract applies to v4 helper responses
+	// (which additively carry redirect fd/pathProvenance). The
+	// echo promotion continues to require zero redirects
+	// (`cmd.redirects.length === 0`); a neutral 2>/dev/null on an
+	// echo therefore routes through V1's host_safe_echo regex,
+	// not this branch -- intentional.
 	if (
-		protocolVersion === 3 &&
+		protocolVersion >= 3 &&
 		cmd.name === "echo" &&
 		cmd.redirects.length === 0 &&
 		cmd.argProvenance !== undefined &&

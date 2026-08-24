@@ -244,7 +244,7 @@ describeWithHelper("structured-command-risk -- REAL parser-helper V2 end-to-end 
 		expect(parsed).not.toBeNull();
 		expect(parsed!.parseStatus).toBe("complete");
 		// Phase 3: vendored helper is v3 with argProvenance.
-		expect(parsed!.protocolVersion).toBe(3);
+		expect(parsed!.protocolVersion).toBe(4); // STDERR-DEVNULL-NEUTRAL01: helper now emits v4
 
 		const r = evaluateCommandRiskWithParser({
 			toolInput: liveCmd,
@@ -275,7 +275,7 @@ describeWithHelper("structured-command-risk -- REAL parser-helper V2 end-to-end 
 		expect(parsed).not.toBeNull();
 		expect(parsed!.parseStatus).toBe("complete");
 		// Phase 3: vendored helper is v3 with argProvenance.
-		expect(parsed!.protocolVersion).toBe(3);
+		expect(parsed!.protocolVersion).toBe(4); // STDERR-DEVNULL-NEUTRAL01: helper now emits v4
 
 		const r = evaluateCommandRiskWithParser({
 			toolInput: liveCmd,

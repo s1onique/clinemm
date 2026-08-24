@@ -155,8 +155,10 @@ describeWithHelper("parser-helper/runtime — REAL binary RED/GREEN (Phase 3)", 
 	it("pwd; pwd → complete AST with two cmd stmts", async () => {
 		const r = await helper.invoke({ command: "pwd; pwd" });
 		expect(r).not.toBeNull();
-		// Phase 3 vendored binary is v3.
-		expect(r!.protocolVersion).toBe(3);
+		// ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01: vendored
+		// helper now emits protocolVersion 4 (additively carries
+		// per-redirect fd + pathProvenance).
+		expect(r!.protocolVersion).toBe(4);
 		expect(r!.parseStatus).toBe("complete");
 		expect(r!.hasCommandSubstitution).toBe(false);
 		expect(r!.program?.stmts).toHaveLength(2);

@@ -315,7 +315,7 @@ describeWithV3(
 			it("helper emits protocolVersion=3", async () => {
 				const parsed = await helper.invoke({ command: "echo 'hi'" });
 				expect(parsed).not.toBeNull();
-				expect(parsed!.protocolVersion).toBe(3);
+				expect(parsed!.protocolVersion).toBe(4); // STDERR-DEVNULL-NEUTRAL01: helper now emits v4
 			});
 			it("helper emits argProvenance with same length as args", async () => {
 				const parsed = await helper.invoke({ command: "echo '*' 'foo' bar" });
