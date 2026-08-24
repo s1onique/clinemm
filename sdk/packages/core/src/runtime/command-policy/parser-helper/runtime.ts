@@ -403,7 +403,7 @@ function validateResponse(
 	//     below marks every cmd as `argProvenance: ["unknown", ...]`
 	//     so `cmd.argProvenance.every(p => p === "static")` is false
 	//     for every command under a v2 helper).
-	if (j.protocolVersion !== 3 && j.protocolVersion !== 2) return null;
+	if (j.protocolVersion !== 4 && j.protocolVersion !== 3 && j.protocolVersion !== 2) return null;
 	if (typeof j.sourceSha256 !== "string") return null;
 	if (j.sourceSha256 !== expectedDigest) return null;
 	if (j.parseStatus !== "complete" && j.parseStatus !== "failed") {

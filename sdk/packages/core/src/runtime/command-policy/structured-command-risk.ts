@@ -107,7 +107,24 @@ import {
  *   "skipped" verdict that preserves V1 behavior.
  */
 
-export const STRUCTURED_PROTO_VERSION = 3 as const;
+/**
+ * The wire protocol version. Bumped from 3 to 4 in
+ * ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01 to add per-
+ * redirect `fd` and `pathProvenance` provenance (additive fields; v3
+ * callers ignore them). v2 callers continue to receive v3/v4 responses
+ * and the classifier handles them with the same inject-unknown fallback
+ * the v3 path already uses.
+ */
+export const STRUCTURED_PROTO_VERSION = 4 as const;
+
+/**
+ * The set of protocol versions a `ParsedShell` may carry at runtime.
+ * v2 is a legacy-frozen oracle; v3 adds argProvenance; v4 adds redirect
+ * fd/pathProvenance. The classifier accepts all three; the runtime
+ * pre-processes v2 responses to inject "unknown" provenance so v3/v4
+ * branches fail closed.
+ */
+export type SupportedProtocolVersion = 2 | 3 | 4;
 
 /**
  * Per-command shell-kind label.
@@ -134,7 +151,7 @@ const PROMOTION_CAPABLE_DIALECTS: ReadonlySet<ShellDialect> = new Set([
 
 /** Result of a single parse attempt. */
 export interface ParsedShell {
-	readonly protocolVersion: typeof STRUCTURED_PROTO_VERSION;
+	readonly protocolVersion: SupportedProtocolVersion;
 	readonly dialect: ShellDialect;
 	/**
 	 * SHA-256 of the exact joined normalized source string the
@@ -207,6 +224,33 @@ export interface StructuredCmd {
 	readonly redirects: ReadonlyArray<{
 		readonly op: string;
 		readonly path: string;
+		/**
+		 * Parser-proven explicit file descriptor for this redirect.
+		 *
+		 * `null` when the source omitted the fd prefix (e.g. `>foo`
+		 * means stdout / implicit fd 1; `>>foo` likewise). For the
+		 * forms `1>...`, `2>...`, `2>>...`, the helper emits the
+		 * numeric fd parsed from the original AST.
+		 *
+		 * ABSENT on legacy v2/v3 helper responses. The classifier
+		 * treats absent `fd` (or `pathProvenance: "unknown"`) as
+		 * non-neutral: redirects missing either field carry their
+		 * full conservative weight.
+		 *
+		 * ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01.
+		 */
+		readonly fd?: number | null;
+		/**
+		 * Parser-proven staticness of the redirect TARGET word.
+		 * "static" iff the target is provably a fixed string of
+		 * literal bytes from the ORIGINAL mvdan/sh AST. "dynamic"
+		 * if the target contains shell expansion. "unknown" if the
+		 * classifier could not establish a positive answer.
+		 *
+		 * ABSENT on legacy v2/v3 helper responses. Same fail-closed
+		 * semantics as `fd`: absent / unknown -> non-neutral.
+		 */
+		readonly pathProvenance?: "static" | "dynamic" | "unknown";
 	}>;
 	readonly isWrapper: boolean;
 	readonly wrapperOf: ShellDialect | "";
