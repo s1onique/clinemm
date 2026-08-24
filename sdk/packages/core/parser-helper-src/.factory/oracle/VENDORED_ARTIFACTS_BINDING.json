@@ -31,9 +31,9 @@
       "target": "win32-x64"
     }
   ],
-  "frozenAt": "phase3-dblquote-context-fix + promoted-to-vendor",
+  "frozenAt": "phase4-vsix-packaging-mvdan-fix",
   "goVersion": "go1.25.8",
-  "mvdanVersion": "mvdan.cc/sh/v3",
+  "mvdanVersion": "mvdan.cc/sh/v3 v3.13.1",
   "protocolVersion": 3,
   "sourceHead": "5d25d2cba6baeae0d725bc8e4c7afb21745fab5a"
 }
