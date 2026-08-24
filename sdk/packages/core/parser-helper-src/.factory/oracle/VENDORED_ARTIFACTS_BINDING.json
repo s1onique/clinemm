@@ -1,14 +1,39 @@
 {
-  "sourceHead": "cb6d08f8b733b06b4bceb8ce625f5a14de52a3cb",
+  "artifacts": [
+    {
+      "bytes": 2568210,
+      "path": "sdk/packages/core/bin/parser-helper/darwin-arm64/cline-parser-helper",
+      "sha256": "6eb885fc8907cde9732a35e83666de7c16ed832b969b5dbb24ea6661615bd4da",
+      "target": "darwin-arm64"
+    },
+    {
+      "bytes": 2666704,
+      "path": "sdk/packages/core/bin/parser-helper/darwin-amd64/cline-parser-helper",
+      "sha256": "16203f6d0e912307d987d7f8dc9b995b408d47abccbe4250d21ee52c853707bb",
+      "target": "darwin-amd64"
+    },
+    {
+      "bytes": 2490552,
+      "path": "sdk/packages/core/bin/parser-helper/linux-amd64/cline-parser-helper",
+      "sha256": "e68e3301461aa8530e1da3eb4da86dbca8c4c0f01230a412d2c0e2f655badd07",
+      "target": "linux-amd64"
+    },
+    {
+      "bytes": 2425016,
+      "path": "sdk/packages/core/bin/parser-helper/linux-arm64/cline-parser-helper",
+      "sha256": "6df4bf7b9d755eec1f969667238ba08a83717faf5f29d731a485a71b6af0cbf4",
+      "target": "linux-arm64"
+    },
+    {
+      "bytes": 2591744,
+      "path": "sdk/packages/core/bin/parser-helper/win32-x64/cline-parser-helper.exe",
+      "sha256": "57dcf3e5a95ee97cc3afb598a659a39e95f45d39879fbd439224884a6d044ef9",
+      "target": "win32-x64"
+    }
+  ],
+  "frozenAt": "phase3-dblquote-context-fix + promoted-to-vendor",
   "goVersion": "go1.25.8",
   "mvdanVersion": "mvdan.cc/sh/v3",
-  "frozenAt": "phase3-dblquote-context-fix",
   "protocolVersion": 3,
-  "artifacts": [
-    {"target": "darwin-arm64", "path": "sdk/packages/core/bin/parser-helper/darwin-arm64/cline-parser-helper", "bytes": 2568210, "sha256": "6eb885fc8907cde9732a35e83666de7c16ed832b969b5dbb24ea6661615bd4da"},
-    {"target": "darwin-amd64", "path": "sdk/packages/core/bin/parser-helper/darwin-amd64/cline-parser-helper", "bytes": 2666704, "sha256": "16203f6d0e912307d987d7f8dc9b995b408d47abccbe4250d21ee52c853707bb"},
-    {"target": "linux-amd64", "path": "sdk/packages/core/bin/parser-helper/linux-amd64/cline-parser-helper", "bytes": 2490552, "sha256": "e68e3301461aa8530e1da3eb4da86dbca8c4c0f01230a412d2c0e2f655badd07"},
-    {"target": "linux-arm64", "path": "sdk/packages/core/bin/parser-helper/linux-arm64/cline-parser-helper", "bytes": 2425016, "sha256": "6df4bf7b9d755eec1f969667238ba08a83717faf5f29d731a485a71b6af0cbf4"},
-    {"target": "win32-x64", "path": "sdk/packages/core/bin/parser-helper/win32-x64/cline-parser-helper.exe", "bytes": 2591744, "sha256": "57dcf3e5a95ee97cc3afb598a659a39e95f45d39879fbd439224884a6d044ef9"}
-  ]
+  "sourceHead": "5d25d2cba6baeae0d725bc8e4c7afb21745fab5a"
 }
