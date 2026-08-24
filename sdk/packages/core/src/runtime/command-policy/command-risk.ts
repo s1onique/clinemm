@@ -50,6 +50,7 @@ import {
 	evaluateCommandPolicy,
 } from "./command-policy";
 import { isOpaqueShellRendered } from "./command-safe-rules";
+import type { WorkspacePathAuthorityEvidence } from "./path-authority-evidence";
 import {
 	evaluateStructuredCommandRisk,
 	isParserProvenSource,
@@ -590,23 +591,22 @@ export function evaluateCommandRiskWithParser(
 		const hasParserProvenLeaf = v2.perStatement.some((s) =>
 			isParserProvenSource(s.source),
 		);
-		// CORRECTION02: detect whether any reachable leaf in the
-		// structured program is from the R0 read-only path-bearing
-		// source set (`host_safe_ls`, `host_safe_find`). When true,
-		// the parser-proven promotion gate refuses to promote
-		// unless the host has supplied `pathAuthorityEvidence`
-		// (the same gate V1 applies per-command for these leaves).
-		// This closes the new positive-V2-capability bypass where
-		// `ls <path> | head -30` (no evidence) was ALLOW-able via
-		// the parser-proven `head` leaf alone: V1 sees the pipe as
-		// one opaque shape and emits `host_mode_safe_only_fallthrough`
-		// (which IS in the promotable set), and V2 saw a
-		// parser-proven `head` leaf. The walk in
-		// `stmtContainsPathBearingLeaf` makes the path-bearing leaf
-		// visible to V2 regardless of how deeply it is nested in a
-		// pipe/and/or/subshell.
-		const pathBearingLeafRequiresEvidence =
-			v2.containsPathBearingLeaf &&
+		// CORRECTION03: bind the structured-program R0 path-bearing
+		// operands to the host's canonical path-authority evidence.
+		// The CORRECTION02 `containsPathBearingLeaf` boolean was a
+		// mere presence check and left a residual
+		// HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND bypass:
+		// an unrelated valid evidence record (e.g. one whose operands
+		// belong to a different command) satisfied the presence test
+		// and unlocked promotion. CORRECTION03 closes this by
+		// requiring per-operand identity + canonical containment
+		// binding (delegated to V1's
+		// `evaluateCommandRealpathConformance`).
+		const pathBearingEvidenceBound = pathBearingOperandsBound(
+			v2.pathBearingOperands,
+			input.hostAuthorization.pathAuthorityEvidence,
+		);
+		const pathBearingEvidenceMissing = v2.pathBearingOperands.length > 0 &&
 			input.hostAuthorization.pathAuthorityEvidence === undefined;
 		const isParserProvenPromotion =
 			hasParserProvenLeaf &&
@@ -623,17 +623,23 @@ export function evaluateCommandRiskWithParser(
 			// ASK sources later has no effect here as long as they
 			// remain outside `STRUCTURE_ONLY_PROMOTABLE_REASONS`.
 			isStructureOnlyPromotableAsk(finalSource) &&
-			// CORRECTION02 path-authority-evidence gate:
-			// refuse to promote when any reachable leaf is from the
-			// R0 path-bearing set and the host has NOT supplied
-			// path authority evidence. The host is the source of
-			// truth for path authority (CORRECTION02); V2 cannot
-			// infer containment from the parser's static argv.
-			// When evidence IS supplied, the per-command ALLOW
-			// contract is honored (the path-bearing leaf authority
-			// gate is delegated to V1's per-command resolution
-			// path, which already validates the evidence).
-			!pathBearingLeafRequiresEvidence &&
+			// CORRECTION03 path-authority binding gate:
+			// refuse to promote when the structured program contains
+			// any R0 path-bearing operand AND the host's evidence is
+			// either missing OR not bound to those operands. The
+			// binding contract is defined in `pathBearingOperandsBound`
+			// below: per-operand identity + per-operand canonical
+			// containment (delegated to V1's
+			// `evaluateCommandRealpathConformance`). When evidence IS
+			// bound AND conforming, the per-command ALLOW contract is
+			// honored. Pre-CORRECTION03 this gate fired on mere
+			// presence (`pathBearingLeafRequiresEvidence`), which
+			// allowed capability aliasing: an unrelated valid
+			// evidence record satisfied the presence check. The
+			// `pathBearingEvidenceMissing` signal is surfaced as a
+			// reason so the operator sees the binding failure.
+			!pathBearingEvidenceMissing &&
+			pathBearingEvidenceBound &&
 			v2.promoteToAllow;
 		if (isParserProvenPromotion) {
 			finalDecision = "allow";
@@ -645,7 +651,7 @@ export function evaluateCommandRiskWithParser(
 		// in Phase 2; the parser-proven path does NOT take this branch
 		// because its finalSource has already been overwritten above.
 		//
-		// CORRECTION02: same path-bearing-evidence gate as
+		// CORRECTION03: same operand-binding gate as
 		// `isParserProvenPromotion` applies. Without this gate, the
 		// v2StructureCausedAsk branch would still ALLOW a pipe
 		// `ls <path> | head -30` (no evidence) whenever the V1
@@ -658,7 +664,8 @@ export function evaluateCommandRiskWithParser(
 			finalDecision === "ask" &&
 			finalDisposition !== "never-auto-approve" &&
 			isStructureOnlyPromotableAsk(finalSource) &&
-			!pathBearingLeafRequiresEvidence &&
+			!pathBearingEvidenceMissing &&
+			pathBearingEvidenceBound &&
 			opaqueCommands.length > 0;
 		if (v2StructureCausedAsk) {
 			// Load-bearing monotonicity invariant: V2 may NEVER
@@ -699,4 +706,89 @@ export function evaluateCommandRiskWithParser(
 		parseConfidence,
 		source: finalSource,
 	};
+}
+
+/* ---------------------------------------------------------------------- *
+ * CORRECTION03: R0 path-bearing operand/evidence binding                *
+ * ---------------------------------------------------------------------- *
+ *
+ * Bind structured-program R0 leaf operands to the host's
+ * canonical `WorkspacePathAuthorityEvidence`. The contract:
+ *
+ *   For every entry `e` in `pathBearingOperands`:
+ *     1. Every operand in `e.operands` MUST have a matching
+ *        entry in `evidence.operands[*]` whose `operand` field
+ *        equals the operand VERBATIM (operand identity). The
+ *        match is by IDENTITY, not by index: the host may have
+ *        supplied evidence for operands that the structured
+ *        program does not actually use (the host is authorized
+ *        to over-supply). The structured program MUST NOT use
+ *        any operand the host did not authorize.
+ *
+ *   Identity is the same rule V1's per-command path gate uses
+ *   (`command-policy.ts` lines 333-345) -- verbatim string
+ *   equality with the extracted operand. This rejects evidence
+ *   records forged for a different command.
+ *
+ *     2. The matching entry MUST have `contained: true` AND
+ *        `resolvedRealPath !== null` (resolution + containment
+ *        authorized). Resolution failures (`resolvedRealPath:
+ *        null`) fail closed per the evidence contract.
+ *
+ *   The host MAY supply evidence for operands the structured
+ *   program does not use; the binder ignores those (the host
+ *   is authorized to over-supply). The structured program MUST
+ *   NOT consume an operand the host did not authorize (this is
+ *   the load-bearing identity check).
+ *
+ * This closes HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND:
+ * the pre-CORRECTION03 gate fired on mere *presence* of any
+ * evidence object (capability aliasing); CORRECTION03 fires on
+ * per-operand identity + canonical containment + canonical
+ * resolution.
+ */
+export function pathBearingOperandsBound(
+	pathBearingOperands: ReadonlyArray<{
+		readonly source: string;
+		readonly operands: ReadonlyArray<string>;
+	}>,
+	evidence: WorkspacePathAuthorityEvidence | undefined,
+): boolean {
+	if (pathBearingOperands.length === 0) {
+		return true;
+	}
+	if (evidence === undefined) {
+		return false;
+	}
+	// Build a lookup by operand identity. Host evidence entries
+	// are assumed to be unique by `.operand` (the host builds one
+	// entry per extracted path operand in V1's
+	// `extractPathOperands` flow). If the host supplied duplicate
+	// entries for the same operand, we use the FIRST one.
+	const byOperand = new Map<string, (typeof evidence.operands)[number]>();
+	for (const e of evidence.operands) {
+		if (!byOperand.has(e.operand)) {
+			byOperand.set(e.operand, e);
+		}
+	}
+	// Iterate every structured R0 operand and require an
+	// identity-bound evidence entry whose resolution +
+	// containment authorize it.
+	for (const leaf of pathBearingOperands) {
+		for (const operand of leaf.operands) {
+			const ev = byOperand.get(operand);
+			if (ev === undefined) {
+				return false;
+			}
+			// Fail-closed: unresolved operand (null realpath)
+			// is never ALLOW-able.
+			if (ev.resolvedRealPath === null) {
+				return false;
+			}
+			if (ev.contained !== true) {
+				return false;
+			}
+		}
+	}
+	return true;
 }

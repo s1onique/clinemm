@@ -1303,3 +1303,177 @@ describe(
 	},
 );
 
+
+/* ---------------------------------------------------------------------- *
+ * Section L: per-operand identity binding (CORRECTION03)
+ * ---------------------------------------------------------------------- *
+ *
+ * ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01-CORRECTION03
+ *
+ * Reviewer disposition of CORRECTION02 closure:
+ *   HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND
+ *
+ * The CORRECTION02 gate fired on mere *presence* of any
+ * `pathAuthorityEvidence` object. That allowed capability
+ * aliasing: a pipe `ls /etc/passwd | head -30` plus an
+ * unrelated valid evidence record (whose operands belonged to
+ * a different command) satisfied the presence test and
+ * unlocked promotion. CORRECTION03 closes this by replacing
+ * the presence check with per-operand identity + canonical
+ * containment binding.
+ *
+ * The 4-way RED matrix locked in here is the canonical
+ * adversarial discriminator the reviewer demanded:
+ *
+ *   (a) correct operand + valid evidence   -> ALLOW
+ *   (b) correct operand + missing evidence -> ASK
+ *   (c) wrong operand + valid evidence     -> ASK
+ *   (d) symlink escape + matching evidence -> ASK
+ *
+ * These cases exercise the new `pathBearingOperandsBound`
+ * helper directly: per-operand identity binding plus per-
+ * operand containment. Pre-CORRECTION03 the gate fired on
+ * (c) and ALLOW'd (because evidence was present). CORRECTION03
+ * identifies that the structured `ls` operand has no matching
+ * evidence entry (because the evidence record is for a
+ * different file) and refuses promotion.
+ */
+
+describe(
+	"structured-command-risk -- per-operand identity binding (CORRECTION03)",
+	() => {
+		let TMP_ROOT: string;
+		let PROJECT_DIR: string;
+		let INSIDE_FILE: string;
+		let SYMLINK_INSIDE_PROJECT: string;
+		let helper: MvdanShHelper;
+
+		beforeAll(() => {
+			TMP_ROOT = mkdtempSync(join(tmpdir(), "cline-correction03-binding-"));
+			PROJECT_DIR = join(TMP_ROOT, "project");
+			const OUTSIDE_DIR = join(TMP_ROOT, "outside");
+			mkdirSync(PROJECT_DIR, { recursive: true });
+			mkdirSync(join(PROJECT_DIR, "inside"), { recursive: true });
+			mkdirSync(OUTSIDE_DIR, { recursive: true });
+			INSIDE_FILE = join(PROJECT_DIR, "inside", "ok.ts");
+			SYMLINK_INSIDE_PROJECT = join(PROJECT_DIR, "escape-link");
+			writeFileSync(INSIDE_FILE, "// inside\n");
+			writeFileSync(join(OUTSIDE_DIR, "secret.txt"), "// outside\n");
+			symlinkSync(OUTSIDE_DIR, SYMLINK_INSIDE_PROJECT, "dir");
+			helper = new MvdanShHelper({
+				platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
+				binaryPath: () => HELPER_PATH as string,
+			});
+		});
+
+		afterAll(() => {
+			if (TMP_ROOT && existsSync(TMP_ROOT)) {
+				rmSync(TMP_ROOT, { recursive: true, force: true });
+			}
+		});
+
+		function evidenceFor(cmd: string) {
+			const result = buildPathAuthorityEvidence({
+				workspaceRoots: [PROJECT_DIR],
+				cwd: PROJECT_DIR,
+				command: { command: cmd },
+			});
+			if (!result.ok) {
+				throw new Error(
+					`buildPathAuthorityEvidence failed: reason=${result.reason}`,
+				);
+			}
+			return result.evidence;
+		}
+
+		function authWith(evidence?: ReturnType<typeof evidenceFor>) {
+			return commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: [PROJECT_DIR],
+				cwd: PROJECT_DIR,
+				pathAuthorityEvidence: evidence,
+			});
+		}
+
+		async function evaluate(cmd: string, evidence?: ReturnType<typeof evidenceFor>) {
+			const parsed = await helper.invoke({ command: cmd })
+			return evaluateCommandRiskWithParser({
+				toolInput: cmd,
+				hostAuthorization: authWith(evidence),
+				parserResult: parsed ?? undefined,
+			})
+		}
+
+		// -- 4-way discriminator --
+
+		it("(a) GREEN: correct operand + valid evidence -> ALLOW", async () => {
+			const cmd = `ls ${INSIDE_FILE} | head -30`
+			const evidence = evidenceFor(cmd)
+			const r = await evaluate(cmd, evidence)
+			expect(r.decision).toBe("allow")
+			expect(r.disposition).toBe("auto-approve-eligible")
+			expect(r.source).toBe("risk_v2_structured_promotion")
+		})
+
+		it("(b) RED: correct operand + missing evidence -> ASK", async () => {
+			const cmd = `ls ${INSIDE_FILE} | head -30`
+			const r = await evaluate(cmd, undefined)
+			expect(r.decision).toBe("ask")
+			expect(r.source).not.toBe("risk_v2_structured_promotion")
+		})
+
+		it("(c) RED (the HALT case): wrong operand + valid evidence -> ASK", async () => {
+			// The reviewer demanded this case be RED. The pipe is
+			// for /etc/passwd; the host supplied evidence for
+			// the inside file. CORRECTION03 must identify that
+			// the structured operand has no matching evidence
+			// entry (the host didn't supply evidence for
+			// /etc/passwd) and refuse promotion. Pre-CORRECTION03
+			// the gate fired on mere presence and ALLOW'd.
+			const cmd = `ls /etc/passwd | head -30`
+			const evidence = evidenceFor(`ls ${INSIDE_FILE}`)
+			const r = await evaluate(cmd, evidence)
+			expect(r.decision).toBe("ask")
+			expect(r.source).not.toBe("risk_v2_structured_promotion")
+		})
+
+		it("(d) RED: symlink escape + matching evidence -> ASK", async () => {
+			// The reviewer demanded this case be RED. The pipe
+			// operand is a symlink to /outside. The host supplied
+			// evidence for a DIFFERENT operand (the inside file),
+			// but the structured program uses the SYMLINK. The
+			// matching evidence entry would have `contained:
+			// false` because realpath resolves outside workspace
+			// roots. CORRECTION03 must identify that the symlink
+			// operand's matching evidence entry is uncontained
+			// and refuse promotion.
+			const cmd = `ls ${SYMLINK_INSIDE_PROJECT} | head -30`
+			const evidence = evidenceFor(cmd)
+			// evidenceFor above will produce entries for the
+			// symlink operand (which realpath resolves outside
+			// the workspace roots) -- they MUST be `contained:
+			// false` or `resolvedRealPath: null` per the
+			// evidence builder contract. CORRECTION03 fires the
+			// gate.
+			const r = await evaluate(cmd, evidence)
+			expect(r.decision).toBe("ask")
+			expect(r.source).not.toBe("risk_v2_structured_promotion")
+		})
+
+		// -- Pathless composition conservation --
+
+		it("ALLOW (conservation): `echo hello | head -30` (no path authority)", async () => {
+			const r = await evaluate(`echo hello | head -30`)
+			expect(r.decision).toBe("allow")
+			expect(r.disposition).toBe("auto-approve-eligible")
+		})
+
+		it("ALLOW (conservation): `pwd && head -30` (no path authority)", async () => {
+			const r = await evaluate(`pwd && head -30`)
+			expect(r.decision).toBe("allow")
+			expect(r.disposition).toBe("auto-approve-eligible")
+		})
+	},
+)
+

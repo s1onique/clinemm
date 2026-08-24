@@ -274,17 +274,30 @@ export type StructuredRisk =
  * that an R5-shaped inner command exists, so V2 may strengthen the
  * disposition to `never-auto-approve` even when V1 said ASK.
  *
- * `containsPathBearingLeaf` (CORRECTION02): true iff at least one
- * reachable leaf in the structured program belongs to the R0
- * read-only path-bearing source set (today `host_safe_ls` and
- * `host_safe_find`). When true, the V2 promotion gate in
- * `command-risk.ts` MUST additionally require the host to have
- * supplied `WorkspacePathAuthorityEvidence` matching the leaf's
- * operands; otherwise the gate refuses to promote. This is the
- * surgical seam that prevents a pipe such as
- * `ls <path> | head -30` (no evidence) from being ALLOW'd via
- * parser-proven promotion of the `head` leaf while the `ls`
- * operand escapes host path authority.
+ * `pathBearingOperands` (CORRECTION03): the list of every reachable
+ * R0 read-only path-bearing leaf in the structured program. Each
+ * entry is `{ source, operands }` where `source` is the
+ * `findSafeRuleMatch` source string for that leaf (e.g.
+ * `"host_safe_ls"`) and `operands` is the list of path operands
+ * extracted from the leaf's argv (skipping options and `--`).
+ *
+ * Why this is the binding key: when V2 sees a parser-proven leaf
+ * inside a composition (e.g. `ls <path> | head -30`), the V1 R0
+ * path-authority gate does NOT fire because V1 sees the pipe as
+ * one opaque shape. The V2 promotion gate therefore must perform
+ * the operand-by-operand evidence binding itself: every operand
+ * here must have a matching entry in the host's
+ * `pathAuthorityEvidence.operands` whose `operand` field equals
+ * this operand verbatim AND whose `contained: true` AND whose
+ * `resolvedRealPath !== null`. Any missing/mismatched/uncontained
+ * operand fails closed (refuse promotion). This closes
+ * HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND: the
+ * pre-CORRECTION03 gate fired on mere presence of any evidence
+ * object; CORRECTION03 fires on per-operand identity + canonical
+ * containment. CORRECTION02 introduced the walker; CORRECTION03
+ * turns the walker's output into the binding key.
+ *
+ * Empty when no R0 path-bearing leaf exists in the program.
  */
 export interface StructuredAnalysis {
 	readonly parseConfidence: "complete" | "partial" | "failed" | "skipped";
@@ -292,7 +305,10 @@ export interface StructuredAnalysis {
 	readonly aggregate: StructuredRisk;
 	readonly promoteToAllow: boolean;
 	readonly downgradeToNeverAutoApprove: boolean;
-	readonly containsPathBearingLeaf: boolean;
+	readonly pathBearingOperands: ReadonlyArray<{
+		readonly source: string;
+		readonly operands: ReadonlyArray<string>;
+	}>;
 	readonly reasons: ReadonlyArray<string>;
 }
 
@@ -578,7 +594,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
-			containsPathBearingLeaf: false,
+			pathBearingOperands: [],
 			reasons: ["structured analysis skipped (no parser result provided)"],
 		};
 	}
@@ -597,7 +613,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
-			containsPathBearingLeaf: false,
+			pathBearingOperands: [],
 			reasons: [
 				`structured analysis skipped (protocol version ${parserResult.protocolVersion} != ${STRUCTURED_PROTO_VERSION} and != 2)`,
 			],
@@ -615,7 +631,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
-			containsPathBearingLeaf: false,
+			pathBearingOperands: [],
 			reasons: [
 				"structured analysis skipped (parser reported parse failure)",
 				...parserResult.errors,
@@ -634,7 +650,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
-			containsPathBearingLeaf: false,
+			pathBearingOperands: [],
 			reasons: [`structured analysis skipped (${bindingFailure})`],
 		};
 	}
@@ -648,7 +664,7 @@ export function evaluateStructuredCommandRisk(args: {
 			aggregate: "ask",
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
-			containsPathBearingLeaf: false,
+			pathBearingOperands: [],
 			reasons: ["structured analysis opaque (command substitution present)"],
 		};
 	}
@@ -668,16 +684,15 @@ export function evaluateStructuredCommandRisk(args: {
 
 	const aggregate = maxRisk(perStmt.map((s) => s.risk));
 
-	// CORRECTION02: walk the structured program AST and detect
-	// path-bearing leaves from the R0 read-only set
-	// (`host_safe_ls`, `host_safe_find`). The aggregation above
-	// collapses leaves to `aggregated-pipe`/`aggregated-and`/
-	// `aggregated-or`, so we cannot rely on perStmt sources for
-	// the predicate. The AST walk uses each leaf's per-stmt
-	// classification (NOT a regex match on the rendered argv)
-	// because the rendered argv is what V1 already handles; the
-	// surgical seam is at the V2 boundary.
-	const containsPathBearingLeaf = stmtContainsPathBearingLeaf(
+	// CORRECTION03: walk the structured program AST and collect
+	// every reachable R0 read-only path-bearing leaf's source +
+	// extracted path operands. The result is the binding key the
+	// V2 promotion gate in `command-risk.ts` uses to validate the
+	// host's `pathAuthorityEvidence` operand-by-operand against
+	// the structured-program operands (not merely against an
+	// evidence object presence check, which CORRECTION02 left as
+	// the residual HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND).
+	const pathBearingOperands = collectPathBearingOperands(
 		parserResult.program,
 		parserResult.dialect,
 		parserResult.protocolVersion,
@@ -688,9 +703,10 @@ export function evaluateStructuredCommandRisk(args: {
 	//    auto-approve-eligible. The caller in `command-risk.ts`
 	//    adds the ASK-source admissibility check
 	//    (`isStructureOnlyPromotableAsk`) AND, when
-	//    `containsPathBearingLeaf` is true, requires
-	//    `hostAuthorization.pathAuthorityEvidence` to be present
-	//    (the path-bearing leaf authority gate; see CORRECTION02).
+	//    `pathBearingOperands` is non-empty, requires
+	//    `hostAuthorization.pathAuthorityEvidence` whose entries
+	//    bind to these operands verbatim AND whose containment +
+	//    resolution status authorize each operand (CORRECTION03).
 	const promote = dialectCapable && aggregate === "auto-approve-eligible";
 	const downgrade = aggregate === "never-auto-approve";
 
@@ -700,9 +716,14 @@ export function evaluateStructuredCommandRisk(args: {
 			`structured analysis dialect ${parserResult.dialect} not promotion-capable`,
 		);
 	}
-	if (containsPathBearingLeaf) {
+	if (pathBearingOperands.length > 0) {
+		const leafCount = pathBearingOperands.length;
+		const operandCount = pathBearingOperands.reduce(
+			(acc, e) => acc + e.operands.length,
+			0,
+		);
 		reasons.push(
-			"structured analysis detected R0 path-bearing leaf (host path authority evidence required for promotion)",
+			`structured analysis extracted ${operandCount} R0 path-bearing operand(s) across ${leafCount} leaf(s) (CORRECTION03 operand-binding gate required for promotion)`,
 		);
 	}
 	reasons.push(...summarizeReasons(perStmt, aggregate));
@@ -713,7 +734,7 @@ export function evaluateStructuredCommandRisk(args: {
 		aggregate,
 		promoteToAllow: promote,
 		downgradeToNeverAutoApprove: downgrade,
-		containsPathBearingLeaf,
+		pathBearingOperands,
 		reasons,
 	};
 }
@@ -1186,80 +1207,112 @@ function renderArgv(cmd: StructuredCmd): string {
 }
 
 /**
- * CORRECTION02: walk the structured program AST and detect
- * whether ANY reachable leaf is from the R0 read-only
- * path-bearing source set (`host_safe_ls`, `host_safe_find`).
+ * CORRECTION03: walk the structured program AST and collect every
+ * reachable R0 read-only path-bearing leaf's source + extracted
+ * path operands. The list is the binding key the V2 promotion
+ * gate in `command-risk.ts` uses to validate the host's
+ * `pathAuthorityEvidence` operand-by-operand.
  *
- * This predicate operates by re-classifying each leaf via
- * `classifyStmt(stmt, ..., dialect, protocolVersion)`, then
- * inspecting the leaf's `source`. It does NOT inspect the
- * rendered argv (that is V1's job); the surgical seam is at
- * the V2 boundary, and the source string is the canonical
- * positive match from V1's `findSafeRuleMatch`.
+ * Why a list and not a boolean:
+ *   CORRECTION02 used a `containsPathBearingLeaf: boolean` flag,
+ *   which caused the V2 gate to fire on mere *presence* of any
+ *   evidence object. That left a residual
+ *   HALT_PIPELINE_PATH_EVIDENCE_NOT_BOUND_TO_OPERAND bypass:
+ *   `ls /etc/passwd | head -30` plus an unrelated valid evidence
+ *   record satisfied the presence test and unlocked promotion.
+ *   CORRECTION03 replaces the boolean with the per-leaf operand
+ *   list. The V2 gate now refuses promotion when ANY operand in
+ *   this list is missing a matching `evidence.operands[i]` entry
+ *   whose `operand` field equals the operand verbatim AND whose
+ *   `contained: true` AND whose `resolvedRealPath !== null`.
  *
- * Why this matters: without this walk, a pipe
- *
- *   `ls <path> | head -30`
- *
- * is aggregated by `classifyStmt` to `aggregated-pipe`
- * (collapsing the constituent leaves) and the V2 promotion
- * gate sees only the parser-proven `head` leaf. The host
- * path-authority evidence for the `ls` operand is required
- * for a per-command ALLOW (V1 already enforces this), but
- * the V2 promotion gate was bypassing the requirement. This
- * walker makes the path-bearing leaf visible to V2.
- *
- * Failure mode: if `classifyStmt` cannot determine the leaf's
- * source (e.g. on `no-rule-match`, `risk:hard-floor:*`, or
- * `redirect-sensitive-write-*`), the leaf is NOT path-bearing
- * for the purposes of this predicate — V1's own gates are
- * the load-bearing boundary for those cases.
+ * Path operand extraction follows the same shape-of-input
+ * contract as V1's `extractPathOperands(NormalizedCommand)`
+ * (skip options, skip `--`); we re-derive it here so the V2
+ * walker operates on the structured-cmd shape without forcing
+ * the structured walker to fabricate a `NormalizedCommand`.
  */
-function stmtContainsPathBearingLeaf(
+function collectPathBearingOperands(
 	program: StructuredProgram,
 	dialect: ShellDialect,
 	protocolVersion: number,
-): boolean {
+): ReadonlyArray<{ source: string; operands: ReadonlyArray<string> }> {
+	const out: Array<{ source: string; operands: ReadonlyArray<string> }> = [];
 	for (const stmt of program.stmts) {
-		if (stmtHasPathBearingLeaf(stmt, dialect, protocolVersion)) {
-			return true;
-		}
+		collectFromStmt(stmt, dialect, protocolVersion, out);
 	}
-	return false;
+	return out;
 }
 
-function stmtHasPathBearingLeaf(
+function collectFromStmt(
 	stmt: StructuredStmt,
 	dialect: ShellDialect,
 	protocolVersion: number,
-): boolean {
+	out: Array<{ source: string; operands: ReadonlyArray<string> }>,
+): void {
 	switch (stmt.kind) {
 		case "cmd": {
-			// Classify the leaf directly via the per-cmd dispatcher.
-			// We only care about the SOURCE string here, not the
-			// risk; a path-bearing leaf's source is in the R0 set
-			// regardless of its risk.
+			// Classify the leaf via the per-cmd dispatcher and only
+			// record it when the leaf's source is in the R0
+			// path-bearing set. We do NOT inspect the rendered argv;
+			// the source string is the canonical positive match from
+			// V1's `findSafeRuleMatch`.
 			const leaf = classifyCmd(stmt.cmd, 0, dialect, protocolVersion);
-			return isR0PathBearingRuleSource(leaf.source);
+			if (isR0PathBearingRuleSource(leaf.source)) {
+				const operands = extractPathOperandsFromStructured(stmt.cmd);
+				out.push({ source: leaf.source, operands });
+			}
+			return;
 		}
 		case "and":
 		case "or":
 		case "pipe":
-			return (
-				stmtHasPathBearingLeaf(stmt.left, dialect, protocolVersion) ||
-				stmtHasPathBearingLeaf(stmt.rhs, dialect, protocolVersion)
-			);
+			collectFromStmt(stmt.left, dialect, protocolVersion, out);
+			collectFromStmt(stmt.rhs, dialect, protocolVersion, out);
+			return;
 		case "subshell":
-			return stmtHasPathBearingLeaf(
-				stmt.inner,
-				dialect,
-				protocolVersion,
-			);
+			collectFromStmt(stmt.inner, dialect, protocolVersion, out);
+			return;
 		case "opaque":
-			return false;
+			return;
 		default:
-			return false;
+			return;
 	}
+}
+
+/**
+ * Extract path operands from a structured cmd argv. Mirrors V1's
+ * `extractPathOperands(NormalizedCommand)` shape contract: skip
+ * any token beginning with `-` (option) or equal to `--`
+ * (option terminator); the remainder are path-position
+ * candidates. Used by the CORRECTION03 walker to build the
+ * binding key the V2 promotion gate validates against
+ * `pathAuthorityEvidence.operands[]`.
+ *
+ * IMPORTANT: this is the SHAPE contract, not the lexical
+ * containment contract. The host already supplied a
+ * canonicalized `resolvedRealPath` for each operand in the
+ * evidence; we only need to enumerate the operand positions
+ * here. Containment + resolution are V1's job.
+ */
+function extractPathOperandsFromStructured(cmd: StructuredCmd): ReadonlyArray<string> {
+	const out: string[] = [];
+	let sawDoubleDash = false;
+	for (const a of cmd.args) {
+		if (sawDoubleDash) {
+			out.push(a);
+			continue;
+		}
+		if (a === "--") {
+			sawDoubleDash = true;
+			continue;
+		}
+		if (a.startsWith("-")) {
+			continue;
+		}
+		out.push(a);
+	}
+	return out;
 }
 
 function maxRisk(risks: ReadonlyArray<StructuredRisk>): StructuredRisk {
