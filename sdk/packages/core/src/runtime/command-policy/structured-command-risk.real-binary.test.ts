@@ -182,9 +182,12 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 	 * The exact LIVE-failing command from the ACT.
 	 *
 	 * POST-CORRECTION01 expected: ALLOW + risk_v2_structured_promotion.
-	 * PRE-CORRECTION01 (the bug): ASK.
+	 * POST-CORRECTION02 CONTAINMENT (current): ASK (the V2 parsed-argv
+	 *   ALLOW branch was removed; the simple compound no longer
+	 *   auto-promotes). The chain will become ALLOW again once
+	 *   parser-proven shellStatic provenance lands (CORRECTION02 proper).
 	 */
-	it("echo '---BRANCH---' && git status --short -> ALLOW (real-helper driven)", async () => {
+	it("echo '---BRANCH---' && git status --short -> ASK under containment (real-helper driven)", async () => {
 		if (!HELPER_PATH) return;
 		const liveCmd = "echo '---BRANCH---' && git status --short";
 		const parsed = await helper.invoke({ command: liveCmd });
@@ -196,16 +199,25 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 			hostAuthorization: SAFE,
 			parserResult: parsed,
 		});
-		expect(r.decision).toBe("allow");
-		expect(r.disposition).toBe("auto-approve-eligible");
-		expect(r.source).toBe("risk_v2_structured_promotion");
+		// Containment pins ASK. The user's LIVE chain ASK is by design;
+		// the live helper binary is unchanged so parser output is
+		// identical, but the V2 promotion that previously flipped the
+		// V1 ASK to ALLOW is gone.
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
 	});
 
 	/**
 	 * The exact five-leaf chain that started this ACT. Drives the
 	 * real parser, then exercises the full V2 pipeline.
+	 *
+	 * POST-CORRECTION01 expected: ALLOW + risk_v2_structured_promotion.
+	 * POST-CORRECTION02 CONTAINMENT (current): ASK. The chain will
+	 *   become ALLOW again once parser-proven shellStatic provenance
+	 *   lands (ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 +
+	 *   CORRECTION02 proper).
 	 */
-	it("user's exact 5-leaf && chain -> ALLOW (real-helper driven)", async () => {
+	it("user's exact 5-leaf && chain -> ASK under containment (real-helper driven)", async () => {
 		if (!HELPER_PATH) return;
 		const liveCmd =
 			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v";
@@ -218,9 +230,8 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 			hostAuthorization: SAFE,
 			parserResult: parsed,
 		});
-		expect(r.decision).toBe("allow");
-		expect(r.disposition).toBe("auto-approve-eligible");
-		expect(r.source).toBe("risk_v2_structured_promotion");
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
 	});
 
 	/**

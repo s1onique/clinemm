@@ -125,8 +125,9 @@ const isSupportedPlatform =
 // platforms). This replaces the original pattern of `if (!HELPER_PATH)
 // return;` per test which silently reported GREEN on a supported
 // platform with no helper binary present.
-const describeWithHelper: typeof describe =
-	HELPER_PATH || isSupportedPlatform ? describe : describe.skip;
+const describeWithHelper = (
+	HELPER_PATH || isSupportedPlatform ? describe : describe.skip
+) as typeof describe;
 
 if (!HELPER_PATH && isSupportedPlatform) {
 	// eslint-disable-next-line no-console
@@ -266,6 +267,25 @@ describeWithHelper(
 					src: "echo foo?",
 					why: "unquoted foo? pathname-expands single-char wildcard",
 				},
+				// -- Section C additions (containment): MUST ASK by design --
+				// The user's exact 5-leaf LIVE chain and the simpler
+				// compound ASK under containment because the V2 parsed-argv
+				// ALLOW path was removed. They will become ALLOW again when
+				// parser-proven shellStatic provenance lands
+				// (ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 +
+				// CORRECTION02 Section D below).
+				{
+					src: "git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v",
+					why: "user's exact LIVE chain ASK under containment (Section C: precision regression, security restored)",
+				},
+				{
+					src: "echo '---BRANCH---' && git status --short",
+					why: "simple compound (quoted echo + safe git) ASK under containment (was the LIVE-bug bypass)",
+				},
+				{
+					src: "echo '---BRANCH---' && echo '<(touch /tmp/nope)' && echo '{a,b}' && echo '*'",
+					why: "compound of all-quoted-literal leaves ASK under containment (Section C)",
+				},
 			];
 
 			for (const { src, why } of mustAsk) {
@@ -287,101 +307,36 @@ describeWithHelper(
 		// Section B: MUST ALLOW. Quoted literal data. Each form must be
 		// approved (decision === "allow" && disposition === "auto-approve-eligible").
 		// ----------------------------------------------------------------
-		describe("MUST ALLOW: quoted literal data (no active expansion)", () => {
-			const mustAllow: ReadonlyArray<{ src: string; why: string }> = [
-				// Single-quoted procsub syntax -- one literal arg
-				{
-					src: "echo '<(touch /tmp/nope)'",
-					why: "single quotes remove shell meaning",
-				},
-				{
-					src: "echo '<(/bin/rm -rf $HOME)'",
-					why: "single quotes remove shell meaning even when inner $HOME looks live",
-				},
-				// Single-quoted brace syntax
-				{ src: "echo '{a,b}'", why: "single quotes suppress brace expansion" },
-				{ src: "echo '{1..5}'", why: "single quotes suppress brace sequence" },
-				// Single-quoted cmd subst / arith / param
-				{
-					src: "echo '$(touch /tmp/nope)'",
-					why: "single quotes suppress command substitution",
-				},
-				{
-					src: "echo '$((1+2))'",
-					why: "single quotes suppress arithmetic expansion",
-				},
-				{
-					// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
-					src: "echo '${HOME}'",
-					why: "single quotes suppress parameter expansion",
-				},
-				// Single-quoted glob
-				{ src: "echo '*'", why: "single quotes suppress pathname expansion" },
-				{
-					src: "echo '$HOME'",
-					why: "single quotes suppress param expansion ($ is literal)",
-				},
-				// Shell metachars inside quotes
-				{
-					src: "echo 'foo; rm -rf /'",
-					why: "semicolon inside quotes is literal data",
-				},
-				{
-					src: "echo 'foo*bar'",
-					why: "glob char inside quotes is literal data",
-				},
-				{
-					src: "echo 'foo|bar'",
-					why: "pipe char inside quotes is literal data",
-				},
-				// The user's exact LIVE echo forms
+		describe("Section B1: MUST ALLOW under CONTAINMENT (V1 source-text echo rule suffices)", () => {
+			// V1's host_safe_echo regex matches the original
+			// source text for these forms (no compound, no
+			// &&, no $). Containment does not change this
+			// path; the source-text match gives ALLOW on its
+			// own.
+			// V1's host_safe_echo regex is anchored to SHELL SOURCE TEXT,
+			// not to parsed argv. Its quoted inner class is
+			// `[A-Za-z0-9 _.,:/+@%^-]*`, so only quoted forms whose inner
+			// characters are all in that class ALLOW via V1 alone. Under
+			// containment these are the only forms that V2 echoes can
+			// ALLOW (without parser-proven shellStatic provenance).
+			const mustAllowV1: ReadonlyArray<{ src: string; why: string }> = [
+				// The user's exact LIVE echo leaves (single + double
+				// quoted hyphen).
 				{
 					src: "echo '---BRANCH---'",
-					why: "user's LIVE echo leaf, single-quoted",
+					why: "user's LIVE echo leaf, single-quoted hyphen (V1 quoted class includes '-')",
 				},
 				{
 					src: "echo '---REMOTES---'",
-					why: "user's LIVE echo leaf, single-quoted",
+					why: "user's LIVE echo leaf, single-quoted hyphen (V1 quoted class includes '-')",
 				},
 				{
 					src: 'echo "---BRANCH---"',
-					why: "double-quoted equivalent of LIVE leaf",
+					why: "double-quoted equivalent of LIVE leaf (V1 quoted class includes '-')",
 				},
-				// Concatenation of literal parts
-				{
-					src: "echo 'foo'bar'baz'",
-					why: "concatenation of single-quoted + bare literal",
-				},
-				// User's exact 5-leaf LIVE chain (must ALLOW)
-				{
-					src: "git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v",
-					why: "user's exact LIVE chain: every expansion-bearing leaf is quoted",
-				},
-				// Compound where every quoted-literal leaf is wrapped
-				{
-					src: "echo '---BRANCH---' && echo '<(touch /tmp/nope)' && echo '{a,b}' && echo '*'",
-					why: "compound: all trailing leaves are quoted literal data",
-				},
-				// Beautiful discriminator pair:
-				//   "echo 'foo; rm -rf /'" -> safe one literal arg
-				//   "echo foo; rm -rf /"   -> shell composition / R5
-				// Already covered in the forms above but worth flagging
-				// again: the projection MUST distinguish them.
-				// --- Paired discriminators: tilde / glob / brace / bracket / question ---
-				// Same characters as the unquoted MUST ASK additions, but
-				// each inside single quotes, so shell expansion is fully
-				// suppressed. These prove the AST difference is preserved
-				// across quote context. If the classifier returns ASK for
-				// these, it is conflating quote context with expansion.
-				{ src: "echo '~'", why: "single-quoted tilde is literal" },
-				{ src: "echo '~/foo'", why: "single-quoted ~-prefix is literal" },
-				{ src: "echo 'foo{a,b}'", why: "single-quoted braces are literal" },
-				{ src: "echo 'foo*'", why: "single-quoted * is literal" },
-				{ src: "echo 'foo[ab]'", why: "single-quoted [ab] is literal" },
-				{ src: "echo 'foo?'", why: "single-quoted ? is literal" },
 			];
 
-			for (const { src, why } of mustAllow) {
+			for (const { src, why } of mustAllowV1) {
 				it(`ALLOW: ${src}`, async () => {
 					const parsed = await requireHelper().invoke({ command: src });
 					const r = evaluateCommandRiskWithParser({
@@ -392,6 +347,142 @@ describeWithHelper(
 					expect(
 						r.decision === "allow" && r.disposition === "auto-approve-eligible",
 						`Expected ALLOW/auto-approve-eligible for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+					).toBe(true);
+				});
+			}
+		});
+
+		// ----------------------------------------------------------------
+		// Section D: PARSER-PROVEN POSITIVE PROVENANCE TARGET (RED until shellStatic lands).
+		//
+		// Each form below contains quoted literal data whose visible
+		// characters fall outside V1's host_safe_echo quoted class
+		// (e.g. `{`, `}`, `*`, `?`, `[`, `]`, `<`, `>`, `)`, `$`, `` ` ``).
+		// Under containment (V2 parsed-argv ALLOW removed), each of these
+		// returns ASK by design.
+		//
+		// When CORRECTION02 lands via
+		// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01, the Go helper
+		// emits per-arg `shellStatic` provenance from the original
+		// mvdan/sh AST + quote context. V2 then ALLOWs any single-command
+		// echo whose every arg is `shellStatic: true`. The 19 forms
+		// below will turn GREEN at that point.
+		//
+		// Each paired form has a MUST ASK sibling in Section A above
+		// (e.g. echo ~ ↔ echo '~', echo * ↔ echo '*', etc.) to keep
+		// the bidirectional contract visible in one file.
+		//
+		// Run this section explicitly via:
+		//   bunx vitest run --config vitest.config.ts -t "Section D:"
+		// (Factory reviewer: "isolate it under a non-default RED
+		// target"; under containment these stay RED by design.)
+		// ----------------------------------------------------------------
+		describe("Section D: parser-proven positive provenance target (RED until shellStatic lands)", () => {
+			const mustAllowParserProven: ReadonlyArray<{ src: string; why: string }> =
+				[
+					// Quoted procsub / brace / param / arith / cmd-subst / glob.
+					// V1's host_safe_echo quoted class intentionally excludes these
+					// characters even when they appear inside quotes (defense in
+					// depth), so V1 ASKs; only positive parser-proven provenance
+					// can safely ALLOW them.
+					{
+						src: "echo '<(touch /tmp/nope)'",
+						why: "single-quoted <(...) is literal data, not procsub (paired with MUST ASK echo <(touch ...))",
+					},
+					{
+						src: "echo '<(/bin/rm -rf $HOME)'",
+						why: "single-quoted procsub-syntax with embedded $-marker is still literal",
+					},
+					{
+						src: "echo '{a,b}'",
+						why: "single-quoted brace list is literal data",
+					},
+					{
+						src: "echo '{1..5}'",
+						why: "single-quoted brace sequence is literal data",
+					},
+					{
+						src: "echo '$(touch /tmp/nope)'",
+						why: "single-quoted cmd-subst syntax is literal data",
+					},
+					{
+						src: "echo '$((1+2))'",
+						why: "single-quoted arith syntax is literal data",
+					},
+					{
+						// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
+						src: "echo '${HOME}'",
+						why: "single-quoted param-expansion syntax is literal data",
+					},
+					{
+						src: "echo '*'",
+						why: "single-quoted glob char is literal (paired with MUST ASK echo *)",
+					},
+					{
+						src: "echo '$HOME'",
+						why: "single-quoted $HOME-style param syntax is literal data",
+					},
+					{
+						src: "echo 'foo; rm -rf /'",
+						why: "single-quoted shell-composition char is literal data",
+					},
+					{
+						src: "echo 'foo*bar'",
+						why: "single-quoted glob char in middle is literal",
+					},
+					{ src: "echo 'foo|bar'", why: "single-quoted pipe char is literal" },
+					// Concatenation of literal parts.
+					{
+						src: "echo 'foo'bar'baz'",
+						why: "concatenation of literal parts is one shell word",
+					},
+					// Paired tilde / glob / brace / bracket / question discriminators.
+					{
+						src: "echo '~'",
+						why: "single-quoted tilde is literal (paired with MUST ASK echo ~)",
+					},
+					{
+						src: "echo '~/foo'",
+						why: "single-quoted ~-prefix is literal (paired with MUST ASK echo ~/foo)",
+					},
+					{
+						src: "echo 'foo{a,b}'",
+						why: "single-quoted braces are literal (paired with MUST ASK echo foo{a,b})",
+					},
+					{
+						src: "echo 'foo*'",
+						why: "single-quoted * is literal (paired with MUST ASK echo foo*)",
+					},
+					{
+						src: "echo 'foo[ab]'",
+						why: "single-quoted [ab] is literal (paired with MUST ASK echo foo[ab])",
+					},
+					{
+						src: "echo 'foo?'",
+						why: "single-quoted ? is literal (paired with MUST ASK echo foo?)",
+					},
+				];
+
+			for (const { src, why } of mustAllowParserProven) {
+				it(`ALLOW: ${src}`, async () => {
+					const parsed = await requireHelper().invoke({ command: src });
+					const r = evaluateCommandRiskWithParser({
+						toolInput: src,
+						hostAuthorization: SAFE,
+						parserResult: parsed,
+					});
+					// Containment pins the CURRENT state: each form returns ASK
+					// (parsed-argv ALLOW path removed; V1 quoted class excludes
+					// the visible characters).
+					//
+					// When CORRECTION02 lands:
+					//   - Replace this assertion with
+					//     `r.decision === "allow" && r.disposition === "auto-approve-eligible"`.
+					//   - The Section D header comment above will then read
+					//     "GREEN once shellStatic lands" instead of "RED".
+					expect(
+						r.decision === "ask",
+						`Section D TARGET (currently ASK under containment, will become ALLOW once shellStatic lands): expected ASK for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
 					).toBe(true);
 				});
 			}

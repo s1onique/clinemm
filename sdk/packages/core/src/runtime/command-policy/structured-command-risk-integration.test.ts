@@ -241,7 +241,13 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 	// still fires. This is the corrected synthetic mirror of the
 	// REAL_PRODUCTION_SEAM test in
 	// `structured-command-risk.real-binary.test.ts`.
-	it("SYNTHETIC PARSER-BOUND EXACT COMMAND (CORRECTED): user's 5-leaf && chain with semantic argv → ALLOW", () => {
+	it("SYNTHETIC PARSER-BOUND EXACT COMMAND (CORRECTED): user's 5-leaf && chain with semantic argv → ASK under containment", () => {
+		// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02
+		// CONTAINMENT: V2's parsed-argv ALLOW branch was removed. The
+		// user's LIVE chain ASKs by design under containment. It will
+		// become ALLOW again once parser-proven shellStatic provenance
+		// lands (ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 +
+		// CORRECTION02 proper).
 		const liveCmd =
 			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v";
 		const r = evaluateCommandRiskWithParser({
@@ -273,9 +279,8 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 				},
 			]),
 		});
-		expect(r.decision).toBe("allow");
-		expect(r.disposition).toBe("auto-approve-eligible");
-		expect(r.source).toBe("risk_v2_structured_promotion");
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
 	});
 
 	// Mixed-risk control: same chain, but with a mutating leaf appended.

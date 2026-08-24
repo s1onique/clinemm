@@ -683,69 +683,52 @@ function classifyCmd(
 		};
 	}
 
-	// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01
-	// argv-semantic echo classifier for the V2 path.
+	// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02
+	// CONTAINMENT (HALT_GO_SOURCE_UNAVAILABLE).
 	//
-	// The V1 source-text `host_safe_echo` rule (in
-	// `command-safe-rules.ts`) is a SHELL-SOURCE regex: it expects
-	// operands in their original source spelling, including any
-	// quote characters that may have wrapped them. The V2 path
-	// receives a parsed `StructuredCmd` whose `args` are the
-	// SEMANTIC argv (the actual byte sequence the command will
-	// see at invocation time, with quote syntax already stripped).
-	// Rendering that argv back into a shell-like string via
-	// `renderArgv(cmd)` produces e.g. `echo ---BRANCH---` with NO
-	// quotes, which does NOT match the V1 regex's bare-operand
-	// class (the bare class excludes `-`). Synthetic `mkParsed()`
-	// fixtures masked this by preserving the literal quote
-	// characters in their hand-built `cmd.args`.
+	// The previous V2 `host_safe_echo_parsed_argv` branch was
+	// removed. It had two related defects:
 	//
-	// The principled fix: V2 classifies `echo` against the parsed
-	// argv DIRECTLY, on its own merits. echo(1) is a stdout-only
-	// command with no documented filesystem / network / process
-	// mutation authority (per POSIX echo(1) and Bash builtin echo).
-	// The structural risks of `echo ...` come entirely from shell
-	// structure (redirection, pipes, substitution, variable
-	// expansion), which the AST has already factored out by the
-	// time `classifyCmd` runs. The remaining argv values are pure
-	// data: their contents do not confer any additional command
-	// authority on echo. (ACT §6, §7 Option A, §8, §11.)
+	//   1. authority-too-broad: a single-command parsed-argv ALLOW
+	//      could be promoted to ALLOW in a compound via V2's
+	//      structure-only promotion gate. In particular:
+	//        - `echo '---BRANCH---' && echo *`
+	//        - `echo '---BRANCH---' && echo {a,b}`
+	//      were returning ALLOW. The unquoted glob/brace in the
+	//      trailing leaf is an active shell expansion that should
+	//      never auto-promote from V2.
 	//
-	// Rejection criteria (the only shell-authority risks that can
-	// still lurk inside an argv value after the AST has stripped
-	// structure):
-	//   - `$`  -- variable / parameter / arithmetic expansion
-	//             (parser emits `${...}` for braced forms, `?` for
-	//             unbraced `$HOME`, and `$(...)` for command
-	//             substitution; `hasCommandSubstitution` is also
-	//             set on the ParsedShell but we keep this as a
-	//             defense-in-depth check inside the value).
-	//   - backtick -- legacy command substitution form.
-	//   - placeholder `?` -- the parser's stand-in for an
-	//             unbraced parameter/expansion reference whose
-	//             value cannot be resolved statically.
+	//   2. authority-too-narrow: 16 quoted-literal forms like
+	//      `echo '*'`, `echo '{a,b}'`, `echo '<(/bin/rm -rf $HOME)'`
+	//      were returning ASK because the V1 regex's quoted class
+	//      intentionally excludes several punctuation characters
+	//      (`{`, `}`, `*`, `?`, `[`, `]`, `<`, `>`, `(`, `)`,
+	//      `$`, `\``) even when they appear inside quotes. The V2
+	//      parsed-argv branch was the only path that ALLOWed them.
 	//
-	// Everything else (hyphens, spaces, `*`, `;`, `|`, `>`, etc.)
-	// is LITERAL DATA inside the parsed argv, with no command
-	// authority over echo. This is the broader principle from
-	// ACT §11: a trusted parsed literal argv word may safely
-	// contain many characters that would have required quoting in
-	// raw shell source.
-	if (cmd.name === "echo") {
-		if (isSafeStructuredEchoArgv(cmd.args)) {
-			return {
-				statementIndex: index,
-				kind: "cmd",
-				risk: "auto-approve-eligible",
-				source: "host_safe_echo_parsed_argv",
-			};
-		}
-		// Echo with an expansion-bearing arg falls through to the
-		// V1 regex + hard-floor path below. The V1 echo regex
-		// will reject it; if V1 also ASK'd via R5, the hard-floor
-		// escalates to never-auto-approve. Either way the
-		// expansion-bearing leaf does NOT auto-promote.
-	}
+	// The principled repair is positive parser-proven per-WordPart
+	// provenance (`shellStatic`), computed INSIDE the Go helper from
+	// the original mvdan/sh AST + quote context. The Go source is
+	// not in this checkout, so CORRECTION02 cannot ship that fix
+	// yet (see ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01).
+	//
+	// Containment removes the unsafe V2 promotion entirely. echo
+	// authority now falls through to V1's `host_safe_echo` source-
+	// text regex + R5 hard floor, which is sound (it accepts the
+	// single-command quoted-hyphen forms). The 16 MUST ALLOW false-
+	// ASKs become true ASKs by design -- a temporary precision
+	// regression the user has authorised in exchange for closing
+	// the 2 MUST ASK authority-broadening bypasses.
+	//
+	// When CORRECTION02 lands, echo authority will be:
+	//
+	//     V2 echo ALLOW  iff  simple echo
+	//                    && no redirects
+	//                    && every arg shellStatic === true
+	//
+	// with `shellStatic` derived from the parser helper's
+	// per-WordPart classification, not from any host-side
+	// punctuation blacklist.
 
 	const rendered = renderArgv(cmd);
 	if (rendered === "") {
@@ -805,64 +788,6 @@ function renderArgv(cmd: StructuredCmd): string {
 	if (cmd.name === "") return "";
 	if (cmd.args.length === 0) return cmd.name;
 	return `${cmd.name} ${cmd.args.join(" ")}`;
-}
-
-/**
- * Determine whether a parsed `echo` argv is safe to auto-approve.
- *
- * ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01.
- *
- * This is the V2 argv-semantic counterpart of the V1 source-text
- * `host_safe_echo` regex in `command-safe-rules.ts`. The V1 regex
- * is anchored to SHELL SOURCE SPELLING and is reused by V2 after a
- * naive `renderArgv(cmd)` reconstruction. That reconstruction
- * loses quote syntax, which means a perfectly safe quoted literal
- * like `echo '---BRANCH---'` (parser argv `["---BRANCH---"]`) does
- * not match the V1 regex's bare-operand class. This helper
- * classifies the argv directly, on its own merits.
- *
- * The check is principled, not pattern-based:
- *
- *   - The structural shell risks of `echo ...` (redirection, pipes,
- *     command substitution, variable expansion) are NOT carried by
- *     the argv values themselves -- they are carried by the AST
- *     node shape (`cmd.redirects`, the surrounding `and`/`or`/
- *     `pipe`/`subshell`/`opaque` constructs, and the top-level
- *     `parserResult.hasCommandSubstitution` flag). All of those
- *     have already been factored out before `classifyCmd` reaches
- *     this point. (See ACT §6.)
- *
- *   - The ONLY shell-authority risk that can still lurk inside an
- *     argv value, after structure has been factored out, is a
- *     shell EXPANSION marker -- a `$`-prefixed value, a backtick,
- *     or the parser's unresolvable-parameter placeholder. We
- *     reject those.
- *
- *   - Everything else (hyphens, spaces, `*`, `;`, `|`, `>`, etc.)
- *     is LITERAL DATA inside the parsed argv, with no command
- *     authority over echo. This is the broader principle in ACT
- *     §11.
- *
- * Returns `true` for safe echo argv, `false` otherwise. Caller
- * (the `echo` branch in `classifyCmd`) treats `false` as "fall
- * through to V1 regex + R5 floor" -- never a promotion.
- */
-export function isSafeStructuredEchoArgv(args: ReadonlyArray<string>): boolean {
-	for (const arg of args) {
-		// Defense-in-depth: the upstream `parserResult.hasCommandSubstitution`
-		// gate has already returned a conservative verdict when substitution
-		// is present, so reaching this point implies no substitution. We
-		// still defensively reject any arg that contains a substitution
-		// marker, in case the helper version drifts and emits a
-		// hasCommandSubstitution=false AST that nonetheless contains one.
-		if (arg.includes("$")) return false; // ${}, $((, $VAR, etc.
-		if (arg.includes("`")) return false; // legacy command substitution
-		// Parser placeholder for an unbraced parameter/expansion reference
-		// whose value cannot be resolved statically. See the helper probe
-		// in .factory/evidence/.../mvdan-sh-probe for the exact emit rule.
-		if (arg === "?") return false;
-	}
-	return true;
 }
 
 function maxRisk(risks: ReadonlyArray<StructuredRisk>): StructuredRisk {
