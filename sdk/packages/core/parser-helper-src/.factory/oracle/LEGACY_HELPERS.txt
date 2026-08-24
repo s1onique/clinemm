@@ -9,26 +9,26 @@ platform:    darwin-amd64
 path:        /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/bin/parser-helper/darwin-amd64/cline-parser-helper
 byte_size:   2666672
 sha256:      218e528607ef8e6a7acc7e957807ed1063b38e8543895c9be688e26aacf5988c
-protocolVer: <not probed (cross-platform; run on the matching host to populate)>
+protocolVer: <UNAVAILABLE_FROM_CURRENT_HOST -- run freeze on a host matching this platform to bind it>
 hostRun:     false
 
 platform:    linux-amd64
 path:        /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/bin/parser-helper/linux-amd64/cline-parser-helper
 byte_size:   2490552
 sha256:      2ca83beb5451f1729215a4d03940066dcb2e6effb672bd8c7969b3748aee8b76
-protocolVer: <not probed (cross-platform; run on the matching host to populate)>
+protocolVer: <UNAVAILABLE_FROM_CURRENT_HOST -- run freeze on a host matching this platform to bind it>
 hostRun:     false
 
 platform:    linux-arm64
 path:        /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/bin/parser-helper/linux-arm64/cline-parser-helper
 byte_size:   2425016
 sha256:      54d0064e30593841e5714cff041f6e48784924576103e678054cf5404829f218
-protocolVer: <not probed (cross-platform; run on the matching host to populate)>
+protocolVer: <UNAVAILABLE_FROM_CURRENT_HOST -- run freeze on a host matching this platform to bind it>
 hostRun:     false
 
 platform:    win32-x64
 path:        /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/bin/parser-helper/win32-x64/cline-parser-helper.exe
 byte_size:   2433024
 sha256:      33d4377fa6e9d546ac0528d9923a25ef661d5b190de11bf831ab22d6a8be1754
-protocolVer: <not probed (cross-platform; run on the matching host to populate)>
+protocolVer: <UNAVAILABLE_FROM_CURRENT_HOST -- run freeze on a host matching this platform to bind it>
 hostRun:     false

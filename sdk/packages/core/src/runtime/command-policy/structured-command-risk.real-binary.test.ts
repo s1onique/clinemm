@@ -100,17 +100,21 @@ const HELPER_PATH = (() => {
 })();
 
 // ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 / P1 hygiene
-// (carried from Factory review of 79bd93ee9):
+// (carried from Factory review of 79bd93ee9; CORRECTION01 of the
+// 0c044cd67 ACT row):
 //
-//   - supported shipped platform + missing helper binary  -> FAIL CI.
-//   - genuinely unsupported platform                       -> explicit SKIP.
+//   Truth table (revised):
 //
-// We bind the describe-fn to either describe (real run; throws on
-// absent-binary supported platforms via beforeAll) or describe.skip
-// (true skip on unsupported platforms). This replaces the original
-// `if (!HELPER_PATH) return;` per-test pattern, which silently
-// reported GREEN on a supported platform with no helper binary
-// present (a true shipping-artifact defect that must not hide).
+//     helper exists                     -> describe, then beforeAll binds
+//     supported + helper missing        -> describe, then beforeAll throws
+//                                          (fail CI; this is the bug we
+//                                          must NOT silently hide)
+//     unsupported platform              -> describe.skip (true skip)
+//
+//   Previous form was:
+//     HELPER_PATH || !isSupportedHelperPlatform
+//   which incorrectly SKIPPED on supported+missing, exactly the
+//   residue the comments claimed to eliminate.
 const SUPPORTED_HELPER_PLATFORMS: ReadonlySet<NonNullable<HelperPlatform>> = new Set([
 	"darwin-arm64",
 	"darwin-amd64",
@@ -120,8 +124,11 @@ const SUPPORTED_HELPER_PLATFORMS: ReadonlySet<NonNullable<HelperPlatform>> = new
 ]);
 const isSupportedHelperPlatform =
 	HELPER_PLATFORM !== null && SUPPORTED_HELPER_PLATFORMS.has(HELPER_PLATFORM);
+// Run describe UNLESS the platform is genuinely unsupported. The
+// supported+missing case runs through describe and the beforeAll
+// guard in each describe block throws, failing the suite.
 const describeWithHelper = (
-	HELPER_PATH || !isSupportedHelperPlatform ? describe : describe.skip
+	isSupportedHelperPlatform ? describe : describe.skip
 ) as typeof describe;
 
 if (!HELPER_PATH && isSupportedHelperPlatform) {
@@ -144,10 +151,18 @@ describeWithHelper("structured-command-risk -- REAL parser-helper argv contract"
 	let helper: MvdanShHelper;
 
 	beforeAll(() => {
-		if (!HELPER_PATH || !HELPER_PLATFORM) return;
+		// CORRECTION01: a missing helper on a supported platform is a
+		// shipping-artifact defect that must fail the suite loudly.
+		// On an unsupported platform the describe-block is bound to
+		// describe.skip and this beforeAll never runs.
+		if (!HELPER_PATH) {
+			throw new Error(
+				`Vendored parser-helper binary missing for supported platform ${HELPER_PLATFORM}; cannot run RED witness.`,
+			);
+		}
 		helper = new MvdanShHelper({
-			platform: HELPER_PLATFORM,
-			binaryPath: () => HELPER_PATH,
+			platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
+			binaryPath: () => HELPER_PATH as string,
 		});
 	});
 
@@ -199,10 +214,18 @@ describeWithHelper("structured-command-risk -- REAL parser-helper V2 end-to-end 
 	let helper: MvdanShHelper;
 
 	beforeAll(() => {
-		if (!HELPER_PATH || !HELPER_PLATFORM) return;
+		// CORRECTION01: a missing helper on a supported platform is a
+		// shipping-artifact defect that must fail the suite loudly.
+		// On an unsupported platform the describe-block is bound to
+		// describe.skip and this beforeAll never runs.
+		if (!HELPER_PATH) {
+			throw new Error(
+				`Vendored parser-helper binary missing for supported platform ${HELPER_PLATFORM}; cannot run RED witness.`,
+			);
+		}
 		helper = new MvdanShHelper({
-			platform: HELPER_PLATFORM,
-			binaryPath: () => HELPER_PATH,
+			platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
+			binaryPath: () => HELPER_PATH as string,
 		});
 	});
 

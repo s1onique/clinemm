@@ -187,7 +187,9 @@ function main() {
 				`path:        ${r.path}`,
 				`byte_size:   ${r.byte_size}`,
 				`sha256:      ${r.sha256}`,
-				`protocolVer: ${r.protocolVersion === null ? "<not probed (cross-platform; run on the matching host to populate)>" : r.protocolVersion}`,
+				`protocolVer: ${r.protocolVersion === null
+				? "<UNAVAILABLE_FROM_CURRENT_HOST -- run freeze on a host matching this platform to bind it>"
+				: r.protocolVersion}`,
 				`hostRun:     ${r.hostRunnable}`,
 			].join("\n"),
 		)

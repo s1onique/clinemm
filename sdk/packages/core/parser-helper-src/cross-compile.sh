@@ -74,7 +74,10 @@ echo "=== cline-parser-helper cross-compile ==="
 echo "SOURCE_HEAD : $(git -C "$HERE/../.." rev-parse HEAD 2>/dev/null || echo '<not in git repo>')"
 echo "GO_VERSION  : $(go version | awk '{print $3}')"
 echo "MVDAN_VERSION: $(grep 'mvdan.cc/sh/v3' go.mod | awk '{print $2}')"
-echo "CGO_ENABLED : ${CGO_ENABLED:-1}"
+# Note: every actual build below explicitly sets CGO_ENABLED=0 (no
+# cgo dependencies in the helper). We record that here so the header
+# is not misleading if the caller exports CGO_ENABLED=1 in their env.
+echo "CGO_ENABLED : 0 (all builds below use CGO_ENABLED=0)"
 echo "OUT_BASE    : $OUT_BASE"
 if [ "$INSTALL" -eq 1 ]; then
     echo "INSTALL     : YES (will OVERWRITE vendored binaries at $LEGACY_OUT_BASE)"
@@ -111,6 +114,7 @@ for entry in "${TARGETS[@]}"; do
     mkdir -p "$OUT_DIR"
 
     echo "--- $PLAT_ ($GOOS_/$GOARCH_) ---"
+    echo "  GOOS=$GOOS_ GOARCH=$GOARCH_ CGO_ENABLED=0"
     GOOS="$GOOS_" GOARCH="$GOARCH_" CGO_ENABLED=0 \
         go build -trimpath -ldflags='-s -w' -o "$OUT_BIN" .
 
