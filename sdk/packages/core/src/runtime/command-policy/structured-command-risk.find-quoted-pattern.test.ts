@@ -471,6 +471,111 @@ describeWithHelper(
 			expect(r.decision).toBe("ask");
 		});
 
+		// HALT_FIND_DOUBLE_DASH_ACTION_ALIAS (CORRECTION01): GNU
+		// find does NOT honor `--` as an end-of-options
+		// terminator for "everything-after-is-roots"; a command
+		// like `find -- root -delete` is interpreted by GNU find
+		// as `root` (search root) plus `-delete` (the
+		// destructive expression action). The parser-proven
+		// branch must reject `--` so a literal path-named
+		// `-delete` file inside the workspace cannot be bound
+		// as a path-authority operand while GNU find actually
+		// executes the destructive action. We pin the
+		// adversarial witness (with synthetic evidence
+		// pre-binding every argv token as a workspace-conforming
+		// path, so a regression to ALLOW would unambiguously
+		// surface as the bypass the reviewer identified).
+		it("P0 ADVERSARIAL: find -- root -delete -> ASK (with pre-bound evidence, RED before CORRECTION01)", async () => {
+			const cmd = "find -- root -delete";
+			const parsed = await helper.invoke({ command: cmd });
+			expect(parsed).not.toBeNull();
+			// All three argv tokens are parser-proven `static`:
+			expect(parsed!.program!.stmts[0]!.cmd.argProvenance).toEqual([
+				"static",
+				"static",
+				"static",
+			]);
+
+			// Synthetic evidence pre-binding every argv token as
+			// a workspace-conforming path. Pre-CORRECTION01
+			// this evaluates to `allow / auto-approve-eligible`;
+			// post-CORRECTION01 the validator rejects `--`,
+			// the leaf is `host_mode_safe_only_fallthrough`,
+			// and the verdict reverts to ASK.
+			const evidence = {
+				roots: [workspaceCanonical],
+				cwd: workspaceCanonical,
+				operands: [
+					{
+						operand: "--",
+						resolvedRealPath: `${workspaceCanonical}/--`,
+						contained: true,
+						reason: "resolved-and-contained" as const,
+					},
+					{
+						operand: "root",
+						resolvedRealPath: `${workspaceCanonical}/root`,
+						contained: true,
+						reason: "resolved-and-contained" as const,
+					},
+					{
+						operand: "-delete",
+						resolvedRealPath: `${workspaceCanonical}/-delete`,
+						contained: true,
+						reason: "resolved-and-contained" as const,
+					},
+				],
+			};
+			const SAFE_BOUND = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: [workspaceCanonical],
+				cwd: workspaceCanonical,
+				pathAuthorityEvidence: evidence,
+			});
+
+			const r = evaluateCommandRiskWithParser({
+				toolInput: cmd,
+				hostAuthorization: SAFE_BOUND,
+				parserResult: parsed,
+			});
+			expect(r.decision).toBe("ask");
+			expect(r.disposition).toBe("ask");
+		});
+
+		it("P0 ADVERSARIAL: find -- . -name '*.ts' -> ASK (rejected outright)", async () => {
+			const cmd = "find -- . -name '*.ts'";
+			const parsed = await helper.invoke({ command: cmd });
+			const r = evaluateCommandRiskWithParser({
+				toolInput: cmd,
+				hostAuthorization: SAFE_NO_EVIDENCE,
+				parserResult: parsed,
+			});
+			// CORRECTION01 precision loss: this command would
+			// semantically succeed (root `.`, single `-name`
+			// predicate, static pattern) under GNU find, but
+			// `--` makes the grammar ambiguous and we reject
+			// it for this ACT. GNU itself recommends
+			// `./...` or absolute pathnames for dubious
+			// starting points rather than `--`.
+			expect(r.decision).toBe("ask");
+		});
+
+		it("P0 ADVERSARIAL: extractFindSearchRoots breaks on -- (no fallthrough into action territory)", async () => {
+			const { extractR0PathOperands } = await import(
+				"./path-authority"
+			);
+			// V1 mirror extractor: even if some future caller
+			// bypasses the validator, the extractor must NOT
+			// collect tokens after `--` as roots.
+			expect(
+				extractR0PathOperands(
+					"find -- root -delete",
+					"host_safe_find_parser_proven_static_patterns",
+				),
+			).toEqual([]);
+		});
+
 		// Section D (P1 fix): Pinned mechanical probe of the operand
 		// extractor + path-authority evidence builder for the exact
 		// LIVE-failing command. Pre-C2: this probe EXPECTS the bug

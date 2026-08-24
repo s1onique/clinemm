@@ -325,23 +325,27 @@ export function extractR0PathOperands(
  * argument token. Once any test/action is seen, we are
  * definitely in expression territory.
  *
- * `--` is the end-of-options terminator; after it, the
- * remainder of argv is roots.
+ * `--` handling (HALT_FIND_DOUBLE_DASH_ACTION_ALIAS /
+ * CORRECTION01): `--` is NOT treated as an end-of-options
+ * terminator that demotes everything after to roots. GNU
+ * find does NOT honor `--` that way -- `find -- root -delete`
+ * is interpreted by GNU find as `root` (search root) plus
+ * `-delete` (the destructive expression action), not as
+ * `root` and `-delete` both being search roots. Treating
+ * everything after `--` as roots would let a literal
+ * path-named `-delete` file inside the workspace be bound
+ * as a path-authority operand while GNU find actually
+ * executes the destructive action. We therefore break at
+ * `--` (no fallthrough into root collection). The validator
+ * rejects the entire command as a separate defense.
  *
  * Lexical approximation:
  *   - First token: `find` (skip).
  *   - Tokens: skip well-known find global-options (no value).
  *     Collect non-option tokens as roots.
- *     Break on `--` (then collect rest as roots).
+ *     Break on `--` (no fallthrough).
  *     Break on any OTHER `-`-prefixed token (a predicate/action
  *     boundary).
- *
- * Why this differs from the prior generic extractor: the
- * prior extractor treated ALL non-option tokens as paths
- * regardless of position, which erroneously included the
- * PATTERN strings of `-[i]name`/`-[i]path` predicates.
- * Promoted pattern: the `find` argv grammar is small enough
- * to model precisely here without parsing the AST.
  */
 const FIND_GLOBAL_NO_VALUE_OPTIONS: ReadonlySet<string> = new Set([
 	"-H",
@@ -357,18 +361,18 @@ const FIND_GLOBAL_NO_VALUE_OPTIONS: ReadonlySet<string> = new Set([
 function extractFindSearchRoots(tokens: ReadonlyArray<string>): string[] {
 	const out: string[] = [];
 	let i = 1;
-	let sawDoubleDash = false;
 	while (i < tokens.length) {
 		const t = tokens[i]!;
-		if (sawDoubleDash) {
-			out.push(t);
-			i++;
-			continue;
-		}
 		if (t === "--") {
-			sawDoubleDash = true;
-			i++;
-			continue;
+			// HALT_FIND_DOUBLE_DASH_ACTION_ALIAS (CORRECTION01):
+			// see function-level docstring. GNU find does
+			// NOT honor `--` as an end-of-options terminator
+			// for "everything-after-is-roots"; a literal
+			// path-named `-delete` file inside the workspace
+			// would otherwise be bound as a path-authority
+			// operand while GNU find actually executes the
+			// destructive action.
+			break;
 		}
 		if (t.startsWith("-")) {
 			// Skip well-known global options that take no value

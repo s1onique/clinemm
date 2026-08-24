@@ -827,8 +827,8 @@ function isParserProvenStdinOnlyReader(cmd: StructuredCmd): boolean {
  * ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01
  *
  * Parser-proven find argv-shape validator. Permits only:
- *   - one or more SEARCH ROOTS (non-option tokens before the first
- *     `-`-prefixed token, OR tokens after `--`)
+ *   - one or more SEARCH ROOTS (non-option tokens before the
+ *     first `-`-prefixed token)
  *   - zero or more `-name PATTERN` / `-iname PATTERN`
  *     / `-path PATTERN` / `-ipath PATTERN` predicates whose
  *     PATTERN operand is parser-proven `static`. The caller's
@@ -836,6 +836,22 @@ function isParserProvenStdinOnlyReader(cmd: StructuredCmd): boolean {
  *     === cmd.args.length && cmd.argProvenance.every(p => p ===
  *     "static")`, so the predicate argument's static status is a
  *     direct lookup into `cmd.argProvenance[]`.
+ *
+ * `--` is REJECTED unconditionally (HALT_FIND_DOUBLE_DASH_ACTION_ALIAS
+ * / CORRECTION01). GNU `find` does NOT honor `--` as an
+ * "everything-after-is-starting-points" terminator; GNU findutils
+ * still recognizes an expression argument starting with `-` even
+ * after `--`, so a command like `find -- root -delete` is
+ * interpreted by GNU find as `root` (search root) plus
+ * `-delete` (the destructive expression action). Treating
+ * everything after `--` as roots would let
+ *   find -- root -delete
+ * classify as `auto-approve-eligible` despite `-delete` being a
+ * mutating predicate -- a direct authority bypass given that
+ * host evidence can bind literal `-delete` pathnames that exist
+ * inside the workspace. For this ACT we reject `--` outright;
+ * GNU itself recommends `./...` or absolute pathnames for
+ * dubious starting points rather than relying on `--`.
  *
  * Conservative predicates/options beyond the test profile are
  * rejected (ASK). Specifically we reject any argv-token that
@@ -879,31 +895,29 @@ function isParserProvenFindArgs(cmd: StructuredCmd): boolean {
 	if (cmd.argProvenance === undefined) {
 		return false;
 	}
+	// HALT_FIND_DOUBLE_DASH_ACTION_ALIAS (CORRECTION01): reject
+	// `--` outright. See the function-level docstring for the
+	// rationale -- GNU find does NOT honor `--` as an
+	// "everything-after-is-starting-points" terminator, and a
+	// path-named `-delete` file inside the workspace would
+	// otherwise bypass the path-bearing binder.
+	for (const a of cmd.args) {
+		if (a === "--") {
+			return false;
+		}
+	}
 	let i = 0;
-	// Phase 1: consume search roots. `--` is the option
-	// terminator; tokens after `--` are roots. Roots are tokens
-	// up to (but not including) the first `-`-prefixed token.
-	let sawDoubleDash = false;
+	// Phase 1: consume search roots. Roots are non-option
+	// tokens up to (but not including) the first `-`-prefixed
+	// token. No `--` here (rejected above).
 	while (i < cmd.args.length) {
 		const a = cmd.args[i]!;
-		if (sawDoubleDash) {
-			// Anything after `--` must be a search root. We
-			// don't enforce a count limit; the rule layer's
-			// command-safe regex bounds this in V1.
-			i++;
-			continue;
-		}
-		if (a === "--") {
-			sawDoubleDash = true;
-			i++;
-			continue;
-		}
 		if (a.startsWith("-")) {
 			break;
 		}
 		i++;
 	}
-	if (!sawDoubleDash && i === 0) {
+	if (i === 0) {
 		// No search root provided (e.g. `find -name '*.ts'`).
 		// GNU find defaults to `.`, but our positive profile
 		// requires an explicit root so the evidence binder can
@@ -1474,15 +1488,18 @@ function extractPathOperandsFromStructured(
  *
  * Structured-cmd find authority-operand extractor. Mirrors V1's
  * `extractFindSearchRoots`: returns ONLY the search roots.
- * Like the V1 mirror it skips well-known find global-options
- * (no value: -H / -L / -P / -X / -E / -d / -s / -x) and breaks
- * at the first predicate/action-sentinel `-`-prefixed token.
  *
- * The set of find's no-value global options is duplicated here
- * (and in `path-authority.ts`) because the V1 lexical side and
- * the V2 structural side derive operands independently --
- * both MUST agree on the same authority shape so the
- * host-evidence binder can verify identity.
+ * HALT_FIND_DOUBLE_DASH_ACTION_ALIAS (CORRECTION01): `--` is
+ * NOT supported -- the parser-proven positive validator rejects
+ * `--` outright because GNU find does NOT honor it as an
+ * "everything-after-is-starting-points" terminator. We mirror
+ * the rejection here so the V2 authority operand list also
+ * stops at `--` (no fallthrough into action-sentinel territory).
+ *
+ * No-value global options (`-H/-L/-P/-X/-E/-d/-s/-x`) are
+ * skipped without consuming following tokens. Any other
+ * `-`-prefixed token is a predicate/action boundary; root-list
+ * ends there.
  */
 const STRUCTURED_FIND_GLOBAL_NO_VALUE_OPTIONS: ReadonlySet<string> = new Set([
 	"-H",
@@ -1497,15 +1514,15 @@ const STRUCTURED_FIND_GLOBAL_NO_VALUE_OPTIONS: ReadonlySet<string> = new Set([
 
 function extractFindOperandsStructured(cmd: StructuredCmd): ReadonlyArray<string> {
 	const out: string[] = [];
-	let sawDoubleDash = false;
 	for (const a of cmd.args) {
-		if (sawDoubleDash) {
-			out.push(a);
-			continue;
-		}
 		if (a === "--") {
-			sawDoubleDash = true;
-			continue;
+			// HALT_FIND_DOUBLE_DASH_ACTION_ALIAS (CORRECTION01):
+			// see function-level docstring. The validator
+			// already rejects `--`, so under normal flow this
+			// branch is unreachable; this is defense-in-depth
+			// for any future caller that does not gate on
+			// `isParserProvenFindArgs`.
+			break;
 		}
 		if (a.startsWith("-")) {
 			if (STRUCTURED_FIND_GLOBAL_NO_VALUE_OPTIONS.has(a)) {
