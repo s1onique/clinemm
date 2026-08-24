@@ -53,7 +53,6 @@ import {
 	BoundedSourceChars,
 	BoundedStdoutChars,
 	BoundedTimeoutMs,
-	PARSER_HELPER_PROTOCOL_VERSION,
 	type ParserHelperDialect,
 	type ParserHelperRequest,
 } from "./protocol";
