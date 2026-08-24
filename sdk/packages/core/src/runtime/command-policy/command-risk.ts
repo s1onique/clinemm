@@ -52,6 +52,7 @@ import {
 import { isOpaqueShellRendered } from "./command-safe-rules";
 import {
 	evaluateStructuredCommandRisk,
+	isParserProvenSource,
 	isStructureOnlyPromotableAsk,
 } from "./structured-command-risk";
 
@@ -551,26 +552,34 @@ export function evaluateCommandRiskWithParser(
 		});
 		const v2SourceBound = v2.parseConfidence === "complete";
 		// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01.
+		// ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01.
 		// Parser-proven positive provenance: when V2's per-stmt
-		// classification reports `host_safe_echo_parser_proven` (every
-		// arg of a simple echo is `static` per the Go helper's AST
+		// classification reports a parser-proven source label
+		// (every arg of the leaf is `static` per the Go helper's AST
 		// classification), V2 can promote a V1 ASK to ALLOW even if
 		// the V1 ASK was caused by V1's restrictive quoted-character
 		// class (NOT by opaque-shell composition). This is the
 		// principal Phase 2 win.
 		//
+		// The single source of truth for which source labels
+		// qualify is `PARSER_PROVEN_SOURCE_LABELS` in
+		// structured-command-risk.ts. Adding a new parser-proven
+		// family (e.g. git log positional refs in a future ACT)
+		// is a one-line edit to that set plus a one-line edit
+		// to the V2 dispatcher.
+		//
 		// Gates (must all hold):
-		//   (a) v2 source label is exactly `host_safe_echo_parser_proven`
-		//       (positive proof, not string-blacklist);
+		//   (a) at least one perStatement has a parser-proven source
+		//       label (positive proof, not string-blacklist);
 		//   (b) v2 source is bound to source (parseConfidence === "complete");
 		//   (c) V1 disposition is not already never-auto-approve (V2
 		//       may NEVER promote a hard-floor disposition back to ALLOW);
-		//   (d) parser helper protocol version is 3 -- enforced at the
+		//   (d) parser helper protocol version is 3+ -- enforced at the
 		//       per-stmt layer; under v2 the runtime injects
 		//       ["unknown"]* which prevents the parser-proven branch
 		//       from activating in the first place.
-		const hasParserProvenLeaf = v2.perStatement.some(
-			(s) => s.source === "host_safe_echo_parser_proven",
+		const hasParserProvenLeaf = v2.perStatement.some((s) =>
+			isParserProvenSource(s.source),
 		);
 		const isParserProvenPromotion =
 			hasParserProvenLeaf &&

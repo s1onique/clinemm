@@ -721,6 +721,190 @@ function classifyStmt(
 	}
 }
 
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01:
+ * Per-command argv-shape validator for the stdin-only reader
+ * extension of the V2 parser-proven allowlist.
+ *
+ * Returns true iff:
+ *   - cmd.name is in the stdin-only allowlist (currently `head`
+ *     and `tail`),
+ *   - every arg is in the reviewed option set,
+ *   - the command has zero path operands (i.e. reads from
+ *     stdin), and
+ *   - the inner per-command validator approves the argv shape.
+ *
+ * Returns false otherwise (fail-closed).
+ *
+ * The fail-closed invariants for the OUTER dispatch (protocol
+ * version, redirect absence, argProvenance) are enforced by the
+ * caller (`classifyCmd`); this function only validates per-command
+ * grammar.
+ *
+ * Architectural note (per reviewer P0): static shell syntax is
+ * NOT filesystem authority. Path-bearing readers (`head FILE`,
+ * `cat FILE`, `tail FILE`, `sort FILE`, `uniq FILE`, `wc FILE`)
+ * are NOT promoted here; they require canonical R0 path-authority
+ * integration (separate ACT). This validator strictly enforces
+ * zero path operands, so any `head some-file` form is rejected
+ * here.
+ */
+function isParserProvenStdinOnlyReader(cmd: StructuredCmd): boolean {
+	if (cmd.name === "head") {
+		return isParserProvenStdinOnlyHead(cmd.args);
+	}
+	if (cmd.name === "tail") {
+		return isParserProvenStdinOnlyTail(cmd.args);
+	}
+	return false;
+}
+
+/**
+ * `head` stdin-only argv validator.
+ *
+ * Reviewed forms (ALL parser-proven `static` by caller's gate):
+ *   - `head`              (no args, stdin only)
+ *   - `head -<N>`         (N is a non-negative integer; e.g. `head -30`)
+ *   - `head -n <N>`       (e.g. `head -n 30`)
+ *   - `head --`           (stdin only, explicit end-of-options)
+ *   - `head -- <...>`     (NOT reviewed; we reject any args after `--`)
+ *   - `head -n <N> --`    (stdin only, explicit end-of-options with count)
+ *
+ * Explicitly REJECTED (conservation):
+ *   - `head -c <N>`       reads BYTES (binary content); not in
+ *                         stdin-only profile
+ *   - `head -v`, `-q`     verbose/quiet flags; not reviewed
+ *   - `head --help`, `--version`
+ *                         not reviewed
+ *   - `head FILE`         path-bearing; requires canonical
+ *                         R0 path-authority (separate ACT)
+ *   - any unknown option
+ *
+ * Any non-option arg before `--` is a path operand; we reject
+ * unconditionally so the validator stays simple and the policy
+ * is local.
+ */
+function isParserProvenStdinOnlyHead(args: ReadonlyArray<string>): boolean {
+	let i = 0;
+	while (i < args.length) {
+		const a = args[i]!;
+		if (a === "--") {
+			// End-of-options: any remaining args would be path
+			// operands, which we reject.
+			if (i + 1 < args.length) return false;
+			return true;
+		}
+		if (a === "-c") {
+			// -c reads BYTES; explicitly out of stdin-only profile.
+			return false;
+		}
+		if (a === "-n") {
+			// -n <N>: consume the value.
+			if (i + 1 >= args.length) return false;
+			const v = args[i + 1]!;
+			if (!/^\d+$/.test(v)) return false;
+			i += 2;
+			continue;
+		}
+		if (a.startsWith("-")) {
+			// Single short option of the form `-<digits>` (e.g. `-30`).
+			if (/^-\d+$/.test(a)) {
+				i++;
+				continue;
+			}
+			// Any other short or long option (including -v, -q,
+			// --help, --version, -c with arg baked in like
+			// `-c100` not reviewed) is rejected.
+			return false;
+		}
+		// Bare arg before `--` is a path operand -- reject.
+		return false;
+	}
+	return true;
+}
+
+/**
+ * `tail` stdin-only argv validator.
+ *
+ * Mirrors `head`'s contract: stdin-only, no path operands,
+ * reviewed options only.
+ *
+ * Reviewed forms:
+ *   - `tail`, `tail -<N>`, `tail -n <N>`, `tail --`,
+ *     `tail -n <N> --`
+ *
+ * Explicitly REJECTED (conservation):
+ *   - `tail -c <N>`       byte-counted read; out of profile
+ *   - `tail -f`, `-F`     follow mode (interactive; out of profile)
+ *   - `tail FILE`         path-bearing; separate ACT
+ *   - any unknown option
+ */
+function isParserProvenStdinOnlyTail(args: ReadonlyArray<string>): boolean {
+	let i = 0;
+	while (i < args.length) {
+		const a = args[i]!;
+		if (a === "--") {
+			if (i + 1 < args.length) return false;
+			return true;
+		}
+		if (a === "-c") return false;
+		if (a === "-f" || a === "-F") return false;
+		if (a === "-n") {
+			if (i + 1 >= args.length) return false;
+			const v = args[i + 1]!;
+			if (!/^\d+$/.test(v)) return false;
+			i += 2;
+			continue;
+		}
+		if (a.startsWith("-")) {
+			if (/^-\d+$/.test(a)) {
+				i++;
+				continue;
+			}
+			return false;
+		}
+		return false;
+	}
+	return true;
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01:
+ * The set of V2 source labels that carry parser-proven positive
+ * provenance. When at least one perStatement has a source label
+ * in this set, the V1 -> V2 promotion gate in
+ * `command-risk.ts` may consider promoting a V1 ASK to ALLOW.
+ *
+ * This set is the SINGLE source of truth for which source labels
+ * participate in the parser-proven promotion contract. Adding a
+ * new parser-proven family MUST add its source label here AND
+ * update the promotion gate to recognize it (the gate imports
+ * this constant via `isParserProvenSource`).
+ *
+ * Architectural note: the V2 promotion gate is intentionally
+ * conservative -- it requires EVERY perStatement to be parser-
+ * proven safe (via `promoteToAllow`), but the gate's secondary
+ * check that the V2 output is source-bound to `toolInput` is
+ * enforced upstream by the V2 evaluator itself.
+ */
+export const PARSER_PROVEN_SOURCE_LABELS: ReadonlySet<string> = new Set([
+	// Existing echo parser-proven branch
+	// (ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01).
+	"host_safe_echo_parser_proven",
+	// stdin-only reader extensions
+	// (ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01).
+	"host_safe_head_parser_proven_stdin_only",
+	"host_safe_tail_parser_proven_stdin_only",
+]);
+
+/**
+ * Returns true iff the source label is parser-proven positive
+ * provenance. See {@link PARSER_PROVEN_SOURCE_LABELS}.
+ */
+export function isParserProvenSource(source: string): boolean {
+	return PARSER_PROVEN_SOURCE_LABELS.has(source);
+}
+
 function classifyCmd(
 	cmd: StructuredCmd,
 	index: number,
@@ -848,28 +1032,54 @@ function classifyCmd(
 	// additional belt for direct callers of `classifyCmd` that bypass
 	// the runtime's injection.
 	//
+	// ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01:
+	// the parser-proven promotion branch is generalized from
+	// echo-only to a per-command dispatch. Each new leaf family
+	// carries its own argv-shape validator and source label.
+	//
 	// ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01: the
-	// protocol version check is widened from `=== 3` to `>= 3` so
-	// the same promotion contract applies to v4 helper responses
-	// (which additively carry redirect fd/pathProvenance). The
-	// echo promotion continues to require zero redirects
-	// (`cmd.redirects.length === 0`); a neutral 2>/dev/null on an
-	// echo therefore routes through V1's host_safe_echo regex,
-	// not this branch -- intentional.
+	// protocol version check remains `>= 3` so the same promotion
+	// contract applies to v4 helper responses (which additively
+	// carry redirect fd/pathProvenance). All branches continue to
+	// require zero redirects (`cmd.redirects.length === 0`); a
+	// neutral 2>/dev/null on a parser-proven command therefore
+	// routes through V1's host_safe_* regex, not this branch --
+	// intentional.
+	//
+	// Architecture (per reviewer correction):
+	//   - Static shell syntax != filesystem authority. Path-bearing
+	//     readers (`head FILE`, `cat FILE`, ...) are NOT promoted
+	//     here; they require canonical R0 path-authority
+	//     integration (separate ACT).
+	//   - Only stdin-only readers (zero path operands) qualify.
+	//   - Each command has a per-command argv-shape validator.
+	//   - Fail-closed invariants are uniform across all branches.
 	if (
 		protocolVersion >= 3 &&
-		cmd.name === "echo" &&
 		cmd.redirects.length === 0 &&
 		cmd.argProvenance !== undefined &&
 		cmd.argProvenance.length === cmd.args.length &&
 		cmd.argProvenance.every((p) => p === "static")
 	) {
-		return {
-			statementIndex: index,
-			kind: "cmd",
-			risk: "auto-approve-eligible",
-			source: "host_safe_echo_parser_proven",
-		};
+		// Existing echo branch -- unchanged.
+		if (cmd.name === "echo") {
+			return {
+				statementIndex: index,
+				kind: "cmd",
+				risk: "auto-approve-eligible",
+				source: "host_safe_echo_parser_proven",
+			};
+		}
+		// stdin-only reader extensions -- new in
+		// ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01.
+		if (isParserProvenStdinOnlyReader(cmd)) {
+			return {
+				statementIndex: index,
+				kind: "cmd",
+				risk: "auto-approve-eligible",
+				source: `host_safe_${cmd.name}_parser_proven_stdin_only`,
+			};
+		}
 	}
 
 	const rendered = renderArgv(cmd);
