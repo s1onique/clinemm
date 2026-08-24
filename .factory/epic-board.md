@@ -5755,7 +5755,65 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
     - single-command echo forms containing parens, braces, dollars, globs, arith expressions inside single quotes
 
   **ARCHITECTURAL CONCLUSION** (preserved across both Halts): the string-blacklist on parser-projected argv is **not** a positive provenance proof. The right abstraction is parser-proven static-literal provenance (mvdan/sh `WordPart` kinds: Lit / SglQuoted / DblQuoted-of-statics ⇒ static; ParamExp / CmdSubst / ArithmExp / ProcSubst / ExtGlob / unquoted-brace / unquoted-glob ⇒ not-static). **P1 (CORRECTION01 review) fixed**: the new attack-witness test file throws on a supported platform where the helper binary is absent, instead of silently passing. **CORRECTION01 SOURCE CODE STATUS**: the source fix in `structured-command-risk.ts` (`host_safe_echo_parsed_argv` branch + `isSafeStructuredEchoArgv` helper) REMAINS IN PLACE on `main` for now. **DO NOT dogfood `apps/vscode/dist/clinemm-4.1.10.vsix`** (built at the unsafe source HEAD). **DO NOT start** `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01`. **DO start** CORRECTION02 (next row). |
-| `ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02` | SAFETY / R0-COMMAND-POLICY | OPEN — RECON ONLY (semantically-correct RED witness in place; repair not yet attempted) | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01 (string-blacklist on parser-projected argv is unsound for unquoted glob/brace in compound) | **SOLE EPISTEMIC PURPOSE**: prove static-literal argv provenance for V2 echo authorization, replacing the unsound character-blacklist of CORRECTION01 with a positive parser-proven fact. The corrected RED witness (`structured-command-risk.attack-witness.test.ts`, 35 tests, drives vendored mvdan/sh helper through `evaluateCommandRiskWithParser`) is the binding contract: 12 RED on CORRECTION01, all semantically correct. **PROGRESSION** (per Factory reviewer):
+| `ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02` | SAFETY / R0-COMMAND-POLICY | OPEN — RECON COMPLETE (semantically-correct RED witness in place; repair not yet attempted) | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION01 (string-blacklist on parser-projected argv is unsound for unquoted glob/brace in compound) | **SOLE EPISTEMIC PURPOSE**: prove shell-static argv provenance for V2 echo authorization, replacing the unsound character-blacklist of CORRECTION01 with a positive parser-proven fact. **FREEZE STRONGER PROVENANCE CONTRACT** (per Factory reviewer, second Halt): `Lit` does NOT imply shell-static. The next implementation must use mvdan/sh's `WordPart` typed AST inside the Go helper, with quote context, to compute a per-arg positive fact:
+
+   ```
+   shellStatic = true iff the parser helper proves:
+     1. exactly one shell word is produced;
+     2. its value is independent of environment / parameters;
+     3. no command / process / arithmetic substitution executes;
+     4. no brace expansion changes multiplicity / value;
+     5. no pathname expansion consults the filesystem;
+     6. no tilde expansion consults HOME / user state;
+     7. no unknown shell expansion remains.
+   ```
+
+   Per WordPart class:
+
+   ```
+   SglQuoted                                STATIC
+   DblQuoted-of-static-parts                STATIC (recursively)
+   unquoted Lit                             STATIC only if:
+                                              - not brace-expandable
+                                              - not a pathname pattern
+                                              - not tilde-expandable
+   unquoted ParamExp / CmdSubst / ArithmExp DYNAMIC
+   unquoted ProcSubst / ExtGlob             DYNAMIC
+   ```
+
+   Then: `V2 echo ALLOW iff simple echo && no redirects && every arg shellStatic`. Otherwise ASK. No host-side character blacklist. **RED WITNESS** (`structured-command-risk.attack-witness.test.ts`, 47 tests, drives vendored mvdan/sh helper through `evaluateCommandRiskWithParser`):
+
+   - MUST ASK (active expansion): 23 forms. Currently 21 GREEN / 2 RED on CORRECTION01.
+   - MUST ALLOW (literal data): 24 forms. Currently 8 GREEN / 16 RED on CORRECTION01.
+
+   All 18 RED are the binding contract for the new provenance classifier. They encode the bidirectional requirement: the repair must accept the literal-data forms (not reject more) AND reject the active-expansion forms (not allow more). **SKIP SEMES** verified on three platforms:
+
+   - Supported platform + helper binary present → real run.
+   - Supported platform + helper binary missing → test file FAILS (CI catches missing shipping artifact).
+   - Unsupported platform → describe.skip → 47 SKIPPED, no false passes.
+
+   **PROGRESSION** (per Factory reviewer, frozen progression):
+
+   1. KEEP corrected 47-case RED witness.
+   2. ~~Add paired tilde/glob/brace/bracket/question discriminators~~ DONE in this commit.
+   3. ~~Reconcile exact mvdan AST shapes for those pairs~~ TODO in implementation.
+   4. Extend parser-helper protocol with host-consumable positive shell-static provenance.
+   5. Compute provenance in the Go helper from original AST + quote context. Do not infer from flattened strings in TypeScript.
+   6. Change V2 echo promotion: every arg shellStatic → candidate ALLOW; otherwise → ASK.
+   7. Delete `isSafeStructuredEchoArgv` character blacklist.
+   8. Run corrected witness: 47/47 GREEN.
+   9. Ablation: remove provenance use → original quoted-hyphen LIVE leaf ASK; active glob/brace compound bypasses reappear. Restore → all GREEN.
+   10. Fix unsupported-platform skip semantics. ~~DONE in this commit for the attack-witness file.~~ Apply same fix to the other real-binary test files (`runtime.real-binary.test.ts`, `structured-command-risk.real-binary.test.ts`).
+   11. Existing R5 / mixed-risk / path-authority conservation.
+   12. Build exact-head VSIX.
+   13. Installed dogfood: exact five-leaf chain → auto-run; mixed-risk sentinel → approval, reject.
+   14. STOP.
+
+   **HALT RULES**:
+
+   - DO NOT start `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01` until CORRECTION02 lands.
+   - DO NOT dogfood the current `apps/vscode/dist/clinemm-4.1.10.vsix` (built at the unsafe source HEAD).
+   - The corrected attack-witness file is the binding contract for CORRECTION02; repair is GREEN when all 47 tests pass. |
 
   1. **Probe done** (prior ACT): the parser emits pre-expansion argv. Active expansion leaves no trace in `cmd.args` for unquoted globs/braces (literal text) or for `$`/backtick forms (parser placeholder `?`). Both classes look "literal" to a character blacklist.
 

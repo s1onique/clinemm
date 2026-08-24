@@ -115,224 +115,286 @@ const SUPPORTED_PLATFORMS: ReadonlySet<NonNullable<HelperPlatform>> = new Set([
 const isSupportedPlatform =
 	HELPER_PLATFORM !== null && SUPPORTED_PLATFORMS.has(HELPER_PLATFORM);
 
-if (isSupportedPlatform && !HELPER_PATH) {
+// P1 from CORRECTION01 Factory review (corrected in CORRECTION02):
+//   - supported platform + expected helper binary absent -> FAIL CI.
+//   - genuinely unsupported platform                    -> skip cleanly.
+//
+// We achieve the second branch by binding the describe-fn to either
+// describe (real run, will throw on absent-binary supported platform
+// inside beforeAll) or describe.skip (true skip on unsupported
+// platforms). This replaces the original pattern of `if (!HELPER_PATH)
+// return;` per test which silently reported GREEN on a supported
+// platform with no helper binary present.
+const describeWithHelper: typeof describe =
+	HELPER_PATH || isSupportedPlatform ? describe : describe.skip;
+
+if (!HELPER_PATH && isSupportedPlatform) {
 	// eslint-disable-next-line no-console
 	console.error(
 		`[structured-command-risk.attack-witness] supported platform ${HELPER_PLATFORM} but vendored helper binary is missing at ${sdkRoot}/bin/parser-helper/${HELPER_PLATFORM}/. Failing the suite.`,
 	);
 }
 
-const skipBlock = !HELPER_PATH;
-void skipBlock; // kept for future per-test skip checks; unused for now since beforeAll handles it
-describe("V2 echo authority RED witness (CORRECTION02) -- semantically-correct shell-expansion matrix", () => {
-	let helper: MvdanShHelper;
+describeWithHelper(
+	"V2 echo authority RED witness (CORRECTION02) -- semantically-correct shell-expansion matrix",
+	() => {
+		let helper: MvdanShHelper;
 
-	// P1 from CORRECTION01 Factory review:
-	//   On the five vendored platforms, ABSENT binary -> FAIL the
-	//   entire describe block (so CI catches a missing shipping
-	//   artifact). On other platforms (unsupported by the shipping
-	//   contract), this guard yields skip-equivalent early-return.
-	//   The original pattern of `if (!HELPER_PATH) return;` per test
-	//   silently reported GREEN; that hid missing artifacts.
-	beforeAll(() => {
-		if (!HELPER_PATH) {
-			if (isSupportedPlatform) {
+		// P1 from CORRECTION01 Factory review (refined):
+		//   On a supported platform where the helper binary is absent,
+		//   throw here so the entire describe block fails (CI catches the
+		//   missing shipping artifact). On an unsupported platform we
+		//   never reach this point because describeWithHelper is bound to
+		//   describe.skip, which short-circuits beforeAll.
+		beforeAll(() => {
+			if (!HELPER_PATH) {
+				if (isSupportedPlatform) {
+					throw new Error(
+						`Vendored parser-helper binary missing for supported platform ${HELPER_PLATFORM}; cannot run RED witness.`,
+					);
+				}
+				return;
+			}
+			helper = new MvdanShHelper({
+				platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
+				binaryPath: () => HELPER_PATH as string,
+			});
+		});
+
+		function requireHelper(): MvdanShHelper {
+			// After the beforeAll guard above, this should always succeed on
+			// supported platforms. If it doesn't, the describe block was
+			// somehow started without the helper initialised -- a true
+			// configuration bug worth failing the test loudly rather than
+			// silently returning a wrong answer.
+			if (!helper) {
 				throw new Error(
-					`Vendored parser-helper binary missing for supported platform ${HELPER_PLATFORM}; cannot run RED witness.`,
+					`parser-helper not initialised; HELPER_PATH=${HELPER_PATH ?? "absent"}, HELPER_PLATFORM=${HELPER_PLATFORM ?? "unknown"}.`,
 				);
 			}
-			return;
+			return helper;
 		}
-		helper = new MvdanShHelper({
-			platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
-			binaryPath: () => HELPER_PATH as string,
-		});
-	});
 
-	function requireHelper(): MvdanShHelper {
-		if (!helper) {
-			// Reachable only on unsupported platforms. Throw so the
-			// describe block fails rather than silently passing.
-			throw new Error(
-				`parser-helper not initialised; HELPER_PATH=${HELPER_PATH ?? "absent"}, HELPER_PLATFORM=${HELPER_PLATFORM ?? "unknown"}.`,
-			);
-		}
-		return helper;
-	}
-
-	// ----------------------------------------------------------------
-	// Section A: MUST ASK. Active shell expansion. Each form must be
-	// rejected (decision === "ask" or disposition === "never-auto-approve").
-	// ----------------------------------------------------------------
-	describe("MUST ASK: active shell expansion", () => {
-		const mustAsk: ReadonlyArray<{ src: string; why: string }> = [
-			// Process substitution (unquoted)
-			{
-				src: "echo <(touch /tmp/CLINEMM_SENTINEL)",
-				why: "unquoted <() runs inner command",
-			},
-			{ src: "echo >(cat)", why: "unquoted >() runs inner command" },
-			// Brace expansion (unquoted)
-			{
-				src: "echo {a,b,c}",
-				why: "unquoted brace list expands to multiple args",
-			},
-			{
-				src: "echo {1..5}",
-				why: "unquoted brace sequence expands to multiple args",
-			},
-			// Glob (unquoted)
-			{ src: "echo *", why: "unquoted * pathname-expands cwd" },
-			{ src: "echo *.ts", why: "unquoted *.ts pathname-expands" },
-			{
-				src: "echo /etc/passwd*",
-				why: "unquoted path glob enumerates filesystem",
-			},
-			// Parameter expansion (unquoted)
-			{ src: "echo $HOME", why: "unquoted $HOME expands to home dir" },
-			// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
-			{ src: "echo ${HOME}", why: "unquoted ${HOME} expands" },
-			// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
-			{ src: "echo ${x:-foo}", why: "unquoted ${x:-foo} expands with default" },
-			// Command substitution
-			{
-				src: "echo $(touch /tmp/CLINEMM_SENTINEL)",
-				why: "unquoted $() runs inner command",
-			},
-			// Arithmetic expansion
-			{ src: "echo $((1+2))", why: "unquoted $((expr)) expands to result" },
-			// Compound: active expansion in trailing leaf
-			{
-				src: "echo '---BRANCH---' && echo *",
-				why: "compound: trailing bare glob enumerates cwd",
-			},
-			{
-				src: "echo '---BRANCH---' && echo <(touch /tmp/CLINEMM_SENTINEL)",
-				why: "compound: trailing unquoted procsub runs touch",
-			},
-			{
-				src: "echo '---BRANCH---' && echo {a,b}",
-				why: "compound: trailing unquoted brace list expands",
-			},
-			{
-				src: "echo '---BRANCH---' && echo $HOME",
-				why: "compound: trailing unquoted param expansion",
-			},
-			// Mixed-risk chain sentinel
-			{
-				src: "git status --short && git branch -D __CLINEMM_SENTINEL__",
-				why: "mutating git subcommand in compound",
-			},
-		];
-
-		for (const { src, why } of mustAsk) {
-			it(`ASK: ${src}`, async () => {
-				const parsed = await requireHelper().invoke({ command: src });
-				const r = evaluateCommandRiskWithParser({
-					toolInput: src,
-					hostAuthorization: SAFE,
-					parserResult: parsed,
-				});
-				expect(
-					r.decision === "ask" || r.disposition === "never-auto-approve",
-					`Expected ASK/never-auto-approve for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
-				).toBe(true);
-			});
-		}
-	});
-	// ----------------------------------------------------------------
-	// Section B: MUST ALLOW. Quoted literal data. Each form must be
-	// approved (decision === "allow" && disposition === "auto-approve-eligible").
-	// ----------------------------------------------------------------
-	describe("MUST ALLOW: quoted literal data (no active expansion)", () => {
-		const mustAllow: ReadonlyArray<{ src: string; why: string }> = [
-			// Single-quoted procsub syntax -- one literal arg
-			{
-				src: "echo '<(touch /tmp/nope)'",
-				why: "single quotes remove shell meaning",
-			},
-			{
-				src: "echo '<(/bin/rm -rf $HOME)'",
-				why: "single quotes remove shell meaning even when inner $HOME looks live",
-			},
-			// Single-quoted brace syntax
-			{ src: "echo '{a,b}'", why: "single quotes suppress brace expansion" },
-			{ src: "echo '{1..5}'", why: "single quotes suppress brace sequence" },
-			// Single-quoted cmd subst / arith / param
-			{
-				src: "echo '$(touch /tmp/nope)'",
-				why: "single quotes suppress command substitution",
-			},
-			{
-				src: "echo '$((1+2))'",
-				why: "single quotes suppress arithmetic expansion",
-			},
-			{
+		// ----------------------------------------------------------------
+		// Section A: MUST ASK. Active shell expansion. Each form must be
+		// rejected (decision === "ask" or disposition === "never-auto-approve").
+		// ----------------------------------------------------------------
+		describe("MUST ASK: active shell expansion", () => {
+			const mustAsk: ReadonlyArray<{ src: string; why: string }> = [
+				// Process substitution (unquoted)
+				{
+					src: "echo <(touch /tmp/CLINEMM_SENTINEL)",
+					why: "unquoted <() runs inner command",
+				},
+				{ src: "echo >(cat)", why: "unquoted >() runs inner command" },
+				// Brace expansion (unquoted)
+				{
+					src: "echo {a,b,c}",
+					why: "unquoted brace list expands to multiple args",
+				},
+				{
+					src: "echo {1..5}",
+					why: "unquoted brace sequence expands to multiple args",
+				},
+				// Glob (unquoted)
+				{ src: "echo *", why: "unquoted * pathname-expands cwd" },
+				{ src: "echo *.ts", why: "unquoted *.ts pathname-expands" },
+				{
+					src: "echo /etc/passwd*",
+					why: "unquoted path glob enumerates filesystem",
+				},
+				// Parameter expansion (unquoted)
+				{ src: "echo $HOME", why: "unquoted $HOME expands to home dir" },
 				// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
-				src: "echo '${HOME}'",
-				why: "single quotes suppress parameter expansion",
-			},
-			// Single-quoted glob
-			{ src: "echo '*'", why: "single quotes suppress pathname expansion" },
-			{
-				src: "echo '$HOME'",
-				why: "single quotes suppress param expansion ($ is literal)",
-			},
-			// Shell metachars inside quotes
-			{
-				src: "echo 'foo; rm -rf /'",
-				why: "semicolon inside quotes is literal data",
-			},
-			{ src: "echo 'foo*bar'", why: "glob char inside quotes is literal data" },
-			{ src: "echo 'foo|bar'", why: "pipe char inside quotes is literal data" },
-			// The user's exact LIVE echo forms
-			{
-				src: "echo '---BRANCH---'",
-				why: "user's LIVE echo leaf, single-quoted",
-			},
-			{
-				src: "echo '---REMOTES---'",
-				why: "user's LIVE echo leaf, single-quoted",
-			},
-			{
-				src: 'echo "---BRANCH---"',
-				why: "double-quoted equivalent of LIVE leaf",
-			},
-			// Concatenation of literal parts
-			{
-				src: "echo 'foo'bar'baz'",
-				why: "concatenation of single-quoted + bare literal",
-			},
-			// User's exact 5-leaf LIVE chain (must ALLOW)
-			{
-				src: "git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v",
-				why: "user's exact LIVE chain: every expansion-bearing leaf is quoted",
-			},
-			// Compound where every quoted-literal leaf is wrapped
-			{
-				src: "echo '---BRANCH---' && echo '<(touch /tmp/nope)' && echo '{a,b}' && echo '*'",
-				why: "compound: all trailing leaves are quoted literal data",
-			},
-			// Beautiful discriminator pair:
-			//   "echo 'foo; rm -rf /'" -> safe one literal arg
-			//   "echo foo; rm -rf /"   -> shell composition / R5
-			// Already covered in the forms above but worth flagging
-			// again: the projection MUST distinguish them.
-		];
+				{ src: "echo ${HOME}", why: "unquoted ${HOME} expands" },
+				// Build the literal shell source by concatenation so biome does not
+				// interpret the ${x:-foo} as a TS template placeholder.
+				{
+					// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
+					src: "echo " + "${x:-foo}",
+					// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
+					why: "unquoted " + "${x:-foo}" + " expands with default",
+				},
+				// Command substitution
+				{
+					src: "echo $(touch /tmp/CLINEMM_SENTINEL)",
+					why: "unquoted $() runs inner command",
+				},
+				// Arithmetic expansion
+				{ src: "echo $((1+2))", why: "unquoted $((expr)) expands to result" },
+				// Compound: active expansion in trailing leaf
+				{
+					src: "echo '---BRANCH---' && echo *",
+					why: "compound: trailing bare glob enumerates cwd",
+				},
+				{
+					src: "echo '---BRANCH---' && echo <(touch /tmp/CLINEMM_SENTINEL)",
+					why: "compound: trailing unquoted procsub runs touch",
+				},
+				{
+					src: "echo '---BRANCH---' && echo {a,b}",
+					why: "compound: trailing unquoted brace list expands",
+				},
+				{
+					src: "echo '---BRANCH---' && echo $HOME",
+					why: "compound: trailing unquoted param expansion",
+				},
+				// Mixed-risk chain sentinel
+				{
+					src: "git status --short && git branch -D __CLINEMM_SENTINEL__",
+					why: "mutating git subcommand in compound",
+				},
+				// --- Paired discriminators: tilde / glob / brace / tilde-prefix ---
+				// These prove the difference between unquoted Lit (which can
+				// carry later shell expansion) and quoted literal data. The
+				// mvdan/sh AST presents both as a `Lit` WordPart at syntax
+				// level; the difference lives in quote context and in the
+				// helper's per-Part expansion-classification. The next
+				// section pairs each of these with its quoted equivalent.
+				{ src: "echo ~", why: "unquoted tilde expands to $HOME" },
+				{ src: "echo ~/foo", why: "unquoted ~-prefix expands to $HOME/foo" },
+				{
+					src: "echo foo{a,b}",
+					why: "unquoted {a,b} brace-expands to two args",
+				},
+				{ src: "echo foo*", why: "unquoted foo* pathname-expands cwd" },
+				{
+					src: "echo foo[ab]",
+					why: "unquoted foo[ab] pathname-expands bracket pattern",
+				},
+				{
+					src: "echo foo?",
+					why: "unquoted foo? pathname-expands single-char wildcard",
+				},
+			];
 
-		for (const { src, why } of mustAllow) {
-			it(`ALLOW: ${src}`, async () => {
-				const parsed = await requireHelper().invoke({ command: src });
-				const r = evaluateCommandRiskWithParser({
-					toolInput: src,
-					hostAuthorization: SAFE,
-					parserResult: parsed,
+			for (const { src, why } of mustAsk) {
+				it(`ASK: ${src}`, async () => {
+					const parsed = await requireHelper().invoke({ command: src });
+					const r = evaluateCommandRiskWithParser({
+						toolInput: src,
+						hostAuthorization: SAFE,
+						parserResult: parsed,
+					});
+					expect(
+						r.decision === "ask" || r.disposition === "never-auto-approve",
+						`Expected ASK/never-auto-approve for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+					).toBe(true);
 				});
-				expect(
-					r.decision === "allow" && r.disposition === "auto-approve-eligible",
-					`Expected ALLOW/auto-approve-eligible for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
-				).toBe(true);
-			});
-		}
-	});
-});
+			}
+		});
+		// ----------------------------------------------------------------
+		// Section B: MUST ALLOW. Quoted literal data. Each form must be
+		// approved (decision === "allow" && disposition === "auto-approve-eligible").
+		// ----------------------------------------------------------------
+		describe("MUST ALLOW: quoted literal data (no active expansion)", () => {
+			const mustAllow: ReadonlyArray<{ src: string; why: string }> = [
+				// Single-quoted procsub syntax -- one literal arg
+				{
+					src: "echo '<(touch /tmp/nope)'",
+					why: "single quotes remove shell meaning",
+				},
+				{
+					src: "echo '<(/bin/rm -rf $HOME)'",
+					why: "single quotes remove shell meaning even when inner $HOME looks live",
+				},
+				// Single-quoted brace syntax
+				{ src: "echo '{a,b}'", why: "single quotes suppress brace expansion" },
+				{ src: "echo '{1..5}'", why: "single quotes suppress brace sequence" },
+				// Single-quoted cmd subst / arith / param
+				{
+					src: "echo '$(touch /tmp/nope)'",
+					why: "single quotes suppress command substitution",
+				},
+				{
+					src: "echo '$((1+2))'",
+					why: "single quotes suppress arithmetic expansion",
+				},
+				{
+					// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell source, not a TS template
+					src: "echo '${HOME}'",
+					why: "single quotes suppress parameter expansion",
+				},
+				// Single-quoted glob
+				{ src: "echo '*'", why: "single quotes suppress pathname expansion" },
+				{
+					src: "echo '$HOME'",
+					why: "single quotes suppress param expansion ($ is literal)",
+				},
+				// Shell metachars inside quotes
+				{
+					src: "echo 'foo; rm -rf /'",
+					why: "semicolon inside quotes is literal data",
+				},
+				{
+					src: "echo 'foo*bar'",
+					why: "glob char inside quotes is literal data",
+				},
+				{
+					src: "echo 'foo|bar'",
+					why: "pipe char inside quotes is literal data",
+				},
+				// The user's exact LIVE echo forms
+				{
+					src: "echo '---BRANCH---'",
+					why: "user's LIVE echo leaf, single-quoted",
+				},
+				{
+					src: "echo '---REMOTES---'",
+					why: "user's LIVE echo leaf, single-quoted",
+				},
+				{
+					src: 'echo "---BRANCH---"',
+					why: "double-quoted equivalent of LIVE leaf",
+				},
+				// Concatenation of literal parts
+				{
+					src: "echo 'foo'bar'baz'",
+					why: "concatenation of single-quoted + bare literal",
+				},
+				// User's exact 5-leaf LIVE chain (must ALLOW)
+				{
+					src: "git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v",
+					why: "user's exact LIVE chain: every expansion-bearing leaf is quoted",
+				},
+				// Compound where every quoted-literal leaf is wrapped
+				{
+					src: "echo '---BRANCH---' && echo '<(touch /tmp/nope)' && echo '{a,b}' && echo '*'",
+					why: "compound: all trailing leaves are quoted literal data",
+				},
+				// Beautiful discriminator pair:
+				//   "echo 'foo; rm -rf /'" -> safe one literal arg
+				//   "echo foo; rm -rf /"   -> shell composition / R5
+				// Already covered in the forms above but worth flagging
+				// again: the projection MUST distinguish them.
+				// --- Paired discriminators: tilde / glob / brace / bracket / question ---
+				// Same characters as the unquoted MUST ASK additions, but
+				// each inside single quotes, so shell expansion is fully
+				// suppressed. These prove the AST difference is preserved
+				// across quote context. If the classifier returns ASK for
+				// these, it is conflating quote context with expansion.
+				{ src: "echo '~'", why: "single-quoted tilde is literal" },
+				{ src: "echo '~/foo'", why: "single-quoted ~-prefix is literal" },
+				{ src: "echo 'foo{a,b}'", why: "single-quoted braces are literal" },
+				{ src: "echo 'foo*'", why: "single-quoted * is literal" },
+				{ src: "echo 'foo[ab]'", why: "single-quoted [ab] is literal" },
+				{ src: "echo 'foo?'", why: "single-quoted ? is literal" },
+			];
+
+			for (const { src, why } of mustAllow) {
+				it(`ALLOW: ${src}`, async () => {
+					const parsed = await requireHelper().invoke({ command: src });
+					const r = evaluateCommandRiskWithParser({
+						toolInput: src,
+						hostAuthorization: SAFE,
+						parserResult: parsed,
+					});
+					expect(
+						r.decision === "allow" && r.disposition === "auto-approve-eligible",
+						`Expected ALLOW/auto-approve-eligible for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+					).toBe(true);
+				});
+			}
+		});
+	},
+);
