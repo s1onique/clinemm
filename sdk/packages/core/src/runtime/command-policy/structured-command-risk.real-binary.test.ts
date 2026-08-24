@@ -238,23 +238,24 @@ describeWithHelper("structured-command-risk -- REAL parser-helper V2 end-to-end 
 	 *   auto-promotes). The chain will become ALLOW again once
 	 *   parser-proven shellStatic provenance lands (CORRECTION02 proper).
 	 */
-	it("echo '---BRANCH---' && git status --short -> ASK under containment (real-helper driven)", async () => {
+	it("echo '---BRANCH---' && git status --short -> ALLOW (parser-proven + V1 git_status, real-helper driven)", async () => {
 		const liveCmd = "echo '---BRANCH---' && git status --short";
 		const parsed = await helper.invoke({ command: liveCmd });
 		expect(parsed).not.toBeNull();
 		expect(parsed!.parseStatus).toBe("complete");
+		// Phase 3: vendored helper is v3 with argProvenance.
+		expect(parsed!.protocolVersion).toBe(3);
 
 		const r = evaluateCommandRiskWithParser({
 			toolInput: liveCmd,
 			hostAuthorization: SAFE,
 			parserResult: parsed,
 		});
-		// Containment pins ASK. The user's LIVE chain ASK is by design;
-		// the live helper binary is unchanged so parser output is
-		// identical, but the V2 promotion that previously flipped the
-		// V1 ASK to ALLOW is gone.
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).not.toBe("auto-approve-eligible");
+		// Phase 2/3 GREEN: parser-proven static provenance on the
+		// echo leaf + V1 host_safe_git_status allowlist on the git
+		// leaf -> ALLOW via risk_v2_structured_promotion.
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
 	});
 
 	/**
@@ -267,20 +268,25 @@ describeWithHelper("structured-command-risk -- REAL parser-helper V2 end-to-end 
 	 *   lands (ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 +
 	 *   CORRECTION02 proper).
 	 */
-	it("user's exact 5-leaf && chain -> ASK under containment (real-helper driven)", async () => {
+	it("user's exact 5-leaf && chain -> ALLOW (parser-proven + V1 git_*, real-helper driven)", async () => {
 		const liveCmd =
 			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v";
 		const parsed = await helper.invoke({ command: liveCmd });
 		expect(parsed).not.toBeNull();
 		expect(parsed!.parseStatus).toBe("complete");
+		// Phase 3: vendored helper is v3 with argProvenance.
+		expect(parsed!.protocolVersion).toBe(3);
 
 		const r = evaluateCommandRiskWithParser({
 			toolInput: liveCmd,
 			hostAuthorization: SAFE,
 			parserResult: parsed,
 		});
-		expect(r.decision).toBe("ask");
-		expect(r.disposition).not.toBe("auto-approve-eligible");
+		// Phase 2/3 GREEN: all 5 leaves are parser-proven static
+		// (single-quoted literal data) AND in V1 host_safe_git_* ->
+		// ALLOW via risk_v2_structured_promotion.
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
 	});
 
 	/**

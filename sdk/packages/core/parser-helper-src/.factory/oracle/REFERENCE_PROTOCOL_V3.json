@@ -1,139 +1,139 @@
 {
-  "hostPlatform": "darwin-arm64",
-  "protocolVersion": 3,
-  "frozenAt": "9f98d59c4+phase2",
-  "parentV2Oracle": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/parser-helper-src/.factory/oracle/REFERENCE_PROTOCOL_V2.json",
-  "frozenByHelperSha256": "22d92db6f09700aae263643f75612396b680ec7c09e8353916d3cdd9a9e839be",
   "corpus": [
     {
+      "argProvenance": [],
       "id": "01-pwd",
-      "source": "pwd",
-      "argProvenance": []
+      "source": "pwd"
     },
     {
+      "argProvenance": [],
       "id": "02-pwd-semicolon-pwd",
-      "source": "pwd; pwd",
-      "argProvenance": []
+      "source": "pwd; pwd"
     },
     {
+      "argProvenance": [],
       "id": "03-git-status-and-diff-stat",
-      "source": "git status && git diff --stat",
-      "argProvenance": []
+      "source": "git status && git diff --stat"
     },
     {
+      "argProvenance": [
+        "static"
+      ],
       "id": "04-echo-dashes-branch",
-      "source": "echo '---BRANCH---'",
-      "argProvenance": [
-        "static"
-      ]
+      "source": "echo '---BRANCH---'"
     },
     {
+      "argProvenance": [
+        "dynamic"
+      ],
       "id": "05-echo-star-unquoted",
-      "source": "echo *",
-      "argProvenance": [
-        "dynamic"
-      ]
+      "source": "echo *"
     },
     {
+      "argProvenance": [
+        "static"
+      ],
       "id": "06-echo-star-single-quoted",
-      "source": "echo '*'",
-      "argProvenance": [
-        "static"
-      ]
+      "source": "echo '*'"
     },
     {
+      "argProvenance": [
+        "dynamic"
+      ],
       "id": "07-echo-brace-unquoted",
-      "source": "echo {a,b}",
-      "argProvenance": [
-        "dynamic"
-      ]
+      "source": "echo {a,b}"
     },
     {
+      "argProvenance": [
+        "static"
+      ],
       "id": "08-echo-brace-single-quoted",
-      "source": "echo '{a,b}'",
-      "argProvenance": [
-        "static"
-      ]
+      "source": "echo '{a,b}'"
     },
     {
+      "argProvenance": [
+        "dynamic"
+      ],
       "id": "09-echo-dollar-home-double",
-      "source": "echo \"$HOME\"",
-      "argProvenance": [
-        "dynamic"
-      ]
+      "source": "echo \"$HOME\""
     },
     {
+      "argProvenance": [
+        "dynamic"
+      ],
       "id": "10-echo-procsub-unquoted",
-      "source": "echo <(pwd)",
-      "argProvenance": [
-        "dynamic"
-      ]
+      "source": "echo <(pwd)"
     },
     {
+      "argProvenance": [
+        "static",
+        "static"
+      ],
       "id": "11-bash-c-rm-rf-home",
-      "source": "bash -c 'rm -rf \"$HOME\"'",
-      "argProvenance": [
-        "static",
-        "static"
-      ]
+      "source": "bash -c 'rm -rf \"$HOME\"'"
     },
     {
+      "argProvenance": [
+        "static",
+        "static",
+        "static"
+      ],
       "id": "12-find-glob-quoted",
-      "source": "find . -name '*.ts'",
+      "source": "find . -name '*.ts'"
+    },
+    {
       "argProvenance": [
         "static",
         "static",
-        "static"
-      ]
-    },
-    {
+        "dynamic"
+      ],
       "id": "13-find-glob-unquoted",
-      "source": "find . -name *.ts",
-      "argProvenance": [
-        "static",
-        "static",
-        "dynamic"
-      ]
+      "source": "find . -name *.ts"
     },
     {
+      "argProvenance": [],
       "id": "14-redirect-output",
-      "source": "pwd > ~/.ssh/authorized_keys",
-      "argProvenance": []
+      "source": "pwd > ~/.ssh/authorized_keys"
     },
     {
+      "argProvenance": [],
       "id": "15-malformed-input",
-      "source": "${BROKEN_INVOCATION",
-      "argProvenance": []
+      "source": "${BROKEN_INVOCATION"
     },
     {
-      "id": "16-echo-rm-cmd-subst",
-      "source": "echo \"$(rm -rf foo)\"",
       "argProvenance": [
         "dynamic"
-      ]
+      ],
+      "id": "16-echo-rm-cmd-subst",
+      "source": "echo \"$(rm -rf foo)\""
     },
     {
-      "id": "17-rm-rf-home-direct",
-      "source": "rm -rf \"$HOME\"",
       "argProvenance": [
         "static",
         "dynamic"
-      ]
+      ],
+      "id": "17-rm-rf-home-direct",
+      "source": "rm -rf \"$HOME\""
     },
     {
+      "argProvenance": [],
       "id": "18-and-or-compound",
-      "source": "git status --short && echo X && git remote -v",
-      "argProvenance": []
+      "source": "git status --short && echo X && git remote -v"
     },
     {
+      "argProvenance": [],
       "id": "19-pipe",
-      "source": "git log --oneline | head -5",
-      "argProvenance": []
+      "source": "git log --oneline | head -5"
     },
     {
+      "argProvenance": [],
       "id": "20-assign-prefix",
-      "source": "FOO=bar pwd",
-      "argProvenance": []
+      "source": "FOO=bar pwd"
     }
-  ]
+  ],
+  "frozenAt": "cb6d08f8b+phase3-dblquote-context-fix",
+  "frozenByHelperSha256": "6eb885fc8907cde9732a35e83666de7c16ed832b969b5dbb24ea6661615bd4da",
+  "hostPlatform": "darwin-arm64",
+  "parentV2Oracle": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/parser-helper-src/.factory/oracle/REFERENCE_PROTOCOL_V2.json",
+  "protocolVersion": 3
 }

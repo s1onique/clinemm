@@ -5779,7 +5779,49 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
 **DO NOT start** `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01`.
 **DO start** the row immediately below (`ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01`).
 |
-| `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | PHASE 2 LANDED — positive parser-proven `argProvenance` ("static" / "dynamic" / "unknown") computed in Go on original `*syntax.Word`, surfaced via protocol v3, consumed in TS as `host_safe_echo_parser_proven` positive branch. Original AST is authority; projection strings are NOT authority; dynamic/unknown/missing fail closed. Vendored binary in `bin/parser-helper/` NOT replaced in this cycle (Phase 3 is its own ACT). | HIGH | ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 / CORRECTION01 evidence contract extension; mvdan/sh v3.13.1 typed WordPart AST |
+| `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | PHASE 2 LANDED + PHASE 3 PROMOTED -- positive parser-proven `argProvenance` ("static" / "dynamic" / "unknown") computed in Go on original `*syntax.Word` with quote-context threading (PHASE 3 P1 fix). Vendored slot now holds v3 binaries (5 platforms, all SHA bound in `parser-helper-src/.factory/oracle/VENDORED_ARTIFACTS_BINDING.json`). Frozen-legacy v2 binary preserved at `parser-helper-src/.factory/oracle/legacy-binaries/` for fail-closed regression. | HIGH | ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 / CORRECTION01 evidence contract extension; mvdan/sh v3.13.1 typed WordPart AST |
+
+**PHASE 2 LANDED + PHASE 3 PROMOTED.**
+
+**PARSER_PROVENANCE_DOUBLE_QUOTE_CONTEXT** PASS (CORRECTION01 P1 fix landed at the front of Phase 3): `provenance.go` threads a `quoteContext` (`quoteBare` / `quoteDouble`) through `classifyPartProvenance`. Inside ordinary `"..."`, a nested `Lit` is unconditionally `static` (the shell suppresses glob / brace / tilde expansion inside double quotes; only typed-AST expansions like `ParamExp` / `CmdSubst` / `ArithmExp` run, and those surface as their own AST node kinds). Bare-Lit byte scan is the ONLY path that activates on `quoteBare`. Locale-translated `$"..."` (`DblQuoted.Dollar === true`) is classified `dynamic` (depends on `LC_*` env); `$'...'` ANSI-C (`SglQuoted.Dollar === true`) remains `static` (deterministic). 12 new Section G tests in `phase2-provenance.test.ts` cover MUST STATIC (`echo "*"`, `echo "foo?"`, `echo "foo[ab]"`, `echo "{a,b}"`, `echo "~"`, `echo "foo\?"`, `echo "foo\*"`, `echo ""`) and MUST DYNAMIC (`echo "$HOME"`, `echo "$(pwd)"`, `echo "$((1+2))"`, `echo $"hello"`).
+
+**V3_DIST_REAL_PIPELINE** PASS -- `bash parser-helper-src/cross-compile.sh` produces all 5 platforms at `parser-helper-src/dist/parser-helper/<platform>/` with per-target `CGO_ENABLED=0` logged. `scripts/verify-v3-equivalence.mjs` against the host darwin-arm64 build reports `20/20 corpus entries: v2 wire compatibility preserved on every entry; v3 argProvenance matches frozen REFERENCE_PROTOCOL_V3.json` (frozen helper SHA `6eb885fc...` after Phase 3 re-bind; per-entry provenance unchanged from `cb6d08f8b`).
+
+**5_CROSS_PLATFORM_BUILDS** PASS -- darwin-arm64, darwin-amd64, linux-amd64, linux-arm64, win32-x64 built from pinned source `mvdan.cc/sh/v3 v3.13.1` + Go 1.25.8.
+
+**5_VENDORED_ARTIFACT_IDENTITIES** BOUND -- `parser-helper-src/.factory/oracle/VENDORED_ARTIFACTS_BINDING.json` records source HEAD, Go version, mvdan version, protocol version, and per-artifact (target, path, byte size, SHA-256).
+
+**VENDORED_HOST_PROTOCOL_VERSION** = **3** -- `runtime.real-binary.test.ts` was updated (Phase 3) to assert `protocolVersion === 3` on the vendored host binary (darwin-arm64).
+
+**VENDORED_REAL_BINARY_POLICY_SUITE** GREEN -- `structured-command-risk.real-binary.test.ts` (9 tests) and `parser-helper/runtime.real-binary.test.ts` (8 tests) both run against the VENDORED v3 helper, NOT dist. 17/17 PASS. Includes the user exact 5-leaf LIVE chain (`git status --short && echo "---BRANCH---" && git branch --show-current && echo "---REMOTES---" && git remote -v`) which now returns ALLOW/auto-approve-eligible via `risk_v2_structured_promotion` (was ASK under containment).
+
+**V2_ORACLE** UNCHANGED -- `REFERENCE_PROTOCOL_V2.json` remains byte-identical to `9f98d59c4` freeze; live v2 verifier output: `20/20 corpus entries normalized-equivalent against FROZEN REFERENCE_PROTOCOL_V2.json`. The v3 oracle per-entry `argProvenance` values are also unchanged from `cb6d08f8b` (only the helper SHA bound was refreshed to `6eb885fc...`).
+
+**V2_FAIL_CLOSED_COMPATIBILITY** PRESERVED -- frozen-legacy v2 darwin-arm64 binary extracted from git history `a3c8d49b7` and preserved at `parser-helper-src/.factory/oracle/legacy-binaries/darwin-arm64-cline-parser-helper-v2` (SHA `ce169663762c823440b864840c71115103f0d5afc146ca40f29e04c4d4239964`, matches `LEGACY_HELPERS.txt`). `phase2-provenance.test.ts > Section F` (3 tests) points at this frozen legacy copy and proves `echo "*"`, `echo "{a,b}"`, `echo "<(pwd)"` STILL ASK under v2 -- the runtime `injectUnknownProvenance` correctly fail-closes v2 responses. The other 4 platforms v2 binaries were never checked in (hostRun=false in LEGACY_HELPERS.txt); Section F is therefore gated on `darwin-arm64 + legacy-file present`.
+
+**SDK_FULL_SUITE** GREEN -- full SDK vitest suite: **2724 PASS / 14 skipped / 0 FAIL** across 192 test files.
+
+**SECTION_D_TARGET GREEN** (re-confirmed against vendored v3): `structured-command-risk.attack-witness.test.ts > Section D` is now a real GREEN regression guard asserting `decision === "allow" && disposition === "auto-approve-eligible"` for every quoted-literal data form. Each form has its unquoted MUST-ASK sibling in Section A to keep the bidirectional contract visible.
+
+**CONSERVATION** preserved:
+- `echo "---BRANCH---" && echo *` -> ASK (active unquoted `*` in trailing leaf; V2 parser-proven correctly reports `dynamic`)
+- `echo "---BRANCH---" && echo {a,b}` -> ASK (same)
+- `echo "---BRANCH---" && git branch -D __CLINEMM_SENTINEL__` -> ASK / never-auto-approve (R5 hard-floor wins over parser-proven)
+- `echo "<(rm -rf foo)"` -> never-auto-approve (V1 R5 hard-floor on `rm -rf`; parser-proven branch respects `finalDisposition !== "never-auto-approve"` gate)
+
+**SCOPE GUARDS HELD** through Phase 3:
+- No quoted-`find` fold-in.
+- No expansion authority on the TS side.
+- No `host_safe_echo_parsed_argv` resurrection; new label `host_safe_echo_parser_proven` only.
+- v2 oracle immutable from `9f98d59c4`; v3 oracle is a separate authority.
+
+**STOP POINT honored:** Phase 4 (exact-head VSIX + LIVE qualification harness re-run) is still its own ACT. Do NOT build the VSIX in this commit.
+
+**NEXT (Phase 4, separate ACT):**
+1. Build VSIX from current HEAD.
+2. Install VSIX (or use the harness) against a freshly-cloned Cline tree.
+3. Re-run the LIVE 5-leaf chain authorization harness and the mixed-risk sentinel.
+4. On green, close ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01. |
 **PHASE 2 LANDED.**
 
 **PROTOCOL_V3_DEFINED** PASS — `PARSER_HELPER_PROTOCOL_VERSION = 3` (Go + TS in lockstep). `StructuredCmdJSON.argProvenance?: ReadonlyArray<"static" | "dynamic" | "unknown">` is additive on every cmd projection; the runtime validator enforces `length === args.length` and the three-value set. `STRUCTURED_PROTO_VERSION = 3` mirrors the bump.

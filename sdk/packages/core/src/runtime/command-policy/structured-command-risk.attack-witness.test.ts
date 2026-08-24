@@ -267,25 +267,16 @@ describeWithHelper(
 					src: "echo foo?",
 					why: "unquoted foo? pathname-expands single-char wildcard",
 				},
-				// -- Section C additions (containment): MUST ASK by design --
-				// The user's exact 5-leaf LIVE chain and the simpler
-				// compound ASK under containment because the V2 parsed-argv
-				// ALLOW path was removed. They will become ALLOW again when
-				// parser-proven shellStatic provenance lands
-				// (ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 +
-				// CORRECTION02 Section D below).
-				{
-					src: "git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v",
-					why: "user's exact LIVE chain ASK under containment (Section C: precision regression, security restored)",
-				},
-				{
-					src: "echo '---BRANCH---' && git status --short",
-					why: "simple compound (quoted echo + safe git) ASK under containment (was the LIVE-bug bypass)",
-				},
-				{
-					src: "echo '---BRANCH---' && echo '<(touch /tmp/nope)' && echo '{a,b}' && echo '*'",
-					why: "compound of all-quoted-literal leaves ASK under containment (Section C)",
-				},
+				// -- Section C entries moved to MUST ALLOW (Phase 2/3): --
+				// The user's 5-leaf LIVE chain and the simpler compounds
+				// that ASK'd under CONTAINMENT (V2 parsed-argv ALLOW
+				// removed) are now ALLOW again under v3 because:
+				//   - every echo leaf has parser-proven static provenance
+				//     (every arg is single-quoted literal data)
+				//   - every git leaf is in V1's host_safe_git_* allowlist
+				// They are covered by the MUST ALLOW list below (Section B)
+				// and by structured-command-risk.phase2-provenance.test.ts
+				// > Section C.
 			];
 
 			for (const { src, why } of mustAsk) {
@@ -353,35 +344,25 @@ describeWithHelper(
 		});
 
 		// ----------------------------------------------------------------
-		// Section D: CURRENT_STATE_WITNESS -- parser-proven positive
-		// provenance TARGET recorded but not asserted GREEN.
+		// Section D: parser-proven positive provenance (PHASE 2/3 GREEN).
 		//
 		// Each form below contains quoted literal data whose visible
 		// characters fall outside V1's host_safe_echo quoted class
 		// (e.g. `{`, `}`, `*`, `?`, `[`, `]`, `<`, `>`, `)`, `$`, `` ` ``).
-		// Under containment (V2 parsed-argv ALLOW removed), each of these
-		// returns ASK by design. The test body asserts the current
-		// conservative verdict (ASK), NOT the target shape.
+		// Under the v3 helper (now vendored), each arg is classified
+		// `static` per the Go classifier's original-AST + quote-
+		// context rule, and V2 promotes the verdict to ALLOW via the
+		// `host_safe_echo_parser_proven` branch.
 		//
-		// When ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 lands and
-		// the Go helper emits per-arg `shellStatic` provenance from
-		// the original mvdan/sh AST + quote context, V2 will ALLOW
-		// any single-command echo whose every arg is
-		// `shellStatic: true`. At that point the assertion in this
-		// section will flip from `r.decision === "ask"` to
-		// `r.decision === "allow" && r.disposition === "auto-approve-eligible"`,
-		// and the section becomes a real GREEN regression guard.
-		//
-		// Per Factory review (P2 documentary correction): this section
-		// is NOT literally RED today. It is the current-state witness
-		// for the future ALLOW target. Run it via:
+		// This file drives the VENDORED helper binary, which is now
+		// the v3 build (post-Phase-3 install). Run it via:
 		//   bunx vitest run --config vitest.config.ts -t "Section D:"
 		//
 		// Each paired form has a MUST ASK sibling in Section A above
 		// (e.g. echo ~ ↔ echo '~', echo * ↔ echo '*', etc.) to keep
 		// the bidirectional contract visible in one file.
 		// ----------------------------------------------------------------
-		describe("Section D: parser-proven positive provenance target (CURRENT_STATE_WITNESS / TARGET shape recorded but not asserted)", () => {
+		describe("Section D: parser-proven positive provenance (PHASE 2/3 GREEN)", () => {
 			const mustAllowParserProven: ReadonlyArray<{ src: string; why: string }> =
 				[
 					// Quoted procsub / brace / param / arith / cmd-subst / glob.
@@ -393,10 +374,11 @@ describeWithHelper(
 						src: "echo '<(touch /tmp/nope)'",
 						why: "single-quoted <(...) is literal data, not procsub (paired with MUST ASK echo <(touch ...))",
 					},
-					{
-						src: "echo '<(/bin/rm -rf $HOME)'",
-						why: "single-quoted procsub-syntax with embedded $-marker is still literal",
-					},
+					// `echo '<(/bin/rm -rf $HOME)'` intentionally NOT in
+					// this list: V1's R5 hard-floor on `rm -rf` fires
+					// regardless of single-quoting. The parser-proven
+					// branch respects this by failing its gate on
+					// `finalDisposition !== "never-auto-approve"`.
 					{
 						src: "echo '{a,b}'",
 						why: "single-quoted brace list is literal data",
@@ -485,8 +467,8 @@ describeWithHelper(
 					//   - The Section D header comment above will then read
 					//     "GREEN once shellStatic lands" instead of "RED".
 					expect(
-						r.decision === "ask",
-						`Section D CURRENT_STATE_WITNESS: asserts the current ASK verdict; flips to ALLOW when parser-proven shellStatic provenance lands. Expected ASK for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+						r.decision === "allow" && r.disposition === "auto-approve-eligible",
+						`Section D PHASE 2/3 GREEN: parser-proven positive provenance asserts ALLOW/auto-approve-eligible for every quoted-literal data form. Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
 					).toBe(true);
 				});
 			}

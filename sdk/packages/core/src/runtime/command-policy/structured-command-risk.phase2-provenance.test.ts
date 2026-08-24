@@ -11,7 +11,7 @@
 //   leaves the vendored binary at v2; promoting v3 to the vendored
 //   slot is is Phase 3. The "OLD PROTOCOL V2 FAILS CLOSED" gate in
 //   the reviewer's stop point is proven by ALSO pointing at the
-//   vendored v2 binary and asserting the same Section D inputs
+//   frozen-legacy v2 binary and asserting the same Section D inputs
 //   remain ASK (fail-closed under v2).
 //
 // Truth table for this suite:
@@ -93,17 +93,29 @@ const V3_DIST_PATH = (() => {
 	return existsSync(candidate) ? candidate : null;
 })();
 
-// V2 vendored helper location (Phase 3 promotion target; Phase 2
-// must not modify it).
-const V2_VENDORED_PATH = (() => {
-	if (!HELPER_PLATFORM) return null;
-	const ext = HELPER_PLATFORM === "win32-x64" ? ".exe" : "";
+// V2 LEGACY helper location (Phase 3 FROZEN-LEGACY path).
+//
+// PHASE 3 P0 change: the vendored slot at sdkRoot/bin/parser-helper/
+// now holds the v3 helper. The v2 legacy helper for darwin-arm64 is
+// preserved at parser-helper-src/.factory/oracle/legacy-binaries/,
+// extracted from commit a3c8d49b7 (the only historical commit that
+// vendored a helper binary). Its frozen identity is captured in
+// LEGACY_HELPERS.txt (sha256 ce169663762c823440b864840c71115103f0d5afc146ca40f29e04c4d4239964,
+// protocolVer 2).
+//
+// The legacy darwin-arm64 binary is the ONLY one we have a frozen
+// copy of (the other 4 platforms were never checked in -- hostRun
+// was false in LEGACY_HELPERS.txt). Section F below is therefore
+// gated on darwin-arm64 + the legacy file being present.
+const V2_LEGACY_PATH = (() => {
+	if (HELPER_PLATFORM !== "darwin-arm64") return null;
 	const candidate = join(
 		sdkRoot,
-		"bin",
-		"parser-helper",
-		HELPER_PLATFORM,
-		`cline-parser-helper${ext}`,
+		"parser-helper-src",
+		".factory",
+		"oracle",
+		"legacy-binaries",
+		"darwin-arm64-cline-parser-helper-v2",
 	);
 	return existsSync(candidate) ? candidate : null;
 })();
@@ -316,19 +328,85 @@ describeWithV3(
 				}
 			});
 		});
+		// ----- Section G: DblQuoted-context discriminator (PHASE 3 P1 fix) -----
+		//
+		// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01
+		//   CORRECTION01 -- DblQuoted-context classification.
+		//
+		// The Phase 2 witness's Section B exercised ONLY single-quoted
+		// literal data. CORRECTION01 surfaced that the same v3 classifier
+		// was mis-classifying DOUBLE-QUOTED literal data as DYNAMIC,
+		// because the bare-Lit byte scanner was being applied to nested
+		// Lit inside "..." (where glob / brace / tilde are suppressed).
+		//
+		// This section is the bidirectional discriminator for the fix:
+		// it asserts the parser-proven v3 classifier reports STATIC for
+		// double-quoted literal data (no typed AST expansion), and
+		// DYNAMIC for double-quoted forms that DO contain typed AST
+		// expansions (ParamExp / CmdSubst / ArithmExp / ProcSubst /
+		// ExtGlob / locale-translated $"...").
+		const mustAllowDblQuoted: ReadonlyArray<{ src: string; why: string }> = [
+			{ src: 'echo "*"', why: "DblQuoted glob char -- typed-AST expansion absent; was mis-classified DYNAMIC pre-fix" },
+			{ src: 'echo "foo?"', why: "DblQuoted glob char mid-string" },
+			{ src: 'echo "foo[ab]"', why: "DblQuoted bracket pattern" },
+			{ src: 'echo "{a,b}"', why: "DblQuoted brace list" },
+			{ src: 'echo "~"', why: "DblQuoted tilde" },
+			{ src: 'echo "foo\\?"', why: "DblQuoted backslash-escape" },
+			{ src: 'echo "foo\\*"', why: "DblQuoted backslash-escape glob" },
+			{ src: 'echo ""', why: "empty DblQuoted" },
+		];
+		for (const { src, why } of mustAllowDblQuoted) {
+			it(`ALLOW: ${src}`, async () => {
+				const parsed = await helper.invoke({ command: src });
+				const r = evaluateCommandRiskWithParser({
+					toolInput: src,
+					hostAuthorization: SAFE,
+					parserResult: parsed,
+				});
+				expect(
+					r.decision === "allow" && r.disposition === "auto-approve-eligible",
+					`Expected ALLOW/auto-approve-eligible for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+				).toBe(true);
+			});
+		}
+
+		const mustAskDblQuoted: ReadonlyArray<{ src: string; why: string }> = [
+			{ src: 'echo "$HOME"', why: "DblQuoted ParamExp" },
+			{ src: 'echo "$(pwd)"', why: "DblQuoted CmdSubst" },
+			{ src: 'echo "$((1+2))"', why: "DblQuoted ArithmExp" },
+			{ src: 'echo $"hello"', why: "Bash locale-translated DblQuoted (Dollar=true) -> DYNAMIC, fail closed" },
+		];
+		for (const { src, why } of mustAskDblQuoted) {
+			it(`ASK: ${src}`, async () => {
+				const parsed = await helper.invoke({ command: src });
+				const r = evaluateCommandRiskWithParser({
+					toolInput: src,
+					hostAuthorization: SAFE,
+					parserResult: parsed,
+				});
+				expect(
+					r.decision === "ask" || r.disposition === "never-auto-approve",
+					`Expected ASK/never-auto-approve for "${src}" (${why}). Got decision=${r.decision} disposition=${r.disposition} source=${r.source}.`,
+				).toBe(true);
+			});
+		}
 	},
 );
 
 // ----- Section F: OLD PROTOCOL V2 FAILS CLOSED -----
-// Point at the vendored v2 binary (lacking argProvenance) and
-// prove the Section B inputs STILL ASK under v2. This is the
+// Point at the frozen-legacy v2 binary (lacking argProvenance, hash
+// ce16966376... per LEGACY_HELPERS.txt) and prove the Section B
+// inputs STILL ASK under v2. This is the
 // fail-closed-on-old-helper guarantee that protects us if a v2
 // helper somehow reappears (downgrade / rollback / cache).
 const describeWithV2 = (
-	helperV2_present() && isSupportedPlatform ? describe : describe.skip
+	legacyV2Present() && isSupportedPlatform ? describe : describe.skip
 ) as typeof describe;
-function helperV2_present(): boolean {
-	return V2_VENDORED_PATH !== null;
+function legacyV2Present(): boolean {
+	// Section F proves v2 fail-closed behavior using the FROZEN
+	// legacy binary at parser-helper-src/.factory/oracle/legacy-binaries/.
+	// We do NOT use the vendored slot (it now holds v3).
+	return V2_LEGACY_PATH !== null;
 }
 describeWithV2(
 	"OLD v2 helper FAILS CLOSED (argProvenance absent -> no parser-proven promotion)",
@@ -337,7 +415,7 @@ describeWithV2(
 		beforeAll(() => {
 			helperV2 = new MvdanShHelper({
 				platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
-				binaryPath: () => V2_VENDORED_PATH as string,
+				binaryPath: () => V2_LEGACY_PATH as string,
 			});
 		});
 
