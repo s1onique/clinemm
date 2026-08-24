@@ -3,37 +3,39 @@
     {
       "bytes": 2618786,
       "path": "sdk/packages/core/bin/parser-helper/darwin-arm64/cline-parser-helper",
-      "sha256": "39b571280cc45b38b7224b535006b0f1d160ceff73697276f345646b21413cb2",
+      "sha256": "874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3",
       "target": "darwin-arm64"
     },
     {
       "bytes": 2712800,
       "path": "sdk/packages/core/bin/parser-helper/darwin-amd64/cline-parser-helper",
-      "sha256": "0fb600d31796aaa9bf97ea6115a4cef159f481fb0f82ed5c7c96cfbb36ef5fbb",
+      "sha256": "26a313d12b586c2ab6055ed6ebb27c7caab2a9f59d12be204a35b7d8398af603",
       "target": "darwin-amd64"
     },
     {
       "bytes": 2539704,
       "path": "sdk/packages/core/bin/parser-helper/linux-amd64/cline-parser-helper",
-      "sha256": "ba529da5ac7705981ea86e45d3feaea3d04e1919669edb7d6f055c5b3d971384",
+      "sha256": "fcd2eb73c68e00c1cac721b45a576608ee75208d421c9f4dd2209beedfc9c2f2",
       "target": "linux-amd64"
     },
     {
       "bytes": 2425016,
       "path": "sdk/packages/core/bin/parser-helper/linux-arm64/cline-parser-helper",
-      "sha256": "421acde003b15996ccd9d541d92aeb299842696a3bc0eb65da7e415214041e2d",
+      "sha256": "71d5abda09be248c606b213b9447be747ef655b992ec924747234445d02fc5c3",
       "target": "linux-arm64"
     },
     {
       "bytes": 2641408,
       "path": "sdk/packages/core/bin/parser-helper/win32-x64/cline-parser-helper.exe",
-      "sha256": "d60c4db2083c17bf6716d70f0c4f01c51fbffcaadb0e97fff5557d3178503027",
+      "sha256": "96f5e3421cd33c091848a480e970a3d2637a85daea743e76956101ffc96d15db",
       "target": "win32-x64"
     }
   ],
-  "frozenAt": "phase5-stderr-devnull-neutral01",
+  "frozenAt": "phase5-stderr-devnull-neutral01-correction01",
   "goVersion": "go1.25.8",
   "mvdanVersion": "mvdan.cc/sh/v3 v3.13.1",
   "protocolVersion": 4,
-  "sourceHead": "9a048c668f95344d275a9ede541609596f995305"
+  "sourceHead": "5904e8760962154e533c6735a997eff112b2a64b",
+  "sourceTree": "f75bf66f6e80fc969b50cba892b888d37728888b",
+  "buildNotes": "CORRECTION01: rebuilt from a clean tree (TRACKED_DIRT=<none>) after cross-compile.sh was hardened with a --install HARD-FAIL provenance guard. The earlier --install (9a048c668 entry) was built with uncommitted C2 modifications to parser-helper-src/{projection,protocol}.go on top of the recorded HEAD; the prior sourceHead claim is therefore obsolete and replaced here."
 }
