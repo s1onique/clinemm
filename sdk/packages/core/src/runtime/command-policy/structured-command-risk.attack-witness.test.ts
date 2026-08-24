@@ -10,8 +10,8 @@
 // these tests are the contract: every shape here must ASK.
 
 import { existsSync } from "node:fs";
-import { arch as processArch, platform as processPlatform } from "node:process";
 import { dirname, join } from "node:path";
+import { arch as processArch, platform as processPlatform } from "node:process";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -20,7 +20,13 @@ import { evaluateCommandRiskWithParser } from "./command-risk-internal";
 import { DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
 import { MvdanShHelper } from "./parser-helper/runtime";
 
-type HelperPlatform = "darwin-arm64" | "darwin-amd64" | "linux-amd64" | "linux-arm64" | "win32-x64" | null;
+type HelperPlatform =
+	| "darwin-arm64"
+	| "darwin-amd64"
+	| "linux-amd64"
+	| "linux-arm64"
+	| "win32-x64"
+	| null;
 
 function detectHelperPlatform(): HelperPlatform {
 	const p = processPlatform;
@@ -54,7 +60,13 @@ const HELPER_PLATFORM = detectHelperPlatform();
 const HELPER_PATH = (() => {
 	if (!HELPER_PLATFORM) return null;
 	const ext = HELPER_PLATFORM === "win32-x64" ? ".exe" : "";
-	const candidate = join(sdkRoot, "bin", "parser-helper", HELPER_PLATFORM, `cline-parser-helper${ext}`);
+	const candidate = join(
+		sdkRoot,
+		"bin",
+		"parser-helper",
+		HELPER_PLATFORM,
+		`cline-parser-helper${ext}`,
+	);
 	return existsSync(candidate) ? candidate : null;
 })();
 
@@ -185,7 +197,8 @@ describe("V2 echo authority RED witness (CORRECTION02) -- parser-projected argv 
 	// The user's own LIVE chain + dangerous quoted procsub trailing leaf
 	it("user's 5-leaf LIVE chain + trailing '<(...)' leaf -> ASK", async () => {
 		if (!HELPER_PATH) return;
-		const src = "git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v && echo '<(touch /tmp/CLINEMM_SENTINEL)'";
+		const src =
+			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v && echo '<(touch /tmp/CLINEMM_SENTINEL)'";
 		const parsed = await helper.invoke({ command: src });
 		const r = evaluateCommandRiskWithParser({
 			toolInput: src,
