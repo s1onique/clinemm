@@ -54,7 +54,7 @@ import type { CommandExecutionPlan } from "@cline/shared";
  * (SHA-256 digest + protocol version + structural validation)).
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-type TrustedParserEvidence = unknown
+type TrustedParserEvidence = unknown;
 
 export interface CliCommandToolApprovalDecision {
 	approved: boolean;
@@ -343,10 +343,13 @@ export function cliEvaluateCommandToolApproval(input: {
 	// layer can test containment on canonical paths (which
 	// catches the symlink-escape attack the reviewer
 	// identified).
-	const hostAuthorization = cliResolveHostAuthorization(input.autoApproveTools, {
-		workspaceRoot: input.workspaceRoot,
-		cwd: input.cwd,
-	});
+	const hostAuthorization = cliResolveHostAuthorization(
+		input.autoApproveTools,
+		{
+			workspaceRoot: input.workspaceRoot,
+			cwd: input.cwd,
+		},
+	);
 
 	if (input.workspaceRoot !== undefined && hostAuthorization.workspaceRoots) {
 		// Attach realpath evidence so the policy layer can
@@ -365,10 +368,21 @@ export function cliEvaluateCommandToolApproval(input: {
 		const evidenceResult = buildPathAuthorityEvidence({
 			workspaceRoots: hostAuthorization.workspaceRoots,
 			cwd: hostAuthorization.cwd ?? null,
-			command: input.toolInput as never,
+			// ACT-CLINEMM-COMMAND-APPROVAL-SPLIT-UNDEFINED-REGRESSION01:
+			// `command` is now typed `unknown` (the SDK runs the canonical
+			// normalizer internally), so we no longer need the `as never`
+			// escape that previously masked a P0 throw for shapes the host
+			// did not pre-normalize (e.g. `{ commands: ["pwd"] }`).
+			command: input.toolInput,
 		});
 		if (evidenceResult.ok) {
 			hostAuthorization.pathAuthorityEvidence = evidenceResult.evidence;
+		} else {
+			// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02:
+			// failed evidence (no-workspace-roots / unparseable-command)
+			// means path authority is disabled — under CORRECTION02 the
+			// production ALLOW path requires realpath evidence. The
+			// policy will ASK path-bearing R0 commands.
 		}
 	}
 

@@ -11,9 +11,6 @@ import {
 	buildPathAuthorityEvidence,
 	type CommandDecision,
 	type CommandHostAuthorization,
-	type WorkspacePathAuthorityEvidence,
-} from "@cline/core"
-import {
 	type CompareCheckpointResult,
 	createRestoredCheckpointMetadata,
 	createUserInstructionConfigService,
@@ -25,6 +22,7 @@ import {
 	type SessionHistoryRecord,
 	setTelemetryOptOutGlobally,
 	type UserInstructionConfigService,
+	type WorkspacePathAuthorityEvidence,
 } from "@cline/core"
 import { defaultParserHelperLocator, MvdanShHelper } from "@cline/core/internal/parser-helper-runtime"
 import type { ProviderConfig } from "@cline/llms"
@@ -829,18 +827,11 @@ export class Controller {
 					// canonical pathnames, which closes the V1
 					// symlink-escape attack.
 					const pathAuthorityEvidence = await this.buildPathAuthorityEvidence(requestInput)
-					let hostAuthorization = getCommandHostAuthorization(
-					_toolName,
-					persisted,
-					this.mcpHub,
-					{
-						workspaceRoots: this.lastKnownWorkspaceRoot
-							? [this.lastKnownWorkspaceRoot]
-							: undefined,
+					let hostAuthorization = getCommandHostAuthorization(_toolName, persisted, this.mcpHub, {
+						workspaceRoots: this.lastKnownWorkspaceRoot ? [this.lastKnownWorkspaceRoot] : undefined,
 						cwd: this.lastKnownWorkspaceRoot,
 						pathAuthorityEvidence,
-					},
-				)
+					})
 					let toolInput = requestInput
 					if (override === "all") {
 						// Compose over the base auth we just computed; this preserves
@@ -1810,9 +1801,7 @@ export class Controller {
 	 * any path-bearing R0 command (no implicit "any path is
 	 * safe" default).
 	 */
-	private async buildPathAuthorityEvidence(
-		toolInput: unknown,
-	): Promise<WorkspacePathAuthorityEvidence | undefined> {
+	private async buildPathAuthorityEvidence(toolInput: unknown): Promise<WorkspacePathAuthorityEvidence | undefined> {
 		let workspaceRoots: string[] = []
 		try {
 			const { paths } = await HostProvider.workspace.getWorkspacePaths({})
@@ -1823,10 +1812,7 @@ export class Controller {
 				workspaceRoots = paths.filter((p) => p.trim().length > 0)
 			}
 		} catch (error) {
-			Logger.warn(
-				"[SdkController] Failed to get workspace paths for path authority evidence:",
-				error,
-			)
+			Logger.warn("[SdkController] Failed to get workspace paths for path authority evidence:", error)
 		}
 		if (workspaceRoots.length === 0) {
 			// Fall back to lastKnownWorkspaceRoot so we have
@@ -1840,11 +1826,23 @@ export class Controller {
 		const result = buildPathAuthorityEvidence({
 			workspaceRoots,
 			cwd,
-			command: toolInput as never,
+			// ACT-CLINEMM-COMMAND-APPROVAL-SPLIT-UNDEFINED-REGRESSION01:
+			// `command` is now typed `unknown` (the SDK runs the canonical
+			// normalizer internally), so we no longer need the `as never`
+			// escape that previously masked a P0 throw for shapes the host
+			// did not pre-normalize (e.g. `{ commands: ["pwd"] }`).
+			command: toolInput,
 		})
 		if (!result.ok) {
+			// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02:
+			// failed evidence (no-workspace-roots / unparseable-command)
+			// means path authority is disabled. Under CORRECTION02 the
+			// production ALLOW path requires realpath evidence — there
+			// is NO V1 lexical fallback. Path-bearing R0 commands with
+			// missing / failed / unparseable evidence downgrade to ASK
+			// with source `host_workspace_realpath_authority`.
 			Logger.warn(
-				`[SdkController] buildPathAuthorityEvidence failed (reason=${result.reason}); falling back to V1 lexical gate`,
+				`[SdkController] buildPathAuthorityEvidence failed (reason=${result.reason}); path authority disabled, policy will ASK path-bearing R0 commands`,
 			)
 			return undefined
 		}

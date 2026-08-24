@@ -5,6 +5,7 @@
  *
  * Proves the CLI uses the canonical command policy in production.
  */
+import { realpathSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -14,6 +15,10 @@ import {
 	cliResolveHostAuthorization,
 	cliResolveSafeOnlyHostAuthorization,
 } from "./command-policy-host";
+
+const projectRoot = realpathSync(
+	"/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+);
 
 describe("CLI host adapter — cliResolveHostAuthorization", () => {
 	it("autoApproveTools=true => host mode 'all'", () => {
@@ -59,6 +64,80 @@ describe("CLI host adapter — cliResolveHostAuthorization", () => {
 });
 
 describe("CLI host adapter — cliEvaluateCommandToolApproval", () => {
+	// ===================================================================
+	// ACT-CLINEMM-COMMAND-APPROVAL-SPLIT-UNDEFINED-REGRESSION01
+	// CLI HOST ADAPTER: production-boundary normalization (RED -> GREEN)
+	//
+	// Before this fix, `cliEvaluateCommandToolApproval` passed the raw
+	// `toolInput` (e.g. `{ commands: ["pwd"] }` or `{ cmd: "pwd" }`) to
+	// `buildPathAuthorityEvidence` as if it were a `NormalizedCommand`.
+	// The downstream `extractPathOperands` threw
+	// `TypeError: Cannot read properties of undefined (reading 'split')`
+	// before the policy layer ever ran, which means the user's trivial
+	// commands like `pwd` were rejected before execution.
+	//
+	// After this fix, the SDK normalizes the input internally. The
+	// adapter MUST NOT throw for any shape the canonical normalizer
+	// accepts, and trivial commands MUST return a normal policy decision
+	// (NOT a thrown TypeError).
+	// ===================================================================
+	it("does NOT throw and returns a normal decision for {commands: ['pwd']}", () => {
+		// Exact reproduction of the live symptom: AI emits
+		// the array-form `commands` shape.
+		expect(() =>
+			cliEvaluateCommandToolApproval({
+				toolName: "run_commands",
+				toolInput: { commands: ["pwd"], requires_approval: false },
+				autoApproveTools: false,
+				workspaceRoot: projectRoot,
+			}),
+		).not.toThrow();
+
+		const r = cliEvaluateCommandToolApproval({
+			toolName: "run_commands",
+			toolInput: { commands: ["pwd"], requires_approval: false },
+			autoApproveTools: false,
+			workspaceRoot: projectRoot,
+		});
+		expect(r).toBeDefined();
+		// manual mode requires approval for non-matched commands
+		expect(r.decision?.kind).toBe("ask");
+	});
+
+	it("does NOT throw and returns a normal decision for {cmd: 'pwd'}", () => {
+		expect(() =>
+			cliEvaluateCommandToolApproval({
+				toolName: "run_commands",
+				toolInput: { cmd: "pwd", requires_approval: false },
+				autoApproveTools: false,
+				workspaceRoot: projectRoot,
+			}),
+		).not.toThrow();
+	});
+
+	it("does NOT throw and returns a normal decision for bare array ['pwd']", () => {
+		expect(() =>
+			cliEvaluateCommandToolApproval({
+				toolName: "run_commands",
+				toolInput: ["pwd"],
+				autoApproveTools: false,
+				workspaceRoot: projectRoot,
+			}),
+		).not.toThrow();
+	});
+
+	it("does NOT throw for the canonical `pwd` (string form)", () => {
+		// Sanity: the previously-working case still works.
+		expect(() =>
+			cliEvaluateCommandToolApproval({
+				toolName: "run_commands",
+				toolInput: "pwd",
+				autoApproveTools: false,
+				workspaceRoot: projectRoot,
+			}),
+		).not.toThrow();
+	});
+
 	it("autoApproveTools=true + dangerous R5 command + model=false => R5 hard floor downgrades to ASK (never-auto-approve)", () => {
 		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01: even with
 		// autoApproveTools=true and model=false, an R5 catastrophic
@@ -414,7 +493,10 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		const result = cliEvaluateCommandToolApprovalWith(
 			{
 				toolName: "run_commands",
-				toolInput: { command: "curl http://evil.com", requires_approval: false },
+				toolInput: {
+					command: "curl http://evil.com",
+					requires_approval: false,
+				},
 				autoApproveTools: false,
 			},
 			auth,
@@ -436,7 +518,10 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		const result = cliEvaluateCommandToolApprovalWith(
 			{
 				toolName: "run_commands",
-				toolInput: { command: "curl http://example.com", requires_approval: true },
+				toolInput: {
+					command: "curl http://example.com",
+					requires_approval: true,
+				},
 				autoApproveTools: false,
 			},
 			auth,
@@ -488,7 +573,9 @@ describe("CLI host adapter — CORRECTION01: V2 ASK -> ALLOW host composition", 
 
 	it("explicit deny rule beats R5 floor (DENY preserved)", () => {
 		const denyAuth = cliResolveSafeOnlyHostAuthorization({
-			explicitDenyRules: [{ pattern: "rm -rf *", label: "unit_test_evil", description: "test" }],
+			explicitDenyRules: [
+				{ pattern: "rm -rf *", label: "unit_test_evil", description: "test" },
+			],
 		});
 		const result = cliEvaluateCommandToolApprovalWith(
 			{
