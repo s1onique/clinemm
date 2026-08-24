@@ -97,7 +97,7 @@ func main() {
 		// Project each top-level stmt to its wire form.
 		projected := make([]map[string]any, 0, len(stmts))
 		for _, stmt := range stmts {
-			projected = append(projected, projectStmt(stmt))
+			projected = append(projected, projectStmt(stmt, req.Source))
 		}
 		resp.Program = &StructuredProgramJSON{Stmts: projected}
 	}

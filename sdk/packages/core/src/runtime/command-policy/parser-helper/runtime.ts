@@ -396,7 +396,15 @@ function validateResponse(
 	}
 	if (!json || typeof json !== "object") return null;
 	const j = json as Record<string, unknown>;
-	if (j.protocolVersion !== PARSER_HELPER_PROTOCOL_VERSION) return null;
+	// Accept BOTH protocol versions:
+	//   - 3 (current): carries per-arg `argProvenance`; classifier's
+	//     parser-proven branch activates.
+	//   - 2 (legacy): NO `argProvenance`; classifier's parser-proven
+	//     branch fail-closes (the synthetic-unknown normalisation
+	//     below marks every cmd as `argProvenance: ["unknown", ...]`
+	//     so `cmd.argProvenance.every(p => p === "static")` is false
+	//     for every command under a v2 helper).
+	if (j.protocolVersion !== 3 && j.protocolVersion !== 2) return null;
 	if (typeof j.sourceSha256 !== "string") return null;
 	if (j.sourceSha256 !== expectedDigest) return null;
 	if (j.parseStatus !== "complete" && j.parseStatus !== "failed") {
@@ -413,7 +421,58 @@ function validateResponse(
 	// shape we consume and reject anything else.
 	if (!isValidProgram(j.program)) return null;
 
+	// PHASE2-PROVENANCE01: a v2 response carries NO argProvenance.
+	// Synthesize a per-arg array of "unknown" so the classifier's
+	// parser-proven branch is GUARANTEED to fail-closed under v2
+	// (no string-blacklist-derived promotion can sneak through).
+	if (j.protocolVersion === 2) {
+		injectUnknownProvenance(j.program);
+		// Re-typecast; the protocolVersion is still 2 on the wire
+		// so the structured-command-risk check sees the right
+		// version. We do NOT mutate `j.protocolVersion` to 3.
+	}
+
 	return j as unknown as ParsedShell;
+}
+
+/**
+ * Recursively walks a parsed program and, for every cmd stmt,
+ * ensures `cmd.argProvenance` is set to an array of "unknown" of
+ * length `cmd.args.length`. This is the v2 fail-closed injection.
+ */
+function injectUnknownProvenance(program: unknown): void {
+	if (!program || typeof program !== "object") return;
+	const p = program as { stmts?: unknown };
+	if (!Array.isArray(p.stmts)) return;
+	for (const stmt of p.stmts) {
+		injectUnknownProvenanceStmt(stmt);
+	}
+}
+
+function injectUnknownProvenanceStmt(stmt: unknown): void {
+	if (!stmt || typeof stmt !== "object") return;
+	const s = stmt as { kind?: string; cmd?: unknown; left?: unknown; rhs?: unknown; inner?: unknown };
+	switch (s.kind) {
+		case "cmd":
+			if (s.cmd && typeof s.cmd === "object") {
+				const c = s.cmd as { args?: unknown; argProvenance?: unknown };
+				if (Array.isArray(c.args) && c.argProvenance === undefined) {
+					c.argProvenance = Array.from({ length: c.args.length }, () => "unknown");
+				}
+			}
+			break;
+		case "and":
+		case "or":
+		case "pipe":
+			injectUnknownProvenanceStmt(s.left);
+			injectUnknownProvenanceStmt(s.rhs);
+			break;
+		case "subshell":
+			injectUnknownProvenanceStmt(s.inner);
+			break;
+		case "opaque":
+			break;
+	}
 }
 
 function isValidProgram(program: unknown): boolean {
@@ -470,6 +529,17 @@ function isValidCmd(cmd: unknown): boolean {
 		const rr = r as Record<string, unknown>;
 		if (typeof rr.op !== "string") return false;
 		if (typeof rr.path !== "string") return false;
+	}
+	// Protocol v3 adds argProvenance. If present, it MUST be a string
+	// array of the same length as `args` and contain only the three
+	// valid provenance values. Absent on protocol v2 responses; the
+	// classifier fails closed when it is missing.
+	if (c.argProvenance !== undefined) {
+		if (!Array.isArray(c.argProvenance)) return false;
+		if ((c.argProvenance as unknown[]).length !== (c.args as unknown[]).length) return false;
+		for (const p of c.argProvenance as unknown[]) {
+			if (p !== "static" && p !== "dynamic" && p !== "unknown") return false;
+		}
 	}
 	return true;
 }

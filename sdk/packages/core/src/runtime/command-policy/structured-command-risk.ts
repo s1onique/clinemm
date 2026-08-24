@@ -107,7 +107,7 @@ import {
  *   "skipped" verdict that preserves V1 behavior.
  */
 
-export const STRUCTURED_PROTO_VERSION = 2 as const;
+export const STRUCTURED_PROTO_VERSION = 3 as const;
 
 /**
  * Per-command shell-kind label.
@@ -187,6 +187,19 @@ export type StructuredStmt =
 export interface StructuredCmd {
 	readonly name: string;
 	readonly args: ReadonlyArray<string>;
+	/**
+	 * Per-arg shell-staticness provenance from the Go helper's
+	 * classification of the ORIGINAL mvdan/sh AST. Invariant:
+	 * `argProvenance.length === args.length` whenever this field is
+	 * present. ABSENT on protocol v2 responses; present on v3
+	 * responses.
+	 *
+	 * The classifier NEVER derives provenance from the projected
+	 * `args` strings. If this field is missing (e.g. an old v2 helper
+	 * somehow appears), the classifier must fail closed: the parser-
+	 * proven promotion branch does NOT activate.
+	 */
+	readonly argProvenance?: ReadonlyArray<"static" | "dynamic" | "unknown">;
 	readonly assigns: ReadonlyArray<{
 		readonly name: string;
 		readonly value: string;
@@ -457,10 +470,14 @@ export function evaluateStructuredCommandRisk(args: {
 		};
 	}
 
-	// 2. Protocol version mismatch. Production callers must pin to
-	//    `STRUCTURED_PROTO_VERSION` (currently 2). Older parser
-	//    helpers are not eligible to authorize promotion.
-	if (parserResult.protocolVersion !== STRUCTURED_PROTO_VERSION) {
+	// 2. Protocol version gate. Accepts BOTH v2 (legacy) and v3
+	//    (current). v3 is required for the parser-proven positive
+	//    provenance branch (`host_safe_echo_parser_proven`); v2
+	//    falls through to the existing structure-caused-ASK path
+	//    (because the runtime injects argProvenance=["unknown"]* for
+	//    v2 responses, fail-closed). Future versions (>=4) skip
+	//    entirely.
+	if (parserResult.protocolVersion !== STRUCTURED_PROTO_VERSION && parserResult.protocolVersion !== 2) {
 		return {
 			parseConfidence: "skipped",
 			perStatement: [],
@@ -468,7 +485,7 @@ export function evaluateStructuredCommandRisk(args: {
 			promoteToAllow: false,
 			downgradeToNeverAutoApprove: false,
 			reasons: [
-				`structured analysis skipped (protocol version ${parserResult.protocolVersion} != ${STRUCTURED_PROTO_VERSION})`,
+				`structured analysis skipped (protocol version ${parserResult.protocolVersion} != ${STRUCTURED_PROTO_VERSION} and != 2)`,
 			],
 		};
 	}
@@ -529,7 +546,7 @@ export function evaluateStructuredCommandRisk(args: {
 
 	// 7. Per-statement classification with structural max-aggregation.
 	const perStmt = parserResult.program.stmts.map((stmt, idx) =>
-		classifyStmt(stmt, idx, parserResult.dialect),
+		classifyStmt(stmt, idx, parserResult.dialect, parserResult.protocolVersion),
 	);
 
 	const aggregate = maxRisk(perStmt.map((s) => s.risk));
@@ -568,13 +585,14 @@ function classifyStmt(
 	stmt: StructuredStmt,
 	index: number,
 	dialect: ShellDialect,
+	protocolVersion: number,
 ): StructuredStmtRisk {
 	switch (stmt.kind) {
 		case "and":
 		case "or":
 		case "pipe": {
-			const left = classifyStmt(stmt.left, index, dialect);
-			const right = classifyStmt(stmt.rhs, index, dialect);
+			const left = classifyStmt(stmt.left, index, dialect, protocolVersion);
+			const right = classifyStmt(stmt.rhs, index, dialect, protocolVersion);
 			return {
 				statementIndex: index,
 				kind: stmt.kind,
@@ -583,7 +601,7 @@ function classifyStmt(
 			};
 		}
 		case "subshell": {
-			const inner = classifyStmt(stmt.inner, index, dialect);
+			const inner = classifyStmt(stmt.inner, index, dialect, protocolVersion);
 			return {
 				statementIndex: index,
 				kind: "subshell",
@@ -600,7 +618,7 @@ function classifyStmt(
 			};
 		}
 		case "cmd": {
-			return classifyCmd(stmt.cmd, index, dialect);
+			return classifyCmd(stmt.cmd, index, dialect, protocolVersion);
 		}
 	}
 }
@@ -609,6 +627,7 @@ function classifyCmd(
 	cmd: StructuredCmd,
 	index: number,
 	_dialect: ShellDialect,
+	protocolVersion: number,
 ): StructuredStmtRisk {
 	// CORRECTION01 STEP 7: redirects participate in risk. Walk
 	// every redirect FIRST; a sensitive write redirect escalates to
@@ -683,52 +702,58 @@ function classifyCmd(
 		};
 	}
 
-	// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02
-	// CONTAINMENT (HALT_GO_SOURCE_UNAVAILABLE).
+	// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01.
 	//
-	// The previous V2 `host_safe_echo_parsed_argv` branch was
-	// removed. It had two related defects:
+	// Parser-proven positive provenance branch. Activates ONLY when
+	// the parser helper speaks protocol v3 (i.e. the authoritative
+	// `argProvenance` array is present). When that gate is open:
 	//
-	//   1. authority-too-broad: a single-command parsed-argv ALLOW
-	//      could be promoted to ALLOW in a compound via V2's
-	//      structure-only promotion gate. In particular:
-	//        - `echo '---BRANCH---' && echo *`
-	//        - `echo '---BRANCH---' && echo {a,b}`
-	//      were returning ALLOW. The unquoted glob/brace in the
-	//      trailing leaf is an active shell expansion that should
-	//      never auto-promote from V2.
+	//   cmd.name === "echo"
+	//   AND no redirects
+	//   AND every argProvenance === "static"
+	//     -> auto-approve-eligible
 	//
-	//   2. authority-too-narrow: 16 quoted-literal forms like
-	//      `echo '*'`, `echo '{a,b}'`, `echo '<(/bin/rm -rf $HOME)'`
-	//      were returning ASK because the V1 regex's quoted class
-	//      intentionally excludes several punctuation characters
-	//      (`{`, `}`, `*`, `?`, `[`, `]`, `<`, `>`, `(`, `)`,
-	//      `$`, `\``) even when they appear inside quotes. The V2
-	//      parsed-argv branch was the only path that ALLOWed them.
+	// Fail-closed requirements (any one disqualifies):
+	//   - protocolVersion !== 3 (v2 or older)
+	//   - argProvenance is missing (defensive; the validator also
+	//     rejects missing-argProvenance on v3 responses, but the
+	//     classifier must not crash if it sees a future variant)
+	//   - argProvenance has length mismatch with args (defensive;
+	//     validator already rejects this on v3)
+	//   - any argProvenance entry is "dynamic" or "unknown"
+	//   - any redirect present
 	//
-	// The principled repair is positive parser-proven per-WordPart
-	// provenance (`shellStatic`), computed INSIDE the Go helper from
-	// the original mvdan/sh AST + quote context. The Go source is
-	// not in this checkout, so CORRECTION02 cannot ship that fix
-	// yet (see ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01).
+	// Source label: `host_safe_echo_parser_proven`. Reviewer
+	// explicitly named this label so the V2 trace distinguishes
+	// it from the (removed) `host_safe_echo_parsed_argv` label
+	// and from V1's `host_safe_echo` regex label.
 	//
-	// Containment removes the unsafe V2 promotion entirely. echo
-	// authority now falls through to V1's `host_safe_echo` source-
-	// text regex + R5 hard floor, which is sound (it accepts the
-	// single-command quoted-hyphen forms). The 16 MUST ALLOW false-
-	// ASKs become true ASKs by design -- a temporary precision
-	// regression the user has authorised in exchange for closing
-	// the 2 MUST ASK authority-broadening bypasses.
-	//
-	// When CORRECTION02 lands, echo authority will be:
-	//
-	//     V2 echo ALLOW  iff  simple echo
-	//                    && no redirects
-	//                    && every arg shellStatic === true
-	//
-	// with `shellStatic` derived from the parser helper's
-	// per-WordPart classification, not from any host-side
-	// punctuation blacklist.
+	// Scope guard: this branch does NOT fold quoted-`find` work;
+	// it does NOT change expansion authority; it does NOT touch
+	// any other V2 source label. V1's `host_safe_echo` regex
+	// still matches the simple `echo ---BRANCH---` forms via
+	// the canonical `findSafeRuleMatch` below.
+	// Fail-closed under v2: the runtime injects ["unknown"]* for v2
+	// responses (see parser-helper/runtime.ts `injectUnknownProvenance`),
+	// so `every(p => p === "static")` is false under v2 and the branch
+	// never activates. The `protocolVersion === 3` check is an
+	// additional belt for direct callers of `classifyCmd` that bypass
+	// the runtime's injection.
+	if (
+		protocolVersion === 3 &&
+		cmd.name === "echo" &&
+		cmd.redirects.length === 0 &&
+		cmd.argProvenance !== undefined &&
+		cmd.argProvenance.length === cmd.args.length &&
+		cmd.argProvenance.every((p) => p === "static")
+	) {
+		return {
+			statementIndex: index,
+			kind: "cmd",
+			risk: "auto-approve-eligible",
+			source: "host_safe_echo_parser_proven",
+		};
+	}
 
 	const rendered = renderArgv(cmd);
 	if (rendered === "") {

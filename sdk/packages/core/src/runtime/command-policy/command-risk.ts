@@ -550,6 +550,42 @@ export function evaluateCommandRiskWithParser(
 			parserResult: input.parserResult,
 		});
 		const v2SourceBound = v2.parseConfidence === "complete";
+		// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01.
+		// Parser-proven positive provenance: when V2's per-stmt
+		// classification reports `host_safe_echo_parser_proven` (every
+		// arg of a simple echo is `static` per the Go helper's AST
+		// classification), V2 can promote a V1 ASK to ALLOW even if
+		// the V1 ASK was caused by V1's restrictive quoted-character
+		// class (NOT by opaque-shell composition). This is the
+		// principal Phase 2 win.
+		//
+		// Gates (must all hold):
+		//   (a) v2 source label is exactly `host_safe_echo_parser_proven`
+		//       (positive proof, not string-blacklist);
+		//   (b) v2 source is bound to source (parseConfidence === "complete");
+		//   (c) V1 disposition is not already never-auto-approve (V2
+		//       may NEVER promote a hard-floor disposition back to ALLOW);
+		//   (d) parser helper protocol version is 3 -- enforced at the
+		//       per-stmt layer; under v2 the runtime injects
+		//       ["unknown"]* which prevents the parser-proven branch
+		//       from activating in the first place.
+		const hasParserProvenLeaf = v2.perStatement.some(
+			(s) => s.source === "host_safe_echo_parser_proven",
+		);
+		const isParserProvenPromotion =
+			hasParserProvenLeaf &&
+			v2SourceBound &&
+			finalDisposition !== "never-auto-approve" &&
+			v2.promoteToAllow;
+		if (isParserProvenPromotion) {
+			finalDecision = "allow";
+			finalDisposition = "auto-approve-eligible";
+			finalSource = "risk_v2_structured_promotion";
+			reasons.push(...v2.reasons);
+		}
+		// Existing structure-caused-ASK promotion (CORRECTION01). Unchanged
+		// in Phase 2; the parser-proven path does NOT take this branch
+		// because its finalSource has already been overwritten above.
 		const v2StructureCausedAsk =
 			v2.promoteToAllow &&
 			finalDecision === "ask" &&

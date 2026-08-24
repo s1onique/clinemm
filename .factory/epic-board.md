@@ -5779,6 +5779,88 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
 **DO NOT start** `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01`.
 **DO start** the row immediately below (`ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01`).
 |
+| `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01-PHASE2-PROVENANCE01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | PHASE 2 LANDED — positive parser-proven `argProvenance` ("static" / "dynamic" / "unknown") computed in Go on original `*syntax.Word`, surfaced via protocol v3, consumed in TS as `host_safe_echo_parser_proven` positive branch. Original AST is authority; projection strings are NOT authority; dynamic/unknown/missing fail closed. Vendored binary in `bin/parser-helper/` NOT replaced in this cycle (Phase 3 is its own ACT). | HIGH | ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 / CORRECTION01 evidence contract extension; mvdan/sh v3.13.1 typed WordPart AST |
+**PHASE 2 LANDED.**
+
+**PROTOCOL_V3_DEFINED** PASS — `PARSER_HELPER_PROTOCOL_VERSION = 3` (Go + TS in lockstep). `StructuredCmdJSON.argProvenance?: ReadonlyArray<"static" | "dynamic" | "unknown">` is additive on every cmd projection; the runtime validator enforces `length === args.length` and the three-value set. `STRUCTURED_PROTO_VERSION = 3` mirrors the bump.
+
+**GO_HELPER_ARG_PROVENANCE IMPLEMENTED** PASS — new file `sdk/packages/core/parser-helper-src/provenance.go` (`classifyWordProvenance(*syntax.Word, source)`) walks the ORIGINAL `*syntax.Word` AST and NEVER inspects the projected string. Rules (frozen):
+
+  - `SglQuoted` -> `static`
+
+  - `DblQuoted` -> `static` iff every nested `WordPart` is static (recurse)
+
+  - `ParamExp` / `CmdSubst` / `ArithmExp` / `ProcSubst` / `ExtGlob` / `BraceExp` -> `dynamic`
+
+  - `Lit` (bare) -> `static` iff the SOURCE bytes (`Lit.ValuePos.Offset..ValueEnd.Offset`) contain no unescaped tilde / brace / glob / bracket / dollar / backtick / paren / redirect / pipe / semicolon / background / comment / exclamation / history. Backslash-escapes are honored (verified via `astprobe` probe: `echo \*` keeps `\*` in source bytes and is classified `static`; `echo foo*` is classified `dynamic`).
+
+  - Any unknown `WordPart` subtype -> `unknown` (fail-closed; future mvdan nodes default conservative)
+
+  - Concatenation: classify each part; the Word is `static` iff every part is `static`, `dynamic` iff any is `dynamic`, else `unknown`
+
+**QUOTED/UNQUOTED AST DISCRIMINATORS** PASS — `scripts/freeze-protocol-v3.mjs` freezes `REFERENCE_PROTOCOL_V3.json` (20 corpus entries, identical source strings to v2 oracle, plus per-entry `argProvenance` array). Bidirectional RED contract is reproduced precisely:
+
+  - `echo "*"` -> `[static]` (single-quoted glob char)
+
+  - `echo *` -> `[dynamic]` (unquoted glob)
+
+  - `echo "{a,b}"` -> `[static]` (single-quoted brace)
+
+  - `echo {a,b}` -> `[dynamic]` (unquoted brace)
+
+  - `echo "$HOME"` -> `[dynamic]` (DblQuoted ParamExp)
+
+  - `echo "$HOME"` (single-quoted) -> `[static]` (single-quoted param syntax)
+
+  - `echo <(pwd)` -> `[dynamic]` (unquoted ProcSubst)
+
+  - `echo "<(pwd)"` (single-quoted) -> `[static]` (single-quoted procsub syntax)
+
+  - `find . -name "*.ts"` -> `[static, static, static]`
+
+  - `find . -name *.ts` -> `[static, static, dynamic]`
+
+  - `rm -rf "$HOME"` -> `[static, dynamic]`
+
+**HOST-BUILT V3 HELPER REAL_PIPELINE** PASS — `bash parser-helper-src/cross-compile.sh` produces all 5 platforms at `parser-helper-src/dist/parser-helper/<platform>/` (per-target CGO_ENABLED=0 logged). `scripts/verify-v3-equivalence.mjs` against the host darwin-arm64 build reports `20/20 corpus entries: v2 wire compatibility preserved on every entry; v3 argProvenance matches frozen REFERENCE_PROTOCOL_V3.json` with the frozen helper SHA-256 (`22d92db6...`) bound and verified against the live binary. v2 verifier against the vendored legacy binary (`ce16966376...`) still reports 20/20 against the IMMUTABLE v2 oracle.
+
+**OLD PROTOCOL V2 FAILS CLOSED / NOT PROMOTED** PASS — `validateResponse` accepts BOTH protocol v2 and v3. Under v2 the runtime injects `cmd.argProvenance = ["unknown"] * args.length` on every cmd (recursively through and/or/pipe/subshell/opaque). The classifier parser-proven branch requires `every(p => p === "static")`; under v2 this is FALSE for every cmd so the branch is GUARANTEED not to activate. New `structured-command-risk.phase2-provenance.test.ts > Section F` proves `echo "*"`, `echo "{a,b}"`, `echo "<(pwd)"` STILL ASK under the v2 vendored binary. `evaluateStructuredCommandRisk` accepts both v2 and v3 (skip-on-mismatch for any other version), so the existing CORRECTION01 control test (`parser-provenance.test.ts > (1) runtime-level ... IS promoted`) continues to fire `risk_v2_structured_promotion` on its forged v2 AST.
+
+**SECTION_D_TARGET GREEN** PASS — the bidirectional RED contract the reviewer demanded is now GREEN:
+
+  - Section A (unquoted active expansion): 12 cases (unquoted `*`, `{a,b}`, `~`, `~/foo`, `<(...)`, `$(...)`, `$HOME`, `foo*`, `foo[ab]`, `foo?`, `*.ts`, `foo{a,b}`) all ASK under v3
+
+  - Section B (single-quoted literal data): 18 cases all ALLOW via `host_safe_echo_parser_proven` under v3
+
+**ACTIVE_EXPANSION CONSERVATION** PASS — Section D of the new witness file proves the original MUST-ASK defects stay closed:
+
+  - `echo "---BRANCH---" && echo *` -> ASK (was LIVE-bug bypass; now correctly ASK because trailing unquoted `*` is `dynamic`)
+
+  - `echo "---BRANCH---" && echo {a,b}` -> ASK (same reason)
+
+  - `echo "---BRANCH---" && git branch -D __CLINEMM_SENTINEL__` -> ASK (R5 hard-floor; never-auto-approve; V2 may NEVER promote a hard-floor disposition)
+
+**MIXED_RISK/R5 CONSERVATION** PASS — `echo "<(pwd)"` ALLOW; `echo "<(rm -rf foo)"` (NOT in the test list, intentionally) keeps V1 R5 hard-floor and returns never-auto-approve; the parser-proven branch respects this by failing its gate on `finalDisposition !== "never-auto-approve"`.
+
+**USER 5-LEAF LIVE COMPOUND RECOVERED** PASS — `git status --short && echo "---BRANCH---" && git branch --show-current && echo "---REMOTES---" && git remote -v` now returns ALLOW/auto-approve-eligible under v3 (was ASK under containment). All 5 leaves are parser-proven `static` AND in V1 host_safe_git_* allowlist. `echo "---BRANCH---" && git status --short` also recovers.
+
+**DEFAULT_TESTS GREEN** PASS — full SDK vitest suite: 2716 PASS / 14 skipped / 0 FAIL across 192 test files (up from 2675 baseline by 41 = the new Phase 2 witness tests).
+
+**SCOPE GUARDS HELD:**
+
+  - No vendored-binary replacement in `bin/parser-helper/` (the v2 SHA `ce16966376...` is unchanged; Phase 3 is its own ACT).
+
+  - No quoted-`find` fold-in.
+
+  - No expansion authority on the TS side.
+
+  - No `host_safe_echo_parsed_argv` resurrection; the new label is `host_safe_echo_parser_proven` per reviewer explicit naming.
+
+  - v2 oracle (`REFERENCE_PROTOCOL_V2.json`) is IMMUTABLE from `9f98d59c4`; v3 oracle (`REFERENCE_PROTOCOL_V3.json`) is a separate, additive authority with its own frozen SHA bound.
+
+**STOP POINT honored:** Phase 3 is its own ACT (cross-platform build/install identity of the 5 vendored binaries); Phase 4 is its own ACT (exact-head VSIX + LIVE qualification harness re-run). This commit ships ONLY Phase 2.
+
+**NEXT (Phase 3, separate ACT):** run `bash parser-helper-src/cross-compile.sh --install` to rebuild the 5 vendored binaries from the new source; update `bin/parser-helper/SHA256SUMS.txt` with the new SHAs; verify the SDK full suite still 2716/2716 PASS against the new binaries. THEN Phase 4: dogfood authorization and live-qualification harness re-run. |
 | `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | PHASE 1 LANDED + CORRECTION01 LANDED — FROZEN_ORACLE_SHA_BOUND / REFERENCE_PROTOCOL_V2 IMMUTABLE / RECONSTRUCTED_V2_EQUIVALENCE 20/20 against frozen JSON / SUPPORTED_MISSING_HELPER FAIL_PROVEN / DEFAULT_SUPPORTED_PLATFORM REAL_EXECUTION_PROVEN. Phases 2-4 still OPEN. | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02 / PRECISION_REPAIR (parser-proven shellStatic provenance requires extending the Go helper; the Go source for the vendored binaries at `sdk/packages/core/bin/parser-helper/` is not in this checkout) |
 **CORRECTION01 of the 0c044cd67 row (HALT_PHASE1_ORACLE_NOT_IMMUTABLY_BOUND):** Three bounded mechanical corrections landed before C3.
 

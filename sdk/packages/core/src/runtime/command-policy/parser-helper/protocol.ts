@@ -37,13 +37,30 @@
  *
  * ## Versioning
  *
- * PROTOCOL_VERSION = 2 (matches STRUCTURED_PROTO_VERSION).
+ * PROTOCOL_VERSION = 3 (matches STRUCTURED_PROTO_VERSION).
  * Bumping requires updating STRUCTURED_PROTO_VERSION and the V2
  * classifier's protocolVersion check.
+ *
+ * v2 = frozen compatibility oracle (no `argProvenance` field).
+ * v3 = v2 projection + `argProvenance: "static" | "dynamic" | "unknown"`
+ *      on each `cmd` projection (additive; v2 callers ignore the new
+ *      field, v3 callers see provenance per arg).
+ *
+ * Provenance is computed INSIDE the Go helper from the ORIGINAL
+ * mvdan/sh AST. The TS side is a consumer; it NEVER derives
+ * provenance from the projected `args` strings.
  */
 
 /** Protocol version. MUST match STRUCTURED_PROTO_VERSION. */
-export const PARSER_HELPER_PROTOCOL_VERSION = 2 as const;
+export const PARSER_HELPER_PROTOCOL_VERSION = 3 as const;
+
+/**
+ * Per-arg shell-provenance provenance computed by the Go helper on
+ * the original mvdan/sh AST.
+ *
+ * Invariant: `argProvenance.length === args.length` for every cmd.
+ */
+export type ArgProvenance = "static" | "dynamic" | "unknown";
 
 /** Dialects accepted by the helper. Matches `ShellDialect`. */
 export type ParserHelperDialect = "bash" | "posix" | "mksh" | "zsh" | "unknown";
@@ -94,6 +111,13 @@ export type StructuredStmtJSON =
 export interface StructuredCmdJSON {
 	readonly name: string;
 	readonly args: ReadonlyArray<string>;
+	/**
+	 * Per-arg shell-staticness provenance from the Go helper's
+	 * classification of the ORIGINAL mvdan/sh AST. Invariant:
+	 * `argProvenance.length === args.length`. Absent on protocol v2
+	 * responses.
+	 */
+	readonly argProvenance?: ReadonlyArray<ArgProvenance>;
 	readonly assigns: ReadonlyArray<{
 		readonly name: string;
 		readonly value: string;

@@ -100,17 +100,17 @@ const PlaceholderProcSubst = "?"
 
 // projectStmt projects a single mvdan *Stmt into the wire form. The
 // returned map's "kind" key is the stmt kind per the protocol contract.
-func projectStmt(stmt *syntax.Stmt) map[string]any {
+func projectStmt(stmt *syntax.Stmt, source string) map[string]any {
 	if stmt == nil {
 		return map[string]any{"kind": "opaque"}
 	}
 	switch c := stmt.Cmd.(type) {
 	case *syntax.CallExpr:
-		return projectCallExpr(c, stmt.Redirs)
+		return projectCallExpr(c, stmt.Redirs, source)
 	case *syntax.Subshell:
-		return projectSubshell(c)
+		return projectSubshell(c, source)
 	case *syntax.BinaryCmd:
-		return projectBinaryCmd(c)
+		return projectBinaryCmd(c, source)
 	default:
 		// IfClause, WhileClause, ForClause, CaseClause, Block,
 		// FuncDecl, ArithmCmd, TestClause, DeclClause, LetClause,
@@ -123,7 +123,7 @@ func projectStmt(stmt *syntax.Stmt) map[string]any {
 // stmt-level redirects (stmt.Redirs) are merged with the CallExpr's own
 // redirects (in that order: stmt-level first, then expr-level, matching
 // shell semantics where stmt-level redirects apply to the whole command).
-func projectCallExpr(call *syntax.CallExpr, stmtRedirs []*syntax.Redirect) map[string]any {
+func projectCallExpr(call *syntax.CallExpr, stmtRedirs []*syntax.Redirect, source string) map[string]any {
 	assigns := make([]map[string]string, 0, len(call.Assigns))
 	for _, a := range call.Assigns {
 		assigns = append(assigns, map[string]string{
@@ -135,8 +135,10 @@ func projectCallExpr(call *syntax.CallExpr, stmtRedirs []*syntax.Redirect) map[s
 	name := projectWord(call.Args[0])
 
 	args := make([]string, 0, len(call.Args)-1)
+	argProvenance := make([]string, 0, len(call.Args)-1)
 	for _, w := range call.Args[1:] {
 		args = append(args, projectWord(w))
+		argProvenance = append(argProvenance, string(classifyWordProvenance(w, source)))
 	}
 
 	redirects := make([]map[string]string, 0)
@@ -148,13 +150,14 @@ func projectCallExpr(call *syntax.CallExpr, stmtRedirs []*syntax.Redirect) map[s
 	}
 
 	cmd := map[string]any{
-		"name":      name,
-		"args":      args,
-		"assigns":   assigns,
-		"redirects": redirects,
-		"isWrapper": false,
-		"wrapperOf": "",
-		"inner":     "",
+		"name":          name,
+		"args":          args,
+		"argProvenance": argProvenance,
+		"assigns":       assigns,
+		"redirects":     redirects,
+		"isWrapper":     false,
+		"wrapperOf":     "",
+		"inner":         "",
 	}
 
 	if isW, dialect, inner := detectWrapper(name, args); isW {
@@ -172,18 +175,18 @@ func projectCallExpr(call *syntax.CallExpr, stmtRedirs []*syntax.Redirect) map[s
 // projectSubshell converts a Subshell into the wire form. The legacy
 // projection flattens a multi-stmt subshell to the first child (per
 // observed corpus behavior; see REFERENCE_PROTOCOL_V2.json id 02 etc.).
-func projectSubshell(s *syntax.Subshell) map[string]any {
+func projectSubshell(s *syntax.Subshell, source string) map[string]any {
 	if len(s.Stmts) == 0 {
 		return map[string]any{"kind": "opaque"}
 	}
 	return map[string]any{
 		"kind":  "subshell",
-		"inner": projectStmt(s.Stmts[0]),
+		"inner": projectStmt(s.Stmts[0], source),
 	}
 }
 
 // projectBinaryCmd converts a BinaryCmd (&&, ||, |) into the wire form.
-func projectBinaryCmd(b *syntax.BinaryCmd) map[string]any {
+func projectBinaryCmd(b *syntax.BinaryCmd, source string) map[string]any {
 	kind := ""
 	switch b.Op {
 	case syntax.AndStmt:
@@ -197,8 +200,8 @@ func projectBinaryCmd(b *syntax.BinaryCmd) map[string]any {
 	}
 	return map[string]any{
 		"kind": kind,
-		"left": projectStmt(b.X),
-		"rhs":  projectStmt(b.Y),
+		"left": projectStmt(b.X, source),
+		"rhs":  projectStmt(b.Y, source),
 	}
 }
 
