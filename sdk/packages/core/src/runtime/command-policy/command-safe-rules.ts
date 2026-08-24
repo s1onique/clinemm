@@ -561,6 +561,189 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		pattern:
 			/^\s*find(?:\s+-(?:H|L|P|E|X|s|d|x))?(?:\s+-f\s+[-A-Za-z0-9_/.,+:%@]+)?(?:\s+(?:--|(?![-])[-A-Za-z0-9_/.,+:%@]+))*?(?:\s+(?:-name\s+[-A-Za-z0-9_/.,+:%@]+|-iname\s+[-A-Za-z0-9_/.,+:%@]+|-path\s+[-A-Za-z0-9_/.,+:%@]+|-ipath\s+[-A-Za-z0-9_/.,+:%@]+|-regex\s+[-A-Za-z0-9_/.,+:%@\\.$^]+|-iregex\s+[-A-Za-z0-9_/.,+:%@\\.$^]+|-type\s+[bcdflpsw]|-perm\s+[-+a-zA-Z0-7]+|-user\s+[-A-Za-z0-9_/.,+:%@]+|-uid\s+\d+|-group\s+[-A-Za-z0-9_/.,+:%@]+|-gid\s+\d+|-size\s+[+-]?\d+[ckbwMG]?|-atime\s+[+-]?\d+|-ctime\s+[+-]?\d+|-mtime\s+[+-]?\d+|-amin\s+[+-]?\d+|-cmin\s+[+-]?\d+|-mmin\s+[+-]?\d+|-newer\s+[-A-Za-z0-9_/.,+:%@]+|-anewer\s+[-A-Za-z0-9_/.,+:%@]+|-cnewer\s+[-A-Za-z0-9_/.,+:%@]+|-newerXY\s+[a-z]\s+[-A-Za-z0-9_/.,+:%@]+|-empty|-readable|-writable|-executable|-true|-false|-links\s+\d+|-inum\s+\d+|-fstype\s+[A-Za-z0-9_]+|-nogroup|-nouser|-depth|-xdev|-mindepth\s+\d+|-maxdepth\s+\d+|-prune|-print0?|-ls|-printf\s+[-A-Za-z0-9_/.,+:%@~%\\]+|-quit|-not|-and|-or))*\s*$/u,
 	},
+	{
+		// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+		// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01-CORRECTION01
+		// HALT_READER_DYNAMIC_OPERAND_AUTHORITY_ALIAS
+		//
+		// cat: GNU Coreutils cat(1) "concatenate files and
+		// print on the standard output". cat is intrinsic
+		// read-only file copy; no helper invocation, no fs
+		// write. Per REVIEW STANDARD we enumerate ONLY the
+		// file-read shapes; we deliberately do NOT allow
+		// GNU's `-n / -b / -s / -E / -T / -v / -A / -e / -t`
+		// output transformations in this first wave --
+		// they multiply the matching surface without an
+		// observed production pain point (bounded scope).
+		//
+		// Reviewed forms:
+		//   cat FILE [FILE ...]            one or more file operands
+		//   cat -- FILE [FILE ...]         explicit end-of-options
+		//
+		// Explicitly REJECTED:
+		//   any -<x> option                not yet reviewed
+		//   any --<x> option               not yet reviewed
+		//   any unknown --foo              ASK (no wildcard)
+		//
+		// SHELL-ACTIVE OPERAND REJECTION (CORRECTION01):
+		//   The path-operand character class is intentionally
+		//   NARROW to characters that are INERT in an unquoted
+		//   shell word under the supported grammar. The
+		//   rejected characters include:
+		//     `$`  parameter expansion   (`cat $HOME/secret`)
+		//     `~`  tilde expansion       (`cat ~/secret`)
+		//     `*`  filename generation  (`cat *`)
+		//     `?`  filename generation  (`cat ?.txt`)
+		//   Why: bash performs these expansions BEFORE `cat`
+		//   sees argv. The host-evidence builder, however,
+		//   resolves the LITERAL token, which may lexically
+		//   resolve inside the workspace (e.g. a fixture file
+		//   named `$HOME/secret` placed at the raw-token
+		//   path). That breaks the load-bearing invariant:
+		//
+		//      evidence operand identity  ==  actual filesystem operand
+		//
+		//   Quoted/dynamic/path-rich operands stay conservative
+		//   (ASK) until V2 can positively establish
+		//   `argProvenance === "static"` and bind the EXACT
+		//   projected operand to host authority.
+		//
+		// File operands are bound by V1's
+		// `host_workspace_realpath_authority` gate (the
+		// canonical CORRECTION01-04 path-authority
+		// machinery). Per `extractR0PathOperands`, every
+		// reviewed non-option operand is a path candidate.
+		//
+		// Multi-file cat (`cat README.md package.json`) is
+		// supported by V1's per-operand realpath binding
+		// when the evidence machinery naturally supplies
+		// one operand entry per file. The per-command
+		// ALLOW contract requires ALL operands bound AND
+		// contained; one outside operand -> ASK.
+		source: "host_safe_cat",
+		pattern:
+			/^\s*cat(?:\s+--\s+|\s+)(?:(?![-])[-A-Za-z0-9_/.,+:%^@][-A-Za-z0-9_/.,+:%^@]*(?:\s+(?![-])[-A-Za-z0-9_/.,+:%^@][-A-Za-z0-9_/.,+:%^@]*)*)\s*$/u,
+	},
+	{
+		// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+		//
+		// head (PATH-BEARING). GNU Coreutils head(1) "print
+		// the first 10 lines of each FILE to standard
+		// output". With FILE operand(s) head reads those
+		// files; with no operand head reads stdin. Per
+		// REVIEW STANDARD we enumerate ONLY the path-bearing
+		// forms; the stdin-only forms (`head`, `head -30`)
+		// are handled by the V2 parser-proven stdin-only
+		// reader branch
+		// (ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01)
+		// in `structured-command-risk.ts`.
+		//
+		// Keeping the two families distinct prevents the
+		// conflation the reviewer flagged: shell provenance
+		// (V2 stdin-only) is NOT filesystem authority (V1
+		// path-bearing).
+		//
+		// Reviewed forms (require at least one FILE operand):
+		//   head FILE
+		//   head -<N> FILE             (N is a non-negative integer)
+		//   head -n <N> FILE
+		//   head -- FILE
+		//   head -n <N> -- FILE
+		//
+		// Explicitly REJECTED (conservation):
+		//   head -c / -c <N>           reads BYTES (binary
+		//                               content); not in
+		//                               bounded scope.
+		//   head -v / -q /
+		//     --verbose / --quiet /
+		//     --silent                 output formatting; not
+		//                               reviewed.
+		//   head --help / --version    documentation.
+		//   head FILE1 FILE2 ...       multi-file read; not
+		//                               yet enumerated.
+		//   any unknown --foo          ASK (no wildcard).
+		//
+		// Per REVIEW STANDARD each option is reviewed
+		// individually. `-n <N>` is a count limit only; it
+		// does NOT invoke an external program, write
+		// outside stdout/stderr, or broaden authority.
+		//
+		// File operands are bound by V1's
+		// `host_workspace_realpath_authority` gate (the
+		// canonical CORRECTION01-04 path-authority
+		// machinery). `extractR0PathOperands` consumes the
+		// reviewed `-n <N>` option argument before collecting
+		// the FILE operand so the authority gate sees the
+		// actual file path (not the count token).
+		source: "host_safe_head_path",
+		pattern:
+			/^\s*head(?:\s+(?:-\d+|-n\s+\d+|--))?(?:\s+--\s+(?![-])[-A-Za-z0-9_/.,+:%^@][-A-Za-z0-9_/.,+:%^@]*|\s+(?![-])[-A-Za-z0-9_/.,+:%^@][-A-Za-z0-9_/.,+:%^@]*)\s*$/u,
+	},
+	{
+		// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+		//
+		// tail (PATH-BEARING). GNU Coreutils tail(1) "print
+		// the last 10 lines of each FILE to standard output".
+		// Per tail-invocation(1) tail-invocation(1)
+		// documents follow-mode (`-f`, `-F`, `--follow`,
+		// `--retry`, `--pid`) and byte-counted reads
+		// (`-c`) as materially different operations
+		// (follow modes can wait indefinitely and monitor
+		// changing files). This rule covers ONLY the
+		// finite observational path-bearing read.
+		//
+		// stdin-only forms (`tail`, `tail -20`) are handled
+		// by the V2 parser-proven stdin-only reader branch
+		// (ACT-CLINEMM-COMMAND-RISK-V2-PIPELINE-LEAF-COMPOSITION01).
+		//
+		// Reviewed forms (require at least one FILE operand):
+		//   tail FILE
+		//   tail -<N> FILE
+		//   tail -n <N> FILE
+		//   tail -- FILE
+		//   tail -n <N> -- FILE
+		//
+		// Explicitly REJECTED (conservation; tail(1)
+		// documents these as materially different
+		// operations):
+		//   tail -f / -F /
+		//     --follow / --follow=<how>
+		//     follow modes; tail waits indefinitely and
+		//     monitors changing files. Per
+		//     tail-invocation(1): "output appended data as
+		//     the file grows". Out of scope for finite
+		//     observational reads.
+		//   tail --retry
+		//     "keep trying to open a file if it is
+		//     inaccessible". Also long-running monitoring
+		//     behavior.
+		//   tail --pid=<pid>
+		//     "like -f but terminate after process ID
+		//     dies". Combines follow with a process
+		//     watcher; broader authority.
+		//   tail -c / -c <N> /
+		//     --bytes                 byte-counted reads;
+		//                               not in bounded scope.
+		//   tail -v / -q /
+		//     --verbose / --quiet /
+		//     --silent                 output formatting;
+		//                               not reviewed.
+		//   tail --help /
+		//     --version                documentation.
+		//   tail FILE1 FILE2 ...       multi-file read; not
+		//                               yet enumerated.
+		//   any unknown --foo          ASK (no wildcard).
+		//
+		// Per REVIEW STANDARD each option is reviewed
+		// individually. tail's follow modes are excluded
+		// because they explicitly wait indefinitely (per
+		// tail-invocation(1)), which is
+		// authority-broadening in the same sense as a
+		// write redirect.
+		source: "host_safe_tail_path",
+		pattern:
+			/^\s*tail(?:\s+(?:-\d+|-n\s+\d+|--))?(?:\s+--\s+(?![-])[-A-Za-z0-9_/.,+:%^@][-A-Za-z0-9_/.,+:%^@]*|\s+(?![-])[-A-Za-z0-9_/.,+:%^@][-A-Za-z0-9_/.,+:%^@]*)\s*$/u,
+	},
 ];
 
 /**

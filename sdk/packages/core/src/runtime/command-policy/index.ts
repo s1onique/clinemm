@@ -77,6 +77,7 @@ export {
 	evaluateCommandPathConformance,
 	evaluateCommandRealpathConformance,
 	extractPathOperands,
+	extractR0PathOperands,
 	isLexicallyContained,
 	isPathOperandConforming,
 	type PathAuthorityContext,
@@ -110,10 +111,15 @@ export {
 export {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
+	SAFE_CAT_PROFILE,
 	SAFE_GIT_DIFF_PROFILE,
 	SAFE_GIT_LOG_PROFILE,
 	SAFE_GIT_STATUS_PROFILE,
+	SAFE_HEAD_PATH_PROFILE,
+	SAFE_LS_PROFILE,
+	SAFE_FIND_PROFILE,
 	SAFE_PWD_PROFILE,
+	SAFE_TAIL_PATH_PROFILE,
 	type SafeExecutionProfile,
 	type SafeExecutionProfileKind,
 } from "./safe-execution-profile";

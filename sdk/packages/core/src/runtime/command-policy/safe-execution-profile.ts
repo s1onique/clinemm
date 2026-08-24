@@ -170,6 +170,46 @@ export const SAFE_FIND_PROFILE: SafeExecutionProfile = {
 	commandSuffix: [],
 };
 
+// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+//
+// Safe execution profiles for the three new R0 path-bearing
+// reader families (`host_safe_cat`, `host_safe_head_path`,
+// `host_safe_tail_path`). All three are intrinsic read-only
+// file copies; no helper invocation, no fs write, no pager
+// control needed.
+//
+// The git-family hardening flags (`-c core.*` /
+// `core.hooksPath=/dev/null`) would BREAK these readers
+// (interpreted as positional arguments); they are NOT used.
+// These readers have no `--no-pager` flag; pager output for
+// a read-only cat/head/tail is acceptable.
+export const SAFE_CAT_PROFILE: SafeExecutionProfile = {
+	kind: "pwd",
+	source: "host_safe_cat_profile",
+	description:
+		"Run cat with no overlay. cat is intrinsically read-only file copy (no helper invocation, no fs write); no per-subcommand suffix needed. The git-family hardening flags would BREAK cat (interpreted as file operands); they are not used here.",
+	commandPrefix: [],
+	commandSuffix: [],
+};
+
+export const SAFE_HEAD_PATH_PROFILE: SafeExecutionProfile = {
+	kind: "pwd",
+	source: "host_safe_head_path_profile",
+	description:
+		"Run head with no overlay. head is intrinsically read-only when reading files (no helper invocation, no fs write); no per-subcommand suffix needed. The git-family hardening flags would BREAK head (interpreted as options/operands); they are not used here.",
+	commandPrefix: [],
+	commandSuffix: [],
+};
+
+export const SAFE_TAIL_PATH_PROFILE: SafeExecutionProfile = {
+	kind: "pwd",
+	source: "host_safe_tail_path_profile",
+	description:
+		"Run tail with no overlay. tail is intrinsically read-only when reading files in finite mode (no follow mode, no helper invocation, no fs write); no per-subcommand suffix needed. The git-family hardening flags would BREAK tail (interpreted as options/operands); they are not used here.",
+	commandPrefix: [],
+	commandSuffix: [],
+};
+
 export function getSafeExecutionProfileForSource(
 	source: string,
 ): SafeExecutionProfile | undefined {
@@ -192,6 +232,14 @@ export function getSafeExecutionProfileForSource(
 			return SAFE_LS_PROFILE;
 		case "host_safe_find":
 			return SAFE_FIND_PROFILE;
+		// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+		// three new R0 path-bearing reader profiles.
+		case "host_safe_cat":
+			return SAFE_CAT_PROFILE;
+		case "host_safe_head_path":
+			return SAFE_HEAD_PATH_PROFILE;
+		case "host_safe_tail_path":
+			return SAFE_TAIL_PATH_PROFILE;
 		default:
 			return undefined;
 	}

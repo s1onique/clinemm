@@ -1259,7 +1259,10 @@ function collectFromStmt(
 			// V1's `findSafeRuleMatch`.
 			const leaf = classifyCmd(stmt.cmd, 0, dialect, protocolVersion);
 			if (isR0PathBearingRuleSource(leaf.source)) {
-				const operands = extractPathOperandsFromStructured(stmt.cmd);
+				const operands = extractPathOperandsFromStructured(
+					stmt.cmd,
+					leaf.source,
+				);
 				out.push({ source: leaf.source, operands });
 			}
 			return;
@@ -1295,7 +1298,97 @@ function collectFromStmt(
  * evidence; we only need to enumerate the operand positions
  * here. Containment + resolution are V1's job.
  */
-function extractPathOperandsFromStructured(cmd: StructuredCmd): ReadonlyArray<string> {
+function extractPathOperandsFromStructured(
+	cmd: StructuredCmd,
+	source: string,
+): ReadonlyArray<string> {
+	switch (source) {
+		case "host_safe_cat":
+			return extractCatOperandsStructured(cmd);
+		case "host_safe_head_path":
+		case "host_safe_tail_path":
+			return extractHeadTailOperandsStructured(cmd);
+		default:
+			return extractGenericOperandsStructured(cmd);
+	}
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+ *
+ * Structured-cmd cat path-operand extractor. Mirrors V1's
+ * `extractCatPathOperands`: every non-option, non-`--` token
+ * is a path candidate. Multi-file cat is supported.
+ */
+function extractCatOperandsStructured(cmd: StructuredCmd): ReadonlyArray<string> {
+	const out: string[] = [];
+	let sawDoubleDash = false;
+	for (const a of cmd.args) {
+		if (sawDoubleDash) {
+			out.push(a);
+			continue;
+		}
+		if (a === "--") {
+			sawDoubleDash = true;
+			continue;
+		}
+		if (a.startsWith("-")) {
+			continue;
+		}
+		out.push(a);
+	}
+	return out;
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+ *
+ * Structured-cmd head/tail path-operand extractor. Mirrors V1's
+ * `extractHeadTailPathOperands`: consume `-n <N>` (skip the
+ * value token), then return the FIRST non-option, non-`--`
+ * token. Bounded single-file scope: stops at the first match.
+ */
+function extractHeadTailOperandsStructured(
+	cmd: StructuredCmd,
+): ReadonlyArray<string> {
+	const out: string[] = [];
+	let sawDoubleDash = false;
+	let i = 0;
+	while (i < cmd.args.length) {
+		const a = cmd.args[i]!;
+		if (sawDoubleDash) {
+			out.push(a);
+			i++;
+			continue;
+		}
+		if (a === "--") {
+			sawDoubleDash = true;
+			i++;
+			continue;
+		}
+		if (a === "-n") {
+			i += 2;
+			continue;
+		}
+		if (a.startsWith("-")) {
+			i++;
+			continue;
+		}
+		out.push(a);
+		break;
+	}
+	return out;
+}
+
+/**
+ * Generic structured-cmd path-operand extractor (ls, find).
+ * Mirrors V1's `extractPathOperands(NormalizedCommand)`: skip
+ * any token beginning with `-` (option) or equal to `--`
+ * (option terminator).
+ */
+function extractGenericOperandsStructured(
+	cmd: StructuredCmd,
+): ReadonlyArray<string> {
 	const out: string[] = [];
 	let sawDoubleDash = false;
 	for (const a of cmd.args) {

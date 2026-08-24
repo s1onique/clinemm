@@ -205,6 +205,161 @@ export function extractPathOperands(command: NormalizedCommand): string[] {
 }
 
 /**
+ * ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+ *
+ * Per-R0-source path operand extraction. Dispatches based on the
+ * safe-rule source label returned by `findSafeRuleMatch` so the
+ * authority gate sees the ACTUAL path operands, not option
+ * arguments or terminator tokens.
+ *
+ * Why this exists:
+ *
+ * The generic `extractPathOperands` (above) is "skip any token
+ * starting with `-`". That works for `ls`/`find` (where the only
+ * -starting tokens are options), but it is UNSOUND for
+ * `head -n 30 FILE` and `tail -n 20 FILE` because `-n` is followed
+ * by an integer argument (`30`, `20`) that the generic extractor
+ * treats as a path candidate. That mismatch would make the V1
+ * path-bearing gate fire on a count number, count it as a
+ * non-resolving operand (`realpath-failed-enoent`), and downgrade
+ * the command to ASK — defeating the entire purpose of adding the
+ * new rules.
+ *
+ * Per-source dispatch lets each R0 family enumerate the operands
+ * it actually consults the filesystem with:
+ *
+ *   cat     | every non-option, non-`--` token (multi-file cat)
+ *   head    | non-option tokens AFTER the reviewed options
+ *   tail    | same as head
+ *   ls      | generic (current behavior)
+ *   find    | generic (current behavior)
+ *   *       | generic fallback
+ *
+ * The dispatcher is a single switch on the source label; adding a
+ * new R0 family is one case in this function plus the new safe
+ * rule plus the new entry in `R0_READONLY_PATH_BEARING_SOURCES`.
+ *
+ * Invariant: the order of returned operands MUST match the order
+ * the operands appear in argv. The V2 walker in
+ * `structured-command-risk.ts` (CORRECTION03) does the same shape
+ * contract on the structured-cmd; both sides derive the list
+ * independently so the host-evidence binder can verify identity.
+ */
+export function extractR0PathOperands(
+	command: NormalizedCommand,
+	source: string,
+): string[] {
+	const rendered = renderNormalizedCommand(command);
+	const tokens = rendered.split(/\s+/u).filter((t) => t.length > 0);
+	if (tokens.length === 0) {
+		return [];
+	}
+	switch (source) {
+		case "host_safe_cat":
+			return extractCatPathOperands(tokens);
+		case "host_safe_head_path":
+			return extractHeadTailPathOperands(tokens);
+		case "host_safe_tail_path":
+			return extractHeadTailPathOperands(tokens);
+		default:
+			// ls / find / future R0 families use the generic
+			// shape (skip `-`-prefixed tokens and `--`).
+			return extractPathOperands(command);
+	}
+}
+
+/**
+ * cat path-operand extractor.
+ *
+ * `cat` accepts a sequence of file operands separated by
+ * whitespace. Every non-option, non-`--` token is a path
+ * candidate. Multi-file cat (`cat README.md package.json`) is
+ * supported; the authority gate requires ALL operands bound AND
+ * contained.
+ */
+function extractCatPathOperands(tokens: ReadonlyArray<string>): string[] {
+	const out: string[] = [];
+	let sawDoubleDash = false;
+	for (let i = 1; i < tokens.length; i++) {
+		const t = tokens[i]!;
+		if (sawDoubleDash) {
+			out.push(t);
+			continue;
+		}
+		if (t === "--") {
+			sawDoubleDash = true;
+			continue;
+		}
+		if (t.startsWith("-")) {
+			continue;
+		}
+		out.push(t);
+	}
+	return out;
+}
+
+/**
+ * head / tail path-operand extractor.
+ *
+ * `head`/`tail` reviewed option forms:
+ *
+ *   -<N>            single-dash digits (count token is the
+ *                    whole token, no separate value)
+ *   -n <N>          long count form, N is the value token
+ *   --              end-of-options terminator
+ *
+ * After consuming any of the above, the FIRST non-option, non-`--`
+ * token is the FILE operand (and is the only path candidate in
+ * this wave). Any additional non-option tokens after FILE would
+ * be rejected by the safe-rule regex (bounded single-file scope),
+ * so this extractor returns at most one operand.
+ *
+ * Defensive: if the argv contains a non-reviewed token BEFORE the
+ * FILE (e.g. `--help` because the caller skipped the regex
+ * gate), this extractor stops at the first non-option token and
+ * does NOT look further. The authority gate treats the operand
+ * as the last "best guess", which still fails-closed on a
+ * non-resolving operand (realpath-failed).
+ */
+function extractHeadTailPathOperands(
+	tokens: ReadonlyArray<string>,
+): string[] {
+	const out: string[] = [];
+	let sawDoubleDash = false;
+	for (let i = 1; i < tokens.length; i++) {
+		const t = tokens[i]!;
+		if (sawDoubleDash) {
+			// Everything after `--` is a path operand.
+			out.push(t);
+			continue;
+		}
+		if (t === "--") {
+			sawDoubleDash = true;
+			continue;
+		}
+		if (t === "-n") {
+			// `-n <N>`: skip the value token (the next token).
+			i++;
+			continue;
+		}
+		if (t.startsWith("-")) {
+			// Other option tokens (`-30`, `-c`, `--help`, etc.).
+			// `-30` is a single-dash digit count form (no value
+			// to skip). Other options are not reviewed; the safe
+			// rule regex should have rejected them, but if a
+			// caller bypasses the regex we just continue scanning
+			// so we still find the FILE if one is present.
+			continue;
+		}
+		// First non-option, non-`--` token: that's the FILE.
+		out.push(t);
+		// Bounded single-file scope: stop here.
+		break;
+	}
+	return out;
+}
+
+/**
  * Aggregate path conformance for a normalized command. The command
  * is path-conforming iff EVERY path operand is conforming. A command
  * with ZERO path operands (e.g. `pwd`, `git status`) is also

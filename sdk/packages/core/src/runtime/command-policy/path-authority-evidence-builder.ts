@@ -53,8 +53,12 @@ import { realpathSync } from "node:fs";
 import { isAbsolute, resolve as resolvePath } from "node:path";
 
 import { normalizeRunCommandsInput } from "../../extensions/tools/helpers";
+import {
+	DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	findSafeRuleMatch,
+} from "./command-safe-rules";
 import type { NormalizedCommand } from "./command-policy-types";
-import { extractPathOperands } from "./path-authority";
+import { extractR0PathOperands } from "./path-authority";
 import type {
 	WorkspacePathAuthorityEvidence,
 	WorkspacePathOperandEvidence,
@@ -321,9 +325,31 @@ export function buildPathAuthorityEvidence(
 	// operand identity binding is checked per-command later in the
 	// policy layer (it sees a single `NormalizedCommand` per call),
 	// so flattening at the evidence builder is the right seam.
+	//
+	// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+	// For each command, dispatch the per-source operand
+	// extractor (`extractR0PathOperands`) so the host evidence
+	// mirrors the policy layer's expectation. For
+	// `head -n 30 FILE`, the generic extractor returns
+	// `[30, FILE]` (the count number as a path candidate);
+	// the per-source extractor returns `[FILE]`. Without
+	// dispatch, the evidence record would contain an
+	// unresolvable `30` operand and force ASK.
+	//
+	// The matcher uses the DEFAULT_COMMAND_HOST_ALLOW_RULES
+	// (the canonical policy ruleset). The host may pass a
+	// narrower ruleset via `CommandHostAuthorization.explicitAllowRules`,
+	// but the evidence builder must enumerate every operand
+	// any ruleset would consult; using the canonical default
+	// keeps the evidence contract stable.
 	const operandEvidence: WorkspacePathOperandEvidence[] = [];
 	for (const command of normalizedCommands) {
-		const operands = extractPathOperands(command);
+		const safeMatch = findSafeRuleMatch(
+			command,
+			DEFAULT_COMMAND_HOST_ALLOW_RULES,
+		);
+		const source = safeMatch?.source ?? "";
+		const operands = extractR0PathOperands(command, source);
 		for (const op of operands) {
 			const resolved = safeRealpathSync(op, canonicalCwd);
 			if (resolved.resolvedRealPath === null) {

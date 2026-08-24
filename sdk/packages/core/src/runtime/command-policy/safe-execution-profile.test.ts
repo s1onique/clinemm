@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
+	SAFE_CAT_PROFILE,
 	SAFE_ECHO_PROFILE,
 	SAFE_FIND_PROFILE,
 	SAFE_GIT_BRANCH_PROFILE,
@@ -24,8 +25,10 @@ import {
 	SAFE_GIT_LOG_PROFILE,
 	SAFE_GIT_REMOTE_PROFILE,
 	SAFE_GIT_STATUS_PROFILE,
+	SAFE_HEAD_PATH_PROFILE,
 	SAFE_LS_PROFILE,
 	SAFE_PWD_PROFILE,
+	SAFE_TAIL_PATH_PROFILE,
 } from "./safe-execution-profile";
 
 describe("Safe Execution Profiles — per-subcommand shape", () => {
@@ -95,6 +98,22 @@ describe("Safe Execution Profiles — per-subcommand shape", () => {
 		);
 		expect(getSafeExecutionProfileForSource("host_safe_git_log")).toBe(
 			SAFE_GIT_LOG_PROFILE,
+		);
+		// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
+		expect(getSafeExecutionProfileForSource("host_safe_ls")).toBe(
+			SAFE_LS_PROFILE,
+		);
+		expect(getSafeExecutionProfileForSource("host_safe_find")).toBe(
+			SAFE_FIND_PROFILE,
+		);
+		expect(getSafeExecutionProfileForSource("host_safe_cat")).toBe(
+			SAFE_CAT_PROFILE,
+		);
+		expect(getSafeExecutionProfileForSource("host_safe_head_path")).toBe(
+			SAFE_HEAD_PATH_PROFILE,
+		);
+		expect(getSafeExecutionProfileForSource("host_safe_tail_path")).toBe(
+			SAFE_TAIL_PATH_PROFILE,
 		);
 		expect(
 			getSafeExecutionProfileForSource("host_safe_unknown"),

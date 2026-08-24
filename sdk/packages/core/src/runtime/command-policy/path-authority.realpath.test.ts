@@ -52,6 +52,10 @@ let PROJECT_DIR: string;
 let OUTSIDE_DIR: string;
 let PROJECT_INSIDE_FILE: string;
 let OUTSIDE_FILE: string;
+// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+// canonical form of PROJECT_DIR for the CORRECTION04
+// authority-context binding check (`auth.cwd === evidence.cwd`).
+let CANONICAL_PROJECT_DIR: string;
 
 beforeAll(() => {
 	TMP_ROOT = mkdtempSync(join(tmpdir(), "cline-path-authority-realpath-"));
@@ -72,6 +76,13 @@ beforeAll(() => {
 	// `find` against this path pass containment. V2 (realpath)
 	// must reject it.
 	symlinkSync(OUTSIDE_DIR, join(PROJECT_DIR, "outside-link"), "dir");
+
+	// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+	// canonicalize PROJECT_DIR for the CORRECTION04 authority-
+	// context binding check (`auth.cwd === evidence.cwd`).
+	// The host is responsible for passing canonicalized cwd;
+	// the test must mirror that contract.
+	CANONICAL_PROJECT_DIR = realpathSync(PROJECT_DIR);
 });
 
 afterAll(() => {
@@ -82,8 +93,8 @@ afterAll(() => {
 
 function evaluateWithRealpathEvidence(command: string) {
 	const result = buildPathAuthorityEvidence({
-		workspaceRoots: [PROJECT_DIR],
-		cwd: PROJECT_DIR,
+		workspaceRoots: [CANONICAL_PROJECT_DIR],
+		cwd: CANONICAL_PROJECT_DIR,
 		command: { command },
 	});
 	if (!result.ok) {
@@ -94,8 +105,8 @@ function evaluateWithRealpathEvidence(command: string) {
 	const auth = commandHostAuthorization({
 		mode: "safe-only",
 		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
-		workspaceRoots: [PROJECT_DIR],
-		cwd: PROJECT_DIR,
+		workspaceRoots: [CANONICAL_PROJECT_DIR],
+		cwd: CANONICAL_PROJECT_DIR,
 		pathAuthorityEvidence: result.evidence,
 	});
 	return evaluateCommandPolicy({
@@ -176,10 +187,16 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01 â€
 		// When the host supplies BOTH the project root and
 		// the outside target as workspace roots, the symlink
 		// escape is a legitimate cross-workspace read.
+		// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+		// canonicalize roots for the CORRECTION04 authority-context
+		// binding check (`auth.workspaceRoots === evidence.roots`).
+		const CANONICAL_OUTSIDE_DIR = realpathSync(OUTSIDE_DIR);
 		const evidenceResult = buildPathAuthorityEvidence({
-			workspaceRoots: [PROJECT_DIR, OUTSIDE_DIR],
-			cwd: PROJECT_DIR,
-			command: { command: `find ${join(PROJECT_DIR, "outside-link")}` },
+			workspaceRoots: [CANONICAL_PROJECT_DIR, CANONICAL_OUTSIDE_DIR],
+			cwd: CANONICAL_PROJECT_DIR,
+			command: {
+				command: `find ${join(PROJECT_DIR, "outside-link")}`,
+			},
 		});
 		expect(evidenceResult.ok).toBe(true);
 		if (!evidenceResult.ok) {
@@ -188,8 +205,8 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01 â€
 		const auth = commandHostAuthorization({
 			mode: "safe-only",
 			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
-			workspaceRoots: [PROJECT_DIR, OUTSIDE_DIR],
-			cwd: PROJECT_DIR,
+			workspaceRoots: [CANONICAL_PROJECT_DIR, CANONICAL_OUTSIDE_DIR],
+			cwd: CANONICAL_PROJECT_DIR,
 			pathAuthorityEvidence: evidenceResult.evidence,
 		});
 		const r = evaluateCommandPolicy({

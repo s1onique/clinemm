@@ -844,9 +844,23 @@ export class Controller {
 					// canonical pathnames, which closes the V1
 					// symlink-escape attack.
 					const pathAuthorityEvidence = await this.buildPathAuthorityEvidence(requestInput)
+					// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+					// Use the evidence's canonical roots + cwd
+					// (built via fs.realpathSync in the evidence
+					// builder) as the host authorization's
+					// workspaceRoots / cwd. The CORRECTION04
+					// authority-context binding invariant
+					// (`command-policy.ts` v1 path-bearing gate)
+					// compares them byte-equal against the
+					// evidence. Without canonicalization here
+					// the host-side auth.roots would diverge from
+					// evidence.roots and every R0 path-bearing
+					// command would force ASK.
+					const canonicalRoots = pathAuthorityEvidence?.roots
+					const canonicalCwd = pathAuthorityEvidence?.cwd ?? undefined
 					let hostAuthorization = getCommandHostAuthorization(_toolName, persisted, this.mcpHub, {
-						workspaceRoots: this.lastKnownWorkspaceRoot ? [this.lastKnownWorkspaceRoot] : undefined,
-						cwd: this.lastKnownWorkspaceRoot,
+						workspaceRoots: canonicalRoots,
+						cwd: canonicalCwd,
 						pathAuthorityEvidence,
 					})
 					let toolInput = requestInput

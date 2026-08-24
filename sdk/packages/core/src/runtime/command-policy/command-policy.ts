@@ -57,7 +57,7 @@ import type {
 import { findSafeRuleMatch } from "./command-safe-rules";
 import {
 	evaluateCommandRealpathConformance,
-	extractPathOperands,
+	extractR0PathOperands,
 } from "./path-authority";
 import {
 	getSafeExecutionProfileForSource,
@@ -315,12 +315,64 @@ function evaluateOne(
 			// command.
 			if (isR0ReadonlyRuleSource(match.source)) {
 				const evidence = auth.pathAuthorityEvidence;
-				const expectedOperands = extractPathOperands(command);
+				// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+				// dispatch per-safe-rule-source so commands like
+				// `head -n 30 FILE` produce an `expectedOperands`
+				// list of `[FILE]` (not `[30, FILE]`). The
+				// generic `extractPathOperands` returns
+				// `[30, FILE]` which would fail operand identity
+				// binding on evidence `[FILE]` and force ASK.
+				const expectedOperands = extractR0PathOperands(
+					command,
+					match.source,
+				);
 				if (evidence === undefined) {
 					return {
 						kind: "ask",
 						source: "host_workspace_realpath_authority",
 						reason: "workspace realpath authority: host did not supply pathAuthorityEvidence; R0 path-bearing commands cannot be ALLOW'd without realpath evidence (CORRECTION02)",
+					};
+				}
+				// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
+				// V1 authority-context binding (the V2 binder
+				// does the same check; V1 must not be a
+				// weaker gate). The evidence's `roots` set
+				// MUST equal the current authorization's
+				// `workspaceRoots` by canonical-form set-
+				// equality; otherwise an evidence record from
+				// a broader scope would unlock ALLOW under a
+				// narrower current authority (capability
+				// reuse across root sets, the exact
+				// CORRECTION04 attack on the pipe path).
+				if (
+					auth.workspaceRoots === undefined ||
+					auth.workspaceRoots.length !== evidence.roots.length
+				) {
+					return {
+						kind: "ask",
+						source: "host_workspace_realpath_authority",
+						reason: "workspace realpath authority: host authority workspaceRoots do not match evidence.roots; R0 path-bearing commands cannot be ALLOW'd with mismatched authority scope (CORRECTION04 invariant)",
+					};
+				}
+				for (let i = 0; i < auth.workspaceRoots.length; i++) {
+					if (auth.workspaceRoots[i] !== evidence.roots[i]) {
+						return {
+							kind: "ask",
+							source: "host_workspace_realpath_authority",
+							reason: `workspace realpath authority: host authority roots[${i}] ("${auth.workspaceRoots[i]}") does not match evidence.roots[${i}] ("${evidence.roots[i]}"); stale evidence scope rejected (CORRECTION04 invariant)`,
+						};
+					}
+				}
+				// cwd binding: the evidence's `cwd` must equal
+				// the current authorization's `cwd` exactly
+				// (host-side canonicalization in
+				// `buildPathAuthorityEvidence` ensures both
+				// are realpath strings).
+				if (auth.cwd !== evidence.cwd) {
+					return {
+						kind: "ask",
+						source: "host_workspace_realpath_authority",
+						reason: `workspace realpath authority: host authority cwd ("${auth.cwd ?? "<undefined>"}") does not match evidence.cwd ("${evidence.cwd ?? "<null>"}"); stale cwd rejected (CORRECTION04 invariant)`,
 					};
 				}
 				if (evidence.operands.length !== expectedOperands.length) {
@@ -516,14 +568,23 @@ function aggregateSource(
 
 /**
  * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01
+ * ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01
  *
  * Set of safe-rule sources that are R0 read-only and therefore
  * subject to the workspace path authority gate. The R0 family
- * today is `host_safe_ls` and `host_safe_find`; pwd/git_* are
- * NOT included because they either take no path operands (pwd,
- * git status, git log, git diff, git rev-parse) or operate on
- * an in-tree repository rooted at the host cwd by design (git
- * show/rev-list/branch).
+ * today is:
+ *   - `host_safe_ls`            (parent ACT)
+ *   - `host_safe_find`          (parent ACT)
+ *   - `host_safe_cat`           (READER ACT)
+ *   - `host_safe_head_path`     (READER ACT; stdin-only head
+ *                                is a separate V2 path)
+ *   - `host_safe_tail_path`     (READER ACT; stdin-only tail
+ *                                is a separate V2 path)
+ *
+ * pwd/git_* are NOT included because they either take no path
+ * operands (pwd, git status, git log, git diff, git rev-parse)
+ * or operate on an in-tree repository rooted at the host cwd by
+ * design (git show/rev-list/branch).
  *
  * Adding a new R0 family that takes path operands MUST also
  * add its source here so the path gate fires for it.
@@ -531,6 +592,9 @@ function aggregateSource(
 const R0_READONLY_PATH_BEARING_SOURCES: ReadonlySet<string> = new Set([
 	"host_safe_ls",
 	"host_safe_find",
+	"host_safe_cat",
+	"host_safe_head_path",
+	"host_safe_tail_path",
 ]);
 
 function isR0ReadonlyRuleSource(source: string): boolean {
