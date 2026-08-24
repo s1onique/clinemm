@@ -29,9 +29,23 @@
 #
 # Recorded alongside each build (logged at start):
 #   - SOURCE_HEAD (the git commit SHA the build is run from)
+#   - SOURCE_TREE (the git tree SHA the build is run from; immutable
+#     identifier of the worktree contents, even if HEAD later moves)
+#   - TRACKED_DIRT (set if the worktree has uncommitted tracked-file
+#     modifications; untracked files ignored to allow ad-hoc debug
+#     outputs under $SAFE_OUT_BASE)
 #   - Go version
 #   - mvdan.cc/sh/v3 version (pinned in go.mod)
 #   - GOOS / GOARCH / CGO_ENABLED
+#
+# Provenance guard (post ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01
+# Factory review): when --install is passed (i.e. the build is going to
+# OVERWRITE vendored binaries), the script HARD-FAILS if there is any
+# tracked-file dirt. The recorded `SOURCE_HEAD` would otherwise be
+# misleading: the source actually compiled is HEAD + uncommitted
+# modifications, but the binding records only HEAD. Pass
+# `--allow-tracked-dirt` to override (NOT recommended; only for ad-hoc
+# debug builds that do NOT go to vendor).
 #
 # Scope guard (this ACT):
 #   - Does NOT add shellStatic.
@@ -50,6 +64,7 @@ SAFE_OUT_BASE="$HERE/dist/parser-helper"
 
 OUT_BASE="$SAFE_OUT_BASE"
 INSTALL=0
+ALLOW_TRACKED_DIRT=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -60,9 +75,12 @@ for arg in "$@"; do
         --out=*)
             OUT_BASE="${arg#--out=}"
             ;;
+        --allow-tracked-dirt)
+            ALLOW_TRACKED_DIRT=1
+            ;;
         *)
             echo "Unknown argument: $arg" >&2
-            echo "Usage: $0 [--install] [--out=DIR]" >&2
+            echo "Usage: $0 [--install] [--out=DIR] [--allow-tracked-dirt]" >&2
             exit 2
             ;;
     esac
@@ -70,8 +88,49 @@ done
 
 cd "$SRC"
 
+# Capture source identity up-front (cheap; we want these even if a
+# later step fails). Use --git-dir so this works from anywhere.
+GIT_DIR_REL="$(git -C "$HERE/../.." rev-parse --git-dir 2>/dev/null || true)"
+if [ -n "$GIT_DIR_REL" ]; then
+    SOURCE_HEAD="$(git -C "$HERE/../.." rev-parse HEAD 2>/dev/null || echo '<not in git repo>')"
+    SOURCE_TREE="$(git -C "$HERE/../.." rev-parse HEAD^{tree} 2>/dev/null || echo '<not in git repo>')"
+    TRACKED_DIRT="$(git -C "$HERE/../.." status --porcelain --untracked-files=no 2>/dev/null | head -1 || true)"
+else
+    SOURCE_HEAD='<not in git repo>'
+    SOURCE_TREE='<not in git repo>'
+    TRACKED_DIRT=''
+fi
+
+if [ "$INSTALL" -eq 1 ] && [ -n "$TRACKED_DIRT" ] && [ "$ALLOW_TRACKED_DIRT" -ne 1 ]; then
+    echo "=== cline-parser-helper cross-compile ==="
+    echo "SOURCE_HEAD : $SOURCE_HEAD"
+    echo "SOURCE_TREE : $SOURCE_TREE"
+    echo "TRACKED_DIRT: <PRESENT -- refusing to --install>"
+    echo ""
+    echo "ERROR: refusing to overwrite vendored binaries with a build from"
+    echo "a worktree that has uncommitted tracked-file modifications."
+    echo ""
+    echo "The binding would record SOURCE_HEAD=$SOURCE_HEAD but the source"
+    echo "actually compiled is HEAD + the uncommitted modifications -- the"
+    echo "source-of-truth / byte-of-truth identity claim would be a lie."
+    echo ""
+    echo "Fix: commit the modifications and re-run, OR stash them, OR (only"
+    echo "for ad-hoc debug builds that do NOT go to vendor) omit --install"
+    echo "and write the output to a separate --out=DIR."
+    echo ""
+    echo "Override: pass --allow-tracked-dirt (NOT recommended)."
+    git -C "$HERE/../.." status --porcelain --untracked-files=no 2>/dev/null || true
+    exit 3
+fi
+
 echo "=== cline-parser-helper cross-compile ==="
-echo "SOURCE_HEAD : $(git -C "$HERE/../.." rev-parse HEAD 2>/dev/null || echo '<not in git repo>')"
+echo "SOURCE_HEAD : $SOURCE_HEAD"
+echo "SOURCE_TREE : $SOURCE_TREE"
+if [ -n "$TRACKED_DIRT" ]; then
+    echo "TRACKED_DIRT: <PRESENT (untracked files may also exist)>"
+else
+    echo "TRACKED_DIRT: <none>"
+fi
 echo "GO_VERSION  : $(go version | awk '{print $3}')"
 echo "MVDAN_VERSION: $(grep 'mvdan.cc/sh/v3' go.mod | awk '{print $2}')"
 # Note: every actual build below explicitly sets CGO_ENABLED=0 (no
