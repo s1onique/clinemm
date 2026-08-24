@@ -99,6 +99,38 @@ const HELPER_PATH = (() => {
 	return existsSync(candidate) ? candidate : null;
 })();
 
+// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 / P1 hygiene
+// (carried from Factory review of 79bd93ee9):
+//
+//   - supported shipped platform + missing helper binary  -> FAIL CI.
+//   - genuinely unsupported platform                       -> explicit SKIP.
+//
+// We bind the describe-fn to either describe (real run; throws on
+// absent-binary supported platforms via beforeAll) or describe.skip
+// (true skip on unsupported platforms). This replaces the original
+// `if (!HELPER_PATH) return;` per-test pattern, which silently
+// reported GREEN on a supported platform with no helper binary
+// present (a true shipping-artifact defect that must not hide).
+const SUPPORTED_HELPER_PLATFORMS: ReadonlySet<NonNullable<HelperPlatform>> = new Set([
+	"darwin-arm64",
+	"darwin-amd64",
+	"linux-amd64",
+	"linux-arm64",
+	"win32-x64",
+]);
+const isSupportedHelperPlatform =
+	HELPER_PLATFORM !== null && SUPPORTED_HELPER_PLATFORMS.has(HELPER_PLATFORM);
+const describeWithHelper = (
+	HELPER_PATH || !isSupportedHelperPlatform ? describe : describe.skip
+) as typeof describe;
+
+if (!HELPER_PATH && isSupportedHelperPlatform) {
+	// eslint-disable-next-line no-console
+	console.error(
+		`[structured-command-risk.real-binary] supported platform ${HELPER_PLATFORM} but vendored helper binary is missing at ${sdkRoot}/bin/parser-helper/${HELPER_PLATFORM}/. Failing the suite.`,
+	);
+}
+
 const SAFE = commandHostAuthorization({
 	mode: "safe-only",
 	explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
@@ -108,7 +140,7 @@ const SAFE = commandHostAuthorization({
  * Section A: parser argv contract (no policy involvement)               *
  * ---------------------------------------------------------------------- */
 
-describe("structured-command-risk -- REAL parser-helper argv contract", () => {
+describeWithHelper("structured-command-risk -- REAL parser-helper argv contract", () => {
 	let helper: MvdanShHelper;
 
 	beforeAll(() => {
@@ -120,7 +152,6 @@ describe("structured-command-risk -- REAL parser-helper argv contract", () => {
 	});
 
 	it("real parser strips quotes from echo '---BRANCH---' argv", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: "echo '---BRANCH---'" });
 		expect(r).not.toBeNull();
 		expect(r!.parseStatus).toBe("complete");
@@ -132,7 +163,6 @@ describe("structured-command-risk -- REAL parser-helper argv contract", () => {
 	});
 
 	it('real parser strips quotes from echo "---BRANCH---" argv', async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: 'echo "---BRANCH---"' });
 		expect(r).not.toBeNull();
 		expect(r!.parseStatus).toBe("complete");
@@ -143,7 +173,6 @@ describe("structured-command-risk -- REAL parser-helper argv contract", () => {
 	});
 
 	it("real parser produces args=['hello'] for echo hello", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: "echo hello" });
 		expect(r).not.toBeNull();
 		const stmt = r!.program!.stmts[0];
@@ -153,7 +182,6 @@ describe("structured-command-risk -- REAL parser-helper argv contract", () => {
 	});
 
 	it("real parser splits -n from echo body (echo -n hello -> args=[-n, hello])", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: "echo -n hello" });
 		expect(r).not.toBeNull();
 		const stmt = r!.program!.stmts[0];
@@ -167,7 +195,7 @@ describe("structured-command-risk -- REAL parser-helper argv contract", () => {
  * Section B: end-to-end V2 through the real parser helper                *
  * ---------------------------------------------------------------------- */
 
-describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTION01)", () => {
+describeWithHelper("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTION01)", () => {
 	let helper: MvdanShHelper;
 
 	beforeAll(() => {
@@ -188,7 +216,6 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 	 *   parser-proven shellStatic provenance lands (CORRECTION02 proper).
 	 */
 	it("echo '---BRANCH---' && git status --short -> ASK under containment (real-helper driven)", async () => {
-		if (!HELPER_PATH) return;
 		const liveCmd = "echo '---BRANCH---' && git status --short";
 		const parsed = await helper.invoke({ command: liveCmd });
 		expect(parsed).not.toBeNull();
@@ -218,7 +245,6 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 	 *   CORRECTION02 proper).
 	 */
 	it("user's exact 5-leaf && chain -> ASK under containment (real-helper driven)", async () => {
-		if (!HELPER_PATH) return;
 		const liveCmd =
 			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v";
 		const parsed = await helper.invoke({ command: liveCmd });
@@ -241,7 +267,6 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 	 * aggregate at ASK. Load-bearing adversarial control.
 	 */
 	it("echo '---BRANCH---' && git branch -D __CLINEMM_SENTINEL__ -> ASK (mutating leaf blocks)", async () => {
-		if (!HELPER_PATH) return;
 		const liveCmd = "echo '---BRANCH---' && git branch -D __CLINEMM_SENTINEL__";
 		const parsed = await helper.invoke({ command: liveCmd });
 		expect(parsed).not.toBeNull();
@@ -264,7 +289,6 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 	 * not bleed into opaque-construct territory.
 	 */
 	it('echo "$(rm -rf foo)" -> ASK (V2 conservative on command substitution)', async () => {
-		if (!HELPER_PATH) return;
 		const liveCmd = 'echo "$(rm -rf foo)"';
 		const parsed = await helper.invoke({ command: liveCmd });
 		expect(parsed).not.toBeNull();
@@ -289,7 +313,6 @@ describe("structured-command-risk -- REAL parser-helper V2 end-to-end (CORRECTIO
 	 * does not bless arbitrary literal values.
 	 */
 	it("echo $HOME -> ASK (literal $-prefixed arg is not echo-safe)", async () => {
-		if (!HELPER_PATH) return;
 		const liveCmd = "echo $HOME";
 		const parsed = await helper.invoke({ command: liveCmd });
 		expect(parsed).not.toBeNull();

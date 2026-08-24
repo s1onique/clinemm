@@ -5779,64 +5779,7 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
 **DO NOT start** `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01`.
 **DO start** the row immediately below (`ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01`).
 |
-| `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | OPEN | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02 / PRECISION_REPAIR (parser-proven shellStatic provenance requires extending the Go helper; the Go source for the vendored binaries at `sdk/packages/core/bin/parser-helper/` is not in this checkout) | **SOLE EPISTEMIC PURPOSE**: reconstruct the vendored `cline-parser-helper` Go source from scratch against `mvdan.cc/sh/v3` v3.13.1 (the version pinned at the helper-bundling commit `a3c8d49b7`), commit it as a buildable artifact under the SDK repo (no longer "vendored-only"), prove behavioral equivalence with the existing protocol-v2 binaries against a frozen oracle corpus, then establish a reproducible source→binary chain capable of carrying future `shellStatic` provenance. **DO NOT implement the TypeScript precision repair in the same first commit.** |
-
-**PHASE 1 — freeze the five existing binaries as oracle (NEVER overwrite during rebuild)**: for each platform (darwin arm64, darwin amd64, linux arm64, linux amd64, win32-x64) record:
-
-  - platform, binary path
-  - file size, SHA-256
-  - `protocolVersion === 2` (assert via direct invocation)
-
-Then build a representative black-box input corpus (pwd, `pwd; pwd`, `git status && git diff --stat`, `echo '---BRANCH---'`, `echo *`, `echo '*'`, `echo {a,b}`, `echo '{a,b}'`, `echo "$HOME"`, `echo <(pwd)`, `bash -c 'pwd'`, `find . -name '*.ts'`, redirect cases, malformed source) and capture each binary's normalized output as `REFERENCE_PROTOCOL_V2`. This becomes the equivalence oracle.
-
-**PHASE 2 — reconstruct source in-repo**. Layout:
-
-```
-sdk/packages/core/parser-helper-src/
-  go.mod
-  go.sum
-  main.go
-  projection.go
-  protocol.go
-  cross-compile.sh
-  README.md
-```
-
-Pin exactly: `mvdan.cc/sh/v3` v3.13.1 (the version frozen at `a3c8d49b7`). mvdan's parser exposes the exact `WordPart` classes we will need later (`Lit`, `SglQuoted`, `DblQuoted`, `ParamExp`, `CmdSubst`, `ArithmExp`, `ProcSubst`, `ExtGlob`) so the source can be authored against a stable public API.
-
-**PHASE 3 — v2 behavioral equivalence FIRST** (BEFORE adding `shellStatic`): the reconstructed helper must reproduce the existing protocol output field-for-field against `REFERENCE_PROTOCOL_V2`. Run all load-bearing corpus cases through both old binary and new binary. If mismatch → `HALT_V2_ORACLE_MISMATCH`. Do NOT casually declare the old binaries wrong just because the rewrite differs.
-
-**PHASE 4 — reproducible build surface + CI guard**. Cross-compile the same 5 targets from tracked source. Record in `cross-compile.sh` and `README.md`:
-
-```
-SOURCE_HEAD (the commit SHA the binaries were built from)
-Go version
-mvdan.cc/sh/v3 version
-GOOS / GOARCH / CGO_ENABLED
-flags
-binary SHA-256
-```
-
-Permanent invariant becomes: **`NO VENDORED PARSER BINARY WITHOUT TRACKED BUILDABLE SOURCE`**. This is arguably the biggest architectural value of this ACT.
-
-**P1 EVIDENCE HYGIENE** (carried from Factory review of 79bd93ee9): unify the real-binary test missing-helper semantics across the suite:
-
-```
-supported shipped platform + helper absent → FAIL
-unsupported platform                                 → explicit SKIP
-```
-
-Apply this rule consistently to `structured-command-risk.real-binary.test.ts` (which still has the old `if (!HELPER_PATH) return;` per-test pattern — silently reports GREEN when the helper is missing on a supported platform), and to any other real-binary test file in the repo. One bounded cleanup, inside this ACT.
-
-**FUTURE CORRECTION02 proper** (NOT this ACT; will be its own row once Phase 4 lands): widen the helper protocol to add per-arg `shellStatic` provenance per the frozen contract (`SglQuoted` ⇒ STATIC; `DblQuoted`-of-static-parts recursively ⇒ STATIC; unquoted `Lit` ⇒ STATIC only if not brace-expandable, not pathname-pattern, not tilde-expandable; `ParamExp`, `CmdSubst`, `ArithmExp` ⇒ DYNAMIC; `ProcSubst`, `ExtGlob` ⇒ DYNAMIC; uncertainty ⇒ `shellStatic: false` fail-closed). Flip the Section D assertions from `r.decision === "ask"` to `r.decision === "allow" && r.disposition === "auto-approve-eligible"`. Produce a temporary RED witness first by flipping Section D to ALLOW expectations BEFORE implementing `shellStatic` (so the implementation ACT has an honest target to drive against), then turn it GREEN.
-
-**REJECTED** options (per Factory reviewer):
-
-  - **Option 1 (recover source from another location)**: rejected — checked branches, reflogs, stashes, `git fsck`, the working disk, and the user home directory; no Go source remains anywhere. Continuing open-ended source hunting violates the Factory speed rule.
-  - **Option 3 (TS-side post-processor over flattened JSON)**: rejected architecturally — the helper protocol narrow projection (deliberate security boundary; see `parser-helper/protocol.ts:8-14`) has already thrown away the WordPart provenance by the time TS sees it. The 6 paired forms (`echo ~` vs `echo '~'`, etc.) are byte-identical in the JSON. Only the Go helper, working on the original mvdan AST, can recover `shellStatic`.
-
-**PHASE-3 PROCESS NOTE** (must close): a security-critical executable whose source is not in the repo should never have been accepted as a durable production artifact. The reconstruction ACT closes that provenance gap permanently, not merely gets CORRECTION02 moving again.
-|
+| `ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01` | SAFETY / R0-COMMAND-POLICY / PROVENANCE | PHASE 1 LANDED — PASS_HELPER_SOURCE_RECONSTRUCTED_V2_EQUIVALENT (20/20 corpus normalized-equivalent vs legacy darwin-arm64 binary at protocol version 2). Phases 2-4 still OPEN. | HIGH | ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01-CORRECTION02 / PRECISION_REPAIR (parser-proven shellStatic provenance requires extending the Go helper; the Go source for the vendored binaries at `sdk/packages/core/bin/parser-helper/` is not in this checkout) | **PHASE 1 LANDED on the closing commit for the new ACT row.** Verified by `bun sdk/packages/core/parser-helper-src/scripts/verify-v2-equivalence.mjs`. **What landed under `sdk/packages/core/parser-helper-src/`**: `go.mod` (pinned `mvdan.cc/sh/v3 v3.13.1`), `go.sum`, `main.go` (stdin JSON → StmtsSeq → protocol-v2 JSON projection, bounded by PARSER_HELPER_PROTOCOL_VERSION=2; never calls shell; no env/network config), `projection.go` (Cmd/And/Or/Pipe/Subshell kinds; wrapper detection rule bash+`-c`→bash / sh+`-c`→posix / zsh+`-c`→zsh / mksh+`-c`→mksh, otherwise not-wrapper; word projection Lit/SglQuoted keep bytes, DblQuoted concatenates static Lit parts with placeholders for the rest, bare CmdSubst→`$(...)`, ProcSubst→`?`, others→`${...}`; CmdSubst inside DblQuoted folds to `${...}`), `protocol.go` (request/response struct shapes pinned to the legacy wire), `cross-compile.sh` (default safe output to `./dist/parser-helper/`; `--install` for the explicit production install; never silently overwrites the legacy binaries), `scripts/freeze-legacy-helpers.mjs` (Phase 1.A + 1.B + 1.C), `scripts/verify-v2-equivalence.mjs` (Phase 1.E), `README.md` (scope guards + invariant), `.gitignore` (`dist/`). **Phase 1.A + 1.B + 1.C artifacts at `.factory/oracle/`**: `LEGACY_HELPERS.txt` records platform/path/byte_size/sha256/protocolVer/hostRun for all 5 vendored binaries (darwin-arm64, darwin-amd64, linux-amd64, linux-arm64, win32-x64); host-platform protocolVersion=2 verified by direct invocation; `REFERENCE_PROTOCOL_V2.json` captures 20 normalized corpus entries (pwd / pwd;pwd / git status&&git diff --stat / echo '---BRANCH---' / echo * / echo '*' / echo {a,b} / echo '{a,b}' / echo "$HOME" / echo <(pwd) / bash -c 'rm -rf "$HOME"' / find -name '*.ts' / find -name *.ts / redirect / malformed / echo "$(rm -rf foo)" / rm -rf "$HOME" / 5-leaf compound / pipe / assign prefix). **Phase 1.E**: 20/20 normalized-equivalent. Two divergences surfaced during dev (`echo <(pwd)` legacy=`?` / new=`${...}`; `echo "$(rm -rf foo)"` legacy=`${...}` / new=`$(...)`) — both fixed in the final source by adding `PlaceholderProcSubst="?"` and folding CmdSubst-inside-DblQuoted to `PlaceholderExp`. **Phase 1.F (P1 hygiene)**: `structured-command-risk.real-binary.test.ts` and `parser-helper/runtime.real-binary.test.ts` now bind their describe-block to `describeWithHelper` per the canonical attack-witness pattern (`HELPER_PATH || !isSupportedHelperPlatform ? describe : describe.skip`), with a `beforeAll` that throws on supported-platform-missing-binary (fail CI) and short-circuits on truly-unsupported platforms (clean SKIP). Replaces the silent `if (!HELPER_PATH) return;` per-test residue. **Conservation gates (all run from `sdk/packages/core/`)**: `bunx vitest run --config vitest.config.ts` -> **2675/2675 PASS, 14 skipped** (unchanged from baseline). `bunx vitest run --config vitest.config.ts src/runtime/command-policy/` -> **710/710 PASS**. Attack-witness default suite: **48/48 GREEN**. Attack-witness Section D via `-t "Section D:"`: **19/19 PASS**. Pre-existing typecheck errors (`parser-provenance.test.ts`, `approvals.real-helper.test.ts`, `runtime.real-binary.test.ts:169/186` .cmd-narrowing, `agent-aurora.test.tsx`, `local-runtime-host.subscribe-runtime-events.e2f-f1*`, `bash.supervised.test.ts`, `command-safe-rules.hostile-filename.test.ts`, `main.test.ts`) UNCHANGED (verified by `git stash` baseline). Pre-existing test failure `approvals.real-helper.test.ts Cannot find module ../command-policy-host` UNCHANGED. **SCOPE GUARDS HELD**: no `shellStatic`, no protocol bump, no vendored-binary replacement (default `cross-compile.sh` writes to `./dist/`, not the production layout; `--install` is the explicit opt-in for the future Phase 4 promotion), no TS V2 echo authority change, no quoted-find work. **NEXT (Phase 2)**: widen the helper protocol to add per-arg `shellStatic` provenance per the frozen contract (`SglQuoted`→STATIC, `DblQuoted`-of-static-parts recursively→STATIC, unquoted `Lit`→STATIC only if not brace/glob/tilde-expandable, `ParamExp`/`CmdSubst`/`ArithmExp`→DYNAMIC, `ProcSubst`/`ExtGlob`→DYNAMIC, uncertainty→`shellStatic: false` fail-closed). Flip the Section D assertions from `r.decision === "ask"` to `r.decision === "allow" && r.disposition === "auto-approve-eligible"` as a temporary RED witness FIRST, then turn GREEN with the implementation. Bump protocol version (this requires a coordinated TS validator update). THEN Phase 3 (rebuild the 5 vendored binaries from the new source via `cross-compile.sh --install`; update `bin/parser-helper/SHA256SUMS.txt`; verify the SDK full suite still 2675/2675 PASS against the new binaries). |
 1. **Probe done** (commit `b3d285cd0`): ran the vendored mvdan/sh helper against 16 attack shapes (procsub, arith, param, brace, glob, quote-protected variants). Result: `cmd.args` carries literal text for `<(quoted)`, `{...}`, `*`, `*.ts`, `/(etc)/passwd*` and these are the exploitable shapes; `cmd.args` carries the placeholder `?` for unbraced `$HOME`, `${HOME}`, `$((...))`, and these are accidentally caught by the `?` rejection in CORRECTION01 (not principled).
 
 2. **Attack RED done** (commit `b3d285cd0`): `structured-command-risk.attack-witness.test.ts` (9 tests) drives the real parser-helper end-to-end through `evaluateCommandRiskWithParser`. 5 of 9 RED on CORRECTION01 (the bypasses); 4 PASS by accidental safety net. All 9 carry runtime shell authority and MUST be rejected by a principled V2 classification.

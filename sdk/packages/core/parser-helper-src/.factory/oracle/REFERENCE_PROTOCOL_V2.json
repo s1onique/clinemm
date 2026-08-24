@@ -1,0 +1,704 @@
+{
+	"frozenAt": "2026-08-24T13:38:59.156Z",
+	"hostPlatform": "darwin-arm64",
+	"protocolVersion": 2,
+	"corpus": [
+		{
+			"id": "01-pwd",
+			"source": "pwd",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "a1159e9df3670d549d04524532629f5477ceb7deec9b45e47e8c009506ecb2c8",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "pwd",
+								"args": [],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"pwd\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"a1159e9df3670d549d04524532629f5477ceb7deec9b45e47e8c009506ecb2c8\"}"
+		},
+		{
+			"id": "02-pwd-semicolon-pwd",
+			"source": "pwd; pwd",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "1b97c6734eb9f4d40b8eaafc44305b5b88abb8fab6001223d8befeee4d02f76b",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "pwd",
+								"args": [],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						},
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "pwd",
+								"args": [],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"pwd\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"},{\"cmd\":{\"args\":[],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"pwd\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"1b97c6734eb9f4d40b8eaafc44305b5b88abb8fab6001223d8befeee4d02f76b\"}"
+		},
+		{
+			"id": "03-git-status-and-diff-stat",
+			"source": "git status && git diff --stat",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "0fdddf2bf03862bc982605680884aa3d1a72b9e46e1442ef3365655b0306c8a9",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "and",
+							"left": {
+								"kind": "cmd",
+								"cmd": {
+									"name": "git",
+									"args": [
+										"status"
+									],
+									"assigns": [],
+									"redirects": [],
+									"isWrapper": false,
+									"wrapperOf": "",
+									"inner": ""
+								}
+							},
+							"rhs": {
+								"kind": "cmd",
+								"cmd": {
+									"name": "git",
+									"args": [
+										"diff",
+										"--stat"
+									],
+									"assigns": [],
+									"redirects": [],
+									"isWrapper": false,
+									"wrapperOf": "",
+									"inner": ""
+								}
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"kind\":\"and\",\"left\":{\"cmd\":{\"args\":[\"status\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"git\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"},\"rhs\":{\"cmd\":{\"args\":[\"diff\",\"--stat\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"git\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}}]},\"protocolVersion\":2,\"sourceSha256\":\"0fdddf2bf03862bc982605680884aa3d1a72b9e46e1442ef3365655b0306c8a9\"}"
+		},
+		{
+			"id": "04-echo-dashes-branch",
+			"source": "echo '---BRANCH---'",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "4d6610ded461a901a2c6344e76fcd37f4c69b6a4750fb24efb5775efb47f1af5",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"---BRANCH---"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"---BRANCH---\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"4d6610ded461a901a2c6344e76fcd37f4c69b6a4750fb24efb5775efb47f1af5\"}"
+		},
+		{
+			"id": "05-echo-star-unquoted",
+			"source": "echo *",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "459e362a3d2ca92d4387cb427f4ace87a20da559e74c39a38163adde3c7ad9c1",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"*"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"*\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"459e362a3d2ca92d4387cb427f4ace87a20da559e74c39a38163adde3c7ad9c1\"}"
+		},
+		{
+			"id": "06-echo-star-single-quoted",
+			"source": "echo '*'",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "3271f489ff732511f63281857ec7156d7fa4f53f5089997ebe6330a6372315e3",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"*"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"*\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"3271f489ff732511f63281857ec7156d7fa4f53f5089997ebe6330a6372315e3\"}"
+		},
+		{
+			"id": "07-echo-brace-unquoted",
+			"source": "echo {a,b}",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "d16800866124f2f946cf8d6a19e598f2b8f3be197e54ffc86199370bf99d658f",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"{a,b}"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"{a,b}\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"d16800866124f2f946cf8d6a19e598f2b8f3be197e54ffc86199370bf99d658f\"}"
+		},
+		{
+			"id": "08-echo-brace-single-quoted",
+			"source": "echo '{a,b}'",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "1546baf0f54c1aa91eff5f69832feb495963e63f11136807bec4ac4bc5cbc530",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"{a,b}"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"{a,b}\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"1546baf0f54c1aa91eff5f69832feb495963e63f11136807bec4ac4bc5cbc530\"}"
+		},
+		{
+			"id": "09-echo-dollar-home-double",
+			"source": "echo \"$HOME\"",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "a9197f4a506e3c553a37bbb110b88382e8781805f38759a1f462627a573e3b51",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"${...}"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"${...}\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"a9197f4a506e3c553a37bbb110b88382e8781805f38759a1f462627a573e3b51\"}"
+		},
+		{
+			"id": "10-echo-procsub-unquoted",
+			"source": "echo <(pwd)",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "728095d9f49cf3a6aef726f6d2172a79b8838fc92e504db052b1620fa29570aa",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"?"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"?\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"728095d9f49cf3a6aef726f6d2172a79b8838fc92e504db052b1620fa29570aa\"}"
+		},
+		{
+			"id": "11-bash-c-rm-rf-home",
+			"source": "bash -c 'rm -rf \"$HOME\"'",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "34f2527883d28a665254a7da8bec43ba4111f2d325b6fa020d5aa7f227242935",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "bash",
+								"args": [
+									"-c",
+									"rm -rf \"$HOME\""
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": true,
+								"wrapperOf": "bash",
+								"inner": "rm -rf \"$HOME\""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"-c\",\"rm -rf \\\"$HOME\\\"\"],\"assigns\":[],\"inner\":\"rm -rf \\\"$HOME\\\"\",\"isWrapper\":true,\"name\":\"bash\",\"redirects\":[],\"wrapperOf\":\"bash\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"34f2527883d28a665254a7da8bec43ba4111f2d325b6fa020d5aa7f227242935\"}"
+		},
+		{
+			"id": "12-find-glob-quoted",
+			"source": "find . -name '*.ts'",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "65e6ebf9b5367ab9d0514de061d16401e0404193927398b681a075e5f428fc90",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "find",
+								"args": [
+									".",
+									"-name",
+									"*.ts"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\".\",\"-name\",\"*.ts\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"find\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"65e6ebf9b5367ab9d0514de061d16401e0404193927398b681a075e5f428fc90\"}"
+		},
+		{
+			"id": "13-find-glob-unquoted",
+			"source": "find . -name *.ts",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "8c8f74f7566258277ae586c8572d3bc53903a40b5aa0cac8b8d4ccfb7352e5a3",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "find",
+								"args": [
+									".",
+									"-name",
+									"*.ts"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\".\",\"-name\",\"*.ts\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"find\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"8c8f74f7566258277ae586c8572d3bc53903a40b5aa0cac8b8d4ccfb7352e5a3\"}"
+		},
+		{
+			"id": "14-redirect-output",
+			"source": "pwd > ~/.ssh/authorized_keys",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "e7b9bde69ef240272cb4e922aca45dd6c0883413cbddd31081df2155050d2beb",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "pwd",
+								"args": [],
+								"assigns": [],
+								"redirects": [
+									{
+										"op": ">",
+										"path": "~/.ssh/authorized_keys"
+									}
+								],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"pwd\",\"redirects\":[{\"op\":\">\",\"path\":\"~/.ssh/authorized_keys\"}],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"e7b9bde69ef240272cb4e922aca45dd6c0883413cbddd31081df2155050d2beb\"}"
+		},
+		{
+			"id": "15-malformed-input",
+			"source": "${BROKEN_INVOCATION",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "failed",
+				"dialect": "bash",
+				"sourceSha256": "49964a5c74b0ee05bf1e5a4357647d17f8c64fa3369f2789a6f8638eceb84124",
+				"hasCommandSubstitution": false,
+				"program": null,
+				"errors": [
+					"1:1: reached EOF without matching `${` with `}`"
+				]
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[\"1:1: reached EOF without matching `${` with `}`\"],\"hasCommandSubstitution\":false,\"parseStatus\":\"failed\",\"program\":null,\"protocolVersion\":2,\"sourceSha256\":\"49964a5c74b0ee05bf1e5a4357647d17f8c64fa3369f2789a6f8638eceb84124\"}"
+		},
+		{
+			"id": "16-echo-rm-cmd-subst",
+			"source": "echo \"$(rm -rf foo)\"",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "cf675459cd6ae397c601fe4d12a1ebbb3b0c91a70dce1286f371367f9f4921f5",
+				"hasCommandSubstitution": true,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "echo",
+								"args": [
+									"${...}"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":true,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"${...}\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"cf675459cd6ae397c601fe4d12a1ebbb3b0c91a70dce1286f371367f9f4921f5\"}"
+		},
+		{
+			"id": "17-rm-rf-home-direct",
+			"source": "rm -rf \"$HOME\"",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "e9cb3cfe093ee8f7d71e28ec5468109853fc57cf5631859c7b00e9fdfd63a35a",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "rm",
+								"args": [
+									"-rf",
+									"${...}"
+								],
+								"assigns": [],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[\"-rf\",\"${...}\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"rm\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"e9cb3cfe093ee8f7d71e28ec5468109853fc57cf5631859c7b00e9fdfd63a35a\"}"
+		},
+		{
+			"id": "18-and-or-compound",
+			"source": "git status --short && echo X && git remote -v",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "c00032b89999d1f9dcec99e5907d90fed02b9ea0407c9baa15e20d6fabcab20e",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "and",
+							"left": {
+								"kind": "and",
+								"left": {
+									"kind": "cmd",
+									"cmd": {
+										"name": "git",
+										"args": [
+											"status",
+											"--short"
+										],
+										"assigns": [],
+										"redirects": [],
+										"isWrapper": false,
+										"wrapperOf": "",
+										"inner": ""
+									}
+								},
+								"rhs": {
+									"kind": "cmd",
+									"cmd": {
+										"name": "echo",
+										"args": [
+											"X"
+										],
+										"assigns": [],
+										"redirects": [],
+										"isWrapper": false,
+										"wrapperOf": "",
+										"inner": ""
+									}
+								}
+							},
+							"rhs": {
+								"kind": "cmd",
+								"cmd": {
+									"name": "git",
+									"args": [
+										"remote",
+										"-v"
+									],
+									"assigns": [],
+									"redirects": [],
+									"isWrapper": false,
+									"wrapperOf": "",
+									"inner": ""
+								}
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"kind\":\"and\",\"left\":{\"kind\":\"and\",\"left\":{\"cmd\":{\"args\":[\"status\",\"--short\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"git\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"},\"rhs\":{\"cmd\":{\"args\":[\"X\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"echo\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}},\"rhs\":{\"cmd\":{\"args\":[\"remote\",\"-v\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"git\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}}]},\"protocolVersion\":2,\"sourceSha256\":\"c00032b89999d1f9dcec99e5907d90fed02b9ea0407c9baa15e20d6fabcab20e\"}"
+		},
+		{
+			"id": "19-pipe",
+			"source": "git log --oneline | head -5",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "ea57c53a7278193c3012ac13e032553e83747b2df5064ef88be9b2a0f45c778f",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "pipe",
+							"left": {
+								"kind": "cmd",
+								"cmd": {
+									"name": "git",
+									"args": [
+										"log",
+										"--oneline"
+									],
+									"assigns": [],
+									"redirects": [],
+									"isWrapper": false,
+									"wrapperOf": "",
+									"inner": ""
+								}
+							},
+							"rhs": {
+								"kind": "cmd",
+								"cmd": {
+									"name": "head",
+									"args": [
+										"-5"
+									],
+									"assigns": [],
+									"redirects": [],
+									"isWrapper": false,
+									"wrapperOf": "",
+									"inner": ""
+								}
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"kind\":\"pipe\",\"left\":{\"cmd\":{\"args\":[\"log\",\"--oneline\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"git\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"},\"rhs\":{\"cmd\":{\"args\":[\"-5\"],\"assigns\":[],\"inner\":\"\",\"isWrapper\":false,\"name\":\"head\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}}]},\"protocolVersion\":2,\"sourceSha256\":\"ea57c53a7278193c3012ac13e032553e83747b2df5064ef88be9b2a0f45c778f\"}"
+		},
+		{
+			"id": "20-assign-prefix",
+			"source": "FOO=bar pwd",
+			"raw": {
+				"protocolVersion": 2,
+				"parseStatus": "complete",
+				"dialect": "bash",
+				"sourceSha256": "01f49d66469ed70d5bcb84014291010b56d064cb146e9b1bbcdf316611109397",
+				"hasCommandSubstitution": false,
+				"program": {
+					"stmts": [
+						{
+							"kind": "cmd",
+							"cmd": {
+								"name": "pwd",
+								"args": [],
+								"assigns": [
+									{
+										"name": "FOO",
+										"value": "bar"
+									}
+								],
+								"redirects": [],
+								"isWrapper": false,
+								"wrapperOf": "",
+								"inner": ""
+							}
+						}
+					]
+				},
+				"errors": []
+			},
+			"normalized": "{\"dialect\":\"bash\",\"errors\":[],\"hasCommandSubstitution\":false,\"parseStatus\":\"complete\",\"program\":{\"stmts\":[{\"cmd\":{\"args\":[],\"assigns\":[{\"name\":\"FOO\",\"value\":\"bar\"}],\"inner\":\"\",\"isWrapper\":false,\"name\":\"pwd\",\"redirects\":[],\"wrapperOf\":\"\"},\"kind\":\"cmd\"}]},\"protocolVersion\":2,\"sourceSha256\":\"01f49d66469ed70d5bcb84014291010b56d064cb146e9b1bbcdf316611109397\"}"
+		}
+	]
+}

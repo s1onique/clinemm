@@ -89,26 +89,61 @@ const HELPER_PATH = (() => {
 	return existsSync(candidate) ? candidate : null;
 })();
 
-describe("parser-helper/runtime — REAL binary RED/GREEN (Phase 3)", () => {
+// ACT-CLINEMM-PARSER-HELPER-SOURCE-RECOVERY01 / P1 hygiene
+// (carried from Factory review of 79bd93ee9):
+//
+//   - supported shipped platform + missing helper binary  -> FAIL CI.
+//   - genuinely unsupported platform                       -> explicit SKIP.
+//
+// We bind the describe-fn to either describe (real run; throws on
+// absent-binary supported platforms via beforeAll) or describe.skip
+// (true skip on unsupported platforms). This replaces the original
+// `if (!HELPER_PATH) return;` per-test pattern, which silently
+// reported GREEN on a supported platform with no helper binary
+// present (a true shipping-artifact defect that must not hide).
+const SUPPORTED_HELPER_PLATFORMS: ReadonlySet<NonNullable<HelperPlatform>> = new Set([
+	"darwin-arm64",
+	"darwin-amd64",
+	"linux-amd64",
+	"linux-arm64",
+	"win32-x64",
+]);
+const isSupportedHelperPlatform =
+	HELPER_PLATFORM !== null && SUPPORTED_HELPER_PLATFORMS.has(HELPER_PLATFORM);
+const describeWithHelper = (
+	HELPER_PATH || !isSupportedHelperPlatform ? describe : describe.skip
+) as typeof describe;
+
+if (!HELPER_PATH && isSupportedHelperPlatform) {
+	// eslint-disable-next-line no-console
+	console.error(
+		`[parser-helper/runtime.real-binary] supported platform ${HELPER_PLATFORM} but vendored helper binary is missing at ${sdkRoot}/bin/parser-helper/${HELPER_PLATFORM}/. Failing the suite.`,
+	);
+}
+
+describeWithHelper("parser-helper/runtime — REAL binary RED/GREEN (Phase 3)", () => {
 	let helper: MvdanShHelper;
 
 	beforeAll(() => {
-		if (!HELPER_PATH || !HELPER_PLATFORM) return;
+		if (!HELPER_PATH) {
+			if (isSupportedHelperPlatform) {
+				throw new Error(
+					`Vendored parser-helper binary missing for supported platform ${HELPER_PLATFORM}; cannot run RED witness.`,
+				);
+			}
+			return;
+		}
 		helper = new MvdanShHelper({
-			platform: HELPER_PLATFORM,
-			binaryPath: () => HELPER_PATH,
+			platform: HELPER_PLATFORM as NonNullable<HelperPlatform>,
+			binaryPath: () => HELPER_PATH as string,
 		});
 	});
 
 	it("helper binary at the expected vendor layout (or skip if absent)", () => {
-		if (!HELPER_PATH) {
-			return;
-		}
 		expect(HELPER_PATH).toMatch(/cline-parser-helper(\.exe)?$/);
 	});
 
 	it("pwd; pwd → complete AST with two cmd stmts", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: "pwd; pwd" });
 		expect(r).not.toBeNull();
 		expect(r!.protocolVersion).toBe(2);
@@ -120,14 +155,12 @@ describe("parser-helper/runtime — REAL binary RED/GREEN (Phase 3)", () => {
 	});
 
 	it("echo \"$(rm -rf foo)\" → complete AST + hasCommandSubstitution=true", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: 'echo "$(rm -rf foo)"' });
 		expect(r).not.toBeNull();
 		expect(r!.hasCommandSubstitution).toBe(true);
 	});
 
 	it("bash -c 'rm -rf \"$HOME\"' → wrapper AST with inner source", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: 'bash -c \'rm -rf "$HOME"\'' });
 		expect(r).not.toBeNull();
 		expect(r!.parseStatus).toBe("complete");
@@ -141,14 +174,12 @@ describe("parser-helper/runtime — REAL binary RED/GREEN (Phase 3)", () => {
 	});
 
 	it("rm -rf \"$HOME\" → complete AST with rm cmd (no parse failure)", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: 'rm -rf "$HOME"' });
 		expect(r).not.toBeNull();
 		expect(r!.parseStatus).toBe("complete");
 	});
 
 	it("pwd > ~/.ssh/authorized_keys → complete AST with redirect captured", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: "pwd > ~/.ssh/authorized_keys" });
 		expect(r).not.toBeNull();
 		expect(r!.parseStatus).toBe("complete");
@@ -160,7 +191,6 @@ describe("parser-helper/runtime — REAL binary RED/GREEN (Phase 3)", () => {
 	});
 
 	it("malformed input → parseStatus: failed (no throw, V2 dormant)", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: "${BROKEN_INVOCATION" });
 		expect(r).not.toBeNull();
 		expect(r!.parseStatus).toBe("failed");
@@ -169,7 +199,6 @@ describe("parser-helper/runtime — REAL binary RED/GREEN (Phase 3)", () => {
 	});
 
 	it("sourceSha256 is a 64-char hex string", async () => {
-		if (!HELPER_PATH) return;
 		const r = await helper.invoke({ command: "git status && git diff" });
 		expect(r).not.toBeNull();
 		expect(r!.sourceSha256).toMatch(/^[0-9a-f]{64}$/);
