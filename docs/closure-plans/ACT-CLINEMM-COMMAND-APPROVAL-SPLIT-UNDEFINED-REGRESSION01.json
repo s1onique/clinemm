@@ -4,7 +4,7 @@
   "parent": "ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02",
   "parent_verdict_basis_at_start": "PASS_WORKSPACE_PATH_AUTHORITY_REALPATH",
   "verdict": "PASS_COMMAND_APPROVAL_SPLIT_UNDEFINED_REGRESSION",
-  "verdict_basis": "Production-boundary normalization added to buildPathAuthorityEvidence (SDK-side canonical normalizer); raw toolInput shapes ({commands: [...]}, {cmd: ...}, bare arrays) no longer throw 'Cannot read properties of undefined (reading split)'; 11 RED tests + 4 CLI host tests + live verification at the bundled SDK all GREEN; no regression in @cline/core unit (2509/2509 +14 skip), @cline/core command-policy/ (549/549), apps/cli command-policy-host (51+5/51+5), apps/vscode src/sdk (1954/1954 +5 skip); apps/vscode check-types EXIT=0; apps/cli check-types EXIT=0; git diff --check HEAD PASS; biome lint CLEAN (auto-format applied); SDK rebuild EXIT=0.",
+  "verdict_basis": "Production-boundary normalization added to buildPathAuthorityEvidence (SDK-side canonical normalizer); raw toolInput shapes ({commands: [...]}, {cmd: ...}, bare arrays) no longer throw 'Cannot read properties of undefined (reading split)'; 11 RED tests + 4 CLI host tests + real_production_bundle_verification at the bundled SDK all GREEN; no regression in @cline/core unit (2509/2509 +14 skip), @cline/core command-policy/ (549/549), apps/cli command-policy-host (51+5/51+5), apps/vscode src/sdk (1954/1954 +5 skip); apps/vscode check-types EXIT=0; apps/cli check-types EXIT=0; git diff --check HEAD PASS; biome lint CLEAN (auto-format applied); SDK rebuild EXIT=0.",
   "regression_class": "P0_APPROVAL_RUNTIME_EXCEPTION",
   "regression_symptom": "Tool 'run_commands' approval request failed: Cannot read properties of undefined (reading 'split')",
   "reproduction": {
@@ -58,7 +58,8 @@
     "biome lint (changed files)": "CLEAN (auto-format applied)",
     "SDK rebuild": "EXIT=0"
   },
-  "live_verification": {
+  "live_verification_label": "real_production_bundle_verification (executed real production @cline/core bundle via Node; NOT installed VSCodium UI reproduction — that requires a separate live dogfood act)",
+  "real_production_bundle_verification": {
     "script": "node /tmp/pwd-repro4.mjs",
     "before_fix": [
       "'{commands:[pwd]}' THREW: Cannot read properties of undefined (reading 'split')",

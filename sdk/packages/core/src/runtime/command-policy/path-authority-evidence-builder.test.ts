@@ -193,7 +193,7 @@ describe("buildPathAuthorityEvidence", () => {
 					cwd: PROJECT_DIR,
 					// RAW toolInput, not a NormalizedCommand — this
 					// is exactly what the host adapters pass.
-					command: { commands: ["pwd"] } as never,
+					command: { commands: ["pwd"] },
 				}),
 			).not.toThrow();
 		});
@@ -203,7 +203,7 @@ describe("buildPathAuthorityEvidence", () => {
 				buildPathAuthorityEvidence({
 					workspaceRoots: [PROJECT_DIR],
 					cwd: PROJECT_DIR,
-					command: { cmd: "pwd" } as never,
+					command: { cmd: "pwd" },
 				}),
 			).not.toThrow();
 		});
@@ -213,7 +213,7 @@ describe("buildPathAuthorityEvidence", () => {
 				buildPathAuthorityEvidence({
 					workspaceRoots: [PROJECT_DIR],
 					cwd: PROJECT_DIR,
-					command: { commands: { command: "pwd" } } as never,
+					command: { commands: { command: "pwd" } },
 				}),
 			).not.toThrow();
 		});
@@ -223,7 +223,7 @@ describe("buildPathAuthorityEvidence", () => {
 				buildPathAuthorityEvidence({
 					workspaceRoots: [PROJECT_DIR],
 					cwd: PROJECT_DIR,
-					command: { commands: [{ command: "pwd" }] } as never,
+					command: { commands: [{ command: "pwd" }] },
 				}),
 			).not.toThrow();
 		});
@@ -233,7 +233,7 @@ describe("buildPathAuthorityEvidence", () => {
 				buildPathAuthorityEvidence({
 					workspaceRoots: [PROJECT_DIR],
 					cwd: PROJECT_DIR,
-					command: ["pwd"] as never,
+					command: ["pwd"],
 				}),
 			).not.toThrow();
 		});
@@ -243,7 +243,7 @@ describe("buildPathAuthorityEvidence", () => {
 				buildPathAuthorityEvidence({
 					workspaceRoots: [PROJECT_DIR],
 					cwd: PROJECT_DIR,
-					command: { command: "pwd", cwd: "/x" } as never,
+					command: { command: "pwd", cwd: "/x" },
 				}),
 			).not.toThrow();
 		});
@@ -254,7 +254,7 @@ describe("buildPathAuthorityEvidence", () => {
 			const r = buildPathAuthorityEvidence({
 				workspaceRoots: [PROJECT_DIR],
 				cwd: PROJECT_DIR,
-				command: { commands: ["pwd"] } as never,
+				command: { commands: ["pwd"] },
 			});
 			expect(r.ok).toBe(true);
 			if (r.ok) {
@@ -266,7 +266,7 @@ describe("buildPathAuthorityEvidence", () => {
 			const r = buildPathAuthorityEvidence({
 				workspaceRoots: [PROJECT_DIR],
 				cwd: PROJECT_DIR,
-				command: "pwd" as never,
+				command: "pwd",
 			});
 			expect(r.ok).toBe(true);
 			if (r.ok) {
@@ -281,7 +281,7 @@ describe("buildPathAuthorityEvidence", () => {
 			const r = buildPathAuthorityEvidence({
 				workspaceRoots: [PROJECT_DIR],
 				cwd: PROJECT_DIR,
-				command: { commands: [`ls ${target}`] } as never,
+				command: { commands: [`ls ${target}`] },
 			});
 			expect(r.ok).toBe(true);
 			if (r.ok) {
@@ -299,7 +299,7 @@ describe("buildPathAuthorityEvidence", () => {
 			const r = buildPathAuthorityEvidence({
 				workspaceRoots: [PROJECT_DIR],
 				cwd: PROJECT_DIR,
-				command: { cmd: `ls ${target}` } as never,
+				command: { cmd: `ls ${target}` },
 			});
 			expect(r.ok).toBe(true);
 			if (r.ok) {
@@ -313,7 +313,7 @@ describe("buildPathAuthorityEvidence", () => {
 			const r = buildPathAuthorityEvidence({
 				workspaceRoots: [PROJECT_DIR],
 				cwd: PROJECT_DIR,
-				command: [`ls ${target}`] as never,
+				command: [`ls ${target}`],
 			});
 			expect(r.ok).toBe(true);
 			if (r.ok) {

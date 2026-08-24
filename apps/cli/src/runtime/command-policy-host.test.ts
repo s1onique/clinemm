@@ -5,8 +5,10 @@
  *
  * Proves the CLI uses the canonical command policy in production.
  */
-import { realpathSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
 	buildCliToolPolicies,
@@ -16,9 +18,33 @@ import {
 	cliResolveSafeOnlyHostAuthorization,
 } from "./command-policy-host";
 
-const projectRoot = realpathSync(
-	"/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
-);
+// ACT-CLINEMM-COMMAND-APPROVAL-SPLIT-UNDEFINED-REGRESSION01
+// HERMETIC_TMP_WORKSPACE_ROOT (P1 reviewer-rejection follow-up):
+// The original test hardcoded one developer's checkout path
+// (/Volumes/UserData/.../clinemm), which would fail immediately on CI,
+// on Linux, on another machine, or after moving the repo. We lazily
+// allocate a hermetic temp directory in the OS temp root; the host
+// adapter canonicalizes via resolvePath() so any real directory
+// works for these `pwd`/`git status` tests (they have zero path
+// operands, so containment is trivially true).
+let projectRoot: string;
+let projectRootTmp: string;
+
+beforeAll(() => {
+	projectRootTmp = mkdtempSync(
+		join(tmpdir(), "cline-cli-command-policy-host-"),
+	);
+	// resolvePath in the host adapter canonicalizes, but using
+	// realpathSync here keeps the value stable across symlinked tmp
+	// roots (macOS /tmp -> /private/tmp).
+	projectRoot = realpathSync(projectRootTmp);
+});
+
+afterAll(() => {
+	if (projectRootTmp) {
+		rmSync(projectRootTmp, { recursive: true, force: true });
+	}
+});
 
 describe("CLI host adapter — cliResolveHostAuthorization", () => {
 	it("autoApproveTools=true => host mode 'all'", () => {
@@ -407,9 +433,9 @@ describe("CLI host adapter — CORRECTION04 ASK -> user YES preserves plan", () 
 		expect(hardened).toContain("--no-textconv");
 		expect(hardened).not.toBe("git diff --stat");
 		// Provenance:
-		const entry = result.executionPlan?.commands[0]!;
-		expect(entry.matchedRuleSource).toBe("host_safe_git_diff");
-		expect(entry.profileSource).toBe("host_safe_git_diff_profile");
+		const entry = result.executionPlan?.commands[0];
+		expect(entry?.matchedRuleSource).toBe("host_safe_git_diff");
+		expect(entry?.profileSource).toBe("host_safe_git_diff_profile");
 	});
 
 	it("safe-only + git diff + requires_approval=false => ALLOW with hardened plan", () => {
