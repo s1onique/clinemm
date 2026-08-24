@@ -34,6 +34,28 @@ describe("CLI host adapter — cliResolveHostAuthorization", () => {
 		const auth = cliResolveHostAuthorization(false);
 		expect(auth.mode).toBe("manual");
 	});
+
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	// REALPATH_WORKSPACE_CONFINEMENT:
+	//
+	// The CORRECTION01 reviewer flagged `cwd === workspaceRoots`
+	// as a P1 authority assumption: if the CLI launches from `/`
+	// or `$HOME`, that directory silently becomes the safe read
+	// authority. CORRECTION01 narrows this: when the host does
+	// NOT supply an explicit `workspaceRoot`, the path authority
+	// is DISABLED and R0 path-bearing commands fall through to
+	// ASK.
+	it("CORRECTION01: no workspaceRoot => workspaceRoots is undefined (path authority disabled)", () => {
+		const auth = cliResolveHostAuthorization(false);
+		expect(auth.workspaceRoots).toBeUndefined();
+	});
+
+	it("CORRECTION01: explicit workspaceRoot => workspaceRoots is [workspaceRoot] (path authority active)", () => {
+		const auth = cliResolveHostAuthorization(true, {
+			workspaceRoot: "/explicit/project",
+		});
+		expect(auth.workspaceRoots).toEqual(["/explicit/project"]);
+	});
 });
 
 describe("CLI host adapter — cliEvaluateCommandToolApproval", () => {

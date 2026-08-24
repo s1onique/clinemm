@@ -7,7 +7,12 @@
 
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
-import type { CommandDecision, CommandHostAuthorization } from "@cline/core"
+import {
+	buildPathAuthorityEvidence,
+	type CommandDecision,
+	type CommandHostAuthorization,
+	type WorkspacePathAuthorityEvidence,
+} from "@cline/core"
 import {
 	type CompareCheckpointResult,
 	createRestoredCheckpointMetadata,
@@ -328,14 +333,19 @@ export function setSdkControllerParserHelper(helper: MvdanShHelper | undefined):
  * `CommandDecision`-shaped result for command tools.
  */
 export function buildSdkControllerEvaluateCommandToolApproval(options: {
-	/** Resolve the host authorization. Production uses the session override path. */
+	/**
+	 * Resolve the host authorization. Production uses the
+	 * session override path. Async so the host can build
+	 * realpath evidence (see
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01).
+	 */
 	resolveHostAuthorization: (
 		toolName: string,
 		requestInput: unknown,
-	) => {
+	) => Promise<{
 		hostAuthorization: CommandHostAuthorization
 		toolInput: unknown
-	}
+	}>
 	/** Override the helper. Production uses `() => sdkControllerParserHelper`. */
 	getHelper: () => MvdanShHelper
 	/** Override cancel_command handling. Production uses `evaluateCancelCommandToolApproval`. */
@@ -361,7 +371,7 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 		if (!isCommandTool(request.toolName)) {
 			return undefined
 		}
-		const { hostAuthorization, toolInput } = options.resolveHostAuthorization(request.toolName, request.input)
+		const { hostAuthorization, toolInput } = await options.resolveHostAuthorization(request.toolName, request.input)
 		if (request.toolName === "cancel_command") {
 			const cancelFn = options.evaluateCancel ?? evaluateCancelCommandToolApproval
 			const cancelResult = cancelFn(toolInput, hostAuthorization)
@@ -796,7 +806,7 @@ export class Controller {
 			// This eliminates the race between shouldAutoApproveTool (authority)
 			// and buildCommandExecutionPlan (constraints) across the approval UI.
 			evaluateCommandToolApproval: buildSdkControllerEvaluateCommandToolApproval({
-				resolveHostAuthorization: (_toolName, requestInput) => {
+				resolveHostAuthorization: async (_toolName, requestInput) => {
 					const autoApprovalSettings = this.stateManager.getGlobalSettingsKey("autoApprovalSettings")
 					const persisted = autoApprovalSettings ?? DEFAULT_AUTO_APPROVAL_SETTINGS
 					const sessionId = this.sessions.getActiveSession()?.sessionId
@@ -812,7 +822,25 @@ export class Controller {
 					// Model escalation (requires_approval=true) is suppressed via
 					// stripRequiresApproval so the user's explicit session authority
 					// is not silently downgraded by an advisory model hint.
-					let hostAuthorization = getCommandHostAuthorization(_toolName, persisted, this.mcpHub)
+					//
+					// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+					// REALPATH_WORKSPACE_CONFINEMENT: build host-produced
+					// realpath evidence. Containment is then tested on
+					// canonical pathnames, which closes the V1
+					// symlink-escape attack.
+					const pathAuthorityEvidence = await this.buildPathAuthorityEvidence(requestInput)
+					let hostAuthorization = getCommandHostAuthorization(
+					_toolName,
+					persisted,
+					this.mcpHub,
+					{
+						workspaceRoots: this.lastKnownWorkspaceRoot
+							? [this.lastKnownWorkspaceRoot]
+							: undefined,
+						cwd: this.lastKnownWorkspaceRoot,
+						pathAuthorityEvidence,
+					},
+				)
 					let toolInput = requestInput
 					if (override === "all") {
 						// Compose over the base auth we just computed; this preserves
@@ -1757,6 +1785,70 @@ export class Controller {
 			Logger.warn("[SdkController] Failed to get workspace paths for remote config, using global fallback:", error)
 			return undefined
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	 * REALPATH_WORKSPACE_CONFINEMENT:
+	 *
+	 * Build host-produced realpath evidence for a path-bearing
+	 * tool call. The VS Code host calls `fs.realpathSync` on the
+	 * workspace roots AND on every path operand in the command;
+	 * the policy layer consumes the evidence to test
+	 * containment on canonical pathnames.
+	 *
+	 * Multi-root: ALL open workspace folders are passed as
+	 * roots (the reviewer flagged this as cheap to wire once
+	 * the seam is open). Virtual workspaces (non-`file` URI
+	 * schemes) are filtered out — realpath cannot follow them,
+	 * so they fail closed naturally.
+	 *
+	 * Returns `undefined` when the host has no workspace
+	 * authority configured (e.g. no folders open, no chat
+	 * workspace available). The policy layer then falls back
+	 * to the V1 lexical-only check, which already rejects
+	 * any path-bearing R0 command (no implicit "any path is
+	 * safe" default).
+	 */
+	private async buildPathAuthorityEvidence(
+		toolInput: unknown,
+	): Promise<WorkspacePathAuthorityEvidence | undefined> {
+		let workspaceRoots: string[] = []
+		try {
+			const { paths } = await HostProvider.workspace.getWorkspacePaths({})
+			if (paths && paths.length > 0) {
+				// Filter empty paths; realpath on an empty
+				// path would resolve to the host's process
+				// cwd, which is the wrong authority anchor.
+				workspaceRoots = paths.filter((p) => p.trim().length > 0)
+			}
+		} catch (error) {
+			Logger.warn(
+				"[SdkController] Failed to get workspace paths for path authority evidence:",
+				error,
+			)
+		}
+		if (workspaceRoots.length === 0) {
+			// Fall back to lastKnownWorkspaceRoot so we have
+			// at least one anchor; this mirrors
+			// getWorkspaceRoot's behavior.
+			const fallback = await this.getWorkspaceRoot()
+			workspaceRoots = [fallback]
+		}
+
+		const cwd = this.lastKnownWorkspaceRoot ?? workspaceRoots[0]!
+		const result = buildPathAuthorityEvidence({
+			workspaceRoots,
+			cwd,
+			command: toolInput as never,
+		})
+		if (!result.ok) {
+			Logger.warn(
+				`[SdkController] buildPathAuthorityEvidence failed (reason=${result.reason}); falling back to V1 lexical gate`,
+			)
+			return undefined
+		}
+		return result.evidence
 	}
 
 	// ---- Session event subscription ----

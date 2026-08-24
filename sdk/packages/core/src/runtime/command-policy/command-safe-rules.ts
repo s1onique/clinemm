@@ -315,11 +315,30 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		//       the few that take a value);
 		//   (c) zero or more POSIX path arguments.
 		//
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+		// This rule is PATH-AGNOSTIC. It accepts ANY
+		// character-class-conformant path operand (relative or
+		// absolute). The policy layer applies a SEPARATE workspace
+		// path authority gate (see `path-authority.ts`) AFTER this
+		// rule matches: the rule confirms the COMMAND SHAPE is
+		// safe; the path authority confirms the OPERANDS are
+		// inside an authorized workspace root. The two layers
+		// MUST NOT be conflated — keeping the regex small and
+		// path-agnostic is the audit-friendly property that
+		// enables bounded positive matching.
+		//
+		// V1 LIMITATION (documented): a path that lexically passes
+		// the path authority gate but is a symlink to a sensitive
+		// filesystem location is not caught. The realpath
+		// variant is a follow-up ACT
+		// (REALPATH_WORKSPACE_CONFINEMENT).
+		//
 		// Sensitive-path policy (e.g. ~/.ssh) is a SEPARATE dimension
-		// not addressed here. See the board row for
-		// ACT-CLINEMM-COMMAND-RISK-R0-READONLY-RECON-EXPANSION02.
+		// addressed by the workspace path authority gate above. See
+		// the board row for
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01.
 		pattern:
-			/^\s*ls(?:\s+(?:-[1aAbBcCdDfFgGhHiIkLlLmnNopqrRsStTuUwWxXzZNQ]+|--all|--almost-all|--author|--escape|--block-size=[-A-Za-z0-9_\/.,+:%^]+|--ignore-backups|--color(?:=(?:always|auto|never))?|--directory|--dired|--classify(?:=(?:always|auto|never))?|--file-type|--format=(?:across|horizontal|commas|long|single-column|verbose|vertical)|--full-time|--group-directories-first|--no-group|--human-readable|--si|--dereference-command-line|--dereference-command-line-symlink-to-dir|--hide=[-A-Za-z0-9_\/.,+:%^*?]+|--hyperlink(?:=(?:always|auto|never))?|--indicator-style=(?:none|slash|file-type|classify)|--inode|--ignore=[-A-Za-z0-9_\/.,+:%^*?]+|--kibibytes|--dereference|--numeric-uid-gid|--literal|--reverse|--recursive|--size|--sort=(?:none|size|time|version|extension|name|width)|--time=(?:access|atime|use|ctime|status|mtime|modification|birth|creation)|--time-style=[-A-Za-z0-9_:,.,+^%]+|--tabsize=\d+|--zero|--quote-name|--quoting-style=(?:literal|locale|shell|shell-always|shell-escape|shell-escape-always|c|escape)|--show-control-chars|--hide-control-chars|--context|--help|--version))*(?:\s+(?:--|(?![-])[-A-Za-z0-9_\/.,+:%^@~*$?][-A-Za-z0-9_\/.,+:%^@~*$?]*))*$/u,
+			/^\s*ls(?:\s+(?:-[1aAbBcCdDfFgGhHiIkLlLmnNopqrRsStTuUwWxXzZNQ]+|--all|--almost-all|--author|--escape|--block-size=[-A-Za-z0-9_/.,+:%^]+|--ignore-backups|--color(?:=(?:always|auto|never))?|--directory|--dired|--classify(?:=(?:always|auto|never))?|--file-type|--format=(?:across|horizontal|commas|long|single-column|verbose|vertical)|--full-time|--group-directories-first|--no-group|--human-readable|--si|--dereference-command-line|--dereference-command-line-symlink-to-dir|--hide=[-A-Za-z0-9_/.,+:%^*?]+|--hyperlink(?:=(?:always|auto|never))?|--indicator-style=(?:none|slash|file-type|classify)|--inode|--ignore=[-A-Za-z0-9_/.,+:%^*?]+|--kibibytes|--dereference|--numeric-uid-gid|--literal|--reverse|--recursive|--size|--sort=(?:none|size|time|version|extension|name|width)|--time=(?:access|atime|use|ctime|status|mtime|modification|birth|creation)|--time-style=[-A-Za-z0-9_:,.,+^%]+|--tabsize=\d+|--zero|--quote-name|--quoting-style=(?:literal|locale|shell|shell-always|shell-escape|shell-escape-always|c|escape)|--show-control-chars|--hide-control-chars|--context|--help|--version))*(?:\s+(?:--|(?![-])[-A-Za-z0-9_/.,+:%^@~*$?][-A-Za-z0-9_/.,+:%^@~*$?]*))*$/u,
 	},
 	{
 		source: "host_safe_find",
@@ -330,6 +349,25 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		// -fls, -fprint, -fprint0, -fprintf). We enumerate ONLY the
 		// stdout-only + pure-predicate forms here. Any invocation
 		// containing a mutating or executing action MUST NOT match.
+		//
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+		// Like host_safe_ls, this rule is PATH-AGNOSTIC. It
+		// accepts ANY character-class-conformant starting path
+		// (relative or absolute) and ANY literal pattern
+		// operand. The policy layer applies a SEPARATE workspace
+		// path authority gate (see `path-authority.ts`) AFTER
+		// this rule matches: the rule confirms the COMMAND SHAPE
+		// is safe; the path authority confirms the OPERANDS are
+		// inside an authorized workspace root.
+		//
+		// V1 LIMITATION: a `find -L` invocation that starts
+		// inside the project but whose first filesystem dereference
+		// is a symlink to a sensitive path is NOT caught by V1's
+		// lexical gate (per GNU find(1), `-L` "lists the
+		// dereferenced targets"). The realpath variant is a
+		// follow-up ACT (REALPATH_WORKSPACE_CONFINEMENT); for V1
+		// we explicitly pin this limitation rather than paper
+		// over it.
 		//
 		// SHELL EXPANSION BOUNDARY (CORRECTION01, 2026-08-24):
 		// The rule classifies the PRE-shell source text. Shell
@@ -420,7 +458,7 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 		//     provenance required to bless these)
 		//   any unknown predicate / action   ASK (no wildcard)
 		pattern:
-			/^\s*find(?:\s+-(?:H|L|P|E|X|s|d|x))?(?:\s+-f\s+[-A-Za-z0-9_\/.,+:%@]+)?(?:\s+(?:--|(?![-])[-A-Za-z0-9_\/.,+:%@]+))*?(?:\s+(?:-name\s+[-A-Za-z0-9_\/.,+:%@]+|-iname\s+[-A-Za-z0-9_\/.,+:%@]+|-path\s+[-A-Za-z0-9_\/.,+:%@]+|-ipath\s+[-A-Za-z0-9_\/.,+:%@]+|-regex\s+[-A-Za-z0-9_\/.,+:%@\\.\$\^]+|-iregex\s+[-A-Za-z0-9_\/.,+:%@\\.\$\^]+|-type\s+[bcdflpsw]|-perm\s+[-+a-zA-Z0-7]+|-user\s+[-A-Za-z0-9_\/.,+:%@]+|-uid\s+\d+|-group\s+[-A-Za-z0-9_\/.,+:%@]+|-gid\s+\d+|-size\s+[+-]?\d+[ckbwMG]?|-atime\s+[+-]?\d+|-ctime\s+[+-]?\d+|-mtime\s+[+-]?\d+|-amin\s+[+-]?\d+|-cmin\s+[+-]?\d+|-mmin\s+[+-]?\d+|-newer\s+[-A-Za-z0-9_\/.,+:%@]+|-anewer\s+[-A-Za-z0-9_\/.,+:%@]+|-cnewer\s+[-A-Za-z0-9_\/.,+:%@]+|-newerXY\s+[a-z]\s+[-A-Za-z0-9_\/.,+:%@]+|-empty|-readable|-writable|-executable|-true|-false|-links\s+\d+|-inum\s+\d+|-fstype\s+[A-Za-z0-9_]+|-nogroup|-nouser|-depth|-xdev|-mindepth\s+\d+|-maxdepth\s+\d+|-prune|-print0?|-ls|-printf\s+[-A-Za-z0-9_\/.,+:%@~%\\]+|-quit|-not|-and|-or))*\s*$/u,
+			/^\s*find(?:\s+-(?:H|L|P|E|X|s|d|x))?(?:\s+-f\s+[-A-Za-z0-9_/.,+:%@]+)?(?:\s+(?:--|(?![-])[-A-Za-z0-9_/.,+:%@]+))*?(?:\s+(?:-name\s+[-A-Za-z0-9_/.,+:%@]+|-iname\s+[-A-Za-z0-9_/.,+:%@]+|-path\s+[-A-Za-z0-9_/.,+:%@]+|-ipath\s+[-A-Za-z0-9_/.,+:%@]+|-regex\s+[-A-Za-z0-9_/.,+:%@\\.$^]+|-iregex\s+[-A-Za-z0-9_/.,+:%@\\.$^]+|-type\s+[bcdflpsw]|-perm\s+[-+a-zA-Z0-7]+|-user\s+[-A-Za-z0-9_/.,+:%@]+|-uid\s+\d+|-group\s+[-A-Za-z0-9_/.,+:%@]+|-gid\s+\d+|-size\s+[+-]?\d+[ckbwMG]?|-atime\s+[+-]?\d+|-ctime\s+[+-]?\d+|-mtime\s+[+-]?\d+|-amin\s+[+-]?\d+|-cmin\s+[+-]?\d+|-mmin\s+[+-]?\d+|-newer\s+[-A-Za-z0-9_/.,+:%@]+|-anewer\s+[-A-Za-z0-9_/.,+:%@]+|-cnewer\s+[-A-Za-z0-9_/.,+:%@]+|-newerXY\s+[a-z]\s+[-A-Za-z0-9_/.,+:%@]+|-empty|-readable|-writable|-executable|-true|-false|-links\s+\d+|-inum\s+\d+|-fstype\s+[A-Za-z0-9_]+|-nogroup|-nouser|-depth|-xdev|-mindepth\s+\d+|-maxdepth\s+\d+|-prune|-print0?|-ls|-printf\s+[-A-Za-z0-9_/.,+:%@~%\\]+|-quit|-not|-and|-or))*\s*$/u,
 	},
 ];
 

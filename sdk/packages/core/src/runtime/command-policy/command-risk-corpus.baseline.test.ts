@@ -21,14 +21,13 @@
  */
 
 import { describe, expect, it } from "vitest";
-
+import { CORPUS } from "./command-risk-corpus";
 import {
 	commandHostAuthorization,
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	evaluateCommandPolicy,
 	findSafeRuleMatch,
 } from "./index";
-import { CORPUS } from "./command-risk-corpus";
 
 /* ---------------------------------------------------------------------- *
  * GROUP A — BASELINE FREEZE                                              *
@@ -123,9 +122,36 @@ describe("Group A — baseline freeze: evaluateCommandPolicy in 'all' mode (the 
 
 describe("Group A — baseline freeze: evaluateCommandPolicy in 'safe-only' mode", () => {
 	it("documents 'safe-only' decisions against the corpus", () => {
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+		// The baseline test freezes the canonical command policy's
+		// safe-only behavior in a host authorization that supplies
+		// workspace roots. The fixture root is `/` (catch-all) so
+		// the path-authority gate is effectively a no-op for every
+		// absolute or relative path, mirroring the V1 (pre-ACT)
+		// baseline behavior. This isolates the V1 rule-engine
+		// verdict from the V1 path-authority verdict. The dedicated
+		// path-authority corpus test
+		// (`command-risk-corpus.path-authority.test.ts`) covers the
+		// post-ACT path-authority contract separately with a
+		// confined workspace root.
+		//
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+		// REALPATH_WORKSPACE_CONFINEMENT:
+		//
+		// The baseline test deliberately does NOT supply
+		// `pathAuthorityEvidence`. The policy layer falls back
+		// to the V1 lexical-only containment check, which is a
+		// no-op under the catch-all root "/". This isolates the
+		// V1 rule-engine verdict from the V1 path-authority
+		// verdict. The new realpath-gated corpus entries resolve
+		// to ALLOW here (under catch-all); the confined workspace
+		// root in the dedicated path-authority corpus test is
+		// what turns those entries into ASK.
 		const safeOnly = commandHostAuthorization({
 			mode: "safe-only",
 			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: ["/"],
+			cwd: "/",
 		});
 		const byId = new Map<string, string>();
 		for (const c of CORPUS) {
@@ -148,7 +174,9 @@ describe("Group A — baseline freeze: evaluateCommandPolicy in 'safe-only' mode
 		expect(byId.get("r0-git-branch-list")).toBe("allow");
 		expect(byId.get("r0-git-branch-all")).toBe("allow");
 		expect(byId.get("r0-git-branch-remotes")).toBe("allow");
-		// V3 ls + find corpus
+		// V3 ls + find corpus (under the catch-all workspace root,
+		// path authority is a no-op so the V1 rule-engine ALLOW
+		// set is preserved).
 		expect(byId.get("r0-ls-bare")).toBe("allow");
 		expect(byId.get("r0-ls-long")).toBe("allow");
 		expect(byId.get("r0-ls-somepath")).toBe("allow");

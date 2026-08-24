@@ -56,6 +56,11 @@ import type {
 } from "./command-policy-types";
 import { findSafeRuleMatch } from "./command-safe-rules";
 import {
+	evaluateCommandPathConformance,
+	evaluateCommandRealpathConformance,
+	extractPathOperands,
+} from "./path-authority";
+import {
 	getSafeExecutionProfileForSource,
 	type SafeExecutionProfile,
 } from "./safe-execution-profile";
@@ -254,6 +259,85 @@ function evaluateOne(
 	if (allowRules.length > 0) {
 		const match = findSafeRuleMatch(command, allowRules);
 		if (match) {
+			// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+			// The R0 rule matched the command's argv shape (e.g.
+			// "ls with reviewed options" / "find with stdout-only
+			// actions"). Before we grant ALLOW, the workspace
+			// path authority must confirm that every path operand
+			// resolves inside an authorized workspace root.
+			//
+			// This is a STRICT SUBSET gate: it only removes
+			// ALLOWs, never adds them. A command that was ASK
+			// before this ACT remains ASK. A command that was
+			// ALLOW with a path outside the workspace root
+			// becomes ASK with the
+			// `host_workspace_path_authority` source.
+			//
+			// The path authority is consulted only when the host
+			// has supplied `workspaceRoots`. A host that does not
+			// supply roots is treated as "no configuration", and
+			// path-bearing commands fall through to ASK — this
+			// closes the regression where a missing
+			// `workspaceRoots` field was effectively equivalent
+			// to "any path is allowed".
+			//
+			// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+			// REALPATH_WORKSPACE_CONFINEMENT:
+			//
+			// If the host produced `pathAuthorityEvidence`, that
+			// evidence TAKES PRECEDENCE over the V1 lexical
+			// `workspaceRoots` + `cwd` containment check. The
+			// evidence was built by the host calling
+			// `fs.realpathSync` on the operand(s) and on the
+			// workspace root(s); the policy stays pure.
+			if (isR0ReadonlyRuleSource(match.source)) {
+				if (auth.pathAuthorityEvidence !== undefined) {
+					const evidence = auth.pathAuthorityEvidence;
+					const expectedOperands = extractPathOperands(command);
+					if (evidence.operands.length !== expectedOperands.length) {
+						return {
+							kind: "ask",
+							source: "host_workspace_realpath_authority",
+							reason: `workspace realpath authority: host evidence operand count (${evidence.operands.length}) does not match command operand count (${expectedOperands.length})`,
+						};
+					}
+					const conformance = evaluateCommandRealpathConformance(evidence);
+					if (!conformance.conforming) {
+						const nonconforming = conformance.operands.find(
+							(o) => !o.result.conforming,
+						);
+						const reason = nonconforming
+							? `workspace realpath authority: operand "${nonconforming.operand}" resolves to "${nonconforming.result.resolvedRealPath ?? "unresolved"}" outside configured workspace roots (${nonconforming.result.reason ?? "unknown"}, hostReason=${nonconforming.result.hostReason})`
+							: `workspace realpath authority: at least one path operand is outside configured workspace roots`;
+						return {
+							kind: "ask",
+							source: "host_workspace_realpath_authority",
+							reason,
+						};
+					}
+				} else {
+					// V1 lexical fallback for hosts that have not yet
+					// upgraded to produce realpath evidence.
+					const pathCtx = {
+						workspaceRoots: auth.workspaceRoots,
+						cwd: auth.cwd,
+					};
+					const conformance = evaluateCommandPathConformance(command, pathCtx);
+					if (!conformance.conforming) {
+						const nonconforming = conformance.operands.find(
+							(o) => !o.result.conforming,
+						);
+						const reason = nonconforming
+							? `workspace path authority: operand "${nonconforming.operand}" resolves to "${nonconforming.result.resolved ?? "?"}" outside configured workspace roots (${nonconforming.result.reason ?? "unknown"})`
+							: `workspace path authority: at least one path operand is outside configured workspace roots`;
+						return {
+							kind: "ask",
+							source: "host_workspace_path_authority",
+							reason,
+						};
+					}
+				}
+			}
 			const profile = getSafeExecutionProfileForSource(match.source);
 			return {
 				kind: "allow",
@@ -355,6 +439,8 @@ function aggregateSource(
 	let anySafeOnlyFallthrough = false;
 	let anySafeOnlyRule = false;
 	let anyAll = false;
+	let anyWorkspacePathAuthority = false;
+	let anyWorkspaceRealpathAuthority = false;
 	for (const ev of perCommand) {
 		if (ev.kind === "deny") {
 			anyDeny = true;
@@ -366,6 +452,10 @@ function aggregateSource(
 			anySafeOnlyRule = true;
 		} else if (ev.source === "host_mode_all") {
 			anyAll = true;
+		} else if (ev.source === "host_workspace_path_authority") {
+			anyWorkspacePathAuthority = true;
+		} else if (ev.source === "host_workspace_realpath_authority") {
+			anyWorkspaceRealpathAuthority = true;
 		}
 	}
 	if (anyDeny) {
@@ -373,6 +463,23 @@ function aggregateSource(
 	}
 	if (anyManual) {
 		return "host_mode_manual";
+	}
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	// REALPATH_WORKSPACE_CONFINEMENT:
+	// Realpath authority is the most specific path authority
+	// downgrade reason, so it takes precedence in the
+	// multi-command aggregate (over the V1 lexical-only
+	// `host_workspace_path_authority` source and over the generic
+	// safe-only fallthrough).
+	if (anyWorkspaceRealpathAuthority) {
+		return "host_workspace_realpath_authority";
+	}
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+	// A workspace path authority downgrade is a more specific
+	// reason for ASK than the generic safe-only fallthrough, so
+	// it takes precedence in the multi-command aggregate.
+	if (anyWorkspacePathAuthority) {
+		return "host_workspace_path_authority";
 	}
 	if (anySafeOnlyFallthrough) {
 		return "host_mode_safe_only_fallthrough";
@@ -384,6 +491,29 @@ function aggregateSource(
 		return "host_mode_all";
 	}
 	return "host_mode_manual";
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01
+ *
+ * Set of safe-rule sources that are R0 read-only and therefore
+ * subject to the workspace path authority gate. The R0 family
+ * today is `host_safe_ls` and `host_safe_find`; pwd/git_* are
+ * NOT included because they either take no path operands (pwd,
+ * git status, git log, git diff, git rev-parse) or operate on
+ * an in-tree repository rooted at the host cwd by design (git
+ * show/rev-list/branch).
+ *
+ * Adding a new R0 family that takes path operands MUST also
+ * add its source here so the path gate fires for it.
+ */
+const R0_READONLY_PATH_BEARING_SOURCES: ReadonlySet<string> = new Set([
+	"host_safe_ls",
+	"host_safe_find",
+]);
+
+function isR0ReadonlyRuleSource(source: string): boolean {
+	return R0_READONLY_PATH_BEARING_SOURCES.has(source);
 }
 
 export { buildCommandExecutionPlan } from "./command-execution-plan";

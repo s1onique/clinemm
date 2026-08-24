@@ -1,0 +1,74 @@
+{
+  "contract_version": 2,
+  "act_id": "ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01",
+  "parent": "ACT-CLINEMM-COMMAND-RISK-R0-READONLY-RECON-EXPANSION02-CORRECTION02",
+  "parent_verdict_basis_at_start": "PASS_R0_READONLY_RECON_EXPANSION",
+  "verdict": "PASS_WORKSPACE_PATH_AUTHORITY_REALPATH",
+  "verdict_basis": "REALPATH_WORKSPACE_CONFINEMENT production-seam RED+GREEN pinned at HEAD (reviewer-flagged symlink-escape closed; multi-root wired; CLI cwd assumption narrowed)",
+  "v1_contract": {
+    "name": "REALPATH_WORKSPACE_CONFINEMENT",
+    "primary": "read-only command + every path operand realpath-resolves inside an authorized workspace root = ALLOW-eligible",
+    "decision_sources_new": [
+      "host_workspace_path_authority (V1 lexical fallback)",
+      "host_workspace_realpath_authority (CORRECTION01 realpath gate)"
+    ],
+    "subset_guarantee": "V1 + CORRECTION01 only REMOVE ALLOWs, never ADD them.",
+    "fail_closed_contract": [
+      "resolvedRealPath: null            ⇒ ASK (realpath failed; do not guess)",
+      "ENOENT / EACCES / ELOOP / ENOTDIR ⇒ ASK",
+      "no-workspace-roots in evidence   ⇒ ASK",
+      "operand-count mismatch            ⇒ ASK"
+    ],
+    "reviewer_findings_closed": [
+      "P0: symlink escape now closed via fs.realpathSync at host boundary",
+      "P1: CLI cwd authority assumption narrowed — workspaceRoot is now an explicit required parameter; no implicit cwd-as-workspace fallback"
+    ]
+  },
+  "files_touched": [
+    "sdk/packages/core/src/runtime/command-policy/path-authority.ts (lexical primitives unchanged + new realpath consumer)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority.test.ts (NEW, V1)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence.ts (NEW, CORRECTION01 host-evidence types)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.ts (NEW, CORRECTION01 realpath builder)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.test.ts (NEW, CORRECTION01)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority.realpath.test.ts (NEW, CORRECTION01 adversarial RED/GREEN)",
+    "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.path-authority.test.ts (V1 + CORRECTION01)",
+    "sdk/packages/core/src/runtime/command-policy/command-policy-types.ts (pathAuthorityEvidence field, host_workspace_realpath_authority source)",
+    "sdk/packages/core/src/runtime/command-policy/command-policy.ts (realpath gate wired after positive R0 rule match)",
+    "sdk/packages/core/src/runtime/command-policy/command-safe-rules.ts (comment-only)",
+    "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.ts (4 new realpath-gated corpus entries)",
+    "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.baseline.test.ts (baseline comment)",
+    "sdk/packages/core/src/runtime/command-policy/index.ts (re-exports)",
+    "sdk/packages/core/src/index.ts (top-level re-exports)",
+    "apps/cli/src/runtime/command-policy-host.ts (workspaceRoot param + buildPathAuthorityEvidence wired)",
+    "apps/cli/src/runtime/command-policy-host.test.ts (CORRECTION01 assertion)",
+    "apps/vscode/src/sdk/sdk-tool-policies.ts (pathAuthorityEvidence plumbing)",
+    "apps/vscode/src/sdk/SdkController.ts (multi-root realpath builder, async resolver)",
+    "apps/vscode/src/sdk/sdk-interaction-coordinator.parser-helper.test.ts (async resolver signature)"
+  ],
+  "stages": {
+    "stage_0_recon": {"status": "PASS"},
+    "stage_1_path_authority_module": {"status": "PASS"},
+    "stage_2_policy_integration": {"status": "PASS"},
+    "stage_3_corpus_contract": {"status": "PASS"},
+    "stage_4_host_adapter_wiring": {"status": "PASS"},
+    "stage_4a_realpath_evidence_module": {"status": "PASS"},
+    "stage_4b_realpath_gate_in_policy": {"status": "PASS"},
+    "stage_4c_adversarial_symlink_red_green": {"status": "PASS"},
+    "stage_4d_multi_root_wired_in_vscode": {"status": "PASS"},
+    "stage_4e_cli_cwd_assumption_narrowed": {"status": "PASS"},
+    "stage_5_validation": {
+      "status": "PASS",
+      "details": [
+        "@cline/core unit 2493 PASS / 14 SKIPPED (was 2470; +23 from CORRECTION01)",
+        "@cline/core command-policy/ 528 PASS (was 505; +23 from CORRECTION01)",
+        "apps/cli command-policy-host 42 PASS (was 40; +2 CORRECTION01 assertions)",
+        "apps/vscode sdk-tool-policies 70 PASS",
+        "apps/vscode typecheck EXIT=0",
+        "apps/cli typecheck EXIT=0",
+        "@cline/core typecheck: 7 pre-existing errors in unrelated files (NONE introduced by this ACT)",
+        "apps/cli test:unit: 4 pre-existing failures unrelated to this ACT (confirmed via git stash round-trip)",
+        "apps/vscode sdk/ tests: 1954/1954 PASS"
+      ]
+    }
+  }
+}

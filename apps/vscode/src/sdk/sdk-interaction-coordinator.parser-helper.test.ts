@@ -165,7 +165,7 @@ function makeProductionCallback(
 	// stays dormant whenever the helper has no binary available.
 	const productionHelper: FakeHelper = helper ?? makeHelperUnavailable()
 	return buildSdkControllerEvaluateCommandToolApproval({
-		resolveHostAuthorization: (_toolName, requestInput) => ({
+		resolveHostAuthorization: async (_toolName, requestInput) => ({
 			hostAuthorization: auth,
 			toolInput: requestInput,
 		}),

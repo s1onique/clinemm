@@ -188,9 +188,18 @@ export const CORPUS: ReadonlyArray<CorpusCase> = [
 		id: "r0-ls-somepath",
 		family: "R0-readonly",
 		command: "ls /etc",
-		requiredDecision: "allow",
-		requiredDisposition: "auto-approve-eligible",
-		notes: "ls of a specific path; observational",
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+		// `ls /etc` is no longer ALLOW by default. The command
+		// shape is safe (ls of any path), but the path operand
+		// is OUTSIDE the configured workspace root, so the
+		// workspace path authority gate downgrades to ASK.
+		// This is a STRICT SUBSET of the previous ALLOW set: the
+		// path-agnostic regex used to allow it; the layered
+		// path authority now correctly ASKs.
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"ls of a specific path; safe command shape, but the path is outside the configured workspace roots -> ASK via host_workspace_path_authority",
 	},
 	{
 		id: "r0-find-bare",
@@ -212,8 +221,7 @@ export const CORPUS: ReadonlyArray<CorpusCase> = [
 	{
 		id: "r0-find-not-path",
 		family: "R0-readonly",
-		command:
-			"find . -type d -name command-risk -and -path ./src",
+		command: "find . -type d -name command-risk -and -path ./src",
 		requiredDecision: "allow",
 		requiredDisposition: "auto-approve-eligible",
 		notes:
@@ -253,6 +261,168 @@ export const CORPUS: ReadonlyArray<CorpusCase> = [
 		requiredDisposition: "ask",
 		notes:
 			"glob in starting path: attacker-controlled filenames become starting paths; ASK",
+	},
+
+	// -------------------- R0 — workspace path authority --------------------
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01
+	// These corpus entries pin the V1 LEXICAL_WORKSPACE_CONFINEMENT
+	// contract. The contract is path-aware but NOT filesystem-aware:
+	// `path.resolve` is used to canonicalize the operand, and
+	// containment under a configured workspace root is tested via
+	// `startsWith(root + path.sep)`. The fixture roots are host-
+	// supplied; in production the CLI passes `process.cwd()` and
+	// the VSCode host passes the multi-root resolver output.
+	//
+	// Every entry below MUST be evaluated against a host authorization
+	// that supplies `workspaceRoots: ["<some root>"]` and a `cwd`.
+	// The corpus-contract test
+	// (`command-risk-corpus.path-authority.test.ts`) supplies a
+	// uniform `WORKSPACE_ROOT = "/current/project"` context.
+	{
+		id: "r0-pathauthority-ls-workspace-absolute",
+		family: "R0-readonly",
+		command: "ls /current/project",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "absolute path under workspace root -> lexical pass -> ALLOW",
+	},
+	{
+		id: "r0-pathauthority-ls-workspace-subdir",
+		family: "R0-readonly",
+		command: "ls /current/project/.factory",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "absolute subpath under workspace root -> lexical pass -> ALLOW",
+	},
+	{
+		id: "r0-pathauthority-find-workspace-absolute",
+		family: "R0-readonly",
+		command: "find /current/project -type f",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "find with absolute starting path under workspace root -> ALLOW",
+	},
+	{
+		id: "r0-pathauthority-find-workspace-subdir-name",
+		family: "R0-readonly",
+		command: "find /current/project/src -name foo.ts",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes:
+			"find with absolute starting path under workspace root + literal name pattern -> ALLOW",
+	},
+	// Negative controls: paths outside the workspace root.
+	{
+		id: "r0-pathauthority-ls-outside-etc",
+		family: "R0-readonly",
+		command: "ls /etc",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"absolute path outside workspace root -> ASK via host_workspace_path_authority (R0/ls shape match, path authority downgrade)",
+	},
+	{
+		id: "r0-pathauthority-ls-outside-ssh",
+		family: "R0-readonly",
+		command: "ls ~/.ssh",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"absolute path outside workspace root (sensitive system path) -> ASK",
+	},
+	{
+		id: "r0-pathauthority-find-root",
+		family: "R0-readonly",
+		command: "find /",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes: "absolute root path outside workspace root -> ASK",
+	},
+	{
+		id: "r0-pathauthority-find-etc",
+		family: "R0-readonly",
+		command: "find /etc",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes: "find with absolute starting path outside workspace root -> ASK",
+	},
+	// Lexical-escape sequences. `path.resolve` collapses
+	// dot-segments, so these are caught even though the source
+	// string begins with the workspace prefix.
+	{
+		id: "r0-pathauthority-find-lexical-escape",
+		family: "R0-readonly",
+		command: "find /current/project/../../etc",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"lexical escape via .. dot-segments: path.resolve collapses them and containment fails -> ASK",
+	},
+	{
+		id: "r0-pathauthority-ls-lexical-escape-1",
+		family: "R0-readonly",
+		command: "ls /current/project/../.ssh",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"lexical escape via .. dot-segments: path.resolve('/current/project/../.ssh') = '/current/.ssh' which is outside the workspace root -> ASK",
+	},
+	{
+		id: "r0-pathauthority-ls-lexical-escape-2",
+		family: "R0-readonly",
+		command: "ls /current/project/sub/../../etc",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes: "lexical escape via multiple .. dot-segments -> ASK",
+	},
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	// REALPATH_WORKSPACE_CONFINEMENT:
+	//
+	// A project-internal symlink pointing outside the project
+	// lexically passes the V1 gate. The realpath variant closes
+	// this by following the symlink at the host boundary and
+	// testing containment on the canonical pathname.
+	//
+	// The corpus now documents the closed case. The host
+	// (CLI / VS Code) is responsible for building the
+	// `pathAuthorityEvidence`; the policy layer consumes it.
+	// Entries below assume the host has supplied evidence that
+	// realpath-resolves the operand to the canonical pathname.
+	{
+		id: "r0-pathauthority-find-symlink-escape-realpath-closed",
+		family: "R0-readonly",
+		command: "find /current/project/outside-link",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"symlink escape closed: a project-internal symlink pointing outside the project now fails realpath containment. The host resolves the symlink via fs.realpathSync; the canonical target escapes the workspace root, so the policy downgrades ALLOW to ASK with host_workspace_realpath_authority. The V1 lexical pass is no longer the gate.",
+	},
+	{
+		id: "r0-pathauthority-find-nonexistent-fail-closed",
+		family: "R0-readonly",
+		command: "find /current/project/does-not-exist",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"fail-closed on ENOENT: when the operand does not exist on disk, the host sets resolvedRealPath=null and the policy downgrades ALLOW to ASK with host_workspace_realpath_authority. This is the conservative default; users may still approve via the TUI.",
+	},
+	{
+		id: "r0-pathauthority-find-permission-denied-fail-closed",
+		family: "R0-readonly",
+		command: "find /current/project/restricted",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"fail-closed on EACCES: when the host cannot read the path (permission denied), resolvedRealPath=null and the policy downgrades to ASK. The policy module never guesses the canonical pathname.",
+	},
+	{
+		id: "r0-pathauthority-find-nonexistent-mixed-operands",
+		family: "R0-readonly",
+		command: "find /current/project/src /current/project/does-not-exist",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"mixed realpath resolution: one operand resolves successfully but a sibling operand fails ENOENT. The aggregate is non-conforming because ANY unresolved operand is ASK. The host surfaces the failure reason via host_workspace_realpath_authority.",
 	},
 
 	// -------------------- R1 — bounded build / test --------------------

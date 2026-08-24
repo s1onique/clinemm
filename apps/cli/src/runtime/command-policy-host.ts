@@ -28,8 +28,11 @@
  * through the pending approval state.
  */
 
+import { resolve as resolvePath } from "node:path";
+
 import {
 	buildCommandExecutionPlan,
+	buildPathAuthorityEvidence,
 	type CommandHostAuthorization,
 	type CommandHostMode,
 	commandHostAuthorization,
@@ -133,9 +136,61 @@ export interface CliCommandToolApprovalDecision {
  */
 export function cliResolveHostAuthorization(
 	autoApproveTools: boolean,
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+	 * Optional host-supplied workspace context. When supplied,
+	 * the policy layer applies the workspace path authority
+	 * gate (see `@cline/core/runtime/command-policy/path-authority`).
+	 * `workspaceRoots` is the canonical absolute path the host
+	 * treats as "the project". `cwd` is the host's current
+	 * working directory used to resolve relative operands.
+	 *
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	 * REALPATH_WORKSPACE_CONFINEMENT:
+	 *
+	 * The CORRECTION01 reviewer flagged `cwd === workspaceRoots`
+	 * as a P1 authority assumption: if the CLI launches from
+	 * `/` or `$HOME`, that directory silently becomes the safe
+	 * read authority. CORRECTION01 narrows this: when the host
+	 * does NOT supply an explicit `workspaceRoot`, the path
+	 * authority is DISABLED for R0 path-bearing commands and
+	 * they fall through to ASK. This is the conservative
+	 * default.
+	 *
+	 * When the host DOES supply `workspaceRoot` (a single
+	 * explicit project root), the host adapter builds realpath
+	 * evidence via `buildPathAuthorityEvidence` and attaches
+	 * it to the authorization. The policy layer consumes the
+	 * evidence and tests containment on realpath-resolved
+	 * strings.
+	 */
+	options: {
+		workspaceRoot?: string;
+		cwd?: string;
+	} = {},
 ): CommandHostAuthorization {
 	const mode: CommandHostMode = autoApproveTools ? "all" : "manual";
-	return commandHostAuthorization({ mode });
+	if (options.workspaceRoot === undefined) {
+		// No explicit workspace root supplied. Disable path
+		// authority: workspaceRoots is undefined, the V1
+		// lexical gate will reject path-bearing R0 commands,
+		// and the host has not supplied realpath evidence.
+		// The regression-closed posture is preserved: an
+		// unconfigured host is a misconfiguration, and "no
+		// configuration => ALLOW" is the regression this ACT
+		// closes.
+		return commandHostAuthorization({
+			mode,
+		});
+	}
+	const canonicalRoot = resolvePath(options.workspaceRoot);
+	const cwd =
+		options.cwd === undefined ? canonicalRoot : resolvePath(options.cwd);
+	return commandHostAuthorization({
+		mode,
+		workspaceRoots: [canonicalRoot],
+		cwd,
+	});
 }
 
 /**
@@ -239,6 +294,26 @@ export function cliEvaluateCommandToolApproval(input: {
 	toolInput: unknown;
 	autoApproveTools: boolean;
 	/**
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	 * REALPATH_WORKSPACE_CONFINEMENT:
+	 *
+	 * Explicit, host-supplied project root. When supplied, the
+	 * CLI builds realpath evidence via `buildPathAuthorityEvidence`
+	 * and the policy layer consumes it for containment testing.
+	 * When UNDEFINED, the path authority is DISABLED: R0
+	 * path-bearing commands fall through to ASK (the conservative
+	 * default; the reviewer flagged `cwd === workspaceRoots` as
+	 * a P1 authority assumption).
+	 *
+	 * Production CLI sessions MUST pass `workspaceRoot` if they
+	 * want the path authority gate to be active. CLI sessions
+	 * that do not know what project they are working on should
+	 * simply omit this field; the conservative default will
+	 * require approval for every read-only inspection.
+	 */
+	workspaceRoot?: string;
+	cwd?: string;
+	/**
 	 * Optional V2 evidence. When supplied, the internal V2-aware
 	 * evaluator is invoked with this result and the
 	 * `risk_v2_structured_promotion` source is composed into the
@@ -260,7 +335,36 @@ export function cliEvaluateCommandToolApproval(input: {
 	 */
 	parserResult?: TrustedParserEvidence | undefined;
 }): CliCommandToolApprovalDecision {
-	const hostAuthorization = cliResolveHostAuthorization(input.autoApproveTools);
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	// REALPATH_WORKSPACE_CONFINEMENT:
+	//
+	// Build the host authorization. When `workspaceRoot` is
+	// supplied, we attach realpath evidence so the policy
+	// layer can test containment on canonical paths (which
+	// catches the symlink-escape attack the reviewer
+	// identified).
+	const hostAuthorization = cliResolveHostAuthorization(input.autoApproveTools, {
+		workspaceRoot: input.workspaceRoot,
+		cwd: input.cwd,
+	});
+
+	if (input.workspaceRoot !== undefined && hostAuthorization.workspaceRoots) {
+		// Attach realpath evidence so the policy layer can
+		// reject symlink escapes. We build one evidence
+		// object per call; the policy layer consumes it.
+		// Build failures (e.g. workspaceRoot does not exist
+		// on disk) fall back to the V1 lexical gate, which
+		// already rejects the path-bearing R0 command.
+		const evidenceResult = buildPathAuthorityEvidence({
+			workspaceRoots: hostAuthorization.workspaceRoots,
+			cwd: hostAuthorization.cwd ?? null,
+			command: input.toolInput as never,
+		});
+		if (evidenceResult.ok) {
+			hostAuthorization.pathAuthorityEvidence = evidenceResult.evidence;
+		}
+	}
+
 	return cliEvaluateCommandToolApprovalWith(input, hostAuthorization);
 }
 

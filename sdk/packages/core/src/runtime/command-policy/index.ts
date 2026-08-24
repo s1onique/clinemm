@@ -22,6 +22,7 @@
  *   - command-policy.ts        composition entry point
  */
 
+export { buildCommandExecutionPlan } from "./command-execution-plan";
 export {
 	type CommandModelHint,
 	type CommandModelHints,
@@ -47,16 +48,65 @@ export {
 	type NormalizedCommands,
 	type NormalizedFailure,
 } from "./command-policy";
-
+// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
+// re-export the R5 hard floor entry point so the VSCode host
+// adapter's stub (`apps/vscode/src/test/cline-core-vitest-stub.ts`)
+// can import it from this single index. The CLI host adapter
+// imports from the top-level `@cline/core` index, which already
+// exports these; the VSCode path needs them at the
+// `runtime/command-policy` subpath because the vitest stub
+// re-exports command-policy symbols from there.
+export {
+	type EvaluateCommandRiskInput,
+	evaluateCommandRisk,
+	type RiskDecision,
+} from "./command-risk";
 export {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	findSafeRuleMatch,
 	isOpaqueShellRendered,
 	OPAQUE_SHELL_TOKENS,
 } from "./command-safe-rules";
-
-export { buildCommandExecutionPlan } from "./command-execution-plan";
-
+// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+// Workspace path authority is the first-class companion to the R0
+// read-only allowlist. Hosts wire the workspace root into the
+// command policy through `CommandHostAuthorization.workspaceRoots`
+// and `cwd`; this module is the policy layer's lexical containment
+// primitive (testable in isolation).
+export {
+	evaluateCommandPathConformance,
+	evaluateCommandRealpathConformance,
+	extractPathOperands,
+	isLexicallyContained,
+	isPathOperandConforming,
+	type PathAuthorityContext,
+	type PathConformanceResult,
+	type RealpathConformanceFailureReason,
+	type RealpathPathConformanceResult,
+} from "./path-authority";
+// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+// REALPATH_WORKSPACE_CONFINEMENT:
+//
+// Re-export the host-produced realpath evidence types so SDK
+// consumers (CLI, VS Code) can construct evidence objects and pass
+// them through `CommandHostAuthorization.pathAuthorityEvidence`.
+export type {
+	WorkspacePathAuthorityEvidence,
+	WorkspacePathOperandEvidence,
+} from "./path-authority-evidence";
+// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+// REALPATH_WORKSPACE_CONFINEMENT:
+//
+// Re-export the host-side evidence builder so CLI and VS Code
+// produce identical realpath-resolution behavior. The builder
+// is the ONLY sanctioned place in the policy stack that calls
+// `fs.realpathSync`.
+export {
+	buildPathAuthorityEvidence,
+	type BuildPathEvidenceOptions,
+	type BuildPathEvidenceResult,
+	safeRealpathSync,
+} from "./path-authority-evidence-builder";
 export {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
@@ -68,20 +118,6 @@ export {
 	type SafeExecutionProfileKind,
 } from "./safe-execution-profile";
 
-// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
-// re-export the R5 hard floor entry point so the VSCode host
-// adapter's stub (`apps/vscode/src/test/cline-core-vitest-stub.ts`)
-// can import it from this single index. The CLI host adapter
-// imports from the top-level `@cline/core` index, which already
-// exports these; the VSCode path needs them at the
-// `runtime/command-policy` subpath because the vitest stub
-// re-exports command-policy symbols from there.
-export {
-	evaluateCommandRisk,
-	type EvaluateCommandRiskInput,
-	type RiskDecision,
-} from "./command-risk";
-
 // ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-ASSISTED01:
 // V2 structured classifier. Hosts may pass a parser result to
 // `evaluateCommandRisk` to opt into structural analysis. When
@@ -91,11 +127,11 @@ export {
 	joinRunCommandsForParse,
 	type ParsedShell,
 	type ShellDialect,
+	STRUCTURED_PROTO_VERSION,
 	type StructuredAnalysis,
 	type StructuredCmd,
 	type StructuredProgram,
 	type StructuredRisk,
 	type StructuredStmt,
 	type StructuredStmtRisk,
-	STRUCTURED_PROTO_VERSION,
 } from "./structured-command-risk";

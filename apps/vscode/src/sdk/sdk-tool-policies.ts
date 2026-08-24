@@ -7,6 +7,7 @@ import {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	type EvaluatedCommand,
 	evaluateCommandPolicy,
+	type WorkspacePathAuthorityEvidence,
 } from "@cline/core"
 import { evaluateCommandRiskWithParser } from "@cline/core/internal/command-risk-internal"
 import type { CommandExecutionPlan } from "@cline/shared"
@@ -113,11 +114,39 @@ function parseMcpToolName(toolName: string): { serverName: string; toolName: str
  *
  * For command tools, this returns the host "mode" — NOT a boolean. The
  * caller is responsible for passing that mode into the command policy.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+ * REALPATH_WORKSPACE_CONFINEMENT:
+ *
+ * `pathAuthorityEvidence` is HOST-PRODUCED realpath evidence. The
+ * host (VS Code here) calls `fs.realpathSync` on the workspace
+ * root(s) and on every path operand; the policy layer consumes
+ * the evidence and tests containment on realpath-resolved strings.
+ * This is the gate that closes the V1 lexical-only
+ * symlink-escape attack (e.g. project-internal symlink → /etc).
+ *
+ * The evidence is OPTIONAL. When absent, the policy layer falls
+ * back to the V1 lexical-only `workspaceRoots` + `cwd` containment
+ * check. The host should ALWAYS supply evidence in production;
+ * tests may omit it.
  */
 export function getCommandHostAuthorization(
 	toolName: string,
 	settings: AutoApprovalSettings,
 	_mcpHub?: McpHub,
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	 * REALPATH_WORKSPACE_CONFINEMENT:
+	 *
+	 * Optional workspace context for the path authority gate.
+	 * All three fields are optional; when absent, the policy
+	 * layer refuses to ALLOW any path-bearing R0 command.
+	 */
+	workspaceContext?: {
+		workspaceRoots?: ReadonlyArray<string>
+		cwd?: string
+		pathAuthorityEvidence?: WorkspacePathAuthorityEvidence
+	},
 ): CommandHostAuthorization {
 	let resolved: CommandHostAuthorization
 	if (isCommandTool(toolName)) {
@@ -136,6 +165,14 @@ export function getCommandHostAuthorization(
 			resolved = commandHostAuthorization({
 				mode: "safe-only",
 				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: workspaceContext?.workspaceRoots,
+				cwd: workspaceContext?.cwd,
+				// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+				// REALPATH_WORKSPACE_CONFINEMENT: attach the
+				// host-produced realpath evidence. When the
+				// caller does not supply it, the policy layer
+				// falls back to the V1 lexical-only check.
+				pathAuthorityEvidence: workspaceContext?.pathAuthorityEvidence,
 			})
 		} else {
 			resolved = commandHostAuthorization({ mode: "manual" })

@@ -105,7 +105,30 @@ export type CommandDecisionSource =
 	// this source. This is the ONLY path through which a V1 ASK
 	// becomes ALLOW — V2 cannot weaken ASK, DENY, or any
 	// never-auto-approve disposition.
-	| "risk_v2_structured_promotion";
+	| "risk_v2_structured_promotion"
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
+	// Workspace path authority downgrade. The R0 read-only rule
+	// matched the command's argv shape, but at least one path
+	// operand failed lexical workspace-root containment. The
+	// command is downgraded from ALLOW to ASK with this source.
+	// This is a STRICT SUBSET of the previous ALLOW set (it
+	// removes cross-authority ALLOW; it never adds new ALLOW).
+	| "host_workspace_path_authority"
+	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	// REALPATH_WORKSPACE_CONFINEMENT:
+	// Same idea as `host_workspace_path_authority` but the
+	// downgrade was driven by HOST-PRODUCED realpath evidence.
+	// The host called `fs.realpathSync` on the operand(s) and
+	// canonical workspace root(s); the policy inspected the
+	// evidence and downgraded because at least one operand
+	// failed realpath-based containment (or failed to resolve
+	// at all). Failures include:
+	//   - realpath ENOENT  (path does not exist)
+	//   - realpath EACCES  (permission denied)
+	//   - realpath ELOOP   (symlink loop)
+	//   - realpath ENOTDIR (a path component is not a directory)
+	// All of these ⇒ ASK, never ALLOW.
+	| "host_workspace_realpath_authority";
 
 export interface CommandDecision {
 	kind: CommandDecisionKind;
@@ -183,6 +206,62 @@ export interface CommandHostAuthorization {
 	 * `safe-only` mode degrades to ASK.
 	 */
 	explicitAllowRules?: ReadonlyArray<CommandHostAllowRule>;
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01
+	 *
+	 * Canonical absolute paths the host treats as "inside the
+	 * project". An R0 read-only command is ALLOW-eligible only
+	 * when EVERY path operand resolves under one of these roots
+	 * (lexical containment via `path.resolve` + `startsWith`).
+	 *
+	 * The host is responsible for canonicalizing these (typically
+	 * via `path.resolve`) before passing them in. The policy
+	 * layer never trusts raw user-typed workspace roots.
+	 *
+	 * Empty/undefined: the host has not declared any workspace
+	 * roots. The path authority then REFUSES to bless any
+	 * R0 read-only command that has a path operand, so the
+	 * command falls through to ASK (the regression this ACT
+	 * closes — `ls /etc` previously was ALLOW by virtue of
+	 * the path-agnostic regex alone).
+	 */
+	workspaceRoots?: ReadonlyArray<string>;
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01
+	 *
+	 * The host's current working directory. Relative path
+	 * operands are resolved against this before containment is
+	 * tested. The host is responsible for canonicalizing this
+	 * (typically via `path.resolve`).
+	 *
+	 * Required for relative path operands to be ALLOW-eligible.
+	 */
+	cwd?: string;
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+	 * REALPATH_WORKSPACE_CONFINEMENT:
+	 *
+	 * Host-produced realpath evidence for path-bearing R0
+	 * commands. The host (CLI or VS Code) calls
+	 * `fs.realpathSync` on the operand(s) AND on the configured
+	 * workspace root(s), then packages the results here. The
+	 * policy module stays pure: it never touches the filesystem.
+	 *
+	 * When present, this evidence TAKES PRECEDENCE over the V1
+	 * lexical `workspaceRoots` + `cwd` containment check. The V1
+	 * check is the fallback used by hosts that have not yet
+	 * upgraded to produce realpath evidence.
+	 *
+	 * The host MUST supply one operand entry per extracted path
+	 * operand. The policy layer does NOT re-extract operands
+	 * when consuming this evidence — the host is the source of
+	 * truth.
+	 *
+	 * Failures (ENOENT, EACCES, ELOOP, ENOTDIR, …) are
+	 * represented as `resolvedRealPath: null` in the operand
+	 * evidence. The policy treats null as ASK, never ALLOW.
+	 */
+	pathAuthorityEvidence?: import("./path-authority-evidence").WorkspacePathAuthorityEvidence;
 }
 
 /**
@@ -192,11 +271,17 @@ export function commandHostAuthorization(params: {
 	mode: CommandHostMode;
 	explicitDenyRules?: ReadonlyArray<{ source: string; pattern: RegExp }>;
 	explicitAllowRules?: ReadonlyArray<CommandHostAllowRule>;
+	workspaceRoots?: ReadonlyArray<string>;
+	cwd?: string;
+	pathAuthorityEvidence?: import("./path-authority-evidence").WorkspacePathAuthorityEvidence;
 }): CommandHostAuthorization {
 	return {
 		mode: params.mode,
 		explicitDenyRules: params.explicitDenyRules,
 		explicitAllowRules: params.explicitAllowRules,
+		workspaceRoots: params.workspaceRoots,
+		cwd: params.cwd,
+		pathAuthorityEvidence: params.pathAuthorityEvidence,
 	};
 }
 

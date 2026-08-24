@@ -465,6 +465,20 @@ export {
 	renderNormalizedCommand,
 } from "./runtime/command-policy";
 export { buildCommandExecutionPlan } from "./runtime/command-policy/command-execution-plan";
+// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+// REALPATH_WORKSPACE_CONFINEMENT:
+//
+// Re-export the host-produced realpath evidence types and the
+// evidence-builder helper at the top-level so SDK consumers
+// (CLI, VS Code) can import them via `@cline/core`.
+export {
+	buildPathAuthorityEvidence,
+	type BuildPathEvidenceOptions,
+	type BuildPathEvidenceResult,
+	safeRealpathSync,
+	type WorkspacePathAuthorityEvidence,
+	type WorkspacePathOperandEvidence,
+} from "./runtime/command-policy/path-authority-evidence-builder";
 export {
 	evaluateCommandRisk,
 	type EvaluateCommandRiskInput,
