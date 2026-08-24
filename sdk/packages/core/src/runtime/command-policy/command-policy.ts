@@ -56,7 +56,6 @@ import type {
 } from "./command-policy-types";
 import { findSafeRuleMatch } from "./command-safe-rules";
 import {
-	evaluateCommandPathConformance,
 	evaluateCommandRealpathConformance,
 	extractPathOperands,
 } from "./path-authority";
@@ -282,60 +281,82 @@ function evaluateOne(
 			// to "any path is allowed".
 			//
 			// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
-			// REALPATH_WORKSPACE_CONFINEMENT:
+			// REALPATH_WORKSPACE_CONFINEMENT (CORRECTION02):
 			//
-			// If the host produced `pathAuthorityEvidence`, that
-			// evidence TAKES PRECEDENCE over the V1 lexical
-			// `workspaceRoots` + `cwd` containment check. The
-			// evidence was built by the host calling
-			// `fs.realpathSync` on the operand(s) and on the
-			// workspace root(s); the policy stays pure.
+			// Production ALLOW eligibility for an R0 path-bearing
+			// rule REQUIRES host-supplied realpath evidence. There
+			// is NO V1 lexical fallback in the production ALLOW
+			// path: when `pathAuthorityEvidence` is missing /
+			// failed / operand-mismatched, the command falls
+			// through to ASK with `host_workspace_realpath_authority`.
+			//
+			// CORRECTION01 had a regression here: when evidence
+			// construction failed (`buildPathAuthorityEvidence`
+			// returned `ok:false`), the host code DID NOT pass
+			// evidence to the policy, and the policy fell back to
+			// the V1 lexical gate. V1 lexical ALLOWs the symlink
+			// escape the reviewer identified. CORRECTION02 closes
+			// this by requiring evidence as a precondition for
+			// ALLOW, regardless of whether the V1 lexical check
+			// would have passed.
+			//
+			// The V1 lexical primitives (`isLexicallyContained`,
+			// `evaluateCommandPathConformance`) remain in the SDK
+			// for unit-testing and diagnostics, but they are no
+			// longer part of the canonical command policy's
+			// production ALLOW path.
+			//
+			// Operand identity binding (CORRECTION02): the
+			// evidence's `operands[i].operand` MUST equal the
+			// extracted `expectedOperands[i]` verbatim. This
+			// closes the "evidence-for-different-command" attack
+			// where an attacker reuses a single-operand ALLOW
+			// evidence record for a different single-operand
+			// command.
 			if (isR0ReadonlyRuleSource(match.source)) {
-				if (auth.pathAuthorityEvidence !== undefined) {
-					const evidence = auth.pathAuthorityEvidence;
-					const expectedOperands = extractPathOperands(command);
-					if (evidence.operands.length !== expectedOperands.length) {
-						return {
-							kind: "ask",
-							source: "host_workspace_realpath_authority",
-							reason: `workspace realpath authority: host evidence operand count (${evidence.operands.length}) does not match command operand count (${expectedOperands.length})`,
-						};
-					}
-					const conformance = evaluateCommandRealpathConformance(evidence);
-					if (!conformance.conforming) {
-						const nonconforming = conformance.operands.find(
-							(o) => !o.result.conforming,
-						);
-						const reason = nonconforming
-							? `workspace realpath authority: operand "${nonconforming.operand}" resolves to "${nonconforming.result.resolvedRealPath ?? "unresolved"}" outside configured workspace roots (${nonconforming.result.reason ?? "unknown"}, hostReason=${nonconforming.result.hostReason})`
-							: `workspace realpath authority: at least one path operand is outside configured workspace roots`;
-						return {
-							kind: "ask",
-							source: "host_workspace_realpath_authority",
-							reason,
-						};
-					}
-				} else {
-					// V1 lexical fallback for hosts that have not yet
-					// upgraded to produce realpath evidence.
-					const pathCtx = {
-						workspaceRoots: auth.workspaceRoots,
-						cwd: auth.cwd,
+				const evidence = auth.pathAuthorityEvidence;
+				const expectedOperands = extractPathOperands(command);
+				if (evidence === undefined) {
+					return {
+						kind: "ask",
+						source: "host_workspace_realpath_authority",
+						reason: "workspace realpath authority: host did not supply pathAuthorityEvidence; R0 path-bearing commands cannot be ALLOW'd without realpath evidence (CORRECTION02)",
 					};
-					const conformance = evaluateCommandPathConformance(command, pathCtx);
-					if (!conformance.conforming) {
-						const nonconforming = conformance.operands.find(
-							(o) => !o.result.conforming,
-						);
-						const reason = nonconforming
-							? `workspace path authority: operand "${nonconforming.operand}" resolves to "${nonconforming.result.resolved ?? "?"}" outside configured workspace roots (${nonconforming.result.reason ?? "unknown"})`
-							: `workspace path authority: at least one path operand is outside configured workspace roots`;
+				}
+				if (evidence.operands.length !== expectedOperands.length) {
+					return {
+						kind: "ask",
+						source: "host_workspace_realpath_authority",
+						reason: `workspace realpath authority: host evidence operand count (${evidence.operands.length}) does not match command operand count (${expectedOperands.length})`,
+					};
+				}
+				// Operand identity binding: each evidence operand
+				// must exactly equal the command's extracted
+				// operand at the same index.
+				for (let i = 0; i < expectedOperands.length; i++) {
+					const expected = expectedOperands[i]!;
+					const actual = evidence.operands[i]?.operand;
+					if (actual !== expected) {
 						return {
 							kind: "ask",
-							source: "host_workspace_path_authority",
-							reason,
+							source: "host_workspace_realpath_authority",
+							reason: `workspace realpath authority: host evidence operand[${i}] ("${actual ?? "<missing>"}") does not match command operand ("${expected}")`,
 						};
 					}
+				}
+				const conformance = evaluateCommandRealpathConformance(evidence);
+				if (!conformance.conforming) {
+					const nonconforming = conformance.operands.find(
+						(o) => !o.result.conforming,
+					);
+					const reason = nonconforming
+						? `workspace realpath authority: operand "${nonconforming.operand}" resolves to "${nonconforming.result.resolvedRealPath ?? "unresolved"}" outside configured workspace roots (${nonconforming.result.reason ?? "unknown"}, hostReason=${nonconforming.result.hostReason})`
+						: `workspace realpath authority: at least one path operand is outside configured workspace roots`;
+					return {
+						kind: "ask",
+						source: "host_workspace_realpath_authority",
+						reason,
+					};
 				}
 			}
 			const profile = getSafeExecutionProfileForSource(match.source);

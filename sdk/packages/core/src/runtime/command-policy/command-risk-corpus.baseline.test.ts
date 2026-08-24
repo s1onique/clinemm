@@ -135,26 +135,46 @@ describe("Group A — baseline freeze: evaluateCommandPolicy in 'safe-only' mode
 		// post-ACT path-authority contract separately with a
 		// confined workspace root.
 		//
-		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
-		// REALPATH_WORKSPACE_CONFINEMENT:
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02
+		// REALPATH_EVIDENCE_REQUIRED_FOR_PATH_BEARING_R0_ALLOW:
 		//
-		// The baseline test deliberately does NOT supply
-		// `pathAuthorityEvidence`. The policy layer falls back
-		// to the V1 lexical-only containment check, which is a
-		// no-op under the catch-all root "/". This isolates the
-		// V1 rule-engine verdict from the V1 path-authority
-		// verdict. The new realpath-gated corpus entries resolve
-		// to ALLOW here (under catch-all); the confined workspace
-		// root in the dedicated path-authority corpus test is
-		// what turns those entries into ASK.
-		const safeOnly = commandHostAuthorization({
-			mode: "safe-only",
-			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
-			workspaceRoots: ["/"],
-			cwd: "/",
-		});
+		// Under CORRECTION02, missing evidence ⇒ ASK, never ALLOW.
+		// The baseline test therefore MUST supply host-produced
+		// evidence for every path-bearing R0 corpus entry. We
+		// build "catch-all" realpath evidence: the workspace root
+		// is "/", and every operand's canonical pathname is the
+		// operand itself (which is contained under "/"). This
+		// mirrors the pre-ACT (V0) baseline behavior, where the
+		// rule engine alone was responsible for the verdict.
 		const byId = new Map<string, string>();
 		for (const c of CORPUS) {
+			// Build catch-all realpath evidence for this entry.
+			// For non-path-bearing commands the operands array is
+			// empty (the production gate does not fire for them).
+			// For path-bearing commands we extract the operands
+			// and synthesize "resolved-and-contained" evidence for
+			// each.
+			const tokens = c.command.split(/\s+/u).filter((t) => t.length > 0);
+			const operands = tokens
+				.slice(1)
+				.filter((t) => !t.startsWith("-"))
+				.map((operand) => ({
+					operand,
+					resolvedRealPath: operand,
+					contained: true,
+					reason: "resolved-and-contained" as const,
+				}));
+			const safeOnly = commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: ["/"],
+				cwd: "/",
+				pathAuthorityEvidence: {
+					roots: ["/"],
+					cwd: "/",
+					operands,
+				},
+			});
 			const r = evaluateCommandPolicy({
 				toolInput: { command: c.command, requires_approval: false },
 				hostAuthorization: safeOnly,

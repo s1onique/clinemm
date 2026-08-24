@@ -201,15 +201,39 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01 �
 		expect(r.decision.kind).toBe("allow");
 	});
 
-	it("V1 LEXICAL REGRESSION: when NO evidence is supplied, lexical-only path auth still ALLOWs the symlink escape (V1 limitation)", () => {
-		// The V1 lexical gate is the FALLBACK when evidence
-		// is absent. It still rejects /etc lexically, but a
-		// project-internal symlink lexically passes
-		// containment. This test documents that exact V1
-		// limitation, which is what CORRECTION01 closes via
-		// realpath evidence. The test passes today because
-		// V1 ALLOWs; the test exists to PROVE the
-		// difference between V1 (ALLOW) and V2 (ASK).
+	it("CORRECTION02 REGRESSION: missing realpath evidence ⇒ ASK (NOT V1 lexical fallback ALLOW)", () => {
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02
+		// REALPATH_EVIDENCE_REQUIRED_FOR_PATH_BEARING_R0_ALLOW:
+		//
+		// The reviewer flagged the CORRECTION01 implementation
+		// because when `pathAuthorityEvidence` was absent
+		// (e.g. `buildPathAuthorityEvidence` returned
+		// `ok:false`), the production policy fell back to the
+		// V1 lexical gate. The V1 lexical gate ALLOWs the
+		// project-internal symlink → outside escape the
+		// reviewer identified. CORRECTION02 closes this:
+		// missing evidence ⇒ ASK, never ALLOW.
+		const auth = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [PROJECT_DIR],
+			cwd: PROJECT_DIR,
+			// pathAuthorityEvidence deliberately omitted
+		});
+		const r = evaluateCommandPolicy({
+			toolInput: {
+				command: `find ${join(PROJECT_DIR, "outside-link")}`,
+			},
+			hostAuthorization: auth,
+		});
+		expect(r.decision.kind).toBe("ask");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
+	});
+
+	it("CORRECTION02: missing evidence for ls project/inside ⇒ ASK", () => {
+		// The "inside" case is just as ASK as the symlink case.
+		// Evidence is required regardless of whether the
+		// lexical gate would have passed.
 		const auth = commandHostAuthorization({
 			mode: "safe-only",
 			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
@@ -218,12 +242,46 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01 �
 		});
 		const r = evaluateCommandPolicy({
 			toolInput: {
-				command: `find ${join(PROJECT_DIR, "outside-link")}`,
+				command: `ls ${join(PROJECT_DIR, "inside")}`,
 			},
 			hostAuthorization: auth,
 		});
-		expect(r.decision.kind).toBe("allow");
-		expect(r.decision.source).toBe("host_mode_safe_only_rule");
+		expect(r.decision.kind).toBe("ask");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
+	});
+
+	it("CORRECTION02: operand identity mismatch (evidence for /safe applied to /evil) ⇒ ASK", () => {
+		// The reviewer flagged this as a P1: evidence with
+		// operand count == 1 but operand content mismatched
+		// used to be accepted (count-only check). CORRECTION02
+		// binds operand identity verbatim.
+		const realEvidenceForSafe = buildPathAuthorityEvidence({
+			workspaceRoots: [PROJECT_DIR],
+			cwd: PROJECT_DIR,
+			command: {
+				command: `ls ${join(PROJECT_DIR, "inside")}`,
+			},
+		});
+		expect(realEvidenceForSafe.ok).toBe(true);
+		if (!realEvidenceForSafe.ok) {
+			return;
+		}
+		// Now apply that evidence to a different operand.
+		const auth = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [PROJECT_DIR],
+			cwd: PROJECT_DIR,
+			pathAuthorityEvidence: realEvidenceForSafe.evidence,
+		});
+		const r = evaluateCommandPolicy({
+			toolInput: {
+				command: `ls ${join(PROJECT_DIR, "outside-link")}`,
+			},
+			hostAuthorization: auth,
+		});
+		expect(r.decision.kind).toBe("ask");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	it("VERIFICATION: realpathSync actually resolves the symlink to OUTSIDE_DIR on this platform", () => {

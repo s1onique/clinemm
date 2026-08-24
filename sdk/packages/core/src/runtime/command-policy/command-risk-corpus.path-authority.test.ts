@@ -4,12 +4,21 @@
  * Integration test for the workspace path authority contract. This
  * is the FULL RED/GREEN matrix from the review.
  *
- * It exercises the canonical command policy
- * (`evaluateCommandPolicy`) with a host authorization that supplies
- * a `workspaceRoots` array and a `cwd`. The fixture root is
- * `/current/project` — chosen to be POSIX-like, NOT user-specific
- * (the policy layer must never bake any user's filesystem layout
- * into its rules; the host supplies the roots).
+ * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
+ * REALPATH_WORKSPACE_CONFINEMENT:
+ *
+ *   The canonical command policy
+ *   (`evaluateCommandPolicy`) consumes host-supplied realpath
+ *   evidence and tests containment on canonical pathnames.
+ *
+ * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02
+ * REALPATH_EVIDENCE_REQUIRED_FOR_PATH_BEARING_R0_ALLOW:
+ *
+ *   Missing or operand-mismatched evidence is ASK, never ALLOW.
+ *   The V1 lexical fallback has been REMOVED from the production
+ *   ALLOW path. Every fixture in this file constructs an explicit
+ *   `pathAuthorityEvidence` per-command that matches the operand
+ *   identity and the desired disposition.
  */
 import { describe, expect, it } from "vitest";
 import { CORPUS } from "./command-risk-corpus";
@@ -25,55 +34,158 @@ const WORKSPACE_ROOT = "/current/project";
 const CWD = WORKSPACE_ROOT;
 
 /**
- * Build a host authorization with the workspace path authority
- * gate configured for the fixture root.
+ * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02
  *
- * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
- * REALPATH_WORKSPACE_CONFINEMENT:
+ * Build host-supplied realpath evidence that matches the
+ * command's operands and yields the desired disposition. The
+ * fixture operates in a POSIX-like string namespace
+ * (`/current/project`); we cannot `fs.realpathSync` those
+ * paths, so we fabricate evidence objects that model the host's
+ * observation.
  *
- * By default this builds a V1 lexical-path-only auth (no
- * `pathAuthorityEvidence`). The corpus entries that exercise the
- * realpath gate (`r0-pathauthority-find-symlink-escape-...`,
- * `r0-pathauthority-find-nonexistent-...`,
- * `r0-pathauthority-find-permission-denied-...`,
- * `r0-pathauthority-find-nonexistent-mixed-operands`) supply a
- * per-entry `pathAuthorityEvidence` via the
- * `pathAuthorityAuthWithEvidence` helper.
+ * For every positive (workspace-conforming) ALLOW case, the
+ * evidence marks every operand as `contained: true` with a
+ * fictional canonical path that is INSIDE the workspace root.
+ * For every negative ASK case, the evidence marks at least one
+ * operand as `contained: false` (resolved-but-outside or
+ * unresolved).
  */
-function pathAuthorityAuth(): ReturnType<typeof commandHostAuthorization> {
+function buildEvidenceForCommand(command: string): WorkspacePathAuthorityEvidence {
+	const tokens = command.split(/\s+/u).filter((t) => t.length > 0);
+	const commandName = tokens[0]!;
+	if (commandName !== "ls" && commandName !== "find") {
+		// Non-path-bearing commands should not need evidence
+		// at all; the production gate does not fire for them.
+		// We still construct an empty-operands evidence record
+		// for completeness.
+		return {
+			roots: [WORKSPACE_ROOT],
+			cwd: CWD,
+			operands: [],
+		};
+	}
+	const operandStrings = tokens.slice(1).filter((t) => !t.startsWith("-"));
+	const operands = operandStrings.map((raw) => {
+		// The fix is intentionally simple: classify each
+		// operand against the same set of rules the policy
+		// uses (realpath containment + lexical containment),
+		// and produce evidence that reflects the host's
+		// observation. The fixture operates in a POSIX-like
+		// string namespace (`/current/project`); we cannot
+		// `fs.realpathSync` these paths, so the "resolved"
+		// pathname is the literal operand string.
+		const isTildePrefixed = raw.startsWith("~");
+		const isOutsideAbsolute =
+			raw === "/" || raw.startsWith("/etc") || raw === "~/.ssh";
+		const isLexicalEscape = raw.includes("/..");
+		const isOutsideProject =
+			isTildePrefixed ||
+			isOutsideAbsolute ||
+			raw === `${WORKSPACE_ROOT}/outside-link` ||
+			raw.startsWith(`${WORKSPACE_ROOT}/does-not-exist`) ||
+			raw.startsWith(`${WORKSPACE_ROOT}/restricted`);
+		if (isTildePrefixed) {
+			// realpath refuses to expand `~`; treat as
+			// realpath-failed-other.
+			return {
+				operand: raw,
+				resolvedRealPath: null,
+				contained: false,
+				reason: "realpath-failed-other" as const,
+			};
+		}
+		if (isLexicalEscape) {
+			// Lexical escape via `..`: pretend realpath
+			// already canonicalized the path (collapsed `.`
+			// and `..`) and the canonical form is OUTSIDE
+			// the workspace root \u2014 e.g.
+			//   `/current/project/../../etc` \u2192 `/etc`
+			//   `/current/project/../.ssh` \u2192 `/.ssh` (or
+			//                              `/${HOME}/.ssh`)
+			// The post-canonicalization pathname is what the
+			// policy's `isLexicallyContained` checks.
+			let canonical: string;
+			if (raw.startsWith("/current/project/../../etc")) {
+				canonical = "/etc";
+			} else if (raw.startsWith("/current/project/../.ssh")) {
+				canonical = "/.ssh";
+			} else {
+				canonical = "/etc";
+			}
+			return {
+				operand: raw,
+				resolvedRealPath: canonical,
+				contained: false,
+				reason: "resolved-but-outside-roots" as const,
+			};
+		}
+		if (raw === `${WORKSPACE_ROOT}/outside-link`) {
+			// Symlink escape: the host's realpath resolves
+			// this to OUTSIDE.
+			return {
+				operand: raw,
+				resolvedRealPath: "/etc",
+				contained: false,
+				reason: "resolved-but-outside-roots" as const,
+			};
+		}
+		if (raw.startsWith(`${WORKSPACE_ROOT}/does-not-exist`)) {
+			return {
+				operand: raw,
+				resolvedRealPath: null,
+				contained: false,
+				reason: "realpath-failed-enoent" as const,
+			};
+		}
+		if (raw.startsWith(`${WORKSPACE_ROOT}/restricted`)) {
+			return {
+				operand: raw,
+				resolvedRealPath: null,
+				contained: false,
+				reason: "realpath-failed-eacces" as const,
+			};
+		}
+		if (isOutsideProject) {
+			return {
+				operand: raw,
+				resolvedRealPath: raw,
+				contained: false,
+				reason: "resolved-but-outside-roots" as const,
+			};
+		}
+		// Workspace-conforming: imaginary canonical path
+		// inside the workspace root.
+		const resolved = raw.startsWith("/") ? raw : `${CWD}/${raw}`;
+		return {
+			operand: raw,
+			resolvedRealPath: resolved,
+			contained: true,
+			reason: "resolved-and-contained" as const,
+		};
+	});
+	return {
+		roots: [WORKSPACE_ROOT],
+		cwd: CWD,
+		operands,
+	};
+}
+
+function pathAuthorityAuth(command: string): ReturnType<typeof commandHostAuthorization> {
 	return commandHostAuthorization({
 		mode: "safe-only",
 		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
 		workspaceRoots: [WORKSPACE_ROOT],
 		cwd: CWD,
+		pathAuthorityEvidence: buildEvidenceForCommand(command),
 	});
 }
 
-/**
- * Build a host authorization with host-supplied realpath
- * evidence attached. The fixture root is the canonical
- * `/current/project` — same as the V1 lexical auth, but the
- * evidence gives the policy layer a way to ASK an operand
- * that realpath-resolved to /outside, or failed to resolve.
- */
-function pathAuthorityAuthWithEvidence(
-	evidence: WorkspacePathAuthorityEvidence,
-): ReturnType<typeof commandHostAuthorization> {
-	return commandHostAuthorization({
-		mode: "safe-only",
-		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
-		workspaceRoots: [WORKSPACE_ROOT],
-		cwd: CWD,
-		pathAuthorityEvidence: evidence,
-	});
-}
-
-describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — RED/GREEN matrix", () => {
+describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02 — RED/GREEN matrix", () => {
 	// ------------ GREEN: under the workspace root ------------
 	it("ALLOW: ls /current/project", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "ls /current/project" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("ls /current/project"),
 		});
 		expect(r.decision.kind).toBe("allow");
 		expect(r.decision.source).toBe("host_mode_safe_only_rule");
@@ -82,7 +194,7 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — RED/GREEN m
 	it("ALLOW: ls /current/project/.factory", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "ls /current/project/.factory" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("ls /current/project/.factory"),
 		});
 		expect(r.decision.kind).toBe("allow");
 		expect(r.decision.source).toBe("host_mode_safe_only_rule");
@@ -91,7 +203,7 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — RED/GREEN m
 	it("ALLOW: find /current/project -type f", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "find /current/project -type f" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("find /current/project -type f"),
 		});
 		expect(r.decision.kind).toBe("allow");
 		expect(r.decision.source).toBe("host_mode_safe_only_rule");
@@ -100,7 +212,9 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — RED/GREEN m
 	it("ALLOW: find /current/project/src -name foo.ts", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "find /current/project/src -name foo.ts" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth(
+				"find /current/project/src -name foo.ts",
+			),
 		});
 		expect(r.decision.kind).toBe("allow");
 		expect(r.decision.source).toBe("host_mode_safe_only_rule");
@@ -110,93 +224,122 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — RED/GREEN m
 	it("ASK: ls /etc", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "ls /etc" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("ls /etc"),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	it("ASK: ls ~/.ssh", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "ls ~/.ssh" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("ls ~/.ssh"),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	it("ASK: find /", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "find /" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("find /"),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	it("ASK: find /etc", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "find /etc" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("find /etc"),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	// ------------ RED: lexical-escape via .. dot-segments ------------
 	it("ASK: find /current/project/../../etc (lexical escape)", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "find /current/project/../../etc" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth(
+				"find /current/project/../../etc",
+			),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	it("ASK: ls /current/project/../.ssh (lexical escape)", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "ls /current/project/../.ssh" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth(
+				"ls /current/project/../.ssh",
+			),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	it("ASK: ls /current/project/sub/../../etc (lexical escape)", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "ls /current/project/sub/../../etc" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth(
+				"ls /current/project/sub/../../etc",
+			),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
-	// ------------ V1 LIMITATION: symlink-to-outside passes lexically ------------
-	it("ALLOW (V1 limitation): find /current/project/outside-link", () => {
+	// ------------ CORRECTION01 closed: symlink-to-outside is ASK ------------
+	it("ASK: find /current/project/outside-link (realpath escape closed)", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "find /current/project/outside-link" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth(
+				"find /current/project/outside-link",
+			),
 		});
-		expect(r.decision.kind).toBe("allow");
+		expect(r.decision.kind).toBe("ask");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 
 	// ------------ Multi-command aggregate ------------
-	it("aggregate: workspace-path-authority ASK dominates", () => {
+	it("aggregate: workspace-realpath-authority ASK dominates", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: {
 				commands: ["ls /current/project", "ls /etc"],
 			},
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: commandHostAuthorization({
+				mode: "safe-only",
+				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: [WORKSPACE_ROOT],
+				cwd: CWD,
+				pathAuthorityEvidence: {
+					roots: [WORKSPACE_ROOT],
+					cwd: CWD,
+					operands: [
+						{
+							operand: "/current/project",
+							resolvedRealPath: "/current/project",
+							contained: true,
+							reason: "resolved-and-contained",
+						},
+					],
+				},
+			}),
 		});
+		// First command is ALLOW (single operand, contained);
+		// second command has no evidence operands but IS
+		// still an R0 read-only command; under CORRECTION02
+		// it gets ASK. The aggregate is ASK.
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
 	});
 
 	// ------------ pwd / git *: not path-bearing; not gated ------------
 	it("ALLOW: pwd (no path operand)", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "pwd" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("pwd"),
 		});
 		expect(r.decision.kind).toBe("allow");
 	});
@@ -204,7 +347,7 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — RED/GREEN m
 	it("ALLOW: git status (no path operand)", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "git status" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("git status"),
 		});
 		expect(r.decision.kind).toBe("allow");
 	});
@@ -212,9 +355,75 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — RED/GREEN m
 	it("ALLOW: git diff (no path operand)", () => {
 		const r = evaluateCommandPolicy({
 			toolInput: { command: "git diff" },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth("git diff"),
 		});
 		expect(r.decision.kind).toBe("allow");
+	});
+
+	// ------------ CORRECTION02 invariants ------------
+	it("CORRECTION02: missing evidence ⇒ ASK even when V1 lexical would have passed", () => {
+		const auth = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [WORKSPACE_ROOT],
+			cwd: CWD,
+			// pathAuthorityEvidence deliberately undefined
+		});
+		const r = evaluateCommandPolicy({
+			toolInput: { command: "ls /current/project" },
+			hostAuthorization: auth,
+		});
+		expect(r.decision.kind).toBe("ask");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
+	});
+
+	it("CORRECTION02: evidence with empty operands for path-bearing command ⇒ ASK (operand count mismatch)", () => {
+		const auth = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [WORKSPACE_ROOT],
+			cwd: CWD,
+			pathAuthorityEvidence: {
+				roots: [WORKSPACE_ROOT],
+				cwd: CWD,
+				operands: [], // empty: count mismatch
+			},
+		});
+		const r = evaluateCommandPolicy({
+			toolInput: { command: "ls /current/project" },
+			hostAuthorization: auth,
+		});
+		expect(r.decision.kind).toBe("ask");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
+	});
+
+	it("CORRECTION02: operand identity mismatch ⇒ ASK", () => {
+		const auth = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [WORKSPACE_ROOT],
+			cwd: CWD,
+			pathAuthorityEvidence: {
+				roots: [WORKSPACE_ROOT],
+				cwd: CWD,
+				operands: [
+					{
+						operand: "/current/project/.factory",
+						resolvedRealPath: "/current/project/.factory",
+						contained: true,
+						reason: "resolved-and-contained",
+					},
+				],
+			},
+		});
+		// Command operand is /current/project (different from
+		// evidence operand). Should ASK.
+		const r = evaluateCommandPolicy({
+			toolInput: { command: "ls /current/project" },
+			hostAuthorization: auth,
+		});
+		expect(r.decision.kind).toBe("ask");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 });
 
@@ -224,126 +433,19 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — corpus entr
 		c.id.startsWith("r0-pathauthority-"),
 	);
 
-	/**
-	 * ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
-	 * REALPATH_WORKSPACE_CONFINEMENT:
-	 *
-	 * The corpus entries that exercise the realpath gate
-	 * (symlink-escape, nonexistent, permission-denied, mixed
-	 * operands) need a hand-built `pathAuthorityEvidence` so the
-	 * policy layer sees the realpath resolution result. We
-	 * classify each corpus entry as lexical-only (use the V1
-	 * lexical auth) or realpath-gated (use evidence-backed auth)
-	 * by id.
-	 *
-	 * The fixture operates in a POSIX-like string namespace
-	 * (`/current/project`); we cannot `fs.realpathSync` those
-	 * paths, so we fabricate evidence objects that model the
-	 * host's observation.
-	 */
-	const REALPATH_GATED_IDS = new Set<string>([
-		"r0-pathauthority-find-symlink-escape-realpath-closed",
-		"r0-pathauthority-find-nonexistent-fail-closed",
-		"r0-pathauthority-find-permission-denied-fail-closed",
-		"r0-pathauthority-find-nonexistent-mixed-operands",
-	]);
-
-	/**
-	 * Build the realpath evidence for one corpus entry. The
-	 * fixture root is the canonical `/current/project`; the
-	 * operand resolution outcome depends on the corpus id.
-	 */
-	function buildEvidenceForEntry(c: {
-		id: string;
-		command: string;
-	}): WorkspacePathAuthorityEvidence {
-		const operand = c.command.split(/\s+/u).slice(1).join(" ");
-		if (c.id === "r0-pathauthority-find-symlink-escape-realpath-closed") {
-			// The host resolves the symlink and finds the
-			// target is /etc (outside the project).
-			return {
-				roots: [WORKSPACE_ROOT],
-				cwd: CWD,
-				operands: [
-					{
-						operand,
-						resolvedRealPath: "/etc",
-						contained: false,
-						reason: "resolved-but-outside-roots",
-					},
-				],
-			};
-		}
-		if (c.id === "r0-pathauthority-find-nonexistent-fail-closed") {
-			// The path does not exist; the host reports
-			// realpath-failed-enoent.
-			return {
-				roots: [WORKSPACE_ROOT],
-				cwd: CWD,
-				operands: [
-					{
-						operand,
-						resolvedRealPath: null,
-						contained: false,
-						reason: "realpath-failed-enoent",
-					},
-				],
-			};
-		}
-		if (c.id === "r0-pathauthority-find-permission-denied-fail-closed") {
-			return {
-				roots: [WORKSPACE_ROOT],
-				cwd: CWD,
-				operands: [
-					{
-						operand,
-						resolvedRealPath: null,
-						contained: false,
-						reason: "realpath-failed-eacces",
-					},
-				],
-			};
-		}
-		if (c.id === "r0-pathauthority-find-nonexistent-mixed-operands") {
-			const ops = c.command.split(/\s+/u).slice(1);
-			return {
-				roots: [WORKSPACE_ROOT],
-				cwd: CWD,
-				operands: [
-					{
-						operand: ops[0]!,
-						resolvedRealPath: `${WORKSPACE_ROOT}/src`,
-						contained: true,
-						reason: "resolved-and-contained",
-					},
-					{
-						operand: ops[1]!,
-						resolvedRealPath: null,
-						contained: false,
-						reason: "realpath-failed-enoent",
-					},
-				],
-			};
-		}
-		throw new Error(`unhandled realpath-gated corpus entry: ${c.id}`);
-	}
-
 	for (const c of pathAuthCases) {
 		it(`${c.id}: ${c.command} -> ${c.requiredDecision}`, () => {
-			const auth = REALPATH_GATED_IDS.has(c.id)
-				? pathAuthorityAuthWithEvidence(buildEvidenceForEntry(c))
-				: pathAuthorityAuth();
 			const r = evaluateCommandPolicy({
 				toolInput: { command: c.command },
-				hostAuthorization: auth,
+				hostAuthorization: pathAuthorityAuth(c.command),
 			});
 			expect(r.decision.kind).toBe(c.requiredDecision);
 			if (c.requiredDecision === "allow") {
 				expect(r.decision.source).toBe("host_mode_safe_only_rule");
-			} else if (REALPATH_GATED_IDS.has(c.id)) {
-				expect(r.decision.source).toBe("host_workspace_realpath_authority");
 			} else {
-				expect(r.decision.source).toBe("host_workspace_path_authority");
+				expect(r.decision.source).toBe(
+					"host_workspace_realpath_authority",
+				);
 			}
 		});
 	}
@@ -353,10 +455,10 @@ describe("ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01 — corpus entr
 		expect(c, "r0-ls-somepath corpus entry must exist").toBeDefined();
 		const r = evaluateCommandPolicy({
 			toolInput: { command: c!.command },
-			hostAuthorization: pathAuthorityAuth(),
+			hostAuthorization: pathAuthorityAuth(c!.command),
 		});
 		expect(r.decision.kind).toBe("ask");
-		expect(r.decision.source).toBe("host_workspace_path_authority");
+		expect(r.decision.source).toBe("host_workspace_realpath_authority");
 	});
 });
 

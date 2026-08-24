@@ -352,9 +352,16 @@ export function cliEvaluateCommandToolApproval(input: {
 		// Attach realpath evidence so the policy layer can
 		// reject symlink escapes. We build one evidence
 		// object per call; the policy layer consumes it.
-		// Build failures (e.g. workspaceRoot does not exist
-		// on disk) fall back to the V1 lexical gate, which
-		// already rejects the path-bearing R0 command.
+		//
+		// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02
+		// REALPATH_EVIDENCE_REQUIRED_FOR_PATH_BEARING_R0_ALLOW:
+		// When evidence construction FAILS (e.g.
+		// workspaceRoot does not exist on disk, ENOENT on
+		// realpath, etc.), we DO NOT pass evidence to the
+		// policy. Under CORRECTION02, missing evidence ⇒
+		// ASK (not the V1 lexical fallback ALLOW that
+		// CORRECTION01 had). This is the fail-closed posture
+		// the reviewer required.
 		const evidenceResult = buildPathAuthorityEvidence({
 			workspaceRoots: hostAuthorization.workspaceRoots,
 			cwd: hostAuthorization.cwd ?? null,

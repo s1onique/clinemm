@@ -1,45 +1,48 @@
 {
-  "contract_version": 2,
+  "contract_version": 3,
   "act_id": "ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01",
   "parent": "ACT-CLINEMM-COMMAND-RISK-R0-READONLY-RECON-EXPANSION02-CORRECTION02",
   "parent_verdict_basis_at_start": "PASS_R0_READONLY_RECON_EXPANSION",
   "verdict": "PASS_WORKSPACE_PATH_AUTHORITY_REALPATH",
-  "verdict_basis": "REALPATH_WORKSPACE_CONFINEMENT production-seam RED+GREEN pinned at HEAD (reviewer-flagged symlink-escape closed; multi-root wired; CLI cwd assumption narrowed)",
+  "verdict_basis": "REALPATH_EVIDENCE_REQUIRED_FOR_PATH_BEARING_R0_ALLOW production-seam RED+GREEN pinned at HEAD (reviewer-flagged 'failed evidence => unsafe lexical fallback' closed; operand identity binding added)",
   "v1_contract": {
-    "name": "REALPATH_WORKSPACE_CONFINEMENT",
-    "primary": "read-only command + every path operand realpath-resolves inside an authorized workspace root = ALLOW-eligible",
-    "decision_sources_new": [
-      "host_workspace_path_authority (V1 lexical fallback)",
-      "host_workspace_realpath_authority (CORRECTION01 realpath gate)"
-    ],
-    "subset_guarantee": "V1 + CORRECTION01 only REMOVE ALLOWs, never ADD them.",
+    "name": "REALPATH_EVIDENCE_REQUIRED_FOR_PATH_BEARING_R0_ALLOW",
+    "primary": "read-only command + valid host-supplied realpath evidence (operand-identity-bound) + every operand realpath-contained inside an authorized workspace root = ALLOW-eligible",
+    "decision_source": "host_workspace_realpath_authority",
+    "subset_guarantee": "CORRECTION02 only REMOVES ALLOWs, never ADDS them.",
     "fail_closed_contract": [
-      "resolvedRealPath: null            ⇒ ASK (realpath failed; do not guess)",
-      "ENOENT / EACCES / ELOOP / ENOTDIR ⇒ ASK",
-      "no-workspace-roots in evidence   ⇒ ASK",
-      "operand-count mismatch            ⇒ ASK"
+      "pathAuthorityEvidence undefined      => ASK (host did not produce evidence; V1 lexical fallback is REMOVED from production ALLOW path)",
+      "resolvedRealPath: null              => ASK (realpath failed; do not guess)",
+      "ENOENT / EACCES / ELOOP / ENOTDIR   => ASK",
+      "no-workspace-roots in evidence     => ASK",
+      "operand-count mismatch             => ASK",
+      "operand-identity mismatch          => ASK (operand[i] must exactly equal command's extracted operand[i])"
     ],
     "reviewer_findings_closed": [
-      "P0: symlink escape now closed via fs.realpathSync at host boundary",
-      "P1: CLI cwd authority assumption narrowed — workspaceRoot is now an explicit required parameter; no implicit cwd-as-workspace fallback"
+      "P0 (CORRECTION01): symlink escape closed via fs.realpathSync at host boundary",
+      "P0 (CORRECTION02): failed evidence no longer falls back to V1 lexical ALLOW — production ALLOW requires realpath evidence",
+      "P1 (CORRECTION02): operand identity binding closes 'evidence-for-different-command' attack",
+      "P1 (CORRECTION01): CLI cwd authority assumption narrowed",
+      "P1 (CORRECTION01): VSCode multi-root wired",
+      "P1 (CORRECTION01): Virtual workspaces fail closed"
     ]
   },
   "files_touched": [
-    "sdk/packages/core/src/runtime/command-policy/path-authority.ts (lexical primitives unchanged + new realpath consumer)",
-    "sdk/packages/core/src/runtime/command-policy/path-authority.test.ts (NEW, V1)",
-    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence.ts (NEW, CORRECTION01 host-evidence types)",
-    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.ts (NEW, CORRECTION01 realpath builder)",
-    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.test.ts (NEW, CORRECTION01)",
-    "sdk/packages/core/src/runtime/command-policy/path-authority.realpath.test.ts (NEW, CORRECTION01 adversarial RED/GREEN)",
-    "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.path-authority.test.ts (V1 + CORRECTION01)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority.ts (lexical primitives retained for unit testing + new realpath consumer)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority.test.ts (V1)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence.ts (CORRECTION01 host-evidence types)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.ts (CORRECTION01 realpath builder)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.test.ts (CORRECTION01)",
+    "sdk/packages/core/src/runtime/command-policy/path-authority.realpath.test.ts (CORRECTION01 + CORRECTION02 adversarial RED/GREEN)",
+    "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.path-authority.test.ts (rewritten with per-corpus realpath evidence)",
     "sdk/packages/core/src/runtime/command-policy/command-policy-types.ts (pathAuthorityEvidence field, host_workspace_realpath_authority source)",
-    "sdk/packages/core/src/runtime/command-policy/command-policy.ts (realpath gate wired after positive R0 rule match)",
+    "sdk/packages/core/src/runtime/command-policy/command-policy.ts (production ALLOW requires realpath evidence; V1 lexical fallback REMOVED; operand identity binding added)",
     "sdk/packages/core/src/runtime/command-policy/command-safe-rules.ts (comment-only)",
     "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.ts (4 new realpath-gated corpus entries)",
-    "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.baseline.test.ts (baseline comment)",
+    "sdk/packages/core/src/runtime/command-policy/command-risk-corpus.baseline.test.ts (per-corpus catch-all realpath evidence)",
     "sdk/packages/core/src/runtime/command-policy/index.ts (re-exports)",
     "sdk/packages/core/src/index.ts (top-level re-exports)",
-    "apps/cli/src/runtime/command-policy-host.ts (workspaceRoot param + buildPathAuthorityEvidence wired)",
+    "apps/cli/src/runtime/command-policy-host.ts (CORRECTION02: comment updated; missing evidence => ASK, NOT V1 fallback ALLOW)",
     "apps/cli/src/runtime/command-policy-host.test.ts (CORRECTION01 assertion)",
     "apps/vscode/src/sdk/sdk-tool-policies.ts (pathAuthorityEvidence plumbing)",
     "apps/vscode/src/sdk/SdkController.ts (multi-root realpath builder, async resolver)",
@@ -56,18 +59,21 @@
     "stage_4c_adversarial_symlink_red_green": {"status": "PASS"},
     "stage_4d_multi_root_wired_in_vscode": {"status": "PASS"},
     "stage_4e_cli_cwd_assumption_narrowed": {"status": "PASS"},
+    "stage_4f_correction02_evidence_required_for_allow": {"status": "PASS"},
+    "stage_4g_correction02_operand_identity_binding": {"status": "PASS"},
     "stage_5_validation": {
       "status": "PASS",
       "details": [
-        "@cline/core unit 2493 PASS / 14 SKIPPED (was 2470; +23 from CORRECTION01)",
-        "@cline/core command-policy/ 528 PASS (was 505; +23 from CORRECTION01)",
-        "apps/cli command-policy-host 42 PASS (was 40; +2 CORRECTION01 assertions)",
+        "@cline/core unit 2498 PASS / 14 SKIPPED (was 2493 in CORRECTION01; +5 from CORRECTION02)",
+        "@cline/core command-policy/ 538 PASS (was 528; +5)",
+        "apps/cli command-policy-host 42 PASS",
         "apps/vscode sdk-tool-policies 70 PASS",
         "apps/vscode typecheck EXIT=0",
         "apps/cli typecheck EXIT=0",
         "@cline/core typecheck: 7 pre-existing errors in unrelated files (NONE introduced by this ACT)",
         "apps/cli test:unit: 4 pre-existing failures unrelated to this ACT (confirmed via git stash round-trip)",
-        "apps/vscode sdk/ tests: 1954/1954 PASS"
+        "apps/vscode sdk/ tests: 1954/1954 PASS",
+        "SDK rebuild EXIT=0"
       ]
     }
   }
