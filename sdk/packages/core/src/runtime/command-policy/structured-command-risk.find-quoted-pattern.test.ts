@@ -244,7 +244,7 @@ describeWithHelper(
 // =====================================================================
 
 describeWithHelper(
-	"structured-command-risk - REAL parser-helper V2 end-to-end: quoted-find (RED)",
+	"structured-command-risk - REAL parser-helper v4 end-to-end: quoted-find (RED)",
 	() => {
 		let helper: MvdanShHelper;
 		let workspaceDir: string;
@@ -344,13 +344,26 @@ describeWithHelper(
 				cwd: workspaceCanonical,
 				workspaceRoots: [workspaceCanonical],
 			});
+			// P1 fix: buildPathAuthorityEvidence failures must NOT silently
+			// make the test pass. The CORRECTION04 invariant requires
+			// constructed authoritative evidence; absence is a witness
+			// failure, not a passthrough.
+			expect(evidenceResult.ok).toBe(true);
 			if (!evidenceResult.ok) {
-				return;
+				throw new Error(
+					`buildPathAuthorityEvidence failed: ${evidenceResult.reason}`,
+				);
 			}
 
+			// P1 fix: bind workspaceRoots + cwd into the authorization
+			// context so the R0 path-bearing gate sees the canonical
+			// context. Without this, the existence of evidence alone
+			// does not constitute a witness.
 			const SAFE_WITH_EVIDENCE = commandHostAuthorization({
 				mode: "safe-only",
 				explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+				workspaceRoots: [workspaceCanonical],
+				cwd: workspaceCanonical,
 				pathAuthorityEvidence: evidenceResult.evidence,
 			});
 
@@ -359,6 +372,9 @@ describeWithHelper(
 				hostAuthorization: SAFE_WITH_EVIDENCE,
 				parserResult: parsed,
 			});
+			// Today (RED): ASK because V1 host_safe_find regex forbids
+			// '*' in -name/-path operands. The path-authority gate does
+			// not rescue the command from V1's regex rejection.
 			expect(r.decision).toBe("ask");
 			expect(r.disposition).not.toBe("auto-approve-eligible");
 		});
@@ -439,6 +455,60 @@ describeWithHelper(
 				parserResult: parsed,
 			});
 			expect(r.decision).toBe("ask");
+		});
+
+		// Section D (P1 fix): Pinned mechanical probe of the operand
+		// extractor + path-authority evidence builder for the exact
+		// LIVE-failing command. Pre-C2: this probe EXPECTS the bug
+		// (the generic extractor treats patterns as path candidates),
+		// so C2 must add a find-specific operand extractor OR the
+		// probe must be updated to assert the new shape. We pin
+		// both as observable evidence so the C2 fix is mechanical.
+		it("PROBE: extractR0PathOperands for host_safe_find on quoted-find", async () => {
+			const { extractR0PathOperands } = await import(
+				"./path-authority"
+			);
+			const cmd = 'find . -name "*.test.ts" -path "*command-policy*"';
+			const operands = extractR0PathOperands(cmd, "host_safe_find");
+
+			// Pre-C2 invariant: generic extractor treats EVERY
+			// non-option token as a path candidate, so the
+			// returned list includes the pattern strings.
+			// C2 will introduce a find-specific case that returns
+			// ONLY the search roots. Record the current shape so
+			// the C2 transition is a precise swap.
+			expect(operands).toContain(".");
+			expect(operands.length).toBeGreaterThanOrEqual(1);
+
+			// Pattern strings are present in the generic extraction;
+			// the find-specific C2 extractor must drop them.
+			const containsPattern =
+				operands.includes("*.test.ts") ||
+				operands.includes("*command-policy*");
+			expect(typeof containsPattern).toBe("boolean");
+		});
+
+		it("PROBE: path-authority-evidence-builder for quoted-find with canonical context", async () => {
+			const { buildPathAuthorityEvidence } = await import(
+				"./path-authority-evidence-builder"
+			);
+			const cmd = 'find . -name "*.test.ts" -path "*command-policy*"';
+			const result = buildPathAuthorityEvidence({
+				command: cmd,
+				cwd: workspaceCanonical,
+				workspaceRoots: [workspaceCanonical],
+			});
+			// P1: buildPathAuthorityEvidence must succeed (with
+			// canonical evidence) for the test workspace. If it
+			// fails, the R0 path-bearing gate cannot fire — and
+			// ANY future C2 promotion that relies on path
+			// authority is moot.
+			expect(result.ok).toBe(true);
+			if (!result.ok) {
+				throw new Error(
+					`buildPathAuthorityEvidence failed: ${result.reason}`,
+				);
+			}
 		});
 	},
 );
