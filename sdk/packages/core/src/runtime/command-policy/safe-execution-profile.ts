@@ -134,6 +134,24 @@ export const SAFE_GIT_BRANCH_PROFILE: SafeExecutionProfile = {
 	commandSuffix: [],
 };
 
+export const SAFE_GIT_REMOTE_PROFILE: SafeExecutionProfile = {
+	kind: "git_observational",
+	source: "host_safe_git_remote_profile",
+	description:
+		"Run git remote under hardened globals: pager disabled, fsmonitor/hooks/pager neutralized via -c overrides. No diff-specific suffix because git remote is observational/list mode and --no-ext-diff/--no-textconv are diff-family options, not remote-list options.",
+	commandPrefix: GIT_GLOBAL_HARDENING,
+	commandSuffix: [],
+};
+
+export const SAFE_ECHO_PROFILE: SafeExecutionProfile = {
+	kind: "pwd",
+	source: "host_safe_echo_profile",
+	description:
+		"echo is intrinsic; no overlay required. echo takes no helper, no fs write, no authority-broadening effect. The git-family hardening flags would BREAK echo's argument parsing (they would be interpreted as text to echo); they are not used here.",
+	commandPrefix: [],
+	commandSuffix: [],
+};
+
 export const SAFE_LS_PROFILE: SafeExecutionProfile = {
 	kind: "pwd",
 	source: "host_safe_ls_profile",
@@ -166,6 +184,10 @@ export function getSafeExecutionProfileForSource(
 			return SAFE_GIT_LOG_PROFILE;
 		case "host_safe_git_branch":
 			return SAFE_GIT_BRANCH_PROFILE;
+		case "host_safe_git_remote":
+			return SAFE_GIT_REMOTE_PROFILE;
+		case "host_safe_echo":
+			return SAFE_ECHO_PROFILE;
 		case "host_safe_ls":
 			return SAFE_LS_PROFILE;
 		case "host_safe_find":

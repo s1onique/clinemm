@@ -88,6 +88,38 @@ describe("Group A — baseline freeze: findSafeRuleMatch vs corpus", () => {
 		expect(r0FindTypeName?.matchedSource).toBe("host_safe_find");
 		const r0FindNotPath = baseline.find((b) => b.id === "r0-find-not-path");
 		expect(r0FindNotPath?.matchedSource).toBe("host_safe_find");
+		// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01
+		// added `host_safe_git_remote` and `host_safe_echo` to the
+		// safe allowlist. These corpus entries pin the post-V1
+		// matchedSource snapshot.
+		const r0GitRemote = baseline.find((b) => b.id === "r0-git-remote");
+		expect(r0GitRemote?.matchedSource).toBe("host_safe_git_remote");
+		const r0GitRemoteV = baseline.find((b) => b.id === "r0-git-remote-v");
+		expect(r0GitRemoteV?.matchedSource).toBe("host_safe_git_remote");
+		const r0GitRemoteVerbose = baseline.find(
+			(b) => b.id === "r0-git-remote-verbose",
+		);
+		expect(r0GitRemoteVerbose?.matchedSource).toBe("host_safe_git_remote");
+		const r0EchoEmpty = baseline.find((b) => b.id === "r0-echo-empty");
+		expect(r0EchoEmpty?.matchedSource).toBe("host_safe_echo");
+		const r0EchoLiteral = baseline.find((b) => b.id === "r0-echo-literal");
+		expect(r0EchoLiteral?.matchedSource).toBe("host_safe_echo");
+		const r0EchoMultiWord = baseline.find(
+			(b) => b.id === "r0-echo-multi-word",
+		);
+		expect(r0EchoMultiWord?.matchedSource).toBe("host_safe_echo");
+		const r0EchoSingleQuote = baseline.find(
+			(b) => b.id === "r0-echo-single-quote",
+		);
+		expect(r0EchoSingleQuote?.matchedSource).toBe("host_safe_echo");
+		const r0EchoDoubleQuote = baseline.find(
+			(b) => b.id === "r0-echo-double-quote",
+		);
+		expect(r0EchoDoubleQuote?.matchedSource).toBe("host_safe_echo");
+		const r0EchoNLiteral = baseline.find(
+			(b) => b.id === "r0-echo-n-literal",
+		);
+		expect(r0EchoNLiteral?.matchedSource).toBe("host_safe_echo");
 	});
 });
 

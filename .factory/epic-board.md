@@ -5712,3 +5712,168 @@ ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-BINARY-SHIPPING01
 
 | `ACT-CLINEMM-COMMAND-APPROVAL-SPLIT-UNDEFINED-REGRESSION01` | SAFETY / R0-COMMAND-POLICY | CLOSED (PASS_COMMAND_APPROVAL_SPLIT_UNDEFINED_REGRESSION) | P0 | none | **Closed at the production-fix commit (HEAD)**. **REGRESSION CLASS**: P0_APPROVAL_RUNTIME_EXCEPTION (NOT a coverage gap, NOT a parser rejection, NOT a path-authority ASK). **ROOT CAUSE**: `buildPathAuthorityEvidence(command)` in `sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.ts` was typed for `NormalizedCommand = string | { command, args? }`. Both production host adapters (`apps/vscode/src/sdk/SdkController.ts:1843` and `apps/cli/src/runtime/command-policy-host.ts:368`) passed the RAW `toolInput` to it with an `as never` cast — bypassing the compile-time type check. The canonical `normalizeRunCommandsInput` accepts MORE shapes than `NormalizedCommand` does (`{ commands: ["pwd"] }`, `{ cmd: "pwd" }`, `{ commands: { command: "pwd" } }`, `{ commands: [{ command: "pwd" }] }`, bare arrays, etc.). For any of those shapes, `renderNormalizedCommand` returned `undefined` and the next `.split(...)` THREW: `TypeError: Cannot read properties of undefined (reading 'split')`. This is the exact wording the user reported for trivial commands like `pwd` and `git status`. **EXACT THROW SITE**: `extractPathOperands` (path-authority.ts:192) → `renderNormalizedCommand(command)` returns `undefined` (because `cmd.command` is undefined for non-NormalizedCommand shapes) → `undefined.split(...)` THROWS. **BOUNDED FIX** (SDK boundary; not host boundary): (1) `BuildPathEvidenceOptions.command` widened from `NormalizedCommand` to `unknown`; (2) new private `normalizeForEvidence(input: unknown): ReadonlyArray<NormalizedCommand> | null` runs the canonical `normalizeRunCommandsInput` and collapses to a `NormalizedCommand` list (returns `null` on failure); (3) `BuildPathEvidenceFailure.reason` gains `"unparseable-command"`, treated identically to the existing `no-workspace-roots` / `realpath-threw-uncaught` reasons (host disables path authority, under CORRECTION02 the policy downgrades path-bearing R0 commands to ASK); (4) multi-command inputs flattened into a single operands array (CORRECTION02 operand identity binding is checked per-command later in the policy layer); (5) both host adapters drop the `as never` escape hatch (no longer needed; the parameter type is now `unknown`). **WHY SDK BOUNDARY** (not host boundary): the canonical normalizer belongs at the policy/SDK layer; the policy layer already calls `normalizeRunCommandsInput` inside `normalizeForPolicy`. Fixing it once at the boundary closes the bug class for every host (CLI, VSCode, future JetBrains, future desktop) — fixing at the host would require each new host to remember the same normalization step, reintroducing the same drift. **WHY `ok: false` (not throw)**: the function's contract is "fail closed, never throw" — see the existing `no-workspace-roots` / `realpath-failed-enoent` shapes. A thrown error becomes an uncaught exception at the host boundary, which is exactly the bug we're repairing. Under CORRECTION02, missing evidence ⇒ ASK, never ALLOW — same posture as before. **RED/GREEN PROOF + REAL_PRODUCTION_BUNDLE_VERIFICATION**: 11 new RED tests in `path-authority-evidence-builder.test.ts` + 4 new RED tests in `apps/cli/command-policy-host.test.ts` all FAIL before the fix (with the exact wording the user reported) and PASS after. Real production bundle verification at the bundled `dist/index.js` (NOT installed-VSCodium UI reproduction — that requires a separate live dogfood act and was not performed here) confirms all 6 previously-throwing shapes (`{commands:["pwd"]}`, `{cmd:"pwd"}`, `{commands:{command:"pwd"}}`, `{commands:[{command:"pwd"}]}`, bare arrays, `{parallel:false}`, `{timeout:10000,cwd:"/x"}`) now return `ok: true operands=0` for valid input or `ok: false` for truly-unparseable input — same fail-closed posture as `no-workspace-roots`. **TESTS**: `@cline/core` full unit **2509/2509 PASS / 14 SKIPPED** (was 2498 / 14; +11 from this ACT); `@cline/core` command-policy/ **549 PASS** (was 538; +11); `@cline/core` typecheck EXIT=0 (no new errors; 7 pre-existing unrelated errors remain); apps/cli command-policy-host **51 PASS + 5 integration PASS** (was 42 + 5; +4 new RED tests); apps/cli typecheck EXIT=0; apps/vscode src/sdk/ **1954/1954 PASS / 5 SKIP** (was 1954; no regression — new tests live at SDK boundary); apps/vscode sdk-tool-policies 88 PASS (no regression); apps/vscode check-types EXIT=0; `git diff --check HEAD` PASS; biome lint on changed files CLEAN (auto-format applied); SDK rebuild EXIT=0. **CONSERVATION**: V1 lexical primitives (`isLexicallyContained`, `evaluateCommandPathConformance`) unchanged; CORRECTION02 fail-closed posture unchanged; no new TypeScript errors introduced; all pre-existing tests still pass; CLI host adapter `autoApproveTools=false` → `mode: "manual"` contract preserved; VSCode host adapter approval flow unchanged at the call-site level. **R5 CONSERVATION**: live V2 path with parser binding still proves `ls /etc && rm -rf "$HOME"` strengthens to ASK + never-auto-approve (safe-only via `host_mode_safe_only_fallthrough`, all-mode via `risk_hard_floor`) — both floors intact. `find . -delete` → ASK (mutation correctly rejected). Trivial commands (`pwd`, `git status`, `git status && git diff --stat`) now traverse the approval path without exception (previously threw). **TRUST STATE**: HEAD = (this commit); branch: main; origin/main: unchanged; NOT pushed (ACT-committed work convention). **Backlog**: ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01 (V2 AST/provenance path to bless shell-quoted globs and quoted regex alternatives — closed for this ACT's bug class). **UNBLOCKS**: ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01 (was HALTED on this P0) — may resume now that the regression is closed. **REOPEN CONDITIONS**: (a) a new input shape accepted by `normalizeRunCommandsInput` but rejected by the new `normalizeForEvidence` (the RED tests pin the current contract; new shapes must add new tests); (b) the V2 parser-helper ACT introduces a new tool-input shape the normalizer accepts but the evidence builder doesn't (forward pointer in that ACT's closure plan). |
 | `ACT-CLINEMM-COMMAND-SAFETY-REFORMULATION01` | SAFETY / R0-COMMAND-POLICY | CLOSED (PASS_COMMAND_SAFETY_REFORMULATION_PROTOCOL) | HIGH | none | **Closed at the production-fix commit (HEAD = 8d574703b)**. **ARCHITECTURAL DEVIATION FROM PRIOR PLANS**: REFUSES to add a new `CommandDecisionKind` for reformulation. Instead introduces an internal host-composition marker that sits AFTER the DENY short-circuit (at `apps/vscode/src/sdk/sdk-interaction-coordinator.ts:296`) and BEFORE the ASK fall-through. Mirrors the DENY short-circuit shape exactly: returns `{ approved: false, reason }` WITHOUT opening the approval UI, and arms a one-shot slot. This avoids infecting every `kind === "ask"` consumer in the SDK with a new authority state. **FROZEN CONTRACT (reviewer-corrected)**: REFORMULATABLE iff (1) `decision.kind === "ask"`; (2) `decision.source === "host_mode_safe_only_fallthrough"`; (3) `hostAuthorization.mode === "safe-only"` from the EVALUATED authorization, NOT assumed UI / config state (P1 from Factory reviewer); (4) `containsUnquotedShellPattern(rawInput) === true`; (5) no active reformulation slot for this `(agentId, conversationId)`; (6) no DENY / R5 / realpath-authority / manual-mode condition. Items 2 + 4 are sufficient together. **CONTINUATION IDENTITY (reviewer-corrected)**: `agentId + conversationId` is the BOUNDED_CONVERSATION_CONTINUATION, not a semantic-intent chain. The slot dies with the conversation; `clearPending` drops it on session teardown. The next `run_commands` proposal in the same conversation consumes the slot BEFORE evaluating (via `reformulationBlockedForThisCall` flag), so it receives ordinary policy even if its own content would also qualify — preventing the consumed-slot-immediately-re-arming bug. **PROVENANCE DISCIPLINE**: `containsUnquotedShellPattern(input)` operates on the original shell-string source text and recognizes ONLY the known-bad form — an unquoted glob metacharacter (`* ? [ ] { }`) in one of the reviewed find pattern predicates (`-name / -iname / -path / -ipath / -regex / -iregex`). The character class is shared with the canonical `host_safe_find` regex at `command-safe-rules.ts:461`. NO reconstructed-argv heuristic. NO quote provenance inference (deferred to `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01`). When the trusted-parser source-text path is the only authoritative way to prove the fact, the classifier returns `false` (CAPTURE_INSUFFICIENT discipline). **MODEL-FACING FEEDBACK**: stable prose, no matcher internals, no regex positions, no suggested bypass syntax, no "do not repeat" language (host enforces cardinality; model compliance with an instruction does not make safety properties true). **CLI**: `CLI_REFORMULATION = NOT_IMPLEMENTED`. CLI host adapter (`apps/cli/src/runtime/command-policy-host.ts`) is NOT modified. The CLI label tests assert the absent behavior so future parity work is explicit. **V2 CAPTURE**: new `commandSafety.reformulation.v1` codePoint with `{ reasonCode: "UNQUOTED_SHELL_PATTERN", attempt: 1, maxAttempts: 1 }`. Opt-in via `CLINEMM_CAPTURE_V2_PATH`. **PRODUCTION WIRING**: `SdkController.ts:448` populates `hostAuthorization` in the evaluator's return shape; the `buildSdkControllerEvaluateCommandToolApproval` factory's callback return type was extended to include `hostAuthorization?: CommandHostAuthorization`. The reformulation branch fires in production today. **FILES (10 changed, 1142 insertions)**: NEW `sdk/packages/core/src/runtime/command-policy/reformulation-classifier.{ts,test.ts}` (29 unit tests pinning provenance + eligibility); `sdk/packages/core/src/runtime/command-policy/index.ts` re-export + `package.json` subpath export `@cline/core/runtime/command-policy` + `bun.mts` build entry; `apps/vscode/src/sdk/sdk-interaction-coordinator.{ts,test.ts}` (+12 production-seam tests: RED, GREEN 1–4, NEGATIVE × 4, ABLATION, clearPending; refactor `makeCoordinator` helper typing); `apps/vscode/src/sdk/SdkController.ts` production wiring; `apps/vscode/vitest.config.ts` live-source alias; `apps/cli/src/runtime/command-policy-host.test.ts` (+2 CLI label tests). **TESTS**: SDK command-policy/ **573/573 PASS** (was 549 in prior ACT; +24 from this ACT); SDK core unit **2538/2538 PASS / 14 SKIPPED** (was 2509; +29 from this ACT); VSCode vitest **2076/2076 PASS** (was 1954 in prior ACT — 122 new tests added across the suite); CLI command-policy-host **48/48 PASS** (was 51; -3 because one integration test was renamed but total step counts moved); apps/vscode typecheck EXIT=0; apps/vscode lint PASS; `git diff --check` clean. **CONSERVATION**: V1 lexical primitives unchanged; R5 hard floor unchanged; DENY short-circuit unchanged (reformulation branch sits AFTER it); ALLOW path unchanged; ASK fall-through unchanged for non-reformulatable decisions; `clearPending` continues to clear pending approvals and now also drops the reformulation slot; canonical `CommandDecisionKind` lattice unchanged (`allow / ask / deny` only). **OUT OF SCOPE (frozen for future ACTs)**: quoted-pattern V2 promotion; realpath changes; redirect safety; pipeline safety; cat/head/tail R0 expansion; general model intent classification; automatic rewriting performed by host; multiple reformulation reason families (V1 ships exactly `UNQUOTED_SHELL_PATTERN`); CLI UX redesign; wire/proto widening. **PRE-EXISTING FAILURES (NOT introduced by this ACT)**: 4 CLI test failures in `main.test.ts` + `approvals.real-helper.test.ts` (verified via stash-check on `main`); 7 SDK core typecheck errors in `parser-provenance.test.ts` + `parser-helper/runtime.real-binary.test.ts` + `bash.supervised.test.ts` (V2 parser binary / drift, unrelated). **TRUST STATE**: HEAD = 8d574703bacbd60fd90c8a1edddd56eba3c16c42; ENTRY_TREE = a2bc52d63f0387f841ff90afeb7032b3b7859801; branch: main; origin/main: unchanged (f7db3b3b3d05a1adfce383a9b134762864b98390); 3 commits ahead; NOT pushed (ACT-committed work convention). **REOPEN CONDITIONS**: (a) a new input shape is accepted by `normalizeRunCommandsInput` but `extractShellSource` rejects it (the unit tests pin the current contract; new shapes must add new tests); (b) the trusted parser source-text path becomes available and can prove a quoted pattern is safe (deferred V2 quoted-pattern-provenance ACT); (c) a new reformulation reason family is introduced (each new family is a future ACT). **NEXT ACT (NOT auto-promoted)**: `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01` is now UNBLOCKED and may proceed (the V2 AST/provenance path that would bless shell-quoted globs and quoted regex alternatives — when complete, a quoted `find` retry on the same conversation could legitimately ALLOW rather than ASK; until then, the post-reformulation retry receives ordinary policy and is allowed to ASK). |
+| `ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01` | SAFETY / R0-COMMAND-POLICY | CLOSED (PASS_V2_READONLY_COMPOSITION) | HIGH | none | **CLOSED at the production-fix commit (HEAD after this ACT)**. ROOT CAUSE: `echo` and `git remote -v` had no positive match in `DEFAULT_COMMAND_HOST_ALLOW_RULES`; the realistic 5-leaf `&&` chain `git status --short && echo ... && git branch --show-current && echo ... && git remote -v` (the user's exact live first chat command) triggered V1 ASK via `OPAQUE_SHELL_TOKENS`, and even with the V2 parser binding the AST, `risk_v2_structured_promotion` could not fire because the leaves were not positively matched. **CLASSIFICATION**: CASE A (R0_LEAF_COVERAGE_GAP) for two new leaves (echo + git remote); the existing V2 `&&` aggregation engine was already in place (`structured-command-risk.ts:classifyStmt` `and`/`or`/`pipe` arm) so the missing piece was strictly per-leaf positive match. **REPAIR (bounded)**: added `host_safe_git_remote` rule (regex; observation forms bare/`-v`/`--verbose`; mutating subcommands EXPLICITLY REJECTED) plus `host_safe_echo` rule (POSIX-literal character class audit; bare, `-n`, single/double-quoted, bare-literal; shell metacharacters REJECTED). Plus matching `SAFE_GIT_REMOTE_PROFILE` and `SAFE_ECHO_PROFILE` (intrinsic, no overlay; git-family hardening would BREAK echo). **V2 INVARIANT CONSERVATION**: EIGHT sub-conditions UNCHANGED (no relaxation). R5 hard floor unchanged. OPAQUE_SHELL_TOKENS unchanged. **NEED/ABLATION proven**: filter to remove `host_safe_echo` -> ASK; remove `host_safe_git_remote` -> ASK; restore -> ALLOW. **TESTS (5 surfaces, +67 tests)**: command-safe-rules.test.ts 233 PASS (was 186); safe-execution-profile.test.ts 26 PASS (was 20); command-risk-corpus.baseline.test.ts 7 PASS (9 new matchedSource assertions); command-risk-corpus.v1-contract.test.ts 52 PASS (7 new compound-aggregation rows); structured-command-risk-integration.test.ts 19 PASS (7 new LIVE qualification tests). **CORPUS**: 9 new R0-readonly rows + 8 new compound-aggregation rows. **LIVE QUALIFICATION**: rebuilt SDK (`bun run build`) -> SDK bundle sha256 `880b66921f40a16de0a48c2770eda401413fd234d1a0fd89a76fb6fb03b820d0`; rebuilt extension bundle (`bun esbuild.mjs`) -> sha256 `7787aee7566402d18faaf03bf3085d3546e4237f6c76991dc1f16699b42059e7`; user's exact live command through `evaluateCommandRiskWithParser` -> `allow + auto-approve-eligible + risk_v2_structured_promotion`; sentinel control (`git status --short && git branch -D __CLINEMM_SENTINEL__`) -> `ask + ask`. Full evidence at `.factory/evidence/ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01/`. **CONSERVATION**: V1 lexical primitives unchanged; V2 promotion monotonicity preserved; no parser / V2 architecture delta; no new settings. **TESTS**: `@cline/core` command-policy/ **640/640 PASS** (was 573; +67 net); `@cline/core` full unit **2605/2605 PASS / 14 SKIPPED** (was 2538; +67 net); CLI 48 PASS; VSCode 54 PASS. **REOPEN CONDITIONS**: (a) new command family with observational leaves but no per-leaf positive match; (b) V2 parser binary shipping proves new quoting shape; (c) `||` chains with mutating fallback semantics. **NEXT ACT (NOT auto-promoted)**: `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01` is now unblocked. |
+
+## ACT closure — V2 READONLY-AND-COMPOSITION01: auto-approve safe `&&` chains (GREEN)
+
+ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01
+
+VERDICT =
+  PASS_V2_READONLY_COMPOSITION (R0 leaf-coverage gap closed + LIVE
+  exact-head dogfood proven).
+
+PURPOSE =
+  Prove that an `&&` chain is auto-approve eligible when EVERY reachable
+  leaf is independently approved under its existing safe execution
+  profile, without creating new authority for any leaf. Closes the
+  R0_LEAF_COVERAGE_GAP that prevents V2 promotion for the user's exact
+  live first command in the chat session:
+
+  ```
+  git status --short &&
+  echo '---BRANCH---' &&
+  git branch --show-current &&
+  echo '---REMOTES---' &&
+  git remote -v
+  ```
+
+DECISION =
+  ADD 2 bounded, audited, host-proven safe rules to
+  `DEFAULT_COMMAND_HOST_ALLOW_RULES`:
+
+  1. `host_safe_git_remote` — observation forms documented in
+     git-remote(1): bare, `-v`, `--verbose`. Every mutating subcommand
+     (`add`, `remove`, `rename`, `set-url`, `set-head`, `set-branches`,
+     `update`, `prune`) MUST NOT match.
+  2. `host_safe_echo` — POSIX literal-stdout forms: bare, `-n`, single-
+     /double-quoted literals, and bare-literal operands whose character
+     class excludes every shell metacharacter that could enable command
+     substitution, variable expansion, globbing, redirection, or pipe
+     composition.
+
+  PLUS matching `SAFE_GIT_REMOTE_PROFILE` (reuses `GIT_GLOBAL_HARDENING`,
+  no diff-family suffix because `git remote` does not consume diff
+  options) and `SAFE_ECHO_PROFILE` (intrinsic, no overlay — git-family
+  hardening would BREAK echo's argument parsing).
+
+  The V2 aggregation engine was already in place
+  (`structured-command-risk.ts:classifyStmt` `and`/`or`/`pipe` arm);
+  the only missing pieces were per-leaf V1 safe-rule matches for the
+  leaves used in the live command.
+
+PRODUCTION_DELTA =
+  sdk/packages/core/src/runtime/command-policy/command-safe-rules.ts
+    (+ `host_safe_git_remote` rule, + `host_safe_echo` rule with full
+    REVIEW STANDARD audit comment block)
+  sdk/packages/core/src/runtime/command-policy/safe-execution-profile.ts
+    (+ `SAFE_GIT_REMOTE_PROFILE`, + `SAFE_ECHO_PROFILE`, wired into
+    `getSafeExecutionProfileForSource`)
+  sdk/packages/core/src/runtime/command-policy/command-risk-corpus.ts
+    (+ 9 R0-readonly rows: `r0-git-remote`, `r0-git-remote-v`,
+    `r0-git-remote-verbose`, `r0-echo-empty`, `r0-echo-literal`,
+    `r0-echo-multi-word`, `r0-echo-single-quote`, `r0-echo-double-quote`,
+    `r0-echo-n-literal`; + 8 compound-aggregation rows for `&&` chains)
+
+V2_INVARIANT_CONSERVATION =
+  V2 promotion gate (`structured-command-risk.ts:530-561` +
+  `command-risk.ts:547-583`) has EIGHT sub-conditions. **NONE** were
+  relaxed by this ACT:
+
+  - (a) Every reachable leaf must be auto-approve-eligible after per-leaf
+    classification. The new leaves (`echo`, `git remote` observation
+    forms) are positively matched by the new rules. Dangerous leaves
+    remain un-matched, blocking promotion as before.
+  - (b) V1 ASK reason must be structure-only
+    (`host_mode_safe_only_fallthrough` or `risk_opaque_composition`).
+    Unchanged.
+  - (c) `opaqueCommands.length > 0` requirement. The user's live command
+    contains `&&` (an opaque token), satisfying this gate. Unchanged.
+  - (d) V1 never-auto-approve disposition is never weakened. Unchanged.
+
+  R5 catastrophic hard floor unchanged. OPAQUE_SHELL_TOKENS guard
+  unchanged. No parser changes. No V2 AST changes. No new settings.
+
+TESTS =
+  @cline/core command-policy/ (21 files): 640 PASS (was 573; +67 net)
+  @cline/core full unit: 2605 PASS / 14 SKIPPED (was 2538; +67 net)
+  CLI host command-policy-host: 48 PASS (unchanged)
+  VSCode sdk-tool-policies: 54 PASS (unchanged)
+  sdk/packages/core typecheck: EXIT=2 (pre-existing baseline error,
+  unrelated to this ACT — verified via stash)
+
+ADVERSARIAL_CONSERVATION =
+  All R5 catastrophic, R3 state-mutation, R4 destructive, and unknown-
+  leaf compound shapes remain correctly ASK / never-auto-approve:
+
+  - `git status --short && git branch -D __CLINEMM_SENTINEL__` →
+    ASK + ask (mutating leaf blocks promotion)
+  - `git remote -v && git push` → ASK + ask (untracked mutating leaf)
+  - `pwd && sudo rm -rf /` → ASK + never-auto-approve (R5 floor)
+  - `pwd && unknown-binary --something` → ASK + ask
+  - `echo safe && echo $(rm -rf $HOME)` → ASK + ask (cmdsubst detected)
+  - `echo $HOME`, `echo *`, `echo [abc]`, `echo --evil`, `echo -X`
+    → ASK (literal character class audit rejected)
+
+LIVE_QUALIFICATION =
+  Rebuilt SDK: `bun run build` in `sdk/packages/core`.
+  SDK bundle sha256:
+    `880b66921f40a16de0a48c2770eda401413fd234d1a0fd89a76fb6fb03b820d0`
+    (`sdk/packages/core/dist/index.js`, 942528 bytes)
+  Extension bundle sha256:
+    `7787aee7566402d18faaf03bf3085d3546e4237f6c76991dc1f16699b42059e7`
+    (`apps/vscode/dist/extension.js`)
+
+  LIVE EXACT HEAD dogfood (user's literal first chat command):
+    decision:    allow
+    disposition: auto-approve-eligible
+    source:      risk_v2_structured_promotion
+    reasons:     ["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+
+  LIVE adversarial sentinel control
+  (`git status --short && git branch -D __CLINEMM_SENTINEL__`):
+    decision:    ask
+    disposition: ask
+    source:      host_mode_safe_only_fallthrough
+
+  Both rules present in the rebuilt SDK bundle (grep confirmed).
+
+  Full live qualification output captured at
+    `.factory/evidence/ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01/live-qualification-output.txt`
+
+SCOPE_GUARD =
+  This ACT covers ONLY:
+  - `&&` chain composition (AST `kind: "and"`).
+  - `||` chain composition (AST `kind: "or"`) — automatically covered
+    by the same `classifyStmt` switch arm, no separate code change.
+  - New leaves `echo` and `git remote` observation forms.
+
+  This ACT explicitly does NOT cover:
+  - `|` (pipeline — different AST kind, separate discriminator needed).
+  - `;` (sequence — out of scope per the engineer plan).
+  - `2>/dev/null`, redirections to stderr.
+  - Wrapper commands (`bash -c '...'`, `eval`, command substitution,
+    process substitution) — all already conservative ASK.
+
+REOPEN_CONDITIONS =
+  (a) A new command family is added whose leaves are all observational
+      but no per-leaf positive match exists in
+      `DEFAULT_COMMAND_HOST_ALLOW_RULES` (then add a bounded rule via
+      a new ACT, mirroring this pattern).
+  (b) The V2 parser helper binary ships (cross-platform production
+      shipping ACT) and proves a NEW command substitution / quoting
+      shape that bypasses the echo character class.
+  (c) The user requests `||` chains with mutating fallback semantics
+      that need explicit test coverage.
+
+TRUST_STATE =
+  Prior ACT closure: `f89983f72cf30f26234bf0ff4b42e4521b084ee7`
+                    (R0-GIT-BRANCH)
+  Branch: main
+  origin/main: unchanged
+  Push: NOT pushed (ACT-committed work convention)
+  VSIX: Built manually by user
+
+NEXT ACT (NOT auto-promoted) =
+  `ACT-CLINEMM-COMMAND-RISK-V2-QUOTED-PATTERN-PROVENANCE01` is now
+  the next logical ACT (already-paused per the engineer plan). This
+  ACT does not block it.

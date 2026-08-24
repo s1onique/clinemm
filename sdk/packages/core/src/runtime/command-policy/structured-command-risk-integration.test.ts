@@ -166,6 +166,170 @@ describe("V2+V1 composition — V2 promotion ASK → ALLOW when AST confirms saf
 		expect(r.decision).toBe("allow");
 		expect(r.disposition).toBe("auto-approve-eligible");
 	});
+
+	// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01
+	//
+	// EXACT LIVE HEAD DOGFOOD: the user's literal first command in the
+	// live chat session. With `host_safe_git_remote` and `host_safe_echo`
+	// added, every reachable leaf now positively matches. V2 promotion
+	// fires; the chain auto-runs.
+	//
+	// This is the load-bearing GREEN test that closes the R0 leaf-
+	// coverage gap the engineer review identified.
+	it("LIVE EXACT HEAD: user's 5-leaf && chain → ALLOW (V2 promotion)", () => {
+		const liveCmd =
+			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v";
+		const r = evaluateCommandRiskWithParser({
+			toolInput: liveCmd,
+			hostAuthorization: SAFE,
+			parserResult: mkParsed(liveCmd, [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("git", ["status", "--short"]) },
+					rhs: {
+						kind: "and",
+						left: { kind: "cmd", cmd: mkCmd("echo", ["'---BRANCH---'"]) },
+						rhs: {
+							kind: "and",
+							left: {
+								kind: "cmd",
+								cmd: mkCmd("git", ["branch", "--show-current"]),
+							},
+							rhs: {
+								kind: "and",
+								left: { kind: "cmd", cmd: mkCmd("echo", ["'---REMOTES---'"]) },
+								rhs: {
+									kind: "cmd",
+									cmd: mkCmd("git", ["remote", "-v"]),
+								},
+							},
+						},
+					},
+				},
+			]),
+		});
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
+		expect(r.source).toBe("risk_v2_structured_promotion");
+	});
+
+	// Mixed-risk control: same chain, but with a mutating leaf appended.
+	// MUST stay ASK. This is the load-bearing adversarial control that
+	// proves the V2 promotion does not extend to mutating neighbors.
+	it("LIVE ADVERSARIAL CONTROL: same 5-leaf chain + git branch -D → ASK (mutating leaf blocks)", () => {
+		const evilCmd =
+			"git status --short && git branch -D __CLINEMM_SENTINEL__";
+		const r = evaluateCommandRiskWithParser({
+			toolInput: evilCmd,
+			hostAuthorization: SAFE,
+			parserResult: mkParsed(evilCmd, [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("git", ["status", "--short"]) },
+					rhs: {
+						kind: "cmd",
+						cmd: mkCmd("git", ["branch", "-D", "__CLINEMM_SENTINEL__"]),
+					},
+				},
+			]),
+		});
+		// V2 must NOT promote: a mutating leaf keeps the aggregate at ASK.
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
+	});
+
+	// Other adversarial compound-aggregation invariants.
+	it("git remote -v && git push → ASK (untracked mutating leaf blocks)", () => {
+		const r = evaluateCommandRiskWithParser({
+			toolInput: "git remote -v && git push",
+			hostAuthorization: SAFE,
+			parserResult: mkParsed("git remote -v && git push", [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("git", ["remote", "-v"]) },
+					rhs: { kind: "cmd", cmd: mkCmd("git", ["push"]) },
+				},
+			]),
+		});
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
+	});
+
+	it("pwd && sudo rm -rf / → ASK + never-auto-approve (R5 leaf blocks promotion)", () => {
+		const r = evaluateCommandRiskWithParser({
+			toolInput: "pwd && sudo rm -rf /",
+			hostAuthorization: SAFE,
+			parserResult: mkParsed("pwd && sudo rm -rf /", [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("pwd") },
+					rhs: { kind: "cmd", cmd: mkCmd("rm", ["-rf", "/"]) },
+				},
+			]),
+		});
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).toBe("never-auto-approve");
+	});
+
+	it("pwd && unknown-binary --something → ASK (unknown leaf blocks promotion)", () => {
+		const r = evaluateCommandRiskWithParser({
+			toolInput: "pwd && unknown-binary --something",
+			hostAuthorization: SAFE,
+			parserResult: mkParsed("pwd && unknown-binary --something", [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("pwd") },
+					rhs: {
+						kind: "cmd",
+						cmd: mkCmd("unknown-binary", ["--something"]),
+					},
+				},
+			]),
+		});
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
+	});
+
+	it("echo hello && echo world → ALLOW (V2 promotion, both leaves match host_safe_echo)", () => {
+		const r = evaluateCommandRiskWithParser({
+			toolInput: "echo hello && echo world",
+			hostAuthorization: SAFE,
+			parserResult: mkParsed("echo hello && echo world", [
+				{
+					kind: "and",
+					left: { kind: "cmd", cmd: mkCmd("echo", ["hello"]) },
+					rhs: { kind: "cmd", cmd: mkCmd("echo", ["world"]) },
+				},
+			]),
+		});
+		expect(r.decision).toBe("allow");
+		expect(r.disposition).toBe("auto-approve-eligible");
+		expect(r.source).toBe("risk_v2_structured_promotion");
+	});
+
+	it("echo safe && echo $(rm -rf $HOME) → ASK (command substitution blocks promotion)", () => {
+		const r = evaluateCommandRiskWithParser({
+			toolInput: "echo safe && echo $(rm -rf $HOME)",
+			hostAuthorization: SAFE,
+			parserResult: mkParsed(
+				"echo safe && echo $(rm -rf $HOME)",
+				[
+					{
+						kind: "and",
+						left: { kind: "cmd", cmd: mkCmd("echo", ["safe"]) },
+						rhs: {
+							kind: "cmd",
+							cmd: mkCmd("echo", ["$(...)"]),
+						},
+					},
+				],
+				{ hasCommandSubstitution: true },
+			),
+		});
+		// Conservative V2 path: command substitution detected → ASK minimum.
+		expect(r.decision).toBe("ask");
+		expect(r.disposition).not.toBe("auto-approve-eligible");
+	});
 });
 
 /* ---------------------------------------------------------------------- *

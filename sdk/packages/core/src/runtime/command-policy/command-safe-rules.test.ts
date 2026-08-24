@@ -431,6 +431,56 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 			expect(m?.source).toBe("host_safe_find");
 		}
 	});
+
+	it("git remote: documented observation forms match (REVIEW STANDARD audit-cleared)", () => {
+		// git-remote(1) explicitly distinguishes the LIST (no-subcommand
+		// / -v / --verbose) form from every mutating subcommand. We
+		// enumerate ONLY the observational forms here. The mutating
+		// forms (add, remove, rename, set-url, set-head, set-branches,
+		// update, prune, get-url) MUST NOT match.
+		for (const cmd of [
+			// Bare
+			"git remote",
+			// Verbose
+			"git remote -v",
+			"git remote --verbose",
+		]) {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m?.source).toBe("host_safe_git_remote");
+		}
+	});
+
+	it("echo: documented literal-stdout forms match (REVIEW STANDARD audit-cleared)", () => {
+		// POSIX echo(1) writes its arguments followed by a newline.
+		// It has NO file-system-mutating mode. Every allowed option
+		// is purely visual; every allowed operand is a literal in the
+		// restricted POSIX-text character class (excluding $,
+		// backtick, \, (), *, ?, [], {}, |, &, ;, <, >, =).
+		for (const cmd of [
+			// Bare (prints empty line)
+			"echo",
+			// Single bare literal
+			"echo hello",
+			"echo BRANCH",
+			// Single-quoted literal (the exact form from the live command)
+			"echo '---BRANCH---'",
+			"echo '---REMOTES---'",
+			// Double-quoted literal
+			'echo "hello world"',
+			// -n suppresses trailing newline
+			"echo -n hello",
+			"echo -n 'literal text'",
+			// Bare with the allowed punctuation set
+			"echo hello, world",
+			"echo a/b/c",
+			// Multi-word bare literal (whitespace is in the bare class)
+			"echo hello world",
+			"echo a b c d e",
+		]) {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m?.source).toBe("host_safe_echo");
+		}
+	});
 });
 
 describe("findSafeRuleMatch — REJECTED git diff options (helper-invocation / out-of-scope)", () => {
@@ -608,6 +658,106 @@ describe("findSafeRuleMatch — REJECTED git branch options (mutation / out-of-s
 	];
 
 	for (const [cmd, _why] of REJECTED_BRANCH) {
+		it(`rejects "${cmd}"`, () => {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m).toBeUndefined();
+		});
+	}
+});
+
+describe("findSafeRuleMatch — REJECTED git remote subcommands (mutation)", () => {
+	// git-remote(1) distinguishes the LIST form (no-subcommand / -v /
+	// --verbose) from every mutating subcommand. None of the mutating
+	// forms may match a safe rule. Per REVIEW STANDARD (top of file),
+	// the rule engine must return undefined for these.
+	const REJECTED_REMOTE = [
+		// add
+		["git remote add origin url", "add remote"],
+		["git remote add origin https://example.com/repo.git", "add remote with url"],
+		// remove (long and short form)
+		["git remote remove origin", "remove remote"],
+		["git remote rm origin", "remove remote (short form)"],
+		// rename
+		["git remote rename origin upstream", "rename remote"],
+		// set-url (multiple sub-forms)
+		["git remote set-url origin url", "set-url mutation"],
+		["git remote set-url --add origin url", "set-url --add mutation"],
+		["git remote set-url --delete origin url", "set-url --delete mutation"],
+		["git remote set-url --push origin url", "set-url --push mutation"],
+		// set-head
+		["git remote set-head origin main", "set-head mutation"],
+		["git remote set-head origin --auto", "set-head auto mutation"],
+		// set-branches
+		["git remote set-branches origin main", "set-branches mutation"],
+		["git remote set-branches --add origin dev", "set-branches --add mutation"],
+		// update (network mutation)
+		["git remote update", "fetch-update mutation"],
+		["git remote update origin", "fetch-update mutation"],
+		// prune (deletion mutation)
+		["git remote prune origin", "prune mutation"],
+		["git remote prune", "prune mutation"],
+		// get-url (observational but narrow; deliberately not allowed)
+		["git remote get-url origin", "narrow observational; ASK"],
+		["git remote get-url --all origin", "narrow observational; ASK"],
+		["git remote get-url --push origin", "narrow observational; ASK"],
+		// Unknown options
+		["git remote --whatever", "unknown long option"],
+		["git remote -v --whatever", "unknown option after -v"],
+		// Combined verb + arg in unexpected position
+		["git remote foo", "positional after subcommand (no documented meaning)"],
+	];
+
+	for (const [cmd, _why] of REJECTED_REMOTE) {
+		it(`rejects "${cmd}"`, () => {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m).toBeUndefined();
+		});
+	}
+});
+
+describe("findSafeRuleMatch — REJECTED echo forms (metacharacter / substitution)", () => {
+	// echo has no documented mutating mode, but the argument character
+	// class is INTENTIONALLY RESTRICTIVE: shell metacharacters that
+	// could enable command substitution, variable expansion, globbing,
+	// redirection, or pipe composition MUST fall through to ASK.
+	const REJECTED_ECHO = [
+		// Variable expansion
+		["echo $HOME", "variable expansion"],
+		["echo $PATH", "variable expansion"],
+		// Command substitution $()
+		["echo $(rm -rf $HOME)", "command substitution"],
+		["echo \"$(dangerous)\"", "command substitution in double quotes"],
+		// Backtick command substitution
+		["echo `rm -rf $HOME`", "backtick command substitution"],
+		["echo \"`dangerous`\"", "backtick command substitution in double quotes"],
+		// Subshell / parens
+		["echo (foo)", "unbalanced paren"],
+		// Backslash escape
+		["echo foo\\bar", "backslash escape"],
+		// Globs
+		["echo *", "glob metacharacter"],
+		["echo *.txt", "glob with extension"],
+		["echo foo?", "glob ?"],
+		["echo [abc]", "glob bracket"],
+		// Brace expansion
+		["echo {a,b}", "brace expansion"],
+		// Pipes / sequence / composition
+		["echo foo | bar", "pipe composition"],
+		["echo foo; bar", "semicolon composition"],
+		["echo foo && bar", "ampersand-and composition"],
+		// Redirection
+		["echo foo > file", "output redirect"],
+		["echo foo >> file", "append redirect"],
+		// Assignment-like
+		["echo foo=bar", "assignment-like (no $)"],
+		// Unknown option
+		["echo --evil", "unknown long option"],
+		["echo -X", "unknown short option"],
+		// Subshell wrapping
+		["echo $(echo inner)", "command substitution wrapping echo"],
+	];
+
+	for (const [cmd, _why] of REJECTED_ECHO) {
 		it(`rejects "${cmd}"`, () => {
 			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
 			expect(m).toBeUndefined();

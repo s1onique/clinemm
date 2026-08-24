@@ -17,10 +17,12 @@ import { describe, expect, it } from "vitest";
 import {
 	applySafeExecutionProfileToCommand,
 	getSafeExecutionProfileForSource,
+	SAFE_ECHO_PROFILE,
 	SAFE_FIND_PROFILE,
 	SAFE_GIT_BRANCH_PROFILE,
 	SAFE_GIT_DIFF_PROFILE,
 	SAFE_GIT_LOG_PROFILE,
+	SAFE_GIT_REMOTE_PROFILE,
 	SAFE_GIT_STATUS_PROFILE,
 	SAFE_LS_PROFILE,
 	SAFE_PWD_PROFILE,
@@ -225,6 +227,70 @@ describe("applySafeExecutionProfileToCommand — token positions", () => {
 	it("getSafeExecutionProfileForSource returns SAFE_GIT_BRANCH_PROFILE for host_safe_git_branch", () => {
 		expect(getSafeExecutionProfileForSource("host_safe_git_branch")).toBe(
 			SAFE_GIT_BRANCH_PROFILE,
+		);
+	});
+
+	it("SAFE_GIT_REMOTE_PROFILE has the documented prefix and no suffix", () => {
+		expect(SAFE_GIT_REMOTE_PROFILE.kind).toBe("git_observational");
+		expect(SAFE_GIT_REMOTE_PROFILE.commandSuffix).toHaveLength(0);
+		expect(SAFE_GIT_REMOTE_PROFILE.commandPrefix).toEqual([
+			"--no-pager",
+			"-c",
+			"core.pager=cat",
+			"-c",
+			"core.fsmonitor=false",
+			"-c",
+			"core.hooksPath=/dev/null",
+		]);
+	});
+
+	it("git remote: hardening prefix only, NO diff-family suffix", () => {
+		const out = applySafeExecutionProfileToCommand(
+			"git remote -v",
+			SAFE_GIT_REMOTE_PROFILE,
+		) as string;
+		expect(out).toContain("--no-pager");
+		expect(out).toContain("core.pager=cat");
+		expect(out).toContain("core.fsmonitor=false");
+		expect(out).toContain("core.hooksPath=/dev/null");
+		expect(out).toContain("git");
+		expect(out).toContain("remote");
+		expect(out).toContain("-v");
+		// Diff-family suffix MUST NOT appear for git remote.
+		expect(out).not.toContain("--no-ext-diff");
+		expect(out).not.toContain("--no-textconv");
+	});
+
+	it("getSafeExecutionProfileForSource returns SAFE_GIT_REMOTE_PROFILE for host_safe_git_remote", () => {
+		expect(getSafeExecutionProfileForSource("host_safe_git_remote")).toBe(
+			SAFE_GIT_REMOTE_PROFILE,
+		);
+	});
+
+	it("SAFE_ECHO_PROFILE is empty (intrinsic, no overlay)", () => {
+		expect(SAFE_ECHO_PROFILE.kind).toBe("pwd");
+		expect(SAFE_ECHO_PROFILE.commandPrefix).toHaveLength(0);
+		expect(SAFE_ECHO_PROFILE.commandSuffix).toHaveLength(0);
+	});
+
+	it("echo: intrinsic profile (no overlay); git-family hardening would BREAK echo", () => {
+		const out = applySafeExecutionProfileToCommand(
+			"echo '---BRANCH---'",
+			SAFE_ECHO_PROFILE,
+		) as string;
+		// echo is intrinsic and takes no overlay.
+		expect(out).toBe("echo '---BRANCH---'");
+		// The git-family hardening flags would be interpreted by echo as
+		// text to print, breaking the command's semantics. They MUST NOT
+		// be applied.
+		expect(out).not.toContain("--no-pager");
+		expect(out).not.toContain("core.pager=cat");
+		expect(out).not.toContain("core.hooksPath=/dev/null");
+	});
+
+	it("getSafeExecutionProfileForSource returns SAFE_ECHO_PROFILE for host_safe_echo", () => {
+		expect(getSafeExecutionProfileForSource("host_safe_echo")).toBe(
+			SAFE_ECHO_PROFILE,
 		);
 	});
 

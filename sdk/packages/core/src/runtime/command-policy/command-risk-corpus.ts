@@ -169,6 +169,78 @@ export const CORPUS: ReadonlyArray<CorpusCase> = [
 		notes: "list remote-tracking only; observational",
 	},
 	{
+		id: "r0-git-remote",
+		family: "R0-readonly",
+		command: "git remote",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "list configured remotes; observational (no-subcommand form)",
+	},
+	{
+		id: "r0-git-remote-v",
+		family: "R0-readonly",
+		command: "git remote -v",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "list with URLs; observational -v form",
+	},
+	{
+		id: "r0-git-remote-verbose",
+		family: "R0-readonly",
+		command: "git remote --verbose",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "list with URLs; observational --verbose form",
+	},
+	{
+		id: "r0-echo-empty",
+		family: "R0-readonly",
+		command: "echo",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "echo with no args; prints empty line; stdout-only",
+	},
+	{
+		id: "r0-echo-literal",
+		family: "R0-readonly",
+		command: "echo hello",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "echo with a bare-literal arg; stdout-only",
+	},
+	{
+		id: "r0-echo-multi-word",
+		family: "R0-readonly",
+		command: "echo hello world",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "echo with multi-word bare literal; stdout-only",
+	},
+	{
+		id: "r0-echo-single-quote",
+		family: "R0-readonly",
+		command: "echo '---BRANCH---'",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "echo with single-quoted literal; stdout-only",
+	},
+	{
+		id: "r0-echo-double-quote",
+		family: "R0-readonly",
+		command: 'echo "hello world"',
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "echo with double-quoted literal (no shell metacharacters); stdout-only",
+	},
+	{
+		id: "r0-echo-n-literal",
+		family: "R0-readonly",
+		command: "echo -n hello",
+		requiredDecision: "allow",
+		requiredDisposition: "auto-approve-eligible",
+		notes: "echo with -n flag; suppresses trailing newline; observational",
+	},
+	{
 		id: "r0-ls-bare",
 		family: "R0-readonly",
 		command: "ls",
@@ -788,4 +860,90 @@ export const CORPUS: ReadonlyArray<CorpusCase> = [
 		requiredDisposition: "ask",
 		notes: "V1 ASK (opaque input); V2 may ALLOW via per-branch max",
 	},
+	// ACT-CLINEMM-COMMAND-RISK-V2-READONLY-AND-COMPOSITION01
+	//
+	// V1 honestly ASKs every compound input containing &&, ;, |, etc.
+	// because the canonical policy treats the input as opaque. The
+	// V1 -> V2 promotion boundary is what makes the rows below
+	// ALLOWable: with a parser-bound AST, every reachable leaf is
+	// independently positively matched, so the aggregate is
+	// auto-approve-eligible and `risk_v2_structured_promotion` fires.
+	//
+	// These rows are asserted in BOTH:
+	//   - V1-only baseline path (current test): all return ASK / ask.
+	//   - V2 parser-bound path (new test in structured-command-risk-integration):
+	//     all return ALLOW / auto-approve-eligible via
+	//     risk_v2_structured_promotion.
+	{
+		id: "compound-and-pwd-then-status",
+		family: "compound-aggregation",
+		command: "pwd && git status",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"V1 ASK (opaque input); V2 parser-bound: ALLOW + auto-approve-eligible + risk_v2_structured_promotion (every leaf matches)",
+	},
+	{
+		id: "compound-and-all-safe-live",
+		family: "compound-aggregation",
+		command:
+			"git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"V1 ASK (opaque input); V2 parser-bound: ALLOW + auto-approve-eligible + risk_v2_structured_promotion (every leaf matches); USER'S EXACT LIVE COMMAND",
+	},
+	// V2 conservation: even with parser bound, an `&&` chain with a
+	// dangerous leaf stays at ASK + never-auto-approve. The V1 ASK
+	// contract holds; V2 strengthens disposition only when an R5 leaf
+	// is found.
+	{
+		id: "compound-and-mixed-evil-sentinel",
+		family: "compound-aggregation",
+		command:
+			"git status --short && git branch -D __CLINEMM_SENTINEL__",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"V1 ASK (opaque input); V2 parser-bound: ASK (git branch -D is ASK, aggregate ASK); mutating leaf correctly rejected",
+	},
+	{
+		id: "compound-and-foreign-unknown",
+		family: "compound-aggregation",
+		command: "pwd && unknown-binary --something",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"V1 ASK (opaque input); V2 parser-bound: ASK (unknown leaf is ASK, aggregate ASK)",
+	},
+	{
+		id: "compound-and-sudo-rm-rf",
+		family: "compound-aggregation",
+		command: "pwd && sudo rm -rf /",
+		requiredDecision: "ask",
+		requiredDisposition: "never-auto-approve",
+		notes:
+			"V1 ASK (opaque input); V2 parser-bound: ASK + never-auto-approve (rm -rf / is R5 catastrophic via hard floor; disposition strengthened to never-auto-approve)",
+	},
+	{
+		id: "compound-and-remote-then-push",
+		family: "compound-aggregation",
+		command: "git remote -v && git push",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"V1 ASK (opaque input); V2 parser-bound: ASK (git push is ASK, aggregate ASK); untracked mutating leaf rejected",
+	},
+	{
+		id: "compound-and-branch-then-branch-d",
+		family: "compound-aggregation",
+		command: "git branch --show-current && git branch -D foo",
+		requiredDecision: "ask",
+		requiredDisposition: "ask",
+		notes:
+			"V1 ASK (opaque input); V2 parser-bound: ASK (git branch -D is ASK, aggregate ASK); mutating leaf rejected",
+	},
+	// V2 conservative guards for non-`&&` compositions stay out of
+	// scope per the engineer plan; the existing compound rows cover
+	// the security side via the R5 hard floor.
 ];

@@ -296,6 +296,95 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 			/^\s*git\s+branch(?:\s+(?:--list|-a|--all|-r|--remotes|--show-current|--no-color|--color=(?:always|auto|never)|-vv?a?|--no-abbrev))*(?:\s+--points-at\s+[A-Za-z0-9_./-]+)?\s*$/u,
 	},
 	{
+		source: "host_safe_git_remote",
+		// git remote: read-only observation forms. Per git-remote(1)
+		// the documented synopsis distinguishes the LIST (no-subcommand
+		// / -v / --verbose) form from every MUTATING subcommand. We
+		// enumerate ONLY the observational forms here. Every mutating
+		// form MUST NOT match.
+		//
+		// Review summary per option (REVIEW STANDARD at top of file):
+		//
+		//   (bare)                list configured remotes; observational
+		//                          (per git-remote(1): "List all the
+		//                          remotes that are configured").
+		//   -v / --verbose        same list with URL shown; observational
+		//                          (per git-remote(1): "Be a little more
+		//                          verbose, and show the remote URL
+		//                          after the name").
+		//
+		// Explicitly REJECTED (mutating):
+		//   add <name> <url>            add a remote
+		//   remove / rm <name>          remove a remote
+		//   rename <old> <new>          rename a remote
+		//   set-url <name> <url>        change remote URL
+		//   set-url --add <n> <u>       add push URL
+		//   set-url --delete <n> <u>    delete push URL
+		//   set-head <name> [branch]    set default branch
+		//   set-branches <name> <branches>
+		//                               set remote-tracking branches
+		//   update [<group>]            fetch updates
+		//   prune [<group>]             delete stale refs
+		//   get-url <name> [--push|--all]   observational but narrow;
+		//                                    V2 may revisit; ASK today
+		//                                    because the rule surface is
+		//                                    too narrow to audit
+		//                                    positively here.
+		//   any unknown --foo           ASK (no wildcard).
+		pattern:
+			/^\s*git\s+remote(?:\s+(?:-v|--verbose))?\s*$/u,
+	},
+	{
+		source: "host_safe_echo",
+		// echo: stdout-only literal text. Per POSIX echo(1) and Bash
+		// builtin echo, the command writes its arguments followed by a
+		// newline. It has NO file-system-mutating command mode. Every
+		// option here is purely visual:
+		//
+		//   (bare)                prints empty line.
+		//   -n                    suppress trailing newline.
+		//
+		// The argument operand class is INTENTIONALLY RESTRICTIVE: it
+		// contains only POSIX literal text characters and excludes
+		// every shell metacharacter that could enable command
+		// substitution, variable expansion, globbing, redirection, or
+		// pipe composition. Specifically EXCLUDED:
+		//
+		//   $        variable expansion or $(...) command substitution
+		//   backtick backtick command substitution
+		//   \        backslash escape
+		//   ( )      subshell / command substitution
+		//   * ? [ ]  glob metacharacters
+		//   { }      brace expansion
+		//   | & ;    composition operators
+		//   < >      redirection
+		//   =        potential variable assignment
+		//
+		// Any token containing those characters falls through to ASK.
+		// Defense-in-depth: V2's `hasCommandSubstitution` gate
+		// (`structured-command-risk.ts:511-520`) catches `$(...)` and
+		// backtick forms even if the regex is bypassed. The opaque
+		// token guard (`OPAQUE_SHELL_TOKENS`) catches all
+		// composition/redirect operators before any rule match.
+		//
+		// The argument may be either:
+		//   - a single-quoted POSIX literal: '...' (inner class excludes
+		//     single-quote to keep the quote boundary unambiguous), OR
+		//   - a double-quoted POSIX literal: "..." (same inner constraint),
+		//     OR
+		//   - a bare POSIX literal: continuous run of allowed chars
+		//     including space (so multi-word `echo hello world` is OK
+		//     as long as the literal character class is preserved;
+		//     shell metacharacters like $ * ? [ ] { } | & ; < > = \
+		//     still terminate the literal).
+		//
+		// This deliberately rejects `echo $HOME`, `echo "$(cmd)"`,
+		// `echo backtick-cmdsubst`, `echo *`, `echo foo > file`,
+		// `echo foo | bar`, etc.
+		pattern:
+			/^\s*echo(?:\s+-n)?(?:\s+(?:[A-Za-z0-9 _.,:;/+@%^]+|'(?:[A-Za-z0-9 _.,:;/+@%^-]*)'|"(?:[A-Za-z0-9 _.,:;/+@%^-]*)"))?\s*$/u,
+	},
+	{
 		source: "host_safe_ls",
 		// ls: directory/file information query. ls(1) documents its
 		// job as "list information about the FILEs". ls has no
