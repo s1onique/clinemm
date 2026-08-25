@@ -68,6 +68,17 @@ export const SEATBELT_BACKEND_ID = "seatbelt-experimental" as const;
 const PROFILE_TEMP_DIR_PREFIX = "clinemm-sandbox-profile-";
 
 /**
+ * ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01.
+ *
+ * Subdirectory prefix under the system temp dir for the SYNTHESIZED
+ * per-invocation writable temp root. Distinct from
+ * `PROFILE_TEMP_DIR_PREFIX` so profile cleanup and temp-root cleanup
+ * cannot be confused. The synthesized root becomes the child command's
+ * `TMPDIR` and is granted as a single `(subpath "...")` write rule.
+ */
+const SYNTHESIZED_TEMP_DIR_PREFIX = "clinemm-sandbox-temp-";
+
+/**
  * Best-effort cleanup of a directory. Used for the profile temp dir.
  * Errors are swallowed because cleanup MUST NOT alter the command's
  * exit classification.
@@ -188,12 +199,50 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			}
 
 			let tempRoot: string | undefined;
+			let synthesizedTempRoot: string | undefined;
 			if (cap.tempRoot) {
 				try {
 					tempRoot = canonicalizeSandboxRoot(cap.tempRoot);
 				} catch (cause) {
 					throw new SandboxError(
 						`Seatbelt: failed to canonicalize tempRoot=${cap.tempRoot}`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+							cause,
+						},
+					);
+				}
+			} else {
+				// ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01:
+				// honor the contract in types.ts (line 113) — when the
+				// caller omits `tempRoot`, the backend synthesizes one
+				// under the system temp root (per-invocation, unique).
+				// The profile emits `(allow file-write* (subpath "<canonical>"))`
+				// for it (via `tempRoot`), and `materializeEnvironment`
+				// sets TMPDIR to the canonical path so child tools like
+				// `mktemp` resolve to the writable root. Cleanup removes
+				// the synthesized root best-effort.
+				try {
+					synthesizedTempRoot = mkdtempSync(
+						join(tmpdir(), SYNTHESIZED_TEMP_DIR_PREFIX),
+					);
+				} catch (cause) {
+					throw new SandboxError(
+						"SandboxError: failed to synthesize per-invocation temp root",
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "profile-write-failed",
+							cause,
+						},
+					);
+				}
+				try {
+					tempRoot = canonicalizeSandboxRoot(synthesizedTempRoot);
+				} catch (cause) {
+					bestEffortRm(synthesizedTempRoot);
+					throw new SandboxError(
+						"SandboxError: failed to canonicalize synthesized temp root",
 						{
 							backendId: SEATBELT_BACKEND_ID,
 							reason: "canonicalization-failed",
@@ -279,6 +328,15 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				envSemantics: getEnvironmentSemantics(cap.environment),
 				cleanup: async () => {
 					bestEffortRm(profileDir);
+					// ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01:
+					// best-effort remove the per-invocation synthesized
+					// temp root if we created one. A caller-supplied
+					// tempRoot is the caller's responsibility and is
+					// NOT touched here (we only canonicalized the
+					// caller-supplied path; we never allocated it).
+					if (synthesizedTempRoot) {
+						bestEffortRm(synthesizedTempRoot);
+					}
 				},
 			};
 		},
