@@ -23,16 +23,10 @@ export default defineConfig({
 	//   (c) Not blocking CI / unconstrained developer shells
 	//       (which would work fine without it; the pin is a
 	//       no-op for them)
-	// The include glob for `src/dev/dogfood/**` is independent
-	// architectural intent and remains.
 	cacheDir: path.resolve(__dirname, "node_modules/.vite"),
 	test: {
 		include: [
 			"src/sdk/**/*.test.ts",
-			// ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01:
-			// dogfood-only qualification runner + characterization
-			// tests. Default-off harness; the runner is non-public.
-			"src/dev/dogfood/**/*.test.ts",
 			"src/hosts/vscode/VscodeEditPreview.test.ts",
 			"src/shared/vsCodeSelectorUtils.test.ts",
 			"src/shared/post-terminal-authority-diagnostic.test.ts",

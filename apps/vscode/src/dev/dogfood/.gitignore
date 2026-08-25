@@ -1,9 +1,0 @@
-# dogfood/ is a default-off developer harness directory.
-#
-# Production extensions should never pick up `.tmp-verify-*.mjs`
-# smoke helpers — these are local-only scratch files used during
-# ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01 to verify helper
-# logic in IDE-sandboxed shells where /tmp is EPERM. They are not
-# part of the shipped harness and should be removed once the ACT
-# closes (see `.factory/evidence/.../c1-closure.md`).
-/.tmp-verify-*.mjs
