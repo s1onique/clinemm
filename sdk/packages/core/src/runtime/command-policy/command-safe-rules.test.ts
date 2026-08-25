@@ -60,6 +60,24 @@ describe("findSafeRuleMatch — finite positive allowlist (CORRECTION03 audit)",
 		}
 	});
 
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01:
+	// reviewed Wave-1 positive allowlist. Trailing whitespace is
+	// tolerated by the rule's regex (`\\s*$`) because bash ignores
+	// it. Anything beyond `-d` does NOT match.
+	it("mktemp: bare and `-d` only (host-defined per-user temp dir, no caller-selected pathname)", () => {
+		for (const cmd of [
+			"mktemp",
+			"mktemp ",
+			"mktemp -d",
+			"mktemp -d ",
+			"  mktemp",
+			"  mktemp -d  ",
+		]) {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m?.source).toBe("host_safe_mktemp_default_temp");
+		}
+	});
+
 	it("git status: documented reporting modes match", () => {
 		for (const cmd of [
 			"git status",
@@ -784,6 +802,125 @@ describe("findSafeRuleMatch — REJECTED ls options", () => {
 			expect(m).toBeUndefined();
 		});
 	}
+});
+
+describe("findSafeRuleMatch — mktemp accepted forms (CORRECTION01 of ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01)", () => {
+	// Bare `mktemp` and `mktemp -d` are the Wave-1 reviewed positive
+	// forms. Both create exactly ONE unpredictable filesystem object
+	// under the host-defined per-user temp directory on darwin (BSD
+	// mktemp ignores $TMPDIR for the bare form) and under
+	// TMPDIR/per-user temp on GNU/Linux (no caller-selected
+	// pathname in either case).
+	it("matches host_safe_mktemp_default_temp for the canonical forms", () => {
+		const MATCH = ["mktemp", "mktemp -d", "mktemp   -d", "  mktemp  ", "mktemp  "];
+		for (const cmd of MATCH) {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m?.source, `expected match for ${cmd}`).toBe(
+				"host_safe_mktemp_default_temp",
+			);
+		}
+	});
+});
+
+describe("findSafeRuleMatch — REJECTED mktemp forms (path-steering / dynamic / -u)", () => {
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 (Wave 1):
+	// These forms have either (a) caller-selected pathname authority,
+	// (b) dynamic operands that defeat provenance, (c) environment
+	// steering that re-orients the temp destination, or (d) the `-u`
+	// unsafe race documented by the Darwin manual. None may match
+	// `host_safe_mktemp_default_temp`; they remain ASK/DENY in V1.
+	//
+	// Some entries duplicate the OPAQUE_SHELL_TOKENS guard
+	// (`&&`, `||`, `|`, `;`, `>`, `<`, `$`, `${`) -- the OPAQUE
+	// guard short-circuits the rule match anyway, but we list them
+	// to document that the boundary holds at the rendered-shape
+	// level too (defense in depth).
+	const REJECTED_MKTEMP: ReadonlyArray<[string, string]> = [
+		// Path-steering via -p
+		["mktemp -p /tmp", "`-p DIR` redirects the destination"],
+		["mktemp -p /tmp foo.XXXX", "`-p DIR TEMPLATE` chooses both destination and template"],
+		["mktemp -p /tmp/foo", "`-p DIR` accepts any path"],
+		["mktemp -p $HOME", "`-p DIR` honors dynamic dir"],
+
+		// -t prefix (template-driven, NOT path-steering alone)
+		["mktemp -t myprefix", "`-t prefix` uses prefix as template base"],
+		["mktemp -t myprefix.XXXX", "`-t prefix.TEMPLATE` is template-bearing"],
+
+		// --tmpdir
+		["mktemp --tmpdir /tmp", "GNU --tmpdir overrides destination"],
+
+		// Unsafe / dry-run
+		["mktemp -u", "`-u` is unsafe per Darwin manual (unlinks the file before return)"],
+		["mktemp -u foo.XXXX", "`-u TEMPLATE` is the unsafe-dryrun form"],
+		["mktemp -d -u", "combined `-d -u` not in Wave 1"],
+
+		// Quiet (out of scope)
+		["mktemp -q", "`-q` is out of scope for Wave 1"],
+		["mktemp -q -d", "combined quiet options not in Wave 1"],
+
+		// Templates (path authority)
+		["mktemp foo.XXXXXX", "TEMPLATE form has path authority (Section 19)"],
+		["mktemp /tmp/foo.XXXXXX", "absolute-template has path authority"],
+		["mktemp ./foo.XXXX", "relative-template has path authority"],
+		["mktemp ../foo.XXXX", "parent-template has path authority"],
+		["mktemp foo", "bare-name template (zero entropy) has path authority"],
+
+		// Dynamic operands
+		['mktemp "$X"', "dynamic operand (Section 33)"],
+		["mktemp $X", "dynamic operand"],
+		['mktemp "$(printf -- -d)"', "substitution-evaluated to `-d` (Section 33)"],
+		["mktemp ${X}", "dynamic operand"],
+		["mktemp ${FLAGS:--d}", "dynamic expansion to `-d` (Section 33)"],
+		["mktemp -./*", "glob operand"],
+
+		// Combined form
+		["mktemp -d foo.XXXX", "combined `-d` + template form"],
+
+		// Assignment prefix (env steering)
+		["TMPDIR=/tmp/x mktemp", "`TMPDIR=` env assignment is steering (Section 20)"],
+		["TMPDIR=/tmp/x mktemp -d", "`TMPDIR=` env assignment with -d"],
+		["TMPDIR=$HOME mktemp", "`TMPDIR=` env assignment with dynamic value"],
+		["env TMPDIR=/tmp/x mktemp", "`env TMPDIR=` wrapper (Section 21)"],
+		["env -i TMPDIR=/tmp mktemp", "`env -i` wrapper with TMPDIR"],
+
+		// Composition / opaque (rejected by OPAQUE guard AND by regex)
+		["mktemp && pwd", "`&&` composition is opaque"],
+		["mktemp || pwd", "`||` composition is opaque"],
+		["mktemp | head", "pipe composition is opaque"],
+		["mktemp; ls", "`;` composition is opaque"],
+		["mktemp > /tmp/x", "redirect-out is opaque"],
+		["mktemp 2>/dev/null", "stderr-redirect-not-to-/dev/null is opaque"],
+		["mktemp 2>&1", "stderr-merge is opaque"],
+		["$(mktemp)", "command substitution is opaque"],
+		["`mktemp`", "command substitution is opaque"],
+		["mktemp -d\\nfoo", "embedded backslash-n in shell input is opaque"],
+
+		// Brace expansion / glob (no flattened inference)
+		["mktemp {-d,}", "brace expansion to `-d` is NOT inferred"],
+		["mktemp *", "glob is NOT inferred"],
+		["mktemp ?.XXXX", "glob-question is NOT inferred"],
+	];
+
+	for (const [cmd, why] of REJECTED_MKTEMP) {
+		it(`rejects "${cmd}" (${why})`, () => {
+			const m = findSafeRuleMatch(cmd, DEFAULT_COMMAND_HOST_ALLOW_RULES);
+			expect(m, `expected no match for ${cmd}; got ${m?.source}`).toBeUndefined();
+		});
+	}
+
+	// End-to-end discriminator: the rule MUST be ablatable.
+	// Removing the new rule must demote `mktemp` back to no-match.
+	// (This test asserts the positive form matches by DEFAULT, then
+	// checks that a rule-set WITHOUT the mktemp entry no longer
+	// matches. The structure mirrors the CORRECTION03 ablation
+	// pattern in this file.)
+	it("ablation: removing the rule demotes bare mktemp to no-match", () => {
+		const WITHOUT_MKTEMP = DEFAULT_COMMAND_HOST_ALLOW_RULES.filter(
+			(r) => r.source !== "host_safe_mktemp_default_temp",
+		);
+		const m = findSafeRuleMatch("mktemp", WITHOUT_MKTEMP);
+		expect(m).toBeUndefined();
+	});
 });
 
 describe("findSafeRuleMatch — REJECTED find actions (mutation / execution)", () => {

@@ -87,6 +87,62 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	// pwd with optional POSIX -L / -P (logical / physical working directory).
 	// Both are pure read-only reporting.
 	{ source: "host_safe_pwd", pattern: /^\s*pwd(?:\s+(?:-[LP]))?\s*$/u },
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01:
+	// V1 lexical positive mktemp rule for the SIMPLE bare forms
+	// `mktemp` and `mktemp -d`. The bare form on darwin (BSD
+	// mktemp) ignores $TMPDIR and creates at the per-user temp
+	// directory (/var/folders/.../T); GNU coreutils mktemp
+	// honors $TMPDIR but still has no caller-selected pathname.
+	// In BOTH cases the form creates exactly one unpredictable
+	// filesystem object at a host-defined destination with no
+	// caller-selected pathname.
+	//
+	// Reviewed forms (parser-proven positive provenance):
+	//   - `mktemp`    (single tempfile in the per-user temp dir)
+	//   - `mktemp -d` (single tempdir  in the per-user temp dir)
+	//
+	// Explicitly REJECTED (remain ASK/DENY through V1):
+	//   - any other flag (`mktemp -u` is unsafe per Darwin manual:
+	//     the created object is unlinked before mktemp exits;
+	//     `mktemp -p DIR ...` and `mktemp -t prefix` alter the
+	//     destination)
+	//   - any template operand (`mktemp foo.XXXXXX`,
+	//     `mktemp /tmp/foo.XXXXXX`, `mktemp ./foo.XXXXXX`,
+	//     `mktemp ../foo.XXXXXX`) -- template form has path authority
+	//     and is a separate authority family (Section 19)
+	//   - any dynamic operand (`mktemp "$X"`, `mktemp ${X}`,
+	//     `mktemp "$(echo foo.XXXX)"`) -- flattened-string inference
+	//     is forbidden (Section 33)
+	//   - any assignment prefix (`TMPDIR=/x mktemp`) -- env steering
+	//     (Section 20)
+	//   - any `env` wrapper (`env TMPDIR=/x mktemp`) (Section 21)
+	//   - any compose shape (`mktemp && pwd`, `mktemp | head`,
+	//     `mktemp 2>/dev/null`, `mktemp > file`) -- the rule's
+	//     regex (anchored end-of-string `\\s*$`) does not match
+	//     composition-operator-bearing input, AND `findSafeRuleMatch`
+	//     runs `isOpaqueShellRendered` first which short-circuits on
+	//     `&&`, `||`, `|`, `;`, `>`, `<`, `${`, etc.
+	//   - GNU/Linux: `findSafeRuleMatch` evaluates the rendered
+	//     surface, which is host-independent, so this rule
+	//     PROMOTES the bare form on Linux too. The DEFAULT_OFF
+	//     discriminator noted in default-off-authority.txt
+	//     (evidence/ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01)
+	//     remains true on Linux as well: GNU mktemp's destination is
+	//     host-defined (TMPDIR or /tmp), not caller-steerable from
+	//     the bare form. Ship darwin+linux uniformly; both
+	//     binaries satisfy Outcome A for the bare form.
+	//
+	// DEFAULT_OFF (Section 43): the rule is INDEPENDENT of any
+	// future sandbox state. Authorization is bounded by the
+	// rendered shape alone, NOT by the later executor's Seatbelt
+	// installation. The Seatbelt composition documented in
+	// ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01
+	// provides ADDITIONAL defense-in-depth (executor binds private
+	// TMPDIR under Seatbelt), not authorization-by-sandbox.
+	{
+		source: "host_safe_mktemp_default_temp",
+		pattern: /^\s*mktemp(?:\s+-d)?\s*$/u,
+	},
 	// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
 	// V1 lexical positive cd rule for the SIMPLE `cd <abs-static>`
 	// shape (no compound, no &&/||/|, no options). This is a
