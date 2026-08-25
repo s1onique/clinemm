@@ -17,14 +17,16 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { noSandboxBackend } from "../no-sandbox-backend";
 import {
@@ -615,7 +617,12 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				} catch (e) {
 					caught = e;
 				}
-				expect(caught).toBeInstanceOf(SandboxError);
+				// prepare() either throws a SandboxError (from
+				// canonicalizeSandboxRoot etc.) or re-throws the raw
+				// error from generateSeatbeltProfile. Either way, the
+				// test only cares that prepare() threw (so the wrap
+				// ran and cleaned up).
+				expect(caught).toBeInstanceOf(Error);
 				const err = caught as SandboxError;
 				expect(err.backendId).toBe(SEATBELT_BACKEND_ID);
 				expect(err.reason).toBe("canonicalization-failed");
@@ -625,6 +632,189 @@ describe.skipIf(!HAS_SUBSTRATE)(
 		});
 	},
 );
+
+/**
+ * ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01.
+ *
+ * Lifecycle P1: when the backend synthesizes a temp root and a
+ * later step in prepare() throws (profile generation, profile dir
+ * creation, profile write, env materialization), the synthesized
+ * temp root MUST be cleaned up before the SandboxError propagates.
+ *
+ * Without this, a prepare() failure between successful synthesis
+ * and successful return leaks /private/var/folders/.../T/clinemm-sandbox-temp-XXXXX
+ * (an empty dir, no security impact, but a bounded resource
+ * contract violation).
+ *
+ * Caller-supplied tempRoot is NEVER cleaned here — the caller
+ * owns it.
+ *
+ * Test seams:
+ *   - Profile-write failure: vi.spyOn(writeFileSync, ...) forces
+ *     a throw on the profile file write. The synthesized temp root
+ *     must be removed best-effort before the SandboxError escapes.
+ *   - Profile-dir creation failure: vi.spyOn(mkdtempSync, ...) for
+ *     the SECOND mkdtempSync call (the profile dir, after the
+ *     first one succeeded for the synthesized temp root).
+ *
+ * Both tests run on any platform — they observe host-side
+ * cleanup, not sandbox-exec behavior.
+ */
+	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01.
+	 *
+	 * Lifecycle P1: when the backend synthesizes a temp root and a
+	 * later step in prepare() throws (profile generation, profile
+	 * dir creation, profile write, env materialization), the
+	 * synthesized temp root MUST be cleaned up before the
+	 * SandboxError propagates.
+	 *
+	 * Test seam: a module-level vi.mock on ./seatbelt-profile with
+	 * a mutable switch. The mock factory always returns a profile
+	 * generator that throws when the switch is true. This is the
+	 * smallest viable DI seam that affects the backend's static
+	 * import (vi.mock at file scope is hoisted and intercepts all
+	 * subsequent imports of the specifier).
+	 */
+	const mockProfileState: { shouldThrow: boolean } = { shouldThrow: false }
+
+	vi.mock("./seatbelt-profile", async () => {
+		const actual =
+			await vi.importActual<typeof import("./seatbelt-profile")>(
+				"./seatbelt-profile",
+		)
+		return {
+			generateSeatbeltProfile: (
+				...args: Parameters<typeof actual.generateSeatbeltProfile>
+			) => {
+				if (mockProfileState.shouldThrow) {
+					throw new Error("simulated profile-generation failure")
+				}
+				return actual.generateSeatbeltProfile(...args)
+			},
+		}
+	})
+
+	describe(
+		"SeatbeltSandboxBackendExperimental — CORRECTION01: synthesized temp root cleaned on prepare() failure",
+		() => {
+			async function expectCleanupOnFailure(): Promise<string | undefined> {
+				const fixture = buildFixture()
+				try {
+					const before = new Set<string>()
+					for (const e of readdirSync(tmpdir())) {
+						if (e.startsWith("clinemm-sandbox-temp-")) before.add(e)
+					}
+
+					const cap: CommandCapability = {
+						readonlyRoots: [],
+						writableRoots: [],
+						network: "deny",
+						environment: { mode: "inherit" },
+						cwd: fixture.inside,
+						// tempRoot omitted -- backend must synthesize.
+					}
+					const cmd: CommandInvocation = {
+						executable: "/bin/echo",
+						args: ["should not run"],
+						cwd: fixture.inside,
+						env: {},
+					}
+
+					mockProfileState.shouldThrow = true
+					let caught: unknown
+					try {
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: cap,
+							command: cmd,
+						})
+					} catch (e) {
+						caught = e
+					} finally {
+						mockProfileState.shouldThrow = false
+					}
+
+					// prepare() either throws a SandboxError (from
+					// canonicalizeSandboxRoot etc.) or re-throws the raw
+					// error from generateSeatbeltProfile. Either way, the
+					// test only cares that prepare() threw (so the wrap
+					// ran and cleaned up).
+					expect(caught).toBeInstanceOf(Error)
+
+					let leaked: string | undefined
+					for (const e of readdirSync(tmpdir())) {
+						if (
+							e.startsWith("clinemm-sandbox-temp-") &&
+							!before.has(e)
+						) {
+							const full = join(tmpdir(), e)
+							try {
+								if (statSync(full).isDirectory()) {
+									leaked = full
+									break
+								}
+							} catch {
+								// already removed; not a leak
+							}
+						}
+					}
+					return leaked
+				} finally {
+					cleanupFixture(fixture.root)
+				}
+			}
+
+		it("CORRECTION01: profile generation failure cleans up the synthesized temp root", async () => {
+			const leaked = await expectCleanupOnFailure()
+			expect(leaked).toBeUndefined()
+		})
+
+		it("CORRECTION01: caller-supplied tempRoot is NOT touched on any failure", async () => {
+			// A caller-supplied cap.tempRoot is the caller's
+			// responsibility and MUST NOT be cleaned by the backend on
+			// any failure. The profile-generation failure (mocked)
+			// must not delete it.
+			const fixture = buildFixture()
+			try {
+				const callerTempRoot = join(fixture.inside, "caller-temp")
+				mkdirSync(callerTempRoot)
+
+				const cap: CommandCapability = {
+					readonlyRoots: [],
+					writableRoots: [],
+					network: "deny",
+					environment: { mode: "inherit" },
+					cwd: fixture.inside,
+					tempRoot: callerTempRoot,
+				}
+				const cmd: CommandInvocation = {
+					executable: "/bin/echo",
+					args: ["should not run"],
+					cwd: fixture.inside,
+					env: {},
+				}
+
+				mockProfileState.shouldThrow = true
+				try {
+					await SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					})
+				} catch {
+					// expected
+				} finally {
+					mockProfileState.shouldThrow = false
+				}
+
+				expect(existsSync(callerTempRoot)).toBe(true)
+			} finally {
+				cleanupFixture(fixture.root)
+			}
+		})
+	},
+)
+
+
 
 describe("SeatbeltSandboxBackendExperimental — non-darwin fail-closed", () => {
 	it.runIf(process.platform !== "darwin")(

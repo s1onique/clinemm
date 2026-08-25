@@ -252,63 +252,92 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				}
 			}
 
-			// 2) Generate the SBPL profile.
-			const profile = generateSeatbeltProfile(
-				{
-					...cap,
-					readonlyRoots,
-					writableRoots,
-					tempRoot,
-					cwd,
-				},
-				{ denyReadSubpaths },
-			);
-
-			// 3) Allocate a sandbox-private temp dir for the profile
-			//    file. Distinct from `tempRoot`.
-			let profileDir: string;
+			// ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01:
+			// Wrap the post-allocation preparation (steps 2-4) in a
+			// single try/catch so that ANY failure between successful
+			// temp-root synthesis and the successful return cleans up
+			// BOTH the synthesized temp root AND the profile temp dir
+			// before propagating the SandboxError. Without this wrap,
+			// a failure in profile generation, profile-dir creation,
+			// profile writing, or env materialization would leak the
+			// synthesized temp root.
+			//
+			// Caller-supplied tempRoot is the caller's responsibility
+			// and is NEVER touched here. The synthesizedTempRoot we
+			// allocated in this prepare() call IS our responsibility
+			// and IS cleaned here.
+			let profileDir: string | undefined;
+			let profilePath: string | undefined;
+			let materialized: ReturnType<typeof materializeEnvironment> | undefined;
 			try {
-				profileDir = mkdtempSync(
-					join(tmpdir(), PROFILE_TEMP_DIR_PREFIX),
-				);
-			} catch (cause) {
-				throw new SandboxError(
-					"Seatbelt: failed to create profile temp dir",
+				// 2) Generate the SBPL profile.
+				const profile = generateSeatbeltProfile(
 					{
-						backendId: SEATBELT_BACKEND_ID,
-						reason: "profile-write-failed",
-						cause,
+						...cap,
+						readonlyRoots,
+						writableRoots,
+						tempRoot,
+						cwd,
 					},
+					{ denyReadSubpaths },
 				);
-			}
-			const profilePath = join(
-				profileDir,
-				`profile-${randomBytes(6).toString("hex")}.sb`,
-			);
 
-			try {
-				writeFileSync(profilePath, profile, { mode: 0o600 });
+				// 3) Allocate a sandbox-private temp dir for the profile
+				//    file. Distinct from `tempRoot`.
+				try {
+					profileDir = mkdtempSync(
+						join(tmpdir(), PROFILE_TEMP_DIR_PREFIX),
+					);
+				} catch (cause) {
+					throw new SandboxError(
+						"Seatbelt: failed to create profile temp dir",
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "profile-write-failed",
+							cause,
+						},
+					);
+				}
+				profilePath = join(
+					profileDir,
+					`profile-${randomBytes(6).toString("hex")}.sb`,
+				);
+
+				try {
+					writeFileSync(profilePath, profile, { mode: 0o600 });
+				} catch (cause) {
+					throw new SandboxError(
+						`Seatbelt: failed to write profile to ${profilePath}`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "profile-write-failed",
+							cause,
+						},
+					);
+				}
+
+				// 4) Materialize the environment.
+				materialized = materializeEnvironment(cap.environment, {
+					parentEnv: process.env,
+					// Synthetic TMPDIR is only set when the capability
+					// provides a tempRoot. Synthetic HOME is intentionally
+					// omitted in Wave-1 — see recon final-assessment.md
+					// ("this changes behavior; dogfood separately").
+					syntheticTempDir: tempRoot,
+				});
 			} catch (cause) {
-				bestEffortRm(profileDir);
-				throw new SandboxError(
-					`Seatbelt: failed to write profile to ${profilePath}`,
-					{
-						backendId: SEATBELT_BACKEND_ID,
-						reason: "profile-write-failed",
-						cause,
-					},
-				);
+				// CORRECTION01: pre-existing profile-dir cleanup, plus
+				// the new synthesized-temp-root cleanup. Both are
+				// best-effort and MUST NOT alter the original cause
+				// being propagated to the caller.
+				if (profileDir) {
+					bestEffortRm(profileDir);
+				}
+				if (synthesizedTempRoot) {
+					bestEffortRm(synthesizedTempRoot);
+				}
+				throw cause;
 			}
-
-			// 4) Materialize the environment.
-			const materialized = materializeEnvironment(cap.environment, {
-				parentEnv: process.env,
-				// Synthetic TMPDIR is only set when the capability
-				// provides a tempRoot. Synthetic HOME is intentionally
-				// omitted in Wave-1 — see recon final-assessment.md
-				// ("this changes behavior; dogfood separately").
-				syntheticTempDir: tempRoot,
-			});
 
 			// 5) Build the prepared invocation: sandbox-exec -f
 			//    <profile> <original-executable> <original-args...>.
