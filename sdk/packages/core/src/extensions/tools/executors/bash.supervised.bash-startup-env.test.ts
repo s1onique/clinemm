@@ -181,27 +181,166 @@ describe("ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 (C2: supervi
     });
   });
 
-  describe("CONSERVATION: exported shell function (BASH_FUNC_*) is NOT stripped", () => {
-    it("BASH_FUNC_* is inherited; CORRECTION03 slash-bypass is the channel that neutralizes it", async () => {
-      // The filter does NOT strip BASH_FUNC_* because slash-bypass
-      // already neutralizes them for the command-identity channel.
-      // We assert BASH_FUNC_* is INHERITED (the filter is conservative
-      // and doesn't touch what it doesn't have to).
-      const { root } = await makeFixture();
+  // ===========================================================================
+  // ACT-CLINEMM-COMMAND-EXECUTOR-BASH-FUNCTION-ENV-AUTHORITY01
+  // ===========================================================================
+  // The earlier "conservation" test for BASH_FUNC_* was structurally
+  // wrong: shell parameter expansion with `$BASH_FUNC_mktemp%%` parses
+  // `$BASH_FUNC_mktemp` as the variable name and the trailing `%%`
+  // as literal text, so the test reported non-empty without proving
+  // that an imported function actually ran. The reviewer correctly
+  // flagged this.
+  //
+  // The REAL test: drive the production executor with a BASH_FUNC_pwd%%
+  // export encoding in the parent env, run `bash -c pwd` through it,
+  // and observe whether the function imports (runs) or is stripped
+  // (real pwd builtin runs).
+  // ===========================================================================
+
+  describe("RED CLOSED: BASH_FUNC_<name>%% inherited exported function does NOT shadow bare AUTO commands", () => {
+    it("bare `pwd` against BASH_FUNC_pwd%% in parent env: imported function does NOT run", async () => {
+      const root = await fs.mkdtemp(FIXTURE_PREFIX);
+      const sentinel = path.join(root, "sentinel");
+      // Inject an exported function encoding into the parent env BEFORE
+      // the production executor spawns. The function body writes the
+      // sentinel; if bash imports it, the sentinel mutates.
+      process.env["BASH_FUNC_pwd%%"] = `() { printf 'UNAUTHORIZED-pwd' >> ${sentinel}; }`;
       try {
-        // Set BASH_FUNC_mktemp%% to a value that we can observe
-        // via `env | grep BASH_FUNC`. Note: this is bash's internal
-        // encoding for exported function names.
-        process.env["BASH_FUNC_mktemp%%"] = "() { printf SHADOWED; }";
         const proc = spawnSupervisableShellCommand({
           executable: "/bin/bash",
-          args: ["-c", "test -n \"$BASH_FUNC_mktemp%%\" && echo PRESENT || echo ABSENT"],
+          args: ["-c", "pwd >/dev/null"],
+          cwd: root,
+        });
+        await proc.exit;
+        const contents = await fs.readFile(sentinel, "utf-8").catch(() => "");
+        // RED-CLOSED: sentinel must remain empty (function did NOT import).
+        expect(contents).toBe("");
+      } finally {
+        delete process.env["BASH_FUNC_pwd%%"];
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("bare `ls /tmp` against BASH_FUNC_ls%% in parent env: imported function does NOT run", async () => {
+      const root = await fs.mkdtemp(FIXTURE_PREFIX);
+      const sentinel = path.join(root, "sentinel");
+      process.env["BASH_FUNC_ls%%"] = `() { printf 'UNAUTHORIZED-ls' >> ${sentinel}; }`;
+      try {
+        const proc = spawnSupervisableShellCommand({
+          executable: "/bin/bash",
+          args: ["-c", "ls /tmp >/dev/null"],
+          cwd: root,
+        });
+        await proc.exit;
+        const contents = await fs.readFile(sentinel, "utf-8").catch(() => "");
+        expect(contents).toBe("");
+      } finally {
+        delete process.env["BASH_FUNC_ls%%"];
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("bare `git --version` against BASH_FUNC_git%% in parent env: imported function does NOT run", async () => {
+      const root = await fs.mkdtemp(FIXTURE_PREFIX);
+      const sentinel = path.join(root, "sentinel");
+      process.env["BASH_FUNC_git%%"] = `() { printf 'UNAUTHORIZED-git' >> ${sentinel}; }`;
+      try {
+        const proc = spawnSupervisableShellCommand({
+          executable: "/bin/bash",
+          args: ["-c", "git --version >/dev/null"],
+          cwd: root,
+        });
+        await proc.exit;
+        const contents = await fs.readFile(sentinel, "utf-8").catch(() => "");
+        expect(contents).toBe("");
+      } finally {
+        delete process.env["BASH_FUNC_git%%"];
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("bare `cat /dev/null` against BASH_FUNC_cat%% in parent env: imported function does NOT run", async () => {
+      const root = await fs.mkdtemp(FIXTURE_PREFIX);
+      const sentinel = path.join(root, "sentinel");
+      process.env["BASH_FUNC_cat%%"] = `() { printf 'UNAUTHORIZED-cat' >> ${sentinel}; }`;
+      try {
+        const proc = spawnSupervisableShellCommand({
+          executable: "/bin/bash",
+          args: ["-c", "cat /dev/null"],
+          cwd: root,
+        });
+        await proc.exit;
+        const contents = await fs.readFile(sentinel, "utf-8").catch(() => "");
+        expect(contents).toBe("");
+      } finally {
+        delete process.env["BASH_FUNC_cat%%"];
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("prefix-strip is unbounded: BASH_FUNC_anything%% is stripped (not enumerated)", async () => {
+      // Proves the strip is prefix-based: arbitrary function names
+      // are also stripped. Without the prefix match, an attacker
+      // could pick a name not in a fixed set.
+      const root = await fs.mkdtemp(FIXTURE_PREFIX);
+      const sentinel = path.join(root, "sentinel");
+      process.env["BASH_FUNC_arbitrary_name_zzz%%"] = `() { printf 'UNAUTHORIZED' >> ${sentinel}; }`;
+      try {
+        const proc = spawnSupervisableShellCommand({
+          executable: "/bin/bash",
+          args: ["-c", "arbitrary_name_zzz 2>/dev/null; echo done"],
+          cwd: root,
+        });
+        await proc.exit;
+        const contents = await fs.readFile(sentinel, "utf-8").catch(() => "");
+        expect(contents).toBe("");
+      } finally {
+        delete process.env["BASH_FUNC_arbitrary_name_zzz%%"];
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("type -t pwd reports builtin (not function) when BASH_FUNC_pwd%% is in parent env", async () => {
+      const root = await fs.mkdtemp(FIXTURE_PREFIX);
+      process.env["BASH_FUNC_pwd%%"] = "() { printf SHADOW; }";
+      try {
+        const proc = spawnSupervisableShellCommand({
+          executable: "/bin/bash",
+          args: ["-c", "echo type=\$(type -t pwd)"],
+          cwd: root,
+        });
+        await proc.exit;
+        const out = proc.stdoutSnapshot().text.trim();
+        // The real bash builtin pwd exists; the imported function
+        // does not. type -t should report "builtin".
+        expect(out).toBe("type=builtin");
+      } finally {
+        delete process.env["BASH_FUNC_pwd%%"];
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+
+    it("slash-prefixed `/usr/bin/mktemp` still works (slash-bypass composes with the strip)", async () => {
+      // Composition: slash-prefixed commands were neutralized by
+      // CORRECTION03 slash-bypass (function lookup doesn't apply to
+      // pathnames). With this ACT's strip, parameter inheritance is
+      // also defensive. The slash form should succeed AND not run
+      // any imported function.
+      const root = await fs.mkdtemp(FIXTURE_PREFIX);
+      const sentinel = path.join(root, "sentinel");
+      process.env["BASH_FUNC_mktemp%%"] = `() { printf 'UNAUTHORIZED' >> ${sentinel}; }`;
+      try {
+        const proc = spawnSupervisableShellCommand({
+          executable: "/bin/bash",
+          args: ["-c", "/usr/bin/mktemp"],
           cwd: root,
         });
         const exit = await proc.exit;
-        const out = proc.stdoutSnapshot().text.trim();
+        const contents = await fs.readFile(sentinel, "utf-8").catch(() => "");
+        // Slash-bypass: function lookup is not performed for
+        // pathnames. /usr/bin/mktemp runs the real binary.
+        expect(contents).toBe("");
         expect(exit.exitCode).toBe(0);
-        expect(out).toBe("PRESENT");
       } finally {
         delete process.env["BASH_FUNC_mktemp%%"];
         await fs.rm(root, { recursive: true, force: true });

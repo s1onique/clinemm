@@ -15,7 +15,7 @@ import type { EnvironmentSemantics } from "../../../runtime/sandbox/types";
 import { TimeoutError } from "../helpers";
 
 /**
- * ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01:
+ * ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 + -FUNCTION-ENV-AUTHORITY01:
  * Inherited environment variables that bash (or POSIX sh)
  * parses at NON-INTERACTIVE STARTUP BEFORE the supplied
  * command string. If any of these is set in the parent
@@ -35,7 +35,21 @@ import { TimeoutError } from "../helpers";
  * bash documents BASH_ENV separately from profile / rcfile
  * machinery.
  *
- * Variables in this set:
+ * Reference: GNU Bash Reference Manual, Shell Functions
+ * (https://www.gnu.org/s/bash/manual/html_node/Shell-Functions.html).
+ *   "When a function is exported using export -f, its body is
+ *    encoded and made available to child bash processes via
+ *    the BASH_FUNC_funcname%% environment variable. The
+ *    imported function shadows any command of the same name
+ *    that bash would otherwise find via PATH or builtin
+ *    lookup. This includes bare-form commands such as pwd,
+ *    ls, git, etc. -- slash-bypass (per GNU Bash, Command
+ *    Search and Execution: command names with a slash are
+ *    executed as pathnames without function/builtin lookup)
+ *    does NOT close this channel because bare commands have
+ *    no slash."
+ *
+ * Variables in this set (exact match):
  *   BASH_ENV   bash sources $BASH_ENV at non-interactive
  *              startup (verified live as load-bearing channel
  *              for P0-4 in red-p0-4-bash-env-startup.txt)
@@ -47,16 +61,25 @@ import { TimeoutError } from "../helpers";
  *              authorized command)
  *   BASHOPTS   analogous to SHELLOPTS for `shopt` options
  *
+ * PREFIX-MATCHED (any name starting with the prefix):
+ *   BASH_FUNC_ bash encodes exported functions as
+ *              `BASH_FUNC_<funcname>%%`. The trailing `%%`
+ *              is part of the name, not a separate token;
+ *              any name with the `BASH_FUNC_` prefix
+ *              participates in function-import at non-
+ *              interactive startup. We strip by prefix
+ *              rather than enumerate because the funcname
+ *              space is unbounded.
+ *
  * Variables NOT in this set (deliberately):
  *   PATH, TERM, LANG, LC_ALL, etc. -- ordinary env;
  *     conservative
- *   exported shell functions (BASH_FUNC_*) -- neutralized
- *     for command-identity channel by CORRECTION03 slash-
- *     bypass; even if inherited, slash-prefixed AUTO
- *     commands run as pathnames (no function lookup)
  *   caller-supplied env (e.g., `env: { SHELL: shell }`
  *     from apps/vscode/src/sdk/command-job-manager.ts:640)
- *     -- caller-controlled, trusted
+ *     -- caller-controlled, trusted. Provenance: `SHELL`
+ *     comes from `getShellInvocation()` which returns a
+ *     fixed mapping (`/bin/bash` on Unix, `powershell` on
+ *     Windows), not user/tool-controlled values.
  *
  * Under envSemantics: "complete" (sanitized Seatbelt mode),
  * the materialized env already excludes these by construction
@@ -73,16 +96,39 @@ const BASH_STARTUP_STRIPPABLE_ENV: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Prefixed names that bash treats specially at non-interactive
+ * startup. We strip by prefix rather than enumerating because
+ * the function-name space is unbounded (any name following
+ * `BASH_FUNC_` participates in function-import).
+ *
+ * Format: `BASH_FUNC_<funcname>%%` per GNU Bash Reference Manual,
+ * Shell Functions. The trailing `%%` is part of the variable
+ * name (a separator that cannot legally appear in a shell
+ * function name), not a parameter-expansion operator.
+ */
+const BASH_FUNC_PREFIX = "BASH_FUNC_";
+
+/**
  * Return a copy of `env` with the bash-startup-affecting
  * variables stripped. Caller's `env` (typically config.env)
  * is preserved; only the inherited process.env layer is
  * filtered. This is intentional: the caller is trusted; the
  * parent environment is not.
+ *
+ * Stripped:
+ *   - exact-match names in BASH_STARTUP_STRIPPABLE_ENV
+ *     (BASH_ENV, ENV, SHELLOPTS, BASHOPTS)
+ *   - any name with the BASH_FUNC_ prefix (exported
+ *     function encodings; the funcname space is unbounded
+ *     so we strip by prefix)
  */
 function stripBashStartupEnvFromParent(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(env)) {
     if (BASH_STARTUP_STRIPPABLE_ENV.has(key)) {
+      continue;
+    }
+    if (key.startsWith(BASH_FUNC_PREFIX)) {
       continue;
     }
     out[key] = value;
@@ -314,17 +360,20 @@ function buildShellProcess(
 	// a sanitized allowlist, and spreading process.env underneath
 	// would silently re-introduce leaked secrets.
 	//
-	// ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01:
+	// ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 + -FUNCTION-ENV-AUTHORITY01:
 	// Under overlay semantics, the spread-merge inherits ALL of
 	// process.env including bash-startup-affecting variables
-	// (BASH_ENV, ENV, SHELLOPTS, BASHOPTS). Bash sources $BASH_ENV
-	// at non-interactive startup BEFORE parsing -c <command>;
-	// inherited SHELLOPTS / BASHOPTS apply colon-separated options
-	// at startup. This lets hostile or surprising parent env run
-	// arbitrary code before the policy-authorized command. We strip
-	// those variables from the inherited process.env layer BEFORE
-	// the spread-merge. Caller's config.env is preserved (caller-
-	// trusted).
+	// (BASH_ENV, ENV, SHELLOPTS, BASHOPTS, BASH_FUNC_*). Bash
+	// sources $BASH_ENV at non-interactive startup BEFORE parsing
+	// -c <command>; inherited SHELLOPTS / BASHOPTS apply colon-
+	// separated options at startup; inherited BASH_FUNC_<name>%%
+	// exports import functions that shadow any command of the
+	// same name (function > builtin > PATH lookup per GNU Bash).
+	// This lets hostile or surprising parent env run arbitrary
+	// code before / instead of the policy-authorized command.
+	// We strip those variables from the inherited process.env
+	// layer BEFORE the spread-merge. Caller's config.env is
+	// preserved (caller-trusted).
 	//
 	// Under "complete" semantics, this filter is a NO-OP because
 	// the materialized env is built from SAFE_ENVIRONMENT_BASELINE
