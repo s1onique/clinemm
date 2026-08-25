@@ -128,7 +128,19 @@ export type CommandDecisionSource =
 	//   - realpath ELOOP   (symlink loop)
 	//   - realpath ENOTDIR (a path component is not a directory)
 	// All of these ⇒ ASK, never ALLOW.
-	| "host_workspace_realpath_authority";
+	| "host_workspace_realpath_authority"
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01:
+	// Host-evidence-bound temp-authority downgrade. The
+	// `host_safe_mktemp_default_temp` lexical regex matched the
+	// rendered shape (mktemp | mktemp -d), but the host did NOT
+	// supply a `tempAuthorityEvidence` proving that the destination
+	// is intrinsically bounded (i.e. the platform and effective
+	// default temp root). Inherited environment (process.env.TMPDIR)
+	// can steer GNU mktemp; the rendered command string alone does
+	// not bound the destination. The verdict is downgraded to ASK
+	// with this source so the operator sees why the AUTO did not
+	// fire, and so the user retains the explicit-approval gate.
+	| "host_mktemp_temp_authority_unbound";
 
 export interface CommandDecision {
 	kind: CommandDecisionKind;
@@ -262,6 +274,66 @@ export interface CommandHostAuthorization {
 	 * evidence. The policy treats null as ASK, never ALLOW.
 	 */
 	pathAuthorityEvidence?: import("./path-authority-evidence").WorkspacePathAuthorityEvidence;
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01
+	 *
+	 * Host-produced evidence for the temporary-file-authority source
+	 * family (currently: `host_safe_mktemp_default_temp`). The bare
+	 * form `mktemp` / `mktemp -d` does NOT bound the destination by
+	 * rendered shape alone -- the inherited process environment
+	 * (e.g. `TMPDIR` on GNU mktemp) can steer where the file is
+	 * created. This evidence MUST be supplied for promotion to ALLOW.
+	 *
+	 * `platform` reports the OS platform the executor will resolve
+	 * `mktemp` on. For this ACT, only `darwin` is approved for
+	 * promotion. Any other value (or `unknown`) returns ASK.
+	 *
+	 * `effectiveDefaultTempRoot` is the host-side observed default
+	 * temp directory for the bare `mktemp` form on this platform
+	 * (typically `_CS_DARWIN_USER_TEMP_DIR` on darwin).
+	 *
+	 * `canonicalDefaultTempRoot` is the realpath of the effective
+	 * default temp root. The policy compares them verbatim.
+	 *
+	 * Defense-in-depth (not a substitution for binding the
+	 * authorization to the actual executor capability): the executor
+	 * also installs its own private canonical temp root under
+	 * Seatbelt (see ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01).
+	 * The policy-side evidence here is the user-facing authorization
+	 * boundary; the Seatbelt-private-root composition is layered
+	 * additional protection when the executor runs under sandbox.
+	 *
+	 * Empty/undefined: the host has not produced the evidence. The
+	 * `host_safe_mktemp_default_temp` rule falls through to ASK with
+	 * `host_mktemp_temp_authority_unbound`. This is a STRICT SUBSET
+	 * gate: it only removes ALLOWs, never adds them.
+	 */
+	tempAuthorityEvidence?: TempAuthorityEvidence;
+}
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01
+ *
+ * Host-produced evidence that the temporary-file authority of a
+ * command (currently `mktemp`) is bounded. See
+ * `CommandHostAuthorization.tempAuthorityEvidence` for the full
+ * contract.
+ */
+export interface TempAuthorityEvidence {
+	/** OS platform the executor will resolve the command on. */
+	platform: "darwin" | "linux" | "win32" | "unknown";
+	/**
+	 * Observed default temporary-file root on this platform for the
+	 * bare command (e.g. the result of `confstr(_CS_DARWIN_USER_TEMP_DIR)`
+	 * on darwin, or `process.env.TMPDIR` on linux). String; the
+	 * policy treats it as a label, not a path authority witness.
+	 */
+	effectiveDefaultTempRoot: string;
+	/**
+	 * Canonicalized realpath of `effectiveDefaultTempRoot`. The
+	 * policy compares this against the effective root for binding.
+	 */
+	canonicalDefaultTempRoot: string;
 }
 
 /**
@@ -274,6 +346,7 @@ export function commandHostAuthorization(params: {
 	workspaceRoots?: ReadonlyArray<string>;
 	cwd?: string;
 	pathAuthorityEvidence?: import("./path-authority-evidence").WorkspacePathAuthorityEvidence;
+	tempAuthorityEvidence?: TempAuthorityEvidence;
 }): CommandHostAuthorization {
 	return {
 		mode: params.mode,
@@ -282,6 +355,7 @@ export function commandHostAuthorization(params: {
 		workspaceRoots: params.workspaceRoots,
 		cwd: params.cwd,
 		pathAuthorityEvidence: params.pathAuthorityEvidence,
+		tempAuthorityEvidence: params.tempAuthorityEvidence,
 	};
 }
 

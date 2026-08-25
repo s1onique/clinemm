@@ -87,21 +87,38 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	// pwd with optional POSIX -L / -P (logical / physical working directory).
 	// Both are pure read-only reporting.
 	{ source: "host_safe_pwd", pattern: /^\s*pwd(?:\s+(?:-[LP]))?\s*$/u },
-	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01:
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01:
 	// V1 lexical positive mktemp rule for the SIMPLE bare forms
-	// `mktemp` and `mktemp -d`. The bare form on darwin (BSD
-	// mktemp) ignores $TMPDIR and creates at the per-user temp
-	// directory (/var/folders/.../T); GNU coreutils mktemp
-	// honors $TMPDIR but still has no caller-selected pathname.
-	// In BOTH cases the form creates exactly one unpredictable
-	// filesystem object at a host-defined destination with no
-	// caller-selected pathname.
+	// `mktemp` and `mktemp -d`. The rendered-shape regex match is
+	// a NECESSARY but NOT SUFFICIENT condition for ALLOW: the
+	// destination of the created filesystem object is determined
+	// by both the rendered shape AND the inherited process
+	// environment. The Darwin BSD mktemp ignores $TMPDIR for the
+	// bare form and anchors on _CS_DARWIN_USER_TEMP_DIR. GNU
+	// coreutils mktemp honors $TMPDIR and writes wherever the
+	// parent process's TMPDIR points. Linux is GNU.
 	//
-	// Reviewed forms (parser-proven positive provenance):
-	//   - `mktemp`    (single tempfile in the per-user temp dir)
-	//   - `mktemp -d` (single tempdir  in the per-user temp dir)
+	// Therefore the rendered-shape match alone CANNOT bound the
+	// destination cross-platform. The original ACT (C2) overstated
+	// this. The CORRECTION01 makes the rule HOST-EVIDENCE-BOUND:
+	// the policy layer consults `CommandHostAuthorization.
+	// tempAuthorityEvidence` after the lexical match, and only
+	// promotes to ALLOW when the evidence is present and reports
+	// `platform === "darwin"`. Without evidence, or on
+	// linux/win32/unknown, the rule falls through to ASK with
+	// source `host_mktemp_temp_authority_unbound`.
 	//
-	// Explicitly REJECTED (remain ASK/DENY through V1):
+	// The host adapter at apps/vscode/src/sdk/sdk-tool-policies.ts
+	// populates the evidence for darwin hosts. The evidence
+	// contract is documented on CommandHostAuthorization.
+	//
+	// Reviewed positive forms (gated by host-evidence):
+	//   - `mktemp`    (single tempfile in the host-evidence-bounded
+	//                  per-user temp dir on darwin)
+	//   - `mktemp -d` (single tempdir  in the host-evidence-bounded
+	//                  per-user temp dir on darwin)
+	//
+	// Explicitly REJECTED at the lexical layer (remain ASK/DENY in V1):
 	//   - any other flag (`mktemp -u` is unsafe per Darwin manual:
 	//     the created object is unlinked before mktemp exits;
 	//     `mktemp -p DIR ...` and `mktemp -t prefix` alter the
@@ -109,33 +126,36 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	//   - any template operand (`mktemp foo.XXXXXX`,
 	//     `mktemp /tmp/foo.XXXXXX`, `mktemp ./foo.XXXXXX`,
 	//     `mktemp ../foo.XXXXXX`) -- template form has path authority
-	//     and is a separate authority family (Section 19)
+	//     and is a separate authority family
 	//   - any dynamic operand (`mktemp "$X"`, `mktemp ${X}`,
 	//     `mktemp "$(echo foo.XXXX)"`) -- flattened-string inference
-	//     is forbidden (Section 33)
+	//     is forbidden
 	//   - any assignment prefix (`TMPDIR=/x mktemp`) -- env steering
-	//     (Section 20)
-	//   - any `env` wrapper (`env TMPDIR=/x mktemp`) (Section 21)
+	//     in the rendered shape
+	//   - any `env` wrapper (`env TMPDIR=/x mktemp`)
 	//   - any compose shape (`mktemp && pwd`, `mktemp | head`,
 	//     `mktemp 2>/dev/null`, `mktemp > file`) -- the rule's
 	//     regex (anchored end-of-string `\\s*$`) does not match
 	//     composition-operator-bearing input, AND `findSafeRuleMatch`
 	//     runs `isOpaqueShellRendered` first which short-circuits on
 	//     `&&`, `||`, `|`, `;`, `>`, `<`, `${`, etc.
-	//   - GNU/Linux: `findSafeRuleMatch` evaluates the rendered
-	//     surface, which is host-independent, so this rule
-	//     PROMOTES the bare form on Linux too. The DEFAULT_OFF
-	//     discriminator noted in default-off-authority.txt
-	//     (evidence/ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01)
-	//     remains true on Linux as well: GNU mktemp's destination is
-	//     host-defined (TMPDIR or /tmp), not caller-steerable from
-	//     the bare form. Ship darwin+linux uniformly; both
-	//     binaries satisfy Outcome A for the bare form.
 	//
-	// DEFAULT_OFF (Section 43): the rule is INDEPENDENT of any
-	// future sandbox state. Authorization is bounded by the
-	// rendered shape alone, NOT by the later executor's Seatbelt
-	// installation. The Seatbelt composition documented in
+	// Linux / unknown hosts: the rule's lexical regex still matches,
+	// but `isTempAuthorityHostEvidenceBoundRuleSource` routes the
+	// match through the host-evidence gate, which rejects anything
+	// other than `platform === "darwin"`. Linux stays at ASK. The
+	// GNU mktemp honors inherited TMPDIR, so a Linux AUTO would
+	// re-open the cross-platform authority leak. Proving bounded
+	// Linux authority requires an authority-evidence change that is
+	// OUT OF SCOPE for this ACT and would be a separate ACT
+	// candidate.
+	//
+	// DEFAULT_OFF (CORRECTION01): the rule's authority is bound by
+	// HOST EVIDENCE that proves the destination is intrinsically
+	// host-defined (darwin BSD mktemp ignores inherited TMPDIR and
+	// uses _CS_DARWIN_USER_TEMP_DIR). On linux/unknown, the rule
+	// stays at ASK regardless of executor sandbox state. The
+	// Seatbelt composition documented in
 	// ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01
 	// provides ADDITIONAL defense-in-depth (executor binds private
 	// TMPDIR under Seatbelt), not authorization-by-sandbox.

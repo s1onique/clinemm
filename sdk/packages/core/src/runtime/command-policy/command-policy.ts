@@ -411,6 +411,58 @@ function evaluateOne(
 					};
 				}
 			}
+			// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01:
+			// Some safe rules are bound by HOST EVIDENCE rather than by
+			// rendered shape alone. Currently:
+			//   host_safe_mktemp_default_temp
+			//     -- the bare `mktemp` / `mktemp -d` form has no
+			//        caller-selected pathname in the command text,
+			//        but the parent process environment (process.env.TMPDIR)
+			//        can steer the destination under GNU mktemp. On
+			//        darwin (BSD mktemp) the bare form is intrinsically
+			//        anchored by _CS_DARWIN_USER_TEMP_DIR; the darwin
+			//        host is the only platform for which this rule is
+			//        approved in this ACT.
+			//
+			// Gate (all must hold for promotion):
+			//   (a) auth.tempAuthorityEvidence is present;
+			//   (b) auth.tempAuthorityEvidence.platform === "darwin";
+			//   (c) auth.tempAuthorityEvidence.effectiveDefaultTempRoot
+			//       is a non-empty string;
+			//   (d) auth.tempAuthorityEvidence.canonicalDefaultTempRoot
+			//       is a non-empty string.
+			//
+			// If any gate fails: ASK with
+			// source="host_mktemp_temp_authority_unbound".
+			//
+			// The check is intentionally a STRICT SUBSET gate: it only
+			// removes ALLOWs, never adds them. A command that was ASK
+			// before this ACT remains ASK.
+			if (isTempAuthorityHostEvidenceBoundRuleSource(match.source)) {
+				const evidence = auth.tempAuthorityEvidence;
+				if (
+					evidence === undefined ||
+					evidence.platform !== "darwin" ||
+					typeof evidence.effectiveDefaultTempRoot !== "string" ||
+					evidence.effectiveDefaultTempRoot.length === 0 ||
+					typeof evidence.canonicalDefaultTempRoot !== "string" ||
+					evidence.canonicalDefaultTempRoot.length === 0
+				) {
+					const missing =
+						evidence === undefined
+							? "host did not supply tempAuthorityEvidence"
+							: evidence.platform !== "darwin"
+								? `host tempAuthorityEvidence.platform = "${evidence.platform}" (only darwin is approved for host_safe_mktemp_default_temp in this ACT)`
+								: evidence.effectiveDefaultTempRoot.length === 0
+									? "host tempAuthorityEvidence.effectiveDefaultTempRoot is empty"
+									: "host tempAuthorityEvidence.canonicalDefaultTempRoot is empty";
+					return {
+						kind: "ask",
+						source: "host_mktemp_temp_authority_unbound",
+						reason: `temp authority unbound: ${missing}; bare ${renderNormalizedCommand(command)} can be steered by inherited process environment (process.env.TMPDIR on GNU mktemp); bound promotion requires host-evidence that the destination is intrinsically host-defined (CORRECTION01)`,
+					};
+				}
+			}
 			const profile = getSafeExecutionProfileForSource(match.source);
 			return {
 				kind: "allow",
@@ -612,6 +664,24 @@ function isR0ReadonlyRuleSource(source: string): boolean {
 	return R0_READONLY_PATH_BEARING_SOURCES.has(source);
 }
 
+// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01:
+// Safe rules whose promotion to ALLOW is bound by HOST EVIDENCE
+// rather than by rendered shape alone. The lexical regex still
+// gates the rendered shape; this set routes the matched rule
+// through the temp-authority host-evidence check below.
+//
+// Adding a new rule here means: the lexical regex match is NOT
+// sufficient -- the host must supply the corresponding evidence
+// (currently: tempAuthorityEvidence). Without evidence, the rule
+// falls through to ASK with the corresponding source label.
+const TEMP_AUTHORITY_HOST_EVIDENCE_BOUND_SOURCES: ReadonlySet<string> = new Set([
+	"host_safe_mktemp_default_temp",
+]);
+
+function isTempAuthorityHostEvidenceBoundRuleSource(source: string): boolean {
+	return TEMP_AUTHORITY_HOST_EVIDENCE_BOUND_SOURCES.has(source);
+}
+
 /**
  * CORRECTION02: export the predicate so the V2 structured
  * classifier (`structured-command-risk.ts`) can also recognize
@@ -631,6 +701,10 @@ function isR0ReadonlyRuleSource(source: string): boolean {
  */
 export function isR0PathBearingRuleSource(source: string): boolean {
 	return R0_READONLY_PATH_BEARING_SOURCES.has(source);
+}
+
+export function isTempAuthorityHostEvidenceBound(source: string): boolean {
+	return TEMP_AUTHORITY_HOST_EVIDENCE_BOUND_SOURCES.has(source);
 }
 
 export { buildCommandExecutionPlan } from "./command-execution-plan";
