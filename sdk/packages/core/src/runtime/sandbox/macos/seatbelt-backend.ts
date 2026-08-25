@@ -38,7 +38,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 
 import { canonicalizeSandboxRoot } from "../canonical-paths";
-import { materializeEnvironment } from "../environment";
+import { materializeEnvironment, getEnvironmentSemantics } from "../environment";
 import {
 	SANDBOX_EXEC_PATH,
 	probeSeatbeltAvailability,
@@ -270,6 +270,13 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				env: materialized,
 				input: cmd.input,
 				backendId: SEATBELT_BACKEND_ID,
+				// CORRECTION01-P1: envSemantics is the typed metadata
+				// the executor reads to decide whether to spread
+				// process.env underneath env ("overlay") or to use env
+				// AS-IS ("complete"). The capability's mode determines
+				// the value; see environment.ts getEnvironmentSemantics
+				// and types.ts EnvironmentSemantics.
+				envSemantics: getEnvironmentSemantics(cap.environment),
 				cleanup: async () => {
 					bestEffortRm(profileDir);
 				},

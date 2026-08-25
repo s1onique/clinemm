@@ -49,6 +49,12 @@ export const noSandboxBackend: SandboxBackend = Object.freeze({
 			args: [...cmd.args],
 			cwd: cmd.cwd,
 			env: { ...cmd.env },
+			// CORRECTION01-P1: explicit envSemantics for the legacy
+			// overlay path. The production executor spreads process.env
+			// underneath `env` (existing production behavior), which is
+			// exactly the "overlay" contract. See types.ts
+			// EnvironmentSemantics.
+			envSemantics: "overlay",
 			// Preserve `input` semantics: `undefined` (not present) is
 			// distinct from `""` (present-but-empty). `CommandInvocation`
 			// has `input?: string`, so we must forward the optional.

@@ -29,7 +29,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { materializeEnvironment } from "./environment";
+import { getEnvironmentSemantics, materializeEnvironment } from "./environment";
 import {
 	escapeSbplString,
 	generateSeatbeltProfile,
@@ -42,25 +42,25 @@ const HAS_SUBSTRATE =
 	process.platform === "darwin" && probeSeatbeltAvailability();
 
 /**
- * Mirror of the production executor's env-merge behavior. The crucial
- * behavior change: if `prepared.env.completeness === "complete"`, the
- * executor MUST use it as-is (no spread-merge). Otherwise (default),
- * the executor does the legacy spread-merge.
+ * Mirror of the production executor's env-merge behavior. CORRECTION01-P1
+ * switched the discriminator from a magic `completeness` env key to a
+ * typed `envSemantics` metadata field. The contract is the same:
+ *
+ *   - `envSemantics === "complete"`: executor uses prepared.env AS-IS.
+ *   - `envSemantics === "overlay"` (default): legacy spread-merge.
  */
 function runWithExecutorSemantics(prepared: {
 	executable: string;
 	args: readonly string[];
 	cwd: string;
 	env: Record<string, string>;
+	envSemantics?: "overlay" | "complete";
 }): { exitCode: number | null; stdout: string; stderr: string } {
-	const preparedAny = prepared.env as { completeness?: string } & Record<
-		string,
-		string
-	>;
+	const semantics = prepared.envSemantics ?? "overlay";
 	const env: Record<string, string> =
-		preparedAny.completeness === "complete"
-			? { ...preparedAny }
-			: { ...(process.env as Record<string, string>), ...preparedAny };
+		semantics === "complete"
+			? { ...prepared.env }
+			: { ...(process.env as Record<string, string>), ...prepared.env };
 	const result = spawnSync(prepared.executable, [...prepared.args], {
 		cwd: prepared.cwd,
 		env,
@@ -154,12 +154,23 @@ describe("CORRECTION01 R1 — readonlyRoots is load-bearing (P0-1)", () => {
 	);
 });
 describe("CORRECTION01 R2 — sanitized env is COMPLETE (P0-2)", () => {
-	it("materializeEnvironment marks sanitized output as completeness=complete", () => {
+	it("getEnvironmentSemantics: sanitized → complete, inherit → overlay", () => {
+		// CORRECTION01-P1: the discriminator is the TYPED metadata
+		// field on the prepared invocation, NOT a magic key in env.
+		// The materialized env record contains only the variables
+		// the sandbox intends — no `completeness` key (which would
+		// pollute the child environment).
 		const out = materializeEnvironment(
 			{ mode: "sanitized", allow: [] },
 			{ parentEnv: {} },
 		);
-		expect((out as { completeness?: string }).completeness).toBe("complete");
+		expect("completeness" in out).toBe(false);
+		expect(out).not.toHaveProperty("completeness");
+		// The semantics is conveyed via the typed metadata helper:
+		expect(getEnvironmentSemantics({ mode: "sanitized", allow: [] })).toBe(
+			"complete",
+		);
+		expect(getEnvironmentSemantics({ mode: "inherit" })).toBe("overlay");
 	});
 
 	it("materializeEnvironment does NOT carry unknown parent var values into the child env", () => {
@@ -189,13 +200,16 @@ describe("CORRECTION01 R2 — sanitized env is COMPLETE (P0-2)", () => {
 		expect(out.AWS_SECRET_ACCESS_KEY).toBe("");
 	});
 
-	it("executor contract: completeness marker prevents leak; spread-merge leaks", () => {
+	it("executor contract: envSemantics=complete prevents leak; spread-merge leaks", () => {
+		// CORRECTION01-P1: the discriminator is the typed metadata
+		// field `envSemantics`, not a magic key inside env. A correct
+		// executor reads the field and applies the contract.
 		const prepared = {
 			env: {
-				completeness: "complete" as const,
 				PATH: "/usr/bin",
 				HOME: "/sandbox",
 			},
+			envSemantics: "complete" as const,
 		};
 		const leaked: Record<string, string | undefined> = {
 			...(process.env as Record<string, string>),
@@ -204,13 +218,10 @@ describe("CORRECTION01 R2 — sanitized env is COMPLETE (P0-2)", () => {
 		expect(leaked["CLINEMM_PARENT_VAR"]).toBe(
 			process.env.CLINEMM_PARENT_VAR,
 		);
-		const correctAny = prepared.env as Record<string, string | undefined> & {
-			completeness?: string;
-		};
 		const correct: Record<string, string | undefined> =
-			correctAny.completeness === "complete"
-				? { ...correctAny }
-				: { ...(process.env as Record<string, string | undefined>), ...correctAny };
+			prepared.envSemantics === "complete"
+				? { ...prepared.env }
+				: { ...(process.env as Record<string, string | undefined>), ...prepared.env };
 		expect(correct["CLINEMM_PARENT_VAR"]).toBeUndefined();
 	});
 

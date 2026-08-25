@@ -1010,6 +1010,7 @@ export {
 	DEFAULT_READONLY_ALLOW,
 	SAFE_ENVIRONMENT_BASELINE,
 	SECRET_BLOCKLIST,
+	getEnvironmentSemantics,
 	isSecretShapedEnvName,
 	materializeEnvironment,
 } from "./runtime/sandbox/environment";
@@ -1024,6 +1025,7 @@ export type {
 	CommandCapability,
 	CommandInvocation,
 	EnvironmentCapability,
+	EnvironmentSemantics,
 	SandboxBackend,
 	SandboxMode,
 	SandboxNetwork,

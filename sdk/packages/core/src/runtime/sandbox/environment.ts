@@ -21,7 +21,27 @@
  * (allocating a private temp root) belong to the Seatbelt backend.
  */
 
-import type { EnvironmentCapability } from "./types";
+import type { EnvironmentCapability, EnvironmentSemantics } from "./types";
+
+/**
+ * Compute the {@link EnvironmentSemantics} a prepared invocation MUST
+ * carry given a capability.
+ *
+ *   - `mode: "inherit"` → `"overlay"` (the executor spreads process.env
+ *     underneath the prepared env).
+ *   - `mode: "sanitized"` → `"complete"` (the prepared env IS the
+ *     entire child env; the executor MUST NOT spread process.env).
+ *
+ * This is the type-safe replacement for the magic
+ * `completeness: "complete"` env key that CORRECTION01 used. The
+ * capability's intent (inherit vs sanitized) is now expressed as a
+ * typed metadata field on the invocation itself.
+ */
+export function getEnvironmentSemantics(
+	capability: EnvironmentCapability,
+): EnvironmentSemantics {
+	return capability.mode === "sanitized" ? "complete" : "overlay";
+}
 
 /**
  * The default safe baseline for sandboxed environment.
@@ -145,9 +165,10 @@ export function materializeEnvironment(
 
 	// CORRECTION01 (P0-2): Sanitized mode produces a COMPLETE
 	// environment. The executor MUST NOT spread `process.env` underneath
-	// it; the contract is enforced by the `completeness: "complete"`
-	// sentinel that the executor must check before applying legacy
-	// `{ ...process.env, ...prepared.env }` merge semantics.
+	// it; the contract is enforced by `envSemantics: "complete"` on
+	// the prepared invocation (NOT a magic key inside `env`, which
+	// would pollute the child's environment — see types.ts
+	// EnvironmentSemantics).
 	//
 	// Prior implementation relied on the executor's spread-merge
 	// behavior to filter secrets by emitting only an "override" record
@@ -160,10 +181,9 @@ export function materializeEnvironment(
 	// intentionally placed. Unknown parent keys do not appear at all.
 	// The known secret-shaped keys (SSH_AUTH_SOCK, AWS_*, ...) are
 	// still emitted as empty strings so that a buggy executor that
-	// ignores the completeness marker at least neutralizes them.
-	const out: Record<string, string> = {
-		completeness: "complete",
-	};
+	// ignores envSemantics and does legacy spread-merge at least
+	// neutralizes them.
+	const out: Record<string, string> = {};
 
 	// 1) Safe baseline. We pull from `parentEnv` for variables whose
 	// values come from the host (PATH, TERM); others get the constant

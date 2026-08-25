@@ -45,34 +45,34 @@ const HAS_SUBSTRATE =
  * Run a `SpawnConfig`-shaped invocation via `child_process.spawnSync`.
  * Returns exit code, stdout, stderr.
  *
- * CORRECTION01 (P0-2): Honors the `completeness` sentinel on the
- * prepared env. When `prepared.env.completeness === "complete"`, the
- * executor MUST use the prepared env AS-IS, with no further spreading
- * of `process.env`. Otherwise (legacy overlay), it spreads
- * `process.env` under `prepared.env`.
+ * CORRECTION01-P1: Honors `prepared.envSemantics` (the typed
+ * metadata on the invocation), NOT a magic key inside `env`.
  *
- * For `inherit` mode, `prepared.env` does NOT carry `completeness`,
- * so the executor applies legacy spread-merge and the child sees
- * `process.env` (mirrors the production `CommandJobManager.start`
- * `{ ...process.env, ...options.env ?? {} }`). For `sanitized` mode,
- * `prepared.env` carries `completeness: "complete"`, so the child
- * sees ONLY the materialized env.
+ *   - `envSemantics === "complete"`: the executor MUST use the
+ *     prepared env AS-IS, with no further spreading of `process.env`.
+ *     This is the contract for sanitized sandboxed environments.
+ *
+ *   - `envSemantics === "overlay"` (or absent): legacy semantics. The
+ *     executor spreads `process.env` underneath `prepared.env`. This
+ *     mirrors the production `CommandJobManager.start` invocation:
+ *     `{ ...process.env, ...options.env ?? {} }`.
+ *
+ * `inherit` mode and `NoSandboxBackend` produce `"overlay"`. Sanitized
+ * mode produces `"complete"`.
  */
 function runPrepared(prepared: {
 	executable: string;
 	args: readonly string[];
 	cwd: string;
 	env: Record<string, string>;
+	envSemantics?: "overlay" | "complete";
 	input?: string;
 }): { exitCode: number | null; stdout: string; stderr: string } {
-	const preparedAny = prepared.env as { completeness?: string } & Record<
-		string,
-		string
-	>;
+	const semantics = prepared.envSemantics ?? "overlay";
 	const env: Record<string, string> =
-		preparedAny.completeness === "complete"
-			? { ...preparedAny }
-			: { ...(process.env as Record<string, string>), ...preparedAny };
+		semantics === "complete"
+			? { ...prepared.env }
+			: { ...(process.env as Record<string, string>), ...prepared.env };
 	const result = spawnSync(prepared.executable, [...prepared.args], {
 		cwd: prepared.cwd,
 		env,

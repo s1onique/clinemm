@@ -138,28 +138,61 @@ export interface CommandInvocation {
 }
 
 /**
+ * How the executor MUST apply `env` to the child process.
+ *
+ * This is a metadata field on {@link SandboxPreparedInvocation}, NOT a
+ * magic key inside `env` itself. The two values:
+ *
+ *   - `"overlay"`: legacy semantics. The executor spreads `process.env`
+ *     UNDERNEATH `env`:
+ *
+ *         env_to_pass = { ...process.env, ...prepared.env }
+ *
+ *     This is the correct behavior for `inherit` mode (the capability
+ *     explicitly asked for parent-environment inheritance) and for
+ *     `NoSandboxBackend` (the executor is responsible for the merge).
+ *
+ *   - `"complete"`: the sandbox's `env` IS the entire environment the
+ *     child process MUST see. The executor MUST NOT spread `process.env`
+ *     underneath:
+ *
+ *         env_to_pass = prepared.env
+ *
+ *     This is the load-bearing property of CORRECTION01 (P0-2): under
+ *     sanitized mode, the sandboxed env is COMPLETE — it does not
+ *     overlay `process.env`. Encoding the distinction as a magic key
+ *     inside `env` (the CORRECTION01 implementation) had two failure
+ *     modes:
+ *
+ *       1. The key was visible to the child as `completeness=complete`,
+ *          polluting the child's environment.
+ *       2. The security property was hidden in an ordinary env var,
+ *          making it easy for an executor to miss the contract.
+ *
+ *     A typed metadata field on the invocation makes the contract
+ *     impossible to misunderstand: the executor MUST check
+ *     `envSemantics` before applying `env` to the spawn options.
+ */
+export type EnvironmentSemantics = "overlay" | "complete";
+
+/**
  * The result of a successful {@link SandboxBackend.prepare}.
  *
- * Structurally identical to {@link CommandInvocation}. The executor
- * passes this directly to `spawnSupervisableShellCommand` (or to
- * `node:child_process.spawn`). No backend-specific concepts leak out.
+ * Structurally identical to {@link CommandInvocation} plus a typed
+ * `envSemantics` metadata field. The executor passes this directly to
+ * `spawnSupervisableShellCommand` (or to `node:child_process.spawn`).
+ * No backend-specific concepts leak out.
  *
  * For Seatbelt, the `executable` becomes `/usr/bin/sandbox-exec` and
  * `args` is prefixed with `["-f", <profile-file>]` followed by the
  * original executable/args. For `NoSandboxBackend`, the prepared
  * invocation is byte-equivalent to the input invocation.
  *
- * `env` may carry a `completeness` sentinel key that signals to the
- * executor HOW it must apply the env to the spawn options:
- *
- *   - `"complete"`: the executor MUST pass `env` to the child process
- *     AS-IS, with no further spreading of `process.env`. This is the
- *     contract for sanitized sandboxed environments and is the load-
- *     bearing property of CORRECTION01 (P0-2): under sanitized mode the
- *     sandbox's env is the COMPLETE child environment, not an overlay
- *     that the executor merges onto the host environment.
- *   - absent: legacy overlay semantics. The executor spreads
- *     `process.env` underneath `env` (existing production behavior).
+ * The executor MUST apply `env` according to `envSemantics` (see
+ * {@link EnvironmentSemantics}). The default behavior (when the
+ * executor predates this field) is `"overlay"` for backwards
+ * compatibility, but a CORRECTION01-aware executor honors `"complete"`
+ * to enforce the sanitized-env security property.
  */
 export interface SandboxPreparedInvocation {
 	readonly executable: string;
@@ -167,6 +200,15 @@ export interface SandboxPreparedInvocation {
 	readonly cwd: string;
 	readonly env: Record<string, string>;
 	readonly input?: string;
+	/**
+	 * How the executor MUST apply `env` to the child process. See
+	 * {@link EnvironmentSemantics}.
+	 *
+	 * Default for executors that do not read this field: assume
+	 * `"overlay"`. Newer executors MUST read this field and apply the
+	 * corresponding contract.
+	 */
+	readonly envSemantics: EnvironmentSemantics;
 	/**
 	 * Optional cleanup hook called by the executor once the spawned
 	 * process has been waited on (or terminated). For Seatbelt, this
