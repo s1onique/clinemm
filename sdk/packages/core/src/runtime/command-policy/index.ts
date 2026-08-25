@@ -48,6 +48,8 @@ export {
 	type NormalizedCommands,
 	type NormalizedFailure,
 } from "./command-policy";
+
+export { type TempAuthorityEvidence } from "./command-policy-types";
 // ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
 // re-export the R5 hard floor entry point so the VSCode host
 // adapter's stub (`apps/vscode/src/test/cline-core-vitest-stub.ts`)

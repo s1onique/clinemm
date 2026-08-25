@@ -1,3 +1,5 @@
+import * as fs from "node:fs"
+import * as os from "node:os"
 import {
 	buildCommandExecutionPlan,
 	type CommandDecision,
@@ -7,6 +9,7 @@ import {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 	type EvaluatedCommand,
 	evaluateCommandPolicy,
+	type TempAuthorityEvidence,
 	type WorkspacePathAuthorityEvidence,
 } from "@cline/core"
 import { evaluateCommandRiskWithParser } from "@cline/core/internal/command-risk-internal"
@@ -130,6 +133,49 @@ function parseMcpToolName(toolName: string): { serverName: string; toolName: str
  * check. The host should ALWAYS supply evidence in production;
  * tests may omit it.
  */
+
+/**
+ * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01
+ *
+ * Host-side evidence builder for the `host_safe_mktemp_default_temp`
+ * safe rule.
+ *
+ * On Darwin (process.platform === "darwin"), Node's `os.tmpdir()` calls
+ * `confstr(_CS_DARWIN_USER_TEMP_DIR, ...)` and returns the per-user
+ * temp directory at `/var/folders/.../T`. The Darwin BSD `mktemp`
+ * binary ignores $TMPDIR for the bare form and anchors on this same
+ * per-user temp directory. Therefore on Darwin the rendered command
+ * `mktemp` / `mktemp -d` has a destination bounded by the host's
+ * intrinsic per-user temp root, and the safe rule can promote to
+ * ALLOW once this evidence is present.
+ *
+ * On linux/unknown, the function returns undefined; the policy layer
+ * will refuse to ALLOW the rule because the destination is not
+ * intrinsically bounded (GNU mktemp honors inherited TMPDIR).
+ *
+ * The canonical root is obtained by realpath'ing the effective
+ * root. `/var/folders/.../T` is a symlink to `/private/var/folders/.../T`
+ * on darwin; both are reported for diagnostic completeness, and the
+ * canonical form is what the policy compares.
+ */
+export function buildTempAuthorityEvidence(): TempAuthorityEvidence | undefined {
+	if (process.platform !== "darwin") {
+		return undefined
+	}
+	const effective = os.tmpdir()
+	let canonical: string
+	try {
+		canonical = fs.realpathSync(effective)
+	} catch {
+		canonical = effective
+	}
+	return {
+		platform: "darwin",
+		effectiveDefaultTempRoot: effective,
+		canonicalDefaultTempRoot: canonical,
+	}
+}
+
 export function getCommandHostAuthorization(
 	toolName: string,
 	settings: AutoApprovalSettings,

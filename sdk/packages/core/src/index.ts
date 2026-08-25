@@ -463,6 +463,7 @@ export {
 	OPAQUE_SHELL_TOKENS,
 	parseCommandModelHints,
 	renderNormalizedCommand,
+	type TempAuthorityEvidence,
 } from "./runtime/command-policy";
 export { buildCommandExecutionPlan } from "./runtime/command-policy/command-execution-plan";
 // ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
