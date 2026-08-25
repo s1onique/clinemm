@@ -149,6 +149,34 @@ export {
 	spawnSupervisableShellCommand,
 } from "../../../../sdk/packages/core/src/extensions/tools/executors/bash"
 export { createEditorExecutor } from "../../../../sdk/packages/core/src/extensions/tools/executors/editor"
+// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+// Re-export the sandbox abstraction surface from the real SDK so
+// `command-job-manager.ts` (which imports these from `@cline/core`
+// via the vitest alias) can wire up the experimental opt-in without
+// the stub blocking production code paths. The real implementations
+// live in the SDK and are exercised by the sdk-side test suites; the
+// stub simply needs to make the symbols resolvable.
+export {
+	type CommandCapability,
+	type CommandInvocation,
+	type EnvironmentCapability,
+	type EnvironmentSemantics,
+	type SandboxBackend,
+	type SandboxBackendOptIn,
+	type SandboxMode,
+	type SandboxNetwork,
+	type SandboxPreparedInvocation,
+	SandboxError,
+} from "../../../../sdk/packages/core/src/runtime/sandbox/types"
+export { noSandboxBackend } from "../../../../sdk/packages/core/src/runtime/sandbox/no-sandbox-backend"
+export {
+	getSandboxBackend,
+	readExperimentalSandboxOptIn,
+} from "../../../../sdk/packages/core/src/runtime/sandbox/sandbox-backend"
+export {
+	SAFE_ENVIRONMENT_BASELINE,
+	SECRET_BLOCKLIST,
+} from "../../../../sdk/packages/core/src/runtime/sandbox/environment"
 export type { EditFileInput } from "../../../../sdk/packages/core/src/extensions/tools/schemas"
 export type { ApplyPatchExecutor, EditorExecutor, ToolExecutors } from "../../../../sdk/packages/core/src/extensions/tools/types"
 export {

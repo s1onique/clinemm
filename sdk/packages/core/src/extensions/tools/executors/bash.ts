@@ -11,6 +11,7 @@ import {
 	getDefaultShell,
 	getShellInvocation,
 } from "@cline/shared";
+import type { EnvironmentSemantics } from "../../../runtime/sandbox/types";
 import { TimeoutError } from "../helpers";
 import type { ShellExecutor } from "../types";
 import {
@@ -78,6 +79,21 @@ interface SpawnConfig {
 	cwd: string;
 	env: Record<string, string>;
 	input?: string;
+	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	 * Optional env-merging semantics. When `undefined` (the legacy
+	 * default), the supervisor spreads `process.env` underneath
+	 * `config.env` — preserving exact pre-integration behavior for
+	 * every existing caller. When `"complete"`, the supervisor uses
+	 * `config.env` AS-IS (no spread) — this is the contract a sandbox
+	 * backend produces for sanitized environments and is the
+	 * load-bearing property that keeps the parent environment from
+	 * leaking into the sandboxed child.
+	 *
+	 * Existing callers do not need to specify this; the undefined
+	 * path preserves byte-equivalent behavior.
+	 */
+	envSemantics?: EnvironmentSemantics;
 }
 
 /**
@@ -212,9 +228,21 @@ function buildShellProcess(
 ): SupervisableShellProcess {
 	const isWindows = process.platform === "win32";
 
+	// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	// Honor `config.envSemantics`. When undefined (legacy callers) or
+	// "overlay", spread process.env underneath config.env — preserving
+	// byte-equivalent pre-integration behavior. When "complete", use
+	// config.env AS-IS — this is the CORRECTION01-P1 contract: a
+	// sandbox backend producing "complete" semantics has already
+	// computed the entire environment the child should see, including
+	// a sanitized allowlist, and spreading process.env underneath
+	// would silently re-introduce leaked secrets.
+	const childEnv =
+		config.envSemantics === "complete" ? config.env : { ...process.env, ...config.env };
+
 	const child = spawn(config.executable, config.args, {
 		cwd: config.cwd,
-		env: { ...process.env, ...config.env },
+		env: childEnv,
 		stdio: ["pipe", "pipe", "pipe"],
 		detached: !isWindows,
 		windowsHide: true,
@@ -675,17 +703,34 @@ export function createShellExecutor(
  * internal setTimeout fires `killTree()` on its own. This primitive
  * exposes `killTree()` so the caller can ignore the wait budget and only
  * enforce the (larger) execution deadline.
+ *
+ * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+ * `envSemantics` may be supplied directly on `config` OR via `options`
+ * (for backward-compatible option ergonomics). When either is `"complete"`,
+ * the supervisor uses `config.env` AS-IS and does NOT spread `process.env`
+ * underneath. This is the CORRECTION01-P1 contract a sandbox backend
+ * produces for sanitized environments.
  */
 export function spawnSupervisableShellCommand(
 	config: SpawnConfig,
 	options: {
 		maxOutputChars?: number;
 		combineOutput?: boolean;
+		/**
+		 * Optional env-merging semantics override. When set, takes
+		 * precedence over `config.envSemantics`. Useful when the caller
+		 * holds an immutable prepared invocation (e.g. a sandbox backend's
+		 * `SandboxPreparedInvocation`) and wants to thread the semantics
+		 * through the option surface instead of mutating the config.
+		 */
+		envSemantics?: EnvironmentSemantics;
 	} = {},
 ): SupervisableShellProcess {
 	const maxOutputChars = options.maxOutputChars ?? MAX_COMMAND_OUTPUT_CHARS;
 	const combineOutput = options.combineOutput ?? true;
-	return buildShellProcess(config, maxOutputChars, combineOutput);
+	const effective: SpawnConfig =
+		options.envSemantics !== undefined ? { ...config, envSemantics: options.envSemantics } : config;
+	return buildShellProcess(effective, maxOutputChars, combineOutput);
 }
 
 /**

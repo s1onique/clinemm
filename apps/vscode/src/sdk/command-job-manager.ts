@@ -32,8 +32,14 @@
  * (see command-status-tool.ts). Observation via `command_status` is
  * read-only and does not require host command policy.
  */
-import { type StructuredCommandInput, type SupervisableShellProcess, spawnSupervisableShellCommand } from "@cline/core"
+import { type StructuredCommandInput, type SupervisableShellProcess, spawnSupervisableShellCommand, SandboxError } from "@cline/core"
 import { type AgentToolContext, getDefaultShell, getShellInvocation } from "@cline/shared"
+import {
+	buildExperimentalReconCapability,
+	defaultSandboxBackendResolver,
+	resolveExperimentalSandboxMode,
+	type SandboxBackendResolver,
+} from "./sandbox-policy"
 
 export type CommandJobState = "running" | "exited" | "deadline_exceeded" | "cancelled" | "spawn_failed"
 
@@ -176,6 +182,34 @@ export interface CommandJobManagerOptions {
 	 * `effectiveExecutionDeadlineMs` for any given job.
 	 */
 	maxWaitBudgetMs?: number
+	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	 * Optional sandbox backend resolver. When set, overrides the
+	 * production default (`defaultSandboxBackendResolver`).
+	 *
+	 * The resolver is the SOLE dependency-injection seam for the
+	 * experimental sandbox integration. Tests use it to:
+	 *   - simulate substrate-unavailable (return `undefined`)
+	 *   - inject a backend whose `prepare()` throws `SandboxError`
+	 *   - assert what was passed to the supervisor
+	 *
+	 * Production code never sets this; it remains on the default. The
+	 * constructor never touches the Seatbelt substrate or SBPL.
+	 */
+	sandboxBackendResolver?: SandboxBackendResolver
+	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	 * Canonical absolute paths treated as WRITE-confined regions in
+	 * the experimental Wave-1 capability. Each invocation under
+	 * `CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt` builds a capability
+	 * with these as `readonlyRoots` (write-deny regions in Seatbelt).
+	 *
+	 * Optional. When omitted, the Wave-1 capability has empty
+	 * `readonlyRoots` (broad-read default; no workspace writes
+	 * protected from the kernel side). Production host code is
+	 * responsible for supplying the actual workspace roots.
+	 */
+	experimentalSandboxWorkspaceRoots?: readonly string[]
 }
 
 /**
@@ -363,6 +397,14 @@ interface CommandJob {
 	 */
 	terminalTransitionResolve?: (transition: TerminalTransition) => void
 	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	 * Optional sandbox-side cleanup hook (e.g. Seatbelt profile temp
+	 * dir removal). Set by `start()` when the experimental sandbox
+	 * was used; called by `finalize()` best-effort. Cleanup failure
+	 * MUST NOT alter the command's exit classification.
+	 */
+	sandboxCleanup?: () => Promise<void>
+	/**
 	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 	 * terminal-transition promise. Pre-created in `start()` so the
 	 * resolver is registered before the exit transition can fire
@@ -401,11 +443,28 @@ export class CommandJobManager {
 	private readonly maxTerminalJobs: number
 	private readonly maxExecutionDeadlineMs: number
 	private readonly maxWaitBudgetMs: number
+	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	 * Sandbox backend resolver (DI seam). Falls back to the production
+	 * default that reads `CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt` and
+	 * resolves through `getSandboxBackend`. Frozen so callers cannot
+	 * accidentally mutate it post-construction (mutating the resolver
+	 * would silently change the fail-closed contract for in-flight jobs).
+	 */
+	private readonly sandboxBackendResolver: SandboxBackendResolver
+	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	 * Canonical workspace roots treated as write-confined regions in
+	 * the Wave-1 experimental capability. Frozen.
+	 */
+	private readonly experimentalSandboxWorkspaceRoots: readonly string[]
 
 	constructor(options: CommandJobManagerOptions = {}) {
 		this.maxTerminalJobs = Math.max(1, options.maxTerminalJobs ?? MAX_TERMINAL_JOBS)
 		this.maxExecutionDeadlineMs = Math.max(0, options.maxExecutionDeadlineMs ?? DEFAULT_EXECUTION_DEADLINE_MS)
 		this.maxWaitBudgetMs = Math.max(0, options.maxWaitBudgetMs ?? DEFAULT_WAIT_BUDGET_MS)
+		this.sandboxBackendResolver = options.sandboxBackendResolver ?? defaultSandboxBackendResolver
+		this.experimentalSandboxWorkspaceRoots = Object.freeze([...(options.experimentalSandboxWorkspaceRoots ?? [])])
 	}
 
 	async start(options: StartCommandJobOptions, context?: AgentToolContext): Promise<StartCommandJobResult> {
@@ -438,13 +497,121 @@ export class CommandJobManager {
 		const startedAtMs = Date.now()
 		const deadlineAtMs = startedAtMs + effectiveDeadlineMs
 
+		// ----------------------------------------------------------------
+		// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+		// Experimental opt-in integration. DEFAULT_OFF is preserved by
+		// `resolveExperimentalSandboxMode()` returning `undefined` for
+		// any unset, invalid, or unrecognized value — the legacy path
+		// below is byte-equivalent to pre-integration behavior.
+		//
+		// Fail-closed contract (P0 invariant):
+		//   - opt-in absent      → legacy path (no behavior change)
+		//   - opt-in + no backend → sandbox-unavailable, no spawn
+		//   - opt-in + prepare throws → fail-closed, no spawn
+		//   - opt-in + prepare ok → use prepared invocation as-is
+		//                          (executable/args/cwd/env come from
+		//                          the backend, NOT from the original)
+		// ----------------------------------------------------------------
+		const sandboxMode = resolveExperimentalSandboxMode()
+		let preparedEnvSemantics: "overlay" | "complete" | undefined
+		let sandboxCleanup: (() => Promise<void>) | undefined
+		// The env passed to the supervisor. When the sandbox prepared
+		// an invocation, we MUST use `prepared.env` (which contains the
+		// sanitized allowlist) and NOT `options.env` (which may contain
+		// secrets that the parent wants to pass to an unsandboxed
+		// shell). The `envSemantics` field tells the supervisor how to
+		// merge this `env` with the parent's `process.env`.
+		let spawnEnv: Record<string, string> = options.env ?? {}
+
+		if (sandboxMode !== undefined) {
+			// Opt-in recognized: route through the sandbox abstraction.
+			const backend = await this.sandboxBackendResolver(sandboxMode)
+			if (!backend) {
+				// Fail-closed: opt-in recognized but no backend applies
+				// (substrate unavailable, gate failed, etc.). The
+				// command is NOT executed unsandboxed.
+				return this.buildSandboxUnavailableResult({
+					id,
+					startedAtMs,
+					deadlineAtMs,
+					maxRetainedOutputChars,
+					maxResponseOutputChars,
+					signal: `sandbox-unavailable: opt-in ${sandboxMode} but no backend resolved`,
+				})
+			}
+
+			// Build the Wave-1 capability. This function lives in the
+			// sandbox-policy module so the executor stays agnostic of
+			// Seatbelt-specific semantics.
+			const capability = buildExperimentalReconCapability({
+				cwd: options.cwd,
+				workspaceRoots: this.experimentalSandboxWorkspaceRoots,
+			})
+
+			let prepared
+			try {
+				prepared = await backend.prepare({
+					capability,
+					command: {
+						executable,
+						args,
+						cwd: options.cwd,
+						env: options.env ?? {},
+						input,
+					},
+				})
+			} catch (err) {
+				// Fail-closed: prepare threw (canonicalize, profile,
+				// launch-prepare, etc.). The command is NOT executed
+				// unsandboxed. The error is surfaced via `signal` on
+				// a `spawn_failed` result.
+				const reason =
+					err instanceof SandboxError
+						? `${err.reason}: ${err.message}`
+						: err instanceof Error
+							? err.message
+							: String(err)
+				return this.buildSandboxUnavailableResult({
+					id,
+					startedAtMs,
+					deadlineAtMs,
+					maxRetainedOutputChars,
+					maxResponseOutputChars,
+					signal: `sandbox-prepare-failed: ${reason}`,
+				})
+			}
+
+			// STRUCTURAL spawn binding (reviewer evidence 2): the
+			// prepared invocation is the authoritative spawn shape.
+			// We replace executable/args/env with what the backend
+			// produced, and thread `prepared.envSemantics` through the
+			// supervisor so the env-merge site honors the contract.
+			executable = prepared.executable
+			args = [...prepared.args]
+			input = prepared.input
+			// CRITICAL: use the BACKEND'S env, not the caller's. The
+			// caller's `options.env` may carry secrets that the parent
+			// (run_commands host) wants to forward to an unsandboxed
+			// shell. Under sanitized mode, those must NOT reach the
+			// child. The backend's env is the authoritative allowlist.
+			spawnEnv = prepared.env
+			preparedEnvSemantics = prepared.envSemantics
+			sandboxCleanup = prepared.cleanup
+		}
+
 		const childProcess = spawnSupervisableShellCommand(
 			{
 				executable,
 				args,
 				cwd: options.cwd,
-				env: options.env ?? {},
+				env: spawnEnv,
 				input,
+				// When `undefined` (legacy / disabled / unrecognized
+				// opt-in) the supervisor preserves the existing
+				// `{ ...process.env, ...config.env }` merge. When the
+				// sandbox produced a sanitized env, this is "complete"
+				// and the supervisor uses `config.env` AS-IS.
+				envSemantics: preparedEnvSemantics,
 			},
 			{
 				// Retain enough for follow-up status checks; response
@@ -486,6 +653,11 @@ export class CommandJobManager {
 			finalized: false,
 			terminalTransitionResolve: resolveTerminalTransition,
 			terminalTransitionPromise,
+			// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+			// Stash the sandbox-prepared cleanup hook (e.g. Seatbelt
+			// profile temp dir removal). `finalize()` will run it
+			// best-effort. Always `undefined` for non-sandboxed jobs.
+			sandboxCleanup,
 		}
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: capture
 		// the cardinality transition at the manager's mutation seam.
@@ -611,6 +783,61 @@ export class CommandJobManager {
 		}
 	}
 
+	/**
+	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+	 * Build a `spawn_failed` result for sandbox fail-closed paths.
+	 *
+	 * Used when:
+	 *   - opt-in recognized, but `sandboxBackendResolver` returns `undefined`
+	 *     (substrate unavailable, gate failed)
+	 *   - opt-in recognized, backend available, but `prepare()` throws
+	 *     a `SandboxError` (canonicalize, profile, etc.)
+	 *
+	 * The job never enters the active Map (no spawn occurred), so
+	 * `terminalPromise` resolves immediately with `becameIdle: true` —
+	 * the runner's `.then()` chain is a no-op.
+	 *
+	 * The `process` field is a synthetic "never-spawned" shell process
+	 * whose `killTree()`/`terminateTree()` are no-ops. This is required
+	 * by the type but never invoked because `state` is already terminal.
+	 */
+	private buildSandboxUnavailableResult(input: {
+		id: string
+		startedAtMs: number
+		deadlineAtMs: number
+		maxRetainedOutputChars: number
+		maxResponseOutputChars: number
+		signal: string
+	}): StartCommandJobResult {
+		const never = (): Promise<never> => new Promise<never>(() => {})
+		const emptySnap = () => ({ text: "", totalChars: 0, dropped: false })
+		const syntheticProcess: SupervisableShellProcess = Object.freeze({
+			exit: never(),
+			killTree: async () => {},
+			terminateTree: async () => ({ treeTerminated: true, escalatedToKill: false }),
+			stdoutSnapshot: emptySnap,
+			stderrSnapshot: emptySnap,
+			pid: undefined,
+		})
+		return {
+			jobId: input.id,
+			state: "spawn_failed",
+			elapsedMs: Math.max(0, Date.now() - input.startedAtMs),
+			deadlineRemainingMs: Math.max(0, input.deadlineAtMs - Date.now()),
+			stdout: "",
+			stderr: "",
+			outputTruncated: false,
+			process: syntheticProcess,
+			// The job never entered the active Map, so there is no
+			// cardinality transition to observe. Resolve immediately
+			// with `becameIdle: true` so any downstream `.then()` is a
+			// no-op rather than holding a pending promise.
+			terminalPromise: Promise.resolve({ becameIdle: true }),
+			becameActive: false,
+			signal: input.signal,
+		}
+	}
+
 	private async terminate(job: CommandJob, reason: "deadline" | "cancel"): Promise<void> {
 		if (job.finalized || job.state !== "running") return
 		// FIRST-WRITER-WINS: if termination is already in flight, return
@@ -690,6 +917,18 @@ export class CommandJobManager {
 			job.abortSignal.removeEventListener("abort", job.abortListener)
 			job.abortSignal = undefined
 			job.abortListener = undefined
+		}
+		// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
+		// Run the sandbox cleanup hook best-effort. For Seatbelt this
+		// removes the profile temp dir. MUST NOT alter the command's
+		// exit classification — failures are swallowed and `state` /
+		// `signal` already reflect the original command outcome.
+		if (job.sandboxCleanup) {
+			const cleanup = job.sandboxCleanup
+			job.sandboxCleanup = undefined
+			void cleanup().catch(() => {
+				// Swallow: cleanup failures are non-fatal.
+			})
 		}
 		// Move from active → terminal (bounded FIFO).
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: capture
