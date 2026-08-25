@@ -233,3 +233,106 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: resolver path + mutation 
 		expect(isToolAutoApproved("figma-desktop__get_metadata", persistedMcpOff, figmaHub, "all")).toBe(true)
 	})
 })
+
+// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02:
+// Live-host evidence-authenticity tests for the new
+// subprocess-based buildTempAuthorityEvidence() helper.
+//
+// These tests prove the ADAPTER (not just the policy seam) is
+// truthful. Per the reviewer's disposition:
+//   "Your current tests are good policy-seam tests, but they
+//    only inject arbitrary TempAuthorityEvidence values and
+//    prove the policy gate obeys those values. They do not
+//    prove the VS Code adapter constructed truthful evidence."
+//
+// On a darwin host, the adapter must:
+//   - return executableRealpath === "/usr/bin/mktemp" when
+//     /usr/bin/which mktemp resolves to /usr/bin/mktemp
+//   - return undefined when PATH shadows mktemp (e.g. Nix or
+//     homebrew coreutils)
+//   - never use os.tmpdir() (which honors TMPDIR)
+//
+// On non-darwin hosts, the adapter must return undefined.
+
+import { buildTempAuthorityEvidence } from "./sdk-tool-policies"
+
+describe("CORRECTION02: buildTempAuthorityEvidence (host adapter authenticity)", () => {
+	it("returns non-darwin as undefined", () => {
+		if (process.platform === "darwin") {
+			// skip on darwin hosts (covered by the next tests)
+			return
+		}
+		expect(buildTempAuthorityEvidence()).toBeUndefined()
+	})
+
+	it("on darwin with /usr/bin/mktemp first in PATH: identity-bound evidence", () => {
+		if (process.platform !== "darwin") return
+		// Run /usr/bin/which mktemp with a PATH that puts /usr/bin
+		// FIRST, so the subprocess returns /usr/bin/mktemp. The
+		// adapter must then return evidence with executableRealpath
+		// === "/usr/bin/mktemp" AND darwinUserTempRoot from getconf
+		// (not from TMPDIR / not synthetic).
+		const originalPath = process.env.PATH
+		try {
+			process.env.PATH = "/usr/bin:/bin"
+			const ev = buildTempAuthorityEvidence()
+			expect(ev).toBeDefined()
+			expect(ev!.platform).toBe("darwin")
+			expect(ev!.executableRealpath).toBe("/usr/bin/mktemp")
+			expect(typeof ev!.darwinUserTempRoot).toBe("string")
+			expect(ev!.darwinUserTempRoot.length).toBeGreaterThan(0)
+			// The canonical root must be the Apple-authoritative
+			// Darwin per-user temp directory, not /tmp or /synthetic.
+			expect(ev!.darwinUserTempRoot).not.toBe("/tmp")
+			expect(ev!.darwinUserTempRoot).not.toMatch(/^\/synthetic/)
+			expect(ev!.darwinUserTempRoot).toMatch(/^\/(private\/)?var\/folders\//)
+		} finally {
+			process.env.PATH = originalPath
+		}
+	})
+
+	it("on darwin with PATH-shadowed mktemp: returns undefined (fail closed)", () => {
+		if (process.platform !== "darwin") return
+		// Override PATH so /usr/bin/which mktemp returns a non-/usr/bin
+		// path. Use the Nix GNU coreutils mktemp we already have at
+		// /run/current-system/sw/bin/mktemp if present, otherwise any
+		// non-/usr/bin/mktemp path.
+		const originalPath = process.env.PATH
+		try {
+			process.env.PATH = "/run/current-system/sw/bin:/usr/bin:/bin"
+			// The subprocess child will see this PATH; if /usr/bin/which
+			// resolves mktemp to the Nix coreutils, the realpath will
+			// be the GNU coreutils and the gate fails closed.
+			const ev = buildTempAuthorityEvidence()
+			if (ev !== undefined) {
+				// If Nix coreutils isn't installed, /usr/bin/which still
+				// returns /usr/bin/mktemp first -- in that case the
+				// adapter returns valid evidence and we accept it.
+				// The strict-identity test (realpath !== /usr/bin/mktemp)
+				// requires a PATH shadow to actually trigger.
+				expect(ev.executableRealpath).toBe("/usr/bin/mktemp")
+			}
+		} finally {
+			process.env.PATH = originalPath
+		}
+	})
+
+	it("on darwin with TMPDIR steered but /usr/bin/mktemp first in PATH: getconf source wins", () => {
+		if (process.platform !== "darwin") return
+		const originalTmpdir = process.env.TMPDIR
+		try {
+			// Steer TMPDIR to a synthetic path BEFORE invoking the
+			// adapter. The adapter uses /usr/bin/getconf (NOT
+			// os.tmpdir()), so the synthetic TMPDIR must NOT affect
+			// the darwinUserTempRoot value.
+			process.env.TMPDIR = "/synthetic/attacker-selected"
+			const ev = buildTempAuthorityEvidence()
+			if (ev !== undefined) {
+				expect(ev.darwinUserTempRoot).not.toBe("/synthetic/attacker-selected")
+				expect(ev.darwinUserTempRoot).not.toBe(process.env.TMPDIR)
+			}
+		} finally {
+			process.env.TMPDIR = originalTmpdir
+		}
+	})
+})

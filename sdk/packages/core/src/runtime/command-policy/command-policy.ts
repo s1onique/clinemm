@@ -439,27 +439,65 @@ function evaluateOne(
 			// removes ALLOWs, never adds them. A command that was ASK
 			// before this ACT remains ASK.
 			if (isTempAuthorityHostEvidenceBoundRuleSource(match.source)) {
+				// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02:
+				// The CORRECTION02 contract requires BOTH
+				//   (a) executable identity bound to /usr/bin/mktemp
+				//       (PATH-resolved + realpath; only Apple-system
+				//        identity reviewed in this ACT)
+				//   (b) true Darwin per-user temp root from
+				//       /usr/bin/getconf DARWIN_USER_TEMP_DIR
+				//       (NOT from os.tmpdir(), which honors
+				//        inherited TMPDIR/TMP/TEMP)
+				//
+				// The CORRECTION01 evidence accepted "darwin +
+				// non-empty strings" as proof; that gate was
+				// environment-steerable (P0-1) and blind to
+				// executable identity (P0-2). CORRECTION02
+				// tightens the gate to require each proven
+				// property explicitly, with a distinct
+				// source label so the operator can see which
+				// gate failed.
 				const evidence = auth.tempAuthorityEvidence;
-				if (
-					evidence === undefined ||
-					evidence.platform !== "darwin" ||
-					typeof evidence.effectiveDefaultTempRoot !== "string" ||
-					evidence.effectiveDefaultTempRoot.length === 0 ||
-					typeof evidence.canonicalDefaultTempRoot !== "string" ||
-					evidence.canonicalDefaultTempRoot.length === 0
-				) {
+				if (evidence === undefined || evidence.platform !== "darwin") {
 					const missing =
 						evidence === undefined
 							? "host did not supply tempAuthorityEvidence"
-							: evidence.platform !== "darwin"
-								? `host tempAuthorityEvidence.platform = "${evidence.platform}" (only darwin is approved for host_safe_mktemp_default_temp in this ACT)`
-								: evidence.effectiveDefaultTempRoot.length === 0
-									? "host tempAuthorityEvidence.effectiveDefaultTempRoot is empty"
-									: "host tempAuthorityEvidence.canonicalDefaultTempRoot is empty";
+							: `host tempAuthorityEvidence.platform = "${evidence.platform}" (only darwin is approved for host_safe_mktemp_default_temp in this ACT)`;
 					return {
 						kind: "ask",
 						source: "host_mktemp_temp_authority_unbound",
-						reason: `temp authority unbound: ${missing}; bare ${renderNormalizedCommand(command)} can be steered by inherited process environment (process.env.TMPDIR on GNU mktemp); bound promotion requires host-evidence that the destination is intrinsically host-defined (CORRECTION01)`,
+						reason: `temp authority unbound: ${missing}; CORRECTION02 requires host evidence that the destination is intrinsically bounded by the Apple-authoritative per-user temp directory (not by inherited environment)`,
+					};
+				}
+				if (
+					typeof evidence.executablePath !== "string" ||
+					evidence.executablePath.length === 0 ||
+					typeof evidence.executableRealpath !== "string" ||
+					evidence.executableRealpath.length === 0
+				) {
+					return {
+						kind: "ask",
+						source: "host_mktemp_executable_identity_unbound",
+						reason: `executable identity unbound: host tempAuthorityEvidence.executablePath or executableRealpath is empty; CORRECTION02 requires the host to PATH-resolve and realpath the mktemp binary and bind it to /usr/bin/mktemp`,
+					};
+				}
+				if (evidence.executableRealpath !== "/usr/bin/mktemp") {
+					return {
+						kind: "ask",
+						source: "host_mktemp_executable_identity_unbound",
+						reason: `executable identity unbound: host PATH-resolved mktemp realpath = "${evidence.executableRealpath}" (not /usr/bin/mktemp); the policy only approves Apple-system BSD mktemp in this ACT. Shadowing via homebrew/nix coreutils, PATH manipulation, or any other resolution that does not yield /usr/bin/mktemp fails closed to ASK.`,
+					};
+				}
+				if (
+					typeof evidence.darwinUserTempRoot !== "string" ||
+					evidence.darwinUserTempRoot.length === 0 ||
+					typeof evidence.canonicalDarwinUserTempRoot !== "string" ||
+					evidence.canonicalDarwinUserTempRoot.length === 0
+				) {
+					return {
+						kind: "ask",
+						source: "host_mktemp_temp_authority_unbound",
+						reason: `temp authority unbound: host tempAuthorityEvidence.darwinUserTempRoot or canonicalDarwinUserTempRoot is empty; CORRECTION02 requires the host to source the per-user temp directory from /usr/bin/getconf DARWIN_USER_TEMP_DIR (confstr) -- NOT from os.tmpdir(), which honors inherited TMPDIR/TMP/TEMP`,
 					};
 				}
 			}

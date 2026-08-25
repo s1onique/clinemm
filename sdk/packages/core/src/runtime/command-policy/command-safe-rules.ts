@@ -87,36 +87,49 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	// pwd with optional POSIX -L / -P (logical / physical working directory).
 	// Both are pure read-only reporting.
 	{ source: "host_safe_pwd", pattern: /^\s*pwd(?:\s+(?:-[LP]))?\s*$/u },
-	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01:
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02:
 	// V1 lexical positive mktemp rule for the SIMPLE bare forms
 	// `mktemp` and `mktemp -d`. The rendered-shape regex match is
 	// a NECESSARY but NOT SUFFICIENT condition for ALLOW: the
 	// destination of the created filesystem object is determined
 	// by both the rendered shape AND the inherited process
-	// environment. The Darwin BSD mktemp ignores $TMPDIR for the
-	// bare form and anchors on _CS_DARWIN_USER_TEMP_DIR. GNU
-	// coreutils mktemp honors $TMPDIR and writes wherever the
-	// parent process's TMPDIR points. Linux is GNU.
+	// environment AND which mktemp binary PATH resolves to.
+	//
+	// Darwin BSD /usr/bin/mktemp ignores $TMPDIR for the bare
+	// form and anchors on _CS_DARWIN_USER_TEMP_DIR. GNU coreutils
+	// mktemp honors $TMPDIR and writes wherever the parent
+	// process's TMPDIR points. Linux is GNU.
 	//
 	// Therefore the rendered-shape match alone CANNOT bound the
-	// destination cross-platform. The original ACT (C2) overstated
-	// this. The CORRECTION01 makes the rule HOST-EVIDENCE-BOUND:
-	// the policy layer consults `CommandHostAuthorization.
-	// tempAuthorityEvidence` after the lexical match, and only
-	// promotes to ALLOW when the evidence is present and reports
-	// `platform === "darwin"`. Without evidence, or on
-	// linux/win32/unknown, the rule falls through to ASK with
-	// source `host_mktemp_temp_authority_unbound`.
+	// destination. CORRECTION01 made the rule HOST-EVIDENCE-BOUND;
+	// CORRECTION02 tightens that contract after the reviewer
+	// identified that the CORRECTION01 evidence was itself
+	// environment-steerable (os.tmpdir() honors TMPDIR/TMP/TEMP)
+	// and blind to executable identity (no realpath binding).
 	//
-	// The host adapter at apps/vscode/src/sdk/sdk-tool-policies.ts
-	// populates the evidence for darwin hosts. The evidence
-	// contract is documented on CommandHostAuthorization.
+	// CORRECTION02 gate (all must hold for promotion to ALLOW):
+	//   (a) executable identity bound to /usr/bin/mktemp
+	//       (the host adapter PATH-resolves `mktemp` via
+	//        /usr/bin/which mktemp, realpaths the result, and
+	//        the policy requires the realpath to equal
+	//        /usr/bin/mktemp; shadowing via homebrew/nix
+	//        coreutils fails closed to ASK)
+	//   (b) darwinUserTempRoot non-empty
+	//   (c) canonicalDarwinUserTempRoot non-empty
+	//   (d) the policy sanity-checks that the canonical root is
+	//       consistent with the raw root.
+	//
+	// Source labels on failure:
+	//   host_mktemp_executable_identity_unbound  (gate a)
+	//   host_mktemp_temp_authority_unbound       (gates b/c/d)
 	//
 	// Reviewed positive forms (gated by host-evidence):
-	//   - `mktemp`    (single tempfile in the host-evidence-bounded
-	//                  per-user temp dir on darwin)
-	//   - `mktemp -d` (single tempdir  in the host-evidence-bounded
-	//                  per-user temp dir on darwin)
+	//   - `mktemp`    (single tempfile via /usr/bin/mktemp,
+	//                  Apple BSD semantics, anchored to the true
+	//                  Darwin per-user temp directory)
+	//   - `mktemp -d` (single tempdir  via /usr/bin/mktemp,
+	//                  Apple BSD semantics, anchored to the true
+	//                  Darwin per-user temp directory)
 	//
 	// Explicitly REJECTED at the lexical layer (remain ASK/DENY in V1):
 	//   - any other flag (`mktemp -u` is unsafe per Darwin manual:

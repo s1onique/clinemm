@@ -1,5 +1,5 @@
+import * as child_process from "node:child_process"
 import * as fs from "node:fs"
-import * as os from "node:os"
 import {
 	buildCommandExecutionPlan,
 	type CommandDecision,
@@ -135,44 +135,109 @@ function parseMcpToolName(toolName: string): { serverName: string; toolName: str
  */
 
 /**
- * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01
+ * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02
  *
  * Host-side evidence builder for the `host_safe_mktemp_default_temp`
  * safe rule.
  *
- * On Darwin (process.platform === "darwin"), Node's `os.tmpdir()` calls
- * `confstr(_CS_DARWIN_USER_TEMP_DIR, ...)` and returns the per-user
- * temp directory at `/var/folders/.../T`. The Darwin BSD `mktemp`
- * binary ignores $TMPDIR for the bare form and anchors on this same
- * per-user temp directory. Therefore on Darwin the rendered command
- * `mktemp` / `mktemp -d` has a destination bounded by the host's
- * intrinsic per-user temp root, and the safe rule can promote to
- * ALLOW once this evidence is present.
+ * On Darwin (process.platform === "darwin"), the function:
  *
- * On linux/unknown, the function returns undefined; the policy layer
- * will refuse to ALLOW the rule because the destination is not
- * intrinsically bounded (GNU mktemp honors inherited TMPDIR).
+ *   (1) Resolves `mktemp` via PATH using `/usr/bin/which mktemp`
+ *       (a subprocess so PATH resolution matches what the executor
+ *       will see). Captures the raw executable path.
+ *   (2) Realpathes the resolved executable via `fs.realpathSync`.
+ *   (3) Requires the realpath to equal `/usr/bin/mktemp` -- only
+ *       Apple-system identity is reviewed in this ACT. Any other
+ *       resolution (homebrew coreutils, Nix coreutils, custom
+ *       build, symlink hack, etc.) returns undefined evidence
+ *       and the policy gate fails closed to ASK with
+ *       host_mktemp_executable_identity_unbound.
+ *   (4) Sourced the true Darwin per-user temp root from
+ *       `/usr/bin/getconf DARWIN_USER_TEMP_DIR` (which calls
+ *       confstr(_CS_DARWIN_USER_TEMP_DIR) on darwin). This is
+ *       the Apple-authoritative source per the Secure Coding
+ *       Guide; unlike os.tmpdir(), it ignores inherited TMPDIR.
+ *   (5) Realpathes the getconf result for the canonical form.
  *
- * The canonical root is obtained by realpath'ing the effective
- * root. `/var/folders/.../T` is a symlink to `/private/var/folders/.../T`
- * on darwin; both are reported for diagnostic completeness, and the
- * canonical form is what the policy compares.
+ * Returns undefined on:
+ *   - non-darwin platform (linux/win32/unknown)
+ *   - which subprocess failure (PATH has no mktemp at all)
+ *   - realpath mismatch against /usr/bin/mktemp
+ *   - getconf subprocess failure
+ *
+ * The returned evidence satisfies BOTH the
+ *   (a) executable identity gate
+ *       (realpath === /usr/bin/mktemp)
+ * and
+ *   (b) true Darwin temp authority gate
+ *       (darwinUserTempRoot from getconf, NOT os.tmpdir())
+ * required by the CORRECTION02 policy gate.
  */
 export function buildTempAuthorityEvidence(): TempAuthorityEvidence | undefined {
 	if (process.platform !== "darwin") {
 		return undefined
 	}
-	const effective = os.tmpdir()
-	let canonical: string
+
+	let executablePath: string
 	try {
-		canonical = fs.realpathSync(effective)
+		const which = child_process.spawnSync("/usr/bin/which", ["mktemp"], {
+			encoding: "utf8",
+			timeout: 5_000,
+		})
+		if (which.status !== 0 || !which.stdout) {
+			return undefined
+		}
+		executablePath = which.stdout.trim().split("\n")[0]
+		if (!executablePath) {
+			return undefined
+		}
 	} catch {
-		canonical = effective
+		return undefined
 	}
+
+	let executableRealpath: string
+	try {
+		executableRealpath = fs.realpathSync(executablePath)
+	} catch {
+		return undefined
+	}
+
+	// STRICT IDENTITY GATE: only Apple-system /usr/bin/mktemp is
+	// reviewed in this ACT. Anything else fails closed to ASK.
+	if (executableRealpath !== "/usr/bin/mktemp") {
+		return undefined
+	}
+
+	let darwinUserTempRoot: string
+	try {
+		const getconf = child_process.spawnSync("/usr/bin/getconf", ["DARWIN_USER_TEMP_DIR"], {
+			encoding: "utf8",
+			timeout: 5_000,
+		})
+		if (getconf.status !== 0 || !getconf.stdout) {
+			return undefined
+		}
+		darwinUserTempRoot = getconf.stdout.trim()
+		if (!darwinUserTempRoot) {
+			return undefined
+		}
+	} catch {
+		return undefined
+	}
+
+	let canonicalDarwinUserTempRoot: string
+	try {
+		canonicalDarwinUserTempRoot = fs.realpathSync(darwinUserTempRoot)
+	} catch {
+		canonicalDarwinUserTempRoot = darwinUserTempRoot
+	}
+
 	return {
 		platform: "darwin",
-		effectiveDefaultTempRoot: effective,
-		canonicalDefaultTempRoot: canonical,
+		executablePath,
+		executableRealpath,
+		darwinUserTempRoot,
+		canonicalDarwinUserTempRoot,
 	}
 }
 

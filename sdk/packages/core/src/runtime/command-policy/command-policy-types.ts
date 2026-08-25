@@ -140,7 +140,16 @@ export type CommandDecisionSource =
 	// not bound the destination. The verdict is downgraded to ASK
 	// with this source so the operator sees why the AUTO did not
 	// fire, and so the user retains the explicit-approval gate.
-	| "host_mktemp_temp_authority_unbound";
+	| "host_mktemp_temp_authority_unbound"
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02:
+	// Executable-identity unbound downgrade. The lexical regex
+	// matched and the platform/temp-root gate passed, but the host
+	// PATH-resolved mktemp realpath is NOT `/usr/bin/mktemp` (e.g.
+	// homebrew coreutils, Nix coreutils, or any other shadowing).
+	// The verdict is downgraded to ASK with this source so the
+	// operator sees that the executable identity gate failed
+	// (vs. the temp-root gate, which uses a different source).
+	| "host_mktemp_executable_identity_unbound";
 
 export interface CommandDecision {
 	kind: CommandDecisionKind;
@@ -312,28 +321,61 @@ export interface CommandHostAuthorization {
 }
 
 /**
- * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01
+ * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02
  *
  * Host-produced evidence that the temporary-file authority of a
- * command (currently `mktemp`) is bounded. See
- * `CommandHostAuthorization.tempAuthorityEvidence` for the full
- * contract.
+ * command (currently `mktemp`) is bounded. The CORRECTION01
+ * contract was tightened in CORRECTION02 to require BOTH:
+ *
+ *   (a) executable identity bound to /usr/bin/mktemp
+ *       (PATH-resolved at policy time + realpath; only Apple-
+ *        system identity reviewed in this ACT)
+ *
+ *   (b) the true Darwin per-user temp root sourced from
+ *       /usr/bin/getconf DARWIN_USER_TEMP_DIR (NOT from
+ *       os.tmpdir(), which honors inherited TMPDIR/TMP/TEMP)
+ *
+ * Either failure -> ASK with the corresponding new source label.
+ *
+ * See `CommandHostAuthorization.tempAuthorityEvidence` for the
+ * full contract and the policy gate semantics.
  */
 export interface TempAuthorityEvidence {
-	/** OS platform the executor will resolve the command on. */
-	platform: "darwin" | "linux" | "win32" | "unknown";
 	/**
-	 * Observed default temporary-file root on this platform for the
-	 * bare command (e.g. the result of `confstr(_CS_DARWIN_USER_TEMP_DIR)`
-	 * on darwin, or `process.env.TMPDIR` on linux). String; the
-	 * policy treats it as a label, not a path authority witness.
+	 * OS platform the executor will resolve the command on. For
+	 * this ACT, only `"darwin"` is approved for promotion to
+	 * ALLOW; any other value (or `unknown`) returns ASK.
 	 */
-	effectiveDefaultTempRoot: string;
+	platform: "darwin";
 	/**
-	 * Canonicalized realpath of `effectiveDefaultTempRoot`. The
-	 * policy compares this against the effective root for binding.
+	 * Raw PATH-resolved executable path of `mktemp`, as returned
+	 * by `/usr/bin/which mktemp` (or equivalent). The host
+	 * adapter obtains this via subprocess to ensure PATH
+	 * resolution matches what the executor will see.
 	 */
-	canonicalDefaultTempRoot: string;
+	executablePath: string;
+	/**
+	 * `fs.realpathSync(executablePath)` -- the canonical
+	 * identity of the executable. The policy gate requires
+	 * this to equal `"/usr/bin/mktemp"`.
+	 */
+	executableRealpath: string;
+	/**
+	 * Raw output of `/usr/bin/getconf DARWIN_USER_TEMP_DIR`,
+	 * which calls `confstr(_CS_DARWIN_USER_TEMP_DIR, ...)` on
+	 * darwin. The Apple Secure Coding Guide identifies this
+	 * as the authoritative per-user temp directory, distinct
+	 * from environment-steered alternatives. The host adapter
+	 * obtains this via subprocess to ensure the value is NOT
+	 * inherited from TMPDIR.
+	 */
+	darwinUserTempRoot: string;
+	/**
+	 * `fs.realpathSync(darwinUserTempRoot)`. The policy gate
+	 * sanity-checks that this is non-empty and consistent
+	 * with the raw root.
+	 */
+	canonicalDarwinUserTempRoot: string;
 }
 
 /**
