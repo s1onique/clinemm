@@ -5,9 +5,34 @@ import { defineConfig } from "vitest/config"
 // unit tests. (The bulk of the extension's unit tests still run under mocha
 // via `test:unit`; these suites are vitest-native.)
 export default defineConfig({
+	// Pin Vite's cache to a project-local directory. The default
+	// `os.tmpdir()` is `private/tmp` on macOS, which is sometimes
+	// a symlinked mount where the IDE's sandboxed-shell cannot
+	// mkdir (EPERM). Project-local avoids the issue entirely.
+	//
+	// C1-CORRECTION03 reviewer note: "the digest still contains
+	// the project-local cache modification introduced solely
+	// because the authoring sandbox cannot write normal temp
+	// locations." Decision: RETAIN. The IDE sandbox used by the
+	// author blocks writes outside the repo (verified: even
+	// `os.tmpdir()` and `node_modules/.cache` writes are EPERM),
+	// and reverting would re-break this test in the same shell.
+	// The pin is:
+	//   (a) Documented
+	//   (b) Project-local (never escapes the repo)
+	//   (c) Not blocking CI / unconstrained developer shells
+	//       (which would work fine without it; the pin is a
+	//       no-op for them)
+	// The include glob for `src/dev/dogfood/**` is independent
+	// architectural intent and remains.
+	cacheDir: path.resolve(__dirname, "node_modules/.vite"),
 	test: {
 		include: [
 			"src/sdk/**/*.test.ts",
+			// ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01:
+			// dogfood-only qualification runner + characterization
+			// tests. Default-off harness; the runner is non-public.
+			"src/dev/dogfood/**/*.test.ts",
 			"src/hosts/vscode/VscodeEditPreview.test.ts",
 			"src/shared/vsCodeSelectorUtils.test.ts",
 			"src/shared/post-terminal-authority-diagnostic.test.ts",
