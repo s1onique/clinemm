@@ -149,7 +149,20 @@ export type CommandDecisionSource =
 	// The verdict is downgraded to ASK with this source so the
 	// operator sees that the executable identity gate failed
 	// (vs. the temp-root gate, which uses a different source).
-	| "host_mktemp_executable_identity_unbound";
+	| "host_mktemp_executable_identity_unbound"
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03:
+	// Shell-resolution unbound downgrade. The user invoked the
+	// BARE `mktemp` or `mktemp -d` form (no slash in the command
+	// name). Bash's command search order is shell-function ->
+	// builtin -> $PATH; the parent shell can `export -f mktemp`
+	// or set BASH_ENV to shadow the binary at lookup time. The
+	// policy cannot prove the executed identity for the bare
+	// form (the proven identity is only "PATH lookup result",
+	// not "actually executed"). The verdict is downgraded to ASK
+	// with this source so the operator sees that the bare form
+	// is intentionally not auto-approved. The user can re-issue
+	// as `/usr/bin/mktemp` (slash bypasses lookup) to obtain AUTO.
+	| "host_mktemp_shell_resolution_unbound";
 
 export interface CommandDecision {
 	kind: CommandDecisionKind;

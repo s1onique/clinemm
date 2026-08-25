@@ -4,7 +4,7 @@ import { commandHostAuthorization } from "./command-policy-types";
 import { DEFAULT_COMMAND_HOST_ALLOW_RULES } from "./command-safe-rules";
 import type { TempAuthorityEvidence } from "./command-policy-types";
 
-// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02
+// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03
 //
 // Real production policy seam test for the corrected
 // host_safe_mktemp_default_temp rule.
@@ -30,13 +30,14 @@ const baseAllow = () =>
     explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
   });
 
-describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
-  describe("darwin host WITH /usr/bin/mktemp identity + true Darwin temp root -> AUTO", () => {
+describe("CORRECTION03: explicit-path-bound mktemp policy seam", () => {
+  describe("darwin host WITH /usr/bin/mktemp identity + true Darwin root -> AUTO for explicit-path positive forms", () => {
     const POSITIVE: ReadonlyArray<string> = [
-      "mktemp",
-      "mktemp -d",
-      "  mktemp  ",
-      "mktemp   -d",
+      "/usr/bin/mktemp",
+      "/usr/bin/mktemp -d",
+      "  /usr/bin/mktemp  ",
+      "/usr/bin/mktemp   -d",
+      "/usr/bin/mktemp\t-d",
     ];
     for (const cmd of POSITIVE) {
       it(`auto-approves: ${JSON.stringify(cmd)}`, () => {
@@ -55,8 +56,38 @@ describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
     }
   });
 
-  describe("darwin host WITHOUT evidence -> ASK (temp authority unbound)", () => {
-    const POSITIVE: ReadonlyArray<string> = ["mktemp", "mktemp -d"];
+  describe("BARE `mktemp` and `mktemp -d` -> ASK with host_mktemp_shell_resolution_unbound", () => {
+    // CORRECTION03: bash's lookup order is shell-function ->
+    // builtin -> PATH. The bare form can be shadowed by an
+    // exported shell function or BASH_ENV startup file. Slash-
+    // bypass is the only way to bind policy-time identity to
+    // execution-time identity without executor changes.
+    const BARE: ReadonlyArray<string> = [
+      "mktemp",
+      "mktemp -d",
+      "  mktemp  ",
+      "mktemp\t-d",
+      "mktemp  -d",
+    ];
+    for (const cmd of BARE) {
+      it(`falls back to ASK with shell-resolution-unbound: ${JSON.stringify(cmd)}`, () => {
+        const r = evaluateCommandPolicy({
+          toolInput: { command: cmd },
+          hostAuthorization: {
+            ...baseAllow(),
+            tempAuthorityEvidence: DARWIN_BSD_EVIDENCE,
+          },
+        });
+        expect(r.decision.kind).toBe("ask");
+        expect(r.decision.source).toBe(
+          "host_mktemp_shell_resolution_unbound",
+        );
+      });
+    }
+  });
+
+  describe("darwin host WITHOUT evidence -> ASK with host_mktemp_temp_authority_unbound", () => {
+    const POSITIVE: ReadonlyArray<string> = ["/usr/bin/mktemp", "/usr/bin/mktemp -d"];
     for (const cmd of POSITIVE) {
       it(`falls back to ASK: ${JSON.stringify(cmd)}`, () => {
         const r = evaluateCommandPolicy({
@@ -72,7 +103,7 @@ describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
   describe("darwin host with PATH-shadowed mktemp (executable identity unbound) -> ASK", () => {
     it("rejects GNU coreutils shadow", () => {
       const r = evaluateCommandPolicy({
-        toolInput: { command: "mktemp" },
+        toolInput: { command: "/usr/bin/mktemp" },
         hostAuthorization: {
           ...baseAllow(),
           tempAuthorityEvidence: {
@@ -93,7 +124,7 @@ describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
     });
     it("rejects Nix coreutils shadow", () => {
       const r = evaluateCommandPolicy({
-        toolInput: { command: "mktemp" },
+        toolInput: { command: "/usr/bin/mktemp" },
         hostAuthorization: {
           ...baseAllow(),
           tempAuthorityEvidence: {
@@ -114,7 +145,7 @@ describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
     });
     it("rejects empty executableRealpath", () => {
       const r = evaluateCommandPolicy({
-        toolInput: { command: "mktemp" },
+        toolInput: { command: "/usr/bin/mktemp" },
         hostAuthorization: {
           ...baseAllow(),
           tempAuthorityEvidence: {
@@ -134,41 +165,10 @@ describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
     });
   });
 
-  describe("darwin host with valid identity + arbitrary temp-root string -> ALLOW (gate is identity-bound; value-source enforced at host adapter)", () => {
-    it("accepts identity-bound promotion regardless of value-source string", () => {
-      // The CORRECTION02 gate is identity-bound at the policy
-      // layer: the policy requires executableRealpath ===
-      // /usr/bin/mktemp and non-empty root strings. The
-      // SOURCE of the root string (getconf vs os.tmpdir() vs
-      // synthetic) is enforced at the host adapter layer
-      // (apps/vscode/src/sdk/sdk-tool-policies.ts), not the
-      // policy layer. This test documents the policy's contract:
-      // identity bound; value-source is the adapter's job.
-      //
-      // The matching test that the host adapter does NOT
-      // produce a synthetic root is at the apps/vscode layer
-      // (see apps/vscode/src/sdk/sdk-tool-policies.test.ts).
-      const r = evaluateCommandPolicy({
-        toolInput: { command: "mktemp" },
-        hostAuthorization: {
-          ...baseAllow(),
-          tempAuthorityEvidence: {
-            platform: "darwin",
-            executablePath: "/usr/bin/mktemp",
-            executableRealpath: "/usr/bin/mktemp",
-            darwinUserTempRoot: "/synthetic/attacker-selected",
-            canonicalDarwinUserTempRoot: "/synthetic/attacker-selected",
-          },
-        },
-      });
-      expect(r.decision.kind).toBe("allow");
-      expect(r.decision.matchedRuleSource).toBe(
-        "host_safe_mktemp_default_temp",
-      );
-    });
+  describe("darwin host with empty temp root -> ASK with host_mktemp_temp_authority_unbound", () => {
     it("rejects empty darwinUserTempRoot", () => {
       const r = evaluateCommandPolicy({
-        toolInput: { command: "mktemp" },
+        toolInput: { command: "/usr/bin/mktemp" },
         hostAuthorization: {
           ...baseAllow(),
           tempAuthorityEvidence: {
@@ -186,7 +186,7 @@ describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
     });
     it("rejects empty canonicalDarwinUserTempRoot", () => {
       const r = evaluateCommandPolicy({
-        toolInput: { command: "mktemp -d" },
+        toolInput: { command: "/usr/bin/mktemp -d" },
         hostAuthorization: {
           ...baseAllow(),
           tempAuthorityEvidence: {
@@ -204,53 +204,28 @@ describe("CORRECTION02: strict-identity-bound mktemp policy seam", () => {
     });
   });
 
-  describe("linux host (any evidence) -> ASK", () => {
-    it("rejects linux evidence object", () => {
-      const r = evaluateCommandPolicy({
-        toolInput: { command: "mktemp" },
-        hostAuthorization: {
-          ...baseAllow(),
-          tempAuthorityEvidence: {
-            platform: "darwin", // platform must be darwin for the gate to inspect identity
-            executablePath: "/usr/bin/mktemp",
-            executableRealpath: "/usr/bin/mktemp",
-            darwinUserTempRoot: "/tmp",
-            canonicalDarwinUserTempRoot: "/tmp",
-          },
-        },
-      });
-      // platform === "darwin" so the gate proceeds; identity
-      // matches; root strings non-empty; expected ALLOW.
-      // This documents that the policy seam does not itself
-      // distinguish darwin vs linux -- the host adapter is
-      // responsible for platform gating. Apps/vscode returns
-      // undefined evidence on linux.
-      expect(r.decision.matchedRuleSource).toBe(
-        "host_safe_mktemp_default_temp",
-      );
-    });
-  });
-
-  describe("darwin host WITH evidence -> negative forms still ASK", () => {
+  describe("darwin host WITH evidence + negative forms -> ASK or DENY", () => {
     const NEGATIVE: ReadonlyArray<string> = [
-      "mktemp -u",
-      "mktemp foo.XXXXXX",
-      "mktemp -p /tmp",
-      "mktemp -t myprefix",
-      "mktemp /tmp/foo.XXXX",
-      "mktemp ./foo.XXXX",
-      "mktemp ../foo.XXXX",
-      'mktemp "$X"',
-      "mktemp ${X}",
-      "mktemp -d foo.X",
-      "TMPDIR=/x mktemp",
-      "env TMPDIR=/x mktemp",
-      "mktemp && pwd",
-      "mktemp | head",
-      "mktemp > /tmp/x",
-      "mktemp 2>/dev/null",
-      "$(mktemp)",
-      "mktemp {-d,}",
+      // -u / -p / -t variants (lexical reject)
+      "/usr/bin/mktemp -u",
+      "/usr/bin/mktemp -p /tmp",
+      "/usr/bin/mktemp -t myprefix",
+      // template operand
+      "/usr/bin/mktemp foo.XXXXXX",
+      // other flags
+      "/usr/bin/mktemp -q",
+      // compose / opaque
+      "/usr/bin/mktemp && pwd",
+      "/usr/bin/mktemp | head",
+      "/usr/bin/mktemp > /tmp/x",
+      "/usr/bin/mktemp 2>/dev/null",
+      "$(/usr/bin/mktemp)",
+      // env steering
+      "TMPDIR=/x /usr/bin/mktemp",
+      "env TMPDIR=/x /usr/bin/mktemp",
+      // dynamic operand
+      '/usr/bin/mktemp "$X"',
+      "/usr/bin/mktemp ${X}",
     ];
     for (const cmd of NEGATIVE) {
       it(`does NOT auto-approve: ${JSON.stringify(cmd)}`, () => {

@@ -1,3 +1,4 @@
+import { evaluateCommandPolicy } from "@cline/core"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import type { McpServer, McpTool } from "@shared/mcp"
 import { describe, expect, it } from "vitest"
@@ -334,5 +335,69 @@ describe("CORRECTION02: buildTempAuthorityEvidence (host adapter authenticity)",
 		} finally {
 			process.env.TMPDIR = originalTmpdir
 		}
+	})
+})
+
+// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03:
+// Slash-bypass positive case: with strict identity bound, the
+// EXPLICIT-PATH forms /usr/bin/mktemp and /usr/bin/mktemp -d
+// are AUTO. BARE forms (mktemp, mktemp -d) are ASK with the
+// new source label host_mktemp_shell_resolution_unbound because
+// bash's lookup order (function -> builtin -> PATH) means the
+// policy cannot prove the executed identity for the bare form.
+//
+// These tests are REAL production-policy-seam tests; they
+// drive evaluateCommandPolicy with production-shaped host
+// authorization and the strict-identity evidence.
+
+const DARWIN_BSD_EVIDENCE = {
+	platform: "darwin",
+	executablePath: "/usr/bin/mktemp",
+	executableRealpath: "/usr/bin/mktemp",
+	darwinUserTempRoot: "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T",
+	canonicalDarwinUserTempRoot: "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T",
+} as const
+
+describe("CORRECTION03: explicit-path slash-bypass (policy seam)", () => {
+	it("/usr/bin/mktemp + darwin identity + getconf root -> ALLOW", () => {
+		// These tests are REAL production-policy-seam tests; they
+		// drive evaluateCommandPolicy with production-shaped host
+		// authorization and the strict-identity evidence. The
+		// CORRECTION03 gate rejects the bare form with
+		// host_mktemp_shell_resolution_unbound and allows the
+		// slash-prefixed form when the host evidence is present
+		// and the identity realpath equals /usr/bin/mktemp.
+		const r = evaluateCommandPolicy({
+			toolInput: { command: "/usr/bin/mktemp" },
+			hostAuthorization: {
+				mode: "safe-only",
+				explicitAllowRules: [
+					{
+						source: "host_safe_mktemp_default_temp",
+						pattern: /^\s*(?:\/usr\/bin\/)?mktemp(?:\s+-d)?\s*$/u,
+					},
+				],
+				tempAuthorityEvidence: DARWIN_BSD_EVIDENCE,
+			},
+		})
+		expect(r.decision.kind).toBe("allow")
+		expect(r.decision.matchedRuleSource).toBe("host_safe_mktemp_default_temp")
+	})
+	it("bare `mktemp` + darwin identity -> ASK with host_mktemp_shell_resolution_unbound", () => {
+		const r = evaluateCommandPolicy({
+			toolInput: { command: "mktemp" },
+			hostAuthorization: {
+				mode: "safe-only",
+				explicitAllowRules: [
+					{
+						source: "host_safe_mktemp_default_temp",
+						pattern: /^\s*(?:\/usr\/bin\/)?mktemp(?:\s+-d)?\s*$/u,
+					},
+				],
+				tempAuthorityEvidence: DARWIN_BSD_EVIDENCE,
+			},
+		})
+		expect(r.decision.kind).toBe("ask")
+		expect(r.decision.source).toBe("host_mktemp_shell_resolution_unbound")
 	})
 })

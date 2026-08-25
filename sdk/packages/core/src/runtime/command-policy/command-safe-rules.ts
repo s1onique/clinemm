@@ -119,17 +119,43 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	//   (d) the policy sanity-checks that the canonical root is
 	//       consistent with the raw root.
 	//
+	// CORRECTION03 (reviewer disposition
+	// HALT_MKTEMP_SHELL_RESOLUTION_IDENTITY_UNPROVEN): bash's
+	// command search order is shell-function -> builtin -> PATH,
+	// NOT just PATH. The CORRECTION02 evidence used
+	// /usr/bin/which mktemp which proves PATH only; the actual
+	// executor runs `bash -c "mktemp"`, and an exported shell
+	// function `mktemp()` or BASH_ENV startup file can shadow the
+	// binary at lookup time. Therefore the proven identity is not
+	// bound to the executed identity for the BARE form. The
+	// CORRECTION03 fix restricts positive forms to the
+	// SLASH-PREFIXED variants, which GNU Bash executes as
+	// pathnames (no function/builtin/PATH lookup):
+	//
+	//   "If the command name contains a slash, Bash uses it as a
+	//    pathname and executes it directly, without performing
+	//    function or builtin lookup."
+	//   -- GNU Bash Reference Manual, Command Search and Execution
+	//
+	// Bare `mktemp` and `mktemp -d` stay ASK with the new source
+	// label host_mktemp_shell_resolution_unbound; the user can
+	// re-issue as `/usr/bin/mktemp` to obtain AUTO.
+	//
 	// Source labels on failure:
-	//   host_mktemp_executable_identity_unbound  (gate a)
-	//   host_mktemp_temp_authority_unbound       (gates b/c/d)
+	//   host_mktemp_shell_resolution_unbound       (bare form, no slash)
+	//   host_mktemp_executable_identity_unbound     (gate a)
+	//   host_mktemp_temp_authority_unbound          (gates b/c/d)
 	//
 	// Reviewed positive forms (gated by host-evidence):
-	//   - `mktemp`    (single tempfile via /usr/bin/mktemp,
-	//                  Apple BSD semantics, anchored to the true
-	//                  Darwin per-user temp directory)
-	//   - `mktemp -d` (single tempdir  via /usr/bin/mktemp,
-	//                  Apple BSD semantics, anchored to the true
-	//                  Darwin per-user temp directory)
+	//   - `/usr/bin/mktemp`    (single tempfile via the
+	//                           Apple-system BSD binary, anchored
+	//                           to the true Darwin per-user temp
+	//                           directory; slash bypasses shell-
+	//                           function and BASH_ENV lookup)
+	//   - `/usr/bin/mktemp -d` (single tempdir  via the same
+	//                           Apple-system BSD binary, anchored
+	//                           to the same Darwin per-user temp
+	//                           directory; slash bypasses lookup)
 	//
 	// Explicitly REJECTED at the lexical layer (remain ASK/DENY in V1):
 	//   - any other flag (`mktemp -u` is unsafe per Darwin manual:
@@ -174,7 +200,25 @@ export const DEFAULT_COMMAND_HOST_ALLOW_RULES: ReadonlyArray<{
 	// TMPDIR under Seatbelt), not authorization-by-sandbox.
 	{
 		source: "host_safe_mktemp_default_temp",
-		pattern: /^\s*mktemp(?:\s+-d)?\s*$/u,
+		// CORRECTION03: the regex matches BOTH the slash-prefixed
+		// form (/usr/bin/mktemp, /usr/bin/mktemp -d) AND the bare
+		// form (mktemp, mktemp -d). The gate in command-policy.ts
+		// then distinguishes them:
+		//   - bare form -> ASK with host_mktemp_shell_resolution_unbound
+		//                  (bash's lookup order is shell-function ->
+		//                   builtin -> PATH; an exported shell
+		//                   function or BASH_ENV startup file can
+		//                   shadow the proven PATH identity)
+		//   - slash-prefixed form -> continue to the host-evidence
+		//                           gate (CORRECTION02). Slash
+		//                           bypasses function/builtin/PATH
+		//                           lookup per GNU Bash Reference
+		//                           Manual, Command Search and
+		//                           Execution, so the proven
+		//                           identity IS the executed identity.
+		// The optional `\/usr\/bin\/` group allows both forms
+		// to match; the gate is the authoritative discriminator.
+		pattern: /^\s*(?:\/usr\/bin\/)?mktemp(?:\s+-d)?\s*$/u,
 	},
 	// ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01:
 	// V1 lexical positive cd rule for the SIMPLE `cd <abs-static>`

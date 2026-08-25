@@ -439,6 +439,39 @@ function evaluateOne(
 			// removes ALLOWs, never adds them. A command that was ASK
 			// before this ACT remains ASK.
 			if (isTempAuthorityHostEvidenceBoundRuleSource(match.source)) {
+				// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03:
+				// The CORRECTION03 contract is that the policy
+				// can only prove execution-time identity for
+				// SLASH-PREFIXED command names. Per GNU Bash
+				// Reference Manual, Command Search and Execution:
+				//
+				//   "If the command name contains a slash, Bash
+				//    uses it as a pathname and executes it
+				//    directly, without performing function or
+				//    builtin lookup."
+				//
+				// For command names WITHOUT a slash, bash's
+				// lookup order is shell-function -> builtin ->
+				// PATH. The parent shell can `export -f mktemp`
+				// or set BASH_ENV to a file that defines
+				// mktemp(); the policy cannot prove the executed
+				// identity in that case. The CORRECTION02
+				// evidence is only "PATH lookup result" -- it
+				// does not bound the function/builtin channel.
+				// So the gate first rejects BARE forms (mktemp,
+				// mktemp -d) with ASK + new source label
+				// host_mktemp_shell_resolution_unbound. The
+				// slash-prefixed form (/usr/bin/mktemp,
+				// /usr/bin/mktemp -d) then continues to the
+				// CORRECTION02 host-evidence gate.
+				const cmdStr = renderNormalizedCommand(command)
+				if (!/^\s*\//u.test(cmdStr)) {
+					return {
+						kind: "ask",
+						source: "host_mktemp_shell_resolution_unbound",
+						reason: `shell resolution unbound: rendered command "${cmdStr}" has no slash in the command name; bash will perform shell-function -> builtin -> PATH lookup, and the policy cannot prove the executed identity. GNU Bash Reference Manual: "If the command name contains a slash, Bash uses it as a pathname and executes it directly, without performing function or builtin lookup." Re-issue as \`/usr/bin/mktemp\` (with the explicit path) to obtain AUTO on darwin hosts.`,
+					};
+				}
 				// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02:
 				// The CORRECTION02 contract requires BOTH
 				//   (a) executable identity bound to /usr/bin/mktemp
