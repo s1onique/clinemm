@@ -999,6 +999,37 @@ export {
 	ToolPresets,
 	truncateCommandOutput,
 } from "./extensions/tools";
+
+// ACT-CLINEMM-COMMAND-SANDBOX-BACKEND-ABSTRACTION01:
+// sandbox backend abstraction (experimental, DEFAULT_OFF).
+export {
+	canonicalizeSandboxRoot,
+	pathExistsForCanonicalization,
+} from "./runtime/sandbox/canonical-paths";
+export {
+	DEFAULT_READONLY_ALLOW,
+	SAFE_ENVIRONMENT_BASELINE,
+	SECRET_BLOCKLIST,
+	isSecretShapedEnvName,
+	materializeEnvironment,
+} from "./runtime/sandbox/environment";
+export { noSandboxBackend } from "./runtime/sandbox/no-sandbox-backend";
+export {
+	DEFAULT_SANDBOX_MODE,
+	getSandboxBackend,
+	readExperimentalSandboxOptIn,
+	type SandboxBackendOptIn,
+} from "./runtime/sandbox/sandbox-backend";
+export type {
+	CommandCapability,
+	CommandInvocation,
+	EnvironmentCapability,
+	SandboxBackend,
+	SandboxMode,
+	SandboxNetwork,
+	SandboxPreparedInvocation,
+} from "./runtime/sandbox/types";
+export { SandboxError } from "./runtime/sandbox/types";
 export {
 	type ClineRecommendedModel,
 	type ClineRecommendedModelsData,
