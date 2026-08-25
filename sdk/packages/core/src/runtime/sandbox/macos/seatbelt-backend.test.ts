@@ -45,17 +45,18 @@ const HAS_SUBSTRATE =
  * Run a `SpawnConfig`-shaped invocation via `child_process.spawnSync`.
  * Returns exit code, stdout, stderr.
  *
- * Mirrors the production executor's env-merge behavior:
+ * CORRECTION01 (P0-2): Honors the `completeness` sentinel on the
+ * prepared env. When `prepared.env.completeness === "complete"`, the
+ * executor MUST use the prepared env AS-IS, with no further spreading
+ * of `process.env`. Otherwise (legacy overlay), it spreads
+ * `process.env` under `prepared.env`.
  *
- *     env: { ...process.env, ...prepared.env }
- *
- * For `inherit` mode, `prepared.env === {}` and the child sees
- * process.env (mirrors the production `CommandJobManager.start`
+ * For `inherit` mode, `prepared.env` does NOT carry `completeness`,
+ * so the executor applies legacy spread-merge and the child sees
+ * `process.env` (mirrors the production `CommandJobManager.start`
  * `{ ...process.env, ...options.env ?? {} }`). For `sanitized` mode,
- * `prepared.env` is the fully materialized env and overrides
- * process.env for any keys it sets (mirrors the Seatbelt
- * backend's contract). Tests that assert "no secret-shaped keys
- * leak" must use `sanitized` mode explicitly.
+ * `prepared.env` carries `completeness: "complete"`, so the child
+ * sees ONLY the materialized env.
  */
 function runPrepared(prepared: {
 	executable: string;
@@ -64,9 +65,17 @@ function runPrepared(prepared: {
 	env: Record<string, string>;
 	input?: string;
 }): { exitCode: number | null; stdout: string; stderr: string } {
+	const preparedAny = prepared.env as { completeness?: string } & Record<
+		string,
+		string
+	>;
+	const env: Record<string, string> =
+		preparedAny.completeness === "complete"
+			? { ...preparedAny }
+			: { ...(process.env as Record<string, string>), ...preparedAny };
 	const result = spawnSync(prepared.executable, [...prepared.args], {
 		cwd: prepared.cwd,
-		env: { ...process.env, ...prepared.env },
+		env,
 		input: prepared.input,
 		stdio: ["pipe", "pipe", "pipe"],
 		timeout: 30_000,
@@ -137,7 +146,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -175,7 +184,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -209,7 +218,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -240,7 +249,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -280,7 +289,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -311,7 +320,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "deny",
@@ -344,7 +353,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -394,7 +403,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				}
 
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -440,7 +449,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -475,7 +484,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -512,7 +521,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",
@@ -554,7 +563,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			const fixture = buildFixture();
 			try {
 				const cap: CommandCapability = {
-					readonlyRoots: [],
+					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					denyReadSubpaths: [fixture.outside],
 					network: "allow",

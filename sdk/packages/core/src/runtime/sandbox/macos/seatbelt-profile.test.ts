@@ -62,19 +62,19 @@ describe("escapeSbplString", () => {
 		expect(escapeSbplString("/path/(sub)/x")).toBe("/path/(sub)/x");
 	});
 
-	it("strips newline (rejected by Seatbelt parser in strings)", () => {
-		expect(escapeSbplString("a\nb")).toBe("ab");
-		expect(escapeSbplString("a\r\nb")).toBe("ab");
+	it("THROWS on newline / CR (CORRECTION01 P0-3: no silent aliasing)", () => {
+		expect(() => escapeSbplString("a\nb")).toThrow();
+		expect(() => escapeSbplString("a\r\nb")).toThrow();
 	});
 
-	it("strips tab", () => {
-		expect(escapeSbplString("a\tb")).toBe("ab");
+	it("THROWS on tab (CORRECTION01 P0-3)", () => {
+		expect(() => escapeSbplString("a\tb")).toThrow();
 	});
 
-	it("strips NUL and other control characters", () => {
-		expect(escapeSbplString("a\x00b")).toBe("ab");
-		expect(escapeSbplString("a\x01b")).toBe("ab");
-		expect(escapeSbplString("a\x7fb")).toBe("ab");
+	it("THROWS on NUL and other control characters (CORRECTION01 P0-3)", () => {
+		expect(() => escapeSbplString("a\x00b")).toThrow();
+		expect(() => escapeSbplString("a\x01b")).toThrow();
+		expect(() => escapeSbplString("a\x7fb")).toThrow();
 	});
 
 	it("passes unicode (non-control) through unchanged", () => {
@@ -82,20 +82,27 @@ describe("escapeSbplString", () => {
 		expect(escapeSbplString("/path/α")).toBe("/path/α");
 	});
 
-	it("survives the recon adversarial fixture matrix end-to-end", () => {
+	it("passes the recon adversarial fixture matrix for safe inputs", () => {
+		// CORRECTION01 P0-3: control characters are NO LONGER
+		// silently stripped; they throw. Only safe inputs here.
 		const fixtures: Array<[string, string]> = [
 			["/normal/path", "/normal/path"],
 			["/path with spaces", "/path with spaces"],
 			['/has"quote', '/has\\"quote'],
 			["/has\\backslash", "/has\\\\backslash"],
 			["/has(parens)", "/has(parens)"],
-			["/has\nnewline", "/hasnewline"],
-			["/has\ttab", "/hastab"],
 			["/unicode/中文", "/unicode/中文"],
 			["", ""],
 		];
 		for (const [input, expected] of fixtures) {
 			expect(escapeSbplString(input)).toBe(expected);
+		}
+	});
+
+	it("THROWS on every control-character entry in the recon adversarial fixture matrix (CORRECTION01 P0-3)", () => {
+		const unsafeFixtures = ["/has\nnewline", "/has\ttab", "/has\x00nul"];
+		for (const input of unsafeFixtures) {
+			expect(() => escapeSbplString(input)).toThrow();
 		}
 	});
 });

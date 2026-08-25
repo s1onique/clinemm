@@ -143,7 +143,27 @@ export function materializeEnvironment(
 		return {};
 	}
 
-	const out: Record<string, string> = {};
+	// CORRECTION01 (P0-2): Sanitized mode produces a COMPLETE
+	// environment. The executor MUST NOT spread `process.env` underneath
+	// it; the contract is enforced by the `completeness: "complete"`
+	// sentinel that the executor must check before applying legacy
+	// `{ ...process.env, ...prepared.env }` merge semantics.
+	//
+	// Prior implementation relied on the executor's spread-merge
+	// behavior to filter secrets by emitting only an "override" record
+	// containing empty strings for known secret-shaped names. This is a
+	// DENYLIST and is fundamentally leaky: any parent var NOT matching
+	// the blocklist (e.g. `CLINEMM_UNKNOWN_CREDENTIAL`) leaks through the
+	// spread.
+	//
+	// The new contract: sanitized mode returns ONLY the keys we
+	// intentionally placed. Unknown parent keys do not appear at all.
+	// The known secret-shaped keys (SSH_AUTH_SOCK, AWS_*, ...) are
+	// still emitted as empty strings so that a buggy executor that
+	// ignores the completeness marker at least neutralizes them.
+	const out: Record<string, string> = {
+		completeness: "complete",
+	};
 
 	// 1) Safe baseline. We pull from `parentEnv` for variables whose
 	// values come from the host (PATH, TERM); others get the constant
@@ -151,7 +171,10 @@ export function materializeEnvironment(
 	const parentEnv = options.parentEnv ?? {};
 	for (const [key, fallback] of Object.entries(SAFE_ENVIRONMENT_BASELINE)) {
 		const fromParent = parentEnv[key];
-		out[key] = typeof fromParent === "string" && fromParent.length > 0 ? fromParent : fallback;
+		out[key] =
+			typeof fromParent === "string" && fromParent.length > 0
+				? fromParent
+				: fallback;
 	}
 
 	// 2) Synthetic HOME / TMPDIR override the baseline when the
@@ -163,18 +186,33 @@ export function materializeEnvironment(
 		out.TMPDIR = options.syntheticTempDir;
 	}
 
-	// 3) EXPLICITLY OVERRIDE secret-shaped names to empty string so
-	// that production executors that merge `prepared.env` over
-	// `process.env` (e.g. `CommandJobManager.start` does
-	// `{ ...process.env, ...options.env }`) actually strip them.
-	// Without this, secret-shaped names in `process.env` would leak
-	// through the spread merge because the materializer's `out`
-	// object would not contain those keys.
-	//
-	// We only set an empty value for names that ARE present in
-	// parentEnv (so we don't add noise for absent keys).
+	// 3) Caller-provided allow list. The allow list is a positive
+	// grant: only variables explicitly named here that are also
+	// present in `parentEnv` are inherited. We DO NOT enumerate a
+	// secret blocklist; unknown parent vars are simply not carried
+	// over.
+	for (const key of capability.allow) {
+		if (typeof key !== "string" || key.length === 0) {
+			continue;
+		}
+		const fromParent = parentEnv[key];
+		if (typeof fromParent === "string" && fromParent.length > 0) {
+			out[key] = fromParent;
+		}
+	}
+
+	// 4) Defensive: emit empty strings for any name in the blocklist
+	// OR matching a secret-shaped wildcard that is also present in
+	// parentEnv. This protects against a buggy executor that ignores
+	// the completeness marker and does legacy spread-merge. A correct
+	// executor using `out` as the whole environment already gets the
+	// right answer; this step is purely defensive.
 	for (const key of SECRET_BLOCKLIST) {
-		if (typeof parentEnv[key] === "string" && parentEnv[key].length > 0) {
+		if (
+			typeof parentEnv[key] === "string" &&
+			parentEnv[key].length > 0 &&
+			out[key] === undefined
+		) {
 			out[key] = "";
 		}
 	}
@@ -183,25 +221,11 @@ export function materializeEnvironment(
 			if (
 				re.test(key) &&
 				typeof parentEnv[key] === "string" &&
-				parentEnv[key].length > 0
+				parentEnv[key].length > 0 &&
+				out[key] === undefined
 			) {
 				out[key] = "";
 			}
-		}
-	}
-
-	// 4) Caller-provided allow list. If the caller explicitly added a
-	// secret-shaped name to the allow list, that's an explicit policy
-	// decision and we honor it (the test suite documents this).
-	// This runs AFTER step 3 so allow-list entries override the
-	// default empty-string override.
-	for (const key of capability.allow) {
-		if (typeof key !== "string" || key.length === 0) {
-			continue;
-		}
-		const fromParent = parentEnv[key];
-		if (typeof fromParent === "string" && fromParent.length > 0) {
-			out[key] = fromParent;
 		}
 	}
 

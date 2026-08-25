@@ -41,6 +41,7 @@
  */
 
 import type { CommandCapability } from "../types";
+import { SandboxError } from "../types";
 
 /**
  * Deterministic ordering of the canonical subpaths that are ALWAYS
@@ -80,22 +81,18 @@ export const ALWAYS_WRITABLE_SYSTEM_SUBPATHS: readonly string[] = Object.freeze(
  *
  *   - `\` must be escaped as `\\`;
  *   - `"` must be escaped as `\"`;
- *   - newlines and other control characters are rejected by the
- *     Seatbelt parser. We strip them;
- *   - non-printable / non-ASCII bytes are passed through (Seatbelt's
- *     string parser is byte-oriented on macOS).
+ *   - newline, tab, NUL, and any other C0 control character (0x00–0x1F)
+ *     or DEL (0x7F) are NOT legal in SBPL string literals.
  *
- * Adversarial fixture paths the test suite must cover:
+ * CORRECTION01: We DO NOT silently strip control characters. Silently
+ * stripping them changes the identity of the path (e.g. `/tmp/foo\nbar`
+ * would be rendered as `/tmp/foobar`, which is a different path the
+ * kernel might authorize). Stripping is exactly the same defect class
+ * as the canonical-path aliasing errors we spent prior ACTs eliminating.
  *
- *   - space        → unchanged
- *   - `"`          → `\"`
- *   - `\`          → `\\`
- *   - `(` `)`      → unchanged (parens are NOT special inside a string)
- *   - newline      → stripped (Seatbelt rejects them in string literals)
- *   - tab          → stripped
- *   - unicode      → unchanged
- *   - leading `/`  → unchanged
- *   - empty string → empty string
+ * The function THROWS `SandboxError` (reason: `profile-generation-failed`)
+ * when the input contains a control character. The caller MUST treat
+ * this as fail-closed.
  */
 export function escapeSbplString(input: string): string {
 	if (input.length === 0) return "";
@@ -103,10 +100,11 @@ export function escapeSbplString(input: string): string {
 	let out = "";
 	for (let i = 0; i < input.length; i++) {
 		const code = input.charCodeAt(i);
-		// Strip control characters (0x00-0x1F, 0x7F). Newlines, tabs,
-		// NULs etc. are not legal in SBPL string literals.
 		if (code <= 0x1f || code === 0x7f) {
-			continue;
+			throw new SandboxError(
+				`escapeSbplString: control character 0x${code.toString(16)} at index ${i} in ${JSON.stringify(input)} — refusing to silently alias`,
+				{ backendId: "seatbelt-profile", reason: "profile-generation-failed" },
+			);
 		}
 		const ch = input[i];
 		if (ch === "\\") {
@@ -121,20 +119,36 @@ export function escapeSbplString(input: string): string {
 }
 
 /**
- * Build the read-permission rule.
+ * CORRECTION01 (P0-1): Read-permission rule.
  *
- * If `denySubpaths` is empty, emits `(allow file-read*)` — a flat
- * allow with no exclusions.
+ * Architecture: macOS Seatbelt cannot enforce a true positive read
+ * allow set without enumerating EVERY path dyld opens during process
+ * startup. The empirically-correct shape (validated by the recon and
+ * used by Anthropic's sandbox-runtime) is:
  *
- * If `denySubpaths` is non-empty, emits the recon-validated containment
- * pattern:
- *
- *     (allow file-read*)
- *     (deny file-read* (subpath "<X>"))
+ *     (allow file-read*)                        ; broad read allow
+ *     (deny file-read* (subpath "<deny1>"))    ; one per denyReadSubpath
+ *     (deny file-read* (subpath "<deny2>"))
  *     ...
  *
- * The kernel matches the resolved vnode path, so symlink escapes are
- * contained as long as the deny-subpaths are themselves canonical.
+ * The kernel processes rules in order; deny-after-allow wins on
+ * overlapping paths. This makes the SECURE boundary the deny list,
+ * not a missing-allow list.
+ *
+ * `readonlyRoots` becomes load-bearing in the WRITE direction:
+ *   - We emit `(deny file-write* (subpath "<readonlyRoot>"))` for each
+ *     readonlyRoot, ensuring the command CANNOT write to a path it
+ *     was only authorized to read. This is the load-bearing meaning
+ *     of "readonly" in the capability.
+ *   - The read allow on these paths is preserved by the broad
+ *     `(allow file-read*)` above.
+ *
+ * This is the documented "broad deny regions plus narrower re-allows"
+ * pattern (per Anthropic's macos-sandbox-utils). The capability
+ * contract is now truthful:
+ *   - readonlyRoots = paths the command may READ but NOT WRITE
+ *   - writableRoots = paths the command may READ AND WRITE
+ *   - denyReadSubpaths = paths the command may NOT READ (and may NOT WRITE)
  */
 function buildReadRule(denySubpaths: readonly string[]): string {
 	const head = "(allow file-read*)";
@@ -148,15 +162,40 @@ function buildReadRule(denySubpaths: readonly string[]): string {
 }
 
 /**
+ * Build the write-deny rules for readonlyRoots.
+ *
+ * Each readonlyRoot is a path the command is permitted to read but
+ * MUST NOT write to. We emit an explicit `(deny file-write* (subpath
+ * "<X>"))` per readonlyRoot, AFTER the write allow rule, so that
+ * Seatbelt's "last match wins" semantics guarantee the deny wins even
+ * if a writableRoots subpath happens to be a descendant of a
+ * readonlyRoot (the planner is responsible for keeping these disjoint,
+ * but the deny-after-allow makes the contract robust).
+ *
+ * NOTE: deny-write is emitted in buildWriteRule (next to the write
+ * allow) so the Seatbelt rule ordering places deny AFTER allow.
+ */
+function buildWriteDenyRule(readonlyRoots: readonly string[]): string {
+	if (readonlyRoots.length === 0) return "";
+	return readonlyRoots
+		.map((p) => `(deny file-write* (subpath "${escapeSbplString(p)}"))`)
+		.join("\n");
+}
+
+/**
  * Build the write-permission rule.
  *
- * Emits `(allow file-write* ...)` with explicit subpaths and literals:
- * the capability's `writableRoots`, the capability's `tempRoot`, and
- * the always-writable set (`/dev/null`, `/dev/tty`, `/private/var/folders`).
+ * Emits `(allow file-write* ...)` with explicit subpaths and literals
+ * (the capability's `writableRoots`, the capability's `tempRoot`, and
+ * the always-writable set), followed by `(deny file-write* (subpath
+ * "<readonlyRoot>"))` for each readonlyRoot. The deny-after-allow
+ * ordering makes the readonlyRoots contract load-bearing: even if a
+ * readonlyRoot is a descendant of a writableRoot, the deny wins.
  */
 function buildWriteRule(
 	writableRoots: readonly string[],
 	tempRoot: string | undefined,
+	readonlyRoots: readonly string[],
 ): string {
 	const subpaths: string[] = [];
 	for (const p of writableRoots) {
@@ -171,19 +210,27 @@ function buildWriteRule(
 	for (const p of ALWAYS_WRITABLE_SYSTEM_SUBPATHS) {
 		subpaths.push(`(subpath "${p}")`);
 	}
-	return `(allow file-write*\n  ${subpaths.join("\n  ")})`;
+	const allowPart = `(allow file-write*\n  ${subpaths.join("\n  ")})`;
+	const denyPart = buildWriteDenyRule(readonlyRoots);
+	return denyPart.length > 0 ? `${allowPart}\n${denyPart}` : allowPart;
 }
 
 /**
- * Build the network rule.
+ * CORRECTION01 (P1): Build the network rule explicitly.
  *
- * `"deny"` → `(deny network*)`. `"allow"` → empty (kernel default).
+ * `"deny"` → `(deny network*)`. `"allow"` → `(allow network*)`.
+ *
+ * Prior implementation emitted NOTHING for `"allow"` and relied on
+ * kernel default behavior; this was untestable as a positive property.
+ * The fix makes the allow explicit so a causal test pair
+ * (allow → connection succeeds, deny → connection fails) can prove
+ * the property.
  */
 function buildNetworkRule(network: CommandCapability["network"]): string {
 	if (network === "deny") {
 		return "(deny network*)";
 	}
-	return "";
+	return "(allow network*)";
 }
 
 /**
@@ -219,10 +266,17 @@ export function generateSeatbeltProfile(
 		"(allow signal (target self))",
 		"(allow sysctl-read)",
 		"(allow mach-lookup)",
-		// Read permission with explicit denylist regions.
+		// CORRECTION01 (P0-1): Read permission — broad allow with
+		// deny-subpaths carve-outs. The deny list IS the secure
+		// boundary; see buildReadRule doc.
 		buildReadRule(denyRead),
-		// Write permission with explicit allowlist regions.
-		buildWriteRule(capability.writableRoots, capability.tempRoot),
+		// Write permission — explicit allowlist plus deny-rules for
+		// readonlyRoots (load-bearing meaning of "readonly").
+		buildWriteRule(
+			capability.writableRoots,
+			capability.tempRoot,
+			capability.readonlyRoots,
+		),
 		// File metadata read for path resolution (stat, lstat).
 		"(allow file-read-metadata (subpath \"/\"))",
 	];

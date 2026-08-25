@@ -32,7 +32,7 @@
  * posture — see recon evidence `final-assessment.md`.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -117,6 +117,28 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				);
 			}
 
+			// CORRECTION01 (P0-1): readonlyRoots is now load-bearing.
+			// We MUST canonicalize it exactly the same way as writableRoots
+			// because the profile generator embeds these strings into SBPL
+			// as positive `(subpath ...)` allow rules. The kernel matches
+			// against the resolved vnode path, so an un-canonicalized
+			// readonlyRoot would silently fail to match its real inode.
+			const readonlyRoots: string[] = [];
+			for (const p of cap.readonlyRoots) {
+				try {
+					readonlyRoots.push(canonicalizeSandboxRoot(p));
+				} catch (cause) {
+					throw new SandboxError(
+						`Seatbelt: failed to canonicalize readonlyRoot=${p}`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+							cause,
+						},
+					);
+				}
+			}
+
 			const writableRoots: string[] = [];
 			for (const p of cap.writableRoots) {
 				try {
@@ -185,6 +207,7 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			const profile = generateSeatbeltProfile(
 				{
 					...cap,
+					readonlyRoots,
 					writableRoots,
 					tempRoot,
 					cwd,
@@ -253,10 +276,4 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			};
 		},
 	});
-
-// `mkdirSync` import retained for future backend extension that
-// needs to pre-create sandbox directories inside the capability's
-// tempRoot. Currently unused; reference it so biome/lint does not
-// strip the import.
-void mkdirSync;
 

@@ -148,6 +148,18 @@ export interface CommandInvocation {
  * `args` is prefixed with `["-f", <profile-file>]` followed by the
  * original executable/args. For `NoSandboxBackend`, the prepared
  * invocation is byte-equivalent to the input invocation.
+ *
+ * `env` may carry a `completeness` sentinel key that signals to the
+ * executor HOW it must apply the env to the spawn options:
+ *
+ *   - `"complete"`: the executor MUST pass `env` to the child process
+ *     AS-IS, with no further spreading of `process.env`. This is the
+ *     contract for sanitized sandboxed environments and is the load-
+ *     bearing property of CORRECTION01 (P0-2): under sanitized mode the
+ *     sandbox's env is the COMPLETE child environment, not an overlay
+ *     that the executor merges onto the host environment.
+ *   - absent: legacy overlay semantics. The executor spreads
+ *     `process.env` underneath `env` (existing production behavior).
  */
 export interface SandboxPreparedInvocation {
 	readonly executable: string;
