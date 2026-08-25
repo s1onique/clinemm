@@ -102,6 +102,15 @@ apps/examples/desktop-app/.cursor/settings.json
 /.factory/*
 !/.factory/epic-board.md
 
+# Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
+# apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt
+# qualification runs and must NOT block exact-head VSIX packaging (build-dogfood-vsix.py
+# runs `git status --porcelain=v1 --untracked-files=all` and HALTs on any ?? entry).
+# The repo-root /  .factory/* rule above only matches paths whose first component
+# is `.factory/`; Git's anchoring in /.factory/* means `apps/vscode/.factory/...`
+# is NOT covered by it, so this symmetric rule is required.
+apps/vscode/.factory/evidence/
+
 # Factory staging/backup siblings (µC-3 round 6 atomic publish)
 .factory-staging-*
 .factory-backup-*
