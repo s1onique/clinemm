@@ -242,7 +242,7 @@ export class SandboxError extends Error {
 		| "profile-generation-failed"
 		| "profile-write-failed"
 		| "launch-prepare-failed";
-	readonly cause?: unknown;
+	override readonly cause?: unknown;
 
 	constructor(
 		message: string,
