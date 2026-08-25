@@ -16,8 +16,11 @@
  * Scope (per C3 reviewer spec):
  *   1. Real production kernel write denial (the headline).
  *   2. stdout / stderr / exit conservation under opt-in and DEFAULT_OFF.
- *   3. Cancellation / deadline conservation (no orphaned descendant,
- *      unchanged terminal classification).
+ *   3. Cancellation / deadline conservation (terminal classification
+ *      and profile temp-dir cleanup under deadline; orphan-descendant
+ *      absence is NOT independently observed in this suite — that
+ *      property relies on Apple platform inheritance semantics plus
+ *      the supervisor's kill tree).
  *
  * These tests run ONLY on darwin hosts with /usr/bin/sandbox-exec
  * present (matching the substrate check the production resolver does
@@ -252,8 +255,11 @@ describe.skipIf(!HAS_SUBSTRATE)(
 
 /**
  * Cancellation / deadline conservation: when the supervised job is
- * cancelled, no orphaned descendant must remain, and the terminal
- * classification must reflect cancellation (not "exited" with code 0).
+ * cancelled, the terminal classification must reflect cancellation
+ * (not "exited" with code 0), and the profile temp dir must be
+ * cleaned up. Orphan-descendant absence is NOT directly observed
+ * in this suite — it relies on Apple platform inheritance plus the
+ * supervisor's kill tree.
  * This must hold under both opt-in and DEFAULT_OFF.
  */
 describe.skipIf(!HAS_SUBSTRATE)(
@@ -298,7 +304,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 			}
 		})
 
-		it("opt-in seatbelt: deadline fires; same terminal classification (no orphan, no false clean exit)", async () => {
+		it("opt-in seatbelt: deadline fires; same terminal classification (no false clean exit; orphan absence NOT independently observed)", async () => {
 			const { manager, jobId } = await runAndAwaitTerminal(SEATBELT_OPTIN)
 			try {
 				const terminal = await manager.status({ jobId, waitMs: 0 })
