@@ -522,6 +522,15 @@ export class CommandJobManager {
 		// shell). The `envSemantics` field tells the supervisor how to
 		// merge this `env` with the parent's `process.env`.
 		let spawnEnv: Record<string, string> = options.env ?? {}
+		// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01-C2-P1:
+		// The cwd passed to Node's spawn() MUST come from the prepared
+		// invocation when the sandbox prepared one, not from the caller's
+		// `options.cwd`. The Seatbelt backend canonicalizes cwd before
+		// emitting the prepared invocation (e.g. /tmp/... -> /private/tmp/...);
+		// the canonicalized form is what must reach spawn(). Node's
+		// `spawn({ cwd })` is the working directory of the explicit
+		// child -- this is not cosmetic metadata.
+		let spawnCwd: string = options.cwd
 
 		if (sandboxMode !== undefined) {
 			// Opt-in recognized: route through the sandbox abstraction.
@@ -582,13 +591,20 @@ export class CommandJobManager {
 			}
 
 			// STRUCTURAL spawn binding (reviewer evidence 2): the
-			// prepared invocation is the authoritative spawn shape.
-			// We replace executable/args/env with what the backend
-			// produced, and thread `prepared.envSemantics` through the
-			// supervisor so the env-merge site honors the contract.
+			// prepared invocation is the authoritative spawn shape for
+			// ALL spawn() fields, not just executable/args/env. We replace
+			// each field with what the backend produced, and thread
+			// `prepared.envSemantics` through the supervisor so the
+			// env-merge site honors the contract.
 			executable = prepared.executable
 			args = [...prepared.args]
 			input = prepared.input
+			// CRITICAL: use the BACKEND'S cwd. Node's spawn({ cwd }) is
+			// the actual working directory of the spawned child, not
+			// metadata. The Seatbelt backend canonicalizes cwd in
+			// prepare(); honoring `options.cwd` would silently drop that
+			// canonicalization (e.g. /tmp/... -> /private/tmp/...).
+			spawnCwd = prepared.cwd
 			// CRITICAL: use the BACKEND'S env, not the caller's. The
 			// caller's `options.env` may carry secrets that the parent
 			// (run_commands host) wants to forward to an unsandboxed
@@ -599,27 +615,45 @@ export class CommandJobManager {
 			sandboxCleanup = prepared.cleanup
 		}
 
-		const childProcess = spawnSupervisableShellCommand(
-			{
-				executable,
-				args,
-				cwd: options.cwd,
-				env: spawnEnv,
-				input,
-				// When `undefined` (legacy / disabled / unrecognized
-				// opt-in) the supervisor preserves the existing
-				// `{ ...process.env, ...config.env }` merge. When the
-				// sandbox produced a sanitized env, this is "complete"
-				// and the supervisor uses `config.env` AS-IS.
-				envSemantics: preparedEnvSemantics,
-			},
-			{
-				// Retain enough for follow-up status checks; response
-				// truncation happens at the snapshot projection.
-				maxOutputChars: maxRetainedOutputChars,
-				combineOutput: true,
-			},
-		)
+		// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01-C2-P2:
+		// If the supervisor throws synchronously (rare, but possible:
+		// e.g. a malformed SpawnConfig that the supervisor validates
+		// before calling spawn()), ensure the sandbox-prepared cleanup
+		// hook still runs. Without this, a profile temp dir from a
+		// successful prepare() could leak because cleanup was attached
+		// to the job only after this line.
+		let childProcess
+		try {
+			childProcess = spawnSupervisableShellCommand(
+				{
+					executable,
+					args,
+					cwd: spawnCwd,
+					env: spawnEnv,
+					input,
+					// When `undefined` (legacy / disabled / unrecognized
+					// opt-in) the supervisor preserves the existing
+					// `{ ...process.env, ...config.env }` merge. When the
+					// sandbox produced a sanitized env, this is "complete"
+					// and the supervisor uses `config.env` AS-IS.
+					envSemantics: preparedEnvSemantics,
+				},
+				{
+					// Retain enough for follow-up status checks; response
+					// truncation happens at the snapshot projection.
+					maxOutputChars: maxRetainedOutputChars,
+					combineOutput: true,
+				},
+			)
+		} catch (err) {
+			if (sandboxCleanup) {
+				void sandboxCleanup().catch(() => {
+					// Swallow: cleanup is best-effort, synchronous
+					// supervisor throw is the load-bearing error.
+				})
+			}
+			throw err
+		}
 
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 		// set up the terminal-transition promise BEFORE the active

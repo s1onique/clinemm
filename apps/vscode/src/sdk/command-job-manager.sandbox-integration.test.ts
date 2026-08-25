@@ -191,7 +191,16 @@ function makeCaptureBackend(opts: {
 	return backend
 }
 
-describe("structural spawn binding (DI seam)", () => {
+// --------------------------------------------------------------------------
+// (c) STRUCTURAL spawn-binding proof (DI seam): the backend prepared
+//     invocation is what the production executor forwards to
+//     `spawnSupervisableShellCommand`. Captured at the seam, not at
+//     `node:child_process.spawn` (which is downstream of the supervisor
+//     and not directly observable from this side). For the runtime
+//     "real production seam" cwd proof, see the next describe block.
+// --------------------------------------------------------------------------
+
+describe("backend prepared invocation reaches the supervisor (structural)", () => {
 	it("with seatbelt opt-in, the prepared invocation's executable replaces the original", async () => {
 		let capturedPrepared: SandboxPreparedInvocation | null = null
 		const stubBackend = makeCaptureBackend({})
@@ -286,6 +295,124 @@ describe("structural spawn binding (DI seam)", () => {
 // (d) Substrate unavailable: injected resolver returns undefined ->
 //     fail-closed spawn_failed result. Command MUST NOT execute.
 // --------------------------------------------------------------------------
+
+// --------------------------------------------------------------------------
+// (c.5) REAL production seam cwd proof: when a backend returns a
+//       different `prepared.cwd` from the caller's `options.cwd`, the
+//       spawned child must see the BACKEND's cwd. This is end-to-end
+//       through the real supervisor + real Node spawn() (no mocks of
+//       either). We assert against `pwd` stdout from the actual child.
+//
+//       This test would FAIL before C2-P1 (where cwd was ignored and
+//       `options.cwd` reached spawn() instead of `prepared.cwd`).
+// --------------------------------------------------------------------------
+
+describe("real production seam: prepared cwd reaches the spawned child", () => {
+	it("with seatbelt opt-in + backend returning a different cwd, `pwd` reports the backend's cwd", async () => {
+		const { mkdtempSync, rmSync } = await import("node:fs")
+		const { tmpdir } = await import("node:os")
+		const { join } = await import("node:path")
+
+		// Two distinct fixture directories:
+		//   - callerCwd: the cwd the host claims to be in
+		//   - backendCwd: a different cwd the backend reports after
+		//                 canonicalization (mirroring the Seatbelt
+		//                 canonicalization behavior, e.g. /tmp/... ->
+		//                 /private/tmp/...)
+		const callerCwd = mkdtempSync(join(tmpdir(), "clinemm-cwd-caller-"))
+		const backendCwd = mkdtempSync(join(tmpdir(), "clinemm-cwd-backend-"))
+		try {
+			// Inject a backend whose prepare() returns a different cwd.
+			// This simulates the canonicalization that the real Seatbelt
+			// backend performs; for the test, the canonicalization is a
+			// textual substitution (callerCwd -> backendCwd) but the
+			// CONTRACT being proven is identical: prepared.cwd reaches
+			// Node's spawn({ cwd }).
+			const manager = new CommandJobManager({
+				sandboxBackendResolver: async () => ({
+					id: "cwd-replacement",
+					async isAvailable() { return true },
+					async prepare(): Promise<SandboxPreparedInvocation> {
+						return {
+							executable: "/bin/sh",
+							// Use `pwd` directly so the spawned child
+							// runs `pwd` AS-IS (no sandbox-exec wrapper).
+							// The supervisor just spawns /bin/sh -c pwd
+							// with the prepared cwd.
+							args: ["-c", "pwd"],
+							cwd: backendCwd,
+							env: { PATH: "/usr/bin:/bin", LANG: "en_US.UTF-8", TERM: "dumb" },
+							envSemantics: "complete",
+							backendId: "cwd-replacement",
+							cleanup: async () => {},
+						}
+					},
+				}),
+			})
+			try {
+				await withSandboxOptIn(SEATBELT_OPTIN, async () => {
+					const start = await manager.start({
+						command: "/bin/sh -c 'pwd'",
+						// Caller claims to be in callerCwd. The backend
+						// reports backendCwd. With C2-P1 fix honored,
+						// the spawned child sees backendCwd.
+						cwd: callerCwd,
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
+					})
+					expect(start.state).toBe("exited")
+					expect(start.exitCode).toBe(0)
+					// The child ran `pwd` from `prepared.cwd`. macOS may
+					// canonicalize /tmp -> /private/tmp, so we normalize
+					// both sides via realpathSync before comparison.
+					const { realpathSync } = await import("node:fs")
+					const actualCwd = realpathSync(start.stdout.trim())
+					const expectedCwd = realpathSync(backendCwd)
+					expect(actualCwd).toBe(expectedCwd)
+					expect(actualCwd).not.toBe(realpathSync(callerCwd))
+				})
+			} finally {
+				await manager.dispose()
+			}
+		} finally {
+			rmSync(callerCwd, { recursive: true, force: true })
+			rmSync(backendCwd, { recursive: true, force: true })
+		}
+	})
+
+	it("DEFAULT_OFF (no opt-in): supervisor uses caller's cwd unchanged", async () => {
+		const { mkdtempSync, rmSync } = await import("node:fs")
+		const { tmpdir } = await import("node:os")
+		const { join } = await import("node:path")
+
+		const callerCwd = mkdtempSync(join(tmpdir(), "clinemm-cwd-default-off-"))
+		try {
+			// No injected resolver: production default. With no opt-in
+			// env, `resolveExperimentalSandboxMode()` returns undefined
+			// and the executor skips the sandbox path entirely. The
+			// supervisor receives the caller's cwd.
+			const manager = new CommandJobManager()
+			try {
+				await withSandboxOptIn(undefined, async () => {
+					const start = await manager.start({
+						command: "/bin/sh -c 'pwd'",
+						cwd: callerCwd,
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
+					})
+					expect(start.state).toBe("exited")
+					expect(start.exitCode).toBe(0)
+					const { realpathSync } = await import("node:fs")
+					expect(realpathSync(start.stdout.trim())).toBe(realpathSync(callerCwd))
+				})
+			} finally {
+				await manager.dispose()
+			}
+		} finally {
+			rmSync(callerCwd, { recursive: true, force: true })
+		}
+	})
+})
 
 describe("fail-closed: substrate unavailable", () => {
 	it("resolver returns undefined: command is not executed (spawn_failed)", async () => {
