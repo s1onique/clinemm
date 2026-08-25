@@ -13,6 +13,82 @@ import {
 } from "@cline/shared";
 import type { EnvironmentSemantics } from "../../../runtime/sandbox/types";
 import { TimeoutError } from "../helpers";
+
+/**
+ * ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01:
+ * Inherited environment variables that bash (or POSIX sh)
+ * parses at NON-INTERACTIVE STARTUP BEFORE the supplied
+ * command string. If any of these is set in the parent
+ * environment, bash sources / uses them BEFORE running
+ * `bash -c <command>`, which would let hostile or surprising
+ * parent env run arbitrary code before the policy-authorized
+ * command.
+ *
+ * Reference: GNU Bash Reference Manual, Bash Startup Files.
+ *   "When Bash is invoked as a non-interactive shell (e.g.,
+ *    via bash -c), it looks for BASH_ENV in the environment,
+ *    and if it is defined, expands the value of that variable
+ *    and uses the expanded value as a file to source BEFORE
+ *    executing the supplied command string."
+ *
+ * `--noprofile` / `--norc` alone is INSUFFICIENT for BASH_ENV;
+ * bash documents BASH_ENV separately from profile / rcfile
+ * machinery.
+ *
+ * Variables in this set:
+ *   BASH_ENV   bash sources $BASH_ENV at non-interactive
+ *              startup (verified live as load-bearing channel
+ *              for P0-4 in red-p0-4-bash-env-startup.txt)
+ *   ENV        POSIX sh analogue: sources $ENV at startup
+ *              (defensive; bash inherits POSIX semantics)
+ *   SHELLOPTS  bash applies each colon-separated option in
+ *              SHELLOPTS at startup (e.g. SHELLOPTS=errexit
+ *              would change exit-on-error semantics of the
+ *              authorized command)
+ *   BASHOPTS   analogous to SHELLOPTS for `shopt` options
+ *
+ * Variables NOT in this set (deliberately):
+ *   PATH, TERM, LANG, LC_ALL, etc. -- ordinary env;
+ *     conservative
+ *   exported shell functions (BASH_FUNC_*) -- neutralized
+ *     for command-identity channel by CORRECTION03 slash-
+ *     bypass; even if inherited, slash-prefixed AUTO
+ *     commands run as pathnames (no function lookup)
+ *   caller-supplied env (e.g., `env: { SHELL: shell }`
+ *     from apps/vscode/src/sdk/command-job-manager.ts:640)
+ *     -- caller-controlled, trusted
+ *
+ * Under envSemantics: "complete" (sanitized Seatbelt mode),
+ * the materialized env already excludes these by construction
+ * (they are not in SAFE_ENVIRONMENT_BASELINE or in any
+ * default allow list), so this filter is a NO-OP there.
+ * The filter is ONLY active under envSemantics: "overlay"
+ * or undefined (the DEFAULT_OFF contract).
+ */
+const BASH_STARTUP_STRIPPABLE_ENV: ReadonlySet<string> = new Set([
+  "BASH_ENV",
+  "ENV",
+  "SHELLOPTS",
+  "BASHOPTS",
+]);
+
+/**
+ * Return a copy of `env` with the bash-startup-affecting
+ * variables stripped. Caller's `env` (typically config.env)
+ * is preserved; only the inherited process.env layer is
+ * filtered. This is intentional: the caller is trusted; the
+ * parent environment is not.
+ */
+function stripBashStartupEnvFromParent(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (BASH_STARTUP_STRIPPABLE_ENV.has(key)) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
 import type { ShellExecutor } from "../types";
 import {
 	MAX_COMMAND_OUTPUT_CHARS,
@@ -237,8 +313,27 @@ function buildShellProcess(
 	// computed the entire environment the child should see, including
 	// a sanitized allowlist, and spreading process.env underneath
 	// would silently re-introduce leaked secrets.
+	//
+	// ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01:
+	// Under overlay semantics, the spread-merge inherits ALL of
+	// process.env including bash-startup-affecting variables
+	// (BASH_ENV, ENV, SHELLOPTS, BASHOPTS). Bash sources $BASH_ENV
+	// at non-interactive startup BEFORE parsing -c <command>;
+	// inherited SHELLOPTS / BASHOPTS apply colon-separated options
+	// at startup. This lets hostile or surprising parent env run
+	// arbitrary code before the policy-authorized command. We strip
+	// those variables from the inherited process.env layer BEFORE
+	// the spread-merge. Caller's config.env is preserved (caller-
+	// trusted).
+	//
+	// Under "complete" semantics, this filter is a NO-OP because
+	// the materialized env is built from SAFE_ENVIRONMENT_BASELINE
+	// + caller allow list (which does not include the bash-startup
+	// variables by default).
 	const childEnv =
-		config.envSemantics === "complete" ? config.env : { ...process.env, ...config.env };
+		config.envSemantics === "complete"
+			? config.env
+			: { ...stripBashStartupEnvFromParent(process.env), ...config.env };
 
 	const child = spawn(config.executable, config.args, {
 		cwd: config.cwd,
