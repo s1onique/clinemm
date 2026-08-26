@@ -87,23 +87,47 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural", () => {
 			cwd: "/tmp",
 			workspaceRoots: ["/var/folders/x/y"],
 		})
-		// readonlyRoots / writableRoots / denyReadSubpaths / env /
-		// cwd are byte-identical to the no-opt-in case except that
-		// network is now "allow". The filesystem contract is
-		// preserved by construction.
-		const baseline = {
-			readonlyRoots: ["/var/folders/x/y"],
-			writableRoots: [],
-			denyReadSubpaths: [],
-			environment: { mode: "sanitized", allow: Object.keys({}) },
-			cwd: "/tmp",
+		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01 update:
+		// The Safe-YOLO opt-in now ALSO activates the curated credential
+		// deny list (resolveSafeYoloSensitiveReadDenials returns the
+		// reviewer's curated V1 set when BOTH opt-ins are active). The
+		// filesystem contract is preserved at the BYTE level for
+		// readonlyRoots / writableRoots / environment / cwd; ONLY
+		// network and denyReadSubpaths differ from the no-opt-in case.
+		// This is the SRC01 extension to the original NETWORK-OPEN01
+		// claim ("opt-in only changes network"); the SRC01 ACT narrowed
+		// the claim to "opt-in only changes network + the YOLO-targeted
+		// credential deny list, which is the actual threat model."
+		expect(cap.readonlyRoots).toEqual(["/var/folders/x/y"])
+		expect(cap.writableRoots).toEqual([])
+		expect(cap.cwd).toBe("/tmp")
+		expect(cap.environment.mode).toBe("sanitized")
+		if (cap.environment.mode === "sanitized") {
+			expect(Array.isArray(cap.environment.allow)).toBe(true)
+			expect(cap.environment.allow.length).toBeGreaterThan(0)
 		}
-		expect(cap.readonlyRoots).toEqual(baseline.readonlyRoots)
-		expect(cap.writableRoots).toEqual(baseline.writableRoots)
-		expect(cap.denyReadSubpaths).toEqual(baseline.denyReadSubpaths)
-		expect(cap.cwd).toBe(baseline.cwd)
-		// Only network is allowed to differ.
+		// denyReadSubpaths is the YOLO credential set, filtered to
+		// existing files. The contents depend on the host HOME; we
+		// verify the SHAPE not the exact contents.
+		const denials = cap.denyReadSubpaths ?? []
+		expect(Array.isArray(denials)).toBe(true)
+		for (const p of denials) {
+			expect(typeof p).toBe("string")
+			expect(p.includes(".ssh/") || p.includes(".gnupg/")).toBe(true)
+		}
+		// Only network and denyReadSubpaths are allowed to differ
+		// from the no-opt-in case.
 		expect(cap.network).toBe("allow")
+	})
+
+	it("filesystem policy WITHOUT the opt-in: denyReadSubpaths is empty", () => {
+		process.env.CLINEMM_SAFE_YOLO_NETWORK = ""
+		const cap = buildExperimentalReconCapability({
+			cwd: "/tmp",
+			workspaceRoots: ["/var/folders/x/y"],
+		})
+		expect(cap.denyReadSubpaths).toEqual([])
+		expect(cap.network).toBe("deny")
 	})
 })
 
