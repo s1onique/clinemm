@@ -28,6 +28,8 @@
 | `BYPASS01` (de-queued) | DEFER | row 20 | (de-queued per row 17 CORRECTION02 — residual is environment-specific, not a general command-policy defect) | Original YOLO approval bypass; no longer indicated |
 | `HOST-TEST RUNNER` | **OPEN / HIGH** | row 18 | (none yet — to be authored) | Host-orchestrated end-to-end Seatbelt dogfood (the natural next layer above the substrate probes) |
 | `ACT-CLINEMM-CLASSIC-PROTECTION-RECON01` | **OPEN / HIGH** | row 22 | (none yet — to be authored) | Classic (non-Seatbelt) approval protection recon; unblocked by `SEATBELT-DEFAULT-ON01` closure; next-frontier after Safe-YOLO is fully closed |
+| (deferred) network-policy hardening / allowlisting | **DEFER** | — | (none — `safe-yolo-seatbelt.md` closed V1; the next slice is a fresh ACT, not a follow-on to the V1 contracts) | Future ACT: harden the network-open opt-in (e.g. allowlist host:port patterns rather than `network*:allow`) so YOLO under Seatbelt becomes more conservative on the network axis. V1 already ships `network: "allow"` / `"deny"` only; this deferred row is the post-V1 hardening lane. |
+| (deferred) authenticated-dev credential capabilities | **DEFER** | — | (none — `authenticated-dev-capabilities.md`) | Deferred family: `~/.aws/`, `~/.kube/`, `~/.docker/config.json`, `~/.config/gh/hosts.yml`. The V1 sensitive-read confinement deliberately scoped *out* these four paths; the post-V1 design space is host-side executor / credential-helper / SSO / exec-plugin, not raw credential bytes to the model. See [`.factory/epics/authenticated-dev-capabilities.md`](./authenticated-dev-capabilities.md). |
 
 ## Open work
 

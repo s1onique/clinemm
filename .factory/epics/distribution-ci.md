@@ -25,6 +25,12 @@
 | `ACT-CLINEMM-GITHUB-ACTIONS-RECON01` (first ACT under `GITHUB-ACTIONS01`) | OPEN (recon only; no repair) | L4102-4106 | Recon existing workflows, failing jobs, package-manager topology, gates, VSIX packaging, permissions, release triggers |
 | `EPIC-CLINEMM-GITHUB-DISTRIBUTION01` | OPEN | L4108-4127 | Publish distributable artifact + decide GitHub Packages inclusion |
 | `ACT-CLINEMM-DOGFOOD-SINGLE-WORKTREE-CLEANUP01` | OPEN (P2) | L4129-4138 | Drop linked Git worktree from dogfood builder |
+| `EPIC-CLINEMM-EXTENSION-PUBLISHING01` (umbrella epic, opened at FUTURE-BACKLOG-CENSUS01) | OPEN | — | Publish ClineMM "like Cline does" to VS Code Marketplace + Open VSX; lives under this `distribution-ci.md` file rather than requiring a new detail file |
+| `VSCODE-MARKETPLACE-PUBLISH-RECON01` (working label) | OPEN on umbrella | — | First ACT under `EXTENSION-PUBLISHING01`: recon the VS Code Marketplace publish path (publisher account, PAT scopes, vsce tooling, release asset shape) |
+| `OPENVSX-PUBLISH-RECON01` (working label) | OPEN on umbrella | — | Second ACT: recon the Open VSX / Codium publish path (namespace, token, ovsx tooling, mirror) |
+| `DUAL-REGISTRY-RELEASE-AUTOMATION01` (working label) | BLOCKED on the two recon ACTs | — | After both recon ACTs land: a single release pipeline that publishes to both registries from the same source HEAD with separate provenance |
+| `RELEASE-IDENTITY-AND-PROVENANCE01` (working label) | BLOCKED on dual-registry | — | Per-artifact trust binding (`SOURCE_HEAD`, `VERSION`, `PATH`, `BYTE_SIZE`, `SHA256`, publisher identity) so both registries prove the same source HEAD was shipped |
+| `PUBLISHING-QUALIFICATION01` (working label) | BLOCKED on provenance | — | Qualification harness: prove a published artifact reproduces identically from the declared source HEAD |
 
 ## Open work
 

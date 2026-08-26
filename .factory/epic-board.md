@@ -1,7 +1,7 @@
 # ClineMM Epic Board
 
 Updated: 2026-08-27
-Source-of-truth: `.factory/epics/*.md` (14 files) — the per-epic detail files. **This board is a navigation index, not an archive.**
+Source-of-truth: `.factory/epics/*.md` (17 files) — the per-epic detail files. **This board is a navigation index, not an archive.**
 Contract: [`.factory/epics/_index-contract.md`](./epics/_index-contract.md) (frozen maintenance law)
 Conservation anchor: `5e96cfd3a` (immutable; see §5 of the contract for the `OLD_ACT_IDS - CURRENT_REPOSITORY_ACT_IDS = ∅` invariant)
 
@@ -28,14 +28,17 @@ Every epic with `ACTIVE` family-level state (per contract §2 status vocabulary)
 
 | Epic | Pri | State | Frontier | Detail |
 |---|---|---|---|---|
-| Safe-YOLO + Darwin Seatbelt | P0 | ACTIVE (core safety substrate CLOSED; 2 open post-substrate frontiers) | `HOST-TEST RUNNER` · `CLASSIC-PROTECTION-RECON01` | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
-| Approval protection | P1 | ACTIVE (command-policy CLOSED; `BYPASS01` de-queued; editor-tool recon `NEXT`) | `EDITOR-TOOL-APPROVAL-FRICTION-RECON01` · `HOST-TEST RUNNER` · `CLASSIC-PROTECTION-RECON01` | [`approval-protection.md`](./epics/approval-protection.md) |
+| Safe-YOLO + Darwin Seatbelt | P0 | ACTIVE (core safety substrate CLOSED; 2 open post-substrate frontiers) | `CLASSIC-PROTECTION-RECON01` (also depends on the `HOST-TEST RUNNER` host-side runner; see Host test infrastructure row below) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
+| Approval protection | P1 | ACTIVE (command-policy CLOSED; `BYPASS01` de-queued; editor-tool recon `NEXT`) | `EDITOR-TOOL-APPROVAL-FRICTION-RECON01` · `CLASSIC-PROTECTION-RECON01` (both depend on the `HOST-TEST RUNNER` host-side runner; see Host test infrastructure row below) | [`approval-protection.md`](./epics/approval-protection.md) |
 | Command-risk classification | P1 | CLOSED framework (V1 GREEN, V2 `HALT_SHIPPING`, V2-READONLY STRUCTURAL) | (none — fresh ACT to authorize further expansion) | [`command-risk-classification.md`](./epics/command-risk-classification.md) |
 | Quality substrate | P1 | ACTIVE (vitest baseline + typecheck local-seam CLOSED; 2 OPEN acceptance conditions) | `CODE-COVERAGE-BASELINE01` · typecheck CI parity | [`quality-substrate.md`](./epics/quality-substrate.md) |
 | Task-presentation | P1 | ACTIVE (compacted-history substrate CLOSED; 3 task-header projection items OPEN) | `E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01` · `TASKHEADER-CANONICAL-PROJECTION01` · `TASKHEADER-OWNER-AWARE-TIMING01` | [`task-presentation.md`](./epics/task-presentation.md) |
 | Task-control liveness | P1 | CLOSED family (bounded generation-fence repair landed; `LIVE` qualification pending) | (post-sharding review only) | [`task-control-liveness.md`](./epics/task-control-liveness.md) |
 | Distribution / CI | P2 | ACTIVE (3 open items: GitHub Actions recon, GitHub Distribution, ACT — see file) | `EPIC-CLINEMM-GITHUB-ACTIONS01` · `EPIC-CLINEMM-GITHUB-DISTRIBUTION01` · … | [`distribution-ci.md`](./epics/distribution-ci.md) |
+| Extension publishing | P1 | OPEN (`EXTENSION-PUBLISHING01` recon-first: VS Code Marketplace + Open VSX; see file) | `VSCODE-MARKETPLACE-PUBLISH-RECON01` · `OPENVSX-PUBLISH-RECON01` | [`distribution-ci.md`](./epics/distribution-ci.md) |
 | Product config / branding | P2 | ACTIVE (cost + consolidation CLOSED; 2 open product fronts) | `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` · `EPIC-CLINEMM-BRANDING01` | [`product-config-branding.md`](./epics/product-config-branding.md) |
+| Dynamic editing backends / Dirac | P1 | OPEN (`DIRAC-EDITING-RECON01` first; all downstream BLOCKED on dependency chain) | `DIRAC-EDITING-RECON01` | [`dynamic-editing-backends.md`](./epics/dynamic-editing-backends.md) |
+| Host test infrastructure | P1 | OPEN (`HOST-TEST RUNNER` recon first; unblocks real-kernel Seatbelt probes, fresh VSIX dogfood, live approval-UI capture, classic-protection qualification) | `HOST-TEST RUNNER` | [`host-test-infrastructure.md`](./epics/host-test-infrastructure.md) |
 | Architecture | P2 | ACTIVE (1 OPEN; 2 HOLD pending upstream evidence) | `EPIC-CLINEMM-ELMIZATION02` (gated on E9) | [`architecture.md`](./epics/architecture.md) |
 | Factory infrastructure | P0 | ACTIVE (substrate-level rules; Git safety CLOSED) | `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` (P2 non-blocking) | [`factory-infrastructure.md`](./epics/factory-infrastructure.md) |
 ## Open supporting work
@@ -61,12 +64,14 @@ Items that are consciously not current execution debt. Reopen triggers are in th
 | E8 — legacy writer retirement | HOLD | When E7 evidence and dependencies justify it. **No action in this board ACT.** | [`architecture.md`](./epics/architecture.md) |
 | E9 — effect interpreter | HOLD | After E8. **No action in this board ACT.** | [`architecture.md`](./epics/architecture.md) |
 | Runtime-task-progression `CLOSED_LIVE` upgrade | DEFER (optional) | When a live ClineMM extension host is available | [`quality-substrate.md`](./epics/quality-substrate.md) |
+| Network-policy hardening / allowlisting | DEFER | Post-V1 next slice (host:port allowlist rather than `network*:allow`); ship a fresh ACT, not a follow-on to the closed V1 contracts | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
+| Authenticated-dev credential capabilities | DEFER | `~/.aws/`, `~/.kube/`, `~/.docker/config.json`, `~/.config/gh/hosts.yml` — host-side executor pattern, not raw credential bytes to the model. Design ACT first, per-family implementation ACTs after. | [`authenticated-dev-capabilities.md`](./epics/authenticated-dev-capabilities.md) |
 
 ---
 
 ## Historical task census
 
-**Purpose: conservation only.** Every `ACT-CLINEMM-*` ID present in the immutable pre-sharding anchor `5e96cfd3a:.factory/epic-board.md` is listed here, grouped by family, so the contract's §5 invariant (`OLD_ACT_IDS - CURRENT_REPOSITORY_ACT_IDS = ∅`) holds. **This is an audit trail, not a status report** — state, priority, and evidence for each ACT live in the owning epic detail file (when sharded) or in `docs/closure-plans/*.json` (when externalized). The 11 detail files (`approval-protection.md`, `command-risk-classification.md`, `closed-foundation.md`, `distribution-ci.md`, `factory-infrastructure.md`, `product-config-branding.md`, `quality-substrate.md`, `safe-yolo-seatbelt.md`, `task-control-liveness.md`, `task-presentation.md`, `upstream-intake.md`, `webview-seam-aop.md`, plus `architecture.md`) are the canonical current state for the families they own.
+**Purpose: conservation only.** Every `ACT-CLINEMM-*` ID present in the immutable pre-sharding anchor `5e96cfd3a:.factory/epic-board.md` is listed here, grouped by family, so the contract's §5 invariant (`OLD_ACT_IDS - CURRENT_REPOSITORY_ACT_IDS = ∅`) holds. **This is an audit trail, not a status report** — state, priority, and evidence for each ACT live in the owning epic detail file (when sharded) or in `docs/closure-plans/*.json` (when externalized). The 17 detail files (`_index-contract.md`, `approval-protection.md`, `authenticated-dev-capabilities.md`, `command-risk-classification.md`, `closed-foundation.md`, `distribution-ci.md`, `dynamic-editing-backends.md`, `factory-infrastructure.md`, `host-test-infrastructure.md`, `product-config-branding.md`, `quality-substrate.md`, `safe-yolo-seatbelt.md`, `task-control-liveness.md`, `task-presentation.md`, `upstream-intake.md`, `webview-seam-aop.md`, plus `architecture.md`) are the canonical current state for the families they own.
 
 The families below are mostly historical (pre-reduction). They are preserved here as ACT IDs only — no closure narrative, no embedded evidence.
 
