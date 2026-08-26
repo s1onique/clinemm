@@ -74,6 +74,20 @@ export interface CommandJobSnapshot {
 	/** Convenience fields for tool results. */
 	elapsedMs: number
 	deadlineRemainingMs: number
+
+	/**
+	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
+	 * Per-command typed capability (read-only witness field). The
+	 * snapshot carries this verbatim so tests can verify the
+	 * positional correlation between plan entries and jobs.
+	 * This is a NAMED ALIAS of the merged `executionCapability`
+	 * stamped on the job record: the manager picks
+	 * `perCommandExecutionCapability` first (real authority) and
+	 * falls back to the legacy `executionCapability` (probe-only).
+	 * Tests reading the snapshot via the legacy name see the same
+	 * value.
+	 */
+	perCommandExecutionCapability?: InternalExecutionCapability
 }
 
 /** Caller-supplied input to {@link CommandJobManager.start}. */
@@ -284,6 +298,12 @@ function snapshot(job: CommandJob): CommandJobSnapshot {
 		outputTruncated: stdoutSnap.dropped || stderrSnap.dropped,
 		elapsedMs: nowMs - job.startedAtMs,
 		deadlineRemainingMs: Math.max(0, job.deadlineAtMs - nowMs),
+		// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
+		// carry the merged per-command typed capability verbatim
+		// (named alias of the merged executionCapability slot) so
+		// tests can verify positional correlation between plan
+		// entries and jobs at the snapshot projection seam.
+		perCommandExecutionCapability: job.executionCapability,
 	}
 }
 
@@ -570,10 +590,43 @@ export class CommandJobManager {
 				workspaceRoots: this.experimentalSandboxWorkspaceRoots,
 			})
 
+			// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
+			// map the typed per-command channel into the Seatbelt
+			// sandbox capability. The `jobExecutionCapability`
+			// variable is constructed later (line 706 below) on
+			// purpose; for the sandbox-prepare call we read directly
+			// from `context` here, which is the single trusted source
+			// for the typed channel.
+			//
+			// Mapping (exhaustive, spec §17 / §45):
+			//   case "filesystem-create-only":
+			//     createOnlyRoots = cap.roots (Seatbelt emits
+			//      (allow file-write-create (subpath "<root>")))
+			//   case "factory-binding-probe":
+			//   case undefined:
+			//     createOnlyRoots = []  (recon default applies)
+			//
+			// Future InternalExecutionCapability variants force a
+			// switch update (compile error otherwise); prevents
+			// silent authority drop (spec §18).
+			const createOnlyRootsForThisJob = capabilityFromJobExecution(
+				context?.perCommandExecutionCapability !== undefined
+					? context.perCommandExecutionCapability
+					: context?.executionCapability,
+			)
+
 			let prepared
 			try {
 				prepared = await backend.prepare({
-					capability,
+					capability: {
+						...capability,
+						// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
+						// attach the typed per-command create-only roots
+						// (if any) so the Seatbelt profile generator
+						// emits (allow file-write-create (subpath ...)).
+						// [] is the safe no-op (no narrowing).
+						...(createOnlyRootsForThisJob.length > 0 ? { createOnlyRoots: createOnlyRootsForThisJob } : {}),
+					},
 					command: {
 						executable,
 						args,
@@ -1159,4 +1212,59 @@ export class CommandJobManager {
 		// belt-and-suspenders cleanup.
 		this.terminalTransitions.clear()
 	}
+}
+
+/**
+ * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
+ *
+ * Map a job-level typed `InternalExecutionCapability` into the
+ * Seatbelt `CommandCapability.createOnlyRoots` field. Exhaustive
+ * switch over the union (spec §17 / §45):
+ *
+ *   case "filesystem-create-only":
+ *     return roots (passed verbatim; the Seatbelt backend
+ *     canonicalizes each root again as a fail-closed gate at
+ *     prepare() time).
+ *   case "factory-binding-probe":
+ *   case undefined:
+ *     return []  (no narrowing; recon default applies)
+ *
+ * Future variants of `InternalExecutionCapability` MUST be added
+ * here. The TypeScript exhaustiveness check (the trailing
+ * `assertNever`) makes a missing branch a compile error, which
+ * prevents silent dropping of authority (spec §18: "do not silently
+ * drop a capability that was required for the approved
+ * execution").
+ *
+ * Why this is a separate helper:
+ *   - testable in isolation
+ *   - keeps the sandbox-policy module agnostic of
+ *     `InternalExecutionCapability` (the union is policy-layer, not
+ *     sandbox-layer)
+ *   - future capability variants only need to be wired here, not in
+ *     every consumer of CommandJobManager
+ */
+function capabilityFromJobExecution(capability: InternalExecutionCapability | undefined): readonly string[] {
+	switch (capability?.kind) {
+		case "filesystem-create-only":
+			return capability.roots
+		case "factory-binding-probe":
+		case undefined:
+			return []
+		default:
+			return assertNeverExhaustiveCapabilityKind(capability)
+	}
+}
+
+/**
+ * TypeScript exhaustiveness helper. If the
+ * `InternalExecutionCapability` union grows, this branch becomes
+ * unreachable; the `never` annotation then makes the call site
+ * a compile error: any caller of `capabilityFromJobExecution`
+ * must be updated. Without this, a future variant could silently
+ * fall through to `return []`, dropping authority that the
+ * approved execution required (spec §18).
+ */
+function assertNeverExhaustiveCapabilityKind(x: never): never {
+	throw new Error(`capabilityFromJobExecution: unhandled InternalExecutionCapability kind ${JSON.stringify(x)}`)
 }

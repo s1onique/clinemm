@@ -111,6 +111,30 @@ export type EnvironmentCapability =
  *
  *   When `tempRoot` is omitted and `environment.mode="sanitized"`, the
  *   backend synthesizes one under the system temp root.
+ *
+ * - `createOnlyRoots`: canonical filesystem roots under which the
+ *   command is permitted to CREATE new filesystem objects (files,
+ *   directories, hardlinks, symlinks) but is NOT permitted to mutate
+ *   or unlink existing ones. When provided, the Seatbelt backend
+ *   emits:
+ *
+ *     (allow file-write-create (subpath "<root>"))
+ *
+ *   per root, plus a deny-after-allow for the existing-file
+ *   mutation operations (the kernel conservatively denies
+ *   file-write-data and file-write-set-attributes against existing
+ *   objects under the same subpath). The narrower `file-write-create`
+ *   Seatbelt operation is the load-bearing primitive; this is the
+ *   exact primitive proven sufficient in the C1 kernel matrix
+ *   (spec ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01).
+ *
+ *   Distinct from `writableRoots`: that grants full read+write
+ *   (existing AND new objects), this grants create-only. Use
+ *   `createOnlyRoots` for "may create a new temp file here" (mktemp),
+ *   `writableRoots` for "may freely edit files here" (workspace).
+ *
+ *   Each entry MUST be canonical (realpath-resolved) by the caller.
+ *   The backend canonicalizes again as a fail-closed gate.
  */
 export interface CommandCapability {
 	readonly readonlyRoots: readonly string[];
@@ -120,6 +144,7 @@ export interface CommandCapability {
 	readonly environment: EnvironmentCapability;
 	readonly cwd?: string;
 	readonly tempRoot?: string;
+	readonly createOnlyRoots?: readonly string[];
 }
 
 /**

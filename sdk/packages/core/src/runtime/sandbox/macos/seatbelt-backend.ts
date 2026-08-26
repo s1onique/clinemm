@@ -198,6 +198,36 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				}
 			}
 
+			// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
+			// Canonicalize `createOnlyRoots` exactly like the other
+			// path-bearing capability fields. Each root is passed
+			// through the same `canonicalizeSandboxRoot` so an
+			// attacker who supplies `/var/folders/...` and the kernel
+			// canonicalizes to `/private/var/folders/...` cannot
+			// escape via path mismatch (Seatbelt subpath matching is
+			// vnode-level; un-canonicalized paths may not match).
+			//
+			// Fail-closed: any canonicalize failure (ENOENT / EACCES /
+			// ELOOP / non-string / empty) is a SandboxError. The
+			// caller (CommandJobManager) catches this and converts to
+			// `spawn_failed` with reason=`canonicalization-failed`;
+			// ZERO commands execute.
+			const createOnlyRoots: string[] = [];
+			for (const p of cap.createOnlyRoots ?? []) {
+				try {
+					createOnlyRoots.push(canonicalizeSandboxRoot(p));
+				} catch (cause) {
+					throw new SandboxError(
+						`Seatbelt: failed to canonicalize createOnlyRoot=${p}`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+							cause,
+						},
+					);
+				}
+			}
+
 			let tempRoot: string | undefined;
 			let synthesizedTempRoot: string | undefined;
 			if (cap.tempRoot) {
@@ -277,6 +307,7 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 						readonlyRoots,
 						writableRoots,
 						tempRoot,
+						createOnlyRoots,
 						cwd,
 					},
 					{ denyReadSubpaths },

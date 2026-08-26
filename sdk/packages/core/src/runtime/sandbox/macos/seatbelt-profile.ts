@@ -196,6 +196,7 @@ function buildWriteRule(
 	writableRoots: readonly string[],
 	tempRoot: string | undefined,
 	readonlyRoots: readonly string[],
+	createOnlyRoots: readonly string[] | undefined,
 ): string {
 	const subpaths: string[] = [];
 	for (const p of writableRoots) {
@@ -212,7 +213,51 @@ function buildWriteRule(
 	}
 	const allowPart = `(allow file-write*\n  ${subpaths.join("\n  ")})`;
 	const denyPart = buildWriteDenyRule(readonlyRoots);
-	return denyPart.length > 0 ? `${allowPart}\n${denyPart}` : allowPart;
+	const writeRule = denyPart.length > 0 ? `${allowPart}\n${denyPart}` : allowPart;
+
+	// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
+	// emit the narrower `file-write-create` allow. The kernel op
+	// `file-write-create` covers mkstemp / mkdir / creat / atomic
+	// rename-into-place but does NOT cover file-write-data against
+	// existing files. This is the proven primitive from the C1
+	// kernel matrix (c1 seatbelt-operation-matrix.tsv). Adding the
+	// narrower allow AFTER the broad allow is strictly permissive
+	// (additive, not widening): it grants ONE MORE operation
+	// (file-write-create) but does not affect existing-file
+	// mutations because the broad `file-write*` allow never granted
+	// `file-write-data` on the `createOnlyRoots` (`writableRoots`
+	// is disjoint from `createOnlyRoots` by construction; see
+	// CommandJobManager.start).
+	const createOnlyAllow = buildCreateOnlyAllowRule(createOnlyRoots);
+
+	return createOnlyAllow.length > 0
+		? `${writeRule}\n${createOnlyAllow}`
+		: writeRule;
+}
+
+/**
+ * Build the narrower `file-write-create` allow rule for `createOnlyRoots`.
+ *
+ * Returns empty string when there are no roots to allow.
+ *
+ * The kernel op `file-write-create` covers CREATE of new filesystem
+ * objects (open(O_CREAT) / mkstemp / creat / mkdir / symlink /
+ * hard link) and atomic rename-into-place when the destination is a
+ * NEW object. It does NOT cover write-data / truncate / chmod /
+ * unlink / rename-from-existing. This is the load-bearing
+ * distinction proven in the C1 matrix:
+ *
+ *   (allow file-write-create (subpath "<canonical-DARWIN_ROOT>"))
+ *
+ * lets Apple mktemp(1) succeed (mkstemp + chmod) while denying
+ * overwrite / unlink / rename-from-existing of an existing sentinel.
+ */
+function buildCreateOnlyAllowRule(createOnlyRoots: readonly string[] | undefined): string {
+	if (!createOnlyRoots || createOnlyRoots.length === 0) {
+		return "";
+	}
+	const subpaths = createOnlyRoots.map((p) => `(subpath "${escapeSbplString(p)}")`);
+	return `(allow file-write-create\n  ${subpaths.join("\n  ")})`;
 }
 
 /**
@@ -276,6 +321,7 @@ export function generateSeatbeltProfile(
 			capability.writableRoots,
 			capability.tempRoot,
 			capability.readonlyRoots,
+			capability.createOnlyRoots,
 		),
 		// File metadata read for path resolution (stat, lstat).
 		"(allow file-read-metadata (subpath \"/\"))",
