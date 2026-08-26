@@ -1,0 +1,116 @@
+{
+  "contract_version": 3,
+  "act_id": "ACT-CLINEMM-SEATBELT-YOLO-APPROVAL-FRICTION-RECON01",
+  "parent_verdict_basis_at_start": "PASS_SAFE_YOLO_MUTATION_CONFINEMENT + PASS_SEATBELT_DEFAULT_ON_WITH_EXPLICIT_OPTOUT",
+  "verdict": "PASS_WITH_NONBLOCKING_RESIDUE_C1_GO",
+  "verdict_basis_at_close": "PASS_WITH_NONBLOCKING_RESIDUE (reviewer HALT: PASS_WITH_NONBLOCKING_RESIDUE, C1: GO). The non-blocking residue is a P2 wording correction: do not overstate the production-host claim as '0 residual ASKs'; reframe as '3 environment-specific .factory realpath failures, no general command-policy residual proven for the representative production-equivalent corpus'. Sufficient to de-queue BYPASS01.",
+  "kind": "RECON + LIVE PROMPT INVENTORY (production-equivalent re-run)",
+  "version": "CORRECTION02",
+  "primary_purpose": "Determine whether the 15 load-bearing-quadrant ASKs from CORRECTION01 were real production residuals or artifacts of the harness deliberately withholding pathAuthorityEvidence.",
+  "corrections_applied": [
+    "The CORRECTION01 15 host_workspace_realpath_authority ASKs were synthesized by the harness omitting pathAuthorityEvidence. Production composition (real buildPathAuthorityEvidence + real realpath workspace roots + real cwd) collapses them.",
+    "PRODUCTION_EQUIVALENT_WITNESS exercises the real production composition (buildPathAuthorityEvidence -> commandHostAuthorization with realpath evidence -> resolveSessionHostAuthorization override) for cat README.md and git diff under effective YOLO. Both return ALLOW with host_mode_safe_only_rule source (path evidence positive match).",
+    "Dogfood witnesses now run in BOTH PRE (synthetic, no evidence) and POST (production-equivalent) compositions side-by-side, so BYPASS01 has a complete pre/post diff to consume.",
+    "Decoder fix: the harness no longer goes through getCommandHostAuthorization (which derives mode from the persisted AutoApprovalSettings and conflated our matrix axis with the production settings state). It now composes the host authorization directly via commandHostAuthorization, so the only difference between PRE and POST is whether pathAuthorityEvidence is supplied."
+  ],
+  "scope_discipline": {
+    "production_code_changed": false,
+    "production_files_touched": [],
+    "test_files_added": 1,
+    "test_files_modified": 0,
+    "stub_files_added_exports": 1,
+    "documentation_files_added": 1,
+    "evidence_artifacts_generated_locally": 3
+  },
+  "files": {
+    "test_modified": "apps/vscode/src/sdk/__tests__/darwin-seatbelt-yolo-approval-friction-recon01.c1-inventory.test.ts",
+    "test_lines": 824,
+    "test_count": 5,
+    "stub_export_added": "apps/vscode/src/test/cline-core-vitest-stub.ts (buildPathAuthorityEvidence + WorkspacePathAuthorityEvidence + WorkspacePathOperandEvidence re-exports from path-authority-evidence-builder.ts)",
+    "evidence_artifacts_emitted_by_test_local_only": [
+      ".factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.jsonl (1372 lines: 684 PRE + 684 POST + 4 dogfood)",
+      ".factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.diff.jsonl (684 lines: one row per corpus matrix cell, with verdict_change field)",
+      ".factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md (77 lines)"
+    ],
+    "evidence_local_only_note": "Per ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01, .factory/evidence is local-by-default. This closure plan is the tracked source of truth."
+  },
+  "recon_anchor_points": {
+    "production_seam": "apps/vscode/src/sdk/sdk-tool-policies.ts:805 evaluateCommandToolApprovalWithPlan",
+    "caller": "apps/vscode/src/sdk/SdkController.ts:823 buildSdkControllerEvaluateCommandToolApproval",
+    "session_override_composition": "apps/vscode/src/sdk/session-auto-approval.ts:209 resolveSessionHostAuthorization",
+    "realpath_evidence_builder": "apps/vscode/src/sdk/SdkController.ts:1863 calls buildPathAuthorityEvidence from @cline/core (sdk/packages/core/src/runtime/command-policy/path-authority-evidence-builder.ts:326)",
+    "canonical_decision_vocabulary": "sdk/packages/core/src/runtime/command-policy/command-policy-types.ts:83-166 (12-source CommandDecisionSource enum)",
+    "seatbelt_mode_resolver": "apps/vscode/src/sdk/sandbox-policy.ts resolveExperimentalSandboxMode (kernel-independent)",
+    "command_policy_entry": "sdk/packages/core/src/runtime/command-policy/command-policy.ts evaluateCommandPolicy"
+  },
+  "corpus": {
+    "command_count": 38,
+    "families": ["fs-mutation (6)", "fs-readonly (9)", "git-readonly (3)", "git-mutation (4)", "package-manager (6)", "network (4)", "shell-composition (6)"]
+  },
+  "matrix_cardinality": {
+    "per_composition_rows": 684,
+    "pre_rows": 684,
+    "post_rows": 684,
+    "dogfood_rows": 4,
+    "total_jsonl_lines": 1372,
+    "diff_rows": 684
+  },
+  "compositions": {
+    "PRE / SYNTHETIC": "commandHostAuthorization with workspaceRoots + cwd but NO pathAuthorityEvidence. Structural baseline.",
+    "POST / PRODUCTION-EQUIVALENT": "calls buildPathAuthorityEvidence (the same function SdkController.ts:1863 invokes) with realpathSync(process.cwd()), threads the result through commandHostAuthorization, composes session override identically to PRE. Identical to PRE except pathAuthorityEvidence is supplied."
+  },
+  "load_bearing_quadrant_observed_results": {
+    "pre_ALLOW": 137,
+    "pre_ASK": 15,
+    "post_ALLOW": 149,
+    "post_ASK": 3,
+    "ASK_vanished_under_production_evidence": 12,
+    "ASK_survived_under_production_evidence": 3,
+    "post_ASK_breakdown_by_source_family": {
+      "host_workspace_realpath_authority (host_workspace_realpath_authority)": 3
+    },
+    "post_ASK_commands": ["fs.ls-arg (ls .factory)"],
+    "post_ASK_root_cause": "All 3 surviving POST ASKs are ls .factory with reason 'realpath-unresolved, hostReason=realpath-failed-enoent'. The harness's sandboxed authoring shell cannot realpathSync('.factory') because the directory is gitignored. The standard expectation is that a realpath-resolution of .factory on a normal user host would succeed and the rule would ALLOW, but that exact execution was NOT performed in this investigation."
+  },
+  "key_finding_cautious_framing": "POST_COMMAND_POLICY_RESIDUAL = 3 environment-specific .factory realpath failures (realpath-failed-enoent under the IDE sandboxed authoring shell; not exercised on an unsandboxed normal host). NO_GENERAL_COMMAND_POLICY_RESIDUAL = PROVEN for the representative production-equivalent corpus (38 commands across 7 families under effective YOLO + Seatbelt + no requires_approval; representative path-bearing commands like cat README.md and git diff ALLOW with host_mode_safe_only_rule source after realpath evidence positive match). Therefore BYPASS01 is de-queued -- the residual is environment-specific, not a general command-policy defect -- and the right next ACT is ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 (which will capture one live prompt rather than install a bypass on the command seam).",
+  "ask_count_overall": {
+    "pre_ASK_total_full_matrix": "44 ASKs vanished under production evidence across the full 684-corpus-cell matrix (12 of those vanishings occur in the effective YOLO subset)"
+  },
+  "PRODUCTION_EQUIVALENT_WITNESSES": {
+    "cat_README_md": "ALLOW (host_mode_safe_only_rule, with realpath evidence positive match on README.md inside workspace root)",
+    "git_diff": "ALLOW (host_mode_safe_only_rule, with realpath evidence positive match on .git inside workspace root)"
+  },
+  "decision": {
+    "verdict": "NO_COMMAND_POLICY_BYPASS_NEEDED",
+    "rationale": "Under the production-equivalent composition, the load-bearing quadrant collapses from 15 ASK to 3 ASK. The 3 survivors are an environment-specific realpath-failed-enoent on the gitignored .factory directory under the sandboxed authoring shell; not exercised on an unsandboxed normal host. Representative production-equivalent path-bearing commands (cat README.md, git diff) ALLOW with host_mode_safe_only_rule source. Sufficient to de-queue BYPASS01 per reviewer verdict PASS_WITH_NONBLOCKING_RESIDUE C1:GO. The user-observed YOLO friction is most plausibly at the editor/write_file/apply_patch tool approval surface per upstream issue #13114.",
+    "next_act_queued": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 (NOT ACT-CLINEMM-SEATBELT-YOLO-APPROVAL-BYPASS01)",
+    "next_act_scope": "Phase 0 -- capture one live YOLO confirmation UI and freeze: TOOL_NAME, TOOL_INPUT_KIND, YOLO_EFFECTIVE, SEATBELT_EFFECTIVE, UI_PROMPT_TYPE, PROMPT_OCCURS_BEFORE_OR_AFTER_TOOL_EXECUTION. Phase 1 -- trace the SdkController non-command tool approval callback at SdkController.ts:799..818 (shouldAutoApproveTool reads autoApprovalSettings.actions.editFiles / .editFilesExternally / MCP per-tool flags, session override); freeze TOOL_POLICY_SOURCE, SESSION_OVERRIDE_SOURCE, AUTO_APPROVAL_SETTINGS_SOURCE, REQUEST_TOOL_APPROVAL_CALLBACK, FINAL_UI_PROMPT_SEAM. Inspect editor / apply_patch / write-or-create-file-equivalent / MCP tool paths. Phase 2 -- exact RED on the live-prompt tool: YOLO + Seatbelt + tool request -> approval callback says ? -> UI prompt occurs? Possible outcomes: callback=ASK -> policy defect; callback=ALLOW but UI still prompts -> completion/UI seam defect; callback never reached -> seam moved. Only after that choose the repair. Per upstream SDK docs and upstream issue #13114 (YOLO auto-approves commands and reads but pauses after file creation), tool auto-approval is a separate surface from command policy."
+  },
+  "skip_conditions": {
+    "non_darwin": "PASS_SKIPPED_PLATFORM_UNSUPPORTED (artifact NOT written)",
+    "seatbelt_off": "PASS_SKIPPED_SEATBELT_OPT_OUT (CLASSIC-PROTECTION-RECON01 territory)",
+    "kernel_probe_status": "NOT CONSUMED -- RECON is hermetic to configuration. Kernel probe moves to BYPASS01 (which we now recommend skipping)."
+  },
+  "regression_gates": {
+    "apps_vscode_check_types": "PASS (0 diagnostics)",
+    "apps_vscode_vitest_recon01_only": "5/5 PASS (CORRECTION02)",
+    "git_diff_check": "empty",
+    "other_tests_touched": 0,
+    "production_code_touched": 0,
+    "artifact_generated_locally": true,
+    "artifact_path_resolves_from_repo_root": true
+  },
+  "trust_state": {
+    "working_tree_clean_before_this_act": true,
+    "production_seam_unchanged": true,
+    "evidence_local_to_host": true
+  },
+  "stop_rules": {
+    "scope_creep_into_production_repair": "HALT_REPAIR_AUTHORITY_NOT_GRANTED (NOT FIRED -- recon-only ACT)",
+    "fake_pass_leak": "HALT_FAKE_PASS_PERSISTED (NOT FIRED -- RECON kernel-hermetic)",
+    "classification_mutation": "HALT_CLASSIFICATION_PROTECTION_VIOLATION (NOT FIRED -- inventory observes only)",
+    "override_axis_decorative": "HALT_OVERRIDE_AXIS_NOT_EXERCISED (NOT FIRED -- resolveSessionHostAuthorization applied)",
+    "synthetic_evidence_pretending_to_be_production": "HALT_SYNTHETIC_EVIDENCE_PRETENDING_TO_BE_PRODUCTION (NOT FIRED -- POST composition uses real buildPathAuthorityEvidence with realpath workspace roots)"
+  },
+  "rationale": "Per the upstream reviewer (HALT_RED_NOT_REPRODUCED): 'Do not start by allowing all commands. Start by proving exactly which approval path is still firing in YOLO, and why.' CORRECTION01 closed the four load-bearing errors (decorative override axis, missing real-prompt reproduction, kernel over-gating, corpus count) but the 15 ASKs it surfaced were SYNTHETIC -- produced by the harness deliberately withholding pathAuthorityEvidence. CORRECTION02 runs the same corpus through the PRODUCTION-EQUIVALENT composition (buildPathAuthorityEvidence + realpath) and shows that 149/152 corpus cells ALLOW; the 3 survivors are an environment-specific .factory realpath-failed-enoent under the IDE sandboxed authoring shell (not exercised on a normal unsandboxed host). Per the reviewer's P2 correction, the verdict framing is conservative: NO_GENERAL_COMMAND_POLICY_RESIDUAL = PROVEN for the representative production-equivalent corpus; POST_COMMAND_POLICY_RESIDUAL = 3 environment-specific .factory realpath failures. Sufficient to de-queue BYPASS01 (the residual is environment-specific, not a general command-policy defect). Next ACT is ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01, which captures one live YOLO prompt at the actual UI surface (per upstream issue #13114 the user-observed prompt occurs after file creation) and only after that scopes a bounded repair."
+}
