@@ -1,0 +1,161 @@
+{
+  "contract_version": 3,
+  "act_id": "ACT-CLINEMM-FACTORY-EPIC-BOARD-SHARDING01",
+  "parent_verdict_basis_at_start": "ANCHOR_HEAD = 5e96cfd3a (.factory/epic-board.md single-file authority at the start of this ACT). MIGRATION_MANIFEST_ACCEPTANCE_GATE defined at docs/factory-migrations/ACT-CLINEMM-FACTORY-EPIC-BOARD-SHARDING01-manifest.md.",
+  "verdict": "PASS_WITH_NONBLOCKING_RESIDUE_C1_GO",
+  "verdict_basis_at_close": "PASS_WITH_NONBLOCKING_RESIDUE (reviewer: PASS_WITH_NONBLOCKING_RESIDUE, C1: GO). The previously identified P1 (validator read indexOf('Work') for state in Gate 6 and Gate 8, aliasing state and work on Current frontier) is closed. Validator now reads indexOf('State'); three runnable negative-power fixtures demonstrate RED/RED/GREEN exactly as the reviewer prescribed. The remaining residue is non-blocking P2 hygiene (3 fixture files lack a trailing newline per the digest) -- batch it whenever those fixtures are next touched, do not start another correction cycle. Sufficient to close SHARDING01 with verdict CLOSED_CLEAN.",
+  "kind": "FACTORY_INFRASTRUCTURE_MIGRATION (board sharding with conservation + validator hardening)",
+  "version": "CLOSURE",
+  "primary_purpose": "Reduce `.factory/epic-board.md` from a single-file 6,346-line / 1.1 MB authority into a ~200-line human-readable index that links to a stable set of per-epic detail files, while preserving lossless ACT-ID conservation and freezing the maintenance contract.",
+  "scope_discipline": {
+    "production_code_changed": false,
+    "production_files_touched": [],
+    "factory_files_added": 4,
+    "factory_files_modified": 2,
+    "documentation_files_added": 2,
+    "documentation_files_modified": 1,
+    "evidence_artifacts_generated_locally": "no new artifacts this closure; existing .factory/evidence/* treated as OPTIONAL_LOCAL_INPUTS per reviewer's explicit designation",
+    "no_production_seam_touched": true,
+    "no_test_files_added": true,
+    "no_test_files_modified": true
+  },
+  "files": {
+    "validator_added": "tools/factory/validate-epic-board.ts (513 lines, 10 hard gates + 1 advisory)",
+    "fixtures_added": [
+      "tools/factory/__validate-fixtures__/A-open-row-missing-detail.md (Current frontier OPEN row, empty Detail -- expected: Gate 6 FAIL)",
+      "tools/factory/__validate-fixtures__/B-orphan-host-required.md (Active epics HOST_REQUIRED alone -- expected: Gate 8 FAIL)",
+      "tools/factory/__validate-fixtures__/C-open-host-required-composite.md (Current frontier OPEN / HOST_REQUIRED composite -- expected: ALL PASS)"
+    ],
+    "detail_files_added_under_factory_epics": [
+      ".factory/epics/_index-contract.md (frozen maintenance law: authority hierarchy, status vocabulary with ACTIVE + HOST_REQUIRED modifier, priority semantics, frontier rules, conservation rules anchored to 5e96cfd3a, human-readability rules, link rules, negative-scope block)",
+      ".factory/epics/approval-protection.md",
+      ".factory/epics/architecture.md",
+      ".factory/epics/closed-foundation.md",
+      ".factory/epics/command-risk-classification.md",
+      ".factory/epics/distribution-ci.md",
+      ".factory/epics/factory-infrastructure.md",
+      ".factory/epics/product-config-branding.md",
+      ".factory/epics/quality-substrate.md",
+      ".factory/epics/safe-yolo-seatbelt.md",
+      ".factory/epics/task-control-liveness.md",
+      ".factory/epics/task-presentation.md",
+      ".factory/epics/upstream-intake.md",
+      ".factory/epics/webview-seam-aop.md"
+    ],
+    "board_modified": ".factory/epic-board.md (6346 lines -> 207 lines, 6 sections: header + Current frontier + Active epics + Open supporting work + Deferred / hold + Historical task census + Recently closed transitions + Maintenance contract)",
+    "manifest_present": "docs/factory-migrations/ACT-CLINEMM-FACTORY-EPIC-BOARD-SHARDING01-manifest.md (the pre-sharding acceptance gate definition)",
+    "closure_record": "docs/factory-migrations/ACT-CLINEMM-FACTORY-EPIC-BOARD-SHARDING01-closure.json (this file)"
+  },
+  "anchors": {
+    "pre_sharding_anchor": "5e96cfd3a (frozen left-hand authority for OLD_ACT_IDS)",
+    "validation_head_at_close": "7b0a57d22 (validator P1 correction + runnable negative-power fixtures)",
+    "commits_since_anchor_inclusive": 24,
+    "previous_migration_commits_in_cadence": 22,
+    "this_closure_commit": "pending (this file's commit is the 24th)"
+  },
+  "board_reduction": {
+    "source_lines": 6346,
+    "source_bytes_approx": "1.1 MB",
+    "result_lines": 207,
+    "source_to_result_ratio": "6346 / 207 = ~30.7x reduction",
+    "target_zone_lines": "100-250 (reviewer's reviewable-zone criterion)",
+    "hard_cap_lines": 400,
+    "result_lines_vs_hard_cap": "207 < 400 (well below hard cap; comfortably inside target zone)"
+  },
+  "conservation_invariant": {
+    "anchor": "5e96cfd3a:.factory/epic-board.md",
+    "old_act_id_count": 192,
+    "new_durable_act_id_count": 205,
+    "old_minus_new_lost": 0,
+    "new_minus_old_gained": 13,
+    "gained_disposition": "+7 from closure-plan JSONs already in docs/closure-plans/; +6 from .factory/evidence/* filenames (treated as OPTIONAL_LOCAL_IDS per reviewer's explicit designation)",
+    "validator_gate": "OLD_ACT_IDS_PRESERVED -- HARD PASS",
+    "validator_message": "OLD - CURRENT_DURABLE = empty; 192 in anchor, 205 in current durable sources (+13 legitimate new IDs from closure-plans); 24 tracked files scanned"
+  },
+  "validator_architecture": {
+    "location": "tools/factory/validate-epic-board.ts",
+    "lines": 513,
+    "cli_modes": [
+      "bun tools/factory/validate-epic-board.ts                          (default -- against .factory/epic-board.md)",
+      "bun tools/factory/validate-epic-board.ts --fixture=<name>         (against tools/factory/__validate-fixtures__/<name>.md)"
+    ],
+    "hard_gates": [
+      "INDEX_LINES_LT_400               (208 lines per validator split; wc -l reports 207)",
+      "ALL_INDEX_LINKS_EXIST            (37 relative links, all resolve)",
+      "ALL_INDEX_LINKS_RELATIVE         (37 relative links, no absolute URLs; rejects http(s)://, file://, and root-absolute /... per contract sec 7)",
+      "NO_DUPLICATE_EPIC_ROWS           (10 unique epic rows in Active epics)",
+      "NO_DUPLICATE_CURRENT_WORK_IDS    (within-region primary work IDs; cross-region sharing allowed)",
+      "EVERY_OPEN_NEXT_ROW_HAS_DETAIL   (every OPEN/NEXT/ACTIVE row has a Detail link)",
+      "STATUS_VOCABULARY_VALID          (state cells use closed-class tokens per contract sec 2)",
+      "HOST_REQUIRED_QUALIFICATION_VALID (HOST_REQUIRED used only as a modifier accompanying another status)",
+      "OLD_ACT_IDS_PRESERVED            (conservation: 192 anchor IDs preserved across 24 tracked files)",
+      "NO_OVERSIZED_INDEX_TABLE_CELL     (all cells <=280 chars; no embedded closure reports)"
+    ],
+    "advisory_gate": "INDEX_TARGET_READABLE (207-208 lines; target <=220)",
+    "fixtures_skipped_for": "Gates 2, 3, 9 (link-target filesystem resolution + conservation source are real-repo-only)",
+    "negative_power_proven_by": [
+      "Fixture A -- OPEN + missing Detail  --> Gate 6 FAIL (others PASS)  [exit 1]",
+      "Fixture B -- HOST_REQUIRED alone   --> Gate 8 FAIL (others PASS)  [exit 1]",
+      "Fixture C -- OPEN / HOST_REQUIRED --> ALL gates PASS             [exit 0]"
+    ]
+  },
+  "validator_p1_correction": {
+    "defect_summary": "Gate 6 (EVERY_OPEN_NEXT_ROW_HAS_DETAIL) and Gate 8 (HOST_REQUIRED_QUALIFICATION_VALID) used headers.indexOf('Work') for BOTH state and work in the Current frontier branch, aliasing the two cells. On the current 207-line board (which has no State column in Current frontier) the bug was latent because the check fell through to testing the Work cell. A future maintainer adding a State column would not get the protection the gate's name promises.",
+    "fix": "Use headers.indexOf('State') for state (returns -1 when no State column; falls back to checking Work, which is the actual semantic intent for current-frontier rows).",
+    "fix_commit": "7b0a57d22",
+    "proof_that_fix_works": "Three runnable fixtures demonstrate RED/RED/GREEN. Before the fix, fixture A and B would have PASSed despite malformed state, because state was effectively always empty (aliased to work).",
+    "latent_gate7_bug_also_fixed": "Closing-braces were missing for the Deferred/hold loop on HEAD; the bug was invisible on the real board because findTableUnder('## Deferred / hold') returned the first table after that heading (Recently closed transitions, which has no State column), so the broken code path was never exercised. The fixtures exposed this latent bug; the correction is included in 7b0a57d22."
+  },
+  "p2_opportunistic_tightening": {
+    "what": "ALL_INDEX_LINKS_RELATIVE now rejects root-absolute paths (/...) and file:// URLs in addition to http(s)://.",
+    "rationale": "Contract sec 7 requires 'relative repository links only'; the prior implementation was closer to NO_HTTP_URLS than to the full rule. GitHub recommends relative repository links for clone-utility; root-absolute paths break that.",
+    "real_board_impact": "None (no absolute or root-absolute links in the current board).",
+    "commit": "7b0a57d22"
+  },
+  "non_blocking_residue": {
+    "p2_eof_newlines_on_fixtures": "tools/factory/__validate-fixtures__/{A,B,C}-*.md lack trailing newlines per the digest. Do not start another correction cycle. Batch it whenever those files are next touched.",
+    "historical_task_census_role": "The 72-line Historical task census (L67-L138) is conservation-only compatibility residue; it is NON_BLOCKING and may later be externalized (e.g. to .factory/epics/_historical-task-census.md) if OLD-ID conservation remains green. Marking it explicitly here so a future reader does not mistake those audit lines for the desired long-term index design.",
+    "other_conceivable_validator_hardening": [
+      "findTableUnder() could reject a table found only after another '## ' heading (defensive against heading reorderings)",
+      "Gate 4 / 5 / 6 / 8 could be exercised under deeper fixture permutations (e.g. multi-line State cells, code-fence-escaped tokens)"
+    ],
+    "rationale_for_not_blocking": "None constitutes a new P0; recursively reviewing the validator would now violate the Factory's speed/correctness objective. The runnable fixtures cover the actual defect we required fixed."
+  },
+  "trust_state": {
+    "working_tree_clean_before_this_act": true,
+    "working_tree_clean_at_closure_commit": true,
+    "production_seam_unchanged": true,
+    "no_production_code_modified": true,
+    "evidence_local_to_host": true,
+    "validator_real_board_run_at_exact_closure_head": "10/10 HARD GATES PASS; exit 0",
+    "validator_fixture_run_at_exact_closure_head": "A=exit1 (Gate6 FAIL), B=exit1 (Gate8 FAIL), C=exit0 (all PASS)",
+    "anchor_diff_check": "git diff --check empty across all 24 commits since anchor",
+    "regression_gates": {
+      "validator_real_board": "PASS (10/10 HARD)",
+      "validator_fixtures_negative_power": "PASS (RED/RED/GREEN as specified)",
+      "gitleaks_or_secret_scan": "no leaks introduced",
+      "git_diff_check_at_closure": "empty"
+    }
+  },
+  "stop_rules": {
+    "scope_creep_into_production_repair": "HALT_REPAIR_AUTHORITY_NOT_GRANTED (NOT FIRED -- factory-infrastructure ACT)",
+    "fake_pass_leak": "HALT_FAKE_PASS_PERSISTED (NOT FIRED -- validator's negative power is proven by runnable fixtures; current board PASSES the validator, not merely 'happens to pass')",
+    "classification_mutation": "HALT_CLASSIFICATION_PROTECTION_VIOLATION (NOT FIRED -- status vocabulary frozen in _index-contract.md sec 2; ACTIVE added per reviewer's correction)",
+    "override_axis_decorative": "HALT_OVERRIDE_AXIS_NOT_EXERCISED (NOT FIRED -- the validator's P1 fix exercises the actual State column, not a decorative alias)",
+    "synthetic_evidence_pretending_to_be_production": "HALT_SYNTHETIC_EVIDENCE_PRETENDING_TO_BE_PRODUCTION (NOT FIRED -- fixture mode is explicitly a synthetic-test seam, not production validation; production validation is the default-mode run against .factory/epic-board.md)"
+  },
+  "next_act": null,
+  "reopen_or_new_work_conditions": {
+    "when_to_reopen": [
+      "If a future epic detail file contradicts _index-contract.md (e.g. introduces a new status token, changes the conservation anchor, breaks the 'relative links only' rule).",
+      "If OLD_ACT_IDS - NEW_DURABLE_ACT_IDS stops being empty (validator fails Gate 9).",
+      "If a new section heading or table shape is added to .factory/epic-board.md that the validator does not understand."
+    ],
+    "when_to_open_a_new_act": [
+      "Externalization of the 72-line Historical task census into a dedicated .factory/epics/_historical-task-census.md (optional, only if Gate 9 stays green).",
+      "Adoption of the validator's P2 hardening (findTableUnder defensive check + deeper fixture permutations) as a separate ACT.",
+      "Batch fix of the fixture-file trailing-newline P2 hygiene whenever those files are next touched."
+    ]
+  },
+  "rationale": "Per the factory reviewer (PASS_WITH_NONBLOCKING_RESIDUE, C1: GO): the previously identified P1 (validator aliased state and work to the same Work cell in Gate 6 / Gate 8 for Current frontier) is closed at commit 7b0a57d22, and the runnable negative-power fixtures prove the validator can FAIL on malformed inputs (not merely PASS the present board). The correction also incidentally fixed a latent Gate 7 closing-braces defect that was invisible on the real board but exercised by the fixtures. The board reduction (6346 -> 207 lines, ~30.7x) puts the index comfortably inside the reviewer's 100-250-line target zone. OLD_ACT_IDS - CURRENT_DURABLE_ACT_IDS = empty (192 anchor IDs preserved across 24 tracked files; +13 legitimate new IDs from already-existing closure plans + .factory/evidence/* optional local inputs). Per the reviewer's explicit instruction, the non-blocking residue (3 fixture files lack trailing newlines per the digest; 72-line Historical task census is conservation-only residue and may later be externalized) is recorded but does NOT warrant another correction cycle. SHARDING01 is ready to close with verdict CLOSED_CLEAN. Return to the product frontier."
+}
