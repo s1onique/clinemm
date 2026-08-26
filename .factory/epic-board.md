@@ -19,6 +19,7 @@ One `NEXT` per lane, named explicitly so the lanes do not collapse into a false 
 | Approval / classic | P1 | `ACT-CLINEMM-CLASSIC-PROTECTION-RECON01` (unblocked post-`SEATBELT-DEFAULT-ON01`) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) · [`approval-protection.md`](./epics/approval-protection.md) |
 | Host substrate | P0 | `HOST-TEST RUNNER` (host-only-behaviour dependency for both approval lanes; `HOST_REQUIRED` modifier per contract §2) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
 | TaskHeader projection | P1 | `EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01` | [`task-presentation.md`](./epics/task-presentation.md) |
+| Runtime progression | P1 | `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` (RECON + live failure capture; secondary purpose = Cancel-affordance authority on the same ownership seam) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
 
 ---
 
