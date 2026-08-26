@@ -4,9 +4,9 @@
 
 ## Current status
 
-- Status: OPEN — fresh epic opened at FUTURE-BACKLOG-CENSUS01-CORRECTION01 (this commit). No ACT authored yet; the items below are working labels.
+- Status: OPEN — fresh epic opened at FUTURE-BACKLOG-CENSUS01-CORRECTION01 (this commit). One canonical ACT `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` was launched at HEAD `a2417ef19` (census-correction02 successor); the other working labels remain until the recon evidence lands.
 - Priority: **HIGH** (direct autonomy defect during supposedly autonomous YOLO runs; upstream evidence says the family remains active in current Cline-- releases)
-- Current frontier: `RUNTIME-TASK-PROGRESSION-RECON01` (working label) — bounded RED-first recon + exact live RED. First action: do **not** pre-classify cause.
+- Current frontier: `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` — bounded RED-first recon + exact live RED. First action: do **not** pre-classify cause. Same ACT also covers Cancel-affordance authority against the same ownership seam (per the reviewer's recommendation).
 - Blocked by: n/a.
 
 ## Contract / durable conclusions
@@ -55,8 +55,8 @@
 
 | ACT / ID | Verdict | Head | Purpose |
 |---|---|---|---|
-| `RUNTIME-TASK-PROGRESSION-RECON01` (working label) | OPEN / HIGH | — | Bounded RECON + exact live RED across the symptom family; characterize the failure modes without claiming a single root cause |
-| `CANCEL-AFFORDANCE-AUTHORITY-RECON` (working label) | OPEN / HIGH | — | Recon of the cancellable-ownership projection across the runtime/UI seam; verifies the "Cancel iff cancellable owner exists" invariant above in both directions |
+| `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` | OPEN / HIGH | `a2417ef19` (this commit) | Bounded RECON + exact live RED across the symptom family; characterize the failure modes without claiming a single root cause. INCORPORATES the Cancel-affordance authority probe as its secondary purpose (same ownership seam) — see `.factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md` and `.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/`. |
+| `CANCEL-AFFORDANCE-AUTHORITY-RECON` (working label — superseded for now; secondary purpose folded into the recon above per this launch) | SUPERSEDED (folded into `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01`) | `a2417ef19` | Recon of the cancellable-ownership projection across the runtime/UI seam. Independent re-promotion is permitted if the recon findings show Cancel-authority defects that are causally distinct from runtime progression. |
 | (RUNTIME_THINKING_STALL cluster — RADAR evidence, not canonical proof) | RADAR (per `.factory/upstream/cline-upstream-triage.md` Correction-04) | — | Upstream supporting signals: #9546, #10015, #10031, #10208, #10537. Newer upstream reports (#12073, #12079, #12827) are recorded as **RADAR / reference only**, not canonical proof — they reinforce the family but do not by themselves establish a ClineMM defect |
 
 ## Open work
