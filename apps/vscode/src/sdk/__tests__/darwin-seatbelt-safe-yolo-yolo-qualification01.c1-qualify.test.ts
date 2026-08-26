@@ -490,3 +490,104 @@ describe("PHASE 5 - network conservation: CONNECTED:$TOKEN under both A and B", 
 		}
 	})
 })
+
+// ---------------------------------------------------------------------------
+// CORRECTION01: UPSTREAM_YOLO_PATH -> SEATBELT integration witness
+//
+// Reviewer P1: the original YQ-B leg entered downstream of
+// SdkController.resolveHostAuthorization. This witness drives the
+// full upstream chain on a SINGLE representative mutation
+// (overwrite $HOME sentinel) and confirms the Seatbelt decision is
+// identical to the downstream-only B leg.
+// ---------------------------------------------------------------------------
+describe("CORRECTION01 - integration witness: upstream YOLO path -> Seatbelt denies $HOME overwrite", () => {
+	let homeCanary: string
+	let wsRoot: string
+	let manager: CommandJobManager
+
+	beforeEach(() => {
+		if (!darwinHost) return
+		homeCanary = join(process.env.HOME!, `.cline-safe-yolo-lab-${randomBytes(4).toString("hex")}`)
+		mkdirSync(homeCanary, { recursive: true })
+		writeFileSync(join(homeCanary, "sentinel.txt"), "HOME_SENTINEL\n", "utf8")
+		wsRoot = realpathSync(mkdtempSync(join(tmpdir(), "clinemm-yq-upstream-")))
+		manager = new CommandJobManager({
+			sandboxBackendResolver: defaultSandboxBackendResolver,
+			experimentalSandboxWorkspaceRoots: [wsRoot],
+		})
+	})
+
+	afterEach(() => {
+		if (!darwinHost) return
+		try {
+			rmSync(homeCanary, { recursive: true, force: true })
+		} catch {}
+		try {
+			rmSync(wsRoot, { recursive: true, force: true })
+		} catch {}
+	})
+
+	it("ACTUAL YOLO path: SessionAutoApprovalStore -> resolveHostAuthorization -> plan -> manager.start -> Seatbelt denies overwrite", async () => {
+		if (!darwinHost || !(await isSeatbeltAvailable())) {
+			expect(true).toBe(true)
+			return
+		}
+
+		const sessionId = `sess-yq-upstream-${randomBytes(4).toString("hex")}`
+		const { SessionAutoApprovalStore, resolveSessionHostAuthorization } = await import(
+			"../session-auto-approval"
+		)
+		const sessionStore = new SessionAutoApprovalStore()
+		sessionStore.setOverride(sessionId, "all")
+
+		const { commandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } = await import("@cline/core")
+		const { evaluateCommandToolApprovalWithPlan } = await import("../sdk-tool-policies")
+
+		const baseAuth = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+		})
+		const composedAuth = resolveSessionHostAuthorization(baseAuth, "all")!
+		expect(composedAuth.mode).toBe("all")
+
+		// Representative HOME mutation: printf > sentinel.txt
+		// matches no host_safe rule, so its executionCapability is
+		// undefined (conservative: no per-command widening attempted).
+		const TOOL_INPUT = `printf 'BAD' > ${homeCanary}/sentinel.txt`
+		const planResult = evaluateCommandToolApprovalWithPlan(TOOL_INPUT, composedAuth)
+		expect(planResult.decision.kind).toBe("allow")
+		const plan = planResult.executionPlan!
+		expect(plan.commands).toHaveLength(1)
+		expect(plan.commands[0].executionCapability).toBeUndefined()
+
+		const beforeSha = sha256File(join(homeCanary, "sentinel.txt"))
+		const scriptPath = join(wsRoot, `upstream-yq-${randomBytes(4).toString("hex")}.sh`)
+		writeFileSync(scriptPath, `#!/bin/bash\n${TOOL_INPUT}\necho EXIT=$?\n`, { mode: 0o755 })
+
+		const out = await manager.start(
+			{
+				command: `/bin/bash ${scriptPath}`,
+				cwd: wsRoot,
+				env: {},
+				waitBudgetMs: 15_000,
+				executionDeadlineMs: 30_000,
+			},
+			{
+				agentId: "yq-upstream-witness",
+				iteration: 0,
+				commandExecutionPlan: plan,
+			},
+		)
+		try {
+			rmSync(scriptPath, { force: true })
+		} catch {}
+
+		const afterSha = sha256File(join(homeCanary, "sentinel.txt"))
+		// The load-bearing proof: kernel denied the overwrite; sentinel
+		// SHA is byte-identical to the pre-run snapshot.
+		expect(afterSha).toBe(beforeSha)
+		// bash itself exits 0 even when a redirect fails (the inner
+		// printf's stderr is captured but does not affect exit). The
+		// canary-SHA equality above is the authoritative signal.
+	})
+})
