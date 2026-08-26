@@ -64,6 +64,7 @@ import {
 	type SandboxBackend,
 	type SandboxMode,
 } from "@cline/core"
+import { existsSync, realpathSync } from "node:fs"
 
 /**
  * DI seam: maps a {@link SandboxMode} to a backend instance.
@@ -132,6 +133,103 @@ export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
 }
 
 /**
+ * ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01.
+ *
+ * Sensitive-read opt-in: returns the curated set of canonical paths
+ * that {@link buildExperimentalReconCapability} will add to the
+ * capability's `denyReadSubpaths` field when the experimental Seatbelt
+ * mode is active.
+ *
+ * The list is the reviewer's authoritative Phase-2 input (verbatim):
+ *
+ *   DENY:
+ *     ~/.ssh/id_rsa
+ *     ~/.ssh/id_ecdsa
+ *     ~/.ssh/id_ecdsa_sk
+ *     ~/.ssh/id_ed25519
+ *     ~/.ssh/id_ed25519_sk
+ *     ~/.ssh/id_mldsa44_ed25519
+ *     ~/.gnupg/private-keys-v1.d/
+ *
+ *   KEEP_READABLE (NOT in deny list):
+ *     ~/.ssh/config
+ *     ~/.ssh/known_hosts
+ *     ~/.ssh/known_hosts2
+ *
+ *   DEFER_AUTHENTICATED_DEV_CREDENTIALS (NOT in this list):
+ *     ~/.aws/{credentials,config,cli/cache/}
+ *     ~/.kube/config
+ *     ~/.docker/config.json
+ *     ~/.config/gh/hosts.yml
+ *
+ * Claim boundary (per reviewer, do NOT exceed): standard OpenSSH
+ * private identities + GnuPG secret-key store only.
+ *
+ * Pattern: file-level `(subpath "<file>")` for each identity file,
+ * directory-level `(subpath "<dir>/")` for the GnuPG private-keys
+ * directory. This avoids the parent-deny/child-allow precedence
+ * hazard documented at openai/codex#21081 (broader parent denies
+ * can shadow more-specific descendant allows on macOS Seatbelt).
+ *
+ * Returns `[]` when the experimental Seatbelt mode is not active
+ * (defensive -- preserves current behavior on Linux/Windows hosts
+ * where the Wave-1 capability is never reached).
+ */
+export function resolveSafeYoloSensitiveReadDenials(): readonly string[] {
+	// The curated credential-set deny list is a YOLO-targeted guard.
+	// It activates only when BOTH the Seatbelt experimental mode is
+	// active AND the Safe-YOLO network opt-in is set, because the
+	// threat model is "YOLO + unrestricted network → exfiltration of
+	// on-disk secrets". Without YOLO the conservative recon capability
+	// keeps the broad-read contract (carried from NETWORK-OPEN01 and
+	// validated by the YQ-QUALIFICATION01 Phase 8 observation).
+	if (resolveExperimentalSandboxMode() !== "seatbelt-experimental") {
+		return []
+	}
+	if (resolveSafeYoloNetworkOptIn() !== "allow") {
+		return []
+	}
+	const home = process.env.HOME
+	if (!home) {
+		return []
+	}
+	// realpathSync resolves the user's home through any symlinks (e.g.
+	// /Users/me -> /Users/me). The seatbelt backend's
+	// canonicalizeSandboxRoot also canonicalizes these before
+	// emission, so this is defensive but not load-bearing.
+	let canonicalHome: string
+	try {
+		// realpathSync is called synchronously here because
+		// buildExperimentalReconCapability is itself synchronous
+		// and the capability builder cannot await.
+		canonicalHome = realpathSync(home)
+	} catch {
+		canonicalHome = home
+	}
+	const candidates = [
+		`${canonicalHome}/.ssh/id_rsa`,
+		`${canonicalHome}/.ssh/id_ecdsa`,
+		`${canonicalHome}/.ssh/id_ecdsa_sk`,
+		`${canonicalHome}/.ssh/id_ed25519`,
+		`${canonicalHome}/.ssh/id_ed25519_sk`,
+		`${canonicalHome}/.ssh/id_mldsa44_ed25519`,
+		`${canonicalHome}/.gnupg/private-keys-v1.d`,
+	]
+	// Production semantics: only emit denypaths that EXIST. The Seatbelt
+	// backend's canonicalizeSandboxRoot uses realpathSync which fails
+	// fail-closed on ENOENT; emitting a non-existent path would fail
+	// the sandbox preparation for every dev who has only `id_ed25519`
+	// (no `id_ecdsa`, `id_ecdsa_sk`, etc.). Filter to existing paths.
+	return candidates.filter((p) => {
+		try {
+			return existsSync(p)
+		} catch {
+			return false
+		}
+	})
+}
+
+/**
  * Production default resolver. Returns the Seatbelt backend iff:
  *   1. mode === "seatbelt-experimental"
  *   2. opt-in env is recognized
@@ -179,7 +277,15 @@ export function buildExperimentalReconCapability(input: {
 	return {
 		readonlyRoots: [...input.workspaceRoots],
 		writableRoots: [],
-		denyReadSubpaths: [],
+		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01:
+		// populate the capability's denyReadSubpaths with the curated
+		// V1 set returned by resolveSafeYoloSensitiveReadDenials().
+		// This is the SOLE production-code change in this ACT. The
+		// Seatbelt profile generator already emits
+		// `(allow file-read*) + (deny file-read* (subpath X))` per
+		// entry; no change to seatbelt-profile.ts, seatbelt-backend.ts,
+		// CommandJobManager, or approval/YOLO logic.
+		denyReadSubpaths: [...resolveSafeYoloSensitiveReadDenials()],
 		// ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01: honor the
 		// `CLINEMM_SAFE_YOLO_NETWORK=allow` opt-in. Default remains
 		// `"deny"` (the conservative network posture). Filesystem
