@@ -47,6 +47,7 @@ These tokens are **frozen** for use across `.factory/epic-board.md`, `.factory/e
 | `SUPERSEDED` | Retained historically; the successor ACT owns future work. The successor must be named. |
 | `NEEDS_CLASSIFICATION` | Historical item preserved but the contract is unresolved. Carries a backlog obligation. |
 | `HOST_REQUIRED` | Claim requires execution **outside** the current sandbox / substrate (e.g. real-kernel Seatbelt probe, live-prompt capture, unsandboxed-host dogfood). |
+| `ACTIVE` | Epic / family has completed substrate plus unfinished current work. Usually contains one or more `NEXT`, `OPEN`, `BLOCKED`, or `HOLD` children. Used as a **family-level** state distinct from work-item scheduling state — see the dual-state note below. |
 
 **HOST_REQUIRED rule.** A claim that asserts a real-kernel, real-prompt, or unsandboxed-host property **must** either:
 
@@ -57,7 +58,30 @@ These tokens are **frozen** for use across `.factory/epic-board.md`, `.factory/e
 
 No third option. The marker is not a status degradation — it is a **truth condition** for the claim. The `approval-protection.md` editor/tool recon (`PROMPT_OCCURS_BEFORE_OR_AFTER_TOOL_EXECUTION`) and the `safe-yolo-seatbelt.md` real-kernel Seatbelt probes (`describe.skipIf(!HAS_SUBSTRATE)(...)`) both rely on this rule.
 
+**`HOST_REQUIRED` is a qualification modifier, not a mutually-exclusive status.** It may accompany any of the work-item scheduling states. The validator MUST recognize composite forms such as `OPEN / HOST_REQUIRED` and `CLOSED / HOST_REQUIRED` (the latter denoting a closure whose qualification is bounded to a host-required environment — e.g. a kernel-mode Seatbelt probe whose closure is partial without an unsandboxed-host run). It is **not** a third axis of the closed-class status set.
+
+**Two-axis model (V1).** For practical purposes this contract recognizes two distinct, non-exclusive state axes:
+
+```text
+Family-level state:    ACTIVE | CLOSED | SUPERSEDED | …
+Work-item scheduling:  NEXT | OPEN | BLOCKED | HOLD | DEFER | CLOSED (+ qualifiers) | …
+HOST_REQUIRED:         qualification modifier (may accompany any work-item scheduling state)
+```
+
+V1 keeps the family-level and work-item axes in one closed-class table for tooling simplicity, but the semantic distinction is acknowledged here so a future V2 may split them without breaking the contract's intent.
+
 ## 3. Priority semantics
+
+Priority is **orthogonal** to status. A `NEXT` item may be any priority; a `CLOSED` item may have been P0 or P2. Conflating them — e.g. asserting "P1 == NEXT" — is a category error.
+
+```text
+P0 = correctness / evidence / safety blocker
+P1 = high-value bounded implementation or substrate work
+P2 = documentary / product / hygiene / deferred correctness residue
+```
+
+A `P2` ACT that introduces a safety defect still has the defect; priority describes **resource allocation**, not **correctness**. Status describes **state**.
+
 ## 4. Frontier rules
 
 The short board has **one clearly identifiable immediate frontier** per priority lane. If several independent lanes genuinely have `NEXT` work, the lane is named explicitly rather than collapsing them into a single serial queue.
@@ -155,13 +179,3 @@ When in doubt: **rules belong here, content belongs in the detail files, exact c
 ---
 
 See `.factory/epic-board.md` for the live index.
-
-Priority is **orthogonal** to status. A `NEXT` item may be any priority; a `CLOSED` item may have been P0 or P2. Conflating them — e.g. asserting "P1 == NEXT" — is a category error.
-
-```text
-P0 = correctness / evidence / safety blocker
-P1 = high-value bounded implementation or substrate work
-P2 = documentary / product / hygiene / deferred correctness residue
-```
-
-A `P2` ACT that introduces a safety defect still has the defect; priority describes **resource allocation**, not **correctness**. Status describes **state**.
