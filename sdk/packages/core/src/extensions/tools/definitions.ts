@@ -7,9 +7,11 @@
 import {
 	type AgentTool,
 	type AgentToolContext,
+	type CommandExecutionPlanEntry,
 	createTool,
 	getDefaultShell,
 	getShellKind,
+	type InternalExecutionCapability,
 	type ITelemetryService,
 	type ShellKind,
 	validateWithZod,
@@ -192,13 +194,46 @@ async function executeShellCommands(
 	const { executor, cwd, context, timeoutMs, timeoutSource, telemetry } =
 		options;
 
+	// ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+	// When the runtime has stamped a per-command plan onto
+	// context.commandExecutionPlan, correlate plan.commands[i] against
+	// commands[i] EXACTLY before fanout. On any mismatch (cardinality,
+	// indices, or hardened-command equality) FAIL CLOSED: throw before
+	// any manager.start is invoked. The legacy tool-call
+	// context.executionCapability is consumed only when no plan is
+	// present (synthetic transport compatibility path).
+	const plan = context.commandExecutionPlan;
+	const planEntries = plan?.commands ?? null;
+	let perCommandCaps: ReadonlyArray<InternalExecutionCapability | undefined> | null = null;
+	if (planEntries !== null) {
+		const correlation = correlateExecutionPlan(commands, planEntries);
+		if (!correlation.ok) {
+			// FAIL CLOSED: do not execute ANY command when the
+			// authorization plan cannot be correlated exactly.
+			throw new Error(
+				`command_execution_plan_correlation_failed: ${correlation.reason}`,
+			);
+		}
+		perCommandCaps = correlation.perCommandCapabilities;
+	}
+
 	return Promise.all(
-		commands.map(async (command): Promise<ToolOperationResult> => {
+		commands.map(async (command, i): Promise<ToolOperationResult> => {
 			const startedAt = Date.now();
 			const query = formatRunCommandQueryPreview(command);
 			try {
+				// ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+				// when a per-command plan is present, the per-command
+				// capability is the EXACT entry capability (or undefined).
+				// MUST NOT fall back to the tool-call
+				// context.executionCapability when a plan exists -- that
+				// would recreate the leak.
+				const perCommandContext: AgentToolContext =
+					perCommandCaps !== null
+						? { ...context, executionCapability: perCommandCaps[i] }
+						: context;
 				const output = await withTimeout(
-					executor(command, cwd, context),
+					executor(command, cwd, perCommandContext),
 					timeoutMs,
 					`Command timed out after ${timeoutMs}ms`,
 				);
@@ -234,6 +269,95 @@ async function executeShellCommands(
 			}
 		}),
 	);
+}
+
+// --------------------------------------------------------------------------
+// ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01: per-command
+// plan correlation. Establishes that plan.commands[i] corresponds exactly
+// to executableCommands[i] by:
+//   1. plan.commands.length === executableCommands.length
+//   2. for every i: plan.commands[i].commandIndex === i
+//   3. for the supported string-command shape:
+//      plan.commands[i].hardenedCommand === executableCommands[i]
+// Any failure here means CORRELATION_UNPROVEN; the caller MUST
+// fail the entire tool call closed (no manager.start calls).
+// --------------------------------------------------------------------------
+type CorrelationResult =
+	| { ok: true; perCommandCapabilities: ReadonlyArray<InternalExecutionCapability | undefined> }
+	| { ok: false; reason: string };
+function correlateExecutionPlan(
+	executableCommands: ReadonlyArray<string | StructuredCommandInput>,
+	planEntries: ReadonlyArray<CommandExecutionPlanEntry>,
+): CorrelationResult {
+	if (executableCommands.length !== planEntries.length) {
+		return {
+			ok: false,
+			reason: `cardinality mismatch: ${planEntries.length} plan entries vs ${executableCommands.length} executable commands`,
+		};
+	}
+	const caps: Array<InternalExecutionCapability | undefined> = [];
+	for (let i = 0; i < planEntries.length; i++) {
+		const entry = planEntries[i];
+		const cmd = executableCommands[i];
+		if (entry === undefined || cmd === undefined) {
+			return {
+				ok: false,
+				reason: `missing entry at index ${i}`,
+			};
+		}
+		if (entry.commandIndex !== i) {
+			return {
+				ok: false,
+				reason: `invalid commandIndex at slot ${i}: plan entry declares ${entry.commandIndex}`,
+			};
+		}
+		// Correlate hardenedCommand against the executable command.
+		// For the supported string shape, exact string equality is required.
+		// For StructuredCommandInput, the object identity (command + args)
+		// must match. The plan carries the post-hardening version of the
+		// command; the executor sees the same command text. ANY drift is
+		// a structural violation -- fail closed.
+		if (typeof cmd === "string") {
+			if (typeof entry.hardenedCommand !== "string") {
+				return {
+					ok: false,
+					reason: `commandIndex ${i}: executable command is a string but plan entry hardenedCommand is non-string`,
+				};
+			}
+			if (entry.hardenedCommand !== cmd) {
+				return {
+					ok: false,
+					reason: `commandIndex ${i}: hardenedCommand (${JSON.stringify(entry.hardenedCommand)}) does not match executable command (${JSON.stringify(cmd)})`,
+				};
+			}
+		} else {
+			// StructuredCommandInput shape: compare as object equality on
+			// command + args. The plan always emits this as a record;
+			// correlate by structural equality.
+			const expected = entry.hardenedCommand as Record<string, unknown>;
+			const expectedCmd = expected["command"];
+			const expectedArgs = expected["args"];
+			if (expectedCmd !== cmd.command) {
+				return {
+					ok: false,
+					reason: `commandIndex ${i}: structured command mismatch`,
+				};
+			}
+			const cmdArgs = cmd.args ?? [];
+			const expArgs = Array.isArray(expectedArgs) ? expectedArgs : [];
+			if (
+				expArgs.length !== cmdArgs.length ||
+				expArgs.some((a, k) => a !== cmdArgs[k])
+			) {
+				return {
+					ok: false,
+					reason: `commandIndex ${i}: structured args mismatch`,
+				};
+			}
+		}
+		caps.push(entry.executionCapability);
+	}
+	return { ok: true, perCommandCapabilities: caps };
 }
 
 // =============================================================================

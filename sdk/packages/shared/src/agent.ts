@@ -11,6 +11,7 @@ import type {
 } from "./agents/recovery/types";
 import type { ModelInfo } from "./llms/model-info";
 import type {
+	CommandExecutionPlan,
 	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
@@ -366,6 +367,35 @@ export interface AgentToolContext {
 	 * to consume the slot.
 	 */
 	executionCapability?: InternalExecutionCapability;
+	/**
+	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+	 *
+	 * CLOSED runtime-owned per-command plan slot. Populated by the
+	 * runtime from `ToolApprovalResult.executionPlan` (the host's
+	 * authorization envelope). The plan carries per-entry authority
+	 * (`CommandExecutionPlanEntry.executionCapability`) that travels
+	 * with the decision that granted it.
+	 *
+	 * Provenance (frozen in metadata-provenance.md):
+	 *   Source 1 (model-stream metadata):    NOT used (typed slot).
+	 *   Source 2 (runtime-owned keys):       NOT used (typed slot).
+	 *   Source 3 (host-attached; trusted):   IS used, via
+	 *     `ToolApprovalResult.executionPlan` -> this slot.
+	 *
+	 * NEVER copied from `toolCall.metadata`. NEVER a parallel
+	 * `perCommandExecutionCapabilities[]` array. The plan is the
+	 * authority-bearing structure; the executor must consume it by
+	 * `commandIndex` (positional) and FAIL CLOSED if correlation
+	 * cannot be proven exactly (cardinality drift, reorder,
+	 * invalid indices, unsupported shapes).
+	 *
+	 * When this slot is present, the executor MUST use
+	 * `entry.executionCapability` (or undefined) and MUST NOT fall
+	 * back to the tool-call `AgentToolContext.executionCapability`.
+	 * When this slot is absent, the legacy tool-call capability
+	 * path is allowed (synthetic transport compatibility only).
+	 */
+	commandExecutionPlan?: CommandExecutionPlan;
 	snapshot?: AgentRuntimeStateSnapshot;
 	emitUpdate?: (update: unknown) => void;
 }

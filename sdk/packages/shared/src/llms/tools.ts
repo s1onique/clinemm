@@ -212,6 +212,33 @@ export interface CommandExecutionPlanEntry {
 	 * applied.
 	 */
 	profileSource?: string;
+	/**
+	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+	 *
+	 * Optional per-command authority slot stamped by the host's
+	 * authorization callback. The capability travels with the
+	 * authorization entry that granted it (NOT a parallel array; NOT
+	 * a text match). When the runtime+executor correlate the plan
+	 * against the actual executable commands, the executor consumes
+	 * entry.executionCapability as the EXACT authority for command
+	 * `commandIndex`.
+	 *
+	 * Provenance boundary (same trust model as
+	 * `ToolApprovalResult.executionCapability`):
+	 *   TRUSTED SOURCE: host's policy callback result for THIS entry.
+	 *   UNTRUSTED: model-stream metadata, MCP, webview, gRPC.
+	 *
+	 * `InternalExecutionCapability` is a closed union with literal
+	 * `kind` discriminator; widening requires editing
+	 * `InternalExecutionCapability` itself (not metadata).
+	 *
+	 * Once a valid per-command plan exists, the executor MUST use
+	 * `entry.executionCapability` (or undefined) and MUST NOT fall
+	 * back to the tool-call `AgentToolContext.executionCapability`.
+	 * A missing entry means a missing capability; silent broadening
+	 * of authority is forbidden (binding-design.md FAIL-CLOSED).
+	 */
+	executionCapability?: InternalExecutionCapability;
 }
 
 export const ToolCallRecordSchema = z.object({

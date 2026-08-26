@@ -28,6 +28,7 @@ import type {
 	AgentRuntimeConfig as BaseAgentRuntimeConfig,
 	AgentRuntimeExecutionState,
 	CaptureTaskLifecycleEventInput,
+	CommandExecutionPlan,
 	ControlPlaneOutcome,
 	InternalExecutionCapability,
 	LiveAgentRuntimeEvent,
@@ -324,6 +325,27 @@ interface PreparedToolExecution {
 	 * in `executePreparedTool`.
 	 */
 	executionCapability?: InternalExecutionCapability;
+	/**
+	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+	 *
+	 * Closed runtime-owned per-command plan slot (NOT in metadata).
+	 * Populated by `prepareToolExecution` from the host's policy
+	 * callback result (`ToolApprovalResult.executionPlan`). The plan
+	 * is the authority-bearing structure: each entry carries
+	 * `executionCapability` which travels with the decision that
+	 * granted it.
+	 *
+	 * Stamped into `AgentToolContext.commandExecutionPlan` at the
+	 * construction site in `executePreparedTool`. The runtime NEVER
+	 * reads this from `toolCall.metadata`.
+	 *
+	 * When this slot is set, the executor MUST consume
+	 * `entry.executionCapability` by `commandIndex` (positional)
+	 * and FAIL CLOSED if correlation cannot be proven exactly.
+	 * When this slot is absent, the legacy tool-call capability
+	 * path is allowed (synthetic transport compatibility only).
+	 */
+	commandExecutionPlan?: CommandExecutionPlan;
 }
 
 interface HookBag {
@@ -2456,6 +2478,16 @@ export class AgentRuntime {
 	 * NEVER read from `toolCall.metadata` (partially untrusted).
 	 */
 	let executionCapability: InternalExecutionCapability | undefined;
+	/**
+	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+	 *
+	 * Closed runtime-owned per-command plan slot. Captured from
+	 * the host's policy callback result (`ToolApprovalResult.executionPlan`);
+	 * NEVER read from `toolCall.metadata`. The plan carries
+	 * per-entry authority (`CommandExecutionPlanEntry.executionCapability`)
+	 * that the executor consumes by `commandIndex` (positional).
+	 */
+	let commandExecutionPlan: CommandExecutionPlan | undefined;
 		const metadata =
 			toolCall.metadata &&
 			typeof toolCall.metadata === "object" &&
@@ -2606,6 +2638,15 @@ export class AgentRuntime {
 				if (approval.approved && approval.executionCapability) {
 					executionCapability = approval.executionCapability;
 				}
+				// ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+				// stamp the host per-command authorization plan onto the
+				// typed runtime-owned slot. Captured ONLY when approval is
+				// approved AND the plan is present. NEVER read from
+				// toolCall.metadata. The plan is the authority-bearing
+				// structure consumed by the executor by commandIndex.
+				if (approval.approved && approval.executionPlan) {
+					commandExecutionPlan = approval.executionPlan;
+				}
 			}
 		}
 		return {
@@ -2615,6 +2656,7 @@ export class AgentRuntime {
 			skipReason,
 			controlPlaneOutcome,
 			executionCapability,
+			commandExecutionPlan,
 		};
 	}
 
@@ -2833,6 +2875,13 @@ export class AgentRuntime {
 					// runtime NEVER reads this from `toolCall.metadata` -- that
 					// channel is partially untrusted (metadata-provenance.md).
 					executionCapability: prepared.executionCapability,
+					// ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+					// closed runtime-owned per-command plan slot (NOT metadata).
+					// Stamped from prepared.commandExecutionPlan, which is
+					// populated by prepareToolExecution from the host policy
+					// callback result (ToolApprovalResult.executionPlan).
+					// The runtime NEVER reads this from toolCall.metadata.
+					commandExecutionPlan: prepared.commandExecutionPlan,
 					snapshot: this.snapshot(),
 					emitUpdate: (update: unknown) => {
 						void this.emit({
