@@ -81,9 +81,58 @@ export interface ToolApprovalRequest {
 	policy: ToolPolicy;
 }
 
+/**
+ * InternalExecutionCapability -- CLOSED runtime-owned authority slot.
+ *
+ * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+ * C2 plumbing (CORRECTION01 of C1). The shape is a closed union
+ * enumerated explicitly. The runtime owns the writer; nothing else
+ * may populate it.
+ *
+ * IMPORTANT: this is NOT a generic metadata bag. The union has a
+ * literal `kind` discriminator; untrusted model/tool metadata
+ * CANNOT create an InternalExecutionCapability because the runtime
+ * is the only writer and only constructs values of an explicit
+ * variant from the host's policy callback.
+ *
+ * Provenance boundary (see metadata-provenance.md in the ACT):
+ *   TRUSTED SOURCE:
+ *     authorization/approval execution plan
+ *       -> runtime-owned executionCapability (THIS TYPE)
+ *   UNTRUSTED / NON-AUTHORITATIVE:
+ *     prepared.toolCall.metadata
+ *       -> MUST NEVER populate typed slot
+ *
+ * The only current variant is the synthetic factory-binding probe
+ * for the binding seam proof. Future variants (file-write-create
+ * allowlists, network-egress scopes, etc.) are added here as new
+ * union members, never by widening `Record<string, unknown>`.
+ */
+export type InternalExecutionCapability =
+	| {
+			readonly kind: "factory-binding-probe"
+			readonly correlationId: string
+	  }
+
 export interface ToolApprovalResult {
 	approved: boolean;
 	reason?: string;
+	/**
+	 * Optional runtime-owned authority slot stamped by the host's
+	 * authorization callback. The runtime is the only writer; the
+	 * value crosses the AgentToolContext.executionCapability seam
+	 * into the executor as a TYPED SLOT, not via the generic
+	 * metadata bag.
+	 *
+	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01:
+	 * provenance-classified (metadata-provenance.md). MUST be
+	 * populated by the host's policy callback if and only if the
+	 * callback intends to grant per-invocation authority. The
+	 * runtime reads this field at the construction site
+	 * (agent-runtime.ts) and typechecks the value; untrusted
+	 * model/tool metadata CANNOT populate it.
+	 */
+	executionCapability?: InternalExecutionCapability;
 	/**
 	 * Optional canonical decision from the host's command policy evaluator.
 	 *

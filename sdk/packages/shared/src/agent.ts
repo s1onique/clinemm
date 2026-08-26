@@ -11,6 +11,7 @@ import type {
 } from "./agents/recovery/types";
 import type { ModelInfo } from "./llms/model-info";
 import type {
+	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
 	ToolPolicy,
@@ -344,6 +345,27 @@ export interface AgentToolContext {
 	toolCallId?: string;
 	signal?: AbortSignal;
 	metadata?: Record<string, unknown>;
+	/**
+	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+	 * C2 plumbing (CORRECTION01 of C1):
+	 *
+	 * CLOSED runtime-owned authority slot. Populated by the runtime
+	 * from the host's policy callback result
+	 * (`ToolApprovalResult.executionCapability`), NEVER from
+	 * `toolCall.metadata`. Untrusted sources cannot reach this slot.
+	 *
+	 * Provenance (frozen in metadata-provenance.md):
+	 *   Source 1 (model-stream metadata): NOT used.
+	 *   Source 2 (runtime-owned keys):   NOT used.
+	 *   Source 3 (host-attached; trusted IF typed slot): IS used,
+	 *     via ToolApprovalResult.executionCapability -> this slot.
+	 *
+	 * Type-level narrowing: `InternalExecutionCapability` is a closed
+	 * union with literal `kind` discriminator; widening it requires
+	 * editing this file (not metadata). Tools MUST switch on `kind`
+	 * to consume the slot.
+	 */
+	executionCapability?: InternalExecutionCapability;
 	snapshot?: AgentRuntimeStateSnapshot;
 	emitUpdate?: (update: unknown) => void;
 }
