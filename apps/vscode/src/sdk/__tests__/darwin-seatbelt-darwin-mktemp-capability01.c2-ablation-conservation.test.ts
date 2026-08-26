@@ -230,27 +230,42 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 ablation + co
 	// -------------------------------------------------------------------------
 	// -------------------------------------------------------------------------
 	// -------------------------------------------------------------------------
-	// NETWORK CONSERVATION (spec §34) - controlled live-listener causal pair
+	// NETWORK CONSERVATION (spec §34) - exact-stdout CONTROL->TEST causal pair
 	//
-	// CORRECTION04: the previous CORRECTION03 test (connect to
-	// 127.0.0.1:1) was not a causal Seatbelt-deny proof - a
-	// connection to a closed port fails identically regardless
-	// of whether the sandbox denies network. This test exercises
-	// the canonical CONTROL->TEST causal pair against a
-	// parent-owned listener:
+	// CORRECTION05: the previous CORRECTION04 test was a FALSE-PASS
+	// hazard. It wrote a probe FILE whose content was
+	// "TOKEN + connected" on success or "denied" on connect
+	// failure, and asserted only that the TEST probe does not
+	// CONTAIN the TOKEN. But bash brace groups continue after
+	// an internal command failure: if Seatbelt denies the
+	// `exec 3<>/dev/tcp/...` redirection, the shell can still
+	// run the trailing `printf connected`, the brace group's
+	// final status is success, and the `|| printf denied` leg
+	// never runs. The probe ends up as "connected" (no TOKEN
+	// because read returned empty) and the assertion
+	// `not.toContain(TOKEN)` passes WITHOUT proving a Seatbelt
+	// denial. A `<missing>` probe (any unrelated TEST failure)
+	// also passes.
 	//
-	//   CONTROL: unsandboxed child connects to the listener and
-	//            echoes the token back to a probe file. MUST see
-	//            "TOKEN".
-	//   TEST:    sandboxed child (Seatbelt `(deny network*)`)
-	//            tries the same connect. MUST NOT see "TOKEN".
+	// CORRECTION05 repairs this with an EXACT-STDOUT
+	// discriminator that decouples network access from
+	// file-write-create authority:
 	//
-	// If CONTROL fails to reach the listener (sandbox exception,
-	// port collision, missing /dev/tcp support, etc.) we label
-	// CAPTURE_INSUFFICIENT - NOT a network-deny PASS.
+	//   CONTROL: stdout === "CONNECTED:${TOKEN}\n" and exit 0
+	//   TEST:    stdout === "DENIED\n"            and exit 0
+	//
+	// The bash script branches on the EXACT exit status of the
+	// `exec 3<>/dev/tcp/...` redirection (via `if ...; then`).
+	// A failed connect jumps to the `else` arm and prints
+	// "DENIED" alone. Any other outcome (including a partially
+	// closed shell where the brace group's outer scope
+	// continues) is a CAPTURE_INSUFFICIENT, not a PASS.
+	//
+	// The listener sends TOKEN followed by a newline so the
+	// CONTROL can read a clean one-line payload.
 	// -------------------------------------------------------------------------
 	describe("Network conservation (spec §34)", () => {
-		it("controlled live-listener causal pair: CONTROL sees token, sandboxed TEST does NOT", async () => {
+		it("exact-stdout causal pair: CONTROL prints CONNECTED:$TOKEN, sandboxed TEST prints DENIED", async () => {
 			if (!darwinHost || !canonicalDarwinRoot) {
 				expect(true).toBe(true)
 				return
@@ -261,11 +276,13 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 ablation + co
 			}
 
 			// 1) Bind a parent-owned listener on 127.0.0.1:<ephemeral>.
+			// The listener echoes "TOKEN\n" once per accepted
+			// connection, then closes.
 			const TOKEN = `C2-NET-PROBE-${randomBytes(6).toString("hex")}`
 			const netMod = await import("node:net")
 			const listener = netMod.createServer((c) => {
 				try {
-					c.write(TOKEN)
+					c.write(`${TOKEN}\n`)
 				} catch {}
 				try {
 					c.end()
@@ -282,110 +299,81 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 ablation + co
 			}
 			const port = addr.port
 
-			// Probe files for the CONTROL and TEST runs. They MUST
-			// live outside createOnlyRoots? No — the sandbox writes
-			// to createOnlyRoots (file-write-create is permitted
-			// there). The CONTROL also writes to createOnlyRoots
-			// to keep the probe surface uniform across runs.
-			const controlProbe = join(canonicalDarwinRoot, `c2-net-ctrl-${randomBytes(6).toString("hex")}`)
-			const testProbe = join(canonicalDarwinRoot, `c2-net-test-${randomBytes(6).toString("hex")}`)
-
-			// Script files (parent-owned). We avoid passing the
-			// bash script via `bash -c "..."` because the nested
-			// single-quote escaping in a long-lived test proves
-			// fragile across bash/sh/posix shells; writing the
-			// script to a file and `exec`-ing it removes the
-			// quoting surface entirely.
+			// Script files. Both branches are gated on the EXIT
+			// STATUS of the exec redirection via `if exec ...;
+			// then` (not a brace group). On success: read one
+			// line, print CONNECTED:$line. On failure: print
+			// DENIED alone. Either branch EXITS 0.
 			const controlScriptPath = join(canonicalDarwinRoot, `c2-net-ctrl-script-${randomBytes(6).toString("hex")}.sh`)
 			const testScriptPath = join(canonicalDarwinRoot, `c2-net-test-script-${randomBytes(6).toString("hex")}.sh`)
-			// Use `read -t 3` (bash builtin, no `timeout` command
-			// dependency — the inherited PATH may not include
-			// GNU coreutils). The script returns whatever was
-			// observable on the socket within 3 seconds, or
-			// writes "denied" on connect failure.
-			writeFileSync(
-				controlScriptPath,
+			const scriptBody = (_probeLabel: string) =>
 				`#!/bin/bash
-` +
-					`bash -c '{ exec 3<>/dev/tcp/127.0.0.1/${port}; read -t 3 line <&3; printf "%s" "$line" > "${controlProbe}"; printf connected >> "${controlProbe}"; } || printf denied > "${controlProbe}"'
-`,
-				{ mode: 0o755 },
-			)
-			writeFileSync(
-				testScriptPath,
-				`#!/bin/bash
-` +
-					`bash -c '{ exec 3<>/dev/tcp/127.0.0.1/${port}; read -t 3 line <&3; printf "%s" "$line" > "${testProbe}"; printf connected >> "${testProbe}"; } || printf denied > "${testProbe}"'
-`,
-				{ mode: 0o755 },
-			)
+if exec 3<>/dev/tcp/127.0.0.1/${port}; then
+	IFS= read -r -t 3 line <&3 || line=""
+	printf "CONNECTED:%s\n" "$line"
+	exec 3<&-
+else
+	printf "DENIED\n"
+fi
+`
+			writeFileSync(controlScriptPath, scriptBody("CTRL"), { mode: 0o755 })
+			writeFileSync(testScriptPath, scriptBody("TEST"), { mode: 0o755 })
 
-			const readProbe = (path: string): string => {
-				try {
-					return readFileSync(path, "utf8").trim()
-				} catch {
-					return "<missing>"
-				}
-			}
-
-			try {
-				// 2) CONTROL: TRULY UNSANDBOXED child runs the script.
-				// runRealStart cannot be used here: the
-				// CLINEMM_EXPERIMENTAL_SANDBOX env var is set for
-				// the test (beforeEach), so the manager routes
-				// everything through the Seatbelt backend with its
-				// default `network: deny` capability — even with NO
-				// per-command executionCapability attached. The
-				// CONTROL must connect to the listener to prove the
-				// listener works, so we bypass the manager and use
-				// plain child_process.spawn (no Seatbelt).
-				const { spawn } = await import("node:child_process")
-				const controlChild = spawn("/bin/bash", [controlScriptPath], {
-					cwd: "/tmp",
-					env: {},
-				})
-				const controlOut = await new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
+			const runChild = (scriptPath: string) =>
+				new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
+					const { spawn } = require("node:child_process") as typeof import("node:child_process")
+					const child = spawn("/bin/bash", [scriptPath], { cwd: "/tmp", env: {} })
 					let stdout = ""
 					let stderr = ""
-					controlChild.stdout?.on("data", (d: Buffer) => (stdout += d.toString()))
-					controlChild.stderr?.on("data", (d: Buffer) => (stderr += d.toString()))
-					controlChild.on("close", (code) => resolve({ exitCode: code, stdout, stderr }))
+					child.stdout?.on("data", (d: Buffer) => (stdout += d.toString()))
+					child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()))
+					child.on("close", (code) => resolve({ exitCode: code, stdout, stderr }))
 				})
-				const controlObserved = readProbe(controlProbe)
-				if (!controlObserved.includes(TOKEN)) {
+
+			try {
+				// 2) CONTROL: truly unsandboxed.
+				// runRealStart cannot be used here (the manager
+				// routes everything through the Seatbelt backend
+				// with its default `network: deny` capability even
+				// with no per-command cap). Plain child_process.
+				const controlOut = await runChild(controlScriptPath)
+				const expectedControl = `CONNECTED:${TOKEN}\n`
+				if (controlOut.stdout !== expectedControl || controlOut.exitCode !== 0) {
 					throw new Error(
-						`CAPTURE_INSUFFICIENT: CONTROL unsandboxed child did not receive the token (got: ${JSON.stringify(controlObserved)} stdout=${JSON.stringify(controlOut.stdout.slice(0, 500))} stderr=${JSON.stringify(controlOut.stderr.slice(0, 500))} exitCode=${controlOut.exitCode}). Cannot claim causal Seatbelt-deny proof without a working CONTROL.`,
-					)
-				}
-				if (!controlObserved.includes(TOKEN)) {
-					throw new Error(
-						`CAPTURE_INSUFFICIENT: CONTROL unsandboxed child did not receive the token (got: ${JSON.stringify(controlObserved)}). Cannot claim causal Seatbelt-deny proof without a working CONTROL.`,
+						`CAPTURE_INSUFFICIENT: CONTROL exact-stdout mismatch; ` +
+							`expected stdout=${JSON.stringify(expectedControl)} exit=0, ` +
+							`got stdout=${JSON.stringify(controlOut.stdout)} exit=${controlOut.exitCode} ` +
+							`stderr=${JSON.stringify(controlOut.stderr.slice(0, 500))}. ` +
+							`Cannot claim causal Seatbelt-deny proof without a working CONTROL.`,
 					)
 				}
 
 				// 3) TEST: sandboxed bash tries the same connect.
 				const cap = buildDarwinCreateOnlyCapability()
 				if (!cap) throw new Error("darwin capability unbuildable")
-				await runRealStart({
+				const testOut = await runRealStart({
 					cmd: "/bin/bash",
 					args: [testScriptPath],
 					capability: cap,
 				})
-				const testObserved = readProbe(testProbe)
-				// Causal discriminator: the sandboxed child MUST NOT
-				// have observed the TOKEN. (If it did, the connect
-				// succeeded under Seatbelt and the deny rule is not
-				// active - a real C2 fail.)
-				expect(testObserved).not.toContain(TOKEN)
+				const expectedTest = `DENIED\n`
+				if (testOut.stdout !== expectedTest || testOut.exitCode !== 0) {
+					throw new Error(
+						`NETWORK_DENY_VIOLATION: TEST exact-stdout mismatch; ` +
+							`expected stdout=${JSON.stringify(expectedTest)} exit=0, ` +
+							`got stdout=${JSON.stringify(testOut.stdout)} exit=${testOut.exitCode} ` +
+							`state=${testOut.state} stderr=${JSON.stringify(testOut.stderr.slice(0, 500))}. ` +
+							`Either Seatbelt did not deny network, the sandbox policy changed, ` +
+							`or the test script execution was not observable.`,
+					)
+				}
+
+				// Exact match on both legs => causal Seatbelt
+				// deny is PROVEN.
+				expect(testOut.stdout).toBe(expectedTest)
 			} finally {
 				try {
 					listener.close()
-				} catch {}
-				try {
-					rmSync(controlProbe, { force: true })
-				} catch {}
-				try {
-					rmSync(testProbe, { force: true })
 				} catch {}
 				try {
 					rmSync(controlScriptPath, { force: true })

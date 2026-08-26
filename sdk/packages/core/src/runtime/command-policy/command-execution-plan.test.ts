@@ -18,7 +18,7 @@
 
 import type { CommandExecutionPlan } from "@cline/shared";
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	buildCommandExecutionPlan,
@@ -514,27 +514,47 @@ describeGr("C2-CORRECTION03: plan builder derives per-entry FilesystemCreateOnly
 });
 
 /**
- * CORRECTION04 (P1 narrowing): the realpathSync probe that
- * resolves the executable argv[0] is gated behind
- * `matchedRuleSource === "host_safe_mktemp_default_temp"`. The
- * plan builder exposes a counter (`_getC2RealpathCallCount`)
- * that increments exactly once per call to
- * resolveExecutableRealpath. We reset the counter and then
- * assert its value after plan construction for non-mktemp
- * entries (pwd, git status) is ZERO, and is ONE for a single
- * mktemp entry / mixed [mktemp, pwd] input.
+ * CORRECTION05 (P1 narrowing without production machinery):
+ * The CORRECTION04 plan-builder used a module-global counter
+ * (`__c2RealpathCallCount`) and exported `_getC2RealpathCallCount`
+ * / `_resetC2RealpathCallCount` so a test could observe probe
+ * counts. That permanently installed test-only instrumentation
+ * into the production authorization path, conflicting with the
+ * Factory discipline:
+ *   - dependency injection > mutable globals
+ *   - temporary diagnostics DEFAULT_OFF
+ *   - no permanent public/test-only production machinery
  *
- * This is the load-bearing proof of the CORRECTION04 narrowing:
- * for a plan with N non-mktemp entries + K mktemp entries,
- * the counter must equal K exactly. This proves the plan
- * builder performs NO host-side filesystem work on unrelated
- * commands.
+ * CORRECTION05 removes the production counter entirely and
+ * observes `realpathSync` via a module-level vi.mock around
+ * `node:fs` (hoisted). vi.importActual preserves all other
+ * node:fs exports. The spy's `.mock.calls.length` is the
+ * observable for "how many realpathSync probes happened".
+ *
+ * The required behavioral matrix remains:
+ *   [pwd, git status]    -> 0 resolver calls
+ *   [/usr/bin/mktemp]    -> 1
+ *   [mktemp, pwd]        -> 1
  */
-import { describe as describeC4, expect as expectC4, it as itC4 } from "vitest"
-import {
-	_resetC2RealpathCallCount,
-	_getC2RealpathCallCount,
-} from "./command-execution-plan"
+// IMPORTANT: vi.mock is hoisted to the top of the file by vitest.
+// bare `vi` is the same global; the mock factory closes over
+// `vi.fn`/`vi.importActual` and IS applied to every `import
+// "node:fs"` (including the one in
+// @cline/core/runtime/command-policy/command-execution-plan.ts).
+vi.mock("node:fs", async () => {
+	const actual = await vi.importActual<typeof import("node:fs")>("node:fs")
+	return {
+		...actual,
+		realpathSync: vi.fn((...args: Parameters<typeof actual.realpathSync>) =>
+			actual.realpathSync(...args),
+		),
+	}
+})
+
+// Alias the realpathSync import from the now-mocked node:fs so
+// the test can assert call counts without exposing any
+// production-side counter.
+import { realpathSync as realpathSyncMocked } from "node:fs"
 
 const DARWIN_AUTH_TEMPL = {
 	mode: "safe-only",
@@ -549,9 +569,12 @@ const DARWIN_AUTH_TEMPL = {
 	},
 }
 
-describeC4("CORRECTION04 narrowing: resolveExecutableRealpath is gated behind the mktemp rule", () => {
-	itC4("non-mktemp plan entries perform zero realpathSync calls", () => {
-		_resetC2RealpathCallCount()
+describe("CORRECTION05 narrowing: resolveExecutableRealpath is gated behind the mktemp rule", () => {
+	beforeEach(() => {
+		;(realpathSyncMocked as unknown as ReturnType<typeof vi.fn>).mockClear()
+	})
+
+	it("non-mktemp plan entries perform zero realpathSync calls", () => {
 		buildCommandExecutionPlan(
 			["pwd", "git status"],
 			[
@@ -568,11 +591,10 @@ describeC4("CORRECTION04 narrowing: resolveExecutableRealpath is gated behind th
 			],
 			commandHostAuthorization(DARWIN_AUTH_TEMPL),
 		)
-		expectC4(_getC2RealpathCallCount()).toBe(0)
+		expect((realpathSyncMocked as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0)
 	})
 
-	itC4("mktemp rule entry performs exactly one realpathSync call", () => {
-		_resetC2RealpathCallCount()
+	it("mktemp rule entry performs exactly one realpathSync call", () => {
 		buildCommandExecutionPlan(
 			"/usr/bin/mktemp",
 			[
@@ -584,11 +606,11 @@ describeC4("CORRECTION04 narrowing: resolveExecutableRealpath is gated behind th
 			],
 			commandHostAuthorization(DARWIN_AUTH_TEMPL),
 		)
-		expectC4(_getC2RealpathCallCount()).toBe(1)
+		expect((realpathSyncMocked as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+		expect((realpathSyncMocked as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe("/usr/bin/mktemp")
 	})
 
-	itC4("mixed [mktemp, pwd] plan performs exactly one realpathSync call (only for mktemp)", () => {
-		_resetC2RealpathCallCount()
+	it("mixed [mktemp, pwd] plan performs exactly one realpathSync call (only for mktemp)", () => {
 		buildCommandExecutionPlan(
 			["/usr/bin/mktemp", "pwd"],
 			[
@@ -605,6 +627,7 @@ describeC4("CORRECTION04 narrowing: resolveExecutableRealpath is gated behind th
 			],
 			commandHostAuthorization(DARWIN_AUTH_TEMPL),
 		)
-		expectC4(_getC2RealpathCallCount()).toBe(1)
+		expect((realpathSyncMocked as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+		expect((realpathSyncMocked as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe("/usr/bin/mktemp")
 	})
 })

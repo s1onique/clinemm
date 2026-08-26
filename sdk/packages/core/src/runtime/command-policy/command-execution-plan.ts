@@ -179,28 +179,11 @@ export function buildCommandExecutionPlan(
  * matches the host's policy gate, which keys on
  * `executableRealpath === "/usr/bin/mktemp"`.
  */
-/**
- * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION04:
- * Exposed for test instrumentation. The counter proves the
- * realpathSync probe is GATED behind the mktemp matched-rule
- * source (the P1 narrowing). It is incremented exactly once
- * per call to resolveExecutableRealpath; production behavior
- * is unaffected by the counter.
- */
-let __c2RealpathCallCount = 0;
-export function _getC2RealpathCallCount(): number {
-	return __c2RealpathCallCount;
-}
-export function _resetC2RealpathCallCount(): void {
-	__c2RealpathCallCount = 0;
-}
-
 function resolveExecutableRealpath(
 	cmd: string | StructuredCommandInput,
 ): string | undefined {
 	const argv0 = typeof cmd === "string" ? cmd.split(/\s+/)[0] : cmd.command;
 	if (!argv0) return undefined;
-	__c2RealpathCallCount++;
 	try {
 		return realpathSync(argv0);
 	} catch {
