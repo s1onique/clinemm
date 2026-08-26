@@ -33,28 +33,13 @@
  * the skip explicitly (per reviewer's P2 residue from NETWORK-OPEN01).
  */
 import { createHash, randomBytes } from "node:crypto"
-import { spawn } from "node:child_process"
-import {
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	readdirSync,
-	readFileSync,
-	realpathSync,
-	rmSync,
-	statSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createServer } from "node:net"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
-import {
-	buildExperimentalReconCapability,
-	defaultSandboxBackendResolver,
-	resolveSafeYoloNetworkOptIn,
-} from "../sandbox-policy"
+import { buildExperimentalReconCapability, defaultSandboxBackendResolver, resolveSafeYoloNetworkOptIn } from "../sandbox-policy"
 
 const darwinHost = process.platform === "darwin"
 
@@ -107,9 +92,7 @@ describe("PHASE 1 - structural: capability is independent of override", () => {
 
 describe("PHASE 6 - approval discriminator: hostAuthorization.mode projects correctly under override", () => {
 	it("override=all projects mode='all' with explicitAllowRules preserved; override=none is pass-through", async () => {
-		const { resolveSessionHostAuthorization, resolveEffectiveHostMode } = await import(
-			"../session-auto-approval"
-		)
+		const { resolveSessionHostAuthorization, resolveEffectiveHostMode } = await import("../session-auto-approval")
 		const { commandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } = await import("@cline/core")
 		const { DEFAULT_AUTO_APPROVAL_SETTINGS } = await import("@shared/AutoApprovalSettings")
 
@@ -534,9 +517,7 @@ describe("CORRECTION01 - integration witness: upstream YOLO path -> Seatbelt den
 		}
 
 		const sessionId = `sess-yq-upstream-${randomBytes(4).toString("hex")}`
-		const { SessionAutoApprovalStore, resolveSessionHostAuthorization } = await import(
-			"../session-auto-approval"
-		)
+		const { SessionAutoApprovalStore, resolveSessionHostAuthorization } = await import("../session-auto-approval")
 		const sessionStore = new SessionAutoApprovalStore()
 		sessionStore.setOverride(sessionId, "all")
 
