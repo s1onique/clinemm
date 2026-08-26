@@ -32,6 +32,7 @@
 | ACT / Source ID | Verdict | Source line range (pre-sharding) | Purpose |
 |---|---|---|---|
 | `ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01` | OPEN | L3339-3347 | Static "Thinking ›" presentation can persist after runtime state is no longer thinking/streaming |
+| `TERMINAL-REPORT-COMPLETION-FRAMING` (working label) | **OPEN / MED** | — | Terminal successful task → visible `Completed` framing; awaiting_followup / resumable → MUST NOT say `Completed`; error → explicit failed/error framing; runtime still active → MUST NOT say `Completed`. Presentation only — do **not** claim runtime completion semantics are defective without RED |
 | `EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01` (historical name: `E7.1-2 TASKHEADER CANONICAL PROJECTION`) | OPEN | L3348-3356 | TaskHeader consumes canonical task-state projections rather than reconstructing state locally |
 | `EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01` | OPEN | L3358-3377 | TaskHeader should project canonical runtime ownership/state with timing semantics (distinct from projection correctness per L3356) |
 
@@ -42,6 +43,16 @@ Three open items, all in the task-state presentation layer:
 - **`ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01`** (L3339-3347). Symptom: static "Thinking ›" presentation can persist after runtime state is no longer thinking/streaming. Constraint: do not invent a second UI authority; use the canonical state/projection.
 - **`EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01`** (L3348-3356). Purpose: TaskHeader consumes canonical task-state projections rather than reconstructing state locally. Constraint: distinct from owner-aware timing (would lose it if folded).
 - **`EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01`** (L3358-3377). Goal: TaskHeader should project canonical runtime ownership/state with timing semantics.
+- **`TERMINAL-REPORT-COMPLETION-FRAMING`** (working label, MED). Symptom: a terminal successful task may render in ordinary assistant prose rather than as a visibly framed `Completed` answer; the runtime may be perfectly terminal while the presentation still looks like continuing work. **Desired invariant:**
+
+  ```text
+  successful terminal task         → visible "Completed" framing
+  awaiting_followup / resumable    → MUST NOT say Completed
+  error                              → explicit failed/error framing
+  runtime still active              → MUST NOT say Completed
+  ```
+
+  This is a **presentation-only** item. It does **not** assert that runtime completion semantics are defective; that requires a separate RED-first ACT under `runtime-task-progression.md` if observed.
 
 Reopen / new-work conditions:
 

@@ -1,7 +1,7 @@
 # ClineMM Epic Board
 
 Updated: 2026-08-27
-Source-of-truth: `.factory/epics/*.md` (17 files) — the per-epic detail files. **This board is a navigation index, not an archive.**
+Source-of-truth: `.factory/epics/*.md` (19 files) — the per-epic detail files. **This board is a navigation index, not an archive.**
 Contract: [`.factory/epics/_index-contract.md`](./epics/_index-contract.md) (frozen maintenance law)
 Conservation anchor: `5e96cfd3a` (immutable; see §5 of the contract for the `OLD_ACT_IDS - CURRENT_REPOSITORY_ACT_IDS = ∅` invariant)
 
@@ -34,11 +34,14 @@ Every epic with `ACTIVE` family-level state (per contract §2 status vocabulary)
 | Quality substrate | P1 | ACTIVE (vitest baseline + typecheck local-seam CLOSED; 2 OPEN acceptance conditions) | `CODE-COVERAGE-BASELINE01` · typecheck CI parity | [`quality-substrate.md`](./epics/quality-substrate.md) |
 | Task-presentation | P1 | ACTIVE (compacted-history substrate CLOSED; 3 task-header projection items OPEN) | `E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01` · `TASKHEADER-CANONICAL-PROJECTION01` · `TASKHEADER-OWNER-AWARE-TIMING01` | [`task-presentation.md`](./epics/task-presentation.md) |
 | Task-control liveness | P1 | CLOSED family (bounded generation-fence repair landed; `LIVE` qualification pending) | (post-sharding review only) | [`task-control-liveness.md`](./epics/task-control-liveness.md) |
+| Upstream intake | P2 | CLOSED family (substrate + 4-correction triage cycle landed; 12 EXACT_MAPs + 5 IMPORTs satisfy binding rule) | (triage cycle closed; new issues re-template through substrate) | [`upstream-intake.md`](./epics/upstream-intake.md) |
 | Distribution / CI | P2 | ACTIVE (3 open items: GitHub Actions recon, GitHub Distribution, ACT — see file) | `EPIC-CLINEMM-GITHUB-ACTIONS01` · `EPIC-CLINEMM-GITHUB-DISTRIBUTION01` · … | [`distribution-ci.md`](./epics/distribution-ci.md) |
 | Extension publishing | P1 | OPEN (`EXTENSION-PUBLISHING01` recon-first: VS Code Marketplace + Open VSX; see file) | `VSCODE-MARKETPLACE-PUBLISH-RECON01` · `OPENVSX-PUBLISH-RECON01` | [`distribution-ci.md`](./epics/distribution-ci.md) |
 | Product config / branding | P2 | ACTIVE (cost + consolidation CLOSED; 2 open product fronts) | `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` · `EPIC-CLINEMM-BRANDING01` | [`product-config-branding.md`](./epics/product-config-branding.md) |
 | Dynamic editing backends / Dirac | P1 | OPEN (`DIRAC-EDITING-RECON01` first; all downstream BLOCKED on dependency chain) | `DIRAC-EDITING-RECON01` | [`dynamic-editing-backends.md`](./epics/dynamic-editing-backends.md) |
 | Host test infrastructure | P1 | OPEN (`HOST-TEST RUNNER` recon first; unblocks real-kernel Seatbelt probes, fresh VSIX dogfood, live approval-UI capture, classic-protection qualification) | `HOST-TEST RUNNER` | [`host-test-infrastructure.md`](./epics/host-test-infrastructure.md) |
+| Runtime task progression | P1 | OPEN / HIGH (the `Continue`-bug family: task stops progressing, no truthful terminal; upstream `RUNTIME_THINKING_STALL` cluster is RADAR) | `RUNTIME-TASK-PROGRESSION-RECON01` · `CANCEL-AFFORDANCE-AUTHORITY-RECON` | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
+| Tool runtime reliability | P1 | OPEN / HIGH | `TOOL-RUNTIME-RELIABILITY-RECON01` | [`tool-runtime-reliability.md`](./epics/tool-runtime-reliability.md) |
 | Architecture | P2 | ACTIVE (1 OPEN; 2 HOLD pending upstream evidence) | `EPIC-CLINEMM-ELMIZATION02` (gated on E9) | [`architecture.md`](./epics/architecture.md) |
 | Factory infrastructure | P0 | ACTIVE (substrate-level rules; Git safety CLOSED) | `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` (P2 non-blocking) | [`factory-infrastructure.md`](./epics/factory-infrastructure.md) |
 ## Open supporting work
@@ -50,7 +53,12 @@ Cross-cutting / substrate work that does not fit a single epic lane. Every row l
 | Typecheck CI parity | P1 | OPEN (PARITY=PARTIAL — local gate only; CI workflow does not gate canonical `tsc`) | `EPIC-CLINEMM-GITHUB-ACTIONS01` | [`quality-substrate.md`](./epics/quality-substrate.md) |
 | Code-coverage baseline | P1 | OPEN / HIGH (ratchet ACT closed; baseline itself not yet set) | n/a | [`quality-substrate.md`](./epics/quality-substrate.md) |
 | Branding activity-bar icon | P2 | OPEN (first bounded slice of `BRANDING01`; `‖ → --`) | n/a | [`product-config-branding.md`](./epics/product-config-branding.md) |
-| Tool-execution semantics recon | P2 | OPEN (first ACT `TOOL-EXECUTION-SEMANTICS-RECON01` — recon only, no classifier logic) | n/a | [`product-config-branding.md`](./epics/product-config-branding.md) |
+| Tool-execution semantics recon | P2 | OPEN (recon `TOOL-EXECUTION-SEMANTICS-RECON01` already closed `PASS_RECON`; next working slice is `TES-IMPL-01` — bounded TaskHeader mechanism/outcome/duration projection; no classifier logic) | n/a | [`product-config-branding.md`](./epics/product-config-branding.md) |
+| Terminal-report completion framing | P2 | OPEN / MED (presentation-only: terminal successful → visible `Completed`; awaiting_followup / error / active → MUST NOT say `Completed`) | n/a | [`task-presentation.md`](./epics/task-presentation.md) |
+| `EPIC-CLINEMM-CHECKPOINT-RELIABILITY01` | P1 | OPEN / HIGH (FINAL-CORRECTION upstream IMPORT; upstream #4388 + #12388) | n/a | [`upstream-intake.md`](./epics/upstream-intake.md) |
+| `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` | P1 | OPEN / HIGH (FINAL-CORRECTION upstream IMPORT; upstream #7413) | n/a | [`upstream-intake.md`](./epics/upstream-intake.md) |
+| `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` | P2 | OPEN / MED (FINAL-CORRECTION upstream IMPORT; upstream #9554) | n/a | [`upstream-intake.md`](./epics/upstream-intake.md) |
+| `EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01` | P2 | OPEN / MED (FINAL-CORRECTION upstream IMPORT; upstream #10016) | n/a | [`upstream-intake.md`](./epics/upstream-intake.md) |
 
 ---
 
@@ -71,7 +79,7 @@ Items that are consciously not current execution debt. Reopen triggers are in th
 
 ## Historical task census
 
-**Purpose: conservation only.** Every `ACT-CLINEMM-*` ID present in the immutable pre-sharding anchor `5e96cfd3a:.factory/epic-board.md` is listed here, grouped by family, so the contract's §5 invariant (`OLD_ACT_IDS - CURRENT_REPOSITORY_ACT_IDS = ∅`) holds. **This is an audit trail, not a status report** — state, priority, and evidence for each ACT live in the owning epic detail file (when sharded) or in `docs/closure-plans/*.json` (when externalized). The 17 detail files (`_index-contract.md`, `approval-protection.md`, `authenticated-dev-capabilities.md`, `command-risk-classification.md`, `closed-foundation.md`, `distribution-ci.md`, `dynamic-editing-backends.md`, `factory-infrastructure.md`, `host-test-infrastructure.md`, `product-config-branding.md`, `quality-substrate.md`, `safe-yolo-seatbelt.md`, `task-control-liveness.md`, `task-presentation.md`, `upstream-intake.md`, `webview-seam-aop.md`, plus `architecture.md`) are the canonical current state for the families they own.
+**Purpose: conservation only.** Every `ACT-CLINEMM-*` ID present in the immutable pre-sharding anchor `5e96cfd3a:.factory/epic-board.md` is listed here, grouped by family, so the contract's §5 invariant (`OLD_ACT_IDS - CURRENT_REPOSITORY_ACT_IDS = ∅`) holds. **This is an audit trail, not a status report** — state, priority, and evidence for each ACT live in the owning epic detail file (when sharded) or in `docs/closure-plans/*.json` (when externalized). The 19 detail files (alphabetical: `_index-contract`, `approval-protection`, `architecture`, `authenticated-dev-capabilities`, `closed-foundation`, `command-risk-classification`, `distribution-ci`, `dynamic-editing-backends`, `factory-infrastructure`, `host-test-infrastructure`, `product-config-branding`, `quality-substrate`, `runtime-task-progression`, `safe-yolo-seatbelt`, `task-control-liveness`, `task-presentation`, `tool-runtime-reliability`, `upstream-intake`, `webview-seam-aop`) are the canonical current state for the families they own.
 
 The families below are mostly historical (pre-reduction). They are preserved here as ACT IDs only — no closure narrative, no embedded evidence.
 
@@ -204,8 +212,6 @@ Closed-class per [`_index-contract.md`](./epics/_index-contract.md) §2: `NEXT`,
 ```text
 epic-board.md  hard cap: < 400 lines     target: 150–220 lines
 ```
-
-This reduction puts the board in the target zone. Future rows must come at the cost of older rows.
 
 ---
 

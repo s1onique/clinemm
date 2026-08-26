@@ -23,8 +23,9 @@
 |---|---|---|---|
 | `ACT-CLINEMM-COST-DISPLAY-TRUTH01` (+ CORRECTION01, CORRECTION02) | CLOSED | L3378-3574 | Cost display truth (canonical cost source) |
 | `ACT-CLINEMM-MAIN-CONSOLIDATION01` | CLOSED at `d844177bc` | L3378-3574 | Main consolidation (canonical main carries consolidated state) |
-| `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` | **OPEN** (umbrella epic; first ACT `TOOL-EXECUTION-SEMANTICS-RECON01`) | L3378-3574 | Tool-execution-semantics product front |
+| `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` | **OPEN** (umbrella epic; first ACT `TOOL-EXECUTION-SEMANTICS-RECON01` already closed `PASS_RECON`; future bounded implementation slice `TES-IMPL-01` is the next working label — mechanism-oriented projection only, no classifier logic) | L3378-3574 | Tool-execution-semantics product front |
 | `EPIC-CLINEMM-BRANDING01` | **OPEN** (umbrella epic; first bounded slice `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`) | L3378-3574 | Branding product front |
+| `TES-IMPL-01` (working label, under `TOOL-EXECUTION-SEMANTICS01`) | **OPEN** (mechanism/outcome/duration projection — only the structurally-known axes; `purpose` remains UNAVAILABLE_FROM_TRACE per the TES-RECON-01 `PASS_RECON` verdict) | L3378-3574 | Bounded TaskHeader mechanism/outcome projection; example truthful projection: `Tools 18 · Edits 6 · Commands 7`. Do **not** infer `CODE_EDIT` from shell command strings; mechanism identity comes from the registered/native tool identity. |
 | `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` | **OPEN** (first bounded slice under `EPIC-CLINEMM-BRANDING01`) | L3378-3574 | Branding activity-bar icon replacement (`‖ → --`) |
 | (substrate; no separate ACT) | CLOSED | L3575-3606 | Product configuration / branding substrate |
 
@@ -32,7 +33,7 @@
 
 Two open product fronts:
 
-- **`EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01`** (L3378-3574). Status: OPEN. The umbrella epic is board row 20. Its first ACT is `TOOL-EXECUTION-SEMANTICS-RECON01`. Do not implement classifier logic in this board ACT — recon precedes any classifier implementation.
+- **`EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01`** (L3378-3574). Status: OPEN. The umbrella epic is board row 20. Its first ACT is `TOOL-EXECUTION-SEMANTICS-RECON01`, which already closed `PASS_RECON`. The next working label is `TES-IMPL-01` — bounded TaskHeader mechanism/outcome/duration projection. Per the recon verdict (`docs/architecture/elm/task-state-tes01-tool-execution-semantics-recon-evidence.md`): mechanism/outcome/duration are REAL; `purpose` is `UNAVAILABLE_FROM_TRACE` and must remain UNAVAILABLE in the projection. Do **not** implement classifier logic; do **not** infer `CODE_EDIT` from shell command strings; mechanism identity comes from the registered/native tool identity (e.g. `apply_patch` / native write tool → EDIT; `run_commands` / `execute_command` → COMMAND; native read/search → READ/SEARCH; `mcp_*` → MCP; structurally unknown → OTHER/UNKNOWN).
 - **`EPIC-CLINEMM-BRANDING01`** (L3575-3606). Status: OPEN. The umbrella epic is board row 21. Its first bounded slice is `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` (board row 24, `NEXT / MED`). Icon: `‖ → --`. Preserve VS Code monochrome / theming behavior.
 
 Reopen / new-work conditions:
