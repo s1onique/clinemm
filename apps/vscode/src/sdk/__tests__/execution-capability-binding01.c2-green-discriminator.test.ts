@@ -209,12 +209,18 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2 GREEN 
 		expect((ctx.metadata ?? {})["executionCapability"]).toBeUndefined()
 	})
 
-	// ---------- Concurrency (reviewer test 5) ----------
-	it("CONCURRENCY: same-runtime interleaved invocations see distinct markers, no crossover", async () => {
-		// The reviewer flagged the C1 third test as harness isolation,
-		// not concurrency. This test drives the REAL AgentRuntime
-		// with two interleaved runTurn calls, each with a distinct
-		// host-side marker.
+	// ---------- Per-tool-call correlation (reviewer test 5 -- NONBLOCKING) ----------
+	it("PER-TOOL-CALL CORRELATION: same-runtime multiple tool calls see distinct markers, no crossover (true concurrent runtime calls NOT EXECUTED; nonblocking per reviewer)", async () => {
+		// The reviewer reworded this from "concurrency" to
+		// "per-tool-call correlation". TRUE concurrent runtime
+		// calls are NOT_EXECUTED and are NONBLOCKING for this ACT.
+		// Since the implementation has no global mutable capability
+		// state, recursive concurrency is not load-bearing for the
+		// authority transport.
+		//
+		// Evidence label (frozen):
+		//   same-runtime multiple tool calls / correlation = EXECUTED
+		//   true concurrent runtime calls                = NOT_EXECUTED
 		const captured: AgentToolContext[] = []
 		const tool = makeShellLikeTool(captured)
 

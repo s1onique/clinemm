@@ -84,27 +84,19 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2 GREEN 
 		await new Promise((r) => setImmediate(r))
 
 		// THE GREEN ASSERTION: the marker-bearing typed slot reaches
-		// the job record (via the AgentToolContext argument to start()).
+		// the manager.start call (via the AgentToolContext argument).
 		// The first arg (options) is the legacy start-command-job
 		// payload; the second arg (context) carries the typed slot.
 		// The manager copies context.executionCapability onto the
-		// CommandJob.executionCapability record and surfaces it on
-		// the snapshot.
+		// internal CommandJob record (NOT on the public snapshot,
+		// per the CORRECTION02 P1 fix that removed it from public
+		// surfaces before real capability variants land).
 		expect(startSpy).toHaveBeenCalled()
 		const callArgs = startSpy.mock.calls[0]
 		expect(callArgs).toBeDefined()
 		const ctxArg = callArgs?.[1] as AgentToolContext | undefined
 		expect(ctxArg).toBeDefined()
 		expect(ctxArg!.executionCapability).toEqual(marker)
-
-		// And the snapshot surfaces it too.
-		const jobIds = manager.getActiveJobIds()
-		if (jobIds.length > 0) {
-			const status = await manager.status({ jobId: jobIds[0]!, waitMs: 0 })
-			if (status.ok) {
-				expect(status.snapshot.executionCapability).toEqual(marker)
-			}
-		}
 	})
 
 	it("GREEN negative: NO marker in context -> NO marker in manager.start options", async () => {
@@ -139,15 +131,6 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2 GREEN 
 		const ctxArg = startSpy.mock.calls[0]?.[1] as AgentToolContext | undefined
 		expect(ctxArg).toBeDefined()
 		expect(ctxArg!.executionCapability).toBeUndefined()
-
-		// And the snapshot surfaces nothing.
-		const jobIds = manager.getActiveJobIds()
-		if (jobIds.length > 0) {
-			const status = await manager.status({ jobId: jobIds[0]!, waitMs: 0 })
-			if (status.ok) {
-				expect(status.snapshot.executionCapability).toBeUndefined()
-			}
-		}
 	})
 
 	it("GREEN: harness isolation -- two independent managers/tools see their own state", async () => {

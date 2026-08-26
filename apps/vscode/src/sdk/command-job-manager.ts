@@ -74,16 +74,6 @@ export interface CommandJobSnapshot {
 	/** Convenience fields for tool results. */
 	elapsedMs: number
 	deadlineRemainingMs: number
-
-	/**
-	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
-	 * C2 plumbing: closed runtime-owned authority slot captured from
-	 * the call site's `AgentToolContext.executionCapability`. NEVER
-	 * populated from `toolCall.metadata` (partially untrusted).
-	 * Observed by tests as the canonical evidence that the binding
-	 * seam is intact end-to-end.
-	 */
-	executionCapability?: InternalExecutionCapability
 }
 
 /** Caller-supplied input to {@link CommandJobManager.start}. */
@@ -294,10 +284,6 @@ function snapshot(job: CommandJob): CommandJobSnapshot {
 		outputTruncated: stdoutSnap.dropped || stderrSnap.dropped,
 		elapsedMs: nowMs - job.startedAtMs,
 		deadlineRemainingMs: Math.max(0, job.deadlineAtMs - nowMs),
-		// ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
-		// C2 plumbing: surface the closed runtime-owned authority slot
-		// on the public snapshot.
-		executionCapability: job.executionCapability,
 	}
 }
 
