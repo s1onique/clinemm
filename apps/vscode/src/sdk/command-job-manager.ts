@@ -32,8 +32,13 @@
  * (see command-status-tool.ts). Observation via `command_status` is
  * read-only and does not require host command policy.
  */
-import { type StructuredCommandInput, type SupervisableShellProcess, spawnSupervisableShellCommand, SandboxError } from "@cline/core"
-import { type AgentToolContext, getDefaultShell, getShellInvocation } from "@cline/shared"
+import {
+	SandboxError,
+	type StructuredCommandInput,
+	type SupervisableShellProcess,
+	spawnSupervisableShellCommand,
+} from "@cline/core"
+import { type AgentToolContext, getDefaultShell, getShellInvocation, type InternalExecutionCapability } from "@cline/shared"
 import {
 	buildExperimentalReconCapability,
 	defaultSandboxBackendResolver,
@@ -353,6 +358,14 @@ interface CommandJob {
 
 	exitCode?: number
 	signal?: string
+
+	/**
+	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+	 * C2 plumbing: closed runtime-owned authority slot captured from
+	 * the call site's `AgentToolContext.executionCapability` at job
+	 * construction time. NEVER read from generic metadata.
+	 */
+	executionCapability?: InternalExecutionCapability
 
 	/**
 	 * Latched when the host initiates termination. Survives natural exit.
@@ -675,6 +688,13 @@ export class CommandJobManager {
 		)
 		this.terminalTransitions.set(id, terminalTransitionPromise)
 
+		// ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+		// C2 plumbing: closed runtime-owned authority slot stamped from
+		// the call-site `AgentToolContext.executionCapability`. This is
+		// the ONLY writer -- it is NEVER derived from `context.metadata`
+		// or any other partially-untrusted channel.
+		const jobExecutionCapability: InternalExecutionCapability | undefined = context?.executionCapability
+
 		const job: CommandJob = {
 			id,
 			state: "running",
@@ -687,6 +707,13 @@ export class CommandJobManager {
 			finalized: false,
 			terminalTransitionResolve: resolveTerminalTransition,
 			terminalTransitionPromise,
+			// ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+			// C2 plumbing: closed runtime-owned authority slot stamped at
+			// construction time. Recorded on the job record for snapshot
+			// inspection by tests; not consumed by the sandbox in C2 of
+			// THIS ACT (Seatbelt integration resumes in
+			// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2).
+			executionCapability: jobExecutionCapability,
 			// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
 			// Stash the sandbox-prepared cleanup hook (e.g. Seatbelt
 			// profile temp dir removal). `finalize()` will run it

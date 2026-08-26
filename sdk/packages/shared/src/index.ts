@@ -239,6 +239,7 @@ export {
 export type {
 	CommandExecutionPlan,
 	CommandExecutionPlanEntry,
+	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
 	ToolCallRecord,

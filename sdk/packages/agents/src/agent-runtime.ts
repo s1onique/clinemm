@@ -29,6 +29,7 @@ import type {
 	AgentRuntimeExecutionState,
 	CaptureTaskLifecycleEventInput,
 	ControlPlaneOutcome,
+	InternalExecutionCapability,
 	LiveAgentRuntimeEvent,
 	LiveAgentRuntimeStateSnapshot,
 	ProviderErrorClass,
@@ -310,6 +311,19 @@ interface PreparedToolExecution {
 	 * Outranks every other provenance in the C1.1 classifier.
 	 */
 	controlPlaneOutcome?: ControlPlaneOutcome;
+	/**
+	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+	 * C2 plumbing: closed runtime-owned authority slot.
+	 *
+	 * Set ONLY when the host's policy callback returned
+	 * `ToolApprovalResult.executionCapability` (the trusted channel).
+	 * NEVER derived from `prepared.toolCall.metadata` -- that source
+	 * is partially untrusted (see metadata-provenance.md) and is
+	 * deliberately excluded from this slot. Stamped into
+	 * `AgentToolContext.executionCapability` at the construction site
+	 * in `executePreparedTool`.
+	 */
+	executionCapability?: InternalExecutionCapability;
 }
 
 interface HookBag {
@@ -2435,6 +2449,13 @@ export class AgentRuntime {
 		 * via Priority 4.
 		 */
 		let controlPlaneOutcome: ControlPlaneOutcome | undefined;
+	/**
+	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+	 * C2 plumbing: closed runtime-owned authority slot. Captured
+	 * from the host's policy callback result (the trusted channel);
+	 * NEVER read from `toolCall.metadata` (partially untrusted).
+	 */
+	let executionCapability: InternalExecutionCapability | undefined;
 		const metadata =
 			toolCall.metadata &&
 			typeof toolCall.metadata === "object" &&
@@ -2568,15 +2589,32 @@ export class AgentRuntime {
 					// shell executor. There is no fallback to raw input.
 					input = approval.executionPlan.transformedInput;
 				}
+				// ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+				// C2 plumbing: capture the host's authority slot. The
+				// trusted writer is the host's policy callback result
+				// (`ToolApprovalResult.executionCapability`); the runtime
+				// is the ONLY consumer that copies this value into the
+				// closed runtime-owned slot. We deliberately do NOT read
+				// from `toolCall.metadata` -- that channel is partially
+				// untrusted (see metadata-provenance.md).
+				//
+				// Set ONLY when approval.approved === true; the fail-closed
+				// contract (binding-design.md FAIL-CLOSED) requires that
+				// denied invocations never carry authority forward. When
+				// approval was denied (above branch), we deliberately skip
+				// this capture so no authority crosses the seam.
+				if (approval.approved && approval.executionCapability) {
+					executionCapability = approval.executionCapability;
+				}
 			}
 		}
-
 		return {
 			toolCall: { ...toolCall, input },
 			tool,
 			input,
 			skipReason,
 			controlPlaneOutcome,
+			executionCapability,
 		};
 	}
 
@@ -2787,6 +2825,14 @@ export class AgentRuntime {
 					toolCallId: prepared.toolCall.toolCallId,
 					signal: this.abortController?.signal,
 					metadata: this.config.toolContextMetadata,
+					// ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+					// C2 plumbing: closed runtime-owned authority slot. Stamped
+					// from `prepared.executionCapability`, which is populated
+					// by `prepareToolExecution` from the host's policy callback
+					// result (`ToolApprovalResult.executionCapability`). The
+					// runtime NEVER reads this from `toolCall.metadata` -- that
+					// channel is partially untrusted (metadata-provenance.md).
+					executionCapability: prepared.executionCapability,
 					snapshot: this.snapshot(),
 					emitUpdate: (update: unknown) => {
 						void this.emit({
