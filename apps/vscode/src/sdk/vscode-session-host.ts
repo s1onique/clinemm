@@ -48,6 +48,7 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
 import { CommandJobManager } from "./command-job-manager"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
+import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import type { SdkSessionHost } from "./session-host"
 import { createVscodeExtraTools } from "./vscode-runtime-builder"
@@ -143,7 +144,18 @@ export class VscodeSessionHost implements SdkSessionHost {
 		// When a terminal manager is available, suppress the SDK's built-in run_commands
 		// tool by setting bash to undefined. Our custom run_commands (provided via
 		// extraTools) replaces it with foreground/background terminal support.
-		const commandJobManager = new CommandJobManager()
+		const commandJobManager = new CommandJobManager({
+			// ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01: thread the active
+			// workspace roots from the hostbridge into the Seatbelt
+			// writableRoots. The safety filter rejects $HOME, HOME's
+			// parent, and "/" so a user who opens a too-broad folder
+			// does NOT silently grant write authority over personal
+			// data. The empty-window back-compat path (no open folder)
+			// passes through with [] which yields the prior
+			// "everything writable except /dev/null = nothing"
+			// contract — no silent widening on the empty-window edge.
+			experimentalSandboxWorkspaceRoots: await resolveActiveWorkspaceRootsForSandbox(),
+		})
 		const toolExecutors: Partial<ToolExecutors> = {}
 		if (options.askQuestion) {
 			toolExecutors.askQuestion = options.askQuestion
@@ -314,12 +326,8 @@ export class VscodeSessionHost implements SdkSessionHost {
 		if (activeIds.length === 0) {
 			return 0
 		}
-		const results = await Promise.all(
-			activeIds.map((jobId) => this.commandJobManager.cancel({ jobId })),
-		)
-		const cancelled = results.filter(
-			(r): r is { ok: true; state: "cancelled" } => r.ok && r.state === "cancelled",
-		).length
+		const results = await Promise.all(activeIds.map((jobId) => this.commandJobManager.cancel({ jobId })))
+		const cancelled = results.filter((r): r is { ok: true; state: "cancelled" } => r.ok && r.state === "cancelled").length
 		Logger.log(
 			`[VscodeSessionHost] cancelBackgroundCommand: cancelled ${cancelled}/${activeIds.length} active background command(s)`,
 		)
@@ -455,5 +463,4 @@ export class VscodeSessionHost implements SdkSessionHost {
 	runtimeSnapshot(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined {
 		return this.inner.getActiveRuntimeSnapshot(sessionId)
 	}
-
 }

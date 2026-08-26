@@ -29,35 +29,33 @@
  * WAVE-1 CAPABILITY SCOPE
  * ===========================================================================
  *
- * `buildExperimentalReconCapability` builds a CONSERVATIVE, non-network
- * capability suitable for read-only recon:
+ * `buildExperimentalReconCapability` builds the active workspace
+ * capability (read+write grant for trusted workspace roots; nothing
+ * wider):
  *
- *   readonlyRoots = workspace roots          (write-deny regions)
- *   writableRoots = []                       (no writes allowed)
- *   denyReadSubpaths = []                    (read confidentiality is a
- *                                              later concern; the
- *                                              backend's broad-read
- *                                              policy plus writable
- *                                              isolation is enough
- *                                              for Wave-1)
- *   network = "deny"                         (no network in Wave-1)
- *   environment.mode = "sanitized"           (CORRECTION01-P1 contract:
- *                                              envSemantics will be
- *                                              "complete")
+ *   readonlyRoots = []                       (workspace is NOT
+ *                                              write-confined — see
+ *                                              ACT-CLINEMM-SAFE-YOLO-
+ *                                              WORKSPACE-WRITE01)
+ *   writableRoots = workspace roots          (READ + WRITE under them)
+ *   denyReadSubpaths = curated credential set when the Safe-YOLO
+ *                                              network opt-in is
+ *                                              active
+ *   network = "deny" (default) | "allow" (opt-in)
+ *   environment.mode = "sanitized"
  *   environment.allow = SAFE_ENVIRONMENT_BASELINE
  *
- * This is INTENTIONALLY NAMED "recon" and not "read-only workspace":
- *   - file reads are broadly allowed (Seatbelt's
- *     `(allow file-read*)` plus writable-deny on the workspace root);
- *     we do NOT confine reads to the workspace.
- *   - the workspace roots are the WRITE-confined regions, not the
- *     READ-confined region. A more restrictive builder (with explicit
- *     `denyReadSubpaths` for credential directories etc.) is a
- *     downstream concern, addressed when Wave-1 finds what needs
- *     denying.
+ * Reads are broadly allowed by the Seatbelt profile generator's
+ * `(allow file-read*)` rule, then narrowed by `(deny file-read*
+ * (subpath X))` for each entry in `denyReadSubpaths`. The workspace
+ * does not appear in `denyReadSubpaths` (the dog's open directory is
+ * always readable to the agent), and the credential deny list is
+ * preserved independently so the network-open exfiltration guard is
+ * not regressed by workspace-write enablement.
  */
 
 import { existsSync, realpathSync } from "node:fs"
+import { homedir } from "node:os"
 import {
 	type CommandCapability,
 	getSandboxBackend,
@@ -131,6 +129,105 @@ export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
 		return undefined
 	}
 	return "allow"
+}
+
+/**
+ * ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 — host-side workspace-root
+ * safety filter.
+ *
+ * The bounded workspace-write repair grants recursive READ+WRITE
+ * under whichever paths the host supplies as the active workspace
+ * trust boundary. That grant is exact and unforgiving — a path
+ * listed in `writableRoots` becomes a (subpath) allow in SBPL. There
+ * is no Seatbelt primitive that says "writable but not too writable".
+ *
+ * This filter is the production safety guard against a user who
+ * opens `$HOME`, `/Users`, or `/` as their VSCode workspace folder.
+ * Such a state would otherwise transitively grant write authority
+ * over the entire user data, all sibling /Users accounts, or the
+ * whole filesystem respectively — far beyond the intended bounded-
+ * project use case.
+ *
+ * Filter rules (defense-in-depth; explicit by design):
+ *
+ *   - empty array  passes through verbatim
+ *               (empty-window back-compat path; the rebuild places
+ *                nothing on writableRoots, which is the prior
+ *                "read-only workspace" behavior)
+ *   - "/"          DROPPED  (do not widen to the entire filesystem)
+ *   - $HOME        DROPPED  (do not widen to user-personal data)
+ *   - HOME parent  DROPPED  (parent is /Users/<u> which would also
+ *                           be dangerously broad if interpreted as
+ *                           a project root)
+ *
+ *   - everything else passes through verbatim. The builder sees
+ *     exactly the workspace boundary the host supplied, minus the
+ *     explicitly-rejected wildcards.
+ *
+ * The filter is exact-path-match against HOME, not a substring
+ * check — a CHILD of HOME (e.g. `$HOME/projects-foo`) is a valid
+ * bounded project and PASSES THROUGH.
+ *
+ * Tests pin this in `darwin-seatbelt-safe-yolo-workspace-write01
+ * .c1-green.test.ts` (HOST-FILTER-*).
+ */
+export function filterWorkspaceRootsForWritable(workspaceRoots: readonly string[]): readonly string[] {
+	if (workspaceRoots.length === 0) return []
+	const home = homedir()
+	const homeParent = home.split("/").slice(0, -1).join("/") || "/"
+	const unsafe = new Set<string>(["/", home, homeParent])
+	const out: string[] = []
+	for (const root of workspaceRoots) {
+		if (typeof root !== "string") continue
+		const trimmed = root.trim()
+		if (trimmed.length === 0) continue
+		if (unsafe.has(trimmed)) continue
+		out.push(trimmed)
+	}
+	return out
+}
+
+/**
+ * ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 — host-side workspace-roots
+ * resolver.
+ *
+ * Reads the active workspace folder paths from the hostbridge and
+ * runs them through {@link filterWorkspaceRootsForWritable} to drop
+ * `$HOME`, HOME parent, and `/`.
+ *
+ * Returns `[]` (empty) when:
+ *   - the hostbridge is not initialized (e.g. unit-test contexts
+ *     that build `VscodeSessionHost` directly without going through
+ *     the real VS Code extension host). This preserves the prior
+ *     "empty workspaceRoots = nothing writable except /dev/null"
+ *     contract for those callers.
+ *   - the host reports no open workspace folders.
+ *
+ * Tests pin this in
+ * `darwin-seatbelt-safe-yolo-workspace-write01.c1-green.test.ts`
+ * (HOST-FILTER-*) — the safety filter is the load-bearing test
+ * target; the hostbridge call itself is exercised end-to-end by the
+ * C2 / Phase-9 live dogfood evidence.
+ */
+export async function resolveActiveWorkspaceRootsForSandbox(): Promise<readonly string[]> {
+	try {
+		// Lazy import to keep @/hosts/host-provider out of the SDK
+		// adapter's compile-time graph (CLI/JetBrains builds do not
+		// link this module). On platforms where HostProvider is not
+		// present, the catch block returns [].
+		const mod = await import("@/hosts/host-provider")
+		if (typeof mod.HostProvider?.isInitialized === "function" && !mod.HostProvider.isInitialized()) {
+			return []
+		}
+		const workspaceClient = mod.HostProvider?.workspace
+		if (!workspaceClient) return []
+		const { paths } = await workspaceClient.getWorkspacePaths({})
+		return filterWorkspaceRootsForWritable(paths ?? [])
+	} catch {
+		// HostProvider module not resolvable (CLI/JetBrains/test
+		// contexts). Fall back to the prior empty-workspace contract.
+		return []
+	}
 }
 
 /**
@@ -320,28 +417,66 @@ export const defaultSandboxBackendResolver: SandboxBackendResolver = async (mode
 }
 
 /**
- * Build a Wave-1 experimental recon capability.
+ * Build a Wave-1 experimental capability.
  *
- * Naming convention: this is a RECON capability, not a "workspace
- * read-only" capability. The workspace roots are the WRITE-confined
- * regions. Reads are broadly allowed per the underlying Seatbelt
- * contract (broad read allow + write-deny regions).
+ * ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01:
+ *   The trust boundary is the set of active workspace roots. The user
+ *   (the dogfooder) opened this repository in their editor; everything
+ *   recursively under it (including `.factory/...`, `.git/...`, etc.)
+ *   is intended to be readable AND writable by the agent.
+ *
+ *   Seatbelt role of each field:
+ *     readonlyRoots  → (deny file-write* (subpath X)) emitted AFTER
+ *                      the write-allow rule. last-rule-wins: a root
+ *                      in `readonlyRoots` becomes write-DENIED.
+ *     writableRoots  → (allow file-write* (subpath X)) appended.
+ *                      Reads are already granted by the broad
+ *                      (allow file-read*) in buildReadRule().
+ *
+ *   Consequence: a root that lives in BOTH lists ends up write-DENIED
+ *   (the deny wins). To grant workspace writes, this builder must NOT
+ *   place the workspace into `readonlyRoots`; placing it in
+ *   `writableRoots` is the minimal-correct representation.
+ *
+ *   Reads under the workspace come from the broad `(allow file-read*)`
+ *   rule (buildReadRule) regardless of which list owns the root.
+ *   Sensitive reads (CURATED_CREDENTIAL_SET_V1) are still DENIED via
+ *   `denyReadSubpaths` because the deny-rule is emitted after the
+ *   broad allow (last-rule-wins).
+ *
+ *   What this does NOT widen:
+ *     - $HOME, parent paths, the workspace parent, and `/` are never
+ *       added unless the caller explicitly names them. This builder
+ *       is opaque: it forwards `input.workspaceRoots` verbatim into
+ *       `writableRoots` (Phase-5 W2 invariant).
+ *     - The credential deny list is independent and unchanged.
+ *     - The network policy is unchanged (opt-in honored, "deny"
+ *       default remains).
+ *     - The environment mode is unchanged.
  *
  * Returns a fresh capability object on every call; safe to mutate.
  *
  * @param cwd canonical cwd for the command (must exist on the host)
- * @param workspaceRoots canonical absolute paths under which writes
- *                       are FORBIDDEN (treated as readonlyRoots). Pass
- *                       the actual workspace tree so the kernel
- *                       denies any write attempt under it.
+ * @param workspaceRoots canonical absolute paths that the host has
+ *                       pre-trusted as the active workspace boundary.
+ *                       Each is added to `writableRoots` so the
+ *                       Seatbelt kernel permits mkdir / write /
+ *                       truncate / rename / unlink / rmdir etc.
+ *                       recursively under it (see
+ *                       seatbelt-profile.ts buildWriteRule).
  */
 export function buildExperimentalReconCapability(input: {
 	readonly cwd: string
 	readonly workspaceRoots: readonly string[]
 }): CommandCapability {
 	return {
-		readonlyRoots: [...input.workspaceRoots],
-		writableRoots: [],
+		// ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01:
+		// Workspace roots are NOT placed in readonlyRoots because
+		// every readonlyRoot emits a write-deny rule (last-rule-wins)
+		// AFTER the write-allow rule, which would silently disable
+		// mkdir inside the workspace — exactly the dogfood RED.
+		readonlyRoots: [],
+		writableRoots: [...input.workspaceRoots],
 		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01
 		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01-CORRECTION01:
 		//

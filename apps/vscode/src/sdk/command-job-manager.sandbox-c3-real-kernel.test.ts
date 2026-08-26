@@ -97,21 +97,26 @@ function sha256(buf: Buffer | string): string {
 }
 
 /**
- * The headline C3 discriminator. Prove the kernel denies a write
- * that would have succeeded under DEFAULT_OFF.
+ * The C3 headline discriminator (ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01)
+ * reframed by ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01.
  *
- * The sentinel lives under the workspaceRoot we passed via
- * experimentalSandboxWorkspaceRoots. By the production wiring
- * contract, that path becomes a readonlyRoot in the Wave-1 capability
- * and emits a write-deny rule in the SBPL profile. Kernel-level
- * evidence of write-deny at this path IS the proof that the production
- * resolver threaded the workspaceRoot into the capability used by the
- * production backend.
+ * Pre-WORKSPACE-WRITE01 this suite asserted that the kernel denied any
+ * write under the workspaceRoot. That was the previous contract; it
+ * locked the buckled-up ClineMM into a read-only-workspace mode and
+ * reproduced the dogfood RED (`mkdir .factory/...` → EPERM).
+ *
+ * Post-WORKSPACE-WRITE01 the workspace is the bounded trust boundary:
+ * the kernel permits writes UNDER the supplied workspace roots and still
+ * denies writes OUTSIDE of them. The discriminator below was flipped
+ * in lockstep with the bounded production repair at
+ * `apps/vscode/src/sdk/sandbox-policy.ts`. The pre-fix behavior is
+ * preserved as `OUTSIDE_WORKSPACE_DENIED` and `COUNTER_TEST_SANDBOX_OFF`
+ * (sandbox OFF and outside-workspace paths still fail).
  */
 describe.skipIf(!HAS_SUBSTRATE)(
-	"C3: real production kernel write-deny discriminator (production resolver + real Seatbelt)",
+	"C3: real production kernel write-allow discriminator (production resolver + real Seatbelt)",
 	() => {
-		it("sandbox ON: write to a path under the workspace root is KERNEL-DENIED, sentinel bytes unchanged", async () => {
+		it("sandbox ON: write to a path under the workspace root is KERNEL-ALLOWED (workspace trust boundary)", async () => {
 			const workspaceRoot = mkdtempSync(join(tmpRoot!, "ws-"))
 			const sentinelPath = join(workspaceRoot, "sentinel.txt")
 			const sentinelBytes = Buffer.from("SENTINEL-ORIGINAL-BYTES-DO-NOT-MUTATE\n")
@@ -129,18 +134,21 @@ describe.skipIf(!HAS_SUBSTRATE)(
 						executionDeadlineMs: 5_000,
 					})
 					expect(start.state).toBe("exited")
-					expect(start.exitCode).not.toBe(0)
+					expect(start.exitCode).toBe(0)
 
 					const afterBytes = readFileSync(sentinelPath)
-					expect(sha256(afterBytes)).toBe(sha256(sentinelBytes))
-					expect(afterBytes.toString("utf8")).toBe(sentinelBytes.toString("utf8"))
+					// Workspace is the bounded trust boundary; the kernel
+					// ALLOWS the override because the test root sits under
+					// experimentalSandboxWorkspaceRoots.
+					expect(sha256(afterBytes)).not.toBe(sha256(sentinelBytes))
+					expect(afterBytes.toString("utf8")).toBe("OVERWRITTEN")
 				})
 			} finally {
 				await manager.dispose()
 			}
 		})
 
-		it("counter-test: same write with sandbox OFF succeeds, sentinel bytes change", async () => {
+		it("counter-test: same write with sandbox OFF also succeeds", async () => {
 			const workspaceRoot = mkdtempSync(join(tmpRoot!, "ws-off-"))
 			const sentinelPath = join(workspaceRoot, "sentinel.txt")
 			const sentinelBytes = Buffer.from("SENTINEL-ORIGINAL-BYTES-DO-NOT-MUTATE\n")
@@ -210,7 +218,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
  *   - mktemp and mktemp -d both succeed
  *   - the produced path is a descendant of the canonical TMPDIR
  *   - TMPDIR in the child env equals the synthesized root
- *   - workspace write (W01-style) still gets kernel EPERM
+ *   - workspace write is KERNEL-ALLOWED under the workspace trust
+ *     boundary (ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 — was
+ *     previously kernel-denied; that contract was the bug this ACT
+ *     fixes)
  *   - a sibling under the same parent canonical temp remains DENIED
  *     (no parent authority expansion)
  */
@@ -304,7 +315,14 @@ describe.skipIf(!HAS_SUBSTRATE)("ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01: 
 		}
 	})
 
-	it("GREEN workspace write still KERNEL-DENIED (W01 conservation)", async () => {
+	it("GREEN workspace write is KERNEL-ALLOWED under the workspace trust boundary (ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01)", async () => {
+		// Pre-WORKSPACE-WRITE01 this asserted that writes under the
+		// workspace root were STILL kernel-denied (the conservation
+		// invariant of the previous "workspace = readonly" contract).
+		// That contract is the bug this ACT fixes: the kernel now
+		// ALLOWS writes under the supplied workspace root. The sibling
+		// and synthesized-temp cleanup tests below continue to prove
+		// that writes OUTSIDE the workspace remain denied.
 		const workspaceRoot = mkdtempSync(join(tmpRoot!, "ws-cons-"))
 		const sentinelPath = join(workspaceRoot, "sentinel.txt")
 		writeFileSync(sentinelPath, Buffer.from("ORIGINAL\n"))
@@ -320,8 +338,8 @@ describe.skipIf(!HAS_SUBSTRATE)("ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01: 
 					executionDeadlineMs: 5_000,
 				})
 				expect(start.state).toBe("exited")
-				expect(start.exitCode).not.toBe(0)
-				expect(readFileSync(sentinelPath).toString("utf8")).toBe("ORIGINAL\n")
+				expect(start.exitCode).toBe(0)
+				expect(readFileSync(sentinelPath).toString("utf8")).toBe("OVERWRITTEN")
 			})
 		} finally {
 			await manager.dispose()

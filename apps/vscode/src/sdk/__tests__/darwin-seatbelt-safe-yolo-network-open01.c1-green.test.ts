@@ -112,11 +112,20 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural", () => {
 		// dangerous capability (Seatbelt experimental + unrestricted
 		// network) — NOT YOLO / approval mode / session override.
 		//
-		// readonlyRoots / writableRoots / environment / cwd are
-		// preserved at the BYTE level. ONLY network and
-		// denyReadSubpaths differ from the no-opt-in case.
-		expect(cap.readonlyRoots).toEqual(["/var/folders/x/y"])
-		expect(cap.writableRoots).toEqual([])
+		// ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01:
+		//   The workspace-write fix changes the writableRoots/readonlyRoots
+		//   contract: workspace roots go into `writableRoots` (and out of
+		//   `readonlyRoots`) so the Seatbelt deny-after-allow rule does
+		//   not silently disable `mkdir` etc. inside the workspace.
+		//   What the network-open fix MUST still preserve:
+		//     - filesystem POLICY preserves workspace as the writable
+		//       trust boundary
+		//     - environment / cwd are unchanged
+		//     - ONLY network and denyReadSubpaths differ from no-opt-in
+		//       in THIS specific direction (no widening to HOME, no
+		//       parent widening)
+		expect(cap.writableRoots).toEqual(["/var/folders/x/y"])
+		expect(cap.readonlyRoots).toEqual([])
 		expect(cap.cwd).toBe("/tmp")
 		expect(cap.environment.mode).toBe("sanitized")
 		if (cap.environment.mode === "sanitized") {
