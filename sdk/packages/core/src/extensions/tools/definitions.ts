@@ -257,27 +257,32 @@ async function executeShellCommands(
 				// context.executionCapability when a plan exists -- that
 				// would recreate the leak.
 				//
-				// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+				// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+				// CORRECTION01 (typed-channel separation):
 				// The per-command channel is the ONLY path that may carry
 				// real authority-bearing capabilities (e.g.
-				// `filesystem-create-only`). The per-command context
-				// widens `executionCapability` to the full
-				// `InternalExecutionCapability` union; the legacy
-				// `AgentToolContext` (whose `executionCapability` is
-				// narrowed to `ToolCallExecutionCapability` for compile-time
-				// defense) cannot represent this wider slot. The boundary
-				// is explicit here. The runtime guard at the top of this
-				// function has already enforced that the legacy
+				// `filesystem-create-only`). The channel separation is
+				// enforced at the TYPE SYSTEM, not via a cast:
+				//   `executionCapability`              -> factory-binding-probe only
+				//   `perCommandExecutionCapability`   -> full InternalExecutionCapability
+				// When the plan is present, we STAMP the per-command
+				// field and CLEAR the legacy field, without an
+				// `as AgentToolContext` cast.
+				//
+				// The runtime guard at the top of this function
+				// (real_execution_capability_requires_per_command_plan)
+				// has already enforced that the legacy
 				// `context.executionCapability` is either undefined or
 				// `factory-binding-probe` when no plan is present; here,
-				// when a plan IS present, the per-command slot IS the
+				// when a plan IS present, the per-command field IS the
 				// authority-bearing channel.
 				const perCommandContext: AgentToolContext =
 					perCommandCaps !== null
-						? ({
+						? {
 								...context,
-								executionCapability: perCommandCaps[i],
-							} as AgentToolContext)
+								executionCapability: undefined,
+								perCommandExecutionCapability: perCommandCaps[i],
+							}
 						: context;
 				const output = await withTimeout(
 					executor(command, cwd, perCommandContext),

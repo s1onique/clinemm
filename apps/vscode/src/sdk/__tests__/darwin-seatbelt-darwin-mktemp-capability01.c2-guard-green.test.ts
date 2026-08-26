@@ -203,6 +203,11 @@ function buildGuardHarness(params: {
 interface CapturedStart {
 	command: string | undefined
 	executionCapability: InternalExecutionCapability | undefined
+	// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION01:
+	// Per-command channel captured so tests assert the typed-channel-
+	// separation contract: real authority flows here, never on
+	// executionCapability.
+	perCommandExecutionCapability: InternalExecutionCapability | undefined
 }
 
 function captureStarts(startSpy: ReturnType<typeof vi.spyOn>): CapturedStart[] {
@@ -212,6 +217,7 @@ function captureStarts(startSpy: ReturnType<typeof vi.spyOn>): CapturedStart[] {
 		return {
 			command: typeof opts?.command === "string" ? opts.command : JSON.stringify(opts?.command),
 			executionCapability: ctx?.executionCapability,
+			perCommandExecutionCapability: ctx?.perCommandExecutionCapability,
 		}
 	})
 }
@@ -411,15 +417,22 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD", () =>
 			const starts = captureStarts(harness.startSpy)
 			expect(starts.length).toBe(2)
 
-			// Job 0: real filesystem-create-only capability.
+			// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION01:
+			// Real authority flows through the typed per-command
+			// channel only -- NEVER via executionCapability. The
+			// legacy channel is CLEARED when a plan is present.
+			//
+			// Job 0: real filesystem-create-only capability on
+			// the per-command channel; legacy channel cleared.
 			expect(starts[0]?.command).toBe("/usr/bin/mktemp")
-			expect(starts[0]?.executionCapability).toEqual(realCap)
+			expect(starts[0]?.perCommandExecutionCapability).toEqual(realCap)
+			expect(starts[0]?.executionCapability).toBeUndefined()
 
-			// Job 1: NO capability (no fallback to tool-call slot,
-			// which was undefined anyway, but also no fallback to
-			// the per-command entry[1].executionCapability which
-			// is undefined).
+			// Job 1: NO capability on either channel -- no fallback
+			// to tool-call slot, no fallback to per-command entry[1]
+			// which is undefined.
 			expect(starts[1]?.command).toBe("printf harmless\n")
+			expect(starts[1]?.perCommandExecutionCapability).toBeUndefined()
 			expect(starts[1]?.executionCapability).toBeUndefined()
 		})
 
@@ -471,10 +484,15 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD", () =>
 			const starts = captureStarts(harness.startSpy)
 			expect(starts.length).toBe(2)
 
-			// Positional binding: even though both commands have
-			// identical text, the capability flows by commandIndex.
-			expect(starts[0]?.executionCapability).toEqual(realCapA)
-			expect(starts[1]?.executionCapability).toEqual(realCapB)
+			// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION01:
+			// Positional binding on the typed per-command channel:
+			// even though both commands have identical text, the
+			// capability flows by commandIndex. The legacy channel
+			// is CLEARED.
+			expect(starts[0]?.perCommandExecutionCapability).toEqual(realCapA)
+			expect(starts[1]?.perCommandExecutionCapability).toEqual(realCapB)
+			expect(starts[0]?.executionCapability).toBeUndefined()
+			expect(starts[1]?.executionCapability).toBeUndefined()
 		})
 	})
 

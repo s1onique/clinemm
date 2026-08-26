@@ -12,6 +12,7 @@ import type {
 import type { ModelInfo } from "./llms/model-info";
 import type {
 	CommandExecutionPlan,
+	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
 	ToolCallExecutionCapability,
@@ -404,6 +405,49 @@ export interface AgentToolContext {
 	 * path is allowed (synthetic transport compatibility only).
 	 */
 	commandExecutionPlan?: CommandExecutionPlan;
+	/**
+	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION01:
+	 *
+	 * Typed per-command authority channel -- the ONLY field that may
+	 * carry a real authority-bearing capability
+	 * (`filesystem-create-only`, ...) through the executor boundary
+	 * WITHOUT an assertion cast.
+	 *
+	 * Why a separate field? The reviewer of the prior GUARD commit
+	 * observed that putting the full `InternalExecutionCapability`
+	 * union into `AgentToolContext.executionCapability` (which is
+	 * narrowed to `ToolCallExecutionCapability`) would force an
+	 * `as AgentToolContext` cast at the executor boundary --
+	 * defeating the compile-time type split at the exact authority-
+	 * bearing seam.
+	 *
+	 * This field is the type-safe counterpart:
+	 *   `executionCapability`              -> factory-binding-probe only
+	 *   `perCommandExecutionCapability`   -> full InternalExecutionCapability
+	 *
+	 * Stamped by the executor ONLY when a per-command plan exists
+	 * and the plan entry carries a capability. NEVER stamped by the
+	 * runtime or by the host; this is the executor's typed output.
+	 *
+	 * Channel separation at the type system:
+	 *   no plan + factory probe      -> executionCapability = probe,
+	 *                                    perCommandExecutionCapability = undefined
+	 *   valid plan [fs, none]        -> executionCapability = undefined,
+	 *                                    perCommandExecutionCapability[0] = fs,
+	 *                                    perCommandExecutionCapability[1] = undefined
+	 *
+	 * Downstream consumers (`CommandJobManager.start`,
+	 * `CommandJob.executionCapability`, Seatbelt profile generator)
+	 * MUST read `context.perCommandExecutionCapability` and MUST NOT
+	 * widen `executionCapability` at the call site. The legacy
+	 * `executionCapability` field remains for synthetic transport
+	 * compatibility (factory-binding-probe only).
+	 *
+	 * The runtime guard at the executor boundary
+	 * (`real_execution_capability_requires_per_command_plan`) remains
+	 * unchanged: TypeScript alone is not a runtime security boundary.
+	 */
+	perCommandExecutionCapability?: InternalExecutionCapability;
 	snapshot?: AgentRuntimeStateSnapshot;
 	emitUpdate?: (update: unknown) => void;
 }

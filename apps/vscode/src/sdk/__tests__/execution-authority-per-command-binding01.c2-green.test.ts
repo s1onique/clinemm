@@ -235,6 +235,11 @@ function buildPerCommandHarness(params: {
 interface CapturedStart {
 	command: string | undefined
 	executionCapability: InternalExecutionCapability | undefined
+	// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION01:
+	// The per-command channel is the typed authority-bearing slot;
+	// captured here so tests can assert the typed-channel-separation
+	// contract (real authority flows here, never on executionCapability).
+	perCommandExecutionCapability: InternalExecutionCapability | undefined
 }
 
 function captureStarts(startSpy: ReturnType<typeof vi.spyOn>): CapturedStart[] {
@@ -244,6 +249,7 @@ function captureStarts(startSpy: ReturnType<typeof vi.spyOn>): CapturedStart[] {
 		return {
 			command: typeof opts?.command === "string" ? opts.command : JSON.stringify(opts?.command),
 			executionCapability: ctx?.executionCapability,
+			perCommandExecutionCapability: ctx?.perCommandExecutionCapability,
 		}
 	})
 }
@@ -295,9 +301,9 @@ describe("ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01 C2 GREEN", () 
 			const starts = captureStarts(harness.startSpy)
 			expect(starts).toHaveLength(2)
 			expect(starts[0]?.command).toBe("/usr/bin/mktemp")
-			expect(starts[0]?.executionCapability).toEqual(capA)
+			expect(starts[0]?.perCommandExecutionCapability).toEqual(capA)
 			expect(starts[1]?.command).toBe("printf harmless\n")
-			expect(starts[1]?.executionCapability).toBeUndefined()
+			expect(starts[1]?.perCommandExecutionCapability).toBeUndefined()
 		})
 
 		it("GREEN: [none, B] -> [none, B] -- reversed shape", async () => {
@@ -332,9 +338,9 @@ describe("ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01 C2 GREEN", () 
 			const starts = captureStarts(harness.startSpy)
 			expect(starts).toHaveLength(2)
 			expect(starts[0]?.command).toBe("printf harmless\n")
-			expect(starts[0]?.executionCapability).toBeUndefined()
+			expect(starts[0]?.perCommandExecutionCapability).toBeUndefined()
 			expect(starts[1]?.command).toBe("/usr/bin/mktemp")
-			expect(starts[1]?.executionCapability).toEqual(capB)
+			expect(starts[1]?.perCommandExecutionCapability).toEqual(capB)
 		})
 
 		it("GREEN: [A, none, C] -> [A, none, C] -- three-command mixed authority", async () => {
@@ -375,9 +381,9 @@ describe("ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01 C2 GREEN", () 
 			expect(result.status).toBe("completed")
 			const starts = captureStarts(harness.startSpy)
 			expect(starts).toHaveLength(3)
-			expect(starts[0]?.executionCapability).toEqual(capA)
-			expect(starts[1]?.executionCapability).toBeUndefined()
-			expect(starts[2]?.executionCapability).toEqual(capC)
+			expect(starts[0]?.perCommandExecutionCapability).toEqual(capA)
+			expect(starts[1]?.perCommandExecutionCapability).toBeUndefined()
+			expect(starts[2]?.perCommandExecutionCapability).toEqual(capC)
 		})
 
 		it("GREEN: duplicate text [git status, git status] -> A for index 0, B for index 1 (positional)", async () => {
@@ -418,9 +424,9 @@ describe("ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01 C2 GREEN", () 
 			const starts = captureStarts(harness.startSpy)
 			expect(starts).toHaveLength(2)
 			expect(starts[0]?.command).toBe("git status")
-			expect(starts[0]?.executionCapability).toEqual(capA)
+			expect(starts[0]?.perCommandExecutionCapability).toEqual(capA)
 			expect(starts[1]?.command).toBe("git status")
-			expect(starts[1]?.executionCapability).toEqual(capB)
+			expect(starts[1]?.perCommandExecutionCapability).toEqual(capB)
 		})
 
 		it("GREEN: tool-call capability is NOT used as fallback when plan is present", async () => {
@@ -461,12 +467,12 @@ describe("ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01 C2 GREEN", () 
 			expect(result.status).toBe("completed")
 			const starts = captureStarts(harness.startSpy)
 			expect(starts).toHaveLength(2)
-			expect(starts[0]?.executionCapability).toEqual(capA)
+			expect(starts[0]?.perCommandExecutionCapability).toEqual(capA)
 			// CRITICAL: command[1] has no per-command capability. It MUST
 			// NOT receive the tool-call capability. The plan wins; no
 			// fallback to tool-call.
-			expect(starts[1]?.executionCapability).toBeUndefined()
-			expect(starts[1]?.executionCapability).not.toEqual(toolCallCap)
+			expect(starts[1]?.perCommandExecutionCapability).toBeUndefined()
+			expect(starts[1]?.perCommandExecutionCapability).not.toEqual(toolCallCap)
 		})
 
 		it("GREEN: legacy path -- no plan present -> tool-call capability flows to all starts", async () => {
@@ -806,10 +812,10 @@ describe("ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01 C2 GREEN", () 
 			// capA (from the host's per-entry authorization); command[1]
 			// gets undefined.
 			expect(starts.length).toBe(2)
-			expect(starts[0]?.executionCapability).toEqual(capA)
+			expect(starts[0]?.perCommandExecutionCapability).toEqual(capA)
 			// CRITICAL: malicious metadata MUST NOT reach the typed slot.
-			expect(starts[0]?.executionCapability).not.toEqual(maliciousCap)
-			expect(starts[1]?.executionCapability).toBeUndefined()
+			expect(starts[0]?.perCommandExecutionCapability).not.toEqual(maliciousCap)
+			expect(starts[1]?.perCommandExecutionCapability).toBeUndefined()
 			void harness // silence unused
 		})
 

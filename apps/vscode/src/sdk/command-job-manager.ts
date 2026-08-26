@@ -693,7 +693,20 @@ export class CommandJobManager {
 		// the call-site `AgentToolContext.executionCapability`. This is
 		// the ONLY writer -- it is NEVER derived from `context.metadata`
 		// or any other partially-untrusted channel.
-		const jobExecutionCapability: InternalExecutionCapability | undefined = context?.executionCapability
+		//
+		// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+		// CORRECTION01 (typed-channel separation):
+		// Read from the typed per-command channel when present; the
+		// legacy tool-call channel is reserved for the synthetic
+		// `factory-binding-probe` capability (zero real authority)
+		// and must not be widened here. This honors the
+		// channel-separation contract: real authority-bearing
+		// variants (`filesystem-create-only`, ...) flow through
+		// `perCommandExecutionCapability` only.
+		const jobExecutionCapability: InternalExecutionCapability | undefined =
+			context?.perCommandExecutionCapability !== undefined
+				? context.perCommandExecutionCapability
+				: context?.executionCapability
 
 		const job: CommandJob = {
 			id,
