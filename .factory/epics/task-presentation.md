@@ -38,7 +38,7 @@
 
 ## Open work
 
-Three open items, all in the task-state presentation layer:
+Four open items, all in the task-state presentation layer:
 
 - **`ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01`** (L3339-3347). Symptom: static "Thinking ›" presentation can persist after runtime state is no longer thinking/streaming. Constraint: do not invent a second UI authority; use the canonical state/projection.
 - **`EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01`** (L3348-3356). Purpose: TaskHeader consumes canonical task-state projections rather than reconstructing state locally. Constraint: distinct from owner-aware timing (would lose it if folded).
