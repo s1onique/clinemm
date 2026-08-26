@@ -239,9 +239,12 @@ export {
 export type {
 	CommandExecutionPlan,
 	CommandExecutionPlanEntry,
+	FactoryBindingProbeCapability,
+	FilesystemCreateOnlyCapability,
 	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
+	ToolCallExecutionCapability,
 	ToolCallRecord,
 	ToolPolicy,
 } from "./llms/tools";

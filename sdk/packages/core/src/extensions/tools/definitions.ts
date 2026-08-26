@@ -217,6 +217,34 @@ async function executeShellCommands(
 		perCommandCaps = correlation.perCommandCapabilities;
 	}
 
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+	//
+	// Runtime enforcement that real authority-bearing capabilities
+	// CANNOT flow through the legacy tool-call channel. The legacy path
+	// (no plan present) is allowed to consume ONLY the synthetic
+	// `factory-binding-probe` capability (zero real authority) or no
+	// capability at all. Any other kind -- e.g.
+	// `filesystem-create-only` -- requires a per-command execution
+	// plan to be attached, because without a correlated plan we have
+	// no way to know which command the authority is meant for.
+	//
+	// TypeScript narrows the slot to `ToolCallExecutionCapability`
+	// (= `FactoryBindingProbeCapability`) at compile time, but a
+	// runtime guard is required because TypeScript is not a runtime
+	// security boundary (the value could be supplied via JSON
+	// deserialization, future code change, or a leaked path).
+	//
+	// On mismatch: FAIL CLOSED -- throw BEFORE any manager.start call.
+	// -------------------------------------------------------------------------
+	if (perCommandCaps === null && context.executionCapability !== undefined) {
+		if (context.executionCapability.kind !== "factory-binding-probe") {
+			throw new Error(
+				`real_execution_capability_requires_per_command_plan: tool-call capability kind=${JSON.stringify(context.executionCapability.kind)} requires a per-command execution plan; legacy tool-call channel only accepts factory-binding-probe`,
+			);
+		}
+	}
+
 	return Promise.all(
 		commands.map(async (command, i): Promise<ToolOperationResult> => {
 			const startedAt = Date.now();
@@ -228,9 +256,28 @@ async function executeShellCommands(
 				// MUST NOT fall back to the tool-call
 				// context.executionCapability when a plan exists -- that
 				// would recreate the leak.
+				//
+				// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+				// The per-command channel is the ONLY path that may carry
+				// real authority-bearing capabilities (e.g.
+				// `filesystem-create-only`). The per-command context
+				// widens `executionCapability` to the full
+				// `InternalExecutionCapability` union; the legacy
+				// `AgentToolContext` (whose `executionCapability` is
+				// narrowed to `ToolCallExecutionCapability` for compile-time
+				// defense) cannot represent this wider slot. The boundary
+				// is explicit here. The runtime guard at the top of this
+				// function has already enforced that the legacy
+				// `context.executionCapability` is either undefined or
+				// `factory-binding-probe` when no plan is present; here,
+				// when a plan IS present, the per-command slot IS the
+				// authority-bearing channel.
 				const perCommandContext: AgentToolContext =
 					perCommandCaps !== null
-						? { ...context, executionCapability: perCommandCaps[i] }
+						? ({
+								...context,
+								executionCapability: perCommandCaps[i],
+							} as AgentToolContext)
 						: context;
 				const output = await withTimeout(
 					executor(command, cwd, perCommandContext),

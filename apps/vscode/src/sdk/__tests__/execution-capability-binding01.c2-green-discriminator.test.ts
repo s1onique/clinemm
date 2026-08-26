@@ -37,6 +37,7 @@ import type {
 	AgentModelRequest,
 	AgentToolContext,
 	AgentToolRuntimeOutcomeHookContext,
+	FactoryBindingProbeCapability,
 	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
@@ -70,7 +71,7 @@ const EVIL_MARKER: InternalExecutionCapability = {
 	correlationId: "EVIL-MODEL-MARKER-DO-NOT-TRUST",
 }
 
-const TRUSTED_A: InternalExecutionCapability = {
+const TRUSTED_A: FactoryBindingProbeCapability = {
 	kind: "factory-binding-probe",
 	correlationId: "host-trusted-A",
 }
@@ -151,7 +152,7 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2 GREEN 
 		// host returns: TRUSTED_MARKER_A
 		// model emits:  toolCall.metadata.executionCapability = EVIL_MARKER_B
 		// expected:     AgentToolContext.executionCapability === TRUSTED_MARKER_A
-		const EVIL_B: InternalExecutionCapability = {
+		const EVIL_B: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "host-EVIL-B-from-model",
 		}
@@ -224,11 +225,11 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2 GREEN 
 		const captured: AgentToolContext[] = []
 		const tool = makeShellLikeTool(captured)
 
-		const MARKER_INV_A: InternalExecutionCapability = {
+		const MARKER_INV_A: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "inv-A",
 		}
-		const MARKER_INV_B: InternalExecutionCapability = {
+		const MARKER_INV_B: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "inv-B",
 		}

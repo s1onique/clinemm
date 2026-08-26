@@ -25,7 +25,7 @@
  * typed slot.
  */
 
-import type { AgentToolContext, InternalExecutionCapability } from "@cline/shared"
+import type { AgentToolContext, FactoryBindingProbeCapability } from "@cline/shared"
 import { describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
 import { createVscodeRunCommandsTool } from "../vscode-run-commands-tool"
@@ -66,7 +66,7 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2 GREEN 
 			backgroundExecutionDeadlineMs: 10_000,
 		}) as unknown as { execute: (input: unknown, ctx: AgentToolContext) => Promise<unknown> }
 
-		const marker: InternalExecutionCapability = {
+		const marker: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "invocation-A-correlation-1",
 		}
@@ -164,7 +164,7 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2 GREEN 
 			backgroundExecutionDeadlineMs: 10_000,
 		}) as unknown as { execute: (input: unknown, ctx: AgentToolContext) => Promise<unknown> }
 
-		const markerA: InternalExecutionCapability = {
+		const markerA: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "A",
 		}

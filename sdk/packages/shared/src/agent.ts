@@ -12,9 +12,9 @@ import type {
 import type { ModelInfo } from "./llms/model-info";
 import type {
 	CommandExecutionPlan,
-	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
+	ToolCallExecutionCapability,
 	ToolPolicy,
 } from "./llms/tools";
 import type { BasicLogger } from "./logging/logger";
@@ -365,8 +365,16 @@ export interface AgentToolContext {
 	 * union with literal `kind` discriminator; widening it requires
 	 * editing this file (not metadata). Tools MUST switch on `kind`
 	 * to consume the slot.
+	 *
+	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+	 * This field is typed as `ToolCallExecutionCapability` (a leaf
+	 * of `InternalExecutionCapability` containing only
+	 * `factory-binding-probe`). Real authority-bearing variants are
+	 * NOT reachable through this field at compile time. Real
+	 * authority flows via the per-command channel
+	 * (`commandExecutionPlan` slot below).
 	 */
-	executionCapability?: InternalExecutionCapability;
+	executionCapability?: ToolCallExecutionCapability;
 	/**
 	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
 	 *

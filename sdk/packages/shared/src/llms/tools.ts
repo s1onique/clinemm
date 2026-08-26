@@ -82,6 +82,44 @@ export interface ToolApprovalRequest {
 }
 
 /**
+ * FactoryBindingProbeCapability -- the synthetic zero-authority
+ * capability used by the binding seam proof.
+ *
+ * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01.
+ * Never authority-bearing; carries only a correlation identifier
+ * for RED/GREEN tests. Permitted to flow through the legacy
+ * tool-call channel (AgentToolContext.executionCapability,
+ * ToolApprovalResult.executionCapability) because it has no
+ * real-world authority to leak.
+ */
+export interface FactoryBindingProbeCapability {
+	readonly kind: "factory-binding-probe"
+	readonly correlationId: string
+}
+
+/**
+ * FilesystemCreateOnlyCapability -- REAL authority-bearing variant.
+ *
+ * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01:
+ *
+ * Grants create-only filesystem authority scoped to the listed
+ * `roots`. This is the first real authority-bearing variant in
+ * the union, which is why the C2 GUARD ACT enforces a strict
+ * rule: real authority MUST travel on a per-command plan entry,
+ * NEVER on the legacy tool-call channel.
+ *
+ * Kernel mapping (Darwin Seatbelt):
+ *   roots[i] -> (allow file-write-create (subpath "<root>"))
+ *
+ * This is a CLOSED leaf. Widening requires adding a new union
+ * member to `InternalExecutionCapability`.
+ */
+export interface FilesystemCreateOnlyCapability {
+	readonly kind: "filesystem-create-only"
+	readonly roots: ReadonlyArray<string>
+}
+
+/**
  * InternalExecutionCapability -- CLOSED runtime-owned authority slot.
  *
  * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
@@ -95,6 +133,14 @@ export interface ToolApprovalRequest {
  * is the only writer and only constructs values of an explicit
  * variant from the host's policy callback.
  *
+ * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+ * The legacy tool-call channel (`AgentToolContext.executionCapability`
+ * and `ToolApprovalResult.executionCapability`) is typed as
+ * `ToolCallExecutionCapability` (factory-binding-probe ONLY).
+ * Real authority-bearing variants (`filesystem-create-only`, ...)
+ * are reachable only via `CommandExecutionPlanEntry.executionCapability`
+ * and only after per-command plan correlation succeeds.
+ *
  * Provenance boundary (see metadata-provenance.md in the ACT):
  *   TRUSTED SOURCE:
  *     authorization/approval execution plan
@@ -102,17 +148,30 @@ export interface ToolApprovalRequest {
  *   UNTRUSTED / NON-AUTHORITATIVE:
  *     prepared.toolCall.metadata
  *       -> MUST NEVER populate typed slot
- *
- * The only current variant is the synthetic factory-binding probe
- * for the binding seam proof. Future variants (file-write-create
- * allowlists, network-egress scopes, etc.) are added here as new
- * union members, never by widening `Record<string, unknown>`.
  */
 export type InternalExecutionCapability =
-	| {
-			readonly kind: "factory-binding-probe"
-			readonly correlationId: string
-	  }
+	| FactoryBindingProbeCapability
+	| FilesystemCreateOnlyCapability
+
+/**
+ * ToolCallExecutionCapability -- the legacy tool-call channel union.
+ *
+ * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+ *
+ * Compile-time guarantee that the legacy tool-call slot cannot
+ * carry real authority. Only the synthetic factory-binding probe
+ * is permitted here. Real authority-bearing variants MUST travel
+ * on `CommandExecutionPlanEntry.executionCapability` (the
+ * per-command channel).
+ *
+ * Why a separate type? TypeScript type narrowing is the structural
+ * guarantee, but the runtime guard in
+ * `executeShellCommands` (sdk/packages/core/src/extensions/tools/definitions.ts)
+ * is the actual security boundary -- the runtime rejects any
+ * tool-call capability whose `kind` is not `"factory-binding-probe"`
+ * before fanout.
+ */
+export type ToolCallExecutionCapability = FactoryBindingProbeCapability
 
 export interface ToolApprovalResult {
 	approved: boolean;
@@ -131,8 +190,16 @@ export interface ToolApprovalResult {
 	 * runtime reads this field at the construction site
 	 * (agent-runtime.ts) and typechecks the value; untrusted
 	 * model/tool metadata CANNOT populate it.
+	 *
+	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+	 * This field is typed as `ToolCallExecutionCapability`
+	 * (factory-binding-probe only). Real authority-bearing
+	 * variants (`filesystem-create-only`, ...) are NOT reachable
+	 * through this field at compile time. Hosts that need to grant
+	 * real authority MUST do so via
+	 * `executionPlan.commands[i].executionCapability`.
 	 */
-	executionCapability?: InternalExecutionCapability;
+	executionCapability?: ToolCallExecutionCapability;
 	/**
 	 * Optional canonical decision from the host's command policy evaluator.
 	 *

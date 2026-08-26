@@ -30,12 +30,12 @@ import type {
 	CaptureTaskLifecycleEventInput,
 	CommandExecutionPlan,
 	ControlPlaneOutcome,
-	InternalExecutionCapability,
 	LiveAgentRuntimeEvent,
 	LiveAgentRuntimeStateSnapshot,
 	ProviderErrorClass,
 	TelemetryProperties,
 	ToolApprovalResult,
+	ToolCallExecutionCapability,
 	ToolPolicy,
 	ToolRuntimeOutcome,
 } from "@cline/shared";
@@ -323,8 +323,15 @@ interface PreparedToolExecution {
 	 * deliberately excluded from this slot. Stamped into
 	 * `AgentToolContext.executionCapability` at the construction site
 	 * in `executePreparedTool`.
+	 *
+	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GUARD:
+	 * This field is typed as `ToolCallExecutionCapability` (a leaf
+	 * containing only `factory-binding-probe`). Real authority-bearing
+	 * variants are NOT reachable here at compile time. Real authority
+	 * flows via the per-command channel (`commandExecutionPlan`
+	 * slot below).
 	 */
-	executionCapability?: InternalExecutionCapability;
+	executionCapability?: ToolCallExecutionCapability;
 	/**
 	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
 	 *
@@ -2477,7 +2484,7 @@ export class AgentRuntime {
 	 * from the host's policy callback result (the trusted channel);
 	 * NEVER read from `toolCall.metadata` (partially untrusted).
 	 */
-	let executionCapability: InternalExecutionCapability | undefined;
+	let executionCapability: ToolCallExecutionCapability | undefined;
 	/**
 	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
 	 *

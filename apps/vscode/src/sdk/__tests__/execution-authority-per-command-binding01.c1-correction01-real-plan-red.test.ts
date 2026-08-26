@@ -119,6 +119,7 @@ import type {
 	AgentToolContext,
 	AgentToolRuntimeOutcomeHookContext,
 	CommandExecutionPlan,
+	FactoryBindingProbeCapability,
 	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
@@ -165,7 +166,7 @@ class ScriptedModel implements AgentModel {
 	}
 }
 
-const TRUSTED_TOOL_CALL_CAPABILITY: InternalExecutionCapability = {
+const TRUSTED_TOOL_CALL_CAPABILITY: FactoryBindingProbeCapability = {
 	kind: "factory-binding-probe",
 	correlationId: "tool-call-c1-correction01",
 }
@@ -200,7 +201,7 @@ interface RealUpstreamHarness {
 function buildRealUpstreamHarness(params: {
 	commands: ReadonlyArray<string>
 	plan: CommandExecutionPlan
-	executionCapability: InternalExecutionCapability
+	executionCapability: FactoryBindingProbeCapability
 }): RealUpstreamHarness {
 	const approvalCalls: Array<{ input: unknown }> = []
 	const capturedStarts: CapturedStart[] = []

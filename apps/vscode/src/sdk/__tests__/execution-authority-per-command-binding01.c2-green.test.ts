@@ -108,6 +108,7 @@ import type {
 	AgentToolContext,
 	AgentToolRuntimeOutcomeHookContext,
 	CommandExecutionPlan,
+	FactoryBindingProbeCapability,
 	InternalExecutionCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
@@ -158,7 +159,7 @@ class ScriptedModel implements AgentModel {
 	}
 }
 
-function capProbe(correlationId: string): InternalExecutionCapability {
+function capProbe(correlationId: string): FactoryBindingProbeCapability {
 	return { kind: "factory-binding-probe", correlationId }
 }
 

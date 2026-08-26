@@ -47,7 +47,7 @@
  * PASS_WITH_REAL_CAPABILITY_GATE_PENDING.
  */
 
-import type { AgentToolContext, InternalExecutionCapability } from "@cline/shared"
+import type { AgentToolContext, FactoryBindingProbeCapability } from "@cline/shared"
 import { describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
 import { createVscodeRunCommandsTool } from "../vscode-run-commands-tool"
@@ -88,7 +88,7 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2-P1 / P
 			backgroundExecutionDeadlineMs: 10_000,
 		}) as unknown as { execute: (input: unknown, ctx: AgentToolContext) => Promise<unknown> }
 
-		const marker: InternalExecutionCapability = {
+		const marker: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "multi-cmd-p0-guard",
 		}
@@ -193,7 +193,7 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2-P1 / P
 			backgroundExecutionDeadlineMs: 10_000,
 		}) as unknown as { execute: (input: unknown, ctx: AgentToolContext) => Promise<unknown> }
 
-		const marker: InternalExecutionCapability = {
+		const marker: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "multi-cmd-empirical",
 		}
@@ -239,7 +239,7 @@ describe("ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 C2-P1 / P
 			backgroundExecutionDeadlineMs: 10_000,
 		}) as unknown as { execute: (input: unknown, ctx: AgentToolContext) => Promise<unknown> }
 
-		const marker: InternalExecutionCapability = {
+		const marker: FactoryBindingProbeCapability = {
 			kind: "factory-binding-probe",
 			correlationId: "multi-cmd-3",
 		}

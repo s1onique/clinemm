@@ -30,7 +30,7 @@ import type {
 	AgentModelRequest,
 	AgentToolContext,
 	AgentToolRuntimeOutcomeHookContext,
-	InternalExecutionCapability,
+	FactoryBindingProbeCapability,
 	ToolApprovalRequest,
 	ToolApprovalResult,
 } from "@cline/shared"
@@ -58,7 +58,7 @@ class ScriptedModel implements AgentModel {
 	}
 }
 
-const TRUSTED_MARKER: InternalExecutionCapability = {
+const TRUSTED_MARKER: FactoryBindingProbeCapability = {
 	kind: "factory-binding-probe",
 	correlationId: "upstream-c2-trusted-A",
 }
