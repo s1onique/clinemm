@@ -4,16 +4,17 @@
 
 ## Current status
 
-- Status: ACTIVE — closed substrate + open frontier (typecheck + coverage baselines)
+- Status: ACTIVE — closed substrate + open frontier (typecheck umbrella partially open at CI parity + code-coverage baseline still open)
 - Priority: P1 (quality-substrate; gates every other code change)
-- Current frontier: 2 OPEN items listed under "Open work" — `TYPECHECK-ZERO-BASELINE01` and `CODE-COVERAGE-BASELINE01`. The factorization work is closed at the intake phase; further Factorize waves are tracked in `.factory/epics/factory-infrastructure.md` (FACT-001..006 doctrine lives there).
+- Current frontier: 1 OPEN item at the strict-baseline level (`CODE-COVERAGE-BASELINE01`) + 1 OPEN remaining acceptance condition (`TYPECHECK-ZERO-BASELINE01` umbrella: CLOSED at local canonical seam, OPEN at CI parity — tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01`). The factorization work is closed at the intake phase; further Factorize waves are tracked in `.factory/epics/factory-infrastructure.md` (FACT-001..006 doctrine lives there).
 - Blocked by: n/a
 
 ## Contract / durable conclusions
 
 - **Vitest baseline is closed at zero failures.** `TEST-BASELINE-ZERO-FAILURES01` is the canonical gate: `bunx vitest run --config vitest.config.ts` returns `CANONICAL_VITEST_FAILURES=0`; `NEW_SKIPS_ADDED=0`. Any future regression breaks this gate.
 - **Runtime-task-progression is closed at the canonical seam** (three-stage: source-level fixes + CORRECTION02). Future CLOSED_LIVE upgrade is optional and may run when a live Cline-- extension host is available.
-- **Typecheck baseline is OPEN / HIGH.** `TYPECHECK-ZERO-BASELINE01` is the open gate. The recon behind it (`TYPECHECK-ZERO-BASELINE-RECON01`) is closed.
+- **Typecheck zero-baseline itself is CLOSED at the local canonical seam.** The verbatim source at L3777-3785 says: `STATUS: CLOSED at this commit (canonical tsc --noEmit -p apps/vscode/tsconfig.json GREEN twice, exit 0, 0 diagnostics)`; `Outcome: canonical tsc --noEmit exits 0 with 0 diagnostics; canonical vitest remains 1672/0`. The recon behind it (`ACT-CLINEMM-TYPECHECK-ZERO-BASELINE-RECON01`) is closed.
+- **Typecheck umbrella ACT retains an explicit remaining acceptance condition: CI parity.** The verbatim source at L3787 records `CI parity note: apps/vscode/package.json:check-types is the canonical local gate; .github/workflows/ext-vscode-test.yml does not currently gate the canonical tsc command. PARITY=PARTIAL — recorded under EPIC-CLINEMM-GITHUB-ACTIONS01 for future ACT.` Until that CI parity ACT lands, treat the typecheck gate as CLOSED for the local canonical seam and OPEN at CI parity, under the umbrella `TYPECHECK-ZERO-BASELINE01`.
 - **Code-coverage baseline is OPEN / HIGH.** `CODE-COVERAGE-BASELINE01` is the open gate. The ratchet ACT (`CODE-COVERAGE-RATCHET01`) is closed (with correction01, correction02); it enforces non-regression once the baseline is set.
 - **Factorize doctrine lives in `factory-infrastructure.md`.** This file owns the quality-substrate ACT family; the FACT-001..006 / FORK-001 / ELM-001 doctrine and the per-Fn waves (F0..F5) belong to the factory-infrastructure epic. The FACTORIZATION01 row here is a SUPERSEDED historical alias retained for context; the operational successor is `EPIC-CLINEMM-FACTORIZE01` (intake ACT `ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01`, 2026-08-21).
 
@@ -24,7 +25,7 @@
 |---|---|---|---|
 | `TEST-BASELINE-ZERO-FAILURES01` | CLOSED (canonical `vitest run` returns 1672 pass / 0 fail; `CANONICAL_VITEST_FAILURES=0`; `NEW_SKIPS_ADDED=0`) | L3648-3706 | Vitest baseline-zero-failures gate |
 | `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-LIVE-RECON01` | CLOSED (three-stage closure: source-level fixes end-to-end; optional future CLOSED_LIVE upgrade) | L3707-3766 | Runtime-task-progression at the canonical seam |
-| `TYPECHECK-ZERO-BASELINE01` | **OPEN / HIGH** | L3767-3788 | Typecheck zero-baseline gate |
+| `TYPECHECK-ZERO-BASELINE01` | **CLOSED at local canonical seam** (canonical `tsc --noEmit -p apps/vscode/tsconfig.json` exits 0 with 0 diagnostics) **/ OPEN at CI parity** (PARITY=PARTIAL — tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01`) | L3767-3788 | Typecheck zero-baseline gate (local: closed; CI: pending) |
 | `ACT-CLINEMM-TYPECHECK-ZERO-BASELINE-RECON01` | CLOSED | (under `TYPECHECK-ZERO-BASELINE01`) | Typecheck baseline recon |
 | `ACT-CLINEMM-TYPECHECK-BASELINE-RECON01` | CLOSED (advertised in the same section) | (under `TYPECHECK-ZERO-BASELINE01`) | Earlier typecheck recon baseline |
 | `CODE-COVERAGE-BASELINE01` | **OPEN / HIGH** | L3789-3807 | Code-coverage baseline gate |
@@ -34,15 +35,16 @@
 
 ## Open work
 
-Two open items:
+One and a half open items (the half is a clear remaining acceptance condition):
 
-- **`TYPECHECK-ZERO-BASELINE01`** (L3767-3788). Status: OPEN / HIGH. The recon behind it is closed; the gate itself is not yet zero. Reopen / new-work conditions: a future typecheck regression on the canonical `tsc --noEmit -p apps/vscode/tsconfig.json` (the gate is GREEN twice on prior commit; future runs must also exit 0 with 0 diagnostics).
-- **`CODE-COVERAGE-BASELINE01`** (L3789-3807). Status: OPEN / HIGH. The ratchet ACT is closed and ready to enforce non-regression once the baseline is set; the baseline itself is not yet fixed.
+- **`TYPECHECK-ZERO-BASELINE01`** (L3767-3788). Status: **CLOSED at local canonical seam** (canonical `tsc --noEmit -p apps/vscode/tsconfig.json` exits 0 with 0 diagnostics); **OPEN at CI parity** (PARITY=PARTIAL — `apps/vscode/package.json:check-types` is the local gate; `.github/workflows/ext-vscode-test.yml` does not currently gate the canonical tsc command — tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01` for a future ACT).
+- **`CODE-COVERAGE-BASELINE01`** (L3789-3807). Status: **OPEN / HIGH**. The ratchet ACT (`CODE-COVERAGE-RATCHET01`) is closed and ready to enforce non-regression once the baseline is set; the baseline itself is not yet fixed.
 
 Reopen / new-work conditions:
 
 - Vitest baseline regresses (any failure count > 0).
 - Runtime-task-progression defect reproduces at the canonical seam.
+- Typecheck baseline regresses on the canonical `tsc --noEmit -p apps/vscode/tsconfig.json` (the gate is GREEN twice on prior commit; future runs must also exit 0 with 0 diagnostics).
 - Code-coverage baseline moves without an explicit ACT authorizing the move.
 
 ## Deferred work

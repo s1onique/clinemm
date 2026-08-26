@@ -4,7 +4,7 @@
 
 ## Current status
 
-- Status: CLOSED family (the generation-fence repair is bounded and live; the queued-prompt integrity work is bounded; the bug-family closure is a structural statement of how to recognize this class of bug in future reviews)
+- Status: CLOSED family (the generation-fence repair is bounded; the queued-prompt integrity work is bounded; the bug-family closure is a structural statement of how to recognize this class of bug in future reviews. The "live" qualification against a live Cline-- extension host is not asserted here — the source-verbatim is "bounded generation-fence repair landed"; exact-head LIVE qualification = pending)
 - Priority: P1 (production-correctness substrate for message-coordinator interactions)
 - Current frontier: see board row 22 (`CLASSIC-PROTECTION-RECON01`) for the unblocked next-frontier after Safe-YOLO closure; task-control-liveness work is in the historical substrate
 - Blocked by: n/a
