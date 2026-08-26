@@ -107,15 +107,28 @@ export async function getSandboxBackend(
 /**
  * Convenience: build the opt-in argument from environment variables.
  *
- * The only supported opt-in knob today is `CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt`.
- * Any other value (or unset) means "not opted in" → `getSandboxBackend`
- * returns `undefined` for experimental modes → executor fails closed.
+ * ACT-CLINEMM-SEATBELT-DEFAULT-ON01 — CORRECTION02: this helper
+ * preserves its historical opt-in-only semantics so that ALL
+ * non-ClineMM-VS-Code SDK consumers (CLI, JetBrains, SDK embeddings,
+ * non-darwin hosts) keep their prior behavior.
+ *
+ * The "default-on for darwin" semantics is NOT applied here. The
+ * default-on behavior lives in the ClineMM-VS-Code-side selector
+ * (`resolveExperimentalSandboxMode` in
+ * `apps/vscode/src/sdk/sandbox-policy.ts`) and is propagated to the
+ * dispatcher by `apps/vscode/src/sdk/sandbox-policy.ts::defaultSandboxBackendResolver`,
+ * which constructs the opt-in argument explicitly once the VS Code
+ * selector chose Seatbelt. This keeps the shared SDK helper narrowly
+ * scoped to its historical consumers.
+ *
+ * Historical semantics:
+ *   - `CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt` → opt-in
+ *   - everything else (unset, "", "off", garbage) → `undefined`
  *
  * This function never throws and is safe to call at startup.
  */
 export function readExperimentalSandboxOptIn(): SandboxBackendOptIn | undefined {
 	const raw = process.env.CLINEMM_EXPERIMENTAL_SANDBOX;
-	if (typeof raw !== "string") return undefined;
 	if (raw === "seatbelt") {
 		return { mode: "seatbelt-experimental" };
 	}

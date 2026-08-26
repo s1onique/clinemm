@@ -12,8 +12,12 @@
  * ===========================================================================
  *
  * Production default: `defaultSandboxBackendResolver` wraps
- * `getSandboxBackend` from `@cline/core` and honors the
- * `CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt` opt-in env var.
+ * `getSandboxBackend` from `@cline/core`. The ClineMM-side selector
+ * (`resolveExperimentalSandboxMode`) is now SECURE-BY-DEFAULT on
+ * darwin hosts: unset / `""` / `"seatbelt"` all resolve to
+ * `"seatbelt-experimental"`. The only recognized opt-out is the
+ * explicit break-glass `CLINEMM_EXPERIMENTAL_SANDBOX=off`. See
+ * `ACT-CLINEMM-SEATBELT-DEFAULT-ON01`.
  *
  * Tests inject a custom resolver to:
  *   - Force substrate-unavailable (returns undefined)
@@ -59,7 +63,6 @@ import { homedir } from "node:os"
 import {
 	type CommandCapability,
 	getSandboxBackend,
-	readExperimentalSandboxOptIn,
 	SAFE_ENVIRONMENT_BASELINE,
 	type SandboxBackend,
 	type SandboxMode,
@@ -79,23 +82,92 @@ import {
 export type SandboxBackendResolver = (mode: SandboxMode) => Promise<SandboxBackend | undefined>
 
 /**
- * The current experimental opt-in knob. Today this is the only
- * recognized opt-in source.
+ * ACT-CLINEMM-SEATBELT-DEFAULT-ON01 — ClineMM VS Code Seatbelt selector.
  *
- * Returns `undefined` when the env var is unset, when the value is
- * unrecognized (only `"seatbelt"` is recognized), or when the value is
- * a fuzzy truthy that does not match the exact expected form.
+ * The recognized values of `CLINEMM_EXPERIMENTAL_SANDBOX`:
  *
- * Any unrecognized or absent opt-in MUST be treated as `disabled`
- * (DEFAULT_OFF). The executor never falls back from disabled to
- * sandboxed based on inferred intent.
+ *   Darwin host:
+ *
+ *     unset / `""` / `"seatbelt"` → `"seatbelt-experimental"`
+ *       (secure default; the legacy opt-in string is still honored as
+ *       an explicit / synonymous declaration of the same intent)
+ *
+ *     `"off"`                     → `undefined`
+ *       (deliberate break-glass — classic execution)
+ *
+ *     any other non-empty string  → THROWS `InvalidSandboxConfigurationError`
+ *       (fail closed: a misspelled env var must NOT silently disable
+ *       Seatbelt; the user gets a clear configuration error instead
+ *       of a quietly-disarmed sandbox)
+ *
+ *   Non-darwin host:
+ *
+ *     unset / `""`                → `undefined`
+ *       (classic execution — there is no Seatbelt substrate to default
+ *       to)
+ *
+ *     `"off"`                     → `undefined`
+ *       (classic execution — explicit break-glass)
+ *
+ *     `"seatbelt"`                → THROWS `InvalidSandboxConfigurationError`
+ *       (fail closed: Seatbelt is not available on this substrate;
+ *       silently falling back to classic execution would defeat the
+ *       operator's explicit request for sandboxing)
+ *
+ *     any other non-empty string  → THROWS `InvalidSandboxConfigurationError`
+ *       (fail closed for the same reason)
+ *
+ * `CLINE_SANDBOX` is intentionally NOT read here. It is a CLI-side
+ * variable with no production reach into the VS Code extension or the
+ * SDK it consumes (see
+ * `.factory/acts/se-001-phase0-cline-sandbox-ownership-freeze.md`).
+ * Mapping it to Seatbelt would create a false alias and a silent
+ * escape hatch via `CLINE_SANDBOX=0`.
  */
 export function resolveExperimentalSandboxMode(): SandboxMode | undefined {
-	const optIn = readExperimentalSandboxOptIn()
-	if (!optIn) {
+	const raw = process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+
+	if (process.platform !== "darwin") {
+		if (raw === undefined || raw === "") {
+			return undefined
+		}
+		if (raw === "off") {
+			return undefined
+		}
+		throw new InvalidSandboxConfigurationError(
+			`CLINEMM_EXPERIMENTAL_SANDBOX=${JSON.stringify(raw)} is not supported on platform '${process.platform}'. ` +
+				`Seatbelt is darwin-only. Use 'off' or unset the variable to run in classic mode.`,
+		)
+	}
+
+	// Darwin path.
+	if (raw === "off") {
 		return undefined
 	}
-	return optIn.mode
+	if (raw === undefined || raw === "" || raw === "seatbelt") {
+		return "seatbelt-experimental"
+	}
+	throw new InvalidSandboxConfigurationError(
+		`Invalid CLINEMM_EXPERIMENTAL_SANDBOX value: ${JSON.stringify(raw)}. ` +
+			`Recognized values on darwin: unset, '' (empty), 'seatbelt', 'off'.`,
+	)
+}
+
+/**
+ * Thrown by {@link resolveExperimentalSandboxMode} when the env var
+ * holds a value the selector cannot honor. Distinct error class so
+ * upstream callers (the executor / command-job-manager) can
+ * distinguish a configuration mistake from a substrate failure
+ * (`SandboxError`) and from a runtime backend crash.
+ *
+ * ACT-CLINEMM-SEATBELT-DEFAULT-ON01 — fail closed on garbage
+ * configuration. A typo must never silently disable Seatbelt.
+ */
+export class InvalidSandboxConfigurationError extends Error {
+	override readonly name = "InvalidSandboxConfigurationError"
+	constructor(message: string) {
+		super(message)
+	}
 }
 
 /**
@@ -430,27 +502,49 @@ export function resolveSafeYoloSensitiveReadDenials(): readonly string[] {
 }
 
 /**
- * Production default resolver. Returns the Seatbelt backend iff:
- *   1. mode === "seatbelt-experimental"
- *   2. opt-in env is recognized
- *   3. Seatbelt substrate is available (cached availability probe)
+ * Production default resolver for the ClineMM VS Code extension.
+ *
+ * ACT-CLINEMM-SEATBELT-DEFAULT-ON01 (CORRECTION02): the VS Code-side
+ * selector (`resolveExperimentalSandboxMode`) is the SOLE authority
+ * for whether Seatbelt is the active mode. Once that selector chose
+ * `"seatbelt-experimental"` (which is now the secure default on
+ * darwin when the env var is unset / empty / "seatbelt"), the
+ * resolver EXPLICITLY supplies the opt-in argument to the dispatcher
+ * — it does NOT consult the shared SDK helper
+ * `readExperimentalSandboxOptIn()`, which intentionally preserves
+ * its historical opt-in-only semantics for non-VS-Code consumers
+ * (CLI, JetBrains, SDK embeddings, non-darwin hosts).
+ *
+ * Returning a Seatbelt backend in this resolver never falls back to
+ * classic execution; the executor takes the prepared invocation as
+ * the only authoritative source. The shared SDK helper is therefore
+ * not on the hot path for the VS Code extension.
+ *
+ * Returns the Seatbelt backend iff:
+ *   1. mode === "seatbelt-experimental" (the only mode that ever
+ *      reaches this resolver, since `resolveExperimentalSandboxMode`
+ *      is the single upstream caller in `CommandJobManager.start`)
+ *   2. Seatbelt substrate is available (cached availability probe
+ *      inside `getSandboxBackend`)
  *
  * Returns `undefined` otherwise. Never throws.
  */
 export const defaultSandboxBackendResolver: SandboxBackendResolver = async (mode) => {
 	if (mode === "disabled") {
-		// Disabled mode → no backend. The executor takes the legacy path.
+		// The VS Code selector returned undefined (classic path).
+		// No backend; the executor takes the legacy path.
 		return undefined
 	}
 	if (mode === "seatbelt-experimental") {
-		const optIn = readExperimentalSandboxOptIn()
-		if (!optIn) {
-			// Opt-in gate: env var wasn't set to "seatbelt".
-			return undefined
-		}
-		return await getSandboxBackend(mode, optIn)
+		// ACT-CLINEMM-SEATBELT-DEFAULT-ON01 CORRECTION02: the VS Code
+		// selector chose Seatbelt. Authorize the backend explicitly by
+		// passing the opt-in argument directly, NOT via the shared SDK
+		// helper (which keeps historical opt-in-only semantics for CLI /
+		// JetBrains / SDK embeddings).
+		return await getSandboxBackend(mode, { mode: "seatbelt-experimental" })
 	}
-	// Unknown mode (defensive).
+	// Unknown mode (defensive). Never reached today, but guard against
+	// a future selector expansion.
 	return undefined
 }
 

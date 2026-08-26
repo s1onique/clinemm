@@ -53,14 +53,22 @@ afterEach(() => {
 })
 
 // --------------------------------------------------------------------------
-// (a) Conservation witnesses: the DEFAULT_OFF behavior MUST remain
-//     byte-equivalent after C2 wiring. These tests PASS today and MUST
-//     continue to PASS after every subsequent ACT.
+// (a) Conservation witnesses: ACT-CLINEMM-SEATBELT-DEFAULT-ON01 rewrote
+//     the selector to be SECURE-BY-DEFAULT on darwin hosts. The previous
+//     C2 contract ("DEFAULT_OFF when env is unset") is intentionally
+//     RETIRED. The tests in this block now pin the NEW conservation
+//     contract:
+//       - explicit `CLINEMM_EXPERIMENTAL_SANDBOX=off` is the only way to
+//         reach classic execution on darwin;
+//       - unknown values THROW (fail closed; they must NOT silently
+//         disable Seatbelt);
+//       - the parent env var reaches the child ONLY when classic is
+//         explicitly selected.
 // --------------------------------------------------------------------------
 
-describe("DEFAULT_OFF conservation (C2 invariance)", () => {
-	it("no sandbox opt-in: seeded parent env var reaches the child", async () => {
-		await withSandboxOptIn(undefined, async () => {
+describe("ACT-CLINEMM-SEATBELT-DEFAULT-ON01: opt-out + fail-closed conservation", () => {
+	it("explicit opt-out (off): seeded parent env var reaches the child", async () => {
+		await withSandboxOptIn("off", async () => {
 			process.env[PROD_LEAK_VAR] = "PLAINTEXT-LEAK-OK"
 			const manager = new CommandJobManager()
 			try {
@@ -79,19 +87,18 @@ describe("DEFAULT_OFF conservation (C2 invariance)", () => {
 		})
 	})
 
-	it("invalid opt-in value: still DEFAULT_OFF", async () => {
+	it("invalid opt-in value: selector throws (fail closed; classic is NOT silently selected)", async () => {
 		await withSandboxOptIn("1", async () => {
 			const manager = new CommandJobManager()
 			try {
-				const start = await manager.start({
-					command: `/bin/sh -c 'printf "ok\\n"'`,
-					cwd: process.cwd(),
-					waitBudgetMs: 5_000,
-					executionDeadlineMs: 5_000,
-				})
-				expect(start.state).toBe("exited")
-				expect(start.exitCode).toBe(0)
-				expect(start.stdout).toContain("ok")
+				await expect(
+					manager.start({
+						command: `/bin/sh -c 'printf "ok\\n"'`,
+						cwd: process.cwd(),
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
+					}),
+				).rejects.toThrow(/Invalid CLINEMM_EXPERIMENTAL_SANDBOX/)
 			} finally {
 				await manager.dispose()
 			}
@@ -380,20 +387,20 @@ describe("real production seam: prepared cwd reaches the spawned child", () => {
 		}
 	})
 
-	it("DEFAULT_OFF (no opt-in): supervisor uses caller's cwd unchanged", async () => {
+	it("explicit opt-out (off): supervisor uses caller's cwd unchanged", async () => {
 		const { mkdtempSync, rmSync } = await import("node:fs")
 		const { tmpdir } = await import("node:os")
 		const { join } = await import("node:path")
 
 		const callerCwd = mkdtempSync(join(tmpdir(), "clinemm-cwd-default-off-"))
 		try {
-			// No injected resolver: production default. With no opt-in
-			// env, `resolveExperimentalSandboxMode()` returns undefined
-			// and the executor skips the sandbox path entirely. The
-			// supervisor receives the caller's cwd.
+			// ACT-CLINEMM-SEATBELT-DEFAULT-ON01: classic execution is now
+			// reached ONLY via the explicit `CLINEMM_EXPERIMENTAL_SANDBOX=off`
+			// break-glass. Unset env defaults to Seatbelt. The supervisor
+			// receives the caller's cwd unchanged when classic is selected.
 			const manager = new CommandJobManager()
 			try {
-				await withSandboxOptIn(undefined, async () => {
+				await withSandboxOptIn("off", async () => {
 					const start = await manager.start({
 						command: "/bin/sh -c 'pwd'",
 						cwd: callerCwd,
@@ -557,7 +564,7 @@ describe("wiring sanity", () => {
 		}
 	})
 
-	it("resolver is NOT invoked when opt-in is absent", async () => {
+	it("resolver is NOT invoked when explicit opt-out (off) is selected", async () => {
 		let callCount = 0
 		const manager = new CommandJobManager({
 			sandboxBackendResolver: async (_mode: SandboxMode) => {
@@ -566,7 +573,7 @@ describe("wiring sanity", () => {
 			},
 		})
 		try {
-			await withSandboxOptIn(undefined, async () => {
+			await withSandboxOptIn("off", async () => {
 				await manager.start({
 					command: `/bin/sh -c 'echo ok'`,
 					cwd: process.cwd(),

@@ -57,7 +57,7 @@ describe("getSandboxBackend — seatbelt-experimental WITHOUT opt-in", () => {
 	});
 });
 
-describe("readExperimentalSandboxOptIn", () => {
+describe("readExperimentalSandboxOptIn (ACT-CLINEMM-SEATBELT-DEFAULT-ON01 CORRECTION02)", () => {
 	const originalEnv = process.env.CLINEMM_EXPERIMENTAL_SANDBOX;
 	afterEach(() => {
 		if (originalEnv === undefined) {
@@ -67,16 +67,32 @@ describe("readExperimentalSandboxOptIn", () => {
 		}
 	});
 
-	it("returns undefined when env var is unset", () => {
+	// ACT-CLINEMM-SEATBELT-DEFAULT-ON01 CORRECTION02: this helper
+	// preserves its HISTORICAL opt-in-only semantics. The "default-on"
+	// behavior lives in `apps/vscode/src/sdk/sandbox-policy.ts`.
+	// These tests pin the conservation contract: shared SDK helper
+	// behavior is unchanged for ALL consumers.
+
+	it("returns undefined when env var is unset (shared SDK conservation)", () => {
 		delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX;
 		expect(readExperimentalSandboxOptIn()).toBeUndefined();
 	});
 
-	it("returns undefined when env var is set to an unsupported value", () => {
-		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "vm";
-		expect(readExperimentalSandboxOptIn()).toBeUndefined();
+	it("returns undefined when env var is empty", () => {
 		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "";
 		expect(readExperimentalSandboxOptIn()).toBeUndefined();
+	});
+
+	it("returns undefined when env var is 'off'", () => {
+		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off";
+		expect(readExperimentalSandboxOptIn()).toBeUndefined();
+	});
+
+	it("returns undefined when env var is set to an unsupported value", () => {
+		for (const v of ["vm", "1", "true", "Seatbelt", "ALLOW", "offish"]) {
+			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = v;
+			expect(readExperimentalSandboxOptIn()).toBeUndefined();
+		}
 	});
 
 	it("returns the seatbelt-experimental opt-in when env var is 'seatbelt'", () => {

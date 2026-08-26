@@ -79,9 +79,10 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural", () => {
 		expect(cap.network).toBe("allow")
 	})
 
-	it("CLINEMM_SAFE_YOLO_NETWORK=allow WITHOUT Seatbelt opt-in: still 'deny'", () => {
-		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = ""
-		delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+	it("CLINEMM_SAFE_YOLO_NETWORK=allow WITHOUT Seatbelt opt-in (off): still 'deny'", () => {
+		// ACT-CLINEMM-SEATBELT-DEFAULT-ON01: classic execution is now
+		// reachable only via the explicit `CLINEMM_EXPERIMENTAL_SANDBOX=off`.
+		process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
 		process.env.CLINEMM_SAFE_YOLO_NETWORK = "allow"
 		expect(resolveSafeYoloNetworkOptIn()).toBeUndefined()
 		const cap = buildExperimentalReconCapability({ cwd: "/tmp", workspaceRoots: [] })

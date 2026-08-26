@@ -216,15 +216,15 @@ export interface CommandJobManagerOptions {
 	sandboxBackendResolver?: SandboxBackendResolver
 	/**
 	 * ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
-	 * Canonical absolute paths treated as WRITE-confined regions in
-	 * the experimental Wave-1 capability. Each invocation under
-	 * `CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt` builds a capability
-	 * with these as `readonlyRoots` (write-deny regions in Seatbelt).
+	 * Canonical absolute paths treated as WRITE-allowed regions in
+	 * the Wave-1 capability. Each invocation under Seatbelt (the new
+	 * ACT-CLINEMM-SEATBELT-DEFAULT-ON01 default) builds a capability
+	 * with these as `writableRoots` (Seatbelt write-allow regions).
 	 *
 	 * Optional. When omitted, the Wave-1 capability has empty
-	 * `readonlyRoots` (broad-read default; no workspace writes
-	 * protected from the kernel side). Production host code is
-	 * responsible for supplying the actual workspace roots.
+	 * `writableRoots` (no workspace writes protected from the kernel
+	 * side). Production host code is responsible for supplying the
+	 * actual workspace roots.
 	 */
 	experimentalSandboxWorkspaceRoots?: readonly string[]
 }
@@ -530,18 +530,26 @@ export class CommandJobManager {
 
 		// ----------------------------------------------------------------
 		// ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01:
-		// Experimental opt-in integration. DEFAULT_OFF is preserved by
-		// `resolveExperimentalSandboxMode()` returning `undefined` for
-		// any unset, invalid, or unrecognized value — the legacy path
-		// below is byte-equivalent to pre-integration behavior.
+		// Experimental opt-in integration.
 		//
-		// Fail-closed contract (P0 invariant):
-		//   - opt-in absent      → legacy path (no behavior change)
-		//   - opt-in + no backend → sandbox-unavailable, no spawn
-		//   - opt-in + prepare throws → fail-closed, no spawn
-		//   - opt-in + prepare ok → use prepared invocation as-is
-		//                          (executable/args/cwd/env come from
-		//                          the backend, NOT from the original)
+		// ACT-CLINEMM-SEATBELT-DEFAULT-ON01: the contract changed from
+		// DEFAULT_OFF to SECURE-BY-DEFAULT on darwin. `resolveExperimental
+		// SandboxMode()` returns `"seatbelt-experimental"` for any unset,
+		// empty, or "seatbelt" value, and `undefined` ONLY for the
+		// explicit break-glass `CLINEMM_EXPERIMENTAL_SANDBOX=off`.
+		// Unknown values now THROW `InvalidSandboxConfigurationError`
+		// (fail closed; a typo must never silently disable Seatbelt).
+		//
+		// Fail-closed contract (P0 invariant, ACT-CLINEMM-SEATBELT-DEFAULT-ON01):
+		//   - default (unset / "" / "seatbelt") → seatbelt path
+		//   - "off"                              → legacy path (break-glass)
+		//   - selector throws InvalidSandboxConfig → bubble out (no spawn)
+		//   - seatbelt + no backend              → sandbox-unavailable, no spawn
+		//   - seatbelt + prepare throws          → fail-closed, no spawn
+		//   - seatbelt + prepare ok              → use prepared invocation as-is
+		//                                        (executable/args/cwd/env come
+		//                                        from the backend, NOT from the
+		//                                        original)
 		// ----------------------------------------------------------------
 		const sandboxMode = resolveExperimentalSandboxMode()
 		let preparedEnvSemantics: "overlay" | "complete" | undefined

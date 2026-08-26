@@ -385,22 +385,36 @@ fi
 		})
 	})
 
-	// DEFAULT-OFF CONSERVATION (spec §39)
+	// ACT-CLINEMM-SEATBELT-DEFAULT-ON01: spec §39 was "default off".
+	// The new contract is SECURE-BY-DEFAULT: unset env now activates
+	// Seatbelt. Classic execution is reachable ONLY via the explicit
+	// break-glass `CLINEMM_EXPERIMENTAL_SANDBOX=off`. This block pins
+	// the new behavior.
 	// -------------------------------------------------------------------------
-	describe("DEFAULT-OFF conservation (spec §39)", () => {
-		it("without CLINEMM_EXPERIMENTAL_SANDBOX: mktemp runs unsandboxed and succeeds", async () => {
+	describe("ACT-CLINEMM-SEATBELT-DEFAULT-ON01: explicit-opt-out classic path", () => {
+		it("with CLINEMM_EXPERIMENTAL_SANDBOX=off: mktemp runs unsandboxed and succeeds", async () => {
 			if (!darwinHost || !canonicalDarwinRoot) {
 				expect(true).toBe(true)
 				return
 			}
+			// ACT-CLINEMM-SEATBELT-DEFAULT-ON01 CORRECTION02: this test
+			// asserts that mktemp runs UNSANDBOXED on `off`. Even though
+			// the Seatbelt backend is bypassed, mktemp still needs to
+			// perform a real mkdtemp() syscall — which the host may itself
+			// refuse if it is sandboxed (e.g. CI runners). Skip when the
+			// production substrate is unavailable, matching the
+			// HOST_REQUIRED convention from earlier ACTs.
+			if (!(await isSeatbeltAvailable())) {
+				expect(true).toBe(true)
+				return
+			}
 
-			// Turn off the opt-in for this test
-			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = ""
-			delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+			// Explicit opt-out: only `off` reaches the classic path.
+			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
 
-			// Build a manager with DEFAULT_OFF resolver: it returns
-			// undefined for any mode that isn't "seatbelt-experimental"
-			// AND has the env var set.
+			// Build a manager with a resolver that returns undefined
+			// for `disabled` (the only mode the selector returns now)
+			// and the production Seatbelt backend otherwise.
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async (mode) => {
 					if (mode === "disabled") return undefined
@@ -418,7 +432,7 @@ fi
 					executionDeadlineMs: 10_000,
 				},
 				{
-					agentId: "c2-default-off",
+					agentId: "c2-explicit-off",
 					iteration: 0,
 				},
 			)
@@ -426,8 +440,8 @@ fi
 			const status = await manager.status({ jobId: startResult.jobId, waitMs: 0 })
 			if (!status.ok) throw new Error(`status code=${status.code}`)
 
-			// DEFAULT_OFF path: mktemp runs unsandboxed, exit 0, file
-			// created. (The NoSandboxBackend path.)
+			// Explicit-opt-out path: mktemp runs unsandboxed, exit 0,
+			// file created. (The NoSandboxBackend path.)
 			expect(status.snapshot.exitCode).toBe(0)
 			const out = status.snapshot.stdout.trim()
 			expect(out).toMatch(/^\/var\/folders\//)
@@ -435,6 +449,21 @@ fi
 			try {
 				rmSync(out, { force: true })
 			} catch {}
+		})
+
+		it("without CLINEMM_EXPERIMENTAL_SANDBOX (unset): selector resolves to Seatbelt and the kernel applies the profile", async () => {
+			if (!darwinHost || !canonicalDarwinRoot) {
+				expect(true).toBe(true)
+				return
+			}
+			// Sanity probe: with the new default-on contract, unset env
+			// must produce Seatbelt. The actual EPERM behavior is
+			// covered by the capability tests above; here we only
+			// verify the selector returns `seatbelt-experimental`.
+			const { resolveExperimentalSandboxMode } = await import("../sandbox-policy")
+			process.env.CLINEMM_EXPERIMENTAL_SANDBOX = ""
+			delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
+			expect(resolveExperimentalSandboxMode()).toBe("seatbelt-experimental")
 		})
 	})
 
