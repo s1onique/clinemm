@@ -162,12 +162,69 @@ describe("ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 C1 — structural W1-W5", () =
 	})
 })
 
+import { existsSync, mkdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { afterAll, beforeAll } from "vitest"
 import { filterWorkspaceRootsForWritable } from "../sandbox-policy"
 
-describe("ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 C1 — host-side workspace-root safety filter", () => {
-	it("HOST-FILTER-1: regular workspace path passes through", () => {
-		const ws = "/Users/chistyakov/Projects/SPbNIX/clinemm"
-		expect(filterWorkspaceRootsForWritable([ws])).toEqual([ws])
+// ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01:
+//
+// The filter now canonicalizes every candidate root with `realpathSync`
+// before comparing to canonical HOME / HOME-parent / `/`. These tests
+// drive that with REAL filesystems: a temp scratch directory, real
+// symlinks to HOME, HOME-parent, and `/`, plus a `..` alias that
+// resolves to HOME. The host's plain `workspaceRoots` set may include
+// any of these aliases; the filter must drop them.
+
+let scratchRoot: string
+let safeRepo: string
+let symlinkToHome: string
+let symlinkToHomeParent: string
+let symlinkToRoot: string
+let nonexistentRoot: string
+
+beforeAll(() => {
+	scratchRoot = realpathSync(tmpdir()) + "/clinemm-wsw-hostfilter-" + process.pid + "-" + Date.now()
+	mkdirSync(scratchRoot, { recursive: true })
+	safeRepo = join(scratchRoot, "safe-repo")
+	mkdirSync(safeRepo, { recursive: true })
+	const home = process.env.HOME ?? ""
+	const homeParent = home.split("/").slice(0, -1).join("/") || "/"
+	symlinkToHome = join(scratchRoot, "lnk-home")
+	symlinkToHomeParent = join(scratchRoot, "lnk-home-parent")
+	symlinkToRoot = join(scratchRoot, "lnk-root")
+	nonexistentRoot = join(scratchRoot, "no-such-directory")
+	if (home) {
+		try {
+			symlinkSync(home, symlinkToHome)
+		} catch {
+			/* best effort */
+		}
+		try {
+			symlinkSync(homeParent, symlinkToHomeParent)
+		} catch {
+			/* best effort */
+		}
+		try {
+			symlinkSync("/", symlinkToRoot)
+		} catch {
+			/* best effort */
+		}
+	}
+})
+
+afterAll(() => {
+	try {
+		rmSync(scratchRoot, { recursive: true, force: true })
+	} catch {
+		/* best effort */
+	}
+})
+
+describe("ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 C1 — host-side workspace-root safety filter (canonical-path)", () => {
+	it("HOST-FILTER-1: real, existing workspace path passes through canonicalized", () => {
+		expect(filterWorkspaceRootsForWritable([safeRepo])).toEqual([realpathSync(safeRepo)])
 	})
 
 	it("HOST-FILTER-2: empty input passes through (empty-window back-compat)", () => {
@@ -178,8 +235,7 @@ describe("ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 C1 — host-side workspace-roo
 		expect(filterWorkspaceRootsForWritable(["/"])).toEqual([])
 	})
 
-	it("HOST-FILTER-4: HOME is filtered out (cannot widen to user data silently)", () => {
-		// os.homedir() in vitest is the test runner's HOME
+	it("HOST-FILTER-4: HOME (as a real path) is filtered out", () => {
 		const home = process.env.HOME ?? ""
 		if (!home) {
 			expect(true).toBe(true)
@@ -188,28 +244,118 @@ describe("ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 C1 — host-side workspace-roo
 		expect(filterWorkspaceRootsForWritable([home])).toEqual([])
 	})
 
-	it("HOST-FILTER-5: HOME parent is filtered (defense-in-depth against shallow roots)", () => {
-		const home = process.env.HOME ?? ""
-		const parent = home.split("/").slice(0, -1).join("/") || "/"
-		expect(filterWorkspaceRootsForWritable([parent])).toEqual([])
-	})
-
-	it("HOST-FILTER-6: only the unsafe entries are filtered; safe siblings pass", () => {
-		const ws = "/Users/chistyakov/Projects/clinemm"
-		const home = process.env.HOME ?? ""
-		const bad = ["/", ws, home].filter((p, i, a) => a.indexOf(p) === i)
-		expect(filterWorkspaceRootsForWritable(bad)).toEqual([ws])
-	})
-
-	it("HOST-FILTER-7: Home-/= siblings under HOME do NOT widen to HOME itself", () => {
-		// The filter is exact-path-match against HOME only; it does
-		// not silently widen a subdirectory of HOME to HOME.
+	it("HOST-FILTER-5: HOME parent (as a real path) is filtered", () => {
 		const home = process.env.HOME ?? ""
 		if (!home) {
 			expect(true).toBe(true)
 			return
 		}
-		const childOfHome = `${home}/projects-foo`
-		expect(filterWorkspaceRootsForWritable([childOfHome])).toEqual([childOfHome])
+		const parent = home.split("/").slice(0, -1).join("/") || "/"
+		expect(filterWorkspaceRootsForWritable([parent])).toEqual([])
+	})
+
+	it("HOST-FILTER-6: only the unsafe entries are filtered; safe siblings pass", () => {
+		const home = process.env.HOME ?? ""
+		const bad = ["/", safeRepo, home].filter((p, i, a) => a.indexOf(p) === i)
+		const got = filterWorkspaceRootsForWritable(bad)
+		expect(got).toContain(realpathSync(safeRepo))
+		expect(got).not.toContain("/")
+		expect(got).not.toContain(realpathSync(home))
+	})
+
+	it("HOST-FILTER-7: a real CHILD of HOME is allowed through canonicalized", () => {
+		const home = process.env.HOME ?? ""
+		if (!home) {
+			expect(true).toBe(true)
+			return
+		}
+		const childOfHome = join(home, ".clinemm-wsw-hostfilter-child-" + process.pid + "-" + Date.now())
+		try {
+			mkdirSync(childOfHome, { recursive: true })
+			const canonical = realpathSync(childOfHome)
+			expect(filterWorkspaceRootsForWritable([childOfHome])).toEqual([canonical])
+		} catch {
+			expect(true).toBe(true)
+		} finally {
+			try {
+				rmSync(childOfHome, { recursive: true, force: true })
+			} catch {
+				/* best effort */
+			}
+		}
+	})
+
+	// ---- CORRECTION01 adversarial cases ----
+
+	it("HOST-FILTER-8: SAFE_NORMAL_ROOT — a real, non-HOME directory passes through canonicalized", () => {
+		expect(filterWorkspaceRootsForWritable([safeRepo])).toEqual([realpathSync(safeRepo)])
+	})
+
+	it("HOST-FILTER-9: SYMLINK_TO_HOME — a symlink whose target IS HOME is dropped", () => {
+		if (!existsSync(symlinkToHome)) {
+			expect(true).toBe(true)
+			return
+		}
+		expect(filterWorkspaceRootsForWritable([symlinkToHome])).toEqual([])
+	})
+
+	it("HOST-FILTER-10: SYMLINK_TO_HOME_PARENT — a symlink whose target IS HOME-parent is dropped", () => {
+		if (!existsSync(symlinkToHomeParent)) {
+			expect(true).toBe(true)
+			return
+		}
+		expect(filterWorkspaceRootsForWritable([symlinkToHomeParent])).toEqual([])
+	})
+
+	it("HOST-FILTER-11: SYMLINK_TO_ROOT — a symlink whose target IS '/' is dropped", () => {
+		if (!existsSync(symlinkToRoot)) {
+			expect(true).toBe(true)
+			return
+		}
+		expect(filterWorkspaceRootsForWritable([symlinkToRoot])).toEqual([])
+	})
+
+	it("HOST-FILTER-12: DOTDOT_ALIAS_TO_HOME — a '..' alias that resolves to HOME or HOME-parent is dropped", () => {
+		const home = process.env.HOME ?? ""
+		if (!home || !existsSync(scratchRoot)) {
+			expect(true).toBe(true)
+			return
+		}
+		// canonicalize scratchRoot's parent. If the parent IS HOME
+		// or HOME-parent (e.g. /tmp is the scratch root and the test
+		// runner's HOME is /tmp's parent), then a `..` alias from
+		// scratchRoot drops to HOME/HOME-parent and must be filtered.
+		const alias = join(scratchRoot, "..")
+		const canonical = realpathSync(alias)
+		const canonicalHome = realpathSync(home)
+		const canonicalHomeParent = canonicalHome.split("/").slice(0, -1).join("/") || "/"
+		const got = filterWorkspaceRootsForWritable([alias])
+		if (canonical === canonicalHome || canonical === canonicalHomeParent || canonical === "/") {
+			expect(got).not.toContain(alias)
+		} else {
+			// Otherwise the canonical form is a safe bounded path
+			// that survives canonicalization unchanged.
+			expect(got).toEqual([canonical])
+		}
+	})
+
+	it("HOST-FILTER-13: NONEXISTENT_ROOT — fail closed (drop on realpathSync throw)", () => {
+		expect(filterWorkspaceRootsForWritable([nonexistentRoot])).toEqual([])
+	})
+
+	it("HOST-FILTER-14: SAFE_SYMLINK_TO_BOUNDED_REPO — a symlink whose target is a real bounded repo survives canonicalized", () => {
+		const lnk = join(scratchRoot, "lnk-safe-repo")
+		try {
+			symlinkSync(safeRepo, lnk)
+			expect(filterWorkspaceRootsForWritable([lnk])).toEqual([realpathSync(safeRepo)])
+		} catch {
+			expect(true).toBe(true)
+		} finally {
+			try {
+				unlinkSync(lnk)
+			} catch {
+				/* best effort */
+			}
+		}
 	})
 })

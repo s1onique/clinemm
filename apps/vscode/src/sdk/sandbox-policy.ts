@@ -160,29 +160,67 @@ export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
  *                           be dangerously broad if interpreted as
  *                           a project root)
  *
- *   - everything else passes through verbatim. The builder sees
- *     exactly the workspace boundary the host supplied, minus the
- *     explicitly-rejected wildcards.
+ *   - everything else passes through as the canonical form. The
+ *     builder sees the canonicalized workspace boundary the host
+ *     supplied, minus the explicitly-rejected wildcards.
  *
- * The filter is exact-path-match against HOME, not a substring
+ * ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01:
+ *
+ * The dangerous-path check is performed AGAINST THE CANONICAL form
+ * (`realpathSync`) of the candidate root and of HOME / HOME-parent.
+ * A symlink whose target is HOME, a `..` alias that resolves to
+ * HOME, or a symlink to `/` MUST all be rejected. Failure to
+ * canonicalize was the original review-blocking defect (the
+ * exact-string comparison passed `/some/symlink -> /Users/me` and
+ * later Seatbelt widening would have granted write authority).
+ *
+ * `realpathSync` throws on a non-existent or unreadable path; we
+ * fail closed (drop) on any throw. This catches
+ * `/not/a/real/path`, symlinks with dangling targets, and any
+ * other host that feeds garbage into `workspaceRoots`.
+ *
+ * The filter is canonical-path-match against HOME, not a substring
  * check — a CHILD of HOME (e.g. `$HOME/projects-foo`) is a valid
- * bounded project and PASSES THROUGH.
+ * bounded project and PASSES THROUGH (canonicalized). Children of
+ * the workspace parent (e.g. `/Users/me/other-project`) are also
+ * canonicalized independently and survive.
  *
  * Tests pin this in `darwin-seatbelt-safe-yolo-workspace-write01
  * .c1-green.test.ts` (HOST-FILTER-*).
  */
 export function filterWorkspaceRootsForWritable(workspaceRoots: readonly string[]): readonly string[] {
 	if (workspaceRoots.length === 0) return []
-	const home = homedir()
-	const homeParent = home.split("/").slice(0, -1).join("/") || "/"
-	const unsafe = new Set<string>(["/", home, homeParent])
+	// Canonicalize the dangerous paths through realpath so symlink chains
+	// and `..` segments that resolve to HOME, HOME-parent, or `/` cannot
+	// sneak past an exact-string comparison (ACT-CLINEMM-SAFE-YOLO-
+	// WORKSPACE-WRITE01-CORRECTION01). realpathSync throws if the path
+	// does not exist; we treat any throw as "fail closed" and drop the
+	// root.
+	let canonicalHome = homedir()
+	try {
+		canonicalHome = realpathSync(canonicalHome)
+	} catch {
+		// HOME unreadable / non-canonicalizable: leave as-is, the
+		// canonicalHome === homeParent comparison is still semantically
+		// correct for this rare path (the host is misconfigured).
+	}
+	let canonicalHomeParent = canonicalHome.split("/").slice(0, -1).join("/") || "/"
+	if (canonicalHomeParent === "") canonicalHomeParent = "/"
+	const unsafeCanonical = new Set<string>(["/", canonicalHome, canonicalHomeParent])
 	const out: string[] = []
 	for (const root of workspaceRoots) {
 		if (typeof root !== "string") continue
 		const trimmed = root.trim()
 		if (trimmed.length === 0) continue
-		if (unsafe.has(trimmed)) continue
-		out.push(trimmed)
+		let canonical: string
+		try {
+			canonical = realpathSync(trimmed)
+		} catch {
+			// Path does not exist or is unreadable -- fail closed.
+			continue
+		}
+		if (unsafeCanonical.has(canonical)) continue
+		out.push(canonical)
 	}
 	return out
 }
