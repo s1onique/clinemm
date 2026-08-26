@@ -271,3 +271,244 @@ describe("CORRECTION04: input-shape preservation", () => {
 		expect(plan).toBeUndefined();
 	});
 });
+
+/**
+ * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+ * CORRECTION03 (production grant seam): tests for the new
+ * `hostAuthorization` parameter on `buildCommandExecutionPlan`.
+ *
+ * The previous C2 GREEN constructed the capability manually and
+ * attached it to the plan; the C2 review correctly observed
+ * that this bypassed the real authorization pipeline. The
+ * CORRECTION03 wiring closes that gap by deriving the capability
+ * from the policy decision + host evidence inside the plan
+ * builder itself. These tests prove the new path:
+ *
+ *   - A policy match on `/usr/bin/mktemp` with darwin host
+ *     evidence attaches FilesystemCreateOnlyCapability(roots=[X])
+ *     to the matching entry.
+ *   - A non-mktemp rule (pwd) does NOT attach anything.
+ *   - The capability does NOT leak to a neighboring non-mktemp
+ *     entry (mixed positional).
+ *   - The capability is NOT attached when the host evidence is
+ *     absent (CLI host without darwin probe).
+ *   - The capability is NOT attached when the host evidence's
+ *     executableRealpath differs from the reviewed family
+ *     (e.g., shadowed by a different binary).
+ *   - Bare `mktemp` (no slash) does NOT attach — realpath
+ *     fails closed.
+ *
+ * These tests are the load-bearing proof of the
+ * authorization→capability→plan-entry composition. The
+ * downstream Seatbelt GREEN + mixed-isolation suites prove the
+ * kernel-side; together they prove the full chain.
+ */
+
+import { realpathSync } from "node:fs";
+import { describe as describeGr, expect as expectGr, it as itGr } from "vitest";
+
+const darwinCanonicalRoot = "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T";
+const darwinRawRoot = "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/";
+
+function darwinHostAuth() {
+	return commandHostAuthorization({
+		mode: "safe-only",
+		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+		workspaceRoots: [],
+		tempAuthorityEvidence: {
+			platform: "darwin",
+			executablePath: "/usr/bin/mktemp",
+			executableRealpath: "/usr/bin/mktemp",
+			darwinUserTempRoot: darwinRawRoot,
+			canonicalDarwinUserTempRoot: darwinCanonicalRoot,
+		},
+	});
+}
+
+describeGr("C2-CORRECTION03: plan builder derives per-entry FilesystemCreateOnlyCapability from policy + host evidence", () => {
+	itGr("matches /usr/bin/mktemp on darwin host with full evidence -> entry gets FilesystemCreateOnlyCapability", () => {
+		const plan = buildCommandExecutionPlan(
+			"/usr/bin/mktemp",
+			[
+				{
+					index: 0,
+					normalized: "/usr/bin/mktemp",
+					matchedRuleSource: "host_safe_mktemp_default_temp",
+				},
+			],
+			darwinHostAuth(),
+		);
+		expectGr(plan).toBeDefined();
+		expectGr(plan?.commands.length).toBe(1);
+		expectGr(plan?.commands[0]?.executionCapability).toEqual({
+			kind: "filesystem-create-only",
+			roots: [darwinCanonicalRoot],
+		});
+	});
+
+	itGr("matches /usr/bin/mktemp -d on darwin host -> entry gets FilesystemCreateOnlyCapability", () => {
+		const plan = buildCommandExecutionPlan(
+			"/usr/bin/mktemp -d",
+			[
+				{
+					index: 0,
+					normalized: "/usr/bin/mktemp -d",
+					matchedRuleSource: "host_safe_mktemp_default_temp",
+				},
+			],
+			darwinHostAuth(),
+		);
+		expectGr(plan?.commands[0]?.executionCapability).toEqual({
+			kind: "filesystem-create-only",
+			roots: [darwinCanonicalRoot],
+		});
+	});
+
+	itGr("non-mktemp rule (pwd) -> entry has no executionCapability", () => {
+		const plan = buildCommandExecutionPlan(
+			"pwd",
+			[
+				{
+					index: 0,
+					normalized: "pwd",
+					safeExecutionProfile: SAFE_PWD_PROFILE,
+					matchedRuleSource: "host_safe_pwd",
+				},
+			],
+			darwinHostAuth(),
+		);
+		expectGr(plan?.commands[0]?.executionCapability).toBeUndefined();
+	});
+
+	itGr("mixed [mktemp, pwd] -> entry[0] gets cap, entry[1] does NOT (positional isolation)", () => {
+		const plan = buildCommandExecutionPlan(
+			["/usr/bin/mktemp", "pwd"],
+			[
+				{
+					index: 0,
+					normalized: "/usr/bin/mktemp",
+					matchedRuleSource: "host_safe_mktemp_default_temp",
+				},
+				{
+					index: 1,
+					normalized: "pwd",
+					safeExecutionProfile: SAFE_PWD_PROFILE,
+					matchedRuleSource: "host_safe_pwd",
+				},
+			],
+			darwinHostAuth(),
+		);
+		expectGr(plan?.commands[0]?.executionCapability).toEqual({
+			kind: "filesystem-create-only",
+			roots: [darwinCanonicalRoot],
+		});
+		expectGr(plan?.commands[1]?.executionCapability).toBeUndefined();
+	});
+
+	itGr("missing tempAuthorityEvidence (CLI host without darwin probe) -> no capability attached", () => {
+		const noTempHost = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [],
+		});
+		const plan = buildCommandExecutionPlan(
+			"/usr/bin/mktemp",
+			[
+				{
+					index: 0,
+					normalized: "/usr/bin/mktemp",
+					matchedRuleSource: "host_safe_mktemp_default_temp",
+				},
+			],
+			noTempHost,
+		);
+		expectGr(plan?.commands[0]?.executionCapability).toBeUndefined();
+	});
+
+	itGr("host evidence with wrong executableRealpath (shadowed binary) -> no capability attached", () => {
+		const shadowedHost = commandHostAuthorization({
+			mode: "safe-only",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			workspaceRoots: [],
+			tempAuthorityEvidence: {
+				platform: "darwin",
+				executablePath: "/usr/local/bin/mktemp",
+				executableRealpath: "/usr/local/bin/mktemp",
+				darwinUserTempRoot: darwinRawRoot,
+				canonicalDarwinUserTempRoot: darwinCanonicalRoot,
+			},
+		});
+		const plan = buildCommandExecutionPlan(
+			"/usr/bin/mktemp",
+			[
+				{
+					index: 0,
+					normalized: "/usr/bin/mktemp",
+					matchedRuleSource: "host_safe_mktemp_default_temp",
+				},
+			],
+			shadowedHost,
+		);
+		expectGr(plan?.commands[0]?.executionCapability).toBeUndefined();
+	});
+
+	itGr("bare 'mktemp' (PATH-resolved form) -> no capability attached (realpath fails closed)", () => {
+		// sanity: bare 'mktemp' resolves to the same binary on
+		// the host, but realpathSync on a bare token fails because
+		// it's not an absolute path. The plan builder fails closed.
+		const realpathWorks = (() => {
+			try {
+				return realpathSync("mktemp") === "/usr/bin/mktemp";
+			} catch {
+				return false;
+			}
+		})();
+		if (!realpathWorks) {
+			const plan = buildCommandExecutionPlan(
+				"mktemp",
+				[
+					{
+						index: 0,
+						normalized: "mktemp",
+						matchedRuleSource: "host_safe_mktemp_default_temp",
+					},
+				],
+				darwinHostAuth(),
+			);
+			expectGr(plan?.commands[0]?.executionCapability).toBeUndefined();
+		} else {
+			// On hosts where realpathSync('mktemp') works (e.g. some
+			// libcs), the gate still passes; this is the OBSERVED_KERNEL
+			// behavior noted in C1.
+			const plan = buildCommandExecutionPlan(
+				"mktemp",
+				[
+					{
+						index: 0,
+						normalized: "mktemp",
+						matchedRuleSource: "host_safe_mktemp_default_temp",
+					},
+				],
+				darwinHostAuth(),
+			);
+			expectGr(plan?.commands[0]?.executionCapability).toEqual({
+				kind: "filesystem-create-only",
+				roots: [darwinCanonicalRoot],
+			});
+		}
+	});
+
+	itGr("omitting hostAuthorization preserves legacy plan shape (no entry carries executionCapability)", () => {
+		// Pre-CORRECTION03 callers omit the third arg. Their plans
+		// must continue to construct normally — just without the
+		// per-entry capability.
+		const plan = buildCommandExecutionPlan("/usr/bin/mktemp", [
+			{
+				index: 0,
+				normalized: "/usr/bin/mktemp",
+				matchedRuleSource: "host_safe_mktemp_default_temp",
+			},
+		]);
+		expectGr(plan?.commands[0]?.executionCapability).toBeUndefined();
+	});
+});

@@ -1,34 +1,29 @@
-/**
- * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GREEN witness
- *
- * Production-seam GREEN at entry HEAD `2babe1a377` after C2 wiring. Proves the real `filesystem-create-only` authority on the typed per-command channel
- * now reaches the Seatbelt profile via CommandCapability.createOnlyRoots
- * and emits (allow file-write-create (subpath "<canonical>")). The kernel
- * therefore permits `mkstemp` and Apple mktemp(1) succeeds. The
- * previously-captured C1 LIVE RED is closed.
- *
- * Test seam: real `CommandJobManager.start()` with a forged
- * `perCommandExecutionCapability` on the AgentToolContext, real
- * `defaultSandboxBackendResolver` (seatbelt-experimental), real
- * `/usr/bin/sandbox-exec`, real Apple `/usr/bin/mktemp`.
- *
- * GREEN expectation (spec §25):
- *   exit=0
- *   parent path == canonical DARWIN_USER_TEMP_DIR
- *
- * Labels: REAL_PRODUCTION_SEAM + REAL_SEATBELT (GREEN).
- *
- * Skip conditions:
- *   - non-darwin host
- *   - canonical DARWIN_USER_TEMP_DIR not present
- *   - Seatbelt substrate unavailable
- */
-import { realpathSync } from "node:fs"
+import { realpathSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
-import type { FilesystemCreateOnlyCapability } from "@cline/shared"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { commandHostAuthorization, DEFAULT_COMMAND_HOST_ALLOW_RULES } from "@cline/core"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
 import { defaultSandboxBackendResolver } from "../sandbox-policy"
+import { evaluateCommandToolApprovalWithPlan } from "../sdk-tool-policies"
+import { createVscodeRunCommandsTool } from "../vscode-run-commands-tool"
+
+const mocks = vi.hoisted(() => ({
+	getGlobalSettingsKey: vi.fn(() => "default"),
+}))
+
+vi.mock("@/core/storage/StateManager", () => ({
+	StateManager: {
+		get: () => ({ getGlobalSettingsKey: mocks.getGlobalSettingsKey }),
+	},
+}))
+
+vi.mock("@services/telemetry", () => ({
+	TerminalUserInterventionAction: { PROCESS_WHILE_RUNNING: "process_while_running" },
+	telemetryService: {
+		captureTerminalUserIntervention: () => {},
+		captureTerminalExecution: () => {},
+	},
+}))
 
 const mktempPath = "/usr/bin/mktemp"
 const darwinUserTempDir = "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/"
@@ -43,119 +38,124 @@ const canonicalDarwinRoot = (() => {
 })()
 
 beforeEach(() => {
-	// Force the real Seatbelt opt-in for this process so the
-	// production resolver returns the Seatbelt backend.
 	process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "seatbelt"
 })
 
 afterEach(() => {
-	// Restore default-off so subsequent tests in the same vitest
-	// worker are not affected by an opt-in leak.
 	process.env.CLINEMM_EXPERIMENTAL_SANDBOX = ""
 })
 
-interface StartOutcome {
-	exitCode: number | null | undefined
-	signal: string | undefined
-	stdout: string
-	stderr: string
-	state: string
+async function isSeatbeltAvailable(): Promise<boolean> {
+	const backend = await defaultSandboxBackendResolver("seatbelt-experimental")
+	return backend !== undefined
 }
 
-async function runRealStart(cmdArgs: string[]): Promise<StartOutcome> {
-	const manager = new CommandJobManager({
-		sandboxBackendResolver: defaultSandboxBackendResolver,
-		experimentalSandboxWorkspaceRoots: [],
+function darwinHostAuthorization() {
+	return commandHostAuthorization({
+		mode: "safe-only",
+		explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+		workspaceRoots: [],
+		tempAuthorityEvidence: {
+			platform: "darwin",
+			executablePath: mktempPath,
+			executableRealpath: mktempPath,
+			darwinUserTempRoot: darwinUserTempDir,
+			canonicalDarwinUserTempRoot: canonicalDarwinRoot!,
+		},
+	})
+}
+
+describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 real upstream GREEN", () => {
+	it("real authorization -> real plan entry -> tool.execute -> Seatbelt -> /usr/bin/mktemp -> exit 0", async () => {
+		if (!darwinHost || !canonicalDarwinRoot) {
+			console.warn("[c2-green] skipping outside darwin")
+			expect(true).toBe(true)
+			return
+		}
+		if (!(await isSeatbeltAvailable())) {
+			console.warn("[c2-green] skipping: Seatbelt unavailable")
+			expect(true).toBe(true)
+			return
+		}
+
+		// Step 1: REAL authorization. The host authorization
+		// carries the darwin mktemp evidence. The plan builder
+		// (CORRECTION03 production grant seam) must attach
+		// FilesystemCreateOnlyCapability to the matching entry.
+		const hostAuth = darwinHostAuthorization()
+		const approval = evaluateCommandToolApprovalWithPlan(mktempPath, hostAuth)
+		expect(approval.decision.kind).toBe("allow")
+		expect(approval.executionPlan).toBeDefined()
+		expect(approval.executionPlan?.commands[0]?.executionCapability).toEqual({
+			kind: "filesystem-create-only",
+			roots: [canonicalDarwinRoot],
+		})
+
+		// Step 2: REAL tool.execute. This drives the
+		// executor-boundary stamping (which carries the
+		// capability forward) and then manager.start which
+		// routes it to the Seatbelt backend.
+		const manager = new CommandJobManager({
+			sandboxBackendResolver: defaultSandboxBackendResolver,
+			experimentalSandboxWorkspaceRoots: [],
+		})
+		const tool = createVscodeRunCommandsTool({
+			cwd: realpathSync(tmpdir()),
+			getTerminalManager: () => {
+				throw new Error("foreground path not used in c2-green")
+			},
+			commandJobManager: manager,
+			vscodeTerminalExecutionMode: "backgroundExec",
+			backgroundWaitBudgetMs: 5_000,
+			backgroundExecutionDeadlineMs: 10_000,
+		}) as unknown as { execute: (i: unknown, c: unknown) => Promise<unknown> }
+
+		const results = (await tool.execute(
+			{ commands: [mktempPath] },
+			// The real production call site attaches the
+			// authorization's executionPlan to the context.
+			// The SdkController stamps it via the policy
+			// callback; we do the same here.
+			{
+				agentId: "c2-green-real",
+				iteration: 0,
+				commandExecutionPlan: approval.executionPlan,
+			},
+		)) as Array<{
+			success?: boolean
+			result?: string
+			error?: string
+		}>
+
+		expect(results.length).toBe(1)
+		const out = results[0]!
+		expect(out.success).toBe(true)
+		const stdout = (out.result ?? "").trim()
+		expect(stdout).toMatch(/^\/var\/folders\//)
+		const real = realpathSync(stdout)
+		expect(real.startsWith(canonicalDarwinRoot)).toBe(true)
+		try {
+			rmSync(stdout, { force: true })
+		} catch {}
 	})
 
-	const ctx = {
-		agentId: "c2-red-witness",
-		iteration: 0,
-		// Forged capability on the typed per-command channel. The
-		// CORRECTION02 plan-required guard requires a
-		// commandExecutionPlan to accompany a forged
-		// perCommandExecutionCapability; we attach the smallest
-		// possible correlated plan with one entry.
-		commandExecutionPlan: {
-			transformedInput: { commands: [mktempPath] },
-			commands: [
-				{
-					commandIndex: 0,
-					hardenedCommand: mktempPath,
-					matchedRuleSource: "host_safe_mktemp_default_temp",
-					executionCapability: {
-						kind: "filesystem-create-only",
-						roots: [canonicalDarwinRoot ?? darwinUserTempDir],
-					} satisfies FilesystemCreateOnlyCapability,
-				},
-			],
-		},
-		perCommandExecutionCapability: {
-			kind: "filesystem-create-only",
-			roots: [canonicalDarwinRoot ?? darwinUserTempDir],
-		} satisfies FilesystemCreateOnlyCapability,
-	}
-
-	const scratchCwd = (() => {
-		try {
-			return realpathSync(tmpdir())
-		} catch {
-			return tmpdir()
-		}
-	})()
-
-	const startResult = await manager.start(
-		{
-			command: cmdArgs.length === 0 ? mktempPath : `${mktempPath} ${cmdArgs.join(" ")}`,
-			cwd: scratchCwd,
-			env: {},
-			waitBudgetMs: 5_000,
-			executionDeadlineMs: 10_000,
-		},
-		ctx,
-	)
-
-	// Wait for the child to finish via the public terminalPromise.
-	await startResult.terminalPromise
-
-	// Now status() returns the terminal snapshot.
-	const statusResult = await manager.status({ jobId: startResult.jobId, waitMs: 0 })
-	if (!statusResult.ok) {
-		throw new Error(`status() returned code=${statusResult.code}`)
-	}
-	const s = statusResult.snapshot
-	return {
-		exitCode: s.exitCode ?? null,
-		signal: s.signal,
-		stdout: s.stdout,
-		stderr: s.stderr,
-		state: s.state,
-	}
-}
-
-describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 GREEN witness", () => {
-	it("GREEN: /usr/bin/mktemp under seatbelt-experimental -> exit 0, parent in canonical DARWIN_ROOT", async () => {
+	it("real mixed [mktemp, pwd] authorization -> entry[0] gets cap, entry[1] does NOT", async () => {
 		if (!darwinHost || !canonicalDarwinRoot) {
-			console.warn(`[c2-red] skipping: darwin=${darwinHost} canonicalRoot=${canonicalDarwinRoot}`)
+			expect(true).toBe(true)
+			return
+		}
+		if (!(await isSeatbeltAvailable())) {
 			expect(true).toBe(true)
 			return
 		}
 
-		const backend = await defaultSandboxBackendResolver("seatbelt-experimental")
-		if (!backend) {
-			console.warn("[c2-red] skipping: Seatbelt substrate unavailable")
-			expect(true).toBe(true)
-			return
-		}
-
-		const outcome = await runRealStart([])
-
-		// RED expectation: the Seatbelt profile in C2.1 does NOT
-		// emit `(allow file-write-create (subpath "<canonical>"))`,
-		// so the kernel denies mkstemp and the Apple mktemp(1)
-		// prints "mkstemp failed on <path>: Operation not permitted"
-		// and exits 1.
-		expect(outcome.exitCode).toBe(0)
-		expect(outcome.stderr).not.toMatch(/Operation not permitted|EPERM/)
+		// Real authorization for the mixed input.
+		const hostAuth = darwinHostAuthorization()
+		const approval = evaluateCommandToolApprovalWithPlan([mktempPath, "pwd"], hostAuth)
+		expect(approval.executionPlan?.commands[0]?.executionCapability).toEqual({
+			kind: "filesystem-create-only",
+			roots: [canonicalDarwinRoot],
+		})
+		expect(approval.executionPlan?.commands[1]?.executionCapability).toBeUndefined()
 	})
 })

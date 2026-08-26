@@ -18,6 +18,7 @@
  *     executor MUST use `transformedInput` for execution.
  */
 
+import { realpathSync } from "node:fs";
 import type {
 	CommandExecutionPlan,
 	CommandExecutionPlanEntry,
@@ -25,7 +26,11 @@ import type {
 
 import { normalizeRunCommandsInput } from "../../extensions/tools/helpers";
 import type { StructuredCommandInput } from "../../extensions/tools/schemas";
-import type { EvaluatedCommand } from "./command-policy-types";
+import type {
+	CommandHostAuthorization,
+	EvaluatedCommand,
+} from "./command-policy-types";
+import { buildFilesystemCreateOnlyCapabilityForCommand } from "./command-policy-types";
 import { applySafeExecutionProfileToCommand } from "./safe-execution-profile";
 
 /**
@@ -58,6 +63,25 @@ import { applySafeExecutionProfileToCommand } from "./safe-execution-profile";
 export function buildCommandExecutionPlan(
 	toolInput: unknown,
 	perCommand: ReadonlyArray<EvaluatedCommand>,
+	/**
+	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+	 * CORRECTION03 (production grant seam):
+	 *
+	 * The host authorization carrying the evidence required to
+	 * decide whether a plan entry qualifies for a real
+	 * `FilesystemCreateOnlyCapability` (currently: darwin
+	 * mktemp). When present and the four-condition gate passes,
+	 * the matching entry's `executionCapability` field is set
+	 * and the capability travels WITH the plan entry to the
+	 * executor-boundary stamping in executeShellCommands.
+	 *
+	 * Optional: omitting it (e.g. host adapters that have not
+	 * yet collected darwin mktemp evidence) preserves the
+	 * existing plan shape — no entries carry executionCapability
+	 * — but the tool flow then cannot use Seatbelt's
+	 * create-only authority for mktemp.
+	 */
+	hostAuthorization?: CommandHostAuthorization,
 ): CommandExecutionPlan | undefined {
 	let normalized: ReadonlyArray<string | StructuredCommandInput>;
 	try {
@@ -82,12 +106,34 @@ export function buildCommandExecutionPlan(
 		const original = normalized[i]!;
 		const evaluated = perCommand[i]!;
 		const profile = evaluated.safeExecutionProfile;
+
+		// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+		// CORRECTION03: derive the real per-command capability from
+		// the policy decision + host authorization. The helper is
+		// pure; it consumes only the matched rule source, the host
+		// evidence, and the canonicalized argv of THIS entry (not
+		// the original model input — we trust the normalized/hardened
+		// argv). When the gate passes, the capability travels WITH
+		// the plan entry; when it fails, the entry's
+		// `executionCapability` remains undefined (no widening).
+		let executionCapability: CommandExecutionPlanEntry["executionCapability"];
+		if (hostAuthorization !== undefined) {
+			const resolvedExec = resolveExecutableRealpath(original);
+			const cap = buildFilesystemCreateOnlyCapabilityForCommand({
+				evaluated,
+				hostAuthorization,
+				resolvedExecutableRealpath: resolvedExec,
+			});
+			executionCapability = cap;
+		}
+
 		if (profile === undefined) {
 			hardenedInputs.push(original);
 			entries.push({
 				commandIndex: i,
 				hardenedCommand: toPlanCommand(original),
 				matchedRuleSource: evaluated.matchedRuleSource,
+				executionCapability,
 			});
 			continue;
 		}
@@ -98,6 +144,7 @@ export function buildCommandExecutionPlan(
 			hardenedCommand: toPlanCommand(hardened),
 			matchedRuleSource: evaluated.matchedRuleSource,
 			profileSource: profile.source,
+			executionCapability,
 		});
 	}
 
@@ -105,6 +152,32 @@ export function buildCommandExecutionPlan(
 		transformedInput: mirrorInputShape(toolInput, hardenedInputs),
 		commands: entries,
 	};
+}
+
+/**
+ * Resolve the executable argv[0] of a normalized command to its
+ * host-PATH-resolved canonical path. Returns undefined when the
+ * command is structured (no string argv[0] to realpath), when the
+ * path does not exist (the file would be unrunnable anyway), or
+ * when realpathSync throws (sandbox restriction at probe time
+ * is treated as "no authority granted" rather than "any
+ * authority granted").
+ *
+ * The call is intentionally narrow — only the executable token
+ * is canonicalized, NOT the full argv or any operand. This
+ * matches the host's policy gate, which keys on
+ * `executableRealpath === "/usr/bin/mktemp"`.
+ */
+function resolveExecutableRealpath(
+	cmd: string | StructuredCommandInput,
+): string | undefined {
+	const argv0 = typeof cmd === "string" ? cmd.split(/\s+/)[0] : cmd.command;
+	if (!argv0) return undefined;
+	try {
+		return realpathSync(argv0);
+	} catch {
+		return undefined;
+	}
 }
 
 function toPlanCommand(

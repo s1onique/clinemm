@@ -385,7 +385,7 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 kernel matrix
 		}
 	})
 
-	it("T11: secret absent (env is sanitized; CLINEMM_FAKE_SECRET must NOT be visible)", async () => {
+	it("T11: secret absent — real positive witness via env probe under sandbox", async () => {
 		if (!darwinHost || !canonicalDarwinRoot) {
 			expect(true).toBe(true)
 			return
@@ -395,43 +395,32 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 kernel matrix
 			return
 		}
 
-		// Spec §35 env conservation: envSemantics=complete in
-		// sandbox mode means the sandboxed child receives ONLY the
-		// allowlisted env from the backend; parent secrets (like
-		// CLINEMM_FAKE_SECRET) MUST NOT be forwarded.
-		//
-		// We observe via /usr/bin/mktemp which under our create-only
-		// profile produces a file in DARWIN_ROOT and writes the file
-		// path to stdout. The file's parent directory listing does
-		// not include any env-derived secret; we observe env isolation
-		// by simply asserting the call succeeds under the create-only
-		// capability (no env-var expansion is needed for mktemp).
-		//
-		// The deeper secret-isolation invariant is enforced by the
-		// sandbox-policy module: envSemantics is "complete" iff
-		// environment.mode === "sanitized" (see
-		// sdk/packages/core/src/runtime/sandbox/environment.ts),
-		// and the supervisor uses config.env AS-IS (no parent
-		// spread). The CORRECTION01-P1 contract in
-		// environment.ts:180-186 makes unknown parent keys simply
-		// not appear at all, so CLINEMM_FAKE_SECRET cannot leak.
+		// CORRECTION03: the previous T11 asserted that `mktemp`
+		// does not echo env vars. That is a false-pass — mktemp
+		// NEVER echoes env vars, so the assertion would pass even
+		// if the secret leaked completely. CORRECTION03 replaces
+		// it with a real positive witness: a sandboxed shell that
+		// reads its own env and writes the result to a file under
+		// createOnlyRoots. If the secret leaks, the file contains
+		// it; if the env is sanitized, the file does not.
 		process.env.CLINEMM_FAKE_SECRET_C2 = "TOP-SECRET-VALUE"
 		const cap = buildDarwinCreateOnlyCapability()
 		if (!cap) throw new Error("darwin capability unbuildable")
+		const probeFile = pathJoin(canonicalDarwinRoot, `c2-secret-probe-${randomBytes(6).toString("hex")}`)
 		try {
-			const out = await runRealStart({ cmd: mktempPath, args: [], capability: cap })
-			expect(out.exitCode).toBe(0)
-			const stdout = out.stdout.trim()
-			// The secret string MUST NOT appear in the sandboxed child's
-			// environment-derived output (mktemp doesn't echo env vars,
-			// but if it did, the secret would be visible).
-			expect(stdout).not.toContain(process.env.CLINEMM_FAKE_SECRET_C2!)
-			expect(stdout).not.toContain("TOP-SECRET-VALUE")
-			try {
-				rmSync(stdout, { force: true })
-			} catch {}
+			await runRealStart({
+				cmd: shPath,
+				args: ["-c", `printf '%s' "${"$"}{CLINEMM_FAKE_SECRET_C2:-absent}" > "${probeFile}"`],
+				capability: cap,
+			})
+			const observed = readFileSync(probeFile, "utf8")
+			// Positive witness: the secret MUST be absent.
+			expect(observed).toBe("absent")
 		} finally {
 			delete process.env.CLINEMM_FAKE_SECRET_C2
+			try {
+				rmSync(probeFile, { force: true })
+			} catch {}
 		}
 	})
 
@@ -449,25 +438,21 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 kernel matrix
 
 		// OBSERVED_KERNEL_BEHAVIOR (spec §31): the kernel-op level
 		// of `file-write-create` may admit arbitrary new-object
-		// creation under the granted subpath. The proof uses the
-		// same Apple mktemp path which T1 already proves works
-		// under the production seam: arbitrary create inside the
-		// createOnlyRoots is admitted by the kernel.
+		// creation under the granted subpath. CORRECTION03 makes
+		// this a real positive assertion (no error swallowing).
+		// If the call fails the test fails (label NOT_EXECUTED).
+		// Use /usr/bin/mktemp <template> which uses mkstemp(3)
+		// (open(O_CREAT|O_RDWR|O_EXCL, 0600)) - exactly the
+		// kernel-op Apple mktemp uses.
 		const knownName = `c2-arbitrary-${randomBytes(6).toString("hex")}`
 		const knownPath = pathJoin(canonicalDarwinRoot, knownName)
-		try {
-			// /usr/bin/mktemp <template> uses mkstemp(3) which calls
-			// open(O_CREAT|O_RDWR|O_EXCL, 0600). This is exactly the
-			// kernel-op Apple mktemp uses; it lands at knownPath.
-			await runRealStart({
-				cmd: mktempPath,
-				args: [knownPath],
-				capability: cap,
-			})
-			expect(existsSync(knownPath)).toBe(true)
-			rmSync(knownPath, { force: true })
-		} catch (e) {
-			console.warn(`[T31] mktemp <template> failed (may be expected in IDE-sandbox context): ${e.message}`)
-		}
+		const out = await runRealStart({
+			cmd: mktempPath,
+			args: [knownPath],
+			capability: cap,
+		})
+		expect(out.exitCode).toBe(0)
+		expect(existsSync(knownPath)).toBe(true)
+		rmSync(knownPath, { force: true })
 	})
 })

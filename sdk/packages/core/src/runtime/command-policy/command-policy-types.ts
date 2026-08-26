@@ -29,6 +29,7 @@
  *   `EvaluatedCommand` per command, each with its own profile (or none).
  */
 
+import type { FilesystemCreateOnlyCapability } from "@cline/shared";
 import type { StructuredCommandInput } from "../../extensions/tools/schemas";
 import type { CommandModelHints } from "./command-model-hints";
 import type { SafeExecutionProfile } from "./safe-execution-profile";
@@ -389,6 +390,104 @@ export interface TempAuthorityEvidence {
 	 * with the raw root.
 	 */
 	canonicalDarwinUserTempRoot: string;
+}
+
+/**
+ * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+ * CORRECTION03 (production grant seam):
+ *
+ * Pure function that decides whether a single evaluated command
+ * qualifies for a real `FilesystemCreateOnlyCapability` rooted
+ * at the canonical Darwin user temp dir.
+ *
+ * The gate composition (all four MUST hold):
+ *
+ *   1. The canonical rule that matched the command is
+ *      `host_safe_mktemp_default_temp` (the exact command-family
+ *      reviewed in this ACT).
+ *   2. The host authorization carries `tempAuthorityEvidence`
+ *      with `platform === "darwin"`,
+ *      `executableRealpath === "/usr/bin/mktemp"`, and a
+ *      non-empty `canonicalDarwinUserTempRoot`.
+ *   3. The normalized command resolves to `/usr/bin/mktemp`
+ *      (realpath check against the same Darwin executable). This
+ *      proves the plan entry corresponds to this exact command
+ *      family, not a forged parallel input.
+ *   4. The matched rule is for the exact command (no `-u`,
+ *      `-t`, `-p`, template, etc.) — handled upstream by the
+ *      policy regex at command-safe-rules.ts:221.
+ *
+ * Inputs are all trusted policy-layer values:
+ *   - `evaluated.matchedRuleSource` (set by `findSafeRuleMatch`)
+ *   - `hostAuthorization.tempAuthorityEvidence` (set by the
+ *     host adapter from a subprocess probe, NOT from model
+ *     metadata)
+ *   - `normalizedCommand` (the canonical normalized argv that
+ *     the plan builder is processing — hardened or original)
+ *
+ * Returns the capability when the gate passes; otherwise
+ * returns `undefined` so the caller leaves the entry's
+ * `executionCapability` unset.
+ *
+ * Pure function: no I/O, no side effects, no caching. Trivially
+ * testable in isolation. Composes with the existing plan builder
+ * at `command-execution-plan.ts:buildCommandExecutionPlan` so
+ * the authority travels with the plan entry, NOT at the tool
+ * call site.
+ *
+ * Why a helper and not inline:
+ *   - The four-condition composition is security-critical and
+ *     must not be duplicated across hosts (CLI, VS Code,
+ *     future ACP) — the same gate must apply everywhere.
+ *   - The helper has zero filesystem access, so it cannot
+ *     become a TOCTOU surface for the cap's roots.
+ *   - Future ACTs that introduce additional create-only
+ *     families (e.g. mac-specific `/usr/bin/mktemp -d`) extend
+ *     this gate with a single additional clause — not a
+ *     rewrite.
+ */
+export function buildFilesystemCreateOnlyCapabilityForCommand(params: {
+	readonly evaluated: Pick<EvaluatedCommand, "matchedRuleSource">;
+	readonly hostAuthorization: Pick<
+		CommandHostAuthorization,
+		"tempAuthorityEvidence"
+	>;
+	/**
+	 * The resolved executable for the plan entry — typically
+	 * the first token of the normalized command, realpath'd
+	 * against the host's PATH.
+	 */
+	readonly resolvedExecutableRealpath: string | undefined;
+}): FilesystemCreateOnlyCapability | undefined {
+	const { evaluated, hostAuthorization, resolvedExecutableRealpath } = params;
+
+	// Gate 1: exact reviewed rule family.
+	if (evaluated.matchedRuleSource !== "host_safe_mktemp_default_temp") {
+		return undefined;
+	}
+
+	const ev = hostAuthorization.tempAuthorityEvidence;
+	if (!ev) {
+		return undefined;
+	}
+
+	// Gate 2: host evidence integrity.
+	if (ev.platform !== "darwin") return undefined;
+	if (ev.executableRealpath !== "/usr/bin/mktemp") return undefined;
+	if (ev.canonicalDarwinUserTempRoot.length === 0) return undefined;
+
+	// Gate 3: command resolved to the same Apple executable.
+	// (The host may have normalized the command through bash
+	// function/builtin/PATH — slash-prefixed form is required
+	// for the realpath check to be meaningful.)
+	if (resolvedExecutableRealpath !== "/usr/bin/mktemp") {
+		return undefined;
+	}
+
+	return {
+		kind: "filesystem-create-only",
+		roots: [ev.canonicalDarwinUserTempRoot],
+	};
 }
 
 /**

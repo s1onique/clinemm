@@ -75,19 +75,17 @@ export interface CommandJobSnapshot {
 	elapsedMs: number
 	deadlineRemainingMs: number
 
-	/**
-	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
-	 * Per-command typed capability (read-only witness field). The
-	 * snapshot carries this verbatim so tests can verify the
-	 * positional correlation between plan entries and jobs.
-	 * This is a NAMED ALIAS of the merged `executionCapability`
-	 * stamped on the job record: the manager picks
-	 * `perCommandExecutionCapability` first (real authority) and
-	 * falls back to the legacy `executionCapability` (probe-only).
-	 * Tests reading the snapshot via the legacy name see the same
-	 * value.
-	 */
-	perCommandExecutionCapability?: InternalExecutionCapability
+	// NOTE (CORRECTION03): real authority-bearing capabilities
+	// (e.g. FilesystemCreateOnlyCapability with the canonical
+	// Darwin user temp root) are NOT projected into this snapshot.
+	// The snapshot is the public status projection observed by
+	// tool consumers and telemetry; surfacing authority data
+	// here would re-introduce the leak that an earlier ACT
+	// (CORRECTION02 of C1) deliberately removed by deleting the
+	// legacy `executionCapability` field. Tests that need to
+	// observe per-job stamping wrap `manager.start` (or
+	// `tool.execute`) and inspect the captured context — see
+	// `darwin-seatbelt-darwin-mktemp-capability01.c2-mixed-isolation.test.ts`.
 }
 
 /** Caller-supplied input to {@link CommandJobManager.start}. */
@@ -298,12 +296,12 @@ function snapshot(job: CommandJob): CommandJobSnapshot {
 		outputTruncated: stdoutSnap.dropped || stderrSnap.dropped,
 		elapsedMs: nowMs - job.startedAtMs,
 		deadlineRemainingMs: Math.max(0, job.deadlineAtMs - nowMs),
-		// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
-		// carry the merged per-command typed capability verbatim
-		// (named alias of the merged executionCapability slot) so
-		// tests can verify positional correlation between plan
-		// entries and jobs at the snapshot projection seam.
-		perCommandExecutionCapability: job.executionCapability,
+		// CORRECTION03: do NOT project job.executionCapability
+		// (which may carry real FilesystemCreateOnlyCapability
+		// roots) into the snapshot. The merged capability lives
+		// on the internal job record for the Seatbelt backend's
+		// consumption; the public snapshot is the status-only
+		// projection observed by tool consumers / telemetry.
 	}
 }
 

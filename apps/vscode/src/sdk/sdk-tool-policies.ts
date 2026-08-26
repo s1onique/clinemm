@@ -773,8 +773,17 @@ export interface EvaluateCommandToolApprovalWithPlanOptions {
 	 * Inject a custom execution plan builder. When provided, the adapter
 	 * calls this instead of `buildCommandExecutionPlan`. Return `undefined`
 	 * to simulate a planner failure (e.g., cardinality mismatch).
+	 *
+	 * ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+	 * CORRECTION03: the override now also receives the host
+	 * authorization so test stubs can exercise the real grant seam.
+	 * Production callers DO NOT use this override.
 	 */
-	buildExecutionPlanOverride?: (toolInput: unknown, commands: readonly EvaluatedCommand[]) => CommandExecutionPlan | undefined
+	buildExecutionPlanOverride?: (
+		toolInput: unknown,
+		commands: readonly EvaluatedCommand[],
+		hostAuthorization: CommandHostAuthorization,
+	) => CommandExecutionPlan | undefined
 	/**
 	 * Optional V2 evidence (TrustedParserEvidence) produced by the trusted
 	 * host-owned `MvdanShHelper` capability. The host adapter
@@ -811,7 +820,14 @@ export function evaluateCommandToolApprovalWithPlan(
 	// (invalid input, cardinality mismatch) and a safe profile is
 	// required, fail closed — do not let raw input execute.
 	const planBuilder = options?.buildExecutionPlanOverride ?? buildCommandExecutionPlan
-	const executionPlan = result.decision.kind === "deny" ? undefined : planBuilder(toolInput, result.commands)
+	// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+	// CORRECTION03: thread the host authorization into the plan
+	// builder so it can derive per-entry FilesystemCreateOnlyCapability
+	// from the policy decision + host evidence. The override hook
+	// (test-only) also receives it. Production planBuilder is the
+	// default `buildCommandExecutionPlan` from the SDK, which now
+	// attaches the capability when the four-condition gate passes.
+	const executionPlan = result.decision.kind === "deny" ? undefined : planBuilder(toolInput, result.commands, hostAuthorization)
 	if (result.decision.kind === "deny") {
 		return { approved: false, decision: result.decision }
 	}
