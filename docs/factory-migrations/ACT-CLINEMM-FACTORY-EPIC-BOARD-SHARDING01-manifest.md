@@ -2,7 +2,7 @@
 
 Source: `.factory/epic-board.md` (6,346 lines, 1.1 MB, 37 `## ` sections, 192 ACT-CLINEMM-* IDs, 15 epic/family IDs).
 
-Goal: Losslessly extract historical/detail blocks into `.factory/epics/*.md`, then reduce `epic-board.md` to a 100–250-line index (hard cap 400). The validator (commit 4 of this ACT) enforces `OLD_IDS - NEW_IDS = ∅` and related invariants.
+Goal: Losslessly extract historical/detail blocks into `.factory/epics/*.md`, then reduce `epic-board.md` to a 100–250-line index (hard cap 400). The validator (commit 4 of this ACT) takes the immutable pre-sharding commit `5e96cfd3a` as its left-hand authority and asserts `OLD_ACT_IDS - NEW_ACT_IDS = ∅` (plus the related invariants listed under [Acceptance gate](#acceptance-gate-commit-4-validator-must-report-all-pass)).
 
 ## ID inventory
 
@@ -12,7 +12,7 @@ Goal: Losslessly extract historical/detail blocks into `.factory/epics/*.md`, th
 | `AOPC0X` / `AOC0X` / `LIVE-CAPTURE0X` family IDs | 15 | same |
 | Already-external closure plans in `docs/closure-plans/` | 9 | `ls docs/closure-plans/` |
 
-Raw ID lists are committed under this directory as `board-acts.txt` and `board-epic-ids.txt` (gitignored via `.factory-staging-*` pattern in `.gitignore` line 115).
+Raw ID lists are **not** committed under this directory. They live only as ephemeral build artifacts under `.factory-staging-sharding01/inventory/` (gitignored via the `.factory-staging-*` pattern in `.gitignore`). The validator uses the immutable pre-sharding commit `5e96cfd3a` as its left-hand authority instead, see `OLD_ACT_IDS` / `NEW_ACT_IDS` under [Acceptance gate](#acceptance-gate-commit-4-validator-must-report-all-pass) below.
 
 
 ## Mapping — current board sections → destination epic files
@@ -98,7 +98,7 @@ These 9 IDs are NOT in the board's 192-ACT count (already externalized). They wi
 | `.factory/epics/closed-foundation.md` | Closed foundation (historical) | Already-closed-passed substrate |
 | `.factory/epics/_epic-orphan-sink.md` | Anything that does not cleanly map to a family above | Safety net so no content is silently dropped |
 
-12 detail files total (within the reviewer's 8–12 target; sink is only populated if needed).
+~12–15 detail files (the manifest's mapping table names 12 primary destinations; `_index-contract.md`, `architecture.md`, `closed-foundation.md`, and the optional `_epic-orphan-sink.md` are supporting locations that are created only if a section actually needs them, so the precise count is decided during extraction). Sink is only populated if a section cannot cleanly map to any of the 12 primary destinations.
 
 ## What each epic file MUST contain (per the reviewer's template)
 
@@ -131,9 +131,40 @@ Only claims we still rely on.
 
 ## Acceptance gate (commit 4 validator MUST report all PASS)
 
+The validator's left-hand authority is the **immutable pre-sharding commit**, not hand-maintained ID lists:
+
+```text
+MIGRATION_SOURCE_HEAD = 5e96cfd3a
+                    = the recon-closure commit frozen immediately before this ACT
+                    = also the last commit at which .factory/epic-board.md was the
+                      single-file authority for all ACT IDs
+```
+
+It computes the OLD vs NEW ACT-ID sets itself:
+
+```text
+OLD_ACT_IDS =
+  grep -oE 'ACT-CLINEMM-[A-Z0-9-]+' <(git show 5e96cfd3a:.factory/epic-board.md)
+  | sort -u
+
+NEW_ACT_IDS =
+  grep -oE 'ACT-CLINEMM-[A-Z0-9-]+'
+    <(cat .factory/epic-board.md .factory/epics/*.md
+        | linked-closure-plan IDs from docs/closure-plans/*.json)
+  | sort -u
+```
+
+And asserts:
+
+```text
+OLD_ACT_IDS - NEW_ACT_IDS = ∅           # load-bearing
+```
+
+A validator that computes against the immutable commit is stronger than line-accounting: after index reduction the old physical line boundaries intentionally disappear, so lines are kept only as migration diagnostics not as a permanent invariant.
+
 ```
 MIGRATION_MANIFEST_COMPLETE      = PASS
-OLD_IDS_MINUS_NEW_IDS            = ∅
+OLD_ACT_IDS - NEW_ACT_IDS        = ∅
 INDEX_LINES                      < 400
 INDEX_LINKS                      = VALID
 OPEN_FRONTIER_PRESERVED          = PASS
@@ -145,6 +176,6 @@ The validator lives in `tools/factory/validate-epic-board.ts`.
 
 ## Notes
 
-- The migration is **lossless**: every ACT ID in the current board will appear (a) in a detail file's ACT ledger, or (b) in a closure plan linked from a detail file, or (c) in the new index. The validator enforces this exactly.
+- The migration is **lossless**: every ACT ID in the current board will appear (a) in a detail file's ACT ledger, or (b) in a closure plan linked from a detail file, or (c) in the new index. The validator enforces this exactly via the `OLD_ACT_IDS - NEW_ACT_IDS = ∅` check (left-hand authority is the immutable pre-sharding commit `5e96cfd3a`).
 - The **content** is moved verbatim where practical. The index is the only place where prose is summarized (to ~250 lines).
 - No production code is involved.
