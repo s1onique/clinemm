@@ -77,7 +77,24 @@ function advisory(name: string, pass: boolean, details?: string) {
 }
 
 // ---------- Load board ----------
-const boardRaw = readFileSync(BOARD_PATH, "utf8");
+// CLI: --fixture=<name> runs the validator against tools/factory/__validate-fixtures__/<name>.md
+// (a small synthetic board) instead of .factory/epic-board.md. Used to prove the gates actually
+// fail on malformed input. Without --fixture, runs against the real board. Gates 2, 3, and 9
+// are skipped for fixtures (link targets / conservation source are real-repo-only).
+const args = process.argv.slice(2);
+let boardRaw: string;
+const fixtureArg = args.find((a) => a.startsWith("--fixture="));
+const fixtureName = fixtureArg?.slice("--fixture=".length);
+if (fixtureName) {
+	const fixturePath = join(REPO_ROOT, `tools/factory/__validate-fixtures__/${fixtureName}.md`);
+	if (!existsSync(fixturePath)) {
+		console.error(`fixture not found: ${fixturePath}`);
+		process.exit(2);
+	}
+	boardRaw = readFileSync(fixturePath, "utf8");
+} else {
+	boardRaw = readFileSync(BOARD_PATH, "utf8");
+}
 const boardLines = boardRaw.split("\n");
 
 // ---------- Gate 1: INDEX_LINES_LT_400 ----------
@@ -88,7 +105,10 @@ const boardLines = boardRaw.split("\n");
 }
 
 // ---------- Gate 2 + 3: ALL_INDEX_LINKS_EXIST + ALL_INDEX_LINKS_RELATIVE ----------
-{
+// Skip when running against a fixture (link targets reference real-repo paths and would resolve
+// against `.factory/` regardless of where the fixture lives). The fixture mode exists to exercise
+// gate 6 / gate 8 specifically.
+if (!fixtureName) {
 	const linkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
 	const allLinks: { target: string; line: number }[] = [];
 	let m: RegExpExecArray | null;
@@ -101,8 +121,9 @@ const boardLines = boardRaw.split("\n");
 	for (const link of allLinks) {
 		const raw = link.target.split("#", 1)[0];
 		if (!raw) continue; // anchor-only link
-		// Reject absolute github.com URLs (the contract's link rule)
-		if (/^https?:\/\//i.test(raw)) {
+		// Reject absolute URLs (http(s)://, file://) AND root-absolute paths (/...).
+		// Per the contract's §7 link rule: relative repository links only.
+		if (/^https?:\/\//i.test(raw) || /^file:\/\//i.test(raw) || raw.startsWith("/")) {
 			absoluteLinks.push(`L${link.line}: ${raw}`);
 			continue;
 		}
@@ -122,7 +143,7 @@ const boardLines = boardRaw.split("\n");
 		absoluteLinks.length === 0,
 		absoluteLinks.length === 0 ? `${allLinks.length} relative links, no absolute URLs` : `absolute: ${absoluteLinks.join(", ")}`,
 	);
-}
+} // end if (!fixtureName)
 
 // ---------- Structural extraction: tables and their headers ----------
 interface Table {
@@ -273,7 +294,7 @@ const recentlyClosedTbl = findTableUnder("## Recently closed transitions");
 		}
 	};
 	if (currentFrontierTbl) {
-		const stateIdx = currentFrontierTbl.headers.indexOf("Work");
+		const stateIdx = currentFrontierTbl.headers.indexOf("State"); // may be -1 if no State column
 		const workIdx = currentFrontierTbl.headers.indexOf("Work");
 		const detailIdx = currentFrontierTbl.headers.indexOf("Detail");
 		check(currentFrontierTbl, "Current frontier", stateIdx, workIdx, detailIdx);
@@ -324,6 +345,23 @@ const recentlyClosedTbl = findTableUnder("## Recently closed transitions");
 		const stateIdx = deferredTbl.headers.indexOf("State");
 		if (stateIdx >= 0) {
 			for (const row of deferredTbl.rows) checkCell(row[stateIdx] ?? "", "Deferred/hold State");
+		}
+	}
+	if (recentlyClosedTbl) {
+		const verdictIdx = recentlyClosedTbl.headers.indexOf("Verdict");
+		if (verdictIdx >= 0) {
+			for (const row of recentlyClosedTbl.rows) checkCell(row[verdictIdx] ?? "", "Recently closed Verdict");
+		}
+	}
+	hard(
+		"STATUS_VOCABULARY_VALID",
+		offendingTokens.size === 0,
+		offendingTokens.size === 0
+			? `state cells use closed-class tokens: ${[...STATUS_BASE].join(", ")} (+ qualifiers)`
+			: `offending: ${[...offendingTokens].join("; ")}`,
+	);
+}
+
 // ---------- Gate 8: HOST_REQUIRED_QUALIFICATION_VALID ----------
 {
 	const orphanHostRequired: string[] = [];
@@ -347,7 +385,7 @@ const recentlyClosedTbl = findTableUnder("## Recently closed transitions");
 		checkRow(activeEpicsTbl, "Active epics", stateIdx, workIdx);
 	}
 	if (currentFrontierTbl) {
-		const stateIdx = currentFrontierTbl.headers.indexOf("Work");
+		const stateIdx = currentFrontierTbl.headers.indexOf("State"); // may be -1 if no State column
 		const workIdx = currentFrontierTbl.headers.indexOf("Work");
 		checkRow(currentFrontierTbl, "Current frontier", stateIdx, workIdx);
 	}
@@ -366,8 +404,10 @@ const recentlyClosedTbl = findTableUnder("## Recently closed transitions");
 }
 
 // ---------- Gate 9: OLD_ACT_IDS_PRESERVED (conservation) ----------
-{
-	const idRe = /\bACT-CLINEMM-[A-Z0-9_-]+\b/g;
+// Skip when running against a fixture (the synthetic fixture won't satisfy conservation).
+if (!fixtureName) {
+	{
+		const idRe = /\bACT-CLINEMM-[A-Z0-9_-]+\b/g;
 	const oldIds = new Set<string>();
 	let anchorReadOk = true;
 	try {
@@ -431,6 +471,7 @@ const recentlyClosedTbl = findTableUnder("## Recently closed transitions");
 		);
 	}
 }
+} // end if (!fixtureName)
 
 // ---------- Gate 10: NO_OVERSIZED_INDEX_TABLE_CELL ----------
 {
@@ -471,19 +512,3 @@ lines.push(pass ? "RESULT: ALL HARD GATES PASS" : "RESULT: ONE OR MORE HARD GATE
 
 console.log(lines.join("\n"));
 process.exit(pass ? 0 : 1);
-		}
-	}
-	if (recentlyClosedTbl) {
-		const verdictIdx = recentlyClosedTbl.headers.indexOf("Verdict");
-		if (verdictIdx >= 0) {
-			for (const row of recentlyClosedTbl.rows) checkCell(row[verdictIdx] ?? "", "Recently closed Verdict");
-		}
-	}
-	hard(
-		"STATUS_VOCABULARY_VALID",
-		offendingTokens.size === 0,
-		offendingTokens.size === 0
-			? `state cells use closed-class tokens: ${[...STATUS_BASE].join(", ")} (+ qualifiers)`
-			: `offending: ${[...offendingTokens].join("; ")}`,
-	);
-}
