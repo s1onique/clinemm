@@ -245,6 +245,42 @@ async function executeShellCommands(
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION02
+	// (per-command channel requires correlated plan):
+	//
+	// The CORRECTION01 typed-channel separation added a second typed
+	// field `perCommandExecutionCapability?: InternalExecutionCapability`
+	// to AgentToolContext. That field's WHOLE POINT is to carry real
+	// authority-bearing capabilities from a successfully correlated
+	// per-command execution plan entry down to CommandJobManager.start.
+	//
+	// Without this guard, the field could arrive on the no-plan branch
+	// (e.g. from a hostile actor who attaches the field directly via a
+	// future code path or JSON-deserialization bypass) and start() would
+	// consume it -- bypassing the invariant we need:
+	//
+	//   perCommandExecutionCapability present
+	//   + no successfully correlated commandExecutionPlan
+	//   = ZERO starts
+	//
+	// The legitimate no-plan cases are:
+	//   - perCommandExecutionCapability === undefined
+	// (any other shape is a forgery -- reject fail-closed)
+	//
+	// Note: this rejects factory-binding-probe too if it appears on
+	// this field without a plan, because the meaning of the field is
+	// derived from a correlated per-command plan. A probe in the
+	// absence of a plan is also a forgery.
+	//
+	// On mismatch: FAIL CLOSED -- throw BEFORE any manager.start call.
+	// -------------------------------------------------------------------------
+	if (perCommandCaps === null && context.perCommandExecutionCapability !== undefined) {
+		throw new Error(
+			`per_command_execution_capability_requires_correlated_plan: perCommandExecutionCapability kind=${JSON.stringify(context.perCommandExecutionCapability.kind)} requires a successfully correlated per-command execution plan; the per-command channel is only legal when a plan is present`,
+		)
+	}
+
 	return Promise.all(
 		commands.map(async (command, i): Promise<ToolOperationResult> => {
 			const startedAt = Date.now();
