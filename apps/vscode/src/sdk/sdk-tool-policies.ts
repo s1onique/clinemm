@@ -135,33 +135,118 @@ function parseMcpToolName(toolName: string): { serverName: string; toolName: str
  */
 
 /**
+ * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01
+ *
+ * Pull the first rendered command string from a tool input and
+ * return its first whitespace-delimited token IF AND ONLY IF it
+ * is exactly `/usr/bin/mktemp`. Returns `undefined` otherwise
+ * (including on parse failure or for any non-mktemp command).
+ *
+ * This is a narrow helper. It exists to detect the exact
+ * reviewed slash-prefixed form so the host adapter can bind
+ * evidence to the ACTUAL executable bash will run, rather than
+ * to whatever `which mktemp` finds in PATH. It does NOT support
+ * any other binary; the policy gate already requires
+ * `realpath === "/usr/bin/mktemp"`, so even if a future bug
+ * allowed a different `executablePath` through, the strict
+ * identity gate would reject it.
+ *
+ * Supports the common input shapes observed in production:
+ *   - `{ command: "/usr/bin/mktemp" }`                 -> string
+ *   - `{ command: "/usr/bin/mktemp -d" }`              -> string with args
+ *   - `{ commands: ["/usr/bin/mktemp"] }`              -> array
+ *   - `{ command: { command: "/usr/bin/mktemp", args: [] } }` -> structured
+ *
+ * Returns the first token trimmed of leading/trailing
+ * whitespace. Trailing tokens / args are ignored.
+ */
+function extractExplicitMktempPath(toolInput: unknown): string | undefined {
+	if (toolInput === null || toolInput === undefined) {
+		return undefined
+	}
+	const REVIEWED = "/usr/bin/mktemp"
+	// String form: command is the raw shell text.
+	if (typeof toolInput === "string") {
+		const first = toolInput.trim().split(/\s+/u)[0]
+		return first === REVIEWED ? first : undefined
+	}
+	// Structured form: object with command / commands / cmd.
+	if (typeof toolInput !== "object") {
+		return undefined
+	}
+	const record = toolInput as Record<string, unknown>
+	const pickFirst = (cmd: unknown): string | undefined => {
+		if (typeof cmd !== "string") {
+			return undefined
+		}
+		const first = cmd.trim().split(/\s+/u)[0]
+		return first === REVIEWED ? first : undefined
+	}
+	if (typeof record.command === "string") {
+		return pickFirst(record.command)
+	}
+	if (Array.isArray(record.commands) && record.commands.length > 0) {
+		return pickFirst(record.commands[0])
+	}
+	if (typeof record.cmd === "string") {
+		return pickFirst(record.cmd)
+	}
+	// StructuredCommandInput: { command: string, args?: string[] }.
+	// Already covered by `record.command` above, but if the outer
+	// shape wraps it (e.g. { command: { command: "...", args: [] } })
+	// recurse one level.
+	if (record.command !== null && typeof record.command === "object") {
+		return extractExplicitMktempPath(record.command)
+	}
+	return undefined
+}
+
+/**
  * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02
+ * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01
  *
  * Host-side evidence builder for the `host_safe_mktemp_default_temp`
  * safe rule.
  *
  * On Darwin (process.platform === "darwin"), the function:
  *
- *   (1) Resolves `mktemp` via PATH using `/usr/bin/which mktemp`
- *       (a subprocess so PATH resolution matches what the executor
- *       will see). Captures the raw executable path.
- *   (2) Realpathes the resolved executable via `fs.realpathSync`.
- *   (3) Requires the realpath to equal `/usr/bin/mktemp` -- only
+ *   (1) EXPLICIT-PATH INVOCATION: when `opts.executablePath` is
+ *       supplied (the user's command text already contains a
+ *       slash-prefixed path such as `/usr/bin/mktemp`), that
+ *       pathname IS the authority. Bash executes a slash-prefixed
+ *       command name as a pathname, bypassing shell-function /
+ *       builtin / PATH lookup (GNU Bash Reference Manual, Command
+ *       Search and Execution). The adapter therefore skips
+ *       `/usr/bin/which mktemp` and `fs.realpathSync`s the
+ *       supplied path directly. PATH shadow (Nix coreutils,
+ *       homebrew coreutils, etc.) is irrelevant -- the executed
+ *       identity is the explicit pathname, not whatever `which`
+ *       happens to find.
+ *   (2) NO EXPLICIT PATH (default): falls back to PATH resolution
+ *       via `/usr/bin/which mktemp` (a subprocess so PATH
+ *       resolution matches what the executor will see). Captures
+ *       the raw executable path.
+ *   (3) Realpathes the resolved executable via `fs.realpathSync`.
+ *   (4) Requires the realpath to equal `/usr/bin/mktemp` -- only
  *       Apple-system identity is reviewed in this ACT. Any other
  *       resolution (homebrew coreutils, Nix coreutils, custom
  *       build, symlink hack, etc.) returns undefined evidence
  *       and the policy gate fails closed to ASK with
  *       host_mktemp_executable_identity_unbound.
- *   (4) Sourced the true Darwin per-user temp root from
+ *   (5) Sourced the true Darwin per-user temp root from
  *       `/usr/bin/getconf DARWIN_USER_TEMP_DIR` (which calls
  *       confstr(_CS_DARWIN_USER_TEMP_DIR) on darwin). This is
  *       the Apple-authoritative source per the Secure Coding
  *       Guide; unlike os.tmpdir(), it ignores inherited TMPDIR.
- *   (5) Realpathes the getconf result for the canonical form.
+ *   (6) Realpathes the getconf result for the canonical form.
  *
  * Returns undefined on:
  *   - non-darwin platform (linux/win32/unknown)
- *   - which subprocess failure (PATH has no mktemp at all)
+ *   - explicit-path invocation where the realpath does not equal
+ *     `/usr/bin/mktemp` (i.e. `/usr/local/bin/mktemp`, a custom
+ *     build, a symlink that resolves elsewhere, etc.)
+ *   - PATH-resolution fallback: which subprocess failure (PATH
+ *     has no mktemp at all)
  *   - realpath mismatch against /usr/bin/mktemp
  *   - getconf subprocess failure
  *
@@ -172,27 +257,57 @@ function parseMcpToolName(toolName: string): { serverName: string; toolName: str
  *   (b) true Darwin temp authority gate
  *       (darwinUserTempRoot from getconf, NOT os.tmpdir())
  * required by the CORRECTION02 policy gate.
+ *
+ * EXPLICIT-PATH EVIDENCE BINDING (CORRECTION01):
+ * `opts.executablePath` is the adapter's request: "the user's
+ * command text invoked THIS exact pathname, so the executed
+ * identity IS this pathname." The adapter does NOT do generic
+ * arbitrary-executable resolution; it only opts in for the
+ * already-reviewed slash-prefixed `/usr/bin/mktemp` family. The
+ * caller's responsibility is to extract the first token from the
+ * normalized command and pass it here; the adapter then runs the
+ * same strict identity gate (realpath === "/usr/bin/mktemp") so
+ * no other binary can sneak through.
  */
-export function buildTempAuthorityEvidence(): TempAuthorityEvidence | undefined {
+export function buildTempAuthorityEvidence(opts?: {
+	/**
+	 * The slash-prefixed executable pathname the user invoked
+	 * (e.g. `/usr/bin/mktemp`). When supplied, the adapter
+	 * resolves this path directly via `fs.realpathSync` instead
+	 * of asking PATH (`/usr/bin/which mktemp`). Only the
+	 * Apple-system `/usr/bin/mktemp` identity passes the strict
+	 * realpath gate.
+	 */
+	executablePath?: string
+}): TempAuthorityEvidence | undefined {
 	if (process.platform !== "darwin") {
 		return undefined
 	}
 
 	let executablePath: string
-	try {
-		const which = child_process.spawnSync("/usr/bin/which", ["mktemp"], {
-			encoding: "utf8",
-			timeout: 5_000,
-		})
-		if (which.status !== 0 || !which.stdout) {
+	if (opts?.executablePath !== undefined) {
+		// Explicit-path invocation. The user's command text
+		// already names the binary by pathname; bash will
+		// execute that pathname directly. We realpath it to
+		// detect symlink escapes (e.g. `/usr/local/bin/mktemp`
+		// that happens to be a symlink to GNU coreutils).
+		executablePath = opts.executablePath
+	} else {
+		try {
+			const which = child_process.spawnSync("/usr/bin/which", ["mktemp"], {
+				encoding: "utf8",
+				timeout: 5_000,
+			})
+			if (which.status !== 0 || !which.stdout) {
+				return undefined
+			}
+			executablePath = which.stdout.trim().split("\n")[0]
+			if (!executablePath) {
+				return undefined
+			}
+		} catch {
 			return undefined
 		}
-		executablePath = which.stdout.trim().split("\n")[0]
-		if (!executablePath) {
-			return undefined
-		}
-	} catch {
-		return undefined
 	}
 
 	let executableRealpath: string
@@ -258,7 +373,39 @@ export function getCommandHostAuthorization(
 		cwd?: string
 		pathAuthorityEvidence?: WorkspacePathAuthorityEvidence
 	},
+	/**
+	 * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01
+	 *
+	 * Optional tool input (the raw `toolInput` from the SDK
+	 * request). When provided AND the first rendered command
+	 * starts with `/usr/bin/mktemp`, the host adapter passes
+	 * that explicit pathname to `buildTempAuthorityEvidence()`
+	 * so the executable identity is bound to the ACTUAL
+	 * slash-prefixed executable bash will execute, NOT to
+	 * whatever `which mktemp` happens to find via PATH. This
+	 * closes the exact-path-name-with-PATH-shadow false
+	 * negative: `/usr/bin/mktemp` is AUTO on darwin even when
+	 * PATH points at GNU/Nix coreutils first.
+	 *
+	 * Omitting this argument falls back to the legacy
+	 * PATH-resolution behavior (used by older callers and by
+	 * the CLI's `command-policy-host.ts` which has its own
+	 * resolver).
+	 */
+	toolInput?: unknown,
 ): CommandHostAuthorization {
+	// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01:
+	// Extract the first whitespace-delimited token of the
+	// rendered command string and, if it is exactly
+	// `/usr/bin/mktemp`, pass it as `executablePath` to
+	// `buildTempAuthorityEvidence`. This binds the host
+	// evidence to the slash-prefixed pathname the user
+	// invoked -- PATH shadow (Nix coreutils, homebrew
+	// coreutils, BASH_FUNC_* shadows) becomes irrelevant for
+	// the executed identity, because bash treats a
+	// slash-prefixed command name as a pathname directly
+	// (GNU Bash Reference Manual, Command Search and Execution).
+	const explicitMktempPath = extractExplicitMktempPath(toolInput)
 	let resolved: CommandHostAuthorization
 	if (isCommandTool(toolName)) {
 		// `cancel_command` is mutating (terminates a process tree) but
@@ -284,6 +431,35 @@ export function getCommandHostAuthorization(
 				// caller does not supply it, the policy layer
 				// falls back to the V1 lexical-only check.
 				pathAuthorityEvidence: workspaceContext?.pathAuthorityEvidence,
+				// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02 +
+				// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01:
+				// NARROW scope: only attach tempAuthorityEvidence
+				// when the user's command is in the reviewed
+				// explicit-path `/usr/bin/mktemp` family. Bare
+				// `mktemp` is intentionally ASK now (binding
+				// requires a slash-prefixed executable), so there
+				// is no reason to probe `/usr/bin/which mktemp` /
+				// `/usr/bin/getconf DARWIN_USER_TEMP_DIR` for an
+				// arbitrary safe command (`pwd`, `git status`,
+				// `ls`, `cat package.json`, etc.) — that would be
+				// unnecessary subprocess work on every command
+				// authorization and violates the ACT's stated
+				// narrow scope.
+				//
+				// The CORRECTION03 policy gate independently
+				// returns `host_mktemp_temp_authority_unbound`
+				// (ASK) when `tempAuthorityEvidence === undefined`
+				// and the command's lexical shape matches
+				// `host_safe_mktemp_default_temp` (bare
+				// `mktemp` / `mktemp -d`). The bare-form ASK
+				// fallback is therefore preserved without
+				// evidence discovery.
+				tempAuthorityEvidence:
+					explicitMktempPath !== undefined
+						? buildTempAuthorityEvidence({
+								executablePath: explicitMktempPath,
+							})
+						: undefined,
 			})
 		} else {
 			resolved = commandHostAuthorization({ mode: "manual" })

@@ -2,7 +2,7 @@ import { evaluateCommandPolicy } from "@cline/core"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import type { McpServer, McpTool } from "@shared/mcp"
 import { describe, expect, it } from "vitest"
-import { isToolAutoApproved } from "./sdk-tool-policies"
+import { buildTempAuthorityEvidence, getCommandHostAuthorization, isToolAutoApproved } from "./sdk-tool-policies"
 import { resolveEffectiveAutoApproval } from "./session-auto-approval"
 
 // Minimal structural type for the McpHub surface isToolAutoApproved uses.
@@ -255,8 +255,6 @@ describe("ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: resolver path + mutation 
 //
 // On non-darwin hosts, the adapter must return undefined.
 
-import { buildTempAuthorityEvidence } from "./sdk-tool-policies"
-
 describe("CORRECTION02: buildTempAuthorityEvidence (host adapter authenticity)", () => {
 	it("returns non-darwin as undefined", () => {
 		if (process.platform === "darwin") {
@@ -399,5 +397,242 @@ describe("CORRECTION03: explicit-path slash-bypass (policy seam)", () => {
 		})
 		expect(r.decision.kind).toBe("ask")
 		expect(r.decision.source).toBe("host_mktemp_shell_resolution_unbound")
+	})
+})
+
+// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01
+//
+// Production-shaped host-adapter tests for the explicit-path
+// evidence binding. These are REAL_PRODUCTION_HOST_ADAPTER tests:
+// they drive `getCommandHostAuthorization()` (the actual function
+// `SdkController.resolveHostAuthorization` calls in production)
+// with a toolInput whose first rendered command is the slash-
+// prefixed `/usr/bin/mktemp`. Then they drive
+// `evaluateCommandPolicy()` with that produced authorization
+// (NOT an injected TempAuthorityEvidence) and assert the policy
+// outcome.
+//
+// The defining scenario is the installed false negative this ACT
+// closes: on a darwin host whose PATH is shadowed by GNU/Nix
+// coreutils mktemp first, the user's explicit invocation
+// `/usr/bin/mktemp` MUST auto-approve, because bash executes a
+// slash-prefixed command name as a pathname (GNU Bash Reference
+// Manual, Command Search and Execution).
+
+describe("ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01: host adapter binds evidence to slash-prefixed executable", () => {
+	const SAFE_ON_SETTINGS = {
+		...DEFAULT_AUTO_APPROVAL_SETTINGS,
+		actions: {
+			...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+			executeSafeCommands: true,
+		},
+	}
+
+	it("R1: with PATH shadowed to GNU/Nix mktemp first, /usr/bin/mktemp via getCommandHostAuthorization -> ALLOW", () => {
+		if (process.platform !== "darwin") return
+		const originalPath = process.env.PATH
+		try {
+			process.env.PATH = "/run/current-system/sw/bin:/usr/bin:/bin"
+			const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+				command: "/usr/bin/mktemp",
+			})
+			expect(auth.tempAuthorityEvidence).toBeDefined()
+			expect(auth.tempAuthorityEvidence!.executableRealpath).toBe("/usr/bin/mktemp")
+			const r = evaluateCommandPolicy({
+				toolInput: { command: "/usr/bin/mktemp" },
+				hostAuthorization: auth,
+			})
+			expect(r.decision.kind).toBe("allow")
+			expect(r.decision.matchedRuleSource).toBe("host_safe_mktemp_default_temp")
+		} finally {
+			process.env.PATH = originalPath
+		}
+	})
+
+	it("R2: with PATH shadowed, /usr/bin/mktemp -d via getCommandHostAuthorization -> ALLOW", () => {
+		if (process.platform !== "darwin") return
+		const originalPath = process.env.PATH
+		try {
+			process.env.PATH = "/run/current-system/sw/bin:/usr/bin:/bin"
+			const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+				command: "/usr/bin/mktemp -d",
+			})
+			const r = evaluateCommandPolicy({
+				toolInput: { command: "/usr/bin/mktemp -d" },
+				hostAuthorization: auth,
+			})
+			expect(r.decision.kind).toBe("allow")
+			expect(r.decision.matchedRuleSource).toBe("host_safe_mktemp_default_temp")
+		} finally {
+			process.env.PATH = originalPath
+		}
+	})
+
+	it("CONSERVATION: with PATH shadowed, bare `mktemp` -> ASK with shell_resolution_unbound", () => {
+		if (process.platform !== "darwin") return
+		const originalPath = process.env.PATH
+		try {
+			process.env.PATH = "/run/current-system/sw/bin:/usr/bin:/bin"
+			const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+				command: "mktemp",
+			})
+			const r = evaluateCommandPolicy({
+				toolInput: { command: "mktemp" },
+				hostAuthorization: auth,
+			})
+			expect(r.decision.kind).toBe("ask")
+			expect(r.decision.source).toBe("host_mktemp_shell_resolution_unbound")
+		} finally {
+			process.env.PATH = originalPath
+		}
+	})
+
+	it("CONSERVATION: with PATH shadowed, bare `mktemp -d` -> ASK with shell_resolution_unbound", () => {
+		if (process.platform !== "darwin") return
+		const originalPath = process.env.PATH
+		try {
+			process.env.PATH = "/run/current-system/sw/bin:/usr/bin:/bin"
+			const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+				command: "mktemp -d",
+			})
+			const r = evaluateCommandPolicy({
+				toolInput: { command: "mktemp -d" },
+				hostAuthorization: auth,
+			})
+			expect(r.decision.kind).toBe("ask")
+			expect(r.decision.source).toBe("host_mktemp_shell_resolution_unbound")
+		} finally {
+			process.env.PATH = originalPath
+		}
+	})
+})
+
+// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01
+//
+// buildTempAuthorityEvidence({executablePath}) unit + getCommandHostAuthorization
+// toolInput-shape coverage.
+
+describe("ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01: buildTempAuthorityEvidence({executablePath}) unit + toolInput shape", () => {
+	const SAFE_ON_SETTINGS = {
+		...DEFAULT_AUTO_APPROVAL_SETTINGS,
+		actions: {
+			...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+			executeSafeCommands: true,
+		},
+	}
+
+	describe("buildTempAuthorityEvidence({executablePath}) explicit-path mode", () => {
+		it("darwin + executablePath=/usr/bin/mktemp -> full evidence bound to that path", () => {
+			if (process.platform !== "darwin") return
+			const ev = buildTempAuthorityEvidence({ executablePath: "/usr/bin/mktemp" })
+			expect(ev).toBeDefined()
+			expect(ev!.platform).toBe("darwin")
+			expect(ev!.executablePath).toBe("/usr/bin/mktemp")
+			expect(ev!.executableRealpath).toBe("/usr/bin/mktemp")
+			expect(ev!.darwinUserTempRoot.length).toBeGreaterThan(0)
+			expect(ev!.canonicalDarwinUserTempRoot.length).toBeGreaterThan(0)
+		})
+
+		it("darwin + executablePath=/usr/local/bin/mktemp -> undefined (not Apple-system)", () => {
+			if (process.platform !== "darwin") return
+			const ev = buildTempAuthorityEvidence({ executablePath: "/usr/local/bin/mktemp" })
+			expect(ev).toBeUndefined()
+		})
+
+		it("darwin + executablePath=/nonexistent/mktemp -> undefined (realpath fails)", () => {
+			if (process.platform !== "darwin") return
+			const ev = buildTempAuthorityEvidence({ executablePath: "/nonexistent/mktemp" })
+			expect(ev).toBeUndefined()
+		})
+
+		it("darwin + executablePath=/usr/bin/mktemp with TMPDIR steered -> getconf still wins", () => {
+			if (process.platform !== "darwin") return
+			const originalTmpdir = process.env.TMPDIR
+			try {
+				process.env.TMPDIR = "/synthetic/attacker-selected"
+				const ev = buildTempAuthorityEvidence({ executablePath: "/usr/bin/mktemp" })
+				if (ev !== undefined) {
+					expect(ev.darwinUserTempRoot).not.toBe("/synthetic/attacker-selected")
+					expect(ev.darwinUserTempRoot).not.toBe(process.env.TMPDIR)
+				}
+			} finally {
+				process.env.TMPDIR = originalTmpdir
+			}
+		})
+	})
+
+	describe("getCommandHostAuthorization toolInput-shape recognition", () => {
+		it("string toolInput /usr/bin/mktemp -> executablePath branch active", () => {
+			if (process.platform !== "darwin") return
+			const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, "/usr/bin/mktemp")
+			expect(auth.tempAuthorityEvidence?.executableRealpath).toBe("/usr/bin/mktemp")
+		})
+
+		it("{commands: ['/usr/bin/mktemp']} -> executablePath branch active", () => {
+			if (process.platform !== "darwin") return
+			const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+				commands: ["/usr/bin/mktemp"],
+			})
+			expect(auth.tempAuthorityEvidence?.executableRealpath).toBe("/usr/bin/mktemp")
+		})
+
+		it("{command: {command: '/usr/bin/mktemp', args: []}} -> executablePath branch active", () => {
+			if (process.platform !== "darwin") return
+			const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+				command: { command: "/usr/bin/mktemp", args: [] },
+			})
+			expect(auth.tempAuthorityEvidence?.executableRealpath).toBe("/usr/bin/mktemp")
+		})
+
+		it("non-mktemp toolInput -> tempAuthorityEvidence undefined (no PATH resolution work)", () => {
+			if (process.platform !== "darwin") return
+			const originalPath = process.env.PATH
+			try {
+				process.env.PATH = "/usr/bin:/bin"
+				const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+					command: "pwd",
+				})
+				expect(auth.tempAuthorityEvidence).toBeUndefined()
+			} finally {
+				process.env.PATH = originalPath
+			}
+		})
+
+		it("non-mktemp toolInput -> no which/getconf subprocess work", () => {
+			if (process.platform !== "darwin") return
+			// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01:
+			// narrow scope means unrelated safe commands
+			// (pwd / git status / ls / cat package.json) MUST NOT
+			// trigger /usr/bin/which mktemp or
+			// /usr/bin/getconf DARWIN_USER_TEMP_DIR subprocess
+			// probes. The earlier broader wiring did. This test
+			// spies on child_process.spawnSync and asserts that
+			// for an unrelated toolInput, neither is invoked.
+			const cp = require("node:child_process") as typeof import("node:child_process")
+			const originalSpawnSync = cp.spawnSync
+			const whichCalls: Array<{ cmd: string; argv: string[] }> = []
+			const getconfCalls: Array<{ cmd: string; argv: string[] }> = []
+			const spy: typeof cp.spawnSync = ((cmd: string, argv?: readonly string[]) => {
+				if (cmd === "/usr/bin/which" || cmd === "which") {
+					whichCalls.push({ cmd, argv: [...(argv ?? [])] })
+				} else if (cmd === "/usr/bin/getconf" || cmd === "getconf") {
+					getconfCalls.push({ cmd, argv: [...(argv ?? [])] })
+				}
+				return originalSpawnSync(cmd, argv as string[])
+			}) as typeof cp.spawnSync
+			cp.spawnSync = spy
+			try {
+				for (const cmd of ["pwd", "git status", "ls", "cat package.json"]) {
+					const auth = getCommandHostAuthorization("run_commands", SAFE_ON_SETTINGS, undefined, undefined, {
+						command: cmd,
+					})
+					expect(auth.tempAuthorityEvidence).toBeUndefined()
+				}
+				expect(whichCalls).toEqual([])
+				expect(getconfCalls).toEqual([])
+			} finally {
+				cp.spawnSync = originalSpawnSync
+			}
+		})
 	})
 })

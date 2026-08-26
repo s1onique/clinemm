@@ -858,11 +858,17 @@ export class Controller {
 					// command would force ASK.
 					const canonicalRoots = pathAuthorityEvidence?.roots
 					const canonicalCwd = pathAuthorityEvidence?.cwd ?? undefined
-					let hostAuthorization = getCommandHostAuthorization(_toolName, persisted, this.mcpHub, {
-						workspaceRoots: canonicalRoots,
-						cwd: canonicalCwd,
-						pathAuthorityEvidence,
-					})
+					let hostAuthorization = getCommandHostAuthorization(
+						_toolName,
+						persisted,
+						this.mcpHub,
+						{
+							workspaceRoots: canonicalRoots,
+							cwd: canonicalCwd,
+							pathAuthorityEvidence,
+						},
+						requestInput,
+					)
 					let toolInput = requestInput
 					if (override === "all") {
 						// Compose over the base auth we just computed; this preserves
