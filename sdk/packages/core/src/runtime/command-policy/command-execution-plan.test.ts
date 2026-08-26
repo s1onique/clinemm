@@ -512,3 +512,99 @@ describeGr("C2-CORRECTION03: plan builder derives per-entry FilesystemCreateOnly
 		expectGr(plan?.commands[0]?.executionCapability).toBeUndefined();
 	});
 });
+
+/**
+ * CORRECTION04 (P1 narrowing): the realpathSync probe that
+ * resolves the executable argv[0] is gated behind
+ * `matchedRuleSource === "host_safe_mktemp_default_temp"`. The
+ * plan builder exposes a counter (`_getC2RealpathCallCount`)
+ * that increments exactly once per call to
+ * resolveExecutableRealpath. We reset the counter and then
+ * assert its value after plan construction for non-mktemp
+ * entries (pwd, git status) is ZERO, and is ONE for a single
+ * mktemp entry / mixed [mktemp, pwd] input.
+ *
+ * This is the load-bearing proof of the CORRECTION04 narrowing:
+ * for a plan with N non-mktemp entries + K mktemp entries,
+ * the counter must equal K exactly. This proves the plan
+ * builder performs NO host-side filesystem work on unrelated
+ * commands.
+ */
+import { describe as describeC4, expect as expectC4, it as itC4 } from "vitest"
+import {
+	_resetC2RealpathCallCount,
+	_getC2RealpathCallCount,
+} from "./command-execution-plan"
+
+const DARWIN_AUTH_TEMPL = {
+	mode: "safe-only",
+	explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+	workspaceRoots: [],
+	tempAuthorityEvidence: {
+		platform: "darwin" as const,
+		executablePath: "/usr/bin/mktemp",
+		executableRealpath: "/usr/bin/mktemp",
+		darwinUserTempRoot: "/var/folders/x/T/",
+		canonicalDarwinUserTempRoot: "/private/var/folders/x/T",
+	},
+}
+
+describeC4("CORRECTION04 narrowing: resolveExecutableRealpath is gated behind the mktemp rule", () => {
+	itC4("non-mktemp plan entries perform zero realpathSync calls", () => {
+		_resetC2RealpathCallCount()
+		buildCommandExecutionPlan(
+			["pwd", "git status"],
+			[
+				{
+					index: 0,
+					normalized: "pwd",
+					matchedRuleSource: "host_safe_pwd",
+				},
+				{
+					index: 1,
+					normalized: "git status",
+					matchedRuleSource: undefined,
+				},
+			],
+			commandHostAuthorization(DARWIN_AUTH_TEMPL),
+		)
+		expectC4(_getC2RealpathCallCount()).toBe(0)
+	})
+
+	itC4("mktemp rule entry performs exactly one realpathSync call", () => {
+		_resetC2RealpathCallCount()
+		buildCommandExecutionPlan(
+			"/usr/bin/mktemp",
+			[
+				{
+					index: 0,
+					normalized: "/usr/bin/mktemp",
+					matchedRuleSource: "host_safe_mktemp_default_temp",
+				},
+			],
+			commandHostAuthorization(DARWIN_AUTH_TEMPL),
+		)
+		expectC4(_getC2RealpathCallCount()).toBe(1)
+	})
+
+	itC4("mixed [mktemp, pwd] plan performs exactly one realpathSync call (only for mktemp)", () => {
+		_resetC2RealpathCallCount()
+		buildCommandExecutionPlan(
+			["/usr/bin/mktemp", "pwd"],
+			[
+				{
+					index: 0,
+					normalized: "/usr/bin/mktemp",
+					matchedRuleSource: "host_safe_mktemp_default_temp",
+				},
+				{
+					index: 1,
+					normalized: "pwd",
+					matchedRuleSource: "host_safe_pwd",
+				},
+			],
+			commandHostAuthorization(DARWIN_AUTH_TEMPL),
+		)
+		expectC4(_getC2RealpathCallCount()).toBe(1)
+	})
+})

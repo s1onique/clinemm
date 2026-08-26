@@ -229,20 +229,28 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 ablation + co
 
 	// -------------------------------------------------------------------------
 	// -------------------------------------------------------------------------
-	// NETWORK CONSERVATION (spec §34) - real causal probe
+	// -------------------------------------------------------------------------
+	// NETWORK CONSERVATION (spec §34) - controlled live-listener causal pair
 	//
-	// The previous C2 review correctly observed that asserting
-	// `mktemp` exit 0 is NOT a network-deny proof (mktemp does
-	// not touch the network). This CORRECTION03 test exercises
-	// a real network-touching shell under the same Seatbelt
-	// capability. We use the production manager.start (already
-	// wired by C2 GREEN) with the production Seatbelt backend
-	// (real /usr/bin/sandbox-exec) and the production profile
-	// (already proved by C1's seatbelt-operation-matrix.tsv
-	// to contain `(deny network*)`).
+	// CORRECTION04: the previous CORRECTION03 test (connect to
+	// 127.0.0.1:1) was not a causal Seatbelt-deny proof - a
+	// connection to a closed port fails identically regardless
+	// of whether the sandbox denies network. This test exercises
+	// the canonical CONTROL->TEST causal pair against a
+	// parent-owned listener:
+	//
+	//   CONTROL: unsandboxed child connects to the listener and
+	//            echoes the token back to a probe file. MUST see
+	//            "TOKEN".
+	//   TEST:    sandboxed child (Seatbelt `(deny network*)`)
+	//            tries the same connect. MUST NOT see "TOKEN".
+	//
+	// If CONTROL fails to reach the listener (sandbox exception,
+	// port collision, missing /dev/tcp support, etc.) we label
+	// CAPTURE_INSUFFICIENT - NOT a network-deny PASS.
 	// -------------------------------------------------------------------------
 	describe("Network conservation (spec §34)", () => {
-		it("sandboxed shell that tries a TCP connect -> probe file does NOT contain CONNECTED", async () => {
+		it("controlled live-listener causal pair: CONTROL sees token, sandboxed TEST does NOT", async () => {
 			if (!darwinHost || !canonicalDarwinRoot) {
 				expect(true).toBe(true)
 				return
@@ -252,33 +260,138 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 ablation + co
 				return
 			}
 
-			const cap = buildDarwinCreateOnlyCapability()
-			if (!cap) throw new Error("darwin capability unbuildable")
+			// 1) Bind a parent-owned listener on 127.0.0.1:<ephemeral>.
+			const TOKEN = `C2-NET-PROBE-${randomBytes(6).toString("hex")}`
+			const netMod = await import("node:net")
+			const listener = netMod.createServer((c) => {
+				try {
+					c.write(TOKEN)
+				} catch {}
+				try {
+					c.end()
+				} catch {}
+			})
+			await new Promise<void>((resolve, reject) => {
+				listener.once("error", reject)
+				listener.listen(0, "127.0.0.1", () => resolve())
+			})
+			const addr = listener.address()
+			if (!addr || typeof addr === "string") {
+				listener.close()
+				throw new Error("listener bound to unexpected address shape")
+			}
+			const port = addr.port
 
-			// The TCP-attempt block in the sandbox: under
-			// `(deny network*)` the open() fails and the
-			// CONNECTED-write below it never runs.
-			const probeFile = join(canonicalDarwinRoot, `c2-net-probe-${randomBytes(6).toString("hex")}`)
+			// Probe files for the CONTROL and TEST runs. They MUST
+			// live outside createOnlyRoots? No — the sandbox writes
+			// to createOnlyRoots (file-write-create is permitted
+			// there). The CONTROL also writes to createOnlyRoots
+			// to keep the probe surface uniform across runs.
+			const controlProbe = join(canonicalDarwinRoot, `c2-net-ctrl-${randomBytes(6).toString("hex")}`)
+			const testProbe = join(canonicalDarwinRoot, `c2-net-test-${randomBytes(6).toString("hex")}`)
+
+			// Script files (parent-owned). We avoid passing the
+			// bash script via `bash -c "..."` because the nested
+			// single-quote escaping in a long-lived test proves
+			// fragile across bash/sh/posix shells; writing the
+			// script to a file and `exec`-ing it removes the
+			// quoting surface entirely.
+			const controlScriptPath = join(canonicalDarwinRoot, `c2-net-ctrl-script-${randomBytes(6).toString("hex")}.sh`)
+			const testScriptPath = join(canonicalDarwinRoot, `c2-net-test-script-${randomBytes(6).toString("hex")}.sh`)
+			// Use `read -t 3` (bash builtin, no `timeout` command
+			// dependency — the inherited PATH may not include
+			// GNU coreutils). The script returns whatever was
+			// observable on the socket within 3 seconds, or
+			// writes "denied" on connect failure.
+			writeFileSync(
+				controlScriptPath,
+				`#!/bin/bash
+` +
+					`bash -c '{ exec 3<>/dev/tcp/127.0.0.1/${port}; read -t 3 line <&3; printf "%s" "$line" > "${controlProbe}"; printf connected >> "${controlProbe}"; } || printf denied > "${controlProbe}"'
+`,
+				{ mode: 0o755 },
+			)
+			writeFileSync(
+				testScriptPath,
+				`#!/bin/bash
+` +
+					`bash -c '{ exec 3<>/dev/tcp/127.0.0.1/${port}; read -t 3 line <&3; printf "%s" "$line" > "${testProbe}"; printf connected >> "${testProbe}"; } || printf denied > "${testProbe}"'
+`,
+				{ mode: 0o755 },
+			)
+
+			const readProbe = (path: string): string => {
+				try {
+					return readFileSync(path, "utf8").trim()
+				} catch {
+					return "<missing>"
+				}
+			}
+
 			try {
+				// 2) CONTROL: TRULY UNSANDBOXED child runs the script.
+				// runRealStart cannot be used here: the
+				// CLINEMM_EXPERIMENTAL_SANDBOX env var is set for
+				// the test (beforeEach), so the manager routes
+				// everything through the Seatbelt backend with its
+				// default `network: deny` capability — even with NO
+				// per-command executionCapability attached. The
+				// CONTROL must connect to the listener to prove the
+				// listener works, so we bypass the manager and use
+				// plain child_process.spawn (no Seatbelt).
+				const { spawn } = await import("node:child_process")
+				const controlChild = spawn("/bin/bash", [controlScriptPath], {
+					cwd: "/tmp",
+					env: {},
+				})
+				const controlOut = await new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
+					let stdout = ""
+					let stderr = ""
+					controlChild.stdout?.on("data", (d: Buffer) => (stdout += d.toString()))
+					controlChild.stderr?.on("data", (d: Buffer) => (stderr += d.toString()))
+					controlChild.on("close", (code) => resolve({ exitCode: code, stdout, stderr }))
+				})
+				const controlObserved = readProbe(controlProbe)
+				if (!controlObserved.includes(TOKEN)) {
+					throw new Error(
+						`CAPTURE_INSUFFICIENT: CONTROL unsandboxed child did not receive the token (got: ${JSON.stringify(controlObserved)} stdout=${JSON.stringify(controlOut.stdout.slice(0, 500))} stderr=${JSON.stringify(controlOut.stderr.slice(0, 500))} exitCode=${controlOut.exitCode}). Cannot claim causal Seatbelt-deny proof without a working CONTROL.`,
+					)
+				}
+				if (!controlObserved.includes(TOKEN)) {
+					throw new Error(
+						`CAPTURE_INSUFFICIENT: CONTROL unsandboxed child did not receive the token (got: ${JSON.stringify(controlObserved)}). Cannot claim causal Seatbelt-deny proof without a working CONTROL.`,
+					)
+				}
+
+				// 3) TEST: sandboxed bash tries the same connect.
+				const cap = buildDarwinCreateOnlyCapability()
+				if (!cap) throw new Error("darwin capability unbuildable")
 				await runRealStart({
-					cmd: shPath,
-					args: [
-						"-c",
-						`{ (exec 3<>/dev/tcp/127.0.0.1/1) 2>/dev/null; } && printf CONNECTED > "${probeFile}" || printf denied > "${probeFile}"`,
-					],
+					cmd: "/bin/bash",
+					args: [testScriptPath],
 					capability: cap,
 				})
-				const observed = (() => {
-					try {
-						return readFileSync(probeFile, "utf8").trim()
-					} catch {
-						return "<missing>"
-					}
-				})()
-				expect(observed).not.toBe("CONNECTED")
+				const testObserved = readProbe(testProbe)
+				// Causal discriminator: the sandboxed child MUST NOT
+				// have observed the TOKEN. (If it did, the connect
+				// succeeded under Seatbelt and the deny rule is not
+				// active - a real C2 fail.)
+				expect(testObserved).not.toContain(TOKEN)
 			} finally {
 				try {
-					rmSync(probeFile, { force: true })
+					listener.close()
+				} catch {}
+				try {
+					rmSync(controlProbe, { force: true })
+				} catch {}
+				try {
+					rmSync(testProbe, { force: true })
+				} catch {}
+				try {
+					rmSync(controlScriptPath, { force: true })
+				} catch {}
+				try {
+					rmSync(testScriptPath, { force: true })
 				} catch {}
 			}
 		})
@@ -380,56 +493,44 @@ describe("ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 ablation + co
 
 	// -------------------------------------------------------------------------
 	// -------------------------------------------------------------------------
-	// PARSER HELPER SHA CONSERVATION (spec §38) - real fs SHA
+	// -------------------------------------------------------------------------
+	// PARSER HELPER SHA CONSERVATION (spec §38) - git-tracked invariant
 	//
-	// The previous C2 test asserted `expect(true).toBe(true)`,
-	// which is not executable evidence. CORRECTION03 replaces it
-	// with a real filesystem SHA over the helper source tree.
-	// The production invariant is: this ACT (CORRECTION03) does
-	// NOT modify any file under the parser-helper subtree; the
-	// SHA observed by this test must equal the SHA the C1
-	// closure observed.
+	// CORRECTION04: the previous "compute current SHA and check
+	// length" test was structural-only (no before-value comparison).
+	// The conservation invariant is provably satisfied by git diff,
+	// which is the actual substrate the production pipeline uses
+	// to ship the parser-helper binary. We replace the SHA
+	// computation with a `git diff ENTRY_HEAD..HEAD --
+	// parser-helper/` empty check, which is a real, executable
+	// conservation proof.
+	//
+	// ENTRY_HEAD for this correction is the C2 main commit
+	// `d51a33328` (the start of the C2 segment). The invariant
+	// under test: between ENTRY_HEAD and HEAD, NO file under
+	// `sdk/packages/core/src/runtime/command-policy/parser-helper/`
+	// has been modified. CORRECTION03 and CORRECTION04 do NOT
+	// touch parser-helper; this test freezes that as a green
+	// invariant.
 	// -------------------------------------------------------------------------
 	describe("Parser helper SHA conservation (spec §38)", () => {
-		it("parser-helper subtree SHA is stable across this ACT (git-tracked files only)", async () => {
+		it("git diff ENTRY_HEAD..HEAD -- parser-helper/ is empty (no parser-helper modifications in C2)", async () => {
 			const { execSync } = await import("node:child_process")
-			let tracked: string
+			const ENTRY_HEAD = "d51a33328"
+			let diff = ""
 			try {
-				tracked = execSync("git ls-files sdk/packages/core/src/runtime/command-policy/parser-helper/ 2>/dev/null", {
-					encoding: "utf8",
-				}).trim()
-			} catch {
-				tracked = ""
-			}
-			const { createHash } = await import("node:crypto")
-			const { readFileSync } = await import("node:fs")
-			if (tracked.length === 0) {
-				// Subtree not present (parser-helper shipped through
-				// a separate ACT; production source not in tree). The
-				// canonical invariant is "no diff in this ACT"; an
-				// absent subtree trivially satisfies it.
-				const exists = execSync(
-					"test -d sdk/packages/core/src/runtime/command-policy/parser-helper && echo yes || echo no",
+				diff = execSync(
+					`git diff ${ENTRY_HEAD}..HEAD -- sdk/packages/core/src/runtime/command-policy/parser-helper/ 2>&1`,
 					{ encoding: "utf8" },
 				).trim()
-				expect(["yes", "no"]).toContain(exists)
-				// sha256("") is the canonical empty-tree digest.
-				expect(createHash("sha256").digest("hex")).toBe(
-					"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-				)
-				return
+			} catch (e) {
+				diff = `<git-failed: ${(e as Error).message}>`
 			}
-			const aggregate = createHash("sha256")
-			for (const f of tracked.split("\n").sort()) {
-				aggregate.update(f)
-				aggregate.update(readFileSync(f))
-			}
-			const sha = aggregate.digest("hex")
-			expect(sha.length).toBe(64)
-			// The subtree HAS files. Assert no diff under this subtree
-			// in this commit (`git status` clean is a stronger
-			// invariant; this test freezes the subtree presence).
-			expect(tracked.split("\n").length).toBeGreaterThan(0)
+			// Empty diff = no parser-helper changes since ENTRY_HEAD.
+			// Non-empty diff means the parser-helper subtree was
+			// touched in this ACT, which would invalidate the
+			// conservation claim.
+			expect(diff).toBe("")
 		})
 	})
 })
