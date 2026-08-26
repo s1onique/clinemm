@@ -57,10 +57,10 @@
  *     denying.
  */
 import {
+	type CommandCapability,
 	getSandboxBackend,
 	readExperimentalSandboxOptIn,
 	SAFE_ENVIRONMENT_BASELINE,
-	type CommandCapability,
 	type SandboxBackend,
 	type SandboxMode,
 } from "@cline/core"
@@ -99,6 +99,39 @@ export function resolveExperimentalSandboxMode(): SandboxMode | undefined {
 }
 
 /**
+ * ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01.
+ *
+ * Network-only opt-in knob. When `CLINEMM_SAFE_YOLO_NETWORK=allow` is
+ * set AND Seatbelt is the active experimental sandbox mode, the
+ * capability built by {@link buildExperimentalReconCapability} flips
+ * `network` from `"deny"` to `"allow"`. The Seatbelt profile
+ * generator already emits the semantically correct `(allow network*)`
+ * rule for `network: "allow"`; this function ONLY selects which value
+ * reaches the capability.
+ *
+ * Returns `"allow"` only when BOTH:
+ *   1. `process.env.CLINEMM_SAFE_YOLO_NETWORK === "allow"` (exact).
+ *   2. The active experimental mode is `"seatbelt-experimental"` AND
+ *      the env opt-in is recognized (see {@link resolveExperimentalSandboxMode}).
+ *
+ * Any other value, unset var, or absent Seatbelt opt-in returns
+ * `undefined` (no-op). Default behavior (`network: "deny"`) is
+ * UNCHANGED when this function returns `undefined`.
+ *
+ * NOT a generic security opt-out: filesystem policy is unaffected.
+ * NOT coupled to classic approval: autoApprove / YOLO are unaffected.
+ */
+export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
+	if (process.env.CLINEMM_SAFE_YOLO_NETWORK !== "allow") {
+		return undefined
+	}
+	if (resolveExperimentalSandboxMode() !== "seatbelt-experimental") {
+		return undefined
+	}
+	return "allow"
+}
+
+/**
  * Production default resolver. Returns the Seatbelt backend iff:
  *   1. mode === "seatbelt-experimental"
  *   2. opt-in env is recognized
@@ -106,7 +139,7 @@ export function resolveExperimentalSandboxMode(): SandboxMode | undefined {
  *
  * Returns `undefined` otherwise. Never throws.
  */
-export const defaultSandboxBackendResolver: SandboxBackendResolver = async mode => {
+export const defaultSandboxBackendResolver: SandboxBackendResolver = async (mode) => {
 	if (mode === "disabled") {
 		// Disabled mode → no backend. The executor takes the legacy path.
 		return undefined
@@ -147,7 +180,11 @@ export function buildExperimentalReconCapability(input: {
 		readonlyRoots: [...input.workspaceRoots],
 		writableRoots: [],
 		denyReadSubpaths: [],
-		network: "deny",
+		// ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01: honor the
+		// `CLINEMM_SAFE_YOLO_NETWORK=allow` opt-in. Default remains
+		// `"deny"` (the conservative network posture). Filesystem
+		// policy is unchanged either way.
+		network: resolveSafeYoloNetworkOptIn() === "allow" ? "allow" : "deny",
 		environment: {
 			mode: "sanitized",
 			// `allow` is a list of env var NAMES the sanitized env
