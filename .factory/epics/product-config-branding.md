@@ -4,17 +4,18 @@
 
 ## Current status
 
-- Status: ACTIVE — closed substrate + open frontier (BRANDING-ACTIVITYBAR-ICON01)
+- Status: ACTIVE — closed cost/consolidation substrate + **2 open product fronts**
 - Priority: P2 (product-facing substrate; not safety/lifecycle-critical)
-- Current frontier: 1 OPEN item listed under "Open work" — `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`.
+- Current frontier: 2 OPEN items listed under "Open work" — `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` (first ACT `TOOL-EXECUTION-SEMANTICS-RECON01`) and `EPIC-CLINEMM-BRANDING01` (first bounded slice `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`).
 - Blocked by: n/a
 
 ## Contract / durable conclusions
 
 - **Cost display truth is closed.** `ACT-CLINEMM-COST-DISPLAY-TRUTH01` (with its CORRECTION01 and CORRECTION02) is the canonical contract: cost values shown to the user are derived from the canonical cost source, not from re-derived approximations. Any future cost display must consume the canonical source.
 - **Main consolidation landed.** `ACT-CLINEMM-MAIN-CONSOLIDATION01` closed at the consolidation commit `d844177bc` (per the prior board wave summary). The canonical main branch carries the consolidated state; non-canonical top-level branches are reconciled into it.
-- **Branding activity-bar icon is OPEN.** `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` is the open frontier. It is the visible-branding replacement for the legacy activity-bar icon and is tracked under board row 24 (`BRANDING-ACTIVITYBAR-ICON01 — NEXT / MED`).
-- **Product configuration / branding substrate is closed.** The "Product configuration / branding" section (L3575-3606) is the closed product-config substrate; the only open item is the visible-branding ACT above.
+- **Tool-execution-semantics is an open product front.** `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` (board row 20) is `STATUS: OPEN`. Its first ACT is `TOOL-EXECUTION-SEMANTICS-RECON01`. Do **not** implement classifier logic in this board ACT — the recon precedes any classifier implementation.
+- **Branding is an open product front.** `EPIC-CLINEMM-BRANDING01` (board row 21) is `STATUS: OPEN`. Its first bounded slice is the activity-bar icon replacement `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`. Icon behavior must preserve VS Code monochrome / theming (no colored branding that breaks native Activity Bar theming).
+- **Two closed product substrates.** The "Cost display truth" (`EPIC-CLINEMM-COST-DISPLAY-TRUTH01`) and "Main consolidation" (`ACT-CLINEMM-MAIN-CONSOLIDATION01`) families are CLOSED_CLEAN; the Product telemetry section that contains them is **not** closed — it carries the two open fronts above.
 
 ## ACT ledger
 
@@ -22,20 +23,23 @@
 |---|---|---|---|
 | `ACT-CLINEMM-COST-DISPLAY-TRUTH01` (+ CORRECTION01, CORRECTION02) | CLOSED | L3378-3574 | Cost display truth (canonical cost source) |
 | `ACT-CLINEMM-MAIN-CONSOLIDATION01` | CLOSED at `d844177bc` | L3378-3574 | Main consolidation (canonical main carries consolidated state) |
-| `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` | **OPEN** | L3378-3574 | Branding activity-bar icon replacement |
+| `EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01` | **OPEN** (umbrella epic; first ACT `TOOL-EXECUTION-SEMANTICS-RECON01`) | L3378-3574 | Tool-execution-semantics product front |
+| `EPIC-CLINEMM-BRANDING01` | **OPEN** (umbrella epic; first bounded slice `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`) | L3378-3574 | Branding product front |
+| `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` | **OPEN** (first bounded slice under `EPIC-CLINEMM-BRANDING01`) | L3378-3574 | Branding activity-bar icon replacement (`‖ → --`) |
 | (substrate; no separate ACT) | CLOSED | L3575-3606 | Product configuration / branding substrate |
 
 ## Open work
 
-One open item:
+Two open product fronts:
 
-- **`ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`** (L3378-3574). Status: OPEN. The visible-branding activity-bar icon is the next ACT to land; it is board row 24 (`BRANDING-ACTIVITYBAR-ICON01 — NEXT / MED`).
+- **`EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01`** (L3378-3574). Status: OPEN. The umbrella epic is board row 20. Its first ACT is `TOOL-EXECUTION-SEMANTICS-RECON01`. Do not implement classifier logic in this board ACT — recon precedes any classifier implementation.
+- **`EPIC-CLINEMM-BRANDING01`** (L3575-3606). Status: OPEN. The umbrella epic is board row 21. Its first bounded slice is `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` (board row 24, `NEXT / MED`). Icon: `‖ → --`. Preserve VS Code monochrome / theming behavior.
 
 Reopen / new-work conditions:
 
 - Cost display observed diverging from the canonical cost source.
 - Main branch loses the consolidated state (i.e. a non-canonical branch re-emerges as a long-lived side).
-- A new visible-branding ACT lands that supersedes `BRANDING-ACTIVITYBAR-ICON01`.
+- A new visible-branding ACT lands that supersedes `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`.
 
 ## Deferred work
 
