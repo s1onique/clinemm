@@ -4,9 +4,9 @@
 
 ## Current status
 
-- Status: CLOSED framework (the 4 ACTs in this family are all closed; the substrate is what the rest of the task-presentation surface relies on)
+- Status: ACTIVE — closed substrate + open frontier
 - Priority: P1 (substrate for task lifecycle)
-- Current frontier: see board rows 22 (`CLASSIC-PROTECTION-RECON01`) and 23 (`REMOVE TEMPORARY YOLO BYPASS`) for the unblocked next-frontier work after Safe-YOLO closure
+- Current frontier: 3 open items listed under "Open work" below. The compacted-history substrate is fully closed; 3 task-header projection items remain open and must be tracked here so the eventual short index does not falsely report this family as closed.
 - Blocked by: n/a
 
 ## Contract / durable conclusions
@@ -14,24 +14,41 @@
 - **Compaction authority.** Compaction is owned by exactly one authority (`ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01`). Selection, sequencing, and cancellation all flow through that authority; downstream observers project from it. Per FACT-001.
 - **Context accounting.** Context-window accounting is truthful across read/compaction boundaries (`ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01`). The truth-row invariant: any consumer reading context length observes the same number after compaction as the canonical source.
 - **User-context ceiling.** A user-context ceiling applies (`ACT-CLINEMM-USER-CONTEXT-CEILING01`) — the host enforces a hard ceiling; the producer cannot exceed it without explicit user override.
-- **Task state presentation.** The task-header projection (`ACT-CLINEMM-E7`) is the canonical consumer of task-state for the webview; downstream telemetry strips read from the same projection.
+- **Task state projection authority.** The task-header projection (`ACT-CLINEMM-E7`) is the canonical consumer of task-state for the webview; downstream telemetry strips read from the same projection. **However**, two projection correctness epics are still open (see Open work) and one timing-semantics epic is open, so the `E7` substrate authority does not yet subsume all of `Task state / presentation`.
 
 ## ACT ledger
+
+### Closed substrate (the compacted-history layer)
 
 | ACT / Source ID | Verdict | Source line range (pre-sharding) | Purpose |
 |---|---|---|---|
 | `ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01` | CLOSED | L3202-3336 | Compaction ownership |
 | `ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01` | CLOSED | L3202-3336 | Truth-row invariant for context length |
 | `ACT-CLINEMM-USER-CONTEXT-CEILING01` | CLOSED | L3202-3336 | Hard user-context ceiling |
-| `ACT-CLINEMM-E7` | CLOSED | L3337-3377 | Task-state header projection (canonical webview source) |
+| `ACT-CLINEMM-E7` (CLOSED substrate; see Open work for still-open follow-on epics under this same umbrella) | CLOSED | L3337-3377 | Task-state header projection (canonical webview source) |
+
+### Open frontier (the task-header projection correctness + timing layer)
+
+| ACT / Source ID | Verdict | Source line range (pre-sharding) | Purpose |
+|---|---|---|---|
+| `ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01` | OPEN | L3339-3347 | Static "Thinking ›" presentation can persist after runtime state is no longer thinking/streaming |
+| `EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01` (historical name: `E7.1-2 TASKHEADER CANONICAL PROJECTION`) | OPEN | L3348-3356 | TaskHeader consumes canonical task-state projections rather than reconstructing state locally |
+| `EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01` | OPEN | L3358-3377 | TaskHeader should project canonical runtime ownership/state with timing semantics (distinct from projection correctness per L3356) |
 
 ## Open work
 
-None directly in this epic. Reopen conditions:
+Three open items, all in the task-state presentation layer:
+
+- **`ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01`** (L3339-3347). Symptom: static "Thinking ›" presentation can persist after runtime state is no longer thinking/streaming. Constraint: do not invent a second UI authority; use the canonical state/projection.
+- **`EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01`** (L3348-3356). Purpose: TaskHeader consumes canonical task-state projections rather than reconstructing state locally. Constraint: distinct from owner-aware timing (would lose it if folded).
+- **`EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01`** (L3358-3377). Goal: TaskHeader should project canonical runtime ownership/state with timing semantics.
+
+Reopen / new-work conditions:
 
 - New compaction authority appears that bypasses `COMPACTION-STATE-AUTHORITY01`.
 - Context accounting observed diverging between producer and any consumer.
 - User-context ceiling becomes soft in production.
+- Any of the 3 open items above changes status.
 
 ## Deferred work
 
