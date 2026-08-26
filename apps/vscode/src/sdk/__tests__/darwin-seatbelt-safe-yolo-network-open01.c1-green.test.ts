@@ -1,6 +1,22 @@
 /**
  * ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 GREEN.
  *
+ * ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01-CORRECTION01
+ * adds two updates to this file:
+ *
+ *   1. The filesystem-conservation structural test ("filesystem
+ *      policy is unchanged regardless of the opt-in") is updated
+ *      to acknowledge SRC01: the Safe-YOLO opt-in now ALSO
+ *      activates the curated credential deny list
+ *      (`resolveSafeYoloSensitiveReadDenials`). The narrow claim
+ *      becomes "filesystem policy is unchanged EXCEPT for the
+ *      credential deny list, which is the SRC01 extension."
+ *
+ *   2. Substrate-dependent tests SKIP (not fake-PASS) on non-darwin
+ *      hosts or when `/usr/bin/sandbox-exec` is unavailable. Uses
+ *      `describe.skipIf(...)` so Vitest reports honest skip counts.
+ *      Pattern matches `command-job-manager.sandbox-c3-real-kernel.test.ts`.
+ *
  * Three test sets, one per ACT §12 requirement:
  *
  *   1. Unit/structural: `CLINEMM_SAFE_YOLO_NETWORK=allow` flips
@@ -21,20 +37,13 @@
  *   3. FILESYSTEM CONSERVATION: with the network opt-in set, the
  *      SAME production seam produces the SAME filesystem decisions
  *      as the pre-change baseline (workspace write OK, home write
- *      DENIED, home read OK, child-process inheritance same).
- *      Exact baseline values are recorded in this file so the test
- *      is not a tautology.
- *
- * This test is intentionally skipped on non-darwin hosts or when
- * the Seatbelt substrate is unavailable. Skips are recorded as
- * PASS (not FAIL) so CI on Linux/Windows does not regress; the
- * substrate-dependent assertions only run on macOS where
- * `/usr/bin/sandbox-exec` exists.
+ *      DENIED, home read OK, child-process inheritance same),
+ *      plus the SRC01 credential deny list is active.
  */
 
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -42,7 +51,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
 import { buildExperimentalReconCapability, resolveSafeYoloNetworkOptIn } from "../sandbox-policy"
 
-const darwinHost = process.platform === "darwin"
+/**
+ * Substrate probe (CORRECTION01 P2): real-kernel Seatbelt tests
+ * SKIP on non-darwin hosts or when `/usr/bin/sandbox-exec` is
+ * missing. Captured once at module load.
+ */
+const HAS_SUBSTRATE: boolean = process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")
 
 beforeEach(() => {
 	process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "seatbelt"
@@ -81,23 +95,26 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural", () => {
 		}
 	})
 
-	it("filesystem policy is unchanged regardless of the opt-in", () => {
+	it("filesystem policy is unchanged EXCEPT for the credential deny list when the opt-in is set", () => {
 		process.env.CLINEMM_SAFE_YOLO_NETWORK = "allow"
 		const cap = buildExperimentalReconCapability({
 			cwd: "/tmp",
 			workspaceRoots: ["/var/folders/x/y"],
 		})
-		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01 update:
-		// The Safe-YOLO opt-in now ALSO activates the curated credential
-		// deny list (resolveSafeYoloSensitiveReadDenials returns the
-		// reviewer's curated V1 set when BOTH opt-ins are active). The
-		// filesystem contract is preserved at the BYTE level for
-		// readonlyRoots / writableRoots / environment / cwd; ONLY
-		// network and denyReadSubpaths differ from the no-opt-in case.
-		// This is the SRC01 extension to the original NETWORK-OPEN01
-		// claim ("opt-in only changes network"); the SRC01 ACT narrowed
-		// the claim to "opt-in only changes network + the YOLO-targeted
-		// credential deny list, which is the actual threat model."
+		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01 + CORRECTION01:
+		//
+		// The Safe-YOLO opt-in activates BOTH:
+		//   - network: "deny" → "allow"   (NETWORK-OPEN01 ACT)
+		//   - denyReadSubpaths: [] → CURATED_CREDENTIAL_SET_V1  (SRC01)
+		//
+		// CORRECTION01 reframes SRC01: the deny list is the
+		// "network-open credential read guard", which follows the
+		// dangerous capability (Seatbelt experimental + unrestricted
+		// network) — NOT YOLO / approval mode / session override.
+		//
+		// readonlyRoots / writableRoots / environment / cwd are
+		// preserved at the BYTE level. ONLY network and
+		// denyReadSubpaths differ from the no-opt-in case.
 		expect(cap.readonlyRoots).toEqual(["/var/folders/x/y"])
 		expect(cap.writableRoots).toEqual([])
 		expect(cap.cwd).toBe("/tmp")
@@ -106,9 +123,9 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural", () => {
 			expect(Array.isArray(cap.environment.allow)).toBe(true)
 			expect(cap.environment.allow.length).toBeGreaterThan(0)
 		}
-		// denyReadSubpaths is the YOLO credential set, filtered to
-		// existing files. The contents depend on the host HOME; we
-		// verify the SHAPE not the exact contents.
+		// denyReadSubpaths is the curated V1 credential set,
+		// filtered to existing files. The contents depend on the
+		// host HOME; we verify the SHAPE not the exact contents.
 		const denials = cap.denyReadSubpaths ?? []
 		expect(Array.isArray(denials)).toBe(true)
 		for (const p of denials) {
@@ -120,7 +137,12 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural", () => {
 		expect(cap.network).toBe("allow")
 	})
 
-	it("filesystem policy WITHOUT the opt-in: denyReadSubpaths is empty", () => {
+	it("filesystem policy WITHOUT the opt-in: denyReadSubpaths is empty (CORRECTION01 R11)", () => {
+		// CORRECTION01 (P2 review): explicit witness that the
+		// historical broad-read contract is preserved when the
+		// dangerous-capability precondition (open network) is NOT
+		// met. Threat model requires open network + readable
+		// credentials; without open network, broad read holds.
 		process.env.CLINEMM_SAFE_YOLO_NETWORK = ""
 		const cap = buildExperimentalReconCapability({
 			cwd: "/tmp",
@@ -132,25 +154,11 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Production-seam live qualification. Darwin-only.
+// Production-seam live qualification. Darwin-only (skipped on non-darwin /
+// when /usr/bin/sandbox-exec is missing).
 // ---------------------------------------------------------------------------
-async function isSeatbeltAvailable(): Promise<boolean> {
-	process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "seatbelt"
-	const { defaultSandboxBackendResolver } = await import("../sandbox-policy")
-	const backend = await defaultSandboxBackendResolver("seatbelt-experimental")
-	return backend !== undefined
-}
-
-describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - REAL production seam GREEN", () => {
+describe.skipIf(!HAS_SUBSTRATE)("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - REAL production seam GREEN", () => {
 	it("CommandJobManager.start with CLINEMM_SAFE_YOLO_NETWORK=allow: sandboxed connect reaches CONTROL (CONNECTED:$TOKEN)", async () => {
-		if (!darwinHost) {
-			expect(true).toBe(true)
-			return
-		}
-		if (!(await isSeatbeltAvailable())) {
-			expect(true).toBe(true)
-			return
-		}
 		process.env.CLINEMM_SAFE_YOLO_NETWORK = "allow"
 
 		const TOKEN = `SYN-${randomBytes(6).toString("hex")}`
@@ -231,14 +239,6 @@ describe("ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - REAL production seam G
 	})
 
 	it("FILESYSTEM CONSERVATION: same production seam with opt-in set, probes match pre-change baseline", async () => {
-		if (!darwinHost) {
-			expect(true).toBe(true)
-			return
-		}
-		if (!(await isSeatbeltAvailable())) {
-			expect(true).toBe(true)
-			return
-		}
 		process.env.CLINEMM_SAFE_YOLO_NETWORK = "allow"
 
 		const wsRoot = realpathSync(mkdtempSync(join(tmpdir(), "clinemm-syn-fs-")))

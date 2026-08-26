@@ -56,6 +56,8 @@
  *     downstream concern, addressed when Wave-1 finds what needs
  *     denying.
  */
+
+import { existsSync, realpathSync } from "node:fs"
 import {
 	type CommandCapability,
 	getSandboxBackend,
@@ -64,7 +66,6 @@ import {
 	type SandboxBackend,
 	type SandboxMode,
 } from "@cline/core"
-import { existsSync, realpathSync } from "node:fs"
 
 /**
  * DI seam: maps a {@link SandboxMode} to a backend instance.
@@ -133,14 +134,50 @@ export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
 }
 
 /**
- * ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01.
+ * ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01
+ * ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01-CORRECTION01
  *
- * Sensitive-read opt-in: returns the curated set of canonical paths
- * that {@link buildExperimentalReconCapability} will add to the
- * capability's `denyReadSubpaths` field when the experimental Seatbelt
- * mode is active.
+ * Network-open credential read guard: returns the curated set of
+ * canonical paths that {@link buildExperimentalReconCapability} will
+ * add to the capability's `denyReadSubpaths` field.
  *
- * The list is the reviewer's authoritative Phase-2 input (verbatim):
+ * ===========================================================================
+ * CORRECTED INVARIANT (CORRECTION01)
+ * ===========================================================================
+ *
+ * SAFE_YOLO_SENSITIVE_READ_GUARD_V1:
+ *
+ *   Seatbelt experimental + unrestricted network
+ *     → CURATED_CREDENTIAL_SET_V1 read-denied
+ *
+ *   independent of:
+ *     manual / safe-only / YOLO approval mode
+ *     `hostAuthorization.mode`
+ *     session override (none / all / ...)
+ *
+ * The previous prose labelled this a "YOLO-targeted guard" with a
+ * threat model of "YOLO + unrestricted network → exfiltration". That
+ * framing was the source of the SECURITY_SCOPE_MISMATCH the reviewer
+ * raised in SRC01 closure: it suggested YOLO was load-bearing for
+ * activation, when in fact the implementation (and the corrected
+ * intent) is that the **dangerous capability — open network + readable
+ * credentials — is what triggers the deny list**, regardless of
+ * whether an approval dialog fired first.
+ *
+ * The architectural separation is preserved:
+ *
+ *   approval authorization  ≠  Seatbelt capability
+ *
+ * Whether the user has to click "approve" before running
+ *
+ *   cat ~/.ssh/id_ed25519 | curl ...
+ *
+ * does not remove the exfiltration capability. The deny list follows
+ * the capability, not the authorization.
+ *
+ * ===========================================================================
+ * CURATED CREDENTIAL SET V1 (Phase-2 freeze, do NOT exceed)
+ * ===========================================================================
  *
  *   DENY:
  *     ~/.ssh/id_rsa
@@ -148,7 +185,7 @@ export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
  *     ~/.ssh/id_ecdsa_sk
  *     ~/.ssh/id_ed25519
  *     ~/.ssh/id_ed25519_sk
- *     ~/.ssh/id_mldsa44_ed25519
+ *     ~/.ssh/id_mldsa44_ed25519    (OpenSSH 9.9+ post-quantum hybrid)
  *     ~/.gnupg/private-keys-v1.d/
  *
  *   KEEP_READABLE (NOT in deny list):
@@ -165,24 +202,52 @@ export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
  * Claim boundary (per reviewer, do NOT exceed): standard OpenSSH
  * private identities + GnuPG secret-key store only.
  *
+ * ===========================================================================
+ * EMISSION PATTERN
+ * ===========================================================================
+ *
  * Pattern: file-level `(subpath "<file>")` for each identity file,
- * directory-level `(subpath "<dir>/")` for the GnuPG private-keys
- * directory. This avoids the parent-deny/child-allow precedence
- * hazard documented at openai/codex#21081 (broader parent denies
- * can shadow more-specific descendant allows on macOS Seatbelt).
+ * directory-level `(subpath "<dir>")` for the GnuPG private-keys
+ * directory. The Seatbelt profile generator emits the broad
+ * `(allow file-read*)` first and then the targeted
+ * `(deny file-read* (subpath X))` per entry. This avoids the
+ * parent-deny/child-allow precedence hazard documented at
+ * openai/codex#21081 (broader parent denies can shadow more-specific
+ * descendant allows on macOS Seatbelt).
+ *
+ * ===========================================================================
+ * NETWORK-DENY BRANCH
+ * ===========================================================================
+ *
+ * When the Seatbelt experimental mode is active but the Safe-YOLO
+ * network opt-in is NOT set (default-off posture), the deny list
+ * returns `[]` -- the historical broad-read contract is preserved.
+ * This is the expected behavior because the threat model requires
+ * open network to make credential reads dangerous; under network-deny
+ * Seatbelt, reads of credential files cannot reach an exfiltration
+ * sink and the historical contract holds.
  *
  * Returns `[]` when the experimental Seatbelt mode is not active
  * (defensive -- preserves current behavior on Linux/Windows hosts
  * where the Wave-1 capability is never reached).
  */
 export function resolveSafeYoloSensitiveReadDenials(): readonly string[] {
-	// The curated credential-set deny list is a YOLO-targeted guard.
-	// It activates only when BOTH the Seatbelt experimental mode is
-	// active AND the Safe-YOLO network opt-in is set, because the
-	// threat model is "YOLO + unrestricted network → exfiltration of
-	// on-disk secrets". Without YOLO the conservative recon capability
-	// keeps the broad-read contract (carried from NETWORK-OPEN01 and
-	// validated by the YQ-QUALIFICATION01 Phase 8 observation).
+	// Network-open credential read guard (CORRECTION01).
+	//
+	// Activation predicate (the CORRECTED intent, not "YOLO-targeted"):
+	//
+	//   Seatbelt experimental mode active
+	//     AND
+	//   Safe-YOLO network opt-in is "allow"
+	//
+	// Independent of `hostAuthorization.mode`, session override,
+	// and the YOLO/approval path. The implementation has always had
+	// this shape; CORRECTION01 only corrects the *documentation*
+	// to match the implementation, which is the safer behavior.
+	//
+	// Threat model: "open network + readable credentials → exfiltration".
+	// Without unrestricted network, credential reads cannot reach an
+	// external sink and the historical broad-read contract holds.
 	if (resolveExperimentalSandboxMode() !== "seatbelt-experimental") {
 		return []
 	}
@@ -277,10 +342,17 @@ export function buildExperimentalReconCapability(input: {
 	return {
 		readonlyRoots: [...input.workspaceRoots],
 		writableRoots: [],
-		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01:
-		// populate the capability's denyReadSubpaths with the curated
-		// V1 set returned by resolveSafeYoloSensitiveReadDenials().
-		// This is the SOLE production-code change in this ACT. The
+		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01
+		// ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01-CORRECTION01:
+		//
+		// Populate denyReadSubpaths with the network-open credential
+		// read guard. The helper returns the curated V1 set whenever
+		// Seatbelt experimental mode is active AND the Safe-YOLO
+		// network opt-in is set, regardless of approval mode / YOLO /
+		// session override. The dangerous capability is what triggers
+		// the deny list, not the authorization dialog.
+		//
+		// This is the SOLE production-code change in SRC01. The
 		// Seatbelt profile generator already emits
 		// `(allow file-read*) + (deny file-read* (subpath X))` per
 		// entry; no change to seatbelt-profile.ts, seatbelt-backend.ts,
