@@ -101,6 +101,10 @@ apps/examples/desktop-app/.cursor/settings.json
 # See ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01.
 /.factory/*
 !/.factory/epic-board.md
+# ACT-CLINEMM-FACTORY-EPIC-BOARD-SHARDING01: per-epic detail files under
+# .factory/epics/ are durable, linkable substrate of the board architecture.
+# See docs/factory-migrations/ACT-CLINEMM-FACTORY-EPIC-BOARD-SHARDING01-manifest.md.
+!/.factory/epics/
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
 # apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt
