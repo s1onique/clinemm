@@ -315,6 +315,14 @@ flagging it here but not addressing it in this ACT.
   CLOSED v2 with no new row).
 - **No ACT opened.** `COMPLETION-PROTOCOL-LIVENESS02` remains deferred
   until the §8 reopen trigger fires.
+  > **Update at `e9e9c39c6` follow-up**: The reopen trigger has now
+  > fired for real-world observation purposes (LIVE_OCCURRENCE_2
+  > captured at session `1787562381026_jao7c`), but the discriminator
+  > fields required by §8 are **NOT externally observable** in the
+  > current harness environment. See
+  > `docs/architecture/elm/completion-protocol-liveness02-phase0-capture01.md`
+  > for the Phase-0 LIVE capture and its `CAPTURE_INSUFFICIENT`
+  > classification (committed in the same session as this update).
 - **Committed as durable negative knowledge** — this file preserves
   the discriminator and the negative architectural result
   ("don't widen framing to fix the missing badge; the framing ACT
