@@ -34,23 +34,50 @@ LIVE_OCCURRENCE_1   final-looking report, no task Completed badge
                     not from external observation.
 
 LIVE_OCCURRENCE_2   final-looking report, no task Completed badge
-                    captured at session 1787562381026_jao7c.
-                    Specimen: the task itself ("Use `find` to locate
-                    TypeScript files in this repository.") — a
-                    deliberately trivial, single-tool, no-team
-                    session intended to make the missing-completion-
-                    protocol symptom maximally diagnosable.
+                    observed in the user-facing chat several days
+                    after the durable session below was opened.
+                    The runtime/session identity that produced
+                    this second UI symptom is NOT YET BOUND.
+
+CANDIDATE_SESSION   session 1787562381026_jao7c (durable JSON
+                    on disk) was the harness-resident session at
+                    the time of capture. Its durable state
+                    matches the "session exists, paused mid-
+                    execution, no done event" profile below. But
+                    NO INDEPENDENT BINDING has been established
+                    between this candidate session and the
+                    LIVE_OCCURRENCE_2 visible chat symptom.
+                    SCREENSHOT_TO_SESSION_BINDING = NOT_PROVEN.
+
+Specimen prompt     "Use `find` to locate TypeScript files in
+                    this repository." — captured because it is
+                    what the candidate session was processing,
+                    NOT because it is proven to be the prompt
+                    that produced LIVE_OCCURRENCE_2.
 ```
 
 The second occurrence makes the "wait for another specimen" condition
-in `completion-framing-live-red-discriminator01.md §8` obsolete. The
-`COMPLETION-PROTOCOL-LIVENESS02` reopen trigger has now fired for
-real-world observation purposes. **But** the actual capture surface
-needs an honest accounting (see §6 below): most of the discriminator
-fields are **not externally observable** in the current harness
-environment, so what we actually have is a *specimen-resident but
-not externally observable* trigger fire. Phase-0 capture must report
-this faithfully, not invent field values it did not observe.
+in `completion-framing-live-red-discriminator01.md §8` obsolete at
+the **UI-symptom level**. The reopen trigger has fired for the
+visible chat (a second UI symptom was observed), **but its
+runtime/session identity is not yet bound**. The discriminator's
+trigger rule additionally requires that the bound specimen exposes
+`attemptCompletionSeen` AND `terminalResponseCommittedThisTurn`
+AND `turnState.phase` AND `visibleLastMessage.type/subtype`. None of
+those four is observable from outside the VSCodium extension host,
+independent of the binding question. So the trigger remains
+**unsatisfied** on TWO independent grounds:
+
+1. **Specimen not bound.** We have a candidate session, not the
+   session that produced LIVE_OCCURRENCE_2.
+2. **Discriminator surface missing.** Even if the specimen were
+   bound, the four required fields are NOT externally observable
+   in the current harness environment (see §6).
+
+The actual capture surface needs an honest accounting on BOTH
+grounds. Phase-0 capture must report this faithfully, not invent
+field values it did not observe and not assert specimen binding it
+did not establish.
 
 ## 2. Specimen identity (CAPTURED — external state)
 
@@ -179,10 +206,18 @@ const completionPolicy = requiresCompletionTool
   basic shell-only sessions, or it was filtered by `effectiveToolPolicies`),
   `requireCompletionTool === false`.
 
-**Verdict**: INFERRED = `requireCompletionTool: undefined` OR
-`requireCompletionTool: false` for this session with high confidence,
-because the `find` prompt is a basic shell task. But **NOT
-externally captured**.
+**Verdict**: `completionPolicy.requireCompletionTool = UNOBSERVED.`
+Full stop.
+
+The source code can tell us **how** it is computed
+(`runtime-builder.ts:706-753`); it cannot tell us the value for this
+live session without the resolved `finalTools` and
+`effectiveToolPolicies`. Task complexity (a basic `find` task) does
+not establish tool registration — the SDK may expose
+`submit_and_exit` alongside `run_commands`, `editor`, `apply_patch`,
+etc., independent of what the user prompt looks like. The value must
+be observed or derived from the actual runtime configuration, not
+inferred from prompt characteristics.
 
 ## 6. Capture surface — what is structurally NOT externally observable
 
@@ -216,9 +251,10 @@ LAST_MODEL_OUTPUT_KIND                     = tool_use (run_commands)
 LAST_TOOL_REQUESTED                        = run_commands
 attemptCompletionSeen                      = UNOBSERVED (capture surface missing)
 terminalResponseCommittedThisTurn          = UNOBSERVED (capture surface missing)
-completionPolicy.requireCompletionTool    = UNOBSERVED (inferred false)
+completionPolicy.requireCompletionTool    = UNOBSERVED
 turnState.phase                             = UNOBSERVED
 visibleLastMessage.isAuthoritativelyCompletedResult = UNOBSERVED
+SCREENSHOT_TO_SESSION_BINDING              = NOT_PROVEN
 DONE_REASON                                = NOT YET FIRED
 MODEL_FINISH_REASON                        = UNOBSERVED
 SESSION_STATUS                             = "running"
@@ -226,12 +262,21 @@ SESSION_STATUS                             = "running"
 
 This is **not a sufficient capture** for the four-way discriminator
 in `completion-framing-live-red-discriminator01.md §8`
-(`A/B/C/D/E/F`). It is closer to **F = CAPTURE_INSUFFICIENT** than
-to any of `A/B/C/D/E`. The evidence we have is *consistent* with
-the predicted `A` (model never requested completion tool) — the model
-emitted `run_commands`, not `submit_and_exit`, and the session has
-not progressed to completion — but the discriminator fields that
-would *prove* `A` are not observable.
+(`A/B/C/D/E/F`) — on TWO independent grounds:
+
+1. **Specimen not bound** — we captured a candidate session that
+   was harness-resident at the time, not the session that produced
+   LIVE_OCCURRENCE_2.
+2. **Discriminator surface missing** — the four required fields are
+   not externally observable (see §6), independent of binding.
+
+Even setting aside the binding question, the evidence on the
+candidate session is *consistent* with the predicted `A` (model
+never requested completion tool) — the model emitted `run_commands`,
+not `submit_and_exit`, and the candidate session has not progressed
+to completion — but the discriminator fields that would *prove* `A`
+are not observable, and the candidate may not even be the right
+specimen.
 
 ## 8. What this means for the LIVENESS02 reopen trigger
 
@@ -243,10 +288,19 @@ The discriminator doc §8 listed the reopen-trigger conditions:
 > `CAPTURE_INSUFFICIENT` and the ACT must NOT be opened.
 
 By this rule, **LIVENESS02 must NOT be opened on the basis of this
-Phase-0 capture alone.** What we have is a *specimen-resident* second
-occurrence and an honest accounting that the live state is **not
-externally observable** in the current capture environment. The
-capture surface gap is the bottleneck.
+Phase-0 capture alone.** What we have is a *candidate-session*
+second occurrence (not bound to LIVE_OCCURRENCE_2) plus an honest
+accounting that the live state is **not externally observable** in
+the current capture environment. Two independent bottlenecks:
+
+1. **Specimen binding not established.** We don't know which
+   session/turn produced the visible chat symptom.
+2. **Discriminator surface missing.** Even if the specimen were
+   bound, the four required fields are not externally observable.
+
+The factory reviewer's verdict: **HALT_CAPTURE_SPECIMEN_NOT_BOUND**,
+followed by Option **B (CAPTURE_SURFACE_RECON)** rather than opening
+LIVENESS02 prematurely.
 
 ## 9. What is needed to actually open LIVENESS02
 
@@ -276,13 +330,20 @@ None of 1-4 is in scope for this Phase-0 file.
 
 ## 10. Honest scope-boundary statement
 
-This file is the **maximum honest Phase-0 capture** for LIVE_OCCURRENCE_2.
-It captures what is externally observable (sessions, prompts, tool
+This file is the **maximum honest Phase-0 capture** for the
+candidate session `1787562381026_jao7c`. It captures what is
+externally observable about that candidate (sessions, prompts, tool
 output, auto-approval settings) and explicitly identifies what is
 **structurally not externally observable** in the current harness
 environment. It does NOT manufacture field values to satisfy the
 discriminator; it does NOT classify into A/B/C/D/E because the
 classification surface is incomplete.
+
+It also does NOT establish binding between the candidate session
+and LIVE_OCCURRENCE_2 (the second UI symptom). The durable session
+shown here was the harness-resident session at the time of capture,
+but its identity does not prove it produced the visible chat
+specimen. `SCREENSHOT_TO_SESSION_BINDING = NOT_PROVEN`.
 
 The factory reviewer's reopen trigger (discriminator §8) requires
 `attemptCompletionSeen AND terminalResponseCommittedThisTurn AND
@@ -309,51 +370,85 @@ turnState.phase AND visibleLastMessage.type/subtype`. Of those four:
   and is not externally observable in the current harness
   environment, so the next person who attempts this capture does not
   have to re-derive the capture-surface gap.
-- **Live occurrence 2 is documented and frozen.**
+- **Live occurrence 2 is documented at the UI-symptom level ONLY.**
+  Runtime/session identity binding is `NOT_PROVEN`. The capture
+  here documents the candidate session that was harness-resident
+  at the time, not the session that produced LIVE_OCCURRENCE_2.
 
 ## 12. Next step options (factory decision)
 
-The factory reviewer has three options after reading this Phase-0
-file:
+The factory reviewer's verdict is **HALT_CAPTURE_SPECIMEN_NOT_BOUND
+→ Option B (CAPTURE_SURFACE_RECON)**:
 
 ```text
 A. ACKNOWLEDGE_CAPTURE_INSUFFICIENT
    Defer LIVENESS02 indefinitely until the harness server is brought
    up. Return to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01.
+   NOT PREFERRED (low-value next occurrence).
 
-B. AUTHORIZE_CAPTURE_SURFACE_RECON
-   Open a separate bounded ACT to bring up the harness server (or
-   add a non-production diagnostic channel) so future captures can
-   reach the discriminator-critical fields. LIVENESS02 still does
-   not open on this ACT's evidence.
+B. AUTHORIZE_CAPTURE_SURFACE_RECON  ← REVIEWER'S CHOICE
+   Open ACT-CLINEMM-COMPLETION-PROTOCOL-CAPTURE-SURFACE-RECON01
+   with contract:
+       PRODUCTION_SEMANTICS_DELTA = 0
+       DEFAULT_OFF                = required
+       PUBLIC_API_DELTA           = 0
+       WIRE_PROTOCOL_DELTA        = 0 unless separately authorized
+   Evidence hierarchy:
+       existing debug harness (preferred)
+       dev-only diagnostic adapter
+       temporary DEFAULT_OFF instrumentation
+       never permanent application telemetry
+   Required observable tuple (minimum viable):
+       sessionId, turnState.phase,
+       attemptCompletionSeen, terminalResponseCommittedThisTurn,
+       lastVisibleMessage.{type,say/ask,partial,isAuthoritativelyCompletedResult},
+       completionPolicy.requireCompletionTool
+   Nice-to-have (don't block on):
+       doneReason, modelFinishReason, lastToolRequested
+   LIVENESS02 still does NOT open on this ACT's evidence.
 
 C. AUTHORIZE_PRODUCTION_DIAGNOSTIC_PATCH
-   Open a temporary "dump MessageTranslatorState + turnState on
-   done" production patch, run it once on a representative session,
-   observe, then revert. LIVENESS02 does not open on this ACT's
-   evidence but the discriminator surfaces are populated.
+   Only if Option B proves the existing/dev-only surfaces are
+   insufficient. Premature at this point.
+
+D. OPEN_LIVENESS02_PREEMPTIVELY (NOT AN OPTION)
+   Would violate §8's CAPTURE_INSUFFICIENT gate.
 ```
 
-The reviewer's prior recommendation was "Option B then re-capture";
-that decision is preserved here. **Option A is the smallest action
-that respects the discriminator contract.**
+**Why B over A**: Option A means waiting for another occurrence
+while knowing that, when it happens, we still cannot observe the
+decisive state — poor learning economics. A third occurrence
+without fixing observability will teach us little more.
+
+**Why not C yet**: The existing debug harness server at
+`apps/vscode/src/dev/debug-harness/server.ts` was discovered but is
+not running. Recon should answer whether that harness can be made
+operational *without production semantic delta* before any
+production patch is considered.
 
 ## 13. Committed as durable negative knowledge
 
 This file is intentionally committed even though it does not open a
 new ACT or produce a new RED. It records:
 
-1. The second live occurrence (so the reopen-trigger firing is real,
-   not theoretical).
+1. A second UI symptom was observed at the chat level (so the
+   reopen-trigger firing is real, not theoretical), **but its
+   runtime/session identity is not bound**
+   (`SCREENSHOT_TO_SESSION_BINDING = NOT_PROVEN`).
 2. The complete capture matrix and what each field resolves to in
    this environment (so the next capture does not have to re-derive
    it).
 3. The structural gap between the discriminator's required fields
    and the externally observable surface (so the factory can decide
    whether to invest in capture-surface work).
-4. The classification discipline applied (CAPTURE_INSUFFICIENT when
-   surface is missing; not invented field values).
+4. The classification discipline applied
+   (`CAPTURE_INSUFFICIENT` when surface is missing or specimen is
+   not bound; not invented field values; not asserted specimen
+   binding).
+5. The corrected posture: HALT_CAPTURE_SPECIMEN_NOT_BOUND, then
+   Option B (CAPTURE_SURFACE_RECON).
 
-Without (1)-(4) the next attempt at this capture would be at risk of
-either silently manufacturing field values (false-pass) or
-re-deriving the surface gap (wasted effort).
+Without (1)-(5) the next attempt at this capture would be at risk of
+either silently manufacturing field values (false-pass), asserting
+specimen binding without proof (false-pass), or re-deriving the
+surface gap (wasted effort).

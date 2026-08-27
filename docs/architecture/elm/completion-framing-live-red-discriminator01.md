@@ -315,14 +315,19 @@ flagging it here but not addressing it in this ACT.
   CLOSED v2 with no new row).
 - **No ACT opened.** `COMPLETION-PROTOCOL-LIVENESS02` remains deferred
   until the §8 reopen trigger fires.
-  > **Update at `e9e9c39c6` follow-up**: The reopen trigger has now
-  > fired for real-world observation purposes (LIVE_OCCURRENCE_2
-  > captured at session `1787562381026_jao7c`), but the discriminator
-  > fields required by §8 are **NOT externally observable** in the
-  > current harness environment. See
+  > **Update at `aac6c6986` follow-up**: A second UI symptom was
+  > observed (LIVE_OCCURRENCE_2), but its runtime/session identity is
+  > **NOT YET BOUND** to a candidate session
+  > (`1787562381026_jao7c`). Even if the specimen were bound, the
+  > four discriminator fields required by §8 are **NOT externally
+  > observable** in the current harness environment. See
   > `docs/architecture/elm/completion-protocol-liveness02-phase0-capture01.md`
-  > for the Phase-0 LIVE capture and its `CAPTURE_INSUFFICIENT`
-  > classification (committed in the same session as this update).
+  > for the Phase-0 capture (candidate-session-level only,
+  > `SCREENSHOT_TO_SESSION_BINDING = NOT_PROVEN`,
+  > `CAPTURE_INSUFFICIENT`). The recommended next bounded ACT is
+  > `ACT-CLINEMM-COMPLETION-PROTOCOL-CAPTURE-SURFACE-RECON01`
+  > (Option B from the reviewer's disposition), NOT
+  > `COMPLETION-PROTOCOL-LIVENESS02`.
 - **Committed as durable negative knowledge** — this file preserves
   the discriminator and the negative architectural result
   ("don't widen framing to fix the missing badge; the framing ACT
