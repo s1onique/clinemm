@@ -143,6 +143,35 @@ not session-wide.
 Per the reviewer's Outcome B: do not pretend the canonical session
 authority exists. Do not reconstruct one inside `cline-session-factory.ts`.
 
+### Phase-0 finding B: SEATBELT_SELECTED ≠ SEATBELT_EFFECTIVE (reviewer at `636d15c31`)
+
+The previous plan (`636d15c31`) bound
+`SEATBELT_EFFECTIVE := resolveExperimentalSandboxMode() === "seatbelt-experimental"`.
+That is an evidence-class promotion: the function only proves the
+user **selected** Seatbelt, not that the substrate is actually
+**enforcing**.
+
+```text
+configured/selected ≠ prepared ≠ active/effective
+```
+
+Source-level recon confirms four distinct Seatbelt lifecycle states
+(see the canonical evidence under "Fact 2 reuse" below). The
+canonical "is Seatbelt actually enforcing" authority at session
+construction time is `getSandboxBackend("seatbelt-experimental",
+{ mode: "seatbelt-experimental" }) !== undefined`, which proves
+**selection AND authorization AND available** (cached kernel probe
+succeeded). It does not prove per-command `backend.prepare()` success;
+that is fail-closed at `CommandJobManager.start()` time and is a
+per-invocation fact, not a per-session one.
+
+CAI-13's intended negative was excellent in spirit (YOLO requested +
+Seatbelt ineffective → authority OFF), but with the old binding it
+actually tested "YOLO requested + Seatbelt NOT selected → authority
+OFF", which is the trivial case. The load-bearing case — "YOLO
+requested + Seatbelt selected + substrate broken → authority OFF" —
+is what the corrected plan now covers as **CAI-13B**.
+
 ### Phase-0 decision: separate three facts, single helper per fact
 
 The reviewer-corrected finding (after `7d999f4ff`) established that the
@@ -222,22 +251,67 @@ Why the name is `isYoloSessionRequested` and not
   re-defining what it means.
 ```
 
-#### Fact 2 reuse (canonical Seatbelt selector)
+#### Fact 2 reuse (canonical Seatbelt-effective authority)
+
+The reviewer-corrected recon (after `636d15c31`) proved that the
+prior binding — `SEATBELT_EFFECTIVE := resolveExperimentalSandboxMode()
+=== "seatbelt-experimental"` — was a load-bearing evidence error. That
+function only proves **selection** (the user requested Seatbelt via
+`CLINEMM_EXPERIMENTAL_SANDBOX`), not that Seatbelt is actually
+**enforcing** (kernel accepts SBPL, binary present, probe round-trips).
+
+The Seatbelt lifecycle has four distinct states:
 
 ```text
-apps/vscode/src/sdk/sandbox-policy.ts:127
-  resolveExperimentalSandboxMode(): SandboxMode | undefined
-    → returns "seatbelt-experimental" when Seatbelt is selected
-    → returns undefined              when CLINEMM_EXPERIMENTAL_SANDBOX=off
-    → throws InvalidSandboxConfigurationError on unknown values
-      (fail closed)
-
-SEATBELT_EFFECTIVE = resolveExperimentalSandboxMode() === "seatbelt-experimental"
+1. SELECTED   resolveExperimentalSandboxMode() === "seatbelt-experimental"
+2. RESOLVED   sandboxBackendResolver(mode) !== undefined
+3. AVAILABLE  backend.isAvailable() === true   (cached probe succeeded)
+4. PREPARED   backend.prepare({cap, cmd}) succeeded   (per-invocation; throws on fail)
 ```
 
-This is the existing canonical Seatbelt selector. The IMPLEMENTATION01
-ACT does not introduce a new Seatbelt state; it reuses this and passes
-it into the capability derivation at the production seam.
+`getSandboxBackend(mode, optIn)` from
+`sdk/packages/core/src/runtime/sandbox/sandbox-backend.ts:73` is the
+canonical "is the Seatbelt substrate authorized AND available" check
+at the dispatcher layer. It returns the cached
+`SeatbeltSandboxBackendExperimental` **iff**:
+
+```text
+- mode === "seatbelt-experimental"      (selection)
+- optIn provided                        (authorization)
+- backend.isAvailable() === true        (cached availability probe:
+                                         darwin + /usr/bin/sandbox-exec
+                                         present + minimal SBPL
+                                         round-trips successfully)
+```
+
+See `sdk/packages/core/src/runtime/sandbox/sandbox-backend.ts:73-100`
+and `seatbelt-availability.ts:76-120` for the canonical evidence.
+
+The canonical V1 fact:
+
+```text
+SEATBELT_EFFECTIVE =
+  resolveExperimentalSandboxMode() === "seatbelt-experimental"
+  &&
+  (await getSandboxBackend("seatbelt-experimental",
+                           { mode: "seatbelt-experimental" }))
+    !== undefined
+```
+
+This is **selection AND authorization AND available** — i.e. the
+substrate is configured, opt-in is granted, and the kernel actually
+accepts SBPL profiles. It does **not** prove that the next command's
+`backend.prepare()` will succeed; that is a per-invocation fact
+resolved at `CommandJobManager.start()` time, where the per-command
+fail-closed contract already lives. Capability derivation is
+per-session, not per-command, so the canonical Seatbelt-effective
+authority is the resolver-level check.
+
+The IMPLEMENTATION01 ACT does not introduce a new Seatbelt state; it
+reuses the existing `getSandboxBackend` and threads its non-undefined
+result into the capability derivation. The resolver signature is
+`async` and `buildSessionConfig` is already `async`, so awaiting is
+free.
 
 #### Fact 3 capability derivation (production seam)
 
@@ -250,16 +324,19 @@ apps/vscode/src/sdk/cline-session-factory.ts:736
          getOverride(sessionId),
        )
     && resolveExperimentalSandboxMode() === "seatbelt-experimental"
+    && (await getSandboxBackend("seatbelt-experimental",
+                                 { mode: "seatbelt-experimental" }))
+         !== undefined
 ```
 
-Both `isYoloSessionRequested` and `resolveExperimentalSandboxMode` are
-dependency-injected (or imported as canonical helpers); neither is
-reconstructed inline.
+Both `isYoloSessionRequested` and `getSandboxBackend` are imported as
+canonical helpers; neither is reconstructed inline. The capability
+derivation awaits the Seatbelt-effective check.
 
-If during implementation either helper proves impossible to scope
-cleanly (e.g. surgery to multiple modules, or
-`resolveExperimentalSandboxMode` is not actually canonical at the
-construction site), HALT_SEAM_MOVED.
+If during implementation either proves impossible to scope cleanly
+(e.g. surgery to multiple modules, or `getSandboxBackend` is not
+actually canonical at the construction site, or `buildSessionConfig`
+cannot be made async-safe for the awaited call), HALT_SEAM_MOVED.
 
 The completion detection wire side is already complete:
 
@@ -289,13 +366,22 @@ So this ACT's only NEW production surface is:
     (small, pure, testable; single owner of "YOLO intent" semantic;
      does NOT touch Seatbelt state)
 
-(b) REUSE existing canonical Seatbelt selector at the production seam:
-    resolveExperimentalSandboxMode() === "seatbelt-experimental"
+(b) REUSE existing canonical Seatbelt-effective authority at the
+    production seam:
+      SEATBELT_EFFECTIVE = resolveExperimentalSandboxMode()
+                              === "seatbelt-experimental"
+                           && (await getSandboxBackend(
+                                 "seatbelt-experimental",
+                                 { mode: "seatbelt-experimental" },
+                               )) !== undefined
+    (selection AND authorization AND cached-availability-probe-ok;
+     imported from sdk/packages/core; NOT reconstructed inline)
 
 (c) derive explicitCompletionAuthority at buildSessionConfig from
     the conjunction: interactiveVsCode && isYoloSessionRequested(...)
                            && SEATBELT_EFFECTIVE
-    (consumed via dependency injection; no inline reconstruction)
+    (consumed via dependency injection; no inline reconstruction;
+     buildSessionConfig is already async; await is free)
 
 (d) when derived true:
       config.enableSubmitAndExit = true     (NEW field on CoreSessionConfig)
@@ -332,11 +418,16 @@ persisted { all 5 actions true } + override "all"
     YOLO classification:
 
 ```text
-iterate the schema's currently-declared actions keys
-  { readFiles, editFiles, executeSafeCommands, useBrowser, useMcp }
-  → for each key, persisted.actions[key] must be included in the
-    conjunction (compile-time / static test against the
-    AutoApprovalSettings type; not a hypothetical future key)
+iterate the keys actually present on DEFAULT_AUTO_APPROVAL_SETTINGS.actions
+  (the runtime default settings object in
+   apps/vscode/src/shared/AutoApprovalSettings.ts) — this is the
+   authoritative key inventory at runtime
+  → for each currently-declared key, the helper must include
+    persisted.actions[key] in the persisted-YOLO conjunction
+  → when a new action key is added to AutoApprovalSettings.actions
+    in the future, the schema-coverage test breaks compile-time,
+    forcing the policy owner to decide whether the new key belongs
+    to YOLO semantics (not a hypothetical future key)
 ```
 
 (c) Integration RED — bind the helper to the real VS Code seam:
@@ -346,7 +437,10 @@ Given:
   source                   = VS Code interactive
   config.mode              = "act"
   isYoloSessionRequested(persisted, getOverride(sessionId)) = true
-  SEATBELT_EFFECTIVE       = true   (resolveExperimentalSandboxMode === "seatbelt-experimental")
+  SEATBELT_EFFECTIVE       = true
+    = resolveExperimentalSandboxMode() === "seatbelt-experimental"
+      AND (await getSandboxBackend("seatbelt-experimental",
+            { mode: "seatbelt-experimental" })) !== undefined
   explicitCompletionAuthority = true   (derived at buildSessionConfig)
 
 Expect:
@@ -363,15 +457,30 @@ Current (LIVENESS02 binding):
   completionPolicy               = undefined
 ```
 
-Critical negative (load-bearing, prevents ordinary "approve everything"
-from being indistinguishable from Seatbelted YOLO):
+Critical negative matrix (load-bearing, prevents ordinary "approve
+everything" from being indistinguishable from Seatbelted YOLO):
 
 ```text
-Given:
+CAI-13A
   isYoloSessionRequested(persisted, getOverride(sessionId)) = true
-  SEATBELT_EFFECTIVE                                        = false
+  SEATBELT_SELECTED (resolveExperimentalSandboxMode === "seatbelt-experimental") = false
   → explicitCompletionAuthority = false
+
+CAI-13B   ← load-bearing
+  isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+  SEATBELT_SELECTED                                          = true
+  SEATBELT_EFFECTIVE  (getSandboxBackend(..., optIn) !== undefined) = false
+  → explicitCompletionAuthority = false
+  (this is the substrate-broken case the prior plan missed)
+
+CAI-13C
+  isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+  SEATBELT_EFFECTIVE                                          = true
+  → explicitCompletionAuthority = true   (eligibility)
+
+Given the negative cases:
   → enableSubmitAndExit         = false
+  → submit_and_exit             = absent
   → submit_and_exit             = absent
 ```
 
@@ -395,14 +504,17 @@ as the manipulated variable (violates CONTRACT01 I3).
 ## 4. Phase 3 — capability derivation
 
 For V1, keep the capability **derived**, not persisted, AND derive
-from the conjunction of two distinct canonical facts (per §1
-Phase-0 decision):
+from the conjunction of three distinct canonical facts (per §1
+Phase-0 findings A+B and Phase-0 decision):
 
 ```text
 explicitCompletionAuthority =
   interactiveVsCode
   AND isYoloSessionRequested(persisted, getOverride(sessionId))
   AND resolveExperimentalSandboxMode() === "seatbelt-experimental"
+  AND (await getSandboxBackend("seatbelt-experimental",
+                                { mode: "seatbelt-experimental" }))
+        !== undefined
 ```
 
 Fact 1 helper (`isYoloSessionRequested`) lives at
@@ -425,22 +537,42 @@ isYoloSessionRequested(persisted, override) =
   )
 ```
 
-Fact 2 reuses the existing canonical Seatbelt selector at
-`apps/vscode/src/sdk/sandbox-policy.ts:127` — it is the single
-production owner of the Seatbelt selector state. The IMPLEMENTATION01
-ACT does not introduce a new Seatbelt state.
+Fact 2 is two distinct facts and the capability uses the conjunction
+of both:
+
+```text
+SEATBELT_SELECTED  = resolveExperimentalSandboxMode() === "seatbelt-experimental"
+                      apps/vscode/src/sdk/sandbox-policy.ts:127
+
+SEATBELT_AVAILABLE = (await getSandboxBackend("seatbelt-experimental",
+                       { mode: "seatbelt-experimental" })) !== undefined
+                      sdk/packages/core/src/runtime/sandbox/sandbox-backend.ts:73
+
+SEATBELT_EFFECTIVE = SEATBELT_SELECTED && SEATBELT_AVAILABLE
+```
+
+The four lifecycle states map to:
+
+```text
+SELECTED   = resolveExperimentalSandboxMode() === "seatbelt-experimental"
+RESOLVED   = sandboxBackendResolver(mode) !== undefined         (subsumed by AVAILABLE)
+AVAILABLE  = getSandboxBackend(mode, optIn) !== undefined       (SELECTED + optIn + cached probe)
+PREPARED   = backend.prepare({cap, cmd}) succeeded             (per-invocation; not a session fact)
+```
 
 The three facts stay separate:
 
 ```text
-YOLO_REQUESTED       = isYoloSessionRequested(...)        (helper)
-SEATBELT_EFFECTIVE   = resolveExperimentalSandboxMode()   (existing)
-COMPLETION_AUTHORITY = interactiveVsCode && YOLO_REQUESTED && SEATBELT_EFFECTIVE
-                                                            (derived)
+YOLO_REQUESTED        = isYoloSessionRequested(...)                          (helper)
+SEATBELT_EFFECTIVE    = SELECTED && AVAILABLE                                (canonical)
+COMPLETION_AUTHORITY  = interactiveVsCode && YOLO_REQUESTED && SEATBELT_EFFECTIVE
+                                                                           (derived)
 ```
 
-Both `isYoloSessionRequested` and `resolveExperimentalSandboxMode` are
-dependency-injected / canonical — neither is reconstructed inline.
+Both `isYoloSessionRequested` and `getSandboxBackend` are imported as
+canonical helpers; neither is reconstructed inline. The capability
+derivation awaits the Seatbelt-effective check (buildSessionConfig is
+already async).
 
 If during implementation either proves impossible to scope cleanly
 (e.g. surgery to multiple modules, or
@@ -505,6 +637,8 @@ the runtime owns the completion semantics and event flow.
 ```text
 isYoloSessionRequested(persisted, getOverride(sessionId)) = true
   AND resolveExperimentalSandboxMode() === "seatbelt-experimental"
+  AND (await getSandboxBackend("seatbelt-experimental",
+                                { mode: "seatbelt-experimental" })) !== undefined
   + mode="act"
   + interactiveVsCode
 
@@ -517,13 +651,16 @@ isYoloSessionRequested(persisted, getOverride(sessionId)) = true
 ```
 
 No `config.mode` transition. No flipped yolo preset.
-## 7. Phase 6 — conservation suite (CAI-01..CAI-13)
+## 7. Phase 6 — conservation suite (CAI-01..CAI-14)
 
 ```text
 CAI-01A persisted Seatbelt-YOLO state
        (all canonical auto-approval gates true; no session override)
        → isYoloSessionRequested(persisted, "none") = true
        AND SEATBELT_EFFECTIVE                       = true
+         (resolveExperimentalSandboxMode === "seatbelt-experimental"
+          && getSandboxBackend("seatbelt-experimental",
+              { mode: "seatbelt-experimental" }) !== undefined)
        → explicitCompletionAuthority = true
        → submit_and_exit present + required
        (proves persisted-only path converges)
@@ -576,21 +713,39 @@ CAI-12 no text/tail-derived completion authority
        (text-based "completed" framing must not be inferred
         from assistant prose; submit_and_exit is the only path)
 
-CAI-13 (NEW) critical negative: YOLO requested + Seatbelt ineffective
+CAI-13A negative — YOLO requested + Seatbelt NOT selected
        isYoloSessionRequested(persisted, getOverride(sessionId)) = true
-       SEATBELT_EFFECTIVE                                       = false
+       SEATBELT_SELECTED                                          = false
        → explicitCompletionAuthority = false
        → enableSubmitAndExit         = false
        → submit_and_exit             = absent
-       (prevents ordinary "approve everything" from being
-        indistinguishable from Seatbelted YOLO)
+
+CAI-13B  ← load-bearing
+       negative — YOLO requested + Seatbelt selected + substrate broken
+       isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+       SEATBELT_SELECTED                                          = true
+       SEATBELT_AVAILABLE  (getSandboxBackend returns defined)    = false
+       → explicitCompletionAuthority = false
+       (this is the substrate-broken case the prior plan missed;
+        cannot be observed without a mocked getSandboxBackend; the
+        test must inject a stub returning undefined under
+        CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt)
+
+CAI-13C positive — YOLO requested + Seatbelt effective
+       isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+       SEATBELT_EFFECTIVE                                          = true
+       → explicitCompletionAuthority = true   (eligibility)
+       → enableSubmitAndExit         = true
+       → submit_and_exit             = present
 ```
 
-CAI-01A/01B/02/04/06/07/08/11/12/13 are load-bearing. CAI-01A/01B/02
-specifically exercise the new `isYoloSessionRequested` helper without
-asserting anything about per-tool semantics — they test the helper's
-two input routes converge. CAI-13 is the load-bearing negative that
-keeps the three facts separate.
+CAI-01A/01B/02/04/06/07/08/11/12/13A/13B/13C are load-bearing.
+CAI-01A/01B/02 specifically exercise the new `isYoloSessionRequested`
+helper without asserting anything about per-tool semantics — they
+test the helper's two input routes converge. CAI-13A/13B/13C
+specifically test the Seatbelt-effective authority at the
+SELECTED+AVAILABLE boundary; CAI-13B is the load-bearing substrate-
+broken case.
 
 ## 8. Phase 7 — bounded retry behavior
 
@@ -668,8 +823,11 @@ Only a new P0 stops the chain.
     isYoloSessionRequested(persisted, override) is correct for every
     persisted/override combination (CAI-01A/01B/02 inputs).
 [ ] Schema-coverage RED passes:
-    every currently-canonical AutoApprovalSettings.actions key
-    participates in the persisted-YOLO classification.
+    every key on DEFAULT_AUTO_APPROVAL_SETTINGS.actions
+    (apps/vscode/src/shared/AutoApprovalSettings.ts) is included in
+    the persisted-YOLO conjunction; adding a new key to
+    AutoApprovalSettings.actions breaks the schema-coverage test
+    compile-time, forcing the policy owner to decide.
 [ ] Integration RED at the real VS Code runtime-builder seam reproduces
     (LIVENESS02's composition_proven_absent claim).
 [ ] Implementation flips BOTH conjuncts
@@ -679,17 +837,23 @@ Only a new P0 stops the chain.
       interactiveVsCode
       && isYoloSessionRequested(...)
       && resolveExperimentalSandboxMode() === "seatbelt-experimental"
-    (three separate canonical facts; dependency-injected / canonical;
-     NOT reconstructed inline).
-[ ] CAI-01A AND CAI-01B AND CAI-02..CAI-13 conservation tests pass.
-    CAI-13 (YOLO requested + Seatbelt ineffective → authority OFF)
-    is load-bearing.
+      && (await getSandboxBackend("seatbelt-experimental",
+            { mode: "seatbelt-experimental" })) !== undefined
+    (four separate canonical facts: user intent + interactivity +
+     Seatbelt selection + Seatbelt substrate-available;
+     dependency-injected / canonical; NOT reconstructed inline).
+[ ] CAI-01A AND CAI-01B AND CAI-02..CAI-14 conservation tests pass.
+    CAI-13A/13B/13C test the Seatbelt-effective authority at the
+    SELECTED+AVAILABLE boundary; CAI-13B is load-bearing
+    (YOLO requested + Seatbelt selected + substrate broken
+     → authority OFF).
 [ ] Manual Act path (override = "none" AND any persisted actions.* false)
     is unchanged (bit-equivalent toolset/policy for the no-Seatbelt user).
 [ ] Plan mode is unchanged.
 [ ] No new persisted setting / UI toggle introduced in V1.
 [ ] No new internal "Seatbelt effective" sentinel introduced; the
-    existing canonical resolveExperimentalSandboxMode is reused.
+    existing canonical resolveExperimentalSandboxMode and
+    getSandboxBackend are reused.
 [ ] No core yolo preset import.
 [ ] Submit executor is PASSIVE: it accepts/returns the submitted summary
     per the host-executor API contract; it does NOT stamp completed /
@@ -740,7 +904,7 @@ Construction seam:
   sdk/packages/core/src/extensions/tools/presets.ts:34
     (ToolPresets.act.enableSubmitAndExit = false — current default)
 
-Capability anchor (three separate canonical facts):
+Capability anchor (four separate canonical facts):
   // Fact 1 — YOLO session-request intent.
   // NEW helper introduced by THIS ACT at the existing override module.
   apps/vscode/src/sdk/session-auto-approval.ts
@@ -755,12 +919,33 @@ Capability anchor (three separate canonical facts):
     //              && persisted.actions.useBrowser
     //              && persisted.actions.useMcp)
 
-  // Fact 2 — canonical Seatbelt selector (existing module, NOT new).
+  // Fact 2a — canonical Seatbelt selector (selection only).
   apps/vscode/src/sdk/sandbox-policy.ts:127
     resolveExperimentalSandboxMode(): SandboxMode | undefined
-    // returns "seatbelt-experimental" when Seatbelt is selected;
-    // returns undefined on explicit break-glass CLINEMM_EXPERIMENTAL_SANDBOX=off;
+    // returns "seatbelt-experimental" when Seatbelt is selected
+    // (darwin default-on OR explicit opt-in);
+    // returns undefined on explicit break-glass
+    // CLINEMM_EXPERIMENTAL_SANDBOX=off;
     // throws on unknown values (fail closed).
+    // PROVES: selection. NOT: substrate functional availability.
+
+  // Fact 2b — canonical Seatbelt-effective authority
+  // (selection + opt-in + cached substrate probe).
+  sdk/packages/core/src/runtime/sandbox/sandbox-backend.ts:73
+    export async function getSandboxBackend(
+      mode: SandboxMode,
+      optIn?: SandboxBackendOptIn,
+    ): Promise<SandboxBackend | undefined>
+    // returns the cached SeatbeltSandboxBackendExperimental iff
+    //   mode === "seatbelt-experimental"
+    //   && optIn provided
+    //   && SeatbeltSandboxBackendExperimental.isAvailable() === true
+    //     (cached probe: darwin + /usr/bin/sandbox-exec present +
+    //      minimal SBPL round-trips successfully)
+    // returns undefined otherwise. Never throws.
+    // PROVES: Seatbelt substrate is selected, authorized, and
+    //         functionally available. NOT: per-command prepare() will
+    //         succeed (that is per-invocation at CommandJobManager).
 
   // Fact 3 — capability is the conjunction (derived; not persisted).
   // wired at apps/vscode/src/sdk/cline-session-factory.ts:736
@@ -770,14 +955,24 @@ Capability anchor (three separate canonical facts):
   // "Seatbelt is effective". Conflating them is the evidence-category
   // promotion Factory normally forbids (see §1 Phase-0 decision).
 
-  // Why reuse resolveExperimentalSandboxMode rather than introduce
-  // a new Seatbelt state? It IS the canonical selector; introducing
-  // a parallel state would create a second policy implementation.
+  // Why reuse getSandboxBackend (not just resolveExperimentalSandboxMode)?
+  // The selector alone proves the user selected Seatbelt; the cached
+  // availability probe is what proves the substrate actually works.
+  // Without the availability check, "Seatbelt selected + substrate
+  // broken" would silently grant completion authority — CAI-13B's
+  // load-bearing case.
 
-  // Why three facts, not one helper that composes them all?
+  // Why four facts, not one helper that composes them all?
   // CLI --yolo is a separate axis (upstream distinction). VS Code
-  // auto-approval is a separate axis. Seatbelt effective is a
-  // separate axis. Forcing them into one function hides the seams.
+  // auto-approval is a separate axis. Seatbelt selection is a
+  // separate axis. Seatbelt substrate-availability is a separate
+  // axis. Forcing them into one function hides the seams.
+
+  // Lifecycle states (per §1 Phase-0 finding B):
+  //   SELECTED   = resolveExperimentalSandboxMode() === "seatbelt-experimental"
+  //   AVAILABLE  = getSandboxBackend(mode, optIn) !== undefined
+  //   PREPARED   = backend.prepare({cap, cmd}) succeeded    (per-invocation)
+  //   EFFECTIVE  = SELECTED && AVAILABLE                   (per-session fact)
 
 Wire-side completion detection (already complete):
   apps/vscode/src/sdk/message-translator.ts:882, 343-352, 365-382,
