@@ -1,8 +1,10 @@
 # ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01
 
-> Status: **NEXT / HIGH** — opens immediately after
+> Status: **OPEN / WAITING_FOR_LIVE_SPECIMEN** — recon §2 PASS at
+> HEAD f8dca1fda / TREE 6f2e01b56 (committed at dbd7c6449); §3
+> live specimen gated behind
 > `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01`
-> dogfood is bound.
+> dogfood closure.
 >
 > **Primary purpose**: LIVE REPRODUCTION → approval-boundary
 > classification → RED at real production seam → causal discriminator →
@@ -199,6 +201,23 @@ T9  mutation boundary (only AFTER approval resolves)
         arming side: sdk-session-auto-approval-coordinator.ts (consumes
         pending intent at session-id allocation; authoritative site)
 
+        **Authority timing (load-bearing)**: after the
+        completion-authority work, the store mutation happens
+        immediately when the user changes ALL/none, but the
+        runtime toolset rebuild that consumes the override is
+        scheduled later. Therefore, at the moment T4
+        (shouldAutoApproveTool) executes for an in-flight tool
+        request, store authority and runtime toolset
+        construction epoch can disagree:
+
+            store override     = NEW
+            runtime toolset    = OLD
+
+        This race surface is Bucket F (chronology / session-rebuild).
+        The store-vs-runtime epoch correlation MUST be captured
+        separately in §3 — treating the store value alone as
+        authoritative for the in-flight decision is incorrect.
+
 6.  resolveSessionHostAuthorization / equivalent
         evaluateCommandToolApproval callback in SdkController.ts:818..870
         (atomic authority+constraints; command tools only — NOT the
@@ -248,29 +267,37 @@ closed. This ACT will halt at the appropriate boundary.
 
 ### Required live matrix (per spec §3)
 
-| Field                              | Required classification              |
-| ---------------------------------- | ------------------------------------ |
-| task/session ID                    | LIVE                                 |
-| stateVersion / correlation ID      | LIVE if available                    |
-| canonical `toolName`               | LIVE                                 |
-| mechanism bucket from TES          | LIVE                                 |
-| tool input *kind*                  | LIVE; no sensitive contents required |
-| target path classification         | LIVE                                 |
-| target inside/outside workspace    | LIVE                                 |
-| current mode                       | LIVE                                 |
-| session override (`none/all`)      | LIVE                                 |
-| persisted `actions.editFiles`      | LIVE                                 |
-| legacy `editFilesExternally`       | LIVE if relevant                     |
-| YOLO_REQUESTED                     | LIVE or composed proof               |
-| Seatbelt selected                  | LIVE                                 |
-| Seatbelt available                 | LIVE                                 |
-| hostAuthorization.mode             | LIVE                                 |
-| resolved tool policy `autoApprove` | LIVE if observable                   |
-| final should-auto-approve result   | LIVE if observable                   |
-| `requestToolApproval` reached      | LIVE                                 |
-| visible prompt subtype             | LIVE                                 |
-| edit happened before prompt?       | LIVE                                 |
-| edit happened after approval?      | LIVE                                 |
+| Field                                   | Required classification              |
+| --------------------------------------- | ------------------------------------ |
+| task/session ID                         | LIVE                                 |
+| stateVersion / correlation ID           | LIVE if available                    |
+| canonical `toolName`                    | LIVE                                 |
+| mechanism bucket from TES               | LIVE                                 |
+| tool input *kind*                       | LIVE; no sensitive contents required |
+| target path classification              | LIVE                                 |
+| target inside/outside workspace         | LIVE                                 |
+| current mode                            | LIVE                                 |
+| session override (`none/all`)           | LIVE                                 |
+| persisted `actions.editFiles`           | LIVE                                 |
+| legacy `editFilesExternally`            | LIVE if relevant                     |
+| YOLO_REQUESTED                          | LIVE or composed proof               |
+| Seatbelt selected                       | LIVE                                 |
+| Seatbelt available                      | LIVE                                 |
+| hostAuthorization.mode                  | LIVE                                 |
+| resolved tool policy `autoApprove`      | LIVE if observable                   |
+| **final shouldAutoApproveTool result**  | **LIVE — primary discriminator**     |
+| **T7 ask emission observed?**           | **LIVE — primary discriminator**     |
+| **approval ask message appended?**      | **LIVE — primary discriminator**     |
+| **store override vs runtime toolset epoch** | **LIVE — chronology check**       |
+| visible prompt subtype                  | LIVE                                 |
+| mutation start observed at T7/T9?       | LIVE                                 |
+
+Note: `requestToolApproval reached` is **not** a useful ALLOW-vs-ASK
+discriminator for native edit tools. For the native edit path
+`request.policy.autoApprove === false` is always true (see §2), so the
+SDK *always* enters approval handling. The discriminator is
+`shouldAutoApproveTool result × T7 emission`, not the fact that
+approval handling was reached at all.
 
 ## §4 — Primary discriminator (deferred to §3)
 
@@ -284,6 +311,63 @@ If a Bucket E specimen is later observed, it must indicate either:
 - a different code path entirely (seam moved → HALT_SEAM_MOVED), or
 - a post-execution acknowledgement message being rendered as an
   approval ask (Bucket C boundary crossing — escalate).
+
+### Bucket taxonomy (canonical discriminator)
+
+The discriminator is **shouldAutoApproveTool result × T7 ask
+emission × observable UI**, NOT `requestToolApproval reached`.
+
+```text
+A. shouldAutoApproveTool = false
+   AND T7 ASK emitted
+   AND UI shows approval
+   ⇒ genuine policy / classification ASK
+   (Expected behavior; not a defect.)
+
+B. shouldAutoApproveTool = true   (decided ALLOW by host)
+   BUT T7 ASK emitted anyway
+   ⇒ control-flow defect
+   (Host returned ALLOW but the ASK branch still ran.)
+   Epistemic guard: correlate store override epoch vs runtime
+   toolset epoch (see §P1 fix below) — a stale toolset with
+   autoApprove=true at construction time is a different bucket
+   (Bucket F race) and must not be misclassified as B.
+
+C. shouldAutoApproveTool = true
+   AND T7 ASK NOT emitted by the runtime
+   BUT UI shows an approval ask
+   ⇒ stale presentation / orphan ask owner
+   (UI is rendering an ask that the runtime never produced.
+    Classic Bucket C defect surface.)
+
+D. toolName did not classify as edit
+   but the prompt surfaces an "edit file" affordance
+   ⇒ policy-category defect
+   (Build-time policy wrong; sub-classification off.)
+
+F. effective.editFiles / override changed across T4
+   (store override = NEW, runtime toolset = OLD at the moment
+    the host decision was taken)
+   ⇒ session-authority / race candidate
+   (NOT a control-flow defect; this is the IMPLEMENTATION01 race
+    surface. Bucket F is its own bucket, not a sub-class of B.)
+
+E. EXCLUDED for the mapped native edit path. (See structural
+   exclusion above.)
+```
+
+The repair verdict tied to each bucket (informational only — RED
+authoring is gated on §3 producing evidence, and the verdict
+itself is NOT pre-baked):
+
+```text
+A ⇒ no repair
+B ⇒ RED: control-flow repair
+C ⇒ RED: presentation-state repair
+D ⇒ RED: classification / build-time policy repair
+F ⇒ RED: chronology / session-rebuild repair (escalate to the
+        IMPLEMENTATION01 race-fix conversation)
+```
 
 ## §5 — Causal chronology (deferred to §3)
 
@@ -304,13 +388,27 @@ Per spec.
 
 ## §8 — Permitted repair boundaries (deferred to §3)
 
-Per spec. Most-likely outcome per `EPIC-APPROVAL-PROTECTION` row 19
-(upstream #13114: prompt occurs AFTER file creation → UI-projection /
-completion-seam defect, NOT approval-ordering). This recon will
-specifically test whether the editor-tool path closes the prompt after
-mutation, even though the §2 source-seam map says the prompt comes
-before mutation. If the live specimen contradicts the source map,
-HALT_SEAM_MOVED is the right gate.
+Per spec. No preferred bucket is pre-baked into the ACT; the
+classification itself is the output of §3, not its input.
+
+### External radar (informational only)
+
+```text
+EXTERNAL_RADAR:
+An upstream report (referenced as upstream #13114 in
+EPIC-APPROVAL-PROTECTION row 19) described a superficially
+similar post-mutation prompt symptom (prompt occurs after
+file creation → UI-projection / completion-seam defect).
+
+It is NOT bound to this specimen or this code path and must
+NOT influence A–G classification. Recording it here so
+later reviews can cross-check against the real upstream
+report, not against a remembered summary.
+```
+
+If the live specimen contradicts the §2 source-seam map (i.e. a
+Bucket E observation on the native edit path), `HALT_SEAM_MOVED`
+is the right gate.
 
 ## §9 — Explicit forbidden repair
 
@@ -354,16 +452,21 @@ factory/docs ≤ 2 (this ACT + seam-map evidence)
 
 Recon (this ACT):
 ```text
-[x] REAL_PROMPT_BOUND                (deferred to §3 — IMPLEMENTATION01
+[ ] REAL_PROMPT_BOUND                (deferred to §3 — IMPLEMENTATION01
                                        dogfood must close first)
-[x] TOOL_EVENT_CORRELATED            (deferred to §3)
-[x] APPROVAL_DECISION_CLASSIFIED     (deferred to §3)
-[x] PROMPT_PRE_OR_POST_MUTATION_CLASSIFIED
-                                       → structurally classified by §2
-                                       (pre-mutation; Bucket E excluded)
-[x] BOUNDARY_A_TO_G_SELECTED         (deferred to §3)
+[ ] TOOL_EVENT_CORRELATED            (deferred to §3)
+[ ] APPROVAL_DECISION_CLASSIFIED     (deferred to §3)
+[x] PROMPT_PRE_OR_POST_MUTATION_STRUCTURAL_BOUNDARY = PASS
+                                       (pre-mutation for the mapped
+                                        native edit path; Bucket E
+                                        structurally excluded by §2)
+[ ] LIVE_PROMPT_MUTATION_ORDER       (NOT_YET_CAPTURED — needs §3)
+[ ] BOUNDARY_A_TO_G_SELECTED         (deferred to §3)
 [x] PASS_RECON_SEAM_MAPPED           (this ACT)
 ```
+
+Unticked-on-purpose: any gate above `[ ]` is `NOT_YET_CAPTURED`,
+not `PASS`. Promotion rules forbid the latter without a specimen.
 
 Repair (NOT in this ACT):
 ```text

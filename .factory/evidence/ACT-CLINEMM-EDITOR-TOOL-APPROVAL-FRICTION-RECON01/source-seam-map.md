@@ -86,9 +86,27 @@ override = sessionAutoApproval.getOverride(sessionId)
 
 `SessionAutoApprovalStore` is defined in
 `apps/vscode/src/sdk/session-auto-approval.ts`. The `getOverride`
-method is non-mutating and returns the override bound at the most
-recent rebuild for that session id (`"none"` if no intent was
-consumed).
+method is non-mutating and returns the override currently bound
+in the canonical store for that session id (`"none"` if no intent
+was consumed).
+
+**Authority timing (load-bearing)**: after the
+completion-authority work (IMPLEMENTATION01), the store mutation
+is immediate when the user changes ALL/none, but the runtime
+toolset rebuild that consumes the override is scheduled later.
+Therefore, at the moment T4 (shouldAutoApproveTool) executes for
+an in-flight tool request, store authority and runtime toolset
+construction epoch can disagree:
+
+```text
+    store override     = NEW
+    runtime toolset    = OLD
+```
+
+This race surface is Bucket F (chronology / session-rebuild) in
+the ACT's bucket taxonomy. The store-vs-runtime epoch correlation
+MUST be captured separately in §3 — treating the store value
+alone as authoritative for the in-flight decision is incorrect.
 
 The composition function `resolveEffectiveAutoApproval` at
 `session-auto-approval.ts:221..244`:
