@@ -545,6 +545,24 @@ export interface TurnState {
  *                              notices), not independent
  *                              interventions — summing them
  *                              double-counted.
+ * - `mechanism?`            — ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01
+ *                              (TES-IMPL-01): per-mechanism cumulative
+ *                              projection (edit / command / search /
+ *                              read / mcp / other) derived from the
+ *                              canonical `toolName` on each
+ *                              `tool-started` runtime event. `total`
+ *                              here is conserved against `toolCalls`:
+ *
+ *                                mechanism.total === toolCalls
+ *                                mechanism.total === sum(mechanism buckets)
+ *
+ *                              Mechanism-only, not purpose — the
+ *                              classifier never infers semantic purpose
+ *                              from tool arguments (e.g. `run_commands
+ *                              ("sed -i ...")` stays `command`, never
+ *                              `edit`). Optional on the wire so
+ *                              Hub/Remote hosts that have not yet
+ *                              received the field simply omit it.
  *
  * The transport is intentionally minimal: NO state label (use
  * `turnState.phase`), NO context/token/cost fields (out of scope for
@@ -556,6 +574,23 @@ export interface TaskHeaderTelemetryStrip {
 	endedAt?: number
 	toolCalls: number
 	recoveryBudgetFailures: number
+	mechanism?: ToolMechanismSummary
+}
+
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
+ * Wire-shape for the per-mechanism cumulative projection. Mirrors
+ * `apps/vscode/src/sdk/tool-mechanism-classifier.ts` so the host
+ * serializes the exact same shape the webview decodes.
+ */
+export interface ToolMechanismSummary {
+	total: number
+	edit: number
+	command: number
+	read: number
+	search: number
+	mcp: number
+	other: number
 }
 
 export interface QueuedPrompt {

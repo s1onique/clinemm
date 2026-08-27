@@ -994,8 +994,17 @@ export class Controller {
 			// `tool-started` per tool invocation that reached the executor;
 			// control-plane DENY/REJECT/UNKNOWN_TOOL never emit this event,
 			// so the counter naturally excludes them.
-			onToolStarted: () => {
-				this.taskTelemetry.recordToolStarted()
+			//
+			// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01):
+			// forward the canonical `toolName` from the
+			// `AgentContentStartEvent` so the tracker can fold each
+			// invocation into the matching mechanism bucket
+			// (`edit` / `command` / `search` / `read` / `mcp` /
+			// `other`). The classification is mechanism-only — the
+			// command TEXT never reaches the classifier, by
+			// construction.
+			onToolStarted: (event) => {
+				this.taskTelemetry.recordToolStartedWithName(event.toolName)
 			},
 			onDidBecomeIdle: () => this.handleSessionBecameIdle(),
 			getRemoteConfigIntegration: () => this.remoteConfigCoreIntegration,

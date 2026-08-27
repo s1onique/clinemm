@@ -524,3 +524,176 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskTelemetryTracker", () => {
 		expect(t.get()?.recoveryBudgetFailures).toBe(2)
 	})
 })
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01)
+ *
+ * Per-mechanism cumulative projection tests on the host tracker.
+ * The classifier itself is covered exhaustively by
+ * `tool-mechanism-classifier.test.ts`; this file proves the tracker
+ * threads the canonical `toolName` into the right bucket AND keeps
+ * the conservation invariant intact (mechanism.total === toolCalls).
+ *
+ * Conservation is the load-bearing invariant: the wire field is
+ * permitted to drift only if `toolCalls` drifts in lockstep, and
+ * even then a hub/remote consumer that reads both will detect a
+ * mismatch.
+ */
+describe("ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryTracker mechanism projection", () => {
+	it("TES-TRK-01: `get()` returns a zero `mechanism` summary right after startTask", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		expect(t.get()?.mechanism).toEqual({
+			total: 0,
+			edit: 0,
+			command: 0,
+			read: 0,
+			search: 0,
+			mcp: 0,
+			other: 0,
+		})
+		// Existing counter is unchanged.
+		expect(t.get()?.toolCalls).toBe(0)
+	})
+
+	it("TES-TRK-02: recordToolStartedWithName increments the right bucket AND toolCalls", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithName("editor")
+		t.recordToolStartedWithName("apply_patch")
+		t.recordToolStartedWithName("run_commands")
+		t.recordToolStartedWithName("read_files")
+		t.recordToolStartedWithName("search_codebase")
+		t.recordToolStartedWithName("figma-desktop__get_metadata")
+		t.recordToolStartedWithName(undefined) // → "other"
+		const m = t.get()?.mechanism
+		expect(m).toEqual({
+			total: 7,
+			edit: 2,
+			command: 1,
+			read: 1,
+			search: 1,
+			mcp: 1,
+			other: 1,
+		})
+		// Conservation: mechanism.total === toolCalls.
+		expect(m?.total).toBe(t.get()?.toolCalls)
+		expect(t.get()?.toolCalls).toBe(7)
+	})
+
+	it("TES-TRK-03: legacy `recordToolStarted()` (no arg) increments total + `other` bucket", () => {
+		// The legacy overload is retained for backwards compatibility.
+		// Without a toolName we cannot infer a mechanism; conservatively
+		// the increment lands in `other` so the projection stays
+		// conserved against `toolCalls`.
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStarted()
+		t.recordToolStarted()
+		const m = t.get()?.mechanism
+		expect(m).toEqual({
+			total: 2,
+			edit: 0,
+			command: 0,
+			read: 0,
+			search: 0,
+			mcp: 0,
+			other: 2,
+		})
+		expect(m?.total).toBe(t.get()?.toolCalls)
+		expect(t.get()?.toolCalls).toBe(2)
+	})
+
+	it("TES-TRK-04: startTask with a NEW task identity resets mechanism summary", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithName("editor")
+		t.recordToolStartedWithName("run_commands")
+		expect(t.get()?.mechanism?.total).toBe(2)
+		// Switch to a different task.
+		t.startTask("task-b")
+		expect(t.get()?.mechanism).toEqual({
+			total: 0,
+			edit: 0,
+			command: 0,
+			read: 0,
+			search: 0,
+			mcp: 0,
+			other: 0,
+		})
+		expect(t.get()?.toolCalls).toBe(0)
+	})
+
+	it("TES-TRK-05: startTask with the SAME task identity preserves the mechanism summary", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithName("editor")
+		t.recordToolStartedWithName("run_commands")
+		const before = t.get()?.mechanism
+		// Same-task re-call (e.g. follow-up turn) must preserve state.
+		t.startTask("task-a")
+		expect(t.get()?.mechanism).toEqual(before)
+		expect(t.get()?.toolCalls).toBe(2)
+	})
+
+	it("TES-TRK-06: clear() resets mechanism summary along with the rest", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithName("editor")
+		t.clear()
+		expect(t.get()).toBeUndefined()
+		// After clear + a new start, the summary is zero again.
+		t.startTask("task-b")
+		expect(t.get()?.mechanism?.total).toBe(0)
+		expect(t.get()?.toolCalls).toBe(0)
+	})
+
+	it("TES-TRK-07: mechanism summary survives a terminal reopen (cumulative across continuation)", () => {
+		// The cumulative invariant must hold across terminal-then-
+		// reopen flows (same-task continuation). This mirrors the
+		// existing THA40 contract for `toolCalls`.
+		const t = new TaskTelemetryTracker()
+		const startedAt = 1_700_000_000_000
+		t.startTask("task-a", startedAt)
+		t.recordToolStartedWithName("editor") // +1 edit
+		t.recordToolStartedWithName("apply_patch") // +1 edit
+		t.observeTurnPhase("completed", 1_700_000_090_000)
+		// New turn begins on the same task.
+		t.observeTurnPhase("streaming")
+		t.recordToolStartedWithName("run_commands") // +1 command
+		expect(t.get()?.toolCalls).toBe(3)
+		expect(t.get()?.mechanism).toEqual({
+			total: 3,
+			edit: 2,
+			command: 1,
+			read: 0,
+			search: 0,
+			mcp: 0,
+			other: 0,
+		})
+		// startedAt preserved
+		expect(t.get()?.startedAt).toBe(startedAt)
+	})
+
+	it("TES-TRK-08: recordToolStartedWithName called before startTask is a no-op (defensive)", () => {
+		const t = new TaskTelemetryTracker()
+		const snap = t.recordToolStartedWithName("editor")
+		expect(snap).toBeUndefined()
+		expect(t.get()).toBeUndefined()
+	})
+
+	it("TES-TRK-09: `sed -i ...` via run_commands is recorded as `command`, never as `edit`", () => {
+		// The host seam only sees the canonical `toolName`. We pass
+		// `run_commands` (the registered tool identity); the
+		// command TEXT is not in scope at the tracker boundary and
+		// must NEVER influence the classification. The host tracker
+		// is therefore protected from accidental purpose inference
+		// by construction: there is no path through which the shell
+		// command's text can reach `classifyToolMechanism`.
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a")
+		t.recordToolStartedWithName("run_commands")
+		expect(t.get()?.mechanism?.command).toBe(1)
+		expect(t.get()?.mechanism?.edit).toBe(0)
+		expect(t.get()?.mechanism?.other).toBe(0)
+	})
+})

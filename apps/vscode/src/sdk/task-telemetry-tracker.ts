@@ -62,8 +62,9 @@
  * Privacy: emits nothing more than bounded integers and timestamps.
  */
 import type { AgentRuntimeRecoverySnapshot } from "@cline/shared"
-import type { TaskHeaderTelemetryStrip } from "@shared/ExtensionMessage"
+import type { TaskHeaderTelemetryStrip, ToolMechanismSummary } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
+import { recordMechanism as accumulateMechanism, emptyMechanismSummary } from "./tool-mechanism-classifier"
 
 /**
  * Phases that freeze the elapsed clock. `awaiting_followup` is NOT in
@@ -131,6 +132,12 @@ export class TaskTelemetryTracker {
 	private toolCalls = 0
 	private recoveryBudgetFailures = 0
 	private prevEpisodeFailures = 0
+	// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
+	// bounded mechanism projection (edit / command / search / read / mcp /
+	// other) derived from the canonical toolName of every `tool-started`
+	// runtime event. `total` in this summary is conserved against the
+	// `toolCalls` counter; see the TES-IMPL-01 contract.
+	private mechanism: ToolMechanismSummary = emptyMechanismSummary()
 
 	/**
 	 * Start (or re-start) a task's telemetry window.
@@ -155,6 +162,7 @@ export class TaskTelemetryTracker {
 		this.toolCalls = 0
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
+		this.mechanism = emptyMechanismSummary()
 		return this.get()
 	}
 
@@ -235,6 +243,7 @@ export class TaskTelemetryTracker {
 		this.toolCalls = 0
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
+		this.mechanism = emptyMechanismSummary()
 		return this.get()
 	}
 
@@ -243,13 +252,45 @@ export class TaskTelemetryTracker {
 	 *
 	 * Idempotent across parallel siblings: two parallel tools count as
 	 * two `tool-started` events, each incrementing the counter by one.
+	 *
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
+	 * This overload retains the legacy no-arg signature for backwards
+	 * compatibility (existing tests assert `recordToolStarted()`
+	 * directly). The production seam is
+	 * `recordToolStartedWithName(toolName)` (wired from
+	 * `SdkController.onToolStarted` once the runtime hands us the
+	 * canonical `AgentContentStartEvent`); callers without a
+	 * toolName still get the cumulative `toolCalls` increment and
+	 * contribute to the `other` mechanism bucket so the projection
+	 * stays conserved.
 	 */
 	recordToolStarted(): TaskHeaderTelemetryStrip | undefined {
+		return this.recordToolStartedWithName(undefined)
+	}
+
+	/**
+	 * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
+	 *
+	 * Production seam: record a canonical `tool-started` runtime event
+	 * with its `toolName` (the structured identity on the
+	 * `AgentContentStartEvent`). Increments the cumulative
+	 * `toolCalls` counter AND the matching mechanism bucket in the
+	 * `mechanism` summary. Conservation holds:
+	 *
+	 *   mechanism.total === toolCalls === sum(mechanism buckets)
+	 *
+	 * If the tracker has no active task (`currentTaskId === undefined`)
+	 * the call is logged and dropped — mirrors the pre-existing
+	 * defensive behavior of `recordToolStarted()` so we never
+	 * fabricate counts against an unowned task identity.
+	 */
+	recordToolStartedWithName(toolName: string | undefined): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId === undefined) {
-			Logger.debug("[TaskTelemetryTracker] recordToolStarted called before startTask; ignored")
+			Logger.debug("[TaskTelemetryTracker] recordToolStartedWithName called before startTask; ignored")
 			return this.get()
 		}
 		this.toolCalls += 1
+		this.mechanism = accumulateMechanism(this.mechanism, toolName)
 		return this.get()
 	}
 
@@ -302,6 +343,12 @@ export class TaskTelemetryTracker {
 			...(this.endedAt !== undefined ? { endedAt: this.endedAt } : {}),
 			toolCalls: this.toolCalls,
 			recoveryBudgetFailures: this.recoveryBudgetFailures,
+			// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
+			// the per-mechanism cumulative projection. Webview renders
+			// it as the compact `🔧N · ✏️E · >_C · 👁R · 🔍S · 🔌M · ❓O`
+			// strip when present; Hub/Remote hosts that have not yet
+			// received the new field simply omit it from the strip.
+			mechanism: this.mechanism,
 		}
 	}
 

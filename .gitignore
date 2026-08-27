@@ -105,6 +105,23 @@ apps/examples/desktop-app/.cursor/settings.json
 # .factory/epics/ are durable, linkable substrate of the board architecture.
 # See docs/factory-migrations/ACT-CLINEMM-FACTORY-EPIC-BOARD-SHARDING01-manifest.md.
 !/.factory/epics/
+# ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01): the
+# implementation ACT contract is referenced from durable board and epic
+# files, so the ACT itself MUST be durable (otherwise the canonical link
+# would be broken on a fresh clone). Parked / waiting-for-evidence ACTs
+# stay local — they have no durable binding contract yet.
+#
+# Policy: DEFAULT-DENY + WHITELIST. The `.factory/acts/` directory
+# itself is re-included so git can recurse, but every file *under* it
+# is ignored unless explicitly whitelisted below. This is forward-safe:
+# any new file dropped under `.factory/acts/` (a future debug dump, a
+# scratch ACT, a captured secret-bearing log) is local-by-default
+# without needing to update this gitignore first. The policy contract
+# is the gitignore rule itself, not a maintained inventory of known
+# local-only filenames.
+!/.factory/acts/
+/.factory/acts/*
+!/.factory/acts/ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01.md
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
 # apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt

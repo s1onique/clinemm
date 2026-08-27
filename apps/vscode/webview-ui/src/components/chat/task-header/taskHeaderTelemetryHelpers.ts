@@ -26,6 +26,20 @@
  *     `TurnPhase → StateLabelProjection` mapping and is the
  *     cumulative foundation both entry points build on.
  *
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
+ *   - Added `isUsableMechanismProjection(mechanism, toolCalls)` as the
+ *     wire-boundary validator. The webview trusts the per-mechanism
+ *     projection ONLY when this returns true. Otherwise it falls
+ *     back to the legacy flat `🔧 N` rendering. The validator is
+ *     semantically equivalent to the SDK-side check
+ *     (`apps/vscode/src/sdk/tool-mechanism-classifier.ts`
+ *     `isUsableMechanismProjection`); both are pinned by their
+ *     respective test suites. Mirroring is necessary because the
+ *     webview bundle cannot import from the host-side classifier
+ *     (`apps/vscode/src/sdk/` is host-only code). The wire type
+ *     `ToolMechanismSummary` itself is the same canonical shape on
+ *     both sides — defined once in `apps/vscode/src/shared/ExtensionMessage.ts`.
+ *
  * Pure helpers for the Task Header telemetry strip:
  *   - `formatElapsed`: deterministic elapsed-time formatter
  *     (mm:ss / h:mm:ss / d hh:mm) with the canonical epoch as
@@ -38,10 +52,11 @@
  *     for new consumers. Reads `taskHeaderPresentation` (when
  *     present) and falls back to `turnState.phase` derivation if the
  *     projection is absent.
+ *   - `isUsableMechanismProjection`: wire-boundary validator. Pure.
  *
  * No React. No DOM. No chat-derived inference.
  */
-import type { TaskHeaderPresentationProjection, TurnPhase, TurnState } from "@shared/ExtensionMessage"
+import type { TaskHeaderPresentationProjection, ToolMechanismSummary, TurnPhase, TurnState } from "@shared/ExtensionMessage"
 
 const MS_PER_SECOND = 1_000
 const MS_PER_MINUTE = 60 * MS_PER_SECOND
@@ -203,4 +218,51 @@ export function taskHeaderPresentationStateLabel(
 		return stateLabel(taskHeaderPresentation.phase)
 	}
 	return stateLabel(turnState?.phase)
+}
+
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / wire-boundary
+ * validator (webview mirror).
+ *
+ * Mirrors the SDK-side `isUsableMechanismProjection` in
+ * `apps/vscode/src/sdk/tool-mechanism-classifier.ts`. The webview
+ * bundle cannot import host-side modules, so the same 4-condition
+ * check lives here too — both pinned by their respective test suites.
+ * The wire shape `ToolMechanismSummary` itself is the same canonical
+ * type on both sides (`apps/vscode/src/shared/ExtensionMessage.ts`).
+ *
+ * Returns `true` only when ALL of the following hold:
+ *
+ *   - `mechanism` is not `undefined`;
+ *   - every field is a finite, non-negative integer (rejects `NaN`,
+ *     `Infinity`, negative values, malformed values);
+ *   - the bucket sum equals `mechanism.total` (in-process conservation);
+ *   - `mechanism.total === toolCalls` (cross-field conservation
+ *     against the older flat counter).
+ *
+ * Returns `false` otherwise. The caller MUST fall back to the legacy
+ * flat `🔧 N` rendering rather than displaying a possibly-stale or
+ * contradictory projection.
+ *
+ * Pure. No I/O. No DOM. No React.
+ */
+export function isUsableMechanismProjection(mechanism: ToolMechanismSummary | undefined, toolCalls: number): boolean {
+	if (mechanism === undefined) {
+		return false
+	}
+	const fields: Array<keyof ToolMechanismSummary> = ["total", "edit", "command", "read", "search", "mcp", "other"]
+	for (const key of fields) {
+		const value = mechanism[key]
+		if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+			return false
+		}
+	}
+	const sum = mechanism.edit + mechanism.command + mechanism.read + mechanism.search + mechanism.mcp + mechanism.other
+	if (mechanism.total !== sum) {
+		return false
+	}
+	if (mechanism.total !== toolCalls) {
+		return false
+	}
+	return true
 }

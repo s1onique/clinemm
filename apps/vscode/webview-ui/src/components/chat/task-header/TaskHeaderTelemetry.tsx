@@ -23,12 +23,31 @@
  *    independently interpret stale legacy `turnState.phase` in
  *    normal operation.
  *
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01):
+ *  - The cumulative `toolCalls` count now renders as a compact
+ *    `🔧N · ✏️E · >_C · 👁R · 🔍S · 🔌M · ❓O` mechanism breakdown
+ *    whenever the host-supplied `telemetry.mechanism` summary is on
+ *    the wire. Each sub-glyph represents one closed mechanism
+ *    bucket (edit / command / search / read / mcp / other) and is
+ *    hidden when its bucket is zero. The display is mechanism-only:
+ *    a native edit tool and a shell command that edits a file remain
+ *    visually distinct (`✏️` vs `>_`). Icon order is stable so the
+ *    user can scan a task header at a glance.
+ *  - Every glyph has an explicit `aria-label` describing the count
+ *    (`6 edit tool calls`) and a `title` tooltip. The icons are
+ *    visual sugar; the semantics live in the screen-reader text.
+ *  - When the host has not yet projected the `mechanism` summary
+ *    (Hub/Remote hosts, pre-observation absence), the strip falls
+ *    back to the existing flat `🔧 N` rendering — the legacy
+ *    `toolCalls` count is still numerically conserved against the
+ *    sum of mechanism buckets when both are present.
+ *
  * Compact Task Header telemetry strip. Reads the canonical
  * `taskTelemetry` (host-owned), `taskHeaderPresentation` (host-owned),
  * and `turnState` (backend-owned, preserved for the projection-
  * absence fallback) and projects them as four compact values:
  *
- *   ⏱ elapsed task time   ● state   🔧 tool calls   ↻ recovery
+ *   ⏱ elapsed task time   ● state   🔧 tool calls (×mechanism)   ↻ recovery
  *
  * Source of truth rules (all pinned by the parent ACT test matrix):
  *
@@ -47,6 +66,9 @@
  *     `isWorking` state.
  *   - Tool count: cumulative `taskTelemetry.toolCalls` (incremented
  *     exactly once per canonical `tool-started` runtime event).
+ *     When `telemetry.mechanism` is present, the count is decomposed
+ *     into the per-mechanism breakdown; otherwise the flat count is
+ *     rendered unchanged.
  *   - Recovery-budget-failure count: cumulative
  *     `taskTelemetry.recoveryBudgetFailures` (positive deltas of
  *     `RecoverySnapshot.episodeFailures` only). HIDDEN at zero per
@@ -57,10 +79,21 @@
  * Accessible: every counter has a text label and aria-label;
  * tooltips describe semantics.
  */
-import type { TaskHeaderPresentationProjection, TaskHeaderTelemetryStrip, TurnState } from "@shared/ExtensionMessage"
-import { ClockIcon, WrenchIcon } from "lucide-react"
+import type {
+	TaskHeaderPresentationProjection,
+	TaskHeaderTelemetryStrip,
+	ToolMechanismSummary,
+	TurnState,
+} from "@shared/ExtensionMessage"
+import type { LucideIcon } from "lucide-react"
+import { ClockIcon, Edit3Icon, EyeIcon, PlugIcon, SearchIcon, WrenchIcon } from "lucide-react"
 import React, { useEffect, useState } from "react"
-import { formatElapsed, resolveElapsedDisplayMs, taskHeaderPresentationStateLabel } from "./taskHeaderTelemetryHelpers"
+import {
+	formatElapsed,
+	isUsableMechanismProjection,
+	resolveElapsedDisplayMs,
+	taskHeaderPresentationStateLabel,
+} from "./taskHeaderTelemetryHelpers"
 
 interface TaskHeaderTelemetryProps {
 	telemetry: TaskHeaderTelemetryStrip | undefined
@@ -69,6 +102,67 @@ interface TaskHeaderTelemetryProps {
 }
 
 const LIVE_TICK_MS = 1_000
+
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01):
+ *
+ * Per-mechanism visual / a11y descriptor table. The order is the
+ * canonical TaskHeader display order:
+ *
+ *   total → edit → command → read → search → mcp → other
+ *
+ * The `Icon` field is the lucide-react component (or `null` for
+ * buckets that use an inline glyph); `glyph` is the inline text
+ * fallback rendered for non-lucide buckets (`>_` command, `?` other);
+ * `label` is the screen-reader / tooltip label fragment; `key` is the
+ * canonical `ToolMechanismSummary` field name.
+ */
+interface MechanismDescriptor {
+	key: keyof ToolMechanismSummary
+	label: string
+	Icon: LucideIcon | null
+	glyph: string | null
+}
+
+const MECHANISM_DESCRIPTORS: readonly MechanismDescriptor[] = [
+	{ key: "edit", label: "edit tool calls", Icon: Edit3Icon, glyph: null },
+	{ key: "command", label: "command tool calls", Icon: null, glyph: ">_" },
+	{ key: "read", label: "read tool calls", Icon: EyeIcon, glyph: null },
+	{ key: "search", label: "search tool calls", Icon: SearchIcon, glyph: null },
+	{ key: "mcp", label: "MCP tool calls", Icon: PlugIcon, glyph: null },
+	{ key: "other", label: "unclassified tool calls", Icon: null, glyph: "?" },
+] as const
+
+/**
+ * Render one compact mechanism chip. Glyph + count, with an
+ * explicit `aria-label` describing the bucket so screen readers
+ * hear `6 edit tool calls` rather than `pencil 6`.
+ */
+function MechanismChip({ descriptor, count }: { descriptor: MechanismDescriptor; count: number }) {
+	const testId = `task-header-mechanism-${descriptor.key}`
+	const ariaLabel = `${count} ${descriptor.label}`
+	if (descriptor.Icon) {
+		const Icon = descriptor.Icon
+		return (
+			<span aria-label={ariaLabel} className="inline-flex items-center gap-0.5" data-testid={testId} title={ariaLabel}>
+				<Icon aria-hidden="true" className="h-3 w-3" />
+				<span className="font-mono">{count}</span>
+			</span>
+		)
+	}
+	return (
+		<span
+			aria-label={ariaLabel}
+			className="inline-flex items-center gap-0.5 font-mono"
+			data-testid={testId}
+			title={ariaLabel}>
+			<span aria-hidden className="text-[0.7rem]">
+				{descriptor.glyph}
+			</span>
+			<span>{count}</span>
+		</span>
+	)
+}
 
 const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, taskHeaderPresentation, turnState }) => {
 	const state = taskHeaderPresentationStateLabel(taskHeaderPresentation, turnState)
@@ -99,6 +193,22 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, ta
 	const elapsedMs = resolveElapsedDisplayMs(telemetry.startedAt, telemetry.endedAt, now)
 	const elapsedText = formatElapsed(elapsedMs)
 	const showRecovery = telemetry.recoveryBudgetFailures > 0
+	// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
+	// Per-mechanism cumulative counts from the host-supplied
+	// projection. The webview trusts the projection ONLY when
+	// `isUsableMechanismProjection` returns true — that validator
+	// enforces:
+	//   - the projection is present;
+	//   - every field is a finite, non-negative integer;
+	//   - the bucket sum equals `mechanism.total` (in-process
+	//     conservation);
+	//   - `mechanism.total === telemetry.toolCalls` (cross-field
+	//     conservation against the older flat counter).
+	// Otherwise we fall back to the existing flat `🔧 N` rendering
+	// rather than display contradictory numbers (e.g. `aria: Tool
+	// calls: 10` against `visible: 🔧9 ✏️3 >_3 ...`).
+	const mechanism = telemetry.mechanism
+	const hasMechanismProjection = isUsableMechanismProjection(mechanism, telemetry.toolCalls)
 
 	return (
 		<div
@@ -121,14 +231,30 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, ta
 				<span aria-hidden>{state.glyph}</span>
 				<span>{state.label}</span>
 			</span>
-			<span
-				aria-label={`Tool calls: ${telemetry.toolCalls}`}
-				className="inline-flex items-center gap-1"
-				data-testid="task-header-tool-count"
-				title="Cumulative tool invocations for this task. Host DENY, user rejection, pre-exec block, and registry miss do not increment — no canonical tool-start occurs for those paths.">
-				<WrenchIcon aria-hidden className="h-3 w-3" />
-				<span className="font-mono">{telemetry.toolCalls}</span>
-			</span>
+			{hasMechanismProjection && mechanism ? (
+				<span
+					aria-label={`Tool calls: ${telemetry.toolCalls}`}
+					className="inline-flex items-center gap-2"
+					data-testid="task-header-tool-count"
+					title="Cumulative tool invocations for this task, broken down by mechanism. Host DENY, user rejection, pre-exec block, and registry miss do not increment — no canonical tool-start occurs for those paths.">
+					<span className="inline-flex items-center gap-0.5" data-testid="task-header-mechanism-total">
+						<WrenchIcon aria-hidden className="h-3 w-3" />
+						<span className="font-mono">{mechanism.total}</span>
+					</span>
+					{MECHANISM_DESCRIPTORS.filter((d) => mechanism[d.key] > 0).map((d) => (
+						<MechanismChip count={mechanism[d.key]} descriptor={d} key={d.key} />
+					))}
+				</span>
+			) : (
+				<span
+					aria-label={`Tool calls: ${telemetry.toolCalls}`}
+					className="inline-flex items-center gap-1"
+					data-testid="task-header-tool-count"
+					title="Cumulative tool invocations for this task. Host DENY, user rejection, pre-exec block, and registry miss do not increment — no canonical tool-start occurs for those paths.">
+					<WrenchIcon aria-hidden className="h-3 w-3" />
+					<span className="font-mono">{telemetry.toolCalls}</span>
+				</span>
+			)}
 			{showRecovery ? (
 				<span
 					aria-label={`Recovery budget failures: ${telemetry.recoveryBudgetFailures}`}

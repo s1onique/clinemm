@@ -10,10 +10,11 @@
  * continues when user replies). Terminal-freeze tests cover the
  * error/resumable/completed set explicitly.
  */
-import type { TaskHeaderPresentationProjection, TurnState } from "@shared/ExtensionMessage"
+import type { TaskHeaderPresentationProjection, ToolMechanismSummary, TurnState } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
 import {
 	formatElapsed,
+	isUsableMechanismProjection,
 	resolveElapsedDisplayMs,
 	stateLabel,
 	taskHeaderPresentationStateLabel,
@@ -198,5 +199,75 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / taskHeaderPr
 		const st = { phase: "streaming" as const, seq: 1 }
 		const p = projection("completed", "shadow", 21)
 		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Complete", glyph: "\u2713", live: false })
+	})
+})
+
+/**
+ * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / wire-boundary
+ * validator (webview mirror).
+ *
+ * Mirrors the SDK-side TES-WIRE-* set. The webview renders the
+ * compact `🔧N · ✏️E · >_C · ...` strip ONLY when
+ * `isUsableMechanismProjection` returns true; otherwise it falls
+ * back to the legacy flat `🔧 N` rendering. Three pin tests for
+ * the contract:
+ *
+ *   - `mechanism.total !== toolCalls`        → fallback
+ *   - bucket sum !== `mechanism.total`      → fallback
+ *   - valid conserved projection            → rich glyph render
+ */
+describe("ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / wire-boundary validator", () => {
+	const validProjection = (): ToolMechanismSummary => ({
+		total: 10,
+		edit: 3,
+		command: 3,
+		read: 2,
+		search: 0,
+		mcp: 1,
+		other: 1,
+	})
+
+	it("TES-WIRE-H01: valid conserved projection is usable", () => {
+		expect(isUsableMechanismProjection(validProjection(), 10)).toBe(true)
+	})
+
+	it("TES-WIRE-H02: `mechanism.total !== toolCalls` triggers fallback", () => {
+		// Version-skew / cross-field conservation violation. The
+		// webview MUST render the legacy flat `🔧 N` strip rather
+		// than display contradictory aria/visible numbers.
+		const projection = validProjection()
+		expect(isUsableMechanismProjection({ ...projection, total: 9 }, 10)).toBe(false)
+	})
+
+	it("TES-WIRE-H03: bucket sum !== `mechanism.total` triggers fallback", () => {
+		// In-process conservation violation.
+		const projection = validProjection()
+		expect(isUsableMechanismProjection({ ...projection, other: 0 }, 10)).toBe(false)
+	})
+
+	it("TES-WIRE-H04: undefined projection triggers fallback (Hub/Remote absence)", () => {
+		expect(isUsableMechanismProjection(undefined, 7)).toBe(false)
+	})
+
+	it("TES-WIRE-H05: malformed snapshot — NaN / Infinity / negative / non-integer — triggers fallback", () => {
+		const base = validProjection()
+		expect(isUsableMechanismProjection({ ...base, edit: Number.NaN }, 10)).toBe(false)
+		expect(isUsableMechanismProjection({ ...base, total: Number.POSITIVE_INFINITY }, 10)).toBe(false)
+		expect(isUsableMechanismProjection({ ...base, mcp: -1, other: 2 }, 10)).toBe(false)
+		expect(isUsableMechanismProjection({ ...base, read: 2.5, other: 0.5 }, 10)).toBe(false)
+	})
+
+	it("TES-WIRE-H06: zero / all-zero projection is usable iff toolCalls is also zero", () => {
+		const empty: ToolMechanismSummary = {
+			total: 0,
+			edit: 0,
+			command: 0,
+			read: 0,
+			search: 0,
+			mcp: 0,
+			other: 0,
+		}
+		expect(isUsableMechanismProjection(empty, 0)).toBe(true)
+		expect(isUsableMechanismProjection(empty, 1)).toBe(false)
 	})
 })

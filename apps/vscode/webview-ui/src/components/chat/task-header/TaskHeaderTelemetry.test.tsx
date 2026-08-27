@@ -232,4 +232,363 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			expect(screen.getByTestId("task-header-elapsed").textContent ?? "").toContain("00:30")
 		})
 	})
+
+	// =========================================================================
+	// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01)
+	//
+	// TaskHeader mechanism-projection tests. Each test pins one
+	// acceptance criterion from the ACT plan:
+	//   - mechanism-only (no semantic-purpose inference)
+	//   - non-zero buckets only
+	//   - stable icon order
+	//   - tooltips + aria-labels carry the semantics
+	//   - native edit (`apply_patch`) and shell edit
+	//     (`run_commands "sed -i ..."`) are visually distinct
+	//   - conservation: the existing flat `toolCalls` count is
+	//     preserved alongside the breakdown
+	//   - Hub/Remote hosts without the new `mechanism` field fall
+	//     back to the legacy flat render unchanged
+	// =========================================================================
+
+	describe("ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / mechanism projection", () => {
+		it("TES-UI-01: renders the mechanism breakdown when `mechanism` is on the wire", () => {
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 10,
+						mechanism: {
+							total: 10,
+							edit: 3,
+							command: 3,
+							read: 2,
+							search: 0,
+							mcp: 1,
+							other: 1,
+						},
+					})}
+					turnState={ts("streaming")}
+				/>,
+			)
+			// Total chip.
+			expect(screen.getByTestId("task-header-mechanism-total").textContent).toContain("10")
+			// Per-mechanism chips.
+			expect(screen.getByTestId("task-header-mechanism-edit").textContent).toContain("3")
+			expect(screen.getByTestId("task-header-mechanism-command").textContent).toContain("3")
+			expect(screen.getByTestId("task-header-mechanism-read").textContent).toContain("2")
+			expect(screen.getByTestId("task-header-mechanism-mcp").textContent).toContain("1")
+			expect(screen.getByTestId("task-header-mechanism-other").textContent).toContain("1")
+			// Search bucket is zero → must NOT render.
+			expect(screen.queryByTestId("task-header-mechanism-search")).toBeNull()
+		})
+
+		it("TES-UI-02: hidden zero-bucket — only non-zero buckets render", () => {
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 4,
+						mechanism: {
+							total: 4,
+							edit: 4,
+							command: 0,
+							read: 0,
+							search: 0,
+							mcp: 0,
+							other: 0,
+						},
+					})}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByTestId("task-header-mechanism-edit")).toBeTruthy()
+			// All other buckets are zero → must not render.
+			expect(screen.queryByTestId("task-header-mechanism-command")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-read")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-search")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-mcp")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-other")).toBeNull()
+		})
+
+		it("TES-UI-03: stable icon order — total, edit, command, read, search, mcp, other", () => {
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 6,
+						mechanism: {
+							total: 6,
+							edit: 1,
+							command: 1,
+							read: 1,
+							search: 1,
+							mcp: 1,
+							other: 1,
+						},
+					})}
+					turnState={ts("streaming")}
+				/>,
+			)
+			const strip = screen.getByTestId("task-header-tool-count")
+			// Read the chips in DOM order and verify the canonical
+			// total → edit → command → read → search → mcp → other
+			// order is preserved.
+			const chips = Array.from(strip.querySelectorAll("[data-testid]")).map((el) => el.getAttribute("data-testid") ?? "")
+			const expectedOrder = [
+				"task-header-mechanism-total",
+				"task-header-mechanism-edit",
+				"task-header-mechanism-command",
+				"task-header-mechanism-read",
+				"task-header-mechanism-search",
+				"task-header-mechanism-mcp",
+				"task-header-mechanism-other",
+			]
+			const actualChipOrder = chips.filter((id) => id.startsWith("task-header-mechanism-"))
+			expect(actualChipOrder).toEqual(expectedOrder)
+		})
+
+		it("TES-UI-04: every chip carries an explicit aria-label describing the bucket", () => {
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 3,
+						mechanism: {
+							total: 3,
+							edit: 1,
+							command: 1,
+							read: 1,
+							search: 0,
+							mcp: 0,
+							other: 0,
+						},
+					})}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByLabelText("1 edit tool calls")).toBeTruthy()
+			expect(screen.getByLabelText("1 command tool calls")).toBeTruthy()
+			expect(screen.getByLabelText("1 read tool calls")).toBeTruthy()
+			// Tooltip on the parent strip explains mechanism projection.
+			const strip = screen.getByTestId("task-header-tool-count")
+			expect(strip.getAttribute("title")).toContain("broken down by mechanism")
+		})
+
+		it("TES-UI-05 (M-killer): `apply_patch` is `edit`, `run_commands` is `command` (distinct glyphs)", () => {
+			// The host-side classification already pins these two
+			// tools to distinct mechanisms (see
+			// `tool-mechanism-classifier.test.ts` TES-CLASS-09); the
+			// webview must render them with distinct, non-collapsing
+			// icons.
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 2,
+						mechanism: {
+							total: 2,
+							edit: 1,
+							command: 1,
+							read: 0,
+							search: 0,
+							mcp: 0,
+							other: 0,
+						},
+					})}
+					turnState={ts("streaming")}
+				/>,
+			)
+			// Both chips exist with distinct test IDs.
+			expect(screen.getByTestId("task-header-mechanism-edit")).toBeTruthy()
+			expect(screen.getByTestId("task-header-mechanism-command")).toBeTruthy()
+			// Their aria-labels are different (so screen readers do
+			// not collapse the two mechanisms).
+			expect(screen.getByLabelText("1 edit tool calls")).toBeTruthy()
+			expect(screen.getByLabelText("1 command tool calls")).toBeTruthy()
+		})
+
+		it("TES-UI-06: Hub/Remote fallback — no `mechanism` field → flat count unchanged", () => {
+			// Hosts that have not yet received the new `mechanism`
+			// field MUST still render the flat `toolCalls` count.
+			render(<TaskHeaderTelemetry telemetry={telemetry({ toolCalls: 7 })} turnState={ts("streaming")} />)
+			const strip = screen.getByTestId("task-header-tool-count")
+			// The flat count is still the single source of truth here.
+			expect(strip.textContent).toContain("7")
+			// No mechanism chips should render in the fallback path.
+			expect(screen.queryByTestId("task-header-mechanism-edit")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-total")).toBeNull()
+		})
+
+		it("TES-UI-07: `toolCalls` (flat) and `mechanism.total` are numerically co-rendered", () => {
+			// Conservation: when both fields are present, the host's
+			// flat `toolCalls` and the mechanism `total` agree. The
+			// strip renders both: `toolCalls` as the parent
+			// `aria-label` (e.g. "Tool calls: 10"), `mechanism.total`
+			// as the total-chip text.
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 10,
+						mechanism: {
+							total: 10,
+							edit: 3,
+							command: 3,
+							read: 2,
+							search: 1,
+							mcp: 1,
+							other: 0,
+						},
+					})}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByLabelText("Tool calls: 10")).toBeTruthy()
+			expect(screen.getByTestId("task-header-mechanism-total").textContent).toContain("10")
+			expect(screen.getByTestId("task-header-mechanism-search")).toBeTruthy()
+		})
+
+		it("TES-UI-08: empty `mechanism` summary renders the total chip with zero sub-buckets", () => {
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 0,
+						mechanism: {
+							total: 0,
+							edit: 0,
+							command: 0,
+							read: 0,
+							search: 0,
+							mcp: 0,
+							other: 0,
+						},
+					})}
+					turnState={ts("idle")}
+				/>,
+			)
+			// Total chip is zero.
+			expect(screen.getByTestId("task-header-mechanism-total").textContent).toContain("0")
+			// No sub-buckets render when everything is zero.
+			expect(screen.queryByTestId("task-header-mechanism-edit")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-command")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-read")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-search")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-mcp")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-other")).toBeNull()
+		})
+
+		it("TES-UI-WIRE-01: `mechanism.total !== toolCalls` triggers flat fallback (no contradictory UI)", () => {
+			// The version-skew / cross-field conservation case. The
+			// host's flat `toolCalls` and the per-mechanism total
+			// disagree. The webview MUST fall back to the legacy
+			// flat `🔧 N` rendering rather than display
+			// `aria: Tool calls: 10` against `visible: 🔧9 ✏️3 >_3 ...`.
+			render(
+				<TaskHeaderTelemetry
+					telemetry={{
+						startedAt: 1_700_000_000_000,
+						toolCalls: 10, // ← flat count
+						recoveryBudgetFailures: 0,
+						mechanism: {
+							total: 9, // ← ≠ toolCalls → validator fails
+							edit: 3,
+							command: 3,
+							read: 2,
+							search: 0,
+							mcp: 1,
+							other: 0,
+						},
+					}}
+					turnState={ts("streaming")}
+				/>,
+			)
+			// Flat fallback: no mechanism chips render; the flat
+			// count is shown.
+			const strip = screen.getByTestId("task-header-tool-count")
+			expect(strip.textContent).toContain("10")
+			expect(screen.queryByTestId("task-header-mechanism-total")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-edit")).toBeNull()
+		})
+
+		it("TES-UI-WIRE-02: bucket sum mismatch triggers flat fallback", () => {
+			// In-process conservation violation.
+			render(
+				<TaskHeaderTelemetry
+					telemetry={{
+						startedAt: 1_700_000_000_000,
+						toolCalls: 10,
+						recoveryBudgetFailures: 0,
+						mechanism: {
+							total: 10,
+							edit: 3,
+							command: 3,
+							read: 2,
+							search: 0,
+							mcp: 1,
+							other: 0, // ← sum = 9, total = 10 → validator fails
+						},
+					}}
+					turnState={ts("streaming")}
+				/>,
+			)
+			const strip = screen.getByTestId("task-header-tool-count")
+			expect(strip.textContent).toContain("10")
+			expect(screen.queryByTestId("task-header-mechanism-total")).toBeNull()
+		})
+
+		it("TES-UI-WIRE-03: a valid conserved projection renders the rich glyph strip", () => {
+			// The positive case: when the boundary validator passes,
+			// the rich `🔧N · ✏️E · >_C · ...` projection renders.
+			render(
+				<TaskHeaderTelemetry
+					telemetry={{
+						startedAt: 1_700_000_000_000,
+						toolCalls: 4,
+						recoveryBudgetFailures: 0,
+						mechanism: {
+							total: 4,
+							edit: 2,
+							command: 1,
+							read: 1,
+							search: 0,
+							mcp: 0,
+							other: 0,
+						},
+					}}
+					turnState={ts("streaming")}
+				/>,
+			)
+			// Rich projection renders.
+			expect(screen.getByTestId("task-header-mechanism-total").textContent).toContain("4")
+			expect(screen.getByTestId("task-header-mechanism-edit").textContent).toContain("2")
+			expect(screen.getByTestId("task-header-mechanism-command").textContent).toContain("1")
+			expect(screen.getByTestId("task-header-mechanism-read").textContent).toContain("1")
+			// Hidden zero-buckets stay hidden.
+			expect(screen.queryByTestId("task-header-mechanism-search")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-mcp")).toBeNull()
+			expect(screen.queryByTestId("task-header-mechanism-other")).toBeNull()
+		})
+
+		it("TES-UI-WIRE-04: malformed snapshot (NaN) triggers flat fallback", () => {
+			// A version-skewed producer might emit `NaN` for an
+			// unknown bucket. The boundary validator rejects it and
+			// the webview falls back to the flat count.
+			render(
+				<TaskHeaderTelemetry
+					telemetry={{
+						startedAt: 1_700_000_000_000,
+						toolCalls: 5,
+						recoveryBudgetFailures: 0,
+						mechanism: {
+							total: 5,
+							edit: Number.NaN, // ← malformed
+							command: 2,
+							read: 1,
+							search: 0,
+							mcp: 0,
+							other: 0,
+						},
+					}}
+					turnState={ts("streaming")}
+				/>,
+			)
+			const strip = screen.getByTestId("task-header-tool-count")
+			expect(strip.textContent).toContain("5")
+			expect(screen.queryByTestId("task-header-mechanism-total")).toBeNull()
+		})
+	})
 })
