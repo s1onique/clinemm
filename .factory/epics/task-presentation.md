@@ -4,9 +4,9 @@
 
 ## Current status
 
-- Status: ACTIVE — closed substrate + open frontier
+- Status: ACTIVE — closed substrate + closed frontier
 - Priority: P1 (substrate for task lifecycle)
-- Current frontier: 1 presentation-only placeholder listed under "Open work" below. The compacted-history substrate is fully closed; THCP01 + THCP11 + OAT01 all re-reconciled at `ab6e29a2e` per `ACT-CLINEMM-TASKHEADER-BOARD-STATE-RECONCILIATION01`. The placeholder (`TERMINAL-REPORT-COMPLETION-FRAMING` working label) is deliberately a future-ACT reservation, not a real open ACT.
+- Current frontier: **no open work**. The compacted-history substrate is fully closed; THCP01 + THCP11 + OAT01 all re-reconciled at `ab6e29a2e` per `ACT-CLINEMM-TASKHEADER-BOARD-STATE-RECONCILIATION01`; `TERMINAL-REPORT-COMPLETION-FRAMING01` + `…-CORRECTION01` both CLOSED at `ab6e29a2e` per `23010e7bb` + `bbbdffc99`. (The earlier "1 presentation-only placeholder" line was stale — it duplicated CLOSED work under a working label; removed per reviewer P1 bounded correction. Completion-protocol liveness capture, if ever needed, lives under `runtime-task-progression.md`, not here.)
 - Blocked by: n/a
 
 ## Contract / durable conclusions
@@ -39,18 +39,11 @@
 
 ## Open work
 
-One open item: a deliberate presentation-only placeholder for a future ACT.
+No open work as of `608fb321b`.
 
-- **`TERMINAL-REPORT-COMPLETION-FRAMING`** (working label, MED). Symptom: a terminal successful task may render in ordinary assistant prose rather than as a visibly framed `Completed` answer; the runtime may be perfectly terminal while the presentation still looks like continuing work. **Desired invariant:**
+The earlier "1 presentation-only placeholder" was stale: `TERMINAL-REPORT-COMPLETION-FRAMING01` + `…-CORRECTION01` are both CLOSED at `ab6e29a2e` (see `23010e7bb` + `bbbdffc99`), and the §Open frontier table above (lines 35-36) records them as such. Retaining a `TERMINAL-REPORT-COMPLETION-FRAMING` placeholder here effectively resurrected closed work under a working label; removed per reviewer P1 bounded correction.
 
-  ```text
-  successful terminal task         → visible "Completed" framing
-  awaiting_followup / resumable    → MUST NOT say Completed
-  error                              → explicit failed/error framing
-  runtime still active              → MUST NOT say Completed
-  ```
-
-  This is a **presentation-only** item. It does **not** assert that runtime completion semantics are defective; that requires a separate RED-first ACT under `runtime-task-progression.md` if observed.
+Completion-protocol liveness (a separate concern: defect at the completion-protocol/liveness seam, NOT at the framing seam) is NOT a task-presentation concern. If its live reopen trigger ever fires, it lives under `runtime-task-progression.md` as `COMPLETION-PROTOCOL-LIVENESS02`. It is not opened here. See `docs/architecture/elm/completion-framing-live-red-discriminator01.md` for the durable negative knowledge preserving the discriminator that framing is correctly closed.
 
 Reopen / new-work conditions:
 
@@ -59,7 +52,6 @@ Reopen / new-work conditions:
 - User-context ceiling becomes soft in production.
 - A new second independent lifecycle classifier appears in the TaskHeader source (re-open trigger for `TASKHEADER-CANONICAL-PROJECTION01`; baseline = Phase-0 inventory at `docs/architecture/elm/task-header-canonical-projection-phase0-inventory01.md`).
 - Live evidence captured that distinguishes agent-active elapsed from wall-clock elapsed and the user demands the distinction (re-open trigger for `TASKHEADER-OWNER-AWARE-TIMING01`; baseline = OAT01 recon `NOT_REPRODUCED` at `e54a71326`).
-- The presentation-only placeholder above changes status.
 
 ## Deferred work
 
