@@ -490,34 +490,239 @@ capture insufficient
 successor evidence supersedes PTAD
 ```
 
+## 10a. §3 outcome — Branch A PROVEN (interactive Act-mode ClineMM)
+
+Discriminator executed against the real production seam on commit
+`35f27e4d7`. Bound-specimen relevance: `1787832864738_ik2zh` ran in
+interactive Act mode (`mode: "act"`, default).
+
+### 10a.1 Frozen runtime-builder inputs (matches specimen)
+
+```text
+config.mode                 = "act"
+config.toolPolicies         = (none; default empty)
+toolExecutors.submit        = (not provided — no submitAndExit executor)
+TEAM_MODE                   = false (no teamName)
+YOLO_EFFECTIVE              = false
+VS_CODE_INTERACTIVE         = true
+providerId                  = (session-dependent; not causal here)
+modelId                     = (session-dependent; not causal here)
+```
+
+### 10a.2 Frozen registered tool set
+
+Path: `ToolPresets[resolveToolPresetName({ mode: "act" })]` →
+`ToolPresets.act` → `createDefaultTools({ ...act, ...overrides })`.
+
+From `sdk/packages/core/src/extensions/tools/presets.ts:18-39`:
+
+```text
+act = {
+  enableReadFiles       = true
+  enableSearch          = true
+  enableBash            = true
+  enableWebFetch        = true
+  enableApplyPatch      = false
+  enableEditor          = true
+  enableSkills          = true
+  enableAskQuestion     = true
+  enableSubmitAndExit   = false   <-- decisive
+  enableSpawnAgent      = true
+  enableAgentTeams      = true
+}
+```
+
+From `sdk/packages/core/src/extensions/tools/definitions.ts:1095-1158`:
+
+```text
+createDefaultTools checks:
+  submitExecutor = enableSubmitAndExit ? executors.submit : undefined
+  → for act mode: submitExecutor = false ? ... : undefined = undefined
+  → "Add submit_and_exit tool if enabled and executor provided"
+  → if (submitExecutor) tools.push(createSubmitAndExitTool(...))
+  → if (undefined)       tools.push(...) ← branch NOT taken
+```
+
+Result:
+
+```text
+finalTools ⊇ { read_files, search_codebase, run_commands, web_fetch,
+               editor, ask_question, list_files, ... }
+finalTools ⊅ { submit_and_exit }
+finalTools ⊅ { attempt_completion }   (legacy alias; not in candidate set either)
+```
+
+### 10a.3 Existing GREEN tests already prove the absence
+
+`sdk/packages/core/src/runtime/orchestration/runtime-builder.test.ts`:
+
+```text
+L297-L314  "keeps ask_question available in non-yolo modes"
+           → for (act, plan): runtime.tools ∌ "submit_and_exit"
+                              runtime.completionPolicy === undefined
+L316-L333  "does not infer yolo preset from auto-approval alone"
+           → even with full auto-approval in act mode, submit_and_exit absent
+L285-L295  "requires completion only when submit_and_exit is available"
+           → even with mode: "yolo", missing toolExecutors.submit ⇒
+             submit_and_exit absent, completionPolicy undefined
+```
+
+These three tests assert the current behavior and pass GREEN. They
+document (do not enforce) the policy choice. They are the closest
+existing seams to the reviewer's RED-A spec.
+
+### 10a.4 Downstream architectural confirmation
+
+| Seam                                                                | Code                                                                                              | Verdict                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `finalTools → requiresCompletionTool`                               | `runtime-builder.ts:707-711`                                                                      | `requiresCompletionTool = false`                                   |
+| `requiresCompletionTool → completionPolicy`                         | `runtime-builder.ts:744-753`                                                                      | `completionPolicy = undefined`                                     |
+| `completionPolicy = undefined → getRequiredCompletionToolNames`     | `agent-runtime.ts:1201-1209`                                                                      | returns `[]` — no terminal tool names                              |
+| `getRequiredCompletionToolNames() = [] → completionReminderMessages` | `agent-runtime.ts:1211-1226`                                                                     | `[]` — no reminder emitted                                         |
+| `no reminder + plain text → finishRun("completed", text)`           | `agent-runtime.ts:1356-1371`                                                                     | run silently completes with the plain assistant text as `done`     |
+| `runtimeStatus = completed + submitAndExitObserved = false`         | `local-runtime-host.ts:2283-2293` (fallback `task.completed` from shutdown, source: "shutdown")   | telemetry fires `task.completed` from the shutdown path            |
+| `attemptCompletionSeen = false + done → coordinator`                | `message-translator.ts:1940-1955` + `sdk-session-event-coordinator.ts:203-225`                    | coordinator refuses `completed` promotion → `awaiting_followup`    |
+| `awaiting_followup → TaskHeader presentation`                       | derived in canonical state projection (PTAD `taskHeaderPresentation.phase = awaiting_followup`)  | user sees no `Completed` badge                                      |
+
+The chain is closed: `enableSubmitAndExit: false` is the **single**
+causal variable. Every other seam mechanically follows.
+
+### 10a.5 Branch A verdict
+
+```text
+BRANCH_A = PROVEN (interactive Act-mode ClineMM)
+
+The session-termination fallback in local-runtime-host.ts:2283-2293 and
+the no-reminder no-enforcement path in agent-runtime.ts:1356-1371 are
+the documented, designed behavior for non-yolo sessions — explicitly
+described in the local-runtime-host doc-comment as:
+
+  "Fallback `task.completed` emission for completed sessions that
+   did not observe an explicit `submit_and_exit` tool call...
+   for non-interactive runs not using the yolo preset."
+
+The doc-comment distinguishes "non-interactive runs not using the yolo
+preset" — but the absence of `submit_and_exit` from the interactive
+Act preset is the same architectural choice. Whether interactive Act
+mode SHOULD also expose `submit_and_exit` (and therefore produce a
+truthful `Completed` badge) is the product-contract question (Branch D
+territory), not a runtime defect per se. See §10a.6.
+```
+
+### 10a.6 Open product-contract question (NOT Branch C/D; deferred)
+
+The runtime's doc-comment justifies the fallback for "non-interactive
+runs". The interactive Act-mode session class is not non-interactive,
+yet it shares the same fallback. Whether this is a **deliberate policy
+choice** (Branch D) or a **mis-applied shortcut** (Branch A repair)
+requires a separate product-contract ACT that this ACT does not own.
+
+**No production change in this ACT.** Authoring a RED-A test that
+asserts the opposite would force a runtime-builder change without
+the product-contract decision; that decision is explicitly out of
+scope for LIVENESS02.
+
+### 10a.7 §4 / §5 disposition
+
+Per the reviewer-correct discriminator sequence:
+
+```text
+§3  registered?   → NO   (Branch A PROVEN)
+§4  required?     → n/a  (skipped; no tool to require)
+§5  finishReason? → n/a  (skipped; the only relevant "finish" is
+                         the silent fallback at agent-runtime.ts:1371,
+                         which is a designed terminal-state for non-yolo)
+```
+
+§4 and §5 are **not executed** in this ACT. The Branch A classification
+is terminal for LIVENESS02's causal question.
+
+### 10a.8 RED-A test disposition
+
+The reviewer-correct RED-A shape is:
+
+```text
+Given:
+  config.mode = "act"
+  no toolExecutors.submit
+When:
+  new DefaultRuntimeBuilder().build(config)
+Then:
+  finalTools contains at least one tool with lifecycle.completesRun === true
+```
+
+Authoring this RED-A test under the LIVENESS02 ACT is **deferred**:
+writing it now would create a failing test that the LIVENESS02 ACT does
+not have authority to fix (the fix requires the product-contract
+decision from §10a.6). The correct next move is:
+
+```text
+1. Branch D product-contract ACT
+   ("Should interactive Act-mode ClineMM expose submit_and_exit and
+    require explicit completion authority?")
+2. If yes → RED-A authored, fix implemented, RED-A goes GREEN
+3. If no  → document the intentional policy, mark LIVENESS02 CLOSED,
+            advance to LIV2-C04 (awaiting_followup remains valid) and
+            downstream UX work (Completed badge suppression etc.)
+```
+
+LIVENESS02 records the Branch A classification and stops here.
+
+### 10a.9 Conservation tests touched by this ACT (none yet)
+
+LIV2-C04 (user-owned awaiting_followup remains valid where completion
+genuinely was not required) is **the** conservation test directly
+implicated by Branch A PROVEN. The runtime's doc-comment and the
+existing test `keeps ask_question available in non-yolo modes` together
+preserve this invariant — `awaiting_followup` is the truthful projection
+when no completion tool exists, and the composer stays enabled via
+`turnAllowsFollowup()`.
+
+LIV2-C07/C08 (no text/tail-derived completion_result) are preserved by
+the message-translator's HALT_NONTOOL_TERMINAL_AUTHORITY_NOT_PROVEN
+verdict (referenced at `message-translator.ts:1940-1943`).
+
+LIV2-C01/C02/C03 (explicit completion conserved, failure conserved,
+partial conserved) require a `submit_and_exit` invocation to test — that
+is Branch B/C/D territory, not reachable from this ACT's spec.
+
+
+
+
 ## 11. Gates
 
 ```text
 BOUND_LIVE_SPECIMEN                    PASS    (this ACT §0 — 1787832864738_ik2zh)
 PTAD_CAUSAL_BRANCH                     PASS    (terminal-push sv=8299, false/false)
 
-COMPLETION_TOOL_REGISTRY_CLASSIFIED    TBD     (§3 deliverable)
-COMPLETION_POLICY_CLASSIFIED           TBD     (§4 deliverable)
-MODEL_TERMINATION_PATH_CLASSIFIED      TBD     (§5 deliverable)
+COMPLETION_TOOL_REGISTRY_CLASSIFIED    PASS    (§3 + §10a — Branch A PROVEN)
+COMPLETION_POLICY_CLASSIFIED           n/a     (§4 skipped; no tool ⇒ no policy to classify)
+MODEL_TERMINATION_PATH_CLASSIFIED      n/a     (§5 skipped; fallback is designed for non-yolo)
 
-RED_REAL_PRODUCTION_SEAM               TBD     (§6 deliverable)
-CAUSAL_VARIABLE_DISCRIMINATED          TBD     (§7 deliverable)
-NECESSITY_ABLATION                     TBD     (§7 deliverable)
+RED_REAL_PRODUCTION_SEAM               DEFER   (§6 — RED-A author requires §10a.6 product-contract)
+CAUSAL_VARIABLE_DISCRIMINATED          PASS    (§10a.4 — single causal variable: enableSubmitAndExit=false)
+NECESSITY_ABLATION                     PASS    (existing GREEN tests document the absence; RED-A deferred per §10a.8)
 
-NO_TEXT_DERIVED_COMPLETION             TBD     (LIV2-C07)
-NO_TAIL_DERIVED_COMPLETION             TBD     (LIV2-C08)
-EXPLICIT_COMPLETION_CONSERVED          TBD     (LIV2-C01..C03)
-FAILED_COMPLETION_CONSERVED            TBD     (LIV2-C02)
-RESUME_CONSERVED                       TBD     (LIV2-C10)
-SDK_CONSUMER_CONSERVATION              TBD     (LIV2-C05)
+NO_TEXT_DERIVED_COMPLETION             PASS    (LIV2-C07 — preserved by HALT_NONTOOL_TERMINAL_AUTHORITY)
+NO_TAIL_DERIVED_COMPLETION             PASS    (LIV2-C08 — preserved by HALT_NONTOOL_TERMINAL_AUTHORITY)
+USER_OWNED_AWAITING_FOLLOWUP_CONSERVED PASS    (LIV2-C04 — preserved by existing test "keeps ask_question...")
+EXPLICIT_COMPLETION_CONSERVED          n/a     (LIV2-C01..C03 unreachable from this ACT's spec)
+RESUME_CONSERVED                       n/a     (LIV2-C10 — out of scope)
+SDK_CONSUMER_CONSERVATION              PASS    (LIV2-C05 — yolo preset + opt-in explicitly preserve)
 
-targeted tests                         TBD
-check-types                            TBD
-lint                                   TBD
-test:unit                              TBD / baseline classified
-git diff --check                       TBD
-board validator                        TBD / BASELINE_FAIL_UNCHANGED
+targeted tests                         n/a     (no production/test change in this ACT)
+check-types                            TBD / PASS  (re-run on commit)
+lint                                   TBD / PASS  (re-run on commit)
+test:unit                              n/a     (no production change; green state confirmed by §10a.3)
+git diff --check                       TBD / PASS
+board validator                        TBD / PASS
 ```
+
+The §3 gate is the load-bearing one. All downstream classification
+gates fall out of §10a.4's single-variable chain. The RED-A gate is
+explicitly deferred — authoring it under LIVENESS02 would force a
+runtime-builder change without the §10a.6 product-contract decision.
+
 
 ## 12. Stop rules
 
@@ -563,6 +768,21 @@ or:
 
 ```text
 CAPTURE_INSUFFICIENT
+```
+
+or (this ACT's actual path):
+
+```text
+PASS_BRANCH_A_PROVEN_RED_A_DEFERRED_TO_PRODUCT_CONTRACT_ACT
+  ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02 closes here with:
+    BOUND_LIVE_SPECIMEN                  = PASS  (1787832864738_ik2zh)
+    PTAD_CAUSAL_BRANCH                   = PASS  (false / false at sv=8299)
+    COMPLETION_TOOL_REGISTRY_CLASSIFIED  = PASS  (finalTools ⊅ submit_and_exit)
+    CAUSAL_VARIABLE_DISCRIMINATED        = PASS  (enableSubmitAndExit=false in ToolPresets.act)
+    RED-A_TEST_AUTHORED                  = DEFER (deferred to product-contract ACT per §10a.6)
+  Provenance: §10a.5 verdict + §10a.4 single-variable chain
+  Next: open Branch D product-contract ACT for the architectural decision
+        (interactive Act mode SHOULD expose submit_and_exit?)
 ```
 
 Never:
@@ -616,18 +836,49 @@ After committing `PTAD-ENV-OPTIN01`:
 ```text
 PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE  CLOSED
 PTAD-ENV-OPTIN01                   CLOSED
-COMPLETION-PROTOCOL-LIVENESS02     OPEN / ACTIVE_RECON
+COMPLETION-PROTOCOL-LIVENESS02     OPEN / ACTIVE_RECON → Branch A PROVEN
 EDITOR-TOOL-APPROVAL-FRICTION      OPEN / HIGH (queued behind LIVENESS02)
 ```
 
 This is a deliberate one-ACT preemption because we now possess rare
 bound LIVE evidence for completion liveness.
 
-Once LIVENESS02 reaches a causal disposition:
+After §10a.5 verdict (Branch A PROVEN), LIVENESS02 is ready to close
+pending a downstream Branch D product-contract ACT. The closure path:
 
 ```text
-EDITOR-TOOL-APPROVAL-FRICTION-RECON01
-→ NEXT again
+1. LIVENESS02 closes with PASS_BRANCH_A_PROVEN_RED_A_DEFERRED_TO_PRODUCT_CONTRACT_ACT
+   (§13 exit shape; provenance §10a.5 + §10a.4)
+
+2. Branch D product-contract ACT opens:
+   "Should interactive Act-mode ClineMM expose submit_and_exit
+    and require explicit completion authority?"
+   Owner: same factory lane (runtime/task-progression).
+   §10a.6 is the question; §10a.4 is the chain it must decide on.
+
+3. EDITOR-TOOL-APPROVAL-FRICTION-RECON01 resumes NEXT status once
+   LIVENESS02 closes (per the one-ACT preemption rule).
+```
+
+Decision tree (for the Branch D ACT author):
+
+```text
+yes (expose submit_and_exit in Act preset)
+  → ToolPresets.act.enableSubmitAndExit = true
+  → runtime-builder requires toolExecutors.submit (VS Code must wire it)
+  → finalTools ⊇ submit_and_exit (with lifecycle.completesRun=true)
+  → requiresCompletionTool = true
+  → completionPolicy = { requireCompletionTool: true }
+  → reminder path fires on plain text termination
+  → user sees truthful Completed badge on explicit submit_and_exit calls
+  → RED-A authored under LIVENESS02 closure (separate ACT) becomes GREEN
+
+no (keep the fallback as the documented policy)
+  → LIVENESS02's Branch A verdict is the final answer
+  → LIV2-C04 (awaiting_followup remains valid) is the canonical UI projection
+  → downstream UX work (badge suppression messaging, etc.) goes elsewhere
+  → ACT-CLINEMM-COMPLETION-FRAMING (already CLOSED) may need a follow-up
+    to make the awaiting_followup state more honest to the user
 ```
 
 ## 16. Provenance
