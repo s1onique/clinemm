@@ -59,6 +59,7 @@ import { RequestStartRow } from "./RequestStartRow"
 import SearchResultsDisplay from "./SearchResultsDisplay"
 import SubagentStatusRow from "./SubagentStatusRow"
 import { ThinkingRow } from "./ThinkingRow"
+import { resolveTerminalReportFraming } from "./terminalReportFraming"
 import UserMessage from "./UserMessage"
 
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
@@ -993,8 +994,15 @@ export const ChatRowContent = memo(
 							? message.text?.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length)
 							: message.text
 
+						// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01: the
+						// "Completed" badge is gated on the runtime-authority
+						// turn phase + message shape. See `terminalReportFraming.ts`
+						// for the decision matrix.
+						const framing = resolveTerminalReportFraming({ message, turnState, mode })
+
 						return (
 							<CompletionOutputRow
+								framing={framing}
 								handleQuoteClick={handleQuoteClick}
 								quoteButtonState={quoteButtonState}
 								showViewChanges={isLast && message.partial !== true && enableCheckpointsSetting}
@@ -1094,8 +1102,16 @@ export const ChatRowContent = memo(
 						if (message.text) {
 							const hasChanges = message.text.endsWith(COMPLETION_RESULT_CHANGES_FLAG) ?? false
 							const text = hasChanges ? message.text.slice(0, -COMPLETION_RESULT_CHANGES_FLAG.length) : message.text
+							// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01:
+							// legacy ask: completion_result path. Legacy tasks reach
+							// terminal completed only via this branch (no SDK translator),
+							// so the framing helper resolves to { kind: "completed" }
+							// when the runtime phase is completed and the message text is
+							// non-empty — same authority used for the say path.
+							const framing = resolveTerminalReportFraming({ message, turnState, mode })
 							return (
 								<CompletionOutputRow
+									framing={framing}
 									handleQuoteClick={handleQuoteClick}
 									quoteButtonState={quoteButtonState}
 									text={text || ""}

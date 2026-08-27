@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { CompletionOutputRow } from "./CompletionOutputRow"
 import PlanCompletionOutputRow from "./PlanCompletionOutputRow"
+import type { TerminalReportFraming } from "./terminalReportFraming"
 
 vi.mock("./MarkdownRow", () => ({
 	MarkdownRow: ({ markdown }: { markdown: string }) => <div>{markdown}</div>,
@@ -44,6 +45,13 @@ vi.mock("@vscode/webview-ui-toolkit/react", async (importOriginal) => {
 
 const hiddenQuoteButton = { visible: false, top: 0, left: 0, selectedText: "" }
 
+const COMPLETED_FRAMING: TerminalReportFraming = {
+	kind: "completed",
+	label: "Completed",
+	ariaLabel: "Task completed",
+	title: "Task completed successfully",
+}
+
 describe("CompletionOutputRow", () => {
 	const writeText = vi.fn(() => Promise.resolve())
 
@@ -53,14 +61,33 @@ describe("CompletionOutputRow", () => {
 	})
 
 	it("shows a small Completed header with a copy button", () => {
-		render(<CompletionOutputRow handleQuoteClick={vi.fn()} quoteButtonState={hiddenQuoteButton} text="All done!" />)
+		render(
+			<CompletionOutputRow
+				framing={COMPLETED_FRAMING}
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="All done!"
+			/>,
+		)
 
-		expect(screen.getByText("Completed")).toBeInTheDocument()
+		// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01: the visible label
+		// is now a `✓ Completed` badge (the `✓ ` is a text-node prefix inside
+		// the span). Assert via the testid so we don't depend on whitespace
+		// normalization.
+		const badge = screen.getByTestId("terminal-completion-framing")
+		expect(badge).toHaveTextContent("✓ Completed")
 		expect(screen.getByRole("button", { name: "Copy response" })).toBeInTheDocument()
 	})
 
 	it("copies the response text to the clipboard", async () => {
-		render(<CompletionOutputRow handleQuoteClick={vi.fn()} quoteButtonState={hiddenQuoteButton} text="All done!" />)
+		render(
+			<CompletionOutputRow
+				framing={COMPLETED_FRAMING}
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="All done!"
+			/>,
+		)
 
 		fireEvent.click(screen.getByRole("button", { name: "Copy response" }))
 
@@ -173,5 +200,127 @@ describe("PlanCompletionOutputRow", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Copy plan response" }))
 
 		await waitFor(() => expect(writeText).toHaveBeenCalledWith("Here is the plan"))
+	})
+})
+
+// ===========================================================================
+// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01
+//
+// Presentation-layer matrix. The pure-helper matrix lives in
+// `terminalReportFraming.test.ts`; this block asserts that the
+// `CompletionOutputRow` component honors the framing prop the way the
+// ACT §2 / §8 / §9 contract demands (badge visibility, accessibility,
+// M-killer text-derived framing is rejected).
+// ===========================================================================
+
+describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — CompletionOutputRow framing", () => {
+	it("renders the ✓ Completed badge with aria-label and title when framing.kind === 'completed'", () => {
+		render(
+			<CompletionOutputRow
+				framing={COMPLETED_FRAMING}
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="All done!"
+			/>,
+		)
+
+		const badge = screen.getByTestId("terminal-completion-framing")
+		expect(badge).toHaveTextContent("✓ Completed")
+		expect(badge).toHaveAttribute("aria-label", "Task completed")
+		expect(badge).toHaveAttribute("title", "Task completed successfully")
+		expect(badge).toHaveAttribute("role", "status")
+	})
+
+	it("omits the Completed badge when framing is undefined (defensive default — old callers without framing prop)", () => {
+		render(<CompletionOutputRow handleQuoteClick={vi.fn()} quoteButtonState={hiddenQuoteButton} text="All done!" />)
+
+		expect(screen.queryByTestId("terminal-completion-framing")).toBeNull()
+		expect(screen.queryByText("Completed")).toBeNull()
+		// Card body still renders — visual result boundary is preserved.
+		expect(screen.getByText("All done!")).toBeInTheDocument()
+	})
+
+	it("M-killer: text says 'Completed everything successfully' but framing is undefined → MUST NOT render badge", () => {
+		// The ACT explicitly forbids text-derived completion inference. The
+		// component trusts the `framing` prop, never the message text. If a
+		// caller forgets to compute the framing (or runtime truth is not
+		// completed), the badge is absent — even if the text happens to
+		// contain the literal word "Completed".
+		render(
+			<CompletionOutputRow
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="Completed everything successfully."
+			/>,
+		)
+
+		// The framing badge must not be rendered. (The body text is allowed
+		// to contain the literal word "Completed" — that is the model's
+		// prose, NOT a presentation truth claim.)
+		expect(screen.queryByTestId("terminal-completion-framing")).toBeNull()
+	})
+
+	it("renders the card body even when framing is undefined (visual boundary preserved)", () => {
+		render(
+			<CompletionOutputRow
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="Some assistant prose that is NOT a terminal completion."
+			/>,
+		)
+
+		// Body text still renders so the result row stays a clear visual
+		// boundary — only the "Completed" badge is the conditional piece.
+		expect(screen.getByText("Some assistant prose that is NOT a terminal completion.")).toBeInTheDocument()
+		expect(screen.getByRole("button", { name: "Copy response" })).toBeInTheDocument()
+		expect(screen.queryByTestId("terminal-completion-framing")).toBeNull()
+	})
+
+	it("flips the badge off when framing goes from completed → undefined (resume continues, intermediate response arrives)", () => {
+		const { rerender } = render(
+			<CompletionOutputRow
+				framing={COMPLETED_FRAMING}
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="First turn complete."
+			/>,
+		)
+		expect(screen.getByTestId("terminal-completion-framing")).toBeInTheDocument()
+
+		// Resume → new intermediate response. Phase is now streaming, framing
+		// is undefined. The historical Completed badge should NOT linger on
+		// the now-current message; the historical row keeps its own badge
+		// because that row's framing is still completed.
+		rerender(
+			<CompletionOutputRow
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="Working on the follow-up…"
+			/>,
+		)
+		expect(screen.queryByTestId("terminal-completion-framing")).toBeNull()
+		// Sanity: the message text updated.
+		expect(screen.getByText("Working on the follow-up…")).toBeInTheDocument()
+	})
+
+	it("flips the badge back on when framing returns to completed (second terminal completion after resume)", () => {
+		const { rerender } = render(
+			<CompletionOutputRow
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="Working on the follow-up…"
+			/>,
+		)
+		expect(screen.queryByTestId("terminal-completion-framing")).toBeNull()
+
+		rerender(
+			<CompletionOutputRow
+				framing={COMPLETED_FRAMING}
+				handleQuoteClick={vi.fn()}
+				quoteButtonState={hiddenQuoteButton}
+				text="Now also done."
+			/>,
+		)
+		expect(screen.getByTestId("terminal-completion-framing")).toBeInTheDocument()
 	})
 })

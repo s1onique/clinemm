@@ -7,6 +7,7 @@ import SuccessButton from "../common/SuccessButton"
 import { QuoteButtonState } from "./ChatRow"
 import { MarkdownRow } from "./MarkdownRow"
 import QuoteButton from "./QuoteButton"
+import { TerminalReportFraming } from "./terminalReportFraming"
 
 interface CompletionOutputRowProps {
 	text: string
@@ -22,6 +23,20 @@ interface CompletionOutputRowProps {
 	 * simply renders no button.
 	 */
 	showViewChanges?: boolean
+	/**
+	 * ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01:
+	 *
+	 * Authoritative terminal-framing for this row, computed by
+	 * `resolveTerminalReportFraming(...)` from the runtime turn phase +
+	 * message shape. When `kind === "completed"`, a quiet `✓ Completed`
+	 * badge is rendered with `aria-label="Task completed"` and
+	 * `title="Task completed successfully"`. When `undefined` the badge is
+	 * omitted entirely — the card body still renders (the visual result
+	 * boundary stays) but the row does NOT claim "Completed" for any
+	 * non-completed runtime state (streaming, awaiting_followup, error,
+	 * resumable, idle, partial content, plan mode, etc.).
+	 */
+	framing?: TerminalReportFraming
 }
 
 /**
@@ -30,9 +45,17 @@ interface CompletionOutputRowProps {
  * button. Deliberately less prominent than the legacy bold "Task Completed"
  * header, since the response might be a question or an interim summary
  * rather than a definitive task completion.
+ *
+ * ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01: the "Completed" label
+ * is now conditional on a runtime-authority `framing` prop. When the
+ * authority says the task is not in a terminal-completed state
+ * (streaming / awaiting_followup / error / resumable / partial / plan mode),
+ * the label is omitted. The card text body still renders — the visual
+ * result boundary is preserved — but it no longer claims "Completed" on
+ * behalf of states that are not terminal-completed.
  */
 export const CompletionOutputRow = memo(
-	({ text, quoteButtonState, handleQuoteClick, showViewChanges }: CompletionOutputRowProps) => {
+	({ text, quoteButtonState, handleQuoteClick, showViewChanges, framing }: CompletionOutputRowProps) => {
 		const [viewChangesPending, setViewChangesPending] = useState(false)
 		// undefined = still checking; the button stays hidden until the host
 		// confirms the latest run actually changed files. A count of 0 also
@@ -70,7 +93,16 @@ export const CompletionOutputRow = memo(
 		return (
 			<div className="rounded-sm border border-success/20 overflow-visible bg-success/10">
 				<div className="flex items-center justify-between gap-2 pl-2 pr-1 pt-1 -mb-1.5">
-					<span className="text-xs font-medium uppercase tracking-wider text-success/70">Completed</span>
+					{framing?.kind === "completed" ? (
+						<span
+							aria-label={framing.ariaLabel}
+							className="text-xs font-medium uppercase tracking-wider text-success/70"
+							data-testid="terminal-completion-framing"
+							role="status"
+							title={framing.title}>
+							✓ {framing.label}
+						</span>
+					) : null}
 					<CopyButton ariaLabel="Copy response" className="text-success/70" textToCopy={text} />
 				</div>
 				<div className="completion-output-content relative p-2 w-full [&_hr]:opacity-20 [&_p:last-child]:mb-0 rounded-sm">
