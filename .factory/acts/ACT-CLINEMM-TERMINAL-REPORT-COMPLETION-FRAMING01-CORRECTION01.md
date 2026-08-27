@@ -228,16 +228,16 @@ which encompasses:
 bbbdffc99  ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01
 ```
 
-NOTE on range semantics: `bbbdffc99^` (parent of CORRECTION01) is
-the v1 ACT commit `3658e65ff`. Git's symmetric `A^..B` includes
-the left endpoint, so the diff `git diff bbbdffc99^..23010e7bb`
-covers BOTH the v1 baseline (already reviewed/closed) AND the
-correction delta. The reviewer explicitly noted that v1 is
-historical context and that expanding the range adds noise — the
-reviewer's preferred narrower expression is the same range, but
-the meaningful inspection target is the **delta vs. v1** (i.e. the
-contribution of `bbbdffc99` + `23010e7bb` to the existing v1
-state). Both views are produced below.
+NOTE on range semantics: `bbbdffc99^` resolves to `3658e65ff`, the v1
+ACT commit. For `git diff`, `A..B` (two-dot) compares the two
+endpoint trees and is equivalent to `git diff A B`; it is **not**
+a commit-set traversal and is **not** the symmetric difference
+(the symmetric difference for commits is `A...B`, three-dot).
+Therefore `git diff bbbdffc99^..23010e7bb` compares the v1 tree
+(`3658e65ff`) against the tree after CORRECTION01 + closure
+(`23010e7bb`), exposing exactly the net correction/closure delta
+relative to v1. The v1 changes themselves are the baseline
+endpoint and are not double-counted.
 
 ### 8.2 File-level diff bound to `bbbdffc99^..23010e7bb` (range used by this evidence)
 
@@ -291,7 +291,7 @@ the second commit (3 insertions / 3 deletions across 2 files).
 
 ### 8.4 Gate evidence (post-range, on working tree)
 
-Captured at `bbbdffc99 + 23010e7bb` (working tree at `23010e7bb`):
+Captured at `bbbdffc99 + 23010e7bb + ae6129bc0` (working tree at `ae6129bc0`):
 
 #### 8.4.1 Helper unit matrix (vitest)
 
@@ -304,7 +304,13 @@ $ cd apps/vscode/webview-ui && bun vitest run \
  ✓ src/components/chat/CompletionOutputRow.test.tsx  (19 tests) 86ms
 ```
 
-40/40 helper tests pass (was 25 in v1; +15 net new in CORRECTION01).
+40/40 helper tests pass (was 25 in v1; +15 net new in CORRECTION01,
+arithmetic of `git diff bbbdffc99^ bbbdffc99 -- .../terminalReportFraming.test.ts`
+= 16 added + 1 deleted test — the deleted case was the v1
+"completed + final say completion_result → visible Completed framing"
+test, which was renamed to the canonical-path variant
+"completed + final say completion_result **with marker** → visible
+Completed framing").
 19/19 component tests pass (was 16 in v1; +3 net new multi-row
 discriminator tests through a new `MultiRowHarness` component).
 
@@ -355,8 +361,11 @@ not caused by the correction.
 #### 8.4.5 Whitespace gate
 
 ```text
-$ git diff --check
-(clean)
+$ git diff --check HEAD
+(clean — no whitespace errors anywhere in the working tree)
+
+$ git diff --check HEAD~3 HEAD
+(clean — no whitespace errors in the CORRECTION01 + evidence lineage)
 ```
 
 ### 8.5 Two-row / three-row discriminator tests (reviewer's required invariant)
@@ -394,17 +403,16 @@ that asserts "text says 'Completed' but no marker → no badge".
 | Plan record review | `bbbdffc99` (1 ACT plan file) |
 | Board state review | `23010e7bb` (2 board files, CLOSED v2) |
 | `.gitignore` policy | `bbbdffc99` (1 entry) |
-| Gate evidence (§8.4) | working tree at `23010e7bb` |
+| Test-count attestation | reconciled in `ae6129bc0` (CORRECTION02 ledger update: 14 → 15 net-new helper tests, with the 16 added / 1 deleted arithmetic recorded) |
+| Gate evidence (§8.4) | working tree at `ae6129bc0` |
 
 ### 8.7 Disposition
 
 ```text
 ACT_IMPLEMENTATION              = CLOSED
 ACT_EVIDENCE_ATTESTATION        = BOUND_TO_BBBDFFC99^..23010E7BB
-NEED_CORRECTION02               = NO
+EVIDENCE_RECORRECTION02         = APPLIED (EOF whitespace, range semantics, test-count)
 NEED_RUNTIME_CHANGE             = NO
+NEED_TEST_CODE_CHANGE           = NO
 ```
-
-
-
 
