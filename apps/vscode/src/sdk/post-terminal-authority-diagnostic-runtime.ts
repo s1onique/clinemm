@@ -46,6 +46,44 @@ const DUMP_FILE_EXTENSION = "post-terminal-authority-diagnostic-extension.jsonl"
 const DUMP_FILE_WEBVIEW = "post-terminal-authority-diagnostic-webview.jsonl"
 
 /**
+ * ACT-CLINEMM-PTAD-ENV-OPTIN01:
+ *
+ * Environment variable that ORs with the persisted workspace toggle so the
+ * diagnostic can be armed from extension startup without needing the user to
+ * remember to invoke the `cline.debug.togglePostTerminalAuthorityDiagnostic`
+ * command before a rare specimen appears.
+ *
+ * Semantics (additive, default OFF, no forced-disable):
+ *
+ *   "1" | "true"  -> enables the diagnostic
+ *   "0" | "false" -> does NOT forcibly disable a persisted toggle
+ *                    (the existing command-toggle stays the user preference)
+ *   unset / ""    -> no env contribution; the persisted toggle decides
+ *   garbage       -> treated as not-enabled (env source is ignored)
+ *
+ * `0`/`false` deliberately do NOT override a `true` persisted toggle. The
+ * env var is a developer/Factory opt-in, not a second precedence system.
+ */
+const CLINEMM_PTAD_ENV = "CLINEMM_PTAD"
+
+/**
+ * Pure env-var parser. Returns `true` iff the env var is set to `"1"` or
+ * `"true"` (case-insensitive). Anything else (unset, empty, `"0"`, `"false"`,
+ * `"off"`, garbage) returns `false`.
+ *
+ * Centralized so capture / sync / dump sites can compose this with the
+ * persisted-toggle predicate without sprinkling `process.env` reads.
+ */
+export function parseClinemmPtadEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+	const raw = env[CLINEMM_PTAD_ENV]
+	if (raw === undefined) {
+		return false
+	}
+	const normalized = raw.trim().toLowerCase()
+	return normalized === "1" || normalized === "true"
+}
+
+/**
  * Narrow structural type for the bits of vscode.ExtensionContext the
  * diagnostic touches. Defined locally so the runtime module does not
  * import `vscode` for type information. Both production and test code
@@ -68,6 +106,37 @@ export interface PostTerminalAuthorityDiagnosticContext {
 export function isPostTerminalAuthorityDiagnosticWorkspaceEnabled(context: PostTerminalAuthorityDiagnosticContext): boolean {
 	const value = context.workspaceState.get<boolean>(WORKSPACE_STATE_KEY)
 	return value === true
+}
+
+/**
+ * ACT-CLINEMM-PTAD-ENV-OPTIN01:
+ *
+ * Merged enable predicate. Returns `true` iff EITHER the persisted
+ * workspace toggle is on OR the `CLINEMM_PTAD` env var is truthy. The env
+ * contribution is ADDITIVE: a `CLINEMM_PTAD=0` / `=false` does NOT force
+ * the result to `false` when the persisted toggle is `true` (the
+ * workspace toggle is the user preference and stays authoritative).
+ *
+ * Composition order (from the user-facing spec):
+ *
+ *   persistedToggle=false + env unset      -> false  (unchanged from C1)
+ *   persistedToggle=true  + env unset      -> true   (unchanged from C1)
+ *   persistedToggle=false + env="1"        -> true   (NEW: env opt-in)
+ *   persistedToggle=true  + env="0"        -> true   (env does NOT override)
+ *   persistedToggle=false + env=garbage    -> false  (env source ignored)
+ *
+ * Callers should use THIS predicate (not the bare workspace one) so the
+ * env opt-in is honored everywhere the diagnostic is asked whether it
+ * should be armed.
+ */
+export function isPostTerminalAuthorityDiagnosticEffectivelyEnabled(
+	context: PostTerminalAuthorityDiagnosticContext,
+	env: NodeJS.ProcessEnv = process.env,
+): boolean {
+	if (isPostTerminalAuthorityDiagnosticWorkspaceEnabled(context)) {
+		return true
+	}
+	return parseClinemmPtadEnv(env)
 }
 
 /**

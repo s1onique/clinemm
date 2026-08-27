@@ -222,9 +222,16 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			expect(source).toContain("isPostTerminalAuthorityDiagnosticWorkspaceEnabled")
 		})
 
-		it("W5-2: SdkController reads the workspace flag and stamps _ptadEnabled on the wire", () => {
+		it("W5-2: SdkController reads the merged enable predicate and stamps _ptadEnabled on the wire", () => {
 			const source = readSource(SDK_CONTROLLER_PATH)
-			expect(source).toMatch(/isPostTerminalAuthorityDiagnosticWorkspaceEnabled\(/)
+			// ACT-CLINEMM-PTAD-ENV-OPTIN01:
+			// The SdkController now reads the MERGED predicate
+			// (workspace toggle OR CLINEMM_PTAD env var) so the env
+			// opt-in arms the diagnostic from extension startup. The
+			// wire bit `_ptadEnabled` is still the only signal the
+			// webview reads; its shape is unchanged when neither
+			// source is on.
+			expect(source).toMatch(/isPostTerminalAuthorityDiagnosticEffectivelyEnabled\(/)
 			expect(source).toMatch(/_ptadEnabled: true/)
 		})
 
@@ -436,6 +443,71 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			// exact declaration form to lock the wire-shape delta at zero.
 			expect(source).toMatch(/readonly attemptCompletionSeen\?:\s*boolean/)
 			expect(source).toMatch(/readonly terminalResponseCommittedThisTurn\?:\s*boolean/)
+		})
+	})
+
+	// ============================================================================
+	// ACT-CLINEMM-PTAD-ENV-OPTIN01
+	//
+	// Wiring assertions for the `CLINEMM_PTAD` env opt-in. The runtime
+	// module owns the parser + merged predicate; the SdkController is the
+	// only call-site that consults them. These assertions pin BOTH ends so
+	// a future refactor that drops either half is caught.
+	// ============================================================================
+	describe("W14: ACT-CLINEMM-PTAD-ENV-OPTIN01 wiring", () => {
+		it("W14-1: the runtime module exports the env parser and merged predicate", () => {
+			const source = readSource(RUNTIME_PATH)
+			expect(source).toContain("parseClinemmPtadEnv")
+			expect(source).toContain("isPostTerminalAuthorityDiagnosticEffectivelyEnabled")
+			expect(source).toContain("CLINEMM_PTAD")
+		})
+
+		it("W14-2: env parsing is centralized — exactly two default-arg seams, no inline reads", () => {
+			// Strip block + line comments to count CODE occurrences of
+			// `process.env`, not docstring mentions. Centralization is
+			// pinned by the structural pattern: every helper that needs
+			// the env takes it via a default-arg parameter
+			// (`env: NodeJS.ProcessEnv = process.env`) so the only seam
+			// is the function signature. An inline `process.env[...]`
+			// inside a function body would fail this assertion.
+			const source = readSource(RUNTIME_PATH)
+			const codeOnly = source
+				.replace(/\/\*[\s\S]*?\*\//g, "") // strip block comments
+				.replace(/(^|[^:])\/\/[^\n]*/g, "$1") // strip line comments
+			const envReads = codeOnly.split(/process\.env\b/).length - 1
+			// Two default-arg seams: parseClinemmPtadEnv + the merged predicate.
+			expect(envReads).toBe(2)
+		})
+
+		it("W14-3: SdkController consults the merged predicate (NOT the bare workspace one)", () => {
+			const source = readSource(SDK_CONTROLLER_PATH)
+			// The merged predicate must be the one called from the
+			// sync block AND the wire-bit stamping site.
+			expect(source).toMatch(/isPostTerminalAuthorityDiagnosticEffectivelyEnabled\(/g)
+			// The bare workspace predicate is still imported by the
+			// toggle function in `post-terminal-authority-diagnostic-runtime.ts`
+			// but should NOT be called from SdkController — the controller
+			// uses the merged predicate so the env opt-in is honored.
+			expect(source).not.toMatch(/isPostTerminalAuthorityDiagnosticWorkspaceEnabled\(/)
+		})
+
+		it("W14-4: the wire shape is unchanged (no new fields added for the env opt-in)", () => {
+			const source = readSource(EXTENSION_MESSAGE_PATH)
+			// The only PTAD-related wire fields are the pre-existing
+			// optional `_ptadEnabled` and `_ptadPushId`. The env opt-in
+			// adds NO new wire fields.
+			expect(source).toMatch(/_ptadEnabled\?:\s*boolean/)
+			expect(source).not.toMatch(/_ptadEnvEnabled/)
+			expect(source).not.toMatch(/_clinemmPtad/)
+		})
+
+		it("W14-5: the toggle command in extension.ts still flips the workspace flag (env never mutates persisted state)", () => {
+			const source = readSource(resolve(__dirname, "../../extension.ts"))
+			// The toggle command MUST still call
+			// togglePostTerminalAuthorityDiagnosticWorkspaceEnabled — the
+			// env opt-in is purely additive and never mutates the
+			// persisted flag.
+			expect(source).toMatch(/togglePostTerminalAuthorityDiagnosticWorkspaceEnabled\(context\)/)
 		})
 	})
 })

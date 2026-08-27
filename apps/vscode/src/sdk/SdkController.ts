@@ -84,7 +84,7 @@ import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigS
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
-import { isPostTerminalAuthorityDiagnosticWorkspaceEnabled } from "./post-terminal-authority-diagnostic-runtime"
+import { isPostTerminalAuthorityDiagnosticEffectivelyEnabled } from "./post-terminal-authority-diagnostic-runtime"
 import {
 	PROVIDER_FAILURE_ERROR_TYPE,
 	PROVIDER_FAILURE_PHASE,
@@ -3325,7 +3325,15 @@ export class Controller {
 			// flag. The toggle command flips the workspace state; the sync here
 			// ensures every getStateToPostToWebview call observes the latest value
 			// without requiring a SdkController restart.
-			if (isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context)) {
+			//
+			// ACT-CLINEMM-PTAD-ENV-OPTIN01:
+			// The check is now the MERGED predicate (workspace toggle OR
+			// CLINEMM_PTAD env var) so the env opt-in arms the recorder from
+			// extension startup. The env contribution is additive — see
+			// isPostTerminalAuthorityDiagnosticEffectivelyEnabled for the full
+			// truth table. When the env var is unset, this branch is
+			// semantically identical to the pre-CLINEMM-PTAD-OPTIN01 behavior.
+			if (isPostTerminalAuthorityDiagnosticEffectivelyEnabled(this.context)) {
 				if (!isPostTerminalAuthorityDiagnosticEnabled("extension")) {
 					enablePostTerminalAuthorityDiagnostic("extension")
 				}
@@ -3442,7 +3450,14 @@ export class Controller {
 			// of the wire `stateVersion` (which is no longer the diagnostic correlation
 			// authority; see
 			// `docs/architecture/elm/task-state-e71-c2-live-replica-truth-evidence.md`).
-			const ptadEnabled = isPostTerminalAuthorityDiagnosticWorkspaceEnabled(this.context)
+			//
+			// ACT-CLINEMM-PTAD-ENV-OPTIN01:
+			// Wire-bit stamping reads the MERGED predicate (workspace toggle OR
+			// CLINEMM_PTAD env var) so the webview's first state push picks up
+			// the env opt-in just like it picks up a persisted `true`. The wire
+			// shape is unchanged: when neither source is on, the field is
+			// absent (byte-for-byte identical to C1).
+			const ptadEnabled = isPostTerminalAuthorityDiagnosticEffectivelyEnabled(this.context)
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
 			//
 			// The single `nextSeq()` value is reused as `stateVersion` (the wire

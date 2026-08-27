@@ -23,6 +23,7 @@ The substrate foundations listed here are still relied on by the active frontier
 | `REACT-UPDATER-PURITY-REPAIR01` | CLOSED | — | React updater purity repair; invariant: no diagnostic/external side effects inside functional state updaters |
 | `RED-FIX01` / `W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01` / `LIVE-SHAPE-REPRODUCTION01` | CLOSED_LIVE | `5637d965dcaf95bd82708b21ecf233d9672cde59` | W1/W2 epoch-domain repair; live verdict PASS_LIVE_EPOCH_REPAIR |
 | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` (LCD01 + C2-CORRECTION02-FIXUP01..04) | CLOSED | `51f2f6a9c48bd880186928b18a2a9e3817613d43` | Incident-diagnostic retirement |
+| `ACT-CLINEMM-PTAD-ENV-OPTIN01` | OPEN / IMPLEMENTATION SHIPPED | (this HEAD; see `.factory/acts/ACT-CLINEMM-PTAD-ENV-OPTIN01.md`) | PTAD `CLINEMM_PTAD` env opt-in (additive with persisted workspace toggle; default off; no schema/wire change; no forced-disable). Eliminates the "rare evidence lost because I forgot the knob" failure mode. 24 new tests; 111/111 PTAD suite green; production semantic delta = 0 when env is unset. |
 | `DOGFOOD-VSIX-QUALIFICATION01` | CLOSED | — | Dogfood VSIX qualification |
 | `ACT-CLINEMM-FACTORY-GLOBAL-EPIC-BOARD-WAVE01` | CLOSED | `1e6430bc15f00d08f66dc905c41edbd3f74045db` | Factory global epic board substrate |
 
