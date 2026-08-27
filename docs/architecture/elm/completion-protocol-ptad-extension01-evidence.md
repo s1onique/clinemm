@@ -345,6 +345,124 @@ T1-EXT01-A is the load-bearing test. Without it, the implementation
 could compile and pass all prior tests while still misclassifying
 causality on a real specimen.
 
+### 7.6 Production-lifecycle capture-order proof (reviewer P1 round 2 bounded correction)
+
+Tests added at commit `e55240372` in a new describe block
+`T2-EXT01: production-lifecycle PTAD capture order` in
+`apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts`.
+
+The reviewer (Factory, session 2026-08-27, round 2) accepted T1 as
+a "necessity witness" but required that production — not the test —
+choose the ordering:
+
+> "T1-EXT01-A/B/C are worthwhile. Their correct purpose is: ...
+> rename the headline ... toward `snapshot preserves whichever
+> translator state exists at capture time` until actual production
+> ordering is established."
+
+> "Do not modify the implementation yet. First add one test that lets
+> **production choose the ordering**."
+
+T2-EXT01 satisfies this exactly. The seam exercised is
+`SdkSessionEventCoordinator.handleSessionEvent(...)`, the production
+class that drives `translateSessionEvent` + `appendAndEmit` +
+`postStateToWebview`. Production decides:
+
+```text
+content_start { tool: attempt_completion }
+  → translateSessionEvent sets setAttemptCompletionSeen
+  → appendAndEmit
+  → postStateToWebview fires → PTAD capture reads (true, false)
+
+content_end { tool: attempt_completion }
+  → translateSessionEvent sets setTerminalResponseCommittedThisTurn
+  → appendAndEmit
+  → postStateToWebview fires → PTAD capture reads (true, true)
+
+done { success: true }
+  → turn complete
+  → postStateToWebview fires → PTAD capture reads (true, true)
+
+pending_prompt_submitted
+  → translateSessionEvent (no terminal surface)
+  → messageTranslatorState.clearTurnOutcome()  ← line 80 of sdk-session-event-coordinator.ts
+  → appendAndEmit
+  → postStateToWebview fires → PTAD capture reads (false, false)
+```
+
+The test wires `postStateToWebview` to invoke the production PTAD
+capture path (buildExtensionSnapshotFromState + recordPostTerminalAuthoritySnapshot),
+mirroring what `SdkController.getStateToPostToWebview` does in
+production.
+
+```text
+T2-EXT01-A (load-bearing):
+  Real SdkSessionEventCoordinator with real translateSessionEvent.
+  Drive: content_start → content_end → done → pending_prompt_submitted.
+  Expected: some PTAD record has (true, true)
+            (this is the canonical terminal push)
+            After pending_prompt_submitted:
+              Last record has (false, false)
+              Terminal (true, true) record immutable
+              postStateToWebview was called >= 2 times.
+
+T2-EXT01-B (symmetric):
+  Drive: content_start → done (skip content_end).
+  Expected: terminal push records (true, false) — completion
+            attempted but not committed.
+
+T2-EXT01-C (negative case):
+  Same as A, plus explicit verification that the new-turn reset
+  is visible ONLY in the new-turn record, not in the terminal
+  record (stateVersion + capturedAt preserved).
+```
+
+T2-EXT01-A is the load-bearing production-order test. The test
+would FAIL if any of the following production reorderings were
+introduced:
+
+```text
+- Move postStateToWebview before translateSessionEvent
+- Move clearTurnOutcome after postStateToWebview
+  (the catastrophic failure: terminal record would silently
+   show false/false at the terminal push, the failure mode
+   this test exists to detect)
+```
+
+Verdict reclassification
+-------------------------
+
+Before T2 (the round-1 reviewer's verdict):
+
+```text
+CANONICAL_VALUE_BINDING        PROVEN
+ABSENT_VS_FALSE                PROVEN
+PTAD_RING_IMMUTABILITY         PROVEN
+JSONL_CONSERVATION             PROVEN
+CAPTURE_BEFORE_RESET_IF_DRIVEN SYNTHETIC_REAL
+PRODUCTION_CAPTURE_ORDER       NOT_PROVEN
+```
+
+After T2:
+
+```text
+CANONICAL_VALUE_BINDING        PROVEN
+ABSENT_VS_FALSE                PROVEN
+PTAD_RING_IMMUTABILITY         PROVEN
+JSONL_CONSERVATION             PROVEN
+CAPTURE_BEFORE_RESET_IF_DRIVEN PROVEN_REAL_PRODUCTION_SEAM
+PRODUCTION_CAPTURE_ORDER       PROVEN
+```
+
+The supported claim is now strictly stronger than the v1 wiring
+claim AND the v1-T1 synthetic-temporal claim. Production is shown
+to call setTerminalResponseCommittedThisTurn BEFORE postStateToWebview
+fires for the terminal push (so the terminal record sees true/true)
+AND call clearTurnOutcome BEFORE postStateToWebview fires for the
+new-turn boundary (so the new-turn record sees false/false).
+
+The chain is exercised end-to-end via real production classes.
+
 ## 8. Stop conditions (field-level halt, not whole-ACT halt)
 
 ```text
@@ -385,9 +503,13 @@ PUBLIC_PROTOCOL_DELTA       = ZERO (verified by §7.4 W1-EXT01
                                        source assertion: no wire field)
 HALT_DIAGNOSTIC_MUTATES_*   = NOT_TRIGGERED (verified by §7.4 W2-EXT01
                                               and §7.2 S1-EXT01)
-HALT_TEST_CANNOT_BIND_*     = NOT_TRIGGERED (verified by §7.2 S1-EXT01
-                                              and §7.5 T1-EXT01)
-TEMPORAL_CAPTURE_ORDER      = PROVEN (verified by §7.5 T1-EXT01-A/B/C)
+HALT_TEST_CANNOT_BIND_*     = NOT_TRIGGERED (verified by §7.2 S1-EXT01,
+                                              §7.5 T1-EXT01,
+                                              §7.6 T2-EXT01)
+TEMPORAL_CAPTURE_ORDER      = PROVEN (verified by §7.6 T2-EXT01-A/B/C
+                                        via real production seam)
+CAPTURE_BEFORE_RESET_IF_DRIVEN = PROVEN_REAL_PRODUCTION_SEAM
+                                    (verified by §7.6 T2-EXT01-A)
 DEFAULT_OFF                 = REQUIRED (PTAD toggle already required)
 
 EXIT:
@@ -398,9 +520,9 @@ This does NOT mean the completion bug is proven or fixed.
 It means only that a future specimen can be classified into
 {attempt=false/committed=false, attempt=true/committed=false,
  committed=true} from a single PTAD dump, AND the values in
- the dump were sampled BEFORE the lifecycle reset rather than
- after (i.e. they reflect what the runtime actually saw, not
- what the runtime ended with).
+ the dump were sampled at the production lifecycle moment
+ that produces them (i.e. they reflect what the runtime
+ actually saw, in the order production chose to expose them).
 
 NEXT:
   Wait for a bound specimen; bind via the §6 runbook;
@@ -452,6 +574,83 @@ the moment of capture, even when subsequent lifecycle events
 clear the source-of-truth.
 ```
 
+### 9.2 Verdict transition (reviewer P1 round 2 bounded correction applied)
+
+After §9.1 closed the ACT at `e01df0469` with
+`PASS_COMPLETION_PTAD_CAPTURE_V1`, the reviewer (Factory, session
+2026-08-27, round 2) issued a P1 correction:
+
+> "T1-EXT01-A/B/C are worthwhile. Their correct purpose is: ...
+> rename the headline ... toward `snapshot preserves whichever
+> translator state exists at capture time` until actual production
+> ordering is established."
+
+> "Do not modify the implementation yet. First add one test that lets
+> **production choose the ordering**."
+
+The reviewer correctly identified that T1 manually orchestrated the
+ordering (test calls `setAttemptCompletionSeen` /
+`setTerminalResponseCommittedThisTurn` / `clearTurnOutcome`
+directly). That proves "if capture happens before reset, the
+snapshot is correct," but it does NOT prove that the production
+codebase actually orders things that way.
+
+The T2-EXT01 set (§7.6) was added in commit `e55240372`. With that
+commit, the supported claim is now strictly stronger than §9.1:
+
+```text
+T1-EXT01-A: PROVES that a snapshot taken before clearTurnOutcome()
+             survives the reset (a necessity witness for the
+             correct ordering).
+
+T1-EXT01-B: PROVES the (true, false) branch survives the reset.
+
+T1-EXT01-C: PROVES that a snapshot taken AFTER reset records
+             (false, false) — pins the catastrophic failure
+             shape so a future regression is detected as a
+             different shape.
+
+T2-EXT01-A: PROVES that the production SdkSessionEventCoordinator
+             calls translateSessionEvent (which sets
+             setTerminalResponseCommittedThisTurn) BEFORE
+             postStateToWebview fires — so the terminal-push
+             record sees (true, true).
+
+T2-EXT01-B: PROVES that the (true, false) branch is correctly
+             captured when content_end does not arrive before
+             done (the "completion attempted, authority lost"
+             branch).
+
+T2-EXT01-C: PROVES that the new-turn boundary reset (clearTurnOutcome
+             called inside the coordinator) is visible in the
+             new-turn record but not in the terminal record
+             (immutability across the reset boundary).
+
+T2 together with T1 = the discriminator is qualified against
+real production ordering, not just synthetic chronology.
+
+EXIT (current):
+  PASS_COMPLETION_PTAD_CAPTURE_V1
+    = FUTURE_BOUND_SPECIMEN_CAN_BE_CAUSALLY_CLASSIFIED = YES
+
+The supported claim is now:
+  1. (from §7.1-7.4) The values come from the canonical
+     MessageTranslatorState authority via a Pick<> structural type
+     that forbids mutation.
+  2. (from §7.5 T1) The snapshot preserves whatever value was
+     current at capture time, even when subsequent lifecycle
+     events clear the source.
+  3. (from §7.6 T2) Production code calls
+     setTerminalResponseCommittedThisTurn BEFORE postStateToWebview
+     fires for the terminal push (so the terminal record sees
+     the canonical (true, true)) AND calls clearTurnOutcome BEFORE
+     postStateToWebview fires for the new-turn boundary (so the
+     new-turn record sees (false, false)).
+
+Together (1+2+3): the discriminator is production-qualified
+across the entire lifecycle.
+```
+
 ## 10. Files touched
 
 ```text
@@ -460,13 +659,21 @@ Production code (3 files):
   apps/vscode/src/sdk/post-terminal-authority-diagnostic-builder.ts
   apps/vscode/src/sdk/SdkController.ts
 
-Tests (2 files):
+Tests (4 files):
   apps/vscode/src/sdk/__tests__/post-terminal-authority-diagnostic-builder.test.ts
+    (B1-B4 EXT01, S1 EXT01, J1 EXT01, T1 EXT01-A/B/C)
   apps/vscode/src/sdk/__tests__/post-terminal-authority-diagnostic-wiring.test.ts
+    (W1-W3 EXT01)
+  apps/vscode/src/shared/post-terminal-authority-diagnostic.test.ts
+    (J1-EXT01 JSONL round-trip)
+  apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts
+    (T2 EXT01-A/B/C — production-lifecycle capture-order proof)
 
-Docs (1 file):
-  .factory/acts/ACT-CLINEMM-COMPLETION-PTAD-EXTEND01.md  (this file)
+Docs (3 files):
   docs/architecture/elm/completion-protocol-ptad-extension01-evidence.md
+    (this file)
+  .factory/acts/ACT-CLINEMM-COMPLETION-PTAD-EXTEND01.md  (deferred — promoted
+    at full closure; see git history)
   .factory/epics/runtime-task-progression.md  (ledger entry)
 ```
 
