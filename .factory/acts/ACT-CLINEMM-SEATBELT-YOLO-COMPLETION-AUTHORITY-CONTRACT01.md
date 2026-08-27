@@ -1,15 +1,23 @@
 # ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01
 
-> Status: **NEXT / HIGH** — opens immediately after `ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02`
-> closes. Pure product-policy decision ACT; no production code yet.
+> Status: **CLOSED**
+> Verdict: `PASS_SEATBELT_YOLO_REQUIRES_EXPLICIT_COMPLETION_AUTHORITY_OPTION_C`
+>
+> Decision: `SEATBELT_YOLO_REQUIRES_EXPLICIT_COMPLETION_AUTHORITY = YES`
+> (architectural form: independent `explicitCompletionAuthority` capability —
+> Option C; default ON for Seatbelt-YOLO interactive VS Code, default OFF
+> for ordinary manual Act; `core mode` remains `"act"`, no flip to `"yolo"`)
+>
+> Successor: `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01`
+> (NEXT / HIGH — RED at the real VS Code runtime-builder seam)
 >
 > **Predecessor**: `ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02` at the closure commit
 > (which see for the bound specimen `1787832864738_ik2zh`, the two-prerequisite
 > predicate, the retracted `PROMPT_VS_RUNTIME_MISMATCH` claim, and the durable
 > transcript + composition evidence).
 >
-> **Verdict (target)**: `SEATBELT_YOLO_REQUIRES_EXPLICIT_COMPLETION_AUTHORITY` = `YES` | `NO`
-> (no fuzzy compromise)
+> **Decision rationale + invariant preservation**: §12. **Forward path**:
+> IMPLEMENTATION01 with RED boundary + CAI-01..CAI-12 conservation.
 
 ## 0. Mission
 
