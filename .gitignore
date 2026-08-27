@@ -145,6 +145,26 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/evidence/
 /.factory/evidence/*
 !/.factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/
+# ACT-CLINEMM-TASK-COST-TRUTH-RECON01: backlog recon ACT authored
+# 2026-08-27. Status OPEN / HIGH (cost provenance lane). Recon §2
+# PASS_RECON_SURFACE_MAPPED at the commit of authorship; §3 live
+# matrix frozen later. The epic ledger at
+# .factory/epics/product-config-branding.md will bind to this ACT
+# file AND to the evidence directory
+# .factory/evidence/ACT-CLINEMM-TASK-COST-TRUTH-RECON01/, so both
+# must be durably tracked for the canonical link to survive a fresh
+# clone.
+!/.factory/acts/ACT-CLINEMM-TASK-COST-TRUTH-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-TASK-COST-TRUTH-RECON01/
+# ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01: backlog
+# recon ACT authored 2026-08-27. Status OPEN / MED-HIGH (settings
+# webview inventory lane). Recon §2 PASS_RECON_SURFACE_MAPPED at
+# the commit of authorship; §3 inventory frozen later. Same
+# durable-binding reason as the cost-truth ACT above: the owning
+# epic (decided by §11 of the ACT, not pre-baked) and the evidence
+# directory must both survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01/
 
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
