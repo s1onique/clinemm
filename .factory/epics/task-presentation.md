@@ -55,7 +55,44 @@ Reopen / new-work conditions:
 
 ## Deferred work
 
-None.
+### COMPLETION-RESULT-COPY-BOUNDARY-RECON
+
+```text
+Priority: MED
+State:    DEFER
+
+Problem:
+Models may emit substantial final prose as ordinary assistant text
+before the authoritative completion_result. The existing completion
+box therefore encloses only part of the human-perceived final report,
+reducing one-click/copy-container usefulness.
+
+Constraints:
+- Preserve upstream-compatible CompletionOutputRow behavior by default.
+- Preserve the completion box as a copy/paste affordance.
+- Do NOT widen completion authority.
+- Do NOT infer terminal content from prose or message-tail position.
+- Do NOT change completion protocol/runtime semantics.
+- Prefer upstream-compatible grouping if upstream evolves here.
+
+Future recon questions:
+1. Does the webview already expose trustworthy assistant-turn ownership?
+2. Can preceding same-response content be grouped visually without
+   relabeling it as completion_result?
+3. Can the box offer "copy final response" independently of its visual
+   ownership boundary?
+4. What does current upstream do at implementation time?
+
+Reopen trigger:
+- Meaningful user demand.
+- Upstream change in completion rendering.
+- Completion-result UX becomes a recurring complaint.
+```
+
+Explicitly compatibility-first — the upstream-style completion
+container stays as-is because the user-facing copy/paste use case
+is strong and visual/behavioural proximity to upstream is worth
+more right now than MiniMax-specific output grouping.
 
 ## Historical detail
 

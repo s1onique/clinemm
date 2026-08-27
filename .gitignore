@@ -127,6 +127,25 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02.md
 !/.factory/acts/ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01.md
 !/.factory/acts/ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01.md
+# ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01: launched 2026-08-27.
+# Status NEXT / HIGH (approval-protection lane); recon §2 PASS_RECON_SEAM_MAPPED
+# at HEAD f8dca1fda / TREE 6f2e01b56; live specimen §3 deferred behind the
+# IMPLEMENTATION01 predecessor. The epic ledger at
+# .factory/epics/approval-protection.md row 19 binds to the ACT file AND to
+# the evidence file .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/source-seam-map.md,
+# so both must be durably tracked for the canonical link to survive a
+# fresh clone.
+!/.factory/acts/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01.md
+# Same durable-binding reason as the ACT file above.
+# Mirror the .factory/acts/ default-deny + whitelist pattern:
+#   1. re-include the .factory/evidence/ directory so git can recurse,
+#   2. deny everything under it by default,
+#   3. whitelist the directory contents that have a durable-binding
+#      contract with an epic ledger / ACT file.
+!/.factory/evidence/
+/.factory/evidence/*
+!/.factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/
+
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
 # apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt
