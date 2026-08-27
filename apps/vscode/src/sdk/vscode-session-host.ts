@@ -53,6 +53,7 @@ import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-c
 import type { SdkSessionHost } from "./session-host"
 import { createVscodeExtraTools } from "./vscode-runtime-builder"
 import { getEffectiveTerminalExecutionMode } from "./vscode-terminal-execution-mode"
+import { createVscodeSubmitExecutor } from "./vscode-submit-executor"
 
 export interface VscodeSessionHostOptions {
 	mcpHub: McpHub
@@ -104,6 +105,22 @@ export interface VscodeSessionHostOptions {
 	 * host owns the projection; the session host is a pass-through.
 	 */
 	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * Custom `submit_and_exit` executor. When supplied, the host provides
+	 * its own submit executor (typically created via `createVscodeSubmitExecutor`
+	 * from `./vscode-submit-executor`, which is the canonical PASSIVE
+	 * implementation). When omitted, the SDK's runtime cannot register
+	 * `submit_and_exit` even if `enableSubmitAndExit` is true on the
+	 * session config, because the runtime requires an executor for the
+	 * tool registration predicate at definitions.ts:1148.
+	 *
+	 * The host opts in to completion authority by providing this executor
+	 * AND by having `buildSessionConfig` set `enableSubmitAndExit: true`
+	 * on `CoreSessionConfig`. The runtime registers the tool iff both
+	 * signals are present.
+	 */
+	submitExecutor?: ToolExecutors["submit"]
 }
 
 /**
@@ -175,6 +192,17 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// bash means no built-in run_commands tool is created.
 			;(toolExecutors as Record<string, unknown>).bash = undefined
 		}
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+		// Always populate `submit` so the runtime can register
+		// `submit_and_exit` iff `CoreSessionConfig.enableSubmitAndExit`
+		// is true on the session config (set by `buildSessionConfig`).
+		// The default is the canonical PASSIVE `createVscodeSubmitExecutor`,
+		// which only acknowledges the submitted summary and never mutates
+		// task state, emits messages, or posts to the webview. The runtime
+		// gates `submit_and_exit` registration on `enableSubmitAndExit`
+		// at `definitions.ts:1148`, so an unused submit executor is
+		// harmless when the capability is OFF.
+		toolExecutors.submit = options.submitExecutor ?? createVscodeSubmitExecutor()
 
 		const inner = await ClineCore.create({
 			backendMode: "local",

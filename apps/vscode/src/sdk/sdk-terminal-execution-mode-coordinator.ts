@@ -8,6 +8,7 @@ import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkSessionRebuildScheduler } from "./sdk-session-rebuild-scheduler"
 import type { SdkSessionHost } from "./session-host"
 import type { VscodeSessionHost } from "./vscode-session-host"
+import type { SessionAutoApprovalOverride } from "./session-auto-approval"
 import { getEffectiveTerminalExecutionMode, type VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
 
 type StartInput = Parameters<VscodeSessionHost["start"]>[0]
@@ -24,6 +25,13 @@ export interface SdkTerminalExecutionModeCoordinatorOptions {
 	buildStartSessionInput: (config: SessionConfig, input: { cwd: string; mode: Mode }) => StartInput
 	postStateToWebview: () => Promise<void>
 	rebuilds: Pick<SdkSessionRebuildScheduler, "request">
+	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * Resolver that returns the override for the rebuilding session.
+	 * Same semantics as sdk-mode-coordinator: bound to the active session
+	 * id, NOT to the pre-arm intent.
+	 */
+	resolveSessionAutoApprovalOverride: (sessionId: string) => SessionAutoApprovalOverride
 }
 
 export class SdkTerminalExecutionModeCoordinator {
@@ -73,7 +81,14 @@ export class SdkTerminalExecutionModeCoordinator {
 			const cwd = await this.options.getWorkspaceRoot()
 			const modeValue = this.options.stateManager.getGlobalSettingsKey("mode")
 			const mode: Mode = modeValue === "plan" || modeValue === "act" ? modeValue : "act"
-			const config = await this.options.sessionConfigBuilder.build({ cwd, mode })
+			const config = await this.options.sessionConfigBuilder.build({
+				cwd,
+				mode,
+				// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+				// terminal-mode rebuild preserves the bound override for the
+				// active session id (same semantics as mode-coordinator).
+				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(oldSessionId),
+			})
 			config.sessionId = oldSessionId
 
 			const initialMessages = await this.options.loadInitialMessages(oldManager, oldSessionId)

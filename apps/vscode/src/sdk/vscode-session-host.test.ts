@@ -127,7 +127,16 @@ describe("VscodeSessionHost telemetry wiring", () => {
 		})
 
 		const capabilities = mockClineCoreCreate.mock.calls[0][0].capabilities
-		expect(capabilities.toolExecutors).toBeUndefined()
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+		// the host always populates `submit` so the runtime can register
+		// `submit_and_exit` whenever CoreSessionConfig.enableSubmitAndExit
+		// is set. The other executor slots remain unset.
+		expect(capabilities.toolExecutors).toBeDefined()
+		expect(capabilities.toolExecutors.editor).toBeUndefined()
+		expect(capabilities.toolExecutors.applyPatch).toBeUndefined()
+		expect(capabilities.toolExecutors.readFile).toBeUndefined()
+		expect(capabilities.toolExecutors.askQuestion).toBeUndefined()
+		expect(typeof capabilities.toolExecutors.submit).toBe("function")
 	})
 
 	it("applies remote config before appending VS Code extra tools", async () => {

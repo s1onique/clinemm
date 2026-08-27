@@ -10,6 +10,8 @@ import type { AutoApprovalSettings } from "@shared/AutoApprovalSettings"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { describe, expect, it } from "vitest"
 import {
+	deriveExplicitCompletionAuthority,
+	isYoloSessionRequested,
 	resolveEffectiveAutoApproval,
 	resolveEffectiveHostMode,
 	resolveSessionHostAuthorization,
@@ -362,5 +364,214 @@ describe("SessionAutoApprovalStore", () => {
 			resolveSessionHostAuthorization(base, "all")
 			expect(JSON.stringify(base)).toBe(baseSnapshot)
 		})
+
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+//
+// RED phase 1: pin `isYoloSessionRequested` against the persisted × override
+// truth table. IMPLEMENTATION01 §2 RED (a).
+// ---------------------------------------------------------------------------
+
+/**
+ * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+ *
+ * The persisted-YOLO intent is defined over the canonical 5-key
+ * semantic action gate. Legacy/compatibility fields
+ * (`readFilesExternally`, `editFilesExternally`, `executeAllCommands`)
+ * MUST NOT participate in the YOLO semantic — flipping them must not
+ * affect classification. This list is the binding product policy;
+ * adding a new key here requires an explicit ACT.
+ */
+const YOLO_REQUEST_ACTION_KEYS = [
+	"readFiles",
+	"editFiles",
+	"executeSafeCommands",
+	"useBrowser",
+	"useMcp",
+] as const satisfies ReadonlyArray<keyof AutoApprovalSettings["actions"]>
+
+const ALL_PERSISTED_ACTIONS_TRUE: AutoApprovalSettings = {
+	...DEFAULT_AUTO_APPROVAL_SETTINGS,
+	actions: {
+		...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+		readFiles: true,
+		editFiles: true,
+		executeSafeCommands: true,
+		useBrowser: true,
+		useMcp: true,
+	},
+}
+
+const MIXED_PERSISTED_ACTIONS: AutoApprovalSettings = {
+	...DEFAULT_AUTO_APPROVAL_SETTINGS,
+	actions: {
+		...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
+		readFiles: true,
+		editFiles: false, // <- the one missing gate
+		executeSafeCommands: true,
+		useBrowser: true,
+		useMcp: true,
+	},
+}
+
+describe("ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / isYoloSessionRequested", () => {
+	it("RED (a.1): persisted all-5-true + override='none' → true (persisted-only path converges)", () => {
+		expect(isYoloSessionRequested(ALL_PERSISTED_ACTIONS_TRUE, "none")).toBe(true)
+	})
+
+	it("RED (a.2): persisted mixed + override='all' → true (session override widens intent)", () => {
+		expect(isYoloSessionRequested(MIXED_PERSISTED_ACTIONS, "all")).toBe(true)
+	})
+
+	it("RED (a.3): persisted mixed + override='none' → false (no persisted, no override)", () => {
+		expect(isYoloSessionRequested(MIXED_PERSISTED_ACTIONS, "none")).toBe(false)
+	})
+
+	it("RED (a.4): persisted all-5-true + override='all' → true (both routes agree)", () => {
+		expect(isYoloSessionRequested(ALL_PERSISTED_ACTIONS_TRUE, "all")).toBe(true)
+	})
+
+	it("RED (a.5) schema-coverage: each canonical YOLO_REQUEST_ACTION_KEYS key participates in the conjunction", () => {
+		// Flipping any single canonical key to false (while leaving the
+		// other four true) must break the persisted-YOLO classification.
+		// If a future ACT adds a new semantic YOLO gate, the helper
+		// body MUST be updated to include it AND this test MUST be
+		// updated to iterate over the new keyset — both moves are
+		// required (compile-time contract + test-time contract).
+		for (const key of YOLO_REQUEST_ACTION_KEYS) {
+			const persisted: AutoApprovalSettings = {
+				...ALL_PERSISTED_ACTIONS_TRUE,
+				actions: {
+					...ALL_PERSISTED_ACTIONS_TRUE.actions,
+					[key]: false,
+				},
+			}
+			expect(isYoloSessionRequested(persisted, "none")).toBe(false)
+		}
+	})
+
+	it("RED (a.6) legacy-key conservation: legacy compatibility fields do NOT affect YOLO classification", () => {
+		// Automotive-load-bearing case: with all 5 canonical gates true,
+		// flipping each legacy field to false individually (and together)
+		// must NOT change the YOLO classification. This prevents
+		// historical compatibility knobs (readFilesExternally,
+		// editFilesExternally, executeAllCommands) from silently
+		// becoming YOLO semantic authority.
+		const legacyKeys = [
+			"readFilesExternally",
+			"editFilesExternally",
+			"executeAllCommands",
+		] as const
+		for (const key of legacyKeys) {
+			const persisted: AutoApprovalSettings = {
+				...ALL_PERSISTED_ACTIONS_TRUE,
+				actions: {
+					...ALL_PERSISTED_ACTIONS_TRUE.actions,
+					[key]: false,
+				},
+			}
+			expect(isYoloSessionRequested(persisted, "none")).toBe(true)
+		}
+		// And: all three legacy keys off simultaneously is still YOLO.
+		const allLegacyOff: AutoApprovalSettings = {
+			...ALL_PERSISTED_ACTIONS_TRUE,
+			actions: {
+				...ALL_PERSISTED_ACTIONS_TRUE.actions,
+				readFilesExternally: false,
+				editFilesExternally: false,
+				executeAllCommands: false,
+			},
+		}
+		expect(isYoloSessionRequested(allLegacyOff, "none")).toBe(true)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+//
+// RED phase 2: pin `deriveExplicitCompletionAuthority` against the conservation
+// matrix. IMPLEMENTATION01 §2 RED (c) negative + positive cases.
+//
+// The four facts are explicit booleans so the conservation matrix is
+// testable without an integration harness.
+// ---------------------------------------------------------------------------
+
+const YOLO_PERSISTED = ALL_PERSISTED_ACTIONS_TRUE
+
+describe("ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / deriveExplicitCompletionAuthority", () => {
+	it("RED (c.1) CAI-13A: YOLO_REQUESTED + SEATBELT NOT selected → authority OFF", () => {
+		expect(
+			deriveExplicitCompletionAuthority({
+				interactive: true,
+				persisted: YOLO_PERSISTED,
+				override: "none",
+				seatbeltSelected: false,
+				seatbeltAvailable: false,
+			}),
+		).toBe(false)
+	})
+
+	it("RED (c.2) CAI-13B (LOAD-BEARING): YOLO_REQUESTED + SELECTED + substrate broken → authority OFF", () => {
+		expect(
+			deriveExplicitCompletionAuthority({
+				interactive: true,
+				persisted: YOLO_PERSISTED,
+				override: "none",
+				seatbeltSelected: true,
+				seatbeltAvailable: false,
+			}),
+		).toBe(false)
+	})
+
+	it("RED (c.3) CAI-13C: YOLO_REQUESTED + SEATBELT_SELECTED + SEATBELT_AVAILABLE → authority ON (eligibility)", () => {
+		expect(
+			deriveExplicitCompletionAuthority({
+				interactive: true,
+				persisted: YOLO_PERSISTED,
+				override: "none",
+				seatbeltSelected: true,
+				seatbeltAvailable: true,
+			}),
+		).toBe(true)
+	})
+
+	it("RED (c.4) non-interactive: even with all Seatbelt facts true, authority OFF", () => {
+		expect(
+			deriveExplicitCompletionAuthority({
+				interactive: false,
+				persisted: YOLO_PERSISTED,
+				override: "none",
+				seatbeltSelected: true,
+				seatbeltAvailable: true,
+			}),
+		).toBe(false)
+	})
+
+	it("RED (c.5) manual/mixed persisted + no Seatbelt: authority OFF (CAI-02 conservation)", () => {
+		expect(
+			deriveExplicitCompletionAuthority({
+				interactive: true,
+				persisted: MIXED_PERSISTED_ACTIONS,
+				override: "none",
+				seatbeltSelected: true,
+				seatbeltAvailable: true,
+			}),
+		).toBe(false)
+	})
+
+	it("RED (c.6) session override='all' + Seatbelt selected/available: authority ON (CAI-01B)", () => {
+		expect(
+			deriveExplicitCompletionAuthority({
+				interactive: true,
+				persisted: MIXED_PERSISTED_ACTIONS,
+				override: "all",
+				seatbeltSelected: true,
+				seatbeltAvailable: true,
+			}),
+		).toBe(true)
+	})
+})
+
 	})
 })

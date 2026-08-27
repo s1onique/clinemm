@@ -50,8 +50,11 @@ import { parseProviderId } from "./model-catalog/provider-id"
 import { toSdkProviderId } from "./model-catalog/sdk-provider-id"
 import { createProviderConfigStore, resolveRuntimeModelSelection } from "./model-catalog/store"
 import { getProviderSettingsManager } from "./provider-migration"
+import { resolveExperimentalSandboxMode } from "./sandbox-policy"
 import { buildSapProviderConfig, type SapProviderConfig } from "./sap-config"
+import { deriveExplicitCompletionAuthority, type SessionAutoApprovalOverride } from "./session-auto-approval"
 import type { SdkSessionHost } from "./session-host"
+import { getSandboxBackend } from "@cline/core"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +78,27 @@ export interface SessionConfigInput {
 	workspaceRoot?: string
 	/** Current mode (act/plan) */
 	mode?: Mode
+	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * Per-session autonomy override that the COMPLETION AUTHORITY
+	 * derivation consumes. Callers must resolve this from the
+	 * canonical SessionAutoApprovalStore:
+	 *
+	 *   - For NEW sessions (no sessionId yet): peek the armed intent
+	 *     via `store.peekArmed()`. The intent will be consumed by
+	 *     `consumePendingOverride(sessionId)` at session-id allocation.
+	 *
+	 *   - For RESUMING an existing session: read `store.getOverride(sessionId)`.
+	 *
+	 *   - When undefined / omitted: defaults to "none". The capability
+	 *     derivation still uses persisted × override semantics — without
+	 *     an override, only the persisted-5-gate-AND path applies.
+	 *
+	 * This is dependency injection (not a global read): the caller
+	 * owns the snapshot decision so the buildSessionConfig seam stays
+	 * pure and testable.
+	 */
+	sessionAutoApprovalOverride?: SessionAutoApprovalOverride
 }
 
 /** Active session state tracked by the factory */
@@ -973,6 +997,47 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		fetch,
 	}
 
+	// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01: derive
+	// the explicit-completion-authority capability from the four canonical
+	// facts (interactive / YOLO_REQUESTED / SEATBELT_SELECTED / SEATBELT_AVAILABLE).
+	// Plan mode skips the derivation entirely — completion authority is
+	// gated to autonomous Act runs only. The capability is then surfaced
+	// on CoreSessionConfig.enableSubmitAndExit so the SDK runtime-builder
+	// can register the submit_and_exit tool and emit requireCompletionTool.
+	//
+	// The Seatbelt selectors are intentionally canonical imports (not
+	// reconstructed inline):
+	//   resolveExperimentalSandboxMode  → selector (configuration fact)
+	//   getSandboxBackend              → cached substrate availability probe
+	// Both are imported from their canonical owners and never duplicated.
+	//
+	// Per-session override is bound through dependency injection — the caller
+	// resolves it from the canonical SessionAutoApprovalStore:
+	//   - New sessions: store.peekArmed() (no consume; consumePendingOverride
+	//     happens at session-id allocation, not here)
+	//   - Resuming:    store.getOverride(sessionId)
+	// This keeps the buildSessionConfig seam pure and the CAI-01B
+	// "override=all" route observable end-to-end (GREEN).
+	const seatbeltSelected = resolveExperimentalSandboxMode() === "seatbelt-experimental"
+	const seatbeltBackend =
+		seatbeltSelected
+			? await getSandboxBackend("seatbelt-experimental", {
+					mode: "seatbelt-experimental",
+				})
+			: undefined
+	const seatbeltAvailable = seatbeltBackend !== undefined
+	const autoApprovalSettings = StateManager.get().getGlobalSettingsKey("autoApprovalSettings")
+	const enableSubmitAndExit =
+		mode === "act" &&
+		autoApprovalSettings !== undefined &&
+		deriveExplicitCompletionAuthority({
+			interactive: true, // VS Code is always interactive
+			persisted: autoApprovalSettings,
+			override: input.sessionAutoApprovalOverride ?? "none",
+			seatbeltSelected,
+			seatbeltAvailable,
+		})
+
 	const config: CoreSessionConfig = {
 		providerId: sdkProviderId,
 		modelId,
@@ -992,6 +1057,13 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 		},
 		enableSpawnAgent: false,
 		enableAgentTeams: false,
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+		// derived above from the 4-fact capability derivation. The runtime
+		// reads this field at DefaultRuntimeBuilder.build() and overrides
+		// the ToolPresets.act default (enableSubmitAndExit: false) when
+		// the capability is granted. When false / undefined, the runtime
+		// falls back to the existing text-based completion path.
+		enableSubmitAndExit,
 		...(useAutoCondense
 			? {
 					compaction: {

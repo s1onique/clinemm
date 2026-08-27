@@ -102,6 +102,7 @@ import { SdkFollowupCoordinator } from "./sdk-followup-coordinator"
 import { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import { SdkMcpCoordinator } from "./sdk-mcp-coordinator"
+import { SdkSessionAutoApprovalCoordinator } from "./sdk-session-auto-approval-coordinator"
 import { SdkMessageCoordinator, type SessionEventListener } from "./sdk-message-coordinator"
 import { SdkModeCoordinator } from "./sdk-mode-coordinator"
 import { SdkProviderChangeCoordinator } from "./sdk-provider-change-coordinator"
@@ -512,6 +513,7 @@ export class Controller {
 	private mode: SdkModeCoordinator
 	private mcpTools: SdkMcpCoordinator
 	private terminalExecutionMode: SdkTerminalExecutionModeCoordinator
+	private sessionAutoApprovalRebuild: SdkSessionAutoApprovalCoordinator
 
 	// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
 	// Live shadow wiring — observation-only. The wiring is instantiated
@@ -1115,6 +1117,10 @@ export class Controller {
 			interactions: this.interactions,
 			messages: this.messages,
 			sessionConfigBuilder: this.sessionConfigBuilder,
+			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+			// mode-rebuild reads the bound override from the canonical store.
+			resolveSessionAutoApprovalOverride: (sessionId) =>
+				this.sessionAutoApproval.getOverride(sessionId),
 			getTask: () => this.task,
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: async (sdkHost, sessionId) =>
@@ -1152,11 +1158,28 @@ export class Controller {
 			postStateToWebview: () => this.postStateToWebview(),
 			rebuilds: this.sessionRebuilds,
 		})
+		this.sessionAutoApprovalRebuild = new SdkSessionAutoApprovalCoordinator({
+			stateManager: this.stateManager,
+			sessions: this.sessions,
+			messages: this.messages,
+			sessionConfigBuilder: this.sessionConfigBuilder,
+			sessionAutoApproval: this.sessionAutoApproval,
+			getWorkspaceRoot: () => this.getWorkspaceRoot(),
+			loadInitialMessages: async (sdkHost, sessionId) =>
+				(await this.sessionHistory.loadInitialMessages(sdkHost, sessionId)) ?? undefined,
+			buildStartSessionInput,
+			postStateToWebview: () => this.postStateToWebview(),
+			rebuilds: this.sessionRebuilds,
+		})
 		this.terminalExecutionMode = new SdkTerminalExecutionModeCoordinator({
 			stateManager: this.stateManager,
 			sessions: this.sessions,
 			messages: this.messages,
 			sessionConfigBuilder: this.sessionConfigBuilder,
+			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+			// terminal-mode rebuild reads the bound override from the canonical store.
+			resolveSessionAutoApprovalOverride: (sessionId) =>
+				this.sessionAutoApproval.getOverride(sessionId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: async (sdkHost, sessionId) =>
 				(await this.sessionHistory.loadInitialMessages(sdkHost, sessionId)) ?? [],
@@ -1266,6 +1289,13 @@ export class Controller {
 			messages: this.messages,
 			taskHistory: this.taskHistory,
 			sessionConfigBuilder: this.sessionConfigBuilder,
+			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+			// CAI-01B production seam — peek the armed override so the
+			// capability derivation sees the user's "ALL — this task" intent.
+			// The peek happens BEFORE consumePendingOverride at session-id
+			// allocation; both peek and consume go through the canonical
+			// SessionAutoApprovalStore (this.sessionAutoApproval).
+			resolveSessionAutoApprovalOverride: () => this.sessionAutoApproval.peekArmed(),
 			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: share the same
 			// task-operation fence with SdkTaskControlCoordinator and
 			// SdkSessionLifecycle so the latest-user-intent-wins invariant
@@ -2503,10 +2533,22 @@ export class Controller {
 	 * The override is EPHEMERAL — it never touches global settings and is
 	 * destroyed by clearTask/cancelTask. Activating without an active
 	 * session is a no-op (the toggle will be inert until a task starts).
+	 *
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * The store mutation is the SOURCE OF TRUTH for the override value,
+	 * but the runtime's tool registry (`CoreSessionConfig.enableSubmitAndExit`
+	 * → `submit_and_exit` registered + `completionPolicy.requireCompletionTool`)
+	 * is frozen at session construction time. When the bound override
+	 * changes for an already-active session, we MUST request a bounded
+	 * rebuild so the new toolset reaches the model. The coordinator
+	 * `sessionAutoApprovalRebuild` handles that path via the standard
+	 * `SdkSessionRebuildScheduler` (idle-deferred, silent).
 	 */
 	async setSessionAutoApprovalOverride(override: SessionAutoApprovalOverride): Promise<void> {
 		const sessionId = this.sessions.getActiveSession()?.sessionId
+		const prev = sessionId ? this.sessionAutoApproval.getOverride(sessionId) : "none"
 		this.sessionAutoApproval.setOverride(sessionId, override)
+		this.sessionAutoApprovalRebuild.handleOverrideChanged(prev)
 		await this.postStateToWebview()
 	}
 
@@ -2647,7 +2689,15 @@ export class Controller {
 				historyItem?.cwdOnTaskInitialization?.trim() ||
 				fallbackCwd
 			const mode = this.stateManager.getGlobalSettingsKey("mode") === "plan" ? "plan" : "act"
-			const config = await this.sessionConfigBuilder.build({ cwd, mode, prompt: historyTitle })
+			const config = await this.sessionConfigBuilder.build({
+				cwd,
+				mode,
+				prompt: historyTitle,
+				// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+				// edit-and-regenerate rebuilds under the same session id —
+				// preserve the bound override via the getOverride read.
+				sessionAutoApprovalOverride: this.sessionAutoApproval.getOverride(sourceSessionId),
+			})
 			if (usesClineAccountAuth(config.providerId) && !config.apiKey) {
 				this.emitClineAuthErrorWithTelemetry(editedText)
 				return
@@ -2762,7 +2812,17 @@ export class Controller {
 		const firstUserMessage = currentMessages.find(isVisibleCheckpointUserMessage)
 		const restoredText = target?.message.text ?? ""
 		const historyTitle = checkpointRunCount === 1 ? restoredText : firstUserMessage?.text || restoredText
-		const config = restoreMessages ? await this.sessionConfigBuilder.build({ cwd, mode, prompt: historyTitle }) : undefined
+		const config = restoreMessages
+			? await this.sessionConfigBuilder.build({
+					cwd,
+					mode,
+					prompt: historyTitle,
+					// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+					// checkpoint restore preserves the bound override for the
+					// active session id (same semantics as edit-and-regenerate).
+					sessionAutoApprovalOverride: this.sessionAutoApproval.getOverride(activeSession.sessionId),
+				})
+			: undefined
 		if (config && usesClineAccountAuth(config.providerId) && !config.apiKey) {
 			this.emitClineAuthErrorWithTelemetry(restoredText)
 			return

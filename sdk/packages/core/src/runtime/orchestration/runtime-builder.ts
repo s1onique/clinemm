@@ -141,6 +141,12 @@ function createBuiltinToolsList(
 	skillsExecutor?: SkillsExecutorWithMetadata,
 	executorOverrides?: Partial<ToolExecutors>,
 	telemetry?: ITelemetryService,
+	// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	// Optional override for the preset's `enableSubmitAndExit` flag. When
+	// provided, takes precedence over the preset default. When undefined,
+	// falls back to the preset default (currently `false` for act/plan/minimal/
+	// search; `true` for yolo).
+	enableSubmitAndExit?: boolean,
 ): AgentTool[] {
 	const preset = ToolPresets[resolveToolPresetName({ mode })];
 	const toolRoutingConfig = resolveToolRoutingConfig(
@@ -155,6 +161,13 @@ function createBuiltinToolsList(
 			cwd,
 			telemetry,
 			...preset,
+			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+			// allow callers to override the preset's enableSubmitAndExit
+			// without mutating the preset map. This is the load-bearing
+			// seam that lets the VS Code host flip the submit_and_exit
+			// tool on under mode="act" + capability active, even though
+			// ToolPresets.act carries `enableSubmitAndExit: false`.
+			enableSubmitAndExit: enableSubmitAndExit ?? preset.enableSubmitAndExit ?? false,
 			enableSkills: !!skillsExecutor,
 			...toolRoutingConfig,
 			executors: {
@@ -492,6 +505,13 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 					undefined,
 					toolExecutors,
 					telemetry ?? config.telemetry,
+					// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+					// Thread the host-derived enableSubmitAndExit from the
+					// session config through to the tool builder. This is
+					// the load-bearing call site that lets VS Code's Act +
+					// Seatbelt-YOLO capability activate submit_and_exit
+					// independently of the runtime's yolo preset.
+					config.enableSubmitAndExit,
 				),
 			);
 			if (!normalized.disableMcpSettingsTools) {
@@ -565,6 +585,9 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 													: undefined,
 												toolExecutors,
 												telemetry ?? config.telemetry,
+														// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+														// host-derived enableSubmitAndExit (loaded above).
+														config.enableSubmitAndExit,
 											),
 											agent,
 										)
@@ -670,6 +693,9 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 									undefined,
 									toolExecutors,
 									telemetry ?? config.telemetry,
+											// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+											// host-derived enableSubmitAndExit (loaded above).
+											config.enableSubmitAndExit,
 								)
 						: undefined,
 					teammateConfigProvider: delegatedAgentConfigProvider,

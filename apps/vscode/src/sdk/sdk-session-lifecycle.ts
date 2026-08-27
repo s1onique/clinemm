@@ -128,6 +128,25 @@ export class SdkSessionLifecycle {
 		}
 	}
 
+	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * Public wrapper around the private `endActiveSession` for bounded
+	 * session-clear paths that aren't full replacements. Used by the
+	 * `SdkSessionAutoApprovalCoordinator` failure handler to drop the
+	 * active session when a rebuild fails — without that, the OLD
+	 * runtime would continue running with a stale `submit_and_exit`
+	 * toolset while the canonical `SessionAutoApprovalStore` already
+	 * reflects the user's NEW override. Tearing down on failure matches
+	 * the reviewer's preferred failure policy: "current runtime is
+	 * marked STALE_FOR_COMPLETION_AUTHORITY. next safe session rebuild /
+	 * task construction obtains the new completion-authority state."
+	 *
+	 * Returns the disposed session (if any) so callers can chain cleanup.
+	 */
+	async clearActiveSession(reason: string): Promise<ActiveSession | undefined> {
+		return this.endActiveSession(reason)
+	}
+
 	private clearActiveSessionReference(): ActiveSession | undefined {
 		const activeSession = this.activeSession
 		this.activeSession = undefined

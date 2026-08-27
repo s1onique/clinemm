@@ -599,3 +599,14 @@ export async function loginOcaOAuth(): Promise<OAuthCredentials> {
 export async function loginOpenAICodex(): Promise<OAuthCredentials> {
 	return {}
 }
+
+// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+// Re-export the real DefaultRuntimeBuilder so the load-bearing integration
+// test at apps/vscode/src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts
+// can drive the production runtime seam (`new DefaultRuntimeBuilder().build({ config })`)
+// from a vitest suite that runs against the @cline/core stub alias.
+//
+// The stub provides enough surface for the SDK adapter tests; this single
+// re-export is the minimum additional surface to unlock the runtime
+// registration assertions (submit_and_exit tool + completionPolicy.requireCompletionTool).
+export { DefaultRuntimeBuilder } from "../../../../sdk/packages/core/src/runtime/orchestration/runtime-builder"

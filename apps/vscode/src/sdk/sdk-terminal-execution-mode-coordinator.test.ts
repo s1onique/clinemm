@@ -93,7 +93,13 @@ describe("SdkTerminalExecutionModeCoordinator", () => {
 
 		await coordinator.restartSessionForTerminalExecutionMode()
 
-		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({ cwd: "/workspace", mode: "plan" })
+		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
+		cwd: "/workspace",
+		mode: "plan",
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+		// the new completion-authority seam threads the bound override.
+		sessionAutoApprovalOverride: "none",
+	})
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(activeSession.sdkHost, "old-session")
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "old-session" }), {
 			cwd: "/workspace",
@@ -140,6 +146,10 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		sessionConfigBuilder: {
 			build: vi.fn().mockResolvedValue(config),
 		},
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+		// test seam — return "none" so the existing suite stays orthogonal
+		// to completion-authority wiring.
+		resolveSessionAutoApprovalOverride: vi.fn(() => "none"),
 		getWorkspaceRoot: vi.fn().mockResolvedValue("/workspace"),
 		loadInitialMessages: vi.fn().mockResolvedValue([{ role: "user", content: "hello" }]),
 		buildStartSessionInput: vi.fn(() => ({ prompt: "start" })),

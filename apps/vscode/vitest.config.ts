@@ -234,6 +234,11 @@ export default defineConfig({
 			// here, so subpath imports fail with "Cannot find package". Keep the more
 			// specific subpath alias(es) before the bare package alias.
 			"@cline/shared/storage": path.resolve(__dirname, "node_modules/@cline/shared/dist/storage/index.js"),
+			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+			// The runtime-builder pulls in sqlite-team-store which imports
+			// `@cline/shared/db` — alias the dist path so the load-bearing
+			// integration test can drive DefaultRuntimeBuilder.build().
+			"@cline/shared/db": path.resolve(__dirname, "node_modules/@cline/shared/dist/db/index.js"),
 			"@cline/shared": path.resolve(__dirname, "node_modules/@cline/shared/dist/index.js"),
 			vscode: path.resolve(__dirname, "src/test/vscode-vitest-stub.ts"),
 			"@": path.resolve(__dirname, "src"),

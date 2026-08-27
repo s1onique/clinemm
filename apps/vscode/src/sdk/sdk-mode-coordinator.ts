@@ -13,6 +13,7 @@ import { isAbortError, type SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import type { SdkSessionRebuildScheduler } from "./sdk-session-rebuild-scheduler"
 import { ACT_MODE_CONTINUATION_PROMPT } from "./sdk-user-message-mapping"
 import type { SdkSessionHost } from "./session-host"
+import type { SessionAutoApprovalOverride } from "./session-auto-approval"
 import type { TaskProxy } from "./task-proxy"
 import type { VscodeSessionHost } from "./vscode-session-host"
 
@@ -32,6 +33,14 @@ export interface SdkModeCoordinatorOptions {
 	interactions: SdkInteractionCoordinator
 	messages: SdkMessageCoordinator
 	sessionConfigBuilder: SdkSessionConfigBuilder
+	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * Resolver that returns the override for the rebuilding session.
+	 * Wired to `controller.sessionAutoApproval.getOverride(sessionId)` so
+	 * a mode rebuild on an active session preserves the bound override
+	 * (and does not pick up a pre-arm intent for the next task).
+	 */
+	resolveSessionAutoApprovalOverride: (sessionId: string) => SessionAutoApprovalOverride
 	getTask: () => TaskProxy | undefined
 	getWorkspaceRoot: () => Promise<string>
 	loadInitialMessages: (sdkHost: SdkSessionHost, sessionId: string) => Promise<unknown[]>
@@ -252,6 +261,11 @@ export class SdkModeCoordinator {
 			const config = await this.options.sessionConfigBuilder.build({
 				cwd,
 				mode: newMode,
+				// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+				// mode-rebuild preserves the bound override for the active
+				// session id (NOT the pre-arm intent — that's reserved for
+				// the next-task case in SdkTaskStartCoordinator.initTask).
+				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(oldSessionId),
 			})
 			Logger.log(
 				`[SdkController] Mode rebuild config: mode=${newMode}, provider=${config.providerId}, model=${config.modelId}, hasApiKey=${!!config.apiKey}`,

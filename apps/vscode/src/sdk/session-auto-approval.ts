@@ -101,6 +101,105 @@ import { Logger } from "@/shared/services/Logger"
 export type SessionAutoApprovalOverride = "none" | "all"
 
 /**
+ * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+ *
+ * Inputs to the explicit completion authority derivation. All four facts
+ * are explicit booleans so the conservation matrix (CAI-13A/13B/13C) can
+ * be exercised independently of the SDK side.
+ *
+ *   YOLO_REQUESTED        isYoloSessionRequested(persisted, override)
+ *   SEATBELT_SELECTED     resolveExperimentalSandboxMode() === "seatbelt-experimental"
+ *   SEATBELT_AVAILABLE    (await getSandboxBackend(...)) !== undefined
+ *   interactive           true for VS Code (always); CLI uses a separate path
+ */
+export interface ExplicitCompletionAuthorityInputs {
+	interactive: boolean
+	persisted: AutoApprovalSettings
+	override: SessionAutoApprovalOverride
+	seatbeltSelected: boolean
+	seatbeltAvailable: boolean
+}
+
+/**
+ * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+ *
+ * Authoritative "is the session requesting autonomous execution?" predicate.
+ *
+ * The plan (IMPLEMENTATION01 §2 + §4):
+ *
+ *   isYoloSessionRequested(persisted, override) =
+ *     override === "all"
+ *     ||
+ *     (
+ *       persisted.actions.readFiles
+ *       && persisted.actions.editFiles
+ *       && persisted.actions.executeSafeCommands
+ *       && persisted.actions.useBrowser
+ *       && persisted.actions.useMcp
+ *     )
+ *
+ * Invariants:
+ *   - Pure. No reads from StateManager, globalState, or session id.
+ *   - Does NOT touch Seatbelt state (fact 2 is a separate concern).
+ *   - The CLI --yolo axis is intentionally NOT consulted here — it is an
+ *     upstream distinction (VS Code auto-approval is the ClineMM user-facing
+ *     YOLO toggle; the CLI preset is the runtime's broader skip-approval
+ *     mode, owned by `@cline/core`).
+ *
+ * Schema-coverage test (RED a.5) iterates the canonical 5-key set; legacy
+ * compatibility fields (`readFilesExternally`, `editFilesExternally`,
+ * `executeAllCommands`) are explicitly excluded (RED a.6).
+ */
+export function isYoloSessionRequested(
+	persisted: AutoApprovalSettings,
+	override: SessionAutoApprovalOverride,
+): boolean {
+	if (override === "all") {
+		return true
+	}
+	return (
+		persisted.actions.readFiles === true &&
+		persisted.actions.editFiles === true &&
+		persisted.actions.executeSafeCommands === true &&
+		persisted.actions.useBrowser === true &&
+		persisted.actions.useMcp === true
+	)
+}
+
+/**
+ * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+ *
+ * Pure derivation of `explicitCompletionAuthority` from the four facts:
+ *
+ *   explicitCompletionAuthority =
+ *     interactive
+ *     && YOLO_REQUESTED
+ *     && SEATBELT_SELECTED
+ *     && SEATBELT_AVAILABLE
+ *
+ * This helper is the single owner of the conjunction. The four facts are
+ * explicit booleans so the conservation matrix (CAI-13A/13B/13C) is
+ * testable without an integration harness.
+ *
+ * CAI-13B is the load-bearing substrate-broken case:
+ *   interactive=true, YOLO_REQUESTED=true, SEATBELT_SELECTED=true,
+ *   SEATBELT_AVAILABLE=false → explicitCompletionAuthority=false
+ *
+ * Caller is responsible for resolving the four facts from their canonical
+ * sources at the buildSessionConfig seam (cline-session-factory.ts).
+ */
+export function deriveExplicitCompletionAuthority(
+	inputs: ExplicitCompletionAuthorityInputs,
+): boolean {
+	return (
+		inputs.interactive === true &&
+		isYoloSessionRequested(inputs.persisted, inputs.override) &&
+		inputs.seatbeltSelected === true &&
+		inputs.seatbeltAvailable === true
+	)
+}
+
+/**
  * Pure resolver: produce the effective AutoApprovalSettings used by
  * isToolAutoApproved() and getCommandHostAuthorization().
  *
@@ -450,5 +549,21 @@ export class SessionAutoApprovalStore {
 	 */
 	isArmed(): boolean {
 		return this.armedOverride !== "none"
+	}
+
+	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * Peek the armed override WITHOUT consuming it. `consumePendingOverride`
+	 * remains the sole consumer (called from the session-id allocation site
+	 * after `startResult.sessionId` becomes the active session id). This
+	 * peek exists so the authoritative completion-authority derivation at
+	 * `buildSessionConfig` time can read the pending intent before the
+	 * session id is allocated — and BEFORE the consume happens, so the
+	 * rely-by-construction guarantee is preserved.
+	 *
+	 * Returns "none" when no arm is set. Does NOT mutate state.
+	 */
+	peekArmed(): SessionAutoApprovalOverride {
+		return this.armedOverride
 	}
 }

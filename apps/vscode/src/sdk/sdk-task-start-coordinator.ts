@@ -14,6 +14,7 @@ import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
 import { historyItemToSessionMetadata, type SdkTaskHistory } from "./sdk-task-history"
+import type { SessionAutoApprovalOverride } from "./session-auto-approval"
 import type { SdkSessionHost } from "./session-host"
 import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
@@ -33,6 +34,18 @@ export interface SdkTaskStartCoordinatorOptions {
 	messages: SdkMessageCoordinator
 	taskHistory: SdkTaskHistory
 	sessionConfigBuilder: SdkSessionConfigBuilder
+	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+	 * Resolver that returns the canonical sessionAutoApproval override
+	 * for the NEW session being built. Wired to
+	 * `controller.sessionAutoApproval.peekArmed()` — peek (not consume)
+	 * because `consumePendingOverride(sessionId)` runs at session-id
+	 * allocation, AFTER this build call. The peek-then-consume
+	 * ordering preserves the store's one-shot semantics: any armed
+	 * intent is observed here AND then bound to the future sessionId
+	 * when `consumePendingOverride` fires.
+	 */
+	resolveSessionAutoApprovalOverride: () => SessionAutoApprovalOverride
 	/**
 	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: shared task-operation
 	 * generation authority. The coordinator calls `fence.begin()` at
@@ -127,6 +140,13 @@ export class SdkTaskStartCoordinator {
 				taskSettings,
 				cwd,
 				mode,
+				// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
+				// CAI-01B production seam — peek the armed override so the
+				// capability derivation at buildSessionConfig sees the user's
+				// "ALL — this task" intent. The intent will be consumed by
+				// `consumePendingOverride(sessionId)` at session-id allocation,
+				// which happens later in `startNewSession`.
+				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(),
 			})
 			providerId = config.providerId
 			modelId = config.modelId

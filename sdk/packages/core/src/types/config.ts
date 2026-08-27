@@ -290,6 +290,19 @@ export interface CoreSessionConfig
 		| ConsecutiveMistakeLimitDecision;
 	toolRoutingRules?: ToolRoutingRule[];
 	/**
+	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01.
+	 *
+	 * When true, the runtime registers the `submit_and_exit` tool and
+	 * honors the host-side submit executor. The VS Code host derives this
+	 * from `interactive && YOLO_REQUESTED && SEATBELT_SELECTED && SEATBELT_AVAILABLE`
+	 * at session construction time. When undefined or false, the runtime
+	 * falls back to the regular text-based completion path.
+	 *
+	 * This field is additive: existing hosts that don't set it preserve
+	 * bit-equivalent behavior (the default is false in `ToolPresets.act`).
+	 */
+	enableSubmitAndExit?: boolean;
+	/**
 	 * Optional skill allowlist for the `skills` tool. When provided, only these
 	 * skills are surfaced in tool metadata and invocable by name.
 	 */
