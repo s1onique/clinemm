@@ -18,7 +18,7 @@ One `NEXT` per lane, named explicitly so the lanes do not collapse into a false 
 | Approval / editor-tool | P1 | `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` | [`approval-protection.md`](./epics/approval-protection.md) |
 | Approval / classic | P1 | `ACT-CLINEMM-CLASSIC-PROTECTION-RECON01` (unblocked post-`SEATBELT-DEFAULT-ON01`) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) · [`approval-protection.md`](./epics/approval-protection.md) |
 | Host substrate | P0 | `HOST-TEST RUNNER` (host-only-behaviour dependency for both approval lanes; `HOST_REQUIRED` modifier per contract §2) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
-| TaskHeader projection | P1 | `EPIC-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01` | [`task-presentation.md`](./epics/task-presentation.md) |
+| TaskHeader projection | P1 | **CLOSED** (migration at `149fb131e` + THCP11 at `8a7e53742` already landed) | [`task-presentation.md`](./epics/task-presentation.md) |
 | Runtime progression | P1 | `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` (RECON + live failure capture; secondary purpose = Cancel-affordance authority on the same ownership seam) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
 
 ---
@@ -33,7 +33,7 @@ Every epic with `ACTIVE` family-level state (per contract §2 status vocabulary)
 | Approval protection | P1 | ACTIVE (command-policy CLOSED; `BYPASS01` de-queued; editor-tool recon `NEXT`) | `EDITOR-TOOL-APPROVAL-FRICTION-RECON01` · `CLASSIC-PROTECTION-RECON01` (both depend on the `HOST-TEST RUNNER` host-side runner; see Host test infrastructure row below) | [`approval-protection.md`](./epics/approval-protection.md) |
 | Command-risk classification | P1 | CLOSED framework (V1 GREEN, V2 `HALT_SHIPPING`, V2-READONLY STRUCTURAL) | (none — fresh ACT to authorize further expansion) | [`command-risk-classification.md`](./epics/command-risk-classification.md) |
 | Quality substrate | P1 | ACTIVE (vitest baseline + typecheck local-seam CLOSED; 2 OPEN acceptance conditions) | `CODE-COVERAGE-BASELINE01` · typecheck CI parity | [`quality-substrate.md`](./epics/quality-substrate.md) |
-| Task-presentation | P1 | ACTIVE (compacted-history substrate CLOSED; 2 task-header projection items OPEN; E7.1 static-thinking presentation ACT CLOSED_NOT_REPRODUCED) | `TASKHEADER-CANONICAL-PROJECTION01` · `TASKHEADER-OWNER-AWARE-TIMING01` | [`task-presentation.md`](./epics/task-presentation.md) |
+| Task-presentation | P1 | ACTIVE (compacted-history substrate CLOSED; THCP01 CLOSED + THCP11 PASS + OAT01 CLOSED_NOT_REPRODUCED; 1 presentation-only placeholder OPEN) | (none) | [`task-presentation.md`](./epics/task-presentation.md) |
 | Task-control liveness | P1 | CLOSED family (bounded generation-fence repair landed; `LIVE` qualification pending) | (post-sharding review only) | [`task-control-liveness.md`](./epics/task-control-liveness.md) |
 | Upstream intake | P2 | CLOSED family (substrate + 4-correction triage cycle landed; 12 EXACT_MAPs + 5 IMPORTs satisfy binding rule) | (triage cycle closed; new issues re-template through substrate) | [`upstream-intake.md`](./epics/upstream-intake.md) |
 | Distribution / CI | P2 | ACTIVE (3 open items: GitHub Actions recon, GitHub Distribution, ACT — see file) | `EPIC-CLINEMM-GITHUB-ACTIONS01` · `EPIC-CLINEMM-GITHUB-DISTRIBUTION01` · … | [`distribution-ci.md`](./epics/distribution-ci.md) |
