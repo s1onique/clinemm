@@ -1,9 +1,8 @@
 # ACT-CLINEMM-PTAD-ENV-OPTIN01
 
-> Status: **OPEN / IMPLEMENTATION SHIPPED** — adds a `CLINEMM_PTAD`
-> environment opt-in that ORs with the existing persisted PTAD workspace
-> toggle. Default off, additive, no schema/wire change, no forced-disable
-> semantics.
+> Status: **CLOSED** — adds a `CLINEMM_PTAD` environment opt-in that ORs
+> with the existing persisted PTAD workspace toggle. Default off,
+> additive, no schema/wire change, no forced-disable semantics.
 > Primary purpose: diagnostic usability — eliminate the "rare evidence lost
 > because I forgot the knob" failure mode. The diagnostic is temporary
 > forensic infrastructure; remembering to invoke a command before a rare
@@ -11,6 +10,10 @@
 > Cuts in before `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01`
 > because the failure mode it prevents (silent missed capture) is more
 > expensive than the small follow-up work it adds.
+>
+> **Subject head**: `02a35fabf5f38b963ded7dfddf607789fecbacd3`
+> **Subject tree**: `1086bc48efe67003539771b4c9c19e426ab93b86`
+> **Verdict**: `PASS_PTAD_ENV_OPTIN_V1`
 
 ## 0. Frozen contract
 
@@ -204,3 +207,49 @@ removal/evolution sequence mirrors the existing PTAD sequence:
   that it would require flipping the short-circuit to also check
   `!parseClinemmPtadEnv(env)` in the truthy branch - but that is NOT
   this ACT.
+
+## 9. Closure evidence
+
+Gates executed (separately, not Leamas-asserted):
+
+```text
+PTAD_TARGETED_TESTS              = 111 / 111 PASS  (24 new: R9-A 9, R9-B 8, R9-C 2; W14 5)
+TYPECHECK                        = PASS            (extension + webview-ui)
+LINT                             = PASS            (biome 1381 files; proto-lint)
+FORMAT                           = PASS            (biome format --write pre-commit)
+DIFF_CHECK                       = PASS            (git diff --check clean)
+
+DEFAULT_UNSET_CONSERVATION       = PASS            (R9-C1 + R9-C2)
+NO_NEW_WIRE_FIELDS               = PASS            (W14-4)
+NO_NEW_PERSISTED_KEY             = PASS            (parseClinemmPtadEnv is stateless)
+NO_FORCED_DISABLE                = PASS            (R9-B5 + R9-B6)
+
+ENV_PARSE_CENTRALIZED            = PASS            (W14-2: exactly 2 process.env mentions
+                                                  in production code, both via default-arg
+                                                  seam in parseClinemmPtadEnv)
+TOGGLE_COMMAND_STILL_PERSISTED   = PASS            (W14-5: extension.ts still routes
+                                                  through togglePostTerminalAuthorityDiagnosticWorkspaceEnabled)
+MERGED_PREDICATE_AT_BOTH_CALLSITES = PASS          (W5-2 updated; W14-3: bare workspace
+                                                  predicate NOT imported by SdkController)
+```
+
+Implementation commit: `02a35fabf5f38b963ded7dfddf607789fecbacd3`
+Implementation tree: `1086bc48efe67003539771b4c9c19e426ab93b86`
+
+Composition (7 files):
+
+```text
+.factory/epics/closed-foundation.md                                       +1
+.gitignore                                                                +1
+apps/vscode/src/sdk/SdkController.ts                                    +15 / -6
+apps/vscode/src/sdk/__tests__/post-terminal-authority-diagnostic-runtime.test.ts  +165 / -6
+apps/vscode/src/sdk/__tests__/post-terminal-authority-diagnostic-wiring.test.ts   +70 / -6
+apps/vscode/src/sdk/post-terminal-authority-diagnostic-runtime.ts         +69
+.factory/acts/ACT-CLINEMM-PTAD-ENV-OPTIN01.md                          (new, 215 lines)
+```
+
+No LIVE qualification required for closure: the helper itself is a
+non-semantic env-parse OR with a persisted flag. The first LIVE specimen
+under `CLINEMM_PTAD=1` dogfood naturally qualifies the diagnostic
+surface (not this ACT). Per the spec, future `CLINEMM-COMPLETION-PROTOCOL-LIVENESS02`
+exploits this opt-in to capture the missing-Completed bug specimen.
