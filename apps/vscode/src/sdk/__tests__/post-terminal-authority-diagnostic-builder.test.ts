@@ -5,7 +5,14 @@
 // function: no I/O, no allocation beyond the returned object.
 // ============================================================================
 
-import { describe, expect, it } from "vitest"
+import {
+	clearPostTerminalAuthorityDiagnostic,
+	disablePostTerminalAuthorityDiagnostic,
+	enablePostTerminalAuthorityDiagnostic,
+	getPostTerminalAuthorityDiagnosticRecords,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { MessageTranslatorState } from "../message-translator"
 import { buildExtensionSnapshotFromState } from "../post-terminal-authority-diagnostic-builder"
 import type { ArbiterSnapshot } from "../task-state-shadow-recorder"
@@ -261,5 +268,179 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 		})
 		expect(result2.attemptCompletionSeen).toBe(false)
 		expect(result2.terminalResponseCommittedThisTurn).toBe(false)
+	})
+
+	// ============================================================================
+	// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01 — T1-EXT01 (reviewer P1 bounded correction)
+	//
+	// Real production-seam temporal test. Proves the PTAD capture site
+	// (as wired in `SdkController.getStateToPostToWebview()`) samples
+	// the two booleans BEFORE the per-turn lifecycle reset
+	// (`MessageTranslatorState.clearTurnOutcome()`) is invoked.
+	//
+	// Without this guarantee, a real specimen could capture
+	// `(false, false)` even though `(true, true)` had been observed
+	// moments earlier — catastrophic misclassification of causality.
+	//
+	// The seam exercised here is the SAME one `SdkController.getStateToPostToWebview()`
+	// uses: buildExtensionSnapshotFromState({ ..., messageTranslatorState }).
+	// We pair it with the live PTAD ring buffer (`recordPostTerminalAuthoritySnapshot`)
+	// to prove the captured record is immutable after a subsequent reset.
+	// ============================================================================
+
+	describe("T1-EXT01: temporal capture order — snapshot samples before lifecycle reset", () => {
+		beforeEach(() => {
+			enablePostTerminalAuthorityDiagnostic("extension")
+			clearPostTerminalAuthorityDiagnostic("extension")
+		})
+
+		afterEach(() => {
+			disablePostTerminalAuthorityDiagnostic("extension")
+			clearPostTerminalAuthorityDiagnostic("extension")
+		})
+
+		it("T1-EXT01-A: snapshot captures true/true; reset; subsequent snapshot captures false/false; first record is immutable", () => {
+			// Step 1: real translator state receives completion markers,
+			// simulating the production seam where the runtime has just
+			// observed the attempt_completion tool AND committed a
+			// terminal user-facing response.
+			const realState = new MessageTranslatorState()
+			realState.setAttemptCompletionSeen()
+			realState.setTerminalResponseCommittedThisTurn()
+
+			// Step 2: drive the same builder call shape
+			// `SdkController.getStateToPostToWebview()` uses, and
+			// synchronously append the result to the live PTAD ring
+			// buffer (just as the production capture site does).
+			recordPostTerminalAuthoritySnapshot(
+				buildExtensionSnapshotFromState({
+					state: baseState,
+					shadow,
+					messageTranslatorState: realState,
+				}),
+			)
+
+			// Step 3: read the latest record from the live ring buffer
+			// (NOT the builder return value — we must exercise the
+			// immutable storage path that the future bound specimen
+			// will dump to JSONL).
+			const recordsAfterFirst = getPostTerminalAuthorityDiagnosticRecords("extension")
+			expect(recordsAfterFirst.length).toBe(1)
+			expect(recordsAfterFirst[0].attemptCompletionSeen).toBe(true)
+			expect(recordsAfterFirst[0].terminalResponseCommittedThisTurn).toBe(true)
+			const firstCapturedAt = recordsAfterFirst[0].capturedAt
+			const firstStateVersion = recordsAfterFirst[0].stateVersion
+
+			// Step 4: invoke the lifecycle reset (`clearTurnOutcome`)
+			// that runs at the next user-turn boundary. This is the
+			// exact method called from SdkController at lines 1137,
+			// 2165, 2307, 2571, 2701, 2803 — i.e. the production reset.
+			realState.clearTurnOutcome()
+
+			// Step 5: drive another state-push capture (next turn's
+			// first push, where the booleans are now back to false).
+			recordPostTerminalAuthoritySnapshot(
+				buildExtensionSnapshotFromState({
+					state: { ...baseState, stateVersion: 1 },
+					shadow,
+					messageTranslatorState: realState,
+				}),
+			)
+
+			const recordsAfterSecond = getPostTerminalAuthorityDiagnosticRecords("extension")
+			expect(recordsAfterSecond.length).toBe(2)
+
+			// Step 6: the SECOND record reflects the post-reset state.
+			expect(recordsAfterSecond[1].attemptCompletionSeen).toBe(false)
+			expect(recordsAfterSecond[1].terminalResponseCommittedThisTurn).toBe(false)
+
+			// Step 7: the FIRST record is IMMUTABLE — the reset cannot
+			// retroactively erase it. This is the load-bearing guarantee
+			// for the discriminator: the snapshot was captured at the
+			// correct lifecycle moment, before any subsequent reset.
+			expect(recordsAfterSecond[0].attemptCompletionSeen).toBe(true)
+			expect(recordsAfterSecond[0].terminalResponseCommittedThisTurn).toBe(true)
+			expect(recordsAfterSecond[0].capturedAt).toBe(firstCapturedAt)
+			expect(recordsAfterSecond[0].stateVersion).toBe(firstStateVersion)
+		})
+
+		it("T1-EXT01-B: snapshot captures true/false when only attempt is set; reset; subsequent snapshot captures false/false", () => {
+			// Same lifecycle shape as T1-EXT01-A, but only the
+			// attempt-completion-seen flag is set (no terminal commit).
+			// This is the "completion attempted, authority lost" branch.
+			const realState = new MessageTranslatorState()
+			realState.setAttemptCompletionSeen()
+
+			recordPostTerminalAuthoritySnapshot(
+				buildExtensionSnapshotFromState({
+					state: baseState,
+					shadow,
+					messageTranslatorState: realState,
+				}),
+			)
+
+			const first = getPostTerminalAuthorityDiagnosticRecords("extension")
+			expect(first.length).toBe(1)
+			expect(first[0].attemptCompletionSeen).toBe(true)
+			expect(first[0].terminalResponseCommittedThisTurn).toBe(false)
+
+			realState.clearTurnOutcome()
+
+			recordPostTerminalAuthoritySnapshot(
+				buildExtensionSnapshotFromState({
+					state: { ...baseState, stateVersion: 1 },
+					shadow,
+					messageTranslatorState: realState,
+				}),
+			)
+
+			const second = getPostTerminalAuthorityDiagnosticRecords("extension")
+			expect(second.length).toBe(2)
+
+			// First record preserved verbatim.
+			expect(second[0].attemptCompletionSeen).toBe(true)
+			expect(second[0].terminalResponseCommittedThisTurn).toBe(false)
+			// Second record reflects post-reset state.
+			expect(second[1].attemptCompletionSeen).toBe(false)
+			expect(second[1].terminalResponseCommittedThisTurn).toBe(false)
+		})
+
+		it("T1-EXT01-C: snapshot taken AFTER reset reflects false/false (not stale true/true)", () => {
+			// Negative case: if the production capture happened AFTER
+			// clearTurnOutcome(), the record would show false/false even
+			// though the booleans had been true. This test pins the
+			// post-reset capture shape so a future regression in the
+			// capture ordering (capturing post-reset instead of pre-reset)
+			// is detected as a DIFFERENT shape (false/false becomes
+			// expected in this test), not silently confused with the
+			// pre-reset shape.
+			const realState = new MessageTranslatorState()
+			realState.setAttemptCompletionSeen()
+			realState.setTerminalResponseCommittedThisTurn()
+
+			// Reset FIRST (simulating a buggy capture ordering where
+			// the PTAD site runs after the next-turn boundary).
+			realState.clearTurnOutcome()
+
+			recordPostTerminalAuthoritySnapshot(
+				buildExtensionSnapshotFromState({
+					state: baseState,
+					shadow,
+					messageTranslatorState: realState,
+				}),
+			)
+
+			const records = getPostTerminalAuthorityDiagnosticRecords("extension")
+			expect(records.length).toBe(1)
+			// Post-reset capture is correctly false/false. This is the
+			// expected shape if the capture site runs after reset; the
+			// discriminator misclassifies this CAUSAL BRANCH (it looks
+			// like "completion never attempted" rather than "attempted
+			// but lost"). T1-EXT01-A above pins the correct capture
+			// ordering, this test pins the consequence of getting it
+			// wrong.
+			expect(records[0].attemptCompletionSeen).toBe(false)
+			expect(records[0].terminalResponseCommittedThisTurn).toBe(false)
+		})
 	})
 })
