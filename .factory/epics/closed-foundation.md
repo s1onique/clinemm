@@ -57,8 +57,8 @@ SOURCE: .factory/epic-board.md L319-381 (pre-sharding).
 ### 3. Thinking canonical-state authority
 
 - status: CLOSED
-- note: canonical authority exists; static presentation residue remains separately OPEN (see `ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01`)
-- source IDs: `E7.1`, `TRACE01`
+- note: canonical authority exists; static presentation residue also CLOSED_NOT_REPRODUCED under `ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01` (see `docs/architecture/elm/task-state-e71-static-thinking-presentation-persistence01-reclosure.md` for the durable closure claim and `docs/architecture/elm/task-state-e71-static-thinking-presentation-persistence01-evidence.md` for the original evidence)
+- source IDs: `E7.1`, `TRACE01`, `STATIC-THINKING-PRESENTATION-PERSISTENCE01`
 
 ### 4. React updater purity repair
 
