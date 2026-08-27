@@ -1,13 +1,16 @@
 # ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02
 
-> Status: **OPEN / WAITING_FOR_LIVE_EVIDENCE** — launched at HEAD `02a35fabf5f38b963ded7dfddf607789fecbacd3`
-> (the PTAD-ENV-OPTIN01 commit that armed `CLINEMM_PTAD=1`).
-> Preempts `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` for one bounded cycle
-> because we now possess a rare bound LIVE specimen where the completion protocol
-> was never entered (`attemptCompletionSeen=false`, `terminalResponseCommittedThisTurn=false`
-> across 64 captured state-pushes, `runtimeStatus: running → completed` transition at sv=8299).
+> Status: **OPEN / ACTIVE_RECON** — launched at HEAD `35f27e4d720c5e08ef33a4cb24afb87bb4df5a31`.
+> The reopen trigger has fired: a bound LIVE specimen (`1787832864738_ik2zh`,
+> 64 captured state-pushes, `attemptCompletionSeen=false`,
+> `terminalResponseCommittedThisTurn=false`, `runtimeStatus: running → completed`
+> transition at sv=8299) is now durable and SHA-256-bound at
+> `.factory/evidence/ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02/`.
 > Recon + bounded RED + causal discriminator. No production repair until one
 > RED branch is proven and the causal variable is isolated.
+> Preempts `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` for exactly one
+> bounded cycle (per reviewer instruction); that ACT resumes `NEXT` once a
+> causal disposition is reached.
 > Owned by `EPIC-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02` (reopens the deferred
 > LIVENESS02 row in `.factory/epics/runtime-task-progression.md`).
 
@@ -46,12 +49,25 @@ terminalResponseCommittedThisTurn  = false    (across all 64 captured extension-
 ```
 
 **Smoking gun**: the canonical `runtimeStatus` and `shadowStatus` both flip
-to `completed` at sv=8299, yet the completion protocol was never entered
-(neither `attempt_completion` nor `submit_and_exit` was observed). The host's
-`taskHeaderPresentation` projection then derives `phase=awaiting_followup`
-from the legacy turnState, which is exactly the stale-`awaiting_followup`
-chain that suppresses the `✓ Completed` badge downstream
-(see `docs/architecture/elm/completion-framing-live-red-discriminator01.md`
+to `completed` at sv=8299, yet the live capture directly proves:
+
+```text
+LIVE (from PTAD):
+  attemptCompletionSeen              = false   (all 64 extension-push records)
+  terminalResponseCommittedThisTurn  = false   (all 64 extension-push records)
+```
+
+Composed with the source contract documented at
+`apps/vscode/src/sdk/message-translator.ts:343-352, 1631-1650, 1929-1943`,
+this means **the canonical completion protocol was neither entered nor
+committed during this run**. We do NOT, from the LIVE capture alone,
+establish whether `submit_and_exit` / `attempt_completion` was absent,
+present-but-unused, or present-and-unused — that is what §3 discriminates.
+
+The host's `taskHeaderPresentation` projection then derives
+`phase=awaiting_followup` from the legacy turnState (the
+stale-`awaiting_followup` chain that suppresses the `✓ Completed` badge
+downstream — see `docs/architecture/elm/completion-framing-live-red-discriminator01.md`
 for the projection chain).
 
 **Load-bearing conclusion at this ACT's launch** (only):
@@ -238,25 +254,31 @@ HALT_COMPLETION_POLICY_REGISTRY_CONTRADICTION
 
 ### Strong hypothesis (not verdict)
 
-My strongest hypothesis is **Branch B**:
+**No strong hypothesis.** Branches A and B are *a priori* not
+discriminable from the LIVE capture alone — §3 must classify the actual
+registered tool set and the actual `completionPolicy.requireCompletionTool`
+value at the real builder→agent boundary before any causal direction is
+named. Naming a strong hypothesis now would pre-classify cause in
+violation of §3's discipline.
+
+The reviewer-correct discriminator sequence is therefore:
 
 ```text
-submit_and_exit is conditionally registered by
-definitions.ts:1155-1158 — only when enableSubmitAndExit=true
-AND executors.submit is provided.
-If either is false for the production ClineMM interactive session,
-finalTools does not contain submit_and_exit,
-requiresCompletionTool is false,
-completionPolicy is undefined (or {completionGuard} only),
-and the model can terminate without calling the completion tool.
+§3  registered?       → yes / no      → A vs. not-A
+§4  required?         → true / false  → B/C/D vs. not-B/C/D
 ```
 
-This is the upstream architectural pattern
-(see cline/docs/sdk/tools.mdx — `submit_and_exit` is the canonical
-"final-answer-and-stop" tool; whether to require it is a separate
-policy decision per session class).
+Both cheap. Both at the real production seam. Do NOT skip to §5
+(`MODEL_FINISH_REASON` etc.) unless §3 and §4 both return `YES / YES`
+(registered and required), in which case the `YES/YES` configuration
+contradicts the LIVE `false / false` capture and Branch C (enforcement
+escape) becomes the only live branch.
 
-But do NOT repair this hypothesis yet.
+This is the upstream architectural pattern
+(see `cline/docs/sdk/tools.mdx` — `submit_and_exit` is the canonical
+"final-answer-and-stop" tool, while CLI `--yolo` separately enables it
+per `apps/cli/README.md`; VS Code ClineMM interactive registration is
+the open question).
 
 ## 5. Third discriminator: model termination path
 
@@ -594,7 +616,7 @@ After committing `PTAD-ENV-OPTIN01`:
 ```text
 PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE  CLOSED
 PTAD-ENV-OPTIN01                   CLOSED
-COMPLETION-PROTOCOL-LIVENESS02     OPEN / WAITING_FOR_LIVE_EVIDENCE → ACTIVE RECON
+COMPLETION-PROTOCOL-LIVENESS02     OPEN / ACTIVE_RECON
 EDITOR-TOOL-APPROVAL-FRICTION      OPEN / HIGH (queued behind LIVENESS02)
 ```
 
@@ -619,8 +641,3 @@ just resolved by this specimen)
 Companion: `docs/architecture/elm/completion-framing-live-red-discriminator01.md`
 Owning epic: `EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01`
 (see `.factory/epics/runtime-task-progression.md` for in-flight state)
-
-
-
-
-
