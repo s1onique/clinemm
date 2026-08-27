@@ -20,8 +20,8 @@ One `NEXT` per lane, named explicitly so the lanes do not collapse into a false 
 | Host substrate | P0 | `HOST-TEST RUNNER` (host-only-behaviour dependency for both approval lanes; `HOST_REQUIRED` modifier per contract §2) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
 | TaskHeader projection | P1 | **CLOSED** (migration at `149fb131e` + THCP11 at `8a7e53742` already landed) | [`task-presentation.md`](./epics/task-presentation.md) |
 | Runtime progression | P1 | `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` (RECON + live failure capture; secondary purpose = Cancel-affordance authority on the same ownership seam) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
-| Cost provenance | P1 | `ACT-CLINEMM-TASK-COST-TRUTH-RECON01` (recon — binds TaskHeader `$X.YYYY` to authoritative per-request cost evidence; Bucket C = expected closing condition) | [`product-config-branding.md`](./epics/product-config-branding.md) |
-| Settings surface parity | P2 | `ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01` (recon — inventory + per-entry intent class; NO bespoke PTAD tab; NO wholesale upstream copy; owning epic decided by §11) | [`product-config-branding.md`](./epics/product-config-branding.md) (tentative; §11 of the ACT may move it to a new `EPIC-CLINEMM-SETTINGS-SUBSTRATE01`) |
+| Cost provenance | P1 (HOLD) | `ACT-CLINEMM-TASK-COST-TRUTH-RECON01` (recon — binds TaskHeader `$X.YYYY` to authoritative per-request cost evidence; Bucket C = expected closing condition; held behind the editor-tool operational frontier) | [`product-config-branding.md`](./epics/product-config-branding.md) |
+| Settings surface parity | P2 (HOLD) | `ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01` (recon — inventory + per-entry intent class; NO bespoke PTAD tab; NO wholesale upstream copy; owning epic decided by §11; sequenced after cost-truth) | [`product-config-branding.md`](./epics/product-config-branding.md) (tentative; §11 of the ACT may move it to a new `EPIC-CLINEMM-SETTINGS-SUBSTRATE01`) |
 
 ---
 

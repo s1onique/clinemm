@@ -1,9 +1,13 @@
 # ACT-CLINEMM-TASK-COST-TRUTH-RECON01
 
-> Status: **OPEN / HIGH** — recon-only ACT; binds the TaskHeader
-> dollar figure to authoritative per-request cost evidence so the
-> "is `$0.8236` correct, surprising, or buggy?" question collapses
-> into a deterministic accounting invariant.
+> Status: **OPEN / HOLD_FOR_EXECUTION** — recon-only ACT; binds
+> the TaskHeader dollar figure to authoritative per-request cost
+> evidence so the "is `$0.8236` correct, surprising, or buggy?"
+> question collapses into a deterministic accounting invariant.
+> Held until the operational frontier
+> (`ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01`,
+> `OPEN / WAITING_FOR_LIVE_SPECIMEN`) is bound, then picked up
+> as the next independent product recon.
 >
 > **Primary purpose**: discover whether `TASK_DISPLAYED_COST` is a
 > well-defined projection of authoritative per-request cost evidence,
@@ -32,10 +36,23 @@ is **NEVER** the stop rule; the *accounting invariant* is.
 
 ## §1 — Entry discipline
 
-Authored under the standard ACT gate contract. No source
-modifications in this ACT. No tests added. No upstream wholesale
-copy. **Recon only.** The board + this ACT are the only artifacts
-produced in this commit.
+Authored under the standard ACT gate contract. This launch is
+docs/governance-only. **No production files are modified. No tests
+are added. No upstream wholesale copy.** Durable launch artifacts
+in this commit are:
+
+```text
+- this ACT file (.factory/acts/ACT-CLINEMM-TASK-COST-TRUTH-RECON01.md)
+- board bookkeeping (.factory/epic-board.md frontier row)
+- epic ledger row (.factory/epics/product-config-branding.md)
+- minimal .gitignore durability whitelist entry
+  (mirrors the ACT + evidence dir whitelist pattern; the evidence
+   dir is reserved here for the §3 / §4 / §5 captures that will
+   land in a future commit)
+```
+
+This ACT is the recon contract; the per-request cost provenance
+itself is NOT in this commit. Recon only.
 
 ## §2 — Scope (production-equivalent composition)
 
@@ -215,10 +232,21 @@ Plus the standard EAF-C01..C14 suite only if RED lands (A, B, D, or E).
 
 ## §11 — Temporary instrumentation
 
-Existing diagnostic seams are sufficient for §3 capture. No new
-instrumentation is authorized in this ACT; if a seam is missing,
-halt at `HALT_SEAM_MISSING` and record the missing seam as evidence
-for a follow-on ACT.
+The existing diagnostic / request-usage / cost surfaces (the
+canonical cost source, the per-request cost accumulator, the
+provider-response stream) are the **first capture path to try** for
+§3. Their sufficiency for binding the complete §3 matrix is
+**NOT_YET_PROVEN** — that is precisely what §3 will determine.
+
+If any required field in §3 cannot be bound from the existing
+surfaces, halt at `HALT_SEAM_MISSING` and record the missing seam
+as evidence for a follow-on ACT. No new instrumentation is
+authorized in this ACT; if a seam must be added, it is a follow-on
+ACT, not an in-this-ACT instrumentation patch.
+
+PTAD is **not** a presumed source of cost truth. It is a
+post-terminal authority diagnostic; its usefulness here is limited
+to identity / state binding for §3 correlation. See §14.
 
 ## §12 — Forbidden side effects
 
@@ -257,11 +285,23 @@ Repair (NOT in this ACT, only if A/B/D/E):
 
 ## §14 — Live qualification
 
-Standard dogfood path: build exact-head VSIX and bind via
-`CLINEMM_PTAD=1 codium .` per the IMPLEMENTATION01 §9 success
-signature path. Run one task of the same provider/model shape as
-the captured screenshot, freeze the §3 matrix before the cost
-changes, and proceed to §4 / §5.
+Use the existing request / usage / cost diagnostics discovered in
+§3 to bind the §3 matrix. The canonical per-request cost stream
+and the provider-response stream are the natural primary surfaces;
+the canonical session cost source is the verification surface.
+
+PTAD may be enabled **only** if useful for task / session / state
+correlation (e.g. to bind the TaskHeader capture to a specific
+runtime session epoch). PTAD is **not** a source of cost truth
+unless §3 recon proves otherwise — its semantics are
+post-terminal authority diagnostic, not per-request cost
+provenance.
+
+Standard dogfood path: build exact-head VSIX and bind via the
+same codeium/CLINEMM invocation pattern used by IMPLEMENTATION01
+§9. Run one task of the same provider/model shape as the captured
+screenshot, freeze the §3 matrix before the cost changes, and
+proceed to §4 / §5.
 
 ## §15 — Evidence layout
 

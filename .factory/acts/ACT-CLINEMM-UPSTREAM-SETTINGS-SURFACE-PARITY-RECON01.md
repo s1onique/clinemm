@@ -1,10 +1,15 @@
 # ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01
 
-> Status: **OPEN / MED-HIGH** — recon-only ACT; inventories the
-> current upstream Cline Settings webview surface against the current
-> ClineMM fork Settings webview surface, classifies each missing
-> setting by intent, and emits a candidate-restore list (NOT a
-> wholesale upstream copy).
+> Status: **OPEN / HOLD_FOR_EXECUTION** — recon-only ACT;
+> inventories the current upstream Cline Settings webview surface
+> against the current ClineMM fork Settings webview surface,
+> classifies each missing setting by intent, and emits a
+> candidate-restore list (NOT a wholesale upstream copy). Held
+> until the operational frontier
+> (`ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01`,
+> `OPEN / WAITING_FOR_LIVE_SPECIMEN`) is bound, then picked up
+> as a subsequent independent recon (sequenced after
+> `TASK-COST-TRUTH-RECON01`).
 >
 > **Primary purpose**: answer "what did our fork drift away from
 > upstream on the Settings surface, and which drifts are
@@ -44,10 +49,24 @@ Recon-only.
 
 ## §1 — Entry discipline
 
-Authored under the standard ACT gate contract. No source
-modifications in this ACT. No tests added. No upstream wholesale
-copy. **Recon only.** The board + this ACT are the only artifacts
-produced in this commit.
+Authored under the standard ACT gate contract. This launch is
+docs/governance-only. **No production files are modified. No tests
+are added. No upstream wholesale copy.** Durable launch artifacts
+in this commit are:
+
+```text
+- this ACT file (.factory/acts/ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01.md)
+- board bookkeeping (.factory/epic-board.md frontier row, tentative
+  to product-config-branding.md pending §11 decision)
+- epic ledger row (.factory/epics/product-config-branding.md)
+- minimal .gitignore durability whitelist entry
+  (mirrors the ACT + evidence dir whitelist pattern; the evidence
+   dir is reserved here for the §3 / §4 / §5 captures that will
+   land in a future commit)
+```
+
+This ACT is the recon contract; the upstream-vs-ClineMM settings
+delta table itself is NOT in this commit. Recon only.
 
 ## §2 — Scope
 
@@ -82,10 +101,11 @@ clinemm_path             repo path
 restoration_recommend    restore | supersede | leave | investigate
 ```
 
-The `clinemm_intent_class` is the load-bearing output. Most rows
-will land in `REMOVED_INTENTIONALLY` or `UPSTREAM_NOT_APPLICABLE`
-(see §6 for the deterministic test); only `MISSING_ACCIDENTALLY`
-rows drive a candidate restore.
+The `clinemm_intent_class` is the load-bearing output. The
+distribution across the five classes is NOT pre-baked; §3 may
+return any mix and the inventory is allowed to surprise us. Only
+`MISSING_ACCIDENTALLY` rows drive a candidate restore (defended
+by §6 tests).
 
 ## §3 — Live inventory (NOT YET CAPTURED)
 
@@ -129,9 +149,8 @@ REMOVED_INTENTIONALLY   ⇒ no restore (the entry was a deliberate
 SUPERSEDED_BY_CLINEMM   ⇒ no restore (ClineMM has a fork-native
                           replacement; record the supersession)
 UPSTREAM_NOT_APPLICABLE ⇒ no restore (the upstream entry is
-                          inapplicable to the ClineMM product, e.g.
-                          upstream's plain-YOLO toggle is replaced
-                          by Seatbelted-YOLO)
+                          inapplicable to the ClineMM product;
+                          classification requires §6 evidence)
 PRESENT_IN_BOTH         ⇒ no action
 ```
 
@@ -181,9 +200,12 @@ TEST_RESTORE_NEEDS_PLUMBING
   repair.
 
 TEST_SUPERSESSION_CLAIM_VERIFIED
-  The row is a deliberate fork substitution (e.g. plain-YOLO
-  toggle replaced by Seatbelted-YOLO). Classify as
-  SUPERSEDED_BY_CLINEMM and explain the supersession; no restore.
+  The row is a deliberate fork substitution. A plausible candidate
+  is upstream's plain-YOLO toggle being replaced by ClineMM's
+  Seatbelted-YOLO, but classification requires §6 evidence
+  (the supersession is only an assumption until the §3 inventory
+  proves it entry-by-entry). Classify as SUPERSEDED_BY_CLINEMM
+  and reference the superseding entry; no restore.
 
 TEST_UPSTREAM_INAPPLICABILITY_VERIFIED
   The row is structurally inapplicable to the ClineMM product
@@ -203,11 +225,15 @@ GUARD_NO_WHOLESALE_UPSTREAM_COPY
   above defended.
 
 GUARD_PRESERVE_DELIBERATE_DIVERGENCE
-  ClineMM's deliberate fork policy (Seatbelted-YOLO replacing
-  upstream plain-YOLO is the obvious example; PTAD as a
-  developer/CI opt-in instead of a user-facing toggle may be
-  another) is preserved. The recon MUST NOT classify deliberate
-  divergence as MISSING_ACCIDENTALLY.
+  ClineMM's deliberate fork policy is preserved. Candidate
+  examples (each requires §6 evidence, not assumption):
+    - upstream's plain-YOLO toggle possibly replaced by
+      Seatbelted-YOLO
+    - PTAD possibly kept as a developer/CI opt-in instead of
+      a user-facing toggle
+  The recon MUST NOT classify deliberate divergence as
+  MISSING_ACCIDENTALLY; the §6 SUPERSESSION test is the only
+  path to that conclusion.
 
 GUARD_NO_PTAD_TAB
   This ACT does not author a bespoke PTAD tab. The PTAD
