@@ -285,6 +285,66 @@ W2-EXT01 is the structural embodiment of
 `HALT_DIAGNOSTIC_MUTATES_MESSAGE_TRANSLATOR_SEMANTICS`: the test
 fails if a setter ever leaks into the builder.
 
+### 7.5 Temporal capture order test (reviewer P1 bounded correction)
+
+Tests added at commit `081ae974a` in a new describe block
+`T1-EXT01: temporal capture order — snapshot samples before
+lifecycle reset` in
+`apps/vscode/src/sdk/__tests__/post-terminal-authority-diagnostic-builder.test.ts`.
+
+The seam exercised is the same shape as the production capture
+site in `SdkController.getStateToPostToWebview()`:
+
+```text
+recordPostTerminalAuthoritySnapshot(
+  buildExtensionSnapshotFromState({ ..., messageTranslatorState }),
+)
+```
+
+NOT a mock-only builder test. The live PTAD ring buffer
+(`enablePostTerminalAuthorityDiagnostic`, `clearPostTerminalAuthorityDiagnostic`,
+`getPostTerminalAuthorityDiagnosticRecords`) drives the real
+capture and read paths that a future bound specimen will use.
+
+```text
+T1-EXT01-A (load-bearing)
+  real new MessageTranslatorState()
+  state.setAttemptCompletionSeen()
+  state.setTerminalResponseCommittedThisTurn()
+  recordPostTerminalAuthoritySnapshot(buildExtensionSnapshotFromState({messageTranslatorState: state}))
+  getPostTerminalAuthorityDiagnosticRecords("extension")
+  -> records.length === 1
+  -> records[0].attemptCompletionSeen === true
+  -> records[0].terminalResponseCommittedThisTurn === true
+  state.clearTurnOutcome()       // production lifecycle reset
+  recordPostTerminalAuthoritySnapshot(buildExtensionSnapshotFromState({messageTranslatorState: state, state: {...baseState, stateVersion: 1}}))
+  getPostTerminalAuthorityDiagnosticRecords("extension")
+  -> records.length === 2
+  -> records[1].attemptCompletionSeen === false
+  -> records[1].terminalResponseCommittedThisTurn === false
+  -> records[0].attemptCompletionSeen === true   (immutable across reset)
+  -> records[0].terminalResponseCommittedThisTurn === true
+  -> records[0].capturedAt preserved
+  -> records[0].stateVersion preserved
+
+T1-EXT01-B
+  Same lifecycle shape with only setAttemptCompletionSeen()
+  (no setTerminalResponseCommittedThisTurn()). Proves the
+  (true, false) branch — "completion attempted, authority lost" —
+  is preserved across the reset.
+
+T1-EXT01-C (negative case)
+  Reset FIRST then capture. Proves that a capture taken AFTER
+  reset correctly shows (false, false). This pins the consequence
+  of getting the capture ordering wrong so a future regression
+  is detected as a different shape rather than silently
+  misclassified.
+```
+
+T1-EXT01-A is the load-bearing test. Without it, the implementation
+could compile and pass all prior tests while still misclassifying
+causality on a real specimen.
+
 ## 8. Stop conditions (field-level halt, not whole-ACT halt)
 
 ```text
@@ -325,7 +385,9 @@ PUBLIC_PROTOCOL_DELTA       = ZERO (verified by §7.4 W1-EXT01
                                        source assertion: no wire field)
 HALT_DIAGNOSTIC_MUTATES_*   = NOT_TRIGGERED (verified by §7.4 W2-EXT01
                                               and §7.2 S1-EXT01)
-HALT_TEST_CANNOT_BIND_*     = NOT_TRIGGERED (verified by §7.2 S1-EXT01)
+HALT_TEST_CANNOT_BIND_*     = NOT_TRIGGERED (verified by §7.2 S1-EXT01
+                                              and §7.5 T1-EXT01)
+TEMPORAL_CAPTURE_ORDER      = PROVEN (verified by §7.5 T1-EXT01-A/B/C)
 DEFAULT_OFF                 = REQUIRED (PTAD toggle already required)
 
 EXIT:
@@ -335,12 +397,59 @@ EXIT:
 This does NOT mean the completion bug is proven or fixed.
 It means only that a future specimen can be classified into
 {attempt=false/committed=false, attempt=true/committed=false,
- committed=true} from a single PTAD dump.
+ committed=true} from a single PTAD dump, AND the values in
+ the dump were sampled BEFORE the lifecycle reset rather than
+ after (i.e. they reflect what the runtime actually saw, not
+ what the runtime ended with).
 
 NEXT:
   Wait for a bound specimen; bind via the §6 runbook;
   classify; then return to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01
   (the next product ACT).
+```
+
+### 9.1 Verdict transition (reviewer P1 bounded correction applied)
+
+This ACT was initially closed at commit `9c10ae273` with the
+narrower verdict:
+
+```text
+PASS_STRUCTURAL_PTAD_DISCRIMINATOR_WIRING
+TEMPORAL_CAPTURE_QUALIFICATION = OPEN
+```
+
+The reviewer (Factory, session 2026-08-27) accepted the value-
+plumbing proofs but required one bounded temporal-capture test:
+
+> "Right now you have proven value plumbing, but not yet
+> temporal capture correctness. ... the implementation still
+> compiles, all 60 tests still pass, and a real terminal
+> specimen would misleadingly capture `(false, false)` even
+> though both had been true moments earlier."
+
+The T1-EXT01 set (§7.5) was added in commit `081ae974a`. With
+that commit:
+
+```text
+PASS_COMPLETION_PTAD_CAPTURE_V1
+  = FUTURE_BOUND_SPECIMEN_CAN_BE_CAUSALLY_CLASSIFIED = YES
+
+Reasoning:
+  T1-EXT01-A proves the snapshot records the canonical
+    (true, true) seen by MessageTranslatorState, AND that
+    the record remains immutable across a subsequent
+    clearTurnOutcome().
+  T1-EXT01-B proves the (true, false) branch is preserved.
+  T1-EXT01-C pins the consequence of getting the capture
+    ordering wrong (false/false recorded when true/true had
+    been set then reset), so a future regression is detected
+    as a different shape rather than silently misclassifying.
+
+The supported claim is now strictly stronger than the v1
+wiring claim: not only does the builder read the right object,
+but the ring buffer preserves the value that was current at
+the moment of capture, even when subsequent lifecycle events
+clear the source-of-truth.
 ```
 
 ## 10. Files touched
