@@ -143,58 +143,123 @@ not session-wide.
 Per the reviewer's Outcome B: do not pretend the canonical session
 authority exists. Do not reconstruct one inside `cline-session-factory.ts`.
 
-### Phase-0 decision: introduce a tiny canonical session-level helper (separately reviewed authority seam)
+### Phase-0 decision: separate three facts, single helper per fact
 
-The cleanest V1 path is to introduce a **small, dependency-injected,
-testable helper** that answers the session-wide question exactly once,
-at a clearly-scoped boundary:
+The reviewer-corrected finding (after `7d999f4ff`) established that the
+prior formulation of "isSeatbeltYoloSessionEnabled" silently conflated
+**two distinct facts**:
+
+```text
+- USER_INTENT:    "this session requested autonomous execution"
+- SAFETY_STATE:   "Seatbelt is actually effective"
+- PRODUCT_CAP:    "explicit completion authority is granted to the runtime"
+```
+
+Conflating them in a single function promotes **user-intent** to
+**safety-effective**, which is the evidence-category promotion
+Factory normally forbids. It also produces a contract contradiction
+when `override === "all"` (which widens authorization) is required to
+imply a YOLO-on persisted state (which the override does not in fact
+require).
+
+The cleanest V1 architecture is therefore:
+
+```text
+fact 1 — YOLO_REQUESTED       (helper, owner = session-auto-approval.ts)
+fact 2 — SEATBELT_EFFECTIVE   (canonical reuse: resolveExperimentalSandboxMode)
+fact 3 — explicitCompletionAuthority = interactiveVsCode
+                                    && YOLO_REQUESTED
+                                    && SEATBELT_EFFECTIVE
+```
+
+#### Fact 1 helper (YOLO session-request intent)
 
 ```text
 apps/vscode/src/sdk/session-auto-approval.ts
   // EXTEND existing module (where the override already lives)
-  isSeatbeltYoloSessionEnabled(
-    persisted: AutoApprovalSettings,    // from StateManager.getGlobalSettingsKey("autoApprovalSettings")
-    override: SessionAutoApprovalOverride,  // from getOverride(sessionId)
+  export function isYoloSessionRequested(
+    persisted: AutoApprovalSettings,
+    override: SessionAutoApprovalOverride,
   ): boolean
 ```
 
-Contract:
+Contract (unambiguous — one rule only):
 
 ```text
-isSeatbeltYoloSessionEnabled(persisted, override) =
-  // authoritative composition for "this session may execute autonomously"
-  //
-  // The persisted `actions.*` IS the canonical user-intent encoding
-  // for "user wants YOLO" (see vscode-to-file-migration.ts:264). We read
-  // the FULL set of gates the legacy YOLO toggle would have enabled.
-  // Future categories added to AutoApprovalSettings.actions that are
-  // part of the YOLO semantic will extend this check at one location.
-  &&
-  override is consistent with the persisted state
-  (override = "all" implies the persisted state is also YOLO-on;
-   override = "none" with all actions.* true is also YOLO-effective;
-   override = "none" with any actions.* false is NOT YOLO-effective)
+isYoloSessionRequested(persisted, override) =
+  override === "all"                         // session-level UI widens
+  ||
+  (
+    persisted.actions.readFiles
+    && persisted.actions.editFiles
+    && persisted.actions.executeSafeCommands
+    && persisted.actions.useBrowser
+    && persisted.actions.useMcp
+  )                                            // OR all canonical persisted
+                                              // auto-approval actions enabled
 ```
 
-Why this is the right seam:
+Truth table:
 
 ```text
-- Single owner. IMPLEMENTATION01 + any future Seatbelt-YOLO policy
-  reads this helper. Not a second implementation.
-- Dependency-injected. cline-session-factory.ts receives the helper;
-  does not reconstruct.
-- Testable. RED can pin the helper against every action.* combination
-  without touching runtime construction.
-- Lives next to the override (session-auto-approval.ts). The override
-  IS the only SessionAutoApprovalOverride owner; the helper composes
-  the override with the persisted settings encoding.
-- NOT in cline-session-factory.ts (per HALT_SEAM_MOVED stop rule).
-- NOT in the core runtime (SDK @cline/core is a host-executor contract,
-  not a user-intent authority).
+persisted all-true  + override "none" → true   (YOLO via persisted alone)
+persisted mixed     + override "all"  → true   (YOLO via session override)
+persisted mixed     + override "none" → false
+persisted all-true  + override "all"  → true   (both routes agree)
 ```
 
-If during implementation the helper proves impossible to scope cleanly
-(e.g. requires surgery to multiple modules), HALT_SEAM_MOVED.
+Why the name is `isYoloSessionRequested` and not
+`isSeatbeltYoloSessionEnabled`:
+
+```text
+- It answers "user wants autonomous execution", NOT
+  "Seatbelt is effective".
+- "Seatbelt-effective" is a separate, canonical fact (fact 2).
+- CLI --yolo (which is independent of VS Code auto-approval per
+  upstream distinction) is also NOT this helper's concern.
+- Future ACTs that need a different intent axis (e.g. a future
+  "policies" subsystem) can compose with this helper without
+  re-defining what it means.
+```
+
+#### Fact 2 reuse (canonical Seatbelt selector)
+
+```text
+apps/vscode/src/sdk/sandbox-policy.ts:127
+  resolveExperimentalSandboxMode(): SandboxMode | undefined
+    → returns "seatbelt-experimental" when Seatbelt is selected
+    → returns undefined              when CLINEMM_EXPERIMENTAL_SANDBOX=off
+    → throws InvalidSandboxConfigurationError on unknown values
+      (fail closed)
+
+SEATBELT_EFFECTIVE = resolveExperimentalSandboxMode() === "seatbelt-experimental"
+```
+
+This is the existing canonical Seatbelt selector. The IMPLEMENTATION01
+ACT does not introduce a new Seatbelt state; it reuses this and passes
+it into the capability derivation at the production seam.
+
+#### Fact 3 capability derivation (production seam)
+
+```text
+apps/vscode/src/sdk/cline-session-factory.ts:736
+  explicitCompletionAuthority =
+    interactiveVsCode
+    && isYoloSessionRequested(
+         stateManager.getGlobalSettingsKey("autoApprovalSettings"),
+         getOverride(sessionId),
+       )
+    && resolveExperimentalSandboxMode() === "seatbelt-experimental"
+```
+
+Both `isYoloSessionRequested` and `resolveExperimentalSandboxMode` are
+dependency-injected (or imported as canonical helpers); neither is
+reconstructed inline.
+
+If during implementation either helper proves impossible to scope
+cleanly (e.g. surgery to multiple modules, or
+`resolveExperimentalSandboxMode` is not actually canonical at the
+construction site), HALT_SEAM_MOVED.
 
 The completion detection wire side is already complete:
 
@@ -217,55 +282,71 @@ So this ACT's only NEW production surface is:
 
 ```text
 (a) NEW helper: apps/vscode/src/sdk/session-auto-approval.ts
-    export function isSeatbeltYoloSessionEnabled(
+    export function isYoloSessionRequested(
       persisted: AutoApprovalSettings,
       override: SessionAutoApprovalOverride,
     ): boolean
-    (small, pure, testable; the canonical session-level YOLO semantic)
+    (small, pure, testable; single owner of "YOLO intent" semantic;
+     does NOT touch Seatbelt state)
 
-(b) derive explicitCompletionAuthority from
-    isSeatbeltYoloSessionEnabled(persisted, getOverride(sessionId))
-    at buildSessionConfig; consume via dependency injection
-(c) when derived true:
+(b) REUSE existing canonical Seatbelt selector at the production seam:
+    resolveExperimentalSandboxMode() === "seatbelt-experimental"
+
+(c) derive explicitCompletionAuthority at buildSessionConfig from
+    the conjunction: interactiveVsCode && isYoloSessionRequested(...)
+                           && SEATBELT_EFFECTIVE
+    (consumed via dependency injection; no inline reconstruction)
+
+(d) when derived true:
       config.enableSubmitAndExit = true     (NEW field on CoreSessionConfig)
-(d) populate toolExecutors.submit in VscodeSessionHost.create when (a) is true
-(e) implement apps/vscode/src/sdk/vscode-submit-executor.ts (NEW)
+
+(e) populate toolExecutors.submit in VscodeSessionHost.create when (c) is true
+
+(f) implement apps/vscode/src/sdk/vscode-submit-executor.ts (NEW)
     - PASSIVE host-facing executor (see §5)
 ```
 
 ## 2. Phase 1 — RED at the real production seam
 
-Two REDs:
+Three REDs:
 
-(a) Helper RED — pin `isSeatbeltYoloSessionEnabled` against every
+(a) Helper RED — pin `isYoloSessionRequested` against every
     persisted/override combination:
 
 ```text
 persisted { all 5 actions true } + override "none"
-  → isSeatbeltYoloSessionEnabled = true   (YOLO via persisted alone)
+  → isYoloSessionRequested = true   (YOLO via persisted alone)
 
 persisted { any actions.* false } + override "all"
-  → isSeatbeltYoloSessionEnabled = true   (YOLO via session override)
+  → isYoloSessionRequested = true   (YOLO via session override)
 
 persisted { any actions.* false } + override "none"
-  → isSeatbeltYoloSessionEnabled = false
+  → isYoloSessionRequested = false
 
 persisted { all 5 actions true } + override "all"
-  → isSeatbeltYoloSessionEnabled = true   (both routes agree)
-
-future-category regression:
-  add a hypothetical "skills" action; persisted must include it
-  for the helper to return true; helper is the single owner of the
-  YOLO-gate set
+  → isYoloSessionRequested = true   (both routes agree)
 ```
 
-(b) Integration RED — bind the helper to the real VS Code seam:
+(b) Schema-coverage RED — every currently-canonical
+    `AutoApprovalSettings.actions` key participates in the persisted
+    YOLO classification:
+
+```text
+iterate the schema's currently-declared actions keys
+  { readFiles, editFiles, executeSafeCommands, useBrowser, useMcp }
+  → for each key, persisted.actions[key] must be included in the
+    conjunction (compile-time / static test against the
+    AutoApprovalSettings type; not a hypothetical future key)
+```
+
+(c) Integration RED — bind the helper to the real VS Code seam:
 
 ```text
 Given:
   source                   = VS Code interactive
   config.mode              = "act"
-  isSeatbeltYoloSessionEnabled(persisted, getOverride(sessionId)) = true
+  isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+  SEATBELT_EFFECTIVE       = true   (resolveExperimentalSandboxMode === "seatbelt-experimental")
   explicitCompletionAuthority = true   (derived at buildSessionConfig)
 
 Expect:
@@ -280,6 +361,18 @@ Current (LIVENESS02 binding):
   toolExecutors.submit           = absent
   submit_and_exit ∉ finalTools
   completionPolicy               = undefined
+```
+
+Critical negative (load-bearing, prevents ordinary "approve everything"
+from being indistinguishable from Seatbelted YOLO):
+
+```text
+Given:
+  isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+  SEATBELT_EFFECTIVE                                        = false
+  → explicitCompletionAuthority = false
+  → enableSubmitAndExit         = false
+  → submit_and_exit             = absent
 ```
 
 If the helper RED does not pass, HALT_RED_NOT_REPRODUCED. If the
@@ -302,45 +395,57 @@ as the manipulated variable (violates CONTRACT01 I3).
 ## 4. Phase 3 — capability derivation
 
 For V1, keep the capability **derived**, not persisted, AND derive
-from the canonical session-level helper introduced in this ACT:
+from the conjunction of two distinct canonical facts (per §1
+Phase-0 decision):
 
 ```text
 explicitCompletionAuthority =
   interactiveVsCode
-  AND isSeatbeltYoloSessionEnabled(persisted, getOverride(sessionId))
+  AND isYoloSessionRequested(persisted, getOverride(sessionId))
+  AND resolveExperimentalSandboxMode() === "seatbelt-experimental"
 ```
 
-`isSeatbeltYoloSessionEnabled` lives at
+Fact 1 helper (`isYoloSessionRequested`) lives at
 `apps/vscode/src/sdk/session-auto-approval.ts` (the existing override
-module). Its contract:
+module). Its contract (unambiguous — one rule only):
 
 ```text
-isSeatbeltYoloSessionEnabled(persisted, override) =
-  // authoritative session-wide YOLO semantic.
-  // The persisted `actions.*` IS the canonical user-intent encoding
-  // for "user wants YOLO" (see vscode-to-file-migration.ts:264). We
-  // read the FULL set of gates the legacy YOLO toggle would have
-  // enabled. Future categories added to AutoApprovalSettings.actions
-  // that are part of the YOLO semantic extend this check at one
-  // location.
-  persisted.actions.readFiles
-  && persisted.actions.editFiles
-  && persisted.actions.executeSafeCommands
-  && persisted.actions.useBrowser
-  && persisted.actions.useMcp
-  && override is consistent with persisted state
-     (override = "all" implies persisted is also YOLO-on;
-      override = "none" with all actions.* true is also YOLO-effective;
-      override = "none" with any actions.* false is NOT YOLO-effective)
+isYoloSessionRequested(persisted, override) =
+  // authoritative YOLO session-request intent (not Seatbelt state).
+  // CLI --yolo is a separate axis (upstream distinction) and is
+  // NOT this helper's concern.
+  override === "all"
+  ||
+  (
+    persisted.actions.readFiles
+    && persisted.actions.editFiles
+    && persisted.actions.executeSafeCommands
+    && persisted.actions.useBrowser
+    && persisted.actions.useMcp
+  )
 ```
 
-The helper is the **single owner** of the session-wide YOLO semantic.
-IMPULEMENTATION01 + any future Seatbelt-YOLO policy read this helper.
-It is dependency-injected into `cline-session-factory.ts` (the
-session-config builder) — never reconstructed inline.
+Fact 2 reuses the existing canonical Seatbelt selector at
+`apps/vscode/src/sdk/sandbox-policy.ts:127` — it is the single
+production owner of the Seatbelt selector state. The IMPLEMENTATION01
+ACT does not introduce a new Seatbelt state.
 
-If during implementation the helper proves impossible to scope cleanly
-(e.g. requires surgery to multiple modules), HALT_SEAM_MOVED.
+The three facts stay separate:
+
+```text
+YOLO_REQUESTED       = isYoloSessionRequested(...)        (helper)
+SEATBELT_EFFECTIVE   = resolveExperimentalSandboxMode()   (existing)
+COMPLETION_AUTHORITY = interactiveVsCode && YOLO_REQUESTED && SEATBELT_EFFECTIVE
+                                                            (derived)
+```
+
+Both `isYoloSessionRequested` and `resolveExperimentalSandboxMode` are
+dependency-injected / canonical — neither is reconstructed inline.
+
+If during implementation either proves impossible to scope cleanly
+(e.g. surgery to multiple modules, or
+`resolveExperimentalSandboxMode` is not actually canonical at the
+construction site), HALT_SEAM_MOVED.
 
 ```text
 DO NOT add (in V1):
@@ -350,7 +455,8 @@ DO NOT add (in V1):
   - new UI toggle
   - new persisted preference
   - new "isYoloSession" / "SessionXoloEffective" sentinel
-    anywhere else (the helper is the single owner)
+    anywhere else (the helper is the single owner of YOLO intent;
+    the sandbox-policy module is the single owner of Seatbelt state)
 ```
 
 If a future ACT wants user decoupling, that's a separate product slice.
@@ -397,7 +503,8 @@ the runtime owns the completion semantics and event flow.
 ## 6. Phase 5 — GREEN composition
 
 ```text
-isSeatbeltYoloSessionEnabled(persisted, getOverride(sessionId)) = true
+isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+  AND resolveExperimentalSandboxMode() === "seatbelt-experimental"
   + mode="act"
   + interactiveVsCode
 
@@ -410,26 +517,28 @@ isSeatbeltYoloSessionEnabled(persisted, getOverride(sessionId)) = true
 ```
 
 No `config.mode` transition. No flipped yolo preset.
-## 7. Phase 6 — conservation suite (CAI-01..CAI-12)
+## 7. Phase 6 — conservation suite (CAI-01..CAI-13)
 
 ```text
 CAI-01A persisted Seatbelt-YOLO state
        (all canonical auto-approval gates true; no session override)
-       → isSeatbeltYoloSessionEnabled(persisted, "none") = true
+       → isYoloSessionRequested(persisted, "none") = true
+       AND SEATBELT_EFFECTIVE                       = true
        → explicitCompletionAuthority = true
        → submit_and_exit present + required
-       (proves persisted-only path converges; helper returns true)
+       (proves persisted-only path converges)
 
 CAI-01B per-session "ALL — this task" override
        (any persisted state; override = "all")
-       → isSeatbeltYoloSessionEnabled(persisted, "all") = true
+       → isYoloSessionRequested(persisted, "all") = true
+       AND SEATBELT_EFFECTIVE                  = true
        → explicitCompletionAuthority = true
        → submit_and_exit present + required
-       (proves session-override path converges; helper returns true)
+       (proves session-override path converges)
 
 CAI-02 manual Act / mixed state
        (override = "none" AND any persisted actions.* false)
-       → isSeatbeltYoloSessionEnabled(persisted, "none") = false
+       → isYoloSessionRequested(persisted, "none") = false
        → explicitCompletionAuthority = false
        → submit_and_exit absent
        → historical toolset/policy unchanged
@@ -466,12 +575,22 @@ CAI-11 config.mode
 CAI-12 no text/tail-derived completion authority
        (text-based "completed" framing must not be inferred
         from assistant prose; submit_and_exit is the only path)
+
+CAI-13 (NEW) critical negative: YOLO requested + Seatbelt ineffective
+       isYoloSessionRequested(persisted, getOverride(sessionId)) = true
+       SEATBELT_EFFECTIVE                                       = false
+       → explicitCompletionAuthority = false
+       → enableSubmitAndExit         = false
+       → submit_and_exit             = absent
+       (prevents ordinary "approve everything" from being
+        indistinguishable from Seatbelted YOLO)
 ```
 
-CAI-01A/01B/02/04/06/07/08/11/12 are load-bearing. CAI-01A/01B/02
-specifically exercise the new `isSeatbeltYoloSessionEnabled` helper
-without asserting anything about per-tool semantics — they test the
-helper's two input routes converge.
+CAI-01A/01B/02/04/06/07/08/11/12/13 are load-bearing. CAI-01A/01B/02
+specifically exercise the new `isYoloSessionRequested` helper without
+asserting anything about per-tool semantics — they test the helper's
+two input routes converge. CAI-13 is the load-bearing negative that
+keeps the three facts separate.
 
 ## 8. Phase 7 — bounded retry behavior
 
@@ -546,20 +665,31 @@ Only a new P0 stops the chain.
 
 ```text
 [ ] Helper RED passes:
-    isSeatbeltYoloSessionEnabled(persisted, override) is correct for
-    every persisted/override combination (CAI-01A/01B/02 inputs).
+    isYoloSessionRequested(persisted, override) is correct for every
+    persisted/override combination (CAI-01A/01B/02 inputs).
+[ ] Schema-coverage RED passes:
+    every currently-canonical AutoApprovalSettings.actions key
+    participates in the persisted-YOLO classification.
 [ ] Integration RED at the real VS Code runtime-builder seam reproduces
     (LIVENESS02's composition_proven_absent claim).
 [ ] Implementation flips BOTH conjuncts
     (enableSubmitAndExit AND toolExecutors.submit) without
     flipping config.mode.
-[ ] Capability derives from isSeatbeltYoloSessionEnabled
-    (single owner; dependency-injected). NOT reconstructed inline.
-[ ] CAI-01A AND CAI-01B AND CAI-02..CAI-12 conservation tests pass.
+[ ] Capability derives from
+      interactiveVsCode
+      && isYoloSessionRequested(...)
+      && resolveExperimentalSandboxMode() === "seatbelt-experimental"
+    (three separate canonical facts; dependency-injected / canonical;
+     NOT reconstructed inline).
+[ ] CAI-01A AND CAI-01B AND CAI-02..CAI-13 conservation tests pass.
+    CAI-13 (YOLO requested + Seatbelt ineffective → authority OFF)
+    is load-bearing.
 [ ] Manual Act path (override = "none" AND any persisted actions.* false)
     is unchanged (bit-equivalent toolset/policy for the no-Seatbelt user).
 [ ] Plan mode is unchanged.
 [ ] No new persisted setting / UI toggle introduced in V1.
+[ ] No new internal "Seatbelt effective" sentinel introduced; the
+    existing canonical resolveExperimentalSandboxMode is reused.
 [ ] No core yolo preset import.
 [ ] Submit executor is PASSIVE: it accepts/returns the submitted summary
     per the host-executor API contract; it does NOT stamp completed /
@@ -610,21 +740,44 @@ Construction seam:
   sdk/packages/core/src/extensions/tools/presets.ts:34
     (ToolPresets.act.enableSubmitAndExit = false — current default)
 
-Capability anchor (canonical session-wide YOLO semantic):
+Capability anchor (three separate canonical facts):
+  // Fact 1 — YOLO session-request intent.
   // NEW helper introduced by THIS ACT at the existing override module.
   apps/vscode/src/sdk/session-auto-approval.ts
-    export function isSeatbeltYoloSessionEnabled(
+    export function isYoloSessionRequested(
       persisted: AutoApprovalSettings,
       override: SessionAutoApprovalOverride,
     ): boolean
+    // contract: override === "all"
+    //          || (persisted.actions.readFiles
+    //              && persisted.actions.editFiles
+    //              && persisted.actions.executeSafeCommands
+    //              && persisted.actions.useBrowser
+    //              && persisted.actions.useMcp)
 
-  // Why not reuse the per-tool / per-call helpers?
-  // getCommandHostAuthorization / resolveSessionHostAuthorization /
-  // isToolAutoApproved all answer per-tool, per-call questions.
-  // No canonical session-wide "is this session in ALL authorization
-  // mode" boolean exists today (see §1 Phase-0 finding). The helper is
-  // the single owner; any future Seatbelt-YOLO policy reads it; not
-  // reconstructed inline.
+  // Fact 2 — canonical Seatbelt selector (existing module, NOT new).
+  apps/vscode/src/sdk/sandbox-policy.ts:127
+    resolveExperimentalSandboxMode(): SandboxMode | undefined
+    // returns "seatbelt-experimental" when Seatbelt is selected;
+    // returns undefined on explicit break-glass CLINEMM_EXPERIMENTAL_SANDBOX=off;
+    // throws on unknown values (fail closed).
+
+  // Fact 3 — capability is the conjunction (derived; not persisted).
+  // wired at apps/vscode/src/sdk/cline-session-factory.ts:736
+
+  // Why isYoloSessionRequested and not isSeatbeltYoloSessionEnabled?
+  // The helper answers "user wants autonomous execution", NOT
+  // "Seatbelt is effective". Conflating them is the evidence-category
+  // promotion Factory normally forbids (see §1 Phase-0 decision).
+
+  // Why reuse resolveExperimentalSandboxMode rather than introduce
+  // a new Seatbelt state? It IS the canonical selector; introducing
+  // a parallel state would create a second policy implementation.
+
+  // Why three facts, not one helper that composes them all?
+  // CLI --yolo is a separate axis (upstream distinction). VS Code
+  // auto-approval is a separate axis. Seatbelt effective is a
+  // separate axis. Forcing them into one function hides the seams.
 
 Wire-side completion detection (already complete):
   apps/vscode/src/sdk/message-translator.ts:882, 343-352, 365-382,
