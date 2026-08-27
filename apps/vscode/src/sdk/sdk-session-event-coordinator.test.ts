@@ -1,7 +1,15 @@
 import type { CoreSessionEvent } from "@cline/core"
 import type { ClineMessage } from "@shared/ExtensionMessage"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { MessageTranslatorState } from "./message-translator"
+import {
+	clearPostTerminalAuthorityDiagnostic,
+	disablePostTerminalAuthorityDiagnostic,
+	enablePostTerminalAuthorityDiagnostic,
+	getPostTerminalAuthorityDiagnosticRecords,
+	recordPostTerminalAuthoritySnapshot,
+} from "@shared/post-terminal-authority-diagnostic"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { MessageTranslatorState, translateSessionEvent } from "./message-translator"
+import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE } from "./provider-failure-telemetry"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "./sdk-session-event-coordinator"
 
@@ -727,6 +735,284 @@ describe("SdkSessionEventCoordinator", () => {
 		await coordinator.handleSessionEvent(event)
 
 		expect(options.setTurnPhase).toHaveBeenCalledWith("error", undefined, expect.any(String))
+	})
+})
+
+// ============================================================================
+// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01 — T2-EXT01 (reviewer P1 round 2 bounded correction)
+//
+// PRODUCTION-LIFECYCLE temporal-capture test. Lets the production
+// SdkSessionEventCoordinator choose when to call
+// `messageTranslatorState.clearTurnOutcome()` and when to fire
+// `postStateToWebview()` (which is the production seam that
+// `SdkController.getStateToPostToWebview()` reads for the PTAD
+// capture).
+//
+// Unlike T1-EXT01 (which manually orchestrates setTerminal →
+// capture → clearTurnOutcome), this test wires the REAL
+// `translateSessionEvent` and feeds a synthetic terminal event
+// sequence through the REAL coordinator. Production decides:
+//
+//   agent_event { content_start, tool: attempt_completion }
+//     → translateSessionEvent sets setAttemptCompletionSeen
+//     → appendAndEmit → postStateToWebview → PTAD capture
+//
+//   agent_event { content_end, tool: attempt_completion }
+//     → translateSessionEvent sets setTerminalResponseCommittedThisTurn
+//     → appendAndEmit → postStateToWebview → PTAD capture
+//
+//   agent_event { done, success: true }
+//     → turn complete
+//     → postStateToWebview → PTAD capture
+//
+//   event { type: pending_prompt_submitted }   (NEW-TURN boundary)
+//     → coordinator calls messageTranslatorState.clearTurnOutcome()
+//       BEFORE appendAndEmit and postStateToWebview
+//     → PTAD capture reads the post-reset state
+//
+// If production captures BEFORE clearTurnOutcome (correct), the
+// terminal-push record must show (true, true) and the new-turn
+// record must show (false, false). If production captures AFTER,
+// the terminal-push record would silently show (false, false) —
+// the catastrophic failure mode this test exists to detect.
+//
+// The seam exercised is `SdkController.getStateToPostToWebview()`
+// simplified: we only assert that the live PTAD ring buffer
+// receives the (true, true) tuple at the moment of the
+// terminal-push postStateToWebview hook, and (false, false) at
+// the new-turn postStateToWebview hook.
+// ============================================================================
+
+describe("T2-EXT01: production-lifecycle PTAD capture order", () => {
+	beforeEach(() => {
+		enablePostTerminalAuthorityDiagnostic("extension")
+		clearPostTerminalAuthorityDiagnostic("extension")
+	})
+
+	afterEach(() => {
+		disablePostTerminalAuthorityDiagnostic("extension")
+		clearPostTerminalAuthorityDiagnostic("extension")
+	})
+
+	function makeContentStart(toolName: string): CoreSessionEvent {
+		return {
+			type: "agent_event",
+			payload: {
+				sessionId: "session-123",
+				event: {
+					type: "content_start",
+					contentType: "tool",
+					toolName,
+					toolCallId: "tc-1",
+					input: { result: "done" },
+				} as never,
+			},
+		} as unknown as CoreSessionEvent
+	}
+
+	function makeContentEnd(toolName: string): CoreSessionEvent {
+		return {
+			type: "agent_event",
+			payload: {
+				sessionId: "session-123",
+				event: {
+					type: "content_end",
+					contentType: "tool",
+					toolName,
+					toolCallId: "tc-1",
+					output: { ok: true },
+				} as never,
+			},
+		} as unknown as CoreSessionEvent
+	}
+
+	function makeDone(): CoreSessionEvent {
+		return {
+			type: "agent_event",
+			payload: {
+				sessionId: "session-123",
+				event: {
+					type: "done",
+					reason: "completed",
+					success: true,
+				} as never,
+			},
+		} as unknown as CoreSessionEvent
+	}
+
+	function makePendingPromptSubmitted(): CoreSessionEvent {
+		return {
+			type: "pending_prompt_submitted",
+			payload: { sessionId: "session-123", prompt: "next turn" },
+		} as unknown as CoreSessionEvent
+	}
+
+	function makeProductionCoordinator() {
+		const messageTranslatorState = new MessageTranslatorState()
+
+		// Wire postStateToWebview to invoke the production PTAD
+		// capture path: buildExtensionSnapshotFromState reads
+		// messageTranslatorState and records into the live ring.
+		// This is what SdkController.getStateToPostToWebview()
+		// does in production (simplified to the messageTranslatorState
+		// axis that this discriminator exercises).
+		let stateVersion = 0
+		const postStateToWebview = vi.fn().mockImplementation(() => {
+			stateVersion += 1
+			recordPostTerminalAuthoritySnapshot(
+				buildExtensionSnapshotFromState({
+					state: {
+						stateVersion,
+						taskId: "task-X",
+						// Stub fields the builder accepts but doesn't
+						// touch for the discriminator:
+						turnState: { phase: "streaming", seq: 0 },
+					},
+					shadow: undefined,
+					messageTranslatorState,
+				}),
+			)
+			return Promise.resolve()
+		})
+
+		const options = {
+			messageTranslatorState,
+			sessions: {
+				getActiveSession: vi.fn(() => ({
+					sessionId: "session-123",
+					sdkHost: {},
+					unsubscribe: vi.fn(),
+					startResult: { sessionId: "session-123" },
+					isRunning: true,
+				})),
+				setRunning: vi.fn(),
+			},
+			messages: {
+				appendAndEmit: vi.fn(),
+			},
+			taskHistory: {
+				updateTaskUsage: vi.fn(),
+			},
+			getTask: vi.fn(() => ({ taskId: "task-X" })),
+			postStateToWebview,
+			setTurnPhase: vi.fn(),
+			getTurnPhase: vi.fn(() => "streaming" as const),
+			captureProviderApiError: vi.fn(),
+			beginProviderFailureTelemetryTurn: vi.fn(),
+			// REAL translateSessionEvent — production chooses ordering.
+			translateSessionEvent: vi.fn((event: CoreSessionEvent, state: MessageTranslatorState) =>
+				translateSessionEvent(event, state),
+			),
+		} as unknown as SdkSessionEventCoordinatorOptions
+
+		const coordinator = new SdkSessionEventCoordinator(options)
+		return { coordinator, options, messageTranslatorState, postStateToWebview }
+	}
+
+	it("T2-EXT01-A: terminal-push capture records (true, true); new-turn capture records (false, false); first is immutable", () => {
+		const { coordinator, postStateToWebview } = makeProductionCoordinator()
+
+		// Step 1: drive a real terminal-turn event sequence through
+		// the production coordinator. NO manual setAttemptCompletionSeen /
+		// setTerminalResponseCommittedThisTurn / clearTurnOutcome —
+		// the production code calls all of those.
+		coordinator.handleSessionEvent(makeContentStart("attempt_completion"))
+		coordinator.handleSessionEvent(makeContentEnd("attempt_completion"))
+		coordinator.handleSessionEvent(makeDone())
+
+		// Step 2: at this point, multiple postStateToWebview calls
+		// have happened (one per event that produced messages +
+		// terminal-turn push + done). Each fired a PTAD capture
+		// through the production seam. Find the record from the
+		// post-terminal-push where both booleans were captured.
+		const terminalRecords = getPostTerminalAuthorityDiagnosticRecords("extension").filter(
+			(r) => r.attemptCompletionSeen === true && r.terminalResponseCommittedThisTurn === true,
+		)
+		expect(terminalRecords.length).toBeGreaterThan(0)
+		const terminalRecord = terminalRecords[terminalRecords.length - 1]
+		const terminalStateVersion = terminalRecord.stateVersion
+		const terminalCapturedAt = terminalRecord.capturedAt
+
+		// Step 3: drive the new-turn boundary. Production calls
+		// clearTurnOutcome() BEFORE postStateToWebview (line 80 of
+		// sdk-session-event-coordinator.ts). The next push must
+		// therefore see (false, false) — the post-reset state — and
+		// the previous terminal record must be immutable.
+		coordinator.handleSessionEvent(makePendingPromptSubmitted())
+
+		const allRecords = getPostTerminalAuthorityDiagnosticRecords("extension")
+		const lastRecord = allRecords[allRecords.length - 1]
+		expect(lastRecord.attemptCompletionSeen).toBe(false)
+		expect(lastRecord.terminalResponseCommittedThisTurn).toBe(false)
+
+		// Step 4: the terminal record is immutable across the
+		// new-turn boundary reset.
+		expect(terminalRecord.attemptCompletionSeen).toBe(true)
+		expect(terminalRecord.terminalResponseCommittedThisTurn).toBe(true)
+		expect(terminalRecord.stateVersion).toBe(terminalStateVersion)
+		expect(terminalRecord.capturedAt).toBe(terminalCapturedAt)
+
+		// Sanity: postStateToWebview was invoked at least twice
+		// (once for the terminal push, at least once for the new-turn
+		// boundary).
+		expect(postStateToWebview.mock.calls.length).toBeGreaterThanOrEqual(2)
+	})
+
+	it("T2-EXT01-B: when only attempt_completion is observed (no terminal commit), terminal-push records (true, false)", () => {
+		// Symmetric branch: content_start (tool: attempt_completion)
+		// fires setAttemptCompletionSeen; the done event arrives
+		// without content_end having fired setTerminalResponseCommittedThisTurn.
+		// Production must NOT promote to "completed"; the captured
+		// record reflects the partial-turn state (true, false).
+		const { coordinator } = makeProductionCoordinator()
+
+		// content_start fires setAttemptCompletionSeen but NO
+		// content_end for the completion tool → terminalResponse NOT
+		// committed. Then a `done` arrives.
+		coordinator.handleSessionEvent(makeContentStart("attempt_completion"))
+		// Skip the content_end to leave terminalResponseCommittedThisTurn=false.
+		coordinator.handleSessionEvent(makeDone())
+
+		const records = getPostTerminalAuthorityDiagnosticRecords("extension")
+		// Find the record that has attempt=true (regardless of committed).
+		const attemptSeenRecords = records.filter((r) => r.attemptCompletionSeen === true)
+		expect(attemptSeenRecords.length).toBeGreaterThan(0)
+		const lastAttemptSeen = attemptSeenRecords[attemptSeenRecords.length - 1]
+		// The terminal push sampled (true, false) — not committed.
+		expect(lastAttemptSeen.attemptCompletionSeen).toBe(true)
+		expect(lastAttemptSeen.terminalResponseCommittedThisTurn).toBe(false)
+	})
+
+	it("T2-EXT01-C: a new-turn boundary reset is visible in the NEXT push only (first is immutable)", () => {
+		// Negative case: the new-turn record reflects the post-reset
+		// state. The terminal record is unaffected. Pin both shapes.
+		const { coordinator } = makeProductionCoordinator()
+
+		coordinator.handleSessionEvent(makeContentStart("attempt_completion"))
+		coordinator.handleSessionEvent(makeContentEnd("attempt_completion"))
+		coordinator.handleSessionEvent(makeDone())
+
+		const terminalRecords = getPostTerminalAuthorityDiagnosticRecords("extension").filter(
+			(r) => r.attemptCompletionSeen === true && r.terminalResponseCommittedThisTurn === true,
+		)
+		expect(terminalRecords.length).toBeGreaterThan(0)
+		const terminalRecord = terminalRecords[terminalRecords.length - 1]
+		const beforeResetStateVersion = terminalRecord.stateVersion
+
+		// New-turn boundary.
+		coordinator.handleSessionEvent(makePendingPromptSubmitted())
+
+		const afterResetRecords = getPostTerminalAuthorityDiagnosticRecords("extension")
+		// The terminal record is still there and still (true, true).
+		expect(terminalRecord.attemptCompletionSeen).toBe(true)
+		expect(terminalRecord.terminalResponseCommittedThisTurn).toBe(true)
+		expect(terminalRecord.stateVersion).toBe(beforeResetStateVersion)
+
+		// The last record reflects the post-reset state.
+		const lastRecord = afterResetRecords[afterResetRecords.length - 1]
+		expect(lastRecord.attemptCompletionSeen).toBe(false)
+		expect(lastRecord.terminalResponseCommittedThisTurn).toBe(false)
+		expect(lastRecord.stateVersion).toBeGreaterThan(beforeResetStateVersion)
 	})
 })
 
