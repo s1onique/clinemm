@@ -882,11 +882,20 @@ sufficient**: it is a precondition, but the executor must also be
 provided. The single-variable causal claim therefore is:
 
 ```text
-NECESSARY_AND_NOT_SUFFICIENT_VARIABLES = { config.mode = "yolo", toolExecutors.submit provided }
+NECESSARY_PREREQUISITES = {
+  enableSubmitAndExit === true  (one source: ToolPresets.yolo, but NOT the only source)
+  AND
+  toolExecutors.submit !== undefined
+}
 ```
 
-Either one missing → completion tool absent → same observable symptom
-as the bound specimen.
+The static ablation at row A establishes that `(1)` is unsatisfied
+for the bound specimen (mode="act" → presets.act.enableSubmitAndExit=false),
+and at row B it establishes that even `(1)` alone does not register
+the tool without `(2)`. Either prerequisite missing → completion tool
+absent → same observable symptom as the bound specimen. **This is the
+correct static-discriminator reading**: a structural proposition about
+the registration predicate, not a vitest-flipped necessity proof.
 
 
 ### 10b.5 Updated verdict
@@ -894,24 +903,45 @@ as the bound specimen.
 ```text
 BRANCH_A                            = STRONGLY_SUPPORTED (was: PROVEN)
 BOUND_SPECIMEN_RUNTIME_CONFIG       = BOUND (was: NOT_YET_BOUND)
-CAUSAL_VARIABLE                     = CANDIDATE enableSubmitAndExit (was: SINGLE)
-NECESSITY_ABLATION                  = NOT_EXECUTED — reclassification required (was: PASS)
+CAUSAL_VARIABLE                     = CANDIDATE — TWO PREREQUISITES (was: SINGLE)
+NECESSITY_ABLATION                  = STATIC_DISCRIMINATOR_PASS / RUNTIME_ABLATION_NOT_EXECUTED (was: PASS)
 CONTRACT_TENSION                    = SURFACED (was: SURFACED §10a.6)
-PROMPT_VS_RUNTIME_MISMATCH          = NEW — tool never wired into apps/vscode/src/sdk/
+PROMPT_VS_RUNTIME_MISMATCH          = NOT BOUND FOR THIS SPECIMEN — see §10c.1 (was: claimed SURFACED)
 
 The §10a single-variable chain is correct in shape (the seams are
 real), but its evidence base did not bind the specimen's actual
 runtime-builder inputs. The chain is now properly anchored at §10b.1.
-The ablation §10b.4 reveals that even if `mode = "yolo"` is forced,
-the missing VS Code executor wiring prevents `submit_and_exit` from
-ever appearing — narrowing the causal gap to two specific missing
-wiring decisions in `apps/vscode/src/sdk/`:
+The ablation §10b.4 reveals that the registration predicate is the
+conjunction of two prerequisites — neither alone is sufficient.
+Reading directly from `sdk/packages/core/src/extensions/tools/definitions.ts:1148`:
 
-  1. UI YOLO toggle does not flow into config.mode = "yolo"
-  2. VS Code adapter does not wire toolExecutors.submit
+  const submitExecutor = enableSubmitAndExit ? executors.submit : undefined;
 
-Either repair, by itself, would expose `submit_and_exit` to the agent
-and the prompt-contract tension would resolve.
+So the actual registration predicate is:
+
+  SUBMIT_AND_EXIT_REGISTERED ⇔
+      (resolved enableSubmitAndExit === true)
+      AND
+      (toolExecutors.submit !== undefined)
+
+Two missing prerequisites, neither sufficient alone:
+
+  (1) the resolved default-tools configuration must set
+      enableSubmitAndExit=true. Selecting core mode="yolo" is ONE
+      way to obtain this (ToolPresets.yolo.enableSubmitAndExit=true
+      at presets.ts:78), but the model-tool routing table can also
+      set enableSubmitAndExit independently of mode. So mode="yolo"
+      is NOT intrinsically necessary — only enableSubmitAndExit=true is.
+
+  (2) the VS Code host must supply toolExecutors.submit.
+      `apps/vscode/src/sdk/` currently does not wire this executor
+      (zero references to `submit:`, `createSubmitAndExitTool`, or
+      `enableSubmitAndExit` in the VS Code adapter).
+
+Neither prerequisite alone is sufficient. The original §10b.5 wording
+("Either repair, by itself, would expose submit_and_exit") was
+internally inconsistent with the ablation §10b.4 (which showed
+mode="yolo" alone does not register the tool) — corrected here.
 ```
 
 ### 10b.6 Open work and §6 RED-A disposition
@@ -964,26 +994,167 @@ NECESSITY_ABLATION      = NOT_EXECUTED — needs runtime test (vitest EPERM
 ```
 
 
+## 10c. §3c outcome — prompt variant binding (final discriminator)
+
+The second-pass reviewer correctly challenged §10b.3's
+`PROMPT_VS_RUNTIME_MISMATCH = SURFACED` claim. Upstream defines **two**
+system prompts:
+
+```text
+DEFAULT_CLINE_SYSTEM_PROMPT  (system.ts:1-36)   — no mention of submit_and_exit
+YOLO_CLINE_SYSTEM_PROMPT     (system.ts:38-68)  — requires submit_and_exit at lines 65-66
+```
+
+The variant selection is at `sdk/packages/shared/src/prompt/cline.ts:161-162`:
+
+```typescript
+const basePrompt =
+    mode === "yolo" ? YOLO_CLINE_SYSTEM_PROMPT : DEFAULT_CLINE_SYSTEM_PROMPT;
+```
+
+So the prompt variant is bound by `mode` alone — same selector as the
+tool preset. For the bound specimen (`mode = "act"`), the bound prompt
+must be **`DEFAULT_CLINE_SYSTEM_PROMPT`**.
+
+### 10c.1 Prompt variant bound directly from durable state
+
+The session JSONL persists the constructed `system_prompt` field
+verbatim at `1787832864738_ik2zh.messages.json:system_prompt`. Reading
+it directly:
+
+```text
+length                      = 4296 chars
+opens with                  = "You are Cline, an AI coding agent..."     ← DEFAULT opening
+contains 'submit_and_exit'  = False                                         ← no YOLO
+contains 'attempt_completion' = False
+contains "completed"         = 4 occurrences — semantic, not tool-specific
+contains "Response without tool calls will considered as completed
+  with final answer."       = True                                          ← DEFAULT line ~30
+```
+
+The bound specimen's persisted prompt **does NOT mention `submit_and_exit`**.
+The DEFAULT prompt's completion semantic is:
+
+> "Always includes tool calls in your response until the task is completed.
+> Response without tool calls will considered as completed with final answer."
+
+This is **Reviewer's Case P2** confirmed: the prompt and runtime
+contract are NOT in contradiction for this specimen. The agent is
+permitted to terminate with a text-only response, and the runtime
+fallback path that yields `awaiting_followup` is consistent with that
+prompt semantic.
+
+### 10c.2 §10b.3 claim retracted
+
+`PROMPT_VS_RUNTIME_MISMATCH = SURFACED` is **retracted** as overstated.
+The §10b.3 reasoning conflated the YOLO-specific prompt (which DOES
+require `submit_and_exit`) with the prompt actually bound to this
+specimen (DEFAULT, which does NOT).
+
+If a future specimen runs with `mode = "yolo"` AND the runtime still
+omits `submit_and_exit`, then the prompt/runtime contradiction would
+be real. That scenario is **not this specimen**. The reviewer-correct
+distinction is:
+
+```text
+Case P1 (PROMPT_VS_RUNTIME_CONTRACT_VIOLATION):
+  Seatbelt-YOLO user-facing + mode="yolo" + prompt=YOLO_CLINE_SYSTEM_PROMPT
+  + resolved enableSubmitAndExit=false + submit executor absent
+  → agent told to call a tool that isn't in its toolkit
+  → STRONG product defect signal
+  → Out of scope for this specimen.
+
+Case P2 (NO INTERNAL CONTRADICTION):
+  Seatbelt-YOLO user-facing + mode="act" + prompt=DEFAULT_CLINE_SYSTEM_PROMPT
+  + resolved enableSubmitAndExit=false + submit executor absent
+  → agent's prompt permits text-only completion; runtime fallback honors it
+  → Terminal UX = awaiting_followup is consistent with both prompt and runtime.
+  → THE BOUND SPECIMEN IS HERE.
+```
+
+### 10c.3 The narrower product question
+
+With the prompt/runtime contradiction retracted, the product question
+collapses to a pure product policy question:
+
+> When ClineMM's user-facing Seatbelted-YOLO host authorization is
+> active (every tool auto-approved under the Seatbelt confinement),
+> should the agent also have explicit completion authority — i.e.,
+> `enableSubmitAndExit=true` AND an executor for `submit_and_exit`?
+>
+> Or is `awaiting_followup` a sufficient terminal UX for non-YOLO-core
+> sessions, with the implicit understanding that Seatbelted-YOLO
+> users accept ordinary text termination?
+
+This is genuinely normative. There is no internal inconsistency in
+the current architecture to "fix"; there is only a question of
+product intent. The downstream ACT must decide whether the gap is a
+defect (and which layer to fix it at: prompt relax? tool wiring? both?).
+
+### 10c.4 Complete product/runtime relationship table (now fully bound)
+
+```text
+USER_FACING_CLINEMM_YOLO       = true       (autoApprovalSettings.actions.* all true)
+CORE config.mode               = "act"      (NOT "yolo" — see §10b.1)
+PROMPT variant                 = DEFAULT    (NOT YOLO — see §10c.1)
+resolved enableSubmitAndExit   = false      (ToolPresets.act.enableSubmitAndExit=false)
+toolExecutors.submit present   = false      (VS Code never wires it — see §10b.1)
+submit_and_exit registered     = false      (consequence of the two above)
+requiresCompletionTool         = false
+completionPolicy               = undefined
+finalTools ⊇ {submit_and_exit} = NO
+finalTools ⊇ {ask_question}    = YES        (preserved at L297-314 test)
+
+OBSERVED:
+  attemptCompletionSeen        = false
+  terminalResponseCommitted    = false
+  legacyPhase                  = streaming → awaiting_followup
+  runtimeStatus                = running → completed
+  prompt mentions submit_and_exit? NO
+  agent asked to call submit_and_exit? NO
+  terminal UX consistent with prompt? YES
+
+DISPOSITION:
+  Internal prompt/runtime contradiction = NONE for this specimen
+  Product policy gap                    = OPEN (downstream contract ACT)
+  Causal prerequisites identified       = 2 (enableSubmitAndExit + executor)
+  Static-discriminator proposition      = PASS (sub-claim a/b/c above)
+  Runtime-ablation                      = NOT EXECUTED (vitest EPERM)
+```
+
+
 ## 11. Gates
 
 ```text
 BOUND_LIVE_SPECIMEN                    PASS    (this ACT §0 — 1787832864738_ik2zh)
 PTAD_CAUSAL_BRANCH                     PASS    (terminal-push sv=8299, false/false)
 BOUND_SPECIMEN_RUNTIME_CONFIG          PASS    (§10b.1 — mode="act" + Seatbelt-YOLO read from durable state)
+BOUND_SESSION_PROMPT_VARIANT           PASS    (§10c.1 — DEFAULT_CLINE_SYSTEM_PROMPT verified by reading
+                                                1787832864738_ik2zh.messages.json:system_prompt verbatim;
+                                                contains no 'submit_and_exit' reference)
 
 COMPLETION_TOOL_REGISTRY_CLASSIFIED    STRONG_SUPPORT (§10b.5 — Branch A STRONGLY_SUPPORTED, not PROVEN)
 COMPLETION_POLICY_CLASSIFIED           n/a     (§4 skipped; no tool ⇒ no policy to classify)
 MODEL_TERMINATION_PATH_CLASSIFIED      n/a     (§5 skipped; fallback is designed for non-yolo)
 
 RED_REAL_PRODUCTION_SEAM               DEFER   (§6 — RED-A author requires §10b.6 product-contract)
-CAUSAL_VARIABLE_DISCRIMINATED          CANDIDATE (§10b.5 — enableSubmitAndExit=false in act preset, NOT sufficient alone)
-NECESSITY_ABLATION                     STATIC_PASS / RUNTIME_NOT_EXECUTED
-                                                (structurally flipped at §10b.4; vitest EPERM-blocked in this sandbox;
-                                                 NOT a clean PASS per reviewer correction)
+CAUSAL_VARIABLE_DISCRIMINATED          TWO_PREREQUISITES (§10b.5 — neither alone sufficient;
+                                                enableSubmitAndExit=true AND toolExecutors.submit)
+                                                (was: CANDIDATE single variable)
+NECESSITY_ABLATION                     STATIC_DISCRIMINATOR_PASS / RUNTIME_ABLATION_NOT_EXECUTED
+                                                (§10b.4 static predicate-discrimination passes;
+                                                 vitest runtime flip EPERM-blocked in this sandbox)
 
 USER_FACING_YOLO_VS_CORE_PRESET_DECOUPLED   SURFACED (§10b.2 — distinct domains; VS Code UI toggle does NOT flow to config.mode)
-PROMPT_VS_RUNTIME_MISMATCH            SURFACED (§10b.3 — system.ts:65-66 says use submit_and_exit; apps/vscode never wires it)
-VS_CODE_EXECUTOR_WIRING_MISSING       SURFACED (§10b.4 — even mode="yolo" would not register submit_and_exit without the executor)
+PROMPT_VS_RUNTIME_MISMATCH            RETRACTED (§10c.2 — not present for this specimen;
+                                                DEFAULT prompt permits text-only completion;
+                                                runtime fallback is consistent with prompt semantic;
+                                                reviewer's Case P2 confirmed)
+VS_CODE_EXECUTOR_WIRING_MISSING       SURFACED (§10b.4 — apps/vscode/src/sdk/ never wires toolExecutors.submit)
+REGISTRATION_PREDICATE_BOUND           PASS    (§10b.5 — definitions.ts:1148:
+                                                submitExecutor = enableSubmitAndExit ? executors.submit : undefined)
+SUBMIT_AND_EXIT_NOT_IN_FINALTOOLS     PROVEN   (§10b.1 — 746-message transcript contains 0 tool_use blocks
+                                                for submit_and_exit or attempt_completion)
 
 NO_TEXT_DERIVED_COMPLETION             PASS    (LIV2-C07 — preserved by HALT_NONTOOL_TERMINAL_AUTHORITY)
 NO_TAIL_DERIVED_COMPLETION             PASS    (LIV2-C08 — preserved by HALT_NONTOOL_TERMINAL_AUTHORITY)
@@ -1000,12 +1171,15 @@ git diff --check                       TBD / PASS
 board validator                        TBD / PASS
 ```
 
-The §10b.1 binding table and the §10b.4 ablation are the load-bearing
-gates. §3 classifies as **STRONG_SUPPORT, not PROVEN** — the reviewer
-correctly identified the inferred-from-defaults gap. NECESSITY_ABLATION
-is downgraded to STATIC_PASS / RUNTIME_NOT_EXECUTED; a real vitest run
-under a working sandbox would reclassify. RED-A gate remains DEFER
-pending the §10b.6 product-contract ACT.
+The §10b.1 binding table, §10b.4 ablation, §10b.5 two-prerequisite
+predicate, and §10c.1 prompt-variant read are the load-bearing gates.
+§3 classifies as **STRONG_SUPPORT, not PROVEN** — the reviewer correctly
+identified the inferred-from-defaults gap (now closed at §10b.1) and the
+PROMPT_VS_RUNTIME_MISMATCH overclaim (now retracted at §10c.2 — the
+bound specimen's prompt is DEFAULT and permits text-only completion).
+NECESSITY_ABLATION is downgraded to STATIC_DISCRIMINATOR_PASS /
+RUNTIME_ABLATION_NOT_EXECUTED. RED-A gate remains DEFER pending the
+§10c.3 product-contract ACT.
 
 
 
@@ -1055,28 +1229,37 @@ or:
 CAPTURE_INSUFFICIENT
 ```
 
-or (this ACT's actual path — reclassified by §10b):
+or (this ACT's actual path — reclassified by §10b and §10c):
 
 ```text
-PASS_BRANCH_A_STRONG_SUPPORT_CAUSAL_CANDIDATE_IDENTIFIED_ABORTED_FOR_PRODUCT_CONTRACT
+PASS_BRANCH_A_STRONG_SUPPORT_BOUND_PROMPT_VARIANT_PRODUCT_POLICY_DECISION_REQUIRED
   ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02 closes here with:
     BOUND_LIVE_SPECIMEN                    = PASS  (1787832864738_ik2zh)
     PTAD_CAUSAL_BRANCH                     = PASS  (false / false at sv=8299)
-    BOUND_SPECIMEN_RUNTIME_CONFIG          = PASS  (§10b.1 — mode="act" + Seatbelt-YOLO)
+    BOUND_SPECIMEN_RUNTIME_CONFIG          = PASS  (§10b.1 — mode="act" + Seatbelt-YOLO from durable state)
+    BOUND_SESSION_PROMPT_VARIANT           = PASS  (§10c.1 — DEFAULT_CLINE_SYSTEM_PROMPT verified by reading
+                                                 1787832864738_ik2zh.messages.json:system_prompt verbatim;
+                                                 contains zero 'submit_and_exit' references)
     COMPLETION_TOOL_REGISTRY_CLASSIFIED    = STRONG_SUPPORT (§10b.5)
-    CAUSAL_VARIABLE_DISCRIMINATED          = CANDIDATE (enableSubmitAndExit=false in act preset,
-                                              also requires toolExecutors.submit — neither wired in VS Code)
-    NECESSITY_ABLATION                     = STATIC_PASS / RUNTIME_NOT_EXECUTED
-    PROMPT_VS_RUNTIME_MISMATCH             = SURFACED (§10b.3)
+    CAUSAL_VARIABLE_DISCRIMINATED          = TWO_PREREQUISITES (§10b.5 — enableSubmitAndExit=true AND
+                                                 toolExecutors.submit; neither alone sufficient;
+                                                 mode="yolo" is ONE source of (1), not the only one)
+    NECESSITY_ABLATION                     = STATIC_DISCRIMINATOR_PASS / RUNTIME_ABLATION_NOT_EXECUTED
+                                                 (§10b.4 predicate discrimination passes; vitest EPERM-blocked)
+    PROMPT_VS_RUNTIME_MISMATCH             = RETRACTED — NONE FOR THIS SPECIMEN (§10c.2)
     USER_FACING_YOLO_VS_CORE_PRESET        = DECOUPLED (§10b.2)
-    VS_CODE_EXECUTOR_WIRING                = MISSING (§10b.4 — mode="yolo" alone won't fix it)
-    RED-A_TEST_AUTHORED                    = DEFER (deferred to product-contract ACT per §10b.6)
-  Provenance: §10b.5 verdict + §10b.4 ablation + §10b.1 binding
+    VS_CODE_EXECUTOR_WIRING                = MISSING (§10b.4 — neither prerequisite is wired in VS Code)
+    REGISTRATION_PREDICATE                 = BOUND (§10b.5 — definitions.ts:1148)
+    SUBMIT_AND_EXIT_NOT_IN_FINALTOOLS      = PROVEN (§10b.1 — 0/746 tool_use blocks)
+    RED-A_TEST_AUTHORED                    = DEFER (deferred to product-contract ACT per §10c.3)
+  Provenance: §10c.5 full relationship table + §10b.5 verdict + §10c.1 prompt read
   Next: open ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01
-        question: when Seatbelt-YOLO is active, must the core runtime
-        also expose completesRun tool + require explicit completion
-        authority, even with conversational mode="act"?
-        (decision tree in §10b.6)
+        question: when Seatbelt-YOLO host authorization is active, must
+        the agent also have explicit completion authority (i.e. both
+        registration prerequisites satisfied), even though conversational
+        mode is "act"? (NO internal prompt/runtime contradiction exists
+        for the bound specimen — this is a pure product-policy question)
+        (decision tree in §10c.3)
 ```
 
 Never:
@@ -1132,29 +1315,31 @@ PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE            CLOSED
 PTAD-ENV-OPTIN01                             CLOSED
 COMPLETION-PROTOCOL-LIVENESS02               OPEN / ACTIVE_RECON
                                               → §10b.5: Branch A STRONG_SUPPORT
-                                              → §10b.6: needs SEATBELT-YOLO-CONTRACT01
+                                              → §10c:  PROMPT VARIANT BOUND (DEFAULT)
+                                              → §10c.3: needs SEATBELT-YOLO-CONTRACT01 (pure policy)
 EDITOR-TOOL-APPROVAL-FRICTION                OPEN / HIGH (queued behind LIVENESS02)
 ```
 
 This is a deliberate one-ACT preemption because we now possess rare
 bound LIVE evidence for completion liveness.
 
-After §10b.5 verdict (Branch A STRONG_SUPPORT + CANDIDATE causal
-variable + PROMPT_VS_RUNTIME_MISMATCH SURFACED), LIVENESS02 is ready
-to close pending a downstream Seatbelt-YOLO completion-authority
-contract ACT. The closure path:
+After §10c.5 verdict (Branch A STRONG_SUPPORT + TWO_PREREQUISITES
+identified + PROMPT_VARIANT BOUND to DEFAULT + PROMPT_VS_RUNTIME_MISMATCH
+RETRACTED for this specimen), LIVENESS02 is ready to close pending a
+downstream Seatbelt-YOLO completion-authority contract ACT. The
+closure path:
 
 ```text
-1. LIVENESS02 closes with PASS_BRANCH_A_STRONG_SUPPORT_CAUSAL_CANDIDATE_IDENTIFIED_ABORTED_FOR_PRODUCT_CONTRACT
-   (§13 exit shape; provenance §10b.5 + §10b.4 + §10b.1)
+1. LIVENESS02 closes with PASS_BRANCH_A_STRONG_SUPPORT_BOUND_PROMPT_VARIANT_PRODUCT_POLICY_DECISION_REQUIRED
+   (§13 exit shape; provenance §10c.5 + §10c.1 + §10b.5 + §10b.4 + §10b.1)
 
 2. ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01 opens:
    "When ClineMM's effective host authorization is Seatbelted YOLO,
-    must the core runtime also expose a completesRun tool and require
-    explicit completion authority, even though its conversational mode
-    remains 'act'?"
+    must the agent also have explicit completion authority (i.e.
+    BOTH registration prerequisites satisfied), even though its
+    conversational mode remains 'act'?"
    Owner: same factory lane (runtime/task-progression).
-   §10b.3 + §10b.6 are the question; §10b.1 + §10b.4 are the chain.
+   §10c.3 is the question; §10b.1 + §10b.4 + §10c.1 are the chain.
 
 3. EDITOR-TOOL-APPROVAL-FRICTION-RECON01 resumes NEXT status once
    LIVENESS02 closes (per the one-ACT preemption rule).
@@ -1165,20 +1350,24 @@ Decision tree (for the Seatbelt-YOLO contract ACT author):
 ```text
 yes (expose submit_and_exit even with mode="act")
   → preserve act-mode editing/tool semantics
-  → overlay enableSubmitAndExit=true (without flipping config.mode)
+  → overlay enableSubmitAndExit=true (without flipping config.mode
+    to "yolo" and inheriting unrelated preset semantics)
   → supply toolExecutors.submit in apps/vscode/src/sdk/
-  → completionPolicy = { requireCompletionTool: true }
-  → reminder path fires on plain text termination
-  → user sees truthful Completed badge on explicit submit_and_exit calls
+  → SUBMIT_AND_EXIT_REGISTERED becomes true per definitions.ts:1148
+  → requiresCompletionTool=true; reminder path fires
+  → user sees truthful Completed badge on explicit submit_and_exit
   → RED-A (finalTools ⊇ completesRun) becomes GREEN
 
 no (keep the fallback as the documented policy)
   → LIVENESS02's STRONG_SUPPORT verdict is the final answer
-  → LIV2-C04 (awaiting_followup remains valid) is the canonical UI projection
-  → PROMPT vs RUNTIME mismatch must be resolved at the prompt layer
-    (system.ts:65-66 should be relaxed to acknowledge awaiting_followup
-    as a valid terminal UX state for non-yolo sessions)
-  → downstream UX work (badge suppression messaging, etc.) goes elsewhere
+  → LIV2-C04 (awaiting_followup remains valid) is the canonical UI
+    projection — already CONSISTENT with the bound DEFAULT prompt
+    (which permits text-only completion)
+  → no prompt rewrite needed (the prompt's "Response without tool
+    calls will considered as completed with final answer" is
+    already compatible with awaiting_followup semantics)
+  → downstream UX work (badge suppression messaging, etc.) goes
+    elsewhere
 ```
 
 ## 16. Provenance
