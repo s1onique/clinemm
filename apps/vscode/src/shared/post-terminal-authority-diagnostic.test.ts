@@ -222,5 +222,60 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			expect(snap.stateVersion).toBe(0)
 			expect(snap.capturedAt).toBe(0)
 		})
+
+		// ============================================================================
+		// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01
+		//
+		// J1-EXT01: ring/JSONL round-trip for the two new fields.
+		// Proves the dump-to-file path (post-terminal-authority-diagnostic-extension.jsonl
+		// via `cline.debug.dumpPostTerminalAuthorityDiagnostic`) preserves the
+		// optional `attemptCompletionSeen` and `terminalResponseCommittedThisTurn`
+		// fields through JSON.stringify + JSON.parse.
+		//
+		// Without this round-trip, a future capture that depends on the
+		// JSONL dump would silently lose the new discriminator.
+		// ============================================================================
+
+		it("J1-EXT01: JSONL round-trip preserves the EXTEND01 completion-discriminator fields", () => {
+			const snap: PostTerminalAuthoritySnapshot = {
+				origin: "extension",
+				captureKind: "extension-push",
+				stateVersion: 7,
+				capturedAt: 12345,
+				// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01:
+				// The actual values that the future-bound specimen will be
+				// classified from. Both fields must survive the dump.
+				attemptCompletionSeen: true,
+				terminalResponseCommittedThisTurn: false,
+			}
+			const jsonl = JSON.stringify(snap)
+			const parsed = JSON.parse(jsonl) as PostTerminalAuthoritySnapshot
+			expect(parsed.attemptCompletionSeen).toBe(true)
+			expect(parsed.terminalResponseCommittedThisTurn).toBe(false)
+
+			// False values must also survive (NOT collapse to undefined or null).
+			const snap2: PostTerminalAuthoritySnapshot = {
+				origin: "extension",
+				captureKind: "extension-push",
+				stateVersion: 8,
+				capturedAt: 12346,
+				attemptCompletionSeen: false,
+				terminalResponseCommittedThisTurn: false,
+			}
+			const parsed2 = JSON.parse(JSON.stringify(snap2)) as PostTerminalAuthoritySnapshot
+			expect(parsed2.attemptCompletionSeen).toBe(false)
+			expect(parsed2.terminalResponseCommittedThisTurn).toBe(false)
+
+			// Absent values must also survive (NOT default to false on parse).
+			const snap3: PostTerminalAuthoritySnapshot = {
+				origin: "extension",
+				captureKind: "extension-push",
+				stateVersion: 9,
+				capturedAt: 12347,
+			}
+			const parsed3 = JSON.parse(JSON.stringify(snap3)) as PostTerminalAuthoritySnapshot
+			expect(parsed3.attemptCompletionSeen).toBeUndefined()
+			expect(parsed3.terminalResponseCommittedThisTurn).toBeUndefined()
+		})
 	})
 })

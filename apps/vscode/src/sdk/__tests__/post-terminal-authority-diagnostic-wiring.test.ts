@@ -376,4 +376,66 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 			expect(source).toMatch(/disablePostTerminalAuthorityDiagnostic\(\s*"webview"\s*\)/)
 		})
 	})
+
+	// ============================================================================
+	// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01
+	//
+	// W1-EXT01 / W2-EXT01 / W3-EXT01 pin the wiring of the new
+	// `attemptCompletionSeen` / `terminalResponseCommittedThisTurn`
+	// discriminator fields at the source level.
+	//
+	// W1-EXT01: the SdkController capture site passes the canonical
+	//           translator state reference.
+	// W2-EXT01: the builder uses the structural `Pick<>` so it
+	//           CANNOT call any setter method. This is the structural
+	//           embodiment of `HALT_DIAGNOSTIC_MUTATES_MESSAGE_TRANSLATOR_SEMANTICS`.
+	// W3-EXT01: the shared diagnostic module declares both new
+	//           optional fields on `PostTerminalAuthoritySnapshot`.
+	// ============================================================================
+
+	describe("W13: ACT-CLINEMM-COMPLETION-PTAD-EXTEND01 wiring", () => {
+		it("W1-EXT01: SdkController capture site passes messageTranslatorState to the builder", () => {
+			const source = readSource(SDK_CONTROLLER_PATH)
+			// The PTAD capture site inside `getStateToPostToWebview()` must
+			// pass `messageTranslatorState: this.messageTranslatorState`
+			// (or an equivalent bind) to `buildExtensionSnapshotFromState`.
+			// We assert the literal string because the exact token name is
+			// load-bearing for the structural `Pick<>` type.
+			expect(source).toMatch(/messageTranslatorState:\s*this\.messageTranslatorState/)
+		})
+
+		it("W2-EXT01: builder source uses Pick<MessageTranslatorState, ...> and does NOT call any setter", () => {
+			const source = readSource(BUILDER_PATH)
+			// Structural type: the builder's Pick<> shape MUST include
+			// exactly the two accessor names. The builder MUST NOT call
+			// any setter method on the supplied state — that would
+			// mutate the canonical authority and break
+			// `HALT_DIAGNOSTIC_MUTATES_MESSAGE_TRANSLATOR_SEMANTICS`.
+			//
+			// We strip block comments and line comments before searching
+			// for setter call-sites, because the JSDoc itself names the
+			// setters in its prohibition (a documentation annotation,
+			// not a call-site). Stripping comments ensures we test the
+			// actual executable surface.
+			const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "")
+			expect(source).toMatch(/Pick<\s*MessageTranslatorState/)
+			expect(source).toMatch(/wasAttemptCompletionSeen/)
+			expect(source).toMatch(/wasTerminalResponseCommittedThisTurn/)
+			// No setter call-sites anywhere in the executable source.
+			expect(codeOnly).not.toMatch(/setAttemptCompletionSeen/)
+			expect(codeOnly).not.toMatch(/setTerminalResponseCommittedThisTurn/)
+			// The builder's import surface MUST include the type but
+			// MUST NOT import the setters as named exports.
+			expect(codeOnly).not.toMatch(/MessageTranslatorState[\s\S]*?setAttemptCompletionSeen/)
+		})
+
+		it("W3-EXT01: PostTerminalAuthoritySnapshot declares both new optional fields", () => {
+			const source = readSource(SHARED_DIAGNOSTIC_PATH)
+			// Both fields must be declared as optional `readonly` on the
+			// PostTerminalAuthoritySnapshot interface. We assert the
+			// exact declaration form to lock the wire-shape delta at zero.
+			expect(source).toMatch(/readonly attemptCompletionSeen\?:\s*boolean/)
+			expect(source).toMatch(/readonly terminalResponseCommittedThisTurn\?:\s*boolean/)
+		})
+	})
 })

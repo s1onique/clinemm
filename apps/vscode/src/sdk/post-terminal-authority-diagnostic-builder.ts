@@ -21,6 +21,7 @@ import type {
 	TurnState,
 } from "@shared/ExtensionMessage"
 import type { PostTerminalAuthoritySnapshot } from "@shared/post-terminal-authority-diagnostic"
+import type { MessageTranslatorState } from "./message-translator"
 import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 
 export interface BuildExtensionSnapshotArgs {
@@ -42,6 +43,29 @@ export interface BuildExtensionSnapshotArgs {
 		executionAwaitingApproval?: boolean
 		pendingToolCalls?: number
 	}
+	/**
+	 * ACT-CLINEMM-COMPLETION-PTAD-EXTEND01:
+	 * Optional reference to the canonical translator state. When
+	 * provided, the builder reads the two turn-outcome booleans
+	 * (`wasAttemptCompletionSeen`,
+	 * `wasTerminalResponseCommittedThisTurn`) and stamps them into
+	 * the snapshot's `attemptCompletionSeen` and
+	 * `terminalResponseCommittedThisTurn` fields.
+	 *
+	 * The `Pick<>` structural type deliberately limits the surface
+	 * area: the builder cannot call `setAttemptCompletionSeen()` or
+	 * `setTerminalResponseCommittedThisTurn()`, so it cannot mutate
+	 * the translator. This is the structural embodiment of the
+	 * `HALT_DIAGNOSTIC_MUTATES_MESSAGE_TRANSLATOR_SEMANTICS` stop
+	 * condition — the type system forbids it.
+	 *
+	 * The caller's lifecycle owns this object; the builder does NOT
+	 * retain the reference.
+	 */
+	readonly messageTranslatorState?: Pick<
+		MessageTranslatorState,
+		"wasAttemptCompletionSeen" | "wasTerminalResponseCommittedThisTurn"
+	>
 }
 
 export function buildExtensionSnapshotFromState(args: BuildExtensionSnapshotArgs): PostTerminalAuthoritySnapshot {
@@ -78,5 +102,13 @@ export function buildExtensionSnapshotFromState(args: BuildExtensionSnapshotArgs
 		thinkingPresentation: state.thinkingPresentation,
 		taskHeaderPresentation: state.taskHeaderPresentation,
 		taskTelemetry: state.taskTelemetry,
+		// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01:
+		// Read-only access via public accessors. The structural
+		// `Pick<>` type on the args interface forbids calling any
+		// setter method. `undefined` propagates verbatim when no
+		// `messageTranslatorState` was supplied (e.g. PTAD-off path,
+		// or the call site pre-EXTEND01).
+		attemptCompletionSeen: args.messageTranslatorState?.wasAttemptCompletionSeen(),
+		terminalResponseCommittedThisTurn: args.messageTranslatorState?.wasTerminalResponseCommittedThisTurn(),
 	}
 }

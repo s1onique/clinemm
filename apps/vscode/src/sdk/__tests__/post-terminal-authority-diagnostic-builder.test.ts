@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { describe, expect, it } from "vitest"
+import { MessageTranslatorState } from "../message-translator"
 import { buildExtensionSnapshotFromState } from "../post-terminal-authority-diagnostic-builder"
 import type { ArbiterSnapshot } from "../task-state-shadow-recorder"
 
@@ -156,5 +157,109 @@ describe("ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-REAL-DOGFOOD-POST-TERMINAL-AUTHORI
 		// fabricating a value.
 		const result = buildExtensionSnapshotFromState({ state: baseState, shadow })
 		expect(result._ptadPushId).toBeUndefined()
+	})
+
+	// ============================================================================
+	// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01
+	//
+	// B1-EXT01 through B4-EXT01 pin the matrix over the new
+	// `attemptCompletionSeen` / `terminalResponseCommittedThisTurn`
+	// fields, sourced from `MessageTranslatorState` via the
+	// structural `Pick<>` type on the builder args.
+	//
+	// S1-EXT01 is the load-bearing structural authority test: it
+	// proves the snapshot values come from the real
+	// `MessageTranslatorState` accessors, not from a duplicated
+	// boolean invented in the builder or PTAD.
+	// ============================================================================
+
+	it("B1-EXT01: no messageTranslatorState → both new fields are undefined (no-zero-delta)", () => {
+		// When `messageTranslatorState` is NOT supplied (the PTAD-disabled
+		// code path, or call sites predating the EXTEND01 schema), the
+		// new fields must propagate `undefined` — NOT default to `false`,
+		// because that would conflate "PTAD off" with "PTAD on, false".
+		// Absent vs false is load-bearing for the discriminator: a
+		// specimen with `attemptCompletionSeen === undefined` proves
+		// no measurement was taken, while `=== false` proves the
+		// canonical authority answered no.
+		const result = buildExtensionSnapshotFromState({ state: baseState, shadow })
+		expect(result.attemptCompletionSeen).toBeUndefined()
+		expect(result.terminalResponseCommittedThisTurn).toBeUndefined()
+	})
+
+	it("B2-EXT01: attempt=false, committed=false → snapshot has false/false (NOT undefined)", () => {
+		// The structural `Pick<MessageTranslatorState, ...>` is satisfied
+		// by a minimal duck-typed stub here. The full real
+		// `MessageTranslatorState` is exercised by S1-EXT01 below.
+		const stub = {
+			wasAttemptCompletionSeen: () => false,
+			wasTerminalResponseCommittedThisTurn: () => false,
+		}
+		const result = buildExtensionSnapshotFromState({ state: baseState, shadow, messageTranslatorState: stub })
+		expect(result.attemptCompletionSeen).toBe(false)
+		expect(result.terminalResponseCommittedThisTurn).toBe(false)
+	})
+
+	it("B3-EXT01: attempt=true, committed=false → snapshot has true/false", () => {
+		// The completion tool was invoked but the canonical terminal
+		// surface was never committed. This is the
+		// "completion attempted, authority lost" branch.
+		const stub = {
+			wasAttemptCompletionSeen: () => true,
+			wasTerminalResponseCommittedThisTurn: () => false,
+		}
+		const result = buildExtensionSnapshotFromState({ state: baseState, shadow, messageTranslatorState: stub })
+		expect(result.attemptCompletionSeen).toBe(true)
+		expect(result.terminalResponseCommittedThisTurn).toBe(false)
+	})
+
+	it("B4-EXT01: attempt=true, committed=true → snapshot has true/true", () => {
+		// Both flags true means the canonical terminal surface WAS
+		// published. Presentation defects are then the relevant
+		// downstream causal seam (not completion-protocol-liveness).
+		const stub = {
+			wasAttemptCompletionSeen: () => true,
+			wasTerminalResponseCommittedThisTurn: () => true,
+		}
+		const result = buildExtensionSnapshotFromState({ state: baseState, shadow, messageTranslatorState: stub })
+		expect(result.attemptCompletionSeen).toBe(true)
+		expect(result.terminalResponseCommittedThisTurn).toBe(true)
+	})
+
+	it("S1-EXT01: snapshot values come from real MessageTranslatorState authority (load-bearing)", () => {
+		// PROVES the snapshot reads `wasAttemptCompletionSeen` /
+		// `wasTerminalResponseCommittedThisTurn` from a real
+		// `MessageTranslatorState` instance (constructed via the real
+		// constructor, mutated via the real public setters), and that
+		// the snapshot preserves the values verbatim — NOT as duplicated
+		// booleans invented in the builder or in PTAD.
+		//
+		// If this test fails, the discriminator has been silently
+		// severed from its canonical authority and any future capture
+		// is INVALID for causal classification.
+		const realState = new MessageTranslatorState()
+		realState.setAttemptCompletionSeen()
+		realState.setTerminalResponseCommittedThisTurn()
+
+		const result = buildExtensionSnapshotFromState({
+			state: baseState,
+			shadow,
+			messageTranslatorState: realState,
+		})
+		expect(result.attemptCompletionSeen).toBe(true)
+		expect(result.terminalResponseCommittedThisTurn).toBe(true)
+
+		// Reset and confirm the snapshot tracks the live state.
+		// (We don't reset in-place because that would invalidate the
+		// reference; we build a fresh state and check the false/false
+		// case as a second probe.)
+		const realStateFalse = new MessageTranslatorState()
+		const result2 = buildExtensionSnapshotFromState({
+			state: baseState,
+			shadow,
+			messageTranslatorState: realStateFalse,
+		})
+		expect(result2.attemptCompletionSeen).toBe(false)
+		expect(result2.terminalResponseCommittedThisTurn).toBe(false)
 	})
 })

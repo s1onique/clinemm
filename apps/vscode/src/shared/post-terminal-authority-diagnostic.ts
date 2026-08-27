@@ -331,6 +331,48 @@ export interface PostTerminalAuthoritySnapshot {
 		readonly seq?: number
 		readonly epoch?: number
 	}
+
+	// ============================================================================
+	// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01
+	//
+	// Causal discriminator for the completion-protocol-liveness family.
+	// Both fields are READ from `MessageTranslatorState` at the
+	// extension-side capture seam (`SdkController.getStateToPostToWebview`)
+	// and live ONLY in the PTAD ring buffer — they NEVER enter the
+	// wire payload. Captured only when PTAD is enabled.
+	//
+	// ABSENT vs false:
+	//   absent  = no measurement (PTAD off, or capture site pre-EXTEND01)
+	//   false   = a captured `false` (the canonical authority answered no)
+	//   true    = a captured `true`  (the canonical authority answered yes)
+	// ============================================================================
+
+	/**
+	 * Whether the message translator observed the completion tool
+	 * (attempt_completion / submit_and_exit) being called this turn.
+	 * Sourced from `MessageTranslatorState.wasAttemptCompletionSeen()`.
+	 *
+	 * The structural test in
+	 * `post-terminal-authority-diagnostic-builder.test.ts > S1-EXT01`
+	 * proves the value comes from the real `MessageTranslatorState`
+	 * authority, not from a duplicated boolean invented in PTAD or
+	 * the builder.
+	 */
+	readonly attemptCompletionSeen?: boolean
+
+	/**
+	 * Whether the translator committed a terminal user-facing response
+	 * this turn (a finalized say:"completion_result" /
+	 * say:"plan_completion_result" / ask:"api_req_failed" row).
+	 * Sourced from
+	 * `MessageTranslatorState.wasTerminalResponseCommittedThisTurn()`.
+	 *
+	 * `committed=true` means the canonical terminal surface was
+	 * published; downstream presentation is then the relevant
+	 * causal seam. `committed=false` means the surface was never
+	 * published, regardless of `attemptCompletionSeen`.
+	 */
+	readonly terminalResponseCommittedThisTurn?: boolean
 }
 
 /**

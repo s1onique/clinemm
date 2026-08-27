@@ -3595,6 +3595,16 @@ export class Controller {
 							taskTelemetry: snapshot.taskTelemetry,
 						},
 						shadow: this.getLocalShadowProjection(),
+						// ACT-CLINEMM-COMPLETION-PTAD-EXTEND01:
+						// Pull the canonical turn-outcome booleans from the
+						// same `MessageTranslatorState` that gates the
+						// canonical `done` seam in
+						// `message-translator.ts:1959-1963`. Read-only via
+						// public accessors; no new state plumbing, no new
+						// wire field. The capture is gated by the outer
+						// `if (isPostTerminalAuthorityDiagnosticEnabled(...))`,
+						// so when PTAD is disabled no method is invoked.
+						messageTranslatorState: this.messageTranslatorState,
 					}),
 				)
 			}
