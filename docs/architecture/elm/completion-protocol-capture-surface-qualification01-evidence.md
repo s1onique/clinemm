@@ -108,8 +108,19 @@ sandbox restriction in this session that blocks binding to
 loopback.
 
 This is a structural property of the current capture environment,
-not a transient failure. It will reproduce on every fresh session
-launch attempt.
+not a transient failure. Reproducibility in the current sandbox
+environment:
+
+```text
+REPRODUCIBLE_IN_CURRENT_SANDBOX_ENVIRONMENT
+  127.0.0.1:19229 → EPERM
+  127.0.0.1:19299 → EPERM
+  HARNESS_CODE_DEFECT = NOT_INDICATED
+```
+
+A fresh unsandboxed shell or another execution substrate may
+permit loopback listening. P2 wording: this is an environment
+claim, not a harness claim.
 
 ## 2. Verdict
 
