@@ -219,8 +219,3 @@ The two together bind current HEAD to the historical THCP contract.
 - Phase-0 inventory file: written, untracked.
 - Board + detail-file corrections land in the bounded reconciliation ACT `ACT-CLINEMM-TASKHEADER-BOARD-STATE-RECONCILIATION01` (the next ACT).
 - Working tree clean (HEAD is `ab6e29a2e`).
-
-
-
-
-
