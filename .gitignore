@@ -126,6 +126,7 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-PTAD-ENV-OPTIN01.md
 !/.factory/acts/ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02.md
 !/.factory/acts/ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01.md
+!/.factory/acts/ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01.md
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
 # apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt
