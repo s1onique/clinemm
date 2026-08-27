@@ -19,7 +19,7 @@ The substrate foundations listed here are still relied on by the active frontier
 |---|---|---|---|
 | `ELM-02F` + `C2.4-*` + `C25-*` | CLOSED | — | Elm/state architecture groundwork |
 | `E7-LOCAL-BACKEND-ACTIVATION01` + `E7.1 LIVE-DOGFOOD-AUTHORITY-TRACE01` | CLOSED | — | E7 local advisory activation |
-| `E7.1` + `TRACE01` | CLOSED | — | Thinking canonical-state authority (static-presentation residue separately OPEN under `ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01`) |
+| `E7.1` + `TRACE01` | CLOSED | — | Thinking canonical-state authority; static-presentation residue now also CLOSED_NOT_REPRODUCED under `ACT-CLINEMM-E7.1-STATIC-THINKING-PRESENTATION-PERSISTENCE01` (see `docs/architecture/elm/task-state-e71-static-thinking-presentation-persistence01-reclosure.md`) |
 | `REACT-UPDATER-PURITY-REPAIR01` | CLOSED | — | React updater purity repair; invariant: no diagnostic/external side effects inside functional state updaters |
 | `RED-FIX01` / `W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01` / `LIVE-SHAPE-REPRODUCTION01` | CLOSED_LIVE | `5637d965dcaf95bd82708b21ecf233d9672cde59` | W1/W2 epoch-domain repair; live verdict PASS_LIVE_EPOCH_REPAIR |
 | `ACT-CLINEMM-PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE01` (LCD01 + C2-CORRECTION02-FIXUP01..04) | CLOSED | `51f2f6a9c48bd880186928b18a2a9e3817613d43` | Incident-diagnostic retirement |
