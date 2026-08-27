@@ -936,12 +936,97 @@ Two missing prerequisites, neither sufficient alone:
   (2) the VS Code host must supply toolExecutors.submit.
       `apps/vscode/src/sdk/` currently does not wire this executor
       (zero references to `submit:`, `createSubmitAndExitTool`, or
-      `enableSubmitAndExit` in the VS Code adapter).
+      `enableSubmitAndExit` in the VS Code adapter — verified at
+      vscode-session-host.ts:159-186, which populates only
+      askQuestion / editor / applyPatch / readFile and explicitly
+      sets bash to undefined when getTerminalManager is present;
+      never populates submit).
 
 Neither prerequisite alone is sufficient. The original §10b.5 wording
 ("Either repair, by itself, would expose submit_and_exit") was
 internally inconsistent with the ablation §10b.4 (which showed
 mode="yolo" alone does not register the tool) — corrected here.
+
+#### 10b.5.1 Two distinct proof classes — separation (reviewer-requested §3c correction01)
+
+A transcript observation can prove that a tool was **never invoked**;
+it cannot prove that a tool was **never registered**. The bound
+specimen's durable transcript is a 746-message run with **0/746**
+`tool_use` blocks for `submit_and_exit` or `attempt_completion`. That
+observation supports one specific claim and no others:
+
+```text
+SUBMIT_AND_EXIT_INVOKED
+  = TRANSCRIPT_PROVEN_FALSE
+  evidence: 0/746 tool_use blocks (sv=8299 anchor point)
+  scope:    this specimen's transcript only
+  does NOT prove: registration, policy, prompt contract
+```
+
+The stronger claim — `SUBMIT_AND_EXIT_REGISTERED = false` — is proven
+by **composition over fully-bound production inputs**, not by
+transcript observation:
+
+```text
+SUBMIT_AND_EXIT_REGISTERED
+  = COMPOSITION_PROVEN_FALSE
+  composition (all bound):
+    bound mode                         = "act"
+    ToolPresets.act.enableSubmitAndExit = false     (presets.ts:34)
+    resolved enableSubmitAndExit        = false     (default-tools config)
+    VS Code toolExecutors.submit        = absent    (vscode-session-host.ts:159-186)
+    definitions.ts:1148 predicate       =
+        submitExecutor = enableSubmitAndExit ? executors.submit : undefined
+                                          = false    ?  absent      : undefined
+                                          = undefined
+    definitions.ts:1156-1158 tool-add   =
+        if (submitExecutor) tools.push(createSubmitAndExitTool(...))
+                                          ⇒ branch not taken
+                                          ⇒ submit_and_exit NOT in tools array
+  consequence:
+    finalTools ⊇ {submit_and_exit}      = false  (deterministic)
+  scope:
+    any VS Code session with mode="act" using default-tools resolution
+    (independent of transcript; a transcript can prove nothing about
+    registry state of sessions that did not run)
+```
+
+Therefore:
+
+```text
+COMPLETION_TOOL_REGISTRY_CLASSIFIED
+  = COMPOSITION_PROVEN_ABSENT (stronger than the §10b.5 STRONG_SUPPORT label)
+```
+
+The prior §10b.5 STRONG_SUPPORT verdict is **superseded** by this
+composition-proven classification; the static ablation §10b.4 is
+sufficient to establish the registry's absence for any session
+matching the bound inputs. **No additional runtime probe is required**
+to discover a deterministic boolean that production source already
+computes from fully bound inputs.
+
+#### 10b.5.2 Two missing prerequisites renamed to registration preconditions
+
+Per the second reviewer correction, the §10b.5 wording `CAUSAL_VARIABLE`
+is now relabeled more precisely. We have proven **why the tool is
+absent** (two conjuncts missing); we have **not** proven whether
+adding explicit completion authority is the **right product behavior**:
+
+```text
+REGISTRATION_PRECONDITIONS_CLASSIFIED
+  = {
+      enableSubmitAndExit=true,
+      toolExecutors.submit present
+    }
+
+CAUSAL_PRODUCT_POLICY
+  = UNDECIDED   (belongs to ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01)
+```
+
+The original §10b.5 label `CAUSAL_VARIABLE_DISCRIMINATED =
+TWO_PREREQUISITES` is preserved as a synonym inside §10b.5
+historical evidence but the durable verdict uses the more precise
+`REGISTRATION_PRECONDITIONS_CLASSIFIED` / `CAUSAL_PRODUCT_POLICY` pair.
 ```
 
 ### 10b.6 Open work and §6 RED-A disposition
@@ -1086,10 +1171,55 @@ collapses to a pure product policy question:
 > sessions, with the implicit understanding that Seatbelted-YOLO
 > users accept ordinary text termination?
 
-This is genuinely normative. There is no internal inconsistency in
-the current architecture to "fix"; there is only a question of
-product intent. The downstream ACT must decide whether the gap is a
-defect (and which layer to fix it at: prompt relax? tool wiring? both?).
+This is genuinely normative. The downstream ACT must decide whether
+the gap is a defect (and which layer to fix it at: prompt relax?
+tool wiring? both?).
+
+#### 10c.3.1 Narrowing the "no contradiction" claim (reviewer-requested §3c correction02)
+
+The §10c "no internal inconsistency" wording was imprecise. The
+**narrower** claim that this ACT actually proves is:
+
+```text
+PROMPT_TOOLSET_CONTRADICTION    = NONE  (§10c.2 Case P2 — bound specimen's
+                                          prompt is DEFAULT and permits
+                                          text-only completion; the runtime's
+                                          text-completion fallback honors that
+                                          prompt semantic; agent is not asked
+                                          to call a tool not in its toolkit)
+
+PRODUCT_COMPLETION_SEMANTICS    = UNDECIDED  (still belongs to the
+                                                downstream contract ACT —
+                                                this is the live product
+                                                question: whether the
+                                                text-completion policy is
+                                                the *right* UX, not whether
+                                                it is *internally
+                                                contradictory* with prompt
+                                                and runtime)
+```
+
+The reviewer is correct that the user-facing tension remains:
+
+```text
+DEFAULT PROMPT:
+  no-tool final response = completed final answer
+
+RUNTIME:
+  runtimeStatus = completed
+
+UI TURN STATE:
+  awaiting_followup
+
+USER:
+  sees Waiting / no task-level Completed badge
+```
+
+That is not a **prompt/toolset contradiction** (which we have
+proven away at §10c.2), but it is exactly the user-facing
+completion-policy question we are trying to resolve. The downstream
+ACT owns the YES/NO decision; LIVENESS02 only classifies that this
+is the open question.
 
 ### 10c.4 Complete product/runtime relationship table (now fully bound)
 
@@ -1099,7 +1229,8 @@ CORE config.mode               = "act"      (NOT "yolo" — see §10b.1)
 PROMPT variant                 = DEFAULT    (NOT YOLO — see §10c.1)
 resolved enableSubmitAndExit   = false      (ToolPresets.act.enableSubmitAndExit=false)
 toolExecutors.submit present   = false      (VS Code never wires it — see §10b.1)
-submit_and_exit registered     = false      (consequence of the two above)
+SUBMIT_AND_EXIT_REGISTERED     = COMPOSITION_PROVEN_FALSE  (§10b.5.1)
+SUBMIT_AND_EXIT_INVOKED        = TRANSCRIPT_PROVEN_FALSE   (§10b.5.1)
 requiresCompletionTool         = false
 completionPolicy               = undefined
 finalTools ⊇ {submit_and_exit} = NO
@@ -1115,9 +1246,10 @@ OBSERVED:
   terminal UX consistent with prompt? YES
 
 DISPOSITION:
-  Internal prompt/runtime contradiction = NONE for this specimen
-  Product policy gap                    = OPEN (downstream contract ACT)
-  Causal prerequisites identified       = 2 (enableSubmitAndExit + executor)
+  PROMPT_TOOLSET_CONTRADICTION = NONE                  (§10c.3.1)
+  PRODUCT_COMPLETION_SEMANTICS = UNDECIDED             (§10c.3.1 — downstream contract ACT)
+  REGISTRATION_PRECONDITIONS    = 2 conjuncts (§10b.5.2)
+  CAUSAL_PRODUCT_POLICY         = UNDECIDED             (§10b.5.2 — downstream contract ACT)
   Static-discriminator proposition      = PASS (sub-claim a/b/c above)
   Runtime-ablation                      = NOT EXECUTED (vitest EPERM)
 ```
@@ -1133,28 +1265,40 @@ BOUND_SESSION_PROMPT_VARIANT           PASS    (§10c.1 — DEFAULT_CLINE_SYSTEM
                                                 1787832864738_ik2zh.messages.json:system_prompt verbatim;
                                                 contains no 'submit_and_exit' reference)
 
-COMPLETION_TOOL_REGISTRY_CLASSIFIED    STRONG_SUPPORT (§10b.5 — Branch A STRONGLY_SUPPORTED, not PROVEN)
+COMPLETION_TOOL_REGISTRY_CLASSIFIED    COMPOSITION_PROVEN_ABSENT (§10b.5.1 — superseded §10b.5
+                                                STRONG_SUPPORT; deterministic composition over
+                                                fully-bound production inputs; no runtime probe required)
 COMPLETION_POLICY_CLASSIFIED           n/a     (§4 skipped; no tool ⇒ no policy to classify)
 MODEL_TERMINATION_PATH_CLASSIFIED      n/a     (§5 skipped; fallback is designed for non-yolo)
 
 RED_REAL_PRODUCTION_SEAM               DEFER   (§6 — RED-A author requires §10b.6 product-contract)
-CAUSAL_VARIABLE_DISCRIMINATED          TWO_PREREQUISITES (§10b.5 — neither alone sufficient;
-                                                enableSubmitAndExit=true AND toolExecutors.submit)
-                                                (was: CANDIDATE single variable)
+REGISTRATION_PRECONDITIONS_CLASSIFIED  TWO_PREREQUISITES (§10b.5.2 — supersedes §10b.5 label;
+                                                enableSubmitAndExit=true AND toolExecutors.submit;
+                                                neither alone sufficient)
+CAUSAL_PRODUCT_POLICY                  UNDECIDED (§10b.5.2 — downstream contract ACT)
 NECESSITY_ABLATION                     STATIC_DISCRIMINATOR_PASS / RUNTIME_ABLATION_NOT_EXECUTED
                                                 (§10b.4 static predicate-discrimination passes;
                                                  vitest runtime flip EPERM-blocked in this sandbox)
 
 USER_FACING_YOLO_VS_CORE_PRESET_DECOUPLED   SURFACED (§10b.2 — distinct domains; VS Code UI toggle does NOT flow to config.mode)
-PROMPT_VS_RUNTIME_MISMATCH            RETRACTED (§10c.2 — not present for this specimen;
-                                                DEFAULT prompt permits text-only completion;
-                                                runtime fallback is consistent with prompt semantic;
-                                                reviewer's Case P2 confirmed)
-VS_CODE_EXECUTOR_WIRING_MISSING       SURFACED (§10b.4 — apps/vscode/src/sdk/ never wires toolExecutors.submit)
+PROMPT_TOOLSET_CONTRADICTION           NONE    (§10c.2 + §10c.3.1 — narrow claim; agent is not
+                                                asked to call a tool not in its toolkit)
+PRODUCT_COMPLETION_SEMANTICS           UNDECIDED (§10c.3.1 — live product question owned by
+                                                 downstream contract ACT; not a prompt/toolset
+                                                 contradiction, but a UX policy question)
+VS_CODE_EXECUTOR_WIRING_MISSING       SURFACED (§10b.4 — apps/vscode/src/sdk/ never wires
+                                                toolExecutors.submit; verified at
+                                                vscode-session-host.ts:159-186)
 REGISTRATION_PREDICATE_BOUND           PASS    (§10b.5 — definitions.ts:1148:
                                                 submitExecutor = enableSubmitAndExit ? executors.submit : undefined)
-SUBMIT_AND_EXIT_NOT_IN_FINALTOOLS     PROVEN   (§10b.1 — 746-message transcript contains 0 tool_use blocks
-                                                for submit_and_exit or attempt_completion)
+SUBMIT_AND_EXIT_INVOKED                TRANSCRIPT_PROVEN_FALSE  (§10b.5.1 — 0/746 tool_use blocks
+                                                for submit_and_exit or attempt_completion;
+                                                scope: this specimen's transcript only)
+SUBMIT_AND_EXIT_REGISTERED             COMPOSITION_PROVEN_FALSE (§10b.5.1 — bound inputs:
+                                                mode=act + ToolPresets.act.enableSubmitAndExit=false
+                                                + VS Code toolExecutors.submit=absent + production
+                                                predicate ⇒ submitExecutor=undefined ⇒ tool not added;
+                                                supersedes §10b.1 STRONG_SUPPORT label)
 
 NO_TEXT_DERIVED_COMPLETION             PASS    (LIV2-C07 — preserved by HALT_NONTOOL_TERMINAL_AUTHORITY)
 NO_TAIL_DERIVED_COMPLETION             PASS    (LIV2-C08 — preserved by HALT_NONTOOL_TERMINAL_AUTHORITY)
@@ -1229,38 +1373,53 @@ or:
 CAPTURE_INSUFFICIENT
 ```
 
-or (this ACT's actual path — reclassified by §10b and §10c):
+or (this ACT's actual path — reclassified by §10b, §10c, and the
+§3c reviewer-requested P1/P2 corrections):
 
 ```text
-PASS_BRANCH_A_STRONG_SUPPORT_BOUND_PROMPT_VARIANT_PRODUCT_POLICY_DECISION_REQUIRED
-  ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02 closes here with:
-    BOUND_LIVE_SPECIMEN                    = PASS  (1787832864738_ik2zh)
-    PTAD_CAUSAL_BRANCH                     = PASS  (false / false at sv=8299)
-    BOUND_SPECIMEN_RUNTIME_CONFIG          = PASS  (§10b.1 — mode="act" + Seatbelt-YOLO from durable state)
-    BOUND_SESSION_PROMPT_VARIANT           = PASS  (§10c.1 — DEFAULT_CLINE_SYSTEM_PROMPT verified by reading
-                                                 1787832864738_ik2zh.messages.json:system_prompt verbatim;
-                                                 contains zero 'submit_and_exit' references)
-    COMPLETION_TOOL_REGISTRY_CLASSIFIED    = STRONG_SUPPORT (§10b.5)
-    CAUSAL_VARIABLE_DISCRIMINATED          = TWO_PREREQUISITES (§10b.5 — enableSubmitAndExit=true AND
-                                                 toolExecutors.submit; neither alone sufficient;
-                                                 mode="yolo" is ONE source of (1), not the only one)
-    NECESSITY_ABLATION                     = STATIC_DISCRIMINATOR_PASS / RUNTIME_ABLATION_NOT_EXECUTED
-                                                 (§10b.4 predicate discrimination passes; vitest EPERM-blocked)
-    PROMPT_VS_RUNTIME_MISMATCH             = RETRACTED — NONE FOR THIS SPECIMEN (§10c.2)
-    USER_FACING_YOLO_VS_CORE_PRESET        = DECOUPLED (§10b.2)
-    VS_CODE_EXECUTOR_WIRING                = MISSING (§10b.4 — neither prerequisite is wired in VS Code)
-    REGISTRATION_PREDICATE                 = BOUND (§10b.5 — definitions.ts:1148)
-    SUBMIT_AND_EXIT_NOT_IN_FINALTOOLS      = PROVEN (§10b.1 — 0/746 tool_use blocks)
-    RED-A_TEST_AUTHORED                    = DEFER (deferred to product-contract ACT per §10c.3)
-  Provenance: §10c.5 full relationship table + §10b.5 verdict + §10c.1 prompt read
+PASS_COMPLETION_LIVENESS_RECON_POLICY_DECISION_REQUIRED
+  ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02 closes here.
+
+  Detailed evidence (per §3c reviewer-requested taxonomy):
+
+    BOUND_LIVE_SPECIMEN                   = PASS   (1787832864738_ik2zh)
+    PTAD_FALSE_FALSE                      = PASS   (terminal-push sv=8299,
+                                                   false/false)
+    BOUND_RUNTIME_CONFIG                  = PASS   (§10b.1 — mode="act" +
+                                                   Seatbelt-YOLO from durable state)
+    BOUND_PROMPT_VARIANT                  = PASS   (§10c.1 — DEFAULT_CLINE_SYSTEM_PROMPT
+                                                   verified by reading
+                                                   1787832864738_ik2zh.messages.json:system_prompt
+                                                   verbatim; zero 'submit_and_exit' references)
+
+    USER_FACING_SEATBELT_YOLO             = true
+    CORE_RUNTIME_MODE                     = "act"
+    PROMPT_VARIANT                        = DEFAULT
+
+    ENABLE_SUBMIT_AND_EXIT                = false          (ToolPresets.act)
+    VS_CODE_SUBMIT_EXECUTOR               = absent         (vscode-session-host.ts:159-186)
+    SUBMIT_AND_EXIT_REGISTERED            = COMPOSITION_PROVEN_FALSE  (§10b.5.1)
+    SUBMIT_AND_EXIT_INVOKED               = TRANSCRIPT_PROVEN_FALSE   (§10b.5.1)
+
+    PROMPT_TOOLSET_CONTRADICTION          = NONE                          (§10c.3.1)
+    PRODUCT_COMPLETION_SEMANTICS          = UNDECIDED                     (§10c.3.1)
+
+    RUNTIME_ABLATION                      = NOT_EXECUTED                  (vitest EPERM)
+    PRODUCTION_REPAIR                     = NONE                          (recon ACT only)
+
+  Provenance: §10b.5.1 composition proof + §10b.5.2 registration preconditions +
+              §10c.3.1 narrowed contradiction claim + §10c.5 full relationship table
+
   Next: open ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01
-        question: when Seatbelt-YOLO host authorization is active, must
-        the agent also have explicit completion authority (i.e. both
-        registration prerequisites satisfied), even though conversational
-        mode is "act"? (NO internal prompt/runtime contradiction exists
-        for the bound specimen — this is a pure product-policy question)
-        (decision tree in §10c.3)
+        (the unreviewed-without-further-investigation product-policy question)
+        — full decision tree in §10c.3 and the contract ACT's own Phase 0
+        invariants I1..I7.
 ```
+
+The `PASS_BRANCH_A_STRONG_SUPPORT_BOUND_PROMPT_VARIANT_PRODUCT_POLICY_DECISION_REQUIRED`
+verdict name used in earlier §10b/§10c drafts is **superseded** by this
+more concise epistemic identifier. Factory verdicts should identify the
+epistemic result; the detailed evidence remains in §10b/§10c and §11.
 
 Never:
 
@@ -1314,24 +1473,28 @@ After committing `PTAD-ENV-OPTIN01`:
 PTAD-DORMANT-DIAGNOSTIC-SUBSTRATE            CLOSED
 PTAD-ENV-OPTIN01                             CLOSED
 COMPLETION-PROTOCOL-LIVENESS02               OPEN / ACTIVE_RECON
-                                              → §10b.5: Branch A STRONG_SUPPORT
-                                              → §10c:  PROMPT VARIANT BOUND (DEFAULT)
-                                              → §10c.3: needs SEATBELT-YOLO-CONTRACT01 (pure policy)
+                                              → §10b.5.1: COMPOSITION_PROVEN_ABSENT
+                                              → §10b.5.2: REGISTRATION_PRECONDITIONS_CLASSIFIED
+                                              → §10c.1:   PROMPT VARIANT BOUND (DEFAULT)
+                                              → §10c.3.1: PROMPT_TOOLSET_CONTRADICTION = NONE;
+                                                          PRODUCT_COMPLETION_SEMANTICS = UNDECIDED
+                                              → §13:      needs SEATBELT-YOLO-CONTRACT01 (pure policy)
 EDITOR-TOOL-APPROVAL-FRICTION                OPEN / HIGH (queued behind LIVENESS02)
 ```
 
 This is a deliberate one-ACT preemption because we now possess rare
 bound LIVE evidence for completion liveness.
 
-After §10c.5 verdict (Branch A STRONG_SUPPORT + TWO_PREREQUISITES
-identified + PROMPT_VARIANT BOUND to DEFAULT + PROMPT_VS_RUNTIME_MISMATCH
-RETRACTED for this specimen), LIVENESS02 is ready to close pending a
-downstream Seatbelt-YOLO completion-authority contract ACT. The
-closure path:
+After §10c.5 verdict (composition-proven registry absence + two
+registration preconditions classified + prompt variant bound to DEFAULT
++ prompt/toolset contradiction narrowed to NONE while the product
+completion semantics remain UNDECIDED), LIVENESS02 is ready to close
+pending a downstream Seatbelt-YOLO completion-authority contract ACT.
+The closure path:
 
 ```text
-1. LIVENESS02 closes with PASS_BRANCH_A_STRONG_SUPPORT_BOUND_PROMPT_VARIANT_PRODUCT_POLICY_DECISION_REQUIRED
-   (§13 exit shape; provenance §10c.5 + §10c.1 + §10b.5 + §10b.4 + §10b.1)
+1. LIVENESS02 closes with PASS_COMPLETION_LIVENESS_RECON_POLICY_DECISION_REQUIRED
+   (§13 exit shape; provenance §10b.5.1 + §10b.5.2 + §10c.3.1 + §10c.5)
 
 2. ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01 opens:
    "When ClineMM's effective host authorization is Seatbelted YOLO,
@@ -1340,6 +1503,8 @@ closure path:
     conversational mode remains 'act'?"
    Owner: same factory lane (runtime/task-progression).
    §10c.3 is the question; §10b.1 + §10b.4 + §10c.1 are the chain.
+   Contract ACT Phase 0 invariants I1..I7 are pre-frozen in §10c.3
+   and the contract ACT's own Phase 0.
 
 3. EDITOR-TOOL-APPROVAL-FRICTION-RECON01 resumes NEXT status once
    LIVENESS02 closes (per the one-ACT preemption rule).
@@ -1359,7 +1524,8 @@ yes (expose submit_and_exit even with mode="act")
   → RED-A (finalTools ⊇ completesRun) becomes GREEN
 
 no (keep the fallback as the documented policy)
-  → LIVENESS02's STRONG_SUPPORT verdict is the final answer
+  → LIVENESS02's PASS_COMPLETION_LIVENESS_RECON_POLICY_DECISION_REQUIRED
+    verdict is the final answer
   → LIV2-C04 (awaiting_followup remains valid) is the canonical UI
     projection — already CONSISTENT with the bound DEFAULT prompt
     (which permits text-only completion)
@@ -1368,6 +1534,14 @@ no (keep the fallback as the documented policy)
     already compatible with awaiting_followup semantics)
   → downstream UX work (badge suppression messaging, etc.) goes
     elsewhere
+
+decoupled (Option C — explicitCompletionAuthority becomes its own
+runtime/product capability, decoupled from both auto-approval and
+the core yolo preset):
+  → Seatbelt-YOLO may choose to enable it by default, but the
+    concepts are no longer welded together
+  → preserves both yes/no paths as policy choices rather than
+    co-inherited side effects of an unrelated toggle
 ```
 
 ## 16. Provenance
