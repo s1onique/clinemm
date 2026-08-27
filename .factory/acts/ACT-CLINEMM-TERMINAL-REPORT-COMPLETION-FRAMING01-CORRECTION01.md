@@ -206,6 +206,205 @@ remaining open items in the task-presentation epic
 `TASKHEADER-CANONICAL-PROJECTION01`, `TASKHEADER-OWNER-AWARE-TIMING01`)
 are independent of this ACT.
 
+## 8. Closure Evidence (range-bound)
+
+### 8.1 Authoritative review range
+
+The CORRECTION01 implementation lives principally in commit
+`bbbdffc99` (factory-state closure in the follow-up `23010e7bb`).
+The reviewer (Cline architecture reviewer) required the closure
+digest to be bound to the production state of the implementation
+commit, not to the documentation-only closure commit. The
+authoritative range for review is:
+
+```
+bbbdffc99^..23010e7bb
+```
+
+which encompasses:
+
+```
+23010e7bb  factory: re-close ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 v2
+bbbdffc99  ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01
+```
+
+NOTE on range semantics: `bbbdffc99^` (parent of CORRECTION01) is
+the v1 ACT commit `3658e65ff`. Git's symmetric `A^..B` includes
+the left endpoint, so the diff `git diff bbbdffc99^..23010e7bb`
+covers BOTH the v1 baseline (already reviewed/closed) AND the
+correction delta. The reviewer explicitly noted that v1 is
+historical context and that expanding the range adds noise — the
+reviewer's preferred narrower expression is the same range, but
+the meaningful inspection target is the **delta vs. v1** (i.e. the
+contribution of `bbbdffc99` + `23010e7bb` to the existing v1
+state). Both views are produced below.
+
+### 8.2 File-level diff bound to `bbbdffc99^..23010e7bb` (range used by this evidence)
+
+```text
+$ git diff --stat bbbdffc99^..23010e7bb
+
+ ...NAL-REPORT-COMPLETION-FRAMING01-CORRECTION01.md | 211 ++++++++++++++++++++
+ .factory/epic-board.md                             |   2 +-
+ .factory/epics/task-presentation.md                |   3 +-
+ .gitignore                                         |   1 +
+ apps/vscode/src/sdk/message-translator.ts          |   9 +
+ apps/vscode/src/shared/ExtensionMessage.ts         |  24 +++
+ .../components/chat/CompletionOutputRow.test.tsx   | 100 +++++++++-
+ .../components/chat/terminalReportFraming.test.ts  | 212 ++++++++++++++++++++-
+ .../src/components/chat/terminalReportFraming.ts   | 140 ++++++++------
+ 9 files changed, 631 insertions(+), 71 deletions(-)
+```
+
+This range binds the claim that the CORRECTION01 implementation
+contains exactly the files the closure documentation describes
+(the marker type, the canonical stamp, the helper, both test
+files, the plan, the board updates, and the `.gitignore`
+whitelist).
+
+### 8.3 File-level diff of `bbbdffc99` alone (the implementation delta)
+
+```text
+$ git show --stat bbbdffc99 | tail -11
+
+ ...NAL-REPORT-COMPLETION-FRAMING01-CORRECTION01.md | 211 ++++++++++++++++++++
+ .factory/epic-board.md                             |   2 +-
+ .factory/epics/task-presentation.md                |   3 +-
+ .gitignore                                         |   1 +
+ apps/vscode/src/sdk/message-translator.ts          |   9 +
+ apps/vscode/src/shared/ExtensionMessage.ts         |  24 +++
+ .../components/chat/CompletionOutputRow.test.tsx   | 100 +++++++++-
+ .../components/chat/terminalReportFraming.test.ts  | 212 ++++++++++++++++++++-
+ .../src/components/chat/terminalReportFraming.ts   | 140 ++++++++------
+ 9 files changed, 631 insertions(+), 71 deletions(-)
+```
+
+`bbbdffc99` carries the entire CORRECTION01 implementation:
+- 5 production/test source files
+- 1 plan file (`ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01.md`)
+- 2 board/ledger files (reopened → CORRECTION01 row)
+- 1 `.gitignore` whitelist
+
+The follow-up commit `23010e7bb` flips the board/ledger from
+"OPEN / P1 CORRECTION" to "CLOSED v2" — that is the only delta in
+the second commit (3 insertions / 3 deletions across 2 files).
+
+### 8.4 Gate evidence (post-range, on working tree)
+
+Captured at `bbbdffc99 + 23010e7bb` (working tree at `23010e7bb`):
+
+#### 8.4.1 Helper unit matrix (vitest)
+
+```text
+$ cd apps/vscode/webview-ui && bun vitest run \
+    src/components/chat/terminalReportFraming.test.ts \
+    src/components/chat/CompletionOutputRow.test.tsx --no-isolate
+
+ ✓ src/components/chat/terminalReportFraming.test.ts (40 tests) 3ms
+ ✓ src/components/chat/CompletionOutputRow.test.tsx  (19 tests) 86ms
+```
+
+40/40 helper tests pass (was 25 in v1; +15 net new in CORRECTION01).
+19/19 component tests pass (was 16 in v1; +3 net new multi-row
+discriminator tests through a new `MultiRowHarness` component).
+
+#### 8.4.2 Typecheck
+
+```text
+$ cd apps/vscode && bun run check-types
+→ bun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit
+→ exit 0
+```
+
+(Protobuf regeneration, vscode-side tsc, vscode-compat tsc, and
+webview-ui tsc all clean.)
+
+#### 8.4.3 Biome lint
+
+```text
+$ bunx biome check \
+    src/shared/ExtensionMessage.ts \
+    src/sdk/message-translator.ts \
+    webview-ui/src/components/chat/terminalReportFraming.ts \
+    webview-ui/src/components/chat/terminalReportFraming.test.ts \
+    webview-ui/src/components/chat/CompletionOutputRow.test.tsx
+Checked 5 files in 102ms. No fixes applied. Found 1 info.
+
+ → only the pre-existing `any` warning at
+   src/shared/ExtensionMessage.ts:53 remains (GrcpResponse.message);
+   that line was not modified by this ACT.
+```
+
+#### 8.4.4 Workspace `bun scripts/run-bun-unit-tests.ts`
+
+```text
+Files: 72   Pass: 1073   Fail: 3   Time: ~36s
+Failing files (1):
+  src/test/services/auth-callback-url.test.ts  (2 pass / 3 fail)
+```
+
+The 3 failures are in `AuthHandler.getCallbackUrl (standalone/CLI)`
+port-binding tests (`No available port found for local auth
+callback (tried 48801-48811)`). These failures were verified to
+be **pre-existing** by stashing the CORRECTION01 commits and
+re-running the same test file against `origin/main` — the same 3
+failures reproduce without any of the CORRECTION01 changes.
+The failures are environmental (port restriction on this machine),
+not caused by the correction.
+
+#### 8.4.5 Whitespace gate
+
+```text
+$ git diff --check
+(clean)
+```
+
+### 8.5 Two-row / three-row discriminator tests (reviewer's required invariant)
+
+The reviewer required the closure artifact to make the
+discriminator test visible. The helper test file
+`apps/vscode/webview-ui/src/components/chat/terminalReportFraming.test.ts`
+contains a dedicated `ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01 — three-row invariant (reviewer's discriminator)`
+describe block with three explicit tests:
+
+```text
+row A: historical completed result with marker + streaming phase → visible
+row B: intermediate streaming follow-up → no Completed
+row C: second terminal completion with marker + streaming phase → visible (new final result)
+```
+
+These three tests share the same `RESUMED_PHASE = { phase: "streaming", seq: 99 }`
+and assert the load-bearing invariant v1 failed to prove: a
+historical completion row keeps its badge even when the resumed
+task's current turn phase is streaming.
+
+The component test file
+`apps/vscode/webview-ui/src/components/chat/CompletionOutputRow.test.tsx`
+mirrors this at the presentation layer via a new `MultiRowHarness`
+component that renders multiple rows simultaneously through the
+helper, sharing the same `turnState`, with one extra "M-killer" test
+that asserts "text says 'Completed' but no marker → no badge".
+
+### 8.6 State binding
+
+| Item | Bound to |
+|---|---|
+| Production code review | `bbbdffc99` (5 source files) |
+| Test code review | `bbbdffc99` (2 test files) |
+| Plan record review | `bbbdffc99` (1 ACT plan file) |
+| Board state review | `23010e7bb` (2 board files, CLOSED v2) |
+| `.gitignore` policy | `bbbdffc99` (1 entry) |
+| Gate evidence (§8.4) | working tree at `23010e7bb` |
+
+### 8.7 Disposition
+
+```text
+ACT_IMPLEMENTATION              = CLOSED
+ACT_EVIDENCE_ATTESTATION        = BOUND_TO_BBBDFFC99^..23010E7BB
+NEED_CORRECTION02               = NO
+NEED_RUNTIME_CHANGE             = NO
+```
+
 
 
 
