@@ -28,13 +28,18 @@ const IDLE_PHASE: TurnState = { phase: "idle", seq: 1 }
 const AWAITING_APPROVAL_PHASE: TurnState = { phase: "awaiting_approval", seq: 1 }
 const COMPACTING_PHASE: TurnState = { phase: "compacting", seq: 1 }
 
-function sayCompletionResult(text: string, partial = false): ClineMessage {
+function sayCompletionResult(text: string, partial = false, marker = false): ClineMessage {
 	return {
 		ts: 1,
 		type: "say",
 		say: "completion_result",
 		text,
 		partial,
+		// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01:
+		// optional marker; default `false` so existing negative tests
+		// keep their semantics (marker absent → no badge unless legacy
+		// ask fallback applies).
+		isAuthoritativelyCompletedResult: marker || undefined,
 	}
 }
 
@@ -70,9 +75,9 @@ function textSay(text: string): ClineMessage {
 // -----------------------------------------------------------------------
 
 describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — completed projection", () => {
-	it("completed + final say completion_result → visible Completed framing", () => {
+	it("completed + final say completion_result with marker → visible Completed framing (canonical path)", () => {
 		const framing = resolveTerminalReportFraming({
-			message: sayCompletionResult("All done.", false),
+			message: sayCompletionResult("All done.", false, true),
 			mode: "act",
 			turnState: COMPLETED_PHASE,
 		})
@@ -304,18 +309,20 @@ describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — model-killer: tex
 
 describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — resume / second completion", () => {
 	it("historical completed result after resume → remains Completed", () => {
-		// The persisted session status drives phase = "completed" for
-		// resumed-completed tasks (sdk-task-control-coordinator.ts:269).
+		// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01:
+		// the per-message marker (primary authority) keeps the badge
+		// even though the resumed task's current turn phase is "streaming".
 		expect(
 			resolveTerminalReportFraming({
-				message: sayCompletionResult("Done the first thing.", false),
+				message: sayCompletionResult("Done the first thing.", false, true),
 				mode: "act",
-				turnState: COMPLETED_PHASE,
+				turnState: STREAMING_PHASE,
 			})?.kind,
 		).toBe("completed")
 	})
 
 	it("intermediate response after resume → no Completed (phase goes back to streaming)", () => {
+		// Marker absent → both primary and legacy paths fail closed.
 		expect(
 			resolveTerminalReportFraming({
 				message: sayCompletionResult("Working on it…", false),
@@ -328,7 +335,7 @@ describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — resume / second c
 	it("second terminal completion after resume → Completed framing (new final result)", () => {
 		expect(
 			resolveTerminalReportFraming({
-				message: sayCompletionResult("Now done the second thing.", false),
+				message: sayCompletionResult("Now done the second thing.", false, true),
 				mode: "act",
 				turnState: COMPLETED_PHASE,
 			})?.kind,
@@ -343,7 +350,7 @@ describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — resume / second c
 describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — output stability", () => {
 	it("returns a frozen framing object so consumers can't mutate it", () => {
 		const framing = resolveTerminalReportFraming({
-			message: sayCompletionResult("Done.", false),
+			message: sayCompletionResult("Done.", false, true),
 			mode: "act",
 			turnState: COMPLETED_PHASE,
 		})
@@ -352,7 +359,7 @@ describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — output stability"
 
 	it("returns the same singleton for repeated calls (no allocation churn)", () => {
 		const a = resolveTerminalReportFraming({
-			message: sayCompletionResult("Done.", false),
+			message: sayCompletionResult("Done.", false, true),
 			mode: "act",
 			turnState: COMPLETED_PHASE,
 		})
@@ -362,5 +369,190 @@ describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — output stability"
 			turnState: COMPLETED_PHASE,
 		})
 		expect(a).toBe(b)
+	})
+})
+
+// -----------------------------------------------------------------------
+// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01:
+// per-message immutable marker is the primary authority. The historical
+// completion_result row keeps its badge even when the current task is
+// mid-stream / mid-compaction / just-resumed.
+// -----------------------------------------------------------------------
+
+describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01 — per-message marker is primary authority", () => {
+	it("marker=true + phase=streaming → visible Completed (historical row survives phase flip)", () => {
+		// The reviewer's two-row discriminator: a historical completed
+		// row carries the marker; the resumed task is now mid-stream.
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done the first thing.", false, true),
+				mode: "act",
+				turnState: STREAMING_PHASE,
+			})?.kind,
+		).toBe("completed")
+	})
+
+	it("marker=true + phase=awaiting_followup → visible Completed", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done.", false, true),
+				mode: "act",
+				turnState: AWAITING_FOLLOWUP_PHASE,
+			})?.kind,
+		).toBe("completed")
+	})
+
+	it("marker=true + phase=resumable → visible Completed", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done.", false, true),
+				mode: "act",
+				turnState: RESUMABLE_PHASE,
+			})?.kind,
+		).toBe("completed")
+	})
+
+	it("marker=true + phase=compacting → visible Completed", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done.", false, true),
+				mode: "act",
+				turnState: COMPACTING_PHASE,
+			})?.kind,
+		).toBe("completed")
+	})
+
+	it("marker=true + undefined turnState → visible Completed", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done.", false, true),
+				mode: "act",
+				turnState: undefined,
+			})?.kind,
+		).toBe("completed")
+	})
+
+	it("marker=true + plan mode → no Completed (plan-mode sentinel still wins)", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done.", false, true),
+				mode: "plan",
+				turnState: COMPLETED_PHASE,
+			}),
+		).toBeUndefined()
+	})
+})
+
+describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01 — marker is required for say path (no fallback to phase)", () => {
+	it("marker absent + phase=completed + say completion_result non-partial → no framing (legacy path is ask-only)", () => {
+		// The say path requires the marker; legacy ask fallback does
+		// NOT cover say rows. This is the boundary between modern SDK
+		// tasks (always stamped) and legacy tasks (always ask).
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done.", false),
+				mode: "act",
+				turnState: COMPLETED_PHASE,
+			}),
+		).toBeUndefined()
+	})
+
+	it("marker=false (explicit) + phase=completed → no framing (opt-out beats completion)", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: { ...sayCompletionResult("Done.", false), isAuthoritativelyCompletedResult: false },
+				mode: "act",
+				turnState: COMPLETED_PHASE,
+			}),
+		).toBeUndefined()
+	})
+
+	it("marker=true + partial say completion_result → visible Completed (marker is row identity, partial is content stream)", () => {
+		// The marker is monotonic per row; a partial say row stamped
+		// at content_start is replaced in place at content_end, so a
+		// stamped partial would only be visible transiently. If it does
+		// become visible, the marker is still authoritative.
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Done.", true, true),
+				mode: "act",
+				turnState: COMPLETED_PHASE,
+			})?.kind,
+		).toBe("completed")
+	})
+})
+
+describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01 — legacy ask path still requires phase", () => {
+	it("legacy ask + phase=completed + non-empty text → visible Completed", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: askCompletionResult("Done."),
+				mode: "act",
+				turnState: COMPLETED_PHASE,
+			})?.kind,
+		).toBe("completed")
+	})
+
+	it("legacy ask + phase=streaming + non-empty text → no Completed (legacy still needs phase=completed)", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: askCompletionResult("Done."),
+				mode: "act",
+				turnState: STREAMING_PHASE,
+			}),
+		).toBeUndefined()
+	})
+
+	it("legacy ask + phase=completed + empty text → no Completed (defense in depth)", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: askCompletionResult(""),
+				mode: "act",
+				turnState: COMPLETED_PHASE,
+			}),
+		).toBeUndefined()
+	})
+})
+
+describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01 — three-row invariant (reviewer's discriminator)", () => {
+	// The reviewer's three-row discriminator. A single helper call
+	// doesn't render two rows at once, but the per-row tests below
+	// together prove that:
+	//   - row A (historical, marker=true) keeps the badge
+	//   - row B (current streaming follow-up, marker absent) doesn't
+	//   - row C (second terminal completion, marker=true) gets a new badge
+	// all rendered against the SAME current turnState.phase=streaming.
+
+	const RESUMED_PHASE: TurnState = { phase: "streaming", seq: 99 }
+
+	it("row A: historical completed result with marker + streaming phase → visible", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("All done.", false, true),
+				mode: "act",
+				turnState: RESUMED_PHASE,
+			})?.kind,
+		).toBe("completed")
+	})
+
+	it("row B: intermediate streaming follow-up → no Completed", () => {
+		// Not a say: completion_result, and no marker. Both paths fail closed.
+		expect(
+			resolveTerminalReportFraming({
+				message: textSay("Working on it…"),
+				mode: "act",
+				turnState: RESUMED_PHASE,
+			}),
+		).toBeUndefined()
+	})
+
+	it("row C: second terminal completion with marker + streaming phase → visible (new final result)", () => {
+		expect(
+			resolveTerminalReportFraming({
+				message: sayCompletionResult("Now done.", false, true),
+				mode: "act",
+				turnState: RESUMED_PHASE,
+			})?.kind,
+		).toBe("completed")
 	})
 })

@@ -643,6 +643,30 @@ export interface ClineMessage {
 	 * absence as opaque and not synthesize either value.
 	 */
 	commandExecutionDisposition?: "executed" | "rejected_before_execution"
+	/**
+	 * ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01:
+	 * immutable per-message marker stamped by the runtime AT THE MOMENT a
+	 * final terminal completion_result row is published (the
+	 * attempt_completion / submit_and_exit `content_end` seam in
+	 * `message-translator.ts`). Stamped once and persisted on the
+	 * message for the rest of the row's lifetime, so it survives phase
+	 * flips (resume, retry-after-error, follow-up, compaction) and
+	 * provides a stable per-message identity that the webview can
+	 * key on without depending on the mutable task-level `TurnState.phase`.
+	 *
+	 * Stamped only by the canonical completion tool `content_end` seam;
+	 * partial rows and rows produced outside that seam (debug commands,
+	 * legacy translation paths) are intentionally NOT stamped.
+	 *
+	 * ABSENT means the row was never authoritatively marked as a
+	 * terminal completion — either pre-CORRECTION01 history, or a
+	 * synthetic ask:"completion_result" / say:"completion_result" row
+	 * produced outside the canonical completion seam. Consumers MUST
+	 * treat absence as opaque and fall back to other gates (legacy
+	 * ask path uses `turnState.phase === "completed"` + non-empty
+	 * text; new rows without the marker must NOT be framed).
+	 */
+	isAuthoritativelyCompletedResult?: boolean
 	lastCheckpointHash?: string
 	isCheckpointCheckedOut?: boolean
 	isOperationOutsideWorkspace?: boolean

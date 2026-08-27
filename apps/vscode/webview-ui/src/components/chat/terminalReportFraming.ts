@@ -1,47 +1,49 @@
 /**
- * ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01
+ * ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 (with CORRECTION01)
  *
  * Pure projection that decides whether a visible assistant result
  * ("completion_result" say/ask) should be framed as a terminal
  * `Completed` report in the chat surface.
  *
- * Authority is the runtime/host-owned turn phase, NOT the message
- * prose. The webview MUST NOT infer completion from the absence of
- * tool calls, the idle appearance of the message tail, or the
- * presence of the literal word "Completed" in the assistant's text.
+ * Two-tier authority:
+ *
+ *   1. PRIMARY — per-message immutable marker
+ *      `message.isAuthoritativelyCompletedResult === true`. This marker
+ *      is stamped ONCE at the single canonical completion publication
+ *      seam (`message-translator.ts:1640`, the attempt_completion /
+ *      submit_and_exit `content_end` handler). It is persisted on the
+ *      row and survives task-level state mutations (resume, retry,
+ *      follow-up, compaction). When the marker is true, the row IS a
+ *      terminal completion — period. The webview renders the badge
+ *      even if the current `turnState.phase` is mid-stream, because
+ *      that phase describes the CURRENT turn, not the historical one.
+ *
+ *   2. SECONDARY — legacy ask: "completion_result" fallback
+ *      Legacy tasks that bypass the SDK translator never get the
+ *      marker stamped. For those rows only, we keep the original
+ *      `turnState.phase === "completed"` + non-empty-text gate so
+ *      legacy completion UI keeps working. This is defense in depth;
+ *      the canonical path (modern SDK) uses the marker.
+ *
+ * What MUST NOT happen:
+ *
+ *   - Infer "Completed" from message text (no string match).
+ *   - Infer "Completed" from message tail (no last-message inference).
+ *   - Use the mutable `turnState.phase` as the SOLE authority for a
+ *     historical completion row — the phase is task-current, not
+ *     row-current.
  *
  * Decision matrix (fails closed on ambiguity):
  *
- *   runtime phase           | ask vs say       | framing
- *   ------------------------+------------------+-----------------
- *   "completed"             | ask + non-empty  | kind: "completed"
- *   "completed"             | say + not partial| kind: "completed"
- *   "completed"             | partial / empty  | undefined
- *   "awaiting_followup"     | any              | undefined
- *   "error"                 | any              | undefined
- *   "resumable"             | any              | undefined
- *   "idle" / "streaming" /  | any              | undefined
- *   "awaiting_approval" /   |                  |
- *   "compacting"            |                  |
- *   undefined turnState     | any              | undefined
- *   mode = "plan"           | any              | undefined
- *
- * Why the message is also gated (not just phase):
- *
- *   - `partial: true` rows are content streams in flight. A
- *     `completion_result` row with `partial: true` means the SDK
- *     emitted `content_start` but not `content_end`. The runtime
- *     phase can transiently lag (CRA03 liveness); the message-level
- *     `partial: false` is the only thing that certifies the result
- *     text is the final committed terminal content.
- *   - `text === ""` rows are skipped by `filterVisibleMessages`
- *     upstream, so we still defend against them here for defense in
- *     depth — there's nothing to frame.
- *   - `mode === "plan"` is a closed-fail sentinel: the visible plan
- *     response renders via `PlanCompletionOutputRow`, never via
- *     `CompletionOutputRow`; reaching this helper with `mode === "plan"`
- *     means the chat-view branch is wrong and the safest answer is
- *     "no Completed framing".
+ *   marker        | runtime phase   | ask vs say       | framing
+ *   --------------+-----------------+------------------+-----------------
+ *   true          | any             | say completion   | kind: "completed"
+ *   true          | any             | _                | kind: "completed"
+ *   absent        | "completed"     | ask + non-empty  | kind: "completed"
+ *   absent        | "completed"     | partial / empty  | undefined
+ *   absent        | any other phase | any              | undefined
+ *   absent        | undefined       | any              | undefined
+ *   any           | n/a (plan mode) | any              | undefined
  *
  * Pure: no React, no DOM, no I/O, no message-tail inference.
  */
@@ -61,13 +63,16 @@ export interface TerminalReportFraming {
 export interface TerminalReportFramingInput {
 	/**
 	 * The `completion_result` row the caller is about to render.
-	 * Used for the message-level gates (partial / non-empty text).
+	 * Used for the per-message marker gate and the legacy message-shape
+	 * gate (partial / non-empty text).
 	 */
 	readonly message: ClineMessage
 	/**
 	 * Authoritative UI turn phase from the host-owned `TurnStateTracker`,
-	 * published on the wire as `turnState`. This is the runtime truth —
-	 * NOT the message tail.
+	 * published on the wire as `turnState`. Used as the SECONDARY
+	 * gate for the legacy ask: completion_result path. NOT used for
+	 * the primary marker path — the marker is monotonic and survives
+	 * phase flips.
 	 */
 	readonly turnState: TurnState | undefined
 	/** Current plan/act mode. "plan" always returns undefined. */
@@ -82,15 +87,38 @@ const COMPLETED: TerminalReportFraming = Object.freeze({
 })
 
 /**
- * Authoritative terminal-phase terminal "completed" set. Mirrors
- * `apps/vscode/src/shared/ExtensionMessage.ts:457-473` and the host-side
- * `setTurnPhase("completed", ...)` writer at
- * `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:133`. Any phase
- * NOT in this set MUST NOT show the "Completed" framing — closed fail.
+ * Authoritative terminal-phase set used by the LEGACY ask fallback.
+ * Mirrors `apps/vscode/src/shared/ExtensionMessage.ts:457-473` and the
+ * host-side `setTurnPhase("completed", ...)` writer at
+ * `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:133`.
+ *
+ * Not used for the primary marker path. The marker is monotonic per
+ * row and is the canonical identity for "this row WAS a terminal
+ * completion"; the phase is canonical for "this turn is currently
+ * terminal". The two are different concepts and must not be confused.
  */
 const COMPLETED_PHASES: ReadonlySet<TurnPhase> = new Set<TurnPhase>(["completed"])
 
-function isCompletionResultAskWithText(message: ClineMessage): boolean {
+/**
+ * PRIMARY authority: per-message immutable marker. Stamped once at the
+ * canonical completion publication seam and persisted on the row.
+ * Survives phase flips (resume / retry / follow-up / compaction).
+ */
+function isAuthoritativeCompletionResult(message: ClineMessage): boolean {
+	return message.isAuthoritativelyCompletedResult === true
+}
+
+/**
+ * LEGACY fallback: legacy tasks that bypass the SDK translator never
+ * get the marker stamped. They emit an `ask: "completion_result"`
+ * row with non-empty text directly. For those rows only, we keep the
+ * original `turnState.phase === "completed"` + non-empty-text gate.
+ *
+ * Modern SDK tasks always go through the marker path; this branch is
+ * reached only when no marker is present AND the row shape is the
+ * legacy ask variant.
+ */
+function isLegacyAskCompletionResultWithText(message: ClineMessage): boolean {
 	if (message.type !== "ask") {
 		return false
 	}
@@ -100,32 +128,28 @@ function isCompletionResultAskWithText(message: ClineMessage): boolean {
 	return typeof message.text === "string" && message.text.length > 0
 }
 
-function isCompletionResultSay(message: ClineMessage): boolean {
-	if (message.type !== "say") {
-		return false
-	}
-	if (message.say !== "completion_result") {
-		return false
-	}
-	return message.partial !== true
-}
-
 export function resolveTerminalReportFraming(input: TerminalReportFramingInput): TerminalReportFraming | undefined {
 	// Closed-fail sentinels first — cheapest, narrowest, no reasoning needed.
 	if (input.mode === "plan") {
 		return undefined
 	}
+
+	// PRIMARY: per-message marker is monotonic and survives phase flips.
+	// A historical completed row keeps its badge even when the current
+	// task is mid-stream / mid-compaction / just-resumed.
+	if (isAuthoritativeCompletionResult(input.message)) {
+		return COMPLETED
+	}
+
+	// SECONDARY: legacy ask path. Both gates must agree (defense in
+	// depth — modern tasks always carry the marker).
 	if (!input.turnState) {
 		return undefined
 	}
 	if (!COMPLETED_PHASES.has(input.turnState.phase)) {
 		return undefined
 	}
-
-	// Phase says "completed". Now confirm the message row is a real,
-	// non-partial, non-empty terminal completion result.
-	const isCompletedMessage = isCompletionResultAskWithText(input.message) || isCompletionResultSay(input.message)
-	if (!isCompletedMessage) {
+	if (!isLegacyAskCompletionResultWithText(input.message)) {
 		return undefined
 	}
 

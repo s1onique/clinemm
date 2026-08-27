@@ -1,8 +1,10 @@
+import type { ClineMessage, TurnState } from "@shared/ExtensionMessage"
+import type { Mode } from "@shared/storage/types"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { CompletionOutputRow } from "./CompletionOutputRow"
 import PlanCompletionOutputRow from "./PlanCompletionOutputRow"
-import type { TerminalReportFraming } from "./terminalReportFraming"
+import { resolveTerminalReportFraming, type TerminalReportFraming } from "./terminalReportFraming"
 
 vi.mock("./MarkdownRow", () => ({
 	MarkdownRow: ({ markdown }: { markdown: string }) => <div>{markdown}</div>,
@@ -322,5 +324,101 @@ describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01 — CompletionOutputR
 			/>,
 		)
 		expect(screen.getByTestId("terminal-completion-framing")).toBeInTheDocument()
+	})
+})
+
+// -----------------------------------------------------------------------
+// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01:
+// the reviewer's two-row and three-row discriminators, exercised at the
+// presentation layer. Multiple rows render simultaneously, each through
+// the helper, sharing the SAME current turnState — this proves the badge
+// survives the phase flip for historical completed rows without leaking
+// to the active turn's intermediate rows.
+// -----------------------------------------------------------------------
+
+function sayCompletionResult(text: string, marker = false): ClineMessage {
+	return {
+		ts: 1,
+		type: "say",
+		say: "completion_result",
+		text,
+		partial: false,
+		isAuthoritativelyCompletedResult: marker || undefined,
+	}
+}
+
+function textSay(text: string): ClineMessage {
+	return {
+		ts: 1,
+		type: "say",
+		say: "text",
+		text,
+	}
+}
+
+function MultiRowHarness({ rows, turnState, mode }: { rows: ClineMessage[]; turnState: TurnState; mode: Mode }) {
+	return (
+		<div data-testid="harness">
+			{rows.map((m) => {
+				const framing = resolveTerminalReportFraming({ message: m, turnState, mode })
+				return (
+					<div data-testid={`row-${m.ts}`} key={`row-${m.ts}`}>
+						<CompletionOutputRow
+							framing={framing}
+							handleQuoteClick={vi.fn()}
+							quoteButtonState={hiddenQuoteButton}
+							text={m.text || ""}
+						/>
+					</div>
+				)
+			})}
+		</div>
+	)
+}
+
+describe("ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01 — two-row invariant (reviewer's discriminator)", () => {
+	it("historical completed result + intermediate streaming follow-up: row A keeps badge, row B doesn't", () => {
+		const RESUMED_PHASE: TurnState = { phase: "streaming", seq: 99 }
+		const rows: ClineMessage[] = [
+			{ ...sayCompletionResult("All done.", true), ts: 1 }, // row A: historical completed
+			{ ...textSay("Working on the follow-up…"), ts: 2 }, // row B: intermediate
+		]
+
+		render(<MultiRowHarness mode="act" rows={rows} turnState={RESUMED_PHASE} />)
+
+		const rowA = screen.getByTestId("row-1")
+		const rowB = screen.getByTestId("row-2")
+		expect(rowA.querySelector('[data-testid="terminal-completion-framing"]')).not.toBeNull()
+		expect(rowB.querySelector('[data-testid="terminal-completion-framing"]')).toBeNull()
+	})
+
+	it("three rows: historical completed + intermediate streaming + second terminal completion → A=badge, B=no, C=badge", () => {
+		const RESUMED_PHASE: TurnState = { phase: "streaming", seq: 99 }
+		const rows: ClineMessage[] = [
+			{ ...sayCompletionResult("All done the first thing.", true), ts: 1 }, // row A: historical completed
+			{ ...textSay("Working on the follow-up…"), ts: 2 }, // row B: intermediate
+			{ ...sayCompletionResult("All done the second thing.", true), ts: 3 }, // row C: second terminal
+		]
+
+		render(<MultiRowHarness mode="act" rows={rows} turnState={RESUMED_PHASE} />)
+
+		const rowA = screen.getByTestId("row-1")
+		const rowB = screen.getByTestId("row-2")
+		const rowC = screen.getByTestId("row-3")
+		expect(rowA.querySelector('[data-testid="terminal-completion-framing"]')).not.toBeNull()
+		expect(rowB.querySelector('[data-testid="terminal-completion-framing"]')).toBeNull()
+		expect(rowC.querySelector('[data-testid="terminal-completion-framing"]')).not.toBeNull()
+	})
+
+	it("M-killer: text says 'Completed' but no marker → no badge (text inference forbidden)", () => {
+		const RESUMED_PHASE: TurnState = { phase: "streaming", seq: 99 }
+		const rows: ClineMessage[] = [
+			{ ...sayCompletionResult("Completed everything successfully.", false), ts: 1 }, // text says Completed, but no marker
+		]
+
+		render(<MultiRowHarness mode="act" rows={rows} turnState={RESUMED_PHASE} />)
+
+		const rowA = screen.getByTestId("row-1")
+		expect(rowA.querySelector('[data-testid="terminal-completion-framing"]')).toBeNull()
 	})
 })

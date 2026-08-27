@@ -1643,6 +1643,15 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 							say: "completion_result",
 							text: resultText,
 							partial: false,
+							// ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01:
+							// immutable per-message identity for "this row WAS a
+							// terminal completion". Stamped at the single canonical
+							// completion publication seam (the attempt_completion /
+							// submit_and_exit content_end). Survives phase flips
+							// (resume / retry / follow-up / compaction) so the
+							// webview can key on a stable marker rather than the
+							// mutable task-level TurnState.phase.
+							isAuthoritativelyCompletedResult: true,
 						})
 						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a
 						// finalized completion_result is the canonical terminal-response
