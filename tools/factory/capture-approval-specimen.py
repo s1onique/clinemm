@@ -252,7 +252,9 @@ def extract_approval_lines(path: Path) -> list[str]:
 SAFE_SESSION_KEYS = {
     "id",
     "sessionId",
+    "session_id",
     "taskId",
+    "task_id",
     "status",
     "source",
     "interactive",
@@ -784,20 +786,172 @@ def begin(args: argparse.Namespace) -> int:
 
 
 def classify_binding(
-    session_candidate_count: int,
-    delta_size: int,
-) -> str:
-    """Classify the specimen binding.
+    discriminator_items: list[dict[str, Any]],
+    session_projection_identities: set[str],
+) -> tuple[str, bool, bool, int]:
+    """Classify the specimen binding along two independent axes.
 
-    PASS is reserved for cases where every forensic discriminator is
-    present: at least one session candidate AND a non-empty event
-    delta. Anything else is CAPTURE_INSUFFICIENT — the artifact was
-    generated (artifactStatus=PASS) but it does not let us identify
-    which specific approval event the human acted on.
+    Axis 1 — runtimeIdentityBound: at least one delta event carries
+    a sessionId/session_id/taskId/task_id/id that also appears in
+    the captured session projections. This proves session/event
+    ownership; the captured event is owned by a captured runtime
+    session, but it does NOT by itself identify the specific approval
+    transaction the human acted on.
+
+    Axis 2 — approvalTransactionBound: the delta contains exactly
+    one qualifying approval transaction — a correlationId group
+    whose members all share the same session identity (the captured
+    one) and contain at least one approvalEntryObserved and at least
+    one approvalTerminalObserved. When more than one correlationId
+    group qualifies, the binding is demoted: session ownership can
+    still be proved, but the human action cannot be uniquely
+    attributed to a single transaction.
+
+    Composition:
+        specimenBinding = PASS only when BOTH axes hold.
+        runtimeIdentityBound       = axis 1 proof
+        approvalTransactionBound   = axis 2 proof
+        qualifyingTransactionCount = number of qualifying groups
+
+    The caller writes all four into binding.json so downstream
+    consumers can distinguish "no events seen" from "events seen but
+    unattributable" AND "exactly one transaction identified" from
+    "multiple transactions present in the same capture window".
     """
-    if session_candidate_count > 0 and delta_size > 0:
-        return "PASS"
-    return "CAPTURE_INSUFFICIENT"
+    if not discriminator_items or not session_projection_identities:
+        return ("CAPTURE_INSUFFICIENT", False, False, 0)
+
+    # --- Axis 1: session/event identity join ---
+    runtime_identity_bound = False
+    for item in discriminator_items:
+        if not isinstance(item, dict):
+            continue
+        sid = item.get("sessionId")
+        if sid is None:
+            continue
+        if str(sid) in session_projection_identities:
+            runtime_identity_bound = True
+            break
+
+    if not runtime_identity_bound:
+        return ("CAPTURE_INSUFFICIENT", False, False, 0)
+
+    # --- Axis 2: approval transaction uniqueness ---
+    qualifying = collect_qualifying_transactions(
+        discriminator_items=discriminator_items,
+        session_projection_identities=session_projection_identities,
+    )
+
+    if len(qualifying) == 1:
+        return ("PASS", True, True, 1)
+
+    # Either zero qualifying transactions, or multiple concurrent
+    # transactions — either way the human action is ambiguous or
+    # absent, so demote the transaction axis but preserve the
+    # session-ownership proof.
+    return ("CAPTURE_INSUFFICIENT", True, False, len(qualifying))
+
+
+def collect_session_projection_identities(
+    session_records: list[dict[str, Any]],
+) -> set[str]:
+    """Project every captured session's identity fields into a set.
+
+    Used by classify_binding to join delta events against captured
+    sessions. The set is intentionally permissive about aliases: if
+    any of {id, sessionId, session_id, taskId, task_id} is present on
+    any captured session, its stringified value joins the set.
+
+    This is not "any string matches any string" — it is a strict set
+    of observed identity values, so an event whose sessionId is
+    session-B will not falsely match a captured session-A whose only
+    identity field is sessionId=session-A.
+    """
+    identities: set[str] = set()
+    for record in session_records:
+        projection = record.get("projection") or {}
+        if not isinstance(projection, dict):
+            continue
+        for key in SESSION_ID_KEYS:
+            value = projection.get(key)
+            if value is None:
+                continue
+            identities.add(str(value))
+    return identities
+
+
+def collect_qualifying_transactions(
+    discriminator_items: list[dict[str, Any]],
+    session_projection_identities: set[str],
+) -> list[dict[str, Any]]:
+    """Group delta events by correlationId and return the qualifying
+    approval transactions.
+
+    A transaction is "qualifying" iff:
+      * correlationId is a non-empty string (distinguish from
+        anonymous events);
+      * the group carries EXACTLY ONE distinct sessionId, and that
+        sessionId is in session_projection_identities (the
+        transaction is wholly owned by ONE captured runtime; a
+        correlation group spanning two captured sessions is
+        incoherent — upstream's approval contract ties the approval
+        identity to the routing sessionId, so a single approval
+        transaction cannot truthfully span sessions);
+      * at least one event has approvalEntryObserved AND at least
+        one has approvalTerminalObserved (complete entry→terminal
+        cycle).
+
+    Note: the previously documented predicate "every member's
+    sessionId joins the captured projection" was WRONG — it proved
+    "every session the group touches belongs to SOME captured
+    session", which silently admitted a cross-session split when
+    two captured sessions both appeared in the group. The strict
+    single-session invariant is the correct one (see the
+    fifth-cycle addendum / HALT_CROSS_SESSION_TRANSACTION_JOIN).
+
+    This does NOT reconstruct upstream's internal approvalId; the
+    correlationId emitted by the diagnostic seam is the correlation
+    authority on the events the tool can see.
+    """
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for item in discriminator_items:
+        if not isinstance(item, dict):
+            continue
+        cid = item.get("correlationId")
+        if not cid or not isinstance(cid, str):
+            continue
+        groups.setdefault(cid, []).append(item)
+
+    qualifying: list[dict[str, Any]] = []
+    for cid, members in groups.items():
+        if not members:
+            continue
+        session_ids = {
+            str(m.get("sessionId"))
+            for m in members
+            if m.get("sessionId") is not None
+        }
+        # The transaction must be wholly owned by ONE captured
+        # session — not "every member is captured", not "at least
+        # one member is captured". This rejects the
+        # session-A-entry/session-B-terminal split as incoherent.
+        if len(session_ids) != 1:
+            continue
+        (sole_session_id,) = session_ids
+        if sole_session_id not in session_projection_identities:
+            continue
+        has_entry = any(m.get("approvalEntryObserved") for m in members)
+        has_terminal = any(m.get("approvalTerminalObserved") for m in members)
+        if not (has_entry and has_terminal):
+            continue
+        qualifying.append({
+            "correlationId": cid,
+            "memberCount": len(members),
+            "sessionIds": sorted(session_ids),
+            "hasEntry": has_entry,
+            "hasTerminal": has_terminal,
+        })
+    return qualifying
 
 
 def finish(args: argparse.Namespace) -> int:
@@ -883,9 +1037,22 @@ def finish(args: argparse.Namespace) -> int:
 
     discriminator = write_discriminator(status["phase_dir"], delta)
 
-    binding = classify_binding(
-        session_candidate_count=status["session_candidate_count"],
-        delta_size=len(delta),
+    # Identity join (P0 closure): the captured event is only causally
+    # linkable to the captured session when at least one delta event
+    # carries a sessionId/session_id/taskId/task_id/id whose value also
+    # appears in the captured session projection. Anything weaker than
+    # an actual set intersection is CAPTURE_INSUFFICIENT regardless of
+    # counts.
+    session_records = json.loads(
+        (status["phase_dir"] / "session-metadata" / "index.json").read_text()
+    )
+    session_projection_identities = collect_session_projection_identities(
+        session_records
+    )
+
+    binding, runtime_identity_bound, approval_transaction_bound, qualifying_transaction_count = classify_binding(
+        discriminator_items=discriminator["items"],
+        session_projection_identities=session_projection_identities,
     )
 
     binding_payload = {
@@ -907,7 +1074,12 @@ def finish(args: argparse.Namespace) -> int:
         "resolvedSessionCandidateCount": status["session_candidate_count"],
         "deltaSize": len(delta),
         "humanChronologyBound": True,
-        "runtimeIdentityBound": True,
+        # Axis 1 — session/event ownership (proved by the identity join).
+        "runtimeIdentityBound": runtime_identity_bound,
+        # Axis 2 — exactly one entry↔terminal correlation group proves
+        # the human's specific approval transaction was identified.
+        "approvalTransactionBound": approval_transaction_bound,
+        "qualifyingTransactionCount": qualifying_transaction_count,
         "sessionBindingAvailable": status["session_candidate_count"] > 0,
         "eventDeltaBound": True,
         "artifactStatus": "PASS",
@@ -921,9 +1093,13 @@ def finish(args: argparse.Namespace) -> int:
     print(f"OUTPUT={status['phase_dir']}")
     print(f"APPROVAL_EVENTS={status['approval_event_count']}")
     print(f"SESSION_CANDIDATES={status['session_candidate_count']}")
+    print(f"SESSION_PROJECTION_IDENTITIES={sorted(session_projection_identities)}")
     print(f"NEW_EVENTS={len(delta)}")
     print(f"DISCRIMINATOR_ITEMS={len(discriminator['items'])}")
+    print(f"QUALIFYING_TRANSACTIONS={qualifying_transaction_count}")
     print(f"SPECIMEN_BINDING={binding}")
+    print(f"RUNTIME_IDENTITY_BOUND={'YES' if runtime_identity_bound else 'NO'}")
+    print(f"APPROVAL_TRANSACTION_BOUND={'YES' if approval_transaction_bound else 'NO'}")
     print(f"ARTIFACT_STATUS=PASS")
     print("MUTATED_RUNTIME_STATE=NO")
     return 0
@@ -972,6 +1148,8 @@ def report(args: argparse.Namespace) -> int:
         f"PENDING_SESSION_CANDIDATES={binding.get('pendingSessionCandidateCount')}",
         f"RESOLVED_SESSION_CANDIDATES={binding.get('resolvedSessionCandidateCount')}",
         f"RUNTIME_IDENTITY_BOUND={'YES' if binding.get('runtimeIdentityBound') else 'NO'}",
+        f"APPROVAL_TRANSACTION_BOUND={'YES' if binding.get('approvalTransactionBound') else 'NO'}",
+        f"QUALIFYING_TRANSACTIONS={binding.get('qualifyingTransactionCount', 0)}",
         f"SESSION_BINDING_AVAILABLE={'YES' if binding.get('sessionBindingAvailable') else 'NO'}",
         f"EVENT_DELTA_BOUND={'YES' if binding.get('eventDeltaBound') else 'NO'}",
         f"TASK_ID={item.get('sessionId') or ''}",

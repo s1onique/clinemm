@@ -1,0 +1,19 @@
+{
+  "capture_id": "20260828T052353Z-ee7198c5",
+  "fixture_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture",
+  "ARTIFACT_STATUS": "PASS",
+  "SPECIMEN_BINDING": "CAPTURE_INSUFFICIENT",
+  "RUNTIME_IDENTITY_BOUND": "YES",
+  "APPROVAL_TRANSACTION_BOUND": "NO",
+  "QUALIFYING_TRANSACTIONS": 0,
+  "NEW_EVENTS": 2,
+  "DISCRIMINATOR_ITEMS": 2,
+  "discriminator_session_ids": [
+    "session-A",
+    "session-B"
+  ],
+  "discriminator_correlation_ids": [
+    "corr-X"
+  ],
+  "P0_closure_verified": "cross_session_transaction_incoherent_with_captured_sessions"
+}

@@ -1,0 +1,13 @@
+{
+  "capture_id": "20260828T052350Z-7ea08329",
+  "fixture_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture",
+  "ARTIFACT_STATUS": "PASS",
+  "SPECIMEN_BINDING": "CAPTURE_INSUFFICIENT",
+  "RUNTIME_IDENTITY_BOUND": "NO",
+  "NEW_EVENTS": 2,
+  "DISCRIMINATOR_ITEMS": 2,
+  "captured_session_identities": [
+    "session-A"
+  ],
+  "P0_closure_verified": true
+}

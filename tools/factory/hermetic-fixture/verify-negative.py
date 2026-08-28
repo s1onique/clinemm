@@ -78,5 +78,5 @@ neg_matrix = {
     "DISCRIMINATOR_ITEMS": len(neg_disc["items"]),
 }
 neg_matrix_path = neg_resolved_dir / "hermetic-verification-matrix-negative.json"
-neg_matrix_path.write_text(json.dumps(neg_matrix, indent=2))
+neg_matrix_path.write_text(json.dumps(neg_matrix, indent=2) + "\n")
 print(f"\nNegative matrix: {neg_matrix_path}")

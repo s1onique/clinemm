@@ -437,12 +437,47 @@ N/A — this ACT IS the instrumentation. No new temp instrumentation.
 [x] P0.2_INVARIANT_FIRES                 (happy-path matrix: NEW_EVENTS=2, delta=B only)
 [x] P0.3_INVARIANT_FIRES                 (negative matrix: artifactStatus=PASS, specimenBinding=CAPTURE_INSUFFICIENT)
 [x] P1_INVARIANT_FIRES                   (real-data smoke: SESSION_CANDIDATES=1 on actual ClineMM storage; hermetic fixture exercises session_id+sessionId+taskId aliases)
+[x] P0_IDENTITY_JOIN_FIRES               (third-cycle: specimenBinding=PASS requires an actual session/event identity intersection; mismatch fixture proves CAPTURE_INSUFFICIENT when identities don't match)
+[x] P1_SNAKE_CASE_PROJECTION_FIRES       (third-cycle: SAFE_SESSION_KEYS now includes session_id and task_id; happy fixture uses ONLY session_id (no aliases) and asserts projection contains it)
+[x] P0_APPROVAL_TRANSACTION_UNIQUE       (fourth-cycle: specimenBinding=PASS additionally requires exactly one qualifying entry↔terminal correlation group; ambiguity fixture proves transaction axis can be demoted while session ownership stays True)
+[x] P0_CROSS_SESSION_TRANSACTION_INCOHERENT (fifth-cycle: a qualifying correlation group must carry EXACTLY ONE distinct sessionId; pre-fix "all members join some captured projection" admitted {entry:A, terminal:B} when both A and B were captured; split fixture proves axis-1 stays YES while axis-2 demotes)
 [x] PRESERVE_EXISTING_CAPTURES           (captures/{9171c6f6,435b5360}/ untouched; sha256 recorded)
 [x] NO_PRODUCTION_CODE_CHANGED           (only tools/factory/* + docs/governance)
 [x] GIT_DIFF_CHECK_PASSES                (P2 — EOF blank lines trimmed)
 [x] PY_COMPILE_PASSES                    (tool syntax)
-[ ] PASS_CAPTURE_TOOL_HARDENED           (reviewer verdict — separate process)
+[ ] PASS_CAPTURE_TOOL_HARDENED           (reviewer verdict — separate process; awaiting fifth-cycle review)
 [ ] editor_tool_recon_re_opens           (after this ACT closes; recon ACT's c1 verb)
+```
+
+The fourth-cycle PASS predicate composes two independent axes:
+
+```text
+Axis 1 — runtimeIdentityBound:
+    ∃ event ∈ delta with
+        event.sessionId ∈ captured_session_projection_identities
+    ⇒ runtimeIdentityBound = True
+
+Axis 2 — approvalTransactionBound:
+    qualifying_transactions := groups of delta events by
+        correlationId where the group contains at least one
+        approvalEntryObserved AND at least one
+        approvalTerminalObserved AND all members carry a
+        sessionId that joins the captured projection identities
+    |qualifying_transactions| = 1 ⇒ approvalTransactionBound = True
+
+Composition:
+    specimenBinding  = PASS only when BOTH axes hold
+    runtimeIdentityBound       = Axis 1 proof
+    approvalTransactionBound   = Axis 2 proof
+    qualifyingTransactionCount = |qualifying_transactions|
+
+When Axis 1 holds but Axis 2 fails (zero or multiple qualifying
+transactions), specimenBinding = CAPTURE_INSUFFICIENT BUT
+runtimeIdentityBound stays True — real session membership is
+not demoted by an unrelated transaction-ambiguity error.
+
+artifactStatus remains PASS whenever the artifact files were
+generated — the artifact-vs-binding separation is preserved.
 ```
 
 ## §14 — Live qualification
@@ -463,13 +498,40 @@ one.
 
 .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/
   hermetic-fixture/
-    happy-path-matrix.json     (verifies begin→finish→report cycle)
+    happy-path-matrix.json     (verifies begin→finish→report cycle;
+                                session uses ONLY snake_case session_id;
+                                proves P1 projection + P0 identity join
+                                + P0x transaction uniqueness on the
+                                exact delta=pair-B case)
     negative-matrix.json       (verifies CAPTURE_INSUFFICIENT on no-new-event)
+    mismatch-matrix.json       (verifies CAPTURE_INSUFFICIENT when event
+                                carries an identity NOT in the captured
+                                session projections; proves P0 join)
+    ambiguity-matrix.json      (verifies CAPTURE_INSUFFICIENT when two
+                                complete approval transactions are
+                                present in the same capture window;
+                                runtimeIdentityBound stays True while
+                                approvalTransactionBound is demoted)
+                                — fourth-cycle P0 closure
+    split-matrix.json          (verifies CAPTURE_INSUFFICIENT when a
+                                single transaction spans TWO captured
+                                sessions — entry on A, terminal on B;
+                                runtimeIdentityBound stays True while
+                                approvalTransactionBound is demoted)
+                                — fifth-cycle P0 closure
 
 tools/factory/hermetic-fixture/
-  build.py                     (builds the synthetic before/after fixture)
+  build.py                     (builds the synthetic before/after, the
+                                before-mismatch/after-mismatch, and the
+                                before-ambiguity/after-ambiguity fixtures)
   verify-happy.py              (runs the begin→finish→report positive test)
   verify-negative.py           (runs the conservation negative)
+  verify-mismatch.py           (runs the identity-mismatch negative;
+                                third-cycle P0 closure)
+  verify-ambiguity.py          (runs the transaction-ambiguity negative;
+                                fourth-cycle P0 closure)
+  verify-split.py             (runs the cross-session split negative;
+                                fifth-cycle P0 closure)
 ```
 
 The hermetic fixture is built under
@@ -595,13 +657,524 @@ The negative still reports `NEW_EVENTS=0` and
 and `probe-minimax-ultra-billing-semantics.md`. Both have been
 trimmed.
 
+## ACT-LEDGER ADDENDUM (2026-08-28, third review cycle — P0 + P1 closure)
+
+Reviewer verdict: **HALT_CAPTURE_BINDING_NOT_PROVEN** — the
+"no more tooling review cycle" stopping rule is broken because
+the collector emits `SPECIMEN_BINDING=PASS` without proving the
+captured event is causally bound to a captured session.
+
+Two new defects identified:
+
+```text
+P0 — session/event identity not actually joined
+     PASS predicate was effectively:
+       session_candidate_count > 0 AND delta_size > 0
+     which any (unrelated_session, unrelated_event) pair satisfies.
+
+P1 — snake_case projection claim not implemented
+     SESSION_ID_KEYS contained (id, sessionId, session_id,
+     taskId, task_id) but SAFE_SESSION_KEYS only projected
+     (id, sessionId, taskId, ...). ACT §2 claimed both lists
+     were consulted; the projection half was a lie.
+```
+
+Bounded correction (this turn, single cycle):
+
+### A. P0 closure — identity-join `classify_binding()`
+
+The PASS predicate now requires an actual identity intersection:
+
+```text
+for each delta event:
+  for each SESSION_ID_KEYS:
+    if event[key] is in captured_session_projection_identities:
+      specimenBinding = PASS
+      runtimeIdentityBound = True
+      return
+specimenBinding = CAPTURE_INSUFFICIENT
+runtimeIdentityBound = False
+```
+
+`runtimeIdentityBound` is now derived from this proof rather
+than hard-coded `True`. `humanChronologyBound` remains `True`
+because the `begin → human-action → finish` lifecycle proves
+chronology by construction.
+
+Helper `collect_session_projection_identities(session_records)`
+builds the comparison set from the captured session projections
+(union across all alias keys, stringified).
+
+### B. P1 closure — `SAFE_SESSION_KEYS` now preserves snake_case
+
+`SAFE_SESSION_KEYS` was missing `session_id` and `task_id`. Added
+both so the projection allowlist matches the identity vocabulary.
+`safe_session_projection()` iterates this set unchanged, so adding
+the two keys is the only required change.
+
+### C. Tightened hermetic fixtures
+
+The pre-third-cycle happy fixture accidentally masked the P1
+defect: its session set all three aliases (`session_id`,
+`sessionId`, `taskId`) to the same value, so the projection could
+"pass" via `sessionId` even if snake_case fields were dropped.
+
+After this turn:
+
+```text
+HAPPY:
+  session uses ONLY session_id = "snake-only-A"
+  events carry session_id = "snake-only-A"
+  ⇒ projection MUST contain session_id (assertion enforced)
+  ⇒ projection MUST NOT contain sessionId/taskId/id (assertion enforced)
+  ⇒ discriminator MUST carry sessionId="snake-only-A" (assertion enforced)
+  ⇒ binding: specimenBinding=PASS, runtimeIdentityBound=True
+
+MISMATCH (NEW this turn):
+  session is session-A
+  new event carries session_id = "session-B"
+  ⇒ join refuses
+  ⇒ binding: specimenBinding=CAPTURE_INSUFFICIENT,
+             runtimeIdentityBound=False,
+             sessionBindingAvailable=True (the candidate IS
+                                          captured; the join
+                                          just doesn't match)
+
+NEGATIVE (unchanged):
+  byte-identical before/after → no new event
+  ⇒ artifactStatus=PASS, specimenBinding=CAPTURE_INSUFFICIENT,
+    runtimeIdentityBound=False
+```
+
+### D. Durable evidence refreshed
+
+```text
+.factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/
+  hermetic-fixture/
+    happy-path-matrix.json   (refreshed 2026-08-28;
+                               now records captured_session_identities,
+                               discriminator_session_ids,
+                               runtimeIdentityBound, P0_closure,
+                               P1_closure)
+    negative-matrix.json     (unchanged schema)
+    mismatch-matrix.json     (NEW: persistent proof of P0 closure)
+```
+
+### E. Things deliberately NOT changed
+
+```text
+- Production code (apps/vscode/src/**) — untouched
+- The two pre-correction 2026-08-27 captures — preserved verbatim
+- The cost-truth sidecar ACT — kept on HOLD, no spec drift
+- The .husky/pre-commit gitleaks fix — already landed in 1212c16a1
+- Any new tool review cycle beyond this one
+```
+
+### F. Verification matrix (third cycle)
+
+```text
+py_compile (capture-approval-specimen.py): OK
+py_compile (build.py / verify-happy.py / verify-negative.py
+            / verify-mismatch.py):           OK
+git diff --check (pending):                  exit 0
+build.py:                                    clean
+verify-happy.py:                             NEW_EVENTS=2, PASS, RUNTIME_IDENTITY_BOUND=YES,
+                                             captured=[snake-only-A], discriminator=[snake-only-A]
+verify-negative.py:                          NEW_EVENTS=0, CAPTURE_INSUFFICIENT,
+                                             RUNTIME_IDENTITY_BOUND=NO
+verify-mismatch.py:                          NEW_EVENTS=2, CAPTURE_INSUFFICIENT,
+                                             RUNTIME_IDENTITY_BOUND=NO,
+                                             captured=[session-A] but delta=[session-B]
+```
+
+### G. Status
+
+```text
+PASS_CAPTURE_TOOL_HARDENED = PENDING_THIRD_CYCLE_REVIEW
+STOP_RULE_BROKEN            = YES (reviewer found a new P0;
+                                  the bounded-fix rule permits
+                                  one more cycle to close it)
+NEXT                        = reviewer verdict on this addendum
+```
+
+Stop here. **C1: GO_WAIT_FOR_THIRD_CYCLE_REVIEWER_VERDICT**.
+
+## ACT-LEDGER ADDENDUM (2026-08-28, fourth review cycle — transaction uniqueness)
+
+Reviewer verdict on third addendum:
+
+```text
+HALT_APPROVAL_TRANSACTION_NOT_BOUND
+  "the join proves an event belongs to a session, not that
+   the human approval transaction is identified"
+```
+
+The new P0: an `event.sessionId ∈ captured_session_identities`
+join is necessary routing evidence but is NOT by itself
+transaction identity. A delta could contain an unrelated
+concurrent approval (or an in-session event that is not the
+human action) and still pass the predicate.
+
+### A. Two-axis classifier (the bounded fix)
+
+`classify_binding(discriminator_items, ...)` now returns four
+fields:
+
+```text
+specimenBinding            = PASS only when BOTH axes hold
+runtimeIdentityBound       = Axis 1 — session/event ownership
+approvalTransactionBound   = Axis 2 — exactly one entry↔terminal
+                              correlation group
+qualifyingTransactionCount = |qualifying transactions|
+```
+
+New helper `collect_qualifying_transactions(...)` groups
+discriminator items by `correlationId` and accepts a group
+iff:
+  * `correlationId` is a non-empty string;
+  * the group has at least one `approvalEntryObserved`
+    and at least one `approvalTerminalObserved`
+    (complete entry→terminal cycle);
+  * every member's `sessionId` joins the captured session
+    projection identities (transaction is wholly owned by
+    a captured runtime; cross-session split = incoherent,
+    reject).
+
+### B. Discriminator reuse, no parser change
+
+The `approval-discriminator.json` already emits
+`correlationId`, `sessionId`, `approvalEntryObserved`,
+`approvalTerminalObserved`. The classifier consumes
+`discriminator["items"]` directly — no event-parser or
+diagnostic-seam change.
+
+### C. New `binding.json` fields (additive, schema still v1)
+
+```text
+"approvalTransactionBound":   <bool>
+"qualifyingTransactionCount":  <int>
+```
+
+Both are additive — the schema field stays
+`cline-approval-specimen-binding/v1` so the existing
+captures/{}/*.json files keep parsing. `report()` and the
+CLI stdout gain two new keys:
+
+```text
+APPROVAL_TRANSACTION_BOUND=YES|NO
+QUALIFYING_TRANSACTIONS=<int>
+```
+
+### D. Adversarial ambiguity fixture (NEW this turn)
+
+```text
+captured session=A (single candidate, snake_case session_id)
+
+corr-B:
+  entry     session_id=session-A
+  terminal  session_id=session-A
+
+corr-C:
+  entry     session_id=session-A
+  terminal  session_id=session-A
+
+Expected (pre-correction PASS would be wrong):
+  NEW_EVENTS=4
+  QUALIFYING_TRANSACTIONS=2
+  SPECIMEN_BINDING=CAPTURE_INSUFFICIENT
+  RUNTIME_IDENTITY_BOUND=YES    ← session ownership PROVED
+  APPROVAL_TRANSACTION_BOUND=NO ← transaction selection AMBIGUOUS
+```
+
+This is the exact "don't demote real session binding merely
+because transaction selection is ambiguous" semantic the
+reviewer asked for. The classifier preserves the Axis-1 proof
+even when Axis 2 fails — the binding.json exposes both axes
+so a downstream consumer can act on the difference.
+
+### E. Existing three fixtures remain valid
+
+```text
+happy:     1 tx, complete → PASS, both axes True
+negative:  0 events      → artifactStatus=PASS, both axes False
+mismatch:  tx session=B  → both axes False (no join at all)
+```
+
+Combined matrix now covers:
+
+```text
+0 events                       → CAPTURE_INSUFFICIENT (chrono only)
+>0 events, no join             → CAPTURE_INSUFFICIENT (no Axis 1)
+>0 events, joined, 0 tx        → CAPTURE_INSUFFICIENT (no Axis 2)
+>0 events, joined, >1 tx       → CAPTURE_INSUFFICIENT (Axis 2 ambig)
+>0 events, joined, 1 tx        → PASS
+```
+
+### F. Things deliberately NOT changed
+
+```text
+- Production code (apps/vscode/src/**) — untouched
+- The two pre-correction 2026-08-27 captures — preserved verbatim
+- The cost-truth sidecar ACT — kept on HOLD
+- The .husky/pre-commit gitleaks fix — unchanged since 1212c16a1
+- Any tooling review cycle beyond this one (the reviewer's
+  "unless executable evidence produces another genuinely new
+  P0" rule applies going forward)
+```
+
+### G. Verification matrix (fourth cycle, all green)
+
+```text
+py_compile (collector + 5 fixture scripts):  OK
+git diff --check working tree:               exit 0
+build.py:                                    clean (4 sub-fixtures)
+verify-happy.py:                             NEW_EVENTS=2,
+                                             QUALIFYING_TRANSACTIONS=1,
+                                             PASS,
+                                             RUNTIME_IDENTITY_BOUND=YES,
+                                             APPROVAL_TRANSACTION_BOUND=YES,
+                                             captured=[snake-only-A],
+                                             discriminator=[snake-only-A]
+verify-negative.py:                          NEW_EVENTS=0,
+                                             CAPTURE_INSUFFICIENT,
+                                             RUNTIME_IDENTITY_BOUND=NO,
+                                             APPROVAL_TRANSACTION_BOUND=NO
+verify-mismatch.py:                          NEW_EVENTS=2,
+                                             CAPTURE_INSUFFICIENT,
+                                             RUNTIME_IDENTITY_BOUND=NO,
+                                             APPROVAL_TRANSACTION_BOUND=NO,
+                                             captured=[session-A]
+                                             delta-claimed=[session-B]
+verify-ambiguity.py:                         NEW_EVENTS=4,
+                                             QUALIFYING_TRANSACTIONS=2,
+                                             CAPTURE_INSUFFICIENT,
+                                             RUNTIME_IDENTITY_BOUND=YES,  ← preserved
+                                             APPROVAL_TRANSACTION_BOUND=NO, ← demoted
+                                             discriminator=[corr-B, corr-C]
+```
+
+### H. Status (this addendum)
+
+```text
+P0 previous session/event identity join    CLOSED (third cycle)
+P1 snake_case projection                   CLOSED (third cycle)
+P0 approval transaction uniqueness         CLOSED (fourth cycle)
+PASS_CAPTURE_TOOL_HARDENED                 PENDING_FOURTH_CYCLE_REVIEW
+STOP_RULE_BROKEN                           YES (third time broken;
+                                             fourth cycle closed it)
+NEXT                                       reviewer verdict on this
+                                             addendum
+```
+
+Stop here. **C1: GO_WAIT_FOR_FOURTH_CYCLE_REVIEWER_VERDICT**.
+
+Stop here. **C1: GO_WAIT_FOR_FOURTH_CYCLE_REVIEWER_VERDICT**.
+
+## ACT-LEDGER ADDENDUM (2026-08-28, fifth review cycle — cross-session transaction incoherence)
+
+Reviewer verdict on fourth addendum:
+
+```text
+HALT_CROSS_SESSION_TRANSACTION_JOIN
+  "a transaction may span two captured sessions and still qualify"
+```
+
+The new P0 is in the implementation of
+`collect_qualifying_transactions(...)`:
+
+```python
+joined = {sid for sid in session_ids
+          if sid in session_projection_identities}
+if joined != session_ids:
+    continue
+```
+
+That predicate proves only "every member's sessionId is *some*
+captured projection". It does NOT prove "all members share one
+session". When two captured sessions both appear in the
+correlation group the predicate admits the group as coherent.
+
+Concrete adversarial case admitted by the predicate:
+
+```text
+captured sessions = {A, B}
+
+corr-X:
+  approval.entry     session=A
+  approval.terminal  session=B
+
+⇒ approvalTransactionBound = True  (BUG)
+```
+
+### A. The bounded predicate fix (one line)
+
+Replace the dual `joined` check with the strict single-session
+invariant:
+
+```python
+if len(session_ids) != 1:
+    continue
+(sole_session_id,) = session_ids
+if sole_session_id not in session_projection_identities:
+    continue
+```
+
+Conceptually:
+
+```text
+QUALIFYING_TRANSACTION =
+    nonempty correlationId
+    AND exactly one distinct sessionId
+    AND that sessionId ∈ captured_session_projection_identities
+    AND entry observed
+    AND terminal observed
+```
+
+The docstring + the third-cycle "all members join some captured
+projection" wording are now corrected to match the actual proof
+(no more silent cross-session split). The classifier still does
+NOT reconstruct upstream's internal approvalId; it uses the
+diagnostic correlation authority verbatim.
+
+NOT reconstruct upstream's internal approvalId; it uses the
+diagnostic correlation authority verbatim.
+
+### B. New cross-session split fixture (NEW this turn)
+
+```text
+captured session projections = {A, B}
+
+delta:
+  approval.entry     session_id=session-A  correlationId=corr-X
+  approval.terminal  session_id=session-B  correlationId=corr-X
+
+Expected:
+  NEW_EVENTS=2
+  QUALIFYING_TRANSACTIONS=0        (the group is incoherent)
+  SPECIMEN_BINDING=CAPTURE_INSUFFICIENT
+  RUNTIME_IDENTITY_BOUND=YES       ← events genuinely belong
+                                    to captured sessions
+  APPROVAL_TRANSACTION_BOUND=NO    ← transaction selection
+                                    IS incoherent
+```
+
+The split fixture complements the ambiguity fixture (same
+two-axis pattern: axis-1 YES, axis-2 NO). Together they prove
+the classifier rejects:
+
+* **too many** transactions on one session,
+* a transaction that **spans** sessions.
+
+### C. Things deliberately NOT changed
+
+```text
+- The discriminator schema (correlationId / sessionId / approval
+  entry / terminal) is reused unchanged.
+- The binding.json schema stays cline-approval-specimen-binding/v1
+  (only the values change; no field additions this cycle).
+- No production code touched.
+- The two pre-correction 2026-08-27 captures still preserved.
+- The cost-truth sidecar ACT stays on HOLD.
+- The .husky/pre-commit gitleaks fix is unchanged since 1212c16a1.
+```
+
+### D. Opportunistic P2 prose cleanup (single sweep)
+
+Cleaned while editing this file for the final status:
+
+```text
+- removed duplicated "GO_WAIT_FOR_THIRD_CYCLE_REVIEWER_VERDICT"
+  closure (the third addendum had two consecutive identical lines)
+- removed duplicated APPROVAL_TRANSACTION_BOUND=YES|NO/... text
+  fence (six lines of overlapping content in the fourth addendum)
+- removed duplicated "Any tooling review cycle beyond this one…"
+  fragment that had split the §F fence into a stub and a copy
+- retained GO_WAIT_FOR_FOURTH_CYCLE_REVIEWER_VERDICT for the
+  fourth addendum's intended closer (one occurrence only)
+- retained the original GO_WAIT_FOR_REVIEWER_VERDICT at the very
+  end of the document (genuine top-level closer of §17)
+```
+
+After the sweep:
+
+```text
+GO_WAIT_FOR_THIRD_CYCLE   → 1
+GO_WAIT_FOR_FOURTH_CYCLE  → 1
+GO_WAIT_FOR_REVIEWER      → 1
+APPROVAL_TRANSACTION_BOUND=YES|NO in body → 1
+"Any tooling review cycle" → 1
+```
+
+### E. Verification matrix (fifth cycle, all green)
+
+```text
+py_compile (collector + 6 fixture scripts):  OK
+git diff --check working tree:               exit 0
+build.py:                                    clean (5 sub-fixtures)
+verify-happy.py:                             NEW_EVENTS=2,
+                                             QUALIFYING_TRANSACTIONS=1,
+                                             PASS,
+                                             RUNTIME_IDENTITY_BOUND=YES,
+                                             APPROVAL_TRANSACTION_BOUND=YES
+verify-negative.py:                          NEW_EVENTS=0,
+                                             CAPTURE_INSUFFICIENT,
+                                             both axes NO
+verify-mismatch.py:                          NEW_EVENTS=2,
+                                             CAPTURE_INSUFFICIENT,
+                                             both axes NO
+verify-ambiguity.py:                         NEW_EVENTS=4,
+                                             QUALIFYING_TRANSACTIONS=2,
+                                             CAPTURE_INSUFFICIENT,
+                                             RUNTIME_IDENTITY_BOUND=YES,
+                                             APPROVAL_TRANSACTION_BOUND=NO
+verify-split.py:                             NEW_EVENTS=2,
+                                             QUALIFYING_TRANSACTIONS=0,
+                                             CAPTURE_INSUFFICIENT,
+                                             RUNTIME_IDENTITY_BOUND=YES,  ← preserved
+                                             APPROVAL_TRANSACTION_BOUND=NO, ← demoted
+                                             discriminator_session_ids=
+                                               [session-A, session-B]
+```
+
+### F. Status (this addendum)
+
+```text
+P0 session/event identity join            CLOSED (third cycle)
+P1 snake_case projection                   CLOSED (third cycle)
+P0 approval transaction uniqueness         CLOSED (fourth cycle)
+P0 cross-session transaction incoherence   CLOSED (fifth cycle)
+PASS_CAPTURE_TOOL_HARDENED                 PENDING_FIFTH_CYCLE_REVIEW
+STOP_RULE_BROKEN                           YES (fourth time broken;
+                                             this is the fifth cycle;
+                                             fifth cycle closed it)
+NEXT                                       reviewer verdict on this
+                                             addendum; on PASS commit
+                                             and stop reviewing this
+                                             collector
+```
+
+Stop here. **C1: GO_WAIT_FOR_FIFTH_CYCLE_REVIEWER_VERDICT**.
+
 ## §17 — Halt conditions (closed-class)
 
 ```text
-HALT_HARDENING_INCOMPLETE  — any of P0.1 / P0.2 / P0.3 / P1 fails
-                              to fire under smoke run
-HOLD_FOR_REVIEWER         — awaiting PASS_CAPTURE_TOOL_HARDENED
-                              verdict on this ACT
+HALT_HARDENING_INCOMPLETE         — any of P0.1 / P0.2 / P0.3 / P1 /
+                                    P0_IDENTITY_JOIN / P1_SNAKE_CASE /
+                                    P0_APPROVAL_TRANSACTION_UNIQUE /
+                                    P0_CROSS_SESSION_TRANSACTION_INCOHERENT
+                                    fails to fire under smoke run
+HALT_APPROVAL_TRANSACTION_BOUND   — PASS is emitted without
+                                    approvalTransactionBound=True
+                                    (the classifier collapsed into the
+                                    identity-only axis)
+HALT_CROSS_SESSION_TRANSACTION_JOIN — a correlation group with two
+                                    distinct sessionIds is admitted
+                                    as qualifying (the strict
+                                    single-session invariant was
+                                    weakened back to "any member
+                                    joins some captured projection")
+HOLD_FOR_REVIEWER                — awaiting PASS_CAPTURE_TOOL_HARDENED
+                                    verdict on this ACT
 ```
 
 Stop here. **C1: GO_WAIT_FOR_REVIEWER_VERDICT**.

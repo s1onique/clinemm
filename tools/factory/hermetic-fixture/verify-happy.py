@@ -63,13 +63,29 @@ assert_eq(ps["approvalEventCount"], len(pfp_lines), "event count != fingerprint 
 assert_eq(ps["approvalEventCount"], 2, "begin should see exactly pair A (2 events)")
 
 proj_keys = set()
+proj_identity_values = set()
 for rec in pi:
     if isinstance(rec.get("projection"), dict):
         proj_keys.update(rec["projection"].keys())
+        for k, v in rec["projection"].items():
+            if k in ("id", "sessionId", "session_id", "taskId", "task_id") and v is not None:
+                proj_identity_values.add(str(v))
 print(f"  session projection keys: {sorted(proj_keys)[:8]}")
-assert proj_keys & {"session_id", "sessionId", "taskId", "id"}, \
-    f"projection missing identity keys: {proj_keys}"
-print("  P1 closed (session_id/sessionId/taskId aliased)")
+print(f"  captured session identities: {sorted(proj_identity_values)}")
+
+# Tightened P1 invariant: the fixture session uses ONLY `session_id`
+# (no `sessionId`/`taskId` aliases), so the projection MUST contain
+# `session_id` with value `snake-only-A`. If the projection allowlist
+# still drops snake_case fields, this assertion fires.
+assert "session_id" in proj_keys, \
+    f"P1 defect: projection missing 'session_id'. keys={sorted(proj_keys)}"
+assert "snake-only-A" in proj_identity_values, \
+    f"P1 defect: 'snake-only-A' missing from projected identities. got={sorted(proj_identity_values)}"
+# And the projection must NOT have phantom aliases the fixture never set:
+proj_session_keys = proj_keys & {"session_id", "sessionId", "taskId", "task_id", "id"}
+assert proj_session_keys <= {"session_id"}, \
+    f"fixture only sets session_id; projection contained extra aliases: {proj_session_keys}"
+print("  P1 closed (snake_case projection proven, no phantom aliases)")
 print("  P0.2 frozen (fingerprints written)")
 
 
@@ -89,14 +105,17 @@ fs = parse_kv(r.stdout)
 print(f"finish summary: NEW_EVENTS={fs['NEW_EVENTS']} "
       f"DISCRIMINATOR_ITEMS={fs['DISCRIMINATOR_ITEMS']} "
       f"SPECIMEN_BINDING={fs['SPECIMEN_BINDING']} "
-      f"ARTIFACT_STATUS={fs['ARTIFACT_STATUS']}")
+      f"ARTIFACT_STATUS={fs['ARTIFACT_STATUS']} "
+      f"RUNTIME_IDENTITY_BOUND={fs.get('RUNTIME_IDENTITY_BOUND')}")
 assert_eq(fs["CAPTURE_ID"], capture_id, "CAPTURE_ID mismatch")
 assert_eq(int(fs["NEW_EVENTS"]), 2, "expected 2 new events (pair B)")
 assert_eq(fs["SPECIMEN_BINDING"], "PASS", "SPECIMEN_BINDING")
 assert_eq(fs["ARTIFACT_STATUS"], "PASS", "ARTIFACT_STATUS")
+assert_eq(fs.get("RUNTIME_IDENTITY_BOUND"), "YES", "RUNTIME_IDENTITY_BOUND")
 print("  CAPTURE_ID bound (begin == finish)")
 print("  P0.2: NEW_EVENTS=2 (pair B)")
-print("  P0.3: SPECIMEN_BINDING=PASS")
+print("  P0.3: SPECIMEN_BINDING=PASS (identity join succeeded)")
+print("  P0 closure: RUNTIME_IDENTITY_BOUND=YES (snake_case identity joined)")
 
 # STEP 2 VERIFY (resolved artifacts)
 print("\n=== STEP 2 VERIFY (resolved artifacts) ===")
@@ -108,7 +127,9 @@ discriminator = json.loads((resolved_dir / "approval-discriminator.json").read_t
 print(f"  schema={binding['schema']} artifactStatus={binding['artifactStatus']} "
       f"specimenBinding={binding['specimenBinding']} "
       f"sessionBindingAvailable={binding['sessionBindingAvailable']} "
-      f"runtimeIdentityBound={binding['runtimeIdentityBound']}")
+      f"runtimeIdentityBound={binding['runtimeIdentityBound']} "
+      f"approvalTransactionBound={binding['approvalTransactionBound']} "
+      f"qualifyingTransactionCount={binding['qualifyingTransactionCount']}")
 print(f"  delta={len(delta_lines)} before={len(before_lines)} after={len(after_lines)} "
       f"discriminator_items={len(discriminator['items'])}")
 
@@ -118,6 +139,9 @@ assert_eq(binding["specimenBinding"], "PASS", "specimenBinding")
 assert binding["sessionBindingAvailable"] is True
 assert binding["eventDeltaBound"] is True
 assert binding["runtimeIdentityBound"] is True
+assert binding["approvalTransactionBound"] is True, \
+    "approvalTransactionBound must be True (exactly one qualifying transaction in happy fixture)"
+assert_eq(binding["qualifyingTransactionCount"], 1, "qualifyingTransactionCount")
 assert_eq(len(delta_lines), 2, "delta should be pair B (2 events)")
 assert_eq(len(before_lines), 2, "before should be pair A (2 events)")
 assert_eq(len(after_lines), 4, "after should be A+B (4 events)")
@@ -132,6 +156,16 @@ print(f"  delta correlationIds={sorted(delta_corr_ids)}")
 assert_eq(delta_corr_ids, {"corr-B"}, "delta should contain only pair B")
 print("  P0.2 verified: BEFORE=A(2), AFTER=A+B(4), DELTA=B only(2)")
 print("  P0.3 verified: artifactStatus=PASS, specimenBinding=PASS")
+print("  P0 verified: identity join (session_id=snake-only-A) succeeded")
+
+# The discriminator must carry the snake_case sessionId for every delta
+# event. This is the per-event identity that the runtimeIdentityBound
+# check joined against the captured projection.
+disc_session_ids = {item.get("sessionId") for item in discriminator["items"]}
+print(f"  discriminator sessionIds={sorted(disc_session_ids)}")
+assert_eq(disc_session_ids, {"snake-only-A"},
+          "discriminator sessionId (every event must carry snake_case identity)")
+print("  P1 verified: discriminator sessionId populated from snake_case event field")
 
 required = ("toolName", "correlationId", "sessionId",
            "policyAutoApprove", "shouldAutoApproveTool",
@@ -170,6 +204,7 @@ matrix = {
         "sessionCandidateCount": ps["sessionCandidateCount"],
         "fingerprintCount": len(pfp_lines),
         "sessionProjectionKeys": sorted(proj_keys),
+        "captured_session_identities": sorted(proj_identity_values),
     },
     "step2_finish": {
         "binding": binding,
@@ -178,6 +213,13 @@ matrix = {
         "after_lines": len(after_lines),
         "discriminator_items": len(discriminator["items"]),
         "delta_correlation_ids": sorted(delta_corr_ids),
+        "discriminator_session_ids": sorted(disc_session_ids),
+        "runtime_identity_bound": binding["runtimeIdentityBound"],
+        "approval_transaction_bound": binding["approvalTransactionBound"],
+        "qualifying_transaction_count": binding["qualifyingTransactionCount"],
+        "P0_closure": "identity_join(snake_case session_id=snake-only-A) succeeded",
+        "P1_closure": "snake_case projection proven (fixture session uses session_id only)",
+        "P0x_closure": "exactly_one_qualifying_transaction(corr-B) identified human action",
     },
     "step3_report": {
         "report_json_bytes": report_json.stat().st_size,
@@ -186,5 +228,5 @@ matrix = {
     },
 }
 matrix_path = resolved_dir / "hermetic-verification-matrix.json"
-matrix_path.write_text(json.dumps(matrix, indent=2))
+matrix_path.write_text(json.dumps(matrix, indent=2) + "\n")
 print(f"\nMatrix: {matrix_path}")
