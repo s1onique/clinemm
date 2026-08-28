@@ -1,9 +1,12 @@
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01
 
 > **Status**: **OPEN / POLICY_INTENT_BOUND** — §2 source-seam-map PASS at
-> HEAD `266def919` / TREE `3aeabf41`; §3 classification = **Branch C-prime
-> (PRODUCT_POLICY_DEFECT)** — the auto-approval/YOLO surface is NOT
-> co-extensive with the Seatbelt network policy axis; §4 RED in flight.
+> ENTRY HEAD `266def919` / ENTRY TREE `3aeabf41` (recon subject);
+> ACT LAUNCH commit `4963904e9` / LAUNCH TREE `bb3667c17` (board +
+> ACT + evidence + .gitignore whitelist). §3 classification =
+> **Branch C-prime (PRODUCT_POLICY_DEFECT)** — the auto-approval/YOLO
+> surface is NOT co-extensive with the Seatbelt network policy axis;
+> §4 RED deferred to darwin host (HOST_REQUIRED).
 >
 > **Primary purpose**: LIVE FAILURE → INTENT/POLICY CLASSIFICATION →
 > RED → NECESSITY → BOUNDED REPAIR.
@@ -200,13 +203,15 @@ Only P0 halts.
 ## §13 — Gate ledger
 
 ```text
-[x] ENTRY_HEAD_CAPTURED                  = 266def919
-[x] ENTRY_TREE_CAPTURED                  = 3aeabf41
-[x] WORKTREE_CLEAN                        (verified `git status --short` empty)
+[x] ENTRY_HEAD_CAPTURED                  = 266def919   (recon subject)
+[x] ENTRY_TREE_CAPTURED                  = 3aeabf41    (tree of ENTRY_HEAD)
+[x] LAUNCH_HEAD                          = 4963904e9   (board + ACT + evidence + .gitignore whitelist)
+[x] LAUNCH_TREE                          = bb3667c17   (tree of LAUNCH_HEAD)
+[x] WORKTREE_CLEAN                        (verified `git status --short` empty at both checkpoints)
 [x] PROTECTED_STASH_PRESERVED            (1 entry; "c2-green-and-c2-p1-delta")
 [x] PASS_RECON_SEAM_MAPPED                (source-seam-map.md; this ACT §2)
 [x] POLICY_INTENT_BOUND                   (Branch C-prime; source-seam-map.md §D)
-[ ] NECESSITY_RELATION_CONFIRMED          (§6 in flight; needs §4 probes)
+[ ] NECESSITY_RELATION_CONFIRMED          (§6 in flight; needs §4 probes on darwin host)
 [ ] RED_REAL_PRODUCTION_SEAM              (deferred to §6 PASS)
 [ ] CAUSAL_ABLATION                       (deferred to §6)
 [ ] GREEN                                 (deferred)
@@ -360,15 +365,19 @@ Branches A/B/D/E ruled out per source-seam-map.md §D.
 
 ## §1 — Entry discipline
 
-Verified at ACT open:
+Verified at ACT open (recon subject) and at ACT launch (board binding):
 
 ```text
-ENTRY_HEAD      = 266def919
-ENTRY_TREE      = 3aeabf41
-WORKTREE        = CLEAN (no uncommitted tracked changes)
-PROTECTED_STASH = PRESERVED (1 entry; "c2-green-and-c2-p1-delta")
-ENTRY_BRANCH    = main (HEAD; canonical consolidation at d844177bc)
+ENTRY_HEAD      = 266def919   (recon subject; the commit the recon read)
+ENTRY_TREE      = 3aeabf41    (tree of ENTRY_HEAD)
+LAUNCH_HEAD     = 4963904e9   (the commit that lands this ACT file,
+                               the evidence file, the board row, and
+                               the .gitignore whitelist)
+LAUNCH_TREE     = bb3667c17   (tree of LAUNCH_HEAD)
+WORKTREE        = CLEAN       (no uncommitted tracked changes)
+PROTECTED_STASH = PRESERVED   (1 entry; "c2-green-and-c2-p1-delta")
+ENTRY_BRANCH    = main        (HEAD; canonical consolidation at d844177bc)
 ```
 
-No entry anomaly. No mixed-fix carry-over.
+No entry anomaly. No mixed-fix carry-over. The recon subject (HEAD `266def919`) is preserved as `ENTRY_HEAD`; the ACT launch commit (HEAD `4963904e9`) carries the durable binding forward.
 

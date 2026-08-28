@@ -1,6 +1,8 @@
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01 — source-seam-map
 
-> **Status**: §2 PASS at HEAD `266def919` / TREE `3aeabf41`.
+> **Status**: §2 PASS at ENTRY HEAD `266def919` / ENTRY TREE `3aeabf41`
+> (recon subject); ACT LAUNCH commit `4963904e9` / LAUNCH TREE
+> `bb3667c17` (board + ACT + evidence + .gitignore whitelist).
 > Recon read from current source, not inferred. Production seam traced
 > end-to-end. §3 classification below.
 >
@@ -348,12 +350,15 @@ evidence class:
   policy intent              = BOUND           (Branch C-prime; the intent
 ## §I — Provenance
 
-- Recon read from current source at HEAD `266def919` /
-  tree `3aeabf41`.
+- Recon read from current source at ENTRY HEAD `266def919` /
+  ENTRY TREE `3aeabf41`. ACT launch commit `4963904e9` / LAUNCH TREE
+  `bb3667c17` (board + ACT + evidence + .gitignore whitelist; no
+  production code changed by this ACT).
 - Source files inspected:
   - `apps/vscode/src/sdk/sandbox-policy.ts` (642 lines) — full read.
-  - `apps/vscode/src/sdk/command-job-manager.ts:440-600`
-    — capability construction + backend resolver seam.
+  - `apps/vscode/src/sdk/command-job-manager.ts:440-720`
+    — capability construction + backend resolver seam + per-command
+      channel mapping (no network-axis override).
   - `sdk/packages/core/src/runtime/sandbox/types.ts` (314 lines) — full read.
   - `sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts:1-403`
     — full read.
@@ -361,6 +366,9 @@ evidence class:
     — full read (network rule builder at line 274-279).
   - `sdk/packages/core/src/runtime/sandbox/sandbox-backend.ts` (136 lines)
     — full read.
+  - `sdk/packages/core/src/runtime/sandbox/macos/seatbelt-availability.ts`
+    — cached availability probe (darwin + /usr/bin/sandbox-exec + minimal
+      `(version 1) (allow default)` profile).
   - `apps/vscode/src/sdk/session-auto-approval.ts:100-200`
     — YOLO predicate (isYoloSessionRequested at line 153;
       deriveExplicitCompletionAuthority at line 191).
@@ -369,10 +377,11 @@ evidence class:
   - `sdk/packages/core/src/runtime/sandbox/correction01-red.test.ts:347-431`
     — CORRECTION01 R4 (the historical RED for `(allow network*)`).
 - Predecessor epics / ACTs read:
-  - `.factory/epic-board.md` — current frontier at HEAD.
+  - `.factory/epic-board.md` — current frontier at HEAD (entry discipline
+    from `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01.md`; this
+    ACT follows the same HEAD/TREE + launch-commit convention).
   - `.factory/acts/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01.md`
-    — §1 entry discipline (HEAD/TREE capture; this ACT follows the
-      same convention).
+    — §1 entry discipline template.
   - `.factory/epics/safe-yolo-seatbelt.md:1-46` — closed-substrate
     state and the deferred network hardening lane.
 - Companion ACTs in the Safe-YOLO family (all CLOSED):
