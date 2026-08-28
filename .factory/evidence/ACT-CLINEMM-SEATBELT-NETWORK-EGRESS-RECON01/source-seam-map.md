@@ -491,4 +491,3 @@ For the live specimen (CLINEMM_SAFE_YOLO_NETWORK unset, "ALL — this task"):
   BACKEND                         = SeatbeltSandboxBackendExperimental
   GENERATED_SEATBELT_NETWORK_RULE = "(deny network*)"
 ```
-

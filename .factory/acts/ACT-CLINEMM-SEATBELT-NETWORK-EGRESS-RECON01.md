@@ -380,4 +380,3 @@ ENTRY_BRANCH    = main        (HEAD; canonical consolidation at d844177bc)
 ```
 
 No entry anomaly. No mixed-fix carry-over. The recon subject (HEAD `266def919`) is preserved as `ENTRY_HEAD`; the ACT launch commit (HEAD `4963904e9`) carries the durable binding forward.
-
