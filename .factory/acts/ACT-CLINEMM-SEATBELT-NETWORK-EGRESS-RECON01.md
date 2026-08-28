@@ -65,15 +65,18 @@ OPEN_HEAD       = 4963904e9   (first commit creating this ACT file,
 LAUNCH_HEAD     = a76ff4137   (durable-binding freeze; the commit list
                                below carries the freeze forward)
 LAUNCH_TREE     = fa383737f   (tree of LAUNCH_HEAD)
-CURRENT_HEAD    = 4a023d31d   (HEAD at the time of the §1-pointer
+CURRENT_HEAD    = 1c6dee1c2   (HEAD at the time of the §1-pointer
                                refresh commit; subsequent commits do
                                not re-bind LAUNCH_HEAD — this row is a
                                pointer, not a contract; re-read at §15
                                if a future commit touches ACT content.)
 
 Commit list for this ACT (chronological, most-recent first):
-  4a023d31d  CURRENT_HEAD pointer refresh (§1 + §13 + evidence §I
-            now point to 4a023d31d; content unchanged at this step)
+  1c6dee1c2  §1 commit-list + §13 CURRENT_HEAD pointer refresh;
+            CONTENT pointers now consistent at this commit
+            (CURRENT_HEAD at the time of this refresh)
+  4a023d31d  CURRENT_HEAD pointer refresh (interim; superseded by
+            1c6dee1c2; recorded for trace)
   168d0b91a  §3 demotion + §0..§17 ordering repair + identity
             terminology reconciliation (NOT a re-binding of LAUNCH_HEAD)
   a4f639cb6  empty finalize-entry-discipline amendment (no content
@@ -369,7 +372,7 @@ HOLD
 [x] OPEN_HEAD                            = 4963904e9   (first commit creating ACT)
 [x] LAUNCH_HEAD                          = a76ff4137   (durable-binding freeze)
 [x] LAUNCH_TREE                          = fa383737f   (tree of LAUNCH_HEAD)
-[x] CURRENT_HEAD                         = 4a023d31d   (last ACT-only edit HEAD at
+[x] CURRENT_HEAD                         = 1c6dee1c2   (last ACT-only edit HEAD at
                                             the time this row was last
                                             refreshed; subsequent commits
                                             do not re-bind LAUNCH_HEAD.

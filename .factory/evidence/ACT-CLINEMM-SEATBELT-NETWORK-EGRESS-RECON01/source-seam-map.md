@@ -3,7 +3,7 @@
 > **Status**: §2 PASS at ENTRY HEAD `266def919` / ENTRY TREE `3aeabf41`
 > (recon subject); OPEN HEAD `4963904e9` / LAUNCH HEAD `a76ff4137` /
 > LAUNCH TREE `fa383737f` (durable-binding freeze per the ACT §1
-> commit list); CURRENT HEAD `4a023d31d` (HEAD at the §1-pointer
+> commit list); CURRENT HEAD `1c6dee1c2` (HEAD at the §1-pointer
 > refresh commit, not re-binding the launch). Recon read from current
 > source, not
 > inferred. Production seam traced end-to-end. §3 classification
@@ -386,7 +386,7 @@ evidence class:
 - Recon read from current source at ENTRY HEAD `266def919` /
   ENTRY TREE `3aeabf41`. ACT OPEN HEAD `4963904e9` / LAUNCH HEAD
   `a76ff4137` / LAUNCH TREE `fa383737f` (durable-binding freeze
-  per ACT §1); CURRENT HEAD `4a023d31d` (the §1-pointer refresh
+  per ACT §1); CURRENT HEAD `1c6dee1c2` (the §1-pointer refresh
   commit, NOT a re-binding of the launch). No production code
   changed by this ACT.
 - Source files inspected:
