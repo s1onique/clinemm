@@ -136,6 +136,15 @@ apps/examples/desktop-app/.cursor/settings.json
 # so both must be durably tracked for the canonical link to survive a
 # fresh clone.
 !/.factory/acts/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01.md
+# ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01: bounded
+# correction ACT authored 2026-08-27 against the editor-tool recon
+# ACT's evidence-acquisition toolchain (capture-approval-specimen.py).
+# Status OPEN / HIGH. The correction ACT binds to the editor-tool
+# recon ACT (which it corrects) and to the binding record
+# .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/specimen-20260827-command-approval01.json,
+# so the ACT file AND the captures/ binding record must both be
+# durably tracked for the canonical link to survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
 # Same durable-binding reason as the ACT file above.
 # Mirror the .factory/acts/ default-deny + whitelist pattern:
 #   1. re-include the .factory/evidence/ directory so git can recurse,
@@ -145,6 +154,11 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/evidence/
 /.factory/evidence/*
 !/.factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/
+# ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01 evidence
+# (hermetic-fixture/happy-path-matrix.json + negative-matrix.json).
+# Same durable-binding reason as the ACT file: the matrices prove
+# the corrected collector's P0.2 / P0.3 / P1 invariants end-to-end.
+!/.factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/
 # ACT-CLINEMM-TASK-COST-TRUTH-RECON01: backlog recon ACT authored
 # 2026-08-27. Status OPEN / HIGH (cost provenance lane). Recon §2
 # PASS_RECON_SURFACE_MAPPED at the commit of authorship; §3 live

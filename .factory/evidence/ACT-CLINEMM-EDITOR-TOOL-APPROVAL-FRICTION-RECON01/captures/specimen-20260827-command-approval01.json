@@ -1,0 +1,36 @@
+{
+  "schema": "cline-approval-specimen-binding/v1",
+  "specimen": "SPECIMEN_COMMAND_APPROVAL_01",
+  "act": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+  "pendingCaptureId": "20260827T211256Z-9171c6f6",
+  "resolvedCaptureId": "20260827T211338Z-435b5360",
+  "humanObserved": {
+    "autoApproveAllArmedBeforeTask": true,
+    "visiblePrompt": "command approval",
+    "promptWasPendingDuringFirstCapture": true,
+    "humanRanCommandBetweenCaptures": true
+  },
+  "capturesFrozenAt": "2026-08-27T21:13:38Z",
+  "capturesRepositoryHead": "1b701e3a7d09916b593aa2100b9931c3151bb271",
+  "capturesFilesUnchangedFromAuthoring": true,
+  "humanChronologyBound": true,
+  "runtimeIdentityBound": false,
+  "sessionBindingAvailable": false,
+  "eventDeltaBound": false,
+  "sessionCandidateCountPending": 0,
+  "sessionCandidateCountResolved": 0,
+  "approvalEventCountPending": 35,
+  "approvalEventCountResolved": 35,
+  "classification": "CAPTURE_INSUFFICIENT",
+  "remediationAct": "ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01",
+  "whyInsufficient": [
+    "resolved invocation omitted --capture-id; the script generated a NEW capture ID (435b5360) instead of binding back to the pending ID (9171c6f6). Filesystem does not assert that resolved resolves pending.",
+    "SESSION_CANDIDATES=0 in both phases — the conservative session.json / messages.json filename heuristic missed the real session storage layout, so no per-task correlation is possible.",
+    "Both phases report APPROVAL_EVENTS=35 with no delta computation, so the specific event that the human approved is not identified."
+  ],
+  "doNot": [
+    "claim this file proves runtime correlation — it explicitly does not",
+    "delete or rewrite the two captures — they are valid hard copies of a chronology the human remembers",
+    "use this binding record as a policy-vs-control-flow classification basis"
+  ]
+}

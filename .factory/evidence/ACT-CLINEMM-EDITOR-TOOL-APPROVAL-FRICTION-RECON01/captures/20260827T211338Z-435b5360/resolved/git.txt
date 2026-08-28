@@ -1,0 +1,13 @@
+REPO=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD=1b701e3a7d09916b593aa2100b9931c3151bb271
+TREE=53f7c2ca0ba1ba56b1fdf55f6751922003ba11f6
+BRANCH=main
+--- STATUS ---
+M .factory/acts/ACT-CLINEMM-TASK-COST-TRUTH-RECON01.md
+ M .factory/epic-board.md
+ M .factory/epics/product-config-branding.md
+?? .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/
+?? .factory/evidence/ACT-CLINEMM-TASK-COST-TRUTH-RECON01/
+?? tools/factory/capture-approval-specimen.py
+--- STASH ---
+stash@{0}: On main: c2-green-and-c2-p1-delta
