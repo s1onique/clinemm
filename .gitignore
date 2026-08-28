@@ -202,6 +202,7 @@ apps/examples/desktop-app/.cursor/settings.json
 # must be captured before LIVE_FAILURE_BOUND can be promoted to PASS.
 !/.factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
+!/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/terminal-chronology-*.json
 
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).

@@ -129,6 +129,101 @@ I  UNKNOWN / CAPTURE_INSUFFICIENT
 
 Do NOT call chronology causality. If evidence cannot distinguish → `CAPTURE_INSUFFICIENT`.
 
+## 3b. Deterministic terminal-state repro (post-TRIAGE_BIND, 2026-08-28)
+
+The TRIAGE_BIND 2026-08-28 specimen (`cmd_mtcjhkhygpteq8v9`) bound only the
+**RUNNING-state half** of the lifecycle. Promotion to
+`LIVE_FAILURE_BOUND = PASS` requires the post-terminal chronology bound to
+the SAME session/task. This section freezes the exact reproduction
+procedure and the exact six-event capture schema so the next capture cycle
+is unambiguous and diff-able.
+
+### Command
+
+Use an ordinary `run_commands` invocation that:
+
+1. crosses the 15-second host foreground wait budget;
+2. then terminates deterministically shortly after (no network, no
+   interactive prompt, no signal-loss race);
+3. emits a recognizable exit marker on stdout.
+
+Canonical form:
+
+```bash
+python3 - <<'PY'
+import time
+print("BEGIN " + str(time.time()), flush=True)
+time.sleep(20)            # >15s wait budget
+print("TERMINAL_MARKER", flush=True)
+PY
+```
+
+Equivalent (pure shell):
+
+```bash
+{ echo BEGIN $(date +%s); sleep 20; echo TERMINAL_MARKER; }
+```
+
+### Host capture flag
+
+Enable the post-terminal authority diagnostic BEFORE the command fires.
+For VS Code + ClineMM, set in workspace state:
+
+```text
+cline.diagnostic.postTerminalAuthority = true
+```
+
+(or the equivalent flag surfaced by
+`apps/vscode/src/sdk/__tests__/post-terminal-authority-diagnostic-runtime.test.ts`
+in the live host you are running against — confirm the exact key with
+`ext.evaluate("Object.keys(globalThis)")` in the harness before capture).
+
+### Six-event capture schema
+
+Bind all six events to one log file. Recommended naming:
+
+```text
+.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
+  terminal-chronology-<jobId>.json
+```
+
+Shape:
+
+```json
+{
+  "specimen_jobId": "cmd_<your-job>",
+  "session_id": "<from PTAD>",
+  "task_id":    "<from PTAD>",
+  "events": [
+    { "t": "T1", "name": "RUNNING_RETURNED", "ts_ms": ..., "jobId": "..." },
+    { "t": "T2", "name": "TERMINAL_STATE",   "ts_ms": ..., "exit_code": ..., "stdout_last_200": "..." },
+    { "t": "T3", "name": "BACKGROUND_STATE_CHANGE_FALSE", "ts_ms": ..., "jobId": "..." },
+    { "t": "T4", "name": "RUNTIME_PHASE_AFTER", "ts_ms": ..., "runtime_phase": "<from PTAD>", "task_phase": "<from PTAD>" },
+    { "t": "T5", "name": "CONTINUATION_EMITTED", "ts_ms": ..., "value": "YES|NO", "evidence": "<ptad-msg-id>" },
+    { "t": "T6", "name": "UI_STATE_OBSERVED",    "ts_ms": ..., "task_header": "Waiting|...|", "input_enabled": true|false, "human_input_since_T1": false }
+  ]
+}
+```
+
+### Decision tree
+
+| T1 → T6 outcome | `LIVE_FAILURE_BOUND` | §3 boundary candidates |
+|---|---|---|
+| T5 = **YES** (autonomous continuation observed) | **NO** — screenshot was an intermediate state, not the symptom | (the bug was the screenshot, not a `Continue`-bug; drop the case) |
+| T5 = **NO** AND T6 = Waiting, input_enabled, human_input_since_T1 = false | **PASS** | proceed to §3 (most likely `C` / `D` / `E` / `H` — do NOT pre-select) |
+| any T-event missing OR `session_id` ≠ the original session bound at T1 | **CAPTURE_INSUFFICIENT** | repeat with PTAD fully enabled |
+
+### Hard constraints
+
+- Zero new ACT may be opened from this capture. The recon owns the symptom.
+- The exact six events must be present; partial chronologies are recorded
+  as `CAPTURE_INSUFFICIENT`, not promoted.
+- `T5 = YES` with no human input since `T1` is a **bug-the-screenshot**
+  signal: the symptom was an intermediate state, not a true liveness
+  failure. Re-classify as `I = UNKNOWN / CAPTURE_INSUFFICIENT` and stop.
+- Do NOT pre-classify §3 boundary before the six events are bound.
+- Do NOT touch `apps/`, `sdk/`, `webview-ui/` from this capture.
+
 ## 4. Causal `Continue` discriminator
 
 Capture state immediately before typing `Continue`, then after.
@@ -235,6 +330,11 @@ cancel-authority.json        both directions of the cancel invariant
 source-seam-map.md           REAL_PRODUCTION_SEAM table per seam
 red-result.txt               RED capture against the real seam
 upstream-comparison.md       radar vs import promotion table
+terminal-chronology-<jobId>.json   six-event capture (T1..T6) from §3b,
+                                   one per deterministic repro; the load-
+                                   bearing artifact for promoting
+                                   LIVE_FAILURE_BOUND from
+                                   RUNNING_STATE_BOUND to PASS
 final-assessment.md          written at closure
 ```
 
