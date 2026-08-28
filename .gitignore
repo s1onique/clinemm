@@ -203,6 +203,22 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/terminal-chronology-*.json
+# ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01: recon ACT
+# LAUNCH_HEAD = 266def919 / TREE = 3aeabf41 (the commit at ACT open;
+# canonical binding per the editor-tool-recon convention). Status
+# OPEN / POLICY_INTENT_BOUND. §2 source-seam-map PASS; §3
+# classification = Branch C-prime PRODUCT_POLICY_DEFECT (the
+# auto-approval/YOLO surface is not co-extensive with the Seatbelt
+# network policy axis; the operator must explicitly set
+# CLINEMM_SAFE_YOLO_NETWORK=allow for an SSH-class command to
+# proceed past Seatbelt). §4 necessity matrix deferred to the darwin
+# host (HOST_REQUIRED per .factory/epics/_index-contract.md §2).
+# Same durable-binding reason as the editor-tool ACT: the ACT file
+# AND the evidence directory are bound by the epic ledger at
+# .factory/epics/safe-yolo-seatbelt.md (deferred post-V1 network
+# hardening row), so both must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01/
 
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).

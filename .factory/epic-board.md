@@ -1,6 +1,6 @@
 # ClineMM Epic Board
 
-Updated: 2026-08-27
+Updated: 2026-08-28
 Source-of-truth: `.factory/epics/*.md` (19 files) — the per-epic detail files. **This board is a navigation index, not an archive.**
 Contract: [`.factory/epics/_index-contract.md`](./epics/_index-contract.md) (frozen maintenance law)
 Conservation anchor: `5e96cfd3a` (immutable; see §5 of the contract for the `OLD_ACT_IDS - CURRENT_REPOSITORY_ACT_IDS = ∅` invariant)
@@ -20,6 +20,7 @@ One `NEXT` per lane, named explicitly so the lanes do not collapse into a false 
 | Host substrate | P0 | `HOST-TEST RUNNER` (host-only-behaviour dependency for both approval lanes; `HOST_REQUIRED` modifier per contract §2) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
 | TaskHeader projection | P1 | **CLOSED** (migration at `149fb131e` + THCP11 at `8a7e53742` already landed) | [`task-presentation.md`](./epics/task-presentation.md) |
 | Runtime progression | P1 | `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` (`OPEN / LIVE_RUNNING_STATE_BOUND`; awaiting terminal chronology; see epic ledger row 58) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
+| Seatbelt network egress | P0 | `ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01` (RECON `OPEN / POLICY_INTENT_BOUND` at HEAD `266def919`; §3 = Branch C-prime PRODUCT_POLICY_DEFECT; §4 necessity matrix in flight; live specimen `SSH_EGRESS_01` = `ssh -o BatchMode=yes ubuntu@81.177.33.219 hostname` returning `Operation not permitted`; targets `PASS_SEATBELT_NETWORK_PRODUCT_POLICY_REPAIR_V1`; same epic family as the deferred post-V1 network hardening row at safe-yolo-seatbelt.md:31, but the bound defect is the *default* under YOLO not the allowlist) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
 | Cost provenance | P1 (HOLD) | `ACT-CLINEMM-TASK-COST-TRUTH-RECON01` (recon — TWO-LAYER as of 2026-08-27: Layer-1 per-request arithmetic (subordinate, retained) + Layer-2 billing-semantic presentation (primary, re-framed against the MiniMax Ultra Token Plan expert review); canonical MiniMax Ultra case = (C, II) → forecasts `PASS_COST_PROVENANCE_PRESENTATION_REPAIR_V1` rather than an accumulator repair; held behind the editor-tool operational frontier) | [`product-config-branding.md`](./epics/product-config-branding.md) |
 | Settings surface parity | P2 (HOLD) | `ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01` (recon — inventory + per-entry intent class; NO bespoke PTAD tab; NO wholesale upstream copy; owning epic decided by §11; sequenced after cost-truth) | [`product-config-branding.md`](./epics/product-config-branding.md) (tentative; §11 of the ACT may move it to a new `EPIC-CLINEMM-SETTINGS-SUBSTRATE01`) |
 
