@@ -1,0 +1,47 @@
+{
+  "evidence": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/cancel-authority",
+  "schema": "cancel-affordance-authority.v1",
+  "head_at_freeze": "a2417ef19909746ed878cdec5ce801a8f2decf81",
+  "status": "NOT_YET_COLLECTED",
+  "captured_at": null,
+  "captured_by": null,
+  "labels_used": ["STRUCTURAL", "INFERRED", "LIVE", "REAL_PRODUCTION_SEAM", "UNAVAILABLE_FROM_TRACE"],
+  "invariant_under_test": {
+    "name": "cancellable-owner <-> Cancel availability",
+    "rule": "if a genuinely cancellable owner exists, Cancel must be available / enabled; if no cancellable owner exists, Cancel must NOT claim otherwise. Both directions are required.",
+    "source_of_invariant": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01 (durable conclusion: application-ownership / projection-coherence work)"
+  },
+  "capture_template": {
+    "runtime_state": null,
+    "owner_kind": null,
+    "owner_id_or_generation": null,
+    "cancellable": null,
+    "cancel_visible": null,
+    "cancel_enabled": null
+  },
+  "must_capture_both_directions": [
+    {
+      "case": "ACTIVE + CANCELLABLE OWNER + CANCEL ABSENT",
+      "outcome_vocabulary": [
+        "OWNER_CORRECT_UI_WRONG",
+        "OWNER_WRONG_UI_CONSISTENT",
+        "BOTH_WRONG",
+        "INVARIANT_HOLDS",
+        "UNOBSERVABLE"
+      ]
+    },
+    {
+      "case": "IDLE + NO OWNER + CANCEL PRESENT",
+      "outcome_vocabulary": [
+        "OWNER_CORRECT_UI_WRONG",
+        "OWNER_WRONG_UI_CONSISTENT",
+        "BOTH_WRONG",
+        "INVARIANT_HOLDS",
+        "UNOBSERVABLE"
+      ]
+    }
+  ],
+  "captured_cases": [],
+  "verdict": null,
+  "scope_note": "do NOT add UI fixes in this ACT; this probe only feeds the runtime-task-progression evidence; a presentation-only assertion would be HALT_PRESENTATION_SCOPE_CREEP"
+}

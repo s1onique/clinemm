@@ -1,0 +1,83 @@
+{
+  "evidence": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/live-failure",
+  "schema": "live-failure-capture.v2",
+  "head_at_freeze": "a2417ef19909746ed878cdec5ce801a8f2decf81",
+  "head_at_capture": "15f2adaf6c12dfdc79f47327e9ae93c46be52776",
+  "status": "LIVE_RUNNING_STATE_BOUND / AWAITING_TERMINAL_DISCRIMINATOR",
+  "captured_at": "2026-08-28T08:30:00Z",
+  "captured_by": "ClineMM Factory reviewer (Agent-runtime / liveness engineer) — TRIAGE_BIND",
+  "triage_intent": "Bind the new background-command LIVE specimen (cmd_mtcjhkhygpteq8v9) into this ACT's pre-existing evidence slots, narrowed to the RUNNING-state half of the lifecycle only. Do NOT promote to LIVE_FAILURE_BOUND: the job was still RUNNING at capture time, so the post-terminal chronology (terminal status, onBackgroundStateChange(false, jobId), runtime phase after, continuation emitted?, UI still Waiting?) is UNOBSERVED. Do NOT open a parallel BACKGROUND-COMMAND-LOOP-LIVENESS01 ACT; preserve the existing recon's stop-rule discipline. Classification outcomes remain UNCLASSIFIED until §3 discriminator runs.",
+  "labels_used": ["STRUCTURAL", "INFERRED", "LIVE", "REAL_PRODUCTION_SEAM", "UNAVAILABLE_FROM_TRACE"],
+  "specimen_identity": {
+    "jobId": "cmd_mtcjhkhygpteq8v9",
+    "command_text": "bash scripts/quality_gate.sh 2>&1 | tail -200",
+    "tool_name": "run_commands",
+    "host_returned_envelope": {
+      "status": "running",
+      "jobId": "cmd_mtcjhkhygpteq8v9",
+      "elapsedMs": 15001,
+      "deadlineRemainingMs": 584999,
+      "outputTruncated": false
+    },
+    "label": "LIVE",
+    "label_source": "screenshot captured by the user at 2026-08-27; transcript not present in this repository; envelope shape matches production createVscodeRunCommandsTool + CommandJobManager.start() return shape (see REAL_PRODUCTION_SEAM rows in source-seam-map.md)"
+  },
+  "user_visible_symptom_to_capture": {
+    "rule": "do NOT begin with source hypotheses; capture one real occurrence of (task was progressing) -> (progress stops) -> (no truthful terminal transition) -> (user must type 'Continue') before any structural claim is made",
+    "last_visible_assistant_state": "ASSISTANT_LAST_TEXT = \"Gate is running in background. Let me wait for it.\" followed by \"Continuing to wait.\" (LIVE — from screenshot)",
+    "last_tool_name": "run_commands (LIVE)",
+    "last_tool_outcome": "RUNNING(jobId=cmd_mtcjhkhygpteq8v9) — returned to model as a normal tool result (LIVE — from screenshot envelope)",
+    "last_tool_result_present": true,
+    "task_runtime_state": "OBSERVED: TaskHeader = Waiting; composer enabled; autonomous loop yielded (LIVE — from screenshot)",
+    "task_presentation_state": "Waiting (LIVE — from screenshot)",
+    "task_application_owner": "UNOBSERVED / INFERRED_FROM_PRESENTATION. The screenshot proves TaskHeader = Waiting and composer = enabled (i.e. the projection flipped); it does NOT directly prove that the runtime / application owner transitioned into USER_OWNERSHIP_ACQUIRED_BY_AWAITING_FOLLOWUP. The Waiting state and the application-owner transition are two distinct events; this specimen binds the former but only supports an INFERRED claim about the latter.",
+    "task_application_owner_inferred_provenance": "INFERRED — projection hook (apps/vscode/src/sdk/SdkController.ts:987) flipped via onBackgroundStateChange(running=true, jobId=cmd_mtcjhkhygpteq8v9). A separate stepless `owner transition` event would have to be captured by a PTAD record to be promoted to LIVE.",
+    "cancel_visible": "UNAVAILABLE_FROM_TRACE — not in screenshot",
+    "cancel_enabled": "UNAVAILABLE_FROM_TRACE — not in screenshot",
+    "resume_visible": "UNAVAILABLE_FROM_TRACE — not in screenshot",
+    "input_enabled": true,
+    "pending_model_request": "UNPROVEN — no PTAD capture locally; INFERRED_FALSE from the observed assistant text \"Continuing to wait.\" which is a self-narration, not a fresh request",
+    "pending_tool_request": "UNPROVEN — no PTAD capture locally",
+    "queued_user_messages": "UNAVAILABLE_FROM_TRACE",
+    "time_since_last_progress": "UNAVAILABLE_FROM_TRACE — no wall-clock timestamp in screenshot beyond the deadlineRemainingMs field which is a process-budget metric, not a UI idle metric",
+    "agent_stated_intent": "agent declared it would wait (LIVE — from screenshot). NOTE: this is INFERRED ownership intent, not a typed runtime ownership fact. ACL04 in apps/vscode/src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts proves no typed `intent` field exists on the run_commands input schema; ACL06 in the same file proves the production tool description does NOT describe what happens when an ordinary foreground call crosses the wait budget and returns RUNNING(jobId)."
+  },
+  "discriminator_load_bearing": {
+    "rule": "when the user types 'Continue', determine whether it (a) starts a fresh model request, (b) drains an already-queued continuation, (c) changes owner state, (d) merely kicks a stuck scheduler, or (e) is a presentation-only change",
+    "verdict": "NOT_YET_OBSERVED — no PTAD capture available locally to discriminate the Continue effect; deferred to a future bounded acquisition",
+    "ablation_attempted": false,
+    "ablation_inputs": ["\"Continue\"", "\".\"", "\"resume\""],
+    "ablation_outcome": null
+  },
+  "boundary_classification_a_through_h": null,
+  "boundary_classification_a_through_h_discipline": "Per the reviewer's correction: PRECLASSIFICATION = NONE. The existing A..I taxonomy in ACT §3 covers background commands already (B, C, D, and E all plausibly apply; H USER_OWNERSHIP_WRONGLY_ACQUIRED is the strongest signal from the screenshot alone). The discriminator runs ONLY after the JOB ↔ SESSION identity is joined (CAPTURE_INSUFFICIENT until then).",
+  "open_product_questions_recorded": [
+    {
+      "question": "What is the ownership contract for HOST_DEFERRED_FOREGROUND?",
+      "current_state": "UNDEFINED — ACL02 in apps/vscode/src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts proves the host wakeup path is structurally absent; ACL04 proves the run_commands input schema lacks a typed intent field that would distinguish FOREGROUND_DEFERRED from INTENTIONALLY_DETACHED; ACL06 proves the tool description does not describe the RUNNING(jobId) path",
+      "candidate_contract": "OWNED/AWAITED vs DETACHED — model-intent-coupled distinction. Upstream Cline's background-terminal.ts plugin demonstrates this via notifyParent=true (steers completion back to owning session) vs notifyParent=false (genuinely detached). NOT_YET_ADOPTED in ClineMM.",
+      "candidate_contract_label": "PRODUCT_CONTRACT_CANDIDATE",
+      "implementation_decision": false,
+      "forbidden_repairs_per_reviewer": [
+        "append 'please keep polling' to system prompt",
+        "special-case MiniMax",
+        "keep TaskHeader visually Working while runtime is actually idle",
+        "synthesize fake user Continue messages",
+        "make every background command block synchronously",
+        "prohibit background execution"
+      ]
+    }
+  ],
+  "evidence_collection_command_paths": [
+    "do NOT begin with source hypotheses; capture the symptom first",
+    "if the real symptom cannot be reproduced locally, halt with HALT_RED_NOT_REPRODUCED and DO NOT repair from upstream reports alone",
+    "verdict for THIS specimen: PASS_REUSE_RUNTIME_TASK_PROGRESSION_RECON — the live witness exists and is bound; classification remains UNCLASSIFIED pending the existing recon's §3 discriminator"
+  ],
+  "scope_notes": [
+    "PRODUCTION_FILES_CHANGED = 0",
+    "PARALLEL_ACT_OPENED = 0 (do not open ACT-CLINEMM-BACKGROUND-COMMAND-LOOP-LIVENESS01; existing recon owns this symptom)",
+    "PTAD_CAPTURE_PRESENT_LOCALLY = false (the user's PTAD stream lives in their host environment, not in this repository)",
+    "SCREENSHOT_BLOB_NOT_IN_REPO = true (the screenshot is in the user's chat, not in the repo; this binding is by reference to the envelope shape, not by SHA-256 of the image bytes)",
+    "SCOPE_OF_BOUND_WITNESS = RUNNING_STATE_ONLY (per TRIAGE_BIND correction 2026-08-28): the specimen proves the run_commands tool returned RUNNING(jobId=cmd_mtcjhkhygpteq8v9) and the presentation flipped to Waiting; it does NOT prove the post-terminal chronology, which is UNOBSERVED. To promote LIVE_FAILURE_BOUND, capture (a) terminal status / exit code, (b) onBackgroundStateChange(false, jobId), (c) runtime phase after, (d) continuation emitted?, (e) UI still Waiting? — see deferred-work entry in epic ledger."
+  ]
+}

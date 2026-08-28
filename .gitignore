@@ -179,6 +179,29 @@ apps/examples/desktop-app/.cursor/settings.json
 # directory must both survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01/
+# ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01: recon ACT
+# LAUNCH_HEAD = cf40c2b8b07520f9ddc2d798c6dfbb9830df9dea (the commit that
+# introduced this ACT; canonical binding per 5b0fbd611 "docs(factory): bind
+# runtime-progression launch identity"). ENTRY_HEAD = a2417ef19 (pre-ACT
+# subject; see entry-freeze.txt). Promoted from OPEN / WAITING_FOR_LIVE_EVIDENCE
+# to OPEN / LIVE_RUNNING_STATE_BOUND / AWAITING_TERMINAL_DISCRIMINATOR at
+# TRIAGE_BIND 2026-08-28 on TRIAGE_HEAD = 15f2adaf6. The live-failure.json,
+# red-result.txt, source-seam-map.md and upstream-comparison.md files now
+# carry the awaited live RUNNING-state specimen (background-command specimen
+# cmd_mtcjhkhygpteq8v9) and the seam map for TOOL_RESULT_TERMINAL_SEAM /
+# TASK_OWNER_SEAM against current source. The epic ledger at
+# .factory/epics/runtime-task-progression.md row 58 binds to the ACT file
+# AND to the evidence directory, so both must be durably tracked for the
+# canonical link to survive a fresh clone. The contract remains UNDEFINED
+# (HOST_DEFERRED_FOREGROUND_OWNERSHIP_CONTRACT) and OWNED/AWAITED-vs-DETACHED
+# is recorded as a PRODUCT_CONTRACT_CANDIDATE only — no implementation work
+# is authorized by this whitelisting. Note: the bound specimen only proves
+# the RUNNING-state half of the lifecycle; the post-terminal chronology
+# (terminal status / exit, onBackgroundStateChange(false, jobId), runtime
+# phase after, continuation emitted?, UI still Waiting?) is UNOBSERVED and
+# must be captured before LIVE_FAILURE_BOUND can be promoted to PASS.
+!/.factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
 
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).

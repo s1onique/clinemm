@@ -1,0 +1,46 @@
+ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
+red-result.txt
+
+Status: CAPTURE_INSUFFICIENT_FOR_CAUSAL_RED  (as of TRIAGE_BIND at 2026-08-28
+on HEAD 15f2adaf6; binding a live witness does NOT yet constitute a RED
+capture — see recon spec §7 and ACL02 reviewer's discipline)
+
+RED CONTRACT (per recon spec §7):
+  - WRITE: the smallest RED through the REAL PRODUCTION seam that
+    reproduces the EXACT violated invariant classified in step 3.
+  - DO NOT: convert it into a speculative implementation test.
+  - IF RED does not reproduce the local failure: HALT_RED_NOT_REPRODUCED
+  - Required: "RED reproduces exact violated invariant" must be TRUE
+    for closure as PASS_RECON_CAUSE_DISCRIMINATED.
+
+Patterns allowed (illustrative, not predetermined):
+  - tool result delivered -> continuation must become schedulable
+  - terminal tool outcome -> owner must transition exactly once
+                         -> next request must start
+  - active owner -> cancellable projection must remain true
+
+WHY NO RED YET (TRIAGE_BIND discipline):
+  - The live specimen cmd_mtcjhkhygpteq8v9 IS captured (see live-failure.json).
+  - The existing recon's §3 boundary-classification requires the JOB ↔ SESSION
+    identity to be joined before a violated invariant can be named; that
+    join is UNPROVEN without a PTAD trace.
+  - ACL02 in apps/vscode/src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts
+    recorded the same conclusion at the c2-4-c bridge: the desired invariant
+    ("a terminal bg-job schedules a successor agent turn") is itself a design
+    decision, not a discovered fact, because HOST_DEFERRED_FOREGROUND_OWNERSHIP_CONTRACT
+    is UNDEFINED. Writing a RED now would enshrine a hypothesis, not a discovery.
+  - Per the C1 GO_WITH_EXISTING_RECON verdict (2026-08-28): this ACT remains
+    LIVE_RUNNING_STATE_BOUND / AWAITING_TERMINAL_DISCRIMINATOR and the RED is
+    deferred until the recon's §3 discriminator runs against a joinable
+    JOB ↔ SESSION trace. The specimen proves RUNNING-state deferral + Waiting
+    presentation only; post-terminal chronology and JOB ↔ SESSION identity
+    are UNOBSERVED.
+
+CAPTURED_RED: (none yet — intentional)
+
+verdict: CAPTURE_INSUFFICIENT_FOR_CAUSAL_RED
+
+next-action: recon §3 discriminator; if no joinable trace is locally reproducible,
+             STOP and either (a) acquire one under the existing CLINEMM_PTAD=1
+             opt-in, or (b) record the missing join as a bounded diagnostic-
+             acquisition ACT (NOT a repair).

@@ -1,0 +1,114 @@
+ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
+entry-freeze
+
+ENTRY_HEAD        = a2417ef19909746ed878cdec5ce801a8f2decf81
+ENTRY_TREE        = (use `git rev-parse HEAD^{tree}` at evidence time; recorded
+                    here as a pointer rather than a fixed SHA because the
+                    evidence dir is gitignored and a fresh `git status`
+                    produces the same tree SHA deterministically)
+ORIGIN_MAIN       = (recorded at evidence-collection time from
+                    `git rev-parse origin/main` if a fetch is performed;
+                    this freeze intentionally does NOT fetch)
+PREVIOUS_VERDICT  = predecessor ACT-CLINEMM-FACTORY-CENSUS-CORRECTION02 =
+                    CLOSED_CORRECTION (4 files / 4 lines changed; board validator
+                    10/10 HARD PASS at this HEAD; conservation invariant preserved)
+BRANCH            = main
+WORKTREE_CLEAN    = true (excluding .factory/evidence/ which is gitignored)
+GIT_DIFF_CHECK    = clean
+PROTECTED_STASHES = stash@{0} = "On main: c2-green-and-c2-p1-delta" (UNTOUCHED;
+                    predecessor ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+                    C2 GREEN; this ACT does not touch the production seam)
+
+PRIMARY PURPOSE
+  RECON + LIVE FAILURE REPRODUCTION for the
+  "task genuinely stops making progress, no truthful terminal
+  transition, user must type 'Continue' (or Resume / Cancel / restart)"
+  symptom family, owned by EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01.
+
+SECONDARY PURPOSE
+  classify Cancel-affordance authority against the SAME runtime-owner
+  seam: same ownership projection is the load-bearing invariant;
+  a defect can be either direction (Cancel while idle OR missing
+  Cancel during execution) and we capture both.
+
+NO PRODUCTION REPAIR
+NO TASKHEADER PRESENTATION REPAIR
+NO TELEMETRY IMPLEMENTATION
+NO PORTED UPSTREAM FIX
+NO NEW EPIC / NO BOARD REWRITE BEYOND THIS ROW BEING ADDED
+
+PLATFORM (capture at evidence-collection time; NOT asserted here)
+  platform         = darwin (macOS)
+  machine          = `uname -mrsv`
+  YOLO override    = UNKNOWN at freeze; capture from session at evidence time
+  Seatbelt mode    = UNKNOWN at freeze; capture from session at evidence time
+  ClineMM version  = HEAD snapshot (no vendored build string asserted here)
+  VS Code/Codium   = record from `code --version` at evidence time
+  Session state    = record whether a Cline-- session is open and whether
+                      YOLO/seatbelt overrides are in effect
+
+ENTRY-CONDITION GATES
+  HALT_UNEXPECTED_TRACKED_DIRT     - unexpected tracked dirt at freeze
+                                       (worktree is clean at this HEAD;
+                                        pass)
+  HALT_SEAM_MOVED                  - production seam moved between prior
+                                       Task-Control ACTs and this ACT
+  HALT_RED_NOT_REPRODUCED          - RED written for the violated invariant
+                                       does NOT reproduce the violated
+                                       invariant locally (fail the ACT;
+                                       do not repair from upstream alone)
+  HALT_LEADING_HYPOTHESIS_REPAIR   - implementation / repair lands before
+                                       boundary A..H is classified
+  HALT_PRESENTATION_SCOPE_CREEP    - Completed framing / TaskHeader polish
+                                       mixed into this ACT
+  CAPTURE_INSUFFICIENT             - preserved as a valid verdict if the
+                                       runtime boundary cannot be
+                                       discriminated from evidence
+
+SCOPE_OF_THIS_ACT
+  - RECON: characterize the failure modes in the ClineMM local recurrence
+  - LIVE FAILURE REPRODUCTION: one real captured occurrence, frozen state
+  - SOURCE-SEAM MAP: recon the actual production symbols / seams
+    (do not assume they remain where prior Task-Control ACTs found them)
+  - CONTINUE-DISCRIMINATOR PROBE: load-bearing causal primitive test
+    (CONTINUE_CREATES_NEW_REQUEST vs DRAINS_EXISTING_CONTINUATION vs
+     RESETS_STALE_OWNER vs RESTARTS_SCHEDULER vs CHANGES_ONLY_PRESENTATION)
+  - CANCEL-AUTHORITY PROBE: same ownership projection invariant,
+    both directions (cancellable owner exists <-> Cancel available;
+    both directions are captured against the same seam)
+  - BOUNDED RED at the real production seam (the smallest test that
+    reproduces the violated invariant, not a speculative impl test)
+  - STOP at one of three useful verdicts:
+      PASS_RECON_CAUSE_DISCRIMINATED     -> author bounded repair ACT
+      NOT_REPRODUCED                       -> preserve witness, do not repair
+      CAPTURE_INSUFFICIENT                 -> author bounded diagnostic-acquisition ACT
+
+NOT_IN_SCOPE (this ACT)
+  - any production repair
+  - any TaskHeader / Completed-framing presentation work
+  - any telemetry implementation
+  - any new epic on the board (the existing
+    EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01 row gains ONLY a single ACT
+    row in its ledger; no structural board rewrite)
+  - porting or backporting any upstream-reported fix
+  - touching the C2 GREEN stash
+
+EVIDENCE_DIR
+  .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
+    entry-freeze.txt                   (this file)
+    live-failure.json                  (created at evidence time)
+    continue-discriminator.json        (created at evidence time)
+    cancel-authority.json              (created at evidence time)
+    source-seam-map.md                 (created at evidence time)
+    red-result.txt                     (created at evidence time)
+    upstream-comparison.md             (created at evidence time)
+    final-assessment.md                (created at closure)
+
+LABEL DISCIPLINE (per the recon contract)
+  LIVE                      = captured from a real running session / real trace
+  REAL_PRODUCTION_SEAM      = the exact source symbol(s) the production code
+                              actually executes (not a stand-in)
+  STRUCTURAL                = derived by walking the source tree statically
+  INFERRED                  = reasoned claim, not directly captured
+  UNAVAILABLE_FROM_TRACE    = cannot be observed from the local trace;
+                              do NOT promote to LIVE / REAL

@@ -1,0 +1,41 @@
+{
+  "evidence": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/continue-discriminator",
+  "schema": "continue-causal-primitive.v1",
+  "head_at_freeze": "a2417ef19909746ed878cdec5ce801a8f2decf81",
+  "status": "NOT_YET_COLLECTED",
+  "captured_at": null,
+  "captured_by": null,
+  "labels_used": ["STRUCTURAL", "INFERRED", "LIVE", "REAL_PRODUCTION_SEAM", "UNAVAILABLE_FROM_TRACE"],
+  "probe_design": {
+    "rule": "this is the most valuable probe; for a stalled task capture state IMMEDIATELY BEFORE typing 'Continue' and AGAIN AFTER; classify the causal primitive.",
+    "captures_required": [
+      "runtime_state_before",
+      "owner_kind_before",
+      "owner_id_or_generation_before_if_safely_observable",
+      "pending_model_request_before",
+      "pending_tool_request_before",
+      "queued_user_messages_before",
+      "typing_text_content",
+      "runtime_state_after",
+      "owner_kind_after",
+      "pending_model_request_after",
+      "queued_user_messages_after",
+      "time_between_before_and_after"
+    ],
+    "ablation_design": {
+      "rule": "ablate the human text content; if any arbitrary user turn unblocks the task, the causal primitive is probably 'new-user-turn arrival', not semantic interpretation of 'Continue'",
+      "inputs": ["\"Continue\"", "\".\"", "\"resume\""],
+      "do_not_over_test": "if the failure is rare, one controlled pair is enough; do not over-test"
+    },
+    "verdict_vocabulary": [
+      "CONTINUE_CREATES_NEW_REQUEST",
+      "CONTINUE_DRAINS_EXISTING_CONTINUATION",
+      "CONTINUE_RESETS_STALE_OWNER",
+      "CONTINUE_RESTARTS_SCHEDULER",
+      "CONTINUE_CHANGES_ONLY_PRESENTATION",
+      "CONTINUE_EFFECT_UNKNOWN"
+    ]
+  },
+  "captured_pairs": [],
+  "verdict": null
+}
