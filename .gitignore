@@ -204,17 +204,20 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/terminal-chronology-*.json
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01: recon ACT
-# LAUNCH_HEAD = 266def919 / TREE = 3aeabf41 (the commit at ACT open;
-# canonical binding per the editor-tool-recon convention). Status
-# OPEN / POLICY_INTENT_BOUND. §2 source-seam-map PASS; §3
-# classification = Branch C-prime PRODUCT_POLICY_DEFECT (the
-# auto-approval/YOLO surface is not co-extensive with the Seatbelt
-# network policy axis; the operator must explicitly set
-# CLINEMM_SAFE_YOLO_NETWORK=allow for an SSH-class command to
-# proceed past Seatbelt). §4 necessity matrix deferred to the darwin
-# host (HOST_REQUIRED per .factory/epics/_index-contract.md §2).
-# Same durable-binding reason as the editor-tool ACT: the ACT file
-# AND the evidence directory are bound by the epic ledger at
+# LAUNCH_HEAD = a76ff4137 / TREE = fa383737f (durable-binding freeze
+# per ACT §1). OPEN_HEAD = 4963904e9 (first commit creating ACT).
+# ENTRY_HEAD = 266def919 / TREE = 3aeabf41 (recon subject; the
+# commit the recon read). Status OPEN / POLICY_INTENT_UNBOUND
+# (demoted from POLICY_INTENT_BOUND on 2026-08-28 per the macOS
+# Seatbelt engineer + factory reviewer verdict
+# HALT_NETWORK_PRODUCT_INTENT_NOT_BOUND). §2 source-seam-map PASS;
+# §3 classification = CANDIDATE_PRODUCT_POLICY_DECISION_REQUIRED
+# (Branch C-prime PRODUCT_POLICY_DEFECT is a candidate but is not
+# a proven defect until the product-contract decision in ACT §15
+# is frozen). §4 host-ablation AUTHORIZED (HOST_REQUIRED); §5 RED
+# NOT_AUTHORIZED until §15 freezes the product contract. Same
+# durable-binding reason as the editor-tool ACT: the ACT file AND
+# the evidence directory are bound by the epic ledger at
 # .factory/epics/safe-yolo-seatbelt.md (deferred post-V1 network
 # hardening row), so both must survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01.md

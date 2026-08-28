@@ -1,10 +1,14 @@
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01 — source-seam-map
 
 > **Status**: §2 PASS at ENTRY HEAD `266def919` / ENTRY TREE `3aeabf41`
-> (recon subject); ACT LAUNCH commit `4963904e9` / LAUNCH TREE
-> `bb3667c17` (board + ACT + evidence + .gitignore whitelist).
-> Recon read from current source, not inferred. Production seam traced
-> end-to-end. §3 classification below.
+> (recon subject); OPEN HEAD `4963904e9` / LAUNCH HEAD `a76ff4137` /
+> LAUNCH TREE `fa383737f` (durable-binding freeze per the ACT §1
+> commit list); CURRENT HEAD `a4f639cb6` (HEAD at the §3 demotion,
+> not re-binding the launch). Recon read from current source, not
+> inferred. Production seam traced end-to-end. §3 classification
+> below (note: §3 was demoted on 2026-08-28 from `PRODUCT_POLICY_DEFECT`
+> to `PRODUCT_POLICY_DECISION_REQUIRED` per the macOS Seatbelt engineer
+> + factory reviewer verdict `HALT_NETWORK_PRODUCT_INTENT_NOT_BOUND`).
 >
 > **Frozen invariant** (frozen at ENTRY):
 >
@@ -179,25 +183,31 @@ B. SEATBELT_BACKEND_DEFECT
 C. PRODUCT_POLICY_DEFECT
    ClineMM currently intends DENY/default-deny, generated policy matches
    ─────────────────────────────────────────────────────────────────────
-   ★ THIS BRANCH ★ (with the "Branch C-prime" caveat below).
+   CANDIDATE — NOT-YET-BOUND.
    The capability-construction default is network:"deny". The operator
    has not set CLINEMM_SAFE_YOLO_NETWORK=allow. The Seatbelt profile
    faithfully emits "(deny network*)". The kernel faithfully returns
-   EPERM. The behavior is internally consistent; the "defect" is at
-   the PRODUCT POLICY seam: the network axis is silently defaulting to
-   "deny" in a path that the operator's mental model classifies as
-   "YOLO = everything runs".
+   EPERM. The behavior is internally consistent with the current
+   code path. The previous draft labelled this ★ THIS BRANCH ★
+   ("Branch C-prime") based on the operator's mental model
+   ("YOLO = everything runs"); that labelling was **withdrawn on
+   2026-08-28** per the macOS Seatbelt engineer + ClineMM factory
+   reviewer verdict `HALT_NETWORK_PRODUCT_INTENT_NOT_BOUND`, which
+   correctly identified the conflation of operator mental model with
+   product contract as an unjustified epistemic leap.
 
-   Branch C-prime (load-bearing distinction):
-     - The user's mental model says: "I turned on YOLO / auto-approve;
+   What Branch C-prime now says (post-demotion):
+     - The user's mental model: "I turned on YOLO / auto-approve;
        SSH is a normal DevOps command; it should run."
-     - The product policy says: "Seatbelt is on; network egress is
-       default-DENY unless the operator has separately authorized it
-       via CLINEMM_SAFE_YOLO_NETWORK=allow."
-     - These two are disjoint. The "intents ALLOW" axis only fires
-       after the operator has set an env var they have likely never
-       heard of. The defect is that the auto-approval/YOLO surface is
-       NOT co-extensive with the Seatbelt network policy.
+     - The current product behavior: "Seatbelt is on; network egress
+       is default-DENY unless the operator has separately authorized
+       it via CLINEMM_SAFE_YOLO_NETWORK=allow."
+     - These two are disjoint; the operator's mental model is
+       UNOBSERVED in any UI surface.
+     - Whether this is a **defect** depends on the desired product
+       contract, which is **UNFROZEN**. Three defensible options
+       are listed in the ACT §15 (allow / deny / independent setting
+       with default TBD).
 
 D. ROUTED_EGRESS_POLICY_DEFECT
    Command routed through a ProxyJump/ProxyCommand path; only that path
@@ -208,14 +218,24 @@ D. ROUTED_EGRESS_POLICY_DEFECT
 
 E. CAPTURE_INSUFFICIENT
    ─────────────────────────────────────────────────────────────────────
-   NOT THIS BRANCH — the policy intent is bound (§A + §C).
+   NOT THIS BRANCH — the policy intent is bound (§A); what is NOT
+   bound is the desired product default (§D / §15 of the ACT).
 ```
 
-**§3 verdict: Branch C-prime (PRODUCT_POLICY_DEFECT)**.
+**§3 verdict (2026-08-28): `PRODUCT_POLICY_DECISION_REQUIRED`** —
+Branch C-prime is a candidate, not a proven defect. Wiring is
+structurally consistent (Branch A ruled out); backend is correct
+(Branch B ruled out); routing is irrelevant under blanket deny
+(Branch D ruled out); capture is sufficient (Branch E ruled out).
+The remaining decision is a product-contract decision recorded in
+the ACT §15 (Options A / B / C).
 
-The smallest, most-precise characterization is:
+The previous, withdrawn characterization (preserved here verbatim
+for audit traceability only — **do not use to drive RED**):
 
 ```text
+[WITHDRAWN 2026-08-28]
+
 ClineMM's auto-approval/YOLO surface (classic policy axis) is NOT
 co-extensive with ClineMM's Seatbelt network policy axis.
 
@@ -347,13 +367,27 @@ evidence class:
                                              sandbox-exec; the policy emits
                                              the deny rule; the kernel
                                              returns EPERM for that rule)
-  policy intent              = BOUND           (Branch C-prime; the intent
+  source-implemented policy  = "deny" (PROVEN; capability-construction default)
+  source-generated SBPL rule = "(deny network*)" (PROVEN; buildNetworkRule("deny"))
+  user-intended network policy = UNOBSERVED (no UI binding for the network axis)
+  desired product default      = UNDECIDED (Branch C-prime is a candidate,
+                                not a proven defect; product-contract
+                                decision required per ACT §15)
+
+  Historical note: the previous draft listed `policy intent = BOUND
+  (Branch C-prime; the intent ...)` here. That labelling was withdrawn
+  on 2026-08-28 per the macOS Seatbelt engineer + factory reviewer
+  verdict `HALT_NETWORK_PRODUCT_INTENT_NOT_BOUND`. The five-line
+  classification above is the grounded replacement.
+
 ## §I — Provenance
 
 - Recon read from current source at ENTRY HEAD `266def919` /
-  ENTRY TREE `3aeabf41`. ACT launch commit `4963904e9` / LAUNCH TREE
-  `bb3667c17` (board + ACT + evidence + .gitignore whitelist; no
-  production code changed by this ACT).
+  ENTRY TREE `3aeabf41`. ACT OPEN HEAD `4963904e9` / LAUNCH HEAD
+  `a76ff4137` / LAUNCH TREE `fa383737f` (durable-binding freeze
+  per ACT §1); CURRENT HEAD `a4f639cb6` (the §3-demotion commit,
+  NOT a re-binding of the launch). No production code changed by
+  this ACT.
 - Source files inspected:
   - `apps/vscode/src/sdk/sandbox-policy.ts` (642 lines) — full read.
   - `apps/vscode/src/sdk/command-job-manager.ts:440-720`
@@ -486,8 +520,17 @@ PREPARED_POLICY                    = generateSeatbeltProfile(...) →
                                       macos/seatbelt-profile.ts:274, CORRECTION01)
 
 For the live specimen (CLINEMM_SAFE_YOLO_NETWORK unset, "ALL — this task"):
-  NETWORK_INTENT                  = ALLOW       (user approved; operator's mental model)
-  ALLOW_OUTBOUND                  = "deny"      (CLINEMM_SAFE_YOLO_NETWORK not set)
+  AUTO_APPROVAL_INTENT            = ALL         (LIVE; session override=all)
+  NETWORK_POLICY                  = "deny"      (SOURCE_PROVEN; env var unset)
+  NETWORK_USER_INTENT             = UNOBSERVED  (no UI binding for the network axis)
+  PRODUCT_EXPECTED_DEFAULT        = UNDECIDED   (no product contract)
   BACKEND                         = SeatbeltSandboxBackendExperimental
   GENERATED_SEATBELT_NETWORK_RULE = "(deny network*)"
+
+  Historical note: the previous draft listed `NETWORK_INTENT = ALLOW
+  (user approved; operator's mental model)`. That phrase conflated
+  the auto-approval axis with the network axis and was withdrawn on
+  2026-08-28 per the macOS Seatbelt engineer + factory reviewer
+  verdict `HALT_NETWORK_PRODUCT_INTENT_NOT_BOUND`. The five-line
+  table above is the grounded replacement.
 ```
