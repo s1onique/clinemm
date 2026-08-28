@@ -2,11 +2,11 @@
 
 > **Status**: **OPEN / POLICY_INTENT_BOUND** — §2 source-seam-map PASS at
 > ENTRY HEAD `266def919` / ENTRY TREE `3aeabf41` (recon subject);
-> ACT LAUNCH commit `4963904e9` / LAUNCH TREE `bb3667c17` (board +
-> ACT + evidence + .gitignore whitelist). §3 classification =
-> **Branch C-prime (PRODUCT_POLICY_DEFECT)** — the auto-approval/YOLO
-> surface is NOT co-extensive with the Seatbelt network policy axis;
-> §4 RED deferred to darwin host (HOST_REQUIRED).
+> ACT LAUNCH HEAD `a76ff4137` (final binding commit; see §1 for the
+> full commit list). §3 classification = **Branch C-prime
+> (PRODUCT_POLICY_DEFECT)** — the auto-approval/YOLO surface is NOT
+> co-extensive with the Seatbelt network policy axis; §4 RED deferred
+> to darwin host (HOST_REQUIRED).
 >
 > **Primary purpose**: LIVE FAILURE → INTENT/POLICY CLASSIFICATION →
 > RED → NECESSITY → BOUNDED REPAIR.
@@ -205,8 +205,8 @@ Only P0 halts.
 ```text
 [x] ENTRY_HEAD_CAPTURED                  = 266def919   (recon subject)
 [x] ENTRY_TREE_CAPTURED                  = 3aeabf41    (tree of ENTRY_HEAD)
-[x] LAUNCH_HEAD                          = 4963904e9   (board + ACT + evidence + .gitignore whitelist)
-[x] LAUNCH_TREE                          = bb3667c17   (tree of LAUNCH_HEAD)
+[x] LAUNCH_HEAD                          = a76ff4137   (frozen; commit list in §1)
+[x] LAUNCH_TREE                          = fa383737f   (tree of LAUNCH_HEAD)
 [x] WORKTREE_CLEAN                        (verified `git status --short` empty at both checkpoints)
 [x] PROTECTED_STASH_PRESERVED            (1 entry; "c2-green-and-c2-p1-delta")
 [x] PASS_RECON_SEAM_MAPPED                (source-seam-map.md; this ACT §2)
@@ -370,13 +370,23 @@ Verified at ACT open (recon subject) and at ACT launch (board binding):
 ```text
 ENTRY_HEAD      = 266def919   (recon subject; the commit the recon read)
 ENTRY_TREE      = 3aeabf41    (tree of ENTRY_HEAD)
-LAUNCH_HEAD     = 4963904e9   (the commit that lands this ACT file,
-                               the evidence file, the board row, and
-                               the .gitignore whitelist)
-LAUNCH_TREE     = bb3667c17   (tree of LAUNCH_HEAD)
+LAUNCH_HEAD     = a76ff4137   (the durable-binding commit for this ACT;
+                               see commit list in §1 history below)
+LAUNCH_TREE     = fa383737f   (tree of LAUNCH_HEAD)
+
+Commit list for this ACT (chronological):
+  4963904e9  launch: ACT + evidence + board + .gitignore
+  2be2e8fdd  entry-discipline binding
+  a76ff4137  trailing-blank-line cleanup; LAUNCH_HEAD frozen here
+
 WORKTREE        = CLEAN       (no uncommitted tracked changes)
 PROTECTED_STASH = PRESERVED   (1 entry; "c2-green-and-c2-p1-delta")
 ENTRY_BRANCH    = main        (HEAD; canonical consolidation at d844177bc)
 ```
 
-No entry anomaly. No mixed-fix carry-over. The recon subject (HEAD `266def919`) is preserved as `ENTRY_HEAD`; the ACT launch commit (HEAD `4963904e9`) carries the durable binding forward.
+No entry anomaly. No mixed-fix carry-over. The recon subject (HEAD
+`266def919`) is preserved as `ENTRY_HEAD`; the ACT launch commits
+(frozen at LAUNCH_HEAD `a76ff4137`) carry the durable binding forward.
+Any future commits to this ACT file MUST NOT change the frozen
+LAUNCH_HEAD/TREE; downstream updates should land in new commits that
+update the §1 commit list without re-binding LAUNCH_HEAD.
