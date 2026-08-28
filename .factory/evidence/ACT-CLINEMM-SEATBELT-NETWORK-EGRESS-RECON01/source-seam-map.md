@@ -3,9 +3,10 @@
 > **Status**: §2 PASS at ENTRY HEAD `266def919` / ENTRY TREE `3aeabf41`
 > (recon subject); OPEN HEAD `4963904e9` / LAUNCH HEAD `a76ff4137` /
 > LAUNCH TREE `fa383737f` (durable-binding freeze per the ACT §1
-> commit list); CURRENT HEAD `1c6dee1c2` (HEAD at the §1-pointer
-> refresh commit, not re-binding the launch). Recon read from current
-> source, not
+> commit list); CURRENT HEAD `9bef23455` (HEAD at the §1-pointer
+> refresh commit, not re-binding the launch; the pointer naturally
+> lags real HEAD by one commit on subsequent ACT-only edits — this
+> is the deliberate design). Recon read from current source, not
 > inferred. Production seam traced end-to-end. §3 classification
 > below (note: §3 was demoted on 2026-08-28 from `PRODUCT_POLICY_DEFECT`
 > to `PRODUCT_POLICY_DECISION_REQUIRED` per the macOS Seatbelt engineer
@@ -386,9 +387,10 @@ evidence class:
 - Recon read from current source at ENTRY HEAD `266def919` /
   ENTRY TREE `3aeabf41`. ACT OPEN HEAD `4963904e9` / LAUNCH HEAD
   `a76ff4137` / LAUNCH TREE `fa383737f` (durable-binding freeze
-  per ACT §1); CURRENT HEAD `1c6dee1c2` (the §1-pointer refresh
-  commit, NOT a re-binding of the launch). No production code
-  changed by this ACT.
+  per ACT §1); CURRENT HEAD `9bef23455` (the §1-pointer refresh
+  commit, NOT a re-binding of the launch; the pointer naturally
+  lags real HEAD by one commit on subsequent ACT-only edits).
+  No production code changed by this ACT.
 - Source files inspected:
   - `apps/vscode/src/sdk/sandbox-policy.ts` (642 lines) — full read.
   - `apps/vscode/src/sdk/command-job-manager.ts:440-720`
