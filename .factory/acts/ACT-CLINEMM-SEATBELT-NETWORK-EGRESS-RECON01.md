@@ -188,32 +188,65 @@ RED and repair.
 ## §4 — Minimal executable probe matrix
 
 Per the plan, drive the **same command execution seam** (not ad-hoc
-shell). Run each once with `sandbox OFF` and `Seatbelt ON`:
+shell). For each probe, three separately-launched extension hosts
+(DENY / ALLOW / OFF — see §6 / §14 for the launch discipline; **do
+not** set the env var in the child command shell — that does not
+affect the extension-host capability construction):
 
 ```text
-N1  DNS only
-    python/socket.getaddrinfo("example.com", 443)
-N2  raw outbound TCP
+P1  raw outbound TCP
     connect known public endpoint:443
-N3  HTTPS
+P2  HTTPS
     curl -fsS https://example.com/
-N4  SSH direct
-    ssh -F /dev/null <direct-host>
-N5  SSH real configuration
-    original ssh command
-N6  loopback
-    connect localhost
+P3  real SSH
+    the live specimen command verbatim
+P4  loopback IP connect
+    connect 127.0.0.1:<local-port>
 ```
 
-For each, record `network intent | generated policy | backend | return code
-| errno | stderr class`. Expected discriminators:
+(Reduced from N1..N6 per the 2026-08-28 reviewer note: DNS and
+direct-SSH-vs-configured-SSH can be added later only if results
+discriminate something useful. P1-P4 are the minimum matrix that
+proves the mechanism.)
+
+For each, record per §14 the eight columns:
 
 ```text
-N1-N5 all EPERM, N6 works        → blanket external-egress deny
-HTTPS works, SSH fails           → protocol/routed-policy issue
-direct SSH works, configured SSH fails → ProxyJump/ProxyCommand path
-sandbox OFF works, Seatbelt ON fails → necessity relation strongly supported
+RUN_ID
+extension launch environment      (DENY / ALLOW / OFF + captured env)
+sandbox backend                   (Seatbelt / none / other)
+CommandCapability.network         ("deny" / "allow")
+generated network rule            ("(deny network*)" / "(allow network*)" / n/a)
+command                           (verbatim)
+return code
+stderr class                      (EPERM / connect-timeout / auth-failed / …)
 ```
+
+**Expected discriminators (per the source seam — `(deny network*)`
+denies the network class generally; loopback IP connect also denied
+under "deny"):**
+
+```text
+DENY  (capability.network="deny",  rule="(deny network*)"):
+  P1-P4  → EPERM at connect() (Seatbelt blocks the network class;
+          localhost is NOT automatically preserved under the current
+          ClineMM Seatbelt substrate)
+
+ALLOW (capability.network="allow", rule="(allow network*)"):
+  P1-P3  → proceeds past Seatbelt (auth may still fail at the
+          server; that is not a Seatbelt outcome)
+  P4     → loopback IP connect proceeds past Seatbelt
+
+OFF   (no Seatbelt envelope):
+  P1-P4  → host behavior (no Seatbelt denial; auth / DNS / etc
+          outcomes depend on the host environment only)
+```
+
+If results diverge from the expected pattern (e.g. loopback works
+under DENY, or HTTPS works under DENY), record the divergence as a
+**denominator observation** rather than dismissing the probe —
+divergences are evidence about the substrate, not failures of the
+probe.
 
 These are EXECUTABLE on the darwin host that produced the live specimen
 (`/usr/bin/sandbox-exec` present; `process.platform === "darwin"`).
@@ -237,6 +270,54 @@ There is no RED for the wiring because the wiring is provably correct
 (source-seam-map.md §E).
 
 Until §15, treat §5 as `BLOCKED / POLICY_CONTRACT_REQUIRED`.
+
+## §6 — Necessity / ablation
+
+Same execution seam as §4, one variable at a time, against the same
+command. Three configurations, each a **separately-launched**
+extension host (not a child-shell env override — see §14):
+
+```text
+DENY:
+  extension host launched with CLINEMM_SAFE_YOLO_NETWORK unset
+  → capability.network = "deny"
+  → generated SBPL network rule = "(deny network*)"
+
+ALLOW:
+  extension host launched with CLINEMM_SAFE_YOLO_NETWORK=allow
+  → capability.network = "allow"
+  → generated SBPL network rule = "(allow network*)"
+
+OFF:
+  extension host launched with CLINEMM_EXPERIMENTAL_SANDBOX=off
+  → no Seatbelt envelope at all
+```
+
+This phase proves only **mechanism / necessity**. It does NOT choose
+the desired product default; that is §15's job.
+
+Required discriminators (each captured per §4 / §14):
+
+```text
+DENY:
+  capability.network  = "deny"
+  generated SBPL rule  = "(deny network*)"
+  connect() under Seatbelt → EPERM (block at syscall)
+
+ALLOW:
+  capability.network  = "allow"
+  generated SBPL rule  = "(allow network*)"
+  connect() under Seatbelt → proceeds past the sandbox envelope
+
+OFF:
+  no Seatbelt envelope
+  connect() → host behavior (no Seatbelt denial)
+```
+
+If the relation does not reproduce, fire `HALT_RED_NOT_REPRODUCED`
+and update this ACT accordingly. §5 RED and §7 repair remain
+NOT_AUTHORIZED until §15 records the product-contract decision.
+
 ## §7 — Likely bounded repair rules (CONDITIONAL — pending §15)
 
 If §6 confirms the necessity AND §15 records an explicit
@@ -411,21 +492,66 @@ this ACT asserts real-kernel Seatbelt properties; the GREEN step is
 `HOST_REQUIRED` and must be run on the darwin host that produced the
 live specimen.
 
+**Critical launch discipline (per the 2026-08-28 reviewer correction):**
+`CLINEMM_SAFE_YOLO_NETWORK` and `CLINEMM_EXPERIMENTAL_SANDBOX` are
+read by the VS Code **extension-host** process at capability-
+construction time (see source-seam-map.md §A — the load-bearing
+caller is `resolveSafeYoloNetworkOptIn()` at extension-host startup,
+not at per-command invocation). Setting these env vars in the
+**child command shell** does NOT affect the already-running
+extension host and would silently false-pass the matrix.
+
+**Therefore the matrix requires THREE SEPARATELY LAUNCHED /
+RELOADED extension-host configurations**, not three child-shell
+invocations under one shared extension host:
+
 ```text
-1. CLINEMM_EXPERIMENTAL_SANDBOX unset (default ON for darwin)
-   + CLINEMM_SAFE_YOLO_NETWORK unset (default OFF; network:"deny")
-   → ssh command → EPERM  (CURRENT; reproduces the live failure)
+D — DENY  (current default; reproduces the live specimen)
+  launch extension host with:
+    CLINEMM_EXPERIMENTAL_SANDBOX unset (default ON for darwin)
+    CLINEMM_SAFE_YOLO_NETWORK     unset
+  expected:
+    capability.network        = "deny"
+    generated SBPL network rule = "(deny network*)"
+    P1-P4  → EPERM at connect() (§4)
 
-2. Same + CLINEMM_SAFE_YOLO_NETWORK=allow (explicit allow)
-   → ssh command → proceeds past Seatbelt
-                                                    (SNE-01 GREEN)
+A — ALLOW  (explicit opt-in via env var)
+  launch / reload extension host with:
+    CLINEMM_EXPERIMENTAL_SANDBOX unset
+    CLINEMM_SAFE_YOLO_NETWORK     = "allow"
+  expected:
+    capability.network        = "allow"
+    generated SBPL network rule = "(allow network*)"
+    P1-P3  → proceeds past Seatbelt
+    P4     → loopback IP connect proceeds past Seatbelt
+                                                       (SNE-01 GREEN)
 
-3. Same as (1) + CLINEMM_EXPERIMENTAL_SANDBOX=off (break-glass)
-   → ssh command → proceeds past Seatbelt           (SNE-03 GREEN)
+O — OFF  (break-glass; no Seatbelt envelope)
+  launch / reload extension host with:
+    CLINEMM_EXPERIMENTAL_SANDBOX = "off"
+  expected:
+    no Seatbelt envelope at all
+    P1-P4  → host behavior (no Seatbelt denial)
+                                                       (SNE-03 GREEN)
+```
 
-4. Same as (1) + post-repair policy (Branch C-prime repair applied)
-   → ssh command → proceeds past Seatbelt
-                                                    (post-repair GREEN)
+**For every run, capture the EFFECTIVE GENERATED POLICY** (e.g. via
+`Cline → Show Generated Sandbox Policy` or equivalent trace; log the
+SBPL profile to the evidence directory) so an inherited / stale
+environment cannot false-pass the matrix. The captured policy MUST
+match the expected rule above for that configuration; a mismatch is
+itself a probe outcome (recorded under `evidence/<run-id>/policy.txt`).
+
+Run matrix: 3 configurations × 4 probes (P1..P4) = 12 probes total.
+Auth success is NOT required; "connection no longer denied by
+Seatbelt" is enough.
+
+Post-repair step (only if §15 picks Option A / C-allow-default and
+§5 RED lands; **not in scope for this §14 round**):
+
+```text
+4. Same launch as D + post-repair policy applied
+   → ssh command → proceeds past Seatbelt (post-repair GREEN)
 ```
 
 ## §15 — Product-contract decision (REQUIRED before §5 RED)

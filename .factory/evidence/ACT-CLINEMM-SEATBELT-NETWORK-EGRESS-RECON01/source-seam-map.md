@@ -48,6 +48,8 @@ BACKEND_SELECTED                   = "seatbelt-experimental" on darwin host when
 BACKEND_AVAILABLE                  = SeatbeltSandboxBackendExperimental.isAvailable()
                                      (cached; darwin + /usr/bin/sandbox-exec +
                                       minimal probe round-trip)
+```
+
 ## §B — The full production seam (verbatim source citations)
 
 ```text
@@ -113,6 +115,8 @@ sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:297-334
      → buildWriteRule(...)                 (workspace write + tempRoot + readonlyRoots deny)
      → (allow file-read-metadata (subpath "/"))
      → buildNetworkRule(network)           (lines 274-279):
+```
+
 ## §C — Site inventory (the load-bearing question)
 
 ```text
@@ -220,8 +224,12 @@ D. ROUTED_EGRESS_POLICY_DEFECT
 
 E. CAPTURE_INSUFFICIENT
    ─────────────────────────────────────────────────────────────────────
-   NOT THIS BRANCH — the policy intent is bound (§A); what is NOT
-   bound is the desired product default (§D / §15 of the ACT).
+   NOT THIS BRANCH. The source-implemented network policy is bound
+   (§A: "deny" with rule "(deny network*)"); the user-intended
+   network policy is UNOBSERVED (no UI binding for the network
+   axis); the desired product default is UNDECIDED (§D / §15 of the
+   ACT). None of those three facts are evidence-insufficient;
+   capture is sufficient for source mechanics.
 ```
 
 **§3 verdict (2026-08-28): `PRODUCT_POLICY_DECISION_REQUIRED`** —
@@ -262,6 +270,8 @@ content of the generated SBPL profile.
 For the live specimen (CLINEMM_SAFE_YOLO_NETWORK unset):
 
   buildExperimentalReconCapability({cwd, workspaceRoots})
+```
+
 ## §F — Conservation shape (target invariant for the repair)
 
 The minimum bounded repair MUST preserve the following axes:
@@ -305,6 +315,8 @@ SNE-11  Seatbelt unavailable → existing fail-closed behavior conserved
                                       (getSandboxBackend returns undefined when
                                       substrate missing; command-job-manager.ts:
                                       577-589 returns sandbox-unavailable)
+```
+
 ## §G — Recon exclusions (what we did NOT need to look at)
 
 ```text
@@ -334,6 +346,8 @@ SNE-11  Seatbelt unavailable → existing fail-closed behavior conserved
     The "forbidden repairs" list (§9 of the plan) explicitly forbids
     disabling Seatbelt globally, special-casing ssh, retrying outside
     the sandbox, or making all sandbox modes network-open. The repair
+```
+
 ## §H — Live specimen freeze
 
 ```text
@@ -381,6 +395,7 @@ evidence class:
   on 2026-08-28 per the macOS Seatbelt engineer + factory reviewer
   verdict `HALT_NETWORK_PRODUCT_INTENT_NOT_BOUND`. The five-line
   classification above is the grounded replacement.
+```
 
 ## §I — Provenance
 
