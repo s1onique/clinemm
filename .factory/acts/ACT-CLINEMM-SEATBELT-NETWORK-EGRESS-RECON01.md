@@ -65,15 +65,16 @@ OPEN_HEAD       = 4963904e9   (first commit creating this ACT file,
 LAUNCH_HEAD     = a76ff4137   (durable-binding freeze; the commit list
                                below carries the freeze forward)
 LAUNCH_TREE     = fa383737f   (tree of LAUNCH_HEAD)
-CURRENT_HEAD    = a4f639cb6   (HEAD at the time of this §3 demotion; a
-                               subsequent in-place amendment that did
-                               not touch ACT content; do not bake this
-                               into the contract — re-read at §15.)
+CURRENT_HEAD    = 168d0b91a   (HEAD at the time of this §3 demotion;
+                               re-read at §15 if a subsequent amendment
+                               touches ACT content.)
 
 Commit list for this ACT (chronological, most-recent first):
-  a4f639cb6  §3 demotion + §0..§17 ordering repair + identity
+  168d0b91a  §3 demotion + §0..§17 ordering repair + identity
             terminology reconciliation (CURRENT_HEAD; not a new
             durable binding)
+  a4f639cb6  empty finalize-entry-discipline amendment (no content
+            change; CURRENT_HEAD at this point)
   a76ff4137  trailing-blank-line cleanup; LAUNCH_HEAD frozen here
   2be2e8fdd  entry-discipline binding
   4963904e9  launch: ACT + evidence + board + .gitignore (OPEN_HEAD)
@@ -365,7 +366,7 @@ HOLD
 [x] OPEN_HEAD                            = 4963904e9   (first commit creating ACT)
 [x] LAUNCH_HEAD                          = a76ff4137   (durable-binding freeze)
 [x] LAUNCH_TREE                          = fa383737f   (tree of LAUNCH_HEAD)
-[x] CURRENT_HEAD                         = a4f639cb6   (HEAD at §3 demotion)
+[x] CURRENT_HEAD                         = 168d0b91a   (HEAD at §3 demotion)
 [x] WORKTREE_CLEAN                        (verified `git status --short` empty at all checkpoints)
 [x] PROTECTED_STASH_PRESERVED            (1 entry; "c2-green-and-c2-p1-delta")
 [x] PASS_RECON_SEAM_MAPPED                (source-seam-map.md; this ACT §2)
