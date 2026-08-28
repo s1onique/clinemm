@@ -65,14 +65,17 @@ OPEN_HEAD       = 4963904e9   (first commit creating this ACT file,
 LAUNCH_HEAD     = a76ff4137   (durable-binding freeze; the commit list
                                below carries the freeze forward)
 LAUNCH_TREE     = fa383737f   (tree of LAUNCH_HEAD)
-CURRENT_HEAD    = 168d0b91a   (HEAD at the time of this §3 demotion;
-                               re-read at §15 if a subsequent amendment
-                               touches ACT content.)
+CURRENT_HEAD    = 4a023d31d   (HEAD at the time of the §1-pointer
+                               refresh commit; subsequent commits do
+                               not re-bind LAUNCH_HEAD — this row is a
+                               pointer, not a contract; re-read at §15
+                               if a future commit touches ACT content.)
 
 Commit list for this ACT (chronological, most-recent first):
+  4a023d31d  CURRENT_HEAD pointer refresh (§1 + §13 + evidence §I
+            now point to 4a023d31d; content unchanged at this step)
   168d0b91a  §3 demotion + §0..§17 ordering repair + identity
-            terminology reconciliation (CURRENT_HEAD; not a new
-            durable binding)
+            terminology reconciliation (NOT a re-binding of LAUNCH_HEAD)
   a4f639cb6  empty finalize-entry-discipline amendment (no content
             change; CURRENT_HEAD at this point)
   a76ff4137  trailing-blank-line cleanup; LAUNCH_HEAD frozen here
@@ -366,7 +369,13 @@ HOLD
 [x] OPEN_HEAD                            = 4963904e9   (first commit creating ACT)
 [x] LAUNCH_HEAD                          = a76ff4137   (durable-binding freeze)
 [x] LAUNCH_TREE                          = fa383737f   (tree of LAUNCH_HEAD)
-[x] CURRENT_HEAD                         = 168d0b91a   (HEAD at §3 demotion)
+[x] CURRENT_HEAD                         = 4a023d31d   (last ACT-only edit HEAD at
+                                            the time this row was last
+                                            refreshed; subsequent commits
+                                            do not re-bind LAUNCH_HEAD.
+                                            This row is a pointer, not a
+                                            contract — re-read at §15 if a
+                                            future commit touches ACT content)
 [x] WORKTREE_CLEAN                        (verified `git status --short` empty at all checkpoints)
 [x] PROTECTED_STASH_PRESERVED            (1 entry; "c2-green-and-c2-p1-delta")
 [x] PASS_RECON_SEAM_MAPPED                (source-seam-map.md; this ACT §2)
