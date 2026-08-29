@@ -80,14 +80,14 @@ authoritative record.
 ```
 
 Commit list for this ACT (chronological, most-recent first):
-  <THIS_COMMIT>     §15 product-contract freeze + §3 reclassification +
-                    §5/§7 SUPERSEDED annotations + §16.1 frozen exit +
-                    §17.1 closure provenance; ACT status moves from
-                    OPEN / POLICY_INTENT_UNBOUND to CLOSED /
-                    PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1.
-                    Docs-only closure commit. NO production source
-                    modified. NO new test added (existing tests
-                    cover all required cases).
+  f36c3fc0f  §15 product-contract freeze + §3 reclassification +
+             §5/§7 SUPERSEDED annotations + §16.1 frozen exit +
+             §17.1 closure provenance; ACT status moves from
+             OPEN / POLICY_INTENT_UNBOUND to CLOSED /
+             PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1.
+             Docs-only closure commit. NO production source
+             modified. NO new test added (existing tests
+             cover all required cases).
   9bef23455  Final CURRENT_HEAD pointer update (this commit);
             subsequent ACT-only commits should not re-bind
             CURRENT_HEAD (the pointer naturally lags by one commit;
@@ -115,7 +115,7 @@ OPEN_HEAD       = 4963904e9   (first commit creating this ACT file,
 LAUNCH_HEAD     = a76ff4137   (durable-binding freeze; the commit list
                                below carries the freeze forward)
 LAUNCH_TREE     = fa383737f   (tree of LAUNCH_HEAD)
-CURRENT_HEAD    = a617ceef1   (HEAD at the time of this closure commit;
+CURRENT_HEAD    = f36c3fc0f   (HEAD at the time of this closure commit;
                                ACT-only edits lag real HEAD by one
                                commit on subsequent edits; re-read at
                                §15 if a future commit touches ACT
