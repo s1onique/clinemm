@@ -1,0 +1,31 @@
+     ✓ translates and emits session messages, then posts state 5ms
+     ✓ filters late completion messages after cancellation 1ms
+     ✓ ignores stale events from inactive sessions 1ms
+     ✓ marks turns complete through the session lifecycle 0ms
+     ✓ posts state on turn end even when the turn-complete event carries NO messages 4ms
+     ✓ resolves the turn phase to 'error' when the turn surfaced a provider error 1ms
+     ✓ marks a submitted queued prompt as a new streaming turn 1ms
+     ✓ posts state for queued prompt turn start even when no transcript message is emitted 1ms
+     ✓ does NOT override the phase on a turn-complete straggler from an already-cancelled session 0ms
+     ✓ resolves the phase when a queued turn completes after its running flag was clobbered 1ms
+     ✓ updates task usage when the active session has a start result 1ms
+     ✓ zeros usage and api request message cost for free Cline models 1ms
+     ✓ leaves mistake-limit recovery to the SDK callback instead of mutating tool-error events 0ms
+     ✓ captures provider failure telemetry for SDK agent errors 1ms
+     ✓ does not capture provider failure telemetry for SDK agent errors without an error payload 0ms
+     ✓ does not capture provider failure telemetry for recoverable error events (mistake notices) 0ms
+     ✓ captures provider failure telemetry when the SDK finishes a turn with reason error 0ms
+     ✓ CRA02-coord: done with no committed terminal response DOES promote to awaiting_followup (liveness-corrected) 0ms
+     ✓ CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result 0ms
+     ✓ CRA03-coord: attemptCompletionSeen but no committed terminal response yields awaiting_followup (liveness-corrected, post-CPL04) 0ms
+     ✓ CPL01: done with no terminal response / no attempt-completion / no error transitions to awaiting_followup (liveness) 0ms
+     ✓ CPL02: done with committed terminal response AND attempt-completion transitions to completed (control: completion-tool path) 0ms
+     ✓ CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (structural/synthetic control) 0ms
+     ✓ CPL04: done with attempt-completion declared but NO committed terminal response yields awaiting_followup (liveness, symmetric to CPL01) 0ms
+     ✓ CPL05: done with error transitions to error (conservation) 0ms
+     × OWN01 RED: bare done + no terminal commit + no attempt_completion + no user-yield authority MUST NOT yield to awaiting_followup 8ms
+     ✓ T2-EXT01-A: terminal-push capture records (true, true); new-turn capture records (false, false); first is immutable 4ms
+     ✓ T2-EXT01-B: when only attempt_completion is observed (no terminal commit), terminal-push records (true, false) 1ms
+     ✓ T2-EXT01-C: a new-turn boundary reset is visible in the NEXT push only (first is immutable) 1ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 passed (29)

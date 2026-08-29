@@ -1,0 +1,62 @@
+{
+  "act_id": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01",
+  "test_id": "OWN01",
+  "test_path": "apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts",
+  "test_line": 780,
+  "kind": "ownership-transfer RED",
+  "head": "f106bc63d0c3c5ab3683c39b8592cb821b4d32f6",
+  "branch": "main",
+  "production_changed": false,
+  "test_only_change": "+80 lines (single new it-block)",
+  "ptad_binding": {
+    "task_id": "1787991478667_tjjyj",
+    "specimen": ".factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/live-20260829T134901Z/post-terminal-authority-diagnostic-extension.jsonl",
+    "first_completed_frame_at_line": 59,
+    "first_completed_frame_state": {
+      "runtimeStatus": "completed",
+      "runtimeModelStreaming": false,
+      "runtimeAwaitingApproval": false,
+      "runtimePendingToolCount": 0,
+      "attemptCompletionSeen": false,
+      "terminalResponseCommittedThisTurn": false,
+      "taskTelemetry": {
+        "toolCalls": 222,
+        "recoveryBudgetFailures": 0
+      },
+      "taskHeaderPresentation": {
+        "phase": "awaiting_followup",
+        "source": "host"
+      }
+    }
+  },
+  "production_seam": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts:172-225",
+  "existing_test_collision": {
+    "test_id": "CPL01",
+    "test_line": 581,
+    "assertion": "setTurnPhase('awaiting_followup', ...) IS called for this state",
+    "red_assertion": "setTurnPhase('awaiting_followup', ...) MUST NOT be called for this state (no user-yield authority)"
+  },
+  "vitest_result": {
+    "test_files": "1 failed (1)",
+    "tests": "1 failed | 28 passed (29)",
+    "failed_test": "OWN01 RED",
+    "diagnostic": "AssertionError: expected true to be false // Object.is equality"
+  },
+  "forbidden_actions_observed": [
+    "no UI fix",
+    "no header-label change",
+    "no synthetic user Continue",
+    "no prompt injection",
+    "no special-case MiniMax",
+    "no timer/polling",
+    "no new state machine",
+    "no global awaiting_followup semantic change",
+    "no production code modification"
+  ],
+  "reviewer_bound_followup": [
+    "RED reproduces, so the bounded causal cycle is authorized",
+    "fix design (Phase 2) must introduce a user-yield discriminator on MessageTranslatorState",
+    "RED stays failing until the fix lands",
+    "CPL01 will need a corresponding revision when the fix lands (or it stays GREEN only when a user-yield authority is present)"
+  ]
+}
