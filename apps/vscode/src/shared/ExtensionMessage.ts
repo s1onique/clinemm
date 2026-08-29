@@ -314,6 +314,12 @@ export interface ExtensionState {
 	backgroundEditEnabled?: boolean
 	optOutOfRemoteConfig?: boolean
 	showFeatureTips?: boolean
+	// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	// Persisted Settings values for the sandbox capability toggles.
+	// Defaults to undefined (= deny/deny = pre-ACT runtime); when the
+	// user touches the toggle, become true. See state-keys.ts.
+	clinemmSafeYoloAllowNetwork?: boolean
+	clinemmSafeYoloAllowSshAgent?: boolean
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean

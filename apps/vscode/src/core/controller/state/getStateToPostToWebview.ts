@@ -46,6 +46,15 @@ export async function getStateToPostToWebview(controller: {
 	const userContextCeiling = stateManager.getGlobalSettingsKey("userContextCeiling")
 	const webSearchEnabled = isModelToolEnabledGlobally("web_search")
 	const subagentsEnabled = stateManager.getGlobalSettingsKey("subagentsEnabled")
+	// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	// Persisted Settings values that bind to the sandbox capability
+	// selectors in apps/vscode/src/sdk/sandbox-policy.ts.
+	const clinemmSafeYoloAllowNetwork = stateManager.getGlobalStateKey(
+		"clinemmSafeYoloAllowNetwork",
+	)
+	const clinemmSafeYoloAllowSshAgent = stateManager.getGlobalStateKey(
+		"clinemmSafeYoloAllowSshAgent",
+	)
 	const userInfo = stateManager.getGlobalStateKey("userInfo")
 	const mcpMarketplaceEnabled = stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 	const mcpDisplayMode = stateManager.getGlobalStateKey("mcpDisplayMode")
@@ -179,6 +188,11 @@ export async function getStateToPostToWebview(controller: {
 		backgroundEditEnabled: stateManager.getGlobalSettingsKey("backgroundEditEnabled"),
 		optOutOfRemoteConfig: stateManager.getGlobalSettingsKey("optOutOfRemoteConfig"),
 		showFeatureTips,
+		// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+		// Project the sandbox-capability toggles to the webview so the
+		// new "Sandbox & Capabilities" tab can render authoritative state.
+		clinemmSafeYoloAllowNetwork,
+		clinemmSafeYoloAllowSshAgent,
 		banners,
 		welcomeBanners,
 		openAiCodexIsAuthenticated,

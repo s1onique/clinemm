@@ -43,6 +43,8 @@ import {
 	buildExperimentalReconCapability,
 	defaultSandboxBackendResolver,
 	resolveExperimentalSandboxMode,
+	resolveSafeYoloCapabilityFromState,
+	type SafeYoloCapabilitySnapshot,
 	type SandboxBackendResolver,
 } from "./sandbox-policy"
 
@@ -227,6 +229,24 @@ export interface CommandJobManagerOptions {
 	 * actual workspace roots.
 	 */
 	experimentalSandboxWorkspaceRoots?: readonly string[]
+	/**
+	 * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	 * Optional source for setting-driven capability overrides. When
+	 * supplied, the production `buildExperimentalReconCapability`
+	 * builder reads this snapshot at every command-start and applies
+	 * it as the runtime source of truth; when omitted, the legacy
+	 * env-only path runs (every existing test suite stays green).
+	 *
+	 * The SdkController supplies a closure that reads the persisted
+	 * state keys `clinemmSafeYoloAllowNetwork` /
+	 * `clinemmSafeYoloAllowSshAgent`. A user who has never opened
+	 * the Settings UI reads `undefined` here and the builder falls
+	 * through to the env-only path — exactly the pre-ACT runtime.
+	 */
+	safeYoloCapabilitySource?: () => {
+		readonly network: boolean | undefined
+		readonly sshAgent: boolean | undefined
+	}
 }
 
 /**
@@ -489,6 +509,20 @@ export class CommandJobManager {
 	 * the Wave-1 experimental capability. Frozen.
 	 */
 	private readonly experimentalSandboxWorkspaceRoots: readonly string[]
+	/**
+	 * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	 * Optional source for setting-driven capability overrides. When
+	 * supplied, the production capability builder reads this
+	 * snapshot at every command-start and applies it as the runtime
+	 * source of truth; when omitted, the legacy env-only path runs
+	 * (every existing test suite stays green).
+	 */
+	private readonly safeYoloCapabilitySource:
+		| (() => {
+				readonly network: boolean | undefined
+				readonly sshAgent: boolean | undefined
+		  })
+		| undefined
 
 	constructor(options: CommandJobManagerOptions = {}) {
 		this.maxTerminalJobs = Math.max(1, options.maxTerminalJobs ?? MAX_TERMINAL_JOBS)
@@ -496,6 +530,7 @@ export class CommandJobManager {
 		this.maxWaitBudgetMs = Math.max(0, options.maxWaitBudgetMs ?? DEFAULT_WAIT_BUDGET_MS)
 		this.sandboxBackendResolver = options.sandboxBackendResolver ?? defaultSandboxBackendResolver
 		this.experimentalSandboxWorkspaceRoots = Object.freeze([...(options.experimentalSandboxWorkspaceRoots ?? [])])
+		this.safeYoloCapabilitySource = options.safeYoloCapabilitySource
 	}
 
 	async start(options: StartCommandJobOptions, context?: AgentToolContext): Promise<StartCommandJobResult> {
@@ -591,10 +626,31 @@ export class CommandJobManager {
 			// Build the Wave-1 capability. This function lives in the
 			// sandbox-policy module so the executor stays agnostic of
 			// Seatbelt-specific semantics.
-			const capability = buildExperimentalReconCapability({
-				cwd: options.cwd,
-				workspaceRoots: this.experimentalSandboxWorkspaceRoots,
-			})
+			//
+			// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+			// when a setting-driven capability source has been injected
+			// into the manager (the production path through
+			// VscodeSessionHost), read it here and pass the override
+			// values through. When no source was injected (legacy
+			// callers and existing test suites), the builder's env-only
+			// fallback runs unchanged — every pre-existing test stays
+			// green.
+			let capability: ReturnType<typeof buildExperimentalReconCapability>
+			if (this.safeYoloCapabilitySource) {
+				const snap = this.safeYoloCapabilitySource()
+				const convertedSnap = resolveSafeYoloCapabilityFromState(snap)
+				capability = buildExperimentalReconCapability({
+					cwd: options.cwd,
+					workspaceRoots: this.experimentalSandboxWorkspaceRoots,
+					networkOverride: convertedSnap.network,
+					sshAgentOverride: convertedSnap.sshAgent,
+				})
+			} else {
+				capability = buildExperimentalReconCapability({
+					cwd: options.cwd,
+					workspaceRoots: this.experimentalSandboxWorkspaceRoots,
+				})
+			}
 
 			// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
 			// map the typed per-command channel into the Seatbelt

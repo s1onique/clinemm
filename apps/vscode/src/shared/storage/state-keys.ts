@@ -281,6 +281,18 @@ const USER_SETTINGS_FIELDS = {
 	userContextCeiling: { default: undefined as number | undefined },
 	subagentsEnabled: { default: false as boolean },
 	worktreesEnabled: { default: false as boolean },
+	// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	// Persisted Settings values that bind to the two capability
+	// selectors in apps/vscode/src/sdk/sandbox-policy.ts:
+	//   - clinemmSafeYoloAllowNetwork   -> SandboxNetwork 'allow' | 'deny'
+	//   - clinemmSafeYoloAllowSshAgent  -> SshAuthenticationAuthority 'agent' | undefined
+	// Defaults are `false` (= deny/deny) which is exactly the pre-ACT
+	// runtime behaviour. Pre-existing state files without these keys
+	// hydrate to undefined; the resolver treats that as "no opt-in"
+	// and produces the same deny/deny capability as the env-only path
+	// (see §14 backward compatibility contract).
+	clinemmSafeYoloAllowNetwork: { default: false as boolean },
+	clinemmSafeYoloAllowSshAgent: { default: false as boolean },
 	preferredLanguage: { default: "English" as string },
 	mode: { default: "act" as Mode },
 	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },

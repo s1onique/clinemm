@@ -48,7 +48,10 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
 import { CommandJobManager } from "./command-job-manager"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
-import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
+import {
+	resolveActiveWorkspaceRootsForSandbox,
+	type SafeYoloCapabilitySnapshot,
+} from "./sandbox-policy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import type { SdkSessionHost } from "./session-host"
 import { createVscodeExtraTools } from "./vscode-runtime-builder"
@@ -57,6 +60,22 @@ import { createVscodeSubmitExecutor } from "./vscode-submit-executor"
 
 export interface VscodeSessionHostOptions {
 	mcpHub: McpHub
+	/**
+	 * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	 * Setting-driven capability snapshot source. When provided, the
+	 * production `buildExperimentalReconCapability` is invoked with
+	 * these overrides; when omitted, the legacy env-only path runs.
+	 * The SdkController supply a closure that reads the persisted
+	 * state keys `clinemmSafeYoloAllowNetwork` and
+	 * `clinemmSafeYoloAllowSshAgent` from the StateManager, so the
+	 * Settings UI is the runtime source of truth for capability
+	 * selection. Conservation: a user who has never touched the UI
+	 * sees exactly the pre-ACT runtime selection (deny / deny).
+	 */
+	safeYoloCapabilitySource?: () => {
+		readonly network: boolean | undefined
+		readonly sshAgent: boolean | undefined
+	}
 	requestToolApproval?: (request: {
 		agentId: string
 		conversationId: string
@@ -172,6 +191,12 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// "everything writable except /dev/null = nothing"
 			// contract — no silent widening on the empty-window edge.
 			experimentalSandboxWorkspaceRoots: await resolveActiveWorkspaceRootsForSandbox(),
+			// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+			// when the host wires a state-driven snapshot source, the
+			// production runtime capability selects from persisted
+			// Settings values. When the host does not (test paths), the
+			// builder's env-only fallback runs unchanged.
+			safeYoloCapabilitySource: options.safeYoloCapabilitySource,
 		})
 		const toolExecutors: Partial<ToolExecutors> = {}
 		if (options.askQuestion) {

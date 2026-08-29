@@ -302,6 +302,24 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("showFeatureTips", request.showFeatureTips)
 		}
 
+		// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+		// Persisted Settings values that bind to the sandbox capability
+		// selectors in apps/vscode/src/sdk/sandbox-policy.ts. Both
+		// fields default to false in state-keys.ts and the resolver
+		// treats absent / false as "no opt-in" → pre-ACT runtime.
+		if (request.clinemmSafeYoloAllowNetwork !== undefined) {
+			controller.stateManager.setGlobalState(
+				"clinemmSafeYoloAllowNetwork",
+				!!request.clinemmSafeYoloAllowNetwork,
+			)
+		}
+		if (request.clinemmSafeYoloAllowSshAgent !== undefined) {
+			controller.stateManager.setGlobalState(
+				"clinemmSafeYoloAllowSshAgent",
+				!!request.clinemmSafeYoloAllowSshAgent,
+			)
+		}
+
 		// Post updated state to webview
 		await controller.postStateToWebview()
 

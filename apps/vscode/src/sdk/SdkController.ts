@@ -1213,7 +1213,7 @@ export class Controller {
 			},
 			runExclusive: (operation) => this.sessionRebuilds.runExclusive(operation),
 			getTask: () => this.task,
-			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub }),
+			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) }),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: (sessionHost, taskId) => this.sessionHistory.loadInitialMessages(sessionHost, taskId),
 			buildStartSessionInput,
@@ -1321,7 +1321,7 @@ export class Controller {
 			onAskResponse: (text, images, files) => this.askResponse(text, images, files),
 			onCancelTask: () => this.cancelTask(),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
-			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub }),
+			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) }),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
 			isClineManagedProviderActive: () => this.isClineManagedProviderActive(),
@@ -1347,7 +1347,7 @@ export class Controller {
 			taskHistory: this.taskHistory,
 			sessionConfigBuilder: this.sessionConfigBuilder,
 			getDisplayedTaskId: () => this.task?.taskId,
-			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub }),
+			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) }),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			postStateToWebview: () => this.postStateToWebview(),
@@ -2657,7 +2657,7 @@ export class Controller {
 		let tempHost: VscodeSessionHost | undefined
 		let sessionHost = activeSession?.sdkHost
 		if (!sessionHost) {
-			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub })
+			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) })
 			sessionHost = tempHost
 		}
 		try {
@@ -2904,7 +2904,7 @@ export class Controller {
 		let tempHost: VscodeSessionHost | undefined
 		let sessionHost = activeSession?.sdkHost
 		if (!sessionHost) {
-			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub })
+			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) })
 			sessionHost = tempHost
 		}
 		try {

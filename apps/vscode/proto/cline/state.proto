@@ -311,6 +311,16 @@ message Settings {
   // `clear_user_context_ceiling`, never both — carrying both is a
   // typed-error rejection at the persistence seam).
   optional bool clear_user_context_ceiling = 188;
+  // ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+  // Persisted Settings values that bind to the two capability
+  // selectors in apps/vscode/src/sdk/sandbox-policy.ts:
+  //   - clinemm_safe_yolo_allow_network   -> SandboxNetwork 'allow' | 'deny'
+  //   - clinemm_safe_yolo_allow_ssh_agent  -> SshAuthenticationAuthority 'agent' | undefined
+  // Defaults are absent / undefined, which the resolver interprets as
+  // "no opt-in" -> deny (network), deny (ssh-agent) — exactly the
+  // pre-ACT runtime behaviour. Persisted true -> allow / agent.
+  optional bool clinemm_safe_yolo_allow_network = 189;
+  optional bool clinemm_safe_yolo_allow_ssh_agent = 190;
 }
 
 message State {
@@ -473,6 +483,13 @@ message UpdateSettingsRequest {
   // intent into two sequential requests if it truly wants to switch
   // between modes.
   optional bool clear_user_context_ceiling = 47;
+  // ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+  // Persisted Settings values for the two sandbox-capability toggles.
+  // See the matching fields on the `Settings` message. Conservation
+  // contract: absent / undefined -> deny (no opt-in) -> exactly the
+  // pre-ACT runtime selection. Persisted true -> enable the capability.
+  optional bool clinemm_safe_yolo_allow_network = 48;
+  optional bool clinemm_safe_yolo_allow_ssh_agent = 49;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

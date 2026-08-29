@@ -481,14 +481,29 @@ export async function resolveActiveWorkspaceRootsForSandbox(): Promise<readonly 
  * (defensive -- preserves current behavior on Linux/Windows hosts
  * where the Wave-1 capability is never reached).
  */
-export function resolveSafeYoloSensitiveReadDenials(): readonly string[] {
+export function resolveSafeYoloSensitiveReadDenials(): readonly string[]
+export function resolveSafeYoloSensitiveReadDenials(opts: {
+	/**
+	 * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	 * Optional override for the network capability. When provided,
+	 * the deny-list activation predicate consults the override
+	 * instead of the env-only path. Used by the production builder
+	 * to honour a Settings-driven network=allow without requiring
+	 * the operator to set the env var.
+	 */
+	readonly networkOverride?: "allow" | undefined
+}): readonly string[]
+export function resolveSafeYoloSensitiveReadDenials(opts?: {
+	readonly networkOverride?: "allow" | undefined
+}): readonly string[] {
 	// Network-open credential read guard (CORRECTION01).
 	//
 	// Activation predicate (the CORRECTED intent, not "YOLO-targeted"):
 	//
 	//   Seatbelt experimental mode active
 	//     AND
-	//   Safe-YOLO network opt-in is "allow"
+	//   effective network capability is "allow"
+	//     (override if supplied; otherwise the env var)
 	//
 	// Independent of `hostAuthorization.mode`, session override,
 	// and the YOLO/approval path. The implementation has always had
@@ -501,7 +516,13 @@ export function resolveSafeYoloSensitiveReadDenials(): readonly string[] {
 	if (resolveExperimentalSandboxMode() !== "seatbelt-experimental") {
 		return []
 	}
-	if (resolveSafeYoloNetworkOptIn() !== "allow") {
+	const effectiveNetwork =
+		opts?.networkOverride !== undefined
+			? opts.networkOverride
+			: resolveSafeYoloNetworkOptIn() === "allow"
+				? "allow"
+				: "deny"
+	if (effectiveNetwork !== "allow") {
 		return []
 	}
 	const home = process.env.HOME
@@ -643,8 +664,54 @@ export const defaultSandboxBackendResolver: SandboxBackendResolver = async (mode
 export function buildExperimentalReconCapability(input: {
 	readonly cwd: string
 	readonly workspaceRoots: readonly string[]
+}): CommandCapability
+export function buildExperimentalReconCapability(input: {
+	readonly cwd: string
+	readonly workspaceRoots: readonly string[]
+	/**
+	 * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	 * Setting-driven overrides for the two sandbox-capability
+	 * selectors. OPTIONAL — when omitted, the legacy env-only path
+	 * runs (preserves every existing call site). When the value is a
+	 * literal string ("allow" / "deny" / "agent" / "deny"), the
+	 * override is authoritative and the env is NOT consulted. When
+	 * undefined, the env-only path runs for that capability field.
+	 * This honours the recon's env-retirement-plan §7 precedence
+	 * rule (persisted value wins; env is fallback) AND the §16
+	 * persistence-authoritative invariant (an explicit persisted
+	 * deny must not be silently re-enabled by an operator env).
+	 */
+	readonly networkOverride?: "allow" | "deny" | undefined
+	readonly sshAgentOverride?: "agent" | "deny" | undefined
+}): CommandCapability
+export function buildExperimentalReconCapability(input: {
+	readonly cwd: string
+	readonly workspaceRoots: readonly string[]
+	readonly networkOverride?: "allow" | "deny" | undefined
+	readonly sshAgentOverride?: "agent" | "deny" | undefined
 }): CommandCapability {
-	const sshAgentMode = resolveSafeYoloSshAgentOptIn()
+	const networkFromOverride = input.networkOverride
+	const sshAgentFromOverride = input.sshAgentOverride
+	// For network: a literal override is authoritative; env is
+	// consulted only when the override is undefined.
+	const network =
+		networkFromOverride !== undefined
+			? networkFromOverride
+			: resolveSafeYoloNetworkOptIn() === "allow"
+				? "allow"
+				: "deny"
+	// For sshAgent: "agent" forces the field on; "deny" forces it off
+	// (the existing { mode: "agent" | undefined } discriminator already
+	// collapses the "deny" case to omit the field entirely); undefined
+	// falls through to the env.
+	let sshAgentMode: "agent" | undefined
+	if (sshAgentFromOverride === "agent") {
+		sshAgentMode = "agent"
+	} else if (sshAgentFromOverride === "deny") {
+		sshAgentMode = undefined
+	} else {
+		sshAgentMode = resolveSafeYoloSshAgentOptIn()
+	}
 	return {
 		// ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01:
 		// Workspace roots are NOT placed in readonlyRoots because
@@ -668,12 +735,13 @@ export function buildExperimentalReconCapability(input: {
 		// `(allow file-read*) + (deny file-read* (subpath X))` per
 		// entry; no change to seatbelt-profile.ts, seatbelt-backend.ts,
 		// CommandJobManager, or approval/YOLO logic.
-		denyReadSubpaths: [...resolveSafeYoloSensitiveReadDenials()],
+		denyReadSubpaths: [...resolveSafeYoloSensitiveReadDenials({ networkOverride: network === "allow" ? "allow" : undefined })],
 		// ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01: honor the
-		// `CLINEMM_SAFE_YOLO_NETWORK=allow` opt-in. Default remains
-		// `"deny"` (the conservative network posture). Filesystem
-		// policy is unchanged either way.
-		network: resolveSafeYoloNetworkOptIn() === "allow" ? "allow" : "deny",
+		// `CLINEMM_SAFE_YOLO_NETWORK=allow` opt-in (or the Settings
+		// override, see ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-
+		// IMPLEMENTATION01). Default remains `"deny"` (the conservative
+		// network posture). Filesystem policy is unchanged either way.
+		network,
 		environment: {
 			mode: "sanitized",
 			// `allow` is a list of env var NAMES the sanitized env
@@ -695,5 +763,72 @@ export function buildExperimentalReconCapability(input: {
 				}
 			: {}),
 		cwd: input.cwd,
+	}
+}
+/**
+ * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+ *
+ * Setting-driven capability snapshot. The two persisted toggles
+ * (`clinemmSafeYoloAllowNetwork`, `clinemmSafeYoloAllowSshAgent`)
+ * bind to the corresponding runtime capability selectors through
+ * this snapshot. Each entry has THREE possible values:
+ *
+ *   - `undefined`  — no persisted opinion (legacy state file or
+ *                    never-touched toggle). The env-only path is
+ *                    the runtime source of truth.
+ *   - `"allow"`    — the persisted network toggle is true (enable
+ *                    network egress).
+ *   - `"deny"`     — the persisted network toggle is false (force
+ *                    deny; persistence is authoritative; env MUST
+ *                    NOT re-enable). Same for `"agent"` /
+ *                    `"deny"` on the sshAgent field.
+ *
+ * This three-valued design is the §16 persistence-authoritative
+ * invariant: an explicit persisted `false` MUST be honoured even
+ * when the operator env says otherwise. Pre-ACT state files (no
+ * key) read as `undefined` here and fall through to the env path,
+ * which is the MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 invariant.
+ */
+export interface SafeYoloCapabilitySnapshot {
+	readonly network: "allow" | "deny" | undefined
+	readonly sshAgent: "agent" | "deny" | undefined
+}
+
+/**
+ * Convert the raw, persisted Settings booleans into the
+ * runtime-capability snapshot. The mapping follows the
+ * three-value contract on {@link SafeYoloCapabilitySnapshot}:
+ *
+ *   `true`    -> "allow"   / "agent"      (enable capability)
+ *   `false`   -> "deny"    / "deny"       (explicit disable;
+ *                                          persistence authoritative;
+ *                                          env MUST NOT re-enable)
+ *   undefined -> undefined                (no opinion; fall through
+ *                                          to env; the migration
+ *                                          default case)
+ *
+ * The helper is a PURE function — it does not touch process.env
+ * or state — so its output is fully determined by its input.
+ * This makes it trivial to test (see
+ * sandbox-policy.settings-binding.test.ts) and trivial to
+ * ablation-discriminate.
+ */
+export function resolveSafeYoloCapabilityFromState(persisted: {
+	readonly network: boolean | undefined
+	readonly sshAgent: boolean | undefined
+}): SafeYoloCapabilitySnapshot {
+	return {
+		network:
+			persisted.network === true
+				? "allow"
+				: persisted.network === false
+					? "deny"
+					: undefined,
+		sshAgent:
+			persisted.sshAgent === true
+				? "agent"
+				: persisted.sshAgent === false
+					? "deny"
+					: undefined,
 	}
 }
