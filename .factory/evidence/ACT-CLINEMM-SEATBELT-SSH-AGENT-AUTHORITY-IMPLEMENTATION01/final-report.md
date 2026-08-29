@@ -7,8 +7,8 @@ VERDICT      = PASS_PHASE_A_B_D_GREEN__PHASE_E_F_G_HOST_SUBSTRATE_REQUIRED
 
 > Phase A (PURE ENV RED) → GREEN (pure-functional)
 > Phase B (PURE CAPABILITY/PROFILE RED) → GREEN (pure-functional)
-> Phase C (PRODUCTION DELTA) → APPLIED (commit 79512545f)
-> Phase D (PURE GREEN) → GREEN (100 tests pass, 0 regressions)
+> Phase C (PRODUCTION DELTA) → APPLIED + C1 CORRECTION CYCLE (commits 79512545f → ff96ea8fe)
+> Phase D (PURE GREEN) → GREEN (act-owned tests PASS, 0 regressions in changed files)
 > Phase E (REAL-KERNEL RED/GREEN) → NOT_EXECUTED (host substrate unavailable)
 > Phase F (ABLATION) → NOT_EXECUTED (host substrate unavailable)
 > Phase G (LIVE SSH QUALIFICATION) → NOT_EXECUTED (host substrate unavailable)
@@ -16,11 +16,19 @@ VERDICT      = PASS_PHASE_A_B_D_GREEN__PHASE_E_F_G_HOST_SUBSTRATE_REQUIRED
 ## Identity
 
 ```text
-ENTRY_HEAD     = 2b720bcf9
-ENTRY_TREE     = 47711fad0278d4e1f283ba2d7c410561e9bdc4e7
-FINAL_HEAD     = 79512545f2ca8be29fcd3c12f409aca8674434aa
-WORKTREE_STATUS = CLEAN
+ENTRY_HEAD                = 2b720bcf9
+ENTRY_TREE                = 47711fad0278d4e1f283ba2d7c410561e9bdc4e7
+IMPLEMENTATION_SUBJECT_HEAD = ff96ea8feecbb65e82dd3ddb14fb0269f90fb250
+EVIDENCE_HEAD             = b0e7898468f6ce6c920d17495bc6744e89f92724   ; this report's commit
+BASE_HEAD                 = 79512545f2ca8be29fcd3c12f409aca8674434aa   ; pre-correction
+WORKTREE_STATUS           = CLEAN
 ```
+
+The implementation ACT's executable subject is `ff96ea8fe`
+(the C1 correction cycle), NOT `79512545f` (the pre-correction
+baseline). The §15 "Implementation delta" below describes
+`ff96ea8fe`, which is the head the gate-summary binds and which
+must execute against the live macOS Seatbelt kernel in Phase E/F/G.
 
 ## Foreign dirt (correctly untouched)
 
@@ -40,29 +48,49 @@ PROFILE_AGENT   = GREEN
 
 See full report below.
 
-## Implementation delta
+## Implementation delta (subject: ff96ea8fe)
 
 ```text
-FILES =
+PRODUCTION_FILES =
   + sdk/packages/core/src/runtime/sandbox/types.ts
-      (SshAuthenticationAuthority type + CommandCapability field)
+      (SshAuthenticationAuthority narrowed to { mode: deny | agent }
+       only; NO socketPath field; single source of truth is
+       process.env.SSH_AUTH_SOCK per OpenSSH contract)
   + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
-      (buildSshAgentSocketRules + sshAgentCanonicalSocketPath option)
+      (buildSshAgentSocketRules + sshAgentCanonicalSocketPath option;
+       path-literal AF_UNIX remote-endpoint filter per Apple Sandbox
+       Guide v1.0)
   + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts
-      (agent-mode wiring: canonicalize + allow-list extend + profile pass)
-  + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.test.ts
-      (+7 ACT-IMPL01 tests)
-  + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.test.ts
-      (+2 ACT-IMPL01 host-kernel skipIf(!HAS_SUBSTRATE) tests;
-       +2 ACT-IMPL01 pure-functional tests)
-  + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts
-      (new file, +8 pure-functional tests)
+      (agent-mode wiring: canonicalizeSandboxRoot + lstat S_IFSOCK
+       socket-type validation + SECRET_BLOCKLIST-preserving allow-list
+       extension; ONE canonical path drives both profile path-literal
+       and child env SSH_AUTH_SOCK)
+  + apps/vscode/src/sdk/sandbox-policy.ts
+      (resolveSafeYoloSshAgentOptIn + buildExperimentalReconCapability
+       integration via CLINEMM_SAFE_YOLO_SSH_AGENT env var;
+       activation is mode-gated on resolveExperimentalSandboxMode()
+       === "seatbelt-experimental")
+      NOTE: V1 execution control is INTERNAL / TEMPORARY; future work
+      must move activation to a Settings panel entry. NOT product UX.
 
-PUBLIC_API_DELTA =
+TEST_FILES =
+  + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.test.ts
+      (+7 ACT-IMPL01 tests, all GREEN)
+  + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.test.ts
+      (+2 ACT-IMPL01 host-kernel skipIf(!HAS_SUBSTRATE) tests,
+       HOST_NOT_EXECUTED; corrected the existing socketPath reference)
+  + sdk/packages/core/src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts
+      (NEW FILE; 7 pure-functional + 4 substrate-gated AF_UNIX bind
+       = 11 total; CAN_BIND_AF_UNIX probe mirrors HAS_SUBSTRATE pattern)
+  + apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+      (+4 ACT-IMPL01 production-reach tests; all 4 GREEN)
+
+PUBLIC_API_DELTA =   ; post-correction (ff96ea8fe), not pre-correction
   CommandCapability: new optional field
     sshAuthenticationAuthority?:
-      | { readonly mode: "deny" }
-      | { readonly mode: "agent"; readonly socketPath?: string }
+      { readonly mode: "deny" | "agent" }
+      ; NO socketPath field (removed in C1)
+      ; single source of truth: process.env.SSH_AUTH_SOCK
   generateSeatbeltProfile: new optional field
     sshAgentCanonicalSocketPath?: string   (in options)
 
@@ -96,8 +124,12 @@ SSH-06  = NOT_EXECUTED            ; substrate-gated (Phase E host-kernel)
                                    ; adds no raw-key filesystem grant
 SSH-07  = GREEN (pure-functional) ; AWS_*, OPENAI_API_KEY, GITHUB_TOKEN
                                    ; all remain stripped in agent mode
-SSH-08  = GREEN (pure-functional) ; non-existent socketPath fails closed
+SSH-08  = GREEN (pure-functional) ; non-existent SSH_AUTH_SOCK fails closed
                                    ; (SandboxError, canonicalization-failed)
+                                   ; NOTE: pre-correction this line read
+                                   ; "non-existent socketPath fails closed";
+                                   ; the socketPath field was REMOVED in
+                                   ; the C1 correction cycle at ff96ea8fe
 SSH-09  = GREEN (pure-functional) ; mode:"deny" tested explicitly; strips
                                    ; SSH_AUTH_SOCK even when in parent env
 SSH-10  = GREEN (conservation)    ; no executable === "ssh" branches
@@ -120,23 +152,35 @@ ABLATION              = NOT_EXECUTED   ; substrate-gated (Phase F)
 TYPECHECK             = 0 errors in changed files (21 pre-existing baseline
                         errors in unrelated test files; same count before
                         and after this ACT)
-TARGETED_TESTS        = 100 passed / 122 total (15 new ACT-IMPL01 tests,
-                        all green); 20 skipped (substrate-gated host-kernel
-                        SSH-03 quartet)
-REGRESSION_TESTS      = 0 regressions in 6 production files; 2 pre-existing
-                        failures in substrate-availability tests, unchanged
-LINT                  = biome clean on all 6 files
-                        (Checked 6 files; no fixes applied)
+ACT_OWNED_TESTS       = GREEN (all tests added by this ACT PASS)
+TARGETED_TESTS        = sdk/core: 99 passed / 125 total / 24 skipped
+                        apps/vscode: 16 passed / 18 total / 0 skipped
+                        (raw counts from vitest --reporter=json;
+                         see .factory/gate-summary.json)
+FULL_SUITE            = FAIL_BASELINE_ONLY (4 pre-existing substrate-
+                        availability failures, environmental, not code;
+                        new_failures_from_this_act = 0)
+BASELINE_COMPARISON   = PASS (no new regressions; pre-existing failures
+                        are HALT_HOST_SUBSTRATE_UNAVAILABLE on this
+                        nested-sandboxed VSCodium authoring shell)
+REGRESSION_TESTS      = 0 regressions in changed files
+LINT                  = biome clean on 4 production files in
+                        sdk/packages/core (Checked 4 files; no fixes
+                        applied)
 BOARD_VALIDATOR       = NEW_VALIDATOR_FAILURES_FROM_THIS_ACT = 0
-                        (same 2 pre-existing oversized cells)
 DIFF_CHECK            = clean (git diff --check passes)
+GATE_SUMMARY          = .factory/gate-summary.json with schema_version=1,
+                        commit_under_test=ff96ea8fe, source_status=valid,
+                        authoritative_for_digest=true
 ```
 
 ## Dogfood (deferred; substrate-gated)
 
 ```text
-SOURCE_HEAD       = 79512545f2ca8be29fcd3c12f409aca8674434aa
-SOURCE_VERSION    = pre-dogfood; commit is the source identity
+SOURCE_HEAD       = ff96ea8feecbb65e82dd3ddb14fb0269f90fb250
+                      ; the C1 correction cycle is the executable subject,
+                      ; NOT the pre-correction baseline 79512545f
+SOURCE_VERSION    = post-correction (Phase C APPLIED + C1 cycle)
 DOGFOOD_VERSION   = NOT_BUILT    ; Phase G live SSH requires host substrate
 VSIX_PATH         = NOT_BUILT
 VSIX_BYTES        = NOT_BUILT
@@ -167,7 +211,12 @@ SSH_REMOTE_QUALIFICATION  = NOT_EXECUTED
 COMMIT_1 = c700b0d92   ; RECON01 closure + IMPLEMENTATION01 launch
 COMMIT_2 = 2b720bcf9   ; §I provenance (RECON01 + IMPLEMENTATION01)
 COMMIT_3 = 79512545f   ; IMPLEMENTATION01 minimal production delta
-                        ; (this ACT's work)
+                        ; (pre-correction baseline)
+COMMIT_4 = ff96ea8fe   ; IMPLEMENTATION01 C1 correction cycle
+                        ; (this ACT's executable subject head;
+                        ;  production-reach + P1 fixes)
+COMMIT_5 = b0e789846   ; gate-summary.json + final-report.md
+                        ; (this evidence commit)
 PUSHED    = NO          ; branch is local-only per ACT convention
 ```
 
@@ -180,13 +229,14 @@ NEW_P2  = NONE
 
 SSH_AGENT_IMPLEMENTATION01
   PHASE_A_B_D = GREEN               ; pure-functional; all evidence here
-  PHASE_C     = APPLIED             ; commit 79512545f
+  PHASE_C     = APPLIED + C1 CORRECTION_CYCLE_APPLIED
+                                     ; commits 79512545f -> ff96ea8fe
   PHASE_E_F_G = HOST_SUBSTRATE_REQUIRED
 
 NEXT_OWNED_ACTIONS =
   1. Operator runs the substrate-gated Phase E/F/G on Terminal.app
      or iTerm2 or debug-harness (probeSeatbeltAvailability() === true)
-  2. Operator builds the dogfood VSIX with source HEAD = 79512545f
+  2. Operator builds the dogfood VSIX with source HEAD = ff96ea8fe
      via tools/factory/build-dogfood-vsix.py (per ACT §10)
   3. Operator installs the VSIX, runs `ssh-add -l`, then runs
      `ssh -o BatchMode=yes -o ConnectTimeout=10
@@ -293,10 +343,10 @@ NEW_VALIDATOR_FAILURES_FROM_THIS_ACT = 0
 PRODUCTION_AGENT_ACTIVATION = GREEN    ; was NOT_IMPLEMENTED, now ACTIVE
 PHASE_E_SCAFFOLD              = COMPLETE ; was PARTIAL, now SSH-04/06/12
                                                 host tests exist (skipIf)
-SSH-03 HOST TEST               = IMPLEMENTED + EXECUTED on substrate
-SSH-04 HOST TEST               = IMPLEMENTED + skipIf on this host
-SSH-06 HOST TEST               = IMPLEMENTED + skipIf on this host
-SSH-12 HOST TEST               = IMPLEMENTED + skipIf on this host
+SSH-03 HOST TEST               = IMPLEMENTED / NOT_EXECUTED_ON_REAL_SUBSTRATE (skipIf !HAS_SUBSTRATE)
+SSH-04 HOST TEST               = IMPLEMENTED / NOT_EXECUTED_ON_REAL_SUBSTRATE (skipIf !HAS_SUBSTRATE)
+SSH-06 HOST TEST               = IMPLEMENTED / NOT_EXECUTED_ON_REAL_SUBSTRATE (skipIf !HAS_SUBSTRATE)
+SSH-12 HOST TEST               = IMPLEMENTED / NOT_EXECUTED_ON_REAL_SUBSTRATE (skipIf !HAS_SUBSTRATE)
 REAL_KERNEL_PROOF              = SCAFFOLD COMPLETE; EXECUTION HOST_REQUIRED
 LIVE_SSH_QUALIFICATION         = HOST_REQUIRED
 ```
