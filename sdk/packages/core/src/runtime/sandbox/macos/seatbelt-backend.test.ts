@@ -937,6 +937,12 @@ describe.skipIf(!HAS_SUBSTRATE)(
 
 		function writeConnectProbe(inside: string, name: string): string {
 			const probePath = join(inside, name);
+			// sys.exit(42) in the except branch is load-bearing: without it,
+			// a correctly-denied Seatbelt AF_UNIX connect yields exit=0 +
+			// PY_CONNECT_ERROR in stdout, and the SSH-12 sibling assertion
+			// `expect(siblingRes.exitCode).not.toBe(0)` fails for the wrong
+			// reason. The numeric value (42) is arbitrary; the invariant is
+			// "denied connect == nonzero exit".
 			const probeBody = [
 				"import socket, sys",
 				"p = sys.argv[1]",
@@ -949,6 +955,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				"except Exception as e:",
 				"    code = getattr(e, 'errno', None)",
 				"    print('PY_CONNECT_ERROR=' + (str(code) if code is not None else type(e).__name__))",
+				"    sys.exit(42)",
 			].join("\n");
 			writeFileSync(probePath, probeBody, { mode: 0o755 });
 			return probePath;
@@ -1167,7 +1174,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 						});
 					const siblingRes = runPrepared(siblingPrepared);
 					expect(siblingRes.exitCode).not.toBe(0);
-					expect(siblingRes.stdout).toContain("PY_CONNECT_ERROR");
+					expect(siblingRes.stdout).toMatch(/PY_CONNECT_ERROR=/);
 					expect(siblingRes.stdout).not.toContain("PY_CONNECT_OK");
 				} finally {
 					if (prev === undefined) {
