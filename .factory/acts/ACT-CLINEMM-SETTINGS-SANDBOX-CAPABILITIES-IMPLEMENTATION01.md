@@ -1,6 +1,18 @@
 # ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01
 
-> **Status**: **CLOSED / PASS_SETTINGS_SANDBOX_CAPABILITIES_V1** (P2; closed 2026-08-29).
+> **Status**: **CLOSED_V2 / PASS_SETTINGS_SANDBOX_CAPABILITIES_V1** (P2; closed 2026-08-29).
+>
+> **Reviewer disposition (V2)**: `PASS_SETTINGS_SANDBOX_CAPABILITIES_V1` / `CLOSED_V2` /
+> `P0=NONE` / `P1=NONE` / `P2=NON_BLOCKING_RESIDUE` /
+> `FURTHER_CORRECTION_ROUND=NOT_AUTHORIZED` /
+> `READY_FOR_NEXT_ACT=YES` /
+> `MAX_CORRECTION_ROUNDS_USED=1/1`.
+> Reviewer halt (`HALT_REQUIRED_UI_GREEN_NOT_PROVEN`) RESOLVED;
+> `REVIEWER_HALT=RESOLVED`. Do not reopen this ACT absent new
+> contradictory P0 evidence.
+>
+> **Final HEAD**: `888cbac8c` (CORRECTION01 production commit).
+> **V2 board closure commit**: `bb54af7f5`.
 >
 > Two distinct evidence layers, mutually reinforcing:
 >
@@ -764,3 +776,144 @@ investigations were not touched and were not reopened.
 
 Final head was `b996f6d2c` at IMPLEMENTATION01 closure; CORRECTION01
 amends that HEAD but does not move it forward to a new ACT-ID.
+
+## §19 — V2 reviewer disposition (formal closure)
+
+Factory reviewer (settings/sandbox-capabilities lane) returned
+`PASS_SETTINGS_SANDBOX_CAPABILITIES_V1 (CLOSED_V2)` on the
+CORRECTION01 follow-up. Verbatim disposition fields:
+
+```text
+ACT_ID         = ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01
+CORRECTION_ID  = ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01-CORRECTION01
+VERDICT        = PASS_SETTINGS_SANDBOX_CAPABILITIES_V1
+CLOSURE        = CLOSED_V2
+P0             = NONE
+P1             = NONE
+P2             = NON_BLOCKING_RESIDUE
+FURTHER_CORRECTION_ROUND = NOT_AUTHORIZED
+READY_FOR_NEXT_ACT       = YES
+REVIEWER_HALT            = RESOLVED
+MAX_CORRECTION_ROUNDS_USED = 1/1
+```
+
+### Per-criterion sign-off
+
+```text
+SETTINGS_UI              = PASS
+PERSISTENCE              = PASS
+MAPPER_BINDING           = PASS
+PRODUCTION_COMPOSITION   = PASS
+BINDING_ABLATION         = PASS
+COMPOSITION_ABLATION     = PASS
+AUTHORITY_CONSERVATION   = PASS
+YOLO_AUTOAPPROVE_CONSERVATION = PASS
+PATCH_HYGIENE            = PASS
+```
+
+### Why the previous HALT closed
+
+The CORRECTION01 diff (`888cbac8c`) carries the exact P0 repair:
+`renderSectionHeader("sandbox")` (was `"sandbox-capabilities"`);
+the strengthened UI spec now asserts the section header renders and
+locks the canonical `tabId` arg as `sandbox`, so this exact
+regression cannot recur silently.
+
+Runner explanation accepted as authoritative: the canonical
+webview-ui test command is `cd webview-ui && bun run test` which
+dispatches to vitest and honours the `@shared` path alias
+defined in `vite.config.ts`. `bun test` alone does not honour
+those aliases. The new UI spec runs **6/6 PASS** under vitest;
+the existing `FeatureSettingsSection.spec.tsx` runs **11/11 PASS**
+under vitest — so this was a pre-existing local runner
+combination quirk, not a defect introduced by this ACT.
+
+### Production composition P1 — closed
+
+The new `sandbox-policy-production-composition.test.ts`
+instantiates the real `CommandJobManager`, injects
+`safeYoloCapabilitySource`, executes `start()`, and captures the
+resulting `CommandCapability` at the existing
+`sandboxBackend.prepare()` production boundary. It covers the
+important discriminators:
+
+```text
+network=true / ssh=false       → allow / no-agent
+network=false + env=allow      → deny
+ssh=true / network=false       → agent / deny
+absent persisted values        → legacy env fallback
+source bypass                  → env-only behavior
+```
+
+The ablation is causal rather than bookkeeping:
+
+```text
+binding present   → 5/5 PASS
+binding bypassed  → T1/T2/T3 FAIL (3/5)
+binding restored  → 5/5 PASS
+```
+
+### Authority conservation — stated correctly
+
+```text
+ABSENT          → preserve legacy env semantics, migration Δ = 0
+EXPLICIT false  → persisted denial wins over env (intentional
+                  conservative change under §16)
+EXPLICIT true   → explicit user opt-in
+```
+
+This removes the earlier logical ambiguity without changing
+implementation. `MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0` is
+correctly scoped to the ABSENT-key category; the EXPLICIT-FALSE
+conservative Δ−1 is the deliberate §16 persistence-authoritative
+invariant, not a migration violation.
+
+### P2 residue (non-blocking, durable register)
+
+The reviewer explicitly authorised `FURTHER_CORRECTION_ROUND=NOT_AUTHORIZED`
+and asked that the following P2 noise be batched when those files
+are next touched, not re-litigated:
+
+```text
+P2_REGISTER
+  STALE_PRE_CORRECTION_PROSE_IN_ACT_FILE
+    → §3 / §13 / §15 / §16 / §17 still describe the pre-CORRECTION01
+      runner-blocked state and the IMPLEMENTATION01-only closure
+      shape. Superseded by §18 / §19; not load-bearing.
+  DUPLICATE_AFTEREACH_IN_COMPOSITION_TEST
+    → `afterEach(...)` block appears twice in
+      `src/sdk/sandbox-policy-production-composition.test.ts`;
+      second occurrence is a no-op. Cosmetic; batch on next edit.
+  GATE_SUMMARY_JSON_SCHEMA_INVALID_BINDING
+    → `.factory/gate-summary.json` is whitelisted but
+      `act_id`/`implementation_subject_head` still bind to
+      `ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01`
+      at `ff96ea8fe` — a previous ACT, not this one. PRE_EXISTING;
+      P2.
+  LEAMAS_GENERATOR_SUBJECT_UNBOUND
+    → Leamas gate-summary generator's `subject` is `bun x vitest
+      run ... --reporter=json (raw, unannotated)` — the digest
+      is explicit-range and non-authoritative as an artifact-
+      identity proof; usable only for source-delta review.
+      EVIDENCE_METADATA_LIMITATION.
+```
+
+Per Factory doctrine, **no further correction round is authorized
+for these items**. They are durable P2 metadata for this ACT and
+will be batched when their owning files are next touched.
+
+### Final authorization
+
+```text
+PASS_SETTINGS_SANDBOX_CAPABILITIES_V1 = CLOSED_V2
+EPIC_BOARD_LANE                        = Settings surface parity
+                                          (P2 PROMOTED → CLOSED_V2)
+NEXT_BOARD_ITEM                        = proceed to (next ACT, not
+                                          this one)
+DO_NOT_REOPEN_WITHOUT_NEW_P0           = yes
+```
+
+Final HEAD at V2 closure: `888cbac8c` (CORRECTION01 commit).
+V2 board row closure commit: `bb54af7f5`.
+This ACT is durably archived; do not re-open without new
+contradictory P0 evidence.
