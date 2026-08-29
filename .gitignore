@@ -127,6 +127,16 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02.md
 !/.factory/acts/ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01.md
 !/.factory/acts/ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01.md
+# ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01: closed
+# PASS_SETTINGS_SANDBOX_CAPABILITIES_V1 at HEAD 47d1d3c36, binding
+# the upstream-settings-parity recon's SET-01..SET-12 contract
+# to the production runtime seam. The Settings UI/state/proto/
+# persistence surface for the ClineMM sandbox capability controls
+# binds to it; the ACT file must be durably tracked for the
+# contract and the ablation §21 / GREEN-RUN / RED-RUN transcripts
+# to survive a fresh clone (mirroring the prior SSH-Authority
+# ACT's durability pattern).
+!/.factory/acts/ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01.md
 # ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01: launched 2026-08-27.
 # Status NEXT / HIGH (approval-protection lane); recon §2 PASS_RECON_SEAM_MAPPED
 # at HEAD f8dca1fda / TREE 6f2e01b56; live specimen §3 deferred behind the
