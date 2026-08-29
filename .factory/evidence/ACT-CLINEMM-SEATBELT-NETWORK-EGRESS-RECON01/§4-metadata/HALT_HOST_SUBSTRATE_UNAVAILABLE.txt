@@ -1,0 +1,299 @@
+ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01
+==========================================
+§4 host-ablation execution attempt — HALT_HOST_SUBSTRATE_UNAVAILABLE
+
+Date:        2026-08-28
+Attempted by: macOS Seatbelt engineer + factory reviewer (this run)
+Authoritative host: the darwin host that produced the live SSH specimen
+                    (per ACT §14 HOST_REQUIRED)
+
+DISPOSITION
+-----------
+HALT_HOST_SUBSTRATE_UNAVAILABLE
+
+The §4 three-point host ablation cannot be driven from this shell
+because the bash process is itself running inside a Chromium sandbox
+spawned by VSCodium's `--enable-sandbox` utility helper. That sandbox
+strips the entitlement required by `/usr/bin/sandbox-exec` to apply a
+new sandbox envelope. Every Seatbelt probe at this shell returns
+`sandbox-exec: sandbox_apply: Operation not permitted` BEFORE the
+profile is evaluated — so the probe cannot discriminate Seatbelt's
+network-rule behavior from the parent-sandbox denial.
+
+This is a substrate-availability failure, not a defect in the ClineMM
+Seatbelt substrate and not a defect in the test infrastructure. The
+`HAS_SUBSTRATE` gate in the c3-real-kernel suite is exactly the
+mechanism designed to detect this state, and the gate fires correctly.
+
+
+PROCESS TREE (this shell)
+--------------------------
+PID 1 = /Applications/VSCodium.app/Contents/MacOS/VSCodium (the IDE)
+  └─ PID 60905  (VSCodium main process; unsandboxed chromium helper)
+       └─ PID 60924  (VSCodium Helper (Plugin) — utility process,
+                       --enable-sandbox,
+                       --utility-sub-type=node.mojom.NodeService)
+            └─ PID 11557 = /bin/zsh  (this shell)
+
+The shell is a grandchild of `--enable-sandbox`, so the kernel sandbox
+is in effect for this process.
+
+
+DIRECT SUBSTRATE PROBE (the c3-real-kernel gate)
+------------------------------------------------
+$ /usr/bin/sandbox-exec -p '(version 1)(allow default)' /bin/echo ok
+sandbox-exec: sandbox_apply: Operation not permitted
+rc=71
+
+The minimal possible profile `(version 1)(allow default)` is rejected
+at `sandbox_apply` (i.e. before the profile is even evaluated). This is
+the parent Chromium sandbox denying the helper privilege to apply a
+new sandbox envelope, NOT a defect in the supplied profile.
+
+
+C3-REAL-KERNEL SUITE STATUS
+----------------------------
+All 15 tests in `command-job-manager.sandbox-c3-real-kernel.test.ts`
+skip cleanly on this shell with the same `HAS_SUBSTRATE = false`
+reason. The new test
+`seatbelt-network-egress-recon01.c4-real-kernel-three-point.test.ts`
+also skips (4 tests, all skipped). This is the expected, gated
+behavior — it is the production-correct response when the substrate
+cannot be probed from the executing shell.
+
+
+NETWORK PROBE ALSO TAINTED
+---------------------------
+Even the no-sandbox `nc` probe returns `Operation not permitted`:
+
+$ /usr/bin/nc -v -z -G 3 1.1.1.1 443
+nc: connectx to 1.1.1.1 port 443 (tcp) failed: Operation not permitted
+
+The same Chromium sandbox that blocks `sandbox-exec` also blocks raw
+outbound `connect()` from this shell. So even the OFF configuration
+of the §4 ablation would not return a clean "host behavior" result;
+the parent sandbox returns the same `Operation not permitted` that
+Seatbelt does under `(deny network*)`. The stderr signature is
+indistinguishable at this shell.
+
+
+WHAT WOULD UNBLOCK THIS
+-----------------------
+The §4 three-point host ablation is HOST_REQUIRED per ACT §14 and
+must be run on a host where the bash session is NOT itself inside a
+Chromium sandbox with `--enable-sandbox`. Acceptable execution paths
+(operator's choice):
+
+  1. Open Terminal.app (or iTerm2) directly on the host that produced
+     the live SSH specimen, `cd` into this repo, and run
+       bunx vitest run --config vitest.config.ts \
+         src/sdk/__tests__/seatbelt-network-egress-recon01.c4-real-kernel-three-point.test.ts
+     from that shell. The HAS_SUBSTRATE gate will pass; the four
+     tests (D, A, O, consistency) will execute; the evidence will be
+     written to evidence/§4-{D,A,O}/{launch-env.txt,result.txt}.
+
+  2. Use the Debug Harness (`apps/vscode/src/dev/debug-harness/server.ts`):
+     that harness launches a child VSCode from a non-sandboxed parent
+     and is therefore substrate-eligible for Seatbelt probes.
+
+  3. (Operator may have a different preferred path; the only
+     requirement is that the parent bash process is NOT itself
+     Chromium-sandboxed.)
+
+This evidence file documents the substrate-unavailability as a
+recorded execution-fence, NOT as a defect in the ClineMM substrate or
+the test design. The test is correctly gated; it will run when
+executed on a substrate-eligible host.
+
+
+SOURCE-PROVEN CAPABILITY DERIVATION (still evidence)
+-----------------------------------------------------
+Even without driving the kernel probe, the source-proven capability
+derivation (the "A" of the reviewer's "separate-process isolation +
+source-proven capability derivation + real kernel outcome"
+composition) IS recorded by the test for each configuration, and IS
+the foundation of the three-point proof once the substrate is
+available. The derivation:
+
+  D (DENY, current default):
+    resolveExperimentalSandboxMode() === "seatbelt-experimental"
+    resolveSafeYoloNetworkOptIn()     === undefined  (env unset)
+    → buildExperimentalReconCapability({cwd, workspaceRoots}).network === "deny"
+    → expected SBPL rule from source mapping (STRUCTURAL; generator not executed) === "(deny network*)"
+
+  A (ALLOW):
+    resolveExperimentalSandboxMode() === "seatbelt-experimental"
+    resolveSafeYoloNetworkOptIn()     === "allow"    (env == "allow")
+    → buildExperimentalReconCapability({cwd, workspaceRoots}).network === "allow"
+    → expected SBPL rule from source mapping (STRUCTURAL; generator not executed) === "(allow network*)"
+
+  O (OFF):
+    resolveExperimentalSandboxMode() === undefined    (env == "off")
+    → no sandbox envelope at all
+
+This source-proven derivation matches source-seam-map.md §A (the
+five-line inspection table) and §E (the buildNetworkRule mapping)
+verbatim, with no divergence. The remaining half of the proof —
+the real kernel outcome — is the substrate-eligible host's job.
+
+
+ACT DISPOSITION
+---------------
+This run records `HALT_HOST_SUBSTRATE_UNAVAILABLE` for §4. §5 RED
+remains NOT_AUTHORIZED. §7 repair remains CONDITIONAL. §15
+product-contract decision remains UNFROZEN. No source code or
+production seam was modified; the new test file is the only
+artifact added in this run, and it is correctly gated to skip on
+non-substrate hosts.
+
+The ACT body, source-seam-map.md, and epic-board.md are unchanged.
+
+
+C2 BOUNDED CORRECTION (REVIEWER-REVISED)
+-----------------------------------------
+After the 2026-08-28 macOS Seatbelt engineer + factory reviewer verdict
+`HALT_§4_TEST_NOT_CAUSALLY_VALID`, the prior implementation was revised:
+
+  P0 #1 — wrong classifier: REMOVED.
+    The regex on `sandbox-exec: sandbox_apply: Operation not permitted`
+    matched the substrate-availability denial signature, NOT a Seatbelt
+    network-policy denial. The new design uses comparative exact-stdout
+    discrimination (CONNECTED:${TOKEN}\n vs DENIED\n) across three
+    INDEPENDENT OS PROCESSES.
+
+  P0 #2 — in-process env mutation: REMOVED.
+    The new orchestrator spawns each case as a separate `Bun.spawn`
+    subprocess. No shared process.env, no shared module-level cache.
+
+  P1 #1 — over-promoted SBPL rule label: FIXED.
+    The local derivation function is now called
+    `expectedSbplRuleFromSourceMapping` and explicitly tagged
+    `(STRUCTURAL, not generated)` in every output. The orchestrator
+    does NOT execute `generateSeatbeltProfile` (deliberate).
+
+  P1 #2 — env-restoration in standalone helper: FIXED.
+    `source-proven-capability-validation.ts` now captures the prior env
+    state and restores it in a `finally` block on every exit path.
+    Verified manually: prior env preserved across script run.
+
+  P2 #1 — EOF newlines: FIXED.
+    All four artifacts end with exactly one trailing newline.
+    `git diff --check` is CLEAN.
+
+The substrate halt evidence above remains valid; it is the shell
+environment, not the test design, that prevents the kernel half from
+running here. The new design is substrate-eligible: when invoked from
+Terminal.app / iTerm2 / the debug harness, the three subprocess workers
+will produce the comparative trio and the orchestrator will execute
+the §6 PASS-criterion assertion.
+
+New test scaffolding:
+  apps/vscode/src/sdk/__tests__/seatbelt-network-egress-recon01.c4-real-kernel-three-point.test.ts  (orchestrator)
+  apps/vscode/src/sdk/__tests__/probe-workers/§4-three-point/worker.ts                            (per-case subprocess)
+
+
+C3 BOUNDED CORRECTION (skip-vs-pass shape)
+------------------------------------------
+After the 2026-08-28 macOS Seatbelt engineer + factory reviewer verdict
+`C1: GO_AFTER_ONE_BOUNDED_FIX`, the prior C2 design was revised to
+make substrate-unavailable executions SKIP rather than PASS:
+
+  P1 (reviewer) — INCONCLUSIVE currently produces green tests: FIXED.
+    The single `describe` block was split into two:
+
+      §4 SOURCE_DERIVATION (always runs; substrate-independent)
+        - D / A / O capability + structural SBPL-rule projection
+        - Uses the production seam directly in-process; no worker
+          subprocess; no /usr/bin/sandbox-exec; no kernel probe.
+        - On ANY host (darwin / linux / win) these 4 tests PASS.
+
+      §4 REAL_KERNEL_PRODUCTION_SEAM (substrate-gated)
+        - Per-case worker subprocess + comparative PASS-criterion.
+        - `describe.skipIf(!HAS_SUBSTRATE)` where HAS_SUBSTRATE is
+          probed by a minimal `/usr/bin/sandbox-exec -p '(version 1)
+          (allow default)' /bin/echo ok` round-trip — NOT just file
+          presence (the c3 test's gate is file-presence, which is
+          weaker; for §4 we need invocation-success to discriminate
+          the VSCodium-descended shell halt from a substrate-present
+          host).
+        - On the VSCodium-descended shell the round-trip returns
+          EPERM at `sandbox_apply`, so HAS_SUBSTRATE === false and
+          all 4 tests SKIP cleanly.
+
+  Terminology (reviewer note, P2 non-blocking).
+    The reviewer noted the prior wording "separately-launched
+    extension-host" over-promised (the workers launch separate bun
+    processes, not full VS Code extension hosts). The C3 design
+    reframes the kernel block as
+    `REAL_KERNEL_PRODUCTION_SEAM (D/A/O subprocesses + comparative;
+    substrate-gated)` to match the actual scope: the subprocess
+    isolation eliminates shared process.env / module-cache
+    contamination, which was the reason the ACT §14 reviewer required
+    process isolation in the first place.
+
+Vitest report on this VSCodium-descended shell:
+
+  source derivation: PASS  (4 tests, all ✓)
+  real-kernel §4:    SKIPPED  (4 tests, all ↓ substrate-gated)
+  Test Files  1 passed (1)
+  Tests        4 passed | 4 skipped (8)
+
+The substrate halt evidence above remains valid; the C3 design makes
+the executable signal consistent with the prose: substrate-unavailable
+≠ green.
+
+
+C4 BOUNDED CORRECTION (exact-trio PASS predicate)
+-------------------------------------------------
+After the 2026-08-28 macOS Seatbelt engineer + factory reviewer verdict
+`HALT_§4_ALLOW_OFF_INCONCLUSIVE_CAN_FALSE_PASS`, the prior C3 PASS
+predicate was revised to require the exact trio rather than the
+inverse:
+
+  P0 (reviewer) — A or O can be INCONCLUSIVE and §4 still PASS.
+
+    OLD:
+      expect(dCls).toBe("SEATBELT_DENIED")
+      expect(aCls).not.toBe("SEATBELT_DENIED")
+      expect(oCls).not.toBe("SEATBELT_DENIED")
+
+    The `not.toBe("SEATBELT_DENIED")` check admits three of the four
+    Classification values: PROCEEDED_PAST_SEATBELT, HOST_BEHAVIOR,
+    and INCONCLUSIVE. INCONCLUSIVE is exactly the case that the
+    probe may produce on unexpected worker outcomes (workerError,
+    listener bind failure, etc.), so the prior predicate could
+    green a probe that produced no observation of permission
+    behavior at all.
+
+    NEW (exact trio, the §6 §14 PASS criterion):
+      expect(dCls).toBe("SEATBELT_DENIED")
+      expect(aCls).toBe("PROCEEDED_PAST_SEATBELT")
+      expect(oCls).toBe("PROCEEDED_PAST_SEATBELT")
+
+    The PASS criterion now requires:
+      D = explicit permission denial (loopback connect denied inside
+          the Seatbelt envelope)
+      A = exact token returned through sandboxed connection
+          (loopback connect succeeded under the Seatbelt envelope)
+      O = exact token returned without sandbox
+          (loopback connect succeeded without any envelope)
+
+    Anything else (INCONCLUSIVE, HOST_BEHAVIOR, etc.) is a FAIL of
+    the §6 §14 PASS-CRITERION test, even though the §6 source-only
+    tests still PASS. That is the desired shape: source-proven
+    derivation can be confirmed on any host; the real-kernel
+    proof requires the exact trio from a substrate-eligible host.
+
+Vitest report on this VSCodium-descended shell (unchanged — kernel
+half still SKIPs because the §4 substrate probe is FALSE here):
+
+  source derivation: PASS  (4 tests, all ✓)
+  real-kernel §4:    SKIPPED  (4 tests, all ↓ substrate-gated)
+  Test Files  1 passed (1)
+  Tests        4 passed | 4 skipped (8)
+
+When run from Terminal.app / iTerm2 / debug harness, the kernel
+half will execute; the only acceptable PASS-criterion outcome is
+the exact trio above. Anything else (timeout, listener-bind
+failure, auth-failed, INCONCLUSIVE for any case) fails the
+PASS-CRITERION test explicitly.
