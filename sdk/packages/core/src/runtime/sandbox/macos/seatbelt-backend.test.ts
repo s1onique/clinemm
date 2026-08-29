@@ -1189,5 +1189,249 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				cleanupSocketFixture(fixture);
 			}
 		});
+
+		it("Phase F: AGENT ON vs AGENT OFF (real connect(2) differential)", async () => {
+			// ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01 /
+			// Phase F. Causal proof of NECESSITY: knowing the canonical
+			// agent socket pathname must NOT suffice to connect to it.
+			// Only `sshAuthenticationAuthority: { mode: "agent" }` must
+			// authorize the connect.
+			//
+			// Differential: ONE variable flips between A and D.
+			//   A (AGENT ON)  : sshAuthenticationAuthority: { mode: "agent" }
+			//   D (AGENT OFF) : sshAuthenticationAuthority: { mode: "deny" }
+			// Everything else is identical.
+			//
+			// Crucially, in D mode we hand the child the canonical
+			// authorized agent.sock pathname via ARGV (not env). The
+			// Python probe uses sys.argv[1] regardless of env. So if
+			// Seatbelt authority depends on (pathname + env), the env-
+			// dependent part is still surfaced.
+
+			const fixture = buildSocketFixture();
+			try {
+				const FAKE_SSH_DIR = join(fixture.inside, ".ssh");
+				mkdirSync(FAKE_SSH_DIR, { recursive: true });
+				const FAKE_KEY = join(FAKE_SSH_DIR, "id_rsa");
+				writeFileSync(FAKE_KEY, "FAKE_PRIVATE_KEY_BLOCK\n", "utf8");
+				const CANONICAL_KEY = realpathSync(FAKE_KEY);
+
+				const closeAuth = await bindUnixSocket(fixture.agentSock);
+				const closeSibling = await bindUnixSocket(fixture.siblingSock);
+				const CANONICAL_AUTH = realpathSync(fixture.agentSock);
+				const CANONICAL_SIBLING = realpathSync(fixture.siblingSock);
+				const CANONICAL_ROOT = realpathSync(fixture.root);
+
+				const probePath = writeConnectProbe(
+					fixture.inside,
+					`phasef-connect-${randomBytes(4).toString("hex")}.py`,
+				);
+				// Parent-write probe: tries to open <fixture.root>/pwn.txt
+				// for write. Returns PY_WRITE_OK on success, PY_WRITE_ERROR
+				// (and exits 43) on failure.
+				const writeProbe = join(
+					fixture.inside,
+					`phasef-write-${randomBytes(4).toString("hex")}.py`,
+				);
+				writeFileSync(
+					writeProbe,
+					[
+						"import sys",
+						"p = sys.argv[1]",
+						"try:",
+						"    f = open(p, 'w')",
+						"    f.close()",
+						"    print('PY_WRITE_OK')",
+						"except Exception as e:",
+						"    code = getattr(e, 'errno', None)",
+						"    print('PY_WRITE_ERROR=' + (str(code) if code is not None else type(e).__name__))",
+						"    sys.exit(43)",
+					].join("\n"),
+					{ mode: 0o755 },
+				);
+
+				const authCmd: CommandInvocation = {
+					executable: "/usr/bin/python3",
+					args: [probePath, CANONICAL_AUTH],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const siblingCmd: CommandInvocation = {
+					executable: "/usr/bin/python3",
+					args: [probePath, CANONICAL_SIBLING],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const rawKeyCmd: CommandInvocation = {
+					executable: "/bin/cat",
+					args: [CANONICAL_KEY],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const parentWriteCmd: CommandInvocation = {
+					executable: "/usr/bin/python3",
+					args: [writeProbe, join(CANONICAL_ROOT, "pwn.txt")],
+					cwd: fixture.inside,
+					env: {},
+				};
+
+				// Capability factory: A vs D — only sshAuthenticationAuthority
+				// differs. Everything else (network, env, roots, key-deny) is
+				// identical so the differential isolates authority.
+				const makeCap = (mode: "agent" | "deny"): CommandCapability => ({
+					readonlyRoots: [fixture.inside, CANONICAL_ROOT],
+					writableRoots: [fixture.inside],
+					network: "deny",
+					environment: { mode: "sanitized", allow: [] },
+					cwd: fixture.inside,
+					sshAuthenticationAuthority: { mode },
+					denyReadSubpaths: [CANONICAL_KEY],
+				});
+
+				const prev = process.env.SSH_AUTH_SOCK;
+				process.env.SSH_AUTH_SOCK = CANONICAL_AUTH;
+				try {
+					// ===== POSITIVE CONTROLS (no Seatbelt) =====
+					// Same probes, same args, no Seatbelt policy. If either
+					// endpoint is unreachable from the host, this fails first
+					// and we HALT_PROBE_BROKEN.
+					const controlCap = makeCap("agent");
+					const controlAuthRes = runPrepared(
+						await noSandboxBackend.prepare({
+							capability: controlCap,
+							command: authCmd,
+						}),
+					);
+					expect(controlAuthRes.exitCode).toBe(0);
+					expect(controlAuthRes.stdout).toContain("PY_CONNECT_OK");
+					expect(controlAuthRes.stdout).not.toContain("PY_CONNECT_ERROR");
+
+					const controlSiblingRes = runPrepared(
+						await noSandboxBackend.prepare({
+							capability: controlCap,
+							command: siblingCmd,
+						}),
+					);
+					expect(controlSiblingRes.exitCode).toBe(0);
+					expect(controlSiblingRes.stdout).toContain("PY_CONNECT_OK");
+					expect(controlSiblingRes.stdout).not.toContain("PY_CONNECT_ERROR");
+
+					// ===== CASE A: AGENT ON =====
+					// Expected: authorized connects; sibling denied;
+					// raw-key denied; parent write denied.
+					const capA = makeCap("agent");
+					const aAuth = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capA,
+							command: authCmd,
+						}),
+					);
+					expect(aAuth.exitCode).toBe(0);
+					expect(aAuth.stdout).toContain("PY_CONNECT_OK");
+					expect(aAuth.stdout).not.toContain("PY_CONNECT_ERROR");
+
+					const aSibling = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capA,
+							command: siblingCmd,
+						}),
+					);
+					expect(aSibling.exitCode).not.toBe(0);
+					expect(aSibling.stdout).toMatch(/PY_CONNECT_ERROR=/);
+					expect(aSibling.stdout).not.toContain("PY_CONNECT_OK");
+
+					const aKey = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capA,
+							command: rawKeyCmd,
+						}),
+					);
+					expect(aKey.exitCode).not.toBe(0);
+					expect(aKey.stdout).toBe("");
+					expect(aKey.stderr).toMatch(
+						/Operation not permitted|Permission denied/i,
+					);
+
+					const aParentWrite = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capA,
+							command: parentWriteCmd,
+						}),
+					);
+					expect(aParentWrite.exitCode).not.toBe(0);
+					expect(aParentWrite.stdout).toMatch(/PY_WRITE_ERROR=/);
+					expect(aParentWrite.stdout).not.toContain("PY_WRITE_OK");
+
+					// ===== CASE D: AGENT OFF (the differential) =====
+					// The child receives the canonical authorized agent.sock
+					// pathname via argv. The Python probe uses sys.argv[1],
+					// so it has full knowledge of the endpoint. If Seatbelt
+					// authority depended on pathname knowledge alone, this
+					// would connect. It must NOT.
+					const capD = makeCap("deny");
+					const dAuth = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capD,
+							command: authCmd,
+						}),
+					);
+					expect(dAuth.exitCode).not.toBe(0);
+					expect(dAuth.stdout).toMatch(/PY_CONNECT_ERROR=/);
+					expect(dAuth.stdout).not.toContain("PY_CONNECT_OK");
+
+					const dSibling = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capD,
+							command: siblingCmd,
+						}),
+					);
+					expect(dSibling.exitCode).not.toBe(0);
+					expect(dSibling.stdout).toMatch(/PY_CONNECT_ERROR=/);
+					expect(dSibling.stdout).not.toContain("PY_CONNECT_OK");
+
+					const dKey = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capD,
+							command: rawKeyCmd,
+						}),
+					);
+					expect(dKey.exitCode).not.toBe(0);
+					expect(dKey.stdout).toBe("");
+					expect(dKey.stderr).toMatch(
+						/Operation not permitted|Permission denied/i,
+					);
+
+					const dParentWrite = runPrepared(
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capD,
+							command: parentWriteCmd,
+						}),
+					);
+					expect(dParentWrite.exitCode).not.toBe(0);
+					expect(dParentWrite.stdout).toMatch(/PY_WRITE_ERROR=/);
+					expect(dParentWrite.stdout).not.toContain("PY_WRITE_OK");
+
+					// Conservation evidence (not causal): in D mode, the
+					// prepared env must strip SSH_AUTH_SOCK. We assert this
+					// on a fresh D-mode prepare of the same authCmd.
+					const dAuthPrepared =
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: capD,
+							command: authCmd,
+						});
+					expect(dAuthPrepared.env.SSH_AUTH_SOCK).toBeUndefined();
+				} finally {
+					if (prev === undefined) {
+						delete process.env.SSH_AUTH_SOCK;
+					} else {
+						process.env.SSH_AUTH_SOCK = prev;
+					}
+					closeAuth();
+					closeSibling();
+				}
+			} finally {
+				cleanupSocketFixture(fixture);
+			}
+		});
 	},
 );
