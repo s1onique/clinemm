@@ -4,7 +4,7 @@
   "act_id": "ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01",
   "implementation_subject_head": "ff96ea8feecbb65e82dd3ddb14fb0269f90fb250",
   "implementation_subject_head_full": "ff96ea8fe ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01: C1 correction cycle (production-reach + P1 fixes)",
-  "evidence_head": "PENDING (this commit)",
+  "evidence_head": "6f36996660ab206acb61eb1400a536471cf67449",
   "commit_under_test": "ff96ea8feecbb65e82dd3ddb14fb0269f90fb250",
   "base_head": "79512545f2ca8be29fcd3c12f409aca8674434aa",
   "base_head_full": "79512545f ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01: minimal production delta (Phase C/D)",
@@ -150,5 +150,6 @@
       "P1 (env-var UX): explicitly classified V1_EXECUTION_CONTROL = INTERNAL/TEMPORARY; product UI surface is NOT_YET_SHIPPED",
       "P2 (EOF newline): trailing newlines verified on all changed files"
     ]
-  }
+  },
+  "evidence_head_full": "see git log; the rebind commit binds this summary to itself"
 }
