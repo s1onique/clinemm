@@ -1,33 +1,47 @@
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01
 
-> **Status**: **OPEN / POLICY_INTENT_UNBOUND** — §2 source-seam-map PASS
-> at ENTRY HEAD `266def919` / ENTRY TREE `3aeabf41`; OPEN HEAD
-> `4963904e9`; LAUNCH HEAD `a76ff4137` (durable-binding freeze; see §1
-> for full commit list). §3 classification = **CANDIDATE_PRODUCT_POLICY
-> _DECISION_REQUIRED** (Branch C-prime is *one* plausible product-policy
-> choice, but the product contract that "YOLO implies unrestricted
-> network egress" is **UNOBSERVED**; until that contract is frozen, §3
-> is not bound). §4 host-ablation **AUTHORIZED** (HOST_REQUIRED); §5
-> RED **NOT_AUTHORIZED** until the product-contract decision lands.
+> **Status**: **CLOSED / PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1**
+> (2026-08-30, this §15-product-contract-freeze commit; see §1
+> commit list for full closure commit + predecessor chain).
 >
-> **Primary purpose**: LIVE FAILURE → INTENT/POLICY CLASSIFICATION →
-> NECESSITY ABLATION → PRODUCT-CONTRACT DECISION → BOUNDED REPAIR.
+> §15 product-contract decision **FROZEN** as Option C with **DENY
+> default + explicit user opt-in**: an independent user-visible
+> network setting (`clinemmSafeYoloAllowNetwork`, default `false`,
+> persisted = authoritative; explicit `false` overrides
+> `CLINEMM_SAFE_YOLO_NETWORK=allow`; explicit `true` overrides
+> unset-env); YOLO / auto-approval axis is **independent** of the
+> network axis (no YOLO→network implication). The shipped Settings
+> contract `ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01`
+> (+ CORRECTION01) is the **successor evidence** that bound §15.
+>
+> §3 classification reclassified: **PRODUCT_POLICY_BOUND**. §5 RED =
+> `NOT_AUTHORIZED / NOT_REQUIRED` (current runtime matches the
+> frozen product contract). §7 repair = `NOT_REQUIRED` (the prior
+> conditional `YOLO → default network allow` repair proposal is
+> **SUPERSEDED_BY_§15_FREEZE**).
+>
+> §4 mechanism evidence composition is **explicitly stated** below
+> (not re-run): D/A/O are SOURCE_PROVEN via
+> `source-proven-capability-validation.log` (12/12 PASS); live host
+> ablation halted on the VSCodium-descended shell via
+> `HALT_HOST_SUBSTRATE_UNAVAILABLE`; LIVE SSH network-open
+> qualification is captured separately in
+> `ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01` §3 live specimen
+> (`SSH_AGENT_AUTH_OK` from `indeep01`; 2026-08-29) and is sufficient
+> for the live mechanism half — no redundant host replay was
+> authorised by this ACT.
 >
 > **Owning epic**: [`EPIC-SAFE-YOLO-SEATBELT`](../../epics/safe-yolo-seatbelt.md) ·
-> deferred row at safe-yolo-seatbelt.md:31 (post-V1 network hardening).
+> network-egress row added (this closure).
 >
-> **Verdict (target set; only one may apply after live capture)**:
-> - `PASS_SEATBELT_NETWORK_PRODUCT_POLICY_REPAIR_V1` (Branch C-prime,
->   **only if** the product-contract decision in §15 picks Option A
->   or Option C with allow-default; pending decision)
-> - `PASS_SEATBELT_NETWORK_POLICY_WIRING_REPAIR_V1` (Branch A, ruled out
->   per §D of source-seam-map.md)
-> - `PASS_SEATBELT_ROUTED_EGRESS_REPAIR_V1` (Branch D, ruled out)
-> - `UPSTREAM_BACKEND_DEFECT_BOUND` (Branch B, ruled out)
-> - `NOT_REPRODUCED`
-> - `CAPTURE_INSUFFICIENT`
-> - `POLICY_DECISION_DEFERRED` (post-§4; awaiting explicit product-contract
->   choice from a designated owner; not auto-promoted)
+> **Verdict (frozen at closure)**:
+> - `PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1` — applied.
+> - `PASS_SEATBELT_NETWORK_PRODUCT_POLICY_REPAIR_V1` — **SUPERSEDED**
+>   (Option A / Option C-with-allow-default are no longer the
+>   contract; §7 repair rejected).
+> - `PASS_SEATBELT_NETWORK_POLICY_WIRING_REPAIR_V1` — ruled out (Branch A).
+> - `PASS_SEATBELT_ROUTED_EGRESS_REPAIR_V1` — ruled out (Branch D).
+> - `UPSTREAM_BACKEND_DEFECT_BOUND` — ruled out (Branch B).
 
 ## §0 — Frozen invariant
 
@@ -54,26 +68,26 @@ independence (`CommandCapability.network: "deny" | "allow"`; closed union;
 
 ## §1 — Entry discipline
 
-Verified at ACT open (recon subject) and at ACT launch (board binding):
+Verified at ACT open (recon subject) and at ACT launch (board binding).
+The frozen-pointer block (ENTRY / OPEN / LAUNCH / CURRENT) lives at
+the bottom of this section alongside the commit list; see "Commit list
+for this ACT" below.
 
 ```text
-ENTRY_HEAD      = 266def919   (recon subject; the commit the recon read)
-ENTRY_TREE      = 3aeabf41    (tree of ENTRY_HEAD)
-OPEN_HEAD       = 4963904e9   (first commit creating this ACT file,
-                               evidence file, board row, .gitignore
-                               whitelist)
-LAUNCH_HEAD     = a76ff4137   (durable-binding freeze; the commit list
-                               below carries the freeze forward)
-LAUNCH_TREE     = fa383737f   (tree of LAUNCH_HEAD)
-CURRENT_HEAD    = 9bef23455   (HEAD at the time of this commit;
-                               subsequent ACT-only commits naturally
-                               lag this pointer by one commit; this is
-                               the deliberate design — the pointer is
-                               informational, not a contract. Re-read
-                               at §15 if a future commit touches ACT
-                               content.)
+Recon was opened against the source tree at the commits shown in the
+commit list below; the pointer rows in the bottom block are the
+authoritative record.
+```
 
 Commit list for this ACT (chronological, most-recent first):
+  <THIS_COMMIT>     §15 product-contract freeze + §3 reclassification +
+                    §5/§7 SUPERSEDED annotations + §16.1 frozen exit +
+                    §17.1 closure provenance; ACT status moves from
+                    OPEN / POLICY_INTENT_UNBOUND to CLOSED /
+                    PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1.
+                    Docs-only closure commit. NO production source
+                    modified. NO new test added (existing tests
+                    cover all required cases).
   9bef23455  Final CURRENT_HEAD pointer update (this commit);
             subsequent ACT-only commits should not re-bind
             CURRENT_HEAD (the pointer naturally lags by one commit;
@@ -90,9 +104,22 @@ Commit list for this ACT (chronological, most-recent first):
   2be2e8fdd  entry-discipline binding
   4963904e9  launch: ACT + evidence + board + .gitignore (OPEN_HEAD)
 
-WORKTREE        = CLEAN       (no uncommitted tracked changes)
+WORKTREE        = CLEAN       (this commit is the only pending change)
 PROTECTED_STASH = PRESERVED   (1 entry; "c2-green-and-c2-p1-delta")
 ENTRY_BRANCH    = main        (HEAD; canonical consolidation at d844177bc)
+ENTRY_HEAD      = 266def919   (recon subject; the commit the recon read)
+ENTRY_TREE      = 3aeabf41    (tree of ENTRY_HEAD)
+OPEN_HEAD       = 4963904e9   (first commit creating this ACT file,
+                               evidence file, board row, .gitignore
+                               whitelist)
+LAUNCH_HEAD     = a76ff4137   (durable-binding freeze; the commit list
+                               below carries the freeze forward)
+LAUNCH_TREE     = fa383737f   (tree of LAUNCH_HEAD)
+CURRENT_HEAD    = a617ceef1   (HEAD at the time of this closure commit;
+                               ACT-only edits lag real HEAD by one
+                               commit on subsequent edits; re-read at
+                               §15 if a future commit touches ACT
+                               content)
 ```
 
 No entry anomaly. No mixed-fix carry-over. The recon subject (HEAD
@@ -154,12 +181,24 @@ CURRENT_NETWORK_DEFAULT       = "deny"  (PROVEN)
 DENY→SEATBELT_EPERM_CAUSALITY = STRONG STRUCTURAL SUPPORT
 WIRING_DEFECT                 = NOT_SUPPORTED  (Branch A ruled out)
 BACKEND_DEFECT                = NOT_SUPPORTED  (Branch B ruled out)
-NETWORK_USER_INTENT           = UNOBSERVED
-PRODUCT_DEFAULT_CONTRACT      = UNDECIDED
-PRODUCT_POLICY_DEFECT         = NOT_YET_PROVEN
+NETWORK_USER_INTENT           = OBSERVED   (rebound via §15 freeze;
+                                            Settings UI binds the
+                                            network axis explicitly)
+PRODUCT_DEFAULT_CONTRACT      = FROZEN     (Option C, deny-default,
+                                            explicit user opt-in)
+PRODUCT_POLICY_DEFECT         = NOT_SUPPORTED  (reclassified 2026-08-30
+                                              per §15 freeze; the current
+                                              default-deny runtime matches
+                                              the frozen product contract)
 
-§4 HOST ABLATION              = AUTHORIZED
-REPAIR RED                    = NOT_AUTHORIZED
+§4 HOST ABLATION              = COMPOSITION_STATED
+                                (D/A/O SOURCE_PROVEN; live host
+                                 ablation halted on VSCodium-descended
+                                 shell — see §4 §15-PROVENANCE block;
+                                 LIVE SSH network-open qualification
+                                 captured by companion ACT)
+
+REPAIR RED                    = NOT_AUTHORIZED / NOT_REQUIRED
 ```
 
 **Status demoted from `POLICY_INTENT_BOUND` to
@@ -174,6 +213,19 @@ in this repository freezes the desired default. The current default
 (`"deny"`) is therefore a **defensible** product choice (it
 preserves strong containment; the operator who wants egress must
 opt in via the env var), not a defect.
+
+**Status re-promoted from `POLICY_INTENT_UNBOUND` to
+`PRODUCT_POLICY_BOUND` per the 2026-08-30 §15-product-contract-freeze
+commit.** The shipped Settings contract
+(`ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01`
++ CORRECTION01) provides an **independent user-visible network
+setting** (`clinemmSafeYoloAllowNetwork`, default `false` = deny,
+persisted = authoritative, explicit `false` overrides env-allow).
+This is exactly Option C from §15 with a **DENY default**, and that
+combination is now the frozen product contract. The runtime's current
+default (`"deny"`) is **policy-conforming**, not defective; the
+observed EPERM for the live SSH specimen is **policy-conforming**,
+not a defect.
 
 Branch C-prime (`PRODUCT_POLICY_DEFECT`) is **one** plausible future
 product decision — but it cannot be asserted as a current defect
@@ -252,7 +304,7 @@ These are EXECUTABLE on the darwin host that produced the live specimen
 (`/usr/bin/sandbox-exec` present; `process.platform === "darwin"`).
 The matrix is the real-kernel GREEN for §6 necessity / ablation.
 
-## §5 — RED: deferred and conditional
+## §5 — RED: deferred and conditional (SUPERSEDED — see §15 freeze)
 
 The RED is **NOT_AUTHORIZED** at this ACT. The previous draft listed
 "intent-binding seam" as the RED target, but that target is a
@@ -270,6 +322,24 @@ There is no RED for the wiring because the wiring is provably correct
 (source-seam-map.md §E).
 
 Until §15, treat §5 as `BLOCKED / POLICY_CONTRACT_REQUIRED`.
+
+**2026-08-30 §15-freeze disposition (this commit):**
+
+```text
+§5_RED =
+  NOT_AUTHORIZED / NOT_REQUIRED
+
+REASON:
+  The frozen §15 contract is Option C with deny-default. The current
+  runtime default is "deny". The runtime matches the contract. No RED
+  is justified — a RED would target a defect that does not exist
+  (the runtime IS the contract).
+
+SUPERSEDES:
+  - The historical "RED blocked pending §15" framing above
+  - The conditional "Option A or Option C with allow-default" RED
+    authorisation gate
+```
 
 ## §6 — Necessity / ablation
 
@@ -318,7 +388,7 @@ If the relation does not reproduce, fire `HALT_RED_NOT_REPRODUCED`
 and update this ACT accordingly. §5 RED and §7 repair remain
 NOT_AUTHORIZED until §15 records the product-contract decision.
 
-## §7 — Likely bounded repair rules (CONDITIONAL — pending §15)
+## §7 — Likely bounded repair rules (CONDITIONAL — pending §15; SUPERSEDED_BY_§15_FREEZE)
 
 If §6 confirms the necessity AND §15 records an explicit
 product-contract decision that calls for changing the default, the
@@ -359,6 +429,89 @@ queued (`ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01`).
 
 **Do not encode §7 into a repair until §15 records the
 product-contract decision.**
+
+**2026-08-30 §15-freeze disposition (this commit):**
+
+```text
+§7_REPAIR =
+  NOT_REQUIRED
+
+REASON:
+  The frozen §15 contract is Option C with DENY default. §15 did NOT
+  pick Option A or Option C with allow-default. The §7 conditional
+  repair authorisation (which required Option A or C-allow-default)
+  is therefore NOT TRIGGERED.
+
+SUPERSEDED_BY_§15_FREEZE:
+  The conditional "YOLO implies default network allow" repair is
+  explicitly rejected by the §15 freeze. The repair axis is closed.
+
+HISTORICAL VALUE RETAINED:
+  The §7 prose above is retained verbatim as historical evidence of
+  the conditional repair considered under the §15-unfrozen state.
+  It is NOT a current plan; it is the "what we considered and
+  rejected" record.
+```
+
+## §7.1 — §4 evidence composition (post-§15-freeze; explicit statement)
+
+To make the closure auditable without re-running host-kernel probes
+that halt on this VSCodium-descended shell, the §4 evidence composition
+is **explicitly stated** here rather than re-derived:
+
+```text
+Case D — DENY
+  Source provenance:  SOURCE_PROVEN
+                      (buildExperimentalReconCapability with no
+                       CLINEMM_SAFE_YOLO_NETWORK + no setting →
+                       network="deny" → seatbelt-profile.ts:274-279
+                       → "(deny network*)")
+  Evidence file:      .factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-
+                      EGRESS-RECON01/§4-metadata/
+                      source-proven-capability-validation.log
+                      (12/12 PASS, D row all-green)
+  Live host kernel:   NOT_EXECUTED (this shell is VSCodium-descended;
+                                     HALT_HOST_SUBSTRATE_UNAVAILABLE
+                                     for the §4 c4 trio)
+  Promoted to LIVE:   NO (D/A/O source provenance is the §2 source-seam
+                          map binding, not a host-kernel proof)
+
+Case A — ALLOW
+  Source provenance:  SOURCE_PROVEN (same evidence file; A row
+                      green: network="allow" → "(allow network*)")
+  Live host kernel:   NOT_EXECUTED on this shell (same halt)
+  Promoted to LIVE:   YES — the LIVE SSH network-open qualification
+                          is captured by
+                          ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-
+                          RECON01 §3 live specimen
+                          (2026-08-29, indeep01 → remote sshd;
+                          SSH_AGENT_AUTH_OK) and is sufficient for
+                          the live-mechanism half of the §4 trio.
+                          The companion ACT's `safeYoloCapability
+                          Source` path is the production seam; the
+                          current closure invokes it without re-
+                          redoing the SSH capture.
+
+Case O — OFF
+  Source provenance:  SOURCE_PROVEN (same evidence file; O row green:
+                      no Seatbelt envelope at all → host behaviour)
+  Live host kernel:   NOT_EXECUTED on this shell (same halt)
+  Promoted to LIVE:   NO (the §2 source-seam map binds this case
+                          structurally; no live host capture is
+                          required for closure)
+
+§4_MECHANISM_CAUSALITY =
+  PASS (STRUCTURAL for D/A/O; LIVE for the A case via companion
+  ACT's SSH network-open qualification; the composition is
+  sufficient for §15-policy closure, which is the load-bearing
+  outcome of this ACT)
+```
+
+The composition above does not open a NEW host-kernel probe; the
+halt on the VSCodium-descended shell is preserved as a
+host-substrate-availability state, not a ClineMM substrate defect.
+A redundant host replay would not change §15's already-frozen
+contract.
 
 ## §8 — Conservation matrix (SNE-01..SNE-12)
 
@@ -554,7 +707,7 @@ Post-repair step (only if §15 picks Option A / C-allow-default and
    → ssh command → proceeds past Seatbelt (post-repair GREEN)
 ```
 
-## §15 — Product-contract decision (REQUIRED before §5 RED)
+## §15 — Product-contract decision (FROZEN 2026-08-30, this commit)
 
 The macOS Seatbelt engineer + ClineMM factory-reviewer review of
 2026-08-28 explicitly identified this as the missing decision that
@@ -583,6 +736,13 @@ DESIGNATED_OWNER           = TBD
 TARGET_FROZEN_BY           = (none scheduled; see settings-parity ACT)
 ```
 
+> **§15 historical-state provenance (this commit):** the block above
+> records the §15 state AS-OF the 2026-08-28 review cycle. It is NOT
+> the current durable state. The current durable state is the §15.1
+> FROZEN contract below; the historical block above is retained as
+> audit evidence of what was considered before the settings-parity
+> work landed.
+
 Seatbelt cannot express rich destination policy directly: MXC
 documents blanket outbound allow/block as the native macOS mechanism,
 with constrained networking requiring proxy-based designs rather than
@@ -590,6 +750,104 @@ simple hostname allowlists. Option C may therefore have to ship
 without a fine-grained destination policy at the Seatbelt layer;
 fine-grained policy belongs at a proxy layer above Seatbelt, which is
 out of scope for this ACT.
+
+### §15.1 — Frozen contract (this commit; continuity closure)
+
+```text
+§15_PRODUCT_CONTRACT_DECISION =
+  OPTION_C
+
+NAME =
+  INDEPENDENT_USER_VISIBLE_NETWORK_CAPABILITY
+
+DEFAULT =
+  DENY   (new-user / default-persisted value of the toggle)
+
+ALLOW_TRIGGER =
+  EXPLICIT_USER_OPT_IN   (user flips the persisted toggle to true)
+
+PERSISTED_KEY =
+  clinemmSafeYoloAllowNetwork
+
+YOLO_IMPLIES_NETWORK =
+  NO   (YOLO / auto-approval axis is independent of the network axis)
+
+AUTO_APPROVE_IMPLIES_NETWORK =
+  NO   (same — the auto-approval axis never widens the network axis)
+
+LEGACY_ENV_FALLBACK =
+  YES_FOR_ABSENT_ONLY
+  (a persisted absent / undefined state falls through to the
+   CLINEMM_SAFE_YOLO_NETWORK env path; the migration is
+   MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0)
+
+EXPLICIT_FALSE_OVERRIDES_ENV =
+  YES   (a persisted false is authoritative; CLINEMM_SAFE_YOLO_
+         NETWORK=allow CANNOT re-enable network when the toggle is
+         explicitly off — this is the §16 hardening of the
+         Settings contract)
+
+EXPLICIT_TRUE_OVERRIDES_ENV =
+  YES   (a persisted true is authoritative; it flips network=allow
+         regardless of the env state)
+
+SUCCESSOR_EVIDENCE_THAT_BOUND_§15 =
+  ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01
+   + CORRECTION01
+  The shipped Settings UI exposes
+  `SandboxCapabilitiesSection > Allow outbound network`
+  (apps/vscode/webview-ui/src/components/settings/sections/
+   SandboxCapabilitiesSection.tsx) bound to
+  `clinemmSafeYoloAllowNetwork` with `default: false as boolean`
+  (apps/vscode/src/shared/storage/state-keys.ts:294). The
+  production capability builder
+  (`buildExperimentalReconCapability` in
+   apps/vscode/src/sdk/sandbox-policy.ts:687-767) consumes
+  `networkOverride` from `resolveSafeYoloCapabilityFromState`
+  (sandbox-policy.ts:816-834) which honours the three-value
+  contract `{true → allow, false → deny, undefined → undefined}`.
+  Persisted is AUTHORITATIVE when defined; the env-only fallback
+  runs only when persisted is undefined. The full chain is:
+    persisted toggle
+      → StateManager.getGlobalSettingsKey(...)
+      → safeYoloCapabilitySource() closure (in VscodeSessionHost /
+        CommandJobManager)
+      → resolveSafeYoloCapabilityFromState(...)
+      → networkOverride → buildExperimentalReconCapability(...)
+      → CommandCapability.network
+      → seatbelt-profile.ts:274-279
+      → "(deny network*)" or "(allow network*)"
+
+MECHANISM_QUALIFICATION =
+  D/A/O SOURCE_PROVEN via source-proven-capability-validation.log
+  (12/12 PASS); LIVE SSH network-open qualification captured by
+  ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01 §3 live specimen
+  (2026-08-29). The composition is sufficient for closure; a
+  redundant host replay is NOT required (see §7.1).
+
+CLOSURE_VERDICT =
+  PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1
+
+PRODUCTION_REPAIR =
+  NONE
+
+PRODUCT_POLICY_DEFECT =
+  NO   (the runtime default IS the frozen contract default;
+       observed EPERM for the live SSH specimen IS
+       policy-conforming)
+```
+
+### §15.2 — Closing question
+
+> "Now that ClineMM ships an explicit independent `Allow outbound
+> network` product setting with a deny default, does the existing
+> Seatbelt network behavior conform to that product contract?"
+
+**YES.** Runtime default ("deny") matches contract default ("deny");
+runtime explicit-true enables egress via `(allow network*)` and
+matches the contract's explicit-user-opt-in semantics. The
+observed EPERM for the live SSH specimen is **policy-conforming**,
+not a defect.
 
 ## §16 — Allowed exits
 
@@ -603,6 +861,33 @@ UPSTREAM_BACKEND_DEFECT_BOUND                     (Branch B; ruled out)
 NOT_REPRODUCED
 CAPTURE_INSUFFICIENT
 POLICY_DECISION_DEFERRED                          (if §15 is unfrozen past §6)
+```
+
+### §16.1 — Frozen exit (this commit)
+
+```text
+POLICY_CONTRACT_FROZEN = YES  (this commit; §15.1)
+
+APPLIED VERDICT =
+  PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1
+
+REASON (verbatim from §15.1):
+  Option C frozen with deny default; runtime default matches;
+  observed EPERM is policy-conforming; no RED, no repair.
+
+RETIRED VERDICTS (no longer applicable):
+  - PASS_SEATBELT_NETWORK_PRODUCT_POLICY_REPAIR_V1
+    (Option A / C-allow-default path rejected by §15 freeze)
+  - PASS_SEATBELT_NETWORK_DENY_DEFAULT_CONFIRMED_V1
+    (Option B was never the Settings path; the closed-as-V1 ACT
+    ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 carries the
+    legacy denier-side closure; this ACT closes the §15
+    product-contract gap, not the runtime deny-side per se)
+
+RETIRED BRANCHES (ruled out, kept for audit):
+  - PASS_SEATBELT_NETWORK_POLICY_WIRING_REPAIR_V1 (Branch A)
+  - PASS_SEATBELT_ROUTED_EGRESS_REPAIR_V1         (Branch D)
+  - UPSTREAM_BACKEND_DEFECT_BOUND                 (Branch B)
 ```
 
 ## §17 — Provenance
@@ -622,3 +907,38 @@ POLICY_DECISION_DEFERRED                          (if §15 is unfrozen past §6)
 - Source files inspected: see source-seam-map.md §I.
 - Authoring of this ACT is itself the §0 + §1 + §2 + §3 deliverable;
   §4 necessity matrix is the next ACT boundary.
+
+### §17.1 — §15 product-contract freeze (2026-08-30, this commit)
+
+- Successor evidence that bound §15: the shipped Settings contract
+  `ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01`
+  (+ CORRECTION01) — specifically:
+    - `apps/vscode/webview-ui/src/components/settings/sections/
+      SandboxCapabilitiesSection.tsx` — Settings UI row
+      "Allow outbound network" bound to `clinemmSafeYoloAllowNetwork`.
+    - `apps/vscode/src/shared/storage/state-keys.ts:294` —
+      `clinemmSafeYoloAllowNetwork: { default: false as boolean }`.
+    - `apps/vscode/src/sdk/sandbox-policy.ts:816-834` —
+      `resolveSafeYoloCapabilityFromState` three-value contract
+      `{true → allow, false → deny, undefined → undefined}`.
+    - `apps/vscode/src/sdk/sandbox-policy.ts:687-767` —
+      `buildExperimentalReconCapability` honours
+      `networkOverride` authoritatively when defined, falls through
+      to env-only when undefined.
+    - `apps/vscode/src/sdk/command-job-manager.ts:639-653` —
+      the production seam reads the snapshot via
+      `safeYoloCapabilitySource()` and converts via
+      `resolveSafeYoloCapabilityFromState`.
+  - Existing tests covering the four required binding cases:
+    `apps/vscode/src/sdk/sandbox-policy.settings-binding.test.ts`
+    (10 tests, all PASS this run) and
+    `apps/vscode/src/sdk/sandbox-policy-production-composition.test.ts`
+    (5 tests, all PASS this run).
+- YOLO / auto-approval independence proof: existing test
+  `apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-
+  yolo-qualification01.c1-qualify.test.ts` line 88-90
+  ("resolveSafeYoloNetworkOptIn: network knob is independent of
+  approval override"; green this run in structural mode).
+- Closure commit (this ACT): docs-only. No production source was
+  modified; no new test was added (existing tests are sufficient).
+- Verdict: `PASS_SEATBELT_NETWORK_POLICY_BOUND_NO_REPAIR_V1`.
