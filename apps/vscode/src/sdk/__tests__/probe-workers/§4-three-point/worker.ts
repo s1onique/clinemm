@@ -27,7 +27,7 @@
  *   CLINEMM_EXPERIMENTAL_SANDBOX=off env -u CLINEMM_SAFE_YOLO_NETWORK \
  *     bun apps/vscode/src/sdk/__tests__/probe-workers/§4-three-point/worker.ts O
  */
-import { existsSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs"
+import { mkdtempSync, realpathSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomBytes } from "node:crypto"
