@@ -146,18 +146,29 @@ does not pin down which configuration produced the original OWN01 bug.
 §5 Summary
 ------------------------------------------------------------------------
 
-  STATUS_COMPLETED_SEMANTICS                 = C (overloaded)
+  STATUS_COMPLETED_SEMANTICS                 = C (overloaded — STRUCTURAL fact, source-derived)
   COMPLETED_PRODUCER_COUNT                   = 2 (local seam: agent-runtime.ts:1371, 1402)
                                               +1 (hub seam: hub-runtime-host.ts:546-548)
   NON_SEMANTIC_COMPLETION_PRODUCERS          = COMPLETION-REMINDER-EXHAUSTION (under
                                               requireCompletionTool=true),
                                               HUB-DONE-EVENT-FROM-PAYLOAD
                                               (default fallback)
-  FIRST_BROKEN_BOUNDARY (conjectured)        = agent-runtime.ts:1371 — a finishRun call
+  FIRST_BROKEN_BOUNDARY (structural)         = agent-runtime.ts:1371 — a finishRun call
                                               that bypasses the requireCompletionTool
                                               gate by virtue of the reminder-loop
-                                              exhaustion.
-  FIRST_BROKEN_BOUNDARY (live UNKNOWN)       = cannot be pinned from the OWN01 RED
-                                              alone; depends on the live config.
+                                              exhaustion. STRUCTURAL defect (latent
+                                              for any future Seatbelt-YOLO session).
+  FIRST_BROKEN_BOUNDARY (live)               = NOT agent-runtime.ts:1371.
+                                              Live defect is DOWNSTREAM of the producer
+                                              (see live-completion-policy-acquisition.md
+                                              §6 verdict amendment).
+                                              The producer at 1371 was operating under
+                                              completionPolicy.requireCompletionTool = undefined
+                                              on the live session, which is the non-defect
+                                              configuration.
 
-NO LIVE confirmation of which producer fired on the OWN01 trace.
+NO LIVE confirmation of which producer fired on the OWN01 trace AT THE TIME
+of original recon (this was a LIVE_REASON gap that has now been CLOSED by
+the post-acquisition cycle: the live producer site IS 1371, but 1371 was
+operating correctly under the live configuration; the live defect is
+DOWNSTREAM, not at the producer).

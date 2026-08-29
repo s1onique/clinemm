@@ -1,9 +1,18 @@
 # ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01
 
-> Status: **CLOSED / PRODUCER_SEMANTICS_BUG / NO_PRODUCTION_DELTA** —
+> Status: **CLOSED / VERDICT_AMENDED / NO_PRODUCTION_DELTA** —
 > producer-side causal classification for the bare-done-with-no-
 > terminal-commit defect captured at `ACT-CLINEMM-RUNTIME-TASK-
-> PROGRESSION-RECON01`'s `OWN01` RED.
+> PROGRESSION-RECON01`'s `OWN01` RED. Original recon verdict
+> `PRODUCER_SEMANTICS_BUG` was overturned by the post-evidence
+> `HALT_LIVE_COMPLETION_POLICY_NOT_BOUND` discriminator acquisition
+> (see `live-completion-policy-acquisition.md`); live producer site
+> 1371 is confirmed but was operating under the non-defect
+> configuration (`completionPolicy.requireCompletionTool = undefined`).
+> The live defect re-routes DOWNSTREAM of the producer to the host
+> ownership-transition / awaiting_followup seam already under
+> investigation at the predecessor ACT's OWN02-OWN03-RECON. This ACT
+> is final; no runtime repair ACT is authorized.
 >
 > Predecessor: `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` reached
 > `CAPTURE_INSUFFICIENT` for the positive successor phase at its
@@ -433,28 +442,48 @@ HOST_OWNED_AUTOCONTINUE_EXISTS = NO
    live ClineMM LocalRuntimeHost does NOT wire it. The host uses
    pendingPromptsController.drain instead, which is USER_OWNED.)
 
-PRIMARY_CAUSAL_CLASSIFICATION = PRODUCER_SEMANTICS_BUG
-  Ruled out (final-assessment.md §1):
-    HOST_CONTINUATION_BUG  — structurally inapplicable (no wired primitive to fail to invoke)
-    PRESENTATION_PHASE_GAP — producer semantics are NOT correct
+PRIMARY_CAUSAL_CLASSIFICATION = NOT_LIVE_CAUSE  (amended post-acquisition;
+                                                       see live-completion-policy-acquisition.md)
+  Original verdict at close fd8627cb6 was PRODUCER_SEMANTICS_BUG.
+  That verdict was OVERCLAIMED — the live configuration
+  (completionPolicy.requireCompletionTool = undefined / false) was
+  NOT bound at close time. The reviewer halt
+  HALT_LIVE_COMPLETION_POLICY_NOT_BOUND was cleared by the
+  post-acquisition discriminator capture, which established that the
+  live producer at 1371 was operating under the non-defect
+  configuration.
+
+  Ruled out (final-assessment.md §1, post-amendment):
+    PRODUCER_SEMANTICS_BUG — operating correctly under live config
+    HOST_CONTINUATION_BUG  — no wired primitive to fail to invoke
+    PRESENTATION_PHASE_GAP — producer semantics were NOT the live defect
     COMPOSED_BUG           — no independent host defect to compose with
-    CAPTURE_INSUFFICIENT   — structural walk + live trace cross-reference is sufficient
+    CAPTURE_INSUFFICIENT   — capture WAS sufficient (config IS now bound)
 
-FIRST_BROKEN_BOUNDARY = agent-runtime.ts:1371
-  finishRun("completed", finalAssistantMessage) fires unconditionally when
-  toolCalls.length === 0 AND (requireCompletionTool === false OR reminder loop
-  exhausted). Bypasses the requireCompletionTool=true configuration by virtue
-  of the reminder-loop exhaustion. No provenance flag distinguishes this from
-  a genuine COMPLETION-TOOL-AUTHORITY call at 1402.
+FIRST_BROKEN_BOUNDARY (LIVE) = UNKNOWN (was agent-runtime.ts:1371 at
+                                original close; amended to UNKNOWN
+                                because 1371 was exonerated)
+FIRST_BROKEN_BOUNDARY (STRUCTURAL) = agent-runtime.ts:1371 remains a real
+                                latent defect under
+                                completionPolicy.requireCompletionTool=true.
+                                STRUCTURAL only; not live.
 
-NEW_TURN_PHASE_REQUIRED = UNKNOWN
-  (producer defect is the first broken boundary; new TurnPhase is only
-   relevant if producer is repaired AND presentation/translation still
-   cannot represent the truthful ownership state. Not yet evaluated.)
+NEW_TURN_PHASE_REQUIRED = UNKNOWN  (cannot evaluate without knowing where the
+                                   live defect actually lives; the producer seam
+                                   is exonerated, so the question moves to the
+                                   host ownership transition / awaiting_followup
+                                   / no autonomous continuation seam — out of
+                                   scope for THIS recon ACT)
 
-NEXT_REPAIR_SEAM = ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-REPAIR01
-  (only this; no parallel TurnPhase speculation; the producer defect is
-   the load-bearing cause and downstream presentation cannot fix it)
+NEXT_REPAIR_SEAM = UNKNOWN  (the previous "ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-
+                            REPAIR01" recommendation was based on the overclaimed
+                            PRODUCER_SEMANTICS_BUG verdict; under the corrected
+                            verdict, the live defect is NOT at 1371 and the
+                            next repair seam is OUT OF SCOPE for this ACT.
+                            The live defect re-routes DOWNSTREAM to the host
+                            ownership-transition / awaiting_followup seam
+                            already under investigation at the predecessor
+                            ACT's OWN02-OWN03-RECON.)
 
 RFS01 = NOT_EXECUTED         (pre-existing tests cover submit_and_exit)
 RFS02 = STRUCTURAL_ONLY      (definitive source walk)
@@ -477,7 +506,13 @@ EVIDENCE_COMMITTED = 7 (this ACT) + 3 (predecessor curated) = 10 files
   + OWN01-RED/red-record.json OWN01-RED/red-file-only-result.txt
   + live-20260829T134901Z/post-terminal-authority-diagnostic-extension.jsonl
 
-VERDICT = PRODUCER_SEMANTICS_BUG
+VERDICT (ORIGINAL — at close fd8627cb6) = PRODUCER_SEMANTICS_BUG
+VERDICT (AMENDED — at HALT_LIVE_COMPLETION_POLICY_NOT_BOUND reopen) = NOT_LIVE_CAUSE
+LIVE_PRODUCER_SITE_1371 = PROVEN
+LIVE_REQUIRE_COMPLETION_TOOL = FALSE (acquired from ~/.cline + transcript)
+STRUCTURAL_BUG_AT_1371 = PROVEN for requireCompletionTool=true (latent; NOT live)
+OPERATIONAL_ACTION = RETURN_TO_SSH_LIVE_QUALIFICATION
+                     (do NOT open ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-REPAIR01)
 ```
 
 Valid verdicts:

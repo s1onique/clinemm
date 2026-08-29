@@ -49,39 +49,43 @@ OWN01 = 1 failed | 28 passed of 29
 CPL   = N/A for THIS ACT (not a CPL ACT)
 CRA   = N/A for THIS ACT (not a CRA ACT)
 
-PRIMARY_CAUSAL_CLASSIFICATION     = PRODUCER_SEMANTICS_BUG
-FIRST_BROKEN_BOUNDARY             = agent-runtime.ts:1371 — finishRun("completed", finalAssistantMessage)
-                                      fires unconditionally when:
-                                        toolCalls.length === 0 AND
-                                        (completionPolicy.requireCompletionTool === false OR
-                                         getCompletionReminderMessages() returned [])
-                                      This bypasses the requireCompletionTool=true
-                                      configuration by virtue of the reminder-loop
-                                      exhaustion. There is NO co-emitted provenance
-                                      flag distinguishing this from a genuine
-                                      COMPLETION-TOOL-AUTHORITY call at 1402.
+PRIMARY_CAUSAL_CLASSIFICATION     = NOT_LIVE_CAUSE  (amended post-acquisition;
+                                                       see live-completion-policy-acquisition.md)
+FIRST_BROKEN_BOUNDARY             = UNKNOWN (the producer at agent-runtime.ts:1371
+                                      fired, but it was operating under
+                                      completionPolicy.requireCompletionTool = undefined,
+                                      which is the non-semantic-collapse configuration;
+                                      therefore the producer is operating correctly
+                                      under the live configuration. The live defect
+                                      must lie downstream of the producer.)
 
-NEW_TURN_PHASE_REQUIRED           = UNKNOWN (the producer defect is the first broken
-                                        boundary; a new TurnPhase would only be
-                                        relevant if the producer is repaired AND
-                                        the presentation/translation layer still
-                                        cannot represent the truthful ownership
-                                        state. Not yet evaluated.)
+LIVE_PRODUCER_SITE_1371           = PROVEN  (1402 ruled out via attemptCompletionSeen=false)
+LIVE_REQUIRE_COMPLETION_TOOL      = FALSE   (acquired from persisted globalState + transcript mode)
+STRUCTURAL_BUG_AT_1371            = PROVEN for requireCompletionTool=true (latent)
+                                    NOT LIVE CAUSE (the live configuration was NOT this)
 
-NEXT_REPAIR_SEAM                  = agent-runtime.ts:1371 (or its caller at 1363-1370)
-                                      The repair must attach a provenance flag
-                                      (e.g. `completionAuthority: "tool" | "model_stop"`)
-                                      to the AgentRunResult and propagate it through
-                                      RuntimeEventAdapter.translateRunFinished so
-                                      AgentDoneEvent carries it (currently no such
-                                      field exists; see types.ts:239-249).
+NEW_TURN_PHASE_REQUIRED           = UNKNOWN  (cannot evaluate without knowing where the live
+                                         defect actually lives; the producer seam is exonerated,
+                                         so the question moves to the host ownership transition
+                                         / awaiting_followup / no autonomous continuation seam)
 
-RECOMMENDED_NEXT_ACT              = ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-REPAIR01
-                                      (only this; no parallel "ACT-CLINEMM-TURN-PHASE-BARE-DONE-SUCCESSOR01"
-                                       yet; the PRESENTATION_PHASE_GAP verdict was
-                                       rejected because the producer defect is the
-                                       load-bearing cause and downstream presentation
-                                       cannot fix it.)
+NEXT_REPAIR_SEAM                  = UNKNOWN  (the previous "agent-runtime.ts:1371" recommendation
+                                         was based on the overclaimed PRODUCER_SEMANTICS_BUG verdict;
+                                         under the corrected verdict, the live defect is NOT at 1371
+                                         and the next repair seam is OUT OF SCOPE for this ACT.
+                                         This is the ACT that owns producer-side recon; a downstream
+                                         ACT must re-investigate the live ownership-transition seam
+                                         before any repair can be proposed.)
+
+RECOMMENDED_NEXT_ACT              = NONE (runtime lane) / RETURN_TO_SSH
+                                      (do NOT open ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-REPAIR01;
+                                       the producer defect is a real latent issue but NOT the cause
+                                       of the live incident. The live defect re-routes to the
+                                       host ownership transition / awaiting_followup seam
+                                       already under investigation at
+                                       ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 OWN02-OWN03-RECON.)
+                                      Operational action: RETURN_TO_SSH_LIVE_QUALIFICATION
+                                      (ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01)
 
 ------------------------------------------------------------------------
 §1 Why PRODUCER_SEMANTICS_BUG (not HOST_CONTINUATION_BUG or others)
