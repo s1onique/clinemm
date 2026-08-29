@@ -1,0 +1,15 @@
+captured_at_utc=20260829T173500Z
+head=f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
+branch=main
+act=ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01
+status=OPEN / OPENING / NO_PRODUCTION_DELTA
+predecessor=ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 OWN02-OWN03-RECON verdict=CAPTURE_INSUFFICIENT
+reviewer_correction_20260829=high-leverage seam is the producer side, not presentation/translation
+live_reason=UNAVAILABLE_FROM_TRACE (PTAD did not capture event.reason)
+scope=READ-ONLY recon of producer code paths + bounded executable probes IF feasible
+production_delta=NONE
+in_scope=inventory every status=completed producer; classify each; trace max-iterations path; audit continuation callers; attempt RFS01..RFS04 probes; reach PRODUCER_SEMANTICS_BUG or HOST_CONTINUATION_BUG or PRESENTATION_PHASE_GAP or COMPOSED_BUG or CAPTURE_INSUFFICIENT
+out_of_scope=production repair; new TurnPhase; MessageTranslator.finishReason propagation; UI change; new RED against hypothetical awaiting_continuation; telemetry; porting upstream fixes
+sequencing=this ACT -> ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-REPAIR01 (only if PRODUCER_SEMANTICS_BUG) -> ACT-CLINEMM-MESSAGE-TRANSLATOR-FINISH-REASON-PROPAGATION01 (after repair) -> ACT-CLINEMM-TURN-PHASE-BARE-DONE-SUCCESSOR01 (only if PRESENTATION_PHASE_GAP)
+evidence_dir=.factory/evidence/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01/
+preserve=OWN01 RED; OWN01-RED evidence; OWN02-OWN03-RECON evidence; live PTAD evidence; stash@{0}=c2-green-and-c2-p1-delta; foreign editor-capture residue
