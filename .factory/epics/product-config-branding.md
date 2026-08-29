@@ -142,6 +142,159 @@ Full inventory & rationale:
   (FW-11, recorded 2026-08-29 by the thread-future-work
   normalization ACT)
 ```
+
+### SETTINGS-SUBSTRATE-RECON01
+
+```text
+Proposed ACT ID: ACT-CLINEMM-SETTINGS-SUBSTRATE-RECON01
+Priority:       HIGH
+State:          FUTURE / UNIMPLEMENTED
+
+Mission (when opened):
+  Provide one coherent user-facing Settings area for ClineMM-specific
+  controls currently represented by internal / env-only seams.
+
+Why this row exists alongside the existing
+ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01 §11
+owning-epic decision tree:
+  §11 is a PASSIVE decision — the recon ACT runs, the candidate
+  restore list comes out, and §11 fires if the list has ≥3 entries
+  spanning distinct categories. This row is the ACTIVE definition
+  of the ClineMM-specific settings contract (orthogonal Seatbelt /
+  network / SSH-agent / PTAD controls) as a durable future-work
+  identity that does NOT depend on the settings-parity ACT
+  running first. It is NOT a duplicate of §11.
+
+Preferred UX (per the thread's preference; do NOT freeze placement
+until Track A's §3 inventory maps the current upstream Settings
+architecture):
+
+  Features
+    ...
+
+  ClineMM / Safe YOLO
+    Seatbelt
+      [✓] Enable Seatbelt
+      [ ] Disable Seatbelt               DANGEROUS
+
+    Network
+      [ ] Allow outbound network
+
+    Authentication
+      [ ] Allow SSH agent authentication
+
+  Advanced
+    Diagnostics
+      [ ] PTAD
+
+Alternative placement:
+  - A dedicated ClineMM section/tab IF Settings parity recon shows
+    that this is the least disruptive upstream-compatible extension
+    point.
+  - Or a clearly grouped ClineMM / Safe YOLO section inside
+    Features/Advanced (the §11 decision tree may choose this).
+
+Candidate product controls (carried into the new ACT):
+  C1 — Seatbelt
+       [✓] Seatbelt ON by default
+       [ ] Disable Seatbelt           DANGEROUS
+                                       explicit warning
+                                       should require deliberate confirmation
+       Semantics: disable sandbox enforcement entirely.
+       Must NOT be conflated with: auto-approval, network access,
+                                    SSH-agent authority.
+
+  C2 — Network access
+       [ ] Allow outbound network
+       Replaces: CLINEMM_SAFE_YOLO_NETWORK=allow
+       Default: OFF / deny
+       Must remain independent from: auto-approve, Seatbelt disable,
+                                      SSH-agent auth.
+
+  C3 — SSH agent authentication
+       [ ] Allow SSH agent authentication
+       Replaces: CLINEMM_SAFE_YOLO_SSH_AGENT=allow
+       Default: OFF / deny
+       Semantics: expose only SSH_AUTH_SOCK authority, NOT raw
+                  private-key reads.
+       Do NOT add: "allow ~/.ssh keys" in V1.
+
+  C4 — Diagnostics / PTAD
+       PTAD / task-state diagnostics controls
+       Placement: Advanced / Diagnostics preferred.
+       Do NOT create: bespoke top-level PTAD tab (unless Settings-
+                       parity recon proves no upstream-aligned
+                       extension point).
+       Controls MAY include: enable PTAD capture, diagnostics
+                              verbosity, evidence path/display.
+       Must remain: DEFAULT_OFF, removable, non-semantic when disabled.
+
+  C5 — Temporary/internal control inventory
+       Inventory all current CLINEMM_* env controls and classify:
+         KEEP_INTERNAL
+         REPLACE_WITH_SETTING
+         DEBUG_ONLY
+         REMOVE_AFTER_SUCCESSOR
+       At minimum inspect:
+         CLINEMM_SAFE_YOLO_NETWORK     (REPLACE_WITH_SETTING)
+         CLINEMM_SAFE_YOLO_SSH_AGENT   (REPLACE_WITH_SETTING)
+         CLINEMM_PTAD                  (REPLACE_WITH_SETTING)
+         CLINEMM_EXPERIMENTAL_*        (KEEP_INTERNAL substrate-only;
+                                          DEBUG_ONLY if naming is stale)
+       Any stale "experimental" naming for default-on Seatbelt should
+       be identified, but NOT renamed in this backlog ACT.
+
+Settings security / UX doctrine (carried into the new ACT):
+  - Preserve capability independence. Do NOT create:
+    "YOLO = approve everything + network + SSH + no sandbox".
+  - Model orthogonal controls:
+      AUTO_APPROVAL       OFF/ON
+      SEATBELT_ENFORCEMENT ON/OFF
+      NETWORK_AUTHORITY    DENY/ALLOW
+      SSH_AGENT_AUTHORITY  DENY/ALLOW
+      DIAGNOSTICS          OFF/ON
+  - Dangerous controls (e.g. Disable Seatbelt) must be visually
+    distinct and explicitly marked dangerous.
+  - Prefer reversible local settings, clear defaults, per-setting
+    descriptions, migration from env vars where practical.
+  - Avoid: hidden magic interactions, provider-specific exceptions,
+    auto-enabling network merely because ALL/Yolo is enabled.
+
+Settings parity vs ClineMM extensions rule (carried into both
+the settings-parity ACT and this ACT):
+  - First learn upstream Settings architecture, then attach
+    ClineMM-specific controls at a stable extension seam.
+  - Do not fork the entire Settings UI unless necessary.
+  - Ideal long-term shape: upstream Settings remain recognizable
+    + ClineMM-only section(s) are additive. This minimizes
+    future upstream sync cost.
+
+Cross-links to existing substrate (do NOT duplicate):
+  - safe-yolo-seatbelt.md Deferred FW-05 (seatbelt-user-facing
+    settings surface cross-link)
+  - safe-yolo-seatbelt.md Deferred FW-11 (TEMP-INTERNAL-CONTROL-CLEANUP
+    primary owner)
+  - product-config-branding.md Deferred FW-11 (cross-link)
+  - ACT-CLINEMM-PTAD-ENV-OPTIN01 ledger (PTAD env var history)
+  - ACT-CLINEMM-SEATBELT-DEFAULT-ON01 ledger (default-ON posture)
+  - ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01 §15
+    (frozen SSH credential authority contract — settings surface
+    must NOT renegotiate)
+
+Constraints (carried into the new ACT):
+  - No implementation in this backlog ACT.
+  - No env-var removal in this backlog ACT.
+  - No Seatbelt behavior change.
+  - No SSH-agent code change.
+  - The env controls remain valid until a stable settings surface
+    can fully cover them.
+  - The settings surface supersedes an env control only when the
+    settings surface can fully cover the same capability.
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01/reconciliation.md
+  (Track C, recorded 2026-08-29 by this ACT)
+```
 ## Historical detail
 
 ### Product telemetry — L3378-3574 (pre-sharding)

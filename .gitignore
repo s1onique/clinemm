@@ -294,6 +294,17 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/
 
 
+# ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01
+# (docs-only): the reconciliation.md is the canonical durable
+# artifact for the 2026-08-29 upstream-parity-and-settings
+# backlog refinement; the two epic-detail files
+# (.factory/epics/factory-infrastructure.md and
+#  .factory/epics/product-config-branding.md) cross-link to it.
+# Mirror the .factory/acts/ + .factory/evidence/ default-deny +
+# whitelist pattern above.
+!/.factory/evidence/ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01/
+
+
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
 # apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt
 # qualification runs and must NOT block exact-head VSIX packaging (build-dogfood-vsix.py

@@ -73,6 +73,119 @@ Full inventory & rationale:
   (FW-06, recorded 2026-08-29 by the thread-future-work
   normalization ACT)
 ```
+
+### UPSTREAM-CATCHUP-RECON01
+
+```text
+Proposed ACT ID: ACT-CLINEMM-UPSTREAM-CATCHUP-RECON01
+Priority:       HIGH
+State:          FUTURE / UNIMPLEMENTED
+
+Mission (when opened):
+  Reduce fork-from-upstream distance deliberately, without
+  sacrificing ClineMM-specific architecture. Operate the
+  upstream-sync cadence that docs/factory/upstream-sync.md
+  already establishes as doctrine but does NOT yet own as a
+  backlog ACT.
+
+Doctrinal substrate (already exists; do not duplicate):
+  docs/factory/upstream-sync.md:
+    - upstream = https://github.com/cline/cline.git (immutable)
+    - origin   = s1onique/clinemm
+    - ClineMM consumes upstream via MERGE, never rebase
+    - Conflict evidence contract: docs/factory/sync/<YYYY-MM-DD>/
+        upstream_commit.txt
+        merge_commit.txt
+        conflict_report.md
+    - Branch topology: factory/*, product/* (reserved),
+                        sync/* (transient)
+    - Divergence measurement:
+        factory/inventories/repository.json#upstream.{commit_oid,
+          tree_oid, merge_base_with_upstream, ahead, behind}
+    - Release tags: factory/inventories/repository.json#tags.nearest
+
+Historical baseline snapshot (frozen at the time of
+ACT-CLINEMM-FORK-BASELINE01-CORRECTION02; the future ACT must
+refresh this):
+  upstream.commit_oid              = c564045d8135c0c1c330b21d47b68b74917ce614
+  merge_base_with_upstream         = c564045d8135c0c1c330b21d47b68b74917ce614
+  working_copy.ahead               = 17
+  working_copy.behind              = 0
+
+User-visible (NON-AUTHORITATIVE) divergence snapshot:
+  FORK_AHEAD_OF_UPSTREAM          = 861 commits
+  UPSTREAM_AHEAD_OF_FORK          = 176 commits
+  LABEL                           = OBSERVED_UI_SNAPSHOT
+  SOURCE                          = GitHub UI compare / pull-request page
+  DATE_OBSERVED                   = 2026-08-29
+  CANONICAL_GIT_DIVERGENCE        = NOT_MEASURED_IN_THIS_ACT
+                                     (the `upstream` remote is not
+                                      configured in this clone; the
+                                      future ACT must run after the
+                                      operator configures the remote)
+
+Strategy (carried into the new ACT):
+  - Progressive bounded sync slices, NOT a 176-commit blind mega-merge.
+  - Per upstream cluster, choose among:
+      REBASE_SLICE
+      MERGE_SLICE
+      CHERRY_PICK_THEMATIC_SERIES
+      MANUAL_PORT
+      DO_NOT_IMPORT
+  - Potential decomposition examples:
+      U1 Settings/UI parity
+      U2 SDK/runtime substrate
+      U3 generated/proto changes
+      U4 provider/API updates
+      U5 tests/tooling
+      U6 docs-only
+
+Hard invariants (carried into the new ACT):
+  - Preserve ClineMM Seatbelt / Safe-YOLO semantics.
+  - Preserve explicit completion authority (per
+    ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01 family).
+  - Preserve Factory evidence tooling.
+  - NO silent regression to upstream plain-YOLO semantics.
+  - NO wholesale replacement of ClineMM-specific runtime seams.
+
+Forbidden (carried into the new ACT):
+  - NO `git merge upstream/main` as the first operation (must
+    follow docs/factory/upstream-sync.md §Fetch procedure first).
+  - NO giant rebase without conflict inventory.
+  - NO semantic conflict resolution based solely on
+    "prefer ours/theirs".
+  - NO deleting fork-specific functionality merely to make sync easy.
+
+Evidence cadence:
+  Every 1–2 meaningful sync commits:
+    typecheck / build / test / runtime evidence.
+  The CONFLICT_REPORT in docs/factory/sync/<date>/ is the
+  durable artifact.
+
+Trigger metric categories (carried forward; numeric thresholds
+NOT frozen in this backlog ACT):
+  - commits-behind threshold
+  - age-behind threshold
+  - settings / schema drift
+  - runtime / SDK API drift
+  - security fixes
+  - generated-proto drift
+
+Future automation (suggested but NOT created in this backlog ACT):
+  MAY monitor divergence metrics and produce a divergence ledger
+  on a cadence. Do NOT create it now.
+
+Constraints:
+  - No actual upstream merge / rebase / cherry-pick in this
+    backlog ACT.
+  - No upstream remote is configured in this clone; the future
+    ACT must start by configuring the canonical upstream remote
+    (or document that the operator declined to do so).
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01/reconciliation.md
+  (Track B, recorded 2026-08-29 by this ACT)
+```
 ## Historical detail
 
 The text below is migrated verbatim from the prior single-file `.factory/epic-board.md` (Git safety + Factorize doctrine + Board maintenance rule, see front-matter block at top of fenced payload for source-line ranges) so the durable conclusions remain anchored to their source lines. **Do not rewrite history here unless the underlying ACT itself is being amended.**
