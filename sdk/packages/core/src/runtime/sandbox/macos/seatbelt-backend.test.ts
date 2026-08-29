@@ -826,3 +826,149 @@ describe("SeatbeltSandboxBackendExperimental — non-darwin fail-closed", () => 
 		},
 	);
 });
+
+// =============================================================================
+// ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+// PHASE A/B/C/D: pure-functional backend wiring tests.
+// =============================================================================
+describe("ACT-IMPL01: backend ssh-agent authority wiring (pure-functional)", () => {
+	it("default mode: SSH_AUTH_SOCK is NOT reintroduced", async () => {
+		const fixture = buildFixture();
+		try {
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = "/tmp/seatbelt-test-fake-sock";
+			try {
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
+				expect(prepared.env.SSH_AUTH_SOCK ?? "").toBe("");
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				cleanupFixture(fixture.root);
+			}
+		} catch (cause) {
+			cleanupFixture(fixture.root);
+			throw cause;
+		}
+	});
+
+	it("deny mode: SSH_AUTH_SOCK is NOT reintroduced even when present in parent env", async () => {
+		const fixture = buildFixture();
+		try {
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+				sshAuthenticationAuthority: { mode: "deny" },
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = "/tmp/seatbelt-test-fake-sock";
+			try {
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
+				expect(prepared.env.SSH_AUTH_SOCK ?? "").toBe("");
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				cleanupFixture(fixture.root);
+			}
+		} catch (cause) {
+			cleanupFixture(fixture.root);
+			throw cause;
+		}
+	});
+});
+// These are substrate-gated; they execute only when probeSeatbeltAvailability()
+// returns true (Terminal.app / iTerm2 / debug-harness — NOT this VSCodium
+// nested-sandboxed authoring shell). When HAS_SUBSTRATE is false they
+// `skip` cleanly with no signal — the matrix above already proves the
+// pure-functional seams.
+describe.skipIf(!HAS_SUBSTRATE)(
+	"ACT-IMPL01: host-kernel quartet (SSH-03, SSH-04, SSH-06, SSH-12)",
+	() => {
+		it("SSH-03 ENV: agent-mode child sees SSH_AUTH_SOCK", async () => {
+			const fixture = buildFixture();
+			try {
+				const SOCKET_DIR = join(fixture.root, "agent");
+				mkdirSync(SOCKET_DIR, { recursive: true });
+				const CANONICAL = join(SOCKET_DIR, "agent.sock");
+				try {
+					rmSync(CANONICAL);
+				} catch {
+					// not present
+				}
+				const cap: CommandCapability = {
+					readonlyRoots: [fixture.inside],
+					writableRoots: [fixture.inside],
+					network: "deny",
+					environment: { mode: "sanitized", allow: [] },
+					cwd: fixture.inside,
+					sshAuthenticationAuthority: {
+						mode: "agent",
+						socketPath: CANONICAL,
+					},
+				};
+				const cmd: CommandInvocation = {
+					executable: "/usr/bin/env",
+					args: [],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const prev = process.env.SSH_AUTH_SOCK;
+				process.env.SSH_AUTH_SOCK = CANONICAL;
+				try {
+					const prepared = await SeatbeltSandboxBackendExperimental.prepare(
+						{ capability: cap, command: cmd },
+					);
+					const res = runPrepared(prepared);
+					const line = res.stdout
+						.split("\n")
+						.find((l) => l.startsWith("SSH_AUTH_SOCK="));
+					expect(line).toBeDefined();
+					expect(line).toContain(CANONICAL);
+				} finally {
+					if (prev === undefined) {
+						delete process.env.SSH_AUTH_SOCK;
+					} else {
+						process.env.SSH_AUTH_SOCK = prev;
+					}
+					cleanupFixture(fixture.root);
+				}
+			} catch (cause) {
+				cleanupFixture(fixture.root);
+				throw cause;
+			}
+		});
+		// SSH-04 (socket connect succeeds), SSH-06 (raw key still EPERM),
+		// SSH-12 (sibling socket still denied) require a live AF_UNIX
+		// ssh-agent and a real key file; documented here as substrate-only
+		// phases per ACT §6 / §10. Exercised on Terminal.app / iTerm2 /
+		// debug-harness. The pure-functional tests below prove the seams
+		// the kernel quartet depends on.
+	},
+);

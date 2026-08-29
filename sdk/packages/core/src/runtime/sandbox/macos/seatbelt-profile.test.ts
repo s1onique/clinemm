@@ -210,5 +210,90 @@ describe("generateSeatbeltProfile", () => {
 		expect(p).toContain('(deny file-read* (subpath "/has\\"quote"))');
 		expect(p).toContain('(deny file-read* (subpath "/has\\\\backslash"))');
 	});
+
+	// ===============================================================
+	// ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+	// PHASE B: ssh-agent AF_UNIX socket rules
+	// ===============================================================
+	describe("ACT-IMPL01: ssh-agent socket rules", () => {
+		it("default mode (sshAuthenticationAuthority omitted): no agent rules emitted", () => {
+			const p = generateSeatbeltProfile(minimalCap);
+			expect(p).not.toContain("AF_UNIX");
+			expect(p).not.toContain("unix-socket");
+			expect(p).not.toContain("SSH_AUTH_SOCK");
+		});
+
+		it("deny mode: no agent rules emitted even when option is omitted (no-op)", () => {
+			const cap: CommandCapability = {
+				...minimalCap,
+				sshAuthenticationAuthority: { mode: "deny" },
+			};
+			const p = generateSeatbeltProfile(cap);
+			expect(p).not.toContain("AF_UNIX");
+			expect(p).not.toContain("unix-socket");
+		});
+
+		it("agent mode + canonical socket: emits AF_UNIX system-socket + path-literal network-outbound", () => {
+			const CANONICAL = "/private/tmp/com.apple.launchd.abc/Listeners";
+			const p = generateSeatbeltProfile(minimalCap, {
+				sshAgentCanonicalSocketPath: CANONICAL,
+			});
+			// AF_UNIX system-socket primitive is present.
+			expect(p).toContain("(allow system-socket");
+			expect(p).toContain("(socket-domain AF_UNIX))");
+			// path-literal (NOT subpath) is the AF_UNIX remote-endpoint filter.
+			expect(p).toContain("(allow network-outbound");
+			expect(p).toContain(
+				`(remote unix-socket (path-literal "${CANONICAL}"))`,
+			);
+			// NEGATIVE: subpath is the filesystem primitive, must NOT be used for sockets.
+			expect(p).not.toMatch(/\(remote unix-socket \(subpath/);
+		});
+
+		it("agent mode: empty/undefined socket path produces no agent rules (fail-closed caller contract)", () => {
+			const p1 = generateSeatbeltProfile(minimalCap, {
+				sshAgentCanonicalSocketPath: undefined,
+			});
+			expect(p1).not.toContain("AF_UNIX");
+			const p2 = generateSeatbeltProfile(minimalCap, {
+				sshAgentCanonicalSocketPath: "",
+			});
+			expect(p2).not.toContain("AF_UNIX");
+		});
+
+		it("agent mode: does NOT widen to ~/.ssh or any filesystem grant (no readwritePaths widening)", () => {
+			const CANONICAL = "/private/var/folders/abc/T/agent.sock";
+			const cap: CommandCapability = {
+				...minimalCap,
+				readonlyRoots: ["/Users/me/.ssh"],
+				writableRoots: [],
+			};
+			const p = generateSeatbeltProfile(cap, {
+				sshAgentCanonicalSocketPath: CANONICAL,
+			});
+			// The presence of an agent socket MUST NOT add a readonly grant
+			// for ~/.ssh. We assert the deny-write rule IS still present
+			// (readonlyRoots means read-only) and that no agent rule
+			// touches /Users/me/.ssh.
+			expect(p).toContain('(deny file-write* (subpath "/Users/me/.ssh"))');
+			expect(p).not.toMatch(/\/Users\/me\/\.ssh.*agent/i);
+		});
+
+		it("agent mode: control-character socket path is REJECTED (CORRECTION01 P0-3 invariant)", () => {
+			expect(() =>
+				generateSeatbeltProfile(minimalCap, {
+					sshAgentCanonicalSocketPath: "/tmp/agent\nsock",
+				}),
+			).toThrow();
+		});
+
+		it("agent mode: socket path with quote is escaped inside the SBPL string", () => {
+			const CANONICAL = '/tmp/agent"quoted';
+			const p = generateSeatbeltProfile(minimalCap, {
+				sshAgentCanonicalSocketPath: CANONICAL,
+			});
+			expect(p).toContain('(path-literal "/tmp/agent\\"quoted")');
+		});
+	});
 });
 

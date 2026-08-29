@@ -136,6 +136,42 @@ export type EnvironmentCapability =
  *   Each entry MUST be canonical (realpath-resolved) by the caller.
  *   The backend canonicalizes again as a fail-closed gate.
  */
+/**
+ * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
+ * Optional ssh-agent authority surface on {@link CommandCapability}.
+ *
+ * Frozen contract (per ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01
+ * §15, FROZEN at c700b0d92):
+ *
+ *   - `mode: "deny"` (default when omitted): no ssh-agent authority.
+ *     The backend MUST NOT emit any ssh-agent-specific SBPL rule
+ *     and MUST NOT reintroduce `SSH_AUTH_SOCK` into the child env.
+ *
+ *   - `mode: "agent"`: the backend MAY reintroduce `SSH_AUTH_SOCK`
+ *     into the child env (from the parent, after canonicalization)
+ *     and MUST emit SBPL rules granting AF_UNIX socket connect
+ *     authority scoped to the canonical socket path. Raw private-key
+ *     reads (e.g. `~/.ssh/id_rsa`) MUST remain denied; the parent
+ *     socket directory MUST NOT gain filesystem write authority;
+ *     sibling Unix sockets MUST remain inaccessible.
+ *
+ *   - `socketPath` is the canonical (realpath-resolved) socket
+ *     pathname the BACKEND computed from the trusted parent env
+ *     (`SSH_AUTH_SOCK`). Callers that set it directly accept the
+ *     canonicalization responsibility. When omitted in agent mode,
+ *     the backend derives it from `process.env.SSH_AUTH_SOCK` and
+ *     canonicalizes before profile generation; derivation failure
+ *     is fail-closed (`SandboxError`, reason
+ *     `canonicalization-failed`).
+ *
+ * This field is capability-driven ONLY. There is no `executable
+ * === "ssh"` branch, no `~/.ssh` grant, no `SECRET_BLOCKLIST`
+ * weakening, no parent-tree widening.
+ */
+export type SshAuthenticationAuthority =
+	| { readonly mode: "deny" }
+	| { readonly mode: "agent"; readonly socketPath?: string };
+
 export interface CommandCapability {
 	readonly readonlyRoots: readonly string[];
 	readonly writableRoots: readonly string[];
@@ -145,6 +181,12 @@ export interface CommandCapability {
 	readonly cwd?: string;
 	readonly tempRoot?: string;
 	readonly createOnlyRoots?: readonly string[];
+	/**
+	 * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
+	 * ssh-agent authority surface. See {@link SshAuthenticationAuthority}.
+	 * Default (omitted or `mode: "deny"`) = no agent authority.
+	 */
+	readonly sshAuthenticationAuthority?: SshAuthenticationAuthority;
 }
 
 /**

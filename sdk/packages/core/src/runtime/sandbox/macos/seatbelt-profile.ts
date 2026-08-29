@@ -279,6 +279,45 @@ function buildNetworkRule(network: CommandCapability["network"]): string {
 }
 
 /**
+ * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
+ * Build the ssh-agent AF_UNIX socket rules.
+ *
+ * Returns empty string when `canonicalSocketPath` is omitted (the
+ * common case: `mode: "deny"` or capability.authority omitted). The
+ * caller is the Seatbelt backend, which is the only place that knows
+ * the canonicalized socket path.
+ *
+ * The emitted rules are EXACT:
+ *
+ *   (allow system-socket
+ *     (socket-domain AF_UNIX))
+ *
+ *   (allow network-outbound
+ *     (remote unix-socket
+ *       (path-literal "<CANONICAL>")))   ;; NOT (subpath ...)
+ *
+ * `path-literal` is the correct AF_UNIX remote-endpoint filter per
+ * Apple Sandbox Guide v1.0; it is distinct from the filesystem
+ * `literal` primitive and from `subpath`. Using `subpath` here would
+ * widen authority to the entire parent directory tree (regression).
+ *
+ * The path is escaped via {@link escapeSbplString} — control
+ * characters throw (CORRECTION01 P0-3 invariant preserved).
+ */
+function buildSshAgentSocketRules(canonicalSocketPath: string | undefined): string {
+	if (typeof canonicalSocketPath !== "string" || canonicalSocketPath.length === 0) {
+		return "";
+	}
+	const escaped = escapeSbplString(canonicalSocketPath);
+	return [
+		"(allow system-socket",
+		"  (socket-domain AF_UNIX))",
+		"(allow network-outbound",
+		`  (remote unix-socket (path-literal "${escaped}")))`,
+	].join("\n");
+}
+
+/**
  * Build the full SBPL profile from a capability.
  *
  * Inputs MUST be canonical (realpath-resolved) by the caller. This
@@ -293,11 +332,20 @@ function buildNetworkRule(network: CommandCapability["network"]): string {
  * @param options.denyReadSubpaths  Paths to add as `(deny file-read*
  *                       (subpath X))`. Use this for "outside"
  *                       containment. Default: `[]` (no deny).
+ * @param options.sshAgentCanonicalSocketPath  ACT-IMPL01: When the
+ *                       capability opts into `mode: "agent"`, the
+ *                       backend passes the canonicalized
+ *                       `SSH_AUTH_SOCK` here. The generator emits
+ *                       the AF_UNIX socket rule pair scoped to that
+ *                       exact endpoint (`path-literal`). When
+ *                       omitted (the deny case) the generator emits
+ *                       no ssh-agent rules.
  */
 export function generateSeatbeltProfile(
 	capability: CommandCapability,
 	options: {
 		readonly denyReadSubpaths?: readonly string[];
+		readonly sshAgentCanonicalSocketPath?: string;
 	} = {},
 ): string {
 	const denyRead = options.denyReadSubpaths ?? [];
@@ -329,6 +377,12 @@ export function generateSeatbeltProfile(
 	const networkRule = buildNetworkRule(capability.network);
 	if (networkRule) {
 		lines.push(networkRule);
+	}
+	const sshAgentRules = buildSshAgentSocketRules(
+		options.sshAgentCanonicalSocketPath,
+	);
+	if (sshAgentRules) {
+		lines.push(sshAgentRules);
 	}
 	return lines.join("\n") + "\n";
 }

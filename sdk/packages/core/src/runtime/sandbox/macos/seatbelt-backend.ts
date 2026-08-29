@@ -299,6 +299,71 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			let profileDir: string | undefined;
 			let profilePath: string | undefined;
 			let materialized: ReturnType<typeof materializeEnvironment> | undefined;
+
+			// ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
+			// Resolve ssh-agent authority for the agent case.
+			//
+			// When `sshAuthenticationAuthority.mode === "agent"`:
+			//   1. Take the canonical socket path. Either the capability
+			//      provides one (already canonicalized per the contract),
+			//      or we derive it from `process.env.SSH_AUTH_SOCK`.
+			//   2. Canonicalize it via `canonicalizeSandboxRoot`. Fail-closed
+			//      on absent/empty/invalid — no unsandboxed fallback.
+			//   3. Reintroduce `SSH_AUTH_SOCK` into the sanitized env by
+			//      adding it to `cap.environment.allow`. The allow path
+			//      (step 3 of `materializeEnvironment`) wins over the
+			//      blocklist-empty step (step 4) — `SECRET_BLOCKLIST`
+			//      is unchanged.
+			//
+			// When the field is omitted or `mode: "deny"`, this block
+			// is a no-op: no agent SBPL rule is emitted and
+			// `SSH_AUTH_SOCK` is NOT reintroduced.
+			let sshAgentCanonicalSocketPath: string | undefined;
+			let effectiveEnvironmentCapability = cap.environment;
+			const auth = cap.sshAuthenticationAuthority;
+			if (auth?.mode === "agent") {
+				let raw: string | undefined;
+				if (typeof auth.socketPath === "string" && auth.socketPath.length > 0) {
+					raw = auth.socketPath;
+				} else {
+					raw = process.env.SSH_AUTH_SOCK;
+				}
+				if (typeof raw !== "string" || raw.length === 0) {
+					throw new SandboxError(
+						"Seatbelt: sshAuthenticationAuthority.mode='agent' requires SSH_AUTH_SOCK to be set in the parent env or cap.sshAuthenticationAuthority.socketPath to be provided",
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+						},
+					);
+				}
+				try {
+					sshAgentCanonicalSocketPath = canonicalizeSandboxRoot(raw);
+				} catch (cause) {
+					throw new SandboxError(
+						`Seatbelt: failed to canonicalize SSH_AUTH_SOCK=${JSON.stringify(raw)}`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+							cause,
+						},
+					);
+				}
+				// Reintroduce SSH_AUTH_SOCK via the existing allow-list
+				// path. Step 3 of materializeEnvironment wins over the
+				// step-4 blocklist-empty fallback (SECRET_BLOCKLIST is
+				// preserved unchanged).
+				if (
+					cap.environment.mode === "sanitized" &&
+					!cap.environment.allow.includes("SSH_AUTH_SOCK")
+				) {
+					effectiveEnvironmentCapability = {
+						mode: "sanitized",
+						allow: [...cap.environment.allow, "SSH_AUTH_SOCK"],
+					};
+				}
+			}
+
 			try {
 				// 2) Generate the SBPL profile.
 				const profile = generateSeatbeltProfile(
@@ -310,7 +375,10 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 						createOnlyRoots,
 						cwd,
 					},
-					{ denyReadSubpaths },
+					{
+						denyReadSubpaths,
+						sshAgentCanonicalSocketPath,
+					},
 				);
 
 				// 3) Allocate a sandbox-private temp dir for the profile
@@ -348,7 +416,7 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				}
 
 				// 4) Materialize the environment.
-				materialized = materializeEnvironment(cap.environment, {
+				materialized = materializeEnvironment(effectiveEnvironmentCapability, {
 					parentEnv: process.env,
 					// Synthetic TMPDIR is only set when the capability
 					// provides a tempRoot. Synthetic HOME is intentionally
