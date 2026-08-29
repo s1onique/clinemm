@@ -1,0 +1,84 @@
+ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01
+entry-freeze
+
+ENTRY_HEAD        = f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
+ENTRY_TREE        = (recorded at evidence-collection time)
+ORIGIN_MAIN       = (recorded at evidence-collection time)
+BRANCH            = main
+WORKTREE_CLEAN    = true (excluding .factory/evidence/ which is gitignored)
+GIT_DIFF_CHECK    = clean
+PROTECTED_STASHES = stash@{0} = "On main: c2-green-and-c2-p1-delta" (UNTOUCHED)
+
+PREDECESSOR
+  ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
+  OWN01 RED (preserved)
+  OWN01-RED evidence at
+    .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/OWN01-RED/
+  OWN02-OWN03-RECON (this predecessor's bounded fix-cycle result):
+    verdict=CAPTURE_INSUFFICIENT for positive successor phase
+    see .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
+        OWN02-OWN03-RECON/recon-report.md
+    reviewer_correction_20260829: high-leverage seam is the producer side,
+        not presentation/translation
+    live_reason=UNAVAILABLE_FROM_TRACE (PTAD did not capture event.reason)
+
+PRIMARY PURPOSE
+  Determine whether AgentRuntime is incorrectly classifying an
+  unfinished autonomous turn as semantically completed.
+
+IN_SCOPE (THIS ACT)
+  - Inventory every status="completed" producer in agent-runtime.ts
+    and orchestration layer.
+  - Classify each producer as SEMANTIC_COMPLETION / MODEL_STOP_ONLY /
+    LOOP_EXHAUSTION / TOOL_COMPLETION / HOST_FALLBACK / UNKNOWN.
+  - Trace the maxIterations throw -> catch -> AgentRunStatus conversion
+    concretely.
+  - Audit every agent.run() / agent.continue() /
+    pendingPromptsController.drain() caller to determine whether a
+    HOST_OWNED autonomous continuation primitive already exists for
+    the live class.
+  - Attempt bounded executable probes RFS01..RFS04 if existing test
+    infrastructure permits.
+  - Reach ONE OF: PRODUCER_SEMANTICS_BUG / HOST_CONTINUATION_BUG /
+    PRESENTATION_PHASE_GAP / COMPOSED_BUG / CAPTURE_INSUFFICIENT.
+
+NOT_IN_SCOPE (THIS ACT)
+  - NO production code repair
+  - NO new TurnPhase value
+  - NO MessageTranslator.finishReason propagation
+  - NO UI change
+  - NO new RED against a hypothetical awaiting_continuation
+  - NO telemetry implementation
+  - NO porting or backporting any upstream-reported fix
+
+ENTRY-CONDITION GATES
+  HALT_UNEXPECTED_TRACKED_DIRT     unexpected tracked dirt at freeze
+  HALT_SEAM_MOVED                  production seam moved between prior
+                                   ACTs and this ACT
+  HALT_PRODUCER_REPAIR             producer code change attempted in
+                                   this ACT (forbidden)
+  HALT_PHASE_DESIGN                new TurnPhase value proposed in
+                                   this ACT (deferred to follow-on)
+  CAPTURE_INSUFFICIENT             preserved as a valid verdict if
+                                   the runtime boundary cannot be
+                                   classified from source alone
+
+EVIDENCE_DIR
+  .factory/evidence/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01/
+    entry-freeze.txt                       (this file)
+    producer-inventory.md                  (every status=completed producer)
+    classification-table.md                (each producer classified)
+    max-iterations-path.md                 (concrete trace)
+    fallback-completion-path.md            (session-termination fallback)
+    continuation-callers.md                (every run/continue caller)
+    probe-results.md                       (RFS01..RFS04 attempts)
+    final-assessment.md                    (written at closure)
+
+LABEL DISCIPLINE (per the recon contract)
+  LIVE                  = captured from a real running session / real trace
+  REAL_PRODUCTION_SEAM  = exact source symbol(s) the production code executes
+  STRUCTURAL            = derived by walking the source tree statically
+  INFERRED              = reasoned claim, not directly captured
+  UNAVAILABLE_FROM_TRACE = cannot be observed from the local trace
+
+  Inferred -> live promotion is FORBIDDEN.

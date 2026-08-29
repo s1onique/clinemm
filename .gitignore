@@ -216,6 +216,33 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/terminal-chronology-*.json
+# ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01: producer-side causal
+# classification ACT. Successor slice to ACT-CLINEMM-RUNTIME-TASK-
+# PROGRESSION-RECON01 OWN02-OWN03-RECON (verdict CAPTURE_INSUFFICIENT for
+# positive successor phase; reviewer correction 2026-08-29 redirected the
+# fix order: producer-side recon FIRST, then (only if PRODUCER_SEMANTICS_BUG
+# or COMPOSED_BUG) producer-side repair, then translation-side propagation,
+# then (only if PRESENTATION_PHASE_GAP) a new TurnPhase value).
+# ENTRY_HEAD = f106bc63d (same HEAD as the predecessor's OWN01 RED; the
+# ACT frozen against the post-cherry-pick C2 GREEN of the SSH-agent ACT).
+# Status OPEN / OPENING / NO_PRODUCTION_DELTA. Same durable-binding reason
+# as the runtime-progression ACT: the ACT file AND the evidence directory
+# are bound by the epic ledger at .factory/epics/runtime-task-progression.md
+# (current status block + ACT ledger row 60), so both must survive a fresh
+# clone. Read-only recon: inventory every status="completed" producer;
+# classify each as SEMANTIC_COMPLETION / MODEL_STOP_ONLY / LOOP_EXHAUSTION /
+# TOOL_COMPLETION / HOST_FALLBACK / UNKNOWN; trace maxIterations throw ->
+# catch -> status="failed" -> AgentDoneEvent.reason="error" concretely;
+# audit every agent.run / agent.continue / drain caller and classify as
+# USER_OWNED / HOST_OWNED / INTERNAL_RECOVERY / TEAM_ONLY / OTHER; attempt
+# bounded RFS01..RFS04 probes if existing test infrastructure permits.
+# Reach one of: PRODUCER_SEMANTICS_BUG / HOST_CONTINUATION_BUG /
+# PRESENTATION_PHASE_GAP / COMPOSED_BUG / CAPTURE_INSUFFICIENT. No
+# production repair in this ACT; no new TurnPhase; no MessageTranslator
+# .finishReason propagation; no UI change; no new RED against a
+# hypothetical awaiting_continuation.
+!/.factory/acts/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01/
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01: recon ACT
 # LAUNCH_HEAD = a76ff4137 / TREE = fa383737f (durable-binding freeze
 # per ACT §1). OPEN_HEAD = 4963904e9 (first commit creating ACT).
