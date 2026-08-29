@@ -1,0 +1,66 @@
+{
+  "act": "ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01",
+  "commit_under_test": "PENDING (correction-cycle commit, not yet made)",
+  "raw_test_summary": {
+    "sdk_core_sandbox": {
+      "passed": 99,
+      "failed": 2,
+      "skipped": 24,
+      "todo": 0,
+      "total": 125,
+      "files": 9
+    },
+    "apps_vscode_sandbox_integration": {
+      "passed": 16,
+      "failed": 2,
+      "skipped": 0,
+      "todo": 0,
+      "total": 18,
+      "files": 1
+    }
+  },
+  "failed_breakdown": {
+    "pre_existing_unrelated": [
+      "src/runtime/sandbox/macos/seatbelt-availability.test.ts > probeSeatbeltAvailability > returns true on darwin when /usr/bin/sandbox-exec is present and functional (this VSCodium shell is nested-sandboxed; probeSeatbeltAvailability() === false; HALT_HOST_SUBSTRATE_UNAVAILABLE per ACT §6/§10)",
+      "src/runtime/sandbox/sandbox-backend.test.ts > getSandboxBackend — seatbelt-experimental WITH opt-in > on darwin with opt-in and substrate present, returns the SeatbeltSandboxBackendExperimental instance (same root cause)",
+      "src/sdk/command-job-manager.sandbox-integration.test.ts > env proof: experimental opt-in honors envSemantics=complete end-to-end > with seatbelt opt-in on darwin, CLINEMM_PRODUCTION_TEST_LEAK_VAR is absent in actual child stdout (host-kernel e2e; runs real /usr/bin/sandbox-exec; same root cause)",
+      "src/sdk/command-job-manager.sandbox-integration.test.ts > env proof: experimental opt-in honors envSemantics=complete end-to-end > with seatbelt opt-in on darwin, AWS_SECRET_ACCESS_KEY is absent in actual child stdout (host-kernel e2e; same root cause)"
+    ],
+    "new_in_this_act": []
+  },
+  "skipped_breakdown": {
+    "substrate_gated": "24 tests correctly skip on this host via skipIf(!HAS_SUBSTRATE) or skipIf(!CAN_BIND_AF_UNIX): SSH-04/06/12 host-kernel quartet (3 skipIf(!HAS_SUBSTRATE) in seatbelt-backend.test.ts) + 4 skipIf(!CAN_BIND_AF_UNIX) AF_UNIX bind positive-path tests in seatbelt-ssh-agent-authority.test.ts + 17 existing substrate-gated host-kernel tests"
+  },
+  "new_validator_failures": 0,
+  "typecheck_sdk_core_sandbox": "0 errors in changed files (21 pre-existing baseline errors in unrelated test files; same count before and after this ACT)",
+  "typecheck_apps_vscode": "0 errors in changed files",
+  "lint": "biome clean on all 6 production files in sdk/packages/core (Checked 6 files; no fixes applied). Note: biome config in apps/vscode has a pre-existing nested-root-config issue unrelated to this ACT.",
+  "diff_check": "clean (git diff --check passes)",
+  "production_reach_status": "GREEN (4/4 ACT-IMPL01 production-reach tests PASS): default no field, CLINEMM_SAFE_YOLO_SSH_AGENT=allow sets sshAuthenticationAuthority.mode='agent', any other value no field, classic mode (off) skips authority entirely.",
+  "substrate_status": "P0 production-reach closed; host-kernel quartet still HOST_REQUIRED on Terminal.app / iTerm2 / debug-harness",
+  "new_p0": 0,
+  "new_p1": 0,
+  "new_p2": 0,
+  "delta_summary": {
+    "production_files_modified": [
+      "sdk/packages/core/src/runtime/sandbox/types.ts (SshAuthenticationAuthority type narrowed; socketPath field removed for single-source-of-truth on process.env.SSH_AUTH_SOCK)",
+      "sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts (buildSshAgentSocketRules + sshAgentCanonicalSocketPath option; path-literal AF_UNIX remote-endpoint filter)",
+      "sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts (agent-mode wiring: canonicalize + lstat isSocket + SECRET_BLOCKLIST-preserving allow-list extension)",
+      "apps/vscode/src/sdk/sandbox-policy.ts (resolveSafeYoloSshAgentOptIn + buildExperimentalReconCapability integration via CLINEMM_SAFE_YOLO_SSH_AGENT env var)"
+    ],
+    "test_files_modified_or_added": [
+      "sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.test.ts (+7 ACT-IMPL01 tests)",
+      "sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.test.ts (+2 host-kernel skipIf tests; corrected the existing socketPath reference)",
+      "sdk/packages/core/src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts (NEW; 7 pure-functional + 4 substrate-gated AF_UNIX bind tests = 11 total)",
+      "apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts (+4 ACT-IMPL01 production-reach tests)"
+    ],
+    "correction_cycle_fixes": [
+      "P0 (production reachability): wired resolveSafeYoloSshAgentOptIn into buildExperimentalReconCapability; added 4 production-reach integration tests in command-job-manager.sandbox-integration.test.ts",
+      "P0 (host-kernel SSH-04/06/12): added 4 substrate-gated AF_UNIX bind tests in seatbelt-ssh-agent-authority.test.ts (positive path; negative path always runs)",
+      "P1 (socket type validation): added lstat S_IFSOCK check in seatbelt-backend.ts; added 2 negative tests (regular file → fail closed, directory → fail closed)",
+      "P1 (socket identity unification): removed socketPath field from SshAuthenticationAuthority type; backend derives canonical socket path from process.env.SSH_AUTH_SOCK only; profile path-literal and child env value are the same string",
+      "P1 (report accounting): raw test counts above; .factory/gate-summary.json (this file) replaces the inaccurate '100 + 20 = 120' mental arithmetic",
+      "P2 (EOF newline): trailing newlines verified on all files; seatbelt-ssh-agent-authority.test.ts ends with newline"
+    ]
+  }
+}

@@ -159,6 +159,19 @@ apps/examples/desktop-app/.cursor/settings.json
 # Same durable-binding reason as the ACT file: the matrices prove
 # the corrected collector's P0.2 / P0.3 / P1 invariants end-to-end.
 !/.factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/
+# ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
+# final-report.md (338-line closed ACT evidence: identity, conservation
+# matrix, quality gates, §15 correction-cycle section, §16 deferred
+# live qualification). The report binds durably to the ACT file
+# .factory/acts/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01.md
+# (whitelisted above per ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01),
+# so the evidence directory must also be durably tracked.
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01/
+# Same durable-binding reason: gate-summary.json records the
+# authoritative test counts (passed/failed/skipped/todo/total per
+# file) for the IMPLEMENTATION01 production-reach + pure-functional
+# tests. Authoritative for digest per reviewer P1 ask.
+!/.factory/gate-summary.json
 # ACT-CLINEMM-TASK-COST-TRUTH-RECON01: backlog recon ACT authored
 # 2026-08-27. Status OPEN / HIGH (cost provenance lane). Recon §2
 # PASS_RECON_SURFACE_MAPPED at the commit of authorship; §3 live
