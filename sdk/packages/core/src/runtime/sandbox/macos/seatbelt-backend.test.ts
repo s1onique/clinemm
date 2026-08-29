@@ -19,26 +19,32 @@ import {
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	statSync,
 	symlinkSync,
+	unlinkSync,
 	writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { noSandboxBackend } from "../no-sandbox-backend";
-import {
-	SeatbeltSandboxBackendExperimental,
-	SEATBELT_BACKEND_ID,
-} from "./seatbelt-backend";
+import type {
+	CommandCapability,
+	CommandInvocation,
+	SandboxError,
+} from "../types";
 import {
 	probeSeatbeltAvailability,
 	SANDBOX_EXEC_PATH,
 } from "./seatbelt-availability";
-import { SandboxError } from "../types";
-import type { CommandCapability, CommandInvocation } from "../types";
+import {
+	SEATBELT_BACKEND_ID,
+	SeatbeltSandboxBackendExperimental,
+} from "./seatbelt-backend";
 
 const HAS_SUBSTRATE =
 	process.platform === "darwin" && probeSeatbeltAvailability();
@@ -161,11 +167,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				expect(prepared.executable).toBe(SANDBOX_EXEC_PATH);
 				expect(prepared.args[0]).toBe("-f");
 				expect(prepared.args[2]).toBe("/bin/echo");
@@ -195,18 +200,14 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				};
 				const cmd: CommandInvocation = {
 					executable: "/bin/sh",
-					args: [
-						"-c",
-						`printf X >> ${JSON.stringify(fixture.write)}; echo OK`,
-					],
+					args: ["-c", `printf X >> ${JSON.stringify(fixture.write)}; echo OK`],
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const r = runPrepared(prepared);
 				expect(r.exitCode).toBe(0);
 				expect(r.stdout).toContain("OK");
@@ -233,11 +234,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const r = runPrepared(prepared);
 				expect(r.exitCode).not.toBe(0);
 				expect(r.stderr).toMatch(/Operation not permitted/);
@@ -264,18 +264,14 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				// deny is observable in the exit status.
 				const cmd: CommandInvocation = {
 					executable: "/bin/sh",
-					args: [
-						"-c",
-						`printf BAD >> ${JSON.stringify(fixture.secret)}`,
-					],
+					args: ["-c", `printf BAD >> ${JSON.stringify(fixture.secret)}`],
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const r = runPrepared(prepared);
 				expect(r.exitCode).not.toBe(0);
 				expect(r.stderr).toMatch(/Operation not permitted/);
@@ -304,11 +300,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const r = runPrepared(prepared);
 				expect(r.exitCode).not.toBe(0);
 				expect(r.stderr).toMatch(/Operation not permitted/);
@@ -335,11 +330,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const r = runPrepared(prepared);
 				// `(deny network*)` is silent on stderr; the only
 				// observable signal is a non-zero exit code (and the
@@ -368,11 +362,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const r = runPrepared(prepared);
 				expect(r.exitCode).not.toBe(0);
 				expect(r.stderr).toMatch(/Operation not permitted/);
@@ -419,11 +412,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					env: {},
 				};
 				try {
-					const prepared =
-						await SeatbeltSandboxBackendExperimental.prepare({
-							capability: cap,
-							command: cmd,
-						});
+					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					});
 					const r = runPrepared(prepared);
 					expect(r.exitCode).toBe(0);
 					for (const k of seedKeys) {
@@ -495,18 +487,14 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				};
 				const cmd: CommandInvocation = {
 					executable: "/bin/sh",
-					args: [
-						"-c",
-						`printf BAD >> ${JSON.stringify(fixture.secret)}`,
-					],
+					args: ["-c", `printf BAD >> ${JSON.stringify(fixture.secret)}`],
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const r = runPrepared(prepared);
 				expect(r.exitCode).not.toBe(0);
 				expect(r.stderr).toMatch(/Operation not permitted/);
@@ -578,11 +566,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					cwd: fixture.inside,
 					env: {},
 				};
-				const prepared =
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					});
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
 				const profilePath = prepared.args[1] as string;
 				expect(existsSync(profilePath)).toBe(true);
 				await prepared.cleanup?.();
@@ -660,161 +647,153 @@ describe.skipIf(!HAS_SUBSTRATE)(
  * Both tests run on any platform — they observe host-side
  * cleanup, not sandbox-exec behavior.
  */
-	/**
-	 * ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01.
-	 *
-	 * Lifecycle P1: when the backend synthesizes a temp root and a
-	 * later step in prepare() throws (profile generation, profile
-	 * dir creation, profile write, env materialization), the
-	 * synthesized temp root MUST be cleaned up before the
-	 * SandboxError propagates.
-	 *
-	 * Test seam: a module-level vi.mock on ./seatbelt-profile with
-	 * a mutable switch. The mock factory always returns a profile
-	 * generator that throws when the switch is true. This is the
-	 * smallest viable DI seam that affects the backend's static
-	 * import (vi.mock at file scope is hoisted and intercepts all
-	 * subsequent imports of the specifier).
-	 */
-	const mockProfileState: { shouldThrow: boolean } = { shouldThrow: false }
+/**
+ * ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01.
+ *
+ * Lifecycle P1: when the backend synthesizes a temp root and a
+ * later step in prepare() throws (profile generation, profile
+ * dir creation, profile write, env materialization), the
+ * synthesized temp root MUST be cleaned up before the
+ * SandboxError propagates.
+ *
+ * Test seam: a module-level vi.mock on ./seatbelt-profile with
+ * a mutable switch. The mock factory always returns a profile
+ * generator that throws when the switch is true. This is the
+ * smallest viable DI seam that affects the backend's static
+ * import (vi.mock at file scope is hoisted and intercepts all
+ * subsequent imports of the specifier).
+ */
+const mockProfileState: { shouldThrow: boolean } = { shouldThrow: false };
 
-	vi.mock("./seatbelt-profile", async () => {
-		const actual =
-			await vi.importActual<typeof import("./seatbelt-profile")>(
-				"./seatbelt-profile",
-		)
-		return {
-			generateSeatbeltProfile: (
-				...args: Parameters<typeof actual.generateSeatbeltProfile>
-			) => {
-				if (mockProfileState.shouldThrow) {
-					throw new Error("simulated profile-generation failure")
-				}
-				return actual.generateSeatbeltProfile(...args)
-			},
-		}
-	})
+vi.mock("./seatbelt-profile", async () => {
+	const actual =
+		await vi.importActual<typeof import("./seatbelt-profile")>(
+			"./seatbelt-profile",
+		);
+	return {
+		generateSeatbeltProfile: (
+			...args: Parameters<typeof actual.generateSeatbeltProfile>
+		) => {
+			if (mockProfileState.shouldThrow) {
+				throw new Error("simulated profile-generation failure");
+			}
+			return actual.generateSeatbeltProfile(...args);
+		},
+	};
+});
 
-	describe(
-		"SeatbeltSandboxBackendExperimental — CORRECTION01: synthesized temp root cleaned on prepare() failure",
-		() => {
-			async function expectCleanupOnFailure(): Promise<string | undefined> {
-				const fixture = buildFixture()
-				try {
-					const before = new Set<string>()
-					for (const e of readdirSync(tmpdir())) {
-						if (e.startsWith("clinemm-sandbox-temp-")) before.add(e)
-					}
-
-					const cap: CommandCapability = {
-						readonlyRoots: [],
-						writableRoots: [],
-						network: "deny",
-						environment: { mode: "inherit" },
-						cwd: fixture.inside,
-						// tempRoot omitted -- backend must synthesize.
-					}
-					const cmd: CommandInvocation = {
-						executable: "/bin/echo",
-						args: ["should not run"],
-						cwd: fixture.inside,
-						env: {},
-					}
-
-					mockProfileState.shouldThrow = true
-					let caught: unknown
-					try {
-						await SeatbeltSandboxBackendExperimental.prepare({
-							capability: cap,
-							command: cmd,
-						})
-					} catch (e) {
-						caught = e
-					} finally {
-						mockProfileState.shouldThrow = false
-					}
-
-					// prepare() either throws a SandboxError (from
-					// canonicalizeSandboxRoot etc.) or re-throws the raw
-					// error from generateSeatbeltProfile. Either way, the
-					// test only cares that prepare() threw (so the wrap
-					// ran and cleaned up).
-					expect(caught).toBeInstanceOf(Error)
-
-					let leaked: string | undefined
-					for (const e of readdirSync(tmpdir())) {
-						if (
-							e.startsWith("clinemm-sandbox-temp-") &&
-							!before.has(e)
-						) {
-							const full = join(tmpdir(), e)
-							try {
-								if (statSync(full).isDirectory()) {
-									leaked = full
-									break
-								}
-							} catch {
-								// already removed; not a leak
-							}
-						}
-					}
-					return leaked
-				} finally {
-					cleanupFixture(fixture.root)
-				}
+describe("SeatbeltSandboxBackendExperimental — CORRECTION01: synthesized temp root cleaned on prepare() failure", () => {
+	async function expectCleanupOnFailure(): Promise<string | undefined> {
+		const fixture = buildFixture();
+		try {
+			const before = new Set<string>();
+			for (const e of readdirSync(tmpdir())) {
+				if (e.startsWith("clinemm-sandbox-temp-")) before.add(e);
 			}
 
-		it("CORRECTION01: profile generation failure cleans up the synthesized temp root", async () => {
-			const leaked = await expectCleanupOnFailure()
-			expect(leaked).toBeUndefined()
-		})
+			const cap: CommandCapability = {
+				readonlyRoots: [],
+				writableRoots: [],
+				network: "deny",
+				environment: { mode: "inherit" },
+				cwd: fixture.inside,
+				// tempRoot omitted -- backend must synthesize.
+			};
+			const cmd: CommandInvocation = {
+				executable: "/bin/echo",
+				args: ["should not run"],
+				cwd: fixture.inside,
+				env: {},
+			};
 
-		it("CORRECTION01: caller-supplied tempRoot is NOT touched on any failure", async () => {
-			// A caller-supplied cap.tempRoot is the caller's
-			// responsibility and MUST NOT be cleaned by the backend on
-			// any failure. The profile-generation failure (mocked)
-			// must not delete it.
-			const fixture = buildFixture()
+			mockProfileState.shouldThrow = true;
+			let caught: unknown;
 			try {
-				const callerTempRoot = join(fixture.inside, "caller-temp")
-				mkdirSync(callerTempRoot)
-
-				const cap: CommandCapability = {
-					readonlyRoots: [],
-					writableRoots: [],
-					network: "deny",
-					environment: { mode: "inherit" },
-					cwd: fixture.inside,
-					tempRoot: callerTempRoot,
-				}
-				const cmd: CommandInvocation = {
-					executable: "/bin/echo",
-					args: ["should not run"],
-					cwd: fixture.inside,
-					env: {},
-				}
-
-				mockProfileState.shouldThrow = true
-				try {
-					await SeatbeltSandboxBackendExperimental.prepare({
-						capability: cap,
-						command: cmd,
-					})
-				} catch {
-					// expected
-				} finally {
-					mockProfileState.shouldThrow = false
-				}
-
-				expect(existsSync(callerTempRoot)).toBe(true)
+				await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
+			} catch (e) {
+				caught = e;
 			} finally {
-				cleanupFixture(fixture.root)
+				mockProfileState.shouldThrow = false;
 			}
-		})
-	},
-)
 
+			// prepare() either throws a SandboxError (from
+			// canonicalizeSandboxRoot etc.) or re-throws the raw
+			// error from generateSeatbeltProfile. Either way, the
+			// test only cares that prepare() threw (so the wrap
+			// ran and cleaned up).
+			expect(caught).toBeInstanceOf(Error);
 
+			let leaked: string | undefined;
+			for (const e of readdirSync(tmpdir())) {
+				if (e.startsWith("clinemm-sandbox-temp-") && !before.has(e)) {
+					const full = join(tmpdir(), e);
+					try {
+						if (statSync(full).isDirectory()) {
+							leaked = full;
+							break;
+						}
+					} catch {
+						// already removed; not a leak
+					}
+				}
+			}
+			return leaked;
+		} finally {
+			cleanupFixture(fixture.root);
+		}
+	}
+
+	it("CORRECTION01: profile generation failure cleans up the synthesized temp root", async () => {
+		const leaked = await expectCleanupOnFailure();
+		expect(leaked).toBeUndefined();
+	});
+
+	it("CORRECTION01: caller-supplied tempRoot is NOT touched on any failure", async () => {
+		// A caller-supplied cap.tempRoot is the caller's
+		// responsibility and MUST NOT be cleaned by the backend on
+		// any failure. The profile-generation failure (mocked)
+		// must not delete it.
+		const fixture = buildFixture();
+		try {
+			const callerTempRoot = join(fixture.inside, "caller-temp");
+			mkdirSync(callerTempRoot);
+
+			const cap: CommandCapability = {
+				readonlyRoots: [],
+				writableRoots: [],
+				network: "deny",
+				environment: { mode: "inherit" },
+				cwd: fixture.inside,
+				tempRoot: callerTempRoot,
+			};
+			const cmd: CommandInvocation = {
+				executable: "/bin/echo",
+				args: ["should not run"],
+				cwd: fixture.inside,
+				env: {},
+			};
+
+			mockProfileState.shouldThrow = true;
+			try {
+				await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
+			} catch {
+				// expected
+			} finally {
+				mockProfileState.shouldThrow = false;
+			}
+
+			expect(existsSync(callerTempRoot)).toBe(true);
+		} finally {
+			cleanupFixture(fixture.root);
+		}
+	});
+});
 
 describe("SeatbeltSandboxBackendExperimental — non-darwin fail-closed", () => {
 	it.runIf(process.platform !== "darwin")(
@@ -911,17 +890,55 @@ describe("ACT-IMPL01: backend ssh-agent authority wiring (pure-functional)", () 
 describe.skipIf(!HAS_SUBSTRATE)(
 	"ACT-IMPL01: host-kernel quartet (SSH-03, SSH-04, SSH-06, SSH-12)",
 	() => {
-		it("SSH-03 ENV: agent-mode child sees SSH_AUTH_SOCK", async () => {
+		/**
+		 * Bind a real AF_UNIX socket at `path`. Returns a close function.
+		 *
+		 * Uses Node's net.createServer (which uses socket(2) under the
+		 * hood); the resulting inode has S_IFSOCK set. This is what the
+		 * production isSocket check requires — a `writeFileSync` placeholder
+		 * is a regular file and correctly fails closed (verified by the
+		 * negative tests in `seatbelt-ssh-agent-authority.test.ts`).
+		 *
+		 * Copy-local rather than cross-imported from
+		 * `seatbelt-ssh-agent-authority.test.ts` to keep this host-kernel
+		 * quartet self-contained (the source-of-truth helper lives next to
+		 * the authority contract; this is the kernel-side mirror).
+		 */
+		async function bindUnixSocket(path: string): Promise<() => void> {
+			const server = createServer();
+			await new Promise<void>((resolve, reject) => {
+				server.once("error", reject);
+				server.listen({ path }, () => resolve());
+			});
+			return () => {
+				server.close();
+				try {
+					unlinkSync(path);
+				} catch {
+					// already gone
+				}
+			};
+		}
+
+		it("SSH-03 ENV: agent-mode child sees SSH_AUTH_SOCK (canonical realpath)", async () => {
 			const fixture = buildFixture();
 			try {
 				const SOCKET_DIR = join(fixture.root, "agent");
 				mkdirSync(SOCKET_DIR, { recursive: true });
-				const CANONICAL = join(SOCKET_DIR, "agent.sock");
+				const RAW = join(SOCKET_DIR, "agent.sock");
 				try {
-					rmSync(CANONICAL);
+					rmSync(RAW);
 				} catch {
 					// not present
 				}
+				// FIXTURE BUG (was: `process.env.SSH_AUTH_SOCK = CANONICAL` with
+				// no actual socket). Production is fail-closed on missing
+				// sockets (canonicalizeSandboxRoot → realpathSync → lstat
+				// S_IFSOCK). Bind a real AF_UNIX server BEFORE setting
+				// SSH_AUTH_SOCK so the canonicalize step resolves to a real
+				// socket inode.
+				const closeSocket = await bindUnixSocket(RAW);
+				const CANONICAL = realpathSync(RAW);
 				const cap: CommandCapability = {
 					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
@@ -941,9 +958,10 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				const prev = process.env.SSH_AUTH_SOCK;
 				process.env.SSH_AUTH_SOCK = CANONICAL;
 				try {
-					const prepared = await SeatbeltSandboxBackendExperimental.prepare(
-						{ capability: cap, command: cmd },
-					);
+					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					});
 					const res = runPrepared(prepared);
 					const line = res.stdout
 						.split("\n")
@@ -956,6 +974,7 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					} else {
 						process.env.SSH_AUTH_SOCK = prev;
 					}
+					closeSocket();
 					cleanupFixture(fixture.root);
 				}
 			} catch (cause) {
@@ -963,11 +982,231 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				throw cause;
 			}
 		});
-		// SSH-04 (socket connect succeeds), SSH-06 (raw key still EPERM),
-		// SSH-12 (sibling socket still denied) require a live AF_UNIX
-		// ssh-agent and a real key file; documented here as substrate-only
-		// phases per ACT §6 / §10. Exercised on Terminal.app / iTerm2 /
-		// debug-harness. The pure-functional tests below prove the seams
-		// the kernel quartet depends on.
+
+		it("SSH-04 connect: agent-mode child can connect to authorized agent.sock", async () => {
+			const fixture = buildFixture();
+			try {
+				const SOCKET_DIR = join(fixture.root, "agent");
+				mkdirSync(SOCKET_DIR, { recursive: true });
+				const RAW = join(SOCKET_DIR, "agent.sock");
+				try {
+					rmSync(RAW);
+				} catch {
+					// not present
+				}
+				const closeSocket = await bindUnixSocket(RAW);
+				const CANONICAL = realpathSync(RAW);
+				const cap: CommandCapability = {
+					readonlyRoots: [fixture.inside],
+					writableRoots: [fixture.inside],
+					network: "deny",
+					environment: { mode: "sanitized", allow: [] },
+					cwd: fixture.inside,
+					sshAuthenticationAuthority: {
+						mode: "agent",
+					},
+				};
+				// bash's `exec 9<>PATH` opens a file descriptor via connect(2)
+				// for AF_UNIX sockets. Seatbelt either permits it (returns 0)
+				// or denies it (returns non-zero + EPERM). We capture the
+				// outcome in CONNECT_OK / CONNECT_DENIED so the test is
+				// robust to stderr noise from the sandboxed shell.
+				const cmd: CommandInvocation = {
+					executable: "/bin/sh",
+					args: [
+						"-c",
+						`if exec 9<>'${CANONICAL}' 2>/dev/null; then echo CONNECT_OK; exec 9<&-; else echo CONNECT_DENIED; fi`,
+					],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const prev = process.env.SSH_AUTH_SOCK;
+				process.env.SSH_AUTH_SOCK = CANONICAL;
+				try {
+					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					});
+					const res = runPrepared(prepared);
+					expect(res.exitCode).toBe(0);
+					expect(res.stdout).toContain("CONNECT_OK");
+					expect(res.stdout).not.toContain("CONNECT_DENIED");
+				} finally {
+					if (prev === undefined) {
+						delete process.env.SSH_AUTH_SOCK;
+					} else {
+						process.env.SSH_AUTH_SOCK = prev;
+					}
+					closeSocket();
+					cleanupFixture(fixture.root);
+				}
+			} catch (cause) {
+				cleanupFixture(fixture.root);
+				throw cause;
+			}
+		});
+
+		it("SSH-06 raw key: agent-mode child cannot read private key fixture (raw-key conservation)", async () => {
+			const fixture = buildFixture();
+			try {
+				// Stand in for ~/.ssh/id_rsa. Place under fixture.root so
+				// the canonicalize step realpath-resolves it.
+				const FAKE_HOME = join(fixture.root, "home");
+				mkdirSync(FAKE_HOME, { recursive: true });
+				const FAKE_SSH_DIR = join(FAKE_HOME, ".ssh");
+				mkdirSync(FAKE_SSH_DIR, { recursive: true });
+				const FAKE_KEY = join(FAKE_SSH_DIR, "id_rsa");
+				writeFileSync(FAKE_KEY, "FAKE_PRIVATE_KEY_BLOCK\n", "utf8");
+				const CANONICAL_KEY = realpathSync(FAKE_KEY);
+
+				const cap: CommandCapability = {
+					readonlyRoots: [fixture.inside],
+					writableRoots: [fixture.inside],
+					network: "deny",
+					environment: { mode: "sanitized", allow: [] },
+					cwd: fixture.inside,
+					sshAuthenticationAuthority: {
+						mode: "agent",
+					},
+					// SSH-06 contract: raw private-key reads are DENIED even
+					// when the agent authority is granted. The production
+					// helper `resolveSafeYoloSensitiveReadDenials` adds
+					// the curated V1 list under Safe-YOLO; the bare
+					// `SeatbeltSandboxBackendExperimental` does NOT
+					// auto-derive the deny list. This test passes the
+					// deny-read subpath explicitly so the kernel-level
+					// `(deny file-read* (subpath ...))` rule fires
+					// regardless of network mode. The contract under test
+					// is "raw-key EPERM at the Seatbelt kernel layer",
+					// independent of the credential-deny-list helper.
+					denyReadSubpaths: [CANONICAL_KEY],
+				};
+				const cmd: CommandInvocation = {
+					executable: "/bin/sh",
+					args: [
+						"-c",
+						`if [ -r '${CANONICAL_KEY}' ]; then echo KEY_READABLE; else echo KEY_DENIED; fi`,
+					],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const prev = process.env.SSH_AUTH_SOCK;
+				// Provide a real agent socket so the SSH-03-style fail-closed
+				// does NOT short-circuit before the deny-read rule fires.
+				const SOCKET_DIR = join(fixture.root, "agent");
+				mkdirSync(SOCKET_DIR, { recursive: true });
+				const RAW = join(SOCKET_DIR, "agent.sock");
+				const closeSocket = await bindUnixSocket(RAW);
+				process.env.SSH_AUTH_SOCK = realpathSync(RAW);
+				try {
+					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					});
+					const res = runPrepared(prepared);
+					expect(res.exitCode).toBe(0);
+					expect(res.stdout).toContain("KEY_DENIED");
+					expect(res.stdout).not.toContain("KEY_READABLE");
+				} finally {
+					if (prev === undefined) {
+						delete process.env.SSH_AUTH_SOCK;
+					} else {
+						process.env.SSH_AUTH_SOCK = prev;
+					}
+					closeSocket();
+					cleanupFixture(fixture.root);
+				}
+			} catch (cause) {
+				cleanupFixture(fixture.root);
+				throw cause;
+			}
+		});
+
+		it("SSH-12 sibling: agent-mode child cannot connect to unauthorized sibling.sock (path-literal scope)", async () => {
+			const fixture = buildFixture();
+			try {
+				const SOCKET_DIR = join(fixture.root, "agent");
+				mkdirSync(SOCKET_DIR, { recursive: true });
+				const AUTH_RAW = join(SOCKET_DIR, "agent.sock");
+				const SIBLING_RAW = join(SOCKET_DIR, "sibling.sock");
+				try {
+					rmSync(AUTH_RAW);
+				} catch {
+					/* not present */
+				}
+				try {
+					rmSync(SIBLING_RAW);
+				} catch {
+					/* not present */
+				}
+				// BOTH sockets are bound to live AF_UNIX servers — the test
+				// is "knowledge of socket path ≠ authority to connect",
+				// NOT "sibling doesn't exist". A missing sibling would pass
+				// trivially (connect(2) returns ENOENT, not EPERM); we need
+				// the sibling inode to exist so the kernel-level
+				// `(allow network-outbound (remote unix-socket (path-literal
+				// "agent.sock")))` rule is the ONLY thing separating the
+				// two outcomes.
+				const closeAuth = await bindUnixSocket(AUTH_RAW);
+				const closeSibling = await bindUnixSocket(SIBLING_RAW);
+				const CANONICAL_AUTH = realpathSync(AUTH_RAW);
+				const CANONICAL_SIBLING = realpathSync(SIBLING_RAW);
+				// Defense-in-depth: assert the two canonical paths differ
+				// (they should — different filenames) so the test cannot
+				// pass by accident.
+				expect(CANONICAL_AUTH).not.toBe(CANONICAL_SIBLING);
+
+				const cap: CommandCapability = {
+					readonlyRoots: [fixture.inside],
+					writableRoots: [fixture.inside],
+					network: "deny",
+					environment: { mode: "sanitized", allow: [] },
+					cwd: fixture.inside,
+					sshAuthenticationAuthority: {
+						mode: "agent",
+					},
+				};
+				// The child receives BOTH socket paths explicitly so the
+				// "knowledge of socket path ≠ authority" property is what
+				// is being tested, not "child didn't know the path".
+				const cmd: CommandInvocation = {
+					executable: "/bin/sh",
+					args: [
+						"-c",
+						[
+							`if exec 9<>'${CANONICAL_AUTH}' 2>/dev/null; then AUTH=1; exec 9<&-; else AUTH=0; fi`,
+							`if exec 9<>'${CANONICAL_SIBLING}' 2>/dev/null; then SIB=1; exec 9<&-; else SIB=0; fi`,
+							"echo AUTH=$AUTH SIBLING=$SIB",
+						].join("; "),
+					],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const prev = process.env.SSH_AUTH_SOCK;
+				process.env.SSH_AUTH_SOCK = CANONICAL_AUTH;
+				try {
+					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					});
+					const res = runPrepared(prepared);
+					expect(res.exitCode).toBe(0);
+					expect(res.stdout).toContain("AUTH=1");
+					expect(res.stdout).toContain("SIBLING=0");
+				} finally {
+					if (prev === undefined) {
+						delete process.env.SSH_AUTH_SOCK;
+					} else {
+						process.env.SSH_AUTH_SOCK = prev;
+					}
+					closeAuth();
+					closeSibling();
+					cleanupFixture(fixture.root);
+				}
+			} catch (cause) {
+				cleanupFixture(fixture.root);
+				throw cause;
+			}
+		});
 	},
 );
