@@ -321,7 +321,7 @@ decisions.
 
 - Progressive bounded sync slices, NOT a 176-commit blind mega-merge.
 - The recon ACT must choose per upstream cluster among:
-  `REBASE_SLICE`, `MERGE_SLICE`, `CHERRY_PICK_THEMATIC_SERIES`,
+  `MERGE_UPSTREAM_SLICE`, `PORT_THEMATIC_SERIES`,
   `MANUAL_PORT`, `DO_NOT_IMPORT`.
 - Potential decomposition examples:
   - U1 Settings/UI parity

@@ -127,9 +127,8 @@ User-visible (NON-AUTHORITATIVE) divergence snapshot:
 Strategy (carried into the new ACT):
   - Progressive bounded sync slices, NOT a 176-commit blind mega-merge.
   - Per upstream cluster, choose among:
-      REBASE_SLICE
-      MERGE_SLICE
-      CHERRY_PICK_THEMATIC_SERIES
+      MERGE_UPSTREAM_SLICE
+      PORT_THEMATIC_SERIES
       MANUAL_PORT
       DO_NOT_IMPORT
   - Potential decomposition examples:
