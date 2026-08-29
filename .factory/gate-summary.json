@@ -151,5 +151,5 @@
       "P2 (EOF newline): trailing newlines verified on all changed files"
     ]
   },
-  "evidence_head_full": "see git log; the rebind commit binds this summary to itself"
+  "evidence_head_full": "6f3699666 ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01: evidence rebind to executable subject head ff96ea8fe"
 }
