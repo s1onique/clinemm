@@ -1411,15 +1411,22 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					expect(dParentWrite.stdout).toMatch(/PY_WRITE_ERROR=/);
 					expect(dParentWrite.stdout).not.toContain("PY_WRITE_OK");
 
-					// Conservation evidence (not causal): in D mode, the
-					// prepared env must strip SSH_AUTH_SOCK. We assert this
-					// on a fresh D-mode prepare of the same authCmd.
+					// Conservation evidence (not causal): in D mode the
+					// prepared env must NOT carry the parent SSH_AUTH_SOCK
+					// credential. The existing environment contract
+					// intentionally materializes secret-blocklist entries
+					// as empty-string (see materializeEnvironment step 4)
+					// — the empty string is the load-bearing defense against
+					// executors that accidentally merge parent env state back
+					// in. Undefined entries would be silently dropped by
+					// child_process.spawn, defeating the defense.
 					const dAuthPrepared =
 						await SeatbeltSandboxBackendExperimental.prepare({
 							capability: capD,
 							command: authCmd,
 						});
-					expect(dAuthPrepared.env.SSH_AUTH_SOCK).toBeUndefined();
+					expect(dAuthPrepared.env.SSH_AUTH_SOCK).toBe("");
+					expect(dAuthPrepared.env.SSH_AUTH_SOCK).not.toBe(CANONICAL_AUTH);
 				} finally {
 					if (prev === undefined) {
 						delete process.env.SSH_AUTH_SOCK;
