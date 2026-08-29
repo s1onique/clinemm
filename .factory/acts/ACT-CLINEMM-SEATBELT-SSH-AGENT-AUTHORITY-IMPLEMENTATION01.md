@@ -339,9 +339,45 @@ when this ACT is launched on a substrate-eligible shell.
 
 ## §I — Entry-discipline audit trail
 
+Append-only list of ACT-only commits (most-recent first); updated at
+each ACT-only commit. The freeze points are:
+
+- `ENTRY_HEAD` = the recon subject committed before this ACT opened
+  (`911d02177`, the network-egress §4 closure commit);
+- `CONTRACT_HEAD` = the commit at which the §15 contract was frozen
+  (`c700b0d92`, RECON01 closure = IMPLEMENTATION01 launch — bundled
+  per the bounded transition);
+- `LAUNCH_HEAD` = this ACT's first commit, same as CONTRACT_HEAD
+  (`c700b0d92` — single-commit design is deliberate; see RECON01 §I
+  for rationale);
+- `CURRENT_HEAD` = refreshed at each ACT-only commit.
+
 ```text
-<reserved; populated at first commit and at ACT-only commits>
+ENTRY_HEAD       = 911d02177
+CONTRACT_HEAD    = c700b0d92   ; RECON01 §15 frozen here
+LAUNCH_HEAD      = c700b0d92   ; IMPLEMENTATION01 launched here
+CURRENT_HEAD     = c700b0d92   ; no follow-up commits yet
+PARENT_ACT       = ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01
+PARENT_VERDICT   = CLOSED / PASS_SEATBELT_SSH_AGENT_AUTHORITY_PRODUCT_POLICY_REPAIR_V1
+PARENT_§15       = FROZEN       ; this ACT inherits verbatim;
+                                 ; renegotiation requires a new
+                                 ; recon ACT
+SUBSTRATE_GATE   = probeSeatbeltAvailability() === true
+                                 ; this VSCodium session reports
+                                 ; false; host-ablation RED must
+                                 ; run on Terminal.app / iTerm2 /
+                                 ; debug-harness
+WORKTREE         = CLEAN       ; tracked changes only; capture
+                                 ; flow untracked files are owned
+                                 ; by other ACTs
+ENTRY_BRANCH     = act-clinemm-seatbelt-ssh-agent-authority-recon01
 ```
+
+Subsequent ACT-only commits will refresh `CURRENT_HEAD` and may
+advance implementation phases. They MUST NOT re-bind `ENTRY_HEAD`,
+`CONTRACT_HEAD`, or `LAUNCH_HEAD` — those are load-bearing frozen
+contracts. They MUST NOT renegotiate the §15 contract; renegotiation
+requires a new recon ACT that closes against this ACT's CLOSED_HEAD.
 
 import { probeSeatbeltAvailability } from
     "@/runtime/sandbox/macos/seatbelt-availability";

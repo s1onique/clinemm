@@ -799,10 +799,48 @@ NEXT:
 ## §I — Provenance and entry-discipline audit trail
 
 Append-only list of ACT-only commits (most-recent first); updated at
-each ACT-only commit. The freeze points are ENTRY_HEAD (recon subject)
-and LAUNCH_HEAD (this ACT's first commit); refresh pointers may lag
-by one commit, which is the deliberate design.
+each ACT-only commit. The freeze points are ENTRY_HEAD (recon subject),
+LAUNCH_HEAD (this ACT's first commit), and CLOSURE_HEAD (the freeze
+commit at which §15 became the sealed contract); refresh pointers
+may lag by one commit, which is the deliberate design.
 
 ```text
-  <reserved; populated at first commit>
+ENTRY_HEAD    = 911d02177        ; recon subject (the commit that
+                                  ;  closed the network-egress §4
+                                  ;  correction)
+LAUNCH_HEAD   = c700b0d92        ; this ACT's first commit; bundled
+                                  ;  with the IMPLEMENTATION01 launch
+                                  ;  because the recon/contract ACT
+                                  ;  closes here and immediately
+                                  ;  opens the executable successor
+                                  ;  (per the bounded transition)
+CLOSURE_HEAD  = c700b0d92        ; §15 freeze point; the contract is
+                                  ;  sealed at this commit
+IMPL_HEAD     = c700b0d92        ; IMPLEMENTATION01 launched in the
+                                  ;  same commit; bind is one commit
+                                  ;  because of the bounded transition
+                                  ;  (single freeze + open)
+ENTRY_TREE    = <resolved at launch>
+LAUNCH_TREE   = <resolved at launch>
+CURRENT_HEAD  = c700b0d92        ; no ACT-only follow-up commits
+                                  ;  beyond the launch (the recon ACT
+                                  ;  is closed; IMPLEMENTATION01 will
+                                  ;  own subsequent ACT-only commits)
+WORKTREE      = CLEAN            ; tracked changes only; capture flow
+                                  ;  untracked files are owned by other
+                                  ;  ACTs (editor-tool-friction recon)
 ```
+
+The single-commit design is deliberate. The reviewer verdict
+`GO_AFTER_ONE_BOUNDED_FIX` authorized one final bounded documentary
+transition: freeze §15 here, open IMPLEMENTATION01 immediately.
+Splitting the freeze from the IMPLEMENTATION01 launch into separate
+commits would have added an unnecessary intermediate state. The
+network-egress ACT used multiple launch commits because it absorbed
+a multi-turn review; this ACT absorbed the review across its §0..§17
+edits and finalized in a single freeze+open commit.
+
+Subsequent ACT-only commits (e.g. from IMPLEMENTATION01 phases) will
+refresh `IMPL_HEAD` and may refresh `CURRENT_HEAD`. They MUST NOT
+re-bind `ENTRY_HEAD`, `LAUNCH_HEAD`, or `CLOSURE_HEAD` — those are
+load-bearing frozen contracts.
