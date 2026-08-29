@@ -1,0 +1,49 @@
+{
+  "act": "ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01",
+  "phase": "ENTRY",
+  "capturedAt": "2026-08-29T21:49:35Z",
+  "repoRoot": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "branch": "main",
+  "entryHead": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
+  "entryTree": "e753ab01d44291654b2951c8c2e5f0cea78e74e4",
+  "originMain": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
+  "worktreeStatus": "CLEAN",
+  "preservedStash": "stash@{0}: On main: c2-green-and-c2-p1-delta",
+  "pythonVersion": "3.12.13",
+  "baselineGates": {
+    "py_compile": "PASS",
+    "biome_lint": "PASS (1392 files, no fixes applied)",
+    "typecheck_known_baseline_TS2339": 3,
+    "typecheck_files_affected": [
+      "src/sdk/command-job-manager.sandbox-integration.test.ts:680",
+      "src/sdk/command-job-manager.sandbox-integration.test.ts:703",
+      "src/sdk/command-job-manager.sandbox-integration.test.ts:728"
+    ],
+    "hermetic_fixtures_status": "ALL_GREEN",
+    "hermetic_fixtures_run": [
+      "verify-happy.py",
+      "verify-negative.py",
+      "verify-mismatch.py",
+      "verify-ambiguity.py",
+      "verify-split.py"
+    ]
+  },
+  "previousCaptureRef": {
+    "captureId": "20260829T060942Z-349b48f1",
+    "path": ".factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260829T060942Z-349b48f1",
+    "runtimeIdentityBound": false,
+    "approvalTransactionBound": false,
+    "approvalEventCount": 0,
+    "specimenBinding": "CAPTURE_INSUFFICIENT",
+    "repoHeadAtCapture": "911d0217772a93e464143491daa5fe530adbc26d",
+    "preservationRule": "PRESERVED_VERBATIM — must remain CAPTURE_INSUFFICIENT (T12)"
+  },
+  "liveEnvironment": {
+    "node": "NOT_FOUND",
+    "npm": "NOT_FOUND",
+    "bun": "/opt/homebrew/bin/bun (1.3.14)",
+    "python3": "/run/current-system/sw/bin/python3 (3.12.13)",
+    "liveVSCodeExtensionHost": "NOT_RUNNING_IN_THIS_SHELL",
+    "liveQualification": "BLOCKED_BY_ENVIRONMENT (no live VSCode extension host available). ACT will close on structural + hermetic + synthetic-live evidence. Editor-friction handoff classified honestly."
+  }
+}

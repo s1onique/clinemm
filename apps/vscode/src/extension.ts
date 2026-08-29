@@ -5,17 +5,18 @@ import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
 import {
-	dumpExtensionSidePostTerminalAuthorityDiagnostic,
-	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
-} from "@/sdk/post-terminal-authority-diagnostic-runtime"
-import {
 	dumpExtensionSideHostOwnershipDiagnostic,
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 } from "@/sdk/host-ownership-diagnostic-runtime"
 import {
+	dumpExtensionSidePostTerminalAuthorityDiagnostic,
+	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
+} from "@/sdk/post-terminal-authority-diagnostic-runtime"
+import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
 } from "@/sdk/turn-state-writer-provenance-runtime"
+import { emitCaptureAttach } from "@/sdk/v2-capture"
 import { Logger } from "@/shared/services/Logger"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
@@ -78,6 +79,14 @@ export async function reportRolloutActivation(input: RolloutBundleActivation): P
 // for all-platform should be registered in common.ts.
 export async function activate(context: vscode.ExtensionContext) {
 	const activationStartTime = performance.now()
+
+	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+	// Fire the capture.attach.v1 marker FIRST so the capture tool
+	// can independently prove the collector sees the live extension
+	// host, independent of any subsequent approval transaction.
+	// The call is a no-op when CLINEMM_CAPTURE_V2_PATH is unset
+	// (DEFAULT_OFF preserved).
+	emitCaptureAttach()
 
 	// 1. Set up HostProvider for VSCode
 	// IMPORTANT: This must be done before any service can be registered

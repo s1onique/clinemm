@@ -213,6 +213,119 @@ write_log(FIXTURE / "after-split",  "after",  split_log_b)
 # -----------------------------------------------------------------------------
 # Already covered by reusing FIXTURE/before/ in verify-negative.py.
 
+# -----------------------------------------------------------------------------
+# ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+# Attachment-marker fixture: a capture.attach.v1 record is present
+# in the after-phase diagnostics, alongside one complete approval
+# transaction. The verify-attach.py script asserts
+# instrumentationAttachmentBound=true.
+# -----------------------------------------------------------------------------
+attach_session = {
+    "session_id": "session-attach-A",
+    "status": "running",
+    "source": "vscode",
+    "interactive": True,
+    "mode": "act",
+    "provider": "openrouter",
+    "model": "anthropic/claude-sonnet-5",
+    "started_at": "2026-08-28T00:00:00.000Z",
+    "updated_at": "2026-08-28T00:01:00.000Z",
+}
+attach_log_a: list[dict] = []
+attach_log_b = attach_log_a + [
+    {
+        "ts": "2026-08-28T00:00:00.000Z",
+        "codePoint": "capture.attach.v1",
+        "scope": "process",
+        "correlationId": "no-request",
+        "commandDigest": "no-input",
+        "data": {
+            "runtimeInstanceId": "01HEXY_FIXTURE_RUNTIME",
+            "clineVersion": "4.1.10",
+            "repoHead": "snake-only-A-fixture",
+            "emittedAt": "2026-08-28T00:00:00.000Z",
+        },
+    },
+    {
+        "ts": "2026-08-28T00:00:00.100Z",
+        "marker": "approval.entry.v2",
+        "toolName": "editor",
+        "correlationId": "corr-attach",
+        "session_id": "session-attach-A",
+        "autoApproveAll": False,
+        "shouldAutoApproveTool": False,
+    },
+    {
+        "ts": "2026-08-28T00:00:00.400Z",
+        "marker": "approval.terminal.v2",
+        "toolName": "editor",
+        "correlationId": "corr-attach",
+        "session_id": "session-attach-A",
+        "verdict": "approve",
+    },
+]
+for sub in ("before-attach", "after-attach"):
+    write_session(FIXTURE / sub, attach_session, "session-attach-A")
+write_log(FIXTURE / "before-attach", "before", attach_log_a)
+write_log(FIXTURE / "after-attach",  "after",  attach_log_b)
+
+# -----------------------------------------------------------------------------
+# Zero-event-with-attachment fixture: capture.attach.v1 is present
+# in the after-phase diagnostics, but no approval entry/terminal
+# events were emitted during the capture window. This is the
+# control case for Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED.
+# -----------------------------------------------------------------------------
+zero_session = attach_session.copy()
+zero_session["session_id"] = "session-zero-A"
+zero_log_a: list[dict] = []
+zero_log_b = zero_log_a + [
+    {
+        "ts": "2026-08-28T00:00:00.000Z",
+        "codePoint": "capture.attach.v1",
+        "scope": "process",
+        "correlationId": "no-request",
+        "commandDigest": "no-input",
+        "data": {
+            "runtimeInstanceId": "01HEXY_FIXTURE_ZERO",
+            "clineVersion": "4.1.10",
+            "repoHead": "snake-only-A-fixture",
+            "emittedAt": "2026-08-28T00:00:00.000Z",
+        },
+    },
+]
+for sub in ("before-zero", "after-zero"):
+    write_session(FIXTURE / sub, zero_session, "session-zero-A")
+write_log(FIXTURE / "before-zero", "before", zero_log_a)
+write_log(FIXTURE / "after-zero",  "after",  zero_log_b)
+
+# -----------------------------------------------------------------------------
+# Stale-source-mismatch fixture: capture.attach.v1 carries a
+# `repoHead` value that DIFFERS from the repo's current HEAD.
+# This proves the runtimeSourceDrift detection is not a no-op.
+# -----------------------------------------------------------------------------
+drift_session = attach_session.copy()
+drift_session["session_id"] = "session-drift-A"
+drift_log_a: list[dict] = []
+drift_log_b = drift_log_a + [
+    {
+        "ts": "2026-08-28T00:00:00.000Z",
+        "codePoint": "capture.attach.v1",
+        "scope": "process",
+        "correlationId": "no-request",
+        "commandDigest": "no-input",
+        "data": {
+            "runtimeInstanceId": "01HEXY_FIXTURE_DRIFT",
+            "clineVersion": "4.1.10",
+            "repoHead": "deadbeef00000000000000000000000000000000",
+            "emittedAt": "2026-08-28T00:00:00.000Z",
+        },
+    },
+]
+for sub in ("before-drift", "after-drift"):
+    write_session(FIXTURE / sub, drift_session, "session-drift-A")
+write_log(FIXTURE / "before-drift", "before", drift_log_a)
+write_log(FIXTURE / "after-drift",  "after",  drift_log_b)
+
 print(f"FIXTURE={FIXTURE}")
 print(f"HAPPY     BEFORE_ROOT={FIXTURE / 'before'}")
 print(f"HAPPY     AFTER_ROOT ={FIXTURE / 'after'}")
@@ -222,3 +335,9 @@ print(f"AMBIGUITY BEFORE_ROOT={FIXTURE / 'before-ambiguity'}")
 print(f"AMBIGUITY AFTER_ROOT ={FIXTURE / 'after-ambiguity'}")
 print(f"SPLIT     BEFORE_ROOT={FIXTURE / 'before-split'}")
 print(f"SPLIT     AFTER_ROOT ={FIXTURE / 'after-split'}")
+print(f"ATTACH    BEFORE_ROOT={FIXTURE / 'before-attach'}")
+print(f"ATTACH    AFTER_ROOT ={FIXTURE / 'after-attach'}")
+print(f"ZERO      BEFORE_ROOT={FIXTURE / 'before-zero'}")
+print(f"ZERO      AFTER_ROOT ={FIXTURE / 'after-zero'}")
+print(f"DRIFT     BEFORE_ROOT={FIXTURE / 'before-drift'}")
+print(f"DRIFT     AFTER_ROOT ={FIXTURE / 'after-drift'}")

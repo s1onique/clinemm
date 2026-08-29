@@ -3,6 +3,7 @@
  *
  * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
  * ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01-CORRECTION01
+ * ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
  *
  * Observational-only: emits one JSONL record per code point to the path
  * configured by the `CLINEMM_CAPTURE_V2_PATH` environment variable.
@@ -44,6 +45,17 @@
  *   commandRisk.structured.v2          (request scope)
  *   hostDecision.compose.v2            (request scope)
  *   approval.terminal.v2               (request scope; exactly once)
+ *
+ *   capture.attach.v1                  (PROCESS scope — fires once
+ *                                       per extension-host startup
+ *                                       when CLINEMM_CAPTURE_V2_PATH
+ *                                       is set; carries
+ *                                       runtimeInstanceId +
+ *                                       clineVersion + repoHead
+ *                                       so the capture tool can
+ *                                       independently prove the
+ *                                       current runtime is bound to
+ *                                       the collector)
  *
  * If the helper returns null we cannot distinguish "binary missing"
  * from "spawn failed" from "validate failed" with the existing public
@@ -256,4 +268,84 @@ export function isV2CaptureEnabled(): boolean {
  */
 export function __resetV2CaptureForTests(): void {
 	cachedPath = undefined
+}
+
+/**
+ * ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+ *
+ * Emit one `capture.attach.v1` record to prove the instrumented
+ * runtime path is active in the collector's view. This is the
+ * attachment marker the capture tool uses to distinguish
+ * "no approval events because no transaction ran" (Z1) from
+ * "no approval events because the collector isn't bound to the
+ * running extension" (Z3).
+ *
+ * The function is best-effort and never throws. When the env flag
+ * is unset the call is a no-op (DEFAULT_OFF preserved).
+ *
+ * Carried identity (bounded, non-sensitive):
+ *   - runtimeInstanceId   : short ULID, regenerated every call but
+ *                           the operator is expected to call this
+ *                           at most once per extension-host startup.
+ *   - clineVersion        : `clineVersion` from package.json when
+ *                           importable, else "UNAVAILABLE".
+ *   - repoHead            : output of `git rev-parse HEAD` if a
+ *                           `.git` is reachable from
+ *                           `process.cwd()`, else "UNAVAILABLE".
+ *
+ * No command text, no environment, no cwd contents, no API keys.
+ */
+export function emitCaptureAttach(): void {
+	const path = resolveCapturePath()
+	if (path === null) return
+
+	let clineVersion = "UNAVAILABLE"
+	try {
+		// Resolve at call time so a version-bumped package.json is
+		// picked up after the next extension-host restart (no
+		// build-time baking).
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		const pkg = require("../../package.json") as { version?: string }
+		if (typeof pkg?.version === "string" && pkg.version.length > 0) {
+			clineVersion = pkg.version
+		}
+	} catch {
+		clineVersion = "UNAVAILABLE"
+	}
+
+	let repoHead = "UNAVAILABLE"
+	try {
+		// Synchronous exec is acceptable here because this fires
+		// at most once per extension-host startup; failure must
+		// never propagate.
+		const { execFileSync } = require("node:child_process") as typeof import("node:child_process")
+		repoHead = execFileSync("git", ["rev-parse", "HEAD"], {
+			encoding: "utf8",
+			timeout: 1000,
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim()
+	} catch {
+		repoHead = "UNAVAILABLE"
+	}
+
+	const record: V2CaptureRecord = {
+		correlationId: "no-request",
+		commandDigest: "no-input",
+		codePoint: "capture.attach.v1",
+		scope: "process",
+		data: {
+			runtimeInstanceId: newV2CorrelationId(),
+			clineVersion,
+			repoHead,
+			emittedAt: new Date().toISOString(),
+		},
+	}
+
+	let line: string
+	try {
+		line = JSON.stringify(record)
+	} catch {
+		return
+	}
+	safeAppend(path, line)
 }

@@ -12,12 +12,13 @@
  * of one block.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	__resetV2CaptureForTests,
+	emitCaptureAttach,
 	emitV2Capture,
 	getV2CaptureContext,
 	isV2CaptureEnabled,
@@ -255,5 +256,53 @@ describe("ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
 		})
 		// After the context scope ends, ambient lookup returns undefined.
 		expect(getV2CaptureContext()).toBeUndefined()
+	})
+
+	// ----------------------------------------------------------------
+	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+	// capture.attach.v1 — diagnostic attachment marker.
+	// ----------------------------------------------------------------
+
+	it("emitCaptureAttach writes one process-scope capture.attach.v1 record", () => {
+		expect(isV2CaptureEnabled()).toBe(true)
+		emitCaptureAttach()
+		const contents = readFileSync(capturePath, "utf8").trim().split("\n")
+		expect(contents).toHaveLength(1)
+		const rec = JSON.parse(contents[0])
+		expect(rec.codePoint).toBe("capture.attach.v1")
+		expect(rec.scope).toBe("process")
+		expect(rec.correlationId).toBe("no-request")
+		expect(rec.commandDigest).toBe("no-input")
+		// runtimeInstanceId is a non-empty string (ULID tail).
+		expect(typeof rec.data.runtimeInstanceId).toBe("string")
+		expect(rec.data.runtimeInstanceId.length).toBeGreaterThan(0)
+		// clineVersion must be present — either a real version or
+		// the literal UNAVAILABLE marker (never missing).
+		expect(typeof rec.data.clineVersion).toBe("string")
+		expect(rec.data.clineVersion.length).toBeGreaterThan(0)
+		// repoHead must be present — either a 40-char sha or
+		// the literal UNAVAILABLE marker (never missing).
+		expect(typeof rec.data.repoHead).toBe("string")
+		expect(rec.data.repoHead.length).toBeGreaterThan(0)
+		expect(typeof rec.data.emittedAt).toBe("string")
+	})
+
+	it("emitCaptureAttach never logs raw command text or PII", () => {
+		const secretToken = "PII-SECRET-TOKEN-67890"
+		// Even if the caller context somehow had a token, the
+		// attachment record must not leak it: it carries only the
+		// bounded identity fields above.
+		emitCaptureAttach()
+		const contents = readFileSync(capturePath, "utf8")
+		expect(contents).not.toContain(secretToken)
+		expect(contents).not.toContain("PII-SECRET")
+	})
+
+	it("emitCaptureAttach is a no-op when env flag is unset", () => {
+		delete process.env.CLINEMM_CAPTURE_V2_PATH
+		__resetV2CaptureForTests()
+		// Should NOT throw, and should NOT create a file.
+		expect(() => emitCaptureAttach()).not.toThrow()
+		expect(existsSync(capturePath)).toBe(false)
 	})
 })

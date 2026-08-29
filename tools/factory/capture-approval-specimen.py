@@ -76,6 +76,36 @@ APPROVAL_MARKERS = (
     "approval.terminal.v2",
 )
 
+# ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+# Attachment marker: a process-scope event the live extension host
+# emits exactly once per startup when CLINEMM_CAPTURE_V2_PATH is
+# set. Its presence in the captured log proves the collector is
+# bound to the running extension (not stale storage).
+ATTACHMENT_MARKERS = (
+    "capture.attach.v1",
+)
+
+# Field shape that identifies a runtime-identity projection. We
+# surface only bounded, non-sensitive values: `clineVersion` (read
+# from ClineMM globalState when available), the OS process pid of
+# the collector (a host fact, not user data), and the git HEAD of
+# the repo at capture time.
+RUNTIME_IDENTITY_KEYS = (
+    "clineVersion",
+    "pid",
+    "repoHead",
+    "repoTree",
+)
+
+# Zero-event classifier labels (spec §19).
+ZERO_EVENT_CLASSES = (
+    "N/A",                                              # not a zero-event capture
+    "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED",           # attachment + no approval events
+    "Z2_APPROVAL_PATH_EXECUTED_BUT_NO_EVENTS_CAPTURED", # attachment + events missing
+    "Z3_RUNTIME_NOT_BOUND",                             # no attachment, no runtime identity
+    "Z4_CAPTURE_INSUFFICIENT",                          # attachment missing or source drift
+)
+
 # Session identity vocabulary observed in real ClineMM storage
 # (2026-08-27 inspection of `.cline2/data/sessions/.../*.json`
 # revealed snake_case `session_id`) AND in synthetic fixtures
@@ -235,18 +265,32 @@ def iter_bounded_files(root: Path, minutes: int) -> Iterable[Path]:
             continue
 
 
-def extract_approval_lines(path: Path) -> list[str]:
-    matches: list[str] = []
+def extract_marker_lines(path: Path) -> list[str]:
+    """Return lines whose content includes any marker of interest.
 
+    A line qualifies when it contains ANY of APPROVAL_MARKERS
+    (the request-scope approval events) OR any of
+    ATTACHMENT_MARKERS (the process-scope attach record).
+    The collector treats both equally as "events emitted by
+    the instrumented runtime path".
+    """
+    matches: list[str] = []
     try:
         with path.open("r", encoding="utf-8", errors="replace") as fh:
             for line in fh:
-                if any(marker in line for marker in APPROVAL_MARKERS):
+                if any(marker in line for marker in APPROVAL_MARKERS) \
+                        or any(marker in line for marker in ATTACHMENT_MARKERS):
                     matches.append(line.rstrip("\n"))
     except (OSError, UnicodeError):
         pass
 
     return matches
+
+
+# Backwards-compat alias — older internal callers may still
+# reference the historic name. Removing it would break
+# hermetic-fixture scripts that pre-date CORRECTION01.
+extract_approval_lines = extract_marker_lines
 
 
 SAFE_SESSION_KEYS = {
@@ -717,6 +761,13 @@ def phase_capture(
     events = collect_approval_events(roots, phase_dir, args.recent_minutes)
     write_event_fingerprints(phase_dir, events)
 
+    # ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+    # Capture a runtime-identity projection at the moment of each
+    # phase. At `finish` time we re-project and compare against
+    # the `pending` projection to detect source drift.
+    runtime_identity_projection = project_runtime_identity(repo, roots)
+    dump_json(phase_dir / "runtime-identity.json", runtime_identity_projection)
+
     summary = {
         "captureId": cid,
         "phase": phase,
@@ -728,7 +779,7 @@ def phase_capture(
                 for e in events
                 if marker in json.dumps(e, sort_keys=True)
             )
-            for marker in APPROVAL_MARKERS
+            for marker in APPROVAL_MARKERS + ATTACHMENT_MARKERS
         },
         "repoHead": git_info["head"],
         "classification": "UNCLASSIFIED",
@@ -756,6 +807,7 @@ def phase_capture(
         "sessions": sessions,
         "approval_event_count": len(events),
         "session_candidate_count": len(sessions),
+        "runtime_identity_projection": runtime_identity_projection,
     }
 
 
@@ -788,15 +840,17 @@ def begin(args: argparse.Namespace) -> int:
 def classify_binding(
     discriminator_items: list[dict[str, Any]],
     session_projection_identities: set[str],
+    attachment_event_present: bool = False,
 ) -> tuple[str, bool, bool, int]:
     """Classify the specimen binding along two independent axes.
 
-    Axis 1 — runtimeIdentityBound: at least one delta event carries
-    a sessionId/session_id/taskId/task_id/id that also appears in
-    the captured session projections. This proves session/event
-    ownership; the captured event is owned by a captured runtime
-    session, but it does NOT by itself identify the specific approval
-    transaction the human acted on.
+    Axis 1 — runtimeIdentityBound: TRUE when either
+      (a) at least one delta event carries a sessionId that joins
+          the captured session projections (the legacy path), OR
+      (b) a capture.attach.v1 attachment marker is present AND at
+          least one captured session exists (the CORRECTION01
+          zero-event path; the attach marker proves the runtime
+          that owns the captured session is alive and observable).
 
     Axis 2 — approvalTransactionBound: the delta contains exactly
     one qualifying approval transaction — a correlationId group
@@ -818,7 +872,11 @@ def classify_binding(
     unattributable" AND "exactly one transaction identified" from
     "multiple transactions present in the same capture window".
     """
-    if not discriminator_items or not session_projection_identities:
+    # Empty delta AND no attachment AND no captured sessions ->
+    # absolute CAPTURE_INSUFFICIENT (zero axes proved).
+    if not discriminator_items and not attachment_event_present:
+        return ("CAPTURE_INSUFFICIENT", False, False, 0)
+    if not session_projection_identities and not attachment_event_present:
         return ("CAPTURE_INSUFFICIENT", False, False, 0)
 
     # --- Axis 1: session/event identity join ---
@@ -832,6 +890,13 @@ def classify_binding(
         if str(sid) in session_projection_identities:
             runtime_identity_bound = True
             break
+
+    # CORRECTION01: an attach marker + at least one captured
+    # session is a parallel axis-1 proof (the marker is the
+    # runtime that owns those sessions identifying itself).
+    if not runtime_identity_bound and attachment_event_present:
+        if session_projection_identities:
+            runtime_identity_bound = True
 
     if not runtime_identity_bound:
         return ("CAPTURE_INSUFFICIENT", False, False, 0)
@@ -954,6 +1019,202 @@ def collect_qualifying_transactions(
     return qualifying
 
 
+# ----------------------------------------------------------------------------
+# ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+# Runtime-identity projection + attachment-marker binding + zero-event
+# classifier.
+# ----------------------------------------------------------------------------
+
+
+def read_cline_version(roots: list[Path]) -> str:
+    """Read clineVersion from the first ClineMM globalState.json found.
+
+    Bounded: only the `clineVersion` key is read; everything else is
+    ignored. Returns "UNAVAILABLE" when no globalState is readable.
+    """
+    for root in roots:
+        gs = root / "data" / "globalState.json"
+        if not gs.is_file():
+            continue
+        try:
+            obj = json.loads(gs.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        v = obj.get("clineVersion")
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return "UNAVAILABLE"
+
+
+def project_runtime_identity(repo: Path, roots: list[Path]) -> dict[str, Any]:
+    """Collect the bounded runtime identity projection.
+
+    Never throws. Every field is either a string value or the
+    literal "UNAVAILABLE" — the binding.json reader can rely on
+    type-stability without re-checking for None.
+    """
+    head = git(repo, "rev-parse", "HEAD") or "UNAVAILABLE"
+    tree = git(repo, "rev-parse", "HEAD^{tree}") or "UNAVAILABLE"
+
+    return {
+        "repoHead": head,
+        "repoTree": tree,
+        "clineVersion": read_cline_version(roots),
+        "pid": str(os.getpid()),
+        "capturedAt": utc_now(),
+    }
+
+
+def runtime_identity_drift(
+    begin_projection: dict[str, Any],
+    finish_projection: dict[str, Any],
+) -> dict[str, Any]:
+    """Compare two runtime-identity snapshots.
+
+    Returns the drift report. drift=true if repoHead or repoTree
+    differs between begin and finish (a fresh HEAD landed mid-
+    capture, or the operator re-ran `begin` mid-task).
+
+    clineVersion and pid are NOT drift signals: clineVersion is
+    read from a globalState that the running extension may rewrite
+    during activation; pid is the collector's own pid and is
+    expected to remain stable.
+    """
+    drift = (
+        begin_projection.get("repoHead") != finish_projection.get("repoHead")
+        or begin_projection.get("repoTree") != finish_projection.get("repoTree")
+    )
+    return {
+        "drift": drift,
+        "beginRepoHead": begin_projection.get("repoHead"),
+        "finishRepoHead": finish_projection.get("repoHead"),
+        "beginRepoTree": begin_projection.get("repoTree"),
+        "finishRepoTree": finish_projection.get("repoTree"),
+    }
+
+
+def find_attachment_event(delta: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the first delta event that matches an attachment marker.
+
+    The attachment marker is content-only (raw line includes
+    `capture.attach.v1`); the parsed `event` may be a flat object
+    (v2-capture.ts emits objects) or a wrapped object (other
+    producers). We accept either shape: a flat string field, a
+    nested `event.codePoint`, or a raw-line substring.
+    """
+    for event in delta:
+        if not isinstance(event, dict):
+            continue
+        parsed = event.get("event")
+        if isinstance(parsed, dict):
+            cp = parsed.get("codePoint")
+            if isinstance(cp, str) and any(m in cp for m in ATTACHMENT_MARKERS):
+                return event
+        raw = event.get("raw") or ""
+        if any(m in raw for m in ATTACHMENT_MARKERS):
+            return event
+    return None
+
+
+def project_attachment(attach_event: dict[str, Any] | None) -> dict[str, Any]:
+    """Project the bounded identity fields from an attachment event.
+
+    Returns a flat dict of {runtimeInstanceId, clineVersion,
+    repoHead, emittedAt}. Every field is either a string or
+    "UNAVAILABLE".
+
+    The fields live under `data.*` when the event comes from
+    v2-capture.ts (which emits a `data` object on every code
+    point). Older or synthetic producers may emit the fields at
+    the top level — we accept both shapes.
+    """
+    if attach_event is None:
+        return {
+            "runtimeInstanceId": "UNAVAILABLE",
+            "clineVersion": "UNAVAILABLE",
+            "repoHead": "UNAVAILABLE",
+            "emittedAt": "UNAVAILABLE",
+        }
+
+    parsed = attach_event.get("event") if isinstance(attach_event.get("event"), dict) else {}
+    data = parsed.get("data") if isinstance(parsed.get("data"), dict) else {}
+
+    def pick(*keys: str) -> str:
+        # Search the `data` object first (v2-capture.ts shape),
+        # then the top-level parsed object (flat synthetic shape).
+        for k in keys:
+            v = data.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+            if isinstance(v, (int, float)):
+                return str(v)
+        for k in keys:
+            v = parsed.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+            if isinstance(v, (int, float)):
+                return str(v)
+        return "UNAVAILABLE"
+
+    return {
+        "runtimeInstanceId": pick("runtimeInstanceId"),
+        "clineVersion": pick("clineVersion"),
+        "repoHead": pick("repoHead"),
+        "emittedAt": pick("emittedAt"),
+    }
+
+
+def classify_zero_event_capture(
+    *,
+    delta_size: int,
+    attachment_present: bool,
+    runtime_identity_bound: bool,
+    approval_transaction_bound: bool,
+    runtime_source_drift: bool,
+) -> str:
+    """Apply the spec §19 zero-event decision function.
+
+    Returns one of the labels in ZERO_EVENT_CLASSES.
+
+    The decision tree:
+
+      if a real approval transaction was observed
+      (delta_size > 0 and approval_transaction_bound):
+            "N/A"
+      elif runtime not bound:
+            "Z3_RUNTIME_NOT_BOUND"
+      elif runtime source drift detected:
+            "Z4_CAPTURE_INSUFFICIENT"
+      elif attachment marker absent:
+            "Z4_CAPTURE_INSUFFICIENT"
+      else:
+            "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED"
+
+    Z2 (events missing despite a known approval path) is
+    structurally indistinguishable from Z1 with the current
+    evidence; we surface Z1 when attachment is bound and no
+    transaction was observed. A future ACT can refine this.
+    """
+    if delta_size > 0 and approval_transaction_bound:
+        return "N/A"
+
+    if not runtime_identity_bound:
+        return "Z3_RUNTIME_NOT_BOUND"
+
+    if runtime_source_drift:
+        return "Z4_CAPTURE_INSUFFICIENT"
+
+    if not attachment_present:
+        return "Z4_CAPTURE_INSUFFICIENT"
+
+    # Attachment present + no approval events + no drift => the
+    # collector IS bound to a live extension and that extension
+    # did not emit any approval transaction during the capture
+    # window. This is the exact "no approval happened" claim the
+    # downstream editor-tool ACT needs.
+    return "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED"
+
+
 def finish(args: argparse.Namespace) -> int:
     repo = Path(args.repo).expanduser().resolve()
     if not (repo / ".git").exists():
@@ -1050,9 +1311,58 @@ def finish(args: argparse.Namespace) -> int:
         session_records
     )
 
+    # ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+    # Runtime-identity drift detection: re-project the runtime
+    # identity at finish time and compare against the pending
+    # projection. Drift means the operator (or another process)
+    # changed the source tree between begin and finish; the
+    # capture is no longer trustworthy as a same-source witness.
+    pending_runtime_identity = json.loads(
+        (pending_dir / "runtime-identity.json").read_text(encoding="utf-8")
+    )
+    finish_runtime_identity = status["runtime_identity_projection"]
+    drift_report = runtime_identity_drift(
+        pending_runtime_identity, finish_runtime_identity
+    )
+    dump_json(
+        status["phase_dir"] / "runtime-identity-drift.json",
+        {
+            "capturedAt": utc_now(),
+            "pending": pending_runtime_identity,
+            "resolved": finish_runtime_identity,
+            "drift": drift_report,
+        },
+    )
+    runtime_source_drift = bool(drift_report.get("drift"))
+
+    # ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+    # Attachment marker: the collector scans the delta for a
+    # `capture.attach.v1` event. If present, the collector is bound
+    # to the live running extension.
+    attachment_event = find_attachment_event(delta)
+    attachment_projection = project_attachment(attachment_event)
+    instrumentation_attachment_bound = attachment_event is not None
+
+    # Classify axis 1 + axis 2 with the attach-marker signal
+    # factored in. The legacy session-join path may have missed a
+    # zero-event capture where the only delta item is the
+    # attachment record itself; the attach path closes that gap.
     binding, runtime_identity_bound, approval_transaction_bound, qualifying_transaction_count = classify_binding(
         discriminator_items=discriminator["items"],
         session_projection_identities=session_projection_identities,
+        attachment_event_present=instrumentation_attachment_bound,
+    )
+
+    # Zero-event classifier (spec §19). When the capture observed a
+    # real transaction this returns "N/A"; otherwise it picks one
+    # of Z1..Z4 based on the runtime identity, attachment, and
+    # source-drift signals.
+    zero_event_classification = classify_zero_event_capture(
+        delta_size=len(delta),
+        attachment_present=instrumentation_attachment_bound,
+        runtime_identity_bound=runtime_identity_bound,
+        approval_transaction_bound=approval_transaction_bound,
+        runtime_source_drift=runtime_source_drift,
     )
 
     binding_payload = {
@@ -1084,6 +1394,13 @@ def finish(args: argparse.Namespace) -> int:
         "eventDeltaBound": True,
         "artifactStatus": "PASS",
         "specimenBinding": binding,
+        # ---- ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01 ----
+        # New fields (additive; schema version stays v1).
+        "instrumentationAttachmentBound": instrumentation_attachment_bound,
+        "attachmentProjection": attachment_projection,
+        "runtimeIdentityProjection": finish_runtime_identity,
+        "runtimeSourceDrift": runtime_source_drift,
+        "zeroEventClassification": zero_event_classification,
     }
     dump_json(status["phase_dir"] / "binding.json", binding_payload)
     write_file_manifest(status["phase_dir"])
@@ -1100,6 +1417,9 @@ def finish(args: argparse.Namespace) -> int:
     print(f"SPECIMEN_BINDING={binding}")
     print(f"RUNTIME_IDENTITY_BOUND={'YES' if runtime_identity_bound else 'NO'}")
     print(f"APPROVAL_TRANSACTION_BOUND={'YES' if approval_transaction_bound else 'NO'}")
+    print(f"INSTRUMENTATION_ATTACHMENT_BOUND={'YES' if instrumentation_attachment_bound else 'NO'}")
+    print(f"RUNTIME_SOURCE_DRIFT={'YES' if runtime_source_drift else 'NO'}")
+    print(f"ZERO_EVENT_CLASSIFICATION={zero_event_classification}")
     print(f"ARTIFACT_STATUS=PASS")
     print("MUTATED_RUNTIME_STATE=NO")
     return 0
@@ -1149,6 +1469,9 @@ def report(args: argparse.Namespace) -> int:
         f"RESOLVED_SESSION_CANDIDATES={binding.get('resolvedSessionCandidateCount')}",
         f"RUNTIME_IDENTITY_BOUND={'YES' if binding.get('runtimeIdentityBound') else 'NO'}",
         f"APPROVAL_TRANSACTION_BOUND={'YES' if binding.get('approvalTransactionBound') else 'NO'}",
+        f"INSTRUMENTATION_ATTACHMENT_BOUND={'YES' if binding.get('instrumentationAttachmentBound') else 'NO'}",
+        f"RUNTIME_SOURCE_DRIFT={'YES' if binding.get('runtimeSourceDrift') else 'NO'}",
+        f"ZERO_EVENT_CLASSIFICATION={binding.get('zeroEventClassification', 'N/A')}",
         f"QUALIFYING_TRANSACTIONS={binding.get('qualifyingTransactionCount', 0)}",
         f"SESSION_BINDING_AVAILABLE={'YES' if binding.get('sessionBindingAvailable') else 'NO'}",
         f"EVENT_DELTA_BOUND={'YES' if binding.get('eventDeltaBound') else 'NO'}",

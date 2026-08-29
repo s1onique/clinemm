@@ -1,0 +1,14 @@
+{
+  "act": "ACT-CLINEMM-SYNTHETIC-LIVE",
+  "approvalActionPerformedByTool": false,
+  "captureId": "20260829T220712Z-c7644574",
+  "capturedAt": "2026-08-29T22:07:12.298508Z",
+  "dataRoots": [
+    "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.synthetic-live-capture/after"
+  ],
+  "phase": "resolved",
+  "readOnlyIntent": true,
+  "recentMinutes": 60,
+  "repo": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "schema": "cline-approval-specimen-capture/v2"
+}

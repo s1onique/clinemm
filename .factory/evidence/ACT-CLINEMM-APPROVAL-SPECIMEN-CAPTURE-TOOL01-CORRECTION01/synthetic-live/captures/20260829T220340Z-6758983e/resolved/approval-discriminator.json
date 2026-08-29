@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-08-29T22:03:40.242720Z",
+  "deltaSize": 1,
+  "items": [
+    {
+      "approvalEntryObserved": false,
+      "approvalTerminalObserved": false,
+      "correlationId": "no-request",
+      "policyAutoApprove": null,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": null,
+      "shouldAutoApproveTool": null,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.synthetic-live-capture/after/diagnostics/after.jsonl",
+      "toolName": null
+    }
+  ],
+  "schema": "cline-approval-discriminator/v1"
+}

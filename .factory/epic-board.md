@@ -15,7 +15,7 @@ One `NEXT` per lane, named explicitly so the lanes do not collapse into a false 
 
 | Lane | Pri | Work | Detail |
 |---|---|---|---|
-| Approval / editor-tool | P1 | `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` (recon — §3 live specimen bound to `CAPTURE_INSUFFICIENT` per `specimen-20260827-command-approval01.json`; toolchain hardened under `ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01`) | [`approval-protection.md`](./epics/approval-protection.md) |
+| Approval / editor-tool | P1 | `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` (recon — §3 live specimen deferred to next ACT boundary; capture toolchain now passes runtime-identity + attachment-proof per `ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01` sixth cycle; evidence at `.factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/`) | [`approval-protection.md`](./epics/approval-protection.md) |
 | Approval / classic | P1 | `ACT-CLINEMM-CLASSIC-PROTECTION-RECON01` (unblocked post-`SEATBELT-DEFAULT-ON01`) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) · [`approval-protection.md`](./epics/approval-protection.md) |
 | Host substrate | P0 | `HOST-TEST RUNNER` (host-only-behaviour dependency for both approval lanes; `HOST_REQUIRED` modifier per contract §2) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
 | TaskHeader projection | P1 | **CLOSED** (migration at `149fb131e` + THCP11 at `8a7e53742` already landed) | [`task-presentation.md`](./epics/task-presentation.md) |
@@ -167,6 +167,7 @@ Short transition notes for closures that materially change the live state. Detai
 | Main consolidation | CLOSED at `d844177bc` (canonical `main` carries the consolidated state) | [`product-config-branding.md`](./epics/product-config-branding.md) |
 | Cost display truth | CLOSED (`ACT-CLINEMM-COST-DISPLAY-TRUTH01` + 2 corrections — canonical cost source contract) | [`product-config-branding.md`](./epics/product-config-branding.md) |
 | Seatbelt SSH credential authority (implementation) | CLOSED (`ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01` → `PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1`; HOST_TEST_HEAD `f6b6697e5` host-kernel PASS_REAL; Phase G OBSERVED SOURCE_UNBOUND) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
+| Approval specimen capture tool (correction 01) | CLOSED (`ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01` sixth cycle → `PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1`; runtime identity + attachment marker + zero-event classifier Z1/Z3/Z4 landed; 9/9 hermetic verify scripts green + 16/16 vitest green + synthetic-live qualifying against real ~/.cline2 + real repo HEAD; live VS Code extension host qualification deferred to next ACT boundary per §23) | [`approval-protection.md`](./epics/approval-protection.md) |
 ## Maintenance contract
 
 ### Index ownership (per [`_index-contract.md`](./epics/_index-contract.md) §1)
