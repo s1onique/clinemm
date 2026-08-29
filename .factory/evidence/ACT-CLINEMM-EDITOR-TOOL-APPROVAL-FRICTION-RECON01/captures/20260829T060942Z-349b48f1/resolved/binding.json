@@ -1,0 +1,21 @@
+{
+  "act": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+  "approvalTransactionBound": false,
+  "artifactStatus": "PASS",
+  "captureId": "20260829T060942Z-349b48f1",
+  "capturedAt": "2026-08-29T06:10:34.647108Z",
+  "deltaSize": 0,
+  "eventDeltaBound": true,
+  "humanChronologyBound": true,
+  "pendingApprovalEventCount": 0,
+  "pendingDir": ".factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260829T060942Z-349b48f1/pending",
+  "pendingSessionCandidateCount": 0,
+  "qualifyingTransactionCount": 0,
+  "resolvedApprovalEventCount": 0,
+  "resolvedDir": ".factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260829T060942Z-349b48f1/resolved",
+  "resolvedSessionCandidateCount": 5,
+  "runtimeIdentityBound": false,
+  "schema": "cline-approval-specimen-binding/v1",
+  "sessionBindingAvailable": true,
+  "specimenBinding": "CAPTURE_INSUFFICIENT"
+}

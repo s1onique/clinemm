@@ -1,0 +1,13 @@
+REPO=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD=911d0217772a93e464143491daa5fe530adbc26d
+TREE=442e6845209310fd1b1a468f98978539cbeec478
+BRANCH=act-clinemm-seatbelt-ssh-agent-authority-recon01
+--- STATUS ---
+M .factory/epic-board.md
+ M .factory/epics/safe-yolo-seatbelt.md
+ M .gitignore
+?? .factory/acts/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01.md
+?? .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260829T060942Z-349b48f1/
+?? .factory/evidence/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01/
+--- STASH ---
+stash@{0}: On main: c2-green-and-c2-p1-delta

@@ -1,0 +1,106 @@
+[
+  {
+    "mtime": "2026-08-29T05:00:40.008784+00:00",
+    "projection": {
+      "enable_spawn": false,
+      "enable_teams": false,
+      "enable_tools": true,
+      "ended_at": "2026-08-29T05:00:40.007Z",
+      "exit_code": 0,
+      "interactive": true,
+      "matchedByShape": true,
+      "model": "MiniMax-M3",
+      "provider": "minimax",
+      "session_id": "1787914767103_csvb7",
+      "source": "vscode",
+      "started_at": "2026-08-28T10:59:27.110Z",
+      "status": "cancelled"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/.cline",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/.cline/data/sessions/1787914767103_csvb7/1787914767103_csvb7.json"
+  },
+  {
+    "mtime": "2026-08-29T05:10:45.543634+00:00",
+    "projection": {
+      "enable_spawn": false,
+      "enable_teams": false,
+      "enable_tools": true,
+      "ended_at": "2026-08-29T05:10:45.543Z",
+      "exit_code": 0,
+      "interactive": true,
+      "matchedByShape": true,
+      "model": "MiniMax-M3",
+      "provider": "minimax",
+      "session_id": "1787979915123_smjo0",
+      "source": "vscode",
+      "started_at": "2026-08-29T05:05:15.124Z",
+      "status": "cancelled"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/.cline",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/.cline/data/sessions/1787979915123_smjo0/1787979915123_smjo0.json"
+  },
+  {
+    "mtime": "2026-08-29T05:15:33.533847+00:00",
+    "projection": {
+      "enable_spawn": false,
+      "enable_teams": false,
+      "enable_tools": true,
+      "ended_at": "2026-08-29T05:15:33.533Z",
+      "exit_code": 0,
+      "interactive": true,
+      "matchedByShape": true,
+      "model": "MiniMax-M3",
+      "provider": "minimax",
+      "session_id": "1787980494193_jyrlj",
+      "source": "vscode",
+      "started_at": "2026-08-29T05:14:54.197Z",
+      "status": "completed"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/.cline",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/.cline/data/sessions/1787980494193_jyrlj/1787980494193_jyrlj.json"
+  },
+  {
+    "mtime": "2026-08-29T04:57:45.874712+00:00",
+    "projection": {
+      "enable_spawn": false,
+      "enable_teams": false,
+      "enable_tools": true,
+      "ended_at": "2026-08-29T04:57:45.874Z",
+      "exit_code": 0,
+      "interactive": true,
+      "matchedByShape": true,
+      "model": "MiniMax-M3",
+      "provider": "minimax",
+      "session_id": "1787930008875_prfq7",
+      "source": "vscode",
+      "started_at": "2026-08-28T15:13:28.879Z",
+      "status": "cancelled"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/.cline",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/.cline/data/sessions/1787930008875_prfq7/1787930008875_prfq7.json"
+  },
+  {
+    "mtime": "2026-08-29T06:10:30.798188+00:00",
+    "projection": {
+      "enable_spawn": false,
+      "enable_teams": false,
+      "enable_tools": true,
+      "exit_code": null,
+      "interactive": true,
+      "matchedByShape": true,
+      "model": "MiniMax-M3",
+      "provider": "minimax",
+      "session_id": "1787980612695_uaks2",
+      "source": "vscode",
+      "started_at": "2026-08-29T05:16:52.700Z",
+      "status": "running"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/.cline",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/.cline/data/sessions/1787980612695_uaks2/1787980612695_uaks2.json"
+  }
+]
