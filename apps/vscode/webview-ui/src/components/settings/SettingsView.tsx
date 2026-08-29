@@ -8,6 +8,7 @@ import {
 	HardDriveDownload,
 	Info,
 	type LucideIcon,
+	ShieldCheck,
 	SlidersHorizontal,
 	SquareTerminal,
 	Wrench,
@@ -29,12 +30,13 @@ import DebugSection from "./sections/DebugSection"
 import FeatureSettingsSection from "./sections/FeatureSettingsSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import { RemoteConfigSection } from "./sections/RemoteConfigSection"
+import SandboxCapabilitiesSection from "./sections/SandboxCapabilitiesSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 
 const IS_DEV = process.env.IS_DEV
 
 // Tab definitions
-type SettingsTabID = "api-config" | "features" | "terminal" | "general" | "about" | "debug" | "remote-config"
+type SettingsTabID = "api-config" | "features" | "terminal" | "general" | "about" | "debug" | "remote-config" | "sandbox"
 interface SettingsTab {
 	id: SettingsTabID
 	name: string
@@ -98,6 +100,15 @@ const SETTINGS_TABS: SettingsTab[] = [
 		icon: FlaskConical,
 		hidden: ({ user } = { user: null, activeOrganization: null }) => !IS_DEV && !isClineInternalTester(user?.email || ""),
 	},
+	// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	// New tab exposing the ClineMM sandbox capability controls.
+	{
+		id: "sandbox",
+		name: "Sandbox",
+		tooltipText: "Sandbox & Capabilities",
+		headerText: "Sandbox & Capabilities",
+		icon: ShieldCheck,
+	},
 ]
 
 type SettingsViewProps = {
@@ -133,6 +144,8 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			"remote-config": RemoteConfigSection,
 			about: AboutSection,
 			debug: DebugSection,
+			// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01
+			sandbox: SandboxCapabilitiesSection,
 		}),
 		[],
 	) // Empty deps - these imports never change

@@ -429,6 +429,13 @@ export const ExtensionStateContextProvider: React.FC<{
 		lastDismissedCliBannerVersion: 0,
 		backgroundEditEnabled: false,
 		showFeatureTips: false,
+		// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+		// Defaults to false — the pre-ACT behaviour treats absent / false
+		// as "no opt-in" → deny (network) / deny (ssh-agent). The author-
+		// itative state is pushed by getStateToPostToWebview; these values
+		// are the initial values used until the first state push lands.
+		clinemmSafeYoloAllowNetwork: false,
+		clinemmSafeYoloAllowSshAgent: false,
 		globalSkillsToggles: {},
 		localSkillsToggles: {},
 
