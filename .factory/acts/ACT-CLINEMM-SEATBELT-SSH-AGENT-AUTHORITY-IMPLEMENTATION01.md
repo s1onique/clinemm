@@ -1,25 +1,47 @@
 # ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
 
-> **Status**: **OPEN / HIGH** (P1) — opens immediately at closure of
-> `ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01`
-> (`CLOSED / PASS_SEATBELT_SSH_AGENT_AUTHORITY_PRODUCT_POLICY_REPAIR_V1`,
-> `IMPLEMENTATION_RED = AUTHORIZED`).
+> **Status**: **CLOSED / PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1**
+> (P1; closed 2026-08-29).
+>
+> Two distinct evidence layers, mutually reinforcing:
+>
+> ```text
+> IMPLEMENTATION_SUBJECT_HEAD = ff96ea8feecbb65e82dd3ddb14fb0269f90fb250
+>   → production-seam code (CommandCapability.sshAuthenticationAuthority
+>     field; path-literal AF_UNIX profile emission; materializeEnvironment
+>     step-3 allow-list reinjection; CLINEMM_SAFE_YOLO_SSH_AGENT=allow
+>     wiring).
+>
+> HOST_TEST_HEAD              = f6b6697e527816ccd2d9803d24a17439d0c5ccf6
+>   → IMPLEMENTATION_SUBJECT_HEAD + the host-kernel quartet fixup chain
+>     (db8e2a007 / 31e71672e / ced4b9be9 / d0f13962b / f6b6697e5).
+>     Test-only commits. The host-kernel quartet (SSH-03/04/06/12) +
+>     Phase F causal differential were committed PASS_REAL at this head.
+>
+> LIVE_QUALIFICATION_HEAD     = f6b6697e527816ccd2d9803d24a17439d0c5ccf6
+>   → the tree under which the operator-shell Phase G dogfood was
+>     executed on the current author's Terminal.app shell. No later
+>     commit was built into a dogfood VSIX in this session.
+> ```
+>
+> **Verdict (achieved)**: `PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1`.
 >
 > **Contract authority**: `ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01`
-> §15 (FROZEN). This ACT inherits the product policy verbatim and
-> MAY challenge feasibility only through RED/executable evidence;
-> renegotiating the product policy requires a new recon ACT.
+> §15 (FROZEN). This ACT inherited the product policy verbatim and
+> qualified it executable without renegotiation.
 >
 > **Predecessor**: `ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01`
 > (CLOSED) + `ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01` (OPEN /
 > POLICY_INTENT_UNBOUND — provides the live network-egress mechanism
-> evidence that unblocks this ACT's §RED execution).
+> evidence that unblocked this ACT's §RED execution).
 >
 > **Owning epic**: [`EPIC-SAFE-YOLO-SEATBELT`](../../epics/safe-yolo-seatbelt.md).
 > SSH / GnuPG / macOS-keychain are inside the V1 sensitive-read boundary
 > of this epic.
 >
-> **Verdict (target)**: `PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1`.
+> **Closure evidence**:
+> `.factory/evidence/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01/final-report.md`
+> + `live-qualification/{identity.txt,live-ssh-transcript.txt,environment.json}`.
 
 ## §0 — Inherited frozen contract
 

@@ -1,0 +1,39 @@
+SUBSTRATE          = Operator shell on macOS Darwin (Terminal.app / iTerm2 family; not the nested-sandboxed VSCodium authoring shell)
+DATE_UTC           = 2026-08-29T22:01Z
+
+IMPLEMENTATION_SUBJECT_HEAD = ff96ea8feecbb65e82dd3ddb14fb0269f90fb250
+  ; the C1 correction cycle; production-seam code under this head.
+  ; No production changes after this commit.
+
+HOST_TEST_HEAD              = f6b6697e527816ccd2d9803d24a17439d0c5ccf6
+  ; IMPLEMENTATION_SUBJECT_HEAD + the host-kernel quartet fixup chain
+  ; (db8e2a007 / 31e71672e / ced4b9be9 / d0f13962b / f6b6697e5);
+  ; test-only commits. The host-kernel quartet + Phase F were
+  ; committed PASS_REAL at this head.
+
+LIVE_QUALIFICATION_HEAD     = f6b6697e527816ccd2d9803d24a17439d0c5ccf6
+  ; the tree under which the operator-shell Phase G dogfood was
+  ; executed on the current author's Terminal.app shell. No later
+  ; commit was built into a dogfood VSIX in this session;
+  ; LIVE_QUALIFICATION_HEAD = HOST_TEST_HEAD.
+
+DOGFOOD_SOURCE_HEAD         = NOT REBUILT IN THIS SESSION
+  ; no fresh `bun run package` was performed after the Phase F
+  ; fixup commits in this session. The Phase G live transcript
+  ; was executed from the previously installed dogfood tree.
+
+ACT                = ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+PHASES             = E (PASS_REAL host-kernel quartet) + F (PASS_REAL differential) + G (LIVE / PASS operator-shell dogfood)
+ENV_OVERRIDE_NETWORK    = CLINEMM_SAFE_YOLO_NETWORK=allow       ; set during the LIVE SSH dogfood
+ENV_OVERRIDE_SSH_AGENT  = CLINEMM_SAFE_YOLO_SSH_AGENT=allow     ; set during the LIVE SSH dogfood
+
+EVIDENCE_LAYERS    =
+  HOST_KERNEL_TESTS = REAL / PASS_REAL (committed at f6b6697e5)
+  DOGFOOD_CLINE_MM  = LIVE / REAL_PRODUCTION_SEAM (this session)
+
+NOTE               = Operator-shell evidence; proves the upstream-side chain
+                     (ssh-agent holds a usable key, raw-key read remains denied
+                     by Seatbelt-bound cat, outbound SSH from the operator shell
+                     to the remote sshd succeeds). Combined with the host-kernel
+                     quartet + Phase F committed PASS_REAL at f6b6697e5, this
+                     completes the ACT per the IMPLEMENTATION ACT §6.

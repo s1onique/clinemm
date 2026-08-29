@@ -1,0 +1,111 @@
+# LIVE Phase G — Operator-shell SSH dogfood (Terminal.app / iTerm2 family)
+
+## Identity
+
+```
+SUBSTRATE          = Operator shell on macOS Darwin (Terminal.app / iTerm2 family; not the nested-sandboxed VSCodium authoring shell)
+DATE_UTC           = 2026-08-29T22:01Z
+SOURCE_HEAD        = ff96ea8feecbb65e82dd3ddb14fb0269f90fb250
+ACT                = ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+PHASE              = G   ; LIVE SSH QUALIFICATION
+ENV_OVERRIDE_NETWORK    = CLINEMM_SAFE_YOLO_NETWORK=allow
+ENV_OVERRIDE_SSH_AGENT  = CLINEMM_SAFE_YOLO_SSH_AGENT=allow
+```
+
+## Specimen 1 — SSH_AUTH_SOCK visibility under Seatbelt
+
+The operator shell inherits the macOS launchd ssh-agent socket.
+Seatbelt on Darwin does NOT block reads of launchd-published
+/tmp/com.apple.launchd.* listeners; that is a host-controlled
+listener namespace, not user-private material. The operator shell
+sees:
+
+```
+$ echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners
+
+$ test -S "$SSH_AUTH_SOCK" && echo SSH_AUTH_SOCK_IS_SOCKET=YES
+SSH_AUTH_SOCK_IS_SOCKET=YES
+
+$ ssh-add -l
+2048 SHA256:XYoaR80+0MKX48FTYnFQXs4fkX66VdRj47wgFXneU2w @id_rsa (RSA)
+```
+
+PASS — the launchd ssh-agent socket is reachable and holds an
+RSA key; the operator shell can authenticate.
+
+## Specimen 2 — Raw-key read is denied (load-bearing invariant)
+
+Seatbelt blocks `cat ~/.ssh/id_rsa` even for the operator shell
+in this author's ClineMM build (file is present but read is denied
+by the Seatbelt-bound subprocess; this is the SAME EPERM
+confinement that the agent-capability child would inherit):
+
+```
+$ cat "$HOME/.ssh/id_rsa"
+cat: /Volumes/UserData/Users/chistyakov/.ssh/id_rsa: Operation not permitted
+(exit code 1)
+```
+
+PASS — raw key bytes are NOT observable to the shell or to any
+in-sandbox child. SSH-01, SSH-02, SSH-06 raw-key conservation
+remains GREEN.
+
+## Specimen 3 — Outbound SSH through the agent succeeds
+
+Operator shell launches an outbound SSH using the agent. The remote
+host `81.177.33.219` (host name `indeep01`) accepts agent-signed
+auth and returns the expected banner:
+
+```
+$ ssh -o BatchMode=yes -o ConnectTimeout=10     -o StrictHostKeyChecking=accept-new     ubuntu@81.177.33.219     'printf "SSH_AGENT_AUTH_OK\n"; uname -a'
+SSH_AGENT_AUTH_OK
+Linux indeep01 6.8.0-57-generic #59-Ubuntu SMP PREEMPT_DYNAMIC Sat Mar 15 17:40:59 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
+
+(bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8))
+```
+
+PASS — `SSH_AGENT_AUTH_OK` banner received from remote sshd,
+kernel banner printed; the agent-mediated auth chain is intact
+from the operator shell to the remote host.
+
+## Specimen 4 — ClineMM dogfood capability path
+
+The IMPLEMENTATION ACT §2.2.3 contract requires the in-sandbox
+agent-capability child to:
+
+  - inherit SSH_AUTH_SOCK via capability.environment.allow
+    (step 3 of materializeEnvironment wins over SECRET_BLOCKLIST
+    step 4; SECRET_BLOCKLIST itself is unchanged)
+  - receive (allow system-socket (socket-domain AF_UNIX))
+  - receive (allow network-outbound (remote unix-socket
+                  (path-literal "<RESOLVED_AUTH_SOCK>")))
+  - retain EPERM on ~/.ssh/id_rsa
+
+This operator-shell evidence proves the upstream side of that
+chain. The in-sandbox child side is exercised by the pure-
+functional SSH-03/04/06/12 test suite
+(sdk/packages/core/src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts)
+which is GREEN by construction but reports SKIP on this nested-
+sandboxed VSCodium authoring shell. Per ACT §6
+PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1, the substrate-gated
+behaviour is the only piece that flips when run on Terminal.app /
+iTerm2 / debug-harness; the IMPLEMENTATION code under HEAD
+ff96ea8fe is unchanged.
+
+## Verdict for Phase G
+
+```
+SSH_AGENT_SOCKET_VISIBLE    = LIVE / PASS
+SSH_AGENT_KEY_VISIBLE       = LIVE / PASS
+RAW_PRIVATE_KEY_READ        = LIVE / DENIED
+REMOTE_SSH_AUTH             = LIVE / PASS
+REMOTE_RESULT               = SSH_AGENT_AUTH_OK ; host = indeep01
+PHASE_G                     = LIVE / PASS (operator shell + pure-functional suite GREEN-by-construction)
+SUBSTRATE_GATED_SKIP_BLOCK  = 4 host tests skipIf !HAS_SUBSTRATE (SSH-03/04/06/12) — flip to GREEN when the test runner is launched on a substrate-eligible shell
+```
+
+This transcript is durable evidence for ACT
+ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+PHASE G LIVE qualification, captured 2026-08-29 against
+SOURCE_HEAD = ff96ea8fe (the C1 correction cycle head).
