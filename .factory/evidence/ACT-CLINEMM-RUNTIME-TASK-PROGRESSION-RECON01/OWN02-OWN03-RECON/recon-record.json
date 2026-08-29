@@ -1,0 +1,81 @@
+{
+  "act_id": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01",
+  "cycle": "OWN02-OWN03-RECON",
+  "head": "f106bc63d0c3c5ab3683c39b8592cb821b4d32f6",
+  "branch": "main",
+  "scope": "test-only comment correction + recon document",
+  "production_delta": "NONE",
+  "red_test": "OWN01",
+  "red_state": "REPRODUCED (1 failed | 28 passed of 29)",
+  "lossy_boundary": {
+    "primary": "apps/vscode/src/sdk/message-translator.ts:2119",
+    "secondary_partial": "apps/vscode/src/sdk/message-translator.ts:1915 (setErrorSeen on reason=='error' only)",
+    "tertiary_errorclass": "apps/vscode/src/sdk/message-translator.ts:2124-2130 (errorClass discarded)"
+  },
+  "dead_enum_values": {
+    "max_iterations": "no production code emits AgentDoneEvent.reason=='max_iterations'; agent-runtime.ts:1417-1419 throws instead",
+    "mistake_limit": "no production code emits AgentDoneEvent.reason=='mistake_limit' anywhere"
+  },
+  "semantic_collapse_functions": [
+    {
+      "name": "statusToLegacyFinishReason",
+      "location": "sdk/packages/core/src/runtime/orchestration/runtime-event-adapter.ts:124-135",
+      "mapping": {
+        "completed": "completed",
+        "aborted": "aborted",
+        "failed": "error"
+      }
+    },
+    {
+      "name": "deriveFinishReason",
+      "location": "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1570+",
+      "mapping": {
+        "completed": "completed",
+        "aborted": "aborted",
+        "failed": "error"
+      }
+    }
+  ],
+  "live_ptad_inference": {
+    "task_id": "1787991478667_tjjyj",
+    "live_observed_state": {
+      "runtimeStatus": "completed",
+      "attemptCompletionSeen": false,
+      "terminalResponseCommittedThisTurn": false,
+      "errorSeen": false,
+      "recoveryBudgetFailures": 0,
+      "toolCalls": 222
+    },
+    "structural_constraint": "current host/adapter maps AgentRunStatus to only: completed | aborted | error (max_iterations and mistake_limit are dead enum values)",
+    "inference": "live AgentDoneEvent.reason was likely 'completed' because that is the only reachable non-error/non-abort value in the live collapse table",
+    "live_reason_evidence": "UNAVAILABLE_FROM_TRACE (PTAD did not capture event.reason)",
+    "evidence_file": ".factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/live-20260829T134901Z/post-terminal-authority-diagnostic-extension.jsonl",
+    "evidence_frame": 59,
+    "forbidden_promotion": "INFERRED must not be promoted to LIVE; the producer-side causal classification in ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01 is the load-bearing next step"
+  },
+  "verdict": "CAPTURE_INSUFFICIENT for positive successor phase",
+  "rationale": "The TurnPhase enum has no slot for 'runtime stopped without yielding to user.' Adding a new phase is forbidden by reviewer bound. Modifying awaiting_followup semantics globally is forbidden. Selecting streaming recreates the pre-CPL01 stuck-streaming bug. Selecting completed violates CRA02-committed (no terminal content was committed). Selecting error/resumable/idle is also wrong for orthogonal reasons.",
+  "reviewer_correction_20260829": "The proposed next ACT (TURN-PHASE-BARE-DONE-SUCCESSOR01) is too far downstream. The high-leverage seam is the producer side: does AgentRuntime correctly classify an unfinished autonomous turn as completed, or is that a producer-contract violation that downstream architecture would compensate for?",
+  "next_required_act": "ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01 (inventory every status='completed' producer; classify each; trace max-iterations path concretely; audit continuation callers; reach a causal classification without any production change or new-phase design)",
+  "supporting_required_act": "ACT-CLINEMM-MESSAGE-TRANSLATOR-FINISH-REASON-PROPAGATION01 (deferred — only after the producer classification is settled)",
+  "phase_design_act": "ACT-CLINEMM-TURN-PHASE-BARE-DONE-SUCCESSOR01 (deferred — only if producer classification says the phase is genuinely missing)",
+  "forbidden_actions_observed": [
+    "no UI fix",
+    "no header-label change",
+    "no synthetic user Continue",
+    "no prompt injection",
+    "no special-case MiniMax",
+    "no timer/polling",
+    "no new state machine",
+    "no global awaiting_followup semantic change",
+    "no production code modification"
+  ],
+  "conservation_gates": {
+    "production_code_diff_lines": 0,
+    "test_file_added_lines": 93,
+    "own01_red_reproduced": true,
+    "all_other_tests_pass": true,
+    "stash_preserved": "stash@{0} = c2-green-and-c2-p1-delta",
+    "foreign_residue_preserved": true
+  }
+}

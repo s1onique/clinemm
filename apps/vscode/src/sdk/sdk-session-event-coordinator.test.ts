@@ -736,6 +736,94 @@ describe("SdkSessionEventCoordinator", () => {
 
 		expect(options.setTurnPhase).toHaveBeenCalledWith("error", undefined, expect.any(String))
 	})
+
+	// ============================================================================
+	// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 — OWN01 (ownership-transfer RED)
+	//
+	// LIVE P0 ROOT CAUSE CANDIDATE:
+	//   The live PTAD specimen
+	//     .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
+	//       live-20260829T134901Z/post-terminal-authority-diagnostic-extension.jsonl
+	//   for task `1787991478667_tjjyj` shows the bare-done branch at
+	//   `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:172-225`:
+	//
+	//     runtimeStatus=completed
+	//     attemptCompletionSeen=false
+	//     terminalResponseCommittedThisTurn=false
+	//     taskTelemetry.toolCalls=222  (autonomous work DID happen)
+	//     taskTelemetry.recoveryBudgetFailures=0
+	//     taskHeaderPresentation.phase=awaiting_followup  ← this transition
+	//
+	//   LIVE_REASON = UNAVAILABLE_FROM_TRACE
+	//     The PTAD specimen does NOT capture the authoritative
+	//     `AgentDoneEvent.reason` (the `MessageTranslator` discards
+	//     `agentEvent.reason` at `apps/vscode/src/sdk/message-translator.ts
+	//     :2119`). We can therefore NOT claim this was specifically
+	//     `max_iterations` — that is an inference, not a trace. The RED
+	//     below pins the negative contract ONLY for the observable state
+	//     (no terminal commit, no attempt_completion, no error); the
+	//     finish-reason discrimination is OWN02's job in the next cycle.
+	//
+	//   The reviewer's bounded task: encode the ownership invariant for this
+	//   state. The current CPL01 asserts `setTurnPhase("awaiting_followup",…)`
+	//   IS called for this state — and the reviewer's hypothesis is that this
+	//   is the WRONG contract when no explicit user-yield event/tool fired.
+	//
+	//   We deliberately do NOT yet prescribe the successor mechanism (per
+	//   reviewer bound: "Do not yet assert 'call runTurn() again' or 'loop
+	//   automatically.'"). The RED only pins that `awaiting_followup` is
+	//   wrong in this state — the fix design will introduce a finish-reason
+	//   discriminator (preserving `AgentDoneEvent.reason` through the
+	//   translator) and route the bare-done case to the correct successor.
+	//
+	//   This test fails on current code (RED), proving the missing causal
+	//   seam: the coord has no way to distinguish "agent yielded to user via
+	//   ask_question / plan_mode_respond / mistake-limit advisory / explicit
+	//   ask tool" from "agent returned `done` because runtime exhausted
+	//   without committing a terminal response". Today both routes yield
+	//   `awaiting_followup` (CPL01/CRA02 paths).
+	//
+	//   Symmetry preserved: legitimate user-yield paths (ask_question,
+	//   plan_mode_respond, mistake_limit, etc.) MUST still produce
+	//   `awaiting_followup`. That conservation is out of scope here — this
+	//   RED pins the negative contract for the BARE-done case only.
+	// ============================================================================
+	it("OWN01 RED: bare done + no terminal commit + no attempt_completion + no user-yield authority MUST NOT yield to awaiting_followup", async () => {
+		// Live-specimen correspondence. Mirrors CPL01's setup so the failure
+		// surfaces the SAME production branch the live task hit.
+		const { coordinator, options, event } = makeCoordinator({
+			translation: {
+				messages: [],
+				sessionEnded: false,
+				turnComplete: true,
+			},
+		})
+		// Pre-conditions from the live PTAD specimen.
+		options.messageTranslatorState.clearTurnOutcome()
+		expect(options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()).toBe(false)
+		expect(options.messageTranslatorState.wasAttemptCompletionSeen()).toBe(false)
+		expect(options.messageTranslatorState.wasErrorSeen()).toBe(false)
+
+		await coordinator.handleSessionEvent(event)
+
+		// NEGATIVE OWNERSHIP INVARIANT: bare AgentRuntime `done` with no
+		// committed terminal content and no user-yield authority MUST NOT
+		// transfer ownership to the user via `awaiting_followup`. The agent
+		// did autonomous work (live specimen: 222 tool calls, 0 recovery
+		// budget failures); the runtime returned `done` for some
+		// authoritative reason (UNAVAILABLE_FROM_TRACE). Yielding here
+		// hands control back to the user regardless of whether the user
+		// task is semantically complete.
+		//
+		// RED: this assertion fails on current code because the coord
+		// currently calls `setTurnPhase("awaiting_followup",…)` for this
+		// exact state (CPL01). The fix must preserve
+		// `AgentDoneEvent.reason` through the translator/coordinator seam
+		// and route this case based on the actual finish reason.
+		expect(
+			(options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "awaiting_followup"),
+		).toBe(false)
+	})
 })
 
 // ============================================================================
