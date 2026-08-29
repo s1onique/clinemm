@@ -1,10 +1,20 @@
 # ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01
 
-> Status: **OPEN / WAITING_FOR_LIVE_SPECIMEN** — recon §2 PASS at
-> HEAD f8dca1fda / TREE 6f2e01b56 (committed at dbd7c6449); §3
-> live specimen gated behind
+> Status: **OPEN / WAITING_FOR_LIVE_SPECIMEN / CONTINUATION_HALT_PRE_DEC** —
+> recon §2 PASS at HEAD f8dca1fda / TREE 6f2e01b56 (committed at
+> dbd7c6449); §3 live specimen remains **GATED** behind
 > `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01`
-> dogfood closure.
+> dogfood closure. 2026-08-30 continuation-session attempted to
+> advance §3 and FAILED to produce a real specimen for two
+> independent reasons (see §17.1 continuation disposition):
+>   (a) the load-bearing predecessor is still NEXT / HIGH (not closed);
+>   (b) the speciman-capture toolchain (`ACT-CLINEMM-APPROVAL-SPECIMEN-
+>       CAPTURE-TOOL01-CORRECTION01`) is OPEN / IN_REVIEW (not closed).
+> The prior capture residue
+> (`specimens/20260829T060942Z-349b48f1/resolved/`) is bound to
+> `CAPTURE_INSUFFICIENT` (`approvalEventCount: 0`,
+> `RUNTIME_IDENTITY_BOUND: NO`, `repoHead: 911d02177` ≠ current
+> `4d1f1ac2d`).
 >
 > **Primary purpose**: LIVE REPRODUCTION → approval-boundary
 > classification → RED at real production seam → causal discriminator →
@@ -25,6 +35,12 @@
 > - `PASS_EDITOR_APPROVAL_SESSION_RACE_REPAIR_V1` (Bucket F)
 > - `NOT_REPRODUCED`
 > - `CAPTURE_INSUFFICIENT`
+>
+> **2026-08-30 continuation-session verdict**:
+> - `CAPTURE_INSUFFICIENT / PREDECESSOR_BLOCKED` (this commit; recorded,
+>   not auto-promoted to a terminal verdict). ACT remains OPEN; the
+>   next board item is still this ACT's §3 live specimen under the
+>   same gating.
 
 ## §0 — Frozen user-facing invariant
 
@@ -55,21 +71,43 @@ run_commands("sed -i ...")
 
 ## §1 — Entry discipline
 
-Verified at ACT open:
+Verified at ACT open (HEAD `f8dca1fda`) and at 2026-08-30 continuation
+session (HEAD `4d1f1ac2d`):
 
 ```text
-ENTRY_HEAD      = f8dca1fda
-ENTRY_TREE      = 6f2e01b56
-WORKTREE        = CLEAN (no uncommitted tracked changes)
-PROTECTED_STASH = PRESERVED (1 entry; "c2-green-and-c2-p1-delta")
+ENTRY_HEAD                   = f8dca1fda   (recon subject)
+ENTRY_TREE                   = 6f2e01b56   (tree of ENTRY_HEAD)
+OPEN_COMMIT                  = dbd7c6449   (this ACT's launch + evidence)
+2026-08-30_CONT_HEAD         = 4d1f1ac2d   (HEAD at continuation session;
+                                            ACT content lags real HEAD by
+                                            one commit, by ACT convention)
+CURRENT_HEAD_AT_CONTINUATION = 4d1f1ac2d   (this ACT's pointer refresh)
+WORKTREE                     = CLEAN for ACT scope;
+                              dirty residue:
+                              - .factory/evidence/ACT-CLINEMM-EDITOR-
+                                TOOL-APPROVAL-FRICTION-RECON01/
+                                captures/capture-index.jsonl (modified)
+                              - .factory/evidence/.../captures/
+                                20260829T060942Z-349b48f1/.../pending+resolved
+                                (newly untracked, pre-existing capture residue)
+                              These are residue from a prior capture run
+                              on a non-current repo head (911d02177 vs.
+                              4d1f1ac2d); they are the load-bearing
+                              CAPTURE_INSUFFICIENT evidence and are
+                              preserved per §1 trust rules.
+PROTECTED_STASH              = PRESERVED (1 entry; "c2-green-and-c2-p1-delta")
 CURRENT_IMPLEMENTATION01_DOGFOOD = NOT YET BOUND
-                  (IMPLEMENTATION01 dogfood is the predecessor; this
-                   ACT does not start RED until the predecessor's
+                  (IMPLEMENTATION01 ACT remains NEXT / HIGH at
+                   continuation HEAD; only CONTRACT01 is closed.
+                   This ACT cannot start RED until the predecessor's
                    live qualification is recorded per IMPLEMENTATION01
                    §9 Phase-8 success signature.)
 ```
 
-No entry anomaly. No mixed-fix carry-over.
+No entry anomaly. No mixed-fix carry-over. The continuation session did
+not pop the stash, did not reset --hard, did not rebase unrelated work,
+and did not fold the capture-toolchain ACT or the IMPLEMENTATION01 ACT
+into this ACT's scope.
 
 ## §2 — Recon: source-seam-map (LIVE-FROZEN)
 
@@ -549,3 +587,115 @@ CAPTURE_INSUFFICIENT
     session override composition)
 - Authoring of this ACT is itself the §0 + §1 + §2 deliverable; §3
   live-capture is the next ACT boundary.
+
+### §17.1 — 2026-08-30 continuation-session disposition (this commit)
+
+```text
+CONTINUATION_SESSION_HEAD    = 4d1f1ac2d
+ENTRY_HEAD                   = f8dca1fda   (unchanged from ACT open)
+ENTRY_TREE                   = 6f2e01b56   (unchanged from ACT open)
+
+VERDICT_FOR_THIS_SESSION =
+  CAPTURE_INSUFFICIENT / PREDECESSOR_BLOCKED
+  (recorded, NOT a terminal ACT verdict — the ACT remains OPEN)
+
+REASONS (two independent; either alone is sufficient to halt):
+
+  R1 = PREDECESSOR_NOT_CLOSED
+       ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+       remains NEXT / HIGH at continuation HEAD; only CONTRACT01
+       is closed. The §0 frozen invariant of this ACT requires:
+         YOLO_REQUESTED = true
+         Seatbelt selected + available
+         relevant editing permission enabled
+       The predecessor contract establishes the canonical
+       "effective Seatbelt-YOLO authority" that the §0 invariant
+       relies on. Capturing a "real" specimen without the
+       predecessor would conflate the unfinished IMPLEMENTATION01
+       work with the editor-tool approval question and violate the
+       §3 boundary classification contract (Bucket F — session
+       override vs runtime toolset epoch — is the most likely
+       misclassification in that condition).
+
+  R2 = SPECIMEN_CAPTURE_TOOLCHAIN_NOT_CLOSED
+       ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
+       is OPEN / IN_REVIEW. The capture residue from 2026-08-29
+       (specimen-20260829T060942Z-349b48f1) bound to
+       `CAPTURE_INSUFFICIENT` because:
+         approvalEventCount: 0
+         RUNTIME_IDENTITY_BOUND: NO
+         APPROVAL_ENTRY: false, APPROVAL_TERMINAL: false
+         repoHead: 911d02177 (≠ current 4d1f1ac2d; ≠ ENTRY_HEAD
+                                f8dca1fda)
+       Re-running the capture against the same toolchain without
+       the CORRECTION01 verdict is expected to produce the same
+       CAPTURE_INSUFFICIENT result. The toolchain ACT owns the
+       diagnostic seam fix.
+
+PRODUCTION_DELTA = 0  (no production source modified)
+TEST_DELTA = 0       (no new test added; existing structural evidence
+                      is sufficient for the OPEN state)
+REPAIR_AUTHORIZED = NO  (R1 and R2 are pre-RED gates; A1 specimen
+                          has not been produced; no RED is authorized
+                          per §11 + §16)
+RED_REPRODUCED = NO  (no RED attempted, because A1 specimen absent)
+LIVE_GREEN = NOT_EXECUTED  (no live qualification attempted, for
+                              the same reason)
+
+NEXT_BOUND_BOUNDARY =
+  IMPLEMENTATION01 must close first; only then can this ACT's §3
+  be re-attempted. Until then, the durable board row
+  "Approval / editor-tool | P1" remains in the OPEN state with
+  CAPTURE_INSUFFICIENT binding.
+
+HALT_GATE =
+  HALT_LEADING_HYPOTHESIS_REPAIR
+  (forging a specimen under un-closed predecessor + toolchain
+   would be a leading-hypothesis repair — explicitly forbidden
+   by §15 stop rules)
+
+PROVENANCE_RECHECK =
+  §2 source-seam-map was verified unchanged at continuation HEAD:
+  - apps/vscode/src/sdk/sdk-tool-policies.ts still 1001 lines;
+    isEditTool at line 91; buildToolPolicies at lines 56-83 still
+    force autoApprove:false for edit tools.
+  - apps/vscode/src/sdk/sdk-interaction-coordinator.ts still 698
+    lines; non-command branch at line 417 still routes via
+    shouldAutoApproveTool disjunct.
+  - No production source drift relative to the §2 seam map.
+```
+
+## §17.2 — Durable-next-ACT rule
+
+The next ACT after this continuation session is **STILL THIS ACT**
+(recon §3 live specimen under the unchanged gating). The durable
+board's row "Approval / editor-tool | P1" is correct; no board
+amendment is required for this session — the row already states
+`CAPTURE_INSUFFICIENT` and that is the live state.
+
+The downstream NEXT ACT for the runtime progression lane
+(`RUNTIME-FINISH-SEMANTICS-RECON01` → `COMPLETION-PROTOCOL-LIVENESS02`
+→ `SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01` →
+`SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01`) must close
+first; that lane is owned by the runtime-progression epic and is
+not this ACT's scope.
+
+Re-read of the durable board after this continuation session:
+
+```text
+APPROVAL/EDITOR-TOOL LANE   = ACTIVE / OPEN; this ACT
+                            (CAPTURE_INSUFFICIENT / PREDECESSOR_BLOCKED)
+APPROVAL/CLASSIC LANE      = ACTIVE / OPEN; CLASSIC-PROTECTION-RECON01
+HOST SUBSTRATE LANE        = ACTIVE / OPEN; HOST-TEST RUNNER
+                            (P0 dependency for both approval lanes)
+SEATBELT NETWORK EGRESS    = CLOSED at 4d1f1ac2d (this session's prior
+                            ACT, closed yesterday)
+SEATBELT SSH-AGENT AUTH    = CLOSED at f6b6697e5
+SETTINGS SANDBOX CAPS      = CLOSED_V2
+RUNTIME TASK PROGRESSION   = CLOSED at fd8627cb6
+                            (NOT_LIVE_CAUSE; the IMPLEMENTATION01
+                             ACT is its own NEXT slice — see
+                             runtime-task-progression.md)
+```
+
+No durable-state contradiction detected in this continuation session.
