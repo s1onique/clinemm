@@ -33,8 +33,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	buildExperimentalReconCapability,
-	resolveSafeYoloNetworkOptIn,
-	resolveSafeYoloSshAgentOptIn,
 	resolveSafeYoloCapabilityFromState,
 	type SafeYoloCapabilitySnapshot,
 } from "./sandbox-policy"
@@ -72,9 +70,7 @@ afterEach(() => {
  * production callers use it (e.g. command-job-manager.ts).
  */
 type CapabilityWithSshAuth = ReturnType<typeof buildExperimentalReconCapability> & {
-	readonly sshAuthenticationAuthority?:
-		| { readonly mode: "agent" }
-		| undefined
+	readonly sshAuthenticationAuthority?: { readonly mode: "agent" } | undefined
 }
 function buildCapabilityWithSnapshot(snap: SafeYoloCapabilitySnapshot): CapabilityWithSshAuth {
 	return buildExperimentalReconCapability({

@@ -48,15 +48,12 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
 import { CommandJobManager } from "./command-job-manager"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
-import {
-	resolveActiveWorkspaceRootsForSandbox,
-	type SafeYoloCapabilitySnapshot,
-} from "./sandbox-policy"
+import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import type { SdkSessionHost } from "./session-host"
 import { createVscodeExtraTools } from "./vscode-runtime-builder"
-import { getEffectiveTerminalExecutionMode } from "./vscode-terminal-execution-mode"
 import { createVscodeSubmitExecutor } from "./vscode-submit-executor"
+import { getEffectiveTerminalExecutionMode } from "./vscode-terminal-execution-mode"
 
 export interface VscodeSessionHostOptions {
 	mcpHub: McpHub

@@ -44,7 +44,6 @@ import {
 	defaultSandboxBackendResolver,
 	resolveExperimentalSandboxMode,
 	resolveSafeYoloCapabilityFromState,
-	type SafeYoloCapabilitySnapshot,
 	type SandboxBackendResolver,
 } from "./sandbox-policy"
 

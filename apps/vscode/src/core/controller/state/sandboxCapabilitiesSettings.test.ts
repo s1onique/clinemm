@@ -22,7 +22,6 @@ import * as path from "node:path"
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
 import { ClineFileStorage } from "@shared/storage/ClineFileStorage"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { Controller } from ".."
 import { updateSettings } from "./updateSettings"
 
 function makeTempDir(): string {
