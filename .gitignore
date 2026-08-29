@@ -222,6 +222,53 @@ apps/examples/desktop-app/.cursor/settings.json
 # hardening row), so both must survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01/
+# ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01: recon/contract ACT
+# Successor slice to SEATBELT-NETWORK-EGRESS-RECON01 (unblocked by
+# LIVE network-egress mechanism evidence, NOT by that ACT's closure;
+# that ACT remains OPEN / POLICY_INTENT_UNBOUND). ENTRY_HEAD =
+# 911d02177 (the commit that closed network-egress §4; the SSH
+# live specimen is strong LIVE_PROVEN qualification evidence for
+# NETWORK_EGRESS_PROCEEDED on a real ClineMM sandboxed execution
+# path, and proves raw key reads remain denied by design). Status:
+# CLOSED / PASS_SEATBELT_SSH_AGENT_AUTHORITY_PRODUCT_POLICY_REPAIR_V1.
+# §5 corrected contract (post macOS Seatbelt + OpenSSH + factory
+# reviewer trio, after `path-literal` correction): capability shape
+# `sshAuthenticationAuthority: deny | agent`; SBPL emits `(allow
+# system-socket (socket-domain AF_UNIX))` + `(allow network-outbound
+# (remote unix-socket (path-literal "<resolved>")))` (path-literal
+# is the Unix-socket selector's exact-match primitive per Apple
+# Sandbox Guide v1.0; distinct from filesystem-operation `literal`;
+# NOT `subpath`, which would widen to sibling sockets); env
+# reintroduction of SSH_AUTH_SOCK via the explicit `allow` list
+# (step 3 of materializeEnvironment wins over step 4); raw-key reads
+# remain DENIED in both modes; readonly-identity-file mode OUT OF
+# SCOPE for V1. Substrate gate: probeSeatbeltAvailability() round-trip
+# (NOT file-presence alone); this VSCodium shell reports
+# probeSeatbeltAvailability() === false; substrate-eligible shell
+# (Terminal.app / iTerm2 / debug-harness) required for IMPLEMENTATION01
+# RED. IMPLEMENTATION_RED = AUTHORIZED at RECON01 closure; follow-on
+# executable ACT SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01 opened
+# immediately per reviewer "GO_AFTER_ONE_BOUNDED_FIX" verdict; that
+# ACT inherits §15 verbatim and may renegotiate only through RED
+# evidence. The ACT file AND the evidence directory are bound by the
+# epic ledger at .factory/epics/safe-yolo-seatbelt.md (current ACT
+# ledger row), so both must survive a fresh clone.
+#
+# ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01: executable
+# ACT. Status: OPEN / HIGH. Inherits the frozen contract from RECON01
+# §15 (sshAuthenticationAuthority: deny | agent; path-literal
+# exact-socket AF_UNIX authority; SSH_AUTH_SOCK reintroduced via env
+# allow; raw-key reads denied in both modes). Primary load-bearing RED:
+# `agent + valid SSH_AUTH_SOCK + substrate` → {child env has
+# SSH_AUTH_SOCK, exact agent socket connect succeeds, sibling socket
+# connect fails, ~/.ssh/id_rsa remains unreadable}. Substrate-eligible
+# shell required (Terminal.app / iTerm2 / debug-harness). Bound by the
+# epic ledger at .factory/epics/safe-yolo-seatbelt.md (current ACT
+# ledger row + Open work entry) and the epic-board frontier row, so
+# this ACT file must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01/
+!/.factory/acts/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01.md
 
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).

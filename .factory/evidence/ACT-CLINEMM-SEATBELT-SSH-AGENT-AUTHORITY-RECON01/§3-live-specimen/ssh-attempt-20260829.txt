@@ -1,0 +1,86 @@
+SSH attempt 2026-08-29
+====================
+
+Context
+-------
+- Session: ClineMM
+- Working dir: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+- Shell: bash (VSCodium-integrated). The bash shell itself is
+  nested-sandboxed, so probeSeatbeltAvailability() returns false
+  (file present, but the round-trip probe returns EPERM). The shell
+  is therefore NOT eligible for a nested Seatbelt host-ablation
+  experiment; however, it WAS a live ClineMM sandboxed execution
+  (the ClineMM sandbox correctly carried the SSH transport to the
+  remote sshd, which is the load-bearing observation).
+- Subject: ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01 (RECON, OPEN)
+- ENTRY_HEAD: 911d02177 (the commit that closed network-egress §4 correction)
+- Backstop ACT: ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01
+
+Environment (set explicitly per network-egress contract)
+-------------------------------------------------------
+  CLINEMM_EXPERIMENTAL_SANDBOX = seatbelt
+  CLINEMM_SAFE_YOLO_NETWORK    = allow
+  CLINEMM_SAFE_YOLO            = allow (sets sensitive-read deny list)
+
+Command
+-------
+  ssh -o BatchMode=yes -o ConnectTimeout=10 \
+      -o StrictHostKeyChecking=accept-new \
+      -o PreferredAuthentications=publickey,password,keyboard-interactive \
+      -o NumberOfPasswordPrompts=1 \
+      ubuntu@81.177.33.219 'echo SSH_OK_$(uname -a)'
+
+Output (verbatim)
+-----------------
+  Load key "/Volumes/UserData/Users/chistyakov/.ssh/id_rsa": Operation not permitted
+  ubuntu@81.177.33.219: Permission denied (publickey,password).
+  exit code: 255
+
+Classification (per ACT §3)
+---------------------------
+  NETWORK_EGRESS_PROCEEDED      : YES  (transport reached remote sshd)
+  RAW_KEY_AUTHORITY_DENIED      : YES  (id_rsa read refused by Seatbelt)
+  REMOTE_AUTH_STAGE             : REACHED
+  REMOTE_KEY_AUTH_SUCCESS       : NO
+
+Interpretation
+--------------
+1. LIVE_PROVEN qualification evidence (not causality re-proof):
+   under CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt +
+   CLINEMM_SAFE_YOLO_NETWORK=allow, the SSH transport reached the
+   remote sshd. This is strong qualification evidence that
+   NETWORK_EGRESS_PROCEEDED is real on a real ClineMM sandboxed
+   execution path. The original D/A/O host-ablation causality is
+   owned by ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01's §4
+   evidence (under probeSeatbeltAvailability() === true); the two
+   are complementary, not redundant.
+2. Had network egress still been broken, the failure would have been
+   EPERM at connect() (no "Load key" / "Permission denied" lines).
+   It was not — the load-bearing observation is the key-file EPERM
+   AFTER the transport succeeded.
+3. The raw-key denial is BY DESIGN: ~/.ssh/id_rsa is in the V1
+   curated deny list emitted by resolveSafeYoloSensitiveReadDenials()
+   (sandbox-policy.ts lines 386–411). The Seatbelt profile contains
+   `(deny file-read* (subpath "<canonical ~/.ssh/id_rsa>"))`.
+4. The gap is a MISSING PRODUCT CAPABILITY: there is no rule in the
+   SBPL generator today for AF_UNIX / ssh-agent authority, and no
+   reintroduction of SSH_AUTH_SOCK in the env. This is the new
+   "narrowly-scoped ssh-agent authority" capability proposed by §5
+   of ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01.
+
+Substrate gate
+--------------
+  probeSeatbeltAvailability() = false on this shell
+    (VSCodium-bash is itself nested-sandboxed; even
+     /usr/bin/sandbox-exec -p '(version 1)(allow default)'
+     /usr/bin/true returns EPERM).
+    This is the canonical round-trip predicate at
+    sdk/packages/core/src/runtime/sandbox/macos/seatbelt-availability.ts;
+    file-presence alone is insufficient — this shell has
+    /usr/bin/sandbox-exec present yet the predicate still returns
+    false because the round-trip probe fails.
+
+  Per ACT §6, the actual RED/host-ablation belongs to the follow-on
+  implementation ACT and requires a shell where
+  probeSeatbeltAvailability() returns true (Terminal.app /
+  iTerm2 / debug-harness).
