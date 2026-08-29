@@ -14,8 +14,12 @@
  *   2. AF_UNIX socket type is validated via lstat S_IFSOCK mask.
  *      Regular files / directories / anything-not-a-socket fail
  *      closed with `SandboxError(reason="canonicalization-failed")`.
- *   3. The profile path-literal and the child env SSH_AUTH_SOCK are
- *      the SAME string (one value, one owner).
+ *   3. The profile path-literal and the child env SSH_AUTH_SOCK
+ *      resolve to the SAME canonical vnode identity (one value,
+ *      one owner under realpath). The TEXTUAL form may differ on
+ *      macOS (`/var` vs `/private/var`) due to symlink aliasing;
+ *      the canonical (realpath-resolved) form is the load-bearing
+ *      identity for both Seatbelt matching and child connect(2).
  *
  * Run with:
  *   bun x vitest run --config vitest.config.ts \
@@ -26,6 +30,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
 	unlinkSync,
 	writeFileSync,
@@ -409,6 +414,14 @@ describe("ACT-IMPL01 ssh-agent authority", () => {
 		try {
 			const CANONICAL = join(fixture.agent, "agent.sock");
 			const closeSocket = await bindUnixSocket(CANONICAL);
+			// CORRECTION01 P1: derive the expected socket identity from
+			// the SAME filesystem truth the production backend uses
+			// (`canonicalizeSandboxRoot` → `realpathSync`). On macOS the
+			// OS temp dir is exposed via the `/var/folders/...` symlink
+			// that resolves to `/private/var/folders/...`; Seatbelt
+			// matches against the resolved vnode path, so the canonical
+			// form is the load-bearing identity for SBPL assertions.
+			const canonicalSocketPath = realpathSync(CANONICAL);
 			const cap: CommandCapability = {
 				readonlyRoots: [fixture.inside],
 				writableRoots: [fixture.inside],
@@ -434,12 +447,23 @@ describe("ACT-IMPL01 ssh-agent authority", () => {
 				const profileContent = readFileSync(profilePath, "utf8");
 				expect(profileContent).toContain("(socket-domain AF_UNIX))");
 				expect(profileContent).toContain(
-					`(remote unix-socket (path-literal "${CANONICAL}"))`,
+					`(remote unix-socket (path-literal "${canonicalSocketPath}"))`,
 				);
 				expect(profileContent).not.toMatch(/\(remote unix-socket \(subpath/);
-				// Profile path-literal and child env value MUST be the
-				// same string (no divergence; single owner).
-				expect(prepared.env.SSH_AUTH_SOCK).toBe(CANONICAL);
+				// "One value, one owner" — the canonical vnode identity
+				// of the socket MUST be the same string wherever it
+				// appears (profile path-literal + child env). The TEXTUAL
+				// form may differ on macOS (`/var` vs `/private/var`) due
+				// to symlink aliasing; the canonical (realpath-resolved)
+				// form is the load-bearing identity.
+				//
+				// Comparing `realpathSync(env.SSH_AUTH_SOCK)` to the
+				// canonicalSocketPath captures the design invariant
+				// without requiring the backend to canonicalize the env
+				// string itself (the env string can stay textual; the
+				// kernel resolves the symlink at connect(2) time).
+				const envCanonical = realpathSync(prepared.env.SSH_AUTH_SOCK ?? "");
+				expect(envCanonical).toBe(canonicalSocketPath);
 			} finally {
 				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
 				else process.env.SSH_AUTH_SOCK = prev;
