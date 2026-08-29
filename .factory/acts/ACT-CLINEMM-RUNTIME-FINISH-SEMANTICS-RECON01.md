@@ -15,12 +15,22 @@
 > producer-side recon first.**
 >
 > ```text
-> ENTRY_HEAD = f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
->              (HEAD the OWN01 RED repro'd against; also HEAD at the
->               end of the ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-
->               IMPLEMENTATION01 C2 cherry-pick cascade)
-> TRIAGE_HEAD = f106bc63d (same; no production delta in the
->               intervening cycle)
+> PREDECESSOR_RED_SUBJECT_HEAD = f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
+>                 (the production/test subject against which the
+>                 predecessor ACT's OWN01 RED was reproduced; also
+>                 the HEAD at the end of the ACT-CLINEMM-SEATBELT-
+>                 SSH-AGENT-AUTHORITY-IMPLEMENTATION01 C2 cherry-pick
+>                 cascade; preserved as a reference, NOT the entry
+>                 head of THIS ACT)
+> ENTRY_HEAD = 6ecf546f84b6593904357d198c56aadd89fe2a85
+>              (the actual repository HEAD immediately before THIS
+>               ACT was opened = commit 6ecf546f8
+>               "RUNTIME-TASK-PROGRESSION-RECON01 OWN02-OWN03-RECON:
+>                bounded fix cycle (reviewer correction 2026-08-29)";
+>               the predecessor bounded fix cycle landed at THIS HEAD;
+>               the ACT was opened AT 2401faf4a)
+> OPEN_HEAD = 2401faf4ac14d6604952f7c840e1b0e45f7992ea
+>             (the commit that introduced THIS ACT; informational)
 > ```
 >
 > Scope discipline (THIS ACT):
@@ -37,8 +47,17 @@
 ## 0. Entry conditions
 
 - branch = main
-- HEAD = `f106bc63d0c3c5ab3683c39b8592cb821b4d32f6`
-- worktree clean (excluding `.factory/evidence/` which is gitignored)
+- PREDECESSOR_RED_SUBJECT_HEAD = `f106bc63d0c3c5ab3683c39b8592cb821b4d32f6`
+  (production/test subject against which the predecessor ACT's `OWN01`
+   RED was reproduced; preserved as a reference)
+- ENTRY_HEAD = `6ecf546f84b6593904357d198c56aadd89fe2a85`
+  (the actual repository HEAD immediately before THIS ACT was opened;
+   the predecessor bounded fix cycle landed here)
+- OPEN_HEAD = `2401faf4ac14d6604952f7c840e1b0e45f7992ea`
+  (the commit that introduced THIS ACT; informational)
+- worktree clean at ENTRY_HEAD (excluding `.factory/evidence/` which is
+  gitignored; the foreign editor-capture residue was preserved as
+  untracked/local-only material per the prior ACT's residue policy)
 - protected stashes untouched: `stash@{0} = c2-green-and-c2-p1-delta`
 - foreign editor-capture residue: preserved
 
@@ -372,8 +391,10 @@ If evidence cannot distinguish:
 
 ```text
 ACT_ID = ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01
-ENTRY_HEAD = f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
-FINAL_HEAD  = (TBD at closure)
+PREDECESSOR_RED_SUBJECT_HEAD = f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
+ENTRY_HEAD = 6ecf546f84b6593904357d198c56aadd89fe2a85
+OPEN_HEAD  = 2401faf4ac14d6604952f7c840e1b0e45f7992ea
+FINAL_HEAD = (TBD at closure)
 
 LIVE_REASON = UNAVAILABLE_FROM_TRACE
 

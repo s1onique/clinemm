@@ -223,8 +223,11 @@ apps/examples/desktop-app/.cursor/settings.json
 # fix order: producer-side recon FIRST, then (only if PRODUCER_SEMANTICS_BUG
 # or COMPOSED_BUG) producer-side repair, then translation-side propagation,
 # then (only if PRESENTATION_PHASE_GAP) a new TurnPhase value).
-# ENTRY_HEAD = f106bc63d (same HEAD as the predecessor's OWN01 RED; the
-# ACT frozen against the post-cherry-pick C2 GREEN of the SSH-agent ACT).
+# PREDECESSOR_RED_SUBJECT_HEAD = f106bc63d (the production/test subject
+# against which the predecessor's OWN01 RED was reproduced; preserved as
+# a reference, NOT the entry head of THIS ACT).
+# ENTRY_HEAD = 6ecf546f8 (the actual repository HEAD immediately before
+# THIS ACT was opened = the predecessor bounded fix cycle commit).
 # Status OPEN / OPENING / NO_PRODUCTION_DELTA. Same durable-binding reason
 # as the runtime-progression ACT: the ACT file AND the evidence directory
 # are bound by the epic ledger at .factory/epics/runtime-task-progression.md
