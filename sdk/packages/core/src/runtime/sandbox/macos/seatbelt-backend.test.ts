@@ -13,6 +13,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
 	existsSync,
 	mkdirSync,
@@ -89,6 +90,7 @@ function runPrepared(prepared: {
 		timeout: 30_000,
 		encoding: "utf8",
 	});
+
 	return {
 		exitCode: result.status,
 		stdout: typeof result.stdout === "string" ? result.stdout : "",
@@ -890,20 +892,6 @@ describe("ACT-IMPL01: backend ssh-agent authority wiring (pure-functional)", () 
 describe.skipIf(!HAS_SUBSTRATE)(
 	"ACT-IMPL01: host-kernel quartet (SSH-03, SSH-04, SSH-06, SSH-12)",
 	() => {
-		/**
-		 * Bind a real AF_UNIX socket at `path`. Returns a close function.
-		 *
-		 * Uses Node's net.createServer (which uses socket(2) under the
-		 * hood); the resulting inode has S_IFSOCK set. This is what the
-		 * production isSocket check requires — a `writeFileSync` placeholder
-		 * is a regular file and correctly fails closed (verified by the
-		 * negative tests in `seatbelt-ssh-agent-authority.test.ts`).
-		 *
-		 * Copy-local rather than cross-imported from
-		 * `seatbelt-ssh-agent-authority.test.ts` to keep this host-kernel
-		 * quartet self-contained (the source-of-truth helper lives next to
-		 * the authority contract; this is the kernel-side mirror).
-		 */
 		async function bindUnixSocket(path: string): Promise<() => void> {
 			const server = createServer();
 			await new Promise<void>((resolve, reject) => {
@@ -915,39 +903,69 @@ describe.skipIf(!HAS_SUBSTRATE)(
 				try {
 					unlinkSync(path);
 				} catch {
-					// already gone
+					/* already gone */
 				}
 			};
 		}
 
-		it("SSH-03 ENV: agent-mode child sees SSH_AUTH_SOCK (canonical realpath)", async () => {
-			const fixture = buildFixture();
+		function buildSocketFixture(): {
+			root: string;
+			inside: string;
+			agentSock: string;
+			siblingSock: string;
+		} {
+			const suffix = randomBytes(6).toString("hex");
+			const root = `/tmp/clinemm-host-kernel-${suffix}`;
+			mkdirSync(root, { recursive: true });
+			const inside = join(root, "inside");
+			mkdirSync(inside, { recursive: true });
+			return {
+				root,
+				inside,
+				agentSock: join(root, "agent.sock"),
+				siblingSock: join(root, "sibling.sock"),
+			};
+		}
+
+		function cleanupSocketFixture(fixture: { root: string }): void {
 			try {
-				const SOCKET_DIR = join(fixture.root, "agent");
-				mkdirSync(SOCKET_DIR, { recursive: true });
-				const RAW = join(SOCKET_DIR, "agent.sock");
-				try {
-					rmSync(RAW);
-				} catch {
-					// not present
-				}
-				// FIXTURE BUG (was: `process.env.SSH_AUTH_SOCK = CANONICAL` with
-				// no actual socket). Production is fail-closed on missing
-				// sockets (canonicalizeSandboxRoot → realpathSync → lstat
-				// S_IFSOCK). Bind a real AF_UNIX server BEFORE setting
-				// SSH_AUTH_SOCK so the canonicalize step resolves to a real
-				// socket inode.
-				const closeSocket = await bindUnixSocket(RAW);
-				const CANONICAL = realpathSync(RAW);
+				rmSync(fixture.root, { recursive: true, force: true });
+			} catch {
+				/* ignore */
+			}
+		}
+
+		function writeConnectProbe(inside: string, name: string): string {
+			const probePath = join(inside, name);
+			const probeBody = [
+				"import socket, sys",
+				"p = sys.argv[1]",
+				"try:",
+				"    s = socket.socket(socket.AF_UNIX)",
+				"    s.settimeout(5)",
+				"    s.connect(p)",
+				"    s.close()",
+				"    print('PY_CONNECT_OK')",
+				"except Exception as e:",
+				"    code = getattr(e, 'errno', None)",
+				"    print('PY_CONNECT_ERROR=' + (str(code) if code is not None else type(e).__name__))",
+			].join("\n");
+			writeFileSync(probePath, probeBody, { mode: 0o755 });
+			return probePath;
+		}
+
+		it("SSH-03 ENV: agent-mode child sees SSH_AUTH_SOCK (canonical realpath)", async () => {
+			const fixture = buildSocketFixture();
+			try {
+				const closeSocket = await bindUnixSocket(fixture.agentSock);
+				const CANONICAL = realpathSync(fixture.agentSock);
 				const cap: CommandCapability = {
 					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					network: "deny",
 					environment: { mode: "sanitized", allow: [] },
 					cwd: fixture.inside,
-					sshAuthenticationAuthority: {
-						mode: "agent",
-					},
+					sshAuthenticationAuthority: { mode: "agent" },
 				};
 				const cmd: CommandInvocation = {
 					executable: "/usr/bin/env",
@@ -975,62 +993,53 @@ describe.skipIf(!HAS_SUBSTRATE)(
 						process.env.SSH_AUTH_SOCK = prev;
 					}
 					closeSocket();
-					cleanupFixture(fixture.root);
 				}
-			} catch (cause) {
-				cleanupFixture(fixture.root);
-				throw cause;
+			} finally {
+				cleanupSocketFixture(fixture);
 			}
 		});
 
-		it("SSH-04 connect: agent-mode child can connect to authorized agent.sock", async () => {
-			const fixture = buildFixture();
+		it("SSH-04 connect: agent-mode child can connect to authorized agent.sock (real connect(2))", async () => {
+			const fixture = buildSocketFixture();
 			try {
-				const SOCKET_DIR = join(fixture.root, "agent");
-				mkdirSync(SOCKET_DIR, { recursive: true });
-				const RAW = join(SOCKET_DIR, "agent.sock");
-				try {
-					rmSync(RAW);
-				} catch {
-					// not present
-				}
-				const closeSocket = await bindUnixSocket(RAW);
-				const CANONICAL = realpathSync(RAW);
+				const closeSocket = await bindUnixSocket(fixture.agentSock);
+				const CANONICAL = realpathSync(fixture.agentSock);
+				const probePath = writeConnectProbe(fixture.inside, "connect_probe.py");
 				const cap: CommandCapability = {
 					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					network: "deny",
 					environment: { mode: "sanitized", allow: [] },
 					cwd: fixture.inside,
-					sshAuthenticationAuthority: {
-						mode: "agent",
-					},
+					sshAuthenticationAuthority: { mode: "agent" },
 				};
-				// bash's `exec 9<>PATH` opens a file descriptor via connect(2)
-				// for AF_UNIX sockets. Seatbelt either permits it (returns 0)
-				// or denies it (returns non-zero + EPERM). We capture the
-				// outcome in CONNECT_OK / CONNECT_DENIED so the test is
-				// robust to stderr noise from the sandboxed shell.
 				const cmd: CommandInvocation = {
-					executable: "/bin/sh",
-					args: [
-						"-c",
-						`if exec 9<>'${CANONICAL}' 2>/dev/null; then echo CONNECT_OK; exec 9<&-; else echo CONNECT_DENIED; fi`,
-					],
+					executable: "/usr/bin/python3",
+					args: [probePath, CANONICAL],
 					cwd: fixture.inside,
 					env: {},
 				};
 				const prev = process.env.SSH_AUTH_SOCK;
 				process.env.SSH_AUTH_SOCK = CANONICAL;
 				try {
+					// POSITIVE CONTROL: no Seatbelt, client itself works.
+					const control = await noSandboxBackend.prepare({
+						capability: cap,
+						command: cmd,
+					});
+					const controlRes = runPrepared(control);
+					expect(controlRes.exitCode).toBe(0);
+					expect(controlRes.stdout).toContain("PY_CONNECT_OK");
+
+					// SEATBELT agent mode: the contract under test.
 					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
 						capability: cap,
 						command: cmd,
 					});
 					const res = runPrepared(prepared);
 					expect(res.exitCode).toBe(0);
-					expect(res.stdout).toContain("CONNECT_OK");
-					expect(res.stdout).not.toContain("CONNECT_DENIED");
+					expect(res.stdout).toContain("PY_CONNECT_OK");
+					expect(res.stdout).not.toContain("PY_CONNECT_ERROR");
 				} finally {
 					if (prev === undefined) {
 						delete process.env.SSH_AUTH_SOCK;
@@ -1038,75 +1047,52 @@ describe.skipIf(!HAS_SUBSTRATE)(
 						process.env.SSH_AUTH_SOCK = prev;
 					}
 					closeSocket();
-					cleanupFixture(fixture.root);
 				}
-			} catch (cause) {
-				cleanupFixture(fixture.root);
-				throw cause;
+			} finally {
+				cleanupSocketFixture(fixture);
 			}
 		});
 
-		it("SSH-06 raw key: agent-mode child cannot read private key fixture (raw-key conservation)", async () => {
-			const fixture = buildFixture();
+		it("SSH-06 raw key: agent-mode child cannot read private key bytes (raw-key conservation)", async () => {
+			const fixture = buildSocketFixture();
 			try {
-				// Stand in for ~/.ssh/id_rsa. Place under fixture.root so
-				// the canonicalize step realpath-resolves it.
-				const FAKE_HOME = join(fixture.root, "home");
-				mkdirSync(FAKE_HOME, { recursive: true });
-				const FAKE_SSH_DIR = join(FAKE_HOME, ".ssh");
+				const FAKE_SSH_DIR = join(fixture.inside, ".ssh");
 				mkdirSync(FAKE_SSH_DIR, { recursive: true });
 				const FAKE_KEY = join(FAKE_SSH_DIR, "id_rsa");
 				writeFileSync(FAKE_KEY, "FAKE_PRIVATE_KEY_BLOCK\n", "utf8");
 				const CANONICAL_KEY = realpathSync(FAKE_KEY);
 
+				const closeSocket = await bindUnixSocket(fixture.agentSock);
+				const CANONICAL_AGENT = realpathSync(fixture.agentSock);
+
 				const cap: CommandCapability = {
 					readonlyRoots: [fixture.inside],
 					writableRoots: [fixture.inside],
 					network: "deny",
 					environment: { mode: "sanitized", allow: [] },
 					cwd: fixture.inside,
-					sshAuthenticationAuthority: {
-						mode: "agent",
-					},
-					// SSH-06 contract: raw private-key reads are DENIED even
-					// when the agent authority is granted. The production
-					// helper `resolveSafeYoloSensitiveReadDenials` adds
-					// the curated V1 list under Safe-YOLO; the bare
-					// `SeatbeltSandboxBackendExperimental` does NOT
-					// auto-derive the deny list. This test passes the
-					// deny-read subpath explicitly so the kernel-level
-					// `(deny file-read* (subpath ...))` rule fires
-					// regardless of network mode. The contract under test
-					// is "raw-key EPERM at the Seatbelt kernel layer",
-					// independent of the credential-deny-list helper.
+					sshAuthenticationAuthority: { mode: "agent" },
 					denyReadSubpaths: [CANONICAL_KEY],
 				};
 				const cmd: CommandInvocation = {
-					executable: "/bin/sh",
-					args: [
-						"-c",
-						`if [ -r '${CANONICAL_KEY}' ]; then echo KEY_READABLE; else echo KEY_DENIED; fi`,
-					],
+					executable: "/bin/cat",
+					args: [CANONICAL_KEY],
 					cwd: fixture.inside,
 					env: {},
 				};
 				const prev = process.env.SSH_AUTH_SOCK;
-				// Provide a real agent socket so the SSH-03-style fail-closed
-				// does NOT short-circuit before the deny-read rule fires.
-				const SOCKET_DIR = join(fixture.root, "agent");
-				mkdirSync(SOCKET_DIR, { recursive: true });
-				const RAW = join(SOCKET_DIR, "agent.sock");
-				const closeSocket = await bindUnixSocket(RAW);
-				process.env.SSH_AUTH_SOCK = realpathSync(RAW);
+				process.env.SSH_AUTH_SOCK = CANONICAL_AGENT;
 				try {
 					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
 						capability: cap,
 						command: cmd,
 					});
 					const res = runPrepared(prepared);
-					expect(res.exitCode).toBe(0);
-					expect(res.stdout).toContain("KEY_DENIED");
-					expect(res.stdout).not.toContain("KEY_READABLE");
+					expect(res.exitCode).not.toBe(0);
+					expect(res.stdout).toBe("");
+					expect(res.stderr).toMatch(
+						/Operation not permitted|Permission denied/i,
+					);
 				} finally {
 					if (prev === undefined) {
 						delete process.env.SSH_AUTH_SOCK;
@@ -1114,47 +1100,21 @@ describe.skipIf(!HAS_SUBSTRATE)(
 						process.env.SSH_AUTH_SOCK = prev;
 					}
 					closeSocket();
-					cleanupFixture(fixture.root);
 				}
-			} catch (cause) {
-				cleanupFixture(fixture.root);
-				throw cause;
+			} finally {
+				cleanupSocketFixture(fixture);
 			}
 		});
-
-		it("SSH-12 sibling: agent-mode child cannot connect to unauthorized sibling.sock (path-literal scope)", async () => {
-			const fixture = buildFixture();
+		it("SSH-12 sibling: agent-mode child cannot connect to unauthorized sibling.sock (path-literal scope, real connect(2))", async () => {
+			const fixture = buildSocketFixture();
 			try {
-				const SOCKET_DIR = join(fixture.root, "agent");
-				mkdirSync(SOCKET_DIR, { recursive: true });
-				const AUTH_RAW = join(SOCKET_DIR, "agent.sock");
-				const SIBLING_RAW = join(SOCKET_DIR, "sibling.sock");
-				try {
-					rmSync(AUTH_RAW);
-				} catch {
-					/* not present */
-				}
-				try {
-					rmSync(SIBLING_RAW);
-				} catch {
-					/* not present */
-				}
-				// BOTH sockets are bound to live AF_UNIX servers — the test
-				// is "knowledge of socket path ≠ authority to connect",
-				// NOT "sibling doesn't exist". A missing sibling would pass
-				// trivially (connect(2) returns ENOENT, not EPERM); we need
-				// the sibling inode to exist so the kernel-level
-				// `(allow network-outbound (remote unix-socket (path-literal
-				// "agent.sock")))` rule is the ONLY thing separating the
-				// two outcomes.
-				const closeAuth = await bindUnixSocket(AUTH_RAW);
-				const closeSibling = await bindUnixSocket(SIBLING_RAW);
-				const CANONICAL_AUTH = realpathSync(AUTH_RAW);
-				const CANONICAL_SIBLING = realpathSync(SIBLING_RAW);
-				// Defense-in-depth: assert the two canonical paths differ
-				// (they should — different filenames) so the test cannot
-				// pass by accident.
+				const closeAuth = await bindUnixSocket(fixture.agentSock);
+				const closeSibling = await bindUnixSocket(fixture.siblingSock);
+				const CANONICAL_AUTH = realpathSync(fixture.agentSock);
+				const CANONICAL_SIBLING = realpathSync(fixture.siblingSock);
 				expect(CANONICAL_AUTH).not.toBe(CANONICAL_SIBLING);
+
+				const probePath = writeConnectProbe(fixture.inside, "connect_probe.py");
 
 				const cap: CommandCapability = {
 					readonlyRoots: [fixture.inside],
@@ -1162,37 +1122,53 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					network: "deny",
 					environment: { mode: "sanitized", allow: [] },
 					cwd: fixture.inside,
-					sshAuthenticationAuthority: {
-						mode: "agent",
-					},
+					sshAuthenticationAuthority: { mode: "agent" },
 				};
-				// The child receives BOTH socket paths explicitly so the
-				// "knowledge of socket path ≠ authority" property is what
-				// is being tested, not "child didn't know the path".
-				const cmd: CommandInvocation = {
-					executable: "/bin/sh",
-					args: [
-						"-c",
-						[
-							`if exec 9<>'${CANONICAL_AUTH}' 2>/dev/null; then AUTH=1; exec 9<&-; else AUTH=0; fi`,
-							`if exec 9<>'${CANONICAL_SIBLING}' 2>/dev/null; then SIB=1; exec 9<&-; else SIB=0; fi`,
-							"echo AUTH=$AUTH SIBLING=$SIB",
-						].join("; "),
-					],
+				const authProbeCmd: CommandInvocation = {
+					executable: "/usr/bin/python3",
+					args: [probePath, CANONICAL_AUTH],
+					cwd: fixture.inside,
+					env: {},
+				};
+				const siblingProbeCmd: CommandInvocation = {
+					executable: "/usr/bin/python3",
+					args: [probePath, CANONICAL_SIBLING],
 					cwd: fixture.inside,
 					env: {},
 				};
 				const prev = process.env.SSH_AUTH_SOCK;
 				process.env.SSH_AUTH_SOCK = CANONICAL_AUTH;
 				try {
-					const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					// POSITIVE CONTROLS (no Seatbelt): both reachable.
+					const controlAuth = await noSandboxBackend.prepare({
 						capability: cap,
-						command: cmd,
+						command: authProbeCmd,
 					});
-					const res = runPrepared(prepared);
-					expect(res.exitCode).toBe(0);
-					expect(res.stdout).toContain("AUTH=1");
-					expect(res.stdout).toContain("SIBLING=0");
+					expect(runPrepared(controlAuth).stdout).toContain("PY_CONNECT_OK");
+					const controlSibling = await noSandboxBackend.prepare({
+						capability: cap,
+						command: siblingProbeCmd,
+					});
+					expect(runPrepared(controlSibling).stdout).toContain("PY_CONNECT_OK");
+
+					// SEATBELT agent mode: authorized connects, sibling denied.
+					const authPrepared = await SeatbeltSandboxBackendExperimental.prepare(
+						{ capability: cap, command: authProbeCmd },
+					);
+					const authRes = runPrepared(authPrepared);
+					expect(authRes.exitCode).toBe(0);
+					expect(authRes.stdout).toContain("PY_CONNECT_OK");
+					expect(authRes.stdout).not.toContain("PY_CONNECT_ERROR");
+
+					const siblingPrepared =
+						await SeatbeltSandboxBackendExperimental.prepare({
+							capability: cap,
+							command: siblingProbeCmd,
+						});
+					const siblingRes = runPrepared(siblingPrepared);
+					expect(siblingRes.exitCode).not.toBe(0);
+					expect(siblingRes.stdout).toContain("PY_CONNECT_ERROR");
+					expect(siblingRes.stdout).not.toContain("PY_CONNECT_OK");
 				} finally {
 					if (prev === undefined) {
 						delete process.env.SSH_AUTH_SOCK;
@@ -1201,11 +1177,9 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					}
 					closeAuth();
 					closeSibling();
-					cleanupFixture(fixture.root);
 				}
-			} catch (cause) {
-				cleanupFixture(fixture.root);
-				throw cause;
+			} finally {
+				cleanupSocketFixture(fixture);
 			}
 		});
 	},
