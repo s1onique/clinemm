@@ -1,0 +1,13 @@
+captured_at_utc=20260829T140658Z
+head=f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
+branch=main
+test_file=apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts
+test_added=OWN01 RED (line 780)
+test_runner=apps/vscode bun x vitest run src/sdk/sdk-session-event-coordinator.test.ts
+result=RED (1 failed | 28 passed of 29)
+red_diagnostic=AssertionError: expected true to be false // Object.is equality
+production_code_changed=NONE
+test_file_change=+80 lines (single new it-block)
+binding=PTAD specimen for task 1787991478667_tjjyj (222 tool calls, 0 recovery budget failures)
+bound_production_seam=apps/vscode/src/sdk/sdk-session-event-coordinator.ts:172-225
+bound_existing_test=CPL01 (asserts opposite contract — reviewer contract-collision is intentional)
