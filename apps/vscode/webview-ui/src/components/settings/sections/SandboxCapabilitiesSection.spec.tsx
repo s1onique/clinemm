@@ -1,25 +1,27 @@
 /**
- * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01
+ * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01-CORRECTION01
  *
- * UI state test for the new SandboxCapabilitiesSection. Red-state:
- * the section component does not yet exist; importing it should fail
- * until it is added to webview-ui/src/components/settings/sections/.
+ * UI tests for the SandboxCapabilitiesSection. Green-disk evidence
+ * for the §P0 review finding: T11_UI_STATE and the header-assertion
+ * gate that locks the SandBox & Capabilities section header in place
+ * so the `renderSectionHeader(tabId)` exact-lookup pattern cannot
+ * silently regress again.
  *
- * Post-GREEN behaviour:
- *   - section renders from authoritative state
- *   - toggling "Allow outbound network" dispatches
- *     updateSetting("clinemmSafeYoloAllowNetwork", checked)
- *   - toggling "Allow SSH agent authentication" dispatches
- *     updateSetting("clinemmSafeYoloAllowSshAgent", checked)
- *   - the two controls are independent (toggling one does not call
- *     updateSetting for the other)
- *   - the section never sets the persisted value to a non-boolean /
- *     undefined / non-finite type — defensive input hygiene
+ * Test-runner: vitest (matches the existing
+ * FeatureSettingsSection.spec.tsx pattern; webview's vite.config.ts
+ * defines the @shared path alias). bun test does NOT pick up
+ * vite.config.ts aliases and fails on `@shared/proto/cline/state`
+ * resolution — vitest is the intended runner for webview-ui tests.
  *
- * The test follows the precedent of
- * `webview-ui/src/components/settings/sections/FeatureSettingsSection.spec.tsx`:
- * mock `useExtensionState`, mock the `updateSetting` helper,
- * mock webview-toolkit. Render with `@testing-library/react`.
+ * Switch interaction: Radix Switch renders a button[role=switch]
+ * (NOT a native input[type=checkbox]). Tests select by `id={label}`
+ * (the Switch primitive forwards `id`) and click the node.
+ *
+ * Header assertion: `renderSectionHeader` performs an exact-lookup
+ * on `SETTINGS_TABS.find((t) => t.id === tabId)` and returns null
+ * when the id is unknown. We assert the header renders the heading
+ * "Sandbox & Capabilities" (and not null), so the exact-lookup
+ * regression cannot recur.
  */
 
 import { fireEvent, render, screen } from "@testing-library/react"
@@ -61,38 +63,74 @@ describe("ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01 — Sandbox
 
 	it("toggling Allow outbound network dispatches updateSetting(clinemmSafeYoloAllowNetwork, true)", () => {
 		const { container } = render(<SandboxCapabilitiesSection renderSectionHeader={() => null} />)
-		const switches = container.querySelectorAll("input[type=checkbox]")
-		// The Switch component (ui/switch) renders a checkbox input. The
-		// first toggle is the network one.
-		const networkSwitch = switches[0] as HTMLInputElement
+		// Toggle row switches are Radix Switches (button[role=switch]).
+		// Each row has its own aria-label matching the visible label.
+		// The two toggles inside the Sandbox section are the only
+		// switches in the rendered tree at this depth; we pick by
+		// aria-label uniqueness (no CSS-id escaping needed).
+		const networkSwitch = container.querySelector('[aria-label="Allow outbound network"]')
 		expect(networkSwitch).toBeTruthy()
-		fireEvent.click(networkSwitch)
+		fireEvent.click(networkSwitch as Element)
 		expect(mockUpdateSetting).toHaveBeenCalledWith("clinemmSafeYoloAllowNetwork", true)
 	})
 
 	it("toggling Allow SSH agent dispatches updateSetting(clinemmSafeYoloAllowSshAgent, true)", () => {
 		const { container } = render(<SandboxCapabilitiesSection renderSectionHeader={() => null} />)
-		const switches = container.querySelectorAll("input[type=checkbox]")
-		const sshAgentSwitch = switches[1] as HTMLInputElement
+		const sshAgentSwitch = container.querySelector(
+			'[aria-label="Allow SSH agent authentication"]',
+		)
 		expect(sshAgentSwitch).toBeTruthy()
-		fireEvent.click(sshAgentSwitch)
+		fireEvent.click(sshAgentSwitch as Element)
 		expect(mockUpdateSetting).toHaveBeenCalledWith("clinemmSafeYoloAllowSshAgent", true)
 	})
 
 	it("toggling one capability does not dispatch updateSetting for the other (independence)", () => {
 		const { container } = render(<SandboxCapabilitiesSection renderSectionHeader={() => null} />)
-		const switches = container.querySelectorAll("input[type=checkbox]")
-		const networkSwitch = switches[0] as HTMLInputElement
-		fireEvent.click(networkSwitch)
+		const networkSwitch = container.querySelector('[aria-label="Allow outbound network"]')
+		fireEvent.click(networkSwitch as Element)
 		expect(mockUpdateSetting).toHaveBeenCalledWith("clinemmSafeYoloAllowNetwork", true)
-		expect(mockUpdateSetting).not.toHaveBeenCalledWith("clinemmSafeYoloAllowSshAgent", expect.anything())
+		expect(mockUpdateSetting).not.toHaveBeenCalledWith(
+			"clinemmSafeYoloAllowSshAgent",
+			expect.anything(),
+		)
 	})
 
-	it("renders the persisted true value as the switch's checked state (visual truth, no hidden protocol delta)", () => {
+	it("renders the persisted true value as the switch's checked state (visual truth)", () => {
 		mockExtensionState.value.clinemmSafeYoloAllowNetwork = true
 		const { container } = render(<SandboxCapabilitiesSection renderSectionHeader={() => null} />)
-		const switches = container.querySelectorAll("input[type=checkbox]")
-		const networkSwitch = switches[0] as HTMLInputElement
-		expect(networkSwitch.checked).toBe(true)
+		const networkSwitch = container.querySelector('[aria-label="Allow outbound network"]')
+		expect(networkSwitch).toBeTruthy()
+		// Radix Switch with checked={true} renders
+		// data-state="checked" on the root (the Switch primitive
+		// is a button[role=switch], not a native checkbox input).
+		expect((networkSwitch as HTMLElement).getAttribute("data-state")).toBe("checked")
+	})
+
+	// §P0 closure-blocker: locks the `renderSectionHeader("sandbox")`
+	// exact-lookup. If a future refactor changes the tab id, the
+	// SectionHeader helper returns null and the heading vanishes;
+	// this test catches that regression instantly.
+	it("renders the 'Sandbox & Capabilities' section header (renderSectionHeader('sandbox') lock)", () => {
+		const observed: string[] = []
+		const { container } = render(
+			<SandboxCapabilitiesSection
+				renderSectionHeader={(tabId) => {
+					observed.push(tabId)
+					return (
+						<div data-testid="section-header" data-tab-id={tabId}>
+							Sandbox & Capabilities
+						</div>
+					)
+				}}
+			/>,
+		)
+		// renderSectionHeader must be invoked exactly once with the
+		// canonical tab id "sandbox" (the exact-lookup key in
+		// SettingsView.tsx). A return of null means the section
+		// renders without its heading.
+		expect(observed).toEqual(["sandbox"])
+		expect(
+			container.querySelector('[data-testid="section-header"][data-tab-id="sandbox"]'),
+		).toBeTruthy()
 	})
 })

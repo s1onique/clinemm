@@ -86,7 +86,7 @@ const SandboxCapabilitiesSection = ({ renderSectionHeader }: SandboxCapabilities
 
 	return (
 		<div>
-			{renderSectionHeader("sandbox-capabilities")}
+			{renderSectionHeader("sandbox")}
 			<Section>
 				<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
 					Sandbox

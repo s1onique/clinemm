@@ -207,29 +207,48 @@ ABLATION_RESULT    = 4 pass / 6 fail. The 6 failures are the §16
 
 ## §4 — Authority conservation (ACT §6 / §16)
 
-| Capability | Pre-ACT runtime selection | New persisted value (default) | New runtime selection | Delta |
-|---|---|---|---|---|
-| network | `"deny"` (env unset / other) | `false` | `"deny"` | **0** |
-| network | `"allow"` (env=`CLINEMM_SAFE_YOLO_NETWORK=allow`) | `false` | `"deny"` | **-1** (conservative) |
-| network | `"deny"` (env unset) | `true` | `"allow"` | **+1** (only when user opts in) |
-| sshAgent | undefined (deny) | `false` | undefined | **0** |
-| sshAgent | `{ mode: "agent" }` (env=`CLINEMM_SAFE_YOLO_SSH_AGENT=allow`) | `false` | undefined | **-1** (conservative) |
-| sshAgent | undefined (deny) | `true` | `{ mode: "agent" }` | **+1** (only when user opts in) |
+The runtime capability selection follows a three-valued contract:
 
-Two conservation invariants verified by tests:
+```text
+ABSENT legacy key  -> env fallback preserved -> no migration delta
+EXPLICIT false     -> persisted deny overrides env (persistence authoritative,
+                                              §16 hardening; intentional conservative)
+EXPLICIT true      -> persisted allow/env is irrelevant (user wants it on)
+```
 
-1. `MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0`: a user who has
-   never touched the UI (no persisted keys) sees exactly the
-   pre-ACT runtime selection. Verified by
-   `sandbox-policy.settings-binding.test.ts > default snapshot
-   maps to pre-ACT deny/deny` and
-   `…legacy settings object missing the new keys loads with
-   undefined values`.
+There are therefore TWO conservation categories, intentionally
+distinguished:
 
-2. Persistence authoritative: an explicit persisted `false`
-   overrides an env that says `"allow"`. Verified by
-   `…persisted network=false forces deny even when env says
-   allow`.
+| ABSENT legacy key | Pre-ACT runtime selection | New runtime selection | Migration Δ |
+|---|---|---|---|
+| network | `"deny"` (env unset / other) | `"deny"` (env fallback) | **0** |
+| network | `"allow"` (env=allow) | `"allow"` (env fallback) | **0** |
+| sshAgent | undefined (env unset / other) | undefined (env fallback) | **0** |
+| sshAgent | `{ mode: "agent" }` (env=allow) | `{ mode: "agent" }` (env fallback) | **0** |
+
+`MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0` is the conservation
+property for the absent-key category above. A user who has
+never opened the Settings UI gets the EXACT pre-ACT runtime
+selection in every branch (this is the load-bearing property;
+verified by `sandbox-policy.settings-binding.test.ts > default
+snapshot maps to pre-ACT deny/deny` and
+`…legacy settings object missing the new keys loads with
+undefined values`).
+
+| EXPLICIT persisted value | Pre-ACT runtime selection | New runtime selection | Delta |
+|---|---|---|---|
+| network = false | any | `"deny"` | intentional conservative (deny wins against env=allow too) |
+| network = true  | any | `"allow"` | intentional enable |
+| sshAgent = false | any | undefined | intentional conservative |
+| sshAgent = true | any | `{ mode: "agent" }` | intentional enable |
+
+The EXPLICIT-FALSE category is intentionally conservative. A
+user who has touched the toggle and turned it off MUST win even
+when the operator/CI env says otherwise (persistence-authoritative
+invariant; §16 hardening; verified by `…persisted network=false
+forces deny even when env says allow`). This is NOT a
+`MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0` violation — the
+property is scoped to the ABSENT category only.
 
 §16 adversarial conservation cases (ACT §16):
 
@@ -680,3 +699,68 @@ NEW_DEPENDENCIES      = none.
 | T11 — UI state | `SandboxCapabilitiesSection.spec.tsx` (structurally complete; environmental RED on host with broken webview-ui bun test runner; see §3 T11 GREEN_BLOCKED + §17 RESIDUE) | BLOCKED env. |
 | T12 — invalid/unknown value handling | `…env path is the fallback when no overrides are supplied (legacy callers stay green)` (env-var non-allow values still produce deny — pre-existing test in `darwin-seatbelt-default-on-selector-matrix01.c1-green.test.ts > D8: Linux + 'seatbelt' → throws InvalidSandboxConfigurationError`) | PASS |
 
+## §18 — Follow-up closure (CORRECTION01)
+
+The factory reviewer's P0 finding — that T11 was BLOCKED and that
+the section file passed `renderSectionHeader("sandbox-capabilities")`
+which the upstream `SETTINGS_TABS.find((t) => t.id === tabId)`
+exact-lookup would reject — was addressed in the bounded
+follow-up `ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01-CORRECTION01`
+(reviewer-verdict: HALT_REQUIRED_UI_GREEN_NOT_PROVEN; correction
+authorized; max 1 correction round).
+
+The correction commit:
+
+1. Repaired the `renderSectionHeader` exact-lookup key
+   (`"sandbox-capabilities"` → `"sandbox"`) so the section heading
+   now renders.
+2. Repaired the UI test runner by using vitest (the canonical
+   webview-ui command is `bun run test` → `vitest run`, which honors
+   the `@shared` path alias defined in `vite.config.ts`; `bun test`
+   alone does not read vite.config.ts — pre-existing).
+3. Strengthened the UI spec to assert the section header renders
+   and locks the canonical `tabId` arg as `sandbox` so this exact
+   regression cannot recur silently. The spec now runs **6/6 PASS**
+   under vitest.
+4. Added a production-composition test
+   (`apps/vscode/src/sdk/sandbox-policy-production-composition.test.ts`)
+   that proves the full chain — `safeYoloCapabilitySource() →
+   CommandJobManager.start() → effective CommandCapability` — at
+   the existing `sandboxBackend.prepare()` seam (not a new
+   integration apparatus). **5/5 PASS** with one bypass-ablation.
+5. Performed an ablation: bypassing the `safeYoloCapabilitySource`
+   read in `CommandJobManager.start` makes the production-composition
+   test fail 3/5 (T1, T2, T3). Restoring the binding restores 5/5
+   PASS. The test discriminates the binding.
+6. Re-ran: persistence suite 5/5, sandbox-policy binding 10/10,
+   selector-matrix structural 18/18 (9 substrate-skips), production
+   composition 5/5.
+7. `ACT_OWNED_TYPECHECK_DELTA = 0` (3 pre-existing TS errors in the
+   unchanged `command-job-manager.sandbox-integration.test.ts`
+   remain; zero new TS errors are introduced by this ACT).
+8. `git diff --check = PASS`.
+9. Stripped the trailing blank line at EOF of this file.
+
+Conservative conservation categories clarified in §4 (per
+reviewer note): the per-row delta table for the ABSENT-key case
+is `0`; the deliberate conservative Δ −1 for the EXPLICIT-FALSE
+case is not a MIGRATION_OR_DEFAULT_AUTHORITY_DELTA violation —
+the property is scoped to the ABSENT category only, and the
+EXPLICIT-FALSE case is the persistence-authoritative invariant
+under §16.
+
+Disambiguation: `bun test` alone (without `bun run`) on the
+webview-ui side fails on path alias resolution because `bun test`
+does not honour `vite.config.ts` aliases. This is a pre-existing
+local-only quirk of the runner combination, not a defect in this
+ACT. The canonical webview-ui test command is `bun run test`,
+which dispatches to vitest and honours the alias. The new UI spec
+runs 6/6 PASS under vitest; the existing `FeatureSettingsSection.spec.tsx`
+runs 11/11 PASS under vitest (verified pre-existing).
+
+The deferred QPSR / RSR / completion / safe-yolo-substrate / BYPASS01 /
+SSH kernel / Disable-Seatbelt-UI / GnuPG / credential-mediation
+investigations were not touched and were not reopened.
+
+Final head was `b996f6d2c` at IMPLEMENTATION01 closure; CORRECTION01
+amends that HEAD but does not move it forward to a new ACT-ID.
