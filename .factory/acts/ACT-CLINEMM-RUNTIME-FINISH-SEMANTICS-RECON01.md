@@ -1,6 +1,6 @@
 # ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01
 
-> Status: **OPEN / OPENING / NO_PRODUCTION_DELTA** —
+> Status: **CLOSED / PRODUCER_SEMANTICS_BUG / NO_PRODUCTION_DELTA** —
 > producer-side causal classification for the bare-done-with-no-
 > terminal-commit defect captured at `ACT-CLINEMM-RUNTIME-TASK-
 > PROGRESSION-RECON01`'s `OWN01` RED.
@@ -394,38 +394,90 @@ ACT_ID = ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01
 PREDECESSOR_RED_SUBJECT_HEAD = f106bc63d0c3c5ab3683c39b8592cb821b4d32f6
 ENTRY_HEAD = 6ecf546f84b6593904357d198c56aadd89fe2a85
 OPEN_HEAD  = 2401faf4ac14d6604952f7c840e1b0e45f7992ea
-FINAL_HEAD = (TBD at closure)
+ENTRY_IDENTITY_FIX_HEAD = 49f7d730aa822a10c277797a8c805db527c2db56
+FINAL_HEAD = 247922cfd9a73b39fa1c9e1f4c5e8a3b27d5f1e4 (this commit's parent at the time of authoring; see below)
 
 LIVE_REASON = UNAVAILABLE_FROM_TRACE
 
-COMPLETED_PRODUCERS =
-SEMANTIC_COMPLETION_PRODUCERS =
-NON_SEMANTIC_COMPLETION_PRODUCERS =
+COMPLETED_PRODUCERS = 2 (local seam) + 1 (hub seam)
+  Local:  agent-runtime.ts:1371 (COMPLETION-REMINDER-EXHAUSTION)
+          agent-runtime.ts:1402 (COMPLETION-TOOL-AUTHORITY)
+  Hub:    hub-runtime-host.ts:546-548 (HUB-DONE-EVENT-FROM-PAYLOAD default)
 
-MAX_ITERATIONS_RUNTIME_STATUS = failed
-MAX_ITERATIONS_AGENT_DONE_REASON = error
-MAX_ITERATIONS_ERROR_EVENT = (yes/no/depends)
+SEMANTIC_COMPLETION_PRODUCERS = 1
+  agent-runtime.ts:1402 (requires completesRun tool observation)
 
-FALLBACK_COMPLETION_CLASSIFICATION =
-  (SEMANTIC_COMPLETION | MODEL_STOP_ONLY | LOOP_EXHAUSTION |
-   TOOL_COMPLETION | HOST_FALLBACK | UNKNOWN)
+NON_SEMANTIC_COMPLETION_PRODUCERS = 2
+  agent-runtime.ts:1371 (under completionPolicy.requireCompletionTool === true)
+  hub-runtime-host.ts:546-548 (default fallback for unknown reason)
 
-CONTINUATION_CALLERS =
-HOST_OWNED_AUTOCONTINUE_EXISTS = (YES | NO | UNKNOWN)
+MAX_ITERATIONS_RUNTIME_STATUS = "aborted" or "failed" (NEVER "completed")
+MAX_ITERATIONS_AGENT_DONE_REASON = "aborted" (NEVER "max_iterations")
+MAX_ITERATIONS_ERROR_EVENT = YES (when status === "failed", emits run-failed → AgentErrorEvent)
 
-PRIMARY_CAUSAL_CLASSIFICATION =
-  (PRODUCER_SEMANTICS_BUG | HOST_CONTINUATION_BUG |
-   PRESENTATION_PHASE_GAP | COMPOSED_BUG | CAPTURE_INSUFFICIENT)
+FALLBACK_COMPLETION_CLASSIFICATION = AMBIGUOUS
+  (under requireCompletionTool=true: collapses two distinct meanings into one outcome)
+  (under requireCompletionTool=false: RUNTIME_INVOCATION_COMPLETION — natural stop IS canonical done)
 
-NEW_TURN_PHASE_REQUIRED = (YES | NO | UNKNOWN)
-NEXT_REPAIR_SEAM =
+CONTINUATION_CALLERS = 7 inventoried (see continuation-callers.md)
+  LOCAL_HOST_EXECUTE_AGENT_TURN         USER_OWNED
+  SESSION_RUNTIME_ORCHESTRATOR_INTERNAL_RUN TOOL_FLOW
+  PENDING_PROMPTS_CONTROLLER_DRAIN      USER_OWNED
+  AGENT_RUNTIME_CONSUME_PENDING_USER_MESSAGE HOST_OWNED (NOT WIRED)
+  TEAM_ONLY_SPAWN_AGENT_TOOL           TEAM_ONLY
+  TEAM_SESSION_COORDINATOR_CAN_AUTO_CONTINUE TEAM_ONLY
+  CLI_AGENT_EXAMPLE_RUN_CONTINUE       USER_OWNED
 
-OWN01 = RED (preserved from predecessor)
+HOST_OWNED_AUTOCONTINUE_EXISTS = NO
+  (the API supports one — consumePendingUserMessage at types.ts:944 — but the
+   live ClineMM LocalRuntimeHost does NOT wire it. The host uses
+   pendingPromptsController.drain instead, which is USER_OWNED.)
+
+PRIMARY_CAUSAL_CLASSIFICATION = PRODUCER_SEMANTICS_BUG
+  Ruled out (final-assessment.md §1):
+    HOST_CONTINUATION_BUG  — structurally inapplicable (no wired primitive to fail to invoke)
+    PRESENTATION_PHASE_GAP — producer semantics are NOT correct
+    COMPOSED_BUG           — no independent host defect to compose with
+    CAPTURE_INSUFFICIENT   — structural walk + live trace cross-reference is sufficient
+
+FIRST_BROKEN_BOUNDARY = agent-runtime.ts:1371
+  finishRun("completed", finalAssistantMessage) fires unconditionally when
+  toolCalls.length === 0 AND (requireCompletionTool === false OR reminder loop
+  exhausted). Bypasses the requireCompletionTool=true configuration by virtue
+  of the reminder-loop exhaustion. No provenance flag distinguishes this from
+  a genuine COMPLETION-TOOL-AUTHORITY call at 1402.
+
+NEW_TURN_PHASE_REQUIRED = UNKNOWN
+  (producer defect is the first broken boundary; new TurnPhase is only
+   relevant if producer is repaired AND presentation/translation still
+   cannot represent the truthful ownership state. Not yet evaluated.)
+
+NEXT_REPAIR_SEAM = ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-REPAIR01
+  (only this; no parallel TurnPhase speculation; the producer defect is
+   the load-bearing cause and downstream presentation cannot fix it)
+
+RFS01 = NOT_EXECUTED         (pre-existing tests cover submit_and_exit)
+RFS02 = STRUCTURAL_ONLY      (definitive source walk)
+RFS03 = NOT_REPRESENTABLE    (requires real model + tools + completionPolicy)
+RFS04 = NOT_REPRESENTABLE    (no HOST_OWNED primitive wired on host)
+
+OWN01 = RED (1 failed | 28 passed of 29)
 CPL01..CPL05 = PASS (preserved)
 CRA02..CRA03 = PASS (preserved)
 
 PRODUCTION_DELTA = NONE
-VERDICT =
+  (5 production files byte-identical between PREDECESSOR_RED_SUBJECT_HEAD
+   and FINAL_HEAD: sdk-session-event-coordinator.ts, message-translator.ts,
+   agent-runtime.ts, local-runtime-host.ts, session-runtime-orchestrator.ts)
+
+EVIDENCE_COMMITTED = 7 (this ACT) + 3 (predecessor curated) = 10 files
+  producer-inventory.md classification-table.md max-iterations-path.md
+  fallback-completion-path.md continuation-callers.md probe-results.md
+  final-assessment.md
+  + OWN01-RED/red-record.json OWN01-RED/red-file-only-result.txt
+  + live-20260829T134901Z/post-terminal-authority-diagnostic-extension.jsonl
+
+VERDICT = PRODUCER_SEMANTICS_BUG
 ```
 
 Valid verdicts:
