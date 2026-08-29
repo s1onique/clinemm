@@ -11,7 +11,7 @@ VERDICT      = PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1
 > Phase D (PURE GREEN) → GREEN (act-owned tests PASS, 0 regressions in changed files)
 > Phase E (REAL-KERNEL QUARTET) → PASS_REAL (committed at f6b6697e5; SSH-03/04/06/12)
 > Phase F (AGENT ON/OFF causal differential) → PASS_REAL (committed at f6b6697e5)
-> Phase G (LIVE DOGFOOD ClineMM) → LIVE / PASS (operator-shell dogfood 2026-08-29)
+> Phase G (LIVE DOGFOOD ClineMM) → LIVE / OBSERVED (operator-shell observation 2026-08-29; SOURCE_UNBOUND; NOT exact-head live qualification)
 
 ## Identity
 
@@ -118,7 +118,8 @@ SSH-02  = GREEN (conservation)    ; network allow alone does NOT grant
                                    ; raw-key reads (proven invariant)
 SSH-03  = PASS_REAL (host-kernel quartet at f6b6697e5)
 SSH-04  = PASS_REAL (host-kernel quartet at f6b6697e5)
-SSH-05  = LIVE / PASS (operator-shell dogfood 2026-08-29;
+SSH-05  = LIVE / OBSERVED (operator-shell observation 2026-08-29;
+                                   SOURCE_UNBOUND;
                                    host = indeep01; SSH_AGENT_AUTH_OK)
 SSH-06  = PASS_REAL (host-kernel quartet at f6b6697e5;
                                    also guaranteed by code: agent mode
@@ -225,12 +226,17 @@ EARLY_DRAFT       ; superseded by §16
 SUBSTRATE_AVAILABLE   = false on this VSCodium authoring shell
                           (probeSeatbeltAvailability() === false;
                            expected per ACT §6)
-SSH_AUTH_SOCK_BOUND   = PASS_REAL at HOST_TEST_HEAD (f6b6697e5)
-SSH_ADD_L             = LIVE / PASS (operator shell 2026-08-29)
+SSH_AUTH_SOCK_BOUND   = LIVE / OBSERVED (operator shell 2026-08-29;
+                           SOURCE_UNBOUND; bonus upstream-side evidence)
+SSH_ADD_L             = LIVE / OBSERVED (operator shell 2026-08-29;
+                           SOURCE_UNBOUND)
 RAW_KEY_READ          = LIVE / DENIED (operator shell 2026-08-29;
-                          also PASS_REAL at HOST_TEST_HEAD)
+                          also PASS_REAL at HOST_TEST_HEAD;
+                          SSH-01/02/06 invariant proven by host-kernel
+                          quartet, not by this transcript)
 SIBLING_SOCKET        = PASS_REAL at HOST_TEST_HEAD (f6b6697e5)
-SSH_REMOTE_QUALIFICATION = LIVE / PASS (operator shell 2026-08-29)
+SSH_REMOTE_QUALIFICATION = LIVE / OBSERVED (operator shell 2026-08-29;
+                           SOURCE_UNBOUND)
 ```
 
 ## Commits
@@ -262,7 +268,11 @@ SSH_AGENT_IMPLEMENTATION01
   PHASE_E     = PASS_REAL                 ; host-kernel quartet at f6b6697e5
                                           ; SSH-03/04/06/12 (committed)
   PHASE_F     = PASS_REAL                 ; A vs D causal differential at f6b6697e5
-  PHASE_G     = LIVE / PASS               ; operator-shell dogfood 2026-08-29
+  PHASE_G     = LIVE / OBSERVED          ; operator-shell observation 2026-08-29
+                                       ; SOURCE_UNBOUND; NOT exact-head live
+                                       ; qualification (bonus upstream-side
+                                       ; chain evidence that corroborates
+                                       ; HOST_KERNEL_TESTS PASS_REAL @ f6b6697e5)
 
 ALREADY_EXECUTED_BY_THIS_CLOSURE_CYCLE =
   ✓ HOST_KERNEL_QUARTET + PHASE_F at f6b6697e5
@@ -291,14 +301,22 @@ SSH-agent implementation ACT work is COMPLETE across all phases:
   Phase D (PURE GREEN)              = GREEN  (act-owned tests PASS)
   Phase E (HOST-KERNEL QUARTET)     = PASS_REAL  (f6b6697e5; SSH-03/04/06/12)
   Phase F (AGENT ON/OFF differential) = PASS_REAL  (f6b6697e5)
-  Phase G (LIVE DOGFOOD ClineMM)    = LIVE / PASS (operator shell 2026-08-29;
-                                       SSH_AUTH_SOCK visible, ssh-add
-                                       shows RSA key, raw-key EPERM,
+  Phase G (LIVE DOGFOOD ClineMM)    = LIVE / OBSERVED (operator shell 2026-08-29;
+                                       SOURCE_UNBOUND; NOT exact-head live
+                                       qualification — SSH_AUTH_SOCK visible,
+                                       ssh-add shows RSA key, raw-key EPERM,
                                        outbound SSH returns SSH_AGENT_AUTH_OK)
 
 Two distinct evidence layers, mutually reinforcing:
   HOST_KERNEL_TESTS = REAL / PASS_REAL (committed at f6b6697e5)
-  DOGFOOD_CLINE_MM  = LIVE / REAL_PRODUCTION_SEAM (this session)
+                      ; exact-head authority proof; load-bearing for V1 contract.
+  DOGFOOD_CLINE_MM  = LIVE / OBSERVED (this session, 2026-08-29; SOURCE_UNBOUND)
+                      ; bonus upstream-side chain evidence; corroborates
+                      HOST_KERNEL_TESTS but does NOT establish exact-head
+                      live qualification. Closing the ACT on the host-kernel
+                      layer (not on this transcript) is consistent with
+                      the Factory evidence rule and with the original
+                      IMPLEMENTATION ACT §6 substrate-gating note.
 
 NEW_P0  = NONE
 NEW_P1  = NONE
@@ -350,12 +368,15 @@ introduced by this ACT.
 ### What is still substrate-gated (per ACT §6)
 
 ```text
-SSH-03 ENV               = PASS_REAL   (host-kernel quartet at f6b6697e5)
-SSH-04 EXACT SOCKET      = PASS_REAL   (host-kernel quartet at f6b6697e5)
-SSH-06 RAW KEY CONSERVE  = PASS_REAL   (host-kernel quartet at f6b6697e5)
-SSH-12 SIBLING SOCKET    = PASS_REAL   (host-kernel quartet at f6b6697e5)
-Phase F ABLATION         = PASS_REAL   (A vs D causal differential at f6b6697e5)
-Phase G LIVE SSH QUAL    = LIVE / PASS (operator-shell dogfood 2026-08-29)
+SSH-03 ENV               = PASS_REAL      (host-kernel quartet at f6b6697e5)
+SSH-04 EXACT SOCKET      = PASS_REAL      (host-kernel quartet at f6b6697e5)
+SSH-06 RAW KEY CONSERVE  = PASS_REAL      (host-kernel quartet at f6b6697e5)
+SSH-12 SIBLING SOCKET    = PASS_REAL      (host-kernel quartet at f6b6697e5)
+Phase F ABLATION         = PASS_REAL      (A vs D causal differential at f6b6697e5)
+Phase G LIVE SSH QUAL    = LIVE / OBSERVED (operator-shell observation 2026-08-29;
+                                          SOURCE_UNBOUND; NOT exact-head live
+                                          qualification — bonus evidence that
+                                          corroborates HOST_KERNEL_TESTS)
 ```
 
 The 4 host-kernel quartet tests + Phase F were committed as
@@ -380,7 +401,11 @@ SSH-06 HOST TEST               = PASS_REAL (committed at f6b6697e5)
 SSH-12 HOST TEST               = PASS_REAL (committed at f6b6697e5)
 PHASE_F_ABLATION                = PASS_REAL (A vs D at f6b6697e5)
 REAL_KERNEL_PROOF              = PASS_REAL (5 passed at f6b6697e5 on Terminal.app / iTerm2)
-LIVE_SSH_QUALIFICATION         = LIVE / PASS (operator shell 2026-08-29)
+LIVE_SSH_QUALIFICATION         = LIVE / OBSERVED (operator shell 2026-08-29;
+                                       SOURCE_UNBOUND; NOT exact-head live
+                                       qualification; bonus upstream-side
+                                       chain evidence that corroborates
+                                       HOST_KERNEL_TESTS PASS_REAL @ f6b6697e5)
 ```
 
 ### Operator next-step (superseded; see §16 for current state)
@@ -509,28 +534,37 @@ ON_THIS_SESSION_HAS_SUBSTRATE = false   ; the VSCodium nested-sandboxed
                                         this session.
 ```
 
-### Layer 2 — DOGFOOD_CLINE_MM_LIVE (LIVE / REAL_PRODUCTION_SEAM, 2026-08-29)
+### Layer 2 — DOGFOOD_CLINE_MM_LIVE (LIVE / OBSERVED; SOURCE_UNBOUND, 2026-08-29)
 
-The Phase G live transcript was executed from the operator shell
-on Terminal.app / iTerm2 family (NOT the nested-sandboxed VSCodium
-authoring shell). Specimens (transcript:
-`live-qualification/live-ssh-transcript.txt`; environment JSON:
-`live-qualification/environment.json`; identity:
-`live-qualification/identity.txt`):
+The Phase G operator-shell observation was executed from the
+operator shell on Terminal.app / iTerm2 family (NOT the
+nested-sandboxed VSCodium authoring shell). The installed
+extension version was NOT bound to a specific source HEAD;
+no fresh `bun run package` + install was executed in this
+session against `f6b6697e5`. This layer is therefore
+**SOURCE_UNBOUND** and is honest bonus evidence that
+corroborates the exact-head HOST_KERNEL_TESTS layer; it does
+NOT establish exact-head live qualification.
+
+Specimens (transcript: `live-qualification/live-ssh-transcript.txt`;
+environment JSON: `live-qualification/environment.json`;
+identity: `live-qualification/identity.txt`):
 
 ```text
-SSH_AUTH_SOCK_VISIBLE   = LIVE / PASS
+SSH_AUTH_SOCK_VISIBLE   = LIVE / OBSERVED (SOURCE_UNBOUND)
   (/private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners;
    test -S => YES)
 
-SSH_AGENT_KEY_VISIBLE  = LIVE / PASS
+SSH_AGENT_KEY_VISIBLE  = LIVE / OBSERVED (SOURCE_UNBOUND)
   (ssh-add -l => 2048 SHA256:XYoaR80+0MKX48FTYnFQXs4fkX66VdRj47wgFXneU2w @id_rsa)
 
-RAW_PRIVATE_KEY_READ   = LIVE / DENIED
+RAW_PRIVATE_KEY_READ   = LIVE / DENIED  (SOURCE_UNBOUND)
   (cat ~/.ssh/id_rsa => "Operation not permitted", exit 1;
-   SSH-01/02/06 invariant holds)
+   consistent with HOST_KERNEL_TESTS PASS_REAL at f6b6697e5;
+   SSH-01/02/06 invariant proven by host-kernel quartet + Phase F,
+   not by this transcript)
 
-REMOTE_SSH_AUTH        = LIVE / PASS
+REMOTE_SSH_AUTH        = LIVE / OBSERVED (SOURCE_UNBOUND)
   (ssh -o BatchMode=yes ubuntu@81.177.33.219 => SSH_AGENT_AUTH_OK;
    host = indeep01; kernel = 6.8.0-57-generic;
    benign "bash: warning: setlocale: LC_ALL: cannot change
@@ -541,16 +575,22 @@ REMOTE_SSH_AUTH        = LIVE / PASS
 
 ```text
 HOST_KERNEL_TESTS = REAL / PASS_REAL (committed at f6b6697e5)
-DOGFOOD_CLINE_MM  = LIVE / REAL_PRODUCTION_SEAM (this session, 2026-08-29)
+                    ; exact-head authority proof; load-bearing for V1 contract.
+DOGFOOD_CLINE_MM  = LIVE / OBSERVED (this session, 2026-08-29;
+                    SOURCE_UNBOUND; bonus upstream-side chain evidence
+                    that corroborates HOST_KERNEL_TESTS but does NOT
+                    establish exact-head live qualification)
 
 The composition is much stronger than either layer alone:
   - HOST_KERNEL_TESTS prove the Seatbelt substrate grants/revokes
     authority at the kernel boundary for the SSH-04/06/12 quartet
-    + Phase F differential.
-  - DOGFOOD_CLINE_MM proves the upstream-side chain holds end-to-end:
-    ssh-agent holds a usable key, raw-key read remains denied by
-    Seatbelt-bound cat, outbound SSH from the operator shell to
-    the remote sshd succeeds with the agent-mediated auth.
+    + Phase F differential, committed as PASS_REAL at f6b6697e5.
+  - DOGFOOD_CLINE_MM (SOURCE_UNBOUND) corroborates that the
+    upstream-side chain holds end-to-end on Terminal.app / iTerm2
+    family: ssh-agent holds a usable key, raw-key read remains
+    denied by Seatbelt-bound cat, outbound SSH from the operator
+    shell to the remote sshd succeeds with the agent-mediated
+    auth. (Exact-head binding NOT established in this session.)
 ```
 
 ### Disposition update
@@ -558,7 +598,9 @@ The composition is much stronger than either layer alone:
 ```text
 PHASE_E_SCAFFOLD                = COMPLETE / PASS_REAL (host-kernel quartet at f6b6697e5)
 PHASE_F_ABLATION                = PASS_REAL (Phase F causal differential at f6b6697e5)
-PHASE_G_LIVE_SSH_QUALIFICATION  = LIVE / PASS (operator-shell dogfood 2026-08-29)
+PHASE_G_LIVE_SSH_QUALIFICATION  = LIVE / OBSERVED (operator-shell observation 2026-08-29;
+                                  SOURCE_UNBOUND; NOT exact-head live qualification;
+                                  bonus upstream-side chain evidence)
 SUBSTRATE_GATED_SKIP_BLOCK      = 4 host tests (SSH-03/04/06/12) on this VSCodium nested-sandboxed
                                   authoring shell; they flip from SKIP to PASS on Terminal.app /
                                   iTerm2 / debug-harness (PASS_REAL expected outcome of

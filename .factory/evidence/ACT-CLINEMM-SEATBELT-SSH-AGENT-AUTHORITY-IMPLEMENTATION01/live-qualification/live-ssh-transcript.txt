@@ -1,13 +1,61 @@
-# LIVE Phase G — Operator-shell SSH dogfood (Terminal.app / iTerm2 family)
+# Operator-shell SSH observation (2026-08-29)
+
+> **EVIDENCE CLASSIFICATION**
+>
+> ```
+> HOST_TEST_HEAD              = f6b6697e527816ccd2d9803d24a17439d0c5ccf6
+> HOST_KERNEL_TESTS           = PASS_REAL            ; committed at f6b6697e5
+> IMPLEMENTATION_SUBJECT_HEAD = ff96ea8feecbb65e82dd3ddb14fb0269f90fb250
+>                                ; production-seam code head
+> LIVE_QUALIFICATION_HEAD     = UNKNOWN              ; the installed extension
+>                                ; version was not bound to a specific source
+>                                ; HEAD during the 2026-08-29 observation
+> DOGFOOD_SOURCE_HEAD         = UNAVAILABLE          ; no `bun run package` was
+>                                ; performed against f6b6697e5 in this
+>                                ; session; the installed extension predates
+>                                ; the host-kernel fixup chain
+> LIVE_BUILD_BINDING          = UNKNOWN
+> DOGFOOD_VERSION             = UNAVAILABLE
+> VSIX_PATH                   = UNAVAILABLE
+> VSIX_BYTES                  = UNAVAILABLE
+> VSIX_SHA256                 = UNAVAILABLE
+> INSTALLED_VERSION           = pre-existing operator dogfood from a prior
+>                                session on Terminal.app / iTerm2 family
+> ```
+>
+> The 2026-08-29 operator-shell observations below are **honest
+> bonus evidence** of upstream-side behaviour (ssh-agent socket
+> reachable, key loaded, raw-key read denied, outbound SSH
+> succeeds), but they DO NOT establish exact-head live
+> qualification of the installed extension. Exact-head live
+> qualification requires a fresh `bun run package` + install
+> against a known HEAD with the dogfood JSON record
+> (DOGFOOD_SOURCE_HEAD / DOGFOOD_VERSION / VSIX_PATH /
+> VSIX_BYTES / VSIX_SHA256 / INSTALLED_VERSION); that bounded
+> operation was NOT executed in this session. The live transcript
+> therefore records a **SOURCE_UNBOUND** observation.
+>
+> The exact-head contract is established by the HOST_KERNEL_TESTS
+> layer (PASS_REAL @ f6b6697e5, committed in
+> db8e2a007..f6b6697e5): the host-kernel quartet
+> (SSH-03/04/06/12) and Phase F (AGENT ON/OFF causal differential)
+> are committed as PASS_REAL at that head. The operator-shell
+> observations below corroborate the upstream-side chain without
+> binding it to an installed VSIX.
 
 ## Identity
 
 ```
-SUBSTRATE          = Operator shell on macOS Darwin (Terminal.app / iTerm2 family; not the nested-sandboxed VSCodium authoring shell)
-DATE_UTC           = 2026-08-29T22:01Z
-SOURCE_HEAD        = ff96ea8feecbb65e82dd3ddb14fb0269f90fb250
-ACT                = ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
-PHASE              = G   ; LIVE SSH QUALIFICATION
+SUBSTRATE               = Operator shell on macOS Darwin (Terminal.app /
+                            iTerm2 family; NOT the nested-sandboxed VSCodium
+                            authoring shell)
+DATE_UTC                = 2026-08-29T22:01Z
+ACT                     = ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+PHASE                   = G  ; LIVE SSH observation (operator shell;
+                            SOURCE_UNBOUND -- not exact-head live qualification)
+ENV_OVERRIDE_NETWORK    = CLINEMM_SAFE_YOLO_NETWORK=allow
+ENV_OVERRIDE_SSH_AGENT  = CLINEMM_SAFE_YOLO_SSH_AGENT=allow
+```
 ENV_OVERRIDE_NETWORK    = CLINEMM_SAFE_YOLO_NETWORK=allow
 ENV_OVERRIDE_SSH_AGENT  = CLINEMM_SAFE_YOLO_SSH_AGENT=allow
 ```
@@ -31,15 +79,15 @@ $ ssh-add -l
 2048 SHA256:XYoaR80+0MKX48FTYnFQXs4fkX66VdRj47wgFXneU2w @id_rsa (RSA)
 ```
 
-PASS — the launchd ssh-agent socket is reachable and holds an
+OBSERVED -- the launchd ssh-agent socket is reachable and holds an
 RSA key; the operator shell can authenticate.
 
-## Specimen 2 — Raw-key read is denied (load-bearing invariant)
+## Specimen 2 -- Raw-key read is denied (load-bearing invariant)
 
-Seatbelt blocks `cat ~/.ssh/id_rsa` even for the operator shell
-in this author's ClineMM build (file is present but read is denied
+Seatbelt blocks `cat ~/.ssh/id_rsa` for the operator shell in
+this author's ClineMM build (file is present but read is denied
 by the Seatbelt-bound subprocess; this is the SAME EPERM
-confinement that the agent-capability child would inherit):
+confinement that the agent-capability child inherits):
 
 ```
 $ cat "$HOME/.ssh/id_rsa"
@@ -47,29 +95,35 @@ cat: /Volumes/UserData/Users/chistyakov/.ssh/id_rsa: Operation not permitted
 (exit code 1)
 ```
 
-PASS — raw key bytes are NOT observable to the shell or to any
-in-sandbox child. SSH-01, SSH-02, SSH-06 raw-key conservation
-remains GREEN.
+OBSERVED -- raw key bytes are NOT observable to the shell or to any
+in-sandbox child. SSH-01 / SSH-02 / SSH-06 raw-key conservation is
+consistent with the live observation; the load-bearing claim that
+`~/.ssh/id_rsa` is unreadable in BOTH deny and agent modes is
+proven by the host-kernel quartet + Phase F at f6b6697e5
+(HOST_KERNEL_TESTS = PASS_REAL), not by this transcript.
 
-## Specimen 3 — Outbound SSH through the agent succeeds
+## Specimen 3 -- Outbound SSH through the agent succeeds
 
 Operator shell launches an outbound SSH using the agent. The remote
 host `81.177.33.219` (host name `indeep01`) accepts agent-signed
 auth and returns the expected banner:
 
 ```
-$ ssh -o BatchMode=yes -o ConnectTimeout=10     -o StrictHostKeyChecking=accept-new     ubuntu@81.177.33.219     'printf "SSH_AGENT_AUTH_OK\n"; uname -a'
+$ ssh -o BatchMode=yes -o ConnectTimeout=10 \
+    -o StrictHostKeyChecking=accept-new \
+    ubuntu@81.177.33.219 \
+    'printf "SSH_AGENT_AUTH_OK\n"; uname -a'
 SSH_AGENT_AUTH_OK
 Linux indeep01 6.8.0-57-generic #59-Ubuntu SMP PREEMPT_DYNAMIC Sat Mar 15 17:40:59 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
 
 (bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8))
 ```
 
-PASS — `SSH_AGENT_AUTH_OK` banner received from remote sshd,
+OBSERVED -- `SSH_AGENT_AUTH_OK` banner received from remote sshd,
 kernel banner printed; the agent-mediated auth chain is intact
 from the operator shell to the remote host.
 
-## Specimen 4 — ClineMM dogfood capability path
+## Specimen 4 -- ClineMM agent-capability path (production seam)
 
 The IMPLEMENTATION ACT §2.2.3 contract requires the in-sandbox
 agent-capability child to:
@@ -77,35 +131,41 @@ agent-capability child to:
   - inherit SSH_AUTH_SOCK via capability.environment.allow
     (step 3 of materializeEnvironment wins over SECRET_BLOCKLIST
     step 4; SECRET_BLOCKLIST itself is unchanged)
-  - receive (allow system-socket (socket-domain AF_UNIX))
-  - receive (allow network-outbound (remote unix-socket
-                  (path-literal "<RESOLVED_AUTH_SOCK>")))
-  - retain EPERM on ~/.ssh/id_rsa
+  - receive `(allow system-socket (socket-domain AF_UNIX))`
+  - receive `(allow network-outbound (remote unix-socket
+                  (path-literal "<RESOLVED_AUTH_SOCK>")))`
+  - retain EPERM on `~/.ssh/id_rsa`
 
-This operator-shell evidence proves the upstream side of that
-chain. The in-sandbox child side is exercised by the pure-
-functional SSH-03/04/06/12 test suite
-(sdk/packages/core/src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts)
-which is GREEN by construction but reports SKIP on this nested-
-sandboxed VSCodium authoring shell. Per ACT §6
-PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1, the substrate-gated
-behaviour is the only piece that flips when run on Terminal.app /
-iTerm2 / debug-harness; the IMPLEMENTATION code under HEAD
-ff96ea8fe is unchanged.
+This operator-shell evidence DOES NOT prove the in-sandbox child
+side. The in-sandbox child side is proven by the host-kernel
+quartet + Phase F at f6b6697e5 (HOST_KERNEL_TESTS = PASS_REAL),
+which committed the SSH-03/04/06/12 + Phase F behaviour as
+PASS_REAL on Terminal.app / iTerm2 / debug-harness.
 
-## Verdict for Phase G
+## Verdict for Phase G (operator-shell observation)
 
 ```
-SSH_AGENT_SOCKET_VISIBLE    = LIVE / PASS
-SSH_AGENT_KEY_VISIBLE       = LIVE / PASS
-RAW_PRIVATE_KEY_READ        = LIVE / DENIED
-REMOTE_SSH_AUTH             = LIVE / PASS
+SSH_AGENT_SOCKET_VISIBLE    = LIVE / OBSERVED  (source unbound)
+SSH_AGENT_KEY_VISIBLE       = LIVE / OBSERVED  (source unbound)
+RAW_PRIVATE_KEY_READ        = LIVE / DENIED    (consistent with HOST_KERNEL_TESTS
+                                                PASS_REAL at f6b6697e5)
+REMOTE_SSH_AUTH             = LIVE / OBSERVED  (source unbound;
+                                                SSH_AGENT_AUTH_OK from indeep01)
 REMOTE_RESULT               = SSH_AGENT_AUTH_OK ; host = indeep01
-PHASE_G                     = LIVE / PASS (operator shell + pure-functional suite GREEN-by-construction)
-SUBSTRATE_GATED_SKIP_BLOCK  = 4 host tests skipIf !HAS_SUBSTRATE (SSH-03/04/06/12) — flip to GREEN when the test runner is launched on a substrate-eligible shell
+PHASE_G                     = LIVE / OBSERVED  (SOURCE_UNBOUND)
+                                -- NOT exact-head live qualification
+                                -- corroborates HOST_KERNEL_TESTS PASS_REAL
+HOST_KERNEL_TESTS_EVIDENCE  = PASS_REAL @ f6b6697e5 (committed;
+                                exact-head authority proven at the
+                                Seatbelt kernel boundary for the
+                                SSH-04/06/12 quartet + Phase F)
 ```
 
 This transcript is durable evidence for ACT
 ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
-PHASE G LIVE qualification, captured 2026-08-29 against
-SOURCE_HEAD = ff96ea8fe (the C1 correction cycle head).
+Phase G operator-shell observation, captured 2026-08-29.
+The transcript is labelled SOURCE_UNBOUND because no fresh
+dogfood was built + installed against a known source HEAD in
+this session; the installed extension predates the host-kernel
+fixup chain. The host-kernel layer (PASS_REAL @ f6b6697e5)
+remains the exact-head authority proof.

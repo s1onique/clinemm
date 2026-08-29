@@ -3,13 +3,19 @@
   "heads": {
     "IMPLEMENTATION_SUBJECT_HEAD": "ff96ea8feecbb65e82dd3ddb14fb0269f90fb250",
     "HOST_TEST_HEAD": "f6b6697e527816ccd2d9803d24a17439d0c5ccf6",
-    "LIVE_QUALIFICATION_HEAD": "f6b6697e527816ccd2d9803d24a17439d0c5ccf6",
-    "DOGFOOD_SOURCE_HEAD": "NOT REBUILT IN THIS SESSION (pre-existing operator dogfood tree)"
+    "LIVE_QUALIFICATION_HEAD": "UNKNOWN",
+    "DOGFOOD_SOURCE_HEAD": "UNAVAILABLE",
+    "LIVE_BUILD_BINDING": "UNKNOWN",
+    "DOGFOOD_VERSION": "UNAVAILABLE",
+    "VSIX_PATH": "UNAVAILABLE",
+    "VSIX_BYTES": "UNAVAILABLE",
+    "VSIX_SHA256": "UNAVAILABLE",
+    "INSTALLED_VERSION": "pre-existing operator dogfood from a prior session on Terminal.app / iTerm2 family"
   },
   "substrate": "operator macOS shell (Terminal.app / iTerm2 family)",
   "evidence_layers": {
     "HOST_KERNEL_TESTS": "REAL / PASS_REAL (committed at f6b6697e5)",
-    "DOGFOOD_CLINE_MM_LIVE": "LIVE / REAL_PRODUCTION_SEAM (this session, 2026-08-29)"
+    "DOGFOOD_CLINE_MM_LIVE": "LIVE / OBSERVED (this session, 2026-08-29; SOURCE_UNBOUND; NOT exact-head live qualification)"
   },
   "host_test_quartet": {
     "SSH03_env": "PASS_REAL",
@@ -23,23 +29,23 @@
       "id": "SSH_AUTH_SOCK_VISIBLE",
       "command": "echo SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners; test -S \"/private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners\" && echo SSH_AUTH_SOCK_IS_SOCKET=YES; ssh-add -l",
       "observed": "SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners; SSH_AUTH_SOCK_IS_SOCKET=YES; ssh-add -l => 2048 SHA256:XYoaR80+0MKX48FTYnFQXs4fkX66VdRj47wgFXneU2w @id_rsa (RSA)",
-      "verdict": "LIVE / PASS"
+      "verdict": "LIVE / OBSERVED (source unbound; corroborates HOST_KERNEL_TESTS but does NOT establish exact-head live qualification)"
     },
     {
       "id": "RAW_KEY_READ",
       "command": "cat \"/Volumes/UserData/Users/chistyakov/.ssh/id_rsa\"",
       "observed": "cat: /Volumes/UserData/Users/chistyakov/.ssh/id_rsa: Operation not permitted; exit code 1",
-      "verdict": "LIVE / DENIED (SSH-01/SSH-02/SSH-06 invariant holds)"
+      "verdict": "LIVE / DENIED (consistent with HOST_KERNEL_TESTS PASS_REAL at f6b6697e5; SSH-01/SSH-02/SSH-06 invariant proven by the host-kernel quartet + Phase F, not by this transcript)"
     },
     {
       "id": "OUTBOUND_SSH",
       "command": "ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new ubuntu@81.177.33.219 \"printf SSH_AGENT_AUTH_OK\\n; uname -a\"",
       "observed": "SSH_AGENT_AUTH_OK; Linux indeep01 6.8.0-57-generic #59-Ubuntu SMP PREEMPT_DYNAMIC Sat Mar 15 17:40:59 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux; bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8) (benign)",
-      "verdict": "LIVE / PASS (agent-mediated auth to remote sshd succeeds)"
+      "verdict": "LIVE / OBSERVED (source unbound; agent-mediated auth to remote sshd succeeds)"
     },
     {
       "id": "PHASE_G_TOTAL",
-      "verdict": "PASS_PHASE_G_LIVE_SSH_QUALIFICATION"
+      "verdict": "PASS_PHASE_G_OPERATOR_SHELL_OBSERVATION_SOURCE_UNBOUND"
     }
   ]
 }

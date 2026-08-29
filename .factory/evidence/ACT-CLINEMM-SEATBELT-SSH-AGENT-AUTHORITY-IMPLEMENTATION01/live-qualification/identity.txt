@@ -11,29 +11,51 @@ HOST_TEST_HEAD              = f6b6697e527816ccd2d9803d24a17439d0c5ccf6
   ; test-only commits. The host-kernel quartet + Phase F were
   ; committed PASS_REAL at this head.
 
-LIVE_QUALIFICATION_HEAD     = f6b6697e527816ccd2d9803d24a17439d0c5ccf6
-  ; the tree under which the operator-shell Phase G dogfood was
-  ; executed on the current author's Terminal.app shell. No later
-  ; commit was built into a dogfood VSIX in this session;
-  ; LIVE_QUALIFICATION_HEAD = HOST_TEST_HEAD.
+LIVE_QUALIFICATION_HEAD     = UNKNOWN
+  ; the installed extension version was not bound to a specific
+  ; source HEAD during the 2026-08-29 observation. The exact-head
+  ; live qualification requires a fresh `bun run package` +
+  ; install against a known HEAD, which was NOT executed in
+  ; this session.
 
-DOGFOOD_SOURCE_HEAD         = NOT REBUILT IN THIS SESSION
-  ; no fresh `bun run package` was performed after the Phase F
-  ; fixup commits in this session. The Phase G live transcript
-  ; was executed from the previously installed dogfood tree.
+DOGFOOD_SOURCE_HEAD         = UNAVAILABLE
+  ; no `bun run package` was performed against f6b6697e5 in this
+  ; session; the installed extension predates the host-kernel
+  ; fixup chain. The Phase G live transcript was executed from
+  ; the previously installed dogfood tree (unbound source HEAD).
+LIVE_BUILD_BINDING          = UNKNOWN
+DOGFOOD_VERSION             = UNAVAILABLE
+VSIX_PATH                   = UNAVAILABLE
+VSIX_BYTES                  = UNAVAILABLE
+VSIX_SHA256                 = UNAVAILABLE
+INSTALLED_VERSION           = pre-existing operator dogfood from a prior
+                              session on Terminal.app / iTerm2 family
 
 ACT                = ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
-PHASES             = E (PASS_REAL host-kernel quartet) + F (PASS_REAL differential) + G (LIVE / PASS operator-shell dogfood)
-ENV_OVERRIDE_NETWORK    = CLINEMM_SAFE_YOLO_NETWORK=allow       ; set during the LIVE SSH dogfood
-ENV_OVERRIDE_SSH_AGENT  = CLINEMM_SAFE_YOLO_SSH_AGENT=allow     ; set during the LIVE SSH dogfood
+PHASES             = E (PASS_REAL host-kernel quartet at f6b6697e5)
+                      + F (PASS_REAL AGENT ON/OFF differential at f6b6697e5)
+                      + G (LIVE / OBSERVED operator-shell; SOURCE_UNBOUND;
+                           corroborates HOST_KERNEL_TESTS but does NOT
+                           establish exact-head live qualification)
+ENV_OVERRIDE_NETWORK    = CLINEMM_SAFE_YOLO_NETWORK=allow       ; set during the Phase G observation
+ENV_OVERRIDE_SSH_AGENT  = CLINEMM_SAFE_YOLO_SSH_AGENT=allow     ; set during the Phase G observation
 
 EVIDENCE_LAYERS    =
   HOST_KERNEL_TESTS = REAL / PASS_REAL (committed at f6b6697e5)
-  DOGFOOD_CLINE_MM  = LIVE / REAL_PRODUCTION_SEAM (this session)
+                     ; load-bearing for the V1 contract; this is
+                     ; the exact-head authority proof.
+  DOGFOOD_CLINE_MM  = LIVE / OBSERVED (this session; SOURCE_UNBOUND)
+                     ; bonus upstream-side chain evidence; NOT
+                     ; exact-head live qualification.
 
-NOTE               = Operator-shell evidence; proves the upstream-side chain
-                     (ssh-agent holds a usable key, raw-key read remains denied
-                     by Seatbelt-bound cat, outbound SSH from the operator shell
-                     to the remote sshd succeeds). Combined with the host-kernel
-                     quartet + Phase F committed PASS_REAL at f6b6697e5, this
-                     completes the ACT per the IMPLEMENTATION ACT §6.
+NOTE               = The 2026-08-29 operator-shell observation is
+                     honest bonus evidence that the upstream-side
+                     chain holds (ssh-agent socket reachable, key
+                     loaded, raw-key EPERM, outbound SSH returns
+                     SSH_AGENT_AUTH_OK). The exact-head authority
+                     proof is the host-kernel quartet + Phase F
+                     committed PASS_REAL @ f6b6697e5. Closing the
+                     ACT on the host-kernel layer (not on this
+                     transcript) is consistent with the Factory
+                     evidence rule and with the original IMPLEMENTATION
+                     ACT §6 substrate-gating note.

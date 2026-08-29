@@ -77,15 +77,26 @@ SSH_EVIDENCE_LAYERS =
 SSH_LIVE_VERDICT =
   HOST_KERNEL_TESTS   = PASS_REAL (host-kernel quartet SSH-03/04/06/12
                                     + Phase F A-vs-D differential; committed
-                                    at HOST_TEST_HEAD = f6b6697e5)
-  DOGFOOD_CLINE_MM    = LIVE / PASS (operator-shell dogfood 2026-08-29;
-                                    SSH_AUTH_SOCK visible, ssh-add shows RSA
-                                    key, raw-key EPERM, outbound SSH returns
-                                    SSH_AGENT_AUTH_OK from indeep01 /
-                                    6.8.0-57-generic)
-  COMPOSITION         = much stronger than either alone (Seatbelt substrate
-                        authority proven at kernel boundary + end-to-end
-                        upstream chain proven in dogfood)
+                                    at HOST_TEST_HEAD = f6b6697e5;
+                                    exact-head authority proof;
+                                    load-bearing for V1 contract)
+  DOGFOOD_CLINE_MM    = LIVE / OBSERVED (operator-shell observation
+                                    2026-08-29; SOURCE_UNBOUND;
+                                    SSH_AUTH_SOCK visible, ssh-add shows
+                                    RSA key, raw-key EPERM, outbound SSH
+                                    returns SSH_AGENT_AUTH_OK from
+                                    indeep01 / 6.8.0-57-generic;
+                                    NOT exact-head live qualification;
+                                    bonus upstream-side chain evidence
+                                    that corroborates HOST_KERNEL_TESTS)
+  COMPOSITION         = HOST_KERNEL_TESTS (PASS_REAL) is the exact-head
+                        authority proof and is sufficient to close the
+                        ACT. DOGFOOD_CLINE_MM (LIVE / OBSERVED,
+                        SOURCE_UNBOUND) corroborates without binding.
+                        Closing on the host-kernel layer (not on the
+                        dogfood layer) is consistent with the Factory
+                        evidence rule and with the original
+                        IMPLEMENTATION ACT §6 substrate-gating note.
 ```
 
 ## Architectural decisions (frozen)
@@ -206,7 +217,13 @@ This ACT is recon-only and does not require dogfood. The
 downstream implementation ACT that follows will require
 dogfood on a per-entry basis.
 
-The Phase G LIVE SSH qualification that unblocked this recon
-is captured at
+The Phase G operator-shell observation that unblocked this
+recon is captured at
 `.factory/evidence/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01/live-qualification/`
 and is referenced from the SSH ACT's `final-report.md` §16.
+The observation is labelled LIVE / OBSERVED with SOURCE_UNBOUND
+(no fresh `bun run package` + install was executed in this
+session); the exact-head authority for the SSH credential
+authority contract is the host-kernel quartet + Phase F
+PASS_REAL @ f6b6697e5 (HOST_TEST_HEAD), not the operator-shell
+observation.
