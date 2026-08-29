@@ -204,6 +204,49 @@ export function resolveSafeYoloNetworkOptIn(): "allow" | undefined {
 }
 
 /**
+ * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01.
+ *
+ * ssh-agent authority opt-in knob. When `CLINEMM_SAFE_YOLO_SSH_AGENT=allow`
+ * is set AND Seatbelt is the active experimental sandbox mode, the
+ * capability built by {@link buildExperimentalReconCapability} sets
+ * `sshAuthenticationAuthority.mode` to `"agent"` instead of the
+ * default (omit / `"deny"`).
+ *
+ * Activation matrix (mirrors {@link resolveSafeYoloNetworkOptIn}):
+ *
+ *   | CLINEMM_SAFE_YOLO_SSH_AGENT | Seatbelt mode                | Result                       |
+ *   | --------------------------- | ---------------------------- | ---------------------------- |
+ *   | unset / anything-else       | any                          | undefined (no agent auth)    |
+ *   | "allow" (exact)             | not seatbelt-experimental    | undefined (no agent auth)    |
+ *   | "allow" (exact)             | seatbelt-experimental        | "agent" (ssh-agent auth ON)  |
+ *
+ * Returns `"agent"` only when BOTH:
+ *   1. `process.env.CLINEMM_SAFE_YOLO_SSH_AGENT === "allow"` (exact).
+ *   2. The active experimental mode is `"seatbelt-experimental"`.
+ *
+ * Returns `undefined` otherwise. Default behavior (no
+ * `sshAuthenticationAuthority` field, treated as deny) is UNCHANGED.
+ *
+ * The backend resolves `process.env.SSH_AUTH_SOCK` directly from the
+ * trusted parent env; this function only selects whether the
+ * capability field is set. Single source of truth for the socket
+ * path is OpenSSH's `SSH_AUTH_SOCK` (no divergence between the
+ * profile path-literal authorization and the child env value).
+ *
+ * NOT a generic security opt-out: filesystem policy is unaffected.
+ * NOT coupled to classic approval: autoApprove / YOLO are unaffected.
+ */
+export function resolveSafeYoloSshAgentOptIn(): "agent" | undefined {
+	if (process.env.CLINEMM_SAFE_YOLO_SSH_AGENT !== "allow") {
+		return undefined
+	}
+	if (resolveExperimentalSandboxMode() !== "seatbelt-experimental") {
+		return undefined
+	}
+	return "agent"
+}
+
+/**
  * ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 — host-side workspace-root
  * safety filter.
  *
@@ -601,6 +644,7 @@ export function buildExperimentalReconCapability(input: {
 	readonly cwd: string
 	readonly workspaceRoots: readonly string[]
 }): CommandCapability {
+	const sshAgentMode = resolveSafeYoloSshAgentOptIn()
 	return {
 		// ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01:
 		// Workspace roots are NOT placed in readonlyRoots because
@@ -637,6 +681,19 @@ export function buildExperimentalReconCapability(input: {
 			// (PATH, LANG, TERM, ...) is enumerated here.
 			allow: Object.keys(SAFE_ENVIRONMENT_BASELINE),
 		},
+		// ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
+		// Honor `CLINEMM_SAFE_YOLO_SSH_AGENT=allow`. Default (omit
+		// the field) = `mode: "deny"` = no agent authority. The
+		// single source of truth for the agent socket path remains
+		// `process.env.SSH_AUTH_SOCK` (resolved inside the Seatbelt
+		// backend); this field only selects whether the AGENT branch
+		// is reachable. See resolveSafeYoloSshAgentOptIn doc above
+		// for the activation matrix.
+		...(sshAgentMode
+			? {
+					sshAuthenticationAuthority: { mode: "agent" as const },
+				}
+			: {}),
 		cwd: input.cwd,
 	}
 }

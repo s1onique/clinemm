@@ -587,3 +587,173 @@ describe("wiring sanity", () => {
 		}
 	})
 })
+
+// =============================================================================
+// ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+//
+// Production-reachability RED. The capability builder
+// `buildExperimentalReconCapability` (sandbox-policy.ts) is the SINGLE
+// production seam that produces CommandCapability for the Seatbelt
+// backend. These tests exercise the REAL production seam (no manual
+// capability construction; only env vars) and assert that the
+// resulting capability carries the right sshAuthenticationAuthority.
+//
+// SSH-AGENT-ACT default (no env): no sshAuthenticationAuthority field
+// SSH-AGENT-ACT opt-in (CLINEMM_SAFE_YOLO_SSH_AGENT=allow): sshAuthenticationAuthority.mode === "agent"
+// SSH-AGENT-ACT explicit CLINEMM_EXPERIMENTAL_SANDBOX=off: no authority (classic path)
+// =============================================================================
+describe("ACT-IMPL01: sshAuthenticationAuthority reaches the production seam", () => {
+	const SSH_AGENT_OPTIN_ENV = "CLINEMM_SAFE_YOLO_SSH_AGENT"
+
+	function withSshAgentOptIn<T>(
+		value: string | undefined,
+		fn: () => Promise<T> | T,
+	): Promise<T> | T {
+		const prev = process.env[SSH_AGENT_OPTIN_ENV]
+		if (value === undefined) {
+			delete process.env[SSH_AGENT_OPTIN_ENV]
+		} else {
+			process.env[SSH_AGENT_OPTIN_ENV] = value
+		}
+		const restore = () => {
+			if (prev === undefined) delete process.env[SSH_AGENT_OPTIN_ENV]
+			else process.env[SSH_AGENT_OPTIN_ENV] = prev
+		}
+		const out = fn()
+		if (out && typeof (out as Promise<T>).then === "function") {
+			return (out as Promise<T>).finally(restore)
+		}
+		restore()
+		return out
+	}
+
+	afterEach(() => {
+		delete process.env[SSH_AGENT_OPTIN_ENV]
+	})
+
+	// Helper: build a stub backend that captures the capability via
+	// an OUTER closure variable (not the broken `__prepared` field on
+	// the frozen backend object — that field is bound to the initial
+	// null at literal evaluation time and cannot be observed later).
+	function makeCapturingBackend(label: string): {
+		backend: SandboxBackend;
+		readonly captured: { value: { cap: CommandCapability; cmd: CommandInvocation } | null };
+	} {
+		const captured = { value: null as { cap: CommandCapability; cmd: CommandInvocation } | null };
+		const backend: SandboxBackend = Object.freeze({
+			id: `ssh-agent-${label}`,
+			async isAvailable() {
+				return true;
+			},
+			async prepare(input: { capability: CommandCapability; command: CommandInvocation }): Promise<SandboxPreparedInvocation> {
+				captured.value = { cap: input.capability, cmd: input.command };
+				return {
+					executable: "/usr/bin/sandbox-exec",
+					args: ["-f", "/tmp/profile.sb", input.command.executable, ...input.command.args],
+					cwd: input.command.cwd,
+					env: { PATH: "/usr/bin:/bin" },
+					input: input.command.input,
+					envSemantics: "complete",
+					backendId: `ssh-agent-${label}`,
+					cleanup: async () => {},
+				};
+			},
+		});
+		return { backend, captured };
+	}
+
+	it("default (env unset): CommandCapability has NO sshAuthenticationAuthority field", async () => {
+		await withSandboxOptIn("seatbelt", async () => {
+			const { backend, captured } = makeCapturingBackend("default");
+			const manager = new CommandJobManager({
+				sandboxBackendResolver: async () => backend,
+			});
+			try {
+				await withSshAgentOptIn(undefined, async () => {
+					await manager.start({
+						command: `/bin/sh -c 'echo ssh-agent-default-red'`,
+						cwd: process.cwd(),
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
+					});
+					expect(captured.value).not.toBeNull();
+					expect(captured.value?.cap.sshAuthenticationAuthority).toBeUndefined();
+				});
+			} finally {
+				await manager.dispose();
+			}
+		});
+	});
+
+	it("CLINEMM_SAFE_YOLO_SSH_AGENT=allow: CommandCapability.sshAuthenticationAuthority.mode === 'agent'", async () => {
+		await withSandboxOptIn("seatbelt", async () => {
+			const { backend, captured } = makeCapturingBackend("allow");
+			const manager = new CommandJobManager({
+				sandboxBackendResolver: async () => backend,
+			});
+			try {
+				await withSshAgentOptIn("allow", async () => {
+					await manager.start({
+						command: `/bin/sh -c 'echo ssh-agent-allow-red'`,
+						cwd: process.cwd(),
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
+					});
+					expect(captured.value).not.toBeNull();
+					expect(captured.value?.cap.sshAuthenticationAuthority).toEqual({
+						mode: "agent",
+					});
+				});
+			} finally {
+				await manager.dispose();
+			}
+		});
+	});
+
+	it("CLINEMM_SAFE_YOLO_SSH_AGENT=deny (or any value other than 'allow'): no agent authority", async () => {
+		await withSandboxOptIn("seatbelt", async () => {
+			const { backend, captured } = makeCapturingBackend("deny");
+			const manager = new CommandJobManager({
+				sandboxBackendResolver: async () => backend,
+			});
+			try {
+				await withSshAgentOptIn("deny", async () => {
+					await manager.start({
+						command: `/bin/sh -c 'echo ssh-agent-deny-red'`,
+						cwd: process.cwd(),
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
+					});
+					expect(captured.value).not.toBeNull();
+					expect(captured.value?.cap.sshAuthenticationAuthority).toBeUndefined();
+				});
+			} finally {
+				await manager.dispose();
+			}
+		});
+	});
+
+	it("CLINEMM_SAFE_YOLO_SSH_AGENT=allow WITHOUT seatbelt mode: no agent authority (mode-gated)", async () => {
+		await withSandboxOptIn("off", async () => {
+			const { backend, captured } = makeCapturingBackend("classic");
+			const manager = new CommandJobManager({
+				sandboxBackendResolver: async () => backend,
+			});
+			try {
+				await withSshAgentOptIn("allow", async () => {
+					await manager.start({
+						command: `/bin/sh -c 'echo classic-with-agent-env-red'`,
+						cwd: process.cwd(),
+						waitBudgetMs: 5_000,
+						executionDeadlineMs: 5_000,
+					});
+					// Classic path: no backend was invoked (resolver not
+					// called); captured.value stays null.
+					expect(captured.value).toBeNull();
+				});
+			} finally {
+				await manager.dispose();
+			}
+		});
+	});
+})

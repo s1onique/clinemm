@@ -148,29 +148,34 @@ export type EnvironmentCapability =
  *     and MUST NOT reintroduce `SSH_AUTH_SOCK` into the child env.
  *
  *   - `mode: "agent"`: the backend MAY reintroduce `SSH_AUTH_SOCK`
- *     into the child env (from the parent, after canonicalization)
- *     and MUST emit SBPL rules granting AF_UNIX socket connect
- *     authority scoped to the canonical socket path. Raw private-key
- *     reads (e.g. `~/.ssh/id_rsa`) MUST remain denied; the parent
- *     socket directory MUST NOT gain filesystem write authority;
- *     sibling Unix sockets MUST remain inaccessible.
+ *     into the child env (from `process.env.SSH_AUTH_SOCK`, the
+ *     OpenSSH-defined source of truth for the agent socket path,
+ *     after canonicalization) and MUST emit SBPL rules granting
+ *     AF_UNIX socket connect authority scoped to that exact
+ *     canonical socket path. Raw private-key reads (e.g.
+ *     `~/.ssh/id_rsa`) MUST remain denied; the parent socket
+ *     directory MUST NOT gain filesystem write authority; sibling
+ *     Unix sockets MUST remain inaccessible.
  *
- *   - `socketPath` is the canonical (realpath-resolved) socket
- *     pathname the BACKEND computed from the trusted parent env
- *     (`SSH_AUTH_SOCK`). Callers that set it directly accept the
- *     canonicalization responsibility. When omitted in agent mode,
- *     the backend derives it from `process.env.SSH_AUTH_SOCK` and
- *     canonicalizes before profile generation; derivation failure
- *     is fail-closed (`SandboxError`, reason
- *     `canonicalization-failed`).
+ *   - The socket path is INTENTIONALLY NOT a field on this type.
+ *     There is one source of truth: `process.env.SSH_AUTH_SOCK`
+ *     (OpenSSH's contract). Callers may not inject a different
+ *     socket path through the capability — that would create a
+ *     divergence between the profile's path-literal authorization
+ *     and the child env's SSH_AUTH_SOCK value, which would either
+ *     leak or wedge depending on the divergence direction. The
+ *     backend reads `process.env.SSH_AUTH_SOCK` once, canonicalizes
+ *     it once, and uses that ONE value for both the SBPL rule and
+ *     the materialized env. Derivation failure is fail-closed
+ *     (`SandboxError`, reason `canonicalization-failed`).
  *
  * This field is capability-driven ONLY. There is no `executable
  * === "ssh"` branch, no `~/.ssh` grant, no `SECRET_BLOCKLIST`
  * weakening, no parent-tree widening.
  */
-export type SshAuthenticationAuthority =
-	| { readonly mode: "deny" }
-	| { readonly mode: "agent"; readonly socketPath?: string };
+export type SshAuthenticationAuthority = {
+	readonly mode: "deny" | "agent";
+};
 
 export interface CommandCapability {
 	readonly readonlyRoots: readonly string[];

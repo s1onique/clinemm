@@ -32,7 +32,7 @@
  * posture — see recon evidence `final-assessment.md`.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -304,16 +304,24 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			// Resolve ssh-agent authority for the agent case.
 			//
 			// When `sshAuthenticationAuthority.mode === "agent"`:
-			//   1. Take the canonical socket path. Either the capability
-			//      provides one (already canonicalized per the contract),
-			//      or we derive it from `process.env.SSH_AUTH_SOCK`.
-			//   2. Canonicalize it via `canonicalizeSandboxRoot`. Fail-closed
-			//      on absent/empty/invalid — no unsandboxed fallback.
-			//   3. Reintroduce `SSH_AUTH_SOCK` into the sanitized env by
-			//      adding it to `cap.environment.allow`. The allow path
-			//      (step 3 of `materializeEnvironment`) wins over the
-			//      blocklist-empty step (step 4) — `SECRET_BLOCKLIST`
-			//      is unchanged.
+			//   1. The socket path is ALWAYS derived from
+			//      `process.env.SSH_AUTH_SOCK` (the OpenSSH-defined
+			//      source of truth). One value, one owner — no
+			//      capability field for it (the divergence risk
+			//      between profile path-literal and child env value
+			//      is structural otherwise).
+			//   2. Canonicalize via `canonicalizeSandboxRoot`.
+			//   3. Validate the canonical path IS an AF_UNIX socket
+			//      via lstat S_IFSOCK check. A regular file, a
+			//      directory, or anything else fails closed. OpenSSH
+			//      defines SSH_AUTH_SOCK specifically as the pathname
+			//      of a Unix-domain socket; a non-socket value here
+			//      would not be a usable agent endpoint.
+			//   4. Use that ONE canonical socket path for BOTH the
+			//      SBPL AF_UNIX rule and the materialized child env
+			//      SSH_AUTH_SOCK. Reintroduce via the existing
+			//      allow-list path (step 3 of materializeEnvironment)
+			//      so SECRET_BLOCKLIST stays globally unchanged.
 			//
 			// When the field is omitted or `mode: "deny"`, this block
 			// is a no-op: no agent SBPL rule is emitted and
@@ -322,23 +330,19 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 			let effectiveEnvironmentCapability = cap.environment;
 			const auth = cap.sshAuthenticationAuthority;
 			if (auth?.mode === "agent") {
-				let raw: string | undefined;
-				if (typeof auth.socketPath === "string" && auth.socketPath.length > 0) {
-					raw = auth.socketPath;
-				} else {
-					raw = process.env.SSH_AUTH_SOCK;
-				}
+				const raw = process.env.SSH_AUTH_SOCK;
 				if (typeof raw !== "string" || raw.length === 0) {
 					throw new SandboxError(
-						"Seatbelt: sshAuthenticationAuthority.mode='agent' requires SSH_AUTH_SOCK to be set in the parent env or cap.sshAuthenticationAuthority.socketPath to be provided",
+						"Seatbelt: sshAuthenticationAuthority.mode='agent' requires SSH_AUTH_SOCK to be set in the parent env",
 						{
 							backendId: SEATBELT_BACKEND_ID,
 							reason: "canonicalization-failed",
 						},
 					);
 				}
+				let canonical: string;
 				try {
-					sshAgentCanonicalSocketPath = canonicalizeSandboxRoot(raw);
+					canonical = canonicalizeSandboxRoot(raw);
 				} catch (cause) {
 					throw new SandboxError(
 						`Seatbelt: failed to canonicalize SSH_AUTH_SOCK=${JSON.stringify(raw)}`,
@@ -349,6 +353,37 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 						},
 					);
 				}
+				// Validate socket type: OpenSSH defines SSH_AUTH_SOCK as
+				// the pathname of a Unix-domain socket. The kernel check
+				// is the load-bearing assertion. lstat (not stat) so we
+				// detect a symlink-to-socket correctly (a symlink itself
+				// is fine; the lstat resolves to the socket inode).
+				let st;
+				try {
+					st = lstatSync(canonical);
+				} catch (cause) {
+					throw new SandboxError(
+						`Seatbelt: SSH_AUTH_SOCK=${JSON.stringify(canonical)} not accessible for type check`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+							cause,
+						},
+					);
+				}
+				// S_IFMT mask; S_IFSOCK = 0o140000 (octal) = 49152 decimal.
+				// POSIX/macOS: S_IFMT & st_mode === S_IFSOCK iff socket.
+				const isSocket = (st.mode & 0o170000) === 0o140000;
+				if (!isSocket) {
+					throw new SandboxError(
+						`Seatbelt: SSH_AUTH_SOCK=${JSON.stringify(canonical)} is not an AF_UNIX socket (mode=${st.mode.toString(8)}); sshAuthenticationAuthority.mode='agent' requires a real Unix-domain socket`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+						},
+					);
+				}
+				sshAgentCanonicalSocketPath = canonical;
 				// Reintroduce SSH_AUTH_SOCK via the existing allow-list
 				// path. Step 3 of materializeEnvironment wins over the
 				// step-4 blocklist-empty fallback (SECRET_BLOCKLIST is

@@ -1,11 +1,21 @@
 /**
  * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
  *
- * Phase A/B/C/D RED/GREEN tests for the ssh-agent authority surface.
+ * Phase A/B/D RED/GREEN tests for the ssh-agent authority surface.
  * Pure-functional: do NOT require the macOS kernel Seatbelt substrate.
  *
  * The host-kernel quartet (SSH-03/04/06/12) is exercised on a
  * substrate-eligible shell per ACT §6.
+ *
+ * Contract enforced here:
+ *   1. SINGLE SOURCE OF TRUTH for the socket path is
+ *      `process.env.SSH_AUTH_SOCK`. The capability has NO
+ *      `socketPath` field (removed in correction cycle).
+ *   2. AF_UNIX socket type is validated via lstat S_IFSOCK mask.
+ *      Regular files / directories / anything-not-a-socket fail
+ *      closed with `SandboxError(reason="canonicalization-failed")`.
+ *   3. The profile path-literal and the child env SSH_AUTH_SOCK are
+ *      the SAME string (one value, one owner).
  *
  * Run with:
  *   bun x vitest run --config vitest.config.ts \
@@ -17,21 +27,25 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	unlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:net";
 import { describe, expect, it } from "vitest";
 
 import { SeatbeltSandboxBackendExperimental } from "./seatbelt-backend";
 import { generateSeatbeltProfile } from "./seatbelt-profile";
 import type { CommandCapability, CommandInvocation } from "../types";
 
-function buildFixture(): { root: string; inside: string } {
+function buildFixture(): { root: string; inside: string; agent: string } {
 	const root = mkdtempSync(join(tmpdir(), "clinemm-act-impl01-"));
 	const inside = join(root, "inside");
+	const agent = join(root, "agent");
 	mkdirSync(inside, { recursive: true });
-	return { root, inside };
+	mkdirSync(agent, { recursive: true });
+	return { root, inside, agent };
 }
 function cleanupFixture(root: string): void {
 	try {
@@ -41,55 +55,82 @@ function cleanupFixture(root: string): void {
 	}
 }
 
-describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
-	it("agent mode + canonical socketPath: SSH_AUTH_SOCK IS reintroduced; SSH_AGENT_PID stays stripped", async () => {
-		const fixture = buildFixture();
-		try {
-			const SOCKET_DIR = join(fixture.root, "agent");
-			mkdirSync(SOCKET_DIR, { recursive: true });
-			const CANONICAL = join(SOCKET_DIR, "agent.sock");
-			writeFileSync(CANONICAL, "");
-			const cap: CommandCapability = {
-				readonlyRoots: [fixture.inside],
-				writableRoots: [fixture.inside],
-				network: "deny",
-				environment: { mode: "sanitized", allow: [] },
-				cwd: fixture.inside,
-				sshAuthenticationAuthority: { mode: "agent", socketPath: CANONICAL },
-			};
-			const cmd: CommandInvocation = {
-				executable: "/usr/bin/env",
-				args: [],
-				cwd: fixture.inside,
-				env: {},
-			};
-			const prev = process.env.SSH_AUTH_SOCK;
-			process.env.SSH_AUTH_SOCK = CANONICAL;
+/**
+ * Best-effort probe: can THIS process (the vitest fork) bind an
+ * AF_UNIX socket right now? On Terminal.app / iTerm2 / debug-harness
+ * this returns true; on the VSCodium authoring shell the test forks
+ * run inside a sandbox that rejects AF_UNIX socket bind with EINVAL,
+ * in which case the positive-path tests (which require a real AF_UNIX
+ * socket fixture) skip cleanly. The negative-path tests (regular
+ * file / directory / missing path) do NOT require socket binding
+ * and ALWAYS run.
+ */
+const CAN_BIND_AF_UNIX = await (async (): Promise<boolean> => {
+	const probeDir = mkdtempSync(join(tmpdir(), "clinemm-probe-"));
+	const probePath = join(probeDir, "probe.sock");
+	try {
+		unlinkSync(probePath);
+	} catch {
+		// not present
+	}
+	return await new Promise<boolean>((resolve) => {
+		const server = createServer();
+		server.once("error", () => {
 			try {
-				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
-					capability: cap,
-					command: cmd,
-				});
-				expect(prepared.env.SSH_AUTH_SOCK).toBe(CANONICAL);
-				expect(prepared.env.SSH_AGENT_PID ?? "").toBe("");
-			} finally {
-				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
-				else process.env.SSH_AUTH_SOCK = prev;
-				cleanupFixture(fixture.root);
+				server.close();
+			} catch {
+				// ignore
 			}
-		} catch (cause) {
-			cleanupFixture(fixture.root);
-			throw cause;
+			resolve(false);
+		});
+		server.listen({ path: probePath }, () => {
+			server.close(() => {
+				try {
+					unlinkSync(probePath);
+				} catch {
+					// ignore
+				}
+				resolve(true);
+			});
+		});
+		try {
+			rmSync(probeDir, { recursive: true, force: true });
+		} catch {
+			// ignore
 		}
 	});
+})();
 
-	it("agent mode WITHOUT socketPath: derived from parent SSH_AUTH_SOCK", async () => {
+/**
+ * Bind a real AF_UNIX socket at `path`. Returns a close function.
+ *
+ * Uses Node's net.createServer (which uses socket(2) under the hood);
+ * the resulting inode has S_IFSOCK set. This is what the isSocket
+ * check requires — a `writeFileSync` placeholder is a regular file
+ * and correctly fails closed (verified by the negative tests).
+ */
+async function bindUnixSocket(path: string): Promise<() => void> {
+	const server = createServer();
+	await new Promise<void>((resolve, reject) => {
+		server.once("error", reject);
+		server.listen({ path }, () => resolve());
+	});
+	return () => {
+		server.close();
+		try {
+			unlinkSync(path);
+		} catch {
+			// already gone
+		}
+	};
+}
+
+describe("ACT-IMPL01 ssh-agent authority", () => {
+	it.skipIf(!CAN_BIND_AF_UNIX)("agent mode: SSH_AUTH_SOCK IS reintroduced from parent env; SSH_AGENT_PID stays stripped", async () => {
 		const fixture = buildFixture();
 		try {
-			const SOCKET_DIR = join(fixture.root, "agent");
-			mkdirSync(SOCKET_DIR, { recursive: true });
-			const CANONICAL = join(SOCKET_DIR, "agent.sock");
-			writeFileSync(CANONICAL, "");
+			const CANONICAL = join(fixture.agent, "agent.sock");
+			const closeSocket = await bindUnixSocket(CANONICAL);
 			const cap: CommandCapability = {
 				readonlyRoots: [fixture.inside],
 				writableRoots: [fixture.inside],
@@ -112,6 +153,45 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 					command: cmd,
 				});
 				expect(prepared.env.SSH_AUTH_SOCK).toBe(CANONICAL);
+				expect(prepared.env.SSH_AGENT_PID ?? "").toBe("");
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				closeSocket();
+				cleanupFixture(fixture.root);
+			}
+		} catch (cause) {
+			cleanupFixture(fixture.root);
+			throw cause;
+		}
+	});
+
+	it("default mode (no sshAuthenticationAuthority field): SSH_AUTH_SOCK is NOT reintroduced", async () => {
+		const fixture = buildFixture();
+		try {
+			const CANONICAL = join(fixture.agent, "agent.sock");
+			writeFileSync(CANONICAL, "");
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = CANONICAL;
+			try {
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
+				expect(prepared.env.SSH_AUTH_SOCK ?? "").toBe("");
 			} finally {
 				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
 				else process.env.SSH_AUTH_SOCK = prev;
@@ -123,7 +203,45 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 		}
 	});
 
-	it("agent mode WITHOUT any SSH_AUTH_SOCK anywhere: fails closed with canonicalization-failed", async () => {
+	it("deny mode: SSH_AUTH_SOCK is NOT reintroduced even when present in parent env", async () => {
+		const fixture = buildFixture();
+		try {
+			const CANONICAL = join(fixture.agent, "agent.sock");
+			writeFileSync(CANONICAL, "");
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+				sshAuthenticationAuthority: { mode: "deny" },
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = CANONICAL;
+			try {
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
+				expect(prepared.env.SSH_AUTH_SOCK ?? "").toBe("");
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				cleanupFixture(fixture.root);
+			}
+		} catch (cause) {
+			cleanupFixture(fixture.root);
+			throw cause;
+		}
+	});
+
+	it("agent mode WITHOUT SSH_AUTH_SOCK in parent env: fails closed (canonicalization-failed)", async () => {
 		const fixture = buildFixture();
 		try {
 			const cap: CommandCapability = {
@@ -162,7 +280,7 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 		}
 	});
 
-	it("agent mode with non-existent socketPath: fails closed", async () => {
+	it("agent mode with non-existent SSH_AUTH_SOCK: fails closed (canonicalization-failed)", async () => {
 		const fixture = buildFixture();
 		try {
 			const cap: CommandCapability = {
@@ -171,10 +289,7 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 				network: "deny",
 				environment: { mode: "sanitized", allow: [] },
 				cwd: fixture.inside,
-				sshAuthenticationAuthority: {
-					mode: "agent",
-					socketPath: "/nonexistent/path/agent.sock",
-				},
+				sshAuthenticationAuthority: { mode: "agent" },
 			};
 			const cmd: CommandInvocation = {
 				executable: "/usr/bin/env",
@@ -182,36 +297,41 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 				cwd: fixture.inside,
 				env: {},
 			};
-			await expect(
-				SeatbeltSandboxBackendExperimental.prepare({
-					capability: cap,
-					command: cmd,
-				}),
-			).rejects.toMatchObject({
-				name: "SandboxError",
-				reason: "canonicalization-failed",
-			});
-			cleanupFixture(fixture.root);
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = "/nonexistent/path/agent.sock";
+			try {
+				await expect(
+					SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					}),
+				).rejects.toMatchObject({
+					name: "SandboxError",
+					reason: "canonicalization-failed",
+				});
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				cleanupFixture(fixture.root);
+			}
 		} catch (cause) {
 			cleanupFixture(fixture.root);
 			throw cause;
 		}
 	});
 
-	it("agent mode: profile contains AF_UNIX system-socket + path-literal network-outbound", async () => {
+	it("agent mode with regular-file SSH_AUTH_SOCK (NOT a socket): fails closed (isSocket check)", async () => {
 		const fixture = buildFixture();
 		try {
-			const SOCKET_DIR = join(fixture.root, "agent");
-			mkdirSync(SOCKET_DIR, { recursive: true });
-			const CANONICAL = join(SOCKET_DIR, "agent.sock");
-			writeFileSync(CANONICAL, "");
+			const CANONICAL = join(fixture.agent, "fake-sock");
+			writeFileSync(CANONICAL, "this is not a socket");
 			const cap: CommandCapability = {
 				readonlyRoots: [fixture.inside],
 				writableRoots: [fixture.inside],
 				network: "deny",
 				environment: { mode: "sanitized", allow: [] },
 				cwd: fixture.inside,
-				sshAuthenticationAuthority: { mode: "agent", socketPath: CANONICAL },
+				sshAuthenticationAuthority: { mode: "agent" },
 			};
 			const cmd: CommandInvocation = {
 				executable: "/usr/bin/env",
@@ -219,18 +339,113 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 				cwd: fixture.inside,
 				env: {},
 			};
-			const prepared = await SeatbeltSandboxBackendExperimental.prepare({
-				capability: cap,
-				command: cmd,
-			});
-			const profilePath = prepared.args[1];
-			const profileContent = readFileSync(profilePath, "utf8");
-			expect(profileContent).toContain("(socket-domain AF_UNIX))");
-			expect(profileContent).toContain(
-				`(remote unix-socket (path-literal "${CANONICAL}"))`,
-			);
-			expect(profileContent).not.toMatch(/\(remote unix-socket \(subpath/);
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = CANONICAL;
+			try {
+				await expect(
+					SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					}),
+				).rejects.toMatchObject({
+					name: "SandboxError",
+					reason: "canonicalization-failed",
+				});
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				cleanupFixture(fixture.root);
+			}
+		} catch (cause) {
 			cleanupFixture(fixture.root);
+			throw cause;
+		}
+	});
+
+	it("agent mode with directory-as-SSH_AUTH_SOCK: fails closed (isSocket check)", async () => {
+		const fixture = buildFixture();
+		try {
+			const CANONICAL = join(fixture.agent, "directory");
+			mkdirSync(CANONICAL, { recursive: true });
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+				sshAuthenticationAuthority: { mode: "agent" },
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = CANONICAL;
+			try {
+				await expect(
+					SeatbeltSandboxBackendExperimental.prepare({
+						capability: cap,
+						command: cmd,
+					}),
+				).rejects.toMatchObject({
+					name: "SandboxError",
+					reason: "canonicalization-failed",
+				});
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				cleanupFixture(fixture.root);
+			}
+		} catch (cause) {
+			cleanupFixture(fixture.root);
+			throw cause;
+		}
+	});
+
+	it.skipIf(!CAN_BIND_AF_UNIX)("agent mode: profile contains AF_UNIX system-socket + path-literal network-outbound (one value, one owner)", async () => {
+		const fixture = buildFixture();
+		try {
+			const CANONICAL = join(fixture.agent, "agent.sock");
+			const closeSocket = await bindUnixSocket(CANONICAL);
+			const cap: CommandCapability = {
+				readonlyRoots: [fixture.inside],
+				writableRoots: [fixture.inside],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				cwd: fixture.inside,
+				sshAuthenticationAuthority: { mode: "agent" },
+			};
+			const cmd: CommandInvocation = {
+				executable: "/usr/bin/env",
+				args: [],
+				cwd: fixture.inside,
+				env: {},
+			};
+			const prev = process.env.SSH_AUTH_SOCK;
+			process.env.SSH_AUTH_SOCK = CANONICAL;
+			try {
+				const prepared = await SeatbeltSandboxBackendExperimental.prepare({
+					capability: cap,
+					command: cmd,
+				});
+				const profilePath = prepared.args[1];
+				const profileContent = readFileSync(profilePath, "utf8");
+				expect(profileContent).toContain("(socket-domain AF_UNIX))");
+				expect(profileContent).toContain(
+					`(remote unix-socket (path-literal "${CANONICAL}"))`,
+				);
+				expect(profileContent).not.toMatch(/\(remote unix-socket \(subpath/);
+				// Profile path-literal and child env value MUST be the
+				// same string (no divergence; single owner).
+				expect(prepared.env.SSH_AUTH_SOCK).toBe(CANONICAL);
+			} finally {
+				if (prev === undefined) delete process.env.SSH_AUTH_SOCK;
+				else process.env.SSH_AUTH_SOCK = prev;
+				closeSocket();
+				cleanupFixture(fixture.root);
+			}
 		} catch (cause) {
 			cleanupFixture(fixture.root);
 			throw cause;
@@ -269,20 +484,18 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 		}
 	});
 
-	it("SSH-07 agent mode: unrelated secrets remain stripped", async () => {
+	it.skipIf(!CAN_BIND_AF_UNIX)("SSH-07 agent mode: unrelated secrets remain stripped", async () => {
 		const fixture = buildFixture();
 		try {
-			const SOCKET_DIR = join(fixture.root, "agent");
-			mkdirSync(SOCKET_DIR, { recursive: true });
-			const CANONICAL = join(SOCKET_DIR, "agent.sock");
-			writeFileSync(CANONICAL, "");
+			const CANONICAL = join(fixture.agent, "agent.sock");
+			const closeSocket = await bindUnixSocket(CANONICAL);
 			const cap: CommandCapability = {
 				readonlyRoots: [fixture.inside],
 				writableRoots: [fixture.inside],
 				network: "deny",
 				environment: { mode: "sanitized", allow: [] },
 				cwd: fixture.inside,
-				sshAuthenticationAuthority: { mode: "agent", socketPath: CANONICAL },
+				sshAuthenticationAuthority: { mode: "agent" },
 			};
 			const cmd: CommandInvocation = {
 				executable: "/usr/bin/env",
@@ -314,6 +527,7 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 					if (v === undefined) delete process.env[k];
 					else process.env[k] = v;
 				}
+				closeSocket();
 				cleanupFixture(fixture.root);
 			}
 		} catch (cause) {
@@ -322,28 +536,27 @@ describe("ACT-IMPL01 ssh-agent authority (continued)", () => {
 		}
 	});
 
-	it("SSH-13 agent mode: socket parent directory remains non-writable (no implicit write rule)", () => {
+	it.skipIf(!CAN_BIND_AF_UNIX)("SSH-13 agent mode: socket parent directory remains non-writable (no implicit write rule)", async () => {
 		const fixture = buildFixture();
 		try {
-			const SOCKET_DIR = join(fixture.root, "agent");
-			mkdirSync(SOCKET_DIR, { recursive: true });
-			const CANONICAL = join(SOCKET_DIR, "agent.sock");
-			writeFileSync(CANONICAL, "");
+			const CANONICAL = join(fixture.agent, "agent.sock");
+			const closeSocket = await bindUnixSocket(CANONICAL);
 			const cap: CommandCapability = {
 				readonlyRoots: [fixture.inside],
 				writableRoots: [fixture.inside],
 				network: "deny",
 				environment: { mode: "sanitized", allow: [] },
 				cwd: fixture.inside,
-				sshAuthenticationAuthority: { mode: "agent", socketPath: CANONICAL },
+				sshAuthenticationAuthority: { mode: "agent" },
 			};
 			const p = generateSeatbeltProfile(cap, {
 				sshAgentCanonicalSocketPath: CANONICAL,
 			});
-			// Parent dir SOCKET_DIR MUST NOT appear as a writable subpath.
-			expect(p).not.toContain(`(subpath "${SOCKET_DIR}")`);
+			// Parent dir MUST NOT appear as a writable subpath.
+			expect(p).not.toContain(`(subpath "${fixture.agent}")`);
 			// And the AF_UNIX rule must use path-literal, not subpath.
 			expect(p).not.toMatch(/\(remote unix-socket \(subpath/);
+			closeSocket();
 			cleanupFixture(fixture.root);
 		} catch (cause) {
 			cleanupFixture(fixture.root);

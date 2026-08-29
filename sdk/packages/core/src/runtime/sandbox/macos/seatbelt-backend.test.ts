@@ -930,7 +930,6 @@ describe.skipIf(!HAS_SUBSTRATE)(
 					cwd: fixture.inside,
 					sshAuthenticationAuthority: {
 						mode: "agent",
-						socketPath: CANONICAL,
 					},
 				};
 				const cmd: CommandInvocation = {
