@@ -30,8 +30,49 @@
 
 ## Deferred work
 
-None.
+### HUSKY-TOOLCHAIN-PATH-PORTABILITY01
 
+```text
+Working label:  HUSKY-TOOLCHAIN-PATH-PORTABILITY01
+Proposed ACT ID: (assigned at ACT creation per FACT-001 naming
+                 doctrine in this file)
+Priority:       P2 / DEFER
+State:          FUTURE / DEFER (activation criteria explicit below)
+
+Mission (when opened):
+  Make repository hooks reliably discover required developer tools
+  across Apple Silicon Homebrew, Intel Homebrew, Linuxbrew,
+  Nix / GUI / non-login environments.
+
+Current state (do NOT touch in this backlog ACT):
+  .husky/pre-commit enumerates Homebrew prefixes for darwin-arm64,
+    darwin-x86_64, and Linuxbrew for the gitleaks binary; the
+    gitleaks branch fails CLOSED if gitleaks cannot be located.
+  The `cd apps/vscode && bunx lint-staged` step does NOT enumerate
+    prefixes; bun / bunx are operator-side PATH-injected.
+
+Activation criteria (must satisfy AT LEAST ONE):
+  - Another operator / CI environment reproduces the failure
+    (a new hook-related tool dropped from PATH on a fresh checkout).
+  - Factory decides developer-tool portability warrants proactive
+    work (e.g. a cluster of PATH-shadowing findings that would
+    benefit from a unified resolution).
+
+Constraints (carried into any future ACT):
+  - Recon first.
+  - No machine-specific tracked symlinks.
+  - No broad global PATH mutation unless evidence justifies it.
+  - Prefer bounded per-tool discovery if opened (e.g. command -v
+    chain with documented fallbacks).
+  - Do NOT silently weaken the gitleaks requirement (the current
+    hook fails closed if gitleaks cannot be located; that posture
+    must be preserved).
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
+  (FW-06, recorded 2026-08-29 by the thread-future-work
+  normalization ACT)
+```
 ## Historical detail
 
 The text below is migrated verbatim from the prior single-file `.factory/epic-board.md` (Git safety + Factorize doctrine + Board maintenance rule, see front-matter block at top of fenced payload for source-line ranges) so the durable conclusions remain anchored to their source lines. **Do not rewrite history here unless the underlying ACT itself is being amended.**

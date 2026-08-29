@@ -47,8 +47,101 @@ Reopen / new-work conditions:
 
 ## Deferred work
 
-None.
+### BRANDING-DEMO-JAN1-ICON
 
+```text
+Proposed ACT ID: ACT-CLINEMM-BRANDING-DEMO-JAN1-ICON01
+Priority:       DEMO / LOW (intentional; must NOT be promoted
+                 ahead of any P0 / P1 work)
+State:          FUTURE / UNIMPLEMENTED
+
+Mission (when opened):
+  On January 1, make the ClineMM extension icon subtly
+  shiny / festive. This is a deliberately tiny end-to-end demo
+  task for product / UI release plumbing.
+
+Why a deferred row (not an ACT yet):
+  No existing backlog entry owns date-driven icon decoration.
+  The existing EPIC-CLINEMM-BRANDING01 umbrella's first bounded
+  slice is the icon-replacement ACT (different concern: ‖ → --).
+  Adding a DEMO/LOW backlog row under the umbrella epic keeps
+  the eventual ACT visible without promoting it to NEXT.
+
+Constraints (carried into any future ACT):
+  - Deterministic date seam (e.g. Date.now() within a configurable
+    date range, or a build-time JAN1_DEMO_ENABLED flag — NOT a
+    clock-driven side effect without an explicit toggle).
+  - Testable without waiting for January 1 (the date seam must
+    accept a fakeable "now" for tests).
+  - No external network dependency.
+  - No large branding redesign (single decorative treatment on
+    Jan 1 only; preserve the normal icon on every other date).
+  - Easy revert / removal (the entire feature lives behind one
+    date-configurable seam).
+  - This is a demo task, not product-critical work. The DEMO/LOW
+    priority is intentional and must not be promoted ahead of any
+    P0 / P1 work.
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
+  (FW-09, recorded 2026-08-29 by the thread-future-work
+  normalization ACT)
+```
+
+### TEMP-INTERNAL-CONTROL-CLEANUP (cross-cutting child of settings-parity)
+
+```text
+Working label:  TEMP-INTERNAL-CONTROL-CLEANUP
+Proposed ACT ID: (assigned at ACT creation per FACT-001 naming
+                 doctrine in factory-infrastructure.md)
+Priority:       P2 / DEFER
+State:          FUTURE / DEFER
+
+This is an inventory + classification task; each temporary /
+internal control must be classified as KEEP_INTERNAL /
+REPLACE_WITH_SETTING / REMOVE_AFTER_SUCCESSOR / DEBUG_ONLY
+before any cleanup ACT can be opened. No inventory exists yet;
+opening a "cleanup" ACT without the inventory would be premature.
+
+Primary inventory (when this work opens):
+  - CLINEMM_SAFE_YOLO_NETWORK
+        classification: REPLACE_WITH_SETTING (see the FW-05
+        cross-link in safe-yolo-seatbelt.md Deferred work)
+  - CLINEMM_SAFE_YOLO_SSH_AGENT
+        classification: REPLACE_WITH_SETTING (see FW-05 cross-link)
+  - PTAD env controls (post-terminal-authority-diagnostic-runtime.ts)
+        classification: REPLACE_WITH_SETTING (settings-parity §3
+        inventory will determine the surface; GUARD_NO_PTAD_TAB
+        preserved)
+  - CLINEMM_EXPERIMENTAL_SANDBOX (sandbox-backend.ts)
+        classification: KEEP_INTERNAL (substrate-only;
+        not user-facing)
+  - Any still-live CLINEMM_EXPERIMENTAL_* naming that is
+    semantically stale — classification TBD by inventory.
+
+Constraints (carried into any future ACT):
+  - No action in this backlog ACT beyond making the debt durable.
+  - The settings-parity ACT's §3 inventory may surface these env
+    controls as SUPERSEDED_BY_CLINEMM rows (env control remains,
+    stable settings surface added).
+  - Do not silently convert temporary env controls into permanent
+    public API — the env controls remain; the settings surface
+    supersedes them only when the settings surface can fully
+    cover the same capability.
+
+Owning epic decision:
+  The primary owner is safe-yolo-seatbelt.md (the env controls
+  are owned by the seatbelt substrate); this row in
+  product-config-branding.md is a cross-link because the eventual
+  replacement is a settings surface that lives in
+  EPIC-CLINEMM-BRANDING01-adjacent settings UI. See
+  safe-yolo-seatbelt.md Deferred work for the primary row.
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
+  (FW-11, recorded 2026-08-29 by the thread-future-work
+  normalization ACT)
+```
 ## Historical detail
 
 ### Product telemetry — L3378-3574 (pre-sharding)

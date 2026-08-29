@@ -54,3 +54,119 @@ Reopen / new-work conditions:
 - A new temporary YOLO bypass proposal is raised — first check the **`defer-not-bypass`** rule: any new ACT must prove the substrate is insufficient against the production-equivalent composition (row 17 CORRECTION02), not just propose a workaround. The production-equivalent composition already collapses the load-bearing-quadrant ASKs from 15 → 3; most "approval friction" is environment-specific, not a general command-policy defect.
 - A new classic (non-Seatbelt) approval protection recon ACT lands — append to this file's ACT ledger row.
 - A new host-only-behaviour dependency (e.g. a new `HOST-TEST RUNNER` artifact, or a future ACT that depends on it) lands — append to this file's ACT ledger row.
+
+## Deferred work
+
+### DESTRUCTIVE-SCOPE-REFINEMENT-RECON
+
+```text
+Proposed ID: ACT-CLINEMM-DESTRUCTIVE-SCOPE-REFINEMENT-RECON01
+Priority:    HIGH
+State:       FUTURE / UNIMPLEMENTED
+
+Mission:
+Introduce a future REFINE_SCOPE decision between ALLOW/ASK/DENY for
+broad or selector-based destructive mutations.
+
+Core doctrine:
+  BROAD_MUTATION != AUTHORIZED_MUTATION
+
+  broad/selector-based action
+    → deterministically estimate/expand impact where safely possible
+    → force an additional model intent-refinement turn
+    → require exact bounded target set + intended postcondition
+    → re-evaluate normal policy from scratch
+    → execute only the precise replacement request
+
+The refinement model is NOT an independent reviewer.
+The host remains authority.
+
+Initial exemplar:
+  rm *.tmp
+  rm -rf generated/
+  find ... -delete
+  git clean -fdx
+
+Future generalization (NOT in V1):
+  mass edits, git force ops, K8s label-selector deletes,
+  Terraform/cloud destroy sets, broad SQL DELETE/UPDATE,
+  recursive chmod/chown, wildcard package removal,
+  broad secret/config access, broad firewall/network-policy mutation.
+
+Anti-patterns:
+  NO "Are you sure?" self-review
+  NO free-form "explain why this is safe" as sufficient proof
+  NO rm-specific regex-only architecture
+  NO automatic execution merely because the second model turn agrees
+
+Potential escalation ladder (NOT frozen in this backlog ACT):
+  L0 NORMAL
+  L1 REFINE_SCOPE
+  L2 JUSTIFY_SCOPE
+  L3 PLAN_ONLY
+  L4 HUMAN_APPROVAL
+
+Doctrine anchors (carried into any future ACT):
+  - Upstream Cline approvals allow an agent to reformulate after a
+    denied tool call (see upstream SDK permission-handling.mdx and
+    approval-handlers.ts); the typed REFINE_SCOPE response plugs
+    into this existing behavioral substrate, not a new control loop.
+  - A syntactic-only rm/find classifier is demonstrably brittle in
+    other coding agents (see Codex exec_policy.rs and the reported
+    rm-variant fall-through). Future doctrine MUST be semantic
+    scope refinement, not more regex.
+
+Constraints (carried into any future ACT):
+  - Recon first; do not pre-classify cause.
+  - Do not freeze numeric thresholds in this backlog ACT.
+  - Recon ACT should observe on the production seam (live
+    broad-mutation specimen) before any RED is written.
+
+Reopen / activation triggers:
+  - A live broad-mutation specimen is captured and the current
+    command-policy surface admits it without a refinement turn.
+  - The command-risk V3 family (progressive classification, see
+    ACT ledger row) explicitly needs a typed REFINE_SCOPE family.
+  - Upstream Cline ships an analogous REFINE_SCOPE primitive
+    that warrants a parity recon.
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
+  (FW-01, recorded 2026-08-29 by the thread-future-work
+  normalization ACT)
+```
+
+### APPROVAL-TRANSACTION-RECORDER-FUTURE-WORK
+
+```text
+State:       FUTURE / UNIMPLEMENTED — already carried by the
+             existing ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01
+             "Reopen / new-work conditions" block; recorded here
+             so a future reviewer can find it from this epic's
+             deferred section as well.
+Priority:    HIGH (after current SSH live qualification)
+
+Cross-references:
+  - .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
+    (FW-02, recorded 2026-08-29)
+  - .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/
+    captures/specimen-20260827-command-approval01.json (current
+    live state: CAPTURE_INSUFFICIENT; approval events before = 0
+    and after = 0 in the 2026-08-29 capture)
+
+Future seam (carried into the existing recon ACT, NOT a new ACT):
+  - Smallest DEFAULT_OFF persistent approval transaction recorder
+    at the real approval entry/terminal seam.
+  - Required future fields: schema version, timestamp, session
+    identity, task identity if available, canonical approval /
+    correlation identity, tool name, policy auto-approve state,
+    shouldAutoApproveTool result, ENTRY | TERMINAL,
+    approved/rejected/cancelled outcome.
+  - Constraints: no policy change; no diagnostic side effect inside
+    semantic state updaters; no heuristic toolName + timestamp
+    identity; no "latest pending approval" correlation;
+    bounded / removable / default-off; reuse canonical approval
+    identity if current runtime supplies one.
+  - Existing tools/factory/capture-approval-specimen.py remains
+    the consumer; do not redesign it in this backlog ACT.
+```

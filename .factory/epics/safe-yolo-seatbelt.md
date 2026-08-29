@@ -48,3 +48,104 @@ Reopen / new-work conditions:
 - A new classic (non-Seatbelt) approval protection recon ACT lands — append to this file's ACT ledger row.
 - A Seatbelt-default-ON regression breaks the selector contract (`SeatbeltSandboxBackendExperimental` no longer the canonical selector on Darwin when the OS-level sandbox feature is enabled).
 - **Real-kernel host qualification remains `HOST_REQUIRED` where applicable.** Per `.factory/epics/_index-contract.md` policy (status vocabulary): any ACT that asserts a real-kernel Seatbelt property (RED-on-kernel, GREEN-on-kernel, byte-equality across canonical / override=all) must include a `host_test_runner` artifact or explicitly mark `HOST_REQUIRED` in the verdict. The Safe-YOLO suite is fully closed under `HAS_SUBSTRATE = process.platform === "darwin" && existsSync("/usr/bin/sandbox-exec")` and `describe.skipIf(!HAS_SUBSTRATE)(...)` (Vitest runtime skip; reports as SKIP, not PASS, on non-Darwin / non-sandbox-exec CI). `HOST-TEST RUNNER` (row 18) is the natural next layer above the substrate probes — separate ACT, not part of this epic's closure.
+
+## Deferred work
+
+### SEATBELT-SAFE-YOLO-USER-FACING-SETTINGS-SURFACE (cross-link)
+
+```text
+Working label:  SEATBELT-SAFE-YOLO-USER-FACING-SETTINGS-SURFACE
+Proposed ACT ID: (none — owned by the settings-parity ACT family
+                 per the cross-cutting decision in
+                 ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01)
+Priority:       HIGH-MED
+State:          FUTURE / UNIMPLEMENTED
+
+This is a cross-link, NOT a separate ACT. The settings-parity
+ACT (ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01) §3
+inventory will enumerate upstream FIRST and classify each
+missing ClineMM internal control as MISSING_ACCIDENTALLY /
+REMOVED_INTENTIONALLY / SUPERSEDED_BY_CLINEMM /
+UPSTREAM_NOT_APPLICABLE / PRESENT_IN_BOTH; the §5 candidate
+restore list is the only output that drives downstream ACTs.
+
+If §3 / §4 classify the ClineMM internal env controls
+(CLINEMM_SAFE_YOLO_NETWORK, CLINEMM_SAFE_YOLO_SSH_AGENT, PTAD
+env controls) as SUPERSEDED_BY_CLINEMM (env control remains;
+stable settings surface added) or MISSING_ACCIDENTALLY
+(some upstream-visible equivalent exists), the §5 candidate
+restore list will include the seatbelt-user-facing surface
+under FW-05's existing shape:
+  - Network egress → upstream "Allow outbound network" toggle
+    candidate (corresponds to CLINEMM_SAFE_YOLO_NETWORK)
+  - Authentication → SSH agent toggle
+    (corresponds to CLINEMM_SAFE_YOLO_SSH_AGENT)
+  - Diagnostics / Advanced → PTAD controls
+
+Constraints carried forward (do NOT loosen):
+  - Independent capabilities, not one giant YOLO switch.
+  - No top-level bespoke PTAD tab (already GUARD_NO_PTAD_TAB).
+  - No raw ~/.ssh key-read toggle in V1 (`readonly`-identity-file
+    mode is OUT OF SCOPE for V1 per RECON01 §15; preserved).
+  - Do not silently convert temporary env controls into permanent
+    public API — env controls remain; the settings surface
+    supersedes them only when the settings surface can fully
+    cover the same capability.
+  - Placement depends on settings-parity §11 decision.
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
+  (FW-05, recorded 2026-08-29 by the thread-future-work
+  normalization ACT)
+```
+
+### TEMP-INTERNAL-CONTROL-CLEANUP (primary owner)
+
+```text
+Working label:  TEMP-INTERNAL-CONTROL-CLEANUP
+Proposed ACT ID: (assigned at ACT creation per FACT-001 naming
+                 doctrine in factory-infrastructure.md)
+Priority:       P2 / DEFER
+State:          FUTURE / DEFER
+
+This is the primary owner of the temporary / internal control
+cleanup inventory; the cross-cutting child in
+product-config-branding.md Deferred work is the secondary row
+because the eventual replacement is a settings surface.
+
+Inventory (when this work opens):
+  - CLINEMM_SAFE_YOLO_NETWORK
+        classification: REPLACE_WITH_SETTING (see the FW-05
+        cross-link above; candidate-restore lives under
+        ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01
+        §3 inventory).
+  - CLINEMM_SAFE_YOLO_SSH_AGENT
+        classification: REPLACE_WITH_SETTING (same; the SSH
+        credential authority contract is FROZEN at RECON01 §15
+        — the settings surface must not renegotiate the
+        product policy).
+  - PTAD env controls (post-terminal-authority-diagnostic-runtime.ts)
+        classification: REPLACE_WITH_SETTING (settings-parity
+        §3 inventory will determine the surface;
+        GUARD_NO_PTAD_TAB preserved).
+  - CLINEMM_EXPERIMENTAL_SANDBOX (sandbox-backend.ts)
+        classification: KEEP_INTERNAL (substrate-only;
+        not user-facing).
+  - Any still-live CLINEMM_EXPERIMENTAL_* naming that is
+    semantically stale — classification TBD by inventory.
+
+Constraints (carried into any future ACT):
+  - No action in this backlog ACT beyond making the debt durable.
+  - The settings-parity ACT's §3 inventory may surface these env
+    controls as SUPERSEDED_BY_CLINEMM rows (env control remains,
+    stable settings surface added).
+  - Do not silently convert temporary env controls into
+    permanent public API — the env controls remain; the settings
+    surface supersedes them only when the settings surface can
+    fully cover the same capability.
+
+Full inventory & rationale:
+  .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
+  (FW-11, recorded 2026-08-29 by the thread-future-work
+  normalization ACT)
+```

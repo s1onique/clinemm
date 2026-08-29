@@ -284,6 +284,16 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01.md
 
 
+# ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01 (docs-only):
+# the reconciliation.md is the canonical durable artifact for the
+# 2026-08-29 thread future-work normalization; the four epic-detail
+# files (.factory/epics/approval-protection.md, factory-infrastructure.md,
+# product-config-branding.md, safe-yolo-seatbelt.md) cross-link to it.
+# Mirror the .factory/acts/ + .factory/evidence/ default-deny +
+# whitelist pattern above.
+!/.factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/
+
+
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
 # apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt
 # qualification runs and must NOT block exact-head VSIX packaging (build-dogfood-vsix.py
