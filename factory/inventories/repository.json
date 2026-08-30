@@ -4,20 +4,25 @@
 		"remote_name": "upstream",
 		"url": "https://github.com/cline/cline.git",
 		"branch": "main",
-		"commit_oid": "c564045d8135c0c1c330b21d47b68b74917ce614",
-		"tree_oid": "2a1d9c0e4cef65151afc286343d92ca0f6b68039"
+		"commit_oid": "48d63852745460ff0fa3dfcc0457bbe2493841de",
+		"tree_oid": "14500ceda6208e38fc6cf2289efd5156d44ca46e",
+		"comment": "RECON_SUBJECT_HEAD; pinned for ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01 (drift is logged not fatal; see ACT-CLINEMM-UPSTREAM-SYNC-RECON01 §Drift-handling policy)."
 	},
 	"fork": {
 		"remote_name": "origin",
 		"url": "git@github.com:s1onique/clinemm.git",
-		"branch": "factory/act-clinemm-fork-baseline01-correction02"
+		"branch": "main",
+		"head_oid": "913dffcaa801c08df4985264272f1e002fe8cb79",
+		"comment": "Round-2 recon commit (AUTO_MERGE 37→38 + log-not-halt drift policy); ahead of origin/main by 2 commits (unpushed: 730a58954, 913dffcaa)."
 	},
 	"working_copy": {
-		"head_oid": "12370b431daeae0dc4eb053496c25a89d9b7baae",
-		"tree_oid": "d43f3579fe734472be82f2696bb620c3feb767de",
-		"merge_base_with_upstream": "c564045d8135c0c1c330b21d47b68b74917ce614",
-		"ahead": 17,
-		"behind": 0,
+		"head_oid": "913dffcaa801c08df4985264272f1e002fe8cb79",
+		"tree_oid": "b0535c31954c9f046b1dd91abd9b6ce54c7a73f2",
+		"merge_base_with_upstream": "ad442cbb6a81d21773ceabc1398ea5eb58170718",
+		"ahead_of_upstream": 905,
+		"behind_upstream": 177,
+		"ahead_of_origin_main": 2,
+		"behind_origin_main": 0,
 		"is_shallow": false,
 		"submodules": [
 			{
@@ -26,7 +31,61 @@
 				"oid": "not-checked-out"
 			}
 		],
-		"lfs_pointer_count": 1
+		"lfs_pointer_count": 1,
+		"protected_stashes": 2,
+		"protected_stash_ids": [
+			"stash@{0}: WIP on main: 056b354a1 fix(sandbox): harden Seatbelt diagnostic observer",
+			"stash@{1}: On main: c2-green-and-c2-p1-delta"
+		],
+		"comment": "Recon ACT halts clean; integration ACT is the successor."
+	},
+	"upstream_sync_recon": {
+		"act_id": "ACT-CLINEMM-UPSTREAM-SYNC-RECON01",
+		"act_body_path": ".factory/acts/ACT-CLINEMM-UPSTREAM-SYNC-RECON01.md",
+		"evidence_dir": ".factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-RECON01/",
+		"verdict": "PASS_UPSTREAM_SYNC_RECON",
+		"sync_priority": "HIGH",
+		"p0_remaining": 0,
+		"p1_remaining": 0,
+		"p2_non_blocking": [
+			"GATE_SUMMARY_INVALID_BINDING",
+			"LEAMAS_GENERATOR_SUBJECT_MISMATCH"
+		],
+		"further_recon_review_authorized": false,
+		"intersection_count": 55,
+		"changed_in_both_count": 54,
+		"add_add_conflicts": 1,
+		"base_present_conflicts": 16,
+		"total_conflicts": 17,
+		"auto_merge_files": 38,
+		"mechanical_conflicts": 6,
+		"semantic_conflicts": 7,
+		"security_critical_conflicts": 4,
+		"factory_only_conflicts": 0,
+		"frozen_invariants_count": 27,
+		"frozen_invariants_mandatory_post_merge_gates": [
+			"F27_SHARED_HOST_SAFE_YOLO_SOURCE_BINDING"
+		],
+		"conflict_resolution_order_frozen": [
+			"state.proto",
+			"sdk-tool-policies.ts (+test)",
+			"SdkController.ts",
+			"vscode-session-host.ts",
+			"bash.ts",
+			"definitions.ts",
+			"runtime-builder.ts",
+			"shared agent/model contracts",
+			"package/UI/tests",
+			"bun.lock (LAST)"
+		],
+		"security_critical_conflict_files": [
+			"state.proto",
+			"SdkController.ts",
+			"bash.ts",
+			"sdk-tool-policies.ts"
+		],
+		"drift_handling_policy": "LOG_DONT_HALT",
+		"next_act": "ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01"
 	},
 	"tags": {
 		"nearest": "cli-v3.0.44",
