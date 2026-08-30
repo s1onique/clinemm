@@ -1,0 +1,74 @@
+{
+  "act": "ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01",
+  "correction": "CORRECTION02 (Reviewer P0 #1 + #2)",
+  "step": "PRODUCTION_SOURCE_BINDING_DISCRIMINATOR",
+  "reviewer_findings": {
+    "p0_1": "c4 test built the closure by hand (ClineFileStorage + readGlobalStateFromStorage + inline closure). Did NOT instantiate StateManager, SdkController, or VscodeSessionHost. Required a production-source binding witness.",
+    "p0_2": "Installed-bundle identity was verified at entry HEAD b25636e6d (pre-edit). The current worktree contains the schema-default edit and is uncommitted, so the installed bundle is byte-equal to PRE-REPAIR source only. Cannot make the source-vs-installed claim for the current repaired tree."
+  },
+  "correction02_production_binding_test": {
+    "test_file": "apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts",
+    "test_setup": [
+      "real HostProvider.initialize(...) with no-op stubs (mirrors aopc02 bridge pattern)",
+      "real StateManager.initialize(createStorageContext({ clineDir: sharedDir, workspacePath: sharedDir }))",
+      "real StateManager.get() singleton",
+      "production-shaped closure (verbatim from SdkController.ts:1216, 1324, 1350, 2660, 2907): () => ({ network: sm.getGlobalSettingsKey(\"clinemmSafeYoloAllowNetwork\"), sshAgent: sm.getGlobalSettingsKey(\"clinemmSafeYoloAllowSshAgent\") })",
+      "real CommandJobManager with the production-shaped closure",
+      "real sandboxBackendResolver returning a capture-only fake SandboxBackend",
+      "capture: input.capability at sandboxBackend.prepare() boundary"
+    ]
+  },
+  "results": {
+    "correction02_1_persisted_true": {
+      "expected": "real StateManager=true → closure returns true → sandboxBackend.prepare receives network='allow'",
+      "observed": "closure.network = true; backend.prepare capability.network = 'allow'",
+      "verdict": "PASS_deterministically; source path is correct for explicit-true"
+    },
+    "correction02_2_lifecycle": {
+      "cmd1_absent": {
+        "expected": "cache.network = undefined; capability = 'allow' (env fallback)",
+        "observed": "initial cache.network = undefined; cmd1 capability.network = 'allow'"
+      },
+      "toggle_to_true": {
+        "cache_after_toggle": "true"
+      },
+      "cmd2_true": {
+        "expected": "capability = 'allow' (explicit override); closure re-reads cache (no stale snapshot)",
+        "observed": "cmd2 capability.network = 'allow'",
+        "snapshot_staleness": "NOT_STALE — closure re-reads the cache on every call"
+      },
+      "verdict": "PASS_deterministically; lifecycle works; no host recreation needed; closure re-reads cache per start() call"
+    }
+  },
+  "tested_subpath_scope": {
+    "tested": "ClineFileStorage → StateManager singleton → getGlobalSettingsKey → inline closure (verbatim SdkController shape) → CommandJobManager → sandboxBackend.prepare",
+    "untested": "SdkController construction, VscodeSessionHost.create(...), Controller state plumbing, webview→backend message bus, full host-bridge",
+    "comment": "This is the most one layer removed from the actual production seam that can be done hermetically without spinning up the host."
+  },
+  "downstream": {
+    "live_failure_class_reproduced_in_tested_subpath": false,
+    "verdict": "LIVE_FAILURE_NOT_REPRODUCED_IN_CURRENT_SOURCE_PATH",
+    "implications": [
+      "The live UI=true → deny failure class cannot be reproduced on the tested source subpath.",
+      "Per reviewer stop rule: do NOT invent additional source fixes in the tested subpath.",
+      "Reclassify the live failure as either (a) environment/artifact specific (DNS, seatbelt binary, firewall, host-override), or (b) living outside the tested subpath (VscodeSessionHost.create callsite, profile generator, installed-bundle mismatch, host-ownership override).",
+      "H2 (legacy absence collapse) repair is preserved as a real bounded correction that the previous ACTs missed because their tests stopped at the ClineFileStorage layer.",
+      "Final disposition: PASS_LEGACY_HYDRATION_REPAIR_V1 + LIVE_REGRESSION = NOT_REPRODUCED_IN_CURRENT_SOURCE_PATH."
+    ]
+  },
+  "source_bundle_identity_reclassified": {
+    "original_claim": "installed bundle is byte-equal to source; live failure cannot be attributed to build/distribution mismatch",
+    "correction02_claim": {
+      "ORIGINAL_FAILURE_ARTIFACT_BOUND_TO_ENTRY_SOURCE": "YES (entry SHA-256 verified; original live failure was running pre-edit source)",
+      "CURRENT_REPAIRED_SOURCE_LIVE_ARTIFACT": "NOT_BUILT (post-edit source has not been bundled, installed, or SHA-256 verified yet)"
+    },
+    "required_for_stronger_claim": [
+      "1. Commit the schema-default edit (commit H2 repair).",
+      "2. bun esbuild.mjs (rebuild dist/extension.js).",
+      "3. Reinstall the extension.",
+      "4. Re-verify SHA-256 byte-equality.",
+      "5. Run the live curl + ping specimen."
+    ],
+    "out_of_scope_for_this_act": "no DNS in this VM per the upstream-sync-recon halt; build/install/qualification requires a follow-on ACT in a VM with network egress."
+  }
+}

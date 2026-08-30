@@ -303,21 +303,20 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		}
 
 		// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+		// ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01:
 		// Persisted Settings values that bind to the sandbox capability
-		// selectors in apps/vscode/src/sdk/sandbox-policy.ts. Both
-		// fields default to false in state-keys.ts and the resolver
-		// treats absent / false as "no opt-in" → pre-ACT runtime.
+		// selectors in apps/vscode/src/sdk/sandbox-policy.ts.
+		// `request.X !== undefined` discriminates the explicit user
+		// toggle (true/false) from absence; the write below is the
+		// ONLY authoritative source of an opinion for these two fields.
+		// After the LIVE-REGRESSION01 repair, absence stays undefined
+		// through hydration so the env path remains authoritative for
+		// users who have never touched the toggle.
 		if (request.clinemmSafeYoloAllowNetwork !== undefined) {
-			controller.stateManager.setGlobalState(
-				"clinemmSafeYoloAllowNetwork",
-				!!request.clinemmSafeYoloAllowNetwork,
-			)
+			controller.stateManager.setGlobalState("clinemmSafeYoloAllowNetwork", !!request.clinemmSafeYoloAllowNetwork)
 		}
 		if (request.clinemmSafeYoloAllowSshAgent !== undefined) {
-			controller.stateManager.setGlobalState(
-				"clinemmSafeYoloAllowSshAgent",
-				!!request.clinemmSafeYoloAllowSshAgent,
-			)
+			controller.stateManager.setGlobalState("clinemmSafeYoloAllowSshAgent", !!request.clinemmSafeYoloAllowSshAgent)
 		}
 
 		// Post updated state to webview

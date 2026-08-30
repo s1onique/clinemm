@@ -1,0 +1,15 @@
+{
+  "act": "ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01",
+  "step": "C2-RED-hydration",
+  "hypothesis": "H2 — default:false in state-keys.ts collapses legacy ABSENT persistent key into cached false, overriding env opt-in through resolveSafeYoloCapabilityFromState.",
+  "expected": "ABSENT legacy key → cache = undefined (documented 3-valued contract)",
+  "observed": "ABSENT legacy key → cache = false",
+  "boundary": "apps/vscode/src/core/storage/utils/state-helpers.ts:readGlobalStateFromStorage:65-69 — applies getDefaultValue for missing keys; the schema default in apps/vscode/src/shared/storage/state-keys.ts:294,295 is `false as boolean` instead of `undefined as boolean | undefined`",
+  "test": "apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c1-red-h2-legacy-absence.test.ts",
+  "red_reproduced": true,
+  "red_output": {
+    "expected": "undefined",
+    "received": "false",
+    "diagnostic": "Legacy ABSENT must hydrate to undefined (3-valued contract), not the schema default."
+  }
+}

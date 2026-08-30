@@ -64,10 +64,14 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			browserSettings,
 			defaultTerminalProfile,
 			// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+			// ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01:
 			// Persisted Settings values that bind to the sandbox capability
 			// selectors in apps/vscode/src/sdk/sandbox-policy.ts. Both
-			// fields default to false in state-keys.ts and the resolver
-			// treats absent / false as "no opt-in" → pre-ACT runtime.
+			// fields default to undefined in state-keys.ts (no schema
+			// default), so a legacy state file without these keys stays
+			// undefined through hydration → the resolver falls through to
+			// the env path. The explicit `true` / `false` writes below
+			// are the only authoritative source of an opinion.
 			clinemmSafeYoloAllowNetwork,
 			clinemmSafeYoloAllowSshAgent,
 			// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: extract
@@ -259,16 +263,10 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 		// value to false explicitly is honoured and survives reload
 		// (mirrors the precedent for worktreesEnabled / subagentsEnabled).
 		if (clinemmSafeYoloAllowNetwork !== undefined) {
-			controller.stateManager.setGlobalState(
-				"clinemmSafeYoloAllowNetwork",
-				!!clinemmSafeYoloAllowNetwork,
-			)
+			controller.stateManager.setGlobalState("clinemmSafeYoloAllowNetwork", !!clinemmSafeYoloAllowNetwork)
 		}
 		if (clinemmSafeYoloAllowSshAgent !== undefined) {
-			controller.stateManager.setGlobalState(
-				"clinemmSafeYoloAllowSshAgent",
-				!!clinemmSafeYoloAllowSshAgent,
-			)
+			controller.stateManager.setGlobalState("clinemmSafeYoloAllowSshAgent", !!clinemmSafeYoloAllowSshAgent)
 		}
 
 		// Update default terminal profile

@@ -517,11 +517,7 @@ export function resolveSafeYoloSensitiveReadDenials(opts?: {
 		return []
 	}
 	const effectiveNetwork =
-		opts?.networkOverride !== undefined
-			? opts.networkOverride
-			: resolveSafeYoloNetworkOptIn() === "allow"
-				? "allow"
-				: "deny"
+		opts?.networkOverride !== undefined ? opts.networkOverride : resolveSafeYoloNetworkOptIn() === "allow" ? "allow" : "deny"
 	if (effectiveNetwork !== "allow") {
 		return []
 	}
@@ -695,11 +691,7 @@ export function buildExperimentalReconCapability(input: {
 	// For network: a literal override is authoritative; env is
 	// consulted only when the override is undefined.
 	const network =
-		networkFromOverride !== undefined
-			? networkFromOverride
-			: resolveSafeYoloNetworkOptIn() === "allow"
-				? "allow"
-				: "deny"
+		networkFromOverride !== undefined ? networkFromOverride : resolveSafeYoloNetworkOptIn() === "allow" ? "allow" : "deny"
 	// For sshAgent: "agent" forces the field on; "deny" forces it off
 	// (the existing { mode: "agent" | undefined } discriminator already
 	// collapses the "deny" case to omit the field entirely); undefined
@@ -735,7 +727,9 @@ export function buildExperimentalReconCapability(input: {
 		// `(allow file-read*) + (deny file-read* (subpath X))` per
 		// entry; no change to seatbelt-profile.ts, seatbelt-backend.ts,
 		// CommandJobManager, or approval/YOLO logic.
-		denyReadSubpaths: [...resolveSafeYoloSensitiveReadDenials({ networkOverride: network === "allow" ? "allow" : undefined })],
+		denyReadSubpaths: [
+			...resolveSafeYoloSensitiveReadDenials({ networkOverride: network === "allow" ? "allow" : undefined }),
+		],
 		// ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01: honor the
 		// `CLINEMM_SAFE_YOLO_NETWORK=allow` opt-in (or the Settings
 		// override, see ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-
@@ -767,6 +761,7 @@ export function buildExperimentalReconCapability(input: {
 }
 /**
  * ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+ * ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01:
  *
  * Setting-driven capability snapshot. The two persisted toggles
  * (`clinemmSafeYoloAllowNetwork`, `clinemmSafeYoloAllowSshAgent`)
@@ -788,6 +783,17 @@ export function buildExperimentalReconCapability(input: {
  * when the operator env says otherwise. Pre-ACT state files (no
  * key) read as `undefined` here and fall through to the env path,
  * which is the MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 invariant.
+ *
+ * Implementation history note: the LIVE-REGRESSION01 ACT discovered
+ * that the original implementation declared `default: false` in
+ * state-keys.ts. Combined with `readGlobalStateFromStorage`'s
+ * default-injection branch, that caused a legacy state file to
+ * hydrate to a CACHED `false` (not `undefined`), which then forced
+ * the resolver into `"deny"` and silently disabled network egress
+ * for users who had never opened the Settings UI. The schema
+ * defaults are now `undefined`, satisfying this three-valued
+ * contract through real hydration. See
+ * ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01.
  */
 export interface SafeYoloCapabilitySnapshot {
 	readonly network: "allow" | "deny" | undefined
@@ -818,17 +824,7 @@ export function resolveSafeYoloCapabilityFromState(persisted: {
 	readonly sshAgent: boolean | undefined
 }): SafeYoloCapabilitySnapshot {
 	return {
-		network:
-			persisted.network === true
-				? "allow"
-				: persisted.network === false
-					? "deny"
-					: undefined,
-		sshAgent:
-			persisted.sshAgent === true
-				? "agent"
-				: persisted.sshAgent === false
-					? "deny"
-					: undefined,
+		network: persisted.network === true ? "allow" : persisted.network === false ? "deny" : undefined,
+		sshAgent: persisted.sshAgent === true ? "agent" : persisted.sshAgent === false ? "deny" : undefined,
 	}
 }

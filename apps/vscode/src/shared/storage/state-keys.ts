@@ -282,17 +282,36 @@ const USER_SETTINGS_FIELDS = {
 	subagentsEnabled: { default: false as boolean },
 	worktreesEnabled: { default: false as boolean },
 	// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+	// ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01:
 	// Persisted Settings values that bind to the two capability
 	// selectors in apps/vscode/src/sdk/sandbox-policy.ts:
 	//   - clinemmSafeYoloAllowNetwork   -> SandboxNetwork 'allow' | 'deny'
 	//   - clinemmSafeYoloAllowSshAgent  -> SshAuthenticationAuthority 'agent' | undefined
-	// Defaults are `false` (= deny/deny) which is exactly the pre-ACT
-	// runtime behaviour. Pre-existing state files without these keys
-	// hydrate to undefined; the resolver treats that as "no opt-in"
-	// and produces the same deny/deny capability as the env-only path
-	// (see §14 backward compatibility contract).
-	clinemmSafeYoloAllowNetwork: { default: false as boolean },
-	clinemmSafeYoloAllowSshAgent: { default: false as boolean },
+	//
+	// ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01:
+	// The original implementation declared `default: false as boolean`.
+	// Combined with readGlobalStateFromStorage's
+	//   `if (value === undefined) { value = getDefaultValue(stateKey) }`
+	// branch, this caused LEGACY state files (where the key is absent)
+	// to hydrate to a CACHED `false`. That `false` then flowed through
+	// the safeYoloCapabilitySource closure into
+	// resolveSafeYoloCapabilityFromState, which maps `false -> "deny"`.
+	// The "deny" override replaced the env-only path and silently
+	// disabled network egress for users who never touched the toggle.
+	//
+	// The fix is to declare the defaults as `undefined` so a missing
+	// key stays `undefined` through hydration, satisfying the
+	// documented 3-valued contract on SafeYoloCapabilitySnapshot:
+	//   - `undefined` (= no persisted opinion, fall through to env)
+	//   - `true`      (= "allow" / "agent")
+	//   - `false`     (= "deny" / "deny"; persistence authoritative)
+	//
+	// A user who has never opened the Settings UI MUST NOT have their
+	// env opt-in overridden by a silent default; an explicit
+	// `false` from the Settings UI MUST continue to mean
+	// authoritative deny.
+	clinemmSafeYoloAllowNetwork: { default: undefined as boolean | undefined },
+	clinemmSafeYoloAllowSshAgent: { default: undefined as boolean | undefined },
 	preferredLanguage: { default: "English" as string },
 	mode: { default: "act" as Mode },
 	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },

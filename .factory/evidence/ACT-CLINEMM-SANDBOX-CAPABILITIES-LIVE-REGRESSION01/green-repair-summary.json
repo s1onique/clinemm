@@ -1,0 +1,56 @@
+{
+  "act": "ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01",
+  "correction": "CORRECTION02 (Reviewer P0 #1 + #2)",
+  "verdict": "PASS_LEGACY_HYDRATION_REPAIR_V1 + LIVE_REGRESSION = NOT_REPRODUCED_IN_CURRENT_SOURCE_PATH",
+  "h2_red_root_cause": "state-keys.ts declared clinemmSafeYoloAllowNetwork/clinemmSafeYoloAllowSshAgent as `default: false`. readGlobalStateFromStorage's default-injection branch then injected `false` into the cache for legacy state files. The cached `false` flowed through the safeYoloCapabilitySource closure into resolveSafeYoloCapabilityFromState, which maps `false → 'deny'`, masking any env opt-in and silently disabling network egress for users who had never touched the toggle.",
+  "h2_red_holds": true,
+  "correction02_finding": "Two issues with CORRECTION01: (1) c4 built the closure by hand instead of using the real StateManager + getGlobalSettingsKey binding that SdkController uses at every VscodeSessionHost.create(...) callsite. (2) The artifact-identity claim was overstated; the bundle SHA-256 was verified at the entry source (pre-edit), not at the post-edit worktree.",
+  "production_binding_evidence": {
+    "tested_subpath": "ClineFileStorage → StateManager singleton → getGlobalSettingsKey → inline closure (verbatim from SdkController.ts:1216, 1324, 1350, 2660, 2907) → CommandJobManager → sandboxBackend.prepare",
+    "untested_subpath": "SdkController construction, VscodeSessionHost.create(...), Controller state plumbing, webview→backend message bus, full host-bridge",
+    "correction02_1": "real StateManager=true → production-shaped closure → network='allow' (deterministic)",
+    "correction02_2": "lifecycle (absent → setGlobalState(true) → next command observes the change): cmd1 absent→allow, cmd2 true→allow; closure re-reads cache per call (no stale snapshot)",
+    "scope_caveat": "tested subpath cannot reproduce the live UI=true → deny failure; the live failure must therefore live outside this subpath OR be environment/artifact specific"
+  },
+  "boundary_bound": "apps/vscode/src/shared/storage/state-keys.ts:294-295 (schema defaults).",
+  "files_changed": [
+    "apps/vscode/src/shared/storage/state-keys.ts (SEMANTIC)",
+    "apps/vscode/src/core/controller/state/updateSettings.ts (doc refresh)",
+    "apps/vscode/src/core/controller/state/updateSettingsCli.ts (doc refresh)",
+    "apps/vscode/src/sdk/sandbox-policy.ts (doc refresh + history note)"
+  ],
+  "files_added": [
+    "apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c1-red-h2-legacy-absence.test.ts",
+    "apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c2-red-production-chain.test.ts",
+    "apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c3-green-state-manager-roundtrip.test.ts",
+    "apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts (CORRECTION02)"
+  ],
+  "semantic_delta": "Schema defaults for clinemmSafeYoloAllowNetwork/clinemmSafeYoloAllowSshAgent changed from `default: false as boolean` to `default: undefined as boolean | undefined`. Legacy ABSENT keys now hydrate to undefined (matching the documented 3-valued SafeYoloCapabilitySnapshot contract), letting the env-only path run as intended for users who never touched the toggle. Explicit `true` / `false` writes from the Settings UI remain authoritative.",
+  "tests_added": [
+    "T01: ABSENT key stays undefined through hydration (was: false) — RED-to-GREEN",
+    "T02: persisted true survives restart",
+    "T03: persisted false survives restart",
+    "T04: ABSENT + env=allow → resolver stays undefined → builder resolves to allow",
+    "T05: persisted false + env=allow → resolver yields 'deny' (persistence beats env)",
+    "T06: persisted true → resolver yields 'allow'",
+    "T07: cache mutation between calls is observed by the next read (live update)",
+    "T10: changing network does not mutate sshAgent capability (independence)",
+    "CORRECTION02-1: real StateManager=true → production-shaped closure (verbatim closure expression from SdkController.ts) → sandboxBackend.prepare receives network='allow' (deterministic)",
+    "CORRECTION02-2: lifecycle (absent → setGlobalState(true) → next command observes the change): cmd1 absent→allow, toggle→cmd2 true→allow; closure re-reads cache per call (snapshot-staleness discriminator)"
+  ],
+  "test_results": {
+    "post_repair_targeted_tests": "34 passed / 0 failed across 7 files",
+    "command_job_manager_tests": "18 pre-existing failures on unmodified main (unrelated to this ACT's diff)",
+    "seatbelt_real_kernel_tests": "2 pre-existing failures on unmodified main (unrelated to this ACT's diff)",
+    "webview_section_spec": "6/6 tests pass"
+  },
+  "typecheck_act_owned_delta": 0,
+  "typecheck_baseline": "3 pre-existing TS2339 errors in command-job-manager.sandbox-integration.test.ts (historical, NOT introduced by this ACT)",
+  "lint_baseline": "Pre-existing baseline unchanged; new test files lint-clean.",
+  "source_bundle_identity": {
+    "entry_source_sha256": "fe79ffedc9b524c0c2b974b2b2532c03c6055987a95b84f400059a067defd2bb",
+    "installed_bundle_sha256": "fe79ffedc9b524c0c2b974b2b2532c03c6055987a95b84f400059a067defd2bb",
+    "byte_equal_at_entry": true,
+    "scope": "ORIGINAL_FAILURE_ARTIFACT_BOUND_TO_ENTRY_SOURCE = YES (original live failure was running pre-edit source). CURRENT_REPAIRED_SOURCE_LIVE_ARTIFACT = NOT_BUILT (post-edit source has not been bundled, installed, or SHA-256 verified yet)."
+  }
+}

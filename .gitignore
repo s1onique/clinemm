@@ -137,6 +137,18 @@ apps/examples/desktop-app/.cursor/settings.json
 # to survive a fresh clone (mirroring the prior SSH-Authority
 # ACT's durability pattern).
 !/.factory/acts/ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01.md
+# ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01: successor ACT
+# to the SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01 closure. The
+# LIVE contradiction was an H2 hydration-layer defect (schema-default
+# `false` collapsing legacy ABSENT keys into a cached `false` that
+# the resolver mapped to `"deny"`, silently disabling network egress
+# for users who had never opened the Settings UI). Repair: schema
+# defaults changed to `undefined as boolean | undefined`. The ACT
+# file is bound durably by .factory/epics/safe-yolo-seatbelt.md and
+# .factory/epics/product-config-branding.md, so it must survive a
+# fresh clone (mirroring the prior SETTINGS-SANDBOX-CAPABILITIES
+# ACT's durability pattern).
+!/.factory/acts/ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01.md
 # ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01: launched 2026-08-27.
 # Status NEXT / HIGH (approval-protection lane); recon §2 PASS_RECON_SEAM_MAPPED
 # at HEAD f8dca1fda / TREE 6f2e01b56; live specimen §3 deferred behind the
@@ -275,6 +287,26 @@ apps/examples/desktop-app/.cursor/settings.json
 # hardening row), so both must survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01/
+# ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01: same
+# durable-binding reason as its ACT file (whitelisted above):
+# source-seam-map.md (the chain A..Q with the G→I first-divergence
+# pinpoint) and green-repair-summary.json (single-line semantic-delta
+# + test summary) are the canonical evidence. The h2-red-hydration.json
+# records the RED reproduction. Without the directory whitelisted,
+# the canonical evidence would be local-only on a fresh clone, and
+# the repair narrative would be incomplete.
+!/.factory/evidence/ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01/
+# ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 CORRECTION01:
+# the c4-red-explicit-true-path test (new in CORRECTION01) drives the
+# real production composition (StateManager → closure →
+# VscodeSessionHost → CommandJobManager.start → sandboxBackend.prepare
+# with capture at the backend.prepare boundary). This evidence file
+# records the discriminator outcome: persisted true →
+# capability.network = "allow" deterministically; lifecycle ablation
+# (absent → toggle → next command) → both commands observe "allow".
+# The CORRECTION01 verdict: H2 repaired, live failure class NOT
+# reproducible on the current source.
+
 # ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01: recon/contract ACT
 # Successor slice to SEATBELT-NETWORK-EGRESS-RECON01 (unblocked by
 # LIVE network-egress mechanism evidence, NOT by that ACT's closure;
