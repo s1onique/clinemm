@@ -24,6 +24,7 @@ import {
 import {
 	createBuiltinTools,
 	DEFAULT_MODEL_TOOL_ROUTING_RULES,
+	type RunCommandExecutionController,
 	resolveToolPresetName,
 	resolveToolRoutingConfig,
 	type SkillsExecutorWithMetadata,
@@ -147,6 +148,13 @@ function createBuiltinToolsList(
 	// falls back to the preset default (currently `false` for act/plan/minimal/
 	// search; `true` for yolo).
 	enableSubmitAndExit?: boolean,
+	// ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01: upstream introduced
+	// `runCommandExecutionController` (PR #13547) so the bash tool can
+	// receive a host-provided controller for streamed output. Reference
+	// at line 165 (formerly line ~153 before merge awk) requires this
+	// to be in scope as a function parameter. Keep both ClineMM HEAD's
+	// enableSubmitAndExit (F23) and the upstream parameter (stream output).
+	runCommandExecutionController?: RunCommandExecutionController,
 ): AgentTool[] {
 	const preset = ToolPresets[resolveToolPresetName({ mode })];
 	const toolRoutingConfig = resolveToolRoutingConfig(
@@ -160,6 +168,9 @@ function createBuiltinToolsList(
 		createBuiltinTools({
 			cwd,
 			telemetry,
+			executorOptions: {
+				bash: { executionController: runCommandExecutionController },
+			},
 			...preset,
 			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
 			// allow callers to override the preset's enableSubmitAndExit
@@ -377,15 +388,26 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 		} = input;
 		const onTeamEvent = input.onTeamEvent ?? (() => {});
 		const normalized = normalizeConfig(config);
-		const modelTools: ModelTool[] =
+		const modelTools: ModelTool[] = [];
+		if (
 			normalized.enableTools &&
 			isModelToolEnabledGlobally("web_search") &&
 			supportsModelTool(
 				{ providerId: config.providerId, modelId: config.modelId },
 				"web_search",
 			)
-				? [{ name: "web_search" }]
-				: [];
+		) {
+			modelTools.push({ name: "web_search" });
+		}
+		if (
+			normalized.enableTools &&
+			supportsModelTool(
+				{ providerId: config.providerId, modelId: config.modelId },
+				"image_generation",
+			)
+		) {
+			modelTools.push({ name: "image_generation", outputFormat: "png" });
+		}
 		const workspaceConfigRoot = config.workspaceRoot ?? config.cwd;
 		const effectiveToolPolicies = input.toolPolicies ?? config.toolPolicies;
 		const globallyDisabledToolNames = resolveDisabledToolNames();
@@ -542,6 +564,8 @@ export class DefaultRuntimeBuilder implements RuntimeBuilder {
 		const delegatedAgentConfigProvider = createDelegatedAgentConfigProvider({
 			providerId: config.providerId,
 			modelId: config.modelId,
+			distinctId: input.distinctId,
+			sessionId: config.sessionId,
 			cwd: config.cwd,
 			apiKey: config.apiKey ?? "",
 			baseUrl: config.baseUrl,

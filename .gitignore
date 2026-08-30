@@ -88,6 +88,7 @@ apps/vscode/tsconfig.test.generated.json
 .next/dev/static
 **/src-tauri/target/debug/.fingerprint
 apps/examples/desktop-app/src-tauri/target
+apps/examples/desktop-app/src-tauri/dmg/background.gen.tiff
 apps/examples/desktop-app/webview/.next
 
 # Next.js generated type shim (churns between dev and build)
@@ -408,6 +409,15 @@ apps/examples/desktop-app/.cursor/settings.json
 # evidence directory above; the epic-board.md and the successor ACT
 # cross-link to this file.
 !/.factory/acts/ACT-CLINEMM-UPSTREAM-SYNC-RECON01.md
+# ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01: successor to the recon
+# ACT above. Executes the 17-conflict merge in frozen risk order
+# against upstream 48d63852745460ff0fa3dfcc0457bbe2493841de. The
+# epic-board.md "Upstream sync (structural merge)" row, the recon
+# ACT's recommendation.md cross-link, and the
+# factory/inventories/repository.json `upstream_sync_recon` block
+# all bind to this ACT file and to its evidence directory.
+!/.factory/acts/ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01.md
+!/.factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01/
 
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).

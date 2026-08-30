@@ -46,6 +46,8 @@ export {
 	PATCH_MARKERS,
 	PatchActionType,
 	type PatchFileChange,
+	RunCommandExecutionController,
+	type RunningCommandRegistration,
 	type SearchExecutorOptions,
 	type ShellExecutorOptions,
 	spawnSupervisableShellCommand,
@@ -76,8 +78,12 @@ export {
 	getCoreBuiltinToolCatalog,
 	getCoreDefaultEnabledToolIds,
 	getCoreHeadlessToolNames,
+	isCoreBuiltinToolAvailable,
+	isSkillsToolAvailable,
 	resolveCoreSelectedToolIds,
+	resolveToolClientType,
 	type ToolCatalogEntry,
+	type ToolClientType,
 } from "./runtime";
 // Schemas
 export {

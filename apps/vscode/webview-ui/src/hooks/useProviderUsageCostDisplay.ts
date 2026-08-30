@@ -1,6 +1,14 @@
 import { useMemo } from "react"
 import { useProviderListings } from "./useProviderListings"
 
+export type UsageCostDisplay = "show" | "hide" | "subscription"
+
+const USAGE_COST_DISPLAYS: readonly UsageCostDisplay[] = ["show", "hide", "subscription"]
+
+function isUsageCostDisplay(value: string | undefined): value is UsageCostDisplay {
+	return !!value && USAGE_COST_DISPLAYS.includes(value as UsageCostDisplay)
+}
+
 /**
  * Surfaces the SDK's `usageCostDisplay` decision for a single provider
  * id. The decision originates in the `@cline/llms` SDK (see

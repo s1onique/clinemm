@@ -35,6 +35,8 @@ export default defineConfig({
 			"src/shared/host-ownership-diagnostic.live-capture01.test.ts",
 			"src/shared/proto-conversions/models/**/*.test.ts",
 			"src/core/storage/remote-config/**/*.test.ts",
+			"src/core/controller/account/setUserOrganization.test.ts",
+			"src/core/controller/remoteConfig/**/*.test.ts",
 			"src/core/controller/state/**/*.test.ts",
 			"src/core/controller/slash/**/*.test.ts",
 			"src/services/mcp/__tests__/settingsLock.test.ts",

@@ -29,6 +29,8 @@ export async function getStateToPostToWebview(controller: {
 	foregroundCommandRunning?: boolean
 	workspaceManager?: any
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
+	isRemoteConfigAvailable?: boolean
+	currentRemoteConfigRevision?: number
 }): Promise<ExtensionState> {
 	const stateManager = controller.stateManager
 
@@ -49,12 +51,8 @@ export async function getStateToPostToWebview(controller: {
 	// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
 	// Persisted Settings values that bind to the sandbox capability
 	// selectors in apps/vscode/src/sdk/sandbox-policy.ts.
-	const clinemmSafeYoloAllowNetwork = stateManager.getGlobalStateKey(
-		"clinemmSafeYoloAllowNetwork",
-	)
-	const clinemmSafeYoloAllowSshAgent = stateManager.getGlobalStateKey(
-		"clinemmSafeYoloAllowSshAgent",
-	)
+	const clinemmSafeYoloAllowNetwork = stateManager.getGlobalStateKey("clinemmSafeYoloAllowNetwork")
+	const clinemmSafeYoloAllowSshAgent = stateManager.getGlobalStateKey("clinemmSafeYoloAllowSshAgent")
 	const userInfo = stateManager.getGlobalStateKey("userInfo")
 	const mcpMarketplaceEnabled = stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 	const mcpDisplayMode = stateManager.getGlobalStateKey("mcpDisplayMode")
@@ -183,10 +181,12 @@ export async function getStateToPostToWebview(controller: {
 		lastDismissedInfoBannerVersion,
 		lastDismissedModelBannerVersion,
 		remoteConfigSettings: stateManager.getRemoteConfigSettings?.(),
+		remoteConfigRevision: controller.currentRemoteConfigRevision ?? 0,
 		lastDismissedCliBannerVersion,
 		dismissedBanners,
 		backgroundEditEnabled: stateManager.getGlobalSettingsKey("backgroundEditEnabled"),
 		optOutOfRemoteConfig: stateManager.getGlobalSettingsKey("optOutOfRemoteConfig"),
+		remoteConfigAvailable: controller.isRemoteConfigAvailable ?? false,
 		showFeatureTips,
 		// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
 		// Project the sandbox-capability toggles to the webview so the
