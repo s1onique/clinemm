@@ -1022,12 +1022,39 @@ export {
 	readExperimentalSandboxOptIn,
 	type SandboxBackendOptIn,
 } from "./runtime/sandbox/sandbox-backend";
+// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+// Re-export the Seatbelt backend's diagnostic observer setter from
+// its source module so the ClineMM policy seam can install a JSONL
+// writer. Trade-off: this is a static re-export, which means
+// importing @cline/core loads seatbelt-backend.ts at module-init
+// time on every host (darwin AND non-darwin, including CLI /
+// JetBrains). The Seatbelt backend is platform-agnostic at module
+// load (no process.platform branches fire until isAvailable() is
+// called, which only the ClineMM darwin + opt-in path does), so
+// the only cost is ~2 KB of additional JS on non-darwin startup.
+// The alternative — a dynamic import() inside the policy seam —
+// would add a one-shot await on the first prepare() and is
+// rejected on latency grounds. The ClineMM VSCode boot path
+// already loads seatbelt-backend.ts eagerly in practice.
+export { setSeatbeltDiagnosticObserver } from "./runtime/sandbox/macos/seatbelt-backend";
+// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01: re-export
+// the Seatbelt singleton + substrate probe so tests outside the
+// SDK package can construct fixtures. The eager-load cost (≈2 KB)
+// is the same trade-off as setSeatbeltDiagnosticObserver above;
+// these symbols are only used by tests / ClineMM-specific callers,
+// not by the CLI / JetBrains SDK consumers.
+export {
+	probeSeatbeltAvailability,
+	SANDBOX_EXEC_PATH,
+	SeatbeltSandboxBackendExperimental,
+} from "./runtime/sandbox/macos/seatbelt-backend";
 export type {
 	CommandCapability,
 	CommandInvocation,
 	EnvironmentCapability,
 	EnvironmentSemantics,
 	SandboxBackend,
+	SandboxBackendDiagnosticObserver,
 	SandboxMode,
 	SandboxNetwork,
 	SandboxPreparedInvocation,

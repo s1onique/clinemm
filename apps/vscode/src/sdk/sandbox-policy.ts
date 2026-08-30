@@ -58,14 +58,17 @@
  * not regressed by workspace-write enablement.
  */
 
-import { existsSync, realpathSync } from "node:fs"
+import { createWriteStream, existsSync, mkdirSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
+import { join } from "node:path"
 import {
 	type CommandCapability,
 	getSandboxBackend,
 	SAFE_ENVIRONMENT_BASELINE,
 	type SandboxBackend,
+	type SandboxBackendDiagnosticObserver,
 	type SandboxMode,
+	setSeatbeltDiagnosticObserver,
 } from "@cline/core"
 
 /**
@@ -80,6 +83,137 @@ import {
  * executor to the abstraction's internal probes.
  */
 export type SandboxBackendResolver = (mode: SandboxMode) => Promise<SandboxBackend | undefined>
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+// DEFAULT-OFF diagnostic JSONL writer for the Seatbelt backend.
+//
+// Gated on the env var `CLINEMM_CAPTURE_SANDBOX=1|true`. When unset
+// (the DEFAULT), nothing is written and the Seatbelt backend's code
+// path is byte-for-byte unchanged (the observer slot in the backend
+// stays `undefined`, so all `safeInvokeObserver` calls are no-ops).
+//
+// The JSONL writer is installed ONCE at module load via a top-level
+// conditional below. This is intentionally a module-local side effect
+// (no public protocol) and is the ONLY place where
+// `setSeatbeltDiagnosticObserver` is called.
+//
+// Output path: `$CLINE_DIR/data/sandbox-diag/<RUN_ID>.jsonl`, where
+// `RUN_ID` is supplied via `CLINEMM_CAPTURE_SANDBOX_RUN_ID`; if that
+// env var is unset, the writer falls back to a deterministic fallback
+// of `default` + a process-start monotonic counter so multiple
+// runs in one process do not collide. The fallback is best-effort
+// and never throws — the env var is the operator-controlled knob.
+//
+// env.txt allowlist (see ACT §3.4.c): the writer never reads
+// process.env outside its own three knobs (CLINEMM_CAPTURE_SANDBOX,
+// CLINEMM_CAPTURE_SANDBOX_RUN_ID, CLINE_DIR). It never writes any
+// credential-shaped value. The operator's downstream capture pack
+// is responsible for collecting env.txt via a separate allowlist.
+// ---------------------------------------------------------------------------
+
+function isCaptureSandboxEnabled(): boolean {
+	const v = process.env.CLINEMM_CAPTURE_SANDBOX
+	return v === "1" || v === "true"
+}
+
+/**
+ * Build the JSONL writer observer. The writer writes one JSON
+ * object per line per seam; lines are appended, not buffered in
+ * memory, so an OOM during long runs is impossible.
+ *
+ * Fail-open: if the JSONL file cannot be opened, the writer logs
+ * via stderr (NOT stdout, NOT process.env) and continues with a
+ * no-op observer. A diagnostic hook MUST NOT be a production
+ * availability hazard.
+ */
+function buildSandboxDiagObserver(): SandboxBackendDiagnosticObserver | null {
+	if (!isCaptureSandboxEnabled()) return null
+
+	const clineDir = process.env.CLINE_DIR || join(homedir(), ".cline")
+	const dataDir = join(clineDir, "data")
+	const runId =
+		process.env.CLINEMM_CAPTURE_SANDBOX_RUN_ID ||
+		`default-${process.pid}-${Date.now()}`
+	const outputPath = join(dataDir, "sandbox-diag", `${runId}.jsonl`)
+
+	try {
+		mkdirSync(join(dataDir, "sandbox-diag"), { recursive: true })
+		const stream = createWriteStream(outputPath, { flags: "a" })
+		// Correlation invariant: the same prepare() call produces
+		// all three callbacks. We tag each line with a monotonic
+		// prepare-counter (NOT a jobId; the production code does
+		// not expose one into the backend). See ACT §3.4.b for
+		// the explicit caveat that within a single prepare() call,
+		// the three lines share `prepareCallId`.
+		let prepareCallId = 0
+		const writeLine = (event: string, payload: Record<string, unknown>) => {
+			try {
+				stream.write(
+					JSON.stringify({
+						ts: new Date().toISOString(),
+						runId,
+						event,
+						...payload,
+					}) + "\n",
+				)
+			} catch {
+				// Best-effort write; do not throw out of an observer.
+			}
+		}
+		const observer: SandboxBackendDiagnosticObserver = {
+			onPrepareInput(input) {
+				prepareCallId += 1
+				writeLine("onPrepareInput", {
+					prepareCallId,
+					capabilityNetwork: input.capability.network,
+					capabilityCwd: input.capability.cwd,
+					commandExecutable: input.command.executable,
+				})
+			},
+			onProfileWritten(info) {
+				writeLine("onProfileWritten", {
+					prepareCallId,
+					profilePath: info.profilePath,
+					sha256: info.sha256,
+					networkRule: info.networkRule,
+				})
+			},
+			onInvocationPrepared(info) {
+				const argv = info.prepared.args
+				// Sandbox-exec convention: args[0] === "-f",
+				// args[1] === profilePath, args[2..] === original
+				// child executable + args. Record these explicitly.
+				writeLine("onInvocationPrepared", {
+					prepareCallId,
+					executable: info.prepared.executable,
+					argv,
+					profilePathFromArgv: argv[1] ?? null,
+				})
+			},
+		}
+		return observer
+	} catch (err) {
+		// Best-effort: log to stderr and return null so the
+		// backend remains observer-free. A broken JSONL writer
+		// MUST NOT take the backend down with it.
+		try {
+			process.stderr.write(
+				`[sandbox-diag] failed to open ${outputPath}: ${err instanceof Error ? err.message : String(err)}\n`,
+			)
+		} catch {
+			// stderr write itself can fail (rare). Swallow.
+		}
+		return null
+	}
+}
+
+// One-shot module-load install. Idempotent — calling
+// `setSeatbeltDiagnosticObserver(null)` is a no-op if already null.
+const _diagObserver = buildSandboxDiagObserver()
+if (_diagObserver) {
+	setSeatbeltDiagnosticObserver(_diagObserver)
+}
 
 /**
  * ACT-CLINEMM-SEATBELT-DEFAULT-ON01 — ClineMM VS Code Seatbelt selector.

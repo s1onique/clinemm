@@ -32,7 +32,7 @@
  * posture — see recon evidence `final-assessment.md`.
  */
 
-import { lstatSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, rmSync, writeFileSync, createHash } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -48,6 +48,7 @@ import type {
 	CommandCapability,
 	CommandInvocation,
 	SandboxBackend,
+	SandboxBackendDiagnosticObserver,
 	SandboxPreparedInvocation,
 } from "../types";
 import { SandboxError } from "../types";
@@ -88,6 +89,99 @@ function bestEffortRm(path: string): void {
 		rmSync(path, { recursive: true, force: true });
 	} catch {
 		// Swallow: cleanup failures are non-fatal.
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+// DEFAULT-OFF diagnostic observer for the REAL Seatbelt backend.
+//
+// The seatbelt backend is exposed as a singleton (Object.freeze({...}) at
+// the bottom of this file). Many tests (~30 in seatbelt-backend.test.ts)
+// import the singleton directly. Adding an instance-level injection
+// point would force a refactor of the public export shape. The next-best
+// option — and the one this ACT adopts — is a module-local observer slot
+// that is set ONCE at extension activation when CLINEMM_CAPTURE_SANDBOX=1.
+//
+// Module globals have three risks the contract below mitigates:
+//   1. Test pollution: a previous test could leave an observer set.
+//      `setSeatbeltDiagnosticObserver(null)` resets; tests MUST use
+//      `afterEach(() => setSeatbeltDiagnosticObserver(null))`.
+//   2. Re-entrancy: an observer that itself triggers a prepare() could
+//      loop. The contract forbids observer callbacks from calling
+//      prepare(); the helper catches and ignores any exception regardless.
+//   3. Production leak: `setSeatbeltDiagnosticObserver` is exported but
+//      only the ClineMM-side policy seam calls it. It is gated on
+//      CLINEMM_CAPTURE_SANDBOX=1 and never set in the default boot path.
+// ---------------------------------------------------------------------------
+
+let diagnosticObserver: SandboxBackendDiagnosticObserver | undefined;
+
+/**
+ * Set the diagnostic observer for the Seatbelt backend. Pass `null`
+ * to clear. Idempotent. The observer receives READ-ONLY references
+ * to backend state and MUST NOT mutate, wrap, or substitute the
+ * backend. When the observer is absent (the DEFAULT), the backend's
+ * code path is byte-for-byte unchanged.
+ */
+export function setSeatbeltDiagnosticObserver(
+	observer: SandboxBackendDiagnosticObserver | null,
+): void {
+	diagnosticObserver = observer ?? undefined;
+}
+
+/**
+ * Read-only accessor for the currently-installed observer. Used by
+ * tests to assert presence/absence. Production code MUST NOT use
+ * this; production code goes through `safeInvokeObserver` instead.
+ */
+export function getSeatbeltDiagnosticObserver():
+	| SandboxBackendDiagnosticObserver
+	| undefined {
+	return diagnosticObserver;
+}
+
+/**
+ * Compute SHA-256 of the profile bytes AND extract the network rule
+ * line. This is forensically useful to discriminate "profile says
+ * allow but kernel denies" from "profile says deny (matches kernel)".
+ */
+function computeProfileFingerprint(
+	profilePath: string,
+	profile: string,
+): { sha256: string; networkRule: string | undefined } {
+	const sha256 = createHash("sha256")
+		.update(profile, "utf8")
+		.digest("hex");
+	const networkRuleMatch = profile.match(/^\((allow|deny) network\*\)$/m);
+	const networkRule = networkRuleMatch ? networkRuleMatch[0] : undefined;
+	// The SHA-256 is computed on the bytes we just wrote. The
+	// profilePath is included in the observer payload so the
+	// caller can re-read the file independently if it needs to.
+	void profilePath;
+	return { sha256, networkRule };
+}
+
+/**
+ * Best-effort invoke a single observer callback. Any thrown exception
+ * is swallowed (the error is intentionally silent — diagnostic hook
+ * failures MUST NOT affect execution; this helper is on the hot
+ * path of prepare() and a logger import would create a cycle).
+ *
+ * Tests can monkey-patch `setSeatbeltDiagnosticObserver` to assert
+ * the fail-open contract; see
+ * apps/vscode/src/sdk/__tests__/seatbelt-network-live-downstream-
+ * recon01.c1-observer.test.ts test T6.
+ */
+function safeInvokeObserver(
+	callback: ((arg: unknown) => void) | undefined,
+	arg: unknown,
+): void {
+	if (typeof callback !== "function") return;
+	try {
+		callback(arg);
+	} catch {
+		// Best-effort ignore. See contract above.
 	}
 }
 
@@ -399,6 +493,29 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				}
 			}
 
+			// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+			// Diagnostic observer seam 1/3 — onPrepareInput.
+			// Fired AFTER all canonicalization is complete (so the
+			// observer sees canonicalized paths) and BEFORE profile
+			// generation. Best-effort; observer exceptions do not affect
+			// command semantics.
+			safeInvokeObserver(
+				diagnosticObserver?.onPrepareInput,
+				{
+					capability: {
+						...cap,
+						readonlyRoots,
+						writableRoots,
+						tempRoot,
+						createOnlyRoots,
+						cwd,
+						denyReadSubpaths,
+						environment: effectiveEnvironmentCapability,
+					},
+					command: cmd,
+				},
+			);
+
 			try {
 				// 2) Generate the SBPL profile.
 				const profile = generateSeatbeltProfile(
@@ -450,7 +567,22 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 					);
 				}
 
-				// 4) Materialize the environment.
+				// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+			// Diagnostic observer seam 2/3 — onProfileWritten.
+			// Fired AFTER the profile is on disk; the SHA-256 is
+			// computed on the bytes we just wrote. The observer
+			// receives profilePath so it can re-read the file
+			// independently if needed. Best-effort; failures here
+			// do not affect the prepared invocation.
+			safeInvokeObserver(
+				diagnosticObserver?.onProfileWritten,
+				{
+					profilePath: profilePath!,
+					...computeProfileFingerprint(profilePath!, profile),
+				},
+			);
+
+			// 4) Materialize the environment.
 				materialized = materializeEnvironment(effectiveEnvironmentCapability, {
 					parentEnv: process.env,
 					// Synthetic TMPDIR is only set when the capability
@@ -475,7 +607,7 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 
 			// 5) Build the prepared invocation: sandbox-exec -f
 			//    <profile> <original-executable> <original-args...>.
-			return {
+			const prepared: SandboxPreparedInvocation = {
 				executable: SANDBOX_EXEC_PATH,
 				args: ["-f", profilePath, cmd.executable, ...cmd.args],
 				cwd,
@@ -502,6 +634,18 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 					}
 				},
 			};
+
+			// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+			// Diagnostic observer seam 3/3 — onInvocationPrepared.
+			// Fired BEFORE return. The prepared invocation includes
+			// the exact profilePath the executor will pass to
+			// sandbox-exec via args[1] (= "-f" + profilePath).
+			safeInvokeObserver(
+				diagnosticObserver?.onInvocationPrepared,
+				{ prepared },
+			);
+
+			return prepared;
 		},
 	});
 

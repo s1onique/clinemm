@@ -359,3 +359,53 @@ export interface SandboxBackend {
 	}): Promise<SandboxPreparedInvocation>;
 }
 
+/**
+ * ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+ * DEFAULT-OFF diagnostic observer for a sandbox backend's `prepare()`.
+ *
+ * The observer records at three seams in the REAL backend's causal
+ * chain — see the seatbelt-backend.ts implementation for the exact
+ * call order. The observer MUST NOT mutate, wrap, or substitute
+ * the backend. When the observer is absent (the DEFAULT), the
+ * backend's code path is byte-for-byte unchanged.
+ *
+ * Semantics contract:
+ *   - All callbacks are OPTIONAL; the backend MAY call any
+ *     subset depending on which seam was reached.
+ *   - Backends MUST catch and best-effort-ignore observer
+ *     exceptions. A diagnostic hook MUST NOT be a production
+ *     availability hazard. The contract here is
+ *     fail-open-for-diagnostics: command semantics MUST be
+ *     preserved even if an observer throws.
+ *   - The observer receives READ-ONLY references to the backend's
+ *     internal state; mutating the passed object MUST NOT affect
+ *     backend behavior (it is `readonly` per TypeScript, but the
+ *     contract is a deep one — do not rely on TypeScript alone).
+ *   - The observer is intended for forensic capture (e.g. to
+ *     $CLINE_DIR/data/sandbox-diag/<RUN_ID>.jsonl) and is
+ *     NEVER part of any public protocol.
+ *
+ * Correlation: the backend passes the prepared invocation
+ * (which contains profilePath) to `onInvocationPrepared`. The
+ * caller MAY correlate the three callbacks within a single
+ * prepare() call by reference equality of the input objects
+ * (the `capability` and `command` references are the SAME
+ * across the three calls) or by using an existing stable
+ * identifier. Backends MUST NOT introduce a public protocol
+ * field for correlation.
+ */
+export interface SandboxBackendDiagnosticObserver {
+	onPrepareInput?(input: {
+		readonly capability: CommandCapability;
+		readonly command: CommandInvocation;
+	}): void;
+	onProfileWritten?(info: {
+		readonly profilePath: string;
+		readonly sha256: string;
+		readonly networkRule: string | undefined;
+	}): void;
+	onInvocationPrepared?(info: {
+		readonly prepared: SandboxPreparedInvocation;
+	}): void;
+}
+

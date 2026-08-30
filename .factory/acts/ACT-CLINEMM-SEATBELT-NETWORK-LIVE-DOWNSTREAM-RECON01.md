@@ -1094,18 +1094,65 @@ ARTIFACT_IDENTITY                   = UNBOUND_PENDING_§1.1 (operator-side;
                                      validated by §1.1
                                      DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL)
 PIPELINE_MAP                        = PASS_SOURCE_BOUND (§2 structural)
+OBSERVER_CONTRACT                   = FROZEN (SandboxBackendDiagnosticObserver
+                                      interface in
+                                      sdk/packages/core/src/runtime/sandbox/types.ts;
+                                      see §3.4.b)
+OBSERVER_IMPLEMENTED                = YES (commit a29994f61's HALT
+                                      O0 corrected; REAL Seatbelt backend
+                                      calls onPrepareInput /
+                                      onProfileWritten /
+                                      onInvocationPrepared at three
+                                      seams; gated on
+                                      CLINEMM_CAPTURE_SANDBOX=1;
+                                      disabled path byte-equal
+                                      invariant proven by T1 + the
+                                      DISABLED semantic-delta test in
+                                      apps/vscode/src/sdk/__tests__/
+                                      seatbelt-network-live-downstream-
+                                      recon01.c1-observer.test.ts)
+CLINEMM_CAPTURE_SANDBOX_EXECUTABLE  = YES (apps/vscode/src/sdk/
+                                      sandbox-policy.ts installs a
+                                      JSONL writer at module load
+                                      when CLINEMM_CAPTURE_SANDBOX=1;
+                                      writes to $CLINE_DIR/data/
+                                      sandbox-diag/<RUN_ID>.jsonl)
+OBSERVER_CALLBACK_FAILURE_POLICY    = FAIL_OPEN_FOR_DIAGNOSTICS
+                                      (observer throws are caught
+                                      by safeInvokeObserver; command
+                                      semantics preserved; tested by
+                                      T6)
+CORRELATION                         = COMPOSED_BY_SINGLE_PREPARE_CALL
+                                      (per-call monotonic prepareCallId
+                                      in the JSONL writer; the
+                                      backend does NOT introduce a
+                                      jobId field; the production
+                                      CommandJobManager.start path
+                                      correlates by reference to the
+                                      job.id field on the spawned
+                                      child, which is unrelated to
+                                      prepareCallId; the
+                                      single-prepare-call invariant
+                                      is documented as the
+                                      correlation boundary, NOT a
+                                      cross-process job-id
+                                      correlation; see §3.4.b caveat)
 EVIDENCE_FILES                      = DIRECTORY_CREATED (.factory/evidence/
                                      ACT-CLINEMM-SEATBELT-NETWORK-LIVE-
                                      DOWNSTREAM-RECON01/ exists; empty
                                      at ACT open; populated per §3.4)
 PRODUCTION_SEAM_TEST                = SOURCE_PROVEN_2_OF_4
-                                     ([P2]/[P3] proven via existing
-                                      c4-red-explicit-true-path test;
-                                      [P1] proven via c2-red-production-
-                                      chain test; [P4] structurally
-                                      proven via seatbelt-profile.test.ts
-                                      but NOT in the production-seam
-                                      flow)
+                                     ([P1]/[P2]/[P3] proven via
+                                      CORRECTION02 c4-red-explicit-
+                                      true-path test, which wires the
+                                      real StateManager singleton +
+                                      real CommandJobManager + real
+                                      closure + a stub backend; c2 is
+                                      the closure-shape-only proof and
+                                      does NOT exercise StateManager;
+                                      [P4] structurally proven via
+                                      seatbelt-profile.test.ts but NOT
+                                      in the production-seam flow)
 LIVE_KERNEL_TEST                    = NOT_EXECUTED (HOST_REQUIRED;
                                      this shell is substrate-unavailable
                                      for the production-seam live half)
