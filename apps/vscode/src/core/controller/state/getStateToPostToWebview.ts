@@ -51,12 +51,8 @@ export async function getStateToPostToWebview(controller: {
 	// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
 	// Persisted Settings values that bind to the sandbox capability
 	// selectors in apps/vscode/src/sdk/sandbox-policy.ts.
-	const clinemmSafeYoloAllowNetwork = stateManager.getGlobalStateKey(
-		"clinemmSafeYoloAllowNetwork",
-	)
-	const clinemmSafeYoloAllowSshAgent = stateManager.getGlobalStateKey(
-		"clinemmSafeYoloAllowSshAgent",
-	)
+	const clinemmSafeYoloAllowNetwork = stateManager.getGlobalStateKey("clinemmSafeYoloAllowNetwork")
+	const clinemmSafeYoloAllowSshAgent = stateManager.getGlobalStateKey("clinemmSafeYoloAllowSshAgent")
 	const userInfo = stateManager.getGlobalStateKey("userInfo")
 	const mcpMarketplaceEnabled = stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 	const mcpDisplayMode = stateManager.getGlobalStateKey("mcpDisplayMode")
