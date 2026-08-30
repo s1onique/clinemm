@@ -217,56 +217,129 @@ useMessageHandlers.ts: case "cancel"
 
 ## Why does the Cancel button appear in OLDER UI screenshots but not in CURRENT?
 
-The recon cannot definitively answer this without the actual screenshots. **Hypotheses** (ranked by plausibility, all require LIVE capture to confirm):
+The user DID provide live screenshots (per chat description:
+task status = Working, tool/edit activity occurring, Cancel absent
+in the new screenshot; Cancel visible in the older screenshot). The
+recon uses these as **soft** evidence: the description establishes
+that the symptom is real UI behavior, not a description-only
+hypothesis. **Hypotheses** (ranked by plausibility):
 
-### Hypothesis A — Phase gate (most likely)
+### Hypothesis A — Phase gate (possible benign explanation)
 
-The OLDER UI was in `phase: "streaming"` (showing model output streaming, or a foreground command running) → Cancel visible. The CURRENT UI is in a different phase (`awaiting_approval`, `awaiting_followup`, `idle` post-completion, etc.) → Cancel hidden by design.
+The OLDER UI was in `phase: "streaming"` (showing model output
+streaming, or a foreground command running) → Cancel visible. The
+CURRENT UI is in a different phase (`awaiting_approval`,
+`awaiting_followup`, `idle` post-completion, etc.) → Cancel hidden
+by design.
 
-This is **NOT a defect** — the new turn-state-driven predicate intentionally gates Cancel to the `streaming` phase only.
+This is **NOT a defect** — the new turn-state-driven predicate
+intentionally gates Cancel to the `streaming` phase only. **However,
+it does not match the user's observation** of active tool/edit
+activity in the CURRENT UI (those phases are typically
+`awaiting_approval`, where Cancel would also be hidden — but the
+user describes the task as actively working, not waiting for input).
 
-### Hypothesis B — Sub-task mode (likely)
+### Hypothesis B — Phase-projection defect (the narrowed live-state question)
 
-The CURRENT task is in a state the new predicate correctly classifies as non-`streaming` (e.g., a sub-agent waiting for child completion that the prior code treated as a streaming turn). Cancel is correctly hidden.
+A real defect in the SdkSessionEventCoordinator phase-transition
+logic that fails to transition `idle → streaming` when a new prompt
+is submitted, or fails to preserve `streaming` during long tool
+execution. **This is the candidate live-cause that requires the
+four-value LIVE capture to discriminate.** It aligns with the prior
+AOC/runtime-progression work the codebase has accumulated.
 
-### Hypothesis C — Phase-projection defect (possible)
+### Hypothesis C — UI_RENDER_DEFECT (the render-side counterpart)
 
-A real defect in the SdkSessionEventCoordinator phase-transition logic that fails to transition `idle → streaming` when a new prompt is submitted, or fails to preserve `streaming` during long tool execution. **Not yet reproduced** — would require LIVE capture.
+`phase === "streaming"` AND Cancel absent — would contradict the
+existing AOC02 §2 tests and represent a render-side regression.
 
 ### Hypothesis D — Tail-fallback regression (very unlikely)
 
-The legacy tail-walking fallback (`getButtonConfigForMessages`) was once used and showed Cancel during `api_req_started`. Now that `turnState` is always provided, the legacy fallback is dead code. If a test fixture or non-production code path relies on the legacy fallback, Cancel would be hidden — but this would be a fixture bug, not a user-facing regression.
+The legacy tail-walking fallback (`getButtonConfigForMessages`) was
+once used and showed Cancel during `api_req_started`. Now that
+`turnState` is always provided, the legacy fallback is dead code. If
+a test fixture or non-production code path relies on the legacy
+fallback, Cancel would be hidden — but this would be a fixture bug,
+not a user-facing regression.
 
 ### Hypothesis E — Upstream UX change (ruled out)
 
-Upstream `48d638527` and ClineMM HEAD have IDENTICAL Cancel button configs. The upstream merge did not remove Cancel. **Ruled out** by diff.
+Upstream `48d638527` and ClineMM HEAD have IDENTICAL Cancel button
+configs. The upstream merge did not remove Cancel. **Ruled out** by
+diff.
 
 ### Hypothesis F — ClineMM local removal (ruled out)
 
-ClineMM-local git history of `buttonConfig.ts` shows only the mistake_limit advisory change (irrelevant to Cancel) and the cancel logic is byte-identical upstream. **Ruled out** by history.
+ClineMM-local git history of `buttonConfig.ts` shows only the
+mistake_limit advisory change (irrelevant to Cancel) and the cancel
+logic is byte-identical upstream. **Ruled out** by history.
 
-## Decision per reviewer's §11
+## Decision per reviewer's §11 (corrected after reviewer reopen)
 
-### CASE C5 — screenshot only reflects temporary substate
+### Recon verdict: CAPTURE_INSUFFICIENT (not PASS / NO_DEFECT)
+
+The reviewer's reopen identified that the prior intermediate framing
+was overclaimed: the user DID provide a live screenshot showing
+active work with no Cancel, and that evidence was dismissed. The
+strongest supported verdict is:
 
 ```text
-WITHOUT LIVE CAPTURE:
-  The Cancel button is INTENTIONALLY hidden in `idle`,
-  `awaiting_approval`, `awaiting_followup`, `completed`,
-  `resumable`, `error`, `compacting` phases by the
-  TurnState-driven predicate. The user's "actively working
-  but no Cancel" observation matches one of these phases;
-  without the actual screenshot we cannot disambiguate.
+SOURCE_RECON          = PASS
+LIVE_SYMPTOM          = REAL_UI (Working, active tool activity, Cancel absent)
+BACKEND_CANCEL        = PASS
+UPSTREAM_REMOVAL      = RULED_OUT
+CLINEMM_REMOVAL       = RULED_OUT
+LIVE_RENDER_STATE_CAUSE = UNBOUND (requires four-value LIVE capture)
+```
+
+### Two narrow candidates remaining
+
+```text
+CASE A:  phase === "streaming" && Cancel === absent
+         → UI_RENDER_DEFECT (would contradict AOC02 §2 tests; not
+           reproduced at source)
+
+CASE B:  phase !== "streaming" && task genuinely active
+         → TURN_STATE_PROJECTION_DEFECT (producer-side candidate:
+           SdkSessionEventCoordinator phase transitions and
+           message-translator.ts streaming-preservation rules)
+
+BENIGN:  phase === "awaiting_approval" || "awaiting_followup"
+         → Cancel intentionally hidden (user input is the next step)
+```
+
+### Discrimination path
+
+```text
+1. Capture LIVE state at the moment the user sees the symptom:
+     turnState.phase, foregroundCommandRunning,
+     backgroundCommandRunning, lastMessage.{type, say, ask, partial}
+
+   These are observable via:
+     cline.debug.togglePostTerminalAuthorityDiagnostic
+     cline.debug.dumpTurnStateWriterProvenanceDiagnostic
+     SdkController.getStateToPostToWebview() capture
+     Or: any webview dev-tools session into ExtensionStateContext
+
+2. If phase === "streaming" and Cancel absent → reopen as
+   UI_RENDER_DEFECT (small repair; render-predicate fix).
+3. If phase !== "streaming" and runtime genuinely active → reopen
+   as TURN_STATE_PROJECTION_DEFECT (larger repair; producer-side
+   phase-transition fix in SdkSessionEventCoordinator /
+   message-translator.ts).
+4. Otherwise (phase ∈ {awaiting_approval, awaiting_followup,
+   completed, resumable, error, compacting, idle}) → symptom
+   is benign; no repair.
 ```
 
 ### Verdict path
 
-Per reviewer's §11 CASE C5:
+Per reviewer's reopen:
 ```text
-NOT_REPRODUCED_AS_GLOBAL_MISSING_CANCEL
+CAPTURE_INSUFFICIENT (SOURCE_RECON=PASS, LIVE_CAUSE=UNBOUND)
 ```
 
-This is the **first stopping point** of the recon. **No production repair authorized** without LIVE capture that proves the task is genuinely active (tool running, model producing tokens) AND the phase is NOT `streaming`.
+This is the **first stopping point** of the recon. **No production repair authorized** without the four-value LIVE capture discriminating the three cases above.
 
 ## What's needed for the next step (a real defect hunt, not this recon)
 
@@ -338,10 +411,28 @@ Background commands:
 
 ## Decision rule
 
-**The recon cannot conclude that Cancel was removed by ClineMM or upstream**. The Cancel button structure is byte-identical upstream vs ClineMM, the predicate is `streaming`-phase-only, and that predicate has been exhaustively pinned by 9+4+20 production-seam tests (all PASS).
+**The source recon is correct and useful** (Cancel implementation +
+handler + backend abort intact; no upstream removal; no ClineMM
+removal; predicate is `streaming`-phase-only and exhaustively pinned
+by 9+4+20 production-seam tests).
 
-**A genuine missing-Cancel defect, IF it exists, requires LIVE capture to reproduce**: which phase was the live UI in? Was the task genuinely working? Was the phase projection correct?
+**However, this does NOT authoritatively prove "no defect"** because
+the user's LIVE screenshot shows active work with no Cancel — which
+is consistent with `TURN_STATE_PROJECTION_DEFECT` and is **not**
+explained by source-tree analysis alone.
 
-**Per the reviewer's §11 CASE C5 / §25 HALT conditions**: this is **NOT_REPRODUCED** — the ACT halts here without a defect being reproducible from the merged source. No production code change is authorized.
+Per the reviewer's reopen (corrected from the prior intermediate
+framing): the strongest supported verdict is `CAPTURE_INSUFFICIENT`,
+with the search space reduced to two narrow remaining candidates
+(`UI_RENDER_DEFECT` and `TURN_STATE_PROJECTION_DEFECT`) plus one
+benign explanation (non-streaming phase where user input is the
+next step).
 
-The next step (a bounded repair ACT) requires LIVE capture that proves: **(task actively working) AND (phase !== "streaming") AND (no equivalent interrupt control visible)**. Until then, the source-seam map and the existing 33+ production-seam tests pin the predicate as correct.
+The next step (operator-driven four-value LIVE capture of
+`turnState.phase`, `foregroundCommandRunning`,
+`backgroundCommandRunning`, and `lastMessage.{type, say, ask, partial}`)
+discriminates the three cases. Until then, the source-seam map pins
+the predicate as correct AND pins the LIVE-state question as the
+remaining unknown.
+
+No production code change is authorized.

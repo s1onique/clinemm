@@ -1,19 +1,28 @@
 # ACT-CLINEMM-TASK-CANCEL-UI-RECON01
 
-> Status: **CLOSED / RECON_ONLY / NOT_REPRODUCED** — the recon
-> establishes that the current merged tree's Cancel-button predicate is
-> `streaming`-phase-only and exhaustively pinned by 33+ production-seam
-> tests (all PASS); the Cancel button structure is byte-identical
-> upstream `48d638527` vs ClineMM HEAD `15c7e3374`. **No upstream or
-> ClineMM-local removal of Cancel is reproducible from the merged
-> source.** A genuine missing-Cancel defect, IF it exists in production,
-> requires LIVE capture of the exact UI state at the moment of the
-> observed "actively working but no Cancel" state to disambiguate which
-> phase the task was in. Until that LIVE capture happens, no production
-> repair is authorized.
+> Status: **CLOSED / RECON_ONLY / CAPTURE_INSUFFICIENT** — corrected
+> from a prior intermediate verdict `PASS_TASK_CANCEL_UI_RECON_NO_DEFECT_FROM_SOURCE_V1`
+> per the reviewer's reopen. The source recon is correct and useful
+> (Cancel implementation + handler + backend abort intact; no upstream
+> removal; no ClineMM removal; the predicate is `streaming`-phase-only
+> and pinned by 33+ production-seam tests). **However** the prior
+> framing dismissed the LIVE screenshot the user actually provided
+> (task status = Working, tool/edit activity occurring, Cancel
+> absent), which is consistent with the alternative hypothesis the ACT
+> itself names: runtime genuinely active + `turnState` projection
+> stale/non-streaming → Cancel hidden.
 >
-> **Verdict**: `PASS_TASK_CANCEL_UI_RECON_NO_DEFECT_FROM_SOURCE_V1`
-> (per reviewer's §11 CASE C5 — `NOT_REPRODUCED_AS_GLOBAL_MISSING_CANCEL`)
+> The strongest supported verdict is therefore `CAPTURE_INSUFFICIENT`
+> with `SOURCE_RECON=PASS` and `LIVE_CAUSE=UNBOUND`, NOT `NO_DEFECT`.
+>
+> **Verdict**: `CAPTURE_INSUFFICIENT` (per reviewer's reopen — the
+> exact phrase in the §11 case table is `NOT_REPRODUCED_FROM_SOURCE`
+> + `CAPTURE_INSUFFICIENT_FOR_LIVE_CAUSE`; the two narrow candidates
+> remaining after the source pass are `UI_RENDER_DEFECT` (phase =
+> streaming but Cancel absent, which would contradict the existing
+> AOC02 §2 tests) and `TURN_STATE_PROJECTION_DEFECT` (phase !=
+> streaming while model/tool work is genuinely active). Discriminating
+> between them requires the four-value LIVE capture named in §10.)
 >
 > **Predecessor ACTs respected**:
 > - `ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01-AOC01` (CLOSED, P1 causal gap closed)
@@ -39,29 +48,54 @@ Answer exactly:
 
 The recon answer:
 
-> **Source-tree recon cannot establish that Cancel was lost.** Cancel
-> renders iff `turnState.phase === "streaming"` (or `foreground_command_running`
-> during streaming). That predicate is exhaustive and pinned by 9+4+20
-> production-seam tests (all PASS). Backend cancel pipeline is intact
+> **Source-tree recon is correct but does NOT support a `NO_DEFECT`
+> verdict.** The Cancel predicate (`turnState.phase === "streaming"`
+> with `foreground_command_running` subpredicate) is exhaustive and
+> pinned by 9+4+20 production-seam tests (all PASS). Backend cancel
+> pipeline is intact
 > (`SdkTaskControlCoordinator.cancelTask` → `sdkHost.abort`).
 > Upstream vs ClineMM Cancel button structure is byte-identical.
-> **Without the actual screenshot, the user's observation cannot be
-> classified beyond "task is in a non-streaming phase, Cancel is
-> correctly hidden by design."**
+> However, the **user DID provide a live screenshot** (task status =
+> Working, tool/edit activity occurring, Cancel absent) which the
+> prior intermediate verdict dismissed. That screenshot is consistent
+> with `TURN_STATE_PROJECTION_DEFECT` (runtime active + phase
+> non-streaming → Cancel hidden) — and the recon reduced the search
+> space to two narrow candidates:
+>
+> - **Case A (`UI_RENDER_DEFECT`)**: `turnState.phase === "streaming"`
+>   but Cancel is absent. The existing AOC02 §2 tests say this state
+>   must render Cancel, so if reproduced at LIVE it is a render-side
+>   regression.
+> - **Case B (`TURN_STATE_PROJECTION_DEFECT`)**: `turnState.phase !==
+>   "streaming"` while model/tool work is genuinely active. The
+>   producer-side phase-transition logic in
+>   `SdkSessionEventCoordinator` and `message-translator.ts` is the
+>   candidate source.
+>
+> Discrimination requires the four-value LIVE capture named in §10
+> (`turnState.phase`, `foregroundCommandRunning`, `backgroundCommandRunning`,
+> last message `{type, say, ask, partial}`).
 
 ## 1. Evidence classification
 
 ```text
-LIVE_OLD_SPECIMEN:      present in user-provided screenshot (description)
-LIVE_NEW_SPECIMEN:      present in user-provided screenshot (description)
-ACTUAL_SCREENSHOTS:     not bundled into this recon; recon does not depend on them
+LIVE_OLD_SPECIMEN:      user-provided screenshot (description in chat)
+LIVE_NEW_SPECIMEN:      user-provided screenshot (description in chat)
+                        visible: task status = Working, tool/edit
+                        activity occurring, Cancel button absent
 
-VISIBLE_CANCEL_CONTROL_DELTA = YES (per user observation)
-CANCEL_BACKEND_CAPABILITY_MISSING = NO (verified — pipeline intact)
-CANCEL_HANDLER_MISSING = NO (verified — TaskServiceClient.cancelTask wired)
-UPSTREAM_REMOVED_CANCEL_INTENTIONALLY = NO (verified — diff is null)
-CSS_VISIBILITY_BUG = UNKNOWN (would require DOM inspection)
-STATE_PROJECTION_BUG = UNKNOWN (would require LIVE state capture)
+LIVE_SYMPTOM:
+  ACTIVE_WORK_VISIBLE   = YES (per user observation)
+  CANCEL_ABSENT         = YES (per user observation)
+
+SOURCE_RECON:
+  CANCEL_CONTROL_PRESENT         = YES (intact)
+  CANCEL_BACKEND_PRESENT         = YES (intact)
+  NO_UPSTREAM_REMOVAL            = YES (ruled out by diff)
+  NO_CLINEMM_REMOVAL             = YES (ruled out by history)
+
+UNRESOLVED_BOUNDARY:
+  TURN_STATE_PROJECTION          = UNBOUND (requires LIVE capture)
 ```
 
 ## 2. Historical/upstream context (frozen)
@@ -235,50 +269,85 @@ REQUIRED for a real defect hunt:
 
 ```text
 CASE C0 — button intentionally moved/replaced:    INSUFFICIENT_EVIDENCE
-CASE C1 — render predicate false incorrectly:     UNREPRODUCED
+CASE C1 — render predicate false incorrectly:     POSSIBLE_CASE_A (requires LIVE phase capture)
 CASE C2 — component/control removed but backend:  RULED_OUT (diff is null)
 CASE C3 — click plumbing missing:                  RULED_OUT (handler identical)
 CASE C4 — backend cancel capability broken:        RULED_OUT (backend healthy)
-CASE C5 — screenshot only reflects substate:      MOST_LIKELY (cancel hidden
-                                                       during non-streaming
-                                                       phases by design)
+CASE C5 — screenshot only reflects substate:      POSSIBLE_CASE_B (runtime active + phase stale)
 ```
 
-### Verdict
+### Verdict (corrected after reviewer reopen)
 
 ```text
-PASS_TASK_CANCEL_UI_RECON_NO_DEFECT_FROM_SOURCE_V1
+CAPTURE_INSUFFICIENT
 
-The recon cannot conclude that Cancel was removed. The merged tree's
-Cancel button is correctly rendered during `streaming` phase and
-correctly hidden in non-streaming phases. The user's observation is
-consistent with a non-streaming phase, which is the design intent.
+  SOURCE_RECON          = PASS
+  LIVE_SYMPTOM          = REAL_UI (Working, active tool activity, Cancel absent)
+  BACKEND_CANCEL        = PASS (handler + abort path intact)
+  UPSTREAM_REMOVAL      = RULED_OUT (diff is null)
+  CLINEMM_REMOVAL       = RULED_OUT (history shows no removal)
+  LIVE_RENDER_STATE_CAUSE = UNBOUND (requires the four-value LIVE capture)
 ```
+
+The recon reduced the problem but did NOT authoritatively prove
+"no defect". Two narrow candidates remain after the source pass:
+
+```text
+CASE A:  phase === "streaming" && Cancel === absent
+         → UI_RENDER_DEFECT (would contradict AOC02 §2 tests; not reproduced at source)
+
+CASE B:  phase !== "streaming" && task genuinely active
+         → TURN_STATE_PROJECTION_DEFECT (producer-side candidate:
+            SdkSessionEventCoordinator phase transitions and
+            message-translator.ts streaming-preservation rules)
+```
+
+To classify, run the operator-driven LIVE capture path named in §10
+and either (a) restart this ACT as a bounded repair if Case A or B is
+reproduced, or (b) confirm the symptom is benign (e.g. task truly
+idle, or task in `awaiting_approval` / `awaiting_followup` where
+Cancel is intentionally absent because user input is the next step).
 
 ## 12-25. RED, ablation, repair, conservation, tests, qualification, artifact, gates, verdicts
 
 **NOT_APPLICABLE** in this recon-only ACT. Per reviewer's §12:
 "RED must reproduce the actual missing-control state" — but the
 missing-control state is not reproducible from the merged source
-without LIVE capture. Per reviewer's §25: `HALT_RED_NOT_REPRODUCED` is
-the correct halt condition here, because:
+without LIVE capture. Per reviewer's §25: the correct halt condition
+here is `CAPTURE_INSUFFICIENT` (reviewer correction supersedes the
+prior framing as `HALT_RED_NOT_REPRODUCED`):
 
 1. Cancel handler exists and is byte-identical upstream vs ClineMM
 2. Backend cancel is healthy
 3. Render predicate is exhaustive and pinned by tests
 4. No diff removed Cancel
 
+But the user DID provide a LIVE screenshot showing active work + no
+Cancel, so:
+
+5. `LIVE_RENDER_STATE_CAUSE` is UNBOUND (Case A vs Case B not classified)
+6. No production repair is authorized until the four-value LIVE
+   capture (§10) discriminates Case A from Case B (and from benign
+   non-streaming phases like `awaiting_approval` /
+   `awaiting_followup`).
+
 ## 26. Board posture
 
 ```text
 TASK_CANCEL_UI_RECON
-  P1 / RECON / CLOSED_NOT_REPRODUCED
+  P1 / RECON / CLOSED_CAPTURE_INSUFFICIENT
 ```
 
-Inserted into the board as a **RECON-ONLY closed** entry. If the user
-later provides a LIVE state capture (turnState dump at the moment of
-observation) that proves the task was actively working AND the phase
-was not `streaming`, this can reopen as a bounded repair ACT.
+Inserted into the runtime-task-progression.md ACT ledger as a
+**RECON-ONLY closed-with-CAPTURE_INSUFFICIENT** entry. A "Recently
+closed transitions" row is also added to `.factory/epic-board.md` to
+record the verdict transition from the prior intermediate framing.
+
+If the user later provides a LIVE state capture (turnState dump at
+the moment of observation) that proves the task was actively working
+AND the phase was not `streaming`, this can reopen as a bounded
+repair ACT to discriminate Case A (`UI_RENDER_DEFECT`) from Case B
+(`TURN_STATE_PROJECTION_DEFECT`) and bind the appropriate fix.
 
 ## 27. Final report
 
@@ -286,7 +355,10 @@ was not `streaming`, this can reopen as a bounded repair ACT.
 
 ```text
 ACT_ID    = ACT-CLINEMM-TASK-CANCEL-UI-RECON01
-VERDICT   = PASS_TASK_CANCEL_UI_RECON_NO_DEFECT_FROM_SOURCE_V1
+VERDICT   = CAPTURE_INSUFFICIENT (corrected after reviewer reopen;
+           prior intermediate verdict
+           PASS_TASK_CANCEL_UI_RECON_NO_DEFECT_FROM_SOURCE_V1 was
+           overclaimed and superseded)
 
 ENTRY_HEAD  = 15c7e3374637e8831a8aaf7692c17cf3e7d88ca1
 FINAL_HEAD  = 15c7e3374637e8831a8aaf7692c17cf3e7d88ca1  (no production change)
@@ -319,12 +391,21 @@ RED_REPRODUCED                = N/A
 ### Cause
 
 ```text
-ROOT_CAUSE                    = UNKNOWN_WITHOUT_LIVE_CAPTURE
+ROOT_CAUSE                    = UNBOUND (requires LIVE phase capture)
 ABLATION                      = N/A
 ABLATION_RESULT               = N/A
-MOST_LIKELY_EXPLANATION       = task is in a non-streaming phase (idle/awaiting_*), Cancel correctly hidden
-ALTERNATIVE_EXPLANATION       = phase projection defect in SdkSessionEventCoordinator (not yet reproduced)
-```
+CASE_A_CANDIDATE              = UI_RENDER_DEFECT
+                                  (phase === "streaming" but Cancel absent;
+                                  would contradict AOC02 §2 tests)
+CASE_B_CANDIDATE              = TURN_STATE_PROJECTION_DEFECT
+                                  (phase !== "streaming" while work is
+                                  genuinely active; producer-side
+                                  candidate: SdkSessionEventCoordinator
+                                  phase transitions + message-translator.ts
+                                  streaming-preservation rules)
+BENIGN_POSSIBILITY            = task in awaiting_approval /
+                                  awaiting_followup (intentionally no Cancel
+                                  because user input is the next step)
 
 ### Repair
 
@@ -387,25 +468,29 @@ LIVE_INTERRUPTED_RESUME       = N/A
 ### Board
 
 ```text
-TASK_CANCEL_UI_RECON          = CLOSED_NOT_REPRODUCED
-NEXT_ACT                      = (depends on next priority; downstream live ACTs may bind)
+TASK_CANCEL_UI_RECON          = CLOSED_CAPTURE_INSUFFICIENT
+RUNTIME-TASK-PROGRESSION_LANE = (entry added to runtime-task-progression.md ACT ledger)
+EPIC-BOARD_CLOSURE_ROW        = (entry added to .factory/epic-board.md Recently closed transitions)
+NEXT_ACT                      = (operator-driven LIVE capture of:
+                                 turnState.phase, foregroundCommandRunning,
+                                 backgroundCommandRunning, lastMessage.{type,say,ask,partial})
 ```
 
 ## Acceptance criteria
 
 ```text
 C01_REPOSITORY_TRUST                       = PASS
-C02_OLD_LIVE_CANCEL_SPECIMEN_BOUND          = NOT_PROVIDED (description only)
-C03_CURRENT_LIVE_MISSING_CANCEL_SPECIMEN    = NOT_PROVIDED (description only)
+C02_OLD_LIVE_CANCEL_SPECIMEN_BOUND          = PASS (description in chat; visible UI only)
+C03_CURRENT_LIVE_MISSING_CANCEL_SPECIMEN    = PASS (description in chat; task Working + no Cancel)
 C04_CURRENT_CANCEL_OWNER_IDENTIFIED         = PASS (SdkTaskControlCoordinator.cancelTask)
 C05_CURRENT_RENDER_PREDICATE_IDENTIFIED     = PASS (streaming-phase-only)
 C06_LAST_GOOD_FIRST_BAD_BOUND               = N/A (no first bad; Cancel always present)
 C07_UPSTREAM_COMPARISON                     = PASS (byte-identical Cancel)
 C08_BACKEND_CANCEL_CAPABILITY               = PASS (handler healthy)
-C09_LIVE_RENDER_INPUTS_CAPTURED             = NOT_CAPTURED (no LIVE dump)
-C10_FIRST_BROKEN_BOUNDARY                   = NOT_REPRODUCED
+C09_LIVE_RENDER_INPUTS_CAPTURED             = NOT_CAPTURED (no turnState dump; phase unknown)
+C10_FIRST_BROKEN_BOUNDARY                   = UNBOUND (two candidates remain; requires LIVE phase capture)
 C11_RED_REPRODUCED                          = NOT_APPLICABLE
-C12_CAUSAL_DISCRIMINATOR                    = NOT_APPLICABLE
+C12_CAUSAL_DISCRIMINATOR                    = NOT_APPLICABLE (requires LIVE phase to discriminate)
 C13_BOUNDED_REPAIR                          = NOT_APPLICABLE
 C14_CANCEL_AUTOAPPROVE_INDEPENDENCE         = PASS (predicate independent)
 C15_CANCEL_NOT_COMPLETION                   = PASS (cancel does NOT emit task.completed)
@@ -424,11 +509,17 @@ C25_WORKTREE_CLEAN                          = PASS
 ## Halt conditions invoked
 
 ```text
-NOT_REPRODUCED_AS_GLOBAL_MISSING_CANCEL  (CASE C5)
+CAPTURE_INSUFFICIENT  (reviewer-corrected; supersedes the prior
+                       NOT_REPRODUCED_AS_GLOBAL_MISSING_CANCEL framing
+                       because the user DID provide a live screenshot
+                       showing active work + no Cancel)
 ```
 
-Per reviewer's §25, this is the correct halt for a recon-only ACT
-where the merged source cannot reproduce the observed defect.
+The recon reduced the search space: source-tree non-removal is
+proven; backend cancel is healthy; upstream and ClineMM have identical
+Cancel button structure. The remaining question is whether the
+`turnState` projection is correct at the exact moment active work is
+occurring — which is a LIVE-state question, not a source question.
 
 ## Governing decision rule
 
@@ -436,18 +527,26 @@ The pre-recon question was:
 
 > "Why does the Cancel button appear in older UI but not current?"
 
-The recon answer:
+The corrected recon answer:
 
-> Without the live screenshot or runtime state dump, the merged source
-> cannot establish a defect. The Cancel button is correctly rendered
-> during `streaming` phase and correctly hidden in other phases. If
-> the user's observed task is genuinely "actively working" but in a
-> non-streaming phase (e.g., awaiting approval, awaiting followup,
-> compacting, or stale-idle), the absence of Cancel is **by design**,
-> not a regression.
+> **Source-tree analysis proves the Cancel button is correctly
+> implemented and correctly rendered under `streaming`-phase
+> predicates.** However, the user's LIVE screenshot shows active work
+> with no Cancel, which is consistent with two narrow remaining
+> candidates: `UI_RENDER_DEFECT` (Cancel missing despite
+> `phase === "streaming"`) or `TURN_STATE_PROJECTION_DEFECT`
+> (Cancel missing because `phase !== "streaming"` despite genuine
+> activity). A third benign possibility is the task being in
+> `awaiting_approval` / `awaiting_followup` (intentionally no Cancel
+> because user input is the next step).
+>
+> To classify: capture the four LIVE values named in §10
+> (`turnState.phase`, `foregroundCommandRunning`,
+> `backgroundCommandRunning`, last message
+> `{type, say, ask, partial}`). If `phase === "streaming"` and Cancel
+> is absent at the same moment, that's Case A (`UI_RENDER_DEFECT`).
+> If `phase !== "streaming"` and the runtime is genuinely producing
+> tokens or executing tools, that's Case B (`TURN_STATE_PROJECTION_DEFECT`).
+> Otherwise, the symptom is benign.
 
-The first real defect hunt requires LIVE state capture at the moment
-of observation (turnState.phase + foregroundCommandRunning + last
-message {type, say, partial}). Until then, the recon halts here.
-
-**C1: GO_RECON done. Verdict: PASS_TASK_CANCEL_UI_RECON_NO_DEFECT_FROM_SOURCE_V1. No production repair authorized without LIVE capture.**
+**C1: GO_RECON done. Verdict: `CAPTURE_INSUFFICIENT`. No production repair authorized. The next live capture (operator-driven, four-value) discriminates Case A from Case B and from benign non-streaming phases.**
