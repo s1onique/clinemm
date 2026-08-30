@@ -31,15 +31,17 @@ describe("SdkTaskStartCoordinator", () => {
 
 		expect(sessionId).toEqual(expect.any(String))
 		expect(options.clearTaskForOperation).toHaveBeenCalledOnce()
-		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
-			prompt: "hello @file",
-			images: ["image.png"],
-			files: ["a.ts"],
-			historyItem: undefined,
-			taskSettings: undefined,
-			cwd: "/workspace",
-			mode: "act",
-		})
+		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith(
+			expect.objectContaining({
+				prompt: "hello @file",
+				images: ["image.png"],
+				files: ["a.ts"],
+				historyItem: undefined,
+				taskSettings: undefined,
+				cwd: "/workspace",
+				mode: "act",
+			}),
+		)
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(
 			expect.objectContaining({ providerId: "anthropic", modelId: "model", sessionId }),
 			expect.objectContaining({
@@ -684,6 +686,19 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		// canonical lifecycle boundary — and never before, so the inner
 		// `clearTask()` → `set("idle")` round-trip cannot drop it.
 		setTurnPhase: vi.fn(),
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+		// (CAI-01B): `resolveSessionAutoApprovalOverride` is REQUIRED on
+		// `SdkTaskStartCoordinatorOptions` (the coordinator calls it inside
+		// `sessionConfigBuilder.build`). Without it the fixture throws
+		// TypeError on the very first initTask await, masking every
+		// downstream assertion. "none" is the semantically-correct neutral
+		// default for these unit tests — no pre-armed user intent.
+		// ACT-CLINEMM-TASK-START-COORDINATOR-PRE-EXISTING-RED-RECON01:
+		// This was the single root cause of all 11 REDs at HEAD
+		// aafafeedf; verified via standalone path-trace discriminator
+		// (initTask paused at sessionConfigBuilder.build without the field,
+		// reached PHASE streaming with it).
+		resolveSessionAutoApprovalOverride: vi.fn(() => ({ kind: "none" })),
 		clearTask: vi.fn().mockResolvedValue(undefined),
 		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: clearTaskForOperation
 		// delegates to clearTask in the test fixture (no fence advance).
