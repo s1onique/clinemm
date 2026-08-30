@@ -203,6 +203,7 @@ function classifySource(source: CommandDecision["source"]): AskSourceFamily {
 		case "host_hard_deny":
 			return "host_hard_deny"
 		case "host_mode_all":
+		case "host_mode_all_seatbelt_required":
 		case "host_mode_safe_only_rule":
 		case "risk_v2_structured_promotion":
 			return "allow-source"
