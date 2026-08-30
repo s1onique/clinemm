@@ -106,58 +106,142 @@ This §1 is the load-bearing gate. The reopen hypothesis
 current repository state is byte-equivalent to the H2-repaired
 commit and the live artifact was built from that source.
 
+Identity roles (see also §20 status block):
+
 ```text
-SOURCE_HEAD                = fe3be36fed1fa354ed8bc0cb3cc36a30de29691a
-                              (fix(settings): preserve absent Sandbox
-                              capability state; merged at 2026-08-30)
-SOURCE_PARENT              = b25636e6d1f9a949e71ac37dc08e91356e5063d2
-                              (docs(factory): editor-tool live
-                              qualification attempt + headless halt)
-SOURCE_HEAD_TREE           = (capture at closure commit; recorded
+SUBJECT_PRODUCTION_HEAD    = fe3be36fed1fa354ed8bc0cb3cc36a30de29691a
+                              (the H2-repair commit; the SUBJECT of
+                              this recon; the load-bearing source
+                              commit the live failure must be bound
+                              to. fix(settings): preserve absent
+                              Sandbox capability state;
+                              merged at 2026-08-30;
+                              parent b25636e6d1f9a949e71ac37dc08e91356e5063d2)
+ENTRY_HEAD                 = 16b8a62326ab5b2c0d86044e703ef3f67b5cb174
+                              (the commit that filed this ACT;
+                              docs-only; parent of any operator's
+                              working tree. Per the §19 runbook
+                              the operator MUST build from the
+                              CURRENT clean HEAD, which is the
+                              ENTRY_HEAD; recording the actual
+                              DOGFOOD_SOURCE_TREE rather than
+                              asserting equivalence to the parent.)
+SOURCE_HEAD_TREE           = (deprecated slot; see CLOSURE_TREE
+                              below. This slot is left as a
+                              no-op for back-compat with the
+                              prior §1 identity block; CLOSURE_TREE
+                              is the canonical place for the
+                              ACT's tree identity.)
+CLOSURE_TREE               = (operator-supplied at closure; recorded
                               in §15 commit list of the new closure
-                              commit for this ACT)
+                              commit for this ACT. Captured by the
+                              closure commit itself, NOT by this ACT
+                              at open.)
 SOURCE_WORKTREE_STATUS     = clean (verified at ACT open: `git
                               status --short` is empty; `git diff
                               --stat HEAD` is empty)
+DOGFOOD_SOURCE_HEAD        = (operator-supplied; the SHA the
+                              operator's `git log -1` reports when
+                              running §19 step 1. MUST equal
+                              ENTRY_HEAD or a docs-only descendant.)
+DOGFOOD_SOURCE_TREE        = (operator-supplied; recorded by §1.1
+                              capture.)
 LIVE_ARTIFACT_HEAD         = NOT_VERIFIED_HERE (the operator
                               session that produced the live
                               `bind: Operation not permitted`
                               observation has not been verified
-                              to be built from fe3be36fe in this
-                              shell; the operator's evidence pack
-                              MUST bind this before §2 opens; see
-                              §1.1)
+                              to be built from the SUBJECT
+                              production head in this shell; the
+                              operator's evidence pack MUST bind
+                              this before §2 opens; see §1.1)
 ```
+
+The reviewer-prescribed "freshly built live artifact" gate
+(see `ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01`
+§528-533) requires the live artifact to be source-bound.
+That binding is to the SUBJECT_PRODUCTION_HEAD, not to the
+ENTRY_HEAD: the only thing the ENTRY_HEAD does is guarantee
+the ACT MD is durable in the repo. The §1.1 contract
+produces two byte-equal checks:
+
+```text
+DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL  YES | NO
+LIVE_INSTALLED_BUNDLE_BYTEEQUAL                YES | NO
+```
+
+Both must be YES for §2 to open. The reviewer-disposition
+that "16b8a6232 is docs-only" is correct, so a build from
+ENTRY_HEAD is expected to produce a `dist/extension.js`
+semantically identical to a build from SUBJECT_PRODUCTION_HEAD,
+but the operator MUST NOT take equivalence on assertion —
+they MUST record the actual SHA from a real build (see §19
+step 3) and record the actual `DOGFOOD_SOURCE_TREE`.
 
 ### §1.1 - Live artifact identity verification (operator-side, before §2 opens)
 
-The operator must produce a four-line artifact-identity pack
-bound to the live session that observed the failure. This is a
-HARD GATE for §2 to open:
+The operator must produce an artifact-identity pack bound to
+the live session that observed the failure. This is a HARD
+GATE for §2 to open. The pack is written to
+`artifact-identity-pack.txt` under the RUN_ID directory
+(see §3.4):
 
 ```text
-VSIX_SHA256                       = <from the live session's installed extension>
+DOGFOOD_SOURCE_HEAD               = <output of `git log -1` on the operator's substrate-eligible shell; expected to equal ENTRY_HEAD = 16b8a62326ab5b2c0d86044e703ef3f67b5cb174 or a docs-only descendant>
+DOGFOOD_SOURCE_TREE               = <`git rev-parse HEAD^{tree}`>
+SUBJECT_PRODUCTION_HEAD           = fe3be36fed1fa354ed8bc0cb3cc36a30de29691a
+SOURCE_dist/extension.js_SHA256    = <built from DOGFOOD_SOURCE_HEAD; rebuild required per §19 step 2-3>
 INSTALLED_EXTENSION_PATH          = <from the live session>
-SOURCE_dist/extension.js_SHA256    = <built from SOURCE_HEAD above; rebuild required>
 INSTALLED_dist/extension.js_SHA256 = <from the live session's installed bundle>
 
-SOURCE_INSTALLED_BYTE_EQUAL       = YES | NO
+DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL
+                                    = YES | NO
+LIVE_INSTALLED_BUNDLE_BYTEEQUAL    = YES | NO
 ```
 
-If `SOURCE_INSTALLED_BYTE_EQUAL = NO`:
+(The first BYTEEQUAL gates "the operator's checkout is
+up-to-date with the ACT's durable state"; the second gates
+"the live artifact matches the source bundle that built it".
+Either NO halts §2.)
+
+`DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL` is the
+SHA-256 of `SOURCE_dist/extension.js` built from
+DOGFOOD_SOURCE_HEAD, compared against the SHA-256 of a
+reference build at SUBJECT_PRODUCTION_HEAD. The reviewer
+disposition that 16b8a6232 is docs-only over ENTRY_HEAD
+(parent) means the two builds SHOULD match byte-for-byte,
+but the operator MUST NOT take that on assertion — they
+MUST produce the actual SHAs and let the comparison gate
+fail loudly if it ever does not. (A divergence here would
+indicate the docs-only contract was violated — i.e., a
+silent production-code change in the ENTRY_HEAD commit;
+that is a §2 HALT not a §2 PASS.)
+
+If `LIVE_INSTALLED_BUNDLE_BYTEEQUAL = NO`:
 
 ```text
 HALT_STALE_LIVE_ARTIFACT
-  -> rebuild from SOURCE_HEAD = fe3be36fe
+  -> rebuild from current clean HEAD (DOGFOOD_SOURCE_HEAD)
   -> reinstall
   -> re-run §1.1
   -> only then proceed to §2
 ```
 
+If `DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL = NO`:
+
+```text
+HALT_DOCS_ONLY_VIOLATION
+  -> the ENTRY_HEAD commit was supposed to be docs-only
+     (per the §15 freeze contract) but its build diverges
+     from the SUBJECT_PRODUCTION_HEAD build
+  -> halt §2; do not assume equivalence; the divergence is
+     load-bearing
+```
+
 This is not paranoia — it is the reviewer-prescribed
 "freshly built live artifact" gate from
 `ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01` §528-533
-("next steps" rule).
+("next steps" rule), generalized to the docs-only-child
+HEAD layout this ACT establishes.
 
 ### §1.2 - Why the binding matters (rationale)
 
@@ -176,7 +260,10 @@ HALT.
 The captured production seam, end-to-end, with the **four capture
 points** this ACT discriminates on. Source citations are
 read-only references to the current source tree at
-`SOURCE_HEAD = fe3be36fe`.
+`SUBJECT_PRODUCTION_HEAD = fe3be36fe`
+(docs-only commit `ENTRY_HEAD = 16b8a6232` is the durable
+filing commit; the §2 / §3 / §4 references are bound to the
+production code at `fe3be36fe`, not the docs-only child).
 
 ```text
 [1] StateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork")
@@ -249,9 +336,12 @@ read-only references to the current source tree at
 ### §2.1 - Known-good capture witness (already proven)
 
 The H2-repair ACT's CORRECTION02 c4-red-explicit-true-path test
-captures **the exact [3] boundary** with the production closure
-shape. Already proven in the current source tree at
-SOURCE_HEAD = `fe3be36fe`:
+captures **the exact [3] boundary** with the production
+closure shape, exercising the real `StateManager` singleton +
+real `CommandJobManager` + real closure + a stub backend
+returning a captured `SandboxPreparedInvocation`. Already
+proven in the current source tree at
+SUBJECT_PRODUCTION_HEAD = `fe3be36fe`:
 
 ```text
 apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01
@@ -261,20 +351,46 @@ apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01
 Witnesses (per the test):
 
 ```text
-w1.safeYoloCapabilitySource().network   === true
-                                         (production closure, verbatim
-                                          from SdkController.ts:1216)
-w2.backend.prepare.__captured.cap.network === "allow"
-                                         (CommandCapability at the
-                                          prepare boundary)
+w1.StateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork")
+                                                  === true
+                                                  (real StateManager
+                                                   singleton;
+                                                   line 131 in c4)
+w2.safeYoloCapabilitySource().network             === true
+                                                  (production closure,
+                                                   verbatim from
+                                                   SdkController.ts:1216)
+w3.backend.prepare.__captured.cap.network        === "allow"
+                                                  (CommandCapability
+                                                   at the prepare
+                                                   boundary; real
+                                                   production chain)
 ```
 
-That is the [2] -> [3] arm. The H2 reviewer's c2-red-production-
-chain test additionally proves [1] -> [2] -> [3] (real
-StateManager round-trip). **The first two and a half capture
-points are SOURCE_PROVEN as `[1]=true, [2]=true, [3]="allow"` in
-the current source tree at fe3be36fe** — they cannot be the
-defect.
+That is the [1] -> [2] -> [3] arm (CORRECTION02 c4 only).
+
+The H2 reviewer's c2-red-production-chain test
+additionally proves the closure shape with constructed
+inputs (it does NOT exercise the real `StateManager`; it
+walks `resolveSafeYoloCapabilityFromState({network:true})
+→ buildExperimentalReconCapability` directly):
+
+```text
+apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01
+  .c2-red-production-chain.test.ts:51-67 (legacy-absent),
+  70-90 (toggle-on)
+```
+
+c2 is the closed proof for the closure shape, NOT the
+StateManager round-trip. Both c2 and c4 are needed for the
+full [1]→[2]→[3] proof; c4 alone provides the
+StateManager-integrated proof; c2 is the shape-only
+proof.
+
+**The first two and a half capture points are
+SOURCE_PROVEN as `[1]=true, [2]=true, [3]="allow"` in the
+current source tree at SUBJECT_PRODUCTION_HEAD = fe3be36fe**
+— they cannot be the defect.
 
 The remaining half — [4] the generated SBPL network clause
 on disk — is the **first seam that has NOT been live-captured
@@ -282,6 +398,12 @@ in a "true->profile"(allow) flow**. The seatbelt-profile.ts
 generator is unit-tested with all three inputs but the
 PRODUCTION-SEAM-generated profile file on disk has not been
 SHA-bound to the upstream chain in any test.
+
+Per the reviewer disposition: c4's stub backend cannot
+substitute into the live capture path because it never
+reaches `seatbelt-backend.ts:generateSeatbeltProfile` +
+`writeFileSync`. The §3.4 observer pattern is required for
+[P3]/[P4]/[P5] in a single real transaction.
 
 ## §3 - Capture protocol (HOST_REQUIRED)
 
@@ -326,24 +448,44 @@ chosen identifier and `<TIMESTAMP>` is `date -u +%Y%m%dT%H%M%SZ`.
      If diverges from [P1]: HALT — cache<->closure seam defect;
        §2 finding: cache->closure.
 
-[P3] CommandCapability.network at sandboxBackend.prepare
-     Location: inside a CommandJobManager.start invocation.
-     Method:
-       - Instrument the production CommandJobManager with a
-         capture backend (mirrors `makeCaptureBackend` in
-         sandbox-capabilities-live-regression01.c4).
+[P3] CommandCapability.network at the REAL sandboxBackend.prepare
+     Location: the production Seatbelt backend
+              (sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts
+              prepare() input); after canonicalization, before
+              profile generation; the input cap.network field
+              is the load-bearing observation.
+     Method (REQUIRED, observe-not-substitute):
+       - The operator wires a DEFAULT-OFF diagnostic observer
+         on the REAL backend, NOT a substituted stub. See
+         §3.4 §observer-contract for the seam definition.
+         The capture backend from c4 (a stub that returns a
+         synthetic prepared invocation) is explicitly NOT
+         used here; that pattern only proves [3]'s shape,
+         never [4]'s file on disk. The c4 pattern is closed
+         proof for [2]→[3]; this observer is open proof for
+         [3]→[4]→[5].
        - Trigger the operator's failing command verbatim.
-       - Read capture.__captured.cap.network.
+       - Read the observer's `onPrepareInput` callback capture
+         (which logs the actual CommandCapability the REAL
+         backend receives).
      Expected: "allow" (mirrors [P2] via resolveSafeYoloCapabilityFromState
        true -> "allow" -> networkFromOverride="allow" -> network="allow").
      If diverges: HALT — closure->capability seam defect;
        §2 finding: closure->capability.
 
-[P4] Generated SBPL network clause
-     Location: profilePath from the same backend.prepare.
-     Method:
-       - Capture profilePath (it is join(profileDir, `profile-<rand>.sb`)).
-       - Read the file. Extract the line matching
+[P4] Generated SBPL network clause (file on disk)
+     Location: profilePath written by the REAL
+              seatbelt-backend.ts writeFileSync(profilePath,
+              profile, { mode: 0o600 });
+              (profilePath = join(profileDir,
+               `profile-${randomBytes(6).toString("hex")}.sb`)).
+     Method (REQUIRED, same transaction as [P3]):
+       - The same diagnostic observer calls `onProfileWritten`
+         with the real path and the real bytes (or their SHA-256).
+       - The operator copies the file to `[P4]-profile.sb`
+         under the RUN_ID directory so the capture survives
+         the backend's best-effort profile cleanup. Extract
+         the line matching
          /^\(deny network\*\)$/ or /^\(allow network\*\)$/.
      Expected: (allow network*) (mirrors [P3] via buildNetworkRule
        which emits "(allow network*)" when network !== "deny").
@@ -353,13 +495,21 @@ chosen identifier and `<TIMESTAMP>` is `date -u +%Y%m%dT%H%M%SZ`.
 [P5] Live kernel outcome (out of §2 scope; first downstream probe)
      Location: the actual command's stderr/stdout/exit.
      Method:
-       - Use the exact command from the operator's live failure
-         (the dig/nslookup/curl that produced "bind: Operation
-         not permitted").
-       - Capture exit code, stdout, stderr, signal.
-     Expected: command proceeds past the kernel EPERM (if [P4] is
-       "(allow network*)"; if [P4] is "(deny network*)", the EPERM
-       is policy-conforming and this §3 capture shows it).
+       - The operator's failing command (the dig / nslookup /
+         curl that produced "bind: Operation not permitted")
+         is launched by the REAL backend; the real job's
+         CommandJobSnapshot (which is already populated by the
+         production supervisor) records exit code, stdout,
+         stderr, signal, and job id. The observer records
+         the SAME job id at `onInvocationPrepared` so
+         [P3] / [P4] / [P5] correlate.
+       - The operator copies the snapshot into
+         `[P5]-live-kernel-{stdout,stderr,exitcode}.txt`
+         under the RUN_ID directory.
+     Expected: command proceeds past the kernel EPERM (if [P4]
+       is "(allow network*)"; if [P4] is "(deny network*)",
+       the EPERM is policy-conforming and this §3 capture
+       shows it).
 ```
 
 ### §3.3 - Capture decision table
@@ -387,27 +537,142 @@ The four-fact discriminator table for §2 closure (mirrors the
                                                                                        down to §4)
 ```
 
-### §3.4 - Required evidence files
+### §3.4 - Required evidence files + observer contract
+
+#### §3.4.a - Required evidence files
 
 Each run drops the following under
 `.factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01/<RUN_ID>/`:
 
 ```text
-correlation.txt             (RUN_ID + correlation timestamp + operator)
-[P1]-state-cache.log        (raw return from StateManager)
-[P2]-closure-return.log     (raw return from safeYoloCapabilitySource())
-[P3]-prepare-cap.txt        (captured.cap.network, full snapshot if possible)
-[P4]-profile.sb             (the actual generated SBPL, verbatim from profilePath)
+correlation.txt              (RUN_ID + correlation timestamp + operator)
+[P1]-state-cache.log         (raw return from StateManager)
+[P2]-closure-return.log      (raw return from safeYoloCapabilitySource())
+[P3]-prepare-cap.txt         (onPrepareInput capture: cap.network
+                              + canonicalized paths + command shape)
+[P4]-profile.sb              (the actual generated SBPL, verbatim
+                              from profilePath; copied from the
+                              observer's onProfileWritten capture)
 [P4]-profile-network-rule.txt (extracted network line + sha256)
 [P5]-live-kernel-stdout.log
 [P5]-live-kernel-stderr.log
 [P5]-live-kernel-exitcode.txt
-env.txt                     (process.env snapshot from extension host;
-                             CLINEMM_SAFE_YOLO_NETWORK, CLINEMM_EXPERIMENTAL_SANDBOX,
-                             SSH_AUTH_SOCK if set, PATH minimum)
-artifact-identity-pack.txt  (from §1.1; VSIX sha256, installed extension
-                             sha256, source bundle sha256, byte-equal verdict)
+observer-correlation.log     (the JSONL writer output keyed by
+                              job id; one line per [P3]/[P4]/[P5];
+                              preserves the single-transaction
+                              causal chain)
+env.txt                      (SELECTED ALLOWLIST only; see §3.4.c)
+artifact-identity-pack.txt   (from §1.1; DOGFOOD_SOURCE_HEAD,
+                              DOGFOOD_SOURCE_TREE, source bundle
+                              sha256, installed bundle sha256,
+                              both BYTEEQUAL verdicts)
 ```
+
+#### §3.4.b - Observer contract (REQUIRED seam design)
+
+The seatbelt-backend's `prepare()` is observed, NOT replaced.
+The interface is added to
+`sdk/packages/core/src/runtime/sandbox/types.ts`:
+
+```typescript
+/**
+ * ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+ * DEFAULT-OFF diagnostic observer for the REAL sandbox backend.
+ * The observer may record, but MUST NOT mutate, wrap, or
+ * substitute the backend. When `observer === undefined` the
+ * code path is byte-for-byte unchanged (semantic delta = 0).
+ */
+export interface SandboxBackendDiagnosticObserver {
+    onPrepareInput?(input: {
+        readonly capability: CommandCapability;
+        readonly command: CommandInvocation;
+    }): void;
+    onProfileWritten?(info: {
+        readonly profilePath: string;
+        readonly sha256: string;
+        readonly networkRule: string | undefined;
+    }): void;
+    onInvocationPrepared?(info: {
+        readonly prepared: SandboxPreparedInvocation;
+    }): void;
+}
+```
+
+The real `SeatbeltSandboxBackendExperimental.prepare()` reads
+the observer from a module-local
+`setSandboxDiagnosticObserver` (set ONCE at extension
+activation, when `CLINEMM_CAPTURE_SANDBOX=1`). When unset,
+every observer call is a no-op (the conditional
+`observer?.onPrepareInput?.(...)` fails closed without
+behavior change). When set, the observer calls fire at three
+seams, IN THIS ORDER:
+
+```text
+  1. onPrepareInput(input)         — AFTER canonicalize; before
+                                     generateSeatbeltProfile
+  2. onProfileWritten({ profilePath, sha256, networkRule })
+                                   — AFTER writeFileSync; before
+                                     return
+  3. onInvocationPrepared({ prepared })
+                                   — BEFORE return
+```
+
+The default-off factory lives in
+`apps/vscode/src/sdk/sandbox-policy.ts`:
+
+```typescript
+const CLINEMM_CAPTURE_SANDBOX_ENABLED =
+    process.env.CLINEMM_CAPTURE_SANDBOX === "1" ||
+    process.env.CLINEMM_CAPTURE_SANDBOX === "true"
+```
+
+When `CLINEMM_CAPTURE_SANDBOX_ENABLED`, the operator runs a
+JSONL writer to
+`$CLINE_DIR/data/sandbox-diag/<RUN_ID>.jsonl` (one JSON
+object per line; never to the repo's `.factory/evidence/`
+directly — that copy is the operator's responsibility in
+step 8 of §19).
+
+Each JSONL line carries the job id from
+`CommandJobManager.start`'s `id` (recorded by the
+production code path, NOT by the observer) so
+[P3]/[P4]/[P5] correlate. The job id reaches the observer
+via the prepared invocation return path (no new
+production-code channel is added; the id is already on the
+`job.id` field constructed at line 561 of
+command-job-manager.ts; the observer captures the existing
+`prepared` reference which is keyed by the same call site).
+
+#### §3.4.c - env.txt allowlist
+
+`env.txt` MUST contain a selected allowlist (NOT a general
+environment dump) per the durable-binding convention for
+canonical evidence:
+
+```text
+CLINEMM_EXPERIMENTAL_SANDBOX
+CLINEMM_SAFE_YOLO_NETWORK
+CLINEMM_SAFE_YOLO_SSH_AGENT
+CLINEMM_CAPTURE_SANDBOX
+CLINE_CAPTURE_BROWSER
+PATH
+SSH_AUTH_SOCK (presence + path only; do NOT include the
+               socket contents if any)
+```
+
+Credentials, tokens, and arbitrary process.env fields are
+NOT captured. The reviewer-observed risk of an evidence
+directory being treated as a credential sink is the reason
+this allowlist is bounded.
+
+The c4 test pattern (a stub backend) remains as the §3
+**closed** proof that [2]→[3] holds in the production
+composition; it does NOT prove [3]→[4] (file on disk) and
+does NOT substitute into the live capture path. c4's role
+is "production-shape validation that the closure+resolver
+reach the prepare boundary"; the new observer's role is
+"the REAL backend, in the REAL transaction, with the REAL
+filesystem". Both are needed.
 
 ## §4 - Downstream kernel ablation (HOST_REQUIRED)
 
@@ -601,7 +866,7 @@ NET01_INVOCATION_REPAIR_FOUND
     downstream of prepare.
 
 HALT_STALE_LIVE_ARTIFACT
-  (§1.1 SOURCE_INSTALLED_BYTE_EQUAL = NO)
+  (§1.1 LIVE_INSTALLED_BUNDLE_BYTEEQUAL = NO)
   -> ACT HALTED until rebuild + reinstall + re-run §1.1.
 ```
 
@@ -686,7 +951,12 @@ must NOT be touched in any closure commit:
 ## §19 - Operator runbook (terminal-quality)
 
 For an operator who wants to drive §3 captures on a
-substrate-eligible host:
+substrate-eligible host. The runbook is calibrated to
+build from the CURRENT clean HEAD (which is the
+ENTRY_HEAD at the time the operator reads it) rather
+than asserting equivalence to SUBJECT_PRODUCTION_HEAD;
+the actual SHA is recorded and the build divergence is
+treated as load-bearing (§1.1).
 
 ```bash
 # 0. From a substrate-eligible shell (Terminal.app / iTerm2 /
@@ -696,9 +966,17 @@ cd /path/to/clinemm
 
 # 1. Verify the source HEAD and worktree:
 git log -1 --format='%H %s'
-# Expected: fe3be36fed1fa354ed8bc0cb3cc36a30de29691a fix(settings): preserve absent Sandbox capability state
+# Expected (at ACT open): 16b8a62326ab5b2c0d86044e703ef3f67b5cb174
+#                         docs(factory): reopen seatbelt network
+#                         lane as downstream recon
+# (the ENTRY_HEAD; record this as DOGFOOD_SOURCE_HEAD)
+git rev-parse HEAD^{tree}
+# Expected: <some tree SHA>; record this as DOGFOOD_SOURCE_TREE
 git status --short
 # Expected: empty
+git rev-parse HEAD^
+# Expected: fe3be36fed1fa354ed8bc0cb3cc36a30de29691a
+#           (SUBJECT_PRODUCTION_HEAD = the H2-repair commit)
 
 # 2. Build the extension from the verified source:
 IS_DEV=true bun esbuild.mjs
@@ -706,63 +984,100 @@ IS_DEV=true bun esbuild.mjs
 # 3. Compute source bundle SHA:
 shasum -a 256 dist/extension.js > /tmp/source-bundle.sha256
 
-# 4. Install the bundle in the operator's VS Code user data dir;
-#    compute installed bundle SHA:
+# 4. (Reference build for the BYTEEQUAL check; this rebuilds
+#    from SUBJECT_PRODUCTION_HEAD into a separate dir so the
+#    SHAs can be compared)
+git worktree add /tmp/clinemm-subject-build fe3be36fed1fa354ed8bc0cb3cc36a30de29691a
+cd /tmp/clinemm-subject-build
+IS_DEV=true bun esbuild.mjs
+shasum -a 256 dist/extension.js > /tmp/subject-bundle.sha256
+cd /path/to/clinemm
+# The two builds SHOULD match byte-for-byte because ENTRY_HEAD
+# is docs-only over SUBJECT_PRODUCTION_HEAD; the operator MUST
+# NOT skip the comparison.
+
+# 5. Compare:
+diff /tmp/source-bundle.sha256 /tmp/subject-bundle.sha256 \
+   && echo DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL=YES \
+   || echo DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL=NO
+
+# 6. Install the source bundle in the operator's VS Code user
+#    data dir; compute installed bundle SHA:
 cp dist/extension.js \
    ~/.vscode/extensions/s1onique.clinemm-4.1.10/dist/extension.js
 shasum -a 256 \
    ~/.vscode/extensions/s1onique.clinemm-4.1.10/dist/extension.js \
    > /tmp/installed-bundle.sha256
 
-# 5. Compare:
+# 7. Compare installed vs source:
 diff /tmp/source-bundle.sha256 /tmp/installed-bundle.sha256 \
-   && echo BYTE_EQUAL=YES \
-   || echo BYTE_EQUAL=NO
+   && echo LIVE_INSTALLED_BUNDLE_BYTEEQUAL=YES \
+   || echo LIVE_INSTALLED_BUNDLE_BYTEEQUAL=NO
 ```
 
 ```bash
-# 6. Launch VS Code; open Cline; toggle the "Allow outbound
+# 8. Enable the diagnostic observer (REQUIRED for §3 P3/P4/P5).
+#    The operator MUST NOT skip this; without CLINEMM_CAPTURE_SANDBOX
+#    the §3 P4 capture is "no observation exists" and §2 cannot
+#    bind the divergence.
+export CLINEMM_CAPTURE_SANDBOX=1
+# The harness sets this; for ad-hoc operators using Terminal.app,
+# set it in the same shell that launches VS Code below.
+
+# 9. Launch VS Code; open Cline; toggle the "Allow outbound
 #    network" Settings UI switch to ON; observe the chat row
 #    that runs dig / nslookup / curl.
 
-# 7. While the failing command runs, capture:
-#    - [P1] StateManager cache value (via ext.evaluate with the
-#           diagnostic hook the operator supplies)
-#    - [P2] safeYoloCapabilitySource().network (same hook)
-#    - [P3] CommandCapability.network at sandboxBackend.prepare
-#           (same hook, or a capture backend mirroring the
-#           existing c4 test pattern)
-#    - [P4] Generated SBPL network clause (read profilePath
-#           the hook captures)
-#    - [P5] Live kernel outcome (the failing command's actual
-#           exit code + stdout + stderr)
+# 10. While the failing command runs, the JSONL writer in the
+#     REAL Seatbelt backend records to
+#     $CLINE_DIR/data/sandbox-diag/<RUN_ID>.jsonl
+#     keyed by job id. The operator copies each line's payload
+#     to the corresponding [P3]/[P4]/[P5] file under the
+#     RUN_ID directory per §3.4.a.
 
-# 8. Drop the captures under
-#    .factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-LIVE-
-#    DOWNSTREAM-RECON01/<RUN_ID>/ per §3.4.
+# 11. For [P1] and [P2], use ext.evaluate in the debug harness:
+#     - globalThis.__clineDebugSafeYoloCapability?.() returns
+#       the StateManager cache value (P1) and the closure
+#       return value (P2). The hook must be supplied by the
+#       operator's existing dev instrumentation; this ACT does
+#       NOT introduce a new global.
 
-# 9. If §3 finds a divergence at [P2]/[P3]/[P4], the §2 finding
-#    is bound; close the ACT with the matching §7 verdict and
-#    a targeted repair commit.
+# 12. Drop the captures under
+#     .factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-LIVE-
+#     DOWNSTREAM-RECON01/<RUN_ID>/ per §3.4.a. Use the env.txt
+#     allowlist from §3.4.c (NOT a general env dump).
 
-# 10. If §3 finds the upstream four holds and the kernel still
+# 13. If §3 finds a divergence at [P2]/[P3]/[P4], the §2 finding
+#     is bound; close the ACT with the matching §7 verdict and
+#     a targeted repair commit.
+
+# 14. If §3 finds the upstream four holds and the kernel still
 #     denies, run §4 same-profile ablation on the operator's
 #     host; close with the matching §7 verdict.
 
-# 11. If §1.5 BYTE_EQUAL=NO, halt and rebuild — the source
-#     is correct but the live artifact is stale.
+# 15. If §1.5 LIVE_INSTALLED_BUNDLE_BYTEEQUAL=NO, halt and
+#     rebuild — the source is correct but the live artifact
+#     is stale. If DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL=NO,
+#     halt — the docs-only contract was violated and the
+#     divergence is load-bearing (do NOT assume equivalence).
 ```
 
 This runbook is terminal-quality: an operator with the
-source tree, a substrate-eligible shell, and the operator's
-own diagnostic hook can drive §3 + §4 without further
-factory-side intervention.
+source tree, a substrate-eligible shell, the operator's
+own `[P1]/[P2]` diagnostic hook, and
+`CLINEMM_CAPTURE_SANDBOX=1` set can drive §3 + §4 without
+further factory-side intervention.
 
 ## §20 - Status (open)
 
 ```text
 ACT_ID                              = ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01
-OPEN_HEAD                           = fe3be36fed1fa354ed8bc0cb3cc36a30de29691a
+SUBJECT_PRODUCTION_HEAD             = fe3be36fed1fa354ed8bc0cb3cc36a30de29691a
+                                      (H2-repair; the SUBJECT the live
+                                      failure must be bound to)
+ENTRY_HEAD                          = 16b8a62326ab5b2c0d86044e703ef3f67b5cb174
+                                      (the commit that filed this ACT;
+                                      docs-only over SUBJECT_PRODUCTION_HEAD)
 OPEN_TREE                           = (capture at closure commit)
 WORKTREE_STATUS                     = clean (verified at ACT open)
 ARTIFACT_IDENTITY                   = UNBOUND_PENDING_§1.1 (operator-side;
@@ -770,9 +1085,14 @@ ARTIFACT_IDENTITY                   = UNBOUND_PENDING_§1.1 (operator-side;
                                      produce the VSIX/source/installed-
                                      bundle identity pack before §2
                                      opens; the reopen IS source-bound
-                                     on the SOURCE_HEAD side but is NOT
-                                     yet bound to any operator-side
-                                     installed extension bundle)
+                                     on the SUBJECT_PRODUCTION_HEAD
+                                     side but is NOT yet bound to any
+                                     operator-side installed extension
+                                     bundle; the docs-only ENTRY_HEAD
+                                     child commit (16b8a6232) is
+                                     documented as docs-only and is
+                                     validated by §1.1
+                                     DOGFOOD_SOURCE_HEAD_BUILD_ARTIFACT_BYTEEQUAL)
 PIPELINE_MAP                        = PASS_SOURCE_BOUND (§2 structural)
 EVIDENCE_FILES                      = DIRECTORY_CREATED (.factory/evidence/
                                      ACT-CLINEMM-SEATBELT-NETWORK-LIVE-
