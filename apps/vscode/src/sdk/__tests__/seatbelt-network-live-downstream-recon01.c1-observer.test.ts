@@ -470,3 +470,49 @@ describe.skipIf(!HAS_SUBSTRATE)(
 		})
 	},
 )
+
+// Companion to T7: structural assertion that the production
+// JSONL writer (apps/vscode/src/sdk/sandbox-policy.ts) has an
+// `'error'` listener attached to its stream. Without that
+// listener, an async stream error would become an unhandled
+// EventEmitter error and terminate the process — exactly the
+// P0 fail-open violation the factory reviewer flagged.
+//
+// This structural check is OUTSIDE the substrate-conditional
+// describe block: it does NOT depend on Seatbelt availability
+// and runs on every host (linux / darwin / windows / sandboxed
+// chromium helpers). It reads the production source file
+// directly and asserts that `stream.on("error", ...)` appears
+// BEFORE any `stream.write(...)` call.
+describe(
+	"ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01 — structural",
+	() => {
+		it("T8: production JSONL writer registers an 'error' listener on its stream", async () => {
+			const { readFileSync, existsSync } = await import("node:fs")
+			const path = await import("node:path")
+			const url = await import("node:url")
+			const here = url.fileURLToPath(import.meta.url)
+			// Resolve the source policy file. The test runs from
+			// either the source path or a transformed/bundled path;
+			// probe both candidates.
+			const candidates = [
+				path.resolve(path.dirname(here), "../sandbox-policy.ts"),
+				path.resolve(path.dirname(here), "../../sdk/sandbox-policy.ts"),
+				path.resolve(
+					process.cwd(),
+					"apps/vscode/src/sdk/sandbox-policy.ts",
+				),
+			]
+			const src = candidates
+				.filter((p) => existsSync(p))
+				.map((p) => readFileSync(p, "utf8"))[0]
+			expect(typeof src).toBe("string")
+			expect((src as string).length).toBeGreaterThan(0)
+			const listenerIdx = (src as string).indexOf('stream.on("error"')
+			const writeIdx = (src as string).indexOf("stream.write(")
+			expect(listenerIdx).toBeGreaterThan(-1)
+			expect(writeIdx).toBeGreaterThan(-1)
+			expect(listenerIdx).toBeLessThan(writeIdx)
+		})
+	},
+)

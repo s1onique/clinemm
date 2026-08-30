@@ -179,10 +179,15 @@ function computeProfileFingerprint(
  * apps/vscode/src/sdk/__tests__/seatbelt-network-live-downstream-
  * recon01.c1-observer.test.ts test T6.
  */
-function safeInvokeObserver(
-	callback: ((arg: unknown) => void) | undefined,
-	arg: unknown,
+function safeInvokeObserver<A>(
+	callback: ((arg: A) => void) | undefined,
+	arg: A,
 ): void {
+	// Generic A preserves the typed payload's shape at the call
+	// site (each observer callback has its own payload type).
+	// Without the generic, the helper would force the typed
+	// callbacks to be assignable to `(arg: unknown) => void`,
+	// which the strict function-type variance rejects (TS2345).
 	if (typeof callback !== "function") return;
 	try {
 		callback(arg);

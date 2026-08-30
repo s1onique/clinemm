@@ -1037,13 +1037,13 @@ export {
 // rejected on latency grounds. The ClineMM VSCode boot path
 // already loads seatbelt-backend.ts eagerly in practice.
 export { setSeatbeltDiagnosticObserver } from "./runtime/sandbox/macos/seatbelt-backend";
-// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01: re-export
-// the Seatbelt singleton + substrate probe so tests outside the
-// SDK package can construct fixtures. The eager-load cost (≈2 KB)
-// is the same trade-off as setSeatbeltDiagnosticObserver above;
-// these symbols are only used by tests / ClineMM-specific callers,
-// not by the CLI / JetBrains SDK consumers.
+// Test-only: the diagnostic observer accessor + Seatbelt singleton
+// + substrate probe are re-exported so apps/vscode vitest suites
+// can construct fixtures. They are NOT used by production callers
+// outside of `sandbox-policy.ts`. The cost is the same as
+// `setSeatbeltDiagnosticObserver` above (≈2 KB static load).
 export {
+	getSeatbeltDiagnosticObserver,
 	probeSeatbeltAvailability,
 	SANDBOX_EXEC_PATH,
 	SeatbeltSandboxBackendExperimental,
