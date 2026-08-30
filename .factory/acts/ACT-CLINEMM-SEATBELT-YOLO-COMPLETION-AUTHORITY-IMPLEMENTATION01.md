@@ -1,10 +1,25 @@
 # ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
 
-> Status: **NEXT / HIGH** — opens immediately after `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01`
-> closes. Real-seam RED + minimal implementation + bounded production repair.
+> Status: **CLOSED / VERDICT_REVISED / NO_PRODUCTION_DELTA_FROM_MERGE** —
+> the post-upstream-integration recon (reviewer §10 R0) established that
+> upstream `48d63852745460ff0fa3dfcc0457bbe2493841de` already provides the
+> single authoritative completion declaration
+> (`submit_and_exit` tool observation → `task.completed` exactly once)
+> with teardown-only fallback (`emitTaskCompletedOnTeardown`, source:
+> `"shutdown"`), and that the ClineMM-side pre-upstream-merge production
+> code (`vscode-submit-executor.ts`, the 4-fact derivation in
+> `cline-session-factory.ts:1069`, the threading in
+> `runtime-builder.ts:530-536`, and the legacy `attempt_completion` /
+> `submit_and_exit` unification in `message-translator.ts:881-882`) all
+> ALREADY exists and is GREEN at the production seam (CAI-01..CAI-12
+> contract tests 13/13 PASS; 245+ production-seam tests PASS, 1
+> pre-existing RED that pre-dates the upstream subject). The original
+> Aug 27 "NEXT / HIGH" mission was rendered obsolete by the upstream
+> integration; the pre-upstream-merge design is preserved as a
+> **superseded-but-defensible** record below for forensic traceability.
 >
 > **Contract authority**: `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01`
-> (verdict `PASS_SEATBELT_YOLO_REQUIRES_EXPLICIT_COMPLETION_AUTHORITY_OPTION_C`;
+> (CLOSED; verdict `PASS_SEATBELT_YOLO_REQUIRES_EXPLICIT_COMPLETION_AUTHORITY_OPTION_C`;
 > decision = YES; architectural form = independent `explicitCompletionAuthority`
 > capability; default ON for Seatbelt-YOLO interactive VS Code, default OFF
 > for ordinary manual Act; `core mode` remains `"act"`, no flip to `"yolo"`).
@@ -12,7 +27,14 @@
 > **Predecessor**: `ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS02` (CLOSED) +
 > `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01` (CLOSED).
 >
-> **Verdict (target)**: `PASS_SEATBELT_YOLO_EXPLICIT_COMPLETION_AUTHORITY_V1`
+> **Verdict**: `PASS_COMPLETION_AUTHORITY_UPSTREAM_SUPERSEDED_V1`
+>
+> **Recon evidence**: `.factory/evidence/ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01/source-seam-map.md`
+>
+> **Entry conditions**: ✅ branch=main, HEAD=origin/main, worktree=clean,
+> stashes=0, protected-stash branches=0, F10 retired.
+>
+> **Mandatory F27 SHARED_HOST_SAFE_YOLO_SOURCE_BINDING regression**: PASS (2/2).
 
 ## 0. Mission
 
