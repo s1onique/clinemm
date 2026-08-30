@@ -269,6 +269,27 @@ apps/examples/desktop-app/.cursor/settings.json
 # hypothetical awaiting_continuation.
 !/.factory/acts/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01/
+# ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-CONTRACT01: contract-preflight
+# ACT that freezes the conditional authority invariant for the
+# successor IMPLEMENTATION01. PHASE_0 = PASS (reviewer disposition
+# 2026-08-30). The preflight evidence file
+# 01-architectural-preflight.md carries the load-bearing contract:
+# frozen product contract, LIVE_R5_CLASSIFICATION binding
+# (corr=G8R987V68S, artifact=4.1.16-a29a08dc8), Architecture B
+# refined shape
+# ({kind: "allow", source: "host_mode_all_seatbelt_required",
+#   executionConstraint: "seatbelt-required"}),
+# DEFER_NOT_BYPASS_CONSERVATION invariants (no unsandboxed
+# fallback, no sandbox-capability expansion), two conservation
+# tests (necessity/ablation + no-fallback), and v1 capability-
+# confinement proof scope. The epic ledger at
+# .factory/epics/approval-protection.md row 23 binds to both the
+# ACT file (when IMPLEMENTATION01 opens it) AND this preflight
+# evidence, so both must survive a fresh clone. Mirror the
+# .factory/evidence/ default-deny + whitelist pattern: directory
+# re-included below so git can recurse, contents are the load-
+# bearing contract.
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-CONTRACT01/
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01: recon ACT
 # LAUNCH_HEAD = a76ff4137 / TREE = fa383737f (durable-binding freeze
 # per ACT §1). OPEN_HEAD = 4963904e9 (first commit creating ACT).
