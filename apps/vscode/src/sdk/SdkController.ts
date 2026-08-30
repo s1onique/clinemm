@@ -91,6 +91,7 @@ import {
 	ProviderFailureTelemetryTurnGate,
 } from "./provider-failure-telemetry"
 import { RemoteConfigRefreshCoordinator } from "./remote-config-refresh-coordinator"
+import { resolveExperimentalSandboxMode } from "./sandbox-policy"
 import {
 	findVisibleCheckpointUserMessageByRun,
 	getCheckpointRunCountForMessage,
@@ -102,10 +103,10 @@ import { SdkFollowupCoordinator } from "./sdk-followup-coordinator"
 import { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { SdkInteractionCoordinator } from "./sdk-interaction-coordinator"
 import { SdkMcpCoordinator } from "./sdk-mcp-coordinator"
-import { SdkSessionAutoApprovalCoordinator } from "./sdk-session-auto-approval-coordinator"
 import { SdkMessageCoordinator, type SessionEventListener } from "./sdk-message-coordinator"
 import { SdkModeCoordinator } from "./sdk-mode-coordinator"
 import { SdkProviderChangeCoordinator } from "./sdk-provider-change-coordinator"
+import { SdkSessionAutoApprovalCoordinator } from "./sdk-session-auto-approval-coordinator"
 import { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import { SdkSessionEventCoordinator } from "./sdk-session-event-coordinator"
 import { SdkSessionHistoryLoader } from "./sdk-session-history-loader"
@@ -131,7 +132,6 @@ import {
 	isSyntheticSdkUserMessage,
 	type SdkUserMessage,
 } from "./sdk-user-message-mapping"
-import { resolveExperimentalSandboxMode } from "./sandbox-policy"
 import {
 	resolveEffectiveAutoApproval,
 	resolveSessionHostAuthorization,
@@ -359,6 +359,18 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 	}
 }) {
 	return async (request: {
+		/**
+		 * ACT-CLINEMM-SEATBELT-YOLO-APPROVAL-FRICTION-RECON01-CORRECTION01:
+		 * Optional sessionId. Production callers (the
+		 * `SdkInteractionCoordinator`) pass the full
+		 * `ToolApprovalRequest` shape which carries `sessionId`.
+		 * Older callers / test seams that only set `toolName` + `input`
+		 * continue to work — `sessionId` defaults to undefined and the
+		 * `approval.sdk-controller.entry.v2` probe records it as
+		 * "no-session". This is purely observational; the absence
+		 * does not change approval semantics.
+		 */
+		sessionId?: string
 		toolName: string
 		input: unknown
 	}): Promise<
@@ -387,10 +399,52 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 		  }
 		| undefined
 	> => {
+		// ACT-CLINEMM-SEATBELT-YOLO-APPROVAL-FRICTION-RECON01-CORRECTION01
+		// Outer probe: fires at the EARLIEST entry of the SdkController-owned
+		// callback, BEFORE the isCommandTool early return and BEFORE the
+		// `await options.resolveHostAuthorization(...)`. The ambient
+		// AsyncLocalStorage V2 capture context (correlationId + commandDigest)
+		// is established upstream by the `SdkInteractionCoordinator` at
+		// `sdk-interaction-coordinator.ts:303` so the probe inherits
+		// those values automatically. If the operator sees an approval
+		// card but this probe is missing for that correlationId, the
+		// SdkController callback was never reached (alternative path
+		// or a different code path emitted the card).
+		emitV2Capture({
+			codePoint: "approval.sdk-controller.entry.v2",
+			data: {
+				sessionId: request.sessionId ?? "no-session",
+				toolName: request.toolName,
+			},
+		})
 		if (!isCommandTool(request.toolName)) {
 			return undefined
 		}
 		const { hostAuthorization, toolInput } = await options.resolveHostAuthorization(request.toolName, request.input)
+		// ACT-CLINEMM-SEATBELT-YOLO-APPROVAL-FRICTION-RECON01-CORRECTION01
+		// Inner probe: fires immediately AFTER the production
+		// `resolveHostAuthorization` closure returns and BEFORE the
+		// canonical composer / parser-helper pipeline consumes the
+		// authorization. Carries only values already safely observable
+		// at this seam (no command text, no paths, no env dump).
+		// Records the LIVE `resolveExperimentalSandboxMode()` value
+		// at this request — this is the load-bearing signal that
+		// distinguishes "runtime sandbox-mode divergence" from a
+		// downstream composer mutation. `baseMode` is intentionally
+		// omitted: it would require restructuring the host's
+		// `getCommandHostAuthorization` -> override -> envelope
+		// pipeline just to capture the pre-override value, and the
+		// per-ACT spec explicitly forbids that.
+		emitV2Capture({
+			codePoint: "approval.sdk-controller.authorization.v2",
+			data: {
+				sessionId: request.sessionId ?? "no-session",
+				resolvedMode: hostAuthorization.mode,
+				sandboxMode: resolveExperimentalSandboxMode() ?? "undefined",
+				mandatorySeatbelt: hostAuthorization.mandatorySeatbelt === true,
+				pathAuthorityEvidenceOk: hostAuthorization.pathAuthorityEvidence !== undefined,
+			},
+		})
 		if (request.toolName === "cancel_command") {
 			const cancelFn = options.evaluateCancel ?? evaluateCancelCommandToolApproval
 			const cancelResult = cancelFn(toolInput, hostAuthorization)
@@ -923,10 +977,7 @@ export class Controller {
 						// kernel-envelope invariant, NOT any user-facing toggle.
 						// The helper is pure and unit-tested at the producer
 						// seam; this call is the only production site.
-						hostAuthorization = applySeatbeltAuthorityEnvelope(
-							hostAuthorization,
-							resolveExperimentalSandboxMode(),
-						)
+						hostAuthorization = applySeatbeltAuthorityEnvelope(hostAuthorization, resolveExperimentalSandboxMode())
 					}
 					return { hostAuthorization, toolInput }
 				},
@@ -1179,8 +1230,7 @@ export class Controller {
 			sessionConfigBuilder: this.sessionConfigBuilder,
 			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
 			// mode-rebuild reads the bound override from the canonical store.
-			resolveSessionAutoApprovalOverride: (sessionId) =>
-				this.sessionAutoApproval.getOverride(sessionId),
+			resolveSessionAutoApprovalOverride: (sessionId) => this.sessionAutoApproval.getOverride(sessionId),
 			getTask: () => this.task,
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: async (sdkHost, sessionId) =>
@@ -1238,8 +1288,7 @@ export class Controller {
 			sessionConfigBuilder: this.sessionConfigBuilder,
 			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
 			// terminal-mode rebuild reads the bound override from the canonical store.
-			resolveSessionAutoApprovalOverride: (sessionId) =>
-				this.sessionAutoApproval.getOverride(sessionId),
+			resolveSessionAutoApprovalOverride: (sessionId) => this.sessionAutoApproval.getOverride(sessionId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: async (sdkHost, sessionId) =>
 				(await this.sessionHistory.loadInitialMessages(sdkHost, sessionId)) ?? [],
@@ -1273,7 +1322,14 @@ export class Controller {
 			},
 			runExclusive: (operation) => this.sessionRebuilds.runExclusive(operation),
 			getTask: () => this.task,
-			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) }),
+			createTempSessionHost: () =>
+				VscodeSessionHost.create({
+					mcpHub: this.mcpHub,
+					safeYoloCapabilitySource: () => ({
+						network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
+						sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
+					}),
+				}),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: (sessionHost, taskId) => this.sessionHistory.loadInitialMessages(sessionHost, taskId),
 			buildStartSessionInput,
@@ -1382,7 +1438,14 @@ export class Controller {
 			onAskResponse: (text, images, files) => this.askResponse(text, images, files),
 			onCancelTask: () => this.cancelTask(),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
-			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) }),
+			createTempSessionHost: () =>
+				VscodeSessionHost.create({
+					mcpHub: this.mcpHub,
+					safeYoloCapabilitySource: () => ({
+						network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
+						sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
+					}),
+				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
 			isClineManagedProviderActive: () => this.isClineManagedProviderActive(),
@@ -1408,7 +1471,14 @@ export class Controller {
 			taskHistory: this.taskHistory,
 			sessionConfigBuilder: this.sessionConfigBuilder,
 			getDisplayedTaskId: () => this.task?.taskId,
-			createTempSessionHost: () => VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) }),
+			createTempSessionHost: () =>
+				VscodeSessionHost.create({
+					mcpHub: this.mcpHub,
+					safeYoloCapabilitySource: () => ({
+						network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
+						sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
+					}),
+				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			postStateToWebview: () => this.postStateToWebview(),
@@ -2830,7 +2900,13 @@ export class Controller {
 		let tempHost: VscodeSessionHost | undefined
 		let sessionHost = activeSession?.sdkHost
 		if (!sessionHost) {
-			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) })
+			tempHost = await VscodeSessionHost.create({
+				mcpHub: this.mcpHub,
+				safeYoloCapabilitySource: () => ({
+					network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
+					sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
+				}),
+			})
 			sessionHost = tempHost
 		}
 		try {
@@ -3077,7 +3153,13 @@ export class Controller {
 		let tempHost: VscodeSessionHost | undefined
 		let sessionHost = activeSession?.sdkHost
 		if (!sessionHost) {
-			tempHost = await VscodeSessionHost.create({ mcpHub: this.mcpHub, safeYoloCapabilitySource: () => ({ network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"), sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent") }) })
+			tempHost = await VscodeSessionHost.create({
+				mcpHub: this.mcpHub,
+				safeYoloCapabilitySource: () => ({
+					network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
+					sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
+				}),
+			})
 			sessionHost = tempHost
 		}
 		try {

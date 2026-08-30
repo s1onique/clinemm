@@ -68,6 +68,45 @@
  *                                       whether the card row was
  *                                       actually persisted.)
  *
+ *   approval.sdk-controller.entry.v2   (request scope; ACT-CLINEMM-
+ *                                       SEATBELT-YOLO-APPROVAL-FRICTION-
+ *                                       RECON01-CORRECTION01 diagnostic.
+ *                                       Fires at the ENTRY of the
+ *                                       `evaluateCommandToolApproval`
+ *                                       callback returned by
+ *                                       `buildSdkControllerEvaluateCommandToolApproval`,
+ *                                       BEFORE the isCommandTool early
+ *                                       return and BEFORE the await on
+ *                                       `resolveHostAuthorization`. Tells
+ *                                       the operator whether the
+ *                                       SdkController-owned callback was
+ *                                       reached at all for this request.)
+ *   approval.sdk-controller.authorization.v2
+ *                                      (request scope; ACT-CLINEMM-
+ *                                       SEATBELT-YOLO-APPROVAL-FRICTION-
+ *                                       RECON01-CORRECTION01 diagnostic.
+ *                                       Fires immediately AFTER the
+ *                                       production `resolveHostAuthorization`
+ *                                       closure returns and BEFORE the
+ *                                       canonical composer consumes
+ *                                       the authorization. Carries
+ *                                       `sessionId`, the resolved
+ *                                       `hostAuthorization.mode`, the
+ *                                       LIVE `resolveExperimentalSandboxMode()`
+ *                                       read, `mandatorySeatbelt`, and
+ *                                       whether `pathAuthorityEvidence`
+ *                                       was supplied — so the operator
+ *                                       can distinguish authorization-
+ *                                       resolution divergence from
+ *                                       downstream composer mutation.
+ *                                       Note: `sessionOverride` is
+ *                                       intentionally NOT carried —
+ *                                       capturing it would require
+ *                                       restructuring the host's
+ *                                       override seam just for
+ *                                       diagnostics, which the per-ACT
+ *                                       spec explicitly forbids.)
+ *
  *   capture.attach.v1                  (PROCESS scope — fires once
  *                                       per extension-host startup
  *                                       when CLINEMM_CAPTURE_V2_PATH
