@@ -1,0 +1,9 @@
+RECON_ADVANCE_LOG (logged, not fatal)
+====================================
+
+FETCHED_AT        = 2026-08-30
+FETCH_CMD         = git fetch --prune upstream main
+RECON_SUBJECT_HEAD= 48d63852745460ff0fa3dfcc0457bbe2493841de
+FETCHED_HEAD      = 48d63852745460ff0fa3dfcc0457bbe2493841de
+STATUS            = NO_DRIFT
+PROCEED           = YES (frozen 17-conflict map applies unchanged)
