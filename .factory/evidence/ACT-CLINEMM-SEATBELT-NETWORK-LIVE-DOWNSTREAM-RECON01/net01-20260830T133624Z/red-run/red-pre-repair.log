@@ -1,0 +1,88 @@
+(node:18027) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:18028) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts (2 tests | 2 failed) 36ms
+     × RED-S0: shared host factory forwards safeYoloCapabilitySource (UI=true → network='allow' end-to-end) 13ms
+     × RED-S0-CARDINALITY: shared host factory forwards safeYoloCapabilitySource such that CommandJobManager calls the source exactly once per command build 1ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts > ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01 — RED (CASE S0) > RED-S0: shared host factory forwards safeYoloCapabilitySource (UI=true → network='allow' end-to-end)
+AssertionError: shared host factory MUST forward safeYoloCapabilitySource: expected 'undefined' to be 'function' // Object.is equality
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts:195:89
+    193|   expect(capturedOptions.current, "VscodeSessionHost.create must have …
+    194|   const forwarded = capturedOptions.current?.safeYoloCapabilitySource
+    195|   expect(typeof forwarded, "shared host factory MUST forward safeYoloC…
+       |                                                                                         ^
+    196|
+    197|   const snap = (forwarded as () => { network: boolean | undefined; ssh…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts > ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01 — RED (CASE S0) > RED-S0-CARDINALITY: shared host factory forwards safeYoloCapabilitySource such that CommandJobManager calls the source exactly once per command build
+AssertionError: expected 'undefined' to be 'function' // Object.is equality
+
+Expected: "function"
+Received: "undefined"
+
+ ❯ src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts:252:28
+    250|
+    251|   const forwarded = capturedOptions.current?.safeYoloCapabilitySource
+    252|   expect(typeof forwarded).toBe("function")
+       |                            ^
+    253|
+    254|   const backend = makeCaptureBackend()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  17:01:07
+   Duration  3.74s (transform 2.35s, setup 1.56s, import 2.04s, tests 36ms, environment 0ms)
+
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0
+[0m[31merror[0m[2m:[0m "[1mvitest[0m" exited with code 1

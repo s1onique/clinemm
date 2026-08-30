@@ -1,0 +1,158 @@
+{
+  "welcomeViewCompleted": true,
+  "__vscodeMigrationVersion": 3,
+  "clineVersion": "4.1.10-19abae18a",
+  "remoteRulesToggles": {},
+  "remoteWorkflowToggles": {},
+  "openAiHeaders": {},
+  "sapAiCoreUseOrchestrationMode": true,
+  "ocaMode": "internal",
+  "planModeApiProvider": "minimax",
+  "actModeApiProvider": "minimax",
+  "planModeOpenRouterModelId": "minimax/minimax-m2.7",
+  "actModeOpenRouterModelId": "minimax/minimax-m2.7",
+  "planModeOpenRouterModelInfo": {
+    "name": "MiniMax-M2.7",
+    "contextWindow": 204800,
+    "maxTokens": 131072,
+    "supportsPromptCache": true,
+    "inputPrice": 0.3,
+    "outputPrice": 1.2,
+    "supportsImages": false,
+    "supportsReasoning": true,
+    "cacheReadsPrice": 0.06,
+    "cacheWritesPrice": 0
+  },
+  "actModeOpenRouterModelInfo": {
+    "name": "MiniMax-M2.7",
+    "contextWindow": 204800,
+    "maxTokens": 131072,
+    "supportsPromptCache": true,
+    "inputPrice": 0.3,
+    "outputPrice": 1.2,
+    "supportsImages": false,
+    "supportsReasoning": true,
+    "cacheReadsPrice": 0.06,
+    "cacheWritesPrice": 0
+  },
+  "lastShownAnnouncementId": "4.1",
+  "dismissedBanners": [
+    {
+      "bannerId": "claude-sonnet-4-6-2026-feb-18",
+      "dismissedAt": 1775751965960
+    },
+    {
+      "bannerId": "minimax-m2.5-free-2026-feb-18",
+      "dismissedAt": 1775751967316
+    },
+    {
+      "bannerId": "chatgpt-integration-v1",
+      "dismissedAt": 1775751968458
+    },
+    {
+      "bannerId": "bnr-01KJ6C5Z35SR471YT7VB1TYM5K",
+      "dismissedAt": 1775751969576
+    },
+    {
+      "bannerId": "jupyter-notebooks-v1",
+      "dismissedAt": 1775751970432
+    },
+    {
+      "bannerId": "bnr-01KJZQW3Y3ACEJSAFS4BQDTK1F",
+      "dismissedAt": 1775751972140
+    },
+    {
+      "bannerId": "bnr-01KPBWCRVKR71TM232K3YQ5VQ2",
+      "dismissedAt": 1776641707222
+    },
+    {
+      "bannerId": "bnr-01KQ02NN40X7WTJMKQC610GS5M",
+      "dismissedAt": 1777554651552
+    },
+    {
+      "bannerId": "bnr-01KSR060R4NW9KA0X60QDF0J1V",
+      "dismissedAt": 1780549748641
+    },
+    {
+      "bannerId": "cline-pass-home-promo-v2",
+      "dismissedAt": 1783087400421
+    }
+  ],
+  "lastDismissedInfoBannerVersion": 1,
+  "mode": "act",
+  "autoApprovalSettings": {
+    "version": 2324,
+    "enabled": true,
+    "favorites": [],
+    "maxRequests": 20,
+    "actions": {
+      "readFiles": true,
+      "readFilesExternally": true,
+      "editFiles": true,
+      "editFilesExternally": true,
+      "executeSafeCommands": true,
+      "executeAllCommands": true,
+      "useBrowser": false,
+      "useMcp": true
+    },
+    "enableNotifications": false
+  },
+  "workspaceRoots": [
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/Projects/Znanie/roz_events",
+      "name": "roz_events",
+      "vcs": "git",
+      "commitHash": "c7210bc69f98ca906404f7a27adb4e693e058ac4"
+    }
+  ],
+  "primaryRootIndex": 0,
+  "globalWorkflowToggles": {},
+  "globalClineRulesToggles": {},
+  "vscodeTerminalExecutionMode": "backgroundExec",
+  "browserSettings": {
+    "viewport": {
+      "width": 900,
+      "height": 600
+    },
+    "remoteBrowserEnabled": false,
+    "remoteBrowserHost": "http://localhost:9222",
+    "chromeExecutablePath": "",
+    "disableToolUse": true,
+    "customArgs": ""
+  },
+  "defaultTerminalProfile": "zsh",
+  "subagentsEnabled": true,
+  "useAutoCondense": true,
+  "backgroundEditEnabled": true,
+  "isNewUser": false,
+  "openAiBaseUrl": "https://api.minimax.io/v1",
+  "planModeOpenAiModelId": "MiniMax-M3",
+  "actModeOpenAiModelId": "MiniMax-M3",
+  "azureApiVersion": "",
+  "planModeOpenAiModelInfo": {
+    "maxTokens": -1,
+    "contextWindow": 256000,
+    "supportsImages": true,
+    "supportsPromptCache": false,
+    "inputPrice": 0,
+    "outputPrice": 0,
+    "temperature": 0
+  },
+  "actModeOpenAiModelInfo": {
+    "maxTokens": -1,
+    "contextWindow": 256000,
+    "supportsImages": true,
+    "supportsPromptCache": false,
+    "inputPrice": 0,
+    "outputPrice": 0,
+    "temperature": 0
+  },
+  "planModeThinkingBudgetTokens": 6000,
+  "actModeThinkingBudgetTokens": 6000,
+  "remoteSkillsToggles": {},
+  "planModeApiModelId": "MiniMax-M3",
+  "actModeApiModelId": "MiniMax-M3",
+  "telemetrySetting": "enabled",
+  "planModeReasoningEffort": "medium",
+  "actModeReasoningEffort": "medium"
+}

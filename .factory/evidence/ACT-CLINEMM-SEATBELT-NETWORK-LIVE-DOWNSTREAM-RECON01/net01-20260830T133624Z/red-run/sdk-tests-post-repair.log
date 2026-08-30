@@ -1,0 +1,135 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+stdout | src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - REAL production seam GREEN > CommandJobManager.start with CLINEMM_SAFE_YOLO_NETWORK=allow: sandboxed connect reaches CONTROL (CONNECTED:$TOKEN)
+[90m[2026-08-30T14:03:47.976Z][39m [7m[31mERROR[39m[27m    Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1986:21)
+    at listenInCluster (node:net:2065:12)
+    at node:net:2274:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+[90m[2026-08-30T14:03:47.977Z][39m [7m[31mERROR[39m[27m    Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1986:21)
+    at listenInCluster (node:net:2065:12)
+    at node:net:2274:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+stdout | src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R6: network connectivity remains OPEN (carried invariant)
+[90m[2026-08-30T14:03:48.005Z][39m [7m[31mERROR[39m[27m    Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1986:21)
+    at listenInCluster (node:net:2065:12)
+    at node:net:2274:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+[90m[2026-08-30T14:03:48.006Z][39m [7m[31mERROR[39m[27m    Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1986:21)
+    at listenInCluster (node:net:2065:12)
+    at node:net:2274:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+ ❯ src/sdk/command-job-manager.sandbox-integration.test.ts (18 tests | 2 failed) 102ms
+     ✓ explicit opt-out (off): seeded parent env var reaches the child 18ms
+     ✓ invalid opt-in value: selector throws (fail closed; classic is NOT silently selected) 1ms
+     × with seatbelt opt-in on darwin, CLINEMM_PRODUCTION_TEST_LEAK_VAR is absent in actual child stdout 10ms
+     × with seatbelt opt-in on darwin, AWS_SECRET_ACCESS_KEY is absent in actual child stdout 0ms
+     ✓ with seatbelt opt-in, the prepared invocation's executable replaces the original 7ms
+     ✓ prepared envSemantics=complete is honored end-to-end (structurally) 7ms
+     ✓ with seatbelt opt-in + backend returning a different cwd, `pwd` reports the backend's cwd 6ms
+     ✓ explicit opt-out (off): supervisor uses caller's cwd unchanged 12ms
+     ✓ resolver returns undefined: command is not executed (spawn_failed) 0ms
+     ✓ real substrate unavailable on non-darwin: command is not executed 0ms
+     ✓ backend.prepare throws SandboxError: command is not executed (spawn_failed) 0ms
+     ✓ backend.prepare throws arbitrary Error: still fail-closed 0ms
+     ✓ resolver is invoked exactly once per start() when opt-in is set 8ms
+     ✓ resolver is NOT invoked when explicit opt-out (off) is selected 7ms
+     ✓ default (env unset): CommandCapability has NO sshAuthenticationAuthority field 6ms
+     ✓ CLINEMM_SAFE_YOLO_SSH_AGENT=allow: CommandCapability.sshAuthenticationAuthority.mode === 'agent' 6ms
+     ✓ CLINEMM_SAFE_YOLO_SSH_AGENT=deny (or any value other than 'allow'): no agent authority 6ms
+     ✓ CLINEMM_SAFE_YOLO_SSH_AGENT=allow WITHOUT seatbelt mode: no agent authority (mode-gated) 6ms
+ ❯ src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts (5 tests | 3 failed) 18ms
+     × RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED - projection must reset when the background job terminates 13ms
+     × NO_JOB_DONE_YIELDS_TO_USER - fast command completes synchronously, no orphaned job 2ms
+     ✓ INTENTIONAL_DETACH_TYPED_INTENT - production run_commands input schema has no typed intent field 1ms
+     ✓ TOOL_DESCRIPTION_PROVENANCE - production run_commands description mentions long-running + tmp-file guidance (does NOT prove the RUNNING(jobId) contract) 0ms
+     × TERMINAL_EVENT_CARDINALITY - terminalPromise resolves exactly once per job 1ms
+ ❯ src/sdk/vscode-run-commands-tool.background-state.test.ts (6 tests | 6 failed) 19ms
+     × emits onBackgroundStateChange(true, jobId) when the tool returns RUNNING 13ms
+     × emits onBackgroundStateChange(false, undefined) when the command completes before the wait budget 2ms
+     × RTP-LONG01: console-sh background job survives after the tool call returns and completes naturally (no cancel, no deadline) 1ms
+     × RTP-ASYNC01: when the tool returns RUNNING, the callback fires again with (false, undefined) after the process completes asynchronously 1ms
+     × RTP-MULTI01: projection stays true while at least one background job is still active (terminal-cardinality-safe) 1ms
+     × RTP-MULTI02: projection fires (true, jobId) when jobs start concurrently (0->N race-safe) 1ms
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts (21 tests | 11 failed) 19ms
+     × initializes a new task, emits the task message, and sends the resolved prompt 5ms
+     × omits images/files from the task message when the task has no attachments 2ms
+     × emits a Cline auth error instead of starting when the cline provider has no token 1ms
+     × emits a Cline auth error instead of starting when ClinePass has no token 0ms
+     × emits a plain chat error when session start fails (e.g. provider misconfigured) 1ms
+     × forwards task useAutoCondense=true into SDK session config inputs 0ms
+     × forwards task useAutoCondense=false into SDK session config inputs 0ms
+     ✓ reinitializes an existing task with preserved initial messages 1ms
+     ✓ falls back to the workspace root when a stored task cwd is unavailable 0ms
+     ✓ emits Cline auth errors when reinitialization fails due auth 0ms
+     × CORRECTION01-1: setTurnPhase is asserted with streaming at the canonical boundary (after startNewSession) 0ms
+     × CORRECTION02-1: setTurnPhase(streaming) is NOT asserted while startNewSession is pending, only after it resolves 0ms
+     × CORRECTION02-2: exactly one setTurnPhase(streaming) is emitted per logical new-task lifecycle 1ms
+     ✓ CORRECTION02-3: a synchronous throw from startNewSession does not assert streaming 0ms
+     × CORRECTION03-1: postStateToWebview fires after setTurnPhase(streaming); seed post fires before session resolves 0ms
+     ✓ CORRECTION01-2: setTurnPhase is NOT called when session start fails (preflight abort) 0ms
+     ✓ CORRECTION01-3: setTurnPhase is NOT called when the Cline auth preflight fires 0ms
+     ✓ CORRECTION02-4: reinitExistingTaskFromId also asserts streaming only after startNewSession resolves 0ms
+     ✓ CORRECTION02-5: reinitExistingTaskFromId emits exactly one setTurnPhase(streaming) 0ms
+     ✓ CORRECTION01-4: reinitExistingTaskFromId also asserts streaming at its boundary 0ms
+     ✓ CORRECTION02-6: SdkController.initTask and reinitExistingTaskFromId do NOT write streaming directly 2ms
+ ❯ src/sdk/sdk-session-event-coordinator.test.ts (29 tests | 1 failed) 19ms
+     ✓ translates and emits session messages, then posts state 3ms
+     ✓ filters late completion messages after cancellation 0ms
+     ✓ ignores stale events from inactive sessions 0ms
+     ✓ marks turns complete through the session lifecycle 0ms
+     ✓ posts state on turn end even when the turn-complete event carries NO messages 1ms
+     ✓ resolves the turn phase to 'error' when the turn surfaced a provider error 0ms
+     ✓ marks a submitted queued prompt as a new streaming turn 0ms
+     ✓ posts state for queued prompt turn start even when no transcript message is emitted 0ms
+     ✓ does NOT override the phase on a turn-complete straggler from an already-cancelled session 0ms
+     ✓ resolves the phase when a queued turn completes after its running flag was clobbered 0ms
+     ✓ updates task usage when the active session has a start result 0ms
+     ✓ zeros usage and api request message cost for free Cline models 0ms
+     ✓ leaves mistake-limit recovery to the SDK callback instead of mutating tool-error events 0ms
+     ✓ captures provider failure telemetry for SDK agent errors 0ms
+     ✓ does not capture provider failure telemetry for SDK agent errors without an error payload 0ms
+     ✓ does not capture provider failure telemetry for recoverable error events (mistake notices) 0ms
+     ✓ captures provider failure telemetry when the SDK finishes a turn with reason error 1ms
+     ✓ CRA02-coord: done with no committed terminal response DOES promote to awaiting_followup (liveness-corrected) 1ms
+     ✓ CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result 0ms
+     ✓ CRA03-coord: attemptCompletionSeen but no committed terminal response yields awaiting_followup (liveness-corrected, post-CPL04) 0ms
+     ✓ CPL01: done with no terminal response / no attempt-completion / no error transitions to awaiting_followup (liveness) 0ms
+     ✓ CPL02: done with committed terminal response AND attempt-completion transitions to completed (control: completion-tool path) 0ms
+     ✓ CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (structural/synthetic control) 0ms
+     ✓ CPL04: done with attempt-completion declared but NO committed terminal response yields awaiting_followup (liveness, symmetric to CPL01) 1ms
+     ✓ CPL05: done with error transitions to error (conservation) 0ms
+     × OWN01 RED: bare done + no terminal commit + no attempt_completion + no user-yield authority MUST NOT yield to awaiting_followup 5ms
+     ✓ T2-EXT01-A: terminal-push capture records (true, true); new-turn capture records (false, false); first is immutable 1ms
+     ✓ T2-EXT01-B: when only attempt_completion is observed (no terminal commit), terminal-push records (true, false) 0ms
+     ✓ T2-EXT01-C: a new-turn boundary reset is visible in the NEXT push only (first is immutable) 0ms
+ ❯ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts (23 tests | 2 failed) 175ms
+       ✓ Read disabled => approval UI opened 56ms
+       ✓ Read disabled + override all => auto-approved without approval UI 0ms
+       ✓ Edit disabled + override all => auto-approved without approval UI 0ms
+       ✓ Web disabled + override all => auto-approved without approval UI 0ms
+       ✓ ordinary unsafe-but-not-hard-denied command + override all => ALLOW 4ms
+       × safe-only persisted + override all => ALLOW (override wins over safe-only mode) 5ms
+       ✓ override all + host_hard_deny rule => DENY (no approval UI) 1ms
+       ✓ override all + execution_plan_invalid => DENY (real mode:all + allow rules) 0ms
+       ✓ simulated clearTask destroys the override (next override=query returns none) 0ms
+       ✓ task B begins with a different session id: override bound to task A does NOT leak 0ms
+       × override all + requires_approval=true => ALLOW (not ASK) 1ms
+       ✓ getOverride is PURE: it does NOT consume the arm across reads 0ms
+       ✓ consumePendingOverride binds the arm to a session id and clears it 0ms
+       ✓ consumePendingOverride is a no-op when no arm is set 0ms
+       ✓ clearActiveOverride destroys the bound override only (arm survives) 0ms
+       ✓ clearPendingArm destroys the arm only (bind survives) 0ms
+       ✓ clearSessionAutoApproval destroys both (full reset) 0ms
+       ✓ setOverride(undefined, 'none') clears both arm and bind (UI toggle off) 0ms
+       ✓ base explicitDenyRules survive session override=all in the composed auth 0ms
+     ✓ figma-desktop/get_metadata + session ALL + persisted MCP=false => ALLOW, no approval UI 0ms
+     ✓ figma-desktop/get_metadata + override=none + persisted MCP=false => ASK (regression baseline) 52ms
+     ✓ pre-arm ALL → new session consumes ALL → Figma MCP ALLOW on first call 0ms
+     ✓ task ends ⇒ persisted MCP behavior restored ⇒ Figma MCP back to ASK 52ms

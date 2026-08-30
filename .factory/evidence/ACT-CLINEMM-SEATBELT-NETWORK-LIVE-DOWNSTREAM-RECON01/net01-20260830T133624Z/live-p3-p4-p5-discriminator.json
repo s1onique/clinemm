@@ -1,0 +1,38 @@
+{
+  "act": "ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01",
+  "run_id": "net01-20260830T133624Z",
+  "evidence_class": "REAL/LIVE/REAL_PRODUCTION_SEAM",
+  "captured_at": "2026-08-30T13:36:24Z",
+  "freeze_at": "2026-08-30T16:53Z",
+  "specimen": {
+    "file": "live-p3-p4-p5-specimen.jsonl",
+    "sha256": "b26604f43fcb77467445ac99af870baef0353de2ad62ab2287138bae1efc653d",
+    "event_count": 441,
+    "prepareCallIds": "1..147"
+  },
+  "globalState_at_capture": {
+    "file": "globalState.json",
+    "sha256": "af58162d60903bfa1b2a84cec3fc039846a4b33fe35b23528f1ce4961314e99f",
+    "clineVersion": "4.1.10-c59c835da",
+    "clinemmSafeYoloAllowNetwork": true,
+    "clinemmSafeYoloAllowSshAgent": true
+  },
+  "live_load_bearing_facts": {
+    "P3_all_capabilityNetwork": "deny",
+    "P4_all_networkRule": "(deny network*)",
+    "P5_all_argv_profilePath_match_P4": true,
+    "P5_executable": "/usr/bin/sandbox-exec",
+    "P5_argv": [
+      "-f",
+      "<profilePath>",
+      "/bin/zsh",
+      "-c",
+      "<command>"
+    ],
+    "P5_argv_profile_path_identity": "bound"
+  },
+  "p3_p4_consistency": "YES",
+  "profile_path_invocation_bound": "YES",
+  "profile_generator_cause_exonerated": "YES_FOR_THIS_TRANSACTION",
+  "first_divergence": "UPSTREAM_OF_BACKEND_PREPARE"
+}
