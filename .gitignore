@@ -420,6 +420,24 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01/
 
 
+# ACT-CLINEMM-TASK-CANCEL-UI-RECON01: source-tree recon (no production
+# change) for the user's reported "actively working task no longer shows
+# Cancel button" observation. Verdict PASS_TASK_CANCEL_UI_RECON_NO_DEFECT_FROM_SOURCE_V1:
+# Cancel button structure is byte-identical upstream vs ClineMM; the
+# render predicate (turnState.phase === "streaming") is exhaustively
+# pinned by 33+ production-seam tests (aoc02 9/9 + aoc01 4/4 +
+# sdk-task-control 20/20, all PASS); backend cancel pipeline
+# (SdkTaskControlCoordinator.cancelTask -> sdkHost.abort) is healthy.
+# Halts at NOT_REPRODUCED_AS_GLOBAL_MISSING_CANCEL (reviewer §11 CASE C5);
+# no production repair authorized without LIVE state capture at the
+# moment of observation. The ACT file and its evidence directory must
+# survive a fresh clone so the verdict and the source-seam map remain
+# bound to the recon trigger (mirroring the prior upstream-sync ACTs'
+# durability pattern).
+!/.factory/acts/ACT-CLINEMM-TASK-CANCEL-UI-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-TASK-CANCEL-UI-RECON01/
+
+
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).
 # apps/vscode/.factory/evidence/ holds generated local evidence from dogfood / seatbelt
 # qualification runs and must NOT block exact-head VSIX packaging (build-dogfood-vsix.py
