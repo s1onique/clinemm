@@ -219,12 +219,26 @@ export {
 	type EnvironmentCapability,
 	type EnvironmentSemantics,
 	type SandboxBackend,
+	type SandboxBackendDiagnosticObserver,
 	type SandboxBackendOptIn,
 	SandboxError,
 	type SandboxMode,
 	type SandboxNetwork,
 	type SandboxPreparedInvocation,
 } from "../../../../sdk/packages/core/src/runtime/sandbox/types"
+// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+// Re-export the Seatbelt singleton + substrate probe + diagnostic
+// observer setter + accessor so the apps/vscode vitest suites (which
+// alias `@cline/core` to this stub) can construct the REAL backend
+// in tests. The SDK source IS the production code path; this is
+// purely a resolution bridge.
+export {
+	getSeatbeltDiagnosticObserver,
+	probeSeatbeltAvailability,
+	SANDBOX_EXEC_PATH,
+	SeatbeltSandboxBackendExperimental,
+	setSeatbeltDiagnosticObserver,
+} from "../../../../sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend"
 export { projectSessionMessagesForDisplay } from "../../../../sdk/packages/core/src/session/display-messages"
 
 // Real file-read executor (dependency-light: node:fs/node:path + @cline/shared/storage)

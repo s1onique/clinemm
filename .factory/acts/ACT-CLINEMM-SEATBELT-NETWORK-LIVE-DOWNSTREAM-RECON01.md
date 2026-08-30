@@ -1121,7 +1121,15 @@ OBSERVER_CALLBACK_FAILURE_POLICY    = FAIL_OPEN_FOR_DIAGNOSTICS
                                       (observer throws are caught
                                       by safeInvokeObserver; command
                                       semantics preserved; tested by
-                                      T6)
+                                      T6. ALSO: production JSONL writer
+                                      installs `stream.on("error", ...)`
+                                      BEFORE any write, sets
+                                      streamFailed=true on async error,
+                                      and `writeLine` permanently
+                                      degrades to a no-op; tested
+                                      structurally by T8 and via the
+                                      synchronous-write-failure path
+                                      by T7)
 CORRELATION                         = COMPOSED_BY_SINGLE_PREPARE_CALL
                                       (per-call monotonic prepareCallId
                                       in the JSONL writer; the

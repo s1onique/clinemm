@@ -137,9 +137,37 @@ function buildSandboxDiagObserver(): SandboxBackendDiagnosticObserver | null {
 		`default-${process.pid}-${Date.now()}`
 	const outputPath = join(dataDir, "sandbox-diag", `${runId}.jsonl`)
 
+	let streamOk = false
 	try {
 		mkdirSync(join(dataDir, "sandbox-diag"), { recursive: true })
 		const stream = createWriteStream(outputPath, { flags: "a" })
+
+		// P0 (factory reviewer verdict 2026-08-30):
+		// `createWriteStream()` reports MOST filesystem failures
+		// asynchronously through the stream's `'error'` event.
+		// Without an error listener, an `'error'` event becomes an
+		// UNHANDLED EventEmitter error and TERMINATES THE PROCESS.
+		// That directly violates the load-bearing contract that
+		// "diagnostic failure != production availability failure".
+		// We install a listener BEFORE any write happens. Once the
+		// stream enters a failed state, `writeLine` permanently
+		// degrades to a no-op (the `streamFailed` flag).
+		let streamFailed = false
+		stream.on("error", (err) => {
+			streamFailed = true
+			// Best-effort stderr log; do NOT re-throw (a process
+			// crash from an unhandled stream error is the exact
+			// failure mode we are guarding against).
+			try {
+				process.stderr.write(
+					`[sandbox-diag] stream error on ${outputPath}: ${err instanceof Error ? err.message : String(err)}\n`,
+				)
+			} catch {
+				// stderr write itself can fail. Swallow.
+			}
+		})
+		streamOk = true
+
 		// Correlation invariant: the same prepare() call produces
 		// all three callbacks. We tag each line with a monotonic
 		// prepare-counter (NOT a jobId; the production code does
@@ -148,7 +176,16 @@ function buildSandboxDiagObserver(): SandboxBackendDiagnosticObserver | null {
 		// the three lines share `prepareCallId`.
 		let prepareCallId = 0
 		const writeLine = (event: string, payload: Record<string, unknown>) => {
+			// Hard fail-open: any of these conditions degrades to
+			// a no-op without throwing. The stream is owned by this
+			// closure and never escapes, so we can safely mutate
+			// `streamFailed` here.
+			if (streamFailed) return
 			try {
+				if (stream.destroyed) {
+					streamFailed = true
+					return
+				}
 				stream.write(
 					JSON.stringify({
 						ts: new Date().toISOString(),
@@ -158,7 +195,7 @@ function buildSandboxDiagObserver(): SandboxBackendDiagnosticObserver | null {
 					}) + "\n",
 				)
 			} catch {
-				// Best-effort write; do not throw out of an observer.
+				streamFailed = true
 			}
 		}
 		const observer: SandboxBackendDiagnosticObserver = {
@@ -204,6 +241,7 @@ function buildSandboxDiagObserver(): SandboxBackendDiagnosticObserver | null {
 		} catch {
 			// stderr write itself can fail (rare). Swallow.
 		}
+		void streamOk
 		return null
 	}
 }

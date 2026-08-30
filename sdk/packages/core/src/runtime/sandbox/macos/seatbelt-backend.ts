@@ -32,10 +32,10 @@
  * posture — see recon evidence `final-assessment.md`.
  */
 
-import { lstatSync, mkdtempSync, rmSync, writeFileSync, createHash } from "node:fs";
+import { lstatSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import { canonicalizeSandboxRoot } from "../canonical-paths";
 import { materializeEnvironment, getEnvironmentSemantics } from "../environment";
@@ -43,6 +43,12 @@ import {
 	SANDBOX_EXEC_PATH,
 	probeSeatbeltAvailability,
 } from "./seatbelt-availability";
+
+// Re-export so tests outside the SDK package can construct
+// fixtures (the apps/vscode vitest stub re-exports the Seatbelt
+// module wholesale). The values are immutable platform constants;
+// no additional SDK surface is added.
+export { probeSeatbeltAvailability, SANDBOX_EXEC_PATH }
 import { generateSeatbeltProfile } from "./seatbelt-profile";
 import type {
 	CommandCapability,
