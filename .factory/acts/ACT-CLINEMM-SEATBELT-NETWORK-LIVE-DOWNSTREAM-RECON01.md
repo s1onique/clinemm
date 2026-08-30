@@ -1,5 +1,30 @@
 # ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01
 
+> **Status (at closure, 2026-08-30)**: CLOSED / PASS_LIVE_SANDBOX_NETWORK_SOURCE_BINDING_REPAIR_V1 / CAUSE=SOURCE_OMITTED
+>
+> **Closure verdict**:
+> ```text
+> PASS_LIVE_SANDBOX_NETWORK_SOURCE_BINDING_REPAIR_V1
+>   CAUSE = SOURCE_OMITTED
+>   The LIVE primary session host factory
+>   (SdkSessionLifecycle.getOrCreateSharedHost at
+>    apps/vscode/src/sdk/sdk-session-lifecycle.ts:528-562) was
+>   missing safeYoloCapabilitySource. The 5 SdkController.ts
+>   createTempSessionHost callsites (lines 1216/1324/1350/2660/2907)
+>   were correctly wired; the 6th callsite — the one used for every
+>   new-task and resume-from-history session — was not.
+> ```
+>
+> **Closure commits**:
+> ```text
+> 24dc72ebf  fix(sandbox): bind live network setting to command capability
+> bd1050299  evidence(factory): seatbelt network downstream recon live specimen + RED/GREEN
+> ```
+>
+> **Operator-driven next steps** (deferred per directive):
+> VSIX build + install + live GREEN + upstream-fetch qualification
+> (C26–C31) are operator-executed.
+
 > **Status (at open)**: OPEN / HIGH / RECON / HOST_REQUIRED
 >
 > **Predecessor**: `ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01`

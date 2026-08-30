@@ -1,0 +1,154 @@
+(node:21614) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:21615) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21620) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21616) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21619) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21617) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21618) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/__tests__/seatbelt-network-live-downstream-recon01.c1-observer.test.ts (8 tests | 7 skipped) 2ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/seatbelt-network-live-downstream-recon01.c1-observer.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c2-red-production-chain.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — production chain > LEGACY-ABSENT — capability.network must be 'allow' (env wins) per documented invariant
+[GREEN ref] legacy absent → cap.network = allow
+
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c2-red-production-chain.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — production chain > TOGGLE-ON — capability.network must be 'allow' (persisted wins)
+[GREEN ref] toggle-on → cap.network = allow
+
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c2-red-production-chain.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — production chain > TOGGLE-OFF — capability.network must be 'deny' (persisted wins over env allow)
+[GREEN ref] toggle-off + env=allow → cap.network = deny
+
+ ✓ src/sdk/__tests__/sandbox-capabilities-live-regression01.c2-red-production-chain.test.ts (3 tests) 13ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c2-red-production-chain.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/seatbelt-network-egress-recon01.c4-real-kernel-three-point.test.ts (8 tests | 4 skipped) 4ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/seatbelt-network-egress-recon01.c4-real-kernel-three-point.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c1-red-h2-legacy-absence.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — H2 RED > hydrates ABSENT clinemmSafeYoloAllowNetwork — observe what the closure receives
+[RED] hydrated.clinemmSafeYoloAllowNetwork after legacy read: undefined typeOf= undefined
+[RED] snap.network = undefined snap.sshAgent = undefined
+
+ ✓ src/sdk/__tests__/sandbox-capabilities-live-regression01.c1-red-h2-legacy-absence.test.ts (1 test) 2173ms
+     ✓ hydrates ABSENT clinemmSafeYoloAllowNetwork — observe what the closure receives  2172ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c1-red-h2-legacy-absence.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/sandbox-capabilities-live-regression01.c3-green-state-manager-roundtrip.test.ts (8 tests) 2176ms
+     ✓ T01: ABSENT key stays undefined through hydration  2171ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c3-green-state-manager-roundtrip.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — CORRECTION02 production binding > CORRECTION02-2: lifecycle (absent → StateManager.setGlobalState(true) → next command observes the change)
+[CORRECTION02-2 initial] cache.network = undefined
+
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — CORRECTION02 production binding > CORRECTION02-2: lifecycle (absent → StateManager.setGlobalState(true) → next command observes the change)
+[CORRECTION02-2] cmd1 (absent) capability.network = allow
+
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — CORRECTION02 production binding > CORRECTION02-2: lifecycle (absent → StateManager.setGlobalState(true) → next command observes the change)
+[CORRECTION02-2] after toggle cache.network = true
+
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — CORRECTION02 production binding > CORRECTION02-2: lifecycle (absent → StateManager.setGlobalState(true) → next command observes the change)
+[CORRECTION02-2] cmd2 (true)  capability.network = allow
+
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — CORRECTION02 production binding > CORRECTION02-1: real StateManager=true → production closure shape → network='allow'
+[CORRECTION02-1] closure.network = true
+
+stdout | src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts > ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 — CORRECTION02 production binding > CORRECTION02-1: real StateManager=true → production closure shape → network='allow'
+[CORRECTION02-1] backend.prepare capability.network = allow
+
+ ✓ src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts (2 tests) 35ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/sandbox-capabilities-live-regression01.c4-red-explicit-true-path.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+ Test Files  6 passed (6)
+      Tests  19 passed | 11 skipped (30)
+   Start at  17:09:59
+   Duration  4.02s (transform 9.49s, setup 10.00s, import 2.36s, tests 4.40s, environment 0ms)
+
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0
+[0m[31merror[0m[2m:[0m "[1mvitest[0m" exited with code 1
