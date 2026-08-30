@@ -179,9 +179,9 @@ function computeProfileFingerprint(
  * apps/vscode/src/sdk/__tests__/seatbelt-network-live-downstream-
  * recon01.c1-observer.test.ts test T6.
  */
-function safeInvokeObserver(
-	callback: ((arg: unknown) => void) | undefined,
-	arg: unknown,
+function safeInvokeObserver<A>(
+	callback: ((arg: A) => void) | undefined,
+	arg: A,
 ): void {
 	if (typeof callback !== "function") return;
 	try {

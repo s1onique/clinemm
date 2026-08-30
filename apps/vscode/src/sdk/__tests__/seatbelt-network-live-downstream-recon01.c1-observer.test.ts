@@ -13,14 +13,26 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
 	type CommandCapability,
 	type CommandInvocation,
-	getSeatbeltDiagnosticObserver,
-	probeSeatbeltAvailability,
 	type SandboxBackendDiagnosticObserver,
 	type SandboxPreparedInvocation,
-	SANDBOX_EXEC_PATH,
-	SeatbeltSandboxBackendExperimental,
 	setSeatbeltDiagnosticObserver,
 } from "@cline/core"
+
+// `getSeatbeltDiagnosticObserver` is intentionally NOT exported
+// from `@cline/core`'s public package surface (it is a test-only
+// assertion accessor per the factory reviewer's P1 #2 verdict;
+// production code MUST NOT use it). Tests reach the Seatbelt
+// singleton + probe + diagnostic accessor via the apps/vscode
+// vitest stub (src/test/cline-core-vitest-stub.ts), which
+// re-exports them from the SDK source path. The relative import
+// below bypasses the `@cline/core` package alias and goes
+// straight to the stub file.
+import {
+	getSeatbeltDiagnosticObserver,
+	probeSeatbeltAvailability,
+	SANDBOX_EXEC_PATH,
+	SeatbeltSandboxBackendExperimental,
+} from "../../test/cline-core-vitest-stub"
 
 const HAS_SUBSTRATE =
 	process.platform === "darwin" && probeSeatbeltAvailability()
