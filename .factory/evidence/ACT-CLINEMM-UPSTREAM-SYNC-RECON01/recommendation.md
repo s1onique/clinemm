@@ -34,7 +34,9 @@ UPSTREAM_ONLY_COMMITS = 177
 RECON_SUBJECT_HEAD    = 48d63852745460ff0fa3dfcc0457bbe2493841de
                        (P1 bounded correction: pin upstream by SHA;
                         successor must merge THIS exact object,
-                        not an implicitly-moving upstream/main)
+                        not an implicitly-moving upstream/main.
+                        See §"Drift-handling policy" for how drift is
+                        logged-but-not-fatal.)
 RECON_SUBJECT_TREE    = 14500ceda6208e38fc6cf2289efd5156d44ca46e
 ```
 ## Counts
@@ -49,7 +51,9 @@ CHANGED_IN_BOTH_COUNT     = 54  (merge-tree section; 1 less than
                                  merge-tree. See conflict-preview.txt
                                  §"55-vs-54 NOTE".)
 CONFLICT_FILES            = 17  (merge-tree --write-tree; authoritative)
-AUTO_MERGE_FILES          = 37  (54 - 17)
+AUTO_MERGE_FILES          = 38  (= 55 - 17, intersection minus conflicts)
+BASE_PRESENT_CONFLICTS    = 16  (CONFLICT (content) entries)
+ADD_ADD_CONFLICTS         = 1   (useProviderUsageCostDisplay.test.ts)
 MECHANICAL_CONFLICTS      = 6
 SEMANTIC_CONFLICTS        = 7
 SECURITY_CRITICAL_CONFLICTS = 4  (state.proto, SdkController.ts,
@@ -102,18 +106,25 @@ Doctrine: temporary integration branch, no rebase of canonical main, historical 
 ```bash
 RECON_SUBJECT_HEAD=48d63852745460ff0fa3dfcc0457bbe2493841de
 
-# step 0 (optional): re-fetch upstream to confirm the subject head has not
-#                   advanced; record any new head and decide whether to
-#                   reopen this ACT or proceed with the pinned subject.
+# step 0: re-fetch upstream; LOG drift but do NOT halt on it.
+#         The whole point of pinning by SHA is that we can execute
+#         even if upstream has advanced. Reopen recon only if the new
+#         commits introduce a P0/security issue or you explicitly
+#         decide staying current is worth invalidating the frozen
+#         17-conflict map.
 git fetch --prune upstream main
 FETCHED_UPSTREAM_HEAD=$(git rev-parse upstream/main)
 if [ "$FETCHED_UPSTREAM_HEAD" != "$RECON_SUBJECT_HEAD" ]; then
     echo "upstream advanced from $RECON_SUBJECT_HEAD to $FETCHED_UPSTREAM_HEAD"
-    echo "Re-open ACT-CLINEMM-UPSTREAM-SYNC-RECON01 with the new subject."
-    exit 1
+    echo "RECON_ADVANCE_LOG: pinned subject is still the merge target."
+    echo "RECON_ADVANCE_LOG: review the new commits for P0/security;"
+    echo "RECON_ADVANCE_LOG: if none, proceed with the frozen subject."
+    # DO NOT exit 1 — that would force a pointless new recon for
+    # any README/release commit that lands while we are executing.
+    # Record the drift and continue.
 fi
 
-# step 1: branch off the pinned subject head (not upstream/main)
+# step 1: branch off the pinned subject head (NOT upstream/main)
 git switch -c factory/upstream-sync-<date>
 git merge --no-ff $RECON_SUBJECT_HEAD
 
@@ -132,7 +143,7 @@ git merge --no-ff factory/upstream-sync-<date>
 # step 5: update factory/inventories/repository.json and .factory/epic-board.md
 ```
 
-The merge target is the **exact recon subject** `48d63852745460ff0fa3dfcc0457bbe2493841de`, not an implicitly-moving `upstream/main`. A 178th upstream commit silently landing between recon and execution would invalidate the 17-conflict map; pinning by SHA catches that.
+The merge target is the **exact recon subject** `48d63852745460ff0fa3dfcc0457bbe2493841de`, not an implicitly-moving `upstream/main`. A 178th upstream commit silently landing between recon and execution would invalidate the 17-conflict map; pinning by SHA makes the integration **decoupled** from `upstream/main` drift. Per the policy adjustment below, drift is **logged, not fatal** — the integration subject is frozen regardless.
 
 ### Conflict resolution order (frozen)
 
@@ -159,6 +170,32 @@ git push --force-with-lease         # would rewrite ClineMM history
 git stash pop stash@{0}             # would surface Seatbelt WIP that must remain WIP
 git reset --hard                    # would destroy evidence anchors
 ```
+
+### Drift-handling policy (P1 bounded correction, post-review)
+
+A naive "if upstream/main != pinned subject → exit 1" rule is too strict:
+it forces a pointless new recon for any README/release commit that lands
+while the successor is mid-execution. The whole point of pinning by SHA is
+that the integration subject is **frozen regardless of upstream drift**.
+
+The successor's drift-handling rule is therefore:
+
+```
+1. Re-fetch upstream.
+2. Compare FETCHED_UPSTREAM_HEAD with RECON_SUBJECT_HEAD.
+3. If equal: proceed silently.
+4. If different: LOG the drift (RECON_ADVANCE_LOG: ...), then
+   (a) spot-check the new commits for P0/security issues
+       (new auth flow, sandbox escape, proto renumbering, dependency
+       RCE, etc.),
+   (b) if none, proceed with the frozen subject and the frozen
+       17-conflict map,
+   (c) if yes, halt as HALT_UPSTREAM_ADVANCE_P0 and re-open
+       ACT-CLINEMM-UPSTREAM-SYNC-RECON01 with the new subject.
+```
+
+This matches the Factory objective (freeze bounded contract → execute
+it) rather than continuously chasing a moving branch.
 
 ## Qualification set (frozen)
 

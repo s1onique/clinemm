@@ -58,7 +58,9 @@ INTERSECTION_COUNT      = 55 (from `git diff --name-only merge-base..HEAD` and
                                   `git diff --name-only merge-base..upstream/main`
                                   intersected via `comm -12`)
 CHANGED_IN_BOTH_COUNT    = 54 (from `git merge-tree --write-tree --messages`)
-AUTO_MERGE_FILES         = 37 (= 54 - 17)
+AUTO_MERGE_FILES         = 38 (= 55 - 17, intersection minus conflicts)
+BASE_PRESENT_CONFLICTS   = 16 (CONFLICT (content) entries)
+ADD_ADD_CONFLICTS        = 1  (useProviderUsageCostDisplay.test.ts)
 CONFLICT_FILES           = 17
 
 The 1-file difference is `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts`:
@@ -71,6 +73,35 @@ The 1-file difference is `apps/vscode/webview-ui/src/hooks/useProviderUsageCostD
 - Both numbers are correct for what they measure. Successor tooling should
   derive `CONFLICT_FILES = 17` from `merge-tree --messages` (the authoritative
   conflict set) and ignore the 1-file `intersection - changed-in-both` delta.
+
+### Why AUTO_MERGE = 38, not 37 (arithmetic correction)
+
+The earlier recon draft computed `AUTO_MERGE = 54 - 17 = 37`, which is wrong
+because the add/add test is **double-subtracted**: it is in INTERSECTION
+(55) but NOT in CHANGED_IN_BOTH (54), so subtracting all 17 conflicts from
+the 54-set removes it zero times and from the 55-set removes it once.
+
+The correct accounting decomposes the 17 conflicts into:
+
+```
+BASE_PRESENT_CONFLICTS = 16   (CONFLICT (content) entries — these are in
+                              CHANGED_IN_BOTH)
+ADD_ADD_CONFLICTS      = 1    (useProviderUsageCostDisplay.test.ts — this is
+                              in INTERSECTION but not in CHANGED_IN_BOTH)
+TOTAL                  = 17
+```
+
+And the auto-merge count is the same by either path:
+
+```
+AUTO_MERGE = INTERSECTION - TOTAL_CONFLICTS
+           = 55 - 17
+           = 38
+
+AUTO_MERGE = CHANGED_IN_BOTH - BASE_PRESENT_CONFLICTS
+           = 54 - 16
+           = 38
+```
 
 This does not block the merge; the 17 real conflicts come directly from
 merge-tree regardless.

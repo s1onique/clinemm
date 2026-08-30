@@ -27,9 +27,8 @@ UPSTREAM_ONLY_COMMITS = 177
 RECON_SUBJECT_HEAD   = 48d63852745460ff0fa3dfcc0457bbe2493841de
                       (pin upstream by SHA; successor must merge
                        THIS exact object, not an implicitly-moving
-                       upstream/main. See recommendation.md §
-                       "Integration strategy" for the halt-on-drift
-                       guard.)
+                       upstream/main. Drift is logged-but-not-fatal;
+                       see recommendation.md §"Drift-handling policy".)
 PROTECTED_STASHES_PRESERVED = 2  (untouched)
 ```
 
@@ -54,7 +53,9 @@ CHANGED_IN_BOTH_COUNT     = 54  (merge-tree section; 1 less because the
                                 add/add test file is reported separately.
                                 See conflict-preview.txt §"55-vs-54 NOTE".)
 CONFLICT_FILES            = 17  (merge-tree --write-tree; authoritative)
-AUTO_MERGE_FILES          = 37  (54 - 17)
+AUTO_MERGE_FILES          = 38  (= 55 - 17, intersection minus conflicts)
+BASE_PRESENT_CONFLICTS    = 16  (CONFLICT (content) entries)
+ADD_ADD_CONFLICTS         = 1   (useProviderUsageCostDisplay.test.ts)
 SEMANTIC_OVERLAPS         = 6 high-value (Completion, QPSR/RSR, Editor tool,
                                 Sandbox, Settings, SDK runtime)
 TRUST_BOUNDARY_OVERLAPS   = 4 (state.proto, SdkController.ts, bash.ts,
@@ -138,36 +139,64 @@ All C01-C21 PASS — see `.factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-RECON01/re
 
 ## Post-review corrections (recon ACT halts clean)
 
-This recon ACT was reviewed before closure. The review surfaced three bounded corrections, all applied in this commit:
+This recon ACT was reviewed before closure. Two review rounds were completed; the second round surfaced two more bounded corrections, all applied across two commits:
 
 ```
-P0  = NONE
-P1  = ONE_BOUNDED_EVIDENCE_CORRECTION
-P2  = DOCUMENTARY_RESIDUE
+ROUND 1 (commit be6c3fb75 -> 730a58954):
+  P0  = NONE
+  P1  = ONE_BOUNDED_EVIDENCE_CORRECTION
+  P2  = DOCUMENTARY_RESIDUE
 
-P1: conflict taxonomy inconsistency
-    - First draft introduced a GENERATED class for the add/add test.
-    - Post-review freeze uses four classes only (MECHANICAL, SEMANTIC,
-      SECURITY_CRITICAL, FACTORY_ONLY); the add/add test is SEMANTIC.
-    - conflict-classification.tsv, conflict-preview.txt, recommendation.md,
-      and this ACT body all now agree.
+  P1: conflict taxonomy inconsistency
+      - First draft introduced a GENERATED class for the add/add test.
+      - Post-review freeze uses four classes only (MECHANICAL, SEMANTIC,
+        SECURITY_CRITICAL, FACTORY_ONLY); the add/add test is SEMANTIC.
+      - conflict-classification.tsv, conflict-preview.txt, recommendation.md,
+        and this ACT body all now agree.
 
-P2: 55-vs-54 overlap accounting
-    - One-sentence explanation added to conflict-preview.txt §"55-vs-54 NOTE".
+  P2: 55-vs-54 overlap accounting
+      - One-sentence explanation added to conflict-preview.txt §"55-vs-54 NOTE".
 
-P2: ACT markdown assembly damage
-    - Top 12 table restored; section ordering corrected.
+  P2: ACT markdown assembly damage
+      - Top 12 table restored; section ordering corrected.
 
-P1 (execution-contract): pin upstream by SHA
-    - RECON_SUBJECT_HEAD = 48d63852745460ff0fa3dfcc0457bbe2493841de
-    - Successor must merge THIS exact object, not upstream/main.
-    - Halt-on-drift guard added to integration strategy in recommendation.md.
+  P1 (execution-contract): pin upstream by SHA
+      - RECON_SUBJECT_HEAD = 48d63852745460ff0fa3dfcc0457bbe2493841de
+      - Successor must merge THIS exact object, not upstream/main.
+      - Halt-on-drift guard added to integration strategy in recommendation.md.
 
-P1 (qualification set): F27 added
-    - SHARED_HOST_SAFE_YOLO_SOURCE_BINDING regression test is mandatory
-      post-merge. SdkController.ts and vscode-session-host.ts are both
-      conflict files while sdk-session-lifecycle.ts auto-merges; this is
-      precisely where a syntactically-clean merge can silently break the
+  P1 (qualification set): F27 added
+      - SHARED_HOST_SAFE_YOLO_SOURCE_BINDING regression test is mandatory
+        post-merge. SdkController.ts and vscode-session-host.ts are both
+        conflict files while sdk-session-lifecycle.ts auto-merges; this is
+        precisely where a syntactically-clean merge can silently break the
+        newly-repaired live source binding. Failure halts as
+        HALT_SHARED_HOST_SOURCE_BINDING_LOST.
+
+ROUND 2 (this commit):
+  P0  = NONE
+  P1  = ONE_ARITHMETIC_RESIDUE (FIX_OPPORTUNISTICALLY)
+  P1  = ONE_POLICY_REFINEMENT (LOG_DONT_HALT)
+  P2  = NONE
+
+  P1: arithmetic residue
+      - Earlier draft: AUTO_MERGE = 54 - 17 = 37  (WRONG, double-subtracts
+        the add/add test that is in INTERSECTION but not in CHANGED_IN_BOTH).
+      - Correct accounting:
+          BASE_PRESENT_CONFLICTS = 16
+          ADD_ADD_CONFLICTS      = 1
+          AUTO_MERGE = INTERSECTION - TOTAL_CONFLICTS = 55 - 17 = 38
+          AUTO_MERGE = CHANGED_IN_BOTH - BASE_PRESENT_CONFLICTS = 54 - 16 = 38
+      - Fixed in conflict-preview.txt, recommendation.md, this ACT body.
+
+  P1: policy refinement
+      - Earlier runbook: "if upstream/main != RECON_SUBJECT_HEAD -> exit 1"
+        (too strict; forces pointless new recon for any README/release
+        commit that lands mid-execution).
+      - Post-review freeze: LOG drift, spot-check new commits for
+        P0/security issues, proceed if none, halt only if yes.
+      - Documented in recommendation.md §"Drift-handling policy".
+```
 ## Halt conditions triggered
 
 None. The fetch succeeded, divergence was measured, overlap was mapped, conflicts were previewed, invariants were frozen, and the strategy was frozen. No halt was reached.
@@ -189,7 +218,7 @@ None. The fetch succeeded, divergence was measured, overlap was mapped, conflict
 
 `ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01` must:
 
-1. Re-fetch upstream and **halt** if `upstream/main` advanced past `RECON_SUBJECT_HEAD=48d63852745460ff0fa3dfcc0457bbe2493841de`.
+1. Re-fetch upstream; compare with `RECON_SUBJECT_HEAD=48d63852745460ff0fa3dfcc0457bbe2493841de`. If drifted, **log but do NOT halt** unless the new commits introduce a P0/security issue (see `recommendation.md` §"Drift-handling policy").
 2. Create `factory/upstream-sync-<date>` branch.
 3. Run `git merge --no-ff 48d63852745460ff0fa3dfcc0457bbe2493841de` (the pinned subject, not `upstream/main`).
 4. Resolve the 17 conflicts in the frozen order (see `recommendation.md` §"Conflict resolution order"):
