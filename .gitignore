@@ -307,6 +307,37 @@ apps/examples/desktop-app/.cursor/settings.json
 # whitelisted above), so all three (epic row + preflight + this ACT)
 # must survive a fresh clone for the canonical link to hold.
 !/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01.md
+# ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01:
+# bounded composition repair in aggregateSource() precedence (R5 ↔ R0).
+# CORRECTION01 (commit 3a198388d) added the strict-suppressor predicate
+# (mode=all + mandatorySeatbelt=true → seatbelt-OVERRIDE step 7 wins
+# over legacy R0 path-authority source labels). CORRECTION02 (commit
+# dd694b6bc) closed the reviewer-disposition P1 (source-kind
+# coherence — seatbelt-OVERRIDE now requires aggregateLatticeKind ===
+# "allow" in addition to (a)+(b)). Reviewer disposition on the
+# CORRECTION01 closure attempt was HALT_RED_NOT_REPRODUCED because
+# the fixes do NOT explain the observed codium-factory live
+# failure (the live tool input is a single normalized command
+# element; aggregateSource() early-returns at perCommand.length
+# === 1, line 644-646). Status REOPENED / CORRECTION02 (P1 closed)
+# + LIVE_RECON_OPEN (P0_1 / P0_2 still UNRESOLVED). The ACT file
+# binds to the safe-yolo-seatbelt.md epic ledger row and to the
+# epic-board.md closure table, so it must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01.md
+# ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+# follow-up ACT opened by the reviewer-disposition reopen on
+# CORRECTION01. The CORRECTION01/CORRECTION02 fixes do NOT explain
+# the observed codium-factory live failure (the live tool input is
+# a single normalized command element, and aggregateSource()
+# early-returns at perCommand.length === 1). This ACT captures the
+# exact normalized live toolInput for a fresh reproduction as a
+# BLOCKING gate, then localizes the actual causal seam (candidates:
+# evaluateOne per-command resolution, R5 catastrophic hard floor,
+# extractR0PathOperands for compound strings). Status OPEN / HIGH.
+# Operator-driven LIVE capture required. The ACT file binds to the
+# safe-yolo-seatbelt.md epic ledger row (future REOPEN row) and to
+# the epic-board.md closure table, so it must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02.md
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01: recon ACT
 # LAUNCH_HEAD = a76ff4137 / TREE = fa383737f (durable-binding freeze
 # per ACT §1). OPEN_HEAD = 4963904e9 (first commit creating ACT).
