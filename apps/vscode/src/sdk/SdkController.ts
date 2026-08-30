@@ -117,6 +117,7 @@ import { SdkTaskStartCoordinator } from "./sdk-task-start-coordinator"
 import { createVscodeSdkTelemetryHandle, type VscodeSdkTelemetryHandle } from "./sdk-telemetry"
 import { SdkTerminalExecutionModeCoordinator } from "./sdk-terminal-execution-mode-coordinator"
 import {
+	applySeatbeltAuthorityEnvelope,
 	evaluateCancelCommandToolApproval,
 	evaluateCommandToolApprovalWithPlan,
 	getCommandHostAuthorization,
@@ -130,6 +131,7 @@ import {
 	isSyntheticSdkUserMessage,
 	type SdkUserMessage,
 } from "./sdk-user-message-mapping"
+import { resolveExperimentalSandboxMode } from "./sandbox-policy"
 import {
 	resolveEffectiveAutoApproval,
 	resolveSessionHostAuthorization,
@@ -914,6 +916,17 @@ export class Controller {
 							hostAuthorization = sessionHostAuth
 						}
 						toolInput = stripRequiresApproval(requestInput)
+						// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+						// CORRECTION02 (REAL_MANDATORY_SEATBELT_PRODUCER):
+						//
+						// Stamp the conditional authority derived from the
+						// kernel-envelope invariant, NOT any user-facing toggle.
+						// The helper is pure and unit-tested at the producer
+						// seam; this call is the only production site.
+						hostAuthorization = applySeatbeltAuthorityEnvelope(
+							hostAuthorization,
+							resolveExperimentalSandboxMode(),
+						)
 					}
 					return { hostAuthorization, toolInput }
 				},

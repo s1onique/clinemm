@@ -112,11 +112,19 @@ INV-5: Explicit DENY unchanged
   T1 explicitly does NOT exercise the deny path; T4's deny witness
   is part of the broader matrix.
 
-INV-6: R5 risk_hard_floor unchanged
-  When the R5 catastrophic-classifier downgrades an ALLOW to ASK
-  with source=risk_hard_floor, the new flag MUST NOT re-promote it.
-  The conditional authority only fires when the canonical lattice
-  emits allow; risk_hard_floor is preserved as-is.
+INV-6: R5 risk_hard_floor conditional on Seatbelt obligation (CORRECTION02)
+  When the R5 catastrophic-classifier would downgrade an ALLOW to ASK
+  with source=risk_hard_floor:
+    - If `hostAuthorization.mandatorySeatbelt === true` AND the
+      canonical lattice emitted `host_mode_all_seatbelt_required`,
+      the R5 floor is SUPPRESSED. The disposition stays
+      `auto-approve-eligible`. The kernel is the gate; the executor
+      (`CommandJobManager.start`) refuses any host-shell fallback.
+    - Otherwise the downgrade fires unchanged. The user is the gate.
+  The flag NEVER upgrades a deny. The flag NEVER promotes a parsed
+  ASK to ALLOW outside the new source's emission.
+  See C2 (CORRECTION02) §9.4 for the corrected matrix and T1/T2
+  witnesses at the production seam.
 
 INV-7: Fail-closed parser invalidity unchanged
   When the canonical policy returns unknown_input or
@@ -556,5 +564,164 @@ FURTHER_REVIEW    = NOT_AUTHORIZED before RED
   `sdk/packages/shared/src/llms/tools.ts:176-260` (ToolApprovalResult)
   `sdk/packages/agents/src/agent-runtime.ts:2534-2800` (prepareToolExecution seam)
   `apps/vscode/src/sdk/sdk-tool-policies.ts:505-1010` (the new surface)
-  `apps/vscode/src/sdk/SdkController.ts:330-510` (the SdkController binding)
+## 11. CORRECTION02 (2026-08-30) — Producer + Runtime Bridge
 
+Reviewer disposition 2026-08-30 (on CORRECTION01):
+
+```
+HALT_PRODUCTION_ENABLEMENT_AND_RUNTIME_BRIDGE_NOT_PROVEN
+
+P0-1 REAL_MANDATORY_SEATBELT_PRODUCER_NOT_PROVEN
+  the conditional behavior only exists if production constructs
+  CommandHostAuthorization{mode:"all", mandatorySeatbelt:true}
+  -- the chain works, but the upstream enablement fact was synthetic.
+
+P0-2 AGENT_RUNTIME_TRANSPORT_NOT_EXECUTABLY_PROVEN
+  T3 hand-copied the flag onto the executor's context
+  -- the real AgentRuntime bridge was not exercised.
+```
+
+### 11.1 What was added
+
+```text
+A) PRODUCTION PRODUCER (P0-1)
+
+   apps/vscode/src/sdk/sdk-tool-policies.ts:
+   new exported pure helper applySeatbeltAuthorityEnvelope(
+       auth: CommandHostAuthorization,
+       sandboxMode: string | undefined,
+   ): CommandHostAuthorization
+   - auth.mode === "all" AND sandboxMode === "seatbelt-experimental"
+     => auth.mandatorySeatbelt = true (new object; no mutation)
+   - otherwise returns auth unchanged
+
+   apps/vscode/src/sdk/SdkController.ts:
+   resolveHostAuthorization() closure (the only production site)
+   now calls applySeatbeltAuthorityEnvelope(
+       hostAuthorization,
+       resolveExperimentalSandboxMode(),
+   )
+   after the session-override "all" projection.
+   - The SdkController binding (file F) is now the live producer;
+     not a per-request constructor argument.
+   - The kernel-envelope invariant (resolveExperimentalSandboxMode)
+     is the source of truth, NOT any user-facing toggle.
+
+B) RUNTIME BRIDGE (P0-2)
+
+   apps/vscode/src/sdk/__tests__/seatbelt-all-r5-authority-implementation01.c2-runtime-bridge.test.ts
+   Witness A producer matrix (5 cases):
+   - A1 all + seatbelt-experimental => mandatorySeatbelt=true
+   - A2 all + disabled                  => mandatorySeatbelt=undefined
+   - A3 all + undefined                => mandatorySeatbelt=undefined
+   - A4 safe-only + seatbelt-experimental => mandatorySeatbelt=undefined
+   - idempotence: a second application does not stack or mutate
+
+   sdk/packages/agents/src/seatbelt-all-r5-authority-implementation01.c2-runtime-bridge.test.ts
+   Witness B runtime bridge (2 cases, drives the real AgentRuntime):
+   - B1 REAL: requestToolApproval returns approved=true +
+     mandatorySeatbeltExecution=true; real AgentRuntime calls the
+     run_commands tool through prepareToolExecution ->
+     executePreparedTool -> tool.execute(input, context); the
+     captured context.mandatorySeatbeltExecution === true
+     (the executor DI seam is the assertion site).
+   - B2 SPURIOUS: same path but approval omits the flag; the
+     captured context.mandatorySeatbeltExecution === undefined
+     (the bridge does NOT default the flag to true; it has to
+     come from the trusted host-attached channel).
+
+C) ACT-INVARIANT NORMALIZATION
+
+   INV-6 was stale (it asserted R5 risk_hard_floor was never
+   re-promoted, but CORRECTION01 deliberately changes that for
+   the obligation case). It is rewritten to spell out the
+   conditional: SUPPRESS the floor only when
+   hostAuthorization.mandatorySeatbelt === true AND canonical
+   emitted host_mode_all_seatbelt_required. All other shapes
+   preserve the original R5 downgrade.
+
+D) DUPLICATE-DECLARATION CLEANUP
+
+   The CORRECTION01 edits had inadvertently duplicated
+   `let executionCapability` in agent-runtime.ts (twice). The
+   agents package vitest refused to load. The duplicate is removed;
+   396/396 agents tests now pass.
+```
+  `apps/vscode/src/sdk/SdkController.ts:330-510` (the SdkController binding)
+### 11.2 Conservation matrix after CORRECTION02
+
+```text
+PRODUCER (Witness A, 5/5 GREEN):
+  mode=all + seatbelt-experimental => mandatorySeatbelt: true
+  mode=all + (anything else)       => mandatorySeatbelt: undefined
+  mode=safe-only                   => mandatorySeatbelt: undefined
+                                    (the stamp fires only on mode="all")
+
+RUNTIME BRIDGE (Witness B, 2/2 GREEN):
+  ToolApprovalResult.mandatorySeatbeltExecution = true
+    => AgentToolContext.mandatorySeatbeltExecution = true
+       (captured at the executor's DI seam)
+  ToolApprovalResult.mandatorySeatbeltExecution absent
+    => AgentToolContext.mandatorySeatbeltExecution = undefined
+       (the bridge carries it ONLY via the trusted channel)
+
+FULL CHAIN (existing C1, 6/6 GREEN; regression sweep 65/65):
+  applySeatbeltAuthorityEnvelope(mode=all, seatbelt)
+    => evaluateCommandToolApproval => allow / host_mode_all_seatbelt_required
+    => ToolApprovalResult.mandatorySeatbeltExecution = true
+    => AgentToolContext.mandatorySeatbeltExecution = true
+    => CommandJobManager.start(): if Seatbelt prepare() throws
+         => spawn_failed, supervisor never invoked
+       else => sandbox-enforced execution
+
+STOP CONDITIONS:
+  HALT_PRODUCER_ABSENT             not triggered (helper is the producer;
+                                       SdkController is the only call site)
+  HALT_RUNTIME_TRANSPORT_BYPASSED  not triggered (B1 drives the real
+                                       AgentRuntime through
+                                       prepareToolExecution ->
+                                       executePreparedTool ->
+                                       tool.execute)
+  HALT_MECHANISM_OR_R5_COMPOSITION regressed (still passes)
+```
+
+### 11.3 Disposition (CORRECTION02)
+
+```text
+PHASE_2_GREEN                = PASS (CORRECTION01 + CORRECTION02)
+PRODUCER_WITNESS             = applied (Witness A, 5/5)
+RUNTIME_BRIDGE_WITNESS       = applied (Witness B, 2/2)
+PRODUCTION_RUNTIME_BINDING   = applied (SdkController helper call)
+INV-6_DOCUMENTARY_RESIDUE    = resolved (rewritten to the conditional)
+EOF_WHITESPACE               = resolved (sed cleanup on ACT MD + tests)
+REGRESSION_SWEEP             = 65/65 in apps/vscode vitest +
+                                 396/396 in sdk/packages/agents vitest +
+                                 2 environmental darwin Seatbelt-substrate
+                                 failures in command-job-manager.
+                                 sandbox-integration.test.ts pre-date this ACT
+                                 (stash-and-rerun baseline).
+
+CURRENT = PASS_SEATBELT_ALL_R5_AUTHORITY_V2
+          CLOSED_CLEAN (architecture stays; mechanism, R5 composition,
+                        producer, and runtime bridge all proven).
+```
+
+## 12. References (post-CORRECTION02)
+
+- CONTRACT01 preflight (durable):
+  `.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-CONTRACT01/01-architectural-preflight.md`
+- LIVE_R5_CLASSIFICATION binding: corr=G8R987V68S, artifact=4.1.16-a29a08dc8
+- Epic ledger row 23: `.factory/epics/approval-protection.md`
+- Production seams (CORRECTION02):
+  `apps/vscode/src/sdk/sdk-tool-policies.ts:521-529` -- applySeatbeltAuthorityEnvelope
+  `apps/vscode/src/sdk/SdkController.ts:915-930` -- the only production call site
+  `apps/vscode/src/sdk/sdk-tool-policies.ts:505-1010` -- canonical lattice surface
+  `apps/vscode/src/sdk/SdkController.ts:330-510` -- SdkController binding
+- Runtime bridge seams (CORRECTION02):
+  `sdk/packages/agents/src/agent-runtime.ts:2578-2606` -- the let-declarations
+  `sdk/packages/agents/src/agent-runtime.ts:2765-2779` -- capture in prepareToolExecution
+  `sdk/packages/agents/src/agent-runtime.ts:3034` -- stamp into AgentToolContext
+- Tests (CORRECTION02):
+  `apps/vscode/src/sdk/__tests__/seatbelt-all-r5-authority-implementation01.c1-green.test.ts` (6 cases, 159 lines)
+  `apps/vscode/src/sdk/__tests__/seatbelt-all-r5-authority-implementation01.c2-runtime-bridge.test.ts` (5 cases, Witness A producer)
+  `sdk/packages/agents/src/seatbelt-all-r5-authority-implementation01.c2-runtime-bridge.test.ts` (2 cases, Witness B runtime bridge)

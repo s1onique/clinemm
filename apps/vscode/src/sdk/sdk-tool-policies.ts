@@ -488,6 +488,47 @@ export function getCommandHostAuthorization(
 }
 
 /**
+ * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+ * CORRECTION02 (REAL_MANDATORY_SEATBELT_PRODUCER):
+ *
+ * Pure, side-effect-free authority envelope stamper. The function
+ * derives the conditional authority from the kernel-envelope
+ * invariant (`sandboxMode`), NOT from any user-facing toggle:
+ *
+ *   auth.mode === "all"
+ *   AND sandboxMode === "seatbelt-experimental"
+ *     => auth with mandatorySeatbelt: true stamped on
+ *     => canonical lattice emits host_mode_all_seatbelt_required
+ *     => R5 hard floor suppressed (kernel is the gate)
+ *
+ *   any other combination
+ *     => auth returned unchanged
+ *     => mandatorySeatbelt remains undefined
+ *     => canonical lattice emits plain host_mode_all
+ *     => R5 hard floor still fires (user is the gate)
+ *
+ * The host adapter (VSCode `SdkController`) calls this in its
+ * `resolveHostAuthorization` closure after the session override
+ * has projected `mode: "all"`. The function is pure (no I/O,
+ * no environment reads) so the production site can be unit-tested
+ * with synthetic inputs.
+ *
+ * Exported for the same reason the other authority utilities are
+ * exported: this is the producer seam of the conditional
+ * authority, and the test suite needs to exercise it directly
+ * without standing up the entire SdkController.
+ */
+export function applySeatbeltAuthorityEnvelope(
+	auth: CommandHostAuthorization,
+	sandboxMode: string | undefined,
+): CommandHostAuthorization {
+	if (auth.mode === "all" && sandboxMode === "seatbelt-experimental") {
+		return { ...auth, mandatorySeatbelt: true }
+	}
+	return auth
+}
+
+/**
  * Evaluate whether a specific command tool call should be auto-approved.
  *
  * This function applies the complete command policy:

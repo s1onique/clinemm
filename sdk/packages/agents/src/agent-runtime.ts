@@ -2577,13 +2577,6 @@ export class AgentRuntime {
 	 */
 	let executionCapability: ToolCallExecutionCapability | undefined;
 	/**
-	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
-	 * C2 plumbing: closed runtime-owned authority slot. Captured
-	 * from the host's policy callback result (the trusted channel);
-	 * NEVER read from `toolCall.metadata` (partially untrusted).
-	 */
-	let executionCapability: ToolCallExecutionCapability | undefined;
-	/**
 	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
 	 *
 	 * Closed runtime-owned per-command plan slot. Captured from
