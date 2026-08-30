@@ -699,3 +699,200 @@ RUNTIME TASK PROGRESSION   = CLOSED at fd8627cb6
 ```
 
 No durable-state contradiction detected in this continuation session.
+
+---
+
+### §17.3 — 2026-08-30 continuation-session disposition #2 (this commit)
+
+Predecessor gates updated since §17.1:
+- `ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01`
+  is now CLOSED at `0841353f0` with
+  `PASS_APPROVAL_SPECIMEN_CAPTURE_STRUCTURAL_READY_V1` and
+  `LIVE_QUALIFICATION=PENDING` — structurally ready, real-runtime
+  attachment delegated.
+- `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01`
+  is still NEXT/HIGH per the durable board; this ACT's §0 frozen
+  invariant (YOLO_REQUESTED=true, Seatbelt available, editing
+  permission enabled) is still gated on its closure. This session's
+  attempt is therefore NOT a §3 live specimen — the §0 invariant
+  is not satisfied.
+
+What this session attempted per the spec's CONTINUATION directive:
+"first prove capture tool LIVE qualified, then ask the boundary
+question under effective auto-approval."
+
+#### Source-bound live artifact prepared
+
+```text
+SOURCE_HEAD              = 0841353f0ad45e1702af80b2b88753e243bca951
+SOURCE_TREE              = 906e54de5f1ae9084c3fc56735eee73d72a800eb
+PACKAGE_VERSION          = 4.1.10-0841353f0
+VSIX_PATH                = dist/clinemm-4.1.10-0841353f0.vsix
+VSIX_BYTES               = 16881379
+VSIX_SHA256              = 1d747b43f72a54c4bc8b7c71fdbfba9df10b0a8c73be4e8911d3f0f76659cd01
+INSTALLED_VERSION        = 4.1.10
+INSTALLED_PATH           = .factory/tmp/live-userdata/extensions/s1onique.clinemm-4.1.10/
+INSTALLED_BUNDLE_SHA256  = fe79ffedc9b524c0c2b974b2b2532c03c6055987a95b84f400059a067defd2bb
+SOURCE_BUNDLE_SHA256     = fe79ffedc9b524c0c2b974b2b2532c03c6055987a95b84f400059a067defd2bb
+INSTALLED == SOURCE      = YES (byte-exact)
+BUNDLE_CONTAINS_capture.attach.v1 = YES (1 hit in extension.js)
+BUNDLE_CONTAINS_CLINEMM_CAPTURE_V2_PATH = YES (1 hit in extension.js)
+```
+
+(D07 stamp applied at package time, then `package.json` restored
+to HEAD content so the installed `package.json` reads `"4.1.10"` —
+the stamped version is on the artifact name only.)
+
+#### Reproduction fidelity (capture tool codepath)
+
+```text
+emitCaptureAttach VITEST COVERAGE = 16/16 PASS
+  - "writes one JSONL record per emit when env var is set"
+  - "emits 'no-correlation' / 'no-input' when no request context is active"
+  - "process-scope events do NOT inherit the ambient request context"
+  - "emitCaptureAttach writes one process-scope capture.attach.v1 record"
+  - "emitCaptureAttach never logs raw command text or PII"
+  - "emitCaptureAttach is a no-op when env flag is unset"
+  - plus 10 prior v2-capture tests
+```
+
+The exact production codepath the live extension host would invoke
+at `activate()` is the same `emitCaptureAttach()` function exercised
+by these vitest cases. Unit fidelity = YES.
+
+#### What was NOT executed
+
+```text
+REAL_EXTENSION_HOST_LAUNCH         = NOT_EXECUTED
+LIVE_CAPTURE_ATTACHMENT_OBSERVED   = NOT_EXECUTED
+LIVE_APPROVAL_TRANSACTION          = NOT_EXECUTED
+LIVE_AUTOAPPROVE_TRANSACTION       = NOT_EXECUTED
+SPECIMEN                            = NOT_REPRODUCED
+
+REASON = ENVIRONMENT_HEADLESS
+  - This shell has no TTY ("TTY=not a tty"), no DISPLAY, and
+    `open -a "Visual Studio Code"` returns Apple Event error -54.
+  - macOS WindowServer is running and `gui/501` reports an active
+    login session with 425 active services — but the launching
+    shell is detached from that session (non-interactive tty,
+    no Aqua bootstrap), so GUI apps refuse to launch.
+  - `_electron.launch` (Playwright) would face the same constraint
+    on macOS without an Aqua session; the docstring warning
+    about Playwright/bun incompatibility is unrelated to this.
+  - The `code` CLI spawns the GUI process and exits; the spawned
+    process never appears in `pgrep` from this shell, suggesting
+    it fails the LaunchServices check at the OS layer.
+  - Capture-diag-only paths (writing capture.attach.v1 with the
+    same env flag) are unit-testable and confirmed; only the
+    real-extension-host invocation path is environmentally
+    blocked.
+```
+
+#### §17.3 verdict
+
+```text
+REAL_EXTENSION_ATTACHMENT          = NOT_EXECUTED
+CAPTURE_TOOL_LIVE_QUALIFIED         = NO   (real runtime unproven)
+CAPTURE_TOOL_STRUCTURAL_FIDELITY    = YES  (16/16 vitest PASS, byte-exact
+                                            installed bundle, source HEAD
+                                            0841353f0)
+SPECIMEN                            = NOT_REPRODUCED
+SPECIMEN_CLASS                      = N/A  (no live transaction)
+PRODUCTION_DELTA                    = 0    (no production source modified;
+                                            no diagnostic added; existing
+                                            capture diagnostics, env-gated
+                                            DEFAULT_OFF, untouched)
+TEST_DELTA                          = 0    (no new test added; existing
+                                            16/16 vitest coverage on
+                                            emitCaptureAttach reused)
+RED_AUTHORIZED                      = NO   (no live specimen)
+RED_REPRODUCED                      = NO   (n/a)
+LIVE_GREEN                          = NOT_EXECUTED
+REPAIR_AUTHORIZED                   = NO   (no live A1 evidence)
+BOARD_ROW_AMENDED                   = YES  (live-control vs headless-blocked
+                                            distinction captured; PENDING →
+                                            still PENDING; NEXT pointer
+                                            retained)
+```
+
+#### Halt gate (per spec §42)
+
+```text
+HALT_LIVE_ARTIFACT_IDENTITY_UNBOUND = NO  (binding is exact-byte
+                                            source = installed)
+HALT_CAPTURE_ATTACHMENT_UNPROVABLE  = NO  (codepath unit-verified;
+                                            only real-host invocation
+                                            is environmentally blocked)
+HALT_APPROVAL_TRANSACTION_UNBINDABLE = NO (no transaction attempted;
+                                            no binding needed)
+HALT_RED_NOT_REPRODUCED             = N/A (no RED attempted, no A1)
+HALT_NEW_P0                         = NO  (no new P0; environmental
+                                            constraint was already
+                                            documented in CORRECTION01
+                                            §C reproduction-fidelity)
+```
+
+#### Authorized next ACT (no new ACT for this lane)
+
+```text
+NEXT_WORK = continuation of this ACT (operator-driven) on a host
+            with an active Aqua session.
+
+OPERATOR_RUNBOOK:
+  1. On a desktop session, run:
+       export CLINEMM_CAPTURE_V2_PATH=/absolute/path/to/capture.v2.jsonl
+       code --user-data-dir .factory/tmp/live-userdata \
+            --extensions-dir .factory/tmp/live-userdata/extensions \
+            .factory/tmp/live-control-a
+  2. Wait for ClineMM sidebar to load.
+  3. CONTROL_A (autoApprove=false): send chat
+     "Create .factory/tmp/editor-control-a.txt with content
+      CONTROL_A_APPROVAL_REQUIRED"
+     Expect approval.entry.v2 → approve in UI →
+     approval.terminal.v2=approved → executor entry → file mutation.
+  4. CONTROL_B (autoApprove=true): same with control-b file.
+     Expect capture.attach.v1 → executor entry → file mutation,
+     NO approval events.
+  5. After both, run `python3 tools/factory/capture-approval-specimen.py
+     begin --capture-id <id>` then `finish --capture-id <id>`, then
+     `report --capture-id <id>` to bind the live specimen.
+  6. Commit evidence to .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-
+     APPROVAL-FRICTION-RECON01/live-control-{a,b}/ and live-specimen/.
+
+PRECONDITION_NOTE:
+  Per the §0 frozen invariant, this ACT still requires
+  ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+  to be closed first. Until then the live specimen will not
+  exercise the §0 invariant's full context (YOLO_REQUESTED=true,
+  Seatbelt available, editing permission enabled). Real closure
+  of this ACT is gated on the IMPLEMENTATION01 dogfood.
+```
+
+#### Files added by this session
+
+```text
+.factory/tmp/live-control-a/                  (empty — CONTROL_A target)
+.factory/tmp/live-control-b/                  (empty — CONTROL_B target)
+.factory/tmp/live-specimen/                   (empty — specimen target)
+.factory/tmp/live-capture-logs/               (empty capture log; no GUI
+                                                host launch)
+.factory/tmp/live-userdata/                   (isolated user-data-dir;
+                                                contains installed
+                                                s1onique.clinemm-4.1.10/)
+dist/clinemm-4.1.10-0841353f0.vsix            (16.1 MB; source-bound
+                                                SHA-256 1d747b43...)
+```
+
+These are under `.factory/tmp/` (factory-internal ephemeral) and
+`dist/` (gitignored). NOT committed.
+
+This commit modifies only:
+  `.factory/acts/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01.md`
+  (this §17.3 disposition block)
+  `.factory/epic-board.md`                       (board row amendment)
+
+PRODUCTION_DELTA = 0.
+
+C1: HALT_LIVE_ARTIFACT_HEADLESS_ENVIRONMENT (new halt code, semantically
+    equivalent to CAPTURE_INSUFFICIENT + REASON=HEADLESS; documents that
+    the blocker is the host's lack of Aqua session, not the toolchain).
