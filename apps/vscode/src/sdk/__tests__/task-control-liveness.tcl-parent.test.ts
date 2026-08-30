@@ -321,6 +321,14 @@ function makeFixture(): Fixture {
 		captureProviderApiError: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		setTurnPhase: vi.fn((phase) => setTurnPhaseCalls.push({ phase })),
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-PRE-EXISTING-RACE-RECON01:
+		// SdkTaskStartCoordinator requires this resolver since
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+		// (CAI-01B). Without it the fixture throws at `sessionConfigBuilder.build`
+		// and `host.start` is never reached, which masks the entire
+		// top-level New Task race. See the companion comment in
+		// tcl-parent.adversarial.test.ts.
+		resolveSessionAutoApprovalOverride: vi.fn(() => ({ kind: "none" })),
 	} as unknown as SdkTaskStartCoordinatorOptions
 
 	const taskStart = new SdkTaskStartCoordinator(startOptions)

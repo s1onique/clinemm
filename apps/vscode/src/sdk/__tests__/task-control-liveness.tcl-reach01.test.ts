@@ -142,6 +142,13 @@ function makeCoordinator(state: CoordinatorState) {
 		setTurnPhase: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		taskOperationFence: fx_fence,
+		// ACT-CLINEMM-DOGFOOD-BUILD-INTEGRATION-REPAIR01 / B2: `clearTaskSettings`
+		// became a required SdkTaskControlCoordinatorOptions field. The reach
+		// fixture exercises wedge/cancel semantics, not StateManager
+		// persistence, so a no-op is the minimal semantically-correct stub.
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-PRE-EXISTING-RACE-RECON01: this
+		// stub was missing for the same reason as tcl-parent*.test.ts.
+		clearTaskSettings: async () => {},
 	} as unknown as SdkTaskControlCoordinatorOptions & {
 		sessions: SdkTaskControlCoordinatorOptions["sessions"] & {
 			getActiveSession: ReturnType<typeof vi.fn>

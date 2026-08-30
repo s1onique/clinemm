@@ -257,6 +257,15 @@ function makeFixture(): AdversarialFixture {
 		captureProviderApiError: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		setTurnPhase: vi.fn(),
+		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-PRE-EXISTING-RACE-RECON01:
+		// SdkTaskStartCoordinator requires this resolver since
+		// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01
+		// (CAI-01B). The fixture exercises fence/scheduling semantics, not
+		// completion-authority; "none" is the minimal semantically-correct
+		// value (no pre-armed intent). Without this the fixture throws at
+		// `sessionConfigBuilder.build` and `host.start` is never reached,
+		// masking every adversarial schedule.
+		resolveSessionAutoApprovalOverride: vi.fn(() => ({ kind: "none" })),
 	} as unknown as SdkTaskStartCoordinatorOptions
 
 	const taskStart = new SdkTaskStartCoordinator(startOptions)
