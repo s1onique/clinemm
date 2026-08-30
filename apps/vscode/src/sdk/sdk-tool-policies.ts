@@ -521,7 +521,21 @@ export function evaluateCommandToolApproval(
 	 * (CORRECTION02 Phase 2).
 	 */
 	parserResult?: TrustedParserEvidence | undefined,
-): { approved: boolean; decision: CommandDecision } {
+): {
+	approved: boolean
+	decision: CommandDecision
+	/**
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 * Executor-side Seatbelt obligation. `true` iff the canonical
+	 * lattice emitted `host_mode_all_seatbelt_required` AND the R5
+	 * composer honored the obligation (did NOT downgrade to ASK). The
+	 * runtime stamps this into
+	 * `AgentToolContext.mandatorySeatbeltExecution`; the executor
+	 * (`CommandJobManager.start`) refuses host-shell fallback when
+	 * `true`.
+	 */
+	mandatorySeatbeltExecution: boolean
+} {
 	// Always enforce dangerous classification for host safety
 	const result = evaluateCommandPolicy({
 		toolInput,
@@ -531,11 +545,15 @@ export function evaluateCommandToolApproval(
 	// DENY precedence: an explicit hard host DENY rule (e.g. an
 	// admin-defined `^rm -rf` block) takes precedence over the R5
 	// hard floor and over any V2 promotion. The user-configured
-	// deny must win.
+	// deny must win. ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+	// CORRECTION01: a DENY MUST NEVER carry the executor-side Seatbelt
+	// obligation — the obligation is `allow`-shaped; nothing executes
+	// under DENY (INV-5).
 	if (result.decision.kind === "deny") {
 		return {
 			approved: false,
 			decision: result.decision,
+			mandatorySeatbeltExecution: false,
 		}
 	}
 
@@ -604,6 +622,10 @@ export function evaluateCommandToolApproval(
 		},
 	})
 	if (riskVerdict.disposition === "never-auto-approve") {
+		// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+		// CORRECTION01: when the R5 layer forced a downgrade (no
+		// Seatbelt obligation, or obligation was not honored), the
+		// executor-side flag is `false`. The user is the gate.
 		return {
 			approved: false,
 			decision: {
@@ -611,6 +633,7 @@ export function evaluateCommandToolApproval(
 				reason: "R5 catastrophic hard floor: never auto-approve",
 				source: "risk_hard_floor",
 			},
+			mandatorySeatbeltExecution: false,
 		}
 	}
 
@@ -627,12 +650,23 @@ export function evaluateCommandToolApproval(
 		return {
 			approved: true,
 			decision: riskVerdict as unknown as CommandDecision,
+			// V2 promotion is independent of Seatbelt obligation; if
+			// the underlying lattice did not emit the seatbelt source,
+			// the obligation is absent here too.
+			mandatorySeatbeltExecution: false,
 		}
 	}
 
+	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+	// CORRECTION01 (final-state projection): the executor-side flag is
+	// `true` iff the canonical lattice emitted the conditional source
+	// AND the R5 layer did NOT force a downgrade (the disposition is
+	// `auto-approve-eligible`, not `never-auto-approve`). The
+	// executor reads this flag and refuses host-shell fallback.
 	return {
 		approved: result.decision.kind === "allow",
 		decision: result.decision,
+		mandatorySeatbeltExecution: result.decision.source === "host_mode_all_seatbelt_required",
 	}
 }
 
@@ -811,6 +845,14 @@ export function evaluateCommandToolApprovalWithPlan(
 	approved: boolean
 	decision: CommandDecision
 	executionPlan?: CommandExecutionPlan
+	/**
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 * Executor-side Seatbelt obligation. See the corresponding
+	 * field on `evaluateCommandToolApproval`. Same computation:
+	 * `true` iff the canonical lattice emitted the conditional
+	 * source AND the R5 layer did NOT force a downgrade.
+	 */
+	mandatorySeatbeltExecution: boolean
 } {
 	const result = evaluateCommandPolicy({
 		toolInput,
@@ -830,7 +872,9 @@ export function evaluateCommandToolApprovalWithPlan(
 	// attaches the capability when the four-condition gate passes.
 	const executionPlan = result.decision.kind === "deny" ? undefined : planBuilder(toolInput, result.commands, hostAuthorization)
 	if (result.decision.kind === "deny") {
-		return { approved: false, decision: result.decision }
+		// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+		// CORRECTION01: DENY MUST NEVER carry the obligation.
+		return { approved: false, decision: result.decision, mandatorySeatbeltExecution: false }
 	}
 	// CORRECTION04 P0: if a safe execution profile is required but the
 	// plan could not be constructed, fail closed rather than allowing
@@ -839,6 +883,10 @@ export function evaluateCommandToolApprovalWithPlan(
 	// a hardened argv.
 	const requiresPlan = result.commands.some((c) => c.safeExecutionProfile !== undefined)
 	if (requiresPlan && !executionPlan) {
+		// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+		// CORRECTION01: an internal failure (plan could not be built)
+		// is treated as DENY. No Seatbelt obligation is propagated
+		// because nothing executes.
 		return {
 			approved: false,
 			decision: {
@@ -846,6 +894,7 @@ export function evaluateCommandToolApprovalWithPlan(
 				source: "execution_plan_invalid",
 				reason: "required hardened execution plan could not be constructed",
 			},
+			mandatorySeatbeltExecution: false,
 		}
 	}
 	// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION01-CORRECTION01:
@@ -896,6 +945,10 @@ export function evaluateCommandToolApprovalWithPlan(
 		parserResult: options?.parserResult as never,
 	})
 	if (risk.disposition === "never-auto-approve") {
+		// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+		// CORRECTION01: when R5 forces a downgrade (no obligation or
+		// obligation was not honored), the executor-side flag is
+		// `false`. The user is the gate.
 		return {
 			approved: false,
 			decision: {
@@ -904,6 +957,7 @@ export function evaluateCommandToolApprovalWithPlan(
 				source: "risk_hard_floor",
 			},
 			executionPlan,
+			mandatorySeatbeltExecution: false,
 		}
 	}
 
@@ -929,14 +983,20 @@ export function evaluateCommandToolApprovalWithPlan(
 				reason: risk.reasons.join("; "),
 			},
 			executionPlan,
+			mandatorySeatbeltExecution: false,
 		}
 	}
 
-	// ALLOW or ASK (V1 path).
+	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+	// CORRECTION01 (final-state projection): the executor-side flag
+	// is `true` iff the canonical lattice emitted the conditional
+	// source AND the R5 layer did NOT force a downgrade. The
+	// executor reads this flag and refuses host-shell fallback.
 	return {
 		approved: result.decision.kind === "allow",
 		decision: result.decision,
 		executionPlan,
+		mandatorySeatbeltExecution: result.decision.source === "host_mode_all_seatbelt_required",
 	}
 }
 

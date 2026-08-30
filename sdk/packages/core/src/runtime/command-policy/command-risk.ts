@@ -471,19 +471,39 @@ export function evaluateCommandRiskWithParser(
 	//         disposition to `never-auto-approve` ONLY if a hard
 	//         family matched. The reason text always names the
 	//         families so the operator understands the source.
+	//
+	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+	// CORRECTION01 (HALT_EXECUTOR_CANNOT_BIND_CONSTRAINT):
+	// when the host has asserted `hostAuthorization.mandatorySeatbelt
+	// === true`, the R5 hard floor MUST NOT downgrade an ALLOW to
+	// ASK. The canonical lattice has already produced a
+	// `host_mode_all_seatbelt_required` source (which carries an
+	// executor-side obligation), and the executor
+	// (`CommandJobManager.start`) will refuse host-shell fallback.
+	// The R5 ASK was the human-approval gate; with the Seatbelt
+	// obligation honored, the gate is the kernel, not the user. The
+	// disposition stays `auto-approve-eligible`; the executor is the
+	// enforcement layer. If the obligation is absent, the existing
+	// downgrade fires unchanged (INV-6).
 	if (floorMatches.length > 0) {
 		const anyHard = floorMatches.some((m) => m.hard);
-		if (finalDecision === "allow") {
+		const seatbeltObligationHonored =
+			policy.decision.source === "host_mode_all_seatbelt_required" &&
+			input.hostAuthorization?.mandatorySeatbelt === true;
+		if (finalDecision === "allow" && !seatbeltObligationHonored) {
 			finalDecision = "ask";
 			finalSource = "risk_hard_floor";
 			reasons.push(policy.decision.reason);
 		}
-		if (anyHard) {
+		if (anyHard && !seatbeltObligationHonored) {
 			finalDisposition = "never-auto-approve";
 		}
 		const families = new Set(floorMatches.map((m) => m.family));
 		for (const fam of families) {
 			reasons.push(`risk:hard-floor:${fam}`);
+		}
+		if (seatbeltObligationHonored) {
+			reasons.push("risk:seatbelt-obligation-honored");
 		}
 	}
 

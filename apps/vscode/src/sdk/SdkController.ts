@@ -371,6 +371,17 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 				// Coordinator's safe-by-default path fires when
 				// omitted (no reformulation).
 				hostAuthorization?: CommandHostAuthorization
+				/**
+				 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+				 * Executor-side Seatbelt obligation. Set from the
+				 * canonical policy chain
+				 * (`evaluateCommandToolApprovalWithPlan`). The runtime
+				 * stamps this into
+				 * `AgentToolContext.mandatorySeatbeltExecution`; the
+				 * executor (`CommandJobManager.start`) refuses
+				 * host-shell fallback when `true`.
+				 */
+				mandatorySeatbeltExecution?: boolean
 		  }
 		| undefined
 	> => {
@@ -487,6 +498,12 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 			// optional field, and the rest of the wiring is
 			// unchanged.
 			hostAuthorization,
+			// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+			// Thread the executor-side Seatbelt obligation from
+			// the canonical policy chain. The runtime MUST stamp
+			// this into `AgentToolContext.mandatorySeatbeltExecution`
+			// before invoking the tool executor.
+			mandatorySeatbeltExecution: result.mandatorySeatbeltExecution,
 		}
 	}
 }

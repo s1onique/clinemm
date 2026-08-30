@@ -222,6 +222,28 @@ export interface ToolApprovalResult {
 		source: string;
 	};
 	/**
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 *
+	 * Conditional authority flag. When `true`, the runtime MUST
+	 * thread this value into `AgentToolContext.mandatorySeatbeltExecution`
+	 * before invoking the tool executor. The executor
+	 * (`CommandJobManager.start`) uses the value to enforce the
+	 * Seatbelt obligation (no host-shell fallback).
+	 *
+	 * Provenance contract:
+	 *   Source 1 (model/tool metadata):  NOT used.
+	 *   Source 2 (runtime-owned keys):  NOT used.
+	 *   Source 3 (host-attached; trusted IF typed slot): IS used,
+	 *     via `evaluateCommandToolApprovalWithPlan` -> this slot.
+	 *     The flag is set ONLY when the canonical policy emitted
+	 *     `host_mode_all_seatbelt_required` (which is the
+	 *     executor-side obligation source).
+	 *
+	 * `false` or `undefined`: no obligation; the existing
+	 * sandbox-or-host path runs unchanged.
+	 */
+	mandatorySeatbeltExecution?: boolean;
+	/**
 	 * Optional execution plan returned by the approval callback.
 	 *
 	 * When set, the AgentRuntime MUST replace the tool input used for

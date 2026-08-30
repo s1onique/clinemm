@@ -353,6 +353,30 @@ interface PreparedToolExecution {
 	 * path is allowed (synthetic transport compatibility only).
 	 */
 	commandExecutionPlan?: CommandExecutionPlan;
+	/**
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 *
+	 * Closed runtime-owned conditional authority flag. Captured from
+	 * the host's policy callback result
+	 * (`ToolApprovalResult.mandatorySeatbeltExecution`). Set ONLY
+	 * when the host's policy chain produced the conditional source
+	 * (`host_mode_all_seatbelt_required`). The runtime is the ONLY
+	 * consumer that copies this value into the closed runtime-owned
+	 * `AgentToolContext.mandatorySeatbeltExecution` slot.
+	 *
+	 * Provenance contract (same family as `executionCapability` /
+	 * `commandExecutionPlan`):
+	 *   Source 1 (toolCall.metadata): NOT used.
+	 *   Source 2 (runtime-owned keys): NOT used.
+	 *   Source 3 (host-attached; trusted IF typed slot): IS used,
+	 *     via ToolApprovalResult.mandatorySeatbeltExecution -> this slot.
+	 *
+	 * Stamped into `AgentToolContext.mandatorySeatbeltExecution` at
+	 * the construction site in `executePreparedTool`. When `true`,
+	 * the executor (`CommandJobManager.start`) refuses any
+	 * host-shell fallback.
+	 */
+	mandatorySeatbeltExecution?: boolean;
 }
 
 interface HookBag {
@@ -2553,6 +2577,13 @@ export class AgentRuntime {
 	 */
 	let executionCapability: ToolCallExecutionCapability | undefined;
 	/**
+	 * ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+	 * C2 plumbing: closed runtime-owned authority slot. Captured
+	 * from the host's policy callback result (the trusted channel);
+	 * NEVER read from `toolCall.metadata` (partially untrusted).
+	 */
+	let executionCapability: ToolCallExecutionCapability | undefined;
+	/**
 	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
 	 *
 	 * Closed runtime-owned per-command plan slot. Captured from
@@ -2562,6 +2593,17 @@ export class AgentRuntime {
 	 * that the executor consumes by `commandIndex` (positional).
 	 */
 	let commandExecutionPlan: CommandExecutionPlan | undefined;
+	/**
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 *
+	 * Closed runtime-owned conditional authority flag. Captured
+	 * from the host's policy callback result
+	 * (`ToolApprovalResult.mandatorySeatbeltExecution`). Set ONLY
+	 * when approval was approved AND the host chain produced the
+	 * conditional source (`host_mode_all_seatbelt_required`).
+	 * NEVER read from `toolCall.metadata` (partially untrusted).
+	 */
+	let mandatorySeatbeltExecution: boolean | undefined;
 		const metadata =
 			toolCall.metadata &&
 			typeof toolCall.metadata === "object" &&
@@ -2730,6 +2772,18 @@ export class AgentRuntime {
 				if (approval.approved && approval.executionPlan) {
 					commandExecutionPlan = approval.executionPlan;
 				}
+				// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+				// Stamp the executor-side Seatbelt obligation onto the
+				// typed runtime-owned slot. Captured ONLY when approval
+				// is approved (otherwise nothing executes and the
+				// obligation is moot). The host's policy chain produced
+				// this flag from the conditional source
+				// (`host_mode_all_seatbelt_required`); we thread it
+				// through the trusted host-attached channel, never via
+				// `toolCall.metadata`.
+				if (approval.approved && approval.mandatorySeatbeltExecution === true) {
+					mandatorySeatbeltExecution = true;
+				}
 			}
 		}
 		return {
@@ -2740,6 +2794,7 @@ export class AgentRuntime {
 			controlPlaneOutcome,
 			executionCapability,
 			commandExecutionPlan,
+			mandatorySeatbeltExecution,
 		};
 	}
 
@@ -2965,6 +3020,18 @@ export class AgentRuntime {
 					// callback result (ToolApprovalResult.executionPlan).
 					// The runtime NEVER reads this from toolCall.metadata.
 					commandExecutionPlan: prepared.commandExecutionPlan,
+					// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+					// Stamp the executor-side Seatbelt obligation onto
+					// the typed runtime-owned slot. Sourced from
+					// `prepared.mandatorySeatbeltExecution`, which is
+					// populated by `prepareToolExecution` from the
+					// host's policy callback result
+					// (`ToolApprovalResult.mandatorySeatbeltExecution`).
+					// The runtime NEVER reads this from
+					// `toolCall.metadata`. The executor
+					// (`CommandJobManager.start`) uses the value to
+					// refuse host-shell fallback when `true`.
+					mandatorySeatbeltExecution: prepared.mandatorySeatbeltExecution,
 					snapshot: this.snapshot(),
 					emitUpdate: (update: unknown) => {
 						void this.emit({

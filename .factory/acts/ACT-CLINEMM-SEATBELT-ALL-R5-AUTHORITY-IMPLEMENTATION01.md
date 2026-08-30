@@ -368,4 +368,193 @@ G) apps/vscode/src/sdk/__tests__/seatbelt-all-r5-authority-implementation01.c1-g
 The implementation introduces a distinct authority class, not silent
 reuse of `host_mode_all`. The host's `CommandJobManager.start(...)`
 becomes the executor-side enforcement seam.
+The implementation introduces a distinct authority class, not silent
+reuse of `host_mode_all`. The host's `CommandJobManager.start(...)`
+becomes the executor-side enforcement seam.
+
+## 9. CORRECTION01 (2026-08-30) — End-to-End Production Binding
+
+Reviewer disposition: `HALT_IMPLEMENTATION_NOT_BOUND_END_TO_END`.
+The first commit (5d73ac211) introduced the conditional source and
+executor flag but did NOT thread them through the production
+approval chain — files E (`sdk-tool-policies.ts`) and F
+(`SdkController.ts`) were declared unchanged, so the test suite
+fabricated `mandatorySeatbeltExecution` by hand. That is exactly
+the failure class the ACT body itself names.
+
+### 9.1 What was wrong
+
+```text
+P0-1 CONDITIONAL_AUTHORITY_NOT_THREADED_TO_EXECUTOR
+  the new source existed in types/policy
+  the executor knew how to react to the flag
+  but the production approval chain never bound them
+  -- T3 only proved "if somebody hands the flag, the executor reacts"
+
+P0-2 T1_BYPASSES_REAL_R5_COMPOSITION
+  T1 invoked evaluateCommandPolicy (no R5 composer)
+  the new source is GREEN at the lower layer
+  but the higher R5 layer can still force ask/risk_hard_floor
+  -- the load-bearing product contract was unproven
+
+P1-1 NO_FALLBACK_SENTINEL_NOT_BOUND_TO_SPAWN
+  the old T3 used __supervisorInvoked on a custom backend object
+  the manager never reads that property
+  -- the sentinel stays false regardless of host-shell invocation
+
+P1-2 CAPABILITY_BYTE_EQUAL_TEST_IS_SELF_COMPARISON
+  old T4 computed both sides in the same run with the same function
+  -- it proved determinism, not cross-fix invariance
+
+P2   EOF_WHITESPACE (blank line at EOF)
+```
+
+### 9.2 What changed in production code
+
+```text
+E) apps/vscode/src/sdk/sdk-tool-policies.ts
+   - evaluateCommandToolApproval returns {approved, decision, mandatorySeatbeltExecution: boolean}
+   - evaluateCommandToolApprovalWithPlan returns {approved, decision, executionPlan, mandatorySeatbeltExecution: boolean}
+   - mandatorySeatbeltExecution is false on DENY / execution_plan_invalid / R5-downgraded ASK
+   - mandatorySeatbeltExecution is true iff the canonical lattice emitted
+     host_mode_all_seatbelt_required AND the R5 layer did NOT force a downgrade
+
+F) apps/vscode/src/sdk/SdkController.ts
+   - buildSdkControllerEvaluateCommandToolApproval threads the flag through
+     the coordinator return value (mandatorySeatbeltExecution?: boolean)
+   - the runtime receives it via the trusted host-attached channel
+     (ToolApprovalResult.mandatorySeatbeltExecution)
+
+G) apps/vscode/src/sdk/sdk-interaction-coordinator.ts
+   - handleRequestToolApproval / runRequestToolApproval return types extended
+     with mandatorySeatbeltExecution?: boolean
+   - the auto-approve branch threads the flag through
+
+H) sdk/packages/shared/src/llms/tools.ts
+   - ToolApprovalResult.mandatorySeatbeltExecution?: boolean (closed runtime-owned)
+
+I) sdk/packages/shared/src/agent.ts
+   - AgentToolContext.mandatorySeatbeltExecution?: boolean (typed channel)
+
+J) sdk/packages/agents/src/agent-runtime.ts
+   - PreparedToolExecution.mandatorySeatbeltExecution?: boolean
+   - prepareToolExecution captures the flag from the host's
+     ToolApprovalResult (NEVER from toolCall.metadata)
+   - executePreparedTool stamps the flag into AgentToolContext
+
+K) sdk/packages/core/src/runtime/command-policy/command-risk.ts
+   - The R5 hard floor downgrades ALLOW -> ASK only when
+     hostAuthorization.mandatorySeatbelt !== true.
+     When the obligation is honored, the R5 floor is suppressed
+     (the kernel is the gate, not the user).
+```
+
+### 9.3 What changed in the RED matrix
+
+```text
+T1    was: evaluateCommandPolicy(input, auth)         (lower layer only)
+       is:  evaluateCommandToolApproval(input, auth)    (full R5 composer)
+       is:  evaluateCommandToolApprovalWithPlan(input, auth)  (WithPlan variant)
+
+T2    same higher-layer call. Expects ask/risk_hard_floor + flag=false.
+
+T2b   NEW: explicit deny rule. Expects deny/host_hard_deny + flag=false.
+       Pinned because DENY beats the conditional source (INV-5).
+
+T3    was: hand-fabricated context with mandatorySeatbeltExecution=true
+       is:  real evaluateCommandToolApproval output ->
+            AgentToolContext.mandatorySeatbeltExecution =
+              approval.mandatorySeatbeltExecution
+            Then the executor runs with that real context.
+       The host-shell path is now mocked via vi.mock("@cline/core", ...)
+       with a counting stub that THROWS on any call -- the test
+       proves non-invocation by virtue of start() returning
+       {state: "spawn_failed"} (no throw from the mock).
+
+T4    was: self-comparison (baseline == computed)
+       is:  v1 baseline is a frozen JSON literal in the test file.
+            The capability builder's output is compared byte-equal
+            to that literal. Any widening (writableRoots, network,
+            sshAuthenticationAuthority) breaks the literal and
+            fails the test.
+```
+### 9.4 Final conservation matrix (verified 6/6 GREEN)
+
+```text
+PRE-FIX BEHAVIOR (cor=G8R987V68S, fixture rm -rf "$HOME"):
+  evaluateCommandPolicy(mode=all) -> allow / host_mode_all
+  evaluateCommandToolApproval(...) -> ask / risk_hard_floor
+  evaluateCommandToolApprovalWithPlan(...) -> ask / risk_hard_floor
+
+POST-FIX BEHAVIOR (with mandatorySeatbelt=true):
+  evaluateCommandPolicy(mode=all, mandatorySeatbelt=true)
+    -> allow / host_mode_all_seatbelt_required
+  evaluateCommandToolApproval(...)
+    -> allow / host_mode_all_seatbelt_required
+    -> mandatorySeatbeltExecution: true
+  evaluateCommandToolApprovalWithPlan(...)
+    -> allow / host_mode_all_seatbelt_required
+    -> mandatorySeatbeltExecution: true
+    -> executionPlan: defined
+
+ABLATION (mandatorySeatbelt=undefined):
+  evaluateCommandToolApproval(...)
+    -> ask / risk_hard_floor   (R5 floor still fires)
+    -> mandatorySeatbeltExecution: false
+
+DENY (mandatorySeatbelt=true + explicit deny rule):
+  evaluateCommandToolApproval(...)
+    -> deny / host_hard_deny   (DENY beats the conditional source)
+    -> mandatorySeatbeltExecution: false
+
+NO-FALLBACK (real approval -> real context -> prepare() throws):
+  CommandJobManager.start() returns {state: "spawn_failed",
+  signal: "sandbox-prepare-failed: ..."}. The mock supervisor
+  is never invoked. Reaching the assertion line proves the executor
+  refused host-shell fallback -- any inadvertent supervisor call
+  would have thrown the mock error first.
+
+CAPABILITY (byte-equal):
+  buildExperimentalReconCapability({cwd, workspaceRoots,
+  networkOverride: "deny", sshAgentOverride: "deny"}) == v1Baseline
+  (the literal in the test file). The new flag is NEVER read by
+  the capability builder.
+```
+
+### 9.5 Stop conditions encountered
+
+```text
+HALT_UNSANDBOXED_FALLBACK_EXISTS       not triggered (T3 sentinel stays false)
+HALT_EXECUTOR_CANNOT_BIND_CONSTRAINT  not triggered (real approval chains
+                                       through to AgentToolContext)
+HALT_EXPLICIT_DENY_BYPASSED           not triggered (T2b pins it)
+HALT_SANDBOX_CAPABILITY_EXPANDED      not triggered (T4 byte-equal)
+```
+
+### 9.6 Disposition (corrected)
+
+```text
+PHASE_1_RED       = PASS (was: flawed; corrected)
+PHASE_2_GREEN     = PASS (6/6 at the production seam)
+PRODUCTION_DELTA  = bounded (files A..F + thread-through files E, F, G, H, I, J, K)
+FURTHER_REVIEW    = NOT_AUTHORIZED before RED
+                    post-GREEN closure review is a bookkeeping review
+                    (board entry + epic ledger update); no design round.
+```
+
+## 10. References
+
+- CONTRACT01 preflight (durable):
+  `.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-CONTRACT01/01-architectural-preflight.md`
+- LIVE_R5_CLASSIFICATION binding: corr=G8R987V68S, artifact=4.1.16-a29a08dc8
+- Epic ledger row 23: `.factory/epics/approval-protection.md`
+- Production seams:
+  `apps/vscode/src/sdk/command-job-manager.ts:535-700`
+  `sdk/packages/core/src/runtime/command-policy/command-policy.ts:540-700`
+  `sdk/packages/core/src/runtime/command-policy/command-policy-types.ts:83-180`
+  `sdk/packages/shared/src/agent.ts:348-460`
+  `sdk/packages/shared/src/llms/tools.ts:176-260` (ToolApprovalResult)
+  `sdk/packages/agents/src/agent-runtime.ts:2534-2800` (prepareToolExecution seam)
+  `apps/vscode/src/sdk/sdk-tool-policies.ts:505-1010` (the new surface)
+  `apps/vscode/src/sdk/SdkController.ts:330-510` (the SdkController binding)
 

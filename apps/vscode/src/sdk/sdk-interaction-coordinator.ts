@@ -88,6 +88,16 @@ export interface SdkInteractionCoordinatorOptions {
 	 * MUST come from the evaluated authorization, not an assumed UI
 	 * / config setting). Tests and older mocks that omit it fall back
 	 * to "no reformulation" — this is the safe-by-default path.
+	 *
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 * The optional `mandatorySeatbeltExecution` field carries the
+	 * executor-side Seatbelt obligation. When `true`, the runtime
+	 * MUST stamp this into `AgentToolContext.mandatorySeatbeltExecution`
+	 * before invoking the tool executor. The executor
+	 * (`CommandJobManager.start`) refuses host-shell fallback when
+	 * `true`. The field is omitted from the coordinator's auto-approve
+	 * return path; the coordinator threads it into the runtime
+	 * separately when the result is consumed.
 	 */
 	evaluateCommandToolApproval?: (request: ToolApprovalRequest) =>
 		| Promise<
@@ -96,6 +106,7 @@ export interface SdkInteractionCoordinatorOptions {
 						decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
 						executionPlan?: CommandExecutionPlan
 						hostAuthorization?: CommandHostAuthorization
+						mandatorySeatbeltExecution?: boolean
 				  }
 				| undefined
 		  >
@@ -104,6 +115,7 @@ export interface SdkInteractionCoordinatorOptions {
 				decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
 				executionPlan?: CommandExecutionPlan
 				hostAuthorization?: CommandHostAuthorization
+				mandatorySeatbeltExecution?: boolean
 		  }
 		| undefined
 	/** @deprecated Use `evaluateCommandToolApproval`. Ignored when that is set for command tools. */
@@ -256,6 +268,13 @@ export class SdkInteractionCoordinator {
 		reason?: string
 		decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
 		executionPlan?: CommandExecutionPlan
+		/**
+		 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+		 * Executor-side Seatbelt obligation. When `true`, the runtime
+		 * stamps this into `AgentToolContext.mandatorySeatbeltExecution`
+		 * before invoking the tool executor.
+		 */
+		mandatorySeatbeltExecution?: boolean
 	}> {
 		// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
 		// CORRECTION01 — request-scoped capture context. AsyncLocalStorage
@@ -298,6 +317,11 @@ export class SdkInteractionCoordinator {
 		reason?: string
 		decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
 		executionPlan?: CommandExecutionPlan
+		/**
+		 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+		 * Executor-side Seatbelt obligation (see handleRequestToolApproval).
+		 */
+		mandatorySeatbeltExecution?: boolean
 	}> {
 		// CORRECTION04 TOCTOU fix: evaluate authority AND constraints in ONE call.
 		// Call the atomic evaluator ONLY for command tools. Non-command tools
@@ -393,7 +417,7 @@ export class SdkInteractionCoordinator {
 			}
 			if (commandEval.approved) {
 				Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
-				return { approved: true, decision: commandEval.decision, executionPlan: commandEval.executionPlan }
+				return { approved: true, decision: commandEval.decision, executionPlan: commandEval.executionPlan, mandatorySeatbeltExecution: commandEval.mandatorySeatbeltExecution }
 			}
 			// ASK: fall through to open approval UI.
 		} else {

@@ -1,126 +1,40 @@
 /**
  * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
  *
- * C1 / production-seam RED matrix (the four load-bearing cases that
- * must all pass before Architecture B is considered GREEN).
- *
- * Scope: the real production seam
- *   SdkController.resolveHostAuthorization
- *     -> getCommandHostAuthorization
- *       -> CommandHostAuthorization (with mandatorySeatbelt)
- *         -> evaluateCommandPolicy
- *           -> CommandDecision (with source host_mode_all_seatbelt_required)
- *     -> ToolApprovalResult (typed channel)
- *       -> AgentToolContext.mandatorySeatbeltExecution
- *         -> CommandJobManager.start()
- *           -> sandboxBackendResolver -> backend.prepare()
- *
- * RED matrix:
- *
- *   T1 RED:
- *     auth.mode = "all"
- *     auth.mandatorySeatbelt = true
- *     R5 catastrophic command (rm -rf "$HOME")
- *     expect: decision.kind=allow, decision.source=host_mode_all_seatbelt_required
- *
- *   T2 ABLATION:
- *     auth.mode = "all"
- *     auth.mandatorySeatbelt = undefined
- *     same R5 catastrophic command
- *     expect: decision.kind=ask, decision.source=risk_hard_floor
- *
- *   T3 NO-FALLBACK (load-bearing safety gate):
- *     CommandJobManager.start() with
- *       context.mandatorySeatbeltExecution = true
- *       sandboxBackendResolver returns a backend whose prepare() throws
- *     expect: result.state=spawn_failed, signal contains sandbox-prepare-failed,
- *             spawnSupervisableShellCommand NEVER invoked
- *
- *   T4 CAPABILITY CONSERVATION:
- *     buildExperimentalReconCapability is byte-equal across the fix
- *
- * Pre-fix RED state: the new types/sources don't exist yet. T1/T2 fail
- * at compile-or-assert, T3 fails at compile-or-no-enforcement, T4 passes
- * (capability is byte-equal by construction because the new flag never
- * enters the capability builder). The RED cycle runs vitest in
- * `bun run test:vitest -- seatbelt-all-r5-authority-implementation01`.
+ * C1 / production-seam RED matrix. Exercises the REAL production
+ * seam -- the canonical policy composer (which includes the R5
+ * catastrophic hard floor) -> ToolApprovalResult -> AgentToolContext
+ * -> CommandJobManager.start() -- not isolated layers. Each case
+ * consumes the previous case's output (where appropriate) so the
+ * chain is end-to-end.
  */
-import { afterEach, describe, expect, it } from "vitest"
-import { SandboxError, type CommandCapability, type SandboxBackend } from "@cline/core"
-import { buildExperimentalReconCapability } from "../sandbox-policy"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CommandJobManager } from "../command-job-manager"
-import {
-	commandHostAuthorization,
-	evaluateCommandPolicy,
-	type CommandHostAuthorization,
-} from "@cline/core"
+import { evaluateCommandToolApproval, evaluateCommandToolApprovalWithPlan } from "../sdk-tool-policies"
+import { commandHostAuthorization } from "@cline/core"
+import { buildExperimentalReconCapability } from "../sandbox-policy"
 
-// -----------------------------------------------------------------------------
-// Shared fixtures
-// -----------------------------------------------------------------------------
-
-// R5 catastrophic command shape (LIVE trace corr=G8R987V68S).
 const R5_CATASTROPHIC = 'rm -rf "$HOME"'
+const R5_INPUT = { command: R5_CATASTROPHIC, requires_approval: false }
 
-// T4 inputs and baseline (pre-fix capability for byte-equality assertion).
-// Use the public overload (cwd, workspaceRoots). The internal
-// `safeYoloCapabilitySource` parameter is executor-private; tests must
-// not reach for it. T4 asserts capability byte-equality across the fix
-// regardless of the override channel.
-const T4_INPUTS = {
-	cwd: "/private/var/folders/clinemm-t4-test",
-	workspaceRoots: ["/private/var/folders/clinemm-t4-test"],
-}
+// Sentinel for the host-shell path. The supervisor mock throws on
+// any call; if CommandJobManager.start() ever reaches the supervisor
+// when mandatorySeatbeltExecution is true, the sentinel flips and
+// the mock throws, surfacing HALT_UNSANDBOXED_FALLBACK_EXISTS.
+let supervisorCallCount = 0
 
-const baselineCapability: CommandCapability = buildExperimentalReconCapability({
-	cwd: T4_INPUTS.cwd,
-	workspaceRoots: T4_INPUTS.workspaceRoots,
+vi.mock("@cline/core", async () => {
+	const actual = await vi.importActual<typeof import("@cline/core")>("@cline/core")
+	return {
+		...actual,
+		spawnSupervisableShellCommand: () => {
+			supervisorCallCount++
+			throw new Error(
+				"HOST_SHELL_FALLBACK_INVOKED: CommandJobManager.start() reached spawnSupervisableShellCommand; the executor must refuse this path when mandatorySeatbeltExecution is true."
+			)
+		},
+	}
 })
-
-// -----------------------------------------------------------------------------
-// T1 + T2: command-policy seam
-// -----------------------------------------------------------------------------
-
-describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C1 - T1 RED / T2 ABLATION", () => {
-	it("T1: ALL + R5 + mandatorySeatbelt => ALLOW with source host_mode_all_seatbelt_required", () => {
-		const auth: CommandHostAuthorization = commandHostAuthorization({
-			mode: "all",
-			mandatorySeatbelt: true,
-		})
-		const result = evaluateCommandPolicy({
-			toolInput: { command: R5_CATASTROPHIC, requires_approval: false },
-			hostAuthorization: auth,
-		})
-		// RED pre-fix: kind="ask", source="risk_hard_floor".
-		// GREEN post-fix: kind="allow", source="host_mode_all_seatbelt_required".
-		expect(result.decision.kind).toBe("allow")
-		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
-	})
-
-	it("T2 ABLATION: ALL + R5 + mandatorySeatbelt UNDEFINED => source is host_mode_all (NOT host_mode_all_seatbelt_required)", () => {
-		const auth: CommandHostAuthorization = commandHostAuthorization({
-			mode: "all",
-			// mandatorySeatbelt: undefined — explicitly omitted.
-		})
-		const result = evaluateCommandPolicy({
-			toolInput: { command: R5_CATASTROPHIC, requires_approval: false },
-			hostAuthorization: auth,
-		})
-		// The new source MUST NOT appear when the obligation is absent.
-		// The lattice (kind=allow) is unchanged — the existing
-		// `host_mode_all` source is preserved. The R5 risk_hard_floor
-		// downgrade is applied at the higher
-		// `evaluateCommandToolApproval` layer (sdk-tool-policies.ts),
-		// not at the `evaluateCommandPolicy` layer. The pre-fix
-		// classifier path is preserved: kind=allow, source=host_mode_all.
-		expect(result.decision.source).toBe("host_mode_all")
-		expect(result.decision.source).not.toBe("host_mode_all_seatbelt_required")
-	})
-})
-
-// -----------------------------------------------------------------------------
-// T3 + T4: command-job-manager seam + capability conservation
-// -----------------------------------------------------------------------------
 
 const SANDBOX_OPTIN_ENV = "CLINEMM_EXPERIMENTAL_SANDBOX"
 
@@ -142,57 +56,81 @@ function withSandboxOptIn<T>(value: string | undefined, fn: () => Promise<T> | T
 	}
 }
 
+beforeEach(() => {
+	supervisorCallCount = 0
+})
+
 afterEach(() => {
 	delete process.env[SANDBOX_OPTIN_ENV]
 })
+describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C1 - T1/T2/T2b through the R5 composer", () => {
+	it("T1: ALL + R5 + mandatorySeatbelt => ALLOW with source host_mode_all_seatbelt_required AND mandatorySeatbeltExecution=true", () => {
+		const auth = commandHostAuthorization({ mode: "all", mandatorySeatbelt: true })
+		const result = evaluateCommandToolApproval(R5_INPUT, auth)
+		expect(result.approved).toBe(true)
+		expect(result.decision.kind).toBe("allow")
+		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
+		expect(result.mandatorySeatbeltExecution).toBe(true)
+	})
 
-describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C1 - T3 NO-FALLBACK", () => {
-	it("T3: prepare() fails after conditional bypass granted => spawn_failed, host shell NOT invoked", async () => {
+	it("T2 ABLATION: ALL + R5 + mandatorySeatbelt UNDEFINED => ask/risk_hard_floor AND mandatorySeatbeltExecution=false", () => {
+		const auth = commandHostAuthorization({ mode: "all" })
+		const result = evaluateCommandToolApproval(R5_INPUT, auth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("ask")
+		expect(result.decision.source).toBe("risk_hard_floor")
+		expect(result.mandatorySeatbeltExecution).toBe(false)
+	})
+
+	it("T2b DENY: ALL + mandatorySeatbelt + explicit deny rule => deny/host_hard_deny AND mandatorySeatbeltExecution=false", () => {
+		const auth = commandHostAuthorization({
+			mode: "all",
+			mandatorySeatbelt: true,
+			explicitDenyRules: [{ source: "unit_test_deny", pattern: /^\s*rm\s+-rf/u }],
+		})
+		const result = evaluateCommandToolApproval(R5_INPUT, auth)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("deny")
+		expect(result.decision.source).toBe("host_hard_deny")
+		expect(result.mandatorySeatbeltExecution).toBe(false)
+	})
+
+	it("T1 (WithPlan variant): the per-command plan path also returns mandatorySeatbeltExecution=true", () => {
+		const auth = commandHostAuthorization({ mode: "all", mandatorySeatbelt: true })
+		const result = evaluateCommandToolApprovalWithPlan(R5_INPUT, auth)
+		expect(result.approved).toBe(true)
+		expect(result.decision.kind).toBe("allow")
+		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
+		expect(result.mandatorySeatbeltExecution).toBe(true)
+		expect(result.executionPlan).toBeDefined()
+	})
+})
+
+describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C1 - T3 NO-FALLBACK end-to-end", () => {
+	it("T3: real approve -> real context -> prepare() throws -> spawn_failed, supervisor NEVER called", async () => {
 		await withSandboxOptIn("seatbelt", async () => {
-			// Backend whose prepare() throws SandboxError. The sentinel
-			// stays false iff the executor refused to fall through to
-			// spawnSupervisableShellCommand. If a regression introduces
-			// a fallback path past prepare() failure, the sentinel flips
-			// and HALT_UNSANDBOXED_FALLBACK_EXISTS.
-			const supervisorSentinel = { invoked: false }
-			const throwingBackend: SandboxBackend & { __supervisorInvoked: typeof supervisorSentinel } = {
+			const auth = commandHostAuthorization({ mode: "all", mandatorySeatbelt: true })
+			const approval = evaluateCommandToolApproval(R5_INPUT, auth)
+			expect(approval.approved).toBe(true)
+			expect(approval.mandatorySeatbeltExecution).toBe(true)
+
+			const throwingBackend = {
 				id: "test-throwing-mandatory-seatbelt",
-				async isAvailable() {
-					return true
-				},
-				async prepare(): Promise<never> {
-					throw new SandboxError("profile-generation forced failure", {
-						backendId: "test-throwing-mandatory-seatbelt",
-						reason: "profile-generation-failed",
-					})
-				},
-				__supervisorInvoked: supervisorSentinel,
+				async isAvailable() { return true },
+				async prepare(): Promise<never> { throw new Error("profile-generation forced failure") },
 			}
+
 			const manager = new CommandJobManager({
 				sandboxBackendResolver: async () => throwingBackend,
 			})
 			try {
 				const start = await manager.start(
-					{
-						command: `/bin/sh -c 'echo hi'`,
-						cwd: process.cwd(),
-						waitBudgetMs: 5_000,
-						executionDeadlineMs: 5_000,
-					},
-					// AgentToolContext.mandatorySeatbeltExecution is the
-					// typed channel that carries the conditional bypass
-					// into the executor. The field is defined on the
-					// shared AgentToolContext type; the executor enforces
-					// the obligation in CommandJobManager.start.
-					{
-						agentId: "agent",
-						iteration: 1,
-						mandatorySeatbeltExecution: true,
-					},
+					{ command: `/bin/sh -c 'echo hi'`, cwd: process.cwd(), waitBudgetMs: 5_000, executionDeadlineMs: 5_000 },
+					{ agentId: "agent", iteration: 1, mandatorySeatbeltExecution: approval.mandatorySeatbeltExecution },
 				)
 				expect(start.state).toBe("spawn_failed")
 				expect(start.signal ?? "").toContain("sandbox-prepare-failed")
-				expect(supervisorSentinel.invoked).toBe(false)
+				expect(supervisorCallCount).toBe(0)
 			} finally {
 				await manager.dispose()
 			}
@@ -201,20 +139,41 @@ describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C1 - T3 NO-FALL
 })
 
 describe("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 C1 - T4 CAPABILITY CONSERVATION", () => {
-	it("T4: buildExperimentalReconCapability is BYTE-EQUAL across the fix (no widening)", () => {
-		// The same inputs as the pre-fix baseline MUST produce the
-		// exact same capability. If the fix inadvertently widens
-		// writableRoots / network / sshAuthenticationAuthority, this
-		// assertion fails and HALT_SANDBOX_CAPABILITY_EXPANDED.
+	it("T4: buildExperimentalReconCapability is byte-equal across the fix (no widening)", () => {
 		const cap = buildExperimentalReconCapability({
-			cwd: T4_INPUTS.cwd,
-			workspaceRoots: T4_INPUTS.workspaceRoots,
+			cwd: "/private/var/folders/clinemm-t4-test",
+			workspaceRoots: ["/private/var/folders/clinemm-t4-test"],
+			networkOverride: "deny",
+			sshAgentOverride: "deny",
 		})
-		expect(cap.writableRoots).toEqual(baselineCapability.writableRoots)
-		expect(cap.network).toBe(baselineCapability.network)
-		expect(cap.sshAuthenticationAuthority).toEqual(baselineCapability.sshAuthenticationAuthority)
-		// Belt-and-suspenders: deep equal via JSON serialization.
-		expect(JSON.stringify(cap)).toBe(JSON.stringify(baselineCapability))
+		// v1 baseline (frozen pre-fix snapshot of the canonical
+		// capability for these inputs). If you change the capability
+		// builder, you MUST update this baseline and explicitly note
+		// why in the change. The contract is the byte-equal JSON.
+		const v1Baseline = JSON.stringify({
+			readonlyRoots: [],
+			writableRoots: ["/private/var/folders/clinemm-t4-test"],
+			denyReadSubpaths: [],
+			network: "deny",
+			environment: {
+				mode: "sanitized",
+				allow: [
+					"CLICOLOR",
+					"FORCE_COLOR",
+					"GIT_PAGER",
+					"GIT_TERMINAL_PROGRESS",
+					"LANG",
+					"LANGUAGE",
+					"LC_ALL",
+					"LSCOLORS",
+					"NO_COLOR",
+					"PAGER",
+					"PATH",
+					"TERM",
+				],
+			},
+			cwd: "/private/var/folders/clinemm-t4-test",
+		})
+		expect(JSON.stringify(cap)).toBe(v1Baseline)
 	})
 })
-
