@@ -1,0 +1,49 @@
+SOURCE: git merge-tree --write-tree --messages HEAD upstream/main
+EXIT: 1 (conflicts detected)
+LABEL: STRUCTURAL (no merge executed)
+
+REAL CONFLICT FILES (17)
+=========================
+apps/vscode/package.json
+apps/vscode/proto/cline/state.proto
+apps/vscode/src/sdk/SdkController.ts
+apps/vscode/src/sdk/model-catalog/catalog.ts
+apps/vscode/src/sdk/model-catalog/contracts.ts
+apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts
+apps/vscode/src/sdk/sdk-tool-policies.test.ts
+apps/vscode/src/sdk/sdk-tool-policies.ts
+apps/vscode/src/sdk/vscode-session-host.ts
+apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts
+apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+bun.lock
+sdk/packages/core/src/extensions/tools/definitions.ts
+sdk/packages/core/src/extensions/tools/executors/bash.ts
+sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+sdk/packages/llms/src/providers/billing.test.ts
+sdk/packages/shared/src/agent.ts
+
+CLASSIFIED (17)
+===============
+MECHANICAL: 6
+  bun.lock
+  package.json
+  useProviderUsageCostDisplay.ts
+  sdk-task-control-coordinator.test.ts
+  sdk-tool-policies.test.ts
+  billing.test.ts
+SEMANTIC: 7
+  model-catalog/catalog.ts
+  model-catalog/contracts.ts
+  vscode-session-host.ts
+  definitions.ts
+  runtime-builder.ts
+  agent.ts
+  useProviderUsageCostDisplay.test.ts (add/add)
+SECURITY_CRITICAL: 4
+  state.proto (field-174 deletion/restoration)
+  SdkController.ts (mcpHub removed from isToolAutoApproved)
+  bash.ts (executor boundary)
+  sdk-tool-policies.ts (MCP approval simplified)
+GENERATED: 0
+FACTORY_ONLY: 0
+  (factory files do not intersect upstream)

@@ -396,6 +396,18 @@ apps/examples/desktop-app/.cursor/settings.json
 # Mirror the .factory/acts/ + .factory/evidence/ default-deny +
 # whitelist pattern above.
 !/.factory/evidence/ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01/
+# ACT-CLINEMM-UPSTREAM-SYNC-RECON01: upstream sync impact recon (177 commits,
+# 55 intersect, 17 conflicts, 26 frozen invariants). The successor
+# ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01 binds to identity.txt,
+# divergence.txt, upstream-commit-map.tsv, conflict-preview.txt,
+# semantic-overlap.md, invariant-map.md, and recommendation.md. The
+# epic-board.md cross-link to this ACT's recommendation requires the
+# evidence to survive a fresh clone.
+!/.factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-RECON01/
+# ACT body file at .factory/acts/. Same durable-binding reason as the
+# evidence directory above; the epic-board.md and the successor ACT
+# cross-link to this file.
+!/.factory/acts/ACT-CLINEMM-UPSTREAM-SYNC-RECON01.md
 
 
 # Same principle for nested Factory state under apps/vscode (ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01).

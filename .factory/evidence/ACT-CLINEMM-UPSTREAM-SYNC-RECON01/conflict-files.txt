@@ -1,0 +1,17 @@
+apps/vscode/package.json
+apps/vscode/proto/cline/state.proto
+apps/vscode/src/sdk/SdkController.ts
+apps/vscode/src/sdk/model-catalog/catalog.ts
+apps/vscode/src/sdk/model-catalog/contracts.ts
+apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts
+apps/vscode/src/sdk/sdk-tool-policies.test.ts
+apps/vscode/src/sdk/sdk-tool-policies.ts
+apps/vscode/src/sdk/vscode-session-host.ts
+apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts
+apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+bun.lock
+sdk/packages/core/src/extensions/tools/definitions.ts
+sdk/packages/core/src/extensions/tools/executors/bash.ts
+sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+sdk/packages/llms/src/providers/billing.test.ts
+sdk/packages/shared/src/agent.ts

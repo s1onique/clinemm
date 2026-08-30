@@ -1,0 +1,17 @@
+bun.lock|MECHANICAL|lockfile churn; bun install regenerates
+package.json|MECHANICAL|dependency version churn
+useProviderUsageCostDisplay.ts|MECHANICAL|small overlap, likely consumable
+useProviderUsageCostDisplay.test.ts|GENERATED|add/add; test added by both sides at same path
+billing.test.ts|MECHANICAL|test drift, likely auto-resolvable
+agent.ts|SEMANTIC|shared agent type changes by both sides
+definitions.ts|SEMANTIC|tool definitions changed by both sides
+runtime-builder.ts|SEMANTIC|runtime builder topology changed by both sides
+bash.ts|SECURITY_CRITICAL|bash executor changes - sandbox/approval boundary
+sdk-tool-policies.ts|SECURITY_CRITICAL|tool policy / autoApprove changes on both sides - load-bearing for Safe-YOLO
+SdkController.ts|SECURITY_CRITICAL|heavy overlap; mcpHub removed from isToolAutoApproved, remote-config coordinator added
+model-catalog/catalog.ts|SEMANTIC|catalog data shape churn on both sides
+model-catalog/contracts.ts|SEMANTIC|branded types contract drift on both sides
+sdk-task-control-coordinator.test.ts|MECHANICAL|test API surface, likely consumable
+sdk-tool-policies.test.ts|MECHANICAL|test matrix, likely consumable
+vscode-session-host.ts|SEMANTIC|session host lifecycle changes
+state.proto|SECURITY_CRITICAL|protobuf field 174 removal/restoration - no field-number collision

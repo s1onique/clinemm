@@ -1,0 +1,124 @@
+af3d4b51ee97cc2c675edb6dbe0c3a7d1d360e70
+100644 5bf394aaf7c079b43656ae3a81f4e9db2ceda4a8 1	apps/vscode/package.json
+100644 b3ae64648ad4fe03a6f4d9e5cb9374b8ed451e82 2	apps/vscode/package.json
+100644 e718fb39d9e4384f2eefd11dd0ec6a5287f6980a 3	apps/vscode/package.json
+100644 dd4caa292775e34a09b6ea47b8dff4f9b8b37aab 1	apps/vscode/proto/cline/state.proto
+100644 33ad212413100e82fe60a6effd4f964c85229c9d 2	apps/vscode/proto/cline/state.proto
+100644 83c35cc86da98f74227dca38bba8b717d90ce6e4 3	apps/vscode/proto/cline/state.proto
+100644 0c8e1f0033d87d9ed4b5bc2ac563ed848e10f3ef 1	apps/vscode/src/sdk/SdkController.ts
+100644 03409f5eb456850226fcff4a0e401afd5ef09eff 2	apps/vscode/src/sdk/SdkController.ts
+100644 03a54cd1e0a4bea81274685af3f55d09f1a0076c 3	apps/vscode/src/sdk/SdkController.ts
+100644 2132d96d50f838ead04de352506992790fe1a750 1	apps/vscode/src/sdk/model-catalog/catalog.ts
+100644 ef601f7f3265f45bef244249ab1f937716289195 2	apps/vscode/src/sdk/model-catalog/catalog.ts
+100644 7d850a3c95440bc53222bdb8ee1094c4bb3c3d9d 3	apps/vscode/src/sdk/model-catalog/catalog.ts
+100644 bd0b243d44d43abca2f9723d5406bd51eae70248 1	apps/vscode/src/sdk/model-catalog/contracts.ts
+100644 8dae98e29be7e0eee5ec2989349b8f0559386902 2	apps/vscode/src/sdk/model-catalog/contracts.ts
+100644 e46a5647d3e3c11e65a7701e1ab87793e0a6472d 3	apps/vscode/src/sdk/model-catalog/contracts.ts
+100644 51b7de46064f0736365cf44105c80ecb40d8e25e 1	apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts
+100644 fd98874144889a456d30e22439040e59501c2efb 2	apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts
+100644 28013c35f2f97a34b6c21d838cc9af59084c2595 3	apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts
+100644 413007d2d7b29393b1e8328b1c557c42382729ff 1	apps/vscode/src/sdk/sdk-tool-policies.test.ts
+100644 dc7ef3669e57fb2e1525da8e810a25e90d841366 2	apps/vscode/src/sdk/sdk-tool-policies.test.ts
+100644 354ba6c50efb1228bd7e7e9399af71fd723456f6 3	apps/vscode/src/sdk/sdk-tool-policies.test.ts
+100644 9406f9bcaf2207b50060dfd1a3d054bf55773532 1	apps/vscode/src/sdk/sdk-tool-policies.ts
+100644 a3c16d40721a9658a358e88fb5d3f8808ea962f6 2	apps/vscode/src/sdk/sdk-tool-policies.ts
+100644 ab548813e78159965304c09754b5f1d108950ead 3	apps/vscode/src/sdk/sdk-tool-policies.ts
+100644 a03fcfaa7e2ba4701f098ec75d9fd567d7686be4 1	apps/vscode/src/sdk/vscode-session-host.ts
+100644 bde8d37fa7c7bf4f2d96660ca9f5b400b2f31ebf 2	apps/vscode/src/sdk/vscode-session-host.ts
+100644 3fb1f0910432fd5da6bdc671059b7f5f34066b64 3	apps/vscode/src/sdk/vscode-session-host.ts
+100644 8e60b8c16c079ef56ca90de65447859b99c4c1a6 2	apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts
+100644 aca18e2f683ef2eab0db404dda4232c66003becb 3	apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts
+100644 70536b3ce788a802c546ba92ff1d9e4470cee251 1	apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+100644 ac52272b2c27afb7b6c0ba00356b38f71f963199 2	apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+100644 2108daf39978cb8bd9ce1ef0d93d78a2745d3694 3	apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+100644 2eb9d2d74bf2c2c37ccf418cddaae067ba7b0062 1	bun.lock
+100644 b4b6424b475e98361499d58cab8d64905ebc5360 2	bun.lock
+100644 7aeb396bd929b12629cdab7d4c52b8c723215986 3	bun.lock
+100644 4f67e88e1cd8b42324eb3207e630b7803bd3c4ab 1	sdk/packages/core/src/extensions/tools/definitions.ts
+100644 d6b1cb51d9bb23af30b1225414978cf37a2151a6 2	sdk/packages/core/src/extensions/tools/definitions.ts
+100644 d02eedf0d617d5c12e6da672e9cc47a7fac54cde 3	sdk/packages/core/src/extensions/tools/definitions.ts
+100644 b24a60f7954d2b1904a6f28143783acf958e5a41 1	sdk/packages/core/src/extensions/tools/executors/bash.ts
+100644 4de77045fa706cd28a4d0e88800e17943bc9f3c2 2	sdk/packages/core/src/extensions/tools/executors/bash.ts
+100644 1b4e8e62cb37e8fe887131508bc9531a26487d41 3	sdk/packages/core/src/extensions/tools/executors/bash.ts
+100644 6e05a0a2552b724300f1d7af40e5ee065ce5e8ea 1	sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+100644 5daf5f54821fb67053dabe532de70ed0ca14d579 2	sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+100644 631392b7cea31e7afed0a8018ff58512edca3dcc 3	sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+100644 42dd1f73d8ba4b9f5792ee4af5f9ed0df3b527f7 1	sdk/packages/llms/src/providers/billing.test.ts
+100644 253942e82856e4d13dd627adf4544fd435a305a5 2	sdk/packages/llms/src/providers/billing.test.ts
+100644 41f9700e8f766675d8ca975c168cc6a03f67ad71 3	sdk/packages/llms/src/providers/billing.test.ts
+100644 871962f5d0c0cc8a9f139b8819935b68a1c89082 1	sdk/packages/shared/src/agent.ts
+100644 db8644f7c65735c7f730310340f53d35f5636a36 2	sdk/packages/shared/src/agent.ts
+100644 d4c4b550f5d0ff78bcd23448de0c024f9d50e3e7 3	sdk/packages/shared/src/agent.ts
+
+Auto-merging .gitignore
+Auto-merging apps/cli/src/main.ts
+Auto-merging apps/cli/src/runtime/run-interactive.ts
+Auto-merging apps/vscode/package.json
+CONFLICT (content): Merge conflict in apps/vscode/package.json
+Auto-merging apps/vscode/proto/cline/state.proto
+CONFLICT (content): Merge conflict in apps/vscode/proto/cline/state.proto
+Auto-merging apps/vscode/proto/cline/task.proto
+Auto-merging apps/vscode/src/core/controller/state/getStateToPostToWebview.ts
+Auto-merging apps/vscode/src/core/controller/state/updateSettings.ts
+Auto-merging apps/vscode/src/extension.ts
+Auto-merging apps/vscode/src/sdk/SdkController.ts
+CONFLICT (content): Merge conflict in apps/vscode/src/sdk/SdkController.ts
+Auto-merging apps/vscode/src/sdk/cline-session-factory.ts
+Auto-merging apps/vscode/src/sdk/message-translator.test.ts
+Auto-merging apps/vscode/src/sdk/message-translator.ts
+Auto-merging apps/vscode/src/sdk/model-catalog/catalog.ts
+CONFLICT (content): Merge conflict in apps/vscode/src/sdk/model-catalog/catalog.ts
+Auto-merging apps/vscode/src/sdk/model-catalog/contracts.ts
+CONFLICT (content): Merge conflict in apps/vscode/src/sdk/model-catalog/contracts.ts
+Auto-merging apps/vscode/src/sdk/sdk-followup-coordinator.ts
+Auto-merging apps/vscode/src/sdk/sdk-session-lifecycle.test.ts
+Auto-merging apps/vscode/src/sdk/sdk-session-lifecycle.ts
+Auto-merging apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts
+CONFLICT (content): Merge conflict in apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts
+Auto-merging apps/vscode/src/sdk/sdk-task-control-coordinator.ts
+Auto-merging apps/vscode/src/sdk/sdk-task-history.test.ts
+Auto-merging apps/vscode/src/sdk/sdk-tool-policies.test.ts
+CONFLICT (content): Merge conflict in apps/vscode/src/sdk/sdk-tool-policies.test.ts
+Auto-merging apps/vscode/src/sdk/sdk-tool-policies.ts
+CONFLICT (content): Merge conflict in apps/vscode/src/sdk/sdk-tool-policies.ts
+Auto-merging apps/vscode/src/sdk/vscode-session-host.test.ts
+Auto-merging apps/vscode/src/sdk/vscode-session-host.ts
+CONFLICT (content): Merge conflict in apps/vscode/src/sdk/vscode-session-host.ts
+Auto-merging apps/vscode/src/shared/ExtensionMessage.ts
+Auto-merging apps/vscode/src/shared/storage/state-keys.ts
+Auto-merging apps/vscode/src/test/cline-core-vitest-stub.ts
+Auto-merging apps/vscode/vitest.config.ts
+Auto-merging apps/vscode/webview-ui/src/components/chat/ChatRow.tsx
+Auto-merging apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx
+Auto-merging apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx
+Auto-merging apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts
+CONFLICT (add/add): Merge conflict in apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts
+Auto-merging apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+CONFLICT (content): Merge conflict in apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+Auto-merging bun.lock
+CONFLICT (content): Merge conflict in bun.lock
+Auto-merging sdk/packages/agents/src/agent-runtime.ts
+Auto-merging sdk/packages/core/package.json
+Auto-merging sdk/packages/core/src/extensions/context/compaction-shared.ts
+Auto-merging sdk/packages/core/src/extensions/tools/definitions.ts
+CONFLICT (content): Merge conflict in sdk/packages/core/src/extensions/tools/definitions.ts
+Auto-merging sdk/packages/core/src/extensions/tools/executors/bash.ts
+CONFLICT (content): Merge conflict in sdk/packages/core/src/extensions/tools/executors/bash.ts
+Auto-merging sdk/packages/core/src/extensions/tools/executors/index.ts
+Auto-merging sdk/packages/core/src/extensions/tools/index.ts
+Auto-merging sdk/packages/core/src/index.ts
+Auto-merging sdk/packages/core/src/runtime/host/local-runtime-host.test.ts
+Auto-merging sdk/packages/core/src/runtime/host/local-runtime-host.ts
+Auto-merging sdk/packages/core/src/runtime/host/runtime-host.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+CONFLICT (content): Merge conflict in sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/runtime-event-adapter.test.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/runtime-event-adapter.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.test.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts
+Auto-merging sdk/packages/llms/src/providers/billing.test.ts
+CONFLICT (content): Merge conflict in sdk/packages/llms/src/providers/billing.test.ts
+Auto-merging sdk/packages/shared/src/agent.ts
+CONFLICT (content): Merge conflict in sdk/packages/shared/src/agent.ts
+Auto-merging sdk/packages/shared/src/agents/types.ts
+Auto-merging sdk/packages/shared/src/index.ts

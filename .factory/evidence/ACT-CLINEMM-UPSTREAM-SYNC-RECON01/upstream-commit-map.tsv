@@ -1,0 +1,51 @@
+SHA	AREA	BEHAVIOR	CLINEMM_LANE	SUPERSESSION_RISK
+c870116d1	RUNTIME_COMPLETION	emit task.completed from every session teardown path via emitTaskCompletedOnTeardown (shutdownSession + releaseSessionRuntime); new taskCompletedEmitted flag; failSession records final-turn error	COMPLETION_AUTHORITY	YES - directly supersedes current ClineMM completion authority work
+80dd57315	RUNTIME_COMPLETION	desktop auto-expand submit_and_exit rows and render summary as markdown	COMPLETION_AUTHORITY	PARTIAL - UX only, no runtime authority change
+b9efa9682	RESUME_RESTORE	continue the surviving idle session on resume/follow-up instead of rebuilding from task history; only rebuild when no live session matches displayed task	QPSR_RSR	YES - directly supersedes QPSR/RSR rebuild behavior
+eef7958ca	RESUME_RESTORE	report truthful session status so desktop checkpoint restore stops wedging; cleared busyness when snapshot carries real status; reset agent.done dedup on session.pending_prompt_submitted; new idle sessions start as idle	QPSR_RSR	YES - directly supersedes session-status truthfulness work
+9cf60cd43	RESUME_RESTORE	finalize queued turns on chat_done with canonical history reconcile (clear streaming id, short-delayed read_session_messages + applyCanonicalHistory, guarded by turn epoch/session id/in-flight send)	QPSR_RSR	YES - directly supersedes queued-turn finalization work
+fed502e3c	RESUME_RESTORE	honor classic truncation range when migrating legacy tasks; legacyApiHistoryToSdkMessages slices deleted range and drops orphaned tool_results	LEGACY_TASK_MIGRATION	YES - directly supersedes migration truncation handling
+89c2efa97	ABORT_CANCELLATION	checkpoint workspace restore refuses when HEAD moved past checkpoint; atomic compare-and-swap via git update-ref; closes guard-to-reset race	CHECKPOINT_RESTORE	YES - directly supersedes checkpoint restore race protection
+52d5e1a51	ABORT_CANCELLATION	session aborts propagated to teammates; persisted aborted teammate tasks as cancelled; settle teammate work on session abort; isolate replacement runs from stale aborts	ABORT_PROPAGATION	PARTIAL - upstream covers multi-agent teammate aborts; ClineMM has no multi-agent lane active
+3f0c5cdc9	CI	tidy workflow cache config and job permissions	CI	NO
+6859d00e5	HUB	stop shipping full transcripts inside broadcast hub events	HUB	NO
+0cfc90158	HUB	flush the /shutdown 202 before daemon teardown	HUB	NO
+83ff8fd2f	HUB	cap hub-events db size so it can not fill the disk	HUB	NO
+1de61b178	HUB	add drain and upgrade commands with replay support	HUB	NO
+2b7b01328	TOOL_POLICY	auto-approve all MCP tool calls when the MCP toggle is on; remove mcpHub from isToolAutoApproved; simplify isMcpToolName to substring check	SAFE_YOLO_APPROVAL	YES - directly supersedes MCP-per-tool approval semantics
+833cc891b	TOOL_POLICY	hide per-tool MCP auto-approve checkboxes behind a flag	SAFE_YOLO_APPROVAL	YES - removes per-tool MCP UI
+7718142ef	TOOL_ROUTING	preserve CRLF line endings across apply_patch updates	EDITOR_TOOL	PARTIAL - applies to apply_patch, not editor
+dc43a57fd	TOOL_ROUTING	create new files with platform-native line ending	EDITOR_TOOL	NO
+8fe5a196c	TOOL_ROUTING	deliver tool hook contextModification to the model; fix: prefer errorMessage as cancelling hook stop reason; honor PostToolUse hook cancel and contextModification	HOOKS	PARTIAL - hook surface, not directly in ClineMM
+9b9a067fb	TOOL_ROUTING	collect PostToolUse hook output and honor its control; bound tool_result hook wait and isolate cancel reason	HOOKS	PARTIAL
+6ba9b9d7b	CLI	release v3.0.59	CLI	NO
+6cc032842	CLI	release v3.0.60	CLI	NO
+a5ac26f27	SETTINGS_STATE	clear task-scoped settings overlay when task view is cleared or switched	SETTINGS	NO
+38f8260bc	SETTINGS_STATE	SDK remote-config parity - refresh coordination, session gating, fail-closed opt-out; removes auto_approve_all_toggled=174 from state.proto	SETTINGS	YES - directly conflicts with ClineMM retention of field 174
+d4b415f8a	RESUME_RESTORE	trim persisted transcript on checkpoint restore (sidecar writes trimmed history to persisted file)	CHECKPOINT_RESTORE	PARTIAL
+29530caa5	UI_ONLY	add searchable session history	UI	NO
+432e00eaa	PROMPT	rich workspace metadata in system prompt	PROMPT	NO
+8bbdde2a5	PROVIDER	model-driven image generation	PROVIDER	NO
+a8841bf96	PROVIDER	surface provider-executed tool activity as observational events	PROVIDER	NO
+70654acc3	UI_ONLY	share agent welcome hero	UI	NO
+be56c505e	UI_ONLY	share the markdown pipeline, chat polish, and ThinkingBlock across products	UI	NO
+3f9c9c3f3	UI_ONLY	collapse finished runs into a work summary and remove hover-state dead space	UI	NO
+cf07572a0	UI_ONLY	show provider web-search support under settings toggle	UI	NO
+eed78103a	UI_ONLY	AskQuestion component redesign	UI	NO
+61b95a62e	TOOL_ROUTING	stream run command output (huge bash.ts addition) plus five follow-up fixes for detached logs	BASH_EXECUTOR	PARTIAL - touches conflict file but ClineMM-side adds different seams
+3c433d5a9	TOOL_ROUTING	run_commands object form without args routes through shell instead of failing with ENOENT	BASH_EXECUTOR	NO
+9154a54a0	UI_ONLY	stop showing cost estimates for subscription-billed providers	UI	NO
+7d004f8dc	UI_ONLY	hide task costs on vscode when ClinePass is selected	UI	NO
+fc9575904	SDK	fix: propagate Langfuse session telemetry	SDK	NO
+9316de6bb	SDK	fix: propagate Langfuse session telemetry	SDK	NO
+5ad2dd5fc	RELEASE	desktop beta release channel from desktop-experimental branch	RELEASE	NO
+b851cd86d	UI_ONLY	expand agent component stories	UI	NO
+3e0aac53a	RELEASE	prepare 4.1.10 release	RELEASE	NO
+b532b174b	CI	stop e2e worker teardown timeouts and deflake hub daemon e2e on Windows	CI	NO
+839074d7c	TEST	prevent E2E worker teardown hangs	TEST	NO
+1986fa56d	LLMS	make Langfuse tracer detection survive minified release builds	LLMS	NO
+27350f243	CHORE	bump undici mermaid	CHORE	NO
+ea20be0a1	UI_ONLY	share attachment drop zone	UI	NO
+aa815cd41	CORE	refresh Cline models from live catalog	CORE	NO
+cea134be06	VS_CODE_HOST	prevent hook spawn failures from crashing the core process	VSCODE_HOST	NO
+48d638527	VS_CODE_HOST	thread task id into hook runner creation so execution telemetry fires	VSCODE_HOST	NO

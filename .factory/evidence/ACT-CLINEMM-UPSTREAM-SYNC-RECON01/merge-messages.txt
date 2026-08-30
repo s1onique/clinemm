@@ -1,0 +1,30 @@
+CONFLICT (add/add): Merge conflict in apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts
+Auto-merging apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+CONFLICT (content): Merge conflict in apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts
+Auto-merging bun.lock
+CONFLICT (content): Merge conflict in bun.lock
+Auto-merging sdk/packages/agents/src/agent-runtime.ts
+Auto-merging sdk/packages/core/package.json
+Auto-merging sdk/packages/core/src/extensions/context/compaction-shared.ts
+Auto-merging sdk/packages/core/src/extensions/tools/definitions.ts
+CONFLICT (content): Merge conflict in sdk/packages/core/src/extensions/tools/definitions.ts
+Auto-merging sdk/packages/core/src/extensions/tools/executors/bash.ts
+CONFLICT (content): Merge conflict in sdk/packages/core/src/extensions/tools/executors/bash.ts
+Auto-merging sdk/packages/core/src/extensions/tools/executors/index.ts
+Auto-merging sdk/packages/core/src/extensions/tools/index.ts
+Auto-merging sdk/packages/core/src/index.ts
+Auto-merging sdk/packages/core/src/runtime/host/local-runtime-host.test.ts
+Auto-merging sdk/packages/core/src/runtime/host/local-runtime-host.ts
+Auto-merging sdk/packages/core/src/runtime/host/runtime-host.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+CONFLICT (content): Merge conflict in sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/runtime-event-adapter.test.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/runtime-event-adapter.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.test.ts
+Auto-merging sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts
+Auto-merging sdk/packages/llms/src/providers/billing.test.ts
+CONFLICT (content): Merge conflict in sdk/packages/llms/src/providers/billing.test.ts
+Auto-merging sdk/packages/shared/src/agent.ts
+CONFLICT (content): Merge conflict in sdk/packages/shared/src/agent.ts
+Auto-merging sdk/packages/shared/src/agents/types.ts
+Auto-merging sdk/packages/shared/src/index.ts
