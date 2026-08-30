@@ -1,17 +1,18 @@
-bun.lock|MECHANICAL|lockfile churn; bun install regenerates
-package.json|MECHANICAL|dependency version churn
-useProviderUsageCostDisplay.ts|MECHANICAL|small overlap, likely consumable
-useProviderUsageCostDisplay.test.ts|GENERATED|add/add; test added by both sides at same path
-billing.test.ts|MECHANICAL|test drift, likely auto-resolvable
-agent.ts|SEMANTIC|shared agent type changes by both sides
-definitions.ts|SEMANTIC|tool definitions changed by both sides
-runtime-builder.ts|SEMANTIC|runtime builder topology changed by both sides
-bash.ts|SECURITY_CRITICAL|bash executor changes - sandbox/approval boundary
-sdk-tool-policies.ts|SECURITY_CRITICAL|tool policy / autoApprove changes on both sides - load-bearing for Safe-YOLO
-SdkController.ts|SECURITY_CRITICAL|heavy overlap; mcpHub removed from isToolAutoApproved, remote-config coordinator added
-model-catalog/catalog.ts|SEMANTIC|catalog data shape churn on both sides
-model-catalog/contracts.ts|SEMANTIC|branded types contract drift on both sides
-sdk-task-control-coordinator.test.ts|MECHANICAL|test API surface, likely consumable
-sdk-tool-policies.test.ts|MECHANICAL|test matrix, likely consumable
-vscode-session-host.ts|SEMANTIC|session host lifecycle changes
-state.proto|SECURITY_CRITICAL|protobuf field 174 removal/restoration - no field-number collision
+PATH	CLASS	NOTE
+state.proto	SECURITY_CRITICAL	protobuf field 174 deletion/restoration (no field-number collision; preserve ClineMM restoration per F17)
+SdkController.ts	SECURITY_CRITICAL	mcpHub removed from isToolAutoApproved; remote-config coordinator added; force-refresh semantics per F24
+sdk-tool-policies.ts	SECURITY_CRITICAL	MCP approval simplified to single useMcp toggle (PR #13498 / 2b7b01328); load-bearing for Safe-YOLO; per-tool MCP flow consolidated per F16
+sdk-tool-policies.test.ts	MECHANICAL	test matrix updated on both sides; likely consumable
+bash.ts	SECURITY_CRITICAL	bash executor boundary - upstream adds stream run command output (61b95a62e) + ENOENT gate (3c433d5a9); ClineMM adds sandbox/command-job-manager authority (BASH_FUNC strip, supervised command execution); different seams, manual reconciliation required
+vscode-session-host.ts	SEMANTIC	session host lifecycle changes on both sides; ClineMM adds handoff/cancelTask/freeze extensions
+sdk-task-control-coordinator.test.ts	MECHANICAL	test API surface; likely consumable
+useProviderUsageCostDisplay.test.ts	SEMANTIC	add/add (both sides added same path independently); one side must be renamed/merged
+useProviderUsageCostDisplay.ts	MECHANICAL	small overlap; CONFLICT (content) per merge-tree but mechanically reconcilable
+definitions.ts	SEMANTIC	tool definitions changed on both sides (stream output upstream; invalid-tool-input validation local)
+runtime-builder.ts	SEMANTIC	runtime builder topology changed on both sides
+agent.ts	SEMANTIC	shared agent type changes on both sides
+model-catalog/catalog.ts	SEMANTIC	catalog data shape churn on both sides
+model-catalog/contracts.ts	SEMANTIC	branded types contract drift on both sides
+billing.test.ts	MECHANICAL	test drift, likely auto-resolvable
+package.json	MECHANICAL	dependency version churn; no semantics
+bun.lock	MECHANICAL	lockfile churn; bun install regenerates

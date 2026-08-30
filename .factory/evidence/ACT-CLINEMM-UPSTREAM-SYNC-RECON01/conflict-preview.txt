@@ -22,14 +22,14 @@ sdk/packages/core/src/runtime/orchestration/runtime-builder.ts
 sdk/packages/llms/src/providers/billing.test.ts
 sdk/packages/shared/src/agent.ts
 
-CLASSIFIED (17)
-===============
+CLASSIFIED (17, frozen taxonomy)
+================================
 MECHANICAL: 6
   bun.lock
   package.json
-  useProviderUsageCostDisplay.ts
-  sdk-task-control-coordinator.test.ts
   sdk-tool-policies.test.ts
+  sdk-task-control-coordinator.test.ts
+  useProviderUsageCostDisplay.ts
   billing.test.ts
 SEMANTIC: 7
   model-catalog/catalog.ts
@@ -38,12 +38,39 @@ SEMANTIC: 7
   definitions.ts
   runtime-builder.ts
   agent.ts
-  useProviderUsageCostDisplay.test.ts (add/add)
+  useProviderUsageCostDisplay.test.ts  (add/add; manual merge step required)
 SECURITY_CRITICAL: 4
   state.proto (field-174 deletion/restoration)
   SdkController.ts (mcpHub removed from isToolAutoApproved)
   bash.ts (executor boundary)
   sdk-tool-policies.ts (MCP approval simplified)
-GENERATED: 0
 FACTORY_ONLY: 0
   (factory files do not intersect upstream)
+
+Note: taxonomy has four classes only (MECHANICAL / SEMANTIC / SECURITY_CRITICAL
+/ FACTORY_ONLY). An earlier draft introduced a GENERATED class for the add/add
+test; the post-review freeze reclassifies it under SEMANTIC. See
+conflict-classification-README.md for the reconciliation.
+
+55-vs-54 NOTE
+=============
+INTERSECTION_COUNT      = 55 (from `git diff --name-only merge-base..HEAD` and
+                                  `git diff --name-only merge-base..upstream/main`
+                                  intersected via `comm -12`)
+CHANGED_IN_BOTH_COUNT    = 54 (from `git merge-tree --write-tree --messages`)
+AUTO_MERGE_FILES         = 37 (= 54 - 17)
+CONFLICT_FILES           = 17
+
+The 1-file difference is `apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts`:
+- It appears in BOTH file-diff lists (so it is in the 55-intersection).
+- In `merge-tree` it is reported as `CONFLICT (add/add)`, NOT as `changed in both`,
+  because both sides ADDED it independently from a base-absent state. An
+  add/add is structurally different from a base-present-3-way-edit conflict,
+  and merge-tree lists it under a separate section rather than the
+  `changed in both` table.
+- Both numbers are correct for what they measure. Successor tooling should
+  derive `CONFLICT_FILES = 17` from `merge-tree --messages` (the authoritative
+  conflict set) and ignore the 1-file `intersection - changed-in-both` delta.
+
+This does not block the merge; the 17 real conflicts come directly from
+merge-tree regardless.

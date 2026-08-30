@@ -25,21 +25,41 @@ ENTRY_TREE       = 4e7c1b7c2420f18523847dd2d84e6a1bda59b7e4
 BRANCH           = main
 WORKTREE_STATUS  = CLEAN
 PROTECTED_STASHES_PRESERVED = 2  (untouched, did NOT pop/drop)
+UPSTREAM_REMOTE  = https://github.com/cline/cline.git (upstream)
+UPSTREAM_HEAD    = 48d63852745460ff0fa3dfcc0457bbe2493841de
+UPSTREAM_TREE    = 14500ceda6208e38fc6cf2289efd5156d44ca46e
+MERGE_BASE       = ad442cbb6a81d21773ceabc1398ea5eb58170718
+LOCAL_ONLY_COMMITS    = 905
+UPSTREAM_ONLY_COMMITS = 177
+RECON_SUBJECT_HEAD    = 48d63852745460ff0fa3dfcc0457bbe2493841de
+                       (P1 bounded correction: pin upstream by SHA;
+                        successor must merge THIS exact object,
+                        not an implicitly-moving upstream/main)
+RECON_SUBJECT_TREE    = 14500ceda6208e38fc6cf2289efd5156d44ca46e
+```
 ## Counts
 
 ```
 UPSTREAM_FILES_CHANGED    = 764
 CLINEMM_FILES_CHANGED     = 1058 (incl. .factory/, tools/factory/)
-INTERSECTION_COUNT        = 55
-CONFLICT_FILES            = 17  (merge-tree --write-tree)
+INTERSECTION_COUNT        = 55  (file-diff intersection via `comm -12`)
+CHANGED_IN_BOTH_COUNT     = 54  (merge-tree section; 1 less than
+                                 INTERSECTION_COUNT because the add/add
+                                 test file is reported separately by
+                                 merge-tree. See conflict-preview.txt
+                                 §"55-vs-54 NOTE".)
+CONFLICT_FILES            = 17  (merge-tree --write-tree; authoritative)
 AUTO_MERGE_FILES          = 37  (54 - 17)
 MECHANICAL_CONFLICTS      = 6
 SEMANTIC_CONFLICTS        = 7
 SECURITY_CRITICAL_CONFLICTS = 4  (state.proto, SdkController.ts,
                                    bash.ts, sdk-tool-policies.ts)
-GENERATED_CONFLICTS       = 0
-FACTORY_ONLY_CONFLICTS    = 0
+FACTORY_ONLY_CONFLICTS    = 0   (factory files do not intersect upstream)
+GENERATED_CONFLICTS       = 0   (class removed in P1 bounded correction;
+                                   the add/add test is now SEMANTIC)
 ```
+
+The taxonomy uses **four classes**: `MECHANICAL`, `SEMANTIC`, `SECURITY_CRITICAL`, `FACTORY_ONLY`. See `conflict-classification-README.md` for the reconciliation history.
 
 ## Open lane impact (per ACT §20 reprioritization)
 
@@ -63,7 +83,7 @@ apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts   MECHANICAL
 apps/vscode/src/sdk/sdk-tool-policies.test.ts              MECHANICAL
 apps/vscode/src/sdk/sdk-tool-policies.ts                   SECURITY_CRITICAL  (MCP approval)
 apps/vscode/src/sdk/vscode-session-host.ts                 SEMANTIC
-apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts  GENERATED add/add
+apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.test.ts  SEMANTIC  (add/add; manual merge step required)
 apps/vscode/webview-ui/src/hooks/useProviderUsageCostDisplay.ts       MECHANICAL
 bun.lock                                                   MECHANICAL
 sdk/packages/core/src/extensions/tools/definitions.ts      SEMANTIC
@@ -77,10 +97,69 @@ sdk/packages/shared/src/agent.ts                           SEMANTIC
 
 Doctrine: temporary integration branch, no rebase of canonical main, historical SHAs preserved.
 
+**P1 bounded correction (post-review):** Pin upstream by SHA, not by ref.
+
 ```bash
+RECON_SUBJECT_HEAD=48d63852745460ff0fa3dfcc0457bbe2493841de
+
+# step 0 (optional): re-fetch upstream to confirm the subject head has not
+#                   advanced; record any new head and decide whether to
+#                   reopen this ACT or proceed with the pinned subject.
+git fetch --prune upstream main
+FETCHED_UPSTREAM_HEAD=$(git rev-parse upstream/main)
+if [ "$FETCHED_UPSTREAM_HEAD" != "$RECON_SUBJECT_HEAD" ]; then
+    echo "upstream advanced from $RECON_SUBJECT_HEAD to $FETCHED_UPSTREAM_HEAD"
+    echo "Re-open ACT-CLINEMM-UPSTREAM-SYNC-RECON01 with the new subject."
+    exit 1
+fi
+
+# step 1: branch off the pinned subject head (not upstream/main)
 git switch -c factory/upstream-sync-<date>
-git fetch upstream  # already done in this ACT
-git merge --no-ff upstream/main
+git merge --no-ff $RECON_SUBJECT_HEAD
+
+# step 2: resolve the 17 conflicts per the order below (NOT alphabetical)
+#       then regenerate proto and build:
+#   bun run protos
+#   bun run build:sdk
+#   bun run check-types
+
+# step 3: qualification set (see next section)
+
+# step 4: merge back into main with --no-ff; do not fast-forward.
+git switch main
+git merge --no-ff factory/upstream-sync-<date>
+
+# step 5: update factory/inventories/repository.json and .factory/epic-board.md
+```
+
+The merge target is the **exact recon subject** `48d63852745460ff0fa3dfcc0457bbe2493841de`, not an implicitly-moving `upstream/main`. A 178th upstream commit silently landing between recon and execution would invalidate the 17-conflict map; pinning by SHA catches that.
+
+### Conflict resolution order (frozen)
+
+Resolve by dependency / risk, **not alphabetically**:
+
+1. `state.proto` (wire contract; affects generated code AND `updateSettings.ts` wire types)
+2. `sdk-tool-policies.ts` + its test (MCP approval simplification; load-bearing for Safe-YOLO)
+3. `SdkController.ts` (calls `isToolAutoApproved` without `mcpHub` per upstream; must coordinate with #2)
+4. `vscode-session-host.ts` (creates the shared host that `SdkController.ts` ref-gates; F27 target)
+5. `bash.ts` (executor boundary; reconcile upstream stream-output with ClineMM sandbox/command-job-manager seams)
+6. `definitions.ts` (tool definitions; affects #4 and #5)
+7. `runtime-builder.ts` (orchestrator topology)
+8. shared agent/model contracts (`agent.ts`, `model-catalog/catalog.ts`, `model-catalog/contracts.ts`)
+9. package / UI / tests (`package.json`, `useProviderUsageCostDisplay.ts`, `useProviderUsageCostDisplay.test.ts` add/add, `sdk-task-control-coordinator.test.ts`, `billing.test.ts`)
+10. `bun.lock` LAST (regenerate via `bun install`; never hand-edit)
+
+Especially **do NOT** take ours/theirs wholesale for the four `SECURITY_CRITICAL` files (state.proto, SdkController.ts, bash.ts, sdk-tool-policies.ts).
+
+### Integration strategy — what NOT to do
+
+```
+git rebase upstream/main onto main  # would rewrite ClineMM history
+git push --force-with-lease         # would rewrite ClineMM history
+git stash pop stash@{0}             # would surface Seatbelt WIP that must remain WIP
+git reset --hard                    # would destroy evidence anchors
+```
+
 ## Qualification set (frozen)
 
 Required post-merge:
@@ -100,6 +179,17 @@ Required post-merge:
 [ ] grep smoke: state.proto field numbers 174, 187, 188, 189, 190 all present and consistent (F17, F18)
 [ ] git diff --stat shows factory/ untouched (F11)
 [ ] git stash list still shows 2 entries (F10)
+
+[ ] SdkSessionLifecycle.getOrCreateSharedHost             (F27: SHARED_HOST_SAFE_YOLO_SOURCE_BINDING)
+    → safeYoloCapabilitySource present
+    → persisted network=true
+    → CommandJobManager capability.network="allow"
+    (P1 bounded correction: SdkController.ts and vscode-session-host.ts
+     are both conflict files, while sdk-session-lifecycle.ts auto-merges.
+     This is precisely where git produces a syntactically clean merge
+     that silently breaks the newly-repaired live source binding. This
+     test MUST be green post-merge; otherwise halt as
+     HALT_SHARED_HOST_SOURCE_BINDING_LOST.)
 ```
 
 NOT required unless upstream touched them:
@@ -112,6 +202,9 @@ NOT required unless upstream touched them:
 ```
 
 ## Fork invariants frozen
+
+See `invariant-map.md` (F1-F27). 27 invariants total: 12 from prior recon + 14 discovered in this ACT + 1 added post-review (F27: `SHARED_HOST_SAFE_YOLO_SOURCE_BINDING` — see Qualification set).
+
 ## Evidence quality labels
 
 ```
@@ -122,8 +215,8 @@ CONFLICT_PREVIEW    = STRUCTURAL        (merge-tree --write-tree; not executed)
 UPSTREAM_TOUR       = SOURCE_PROVEN     (git log + git show on every named SHA)
 SEMANTIC_OVERLAP    = SOURCE_PROVEN + INFERRED  (named SHAs are real; risk classification is inferred)
 FORK_INVARIANTS     = SOURCE_PROVEN     (file existence + grep; some derived from prior ACTs)
-INTEGRATION_STRATEGY = DOCTRINE          (frozen from prior recon; reconfirmed)
-QUALIFICATION_SET   = INFERRED          (selected from the conflict map; not yet run)
+INTEGRATION_STRATEGY = DOCTRINE          (frozen from prior recon; reconfirmed; pin-by-SHA P1 correction)
+QUALIFICATION_SET   = INFERRED          (selected from the conflict map; not yet run; F27 target added post-review)
 LANE_IMPACT         = INFERRED          (judgment based on upstream commit contents)
 ```
 

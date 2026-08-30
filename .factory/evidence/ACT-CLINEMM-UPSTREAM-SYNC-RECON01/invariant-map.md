@@ -144,3 +144,18 @@ F26 SDK auto-build pre-condition
       touch SDK packages (`local-runtime-host.ts`, `bash.ts`,
       `sdk-tool-policies.ts`) and ClineMM has multiple SDK
       consumers.
+
+F27 SHARED_HOST_SAFE_YOLO_SOURCE_BINDING (P1 bounded correction, post-review)
+    - `SdkSessionLifecycle.getOrCreateSharedHost` MUST thread
+      `safeYoloCapabilitySource` through to the resulting
+      `VscodeSessionHost` instance.
+    - When persisted network=true, `CommandJobManager.capability.network`
+      MUST equal `"allow"` (not `"deny"`).
+    - Why: `SdkController.ts` AND `vscode-session-host.ts` are both
+      conflict files; `sdk-session-lifecycle.ts` auto-merges. This
+      combination is precisely where git produces a syntactically
+      clean merge that silently breaks the live source binding for
+      the newly-repaired Safe-YOLO capability surface. The post-merge
+      qualification set MUST execute this regression test BEFORE
+      any host-side editor-tool or classic-protection live specimen
+      is run; failure halts with `HALT_SHARED_HOST_SOURCE_BINDING_LOST`.
