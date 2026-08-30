@@ -114,7 +114,7 @@ export function evaluateCommandPolicy(
 	//    ASK still runs hardened (defense in depth).
 	let finalKind = aggregateKind;
 	let finalReason = aggregateReason(perCommand);
-	let finalSource = aggregateSource(perCommand, input.hostAuthorization);
+	let finalSource = aggregateSource(perCommand, input.hostAuthorization, finalKind);
 
 	if (modelHints.effectiveEscalation && finalKind === "allow") {
 		finalKind = "ask";
@@ -640,6 +640,7 @@ function aggregateReason(perCommand: PerCommandEvaluation[]): string {
 function aggregateSource(
 	perCommand: PerCommandEvaluation[],
 	auth: CommandHostAuthorization,
+	aggregateLatticeKind: CommandDecisionKind,
 ): CommandDecisionSource {
 	if (perCommand.length === 1) {
 		return perCommand[0]!.source;
@@ -694,19 +695,31 @@ function aggregateSource(
 	// safe-only fallthrough).
 	//
 	// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01
-	// (CORRECTION01):
+	// (CORRECTION01 + CORRECTION02):
 	// STRICT SUPPRESSOR. Under `mode=all + mandatorySeatbelt=true` the
 	// executor-side Seatbelt obligation is already in force; the legacy
-	// R0 realpath ASK is a redundant human-approval downgrade (kernel
-	// is the gate). When the (a)+(b) intersection holds, the
-	// realpath source is SUPPRESSED at the aggregate-election step
-	// (NOT removed from the type union; still emitted in any
-	// non-(a)+(b) code path). Outside that intersection the existing
-	// behavior is byte-identical.
+	// R0 realpath source label is overridden in favor of the conditional
+	// Seatbelt-ALL branch. Inversion ONLY fires when the aggregate
+	// lattice verdict is `allow` (when ANY per-command verdict is
+	// `ask`, the lattice correctly stays `ask` and the source label
+	// preserves the ASK-class provenance). When the (a)+(b)
+	// intersection holds AND the aggregate is ALLOW, the
+	// realpath / safe-only source labels fall through to step 7
+	// (`host_mode_all_seatbelt_required`). Outside that intersection
+	// the existing behavior is byte-identical.
 	const seatbeltObligationActive =
 		auth.mandatorySeatbelt === true && auth.mode === "all"
+	// CORRECTION02: the seatbelt-OVERRIDE predicate gates the source
+	// election ONLY when the aggregate lattice is ALLOW. When the
+	// aggregate is ASK (because at least one per-command verdict
+	// failed realpath / safe-rule / etc.), the source label stays
+	// the original ASK-class label so consumers see a coherent
+	// (kind=ask, source=realpath_authority) pair. This enforces the
+	// invariant: `source === "host_mode_all_seatbelt_required"` IMPLIES
+	// `kind === "allow"` (an ALLOW-class authority label must not be
+	// attached to an ASK verdict).
 	if (anyWorkspaceRealpathAuthority) {
-		if (seatbeltObligationActive) {
+		if (seatbeltObligationActive && aggregateLatticeKind === "allow") {
 			// Skip the realpath downgrade; the executor-side Seatbelt
 			// obligation is the gate. Fall through to step 7
 			// (`host_mode_all_seatbelt_required`).
@@ -726,14 +739,14 @@ function aggregateSource(
 	}
 	if (anySafeOnlyRule) {
 		// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01
-		// (CORRECTION01): same strict-suppressor logic. When the
-		// (a)+(b) intersection holds, the executor-side Seatbelt
-		// obligation wins over the safe-only source label so the
-		// executor obligation propagates for ANY aggregate that
-		// contains at least one safe-rule ALLOW under
-		// ALL+mandatorySeatbelt. Outside the intersection the
+		// (CORRECTION01 + CORRECTION02): same strict-suppressor logic.
+		// When the (a)+(b) intersection holds AND the aggregate lattice
+		// is ALLOW, the executor-side Seatbelt obligation wins over the
+		// safe-only source label so the executor obligation propagates
+		// for ANY aggregate that contains at least one safe-rule ALLOW
+		// under ALL+mandatorySeatbelt. Outside that intersection the
 		// existing behavior is byte-identical.
-		if (!seatbeltObligationActive) {
+		if (!(seatbeltObligationActive && aggregateLatticeKind === "allow")) {
 			return "host_mode_safe_only_rule"
 		}
 	}

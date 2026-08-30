@@ -195,6 +195,12 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T-E
 		expect(result.decision.kind).toBe("allow")
 		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
 		expect(result.mandatorySeatbeltExecution).toBe(true)
+		// INVARIANT (CORRECTION02): source === "host_mode_all_seatbelt_required"
+		// ⇒ kind === "allow". The ALLOW-class authority label is only
+		// emitted with an ALLOW verdict.
+		if (result.decision.source === "host_mode_all_seatbelt_required") {
+			expect(result.decision.kind).toBe("allow")
+		}
 	})
 
 	it("T-EXACT-SHAPE (atomic shape): evaluateCommandToolApproval also reports the seatbelt source", () => {
@@ -326,7 +332,18 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T4 
 		writeFileSync(outsideVictim, "// T4 outside\n", "utf8")
 	})
 
-	it("T4: ONE inside-root + ONE outside-root operand under ALL+Seatbelt → seatbelt source propagated even with outside-root in array", () => {
+	it("T4: ONE inside-root + ONE outside-root operand under ALL+Seatbelt → ASK with realpath reason preserved (source ↔ kind coherence)", () => {
+		// CORRECTION02: the bounded repair is a STRICT SUPPRESSOR
+		// that respects source ↔ kind coherence. The
+		// `host_mode_all_seatbelt_required` source label is an
+		// ALLOW-class authority and is NEVER emitted with a non-allow
+		// kind. When the aggregate lattice is ASK (because one command
+		// genuinely fails realpath containment), the source label
+		// preserves the original ASK-class label so consumers see a
+		// coherent (kind=ask, source=host_workspace_realpath_authority)
+		// pair. The (a)+(b) intersection is a NECESSARY but not
+		// SUFFICIENT condition for the seatbelt-source override; the
+		// aggregate must also be ALLOW.
 		const persistedAuth = makeProductionAuth({ workspaceRoot, victim: insideVictim })
 		const stampedAuth = stampSeatbeltEnvelope(persistedAuth)
 
@@ -336,24 +353,23 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T4 
 		}
 		const result = evaluateCommandToolApprovalWithPlan(liveInput, stampedAuth)
 
-		// The bounded repair suppresses the legacy R0 realpath source
-		// at the aggregate-election step in the (a)+(b) intersection.
-		// The seatbelt source IS propagated — this is the load-bearing
-		// claim of the bounded repair: under ALL+mandatorySeatbelt,
-		// the executor obligation always reaches the executor.
-		//
-		// The lattice kind stays `ask` because one command genuinely
-		// fails realpath containment (the outside-root operand). The
-		// bounded repair NEVER widens the lattice verdict; it only
-		// relocates source labeling. The kernel will deny the
-		// outside-root access at execute time (the Seatbelt profile
-		// is the load-bearing containment gate for that case).
-		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
-		expect(result.mandatorySeatbeltExecution).toBe(true)
-		// Per-command lattice reason still shows the ASK entry; this
-		// is the diagnostic that proves the bounded repair is not
-		// silently erasing the realpath gate's per-command verdict.
-		expect(result.decision.reason).toContain("host_workspace_realpath_authority")
+		// Lattice: ask (one per-command verdict genuinely fails
+		// realpath containment).
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("ask")
+		// Source: preserved as host_workspace_realpath_authority, NOT
+		// overridden to host_mode_all_seatbelt_required (which is an
+		// ALLOW-class authority label).
+		expect(result.decision.source).toBe("host_workspace_realpath_authority")
+		expect(result.decision.source).not.toBe("host_mode_all_seatbelt_required")
+		// Source ↔ kind coherence invariant: an ALLOW-class authority
+		// label must NEVER be attached to an ASK verdict. The
+		// executor-side Seatbelt obligation stays false because the
+		// aggregate is ASK — the user is the gate (and the legacy R0
+		// ASK-class source is the diagnostic that explains why).
+		expect(result.mandatorySeatbeltExecution).toBe(false)
+		// INVARIANT: source === "host_mode_all_seatbelt_required" ⇒ kind === "allow".
+		// Enforced in the load-bearing cases below.
 	})
 
 	it("T4b: same outside-root operand WITHOUT mandatory Seatbelt → ASK (realpath gate is the only containment)", () => {
@@ -442,5 +458,70 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 T6 
 		// repair; the source label is still emitted when evidence is
 		// genuinely stale / mismatched).
 		expect(result.decision.source).toBe("host_workspace_realpath_authority")
+	})
+})
+
+// ---------------------------------------------------------------------------
+// INVARIANT: source ↔ kind coherence (CORRECTION02)
+// ---------------------------------------------------------------------------
+// `host_mode_all_seatbelt_required` is an ALLOW-class authority label (the
+// frozen R5 contract §1 INV-1 + upstream SDK semantics). It must NEVER be
+// emitted with a non-allow kind. The bounded repair (CORRECTION01) added
+// the strict-suppressor predicate; CORRECTION02 enforces this invariant by
+// gating the source-override predicate on `aggregateLatticeKind === "allow"`.
+//
+// This describe block drives the load-bearing case + the corrected T4
+// (mixed in/out root under ALL+Seatbelt — the case where the
+// (a)+(b) intersection holds but the lattice is ASK because one
+// command fails realpath) and asserts source ↔ kind coherence on both.
+describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01 INVARIANT (source ↔ kind coherence)", () => {
+	let workspaceRoot: string
+	let victim: string
+	let outsideVictim: string
+
+	beforeAll(() => {
+		workspaceRoot = realpathSync(process.cwd())
+		mkdirSync(join(workspaceRoot, ".factory", "tmp"), { recursive: true })
+		const insideTmp = mkdtempSync(join(workspaceRoot, ".factory/tmp/ws-realpath-invariant-in-"))
+		victim = join(insideTmp, "victim.ts")
+		writeFileSync(victim, "// invariant inside\n", "utf8")
+		const outsideTmp = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-invariant-"))
+		outsideVictim = join(outsideTmp, "victim.ts")
+		writeFileSync(outsideVictim, "// invariant outside\n", "utf8")
+	})
+
+	it("INV-1: source === host_mode_all_seatbelt_required ⇒ kind === allow (load-bearing case)", () => {
+		const persistedAuth = makeProductionAuth({ workspaceRoot, victim })
+		const stampedAuth = stampSeatbeltEnvelope(persistedAuth)
+		const result = evaluateCommandToolApprovalWithPlan(
+			{ commands: R0_FAMILY_SPECIMEN(victim) as unknown as string[], requires_approval: false },
+			stampedAuth,
+		)
+		// Load-bearing ALLOW case: source ↔ kind coherence holds.
+		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
+		expect(result.decision.kind).toBe("allow")
+		expect(result.mandatorySeatbeltExecution).toBe(true)
+		// Hard invariant — must NEVER break.
+		if (result.decision.source === "host_mode_all_seatbelt_required") {
+			expect(result.decision.kind).toBe("allow")
+		}
+	})
+
+	it("INV-2: when aggregate lattice is ASK, source stays ASK-class (NOT overridden to host_mode_all_seatbelt_required)", () => {
+		const persistedAuth = makeProductionAuth({ workspaceRoot, victim })
+		const stampedAuth = stampSeatbeltEnvelope(persistedAuth)
+		const result = evaluateCommandToolApprovalWithPlan(
+			{
+				commands: [`cat ${victim}`, `cat ${outsideVictim}`],
+				requires_approval: false,
+			},
+			stampedAuth,
+		)
+		expect(result.decision.kind).toBe("ask")
+		expect(result.decision.source).toBe("host_workspace_realpath_authority")
+		expect(result.decision.source).not.toBe("host_mode_all_seatbelt_required")
+		// Hard invariant — must NEVER break: an ASK verdict cannot
+		// carry an ALLOW-class source label.
+		expect(result.mandatorySeatbeltExecution).toBe(false)
 	})
 })
