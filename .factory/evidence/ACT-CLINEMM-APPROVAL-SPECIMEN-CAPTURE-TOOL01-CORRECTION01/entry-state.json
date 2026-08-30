@@ -1,13 +1,39 @@
 {
   "act": "ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01",
-  "phase": "ENTRY",
+  "phase": "ENTRY_AND_FINAL",
   "capturedAt": "2026-08-29T21:49:35Z",
+  "closedAt": "2026-08-29T22:08:00Z",
+  "verdict": "PASS_APPROVAL_SPECIMEN_CAPTURE_STRUCTURAL_READY_V1",
+  "verdictAmendment": {
+    "amendedAt": "2026-08-29T22:30:00Z",
+    "amendedBy": "reviewer-verdict-2026-08-29",
+    "previousVerdict": "PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1",
+    "amendmentReason": "P0 evidence-class overpromotion. The synthetic-live qualifier emits a Python record that is content-identical to emitCaptureAttach() but does NOT prove the real VS Code extension host runs that code path. LIVE_QUALIFICATION is PENDING, not BOUND. New verdict reflects structural-only readiness; live control is delegated to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §3."
+  },
+  "evidenceClassification": {
+    "ATTACHMENT_MECHANISM_IMPLEMENTED": "PASS",
+    "RUNTIME_IDENTITY_CLASSIFIER": "PASS",
+    "ZERO_EVENT_CLASSIFIER": "PASS",
+    "FAIL_CLOSED_BEHAVIOR": "PASS",
+    "ABLATION": "PASS",
+    "HISTORICAL_EVIDENCE_IMMUTABILITY": "PASS",
+    "SYNTHETIC_RUNTIME_BINDING": "PASS",
+    "REAL_EXTENSION_ATTACHMENT": "NOT_EXECUTED",
+    "LIVE_APPROVAL_TRANSACTION": "NOT_EXECUTED",
+    "LIVE_AUTOAPPROVE_ZERO_EVENT": "NOT_EXECUTED",
+    "LIVE_QUALIFICATION": "PENDING",
+    "REASON": "BLOCKED_BY_ENVIRONMENT (no live VSCode extension host in this shell; no bun in active PATH at entry)"
+  },
+  "liveQualificationStatus": "PENDING — delegated to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §3 (CONTROL_A + CONTROL_B as the first probe of that ACT)",
   "repoRoot": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
   "branch": "main",
   "entryHead": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
   "entryTree": "e753ab01d44291654b2951c8c2e5f0cea78e74e4",
+  "implementationHead": "fc957590445f39788ff7e2b7625be4929b18328d",
+  "implementationTree": "70d4363e6548267c9910de992e3ab57e1346f5f4",
+  "implementationCommitMessage": "fix(factory): bind approval capture to active runtime",
   "originMain": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
-  "worktreeStatus": "CLEAN",
+  "worktreeStatus": "AMENDMENT_CLEAN_PENDING_COMMIT (only this entry-state.json is unstaged at amendment time)",
   "preservedStash": "stash@{0}: On main: c2-green-and-c2-p1-delta",
   "pythonVersion": "3.12.13",
   "baselineGates": {
@@ -25,8 +51,13 @@
       "verify-negative.py",
       "verify-mismatch.py",
       "verify-ambiguity.py",
-      "verify-split.py"
-    ]
+      "verify-split.py",
+      "verify-attach.py",
+      "verify-zero.py",
+      "verify-drift.py",
+      "verify-ablation.py"
+    ],
+    "synthetic_live_qualify": "PASS — emits content-identical capture.attach.v1 from Python; session + clineVersion from real ~/.cline2; repoHead from live git; classification: SYNTHETIC_REAL, NOT LIVE"
   },
   "previousCaptureRef": {
     "captureId": "20260829T060942Z-349b48f1",
@@ -41,9 +72,14 @@
   "liveEnvironment": {
     "node": "NOT_FOUND",
     "npm": "NOT_FOUND",
-    "bun": "/opt/homebrew/bin/bun (1.3.14)",
+    "bun": "/opt/homebrew/bin/bun (1.3.14) — NOT on active PATH",
     "python3": "/run/current-system/sw/bin/python3 (3.12.13)",
     "liveVSCodeExtensionHost": "NOT_RUNNING_IN_THIS_SHELL",
-    "liveQualification": "BLOCKED_BY_ENVIRONMENT (no live VSCode extension host available). ACT will close on structural + hermetic + synthetic-live evidence. Editor-friction handoff classified honestly."
+    "liveQualification": "BLOCKED_BY_ENVIRONMENT (no live VSCode extension host available). ACT closes on structural + hermetic + synthetic-live evidence. Live qualification delegated to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §3 first probe (CONTROL_A + CONTROL_B)."
+  },
+  "handoffToEditorToolRecon": {
+    "next_act": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+    "firstProbe": "Live CONTROL_A (autoApprove=false) + CONTROL_B (autoApprove=true) — the capture toolchain is now structurally capable; this ACT's missing piece is proof that the real extension host runs extension.ts → emitCaptureAttach(). Run both controls under an active VS Code + extension host with CLINEMM_CAPTURE_V2_PATH set; if both succeed, the same session proceeds directly to the real editor-friction specimen.",
+    "exitCriterionForCaptureToolLane": "REAL_EXTENSION_ATTACHMENT=YES + LIVE_APPROVAL_CONTROL=PASS + LIVE_AUTOAPPROVE_CONTROL=PASS"
   }
 }

@@ -1311,12 +1311,11 @@ P0 session/event identity join           CLOSED (third cycle)
 P1 snake_case projection                  CLOSED (third cycle)
 P0 approval transaction uniqueness        CLOSED (fourth cycle)
 P0 cross-session transaction incoherence  CLOSED (fifth cycle)
-P0 runtime identity binding               CLOSED (sixth cycle)
-P0 attachment marker                      CLOSED (sixth cycle)
-P0 zero-event classifier                  CLOSED (sixth cycle)
-PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1  ACHIEVED
-STOP_RULE_BROKEN                         NO  (sixth cycle closed it directly)
-NEXT                                      ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §3 live specimen
+P0 runtime identity binding               CLOSED (sixth cycle IMPLEMENTED)
+P0 attachment marker                      CLOSED (sixth cycle IMPLEMENTED)
+P0 zero-event classifier                  CLOSED (sixth cycle IMPLEMENTED)
+P0 evidence-class overpromotion           OPEN   (seventh cycle amendment - see below)
+LIVE_QUALIFICATION                        PENDING (delegated to editor-tool ACT §3)
 ```
 
 ### F. Detailed results
@@ -1333,3 +1332,127 @@ The evidence folder also contains:
 - `hermetic-fixture/` — copied from the prior cycle for back-compat
 
 Stop here. **C1: GO_NEXT_ACT_IS_EDITOR_TOOL_RECON01**.
+
+---
+
+## ACT-LEDGER ADDENDUM (2026-08-29, seventh review cycle — evidence-class amendment)
+
+The factory reviewer flagged an evidence-class P0: the prior
+verdict `PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1`
+overclaimed. The synthetic-live qualifier emits a Python record
+that is content-identical to `emitCaptureAttach()`, but it does
+NOT prove the real VS Code extension host runs that code path.
+This addendum amends the verdict to honestly reflect what has
+been proven vs. what remains pending.
+
+### A. Evidence classification (corrected)
+
+```
+ATTACHMENT_MECHANISM_IMPLEMENTED=PASS
+RUNTIME_IDENTITY_CLASSIFIER=PASS
+ZERO_EVENT_CLASSIFIER=PASS
+FAIL_CLOSED_BEHAVIOR=PASS
+ABLATION=PASS
+HISTORICAL_EVIDENCE_IMMUTABILITY=PASS
+SYNTHETIC_RUNTIME_BINDING=PASS            ← Python surrogate, content-correct
+REAL_EXTENSION_ATTACHMENT=NOT_EXECUTED    ← real extension host path unproven
+LIVE_APPROVAL_TRANSACTION=NOT_EXECUTED
+LIVE_AUTOAPPROVE_ZERO_EVENT=NOT_EXECUTED
+LIVE_QUALIFICATION=PENDING                ← was BLOCKED_BY_ENVIRONMENT
+                                           (still that, but verdict
+                                            changed to honest structural)
+```
+
+### B. Verdict amendment
+
+Old (overclaimed):
+
+```
+PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1
+```
+
+New (honest):
+
+```
+PASS_APPROVAL_SPECIMEN_CAPTURE_STRUCTURAL_READY_V1
+LIVE_QUALIFICATION=PENDING
+```
+
+The implementation defect IS NONE — the layers all work as
+specified, all 9 hermetic + 16/16 vitest + synthetic-live
+gates PASS. The overclaim was in the verdict label.
+
+### C. Reproduction fidelity
+
+The synthetic-live qualifier produces a record that is
+content-identical to `v2-capture.ts:emitCaptureAttach()`:
+same `codePoint`, same `scope: "process"`, same nested
+`{ runtimeInstanceId, clineVersion, repoHead, emittedAt }`
+under `data`, same env-gating behavior. Python can therefore
+prove: "if a real emitCaptureAttach() output lands in the
+captured log, the collector will recognize it, project its
+identity, and surface it in binding.json."
+
+Python cannot prove: "the real VS Code extension host calls
+emitCaptureAttach() at all." That requires either:
+  (a) a live VS Code extension host with CLINEMM_CAPTURE_V2_PATH
+      set; or
+  (b) a unit test that exercises the extension.ts → emitCaptureAttach()
+      codepath in-process (e.g., a vitest that mocks vscode.ExtensionContext).
+
+Both are delegated to the editor-tool ACT §3 first probe.
+
+### D. Authorized next work (no new implementation ACT)
+
+```
+NEXT_EXECUTABLE_WORK =
+  ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §3
+  WITH LIVE CAPTURE-TOOL QUALIFICATION AS ITS FIRST PROBE
+    CONTROL_A  (autoApprove=false)
+      capture.attach.v1 observed from real extension host
+      + approval.entry.v2 + approval.terminal.v2
+      + executor.entry
+      -> SAME TRANSACTION BOUND
+    CONTROL_B  (autoApprove=true)
+      real capture.attach.v1
+      + no approval.entry/terminal
+      + executor.entry
+      -> Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED
+    If both succeed:
+      CAPTURE_TOOL_LIVE_QUALIFIED=YES
+      -> proceed directly to the §27 native editor-friction specimen
+```
+
+A second capture-tool implementation round
+(`ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION02`)
+is NOT authorized; the implementation is correct and the
+gates are green. The remaining proof point is runtime, not
+tooling.
+
+### E. Status (this addendum)
+
+```
+P0 runtime identity binding               CLOSED (sixth cycle IMPLEMENTED)
+P0 attachment marker                      CLOSED (sixth cycle IMPLEMENTED)
+P0 zero-event classifier                  CLOSED (sixth cycle IMPLEMENTED)
+P0 evidence-class overpromotion           CLOSED (seventh cycle AMENDMENT)
+PASS_APPROVAL_SPECIMEN_CAPTURE_STRUCTURAL_READY_V1 ACHIEVED
+LIVE_QUALIFICATION                       PENDING (delegated to editor-tool ACT §3)
+STOP_RULE_BROKEN                         NO  (seventh cycle closed it directly)
+NEXT                                      ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §3 CONTROL_A + CONTROL_B (live capture-tool qualification as first probe) THEN §27 native editor-tool specimen
+```
+
+### F. Files amended (this cycle)
+
+```
+.factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/entry-state.json
+.factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/final-report.json
+.factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md  (this addendum)
+.factory/epic-board.md                                                       (capture-tool lane row + handoff pointer)
+```
+
+NO source-code changes; NO production-code changes; NO new
+diagnostic architecture. This is an evidence/bookkeeping-only
+amendment per the reviewer's authoritative direction.
+
+Stop here. **C1: GO_EDITOR_TOOL_RECON03_WITH_LIVE_CAPTURE_FIRST_PROBE**.

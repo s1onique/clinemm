@@ -1,0 +1,20 @@
+[
+  {
+    "mtime": "2026-08-30T04:44:24.403280+00:00",
+    "projection": {
+      "interactive": true,
+      "matchedByShape": true,
+      "mode": "act",
+      "model": "anthropic/claude-sonnet-5",
+      "provider": "openrouter",
+      "session_id": "synthetic-live-A",
+      "source": "vscode",
+      "started_at": "2026-08-29T22:00:00.000Z",
+      "status": "running",
+      "updated_at": "2026-08-29T22:01:00.000Z"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.synthetic-live-capture/before",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.synthetic-live-capture/before/sessions/synthetic/synthetic.json"
+  }
+]

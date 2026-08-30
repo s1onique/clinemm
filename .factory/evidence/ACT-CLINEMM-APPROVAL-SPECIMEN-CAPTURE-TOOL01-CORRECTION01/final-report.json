@@ -1,18 +1,39 @@
 {
   "act": "ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01",
-  "verdict": "PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1",
+  "verdict": "PASS_APPROVAL_SPECIMEN_CAPTURE_STRUCTURAL_READY_V1",
+  "verdictAmendment": {
+    "amendedAt": "2026-08-29T22:30:00Z",
+    "amendedBy": "reviewer-verdict-2026-08-29",
+    "previousVerdict": "PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1",
+    "amendmentReason": "P0 evidence-class overpromotion. The synthetic-live qualifier emits a Python record that is content-identical to emitCaptureAttach() but does NOT prove the real VS Code extension host runs that code path. LIVE_QUALIFICATION=PENDING; real attachment is delegated to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 \u00a73 first probe (CONTROL_A + CONTROL_B)."
+  },
+  "evidenceClassification": {
+    "ATTACHMENT_MECHANISM_IMPLEMENTED": "PASS",
+    "RUNTIME_IDENTITY_CLASSIFIER": "PASS",
+    "ZERO_EVENT_CLASSIFIER": "PASS",
+    "FAIL_CLOSED_BEHAVIOR": "PASS",
+    "ABLATION": "PASS",
+    "HISTORICAL_EVIDENCE_IMMUTABILITY": "PASS",
+    "SYNTHETIC_RUNTIME_BINDING": "PASS",
+    "REAL_EXTENSION_ATTACHMENT": "NOT_EXECUTED",
+    "LIVE_APPROVAL_TRANSACTION": "NOT_EXECUTED",
+    "LIVE_AUTOAPPROVE_ZERO_EVENT": "NOT_EXECUTED",
+    "LIVE_QUALIFICATION": "PENDING",
+    "REASON": "BLOCKED_BY_ENVIRONMENT (no live VSCode extension host in this shell; no bun in active PATH at entry)"
+  },
   "capturedAt": "2026-08-29T22:02:56Z",
+  "amendedAt": "2026-08-29T22:30:00Z",
   "entryHead": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
   "entryTree": "e753ab01d44291654b2951c8c2e5f0cea78e74e4",
-  "implementationHead": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
-  "implementationTree": "e753ab01d44291654b2951c8c2e5f0cea78e74e4",
-  "worktreeStatus": "CLEAN_FOR_ACT_DELTA (3 pre-existing biome-format tidy files in apps/vscode/src/core/controller/state/ were dirty at entry per spec §0 'recent unused-import cleanup')",
+  "implementationHead": "fc957590445f39788ff7e2b7625be4929b18328d",
+  "implementationTree": "70d4363e6548267c9910de992e3ab57e1346f5f4",
+  "worktreeStatus": "AMENDMENT_CLEAN_PENDING_COMMIT (only the ACT-owned entry-state.json amendment is unstaged)",
   "previousCapture": {
     "captureId": "20260829T060942Z-349b48f1",
     "runtimeIdentityBound": false,
     "approvalTransactionBound": false,
     "specimenBinding": "CAPTURE_INSUFFICIENT",
-    "preservationRule": "PRESERVED_VERBATIM — T12 invariant holds"
+    "preservationRule": "PRESERVED_VERBATIM \u2014 T12 invariant holds"
   },
   "productionSeams": {
     "capture_attach_emitter": "apps/vscode/src/sdk/v2-capture.ts:emitCaptureAttach()",
@@ -25,9 +46,9 @@
     "drift_detector": "tools/factory/capture-approval-specimen.py:runtime_identity_drift()"
   },
   "red": {
-    "red_runtime_identity": "CLOSED — verify-attach.py + verify-zero.py",
-    "red_zero_event_ambiguity": "CLOSED — verify-zero.py proves Z1",
-    "red_transaction_binding": "RED-3=NOT_APPLICABLE_EXISTING_PASS — preserved from prior cycle"
+    "red_runtime_identity": "CLOSED - verify-attach.py + verify-zero.py",
+    "red_zero_event_ambiguity": "CLOSED - verify-zero.py proves Z1",
+    "red_transaction_binding": "RED-3=NOT_APPLICABLE_EXISTING_PASS - preserved from prior cycle"
   },
   "green": {
     "targeted_tests": "9/9 hermetic verify scripts PASS",
@@ -38,24 +59,29 @@
     "py_compile": "PASS"
   },
   "ablation": {
-    "identity_ablation": "PASS — verify-ablation.py removes attach marker → ZERO_EVENT_CLASSIFICATION=Z3, proves binding is necessary",
-    "restoration": "PASS — re-adds marker → Z1"
+    "identity_ablation": "PASS - verify-ablation.py removes attach marker -> ZERO_EVENT_CLASSIFICATION=Z3, proves binding is necessary",
+    "restoration": "PASS - re-adds marker -> Z1"
   },
   "artifact_identity": {
     "source_head": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
     "source_tree": "e753ab01d44291654b2951c8c2e5f0cea78e74e4",
-    "runtime_instance_id": "synthetic-live: see .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/synthetic-live/captures/<cid>/resolved/binding.json"
+    "runtime_instance_id": "SYNTHETIC - synthetic-live qualifier produced a real-shaped ULID at synthetic-live/captures/<cid>/resolved/binding.json. Does NOT prove the real extension host runs emitCaptureAttach(); for real-runtime binding see ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 sec 3 CONTROL_A."
   },
   "live_control_a": {
-    "tool": "UNAUTHORED — live VS Code extension host unavailable",
+    "tool": "NOT_EXECUTED",
     "auto_approve_false": null,
-    "evidence_class": "STRUCTURAL + SYNTHETIC (covered by verify-attach.py + synthetic-live-qualify.py)"
+    "REAL_EXTENSION_ATTACHMENT": "NOT_EXECUTED",
+    "LIVE_APPROVAL_TRANSACTION": "NOT_EXECUTED",
+    "REASON": "BLOCKED_BY_ENVIRONMENT - no live VS Code extension host in this shell",
+    "evidence_class": "STRUCTURAL (verify-attach.py proves the contract for synthetic data) + SYNTHETIC_REAL (synthetic-live-qualify.py proves the collector can observe a Python-emitted attach record)"
   },
   "live_control_b": {
-    "tool": "UNAUTHORED — live VS Code extension host unavailable",
+    "tool": "NOT_EXECUTED",
     "auto_approve_true": null,
-    "zero_event_class": "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED (synthetic)",
-    "evidence_class": "STRUCTURAL + SYNTHETIC (covered by verify-zero.py + synthetic-live-qualify.py)"
+    "zero_event_class": "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED (synthetic - verify-zero.py)",
+    "LIVE_AUTOAPPROVE_ZERO_EVENT": "NOT_EXECUTED",
+    "REASON": "BLOCKED_BY_ENVIRONMENT - no live VS Code extension host in this shell",
+    "evidence_class": "STRUCTURAL (verify-zero.py proves the contract) + SYNTHETIC_REAL"
   },
   "synthetic_live_qualify": {
     "fixture_root": ".factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/synthetic-live/",
@@ -68,50 +94,15 @@
     "attachment_runtime_instance_id_prefix": "47f1ad044b8c...",
     "runtime_identity_cline_version": "4.1.10",
     "runtime_identity_repo_head": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
-    "evidence_class": "SYNTHETIC_REAL — records content-identical to v2-capture.ts emitCaptureAttach() output; session + clineVersion come from real ~/.cline2"
+    "evidence_class": "SYNTHETIC_REAL - records content-identical to v2-capture.ts emitCaptureAttach() output, emitted from Python; session + clineVersion come from real ~/.cline2; repoHead from real git. PROVES the collector can observe a content-correct attach record. DOES NOT PROVE the real VS Code extension host runs the emitCaptureAttach() codepath - delegated to the editor-tool ACT sec 3 CONTROL_A."
   },
   "editor_friction_specimen": {
     "specimen_id": "DEFERRED_TO_EDITOR_TOOL_RECON01",
-    "specimen_binding": "READY_TO_RESUME — capture toolchain now proves runtime identity + attachment; editor ACT can run §27 specimen under the corrected tool"
+    "specimen_binding": "READY_TO_RESUME - capture toolchain is structurally ready; the editor ACT sec 3 must run CONTROL_A + CONTROL_B as its first probe to prove real-runtime binding, then proceed to the sec 27 native editor-tool specimen"
   },
   "handoff": {
     "editor_tool_approval_friction_recon": "READY_TO_RESUME",
-    "red_for_editor_recon": "AUTHORIZED_ONLY_IF_REAL_A1",
-    "live_qualification_status": "BLOCKED_BY_ENVIRONMENT (no VS Code extension host in this shell)"
-  },
-  "acceptance_criteria": {
-    "C01_EXISTING_CAPTURE_TOOL_REUSED": "PASS",
-    "C02_PREVIOUS_CAPTURE_FAILURE_RECONSTRUCTED": "PASS",
-    "C03_CURRENT_RUNTIME_IDENTITY_SCHEME": "PASS — project_runtime_identity()",
-    "C04_ATTACHMENT_PROOF_IMPLEMENTED": "PASS — emitCaptureAttach()",
-    "C05_DIAGNOSTICS_DEFAULT_OFF": "PASS — env-gated, no-op when unset",
-    "C06_DISABLED_SEMANTIC_DELTA_ZERO": "PASS — covered by existing v2-capture invariants",
-    "C07_APPROVAL_ENTRY_OBSERVABLE": "PASS",
-    "C08_APPROVAL_TERMINAL_OBSERVABLE": "PASS",
-    "C09_EXECUTOR_ENTRY_OBSERVABLE_OR_COMPOSED": "PASS — capture.attach.v1 + session projection compose runtime identity",
-    "C10_TRANSACTION_IDENTITY_CORRELATED": "PASS — preserved from prior cycle",
-    "C11_ZERO_EVENT_AMBIGUITY_REMOVED": "PASS — verify-zero.py (Z1) + verify-ablation.py (Z3/Z4)",
-    "C12_STALE_RUNTIME_MISMATCH_FAILS_CLOSED": "PASS — verify-drift.py",
-    "C13_PREVIOUS_INSUFFICIENT_CAPTURE_NOT_UPGRADED": "PASS — verify-attach.py asserts 20260829T060942Z-349b48f1 still CAPTURE_INSUFFICIENT",
-    "C14_SYNTHETIC_APPROVAL_CONTROL": "PASS — verify-attach.py",
-    "C15_SYNTHETIC_AUTOAPPROVE_CONTROL": "PASS — verify-zero.py",
-    "C16_IDENTITY_ABLATION": "PASS — verify-ablation.py",
-    "C17_CURRENT_ARTIFACT_SOURCE_BOUND": "PASS — synthetic-live uses real repoHead + real globalState",
-    "C18_LIVE_APPROVAL_REQUIRED_CONTROL": "BLOCKED_BY_ENVIRONMENT — structural+synthetic evidence covers",
-    "C19_LIVE_AUTOAPPROVED_CONTROL": "BLOCKED_BY_ENVIRONMENT — verify-zero.py + synthetic-live cover",
-    "C20_REAL_EDITOR_SPECIMEN_ATTEMPTED": "DEFERRED to editor ACT per spec §27",
-    "C21_EDITOR_SPECIMEN_RUNTIME_BOUND": "READY_TO_RESUME — toolchain now binds runtime identity + attachment",
-    "C22_NO_APPROVAL_POLICY_DELTA": "PASS",
-    "C23_NO_SANDBOX_POLICY_DELTA": "PASS",
-    "C24_TARGETED_TESTS": "PASS — 9/9 hermetic + 16/16 vitest",
-    "C25_LINT": "PASS",
-    "C26_TYPECHECK_ACT_OWNED_DELTA": "0 (only the 3 known baseline TS2339 errors, unchanged)",
-    "C27_DIFF_CHECK": "PASS",
-    "C28_WORKTREE_CONSERVATION": "PASS — ACT delta is bounded to (apps/vscode/src/sdk/v2-capture.ts, apps/vscode/src/sdk/v2-capture.test.ts, apps/vscode/src/extension.ts, tools/factory/capture-approval-specimen.py, tools/factory/hermetic-fixture/{build.py,verify-*.py,synthetic-live-qualify.py}). The 3 pre-existing biome-format tidy files in apps/vscode/src/core/controller/state/ were dirty at entry per spec §0 'recent unused-import cleanup'."
-  },
-  "board_re_read": {
-    "capture_tool_lane": "READY_TO_CLOSE — PASS_APPROVAL_SPECIMEN_CAPTURE_CURRENT_RUNTIME_BOUND_V1",
-    "editor_tool_lane": "READY_TO_RESUME — capture toolchain now provides the runtime-binding + attachment proof the editor ACT §3 needs",
-    "next_act": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §3 live specimen under the corrected tool"
+    "capture_tool_first_probe": "CONTROL_A (autoApprove=false) + CONTROL_B (autoApprove=true) under an active VS Code + extension host with CLINEMM_CAPTURE_V2_PATH set. If both succeed, CAPTURE_TOOL_LIVE_QUALIFIED=YES and the same session can proceed directly to the sec 27 editor-friction specimen.",
+    "live_qualification_status": "PENDING - delegated to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 sec 3"
   }
 }
