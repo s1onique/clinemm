@@ -692,8 +692,27 @@ function aggregateSource(
 	// multi-command aggregate (over the V1 lexical-only
 	// `host_workspace_path_authority` source and over the generic
 	// safe-only fallthrough).
+	//
+	// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01
+	// (CORRECTION01):
+	// STRICT SUPPRESSOR. Under `mode=all + mandatorySeatbelt=true` the
+	// executor-side Seatbelt obligation is already in force; the legacy
+	// R0 realpath ASK is a redundant human-approval downgrade (kernel
+	// is the gate). When the (a)+(b) intersection holds, the
+	// realpath source is SUPPRESSED at the aggregate-election step
+	// (NOT removed from the type union; still emitted in any
+	// non-(a)+(b) code path). Outside that intersection the existing
+	// behavior is byte-identical.
+	const seatbeltObligationActive =
+		auth.mandatorySeatbelt === true && auth.mode === "all"
 	if (anyWorkspaceRealpathAuthority) {
-		return "host_workspace_realpath_authority";
+		if (seatbeltObligationActive) {
+			// Skip the realpath downgrade; the executor-side Seatbelt
+			// obligation is the gate. Fall through to step 7
+			// (`host_mode_all_seatbelt_required`).
+		} else {
+			return "host_workspace_realpath_authority"
+		}
 	}
 	// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01:
 	// A workspace path authority downgrade is a more specific
@@ -706,7 +725,17 @@ function aggregateSource(
 		return "host_mode_safe_only_fallthrough";
 	}
 	if (anySafeOnlyRule) {
-		return "host_mode_safe_only_rule";
+		// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01
+		// (CORRECTION01): same strict-suppressor logic. When the
+		// (a)+(b) intersection holds, the executor-side Seatbelt
+		// obligation wins over the safe-only source label so the
+		// executor obligation propagates for ANY aggregate that
+		// contains at least one safe-rule ALLOW under
+		// ALL+mandatorySeatbelt. Outside the intersection the
+		// existing behavior is byte-identical.
+		if (!seatbeltObligationActive) {
+			return "host_mode_safe_only_rule"
+		}
 	}
 	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
 	// The conditional authority class wins over plain host_mode_all
