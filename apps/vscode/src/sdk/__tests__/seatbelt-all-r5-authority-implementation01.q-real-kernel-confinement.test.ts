@@ -103,7 +103,7 @@
  * satisfy Q2/Q3/Q4 trivially. Q1 is the positive control that
  * discriminates "confined" from "broken".
  */
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
@@ -146,6 +146,64 @@ function hasWorkingSeatbelt(): boolean {
 }
 
 const SUBSTRATE = hasWorkingSeatbelt()
+
+/**
+ * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01 CORRECTION03
+ * (HARNESS-FIX):
+ *
+ * Run an unsandboxed control child asynchronously. We CANNOT use
+ * `spawnSync()` here: Q3 and Q4 each create an in-process TCP / AF_UNIX
+ * server inside the Vitest worker. `spawnSync()` blocks the calling
+ * Node thread, which is the same event loop that has to accept the
+ * incoming connection and emit the protocol token. With `spawnSync()`
+ * the server's `connection` callback never fires before the child
+ * timeout, so the CONTROL leg produces `CONNECTED:\n` / `AGENT_DENIED`
+ * even on a fully reachable endpoint -- a CAPTURE_INSUFFICIENT, not a
+ * real Seatbelt denial. This helper exists to keep the event loop
+ * alive during the control leg.
+ *
+ * `hasWorkingSeatbelt()` keeps `spawnSync()` because there is no
+ * in-process server involved there.
+ */
+function runChildAsync(
+	command: string,
+	args: string[],
+	options: {
+		cwd: string
+		env?: NodeJS.ProcessEnv
+		timeoutMs?: number
+	},
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+	return new Promise((resolve, reject) => {
+		const child = spawn(command, args, {
+			cwd: options.cwd,
+			env: options.env,
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+
+		let stdout = ""
+		let stderr = ""
+		child.stdout.setEncoding("utf8")
+		child.stderr.setEncoding("utf8")
+		child.stdout.on("data", (chunk: string) => (stdout += chunk))
+		child.stderr.on("data", (chunk: string) => (stderr += chunk))
+
+		const timer = setTimeout(() => {
+			child.kill("SIGKILL")
+			reject(new Error("CONTROL_TIMEOUT"))
+		}, options.timeoutMs ?? 15_000)
+
+		child.once("error", (err) => {
+			clearTimeout(timer)
+			reject(err)
+		})
+
+		child.once("close", (exitCode) => {
+			clearTimeout(timer)
+			resolve({ exitCode, stdout, stderr })
+		})
+	})
+}
 
 beforeEach(() => {
 	process.env[SANDBOX_OPTIN_ENV] = "seatbelt"
@@ -434,11 +492,15 @@ describe.skipIf(!SUBSTRATE)("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATIO
 		try {
 			// CONTROL: unsandboxed, the listener IS reachable. Without this
 			// leg, "NET_DENIED" could just mean the listener was dead --
-			// a false pass.
-			const control = spawnSync("/bin/bash", [scriptPath], { encoding: "utf8", cwd: wsRoot, timeout: 15_000 })
-			if (!(control.stdout ?? "").includes(`CONNECTED:${TOKEN}`)) {
+			// a false pass. Must run asynchronously so the Vitest worker
+			// event loop remains alive to service the in-process
+			// `createServer` callback (CORRECTION03).
+			const control = await runChildAsync("/bin/bash", [scriptPath], { cwd: wsRoot })
+			if (!control.stdout.includes(`CONNECTED:${TOKEN}`)) {
 				throw new Error(
-					`CAPTURE_INSUFFICIENT: CONTROL could not reach the listener; got=${JSON.stringify(control.stdout)}`,
+					`CAPTURE_INSUFFICIENT: CONTROL could not reach the listener; stdout=${JSON.stringify(
+						control.stdout,
+					)} stderr=${JSON.stringify(control.stderr)}`,
 				)
 			}
 
@@ -512,16 +574,19 @@ describe.skipIf(!SUBSTRATE)("ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATIO
 
 		try {
 			// CONTROL: unsandboxed, the agent endpoint IS reachable, so
-			// "AGENT_DENIED" cannot be explained by a dead socket.
-			const control = spawnSync("/bin/bash", [scriptPath], {
-				encoding: "utf8",
+			// "AGENT_DENIED" cannot be explained by a dead socket. Must
+			// run asynchronously so the Vitest worker event loop
+			// remains alive to service the in-process AF_UNIX listener
+			// (CORRECTION03).
+			const control = await runChildAsync("/bin/bash", [scriptPath], {
 				cwd: wsRoot,
-				timeout: 15_000,
 				env: { ...process.env, SSH_AUTH_SOCK: agentSocketPath },
 			})
-			if (!(control.stdout ?? "").includes("AGENT_REACHED")) {
+			if (!control.stdout.includes("AGENT_REACHED")) {
 				throw new Error(
-					`CAPTURE_INSUFFICIENT: CONTROL could not reach the agent socket; got=${JSON.stringify(control.stdout)}`,
+					`CAPTURE_INSUFFICIENT: CONTROL could not reach the agent socket; stdout=${JSON.stringify(
+						control.stdout,
+					)} stderr=${JSON.stringify(control.stderr)}`,
 				)
 			}
 

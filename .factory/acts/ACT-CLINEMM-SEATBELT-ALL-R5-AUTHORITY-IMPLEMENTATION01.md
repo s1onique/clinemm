@@ -797,6 +797,102 @@ applySeatbeltAuthorityEnvelope        (real producer)
                 -> /usr/bin/sandbox-exec -f profile.sb       (real kernel)
 ```
 
+Q1/Q2 PASSED on the real kernel at HEAD `<CORRECTION03>` (reviewer rerun on a non-sandboxed substrate). Q3/Q4 CONTROL legs produced `CAPTURE_INSUFFICIENT`, NOT a capability leak.
+
+### 13.5 CORRECTION03 (HARNESS-FIX) — diagnosis & reclassification
+
+Reviewer (2026-08-30, second look):
+
+```text
+Q0     PASS
+Q0-ABL PASS
+Q1     PASS
+Q2     PASS
+Q3     CAPTURE_INSUFFICIENT
+Q4     CAPTURE_INSUFFICIENT
+```
+
+Q3 / Q4 used `spawnSync()` for the unsandboxed CONTROL child. That
+**blocks the same Node event loop** hosting the in-process TCP / AF_UNIX
+control servers, so the server callback can't fire until the synchronous
+spawn returns. The child *did* connect to the endpoint; it just read an
+empty body because nothing wrote to it.
+
+| Observation | Was read as | Actually was |
+|---|---|---|
+| `CONNECTED:\n` (control Q3) | "endpoint unreachable" | endpoint reachable, server callback starved |
+| `SSH_AUTH_SOCK=[...] AGENT_DENIED` (control Q4) | "AF_UNIX unreachable" | endpoint reachable, server callback starved |
+
+**That is a test-fixture defect, not a Seatbelt finding.** Q1/Q2 are real
+kernel evidence and stay PASS.
+
+**Fix scope:** harness-only. Production code untouched. Changes to
+`apps/vscode/src/sdk/__tests__/seatbelt-all-r5-authority-implementation01.q-real-kernel-confinement.test.ts`:
+
+1. Add `runChildAsync(command, args, options)` using `node:child_process.spawn`
+   so the event loop stays live during the CONTROL leg.
+2. Replace the two Q3 / Q4 CONTROL `spawnSync()` calls with
+   `await runChildAsync(...)`.
+
+`hasWorkingSeatbelt()` keeps `spawnSync()` because there is no
+in-process server involved there.
+
+```text
+Q1_REAL_FILESYSTEM_POSITIVE       = PASS
+Q2_REAL_FILESYSTEM_CONFINEMENT    = PASS
+Q3_REAL_NETWORK_CONSERVATION      = PENDING_HARNESS_FIX_VERIFIED
+Q4_REAL_SSH_AGENT_CONSERVATION    = PENDING_HARNESS_FIX_VERIFIED
+
+FIX_ONCE_AND_CONTINUE = authorized
+PRODUCTION_CHANGE_REQUIRED = NO
+NEW_ACT                 = NO
+NEW_DESIGN_ROUND        = NO
+FURTHER_POLICY_REVIEW   = NO
+```
+
+### 13.6 To close — single rerun on a non-sandboxed substrate
+
+At HEAD `<CORRECTION03>`:
+
+```bash
+cd apps/vscode
+bun run test:vitest -- \
+  src/sdk/__tests__/seatbelt-all-r5-authority-implementation01.q-real-kernel-confinement.test.ts
+```
+
+Required output:
+
+```text
+[Q-real-kernel] platform=darwin sandbox-exec=true SUBSTRATE_ELIGIBLE=true
+
+Q0     PASS
+Q0-ABL PASS
+Q0-SUB PASS
+Q1     PASS
+Q2     PASS
+Q3     PASS
+Q4     PASS
+
+Tests   7 passed
+Skipped 0
+```
+
+Expected causal composition:
+
+```text
+Q3 UNSANDBOXED CONTROL -> CONNECTED:<token>
+Q3 SANDBOXED deny      -> NET_DENIED
+
+Q4 UNSANDBOXED CONTROL -> SSH_AUTH_SOCK=[path] ; AGENT_REACHED
+Q4 SANDBOXED deny      -> SSH_AUTH_SOCK=[]    ; AGENT_DENIED
+```
+
+On that single run with `7/7 PASS, 0 SKIPPED`, finalize as
+`CLOSED_CLEAN / PASS_SEATBELT_ALL_R5_AUTHORITY_V2`. No further review.
+
+No VSIX/UI dogfood is required for the kernel property; the test process
+is sufficient.
+
 | Gate | Property | Assertion class |
 |---|---|---|
 | Q0 | ALLOW / `host_mode_all_seatbelt_required` / flag=true | substrate-independent |
