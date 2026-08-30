@@ -585,6 +585,45 @@ export class CommandJobManager {
 		//                                        from the backend, NOT from the
 		//                                        original)
 		// ----------------------------------------------------------------
+		// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+		// Conditional authority enforcement at the executor boundary.
+		//
+		// When `context.mandatorySeatbeltExecution === true`, the host
+		// has asserted that the Seatbelt obligation MUST be honored
+		// for this execution. The existing sandbox path below already
+		// fail-closes on prepare() failure (see the try/catch around
+		// `backend.prepare(...)` further down). The new gate here is:
+		// if Seatbelt is unavailable (sandboxMode === undefined), the
+		// command MUST NOT execute via `spawnSupervisableShellCommand`.
+		// The existing fail-closed `buildSandboxUnavailableResult` path
+		// is reused.
+		//
+		// Why we DON'T probe prepare() up-front:
+		//   The existing sandbox branch (below) already fail-closes
+		//   on prepare() throw by returning buildSandboxUnavailableResult
+		//   BEFORE reaching `spawnSupervisableShellCommand`. The new
+		//   thing this gate adds is solely the Seatbelt-availability
+		//   check (the case the existing code did NOT cover, because
+		//   the pre-fix executor fell through to the host shell when
+		//   `sandboxMode === undefined`).
+		//
+		// INV-3, INV-7. The check happens at the TOP of start() so it
+		// runs BEFORE the supervisor is invoked.
+		// ----------------------------------------------------------------
+		const mandatorySeatbeltExecution = context?.mandatorySeatbeltExecution === true
+		if (mandatorySeatbeltExecution && resolveExperimentalSandboxMode() === undefined) {
+			// The host asserted Seatbelt is mandatory, but the
+			// operator has opted out (`CLINEMM_EXPERIMENTAL_SANDBOX=off`
+			// break-glass on darwin, or non-darwin platform). Fail closed.
+			return this.buildSandboxUnavailableResult({
+				id,
+				startedAtMs,
+				deadlineAtMs,
+				maxRetainedOutputChars,
+				maxResponseOutputChars,
+				signal: "seatbelt-required-but-unavailable: CLINEMM_EXPERIMENTAL_SANDBOX is off",
+			})
+		}
 		const sandboxMode = resolveExperimentalSandboxMode()
 		let preparedEnvSemantics: "overlay" | "complete" | undefined
 		let sandboxCleanup: (() => Promise<void>) | undefined

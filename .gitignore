@@ -290,6 +290,23 @@ apps/examples/desktop-app/.cursor/settings.json
 # re-included below so git can recurse, contents are the load-
 # bearing contract.
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-CONTRACT01/
+# ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01: implementation
+# ACT that lands the Architecture B refined contract frozen by the
+# CONTRACT01 predecessor. Status OPEN / HIGH (reviewer disposition
+# 2026-08-30 = GO_IMPLEMENTATION01, one bounded implementation/fix
+# cycle authorized; no further pre-execution review). The ACT carries
+# the load-bearing RED matrix (T1 RED, T2 ABLATION, T3 NO-FALLBACK,
+# T4 CAPABILITY CONSERVATION), the new `host_mode_all_seatbelt_required`
+# decision source, the typed `mandatorySeatbeltExecution` slot on
+# `AgentToolContext`, the executor-side enforcement invariant
+# (no host-shell fallback), and the four stop conditions
+# (HALT_UNSANDBOXED_FALLBACK_EXISTS / HALT_EXECUTOR_CANNOT_BIND_CONSTRAINT
+# / HALT_EXPLICIT_DENY_BYPASSED / HALT_SANDBOX_CAPABILITY_EXPANDED).
+# The epic ledger at .factory/epics/approval-protection.md row 23
+# binds to this ACT AND to the CONTRACT01 preflight evidence (already
+# whitelisted above), so all three (epic row + preflight + this ACT)
+# must survive a fresh clone for the canonical link to hold.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01.md
 # ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01: recon ACT
 # LAUNCH_HEAD = a76ff4137 / TREE = fa383737f (durable-binding freeze
 # per ACT §1). OPEN_HEAD = 4963904e9 (first commit creating ACT).

@@ -384,6 +384,37 @@ export interface AgentToolContext {
 	 */
 	executionCapability?: ToolCallExecutionCapability;
 	/**
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 *
+	 * CLOSED runtime-owned conditional-authority flag. When `true`,
+	 * the executor (`CommandJobManager.start`) MUST refuse any
+	 * host-shell fallback: it MUST require the Seatbelt path
+	 * (sandbox resolver + `backend.prepare()`) to succeed; if the
+	 * Seatbelt substrate is unavailable OR `prepare()` throws a
+	 * `SandboxError`, the executor returns a `spawn_failed` result
+	 * rather than falling through to `spawnSupervisableShellCommand`.
+	 *
+	 * Provenance (same family as `executionCapability` /
+	 * `commandExecutionPlan`):
+	 *   Source 1 (model-stream metadata): NOT used.
+	 *   Source 2 (runtime-owned keys):   NOT used.
+	 *   Source 3 (host-attached; trusted IF typed slot): IS used,
+	 *     via `ToolApprovalResult.mandatorySeatbeltExecution` ->
+	 *     this slot. The host computes the flag from
+	 *     `CommandHostAuthorization.mandatorySeatbelt` set during
+	 *     `evaluateCommandPolicy`.
+	 *
+	 * This field is the executor-side enforcement hook for the
+	 * `host_mode_all_seatbelt_required` decision source. The two
+	 * MUST stay in lockstep: if the policy emitted
+	 * `host_mode_all_seatbelt_required`, the host MUST attach this
+	 * flag to the resulting ToolApprovalResult; if this flag is
+	 * `true`, the executor MUST treat it as a Seatbelt obligation.
+	 *
+	 * Default: `undefined` (no obligation; existing behavior).
+	 */
+	mandatorySeatbeltExecution?: boolean;
+	/**
 	 * ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
 	 *
 	 * CLOSED runtime-owned per-command plan slot. Populated by the

@@ -548,6 +548,20 @@ function evaluateOne(
 	// 3. Mode-based resolution.
 	switch (auth.mode) {
 		case "all":
+			// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+			// Conditional authority class. When the host has asserted
+			// `mandatorySeatbelt: true`, emit the new
+			// `host_mode_all_seatbelt_required` source so the executor
+			// (CommandJobManager.start) enforces the Seatbelt obligation.
+			// The lattice (allow) is unchanged; only the source label
+			// changes. INV-1, INV-2, INV-4, INV-5, INV-6.
+			if (auth.mandatorySeatbelt === true) {
+				return {
+					kind: "allow",
+					source: "host_mode_all_seatbelt_required",
+					reason: "user enabled execute-all-commands mode with mandatory Seatbelt obligation",
+				};
+			}
 			return {
 				kind: "allow",
 				source: "host_mode_all",
@@ -635,6 +649,10 @@ function aggregateSource(
 	let anySafeOnlyFallthrough = false;
 	let anySafeOnlyRule = false;
 	let anyAll = false;
+	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	// Conditional authority class. Multi-command aggregate preserves
+	// the executor Seatbelt obligation if ANY command required it.
+	let anyAllSeatbeltRequired = false;
 	let anyWorkspacePathAuthority = false;
 	let anyWorkspaceRealpathAuthority = false;
 	for (const ev of perCommand) {
@@ -648,6 +666,13 @@ function aggregateSource(
 			anySafeOnlyRule = true;
 		} else if (ev.source === "host_mode_all") {
 			anyAll = true;
+		} else if (ev.source === "host_mode_all_seatbelt_required") {
+			// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+			// Track the conditional authority source separately so
+			// the multi-command aggregate preserves the executor
+			// obligation. ANY command carrying this source forces
+			// the aggregate to carry the executor obligation too.
+			anyAllSeatbeltRequired = true;
 		} else if (ev.source === "host_workspace_path_authority") {
 			anyWorkspacePathAuthority = true;
 		} else if (ev.source === "host_workspace_realpath_authority") {
@@ -682,6 +707,13 @@ function aggregateSource(
 	}
 	if (anySafeOnlyRule) {
 		return "host_mode_safe_only_rule";
+	}
+	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	// The conditional authority class wins over plain host_mode_all
+	// in the aggregate. If ANY command in the multi-command input
+	// requires Seatbelt, the whole aggregate requires Seatbelt.
+	if (anyAllSeatbeltRequired || (auth.mandatorySeatbelt === true && auth.mode === "all")) {
+		return "host_mode_all_seatbelt_required";
 	}
 	if (anyAll || auth.mode === "all") {
 		return "host_mode_all";

@@ -82,6 +82,16 @@ export function maxRestrictive(
  */
 export type CommandDecisionSource =
 	| "host_mode_all"
+	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	// Conditional authority class. Emitted ONLY when `auth.mode ===
+	// "all"` AND `auth.mandatorySeatbelt === true`. Distinct from
+	// `host_mode_all`: the executor (CommandJobManager.start) MUST
+	// refuse any host-shell fallback when this source is granted,
+	// and MUST refuse the spawn if Seatbelt prepare() throws or no
+	// Seatbelt backend is available. The new source carries an
+	// executor-side obligation (seatbelt-required), not merely an
+	// approval bypass. See INV-1..INV-7 in the ACT body.
+	| "host_mode_all_seatbelt_required"
 	| "host_mode_safe_only_rule"
 	| "host_mode_safe_only_fallthrough"
 	| "host_mode_manual"
@@ -221,6 +231,30 @@ export interface CommandHostAllowRule {
  */
 export interface CommandHostAuthorization {
 	mode: CommandHostMode;
+	/**
+	 * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+	 * Conditional authority flag. When `true`, the host is asserting
+	 * that the executor-side Seatbelt obligation will be honored for
+	 * this evaluation — i.e., a Seatbelt substrate is expected to be
+	 * available at execution time, and `prepare()` is expected to
+	 * succeed under the experimental opt-in. The policy evaluator
+	 * emits the new `host_mode_all_seatbelt_required` decision
+	 * source ONLY when this flag is `true` AND `mode === "all"`.
+	 *
+	 * The flag is an executor-side obligation, NOT a capability
+	 * expansion: when the canonical lattice would otherwise emit
+	 * `host_mode_all`, this flag changes the source label so the
+	 * executor enforces the obligation. It does NOT change what
+	 * the command is allowed to do (writableRoots / network /
+	 * sshAgent are computed identically with or without the flag).
+	 *
+	 * `false` or `undefined` is the existing behavior: the lattice
+	 * emits `host_mode_all` and the executor falls back to the
+	 * existing sandbox-or-host path without a Seatbelt obligation.
+	 *
+	 * Default: `undefined` (no obligation; existing behavior).
+	 */
+	mandatorySeatbelt?: boolean;
 	/**
 	 * Optional explicit host deny rules (future). When set, any command
 	 * matching these patterns is DENY unconditionally. The model cannot
@@ -492,9 +526,18 @@ export function buildFilesystemCreateOnlyCapabilityForCommand(params: {
 
 /**
  * Strict-mode constructor for host authorization.
+ *
+ * ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01:
+ * `mandatorySeatbelt` is an optional conditional-authority flag. When
+ * present and `true`, the policy evaluator emits the new
+ * `host_mode_all_seatbelt_required` source instead of `host_mode_all`,
+ * and the executor enforces the Seatbelt obligation (no host-shell
+ * fallback). See the field doc on `CommandHostAuthorization` above and
+ * INV-1..INV-7 in the ACT body.
  */
 export function commandHostAuthorization(params: {
 	mode: CommandHostMode;
+	mandatorySeatbelt?: boolean;
 	explicitDenyRules?: ReadonlyArray<{ source: string; pattern: RegExp }>;
 	explicitAllowRules?: ReadonlyArray<CommandHostAllowRule>;
 	workspaceRoots?: ReadonlyArray<string>;
@@ -504,6 +547,7 @@ export function commandHostAuthorization(params: {
 }): CommandHostAuthorization {
 	return {
 		mode: params.mode,
+		mandatorySeatbelt: params.mandatorySeatbelt,
 		explicitDenyRules: params.explicitDenyRules,
 		explicitAllowRules: params.explicitAllowRules,
 		workspaceRoots: params.workspaceRoots,
