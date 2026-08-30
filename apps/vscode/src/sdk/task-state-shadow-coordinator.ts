@@ -234,6 +234,7 @@ function edgeKeyOf(event: AgentRuntimeEvent): string {
 		case "assistant-text-delta":
 		case "assistant-reasoning-delta":
 		case "assistant-message":
+		case "assistant-media":
 		case "usage-updated":
 		case "status-notice":
 			return `presentational:${event.type}`

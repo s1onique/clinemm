@@ -186,6 +186,13 @@ function makeFixture(): AdversarialFixture {
 		setTask: (task) => {
 			state.task = task as SharedState["task"]
 		},
+		// ACT-CLINEMM-DOGFOOD-BUILD-INTEGRATION-REPAIR01 / B2:
+		// `clearTaskSettings` became a required SdkTaskControlCoordinatorOptions
+		// field (it persists the StateManager's task-scoped settings overlay
+		// before clearing the task). The liveness fixtures here exercise
+		// fence / wedge / cancel semantics, not StateManager persistence, so
+		// a no-op is the minimal semantically-correct stub.
+		clearTaskSettings: async () => {},
 		onAskResponse: vi.fn().mockResolvedValue(undefined),
 		resetMessageTranslator: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),

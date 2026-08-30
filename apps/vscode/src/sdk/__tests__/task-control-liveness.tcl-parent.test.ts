@@ -253,6 +253,10 @@ function makeFixture(): Fixture {
 		setTask: (task) => {
 			state.task = task as SharedState["task"]
 		},
+		// ACT-CLINEMM-DOGFOOD-BUILD-INTEGRATION-REPAIR01 / B2:
+		// `clearTaskSettings` became a required SdkTaskControlCoordinatorOptions
+		// field. See companion comment in tcl-parent.adversarial.test.ts.
+		clearTaskSettings: async () => {},
 		onAskResponse: vi.fn().mockResolvedValue(undefined),
 		resetMessageTranslator: vi.fn(),
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),

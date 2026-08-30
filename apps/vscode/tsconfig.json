@@ -120,6 +120,20 @@
 		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01.test.ts",
 		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
-		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts"
+		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+		// ACT-CLINEMM-DOGFOOD-BUILD-INTEGRATION-REPAIR01 / B1:
+		// The Seatbelt observer test imports `./cline-core-vitest-stub`
+		// via a relative path to drive the live Seatbelt singleton. The
+		// stub in turn re-exports raw SDK source from `sdk/packages/core/...`
+		// (file-read, command-policy, sandbox backends, etc.) which then
+		// pulls the entire SDK source tree into the apps/vscode
+		// compilation unit under rootDir `.` — producing 306× TS6059.
+		//
+		// The stub IS already excluded (line 73) but `tsc` re-resolves
+		// it via transitive relative import from this consumer. Excluding
+		// the consumer (which is test-only and is run via vitest under
+		// `bun run test:vitest`) breaks the leak while leaving every
+		// vitest, bun, and integration test harness unaffected.
+		"src/sdk/__tests__/seatbelt-network-live-downstream-recon01.c1-observer.test.ts"
 	]
 }
