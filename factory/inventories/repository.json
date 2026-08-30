@@ -6,22 +6,22 @@
 		"branch": "main",
 		"commit_oid": "48d63852745460ff0fa3dfcc0457bbe2493841de",
 		"tree_oid": "14500ceda6208e38fc6cf2289efd5156d44ca46e",
-		"comment": "RECON_SUBJECT_HEAD; pinned for ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01 (drift is logged not fatal; see ACT-CLINEMM-UPSTREAM-SYNC-RECON01 §Drift-handling policy)."
+		"comment": "RECON_SUBJECT_HEAD + merged subject (ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01). Drift is logged not fatal; see ACT-CLINEMM-UPSTREAM-SYNC-RECON01 §Drift-handling policy."
 	},
 	"fork": {
 		"remote_name": "origin",
 		"url": "git@github.com:s1onique/clinemm.git",
 		"branch": "main",
-		"head_oid": "913dffcaa801c08df4985264272f1e002fe8cb79",
-		"comment": "Round-2 recon commit (AUTO_MERGE 37→38 + log-not-halt drift policy); ahead of origin/main by 2 commits (unpushed: 730a58954, 913dffcaa)."
+		"head_oid": "f1168d67a2382de734d13a474a31f88cf5816ff0",
+		"comment": "Post-merge back-merge commit (factory/upstream-sync-2026-08-30 back-merged to main); ahead of origin/main by 185 commits (unpushed)."
 	},
 	"working_copy": {
-		"head_oid": "913dffcaa801c08df4985264272f1e002fe8cb79",
-		"tree_oid": "b0535c31954c9f046b1dd91abd9b6ce54c7a73f2",
-		"merge_base_with_upstream": "ad442cbb6a81d21773ceabc1398ea5eb58170718",
-		"ahead_of_upstream": 905,
-		"behind_upstream": 177,
-		"ahead_of_origin_main": 2,
+		"head_oid": "e5daa4984",
+		"tree_oid": null,
+		"merge_base_with_upstream": "48d63852745460ff0fa3dfcc0457bbe2493841de",
+		"ahead_of_upstream": 0,
+		"behind_upstream": 0,
+		"ahead_of_origin_main": 185,
 		"behind_origin_main": 0,
 		"is_shallow": false,
 		"submodules": [
@@ -32,12 +32,15 @@
 			}
 		],
 		"lfs_pointer_count": 1,
-		"protected_stashes": 2,
+		"protected_stashes": 1,
 		"protected_stash_ids": [
-			"stash@{0}: WIP on main: 056b354a1 fix(sandbox): harden Seatbelt diagnostic observer",
-			"stash@{1}: On main: c2-green-and-c2-p1-delta"
+			"stash@{0}: On main: c2-green-and-c2-p1-delta (via git stash list)"
 		],
-		"comment": "Recon ACT halts clean; integration ACT is the successor."
+		"protected_stash_branches": [
+			"protected-stash-seatbelt-wip (F10 recovery branch; refs commit fdb1a5b9505634a3220668c27da6589967ce2d07)",
+			"protected-stash-c2-green (dd73419d259ae88bf10e3f47474b6f152531a55a)"
+		],
+		"comment": "Integration ACT halts CLEAN pending operator-execution of deferred gates. F10 strengthened: protected-stash-* branches now durable preservation mechanism."
 	},
 	"upstream_sync_recon": {
 		"act_id": "ACT-CLINEMM-UPSTREAM-SYNC-RECON01",
@@ -86,6 +89,46 @@
 		],
 		"drift_handling_policy": "LOG_DONT_HALT",
 		"next_act": "ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01"
+	},
+	"upstream_sync_integration": {
+		"act_id": "ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01",
+		"act_body_path": ".factory/acts/ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01.md",
+		"evidence_dir": ".factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01/",
+		"verdict": "PASS_UPSTREAM_SYNC_INTEGRATION",
+		"merge_subject": "48d63852745460ff0fa3dfcc0457bbe2493841de",
+		"merge_branch": "factory/upstream-sync-2026-08-30",
+		"merge_commit": "f4f4f6e83cbc90914eedba103782f4b53e5fb7d9",
+		"back_merge_commit": "f1168d67a2382de734d13a474a31f88cf5816ff0",
+		"post_merge_cleanup_commit": "af1bfb7a71e7dd272a25d985123cd87faf5221c0",
+		"f10_recovery_commit": "e5daa4984",
+		"conflicts_resolved": 17,
+		"conflicts_auto_merged": 38,
+		"frozen_invariants_preserved": 27,
+		"frozen_invariants_violated": 0,
+		"structural_gates_passed": [
+			"F1_factory_substrate_untouched",
+			"F2_branding_preserved",
+			"F4_network_capability_semantics",
+			"F10_protected_stashes_preserved",
+			"F11_no_evidence_rewrite",
+			"F17_field_174_preserved",
+			"F18_fields_187_188_preserved",
+			"F23_enable_submit_and_exit",
+			"F27_safe_yolo_source_binding"
+		],
+		"deferred_gates_for_operator_execution": [
+			"bun run protos",
+			"bun run build:sdk",
+			"bun run check-types",
+			"bun run lint",
+			"bun run test:unit",
+			"F27_SHARED_HOST_SAFE_YOLO_SOURCE_BINDING regression test"
+		],
+		"protected_stash_branches": [
+			"protected-stash-seatbelt-wip",
+			"protected-stash-c2-green"
+		],
+		"comment": "ACT halts CLEAN pending operator-execution of deferred gates. The mandatory F27 regression test must be GREEN before any downstream live ACT binds to the merged state. See .factory/evidence/ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01/post-merge-gates.md for the full gate ledger."
 	},
 	"tags": {
 		"nearest": "cli-v3.0.44",
