@@ -517,19 +517,97 @@ export function evaluateCommandRiskWithParser(
 	//     rm -rf $HOME doesn't match any safe rule. But
 	//     "pwd; bash -c 'rm -rf $HOME'" similarly degrades. The
 	//     opaque check is the belt-and-braces guard.
+	//
+	// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+	// BOUNDED REPAIR CYCLE 2 (reviewer ablation verified 2026-08-31):
+	// this branch DOES need a Seatbelt-aware exception, but the
+	// causal chain is non-obvious — the live specimen's final
+	// source is `risk_hard_floor` (re-skinned downstream at
+	// `sdk-tool-policies.ts:988` from `risk_opaque_composition`)
+	// because the V2 strengthen branch at the end of this function
+	// upgrades an already-ASK disposition to `never-auto-approve`,
+	// which the downstream treats as a hard-floor verdict.
+	//
+	// Causal gate sequence (load-bearing for the live failure):
+	//
+	//   1. V1 R5 floor: ALLOW preserved (mandatory Seatbelt
+	//      obligation honored, `seatbeltObligationHonored` guard
+	//      suppresses the ALLOW→ASK downgrade here).
+	//   2. THIS OPAQUE BRANCH: ALLOW → ASK with
+	//      `source = "risk_opaque_composition"`. Without the
+	//      Seatbelt-aware exception, this branch fires for the
+	//      live `ls /Volumes/... 2>&1` redirect — the helper
+	//      emits `op: ">&"` which the renderer treats as opaque.
+	//   3. V2 strengthen branch: sees `finalDecision === "ask"` →
+	//      upgrades disposition to `never-auto-approve`. This is
+	//      the load-bearing fix at the V2 R5 substrate.
+	//   4. Downstream `sdk-tool-policies.ts:988-1003`: re-skins
+	//      `risk.disposition === "never-auto-approve"` into
+	//      `source: "risk_hard_floor"` for the user-facing card.
+	//
+	// Removing step 2's Seatbelt-aware exception (cycle 2 ablation)
+	// re-broke the load-bearing RED:
+	//
+	//   risk-direct: {
+	//     decision: "ask",
+	//     disposition: "never-auto-approve",
+	//     source: "risk_opaque_composition",  ← step 2 fired
+	//     reasons: ["risk:hard-floor:root-destruction",
+	//               "risk:seatbelt-obligation-honored",  ← step 1 honored
+	//               "opaque shell composition detected in 1 command(s)",
+	//               "structured-max-risk:never-auto-approve:aggregated-r5-child"]
+	//   }
+	//
+	//   verdict: { kind: "ask", source: "risk_hard_floor",  ← step 4 re-skin
+	//              mandatorySeatbeltExecution: false }
+	//
+	// This proves the opaque branch IS the second causal gate.
+	// The V2 R5 strengthen fix alone is insufficient because the
+	// opaque branch fires BEFORE the V2 branch and leaves the
+	// final decision in ASK; the V2 branch's ASK→never-auto-approve
+	// disposition upgrade then triggers the downstream re-skin.
+	//
+	// Conservation witness for the second causal gate: see
+	// `seatbelt-all-r5-authority-implementation01.go-parser-result-red.test.ts`
+	// Section B "REAL-HELPER RED" + "CONSERVATION ABLATION" tests,
+	// which mechanically bind the helper bytes to the vendored
+	// binding and verify both the Seatbelt-honored ALLOW case and
+	// the no-Seatbelt ASK case.
 	if (opaqueCommands.length > 0 && finalDecision === "allow") {
-		// Conservative: if any command is opaque, we cannot reason
-		// about composition. The existing safe-rule engine already
-		// forces ASK for opaque renderings, so this branch should
-		// be unreachable in practice (it would mean the policy
-		// granted ALLOW on an opaque rendering, which is a
-		// regression). Surface it as a safety check.
-		finalDecision = "ask";
-		finalDisposition = "ask";
-		finalSource = "risk_opaque_composition";
-		reasons.push(
-			`opaque shell composition detected in ${opaqueCommands.length} command(s)`,
-		);
+		// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+		// BOUNDED REPAIR (cycle 2, reviewer ablation-verified 2026-08-31):
+		// when the host has asserted `mandatorySeatbelt === true`
+		// AND the canonical lattice emitted
+		// `host_mode_all_seatbelt_required`, suppress the opaque
+		// downgrade. Mirrors the V1 R5 floor's `seatbeltObligationHonored`
+		// guard above and the V2 R5 strengthen branch's analogous
+		// guard below. The opaque-rendering concern remains
+		// operator-visible via the surface reason.
+		const seatbeltObligationHonored =
+			policy.decision.source === "host_mode_all_seatbelt_required" &&
+			input.hostAuthorization?.mandatorySeatbelt === true;
+		if (!seatbeltObligationHonored) {
+			// Conservative: if any command is opaque, we cannot reason
+			// about composition. The existing safe-rule engine already
+			// forces ASK for opaque renderings, so this branch should
+			// be unreachable in practice (it would mean the policy
+			// granted ALLOW on an opaque rendering, which is a
+			// regression). Surface it as a safety check.
+			finalDecision = "ask";
+			finalDisposition = "ask";
+			finalSource = "risk_opaque_composition";
+			reasons.push(
+				`opaque shell composition detected in ${opaqueCommands.length} command(s)`,
+			);
+		} else {
+			// Seatbelt-honored case: the kernel will refuse to
+			// execute anything outside the writable workspace. The
+			// opaque-rendering concern is already covered by the
+			// kernel's filesystem confinement. Surface the opaque
+			// detection as a reason (operator-visible) but do NOT
+			// downgrade the otherwise-ALLOW verdict.
+			reasons.push("opaque-composition:seatbelt-obligation-honored");
+		}
 	}
 
 	// 5c. Empty / unparseable input.
@@ -711,14 +789,47 @@ export function evaluateCommandRiskWithParser(
 			// matching V1's R5 floor pattern), BUT only when the
 			// parser result is bound to source. An unbound AST
 			// cannot be trusted to surface R5.
+			//
+			// ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-IMPLEMENTATION01
+			// BOUNDED REPAIR (reviewer authorized 2026-08-31):
+			// when the host has asserted
+			// `hostAuthorization.mandatorySeatbelt === true` AND
+			// the canonical lattice emitted the
+			// `host_mode_all_seatbelt_required` source (which carries
+			// an executor-side obligation), the V2 strengthen branch
+			// MUST NOT downgrade the otherwise-ALLOW verdict. The
+			// human-approval gate has been delegated to the kernel
+			// (which `CommandJobManager.start` refuses to bypass);
+			// converting to ASK here would surface a card that the
+			// operator's deliberate mode-all + mandatory-seatbelt
+			// choice already covers.
+			//
+			// Mirrors the V1 R5 floor's
+			// `seatbeltObligationHonored` guard at line 490-492.
+			// The V1 floor guards the ALLOW→ASK on the V1 R5
+			// substrate; this guard symmetrically guards the V2 R5
+			// substrate's ALLOW→ASK. The disposition labels stay
+			// symmetric (auto-approve-eligible vs never-auto-approve):
+			// only the human-approval strengthening is suppressed.
+			// The R5 classification (V2's never-auto-approve aggregate)
+			// remains visible to the operator via `v2.reasons` so the
+			// structured-cmd surface still reports the catastrophic
+			// family. Outside the Seatbelt-obligation-honored case,
+			// the existing downgrade fires unchanged (INV-6).
+			const seatbeltObligationHonored =
+				policy.decision.source === "host_mode_all_seatbelt_required" &&
+				input.hostAuthorization?.mandatorySeatbelt === true;
 			if (finalDecision === "ask") {
 				finalDisposition = "never-auto-approve";
-			} else if (finalDecision === "allow") {
+			} else if (finalDecision === "allow" && !seatbeltObligationHonored) {
 				finalDecision = "ask";
 				finalDisposition = "never-auto-approve";
 				finalSource = "risk_v2_structured_strengthen";
 			}
 			reasons.push(...v2.reasons);
+			if (finalDecision === "allow" && seatbeltObligationHonored) {
+				reasons.push("risk:seatbelt-obligation-honored");
+			}
 		}
 	}
 
