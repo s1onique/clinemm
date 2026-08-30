@@ -100,6 +100,16 @@ function isBrowserTool(toolName: string): boolean {
 	return toolName === "fetch_web_content" || toolName === "web_fetch" || toolName === "web_search"
 }
 
+/** MCP tools are registered by `createMcpTools` under `serverName__toolName`. */
+function parseMcpToolName(toolName: string): { serverName: string; toolName: string } | undefined {
+	const separatorIndex = toolName.indexOf("__")
+	if (separatorIndex <= 0) return undefined
+	const serverName = toolName.substring(0, separatorIndex)
+	const mcpToolName = toolName.substring(separatorIndex + 2)
+	if (!mcpToolName) return undefined
+	return { serverName, toolName: mcpToolName }
+}
+
 /**
  * Evaluate the current UI auto-approval settings for a single SDK tool name.
  * Used both when building initial SDK policies and as a live guard in the

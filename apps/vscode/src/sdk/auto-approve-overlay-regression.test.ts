@@ -25,6 +25,7 @@ import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@/shared/AutoApprovalSettings"
 import { AutoApprovalSettingsRequest } from "@/shared/proto/cline/state"
 import { createStorageContext } from "@/shared/storage/storage-context"
 import { SdkTaskControlCoordinator, type SdkTaskControlCoordinatorOptions } from "./sdk-task-control-coordinator"
+import { TaskOperationFence } from "./task-operation-fence"
 import type { TaskProxy } from "./task-proxy"
 
 vi.mock("@/services/logging/distinctId", () => ({
@@ -68,6 +69,13 @@ describe("auto-approve settings after New Task (#13260)", () => {
 			resetMessageTranslator: () => {},
 			postStateToWebview,
 			clearTaskSettings: () => stateManager.clearTaskSettings(),
+			// ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01 (post-merge correction):
+			// upstream PR #13310 added this regression test without supplying
+			// the `taskOperationFence` that ClineMM HEAD's
+			// SdkTaskControlCoordinator.clearTask() requires (security
+			// boundary added by ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01).
+			// Provide a per-test fence so clearTask().begin() resolves.
+			taskOperationFence: new TaskOperationFence(),
 			setTurnPhase: () => {},
 		} as unknown as SdkTaskControlCoordinatorOptions)
 
