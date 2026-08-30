@@ -17,7 +17,7 @@ describe("provider usage cost display", () => {
 		expect(shouldShowProviderUsageCost("openai-codex-cli")).toBe(false);
 	});
 
-	// ACT-CLINEMM-COST-DISPLAY-TRUTH01: explicit contract for ClinePass,
+// ACT-CLINEMM-COST-DISPLAY-TRUTH01: explicit contract for ClinePass,
 	// whose token-derived reference prices are NOT the user's per-task
 	// spend. Catalog layers downstream MUST preserve this "subscription"
 	// class; see apps/vscode/src/sdk/model-catalog/catalog.ts.
@@ -26,6 +26,10 @@ describe("provider usage cost display", () => {
 			"subscription",
 		);
 		expect(shouldShowProviderUsageCost("cline-pass")).toBe(false);
+	});
+	it("hides usage cost for the Claude Code subscription provider", () => {
+		expect(resolveProviderUsageCostDisplay("claude-code")).toBe("subscription");
+		expect(shouldShowProviderUsageCost("claude-code")).toBe(false);
 	});
 
 	it("shows usage cost by default for usage-billed providers", () => {

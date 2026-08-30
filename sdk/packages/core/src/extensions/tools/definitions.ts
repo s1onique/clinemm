@@ -282,7 +282,7 @@ async function executeShellCommands(
 	}
 
 	return Promise.all(
-		commands.map(async (command, i): Promise<ToolOperationResult> => {
+		commands.map(async (command, commandIndex): Promise<ToolOperationResult> => {
 			const startedAt = Date.now();
 			const query = formatRunCommandQueryPreview(command);
 			try {
@@ -317,11 +317,35 @@ async function executeShellCommands(
 						? {
 								...context,
 								executionCapability: undefined,
-								perCommandExecutionCapability: perCommandCaps[i],
+								perCommandExecutionCapability: perCommandCaps[commandIndex],
 							}
 						: context;
+				// ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01: keep upstream's
+				// commandIndex+query envelope on emitUpdate (PR #13547 stream
+				// run-command output) and STACK it on top of the ClineMM
+				// per-command authority binding. Order matters: the per-command
+				// capability is stamped FIRST so the executor receives the
+				// authority-bearing context; the emitUpdate envelope is then
+				// applied so the runtime still tags streamed output with the
+				// command index and query preview.
+				const commandContext: AgentToolContext = context.emitUpdate
+					? {
+							...perCommandContext,
+							emitUpdate: (update) => {
+								const payload =
+									update && typeof update === "object" && !Array.isArray(update)
+										? (update as Record<string, unknown>)
+										: { update };
+								context.emitUpdate?.({
+									...payload,
+									commandIndex,
+									query,
+								});
+							},
+						}
+					: perCommandContext;
 				const output = await withTimeout(
-					executor(command, cwd, perCommandContext),
+					executor(command, cwd, commandContext),
 					timeoutMs,
 					`Command timed out after ${timeoutMs}ms`,
 				);

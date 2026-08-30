@@ -634,5 +634,18 @@ describe("ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01: buildTemp
 				cp.spawnSync = originalSpawnSync
 			}
 		})
+		// NOTE (ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01): upstream PR #13498 added
+		// 2 tests here that expected isToolAutoApproved("firecrawl__scrape", settings)
+		// (2-arg signature) to return `true` when settings.actions.useMcp=true
+		// WITHOUT an mcpHub. ClineMM's `isToolAutoApproved` (line 944) requires
+		// either an mcpHub or an `override === "all"` session override; otherwise
+		// `!!tool?.autoApprove` is `false` for unknown tools (intentional
+		// hard-DENY for unknown MCP server/tool pairs, see F16 +
+		// ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03 G1 fixture). The upstream
+		// tests encode the simplified useMcp-only semantic that F16 prohibits
+		// in ClineMM (per-tool MCP approval is load-bearing for Safe-YOLO).
+		// Therefore: dropped upstream's 2 tests. ClineMM's existing test
+		// matrix (A/B/C/D/E/F/G1/G2/PRODUCTION REGRESSION at lines 30-637)
+		// already proves the correct semantic.
 	})
 })

@@ -1,5 +1,6 @@
 "use client";
 
+import { GeneratedMediaContent } from "@cline/ui";
 import {
 	Message as AgentMessage,
 	type AgentMessageRole,
@@ -16,10 +17,75 @@ import {
 	UndoIcon,
 } from "lucide-react";
 import { memo } from "react";
-import type { ChatMessage, ChatMessageImage } from "@/lib/chat-schema";
+import type {
+	ChatMessage,
+	ChatMessageImage,
+	ChatMessageMedia,
+} from "@/lib/chat-schema";
+import { cn } from "@/lib/utils";
 import { MemoizedMarkdown } from "../../../ui/markdown";
 import { formatChatMessageContent } from "../message-content";
+import { isSystemSteeringMessage } from "./group-messages";
+import { MessageImageCarousel } from "./image-carousel";
 import { ReasoningBlock } from "./reasoning-block";
+
+function MessageImages({
+	images,
+	isUser,
+	onExpandImage,
+}: {
+	images: ChatMessageImage[];
+	isUser: boolean;
+	onExpandImage?: (image: ChatMessageImage) => void;
+}) {
+	if (!isUser) {
+		return (
+			<MessageImageCarousel images={images} onExpandImage={onExpandImage} />
+		);
+	}
+
+	return (
+		<div className="grid max-w-2xl gap-2">
+			{images.map((image, index) => (
+				<button
+					aria-label={`Expand attachment ${index + 1}`}
+					className="cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted text-left transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					key={image.id}
+					onClick={() => onExpandImage?.(image)}
+					type="button"
+				>
+					{/* biome-ignore lint/performance/noImgElement: In-memory data URLs do not have dimensions and cannot use Next's optimizer. */}
+					<img
+						alt={`Attachment ${index + 1}`}
+						className="max-h-56.25 max-w-56.25 object-contain"
+						src={`data:${image.mediaType};base64,${image.data}`}
+					/>
+				</button>
+			))}
+		</div>
+	);
+}
+
+function MessageMedia({ media }: { media: ChatMessageMedia[] }) {
+	return (
+		<div className="flex max-w-2xl flex-col gap-2">
+			{media.map((item) => (
+				<GeneratedMediaContent
+					classNames={{
+						image:
+							"max-h-96 max-w-full rounded-lg border border-border bg-muted object-contain",
+						audio: "w-full",
+						video: "max-h-96 max-w-full rounded-lg",
+						file: "text-sm underline",
+						unavailable: "rounded-lg border border-border bg-muted p-3 text-sm",
+					}}
+					key={item.id}
+					media={item}
+				/>
+			))}
+		</div>
+	);
+}
 
 // Memoized with id-parameterized callbacks: during streaming only the message
 // object that received a delta changes identity, so all other bubbles skip
@@ -45,6 +111,7 @@ export const MessageBubble = memo(function MessageBubble({
 	forkPending = false,
 	forkError,
 	isLastAssistantMessage = false,
+	followsWorkingRows = false,
 	reasoningContent,
 	reasoningRedacted,
 	thoughtDurationMilliseconds,
@@ -76,6 +143,9 @@ export const MessageBubble = memo(function MessageBubble({
 	forkPending?: boolean;
 	forkError?: string;
 	isLastAssistantMessage?: boolean;
+	/** Pulls the bubble closer to the working rows (tool calls/run summary)
+	 * directly above it, which it answers. */
+	followsWorkingRows?: boolean;
 	reasoningContent: string;
 	reasoningRedacted: boolean;
 	thoughtDurationMilliseconds?: number;
@@ -83,6 +153,14 @@ export const MessageBubble = memo(function MessageBubble({
 	const isUser = message.role === "user";
 	const isError = message.role === "error";
 	const checkpoint = message.meta?.checkpoint;
+	// Runtime steering notes (completion nudges in scheduled/automation runs,
+	// team-obligation reminders) are user-role messages the machinery sends to
+	// the model, not something the person said or needs to read — hide them
+	// from the transcript entirely. Grouping still treats them as working-row
+	// machinery (never a turn boundary, an answer, or a run-count increment).
+	if (isSystemSteeringMessage(message)) {
+		return null;
+	}
 	const displayContent = formatChatMessageContent(
 		message.role,
 		message.content,
@@ -126,10 +204,19 @@ export const MessageBubble = memo(function MessageBubble({
 		</time>
 	) : null;
 
-	// Spacing between blocks comes solely from the conversation list's `gap-8`
-	// and this content column's `gap-2`; blocks must not add their own margins.
+	// Spacing between blocks comes from the conversation list's `gap-4` and
+	// this content column's `gap-2`, with two exceptions: a user message opens
+	// a new turn so it adds top margin, and an answer under its run's working
+	// rows pulls itself closer to them.
 	return (
-		<AgentMessage className="relative flex flex-col gap-2" from={agentRole}>
+		<AgentMessage
+			className={cn(
+				"relative flex flex-col gap-2",
+				isUser && "mt-4 first:mt-0",
+				followsWorkingRows && "-mt-2",
+			)}
+			from={agentRole}
+		>
 			<MessageContent className="flex min-w-0 flex-col gap-2 wrap-break-word">
 				{reasoningContent || reasoningRedacted ? (
 					<ReasoningBlock
@@ -141,25 +228,14 @@ export const MessageBubble = memo(function MessageBubble({
 				) : null}
 
 				{message.images?.length ? (
-					<div className="grid max-w-2xl gap-2">
-						{message.images.map((image, index) => (
-							<button
-								aria-label={`Expand attachment ${index + 1}`}
-								className="cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted text-left transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								key={image.id}
-								onClick={() => onExpandImage?.(image)}
-								type="button"
-							>
-								{/* biome-ignore lint/performance/noImgElement: User-provided data URLs do not have dimensions and cannot use Next's optimizer. */}
-								<img
-									alt={`Attachment ${index + 1}`}
-									className="max-h-56.25 max-w-56.25 object-contain"
-									src={`data:${image.mediaType};base64,${image.data}`}
-								/>
-							</button>
-						))}
-					</div>
+					<MessageImages
+						images={message.images}
+						isUser={isUser}
+						onExpandImage={onExpandImage}
+					/>
 				) : null}
+
+				{message.media?.length ? <MessageMedia media={message.media} /> : null}
 
 				{displayContent ? (
 					<div className="min-w-0 max-w-full wrap-break-word">
@@ -177,7 +253,7 @@ export const MessageBubble = memo(function MessageBubble({
 						{onCopyMessage ? (
 							<MessageAction
 								label={wasCopied ? "Copied user message" : "Copy user message"}
-								onClick={() => void onCopyMessage(message.id, message.content)}
+								onClick={() => void onCopyMessage(message.id, displayContent)}
 								title={wasCopied ? "Copied" : "Copy message"}
 							>
 								{wasCopied ? (

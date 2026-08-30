@@ -331,6 +331,10 @@ export interface SessionConnectionRuntimeService {
 	): Promise<void>;
 }
 
+export interface CommandExecutionRuntimeService {
+	proceedWhileRunning(sessionId: string, toolCallId?: string): Promise<number>;
+}
+
 export interface RuntimeHostSubscribeOptions {
 	sessionId?: string;
 }

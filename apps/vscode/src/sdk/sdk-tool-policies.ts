@@ -38,7 +38,7 @@ import { emitV2Capture } from "./v2-capture"
  * Build SDK `toolPolicies` for tools governed by Cline's auto-approval UI.
  *
  * The SDK defaults unlisted tools to auto-approved. For tools controlled by
- * AutoApproveBar/MCP per-tool settings, force the SDK to call
+ * the AutoApproveBar toggles (including all MCP tools), force the SDK to call
  * `requestToolApproval`; the approval callback then evaluates the latest
  * settings and either silently approves or shows the approval UI. This keeps
  * active sessions in sync when the user toggles auto-approval mid-task.
@@ -98,15 +98,6 @@ export function isCommandTool(toolName: string): boolean {
 
 function isBrowserTool(toolName: string): boolean {
 	return toolName === "fetch_web_content" || toolName === "web_fetch" || toolName === "web_search"
-}
-
-function parseMcpToolName(toolName: string): { serverName: string; toolName: string } | undefined {
-	const separatorIndex = toolName.indexOf("__")
-	if (separatorIndex <= 0) return undefined
-	const serverName = toolName.substring(0, separatorIndex)
-	const mcpToolName = toolName.substring(separatorIndex + 2)
-	if (!mcpToolName) return undefined
-	return { serverName, toolName: mcpToolName }
 }
 
 /**
