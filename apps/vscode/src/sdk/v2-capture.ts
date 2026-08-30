@@ -46,6 +46,28 @@
  *   hostDecision.compose.v2            (request scope)
  *   approval.terminal.v2               (request scope; exactly once)
  *
+ *   approval.ui.branch.v2              (request scope; ACT-CLINEMM-
+ *                                       APPROVAL-SPECIMEN-CAPTURE-TOOL02
+ *                                       fires unconditionally at entry
+ *                                       of the manual-ask publishing
+ *                                       branch, BEFORE onToolApprovalAsk
+ *                                       and BEFORE appendAndEmit. Auto-
+ *                                       approved/bypass requests MUST
+ *                                       NOT fire this code point — the
+ *                                       early `return { approved: true }`
+ *                                       exits happen before this line.)
+ *   approval.ui.published.v2           (request scope; ACT-CLINEMM-
+ *                                       APPROVAL-SPECIMEN-CAPTURE-TOOL02
+ *                                       fires only AFTER the ask
+ *                                       message has been emitted via
+ *                                       messages.appendAndEmit, with
+ *                                       the same correlationId +
+ *                                       commandDigest inherited from
+ *                                       the ambient AsyncLocalStorage
+ *                                       context. Tells the operator
+ *                                       whether the card row was
+ *                                       actually persisted.)
+ *
  *   capture.attach.v1                  (PROCESS scope — fires once
  *                                       per extension-host startup
  *                                       when CLINEMM_CAPTURE_V2_PATH

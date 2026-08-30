@@ -1359,4 +1359,94 @@ describe("SdkInteractionCoordinator", () => {
 			await expect(promise).resolves.toEqual({ approved: true })
 		})
 	})
+	// ----------------------------------------------------------------
+	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL02-CORRECTION01
+	// Card-publication seam probes: a request that is auto-approved /
+	// bypassed MUST NOT enter the manual-ask publishing branch, so the
+	// `approval.ui.branch.v2` and `approval.ui.published.v2` code points
+	// MUST NOT fire for it.
+	//
+	// This test pins the diagnostic, not a behavior change. It only
+	// asserts the absence of those two code points when the host
+	// decision is "allow / host_mode_all" (the live YOLO / ⚡ ALL —
+	// this task path). If this test ever fails, that is the load-bearing
+	// evidence that the card-publishing branch is being reached for an
+	// auto-approved request — exactly the live-recon defect class.
+	// ----------------------------------------------------------------
+	describe("ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL02: card-publication seam probes", () => {
+		it("auto-approved / host_mode_all request does NOT fire approval.ui.branch.v2 or approval.ui.published.v2", async () => {
+			const { mkdtempSync, readFileSync, rmSync } = await import("node:fs")
+			const { tmpdir } = await import("node:os")
+			const { join } = await import("node:path")
+			const { __resetV2CaptureForTests, isV2CaptureEnabled } = await import("./v2-capture")
+
+			const originalEnv = process.env.CLINEMM_CAPTURE_V2_PATH
+			const tmpDir = mkdtempSync(join(tmpdir(), "card-seam-"))
+			const capturePath = join(tmpDir, "capture.jsonl")
+			process.env.CLINEMM_CAPTURE_V2_PATH = capturePath
+			__resetV2CaptureForTests()
+
+			try {
+				expect(isV2CaptureEnabled()).toBe(true)
+
+				const task = createTaskProxy("session-host-mode-all", vi.fn(), vi.fn())
+				const coordinator = new SdkInteractionCoordinator({
+					messages: new SdkMessageCoordinator({ getTask: () => task }),
+					getSessionId: () => "session-host-mode-all",
+					postStateToWebview: vi.fn().mockResolvedValue(undefined),
+					recordApprovedToolMessage: vi.fn(),
+					// SDK policy short-circuit — the live YOLO / ⚡ ALL — this task path.
+					// No onToolApprovalAsk, no messages.appendAndEmit, no
+					// setTurnPhase awaiting_approval. The request returns BEFORE the
+					// seam probes.
+					shouldAutoApproveTool: () => true,
+				})
+
+				await expect(
+					coordinator.handleRequestToolApproval({
+						agentId: "agent",
+						conversationId: "conversation",
+						iteration: 1,
+						toolCallId: "tool-host-mode-all",
+						toolName: "run_commands",
+						input: { command: "printf 'approval-live-probe\\n'" },
+						policy: { autoApprove: true },
+					}),
+				).resolves.toEqual({ approved: true })
+
+				// Auto-approved request MUST NOT have published a card row.
+				expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
+
+				// Even if capture was somehow partially written (it must not be,
+				// but we read defensively to keep this assertion honest), the two
+				// card-seam code points must NOT appear in the JSONL output.
+				let contents = ""
+				try {
+					contents = readFileSync(capturePath, "utf8")
+				} catch {
+					contents = ""
+				}
+				const records = contents
+					.split("\n")
+					.filter((l) => l.length > 0)
+					.map((l) => JSON.parse(l))
+				const branchHits = records.filter((r) => r.codePoint === "approval.ui.branch.v2")
+				const publishedHits = records.filter((r) => r.codePoint === "approval.ui.published.v2")
+				expect(branchHits).toEqual([])
+				expect(publishedHits).toEqual([])
+			} finally {
+				if (originalEnv === undefined) {
+					delete process.env.CLINEMM_CAPTURE_V2_PATH
+				} else {
+					process.env.CLINEMM_CAPTURE_V2_PATH = originalEnv
+				}
+				__resetV2CaptureForTests()
+				try {
+					rmSync(tmpDir, { recursive: true, force: true })
+				} catch {
+					// best-effort cleanup
+				}
+			}
+		})
+	})
 })

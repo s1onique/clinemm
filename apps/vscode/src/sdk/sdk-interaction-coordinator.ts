@@ -421,6 +421,22 @@ export class SdkInteractionCoordinator {
 			}
 		}
 
+		// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL02-CORRECTION01
+		// Card-publication seam probes — default-off, never throw.
+		// `branch` fires unconditionally on entry to the manual-ask code path;
+		// `published` fires only after the ask message was actually emitted to
+		// the webview. An auto-approved/bypass request returns from one of the
+		// earlier `return { approved: true, ... }` exits and never reaches
+		// either probe, which is the contract the matching test pins.
+		emitV2Capture({
+			codePoint: "approval.ui.branch.v2",
+			scope: "request",
+			data: {
+				toolName: request.toolName,
+				toolCallId: request.toolCallId,
+			},
+		})
+
 		// Open the edit diff preview before the Approve/Reject buttons render. This is the only
 		// pre-execution point where the adapter has the full tool input (the SDK emits the
 		// tool's content events only after approval resolves).
@@ -435,6 +451,15 @@ export class SdkInteractionCoordinator {
 		this.options.messages.appendAndEmit([toolAskMessage], {
 			type: "status",
 			payload: { sessionId: this.options.getSessionId(), status: "running" },
+		})
+		emitV2Capture({
+			codePoint: "approval.ui.published.v2",
+			scope: "request",
+			data: {
+				toolName: request.toolName,
+				toolCallId: request.toolCallId,
+				messageTs: toolAskMessage.ts,
+			},
 		})
 		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts, "interaction-handle-tool-approval")
 		await this.options.postStateToWebview()
