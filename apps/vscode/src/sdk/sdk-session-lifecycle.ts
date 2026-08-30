@@ -69,6 +69,23 @@ export interface SdkSessionLifecycleOptions {
 	 * from any query path. See SessionAutoApprovalStore for the contract.
 	 */
 	consumePendingOverride?: (sessionId: string) => void
+	/**
+	 * ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+	 * Setting-driven capability snapshot source forwarded to the
+	 * shared VscodeSessionHost. Required so the LIVE primary session
+	 * (and resume-from-history sessions) read the persisted
+	 * `clinemmSafeYoloAllowNetwork` / `clinemmSafeYoloAllowSshAgent`
+	 * values from StateManager instead of falling back to the env-only
+	 * network path. The 5 SdkController.ts callsites
+	 * (`createTempSessionHost` for followup / compaction / edit /
+	 * regenerate) already wire this; this field closes the
+	 * `getOrCreateSharedHost` gap that the live UI=true → deny
+	 * specimen exposed.
+	 */
+	safeYoloCapabilitySource?: () => {
+		readonly network: boolean | undefined
+		readonly sshAgent: boolean | undefined
+	}
 	onDidBecomeIdle?: () => void
 	/**
 	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback for the
@@ -548,6 +565,15 @@ export class SdkSessionLifecycle {
 				// host so the run_commands tool can flip the projection when
 				// it returns RUNNING / reaches a terminal state.
 				onBackgroundStateChange: this.options.onBackgroundStateChange,
+				// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+				// forward the setting-driven capability source to the
+				// shared VscodeSessionHost. Without this, every live
+				// primary-session and resume-from-history command build
+				// receives safeYoloCapabilitySource=undefined inside the
+				// CommandJobManager and falls through to the env-only
+				// network path — yielding network="deny" regardless of
+				// the persisted clinemmSafeYoloAllowNetwork=true.
+				safeYoloCapabilitySource: this.options.safeYoloCapabilitySource,
 			})
 				.then((sdkHost) => {
 					this.ensureSharedHostSubscription(sdkHost)

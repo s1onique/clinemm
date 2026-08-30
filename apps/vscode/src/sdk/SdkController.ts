@@ -1010,6 +1010,18 @@ export class Controller {
 			},
 			onDidBecomeIdle: () => this.handleSessionBecameIdle(),
 			getRemoteConfigIntegration: () => this.remoteConfigCoreIntegration,
+			// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+			// Forward the production-safeYoloCapabilitySource closure
+			// (verbatim shape used by the 5 SdkController.ts
+			// createTempSessionHost callsites at 1216/1324/1350/2660/2907)
+			// to the shared VscodeSessionHost. Without this the live
+			// primary session host swallows UI=true into the env-only
+			// path and yields network="deny" regardless of the persisted
+			// opt-in.
+			safeYoloCapabilitySource: () => ({
+				network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
+				sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
+			}),
 			foregroundCommands: this.foregroundCommands,
 			getTerminalManager: () => {
 				// Guarded by getEffectiveTerminalExecutionMode() at the read sites
