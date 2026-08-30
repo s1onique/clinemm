@@ -287,6 +287,27 @@ apps/examples/desktop-app/.cursor/settings.json
 # hardening row), so both must survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01/
+# ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01: successor
+# recon ACT opened at SOURCE_HEAD = fe3be36fe (post-H2-repair head).
+# Reopens the SEATBELT-NETWORK-EGRESS-RECON01 row on the operator
+# session's fresh `UI=true -> deny` evidence, bounded DOWNSTREAM of
+# sandboxBackend.prepare(). The reopen does NOT contest the §15
+# product-contract freeze; H2 settings repair remains NOT_AUTHORIZED;
+# profile / invocation repairs NOT_AUTHORIZED until §3 captures find
+# the divergence. The ACT file binds durably to .factory/epic-board.md
+# row 23 ("Seatbelt network egress ... REOPENED at fe3be36fe by
+# ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01") and to the
+# safe-yolo-seatbelt.md epic ledger, so it must survive a fresh clone.
+# Same durable-binding reason as SEATBELT-NETWORK-EGRESS-RECON01 above.
+# ACT-OWNED_TYPECHECK_DELTA is verified at ACT closure (NOT at open).
+# The evidence directory captures the four-fact discriminator pack
+# (correlation.txt + [P1]-[P5] logs + profile.sb + env.txt +
+# artifact-identity-pack.txt); the directory itself is whitelisted
+# alongside the ACT MD per the durable-binding pattern even before
+# the captures exist, so an empty `.gitkeep`-style canonical place
+# is reserved and operator captures have a known tracked home.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01/
 # ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01: same
 # durable-binding reason as its ACT file (whitelisted above):
 # source-seam-map.md (the chain A..Q with the G→I first-divergence
