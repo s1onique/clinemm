@@ -5,6 +5,7 @@ import type { Extension, ExtensionContext } from "vscode"
 import { ExtensionKind, ExtensionMode } from "vscode"
 import { URI } from "vscode-uri"
 import { ExtensionRegistryInfo } from "@/registry"
+import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import { log } from "./utils"
 import { EnvironmentVariableCollection, MementoStore, readJson, SecretStore } from "./vscode-context-utils"
 
@@ -76,6 +77,27 @@ export function initializeContext(clineDir?: string) {
 	}
 
 	log("Finished loading vscode context...")
+
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	// (CORRECTION02): bind the extension-owned storage root for the
+	// dogfood auto capture sink on the standalone host. Mirrors the
+	// VS Code `extension.ts:activate` binding by supplying the
+	// standalone host's canonical global-storage root (the same
+	// `DATA_DIR` already wired into
+	// `extensionContext.globalStorageUri.fsPath` above), instead
+	// of the home-directory `~/.cline/data` root that the CORREC
+	// TION02 live investigation proved untrustworthy under the
+	// dogfood launcher (mkdirSync → EPERM on sealed user-data
+	// trees). On a public (non-dogfood) standalone host the
+	// resolver returns null and the bind is dormant; on a dogfood
+	// standalone host the resolver writes through the host's own
+	// canonical root. Whether that root is writable is
+	// host-specific and verified by the same truthful-return
+	// branch (mkdir fails → null → V=false) the VS Code path
+	// already exercises. The low-level capture modules never see
+	// the `vscode` import — they only receive the opaque root
+	// path from this call.
+	configureDogfoodCaptureStorage(DATA_DIR)
 
 	return {
 		extensionContext,

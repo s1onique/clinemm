@@ -4,6 +4,7 @@
 import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
+import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import {
 	dumpExtensionSideHostOwnershipDiagnostic,
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
@@ -79,6 +80,20 @@ export async function reportRolloutActivation(input: RolloutBundleActivation): P
 // for all-platform should be registered in common.ts.
 export async function activate(context: vscode.ExtensionContext) {
 	const activationStartTime = performance.now()
+
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	// (CORRECTION02): bind the extension-owned storage root for the
+	// dogfood auto capture sink BEFORE any capture-path query runs.
+	// `globalStorageUri.fsPath` is the canonical, platform-managed
+	// writable location for extension-owned diagnostic files. The
+	// prior implementation rooted the auto sink in
+	// `<~/.cline>/data/runtime-diag/`, which proved untrustworthy
+	// under the dogfood launcher (mkdirSync returned EPERM on a
+	// sealed user-data tree); see CORRECTION02 live investigation.
+	// The low-level capture modules consume only an opaque path,
+	// never the `vscode` API, so `vscode` is not imported into the
+	// SDK capture code.
+	configureDogfoodCaptureStorage(context.globalStorageUri.fsPath)
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool
