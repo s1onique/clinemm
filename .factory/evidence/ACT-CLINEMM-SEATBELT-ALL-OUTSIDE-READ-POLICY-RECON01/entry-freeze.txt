@@ -1,0 +1,55 @@
+# Entry freeze — ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01
+
+Captured BEFORE any non-trivial recon work so the starting state is
+bit-reproducible from this file alone.
+
+```text
+REPO                /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD (rev-parse)    f56e87af0d752128efa83e6e79252464fd36a0fd
+HEAD (describe)     f56e87af0
+PARENT              c807f5fc292c (ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01 PASS)
+WORKTREE            clean
+STASHES             none
+BRANCH              main
+REMOTE_HEAD         (NOT_AUTHORIZED — no fetch in this shell)
+UNAUTHENTICATED     git config --get user.email / .name (no global git identity; commits use ACT-local identity set per ACT contract)
+```
+
+Tree clean per `git status --short` (returns empty). Authoritative
+parent is `c807f5fc2` (the R0 REPAIR01 closure commit). The current
+HEAD `f56e87af0` is the bounded correction (CORRECTION02) for the
+multi-element evidence-cardinality defect, with the corrected
+disposition `MULTI_ELEMENT_EVIDENCE_CARDINALITY_DEFECT=REPAIRED`,
+`LIVE_SHAPE_FAMILY=BOUND`, `54T24A8CE5_CAUSAL_BINDING=NOT_PROVEN`,
+`R5_MANUAL_APPROVAL_LANE=STILL OPEN`.
+
+## Recoverability
+
+If this ACT or its evidence is lost, recovery is:
+- git reset --hard f56e87af0 (this is the recon-only HEAD)
+- no committed production change is associated with this ACT
+
+## Authoritative inputs (cross-checked against HEAD)
+
+```text
+.factory/acts/ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02.md
+.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02/
+apps/vscode/src/sdk/__tests__/seatbelt-all-workspace-realpath-authority-correction02.live-two-element-red.test.ts
+sdk/packages/core/src/runtime/command-policy/command-policy.ts:329-411 (path-authority gate)
+sdk/packages/core/src/runtime/command-policy/command-policy-types.ts (lattice + sources)
+sdk/packages/core/src/runtime/command-policy/path-authority.ts (realpath conformance)
+sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:153-162 (buildReadRule)
+sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:62-75 (ALWAYS_WRITABLE_LITERALS)
+sdk/packages/core/src/runtime/sandbox/types.ts:82-96 (denyReadSubpaths semantics)
+apps/vscode/src/sdk/sandbox-policy.ts:656-734 (resolveSafeYoloSensitiveReadDenials)
+apps/vscode/src/sdk/sandbox-policy.ts:892-933 (denyReadSubpaths wiring)
+apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts (R10/R11 broad-read contract)
+.factory/epics/safe-yolo-seatbelt.md (epic + §15 freeze)
+```
+
+## Working tree policy
+
+All recon-side artifacts land under
+`.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01/`
+and `.factory/acts/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01.md`.
+No production source is touched by this ACT.

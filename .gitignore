@@ -256,6 +256,19 @@ apps/examples/desktop-app/.cursor/settings.json
 # directory must both survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01/
+# ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01: recon ACT
+# authored 2026-08-31 at HEAD f56e87af0. Status OPEN / RECON_ONLY /
+# NO_REPAIR (P1, successor to …-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02
+# R5 lane). The owning epic .factory/epics/safe-yolo-seatbelt.md AND
+# the board row at .factory/epic-board.md (the new "Approval /
+# outside-read under ALL+Seatbelt policy reconciliation" row) both
+# bind durably to this ACT file. Same durable-binding reason as the
+# other recon ACTs above: the canonical link must survive a fresh
+# clone. The ACT produces a 269-line recon contract + a 405-line
+# source-seam-map.md + a 212-line adversarial-case-inventory.md +
+# a 140-line final-report.md (1081 lines total of durable evidence).
+!/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01/
 # ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01: recon ACT
 # LAUNCH_HEAD = cf40c2b8b07520f9ddc2d798c6dfbb9830df9dea (the commit that
 # introduced this ACT; canonical binding per 5b0fbd611 "docs(factory): bind
