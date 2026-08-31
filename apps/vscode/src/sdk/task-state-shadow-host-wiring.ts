@@ -208,6 +208,22 @@ export interface TaskShadowHostWiringWithSink extends TaskShadowHostWiring {
 	 * Read-only advisory accessor; non-mutating.
 	 */
 	readonly getLastObservedShadowPhase: () => import("@shared/ExtensionMessage").TurnPhase | undefined
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 *
+	 * Returns the monotonic `seq` the comparator had when it
+	 * accepted its last observation, or `undefined` when no
+	 * observation has been recorded yet (Hub/Remote absence or
+	 * Local pre-observation). The publication selectors
+	 * (`selectTaskHeaderPresentation`,
+	 * `selectThinkingPresentation`) consume this seq to detect
+	 * "shadow is stale relative to the legacy tracker" and fall
+	 * through to the legacy branch — forbidding a stale shadow
+	 * projection from overriding a fresh legacy phase.
+	 *
+	 * Read-only advisory accessor; non-mutating.
+	 */
+	readonly getLastObservedShadowSeq: () => number | undefined
 }
 
 /**
@@ -448,6 +464,19 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			const canonical = TaskState.projectTurnState(model)
 			return toLegacyPhase(canonical)
 		},
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+		// Returns the comparator's monotonic observation seq, or
+		// `undefined` when no observation has been recorded. The
+		// presence gate (`hasObservedShadowState()`) and the seq
+		// increment are the same — `seq` advances only on
+		// observation, so `seq > 0` iff shadow has observed at
+		// least once.
+		getLastObservedShadowSeq: (): number | undefined => {
+			if (!comparator.hasObservedShadowState()) {
+				return undefined
+			}
+			return comparator.debugObservedSeq()
+		},
 		coordinator,
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-SHADOW-DIFFERENTIAL01-CORRECTION02-C2.2:
@@ -633,6 +662,16 @@ function createNoopWiring(): TaskShadowHostWiringWithSink {
 		// with the Hub/Remote absence state.
 		getLastObservedArbiter: () => undefined,
 		getLastObservedShadowPhase: () => undefined,
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+		// Noop wiring: same advisory accessor, returning
+		// `undefined` (no observation has happened) — which is the
+		// exact semantics the consumer-cutover signal collapses
+		// with the Hub/Remote absence state. The selector's
+		// staleness gate treats `canonicalShadowSeq === undefined`
+		// as "no observation yet" and falls through to the legacy
+		// branch, so the no-op wiring remains a coherent
+		// publication producer.
+		getLastObservedShadowSeq: () => undefined,
 		coordinator: noopCoordinator,
 		observeCanonicalRuntimeEvent(_input: TaskShadowCanonicalEvent): void {
 			/* No-op: wiring disabled by env flag. */

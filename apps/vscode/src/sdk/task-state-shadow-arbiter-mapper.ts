@@ -225,6 +225,32 @@ export interface ThinkingPresentationInputs {
 	 * the projection so webview stale-push fencing continues to work.
 	 */
 	readonly seq: number
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 *
+	 * The seq stamp the canonical shadow had when it produced
+	 * `canonicalShadow` (or, equivalently, when it produced the
+	 * last `getLastObservedShadowPhase()` projection). Used to
+	 * forbid the LIVE contradiction where the canonical shadow's
+	 * LAST observation was a prior lifecycle state (e.g.
+	 * `streaming` from a prior turn, or the initial `idle`
+	 * projection of a never-observed TaskModel) and the legacy
+	 * `TurnStateTracker` has since advanced to a different
+	 * phase (e.g. `completed`, `error`, `resumable`, or
+	 * `streaming`).
+	 *
+	 * When `canonicalShadowSeq !== undefined && seq > canonicalShadowSeq`
+	 * the shadow is STALE relative to the legacy phase. The
+	 * selector MUST fall through to the legacy branch — the same
+	 * rule that forbids a stale `getLastObservedShadowPhase()`
+	 * from overriding a fresh `turnStateTracker.currentPhase`.
+	 *
+	 * Hub/Remote hosts and Local sessions with no observation
+	 * pass `canonicalShadowSeq === undefined`, which is the
+	 * absence-collapse case (the shadow branch does not fire
+	 * anyway).
+	 */
+	readonly canonicalShadowSeq?: number
 }
 
 /**
@@ -240,7 +266,14 @@ export interface ThinkingPresentationInputs {
  * enforced by the body shape, not by an assertion.
  */
 export function selectThinkingPresentation(input: ThinkingPresentationInputs): ThinkingPresentationProjection {
-	if (input.canonicalShadow) {
+	// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	// When the shadow observation is STALE relative to the most
+	// recent legacy transition (`seq > canonicalShadowSeq`), fall
+	// through to the legacy branch. A stale shadow must NOT
+	// override a fresh legacy phase.
+	const isShadowStale =
+		input.canonicalShadow !== undefined && input.canonicalShadowSeq !== undefined && input.seq > input.canonicalShadowSeq
+	if (input.canonicalShadow && !isShadowStale) {
 		return {
 			modelStreaming: input.canonicalShadow.execution.modelStreaming,
 			source: "shadow",
@@ -377,6 +410,27 @@ export interface TaskHeaderPresentationInputs {
 	 * token for the entire publish batch.
 	 */
 	readonly seq: number
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 *
+	 * The seq stamp the canonical shadow had when it produced
+	 * `canonicalShadowPhase`. Used to forbid the LIVE
+	 * contradiction where the canonical shadow's LAST observation
+	 * was a prior lifecycle state (e.g. `streaming` from a prior
+	 * turn, or the initial `idle` projection of a never-observed
+	 * TaskModel) and the legacy `TurnStateTracker` has since
+	 * advanced to a different phase (e.g. `completed`, `error`,
+	 * `resumable`, or `streaming`).
+	 *
+	 * When `canonicalShadowSeq !== undefined && seq > canonicalShadowSeq`
+	 * the shadow is STALE relative to the legacy phase. The
+	 * selector MUST fall through to the legacy branch — the
+	 * same rule that forbids a stale `getLastObservedShadowPhase()`
+	 * from overriding a fresh `turnStateTracker.currentPhase`.
+	 *
+	 * Mirrors the same parameter on `ThinkingPresentationInputs`.
+	 */
+	readonly canonicalShadowSeq?: number
 }
 
 /**
@@ -458,14 +512,28 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 	// overrides a stale legacy phase when present. The two
 	// host-owned phases (compacting / awaiting_followup) are
 	// handled by the two host-override branches above.
+	//
+	// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	// When the canonical shadow's last observation is STALE
+	// relative to the most recent legacy transition (`seq >
+	// canonicalShadowSeq`), fall through to the legacy branch. A
+	// stale shadow must NOT override a fresh legacy phase — this
+	// is the LIVE contradiction the REPAIR01 captures
+	// (publicationId 15/17 of taskId 1788189447617_rw5zx:
+	// turnState.phase="streaming" + taskHeaderPresentation.phase="idle").
 	if (input.canonicalShadowPhase !== undefined) {
-		return {
-			phase: input.canonicalShadowPhase,
-			source: "shadow",
-			seq: input.seq,
+		const isShadowStale = input.canonicalShadowSeq !== undefined && input.seq > input.canonicalShadowSeq
+		if (!isShadowStale) {
+			return {
+				phase: input.canonicalShadowPhase,
+				source: "shadow",
+				seq: input.seq,
+			}
 		}
 	}
 	// 4. ABSENCE FALLBACK — Hub/Remote / Local pre-observation.
+	// Also the destination for a stale shadow (per the staleness
+	// gate above).
 	return {
 		phase: input.currentLegacyPhase,
 		source: "legacy",

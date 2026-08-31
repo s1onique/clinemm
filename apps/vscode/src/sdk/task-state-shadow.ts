@@ -192,6 +192,29 @@ export class TaskShadowComparator {
 	}
 
 	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 *
+	 * Read-only accessor for the comparator's monotonic
+	 * observation seq. Used by the wiring's
+	 * `getLastObservedShadowSeq()` accessor to surface the
+	 * shadow's generation to the publication selectors, so the
+	 * selectors can detect "shadow is stale relative to the
+	 * legacy tracker" and forbid the LIVE contradiction where
+	 * a stale `getLastObservedShadowPhase()` would override a
+	 * fresh `turnStateTracker.currentPhase`.
+	 *
+	 * Returns 0 when the comparator has never accepted an
+	 * observation (i.e. `hasObservedShadowState() === false`).
+	 * The wiring's accessor wraps this with the
+	 * `hasObservedShadowState()` presence gate and returns
+	 * `undefined` for the absence case — so production
+	 * consumers never see `0`.
+	 */
+	debugObservedSeq(): number {
+		return this.seq
+	}
+
+	/**
 	 * ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01-CORRECTION01-FIX01:
 	 *
 	 * Presence seam (host-wiring responsibility).

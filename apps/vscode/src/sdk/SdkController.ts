@@ -72,12 +72,12 @@ import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
 import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
+import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { AuthService, LogoutReason } from "./auth-service"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
-import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
@@ -1930,6 +1930,28 @@ export class Controller {
 	 */
 	getLocalShadowPhase(): TurnPhase | undefined {
 		return this.taskStateShadowWiring?.getLastObservedShadowPhase()
+	}
+
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 *
+	 * Returns the seq stamp the canonical shadow had when it
+	 * produced its last observation, or `undefined` when no
+	 * shadow observation has been recorded yet. The wiring's
+	 * comparator carries a monotonic `seq` counter that
+	 * increments on every `observeRuntimeEvent` /
+	 * `observeTaskMsg`. Reading this seq lets the publication
+	 * selectors detect "shadow is stale relative to the legacy
+	 * tracker" — i.e. forbids a stale `getLocalShadowPhase()`
+	 * from overriding a fresh `turnStateTracker.currentPhase`
+	 * (the LIVE contradiction this ACT repairs).
+	 *
+	 * Non-mutating advisory accessor.
+	 */
+	getLocalShadowSeq(): number | undefined {
+		if (!this.taskStateShadowWiring) return undefined
+		const seq = this.taskStateShadowWiring.getLastObservedShadowSeq()
+		return seq
 	}
 
 	async dispose(): Promise<void> {
@@ -3963,6 +3985,14 @@ export class Controller {
 					canonicalShadow: this.getLocalShadowProjection(),
 					currentLegacyPhase: this.turnStateTracker.currentPhase,
 					seq: this.turnStateTracker.get().seq,
+					// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+					// Pass the shadow's last-observation seq so the
+					// selector can detect "shadow is stale relative to
+					// the legacy tracker" and fall through to the
+					// legacy branch — forbidding the LIVE contradiction
+					// where a stale shadow projection would override a
+					// fresh `turnStateTracker.currentPhase`.
+					canonicalShadowSeq: this.getLocalShadowSeq(),
 				}),
 				// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
 				//
@@ -3997,6 +4027,14 @@ export class Controller {
 					canonicalShadowPhase: this.getLocalShadowPhase(),
 					currentLegacyPhase: this.turnStateTracker.currentPhase,
 					seq: this.turnStateTracker.get().seq,
+					// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+					// Pass the shadow's last-observation seq so the
+					// selector can detect "shadow is stale relative to
+					// the legacy tracker" and fall through to the
+					// legacy branch — forbidding the LIVE contradiction
+					// where a stale shadow projection would override a
+					// fresh `turnStateTracker.currentPhase`.
+					canonicalShadowSeq: this.getLocalShadowSeq(),
 				}),
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned
