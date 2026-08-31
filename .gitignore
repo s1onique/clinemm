@@ -583,3 +583,20 @@ apps/vscode/.factory/evidence/
 # must survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01/
+
+# ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01:
+# bounded REPAIR01 ACT authored 2026-08-31. Status
+# CLOSED / PASS / REPAIR01_COMMITTED (per Factory review).
+# Sibling (NOT bundled) of ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-
+# AUTHORITY-CORRECTION02. The ACT body binds durably to
+# .factory/epic-board.md row `Single-R0 Seatbelt execution-obligation
+# propagation (synthetic production-seam)` (now status
+# REPAIRED / REPAIR01_COMMITTED), and the evidence directory contains
+# the entry-freeze + final-report that document the bounded production
+# repair at sdk/packages/core/src/runtime/command-policy/command-policy.ts
+# line 645-647 (single-element short-circuit mirror of the multi-element
+# strict-suppressor at line 749-751). Same durable-binding reason as
+# RECON01 above: the board row + ACT body + evidence directory all
+# must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01.md
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01/

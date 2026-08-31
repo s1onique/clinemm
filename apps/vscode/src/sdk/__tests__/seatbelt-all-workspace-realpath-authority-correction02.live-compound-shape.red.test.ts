@@ -114,10 +114,7 @@ import {
 	DEFAULT_COMMAND_HOST_ALLOW_RULES,
 } from "@cline/core"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import {
-	applySeatbeltAuthorityEnvelope,
-	evaluateCommandToolApprovalWithPlan,
-} from "../sdk-tool-policies"
+import { applySeatbeltAuthorityEnvelope, evaluateCommandToolApprovalWithPlan } from "../sdk-tool-policies"
 import { resolveSessionHostAuthorization } from "../session-auto-approval"
 
 // Inside-root victim for the synthetic-seam witnesses. Both operands
@@ -140,10 +137,7 @@ function liveCompound(): string {
 	return `${wcCmd()} && ${catCmd()}`
 }
 
-function makeProductionAuth(opts: {
-	workspaceRoot: string
-	command: unknown
-}): CommandHostAuthorization {
+function makeProductionAuth(opts: { workspaceRoot: string; command: unknown }): CommandHostAuthorization {
 	const evidence = buildPathAuthorityEvidence({
 		workspaceRoots: [opts.workspaceRoot],
 		cwd: opts.workspaceRoot,
@@ -209,37 +203,45 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / s
 	// C1_SINGLE_R0_WITNESS — synthetic production-seam observation
 	// -------------------------------------------------------------------
 	//
-	// CLASSIFICATION:
-	//   SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED
+	// CLASSIFICATION HISTORY:
+	//   Prior to ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01:
+	//     SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED
 	//     P1 candidate: SEATBELT_EXECUTION_OBLIGATION_NOT_PROPAGATED_ON_
 	//     SINGLE_R0_ALLOW. Separate bounded ACT only.
 	//
-	// OBSERVED (current HEAD):
+	//   POST-ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01:
+	//     REPAIRED / POST_FIX_REGRESSION_GUARD.
+	//     The P1 sibling ACT was opened, the bounded per-command
+	//     Seatbelt-execution-obligation propagation fix was landed
+	//     (aggregateSource() single-element short-circuit at
+	//     sdk/packages/core/src/runtime/command-policy/command-policy.ts
+	//     line 645-647 now mirrors the multi-element strict-suppressor
+	//     at line 749-751), and the live binding Q7TBNE3BS5 confirmed
+	//     the defect was on the production path. This witness was
+	//     therefore migrated from a pre-fix observation pin to a
+	//     post-fix regression guard (the migration was the witness's
+	//     own documented purpose; see the prior comment below).
+	//
+	// HISTORICAL OBSERVATION (pre-REPAIR01):
 	//   decision.kind = allow
 	//   decision.source = host_mode_safe_only_rule
 	//   mandatorySeatbeltExecution = false
 	//
-	// DESIRED POST-FIX (preserved in comment, NOT asserted):
+	// CURRENT OBSERVATION (post-REPAIR01):
+	//   decision.kind = allow
 	//   decision.source = host_mode_all_seatbelt_required
 	//   mandatorySeatbeltExecution = true
 	//
-	// DO NOT add a `expect(...).toBe("host_mode_all_seatbelt_required")`
-	// assertion here until the P1 sibling ACT is opened and the bounded
-	// per-command Seatbelt-execution-obligation propagation fix is
-	// landed. Adding it now would re-create the
-	// INTENTIONALLY_FAILING_CLASSIFIER_IN_DEFAULT_TEST_SURFACE defect
-	// the causal reviewer flagged.
-	it("C1_SINGLE_R0_WITNESS: single-R0 'cat <inside>' under ALL+Seatbelt+valid evidence — current source=host_mode_safe_only_rule, mandatorySeatbeltExecution=false (SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED)", () => {
+	// Migration history preserved here so future maintainers can
+	// re-derive why the assertion flipped.
+	it("C1_SINGLE_R0_WITNESS: single-R0 'cat <inside>' under ALL+Seatbelt+valid evidence — current source=host_mode_all_seatbelt_required, mandatorySeatbeltExecution=true (POST_FIX_REGRESSION_GUARD; migrated from SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED by ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01)", () => {
 		const persistedAuth = makeProductionAuth({
 			workspaceRoot,
 			command: { command: catCmd(), requires_approval: false },
 		})
 		const stampedAuth = stampSeatbeltEnvelope(persistedAuth)
 
-		const result = evaluateCommandToolApprovalWithPlan(
-			{ command: catCmd(), requires_approval: false },
-			stampedAuth,
-		)
+		const result = evaluateCommandToolApprovalWithPlan({ command: catCmd(), requires_approval: false }, stampedAuth)
 
 		// Source-kind coherence guard: source labels in
 		// {host_mode_all_seatbelt_required, ...} MUST be emitted with
@@ -249,15 +251,14 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / s
 			expect(result.decision.kind).toBe("allow")
 		}
 
-		// Pin the CURRENT observation (not the desired post-fix).
 		// eslint-disable-next-line no-console
 		console.log(
-			`[C1_SINGLE_R0_WITNESS] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
+			`[C1_SINGLE_R0_WITNESS POST_FIX] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
 		expect(result.approved).toBe(true)
 		expect(result.decision.kind).toBe("allow")
-		expect(result.decision.source).toBe("host_mode_safe_only_rule")
-		expect(result.mandatorySeatbeltExecution).toBe(false)
+		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
+		expect(result.mandatorySeatbeltExecution).toBe(true)
 	})
 
 	// -------------------------------------------------------------------
@@ -286,10 +287,7 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / s
 		})
 		const stampedAuth = stampSeatbeltEnvelope(persistedAuth)
 
-		const result = evaluateCommandToolApprovalWithPlan(
-			{ command: compound, requires_approval: false },
-			stampedAuth,
-		)
+		const result = evaluateCommandToolApprovalWithPlan({ command: compound, requires_approval: false }, stampedAuth)
 
 		// Source-kind coherence guard.
 		if (result.decision.source === "host_mode_all_seatbelt_required") {
@@ -346,10 +344,7 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / s
 		})
 		const stampedAuth = stampSeatbeltEnvelope(persistedAuth)
 
-		const result = evaluateCommandToolApprovalWithPlan(
-			{ commands: arr, requires_approval: false },
-			stampedAuth,
-		)
+		const result = evaluateCommandToolApprovalWithPlan({ commands: arr, requires_approval: false }, stampedAuth)
 
 		// Source-kind coherence guard.
 		if (result.decision.source === "host_mode_all_seatbelt_required") {
@@ -386,10 +381,7 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / s
 		const stampedAuth = stampSeatbeltEnvelope(persistedAuth)
 
 		const differentCat = `cat ${join(workspaceRoot, "package.json")}`
-		const result = evaluateCommandToolApprovalWithPlan(
-			{ command: differentCat, requires_approval: false },
-			stampedAuth,
-		)
+		const result = evaluateCommandToolApprovalWithPlan({ command: differentCat, requires_approval: false }, stampedAuth)
 
 		// Source-kind coherence guard.
 		if (result.decision.source === "host_mode_all_seatbelt_required") {

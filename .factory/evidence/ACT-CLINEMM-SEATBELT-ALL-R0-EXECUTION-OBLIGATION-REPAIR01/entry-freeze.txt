@@ -1,0 +1,125 @@
+ACT_ID            = ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01
+ENTRY_COMMIT      = ac211a261573c99379618810a6bd204ad42038c8 (HEAD = origin/main)
+ENTRY_TREE        = (clean)
+ENTRY_BRANCH      = main
+ENTRY_REMOTE      = ac211a261573c99379618810a6bd204ad42038c8 (origin/main)
+ENTRY_STATUS      = clean tracked worktree
+ENTRY_STASHES     = (none)
+ENTRY_RECOVERY    = (none)
+
+PREVIOUS_ACT      = ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01 (CLOSED)
+                    Disposition: SUPERSEDED_BY_CORRECTION02.
+                    Static defect REAL, live binding initially UNVERIFIED.
+                    Per-element evidence labels:
+                      evaluateOne defect              = STRUCTURAL
+                      aggregateSource defect          = STRUCTURAL
+                      propagation into SDK policy     = STRUCTURAL
+                      Seatbelt-skip reachability      = STRUCTURAL
+                      real dogfood occurrence         = LIVE_UNVERIFIED
+                      actual user-visible consequence = LIVE_UNVERIFIED
+                    Reviewer note (verbatim):
+                      "On match: open
+                       ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01.
+                       On no-match: preserve structural finding;
+                       do not repair speculatively."
+
+LIVE_BINDING      = Q7TBNE3BS5
+                    (v2-capture: ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-
+                    IMPLEMENTATION01/r5-authz-20260830T221021Z/v2-capture.jsonl
+                    lines 11869-11879)
+                    correlationId    = Q7TBNE3BS5
+                    commandDigest    = 7ba5f081faf5
+                    toolName         = run_commands
+                    resolvedMode     = all
+                    sandboxMode      = seatbelt-experimental
+                    mandatorySeatbelt= true
+                    commandsArrayLength = 1
+                    normalizedCommandsLength = 1
+                    normalizedKinds = ["string"]
+                    finalDecision    = allow
+                    finalSource      = host_mode_safe_only_rule
+                    COMPOSED_BINDING =
+                      live policy seam elected host_mode_safe_only_rule under
+                      (mode=all + mandatorySeatbelt=true + single element +
+                       R0 safe-rule allow match).
+                      By the deterministic mapping at
+                      sdk-tool-policies.ts:710
+                      (mandatorySeatbeltExecution =
+                       result.decision.source === "host_mode_all_seatbelt_required")
+                      this emits mandatorySeatbeltExecution=false,
+                      which makes command-job-manager.ts:613-614
+                      skip the Seatbelt enforcement gate.
+                      That is the exact composition the RECON01
+                      structural trace predicted as a candidate
+                      latent defect; the live specimen is now bound
+                      to the structural path.
+
+CYCLE             = REPAIR_CYCLE. RED-first bounded repair on
+                    a sibling test surface. NO bundling with
+                    ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-
+                    AUTHORITY-CORRECTION02.
+
+CANDIDATE_DEFECT  = single-element contained R0 path-bearing command under
+                    (mode=all + mandatorySeatbelt=true) gets
+                      source = host_mode_safe_only_rule
+                      mandatorySeatbeltExecution = false
+                    Desired invariant:
+                      (decision.kind=allow AND mode=all AND mandatorySeatbelt=true)
+                        => (source=host_mode_all_seatbelt_required
+                            AND mandatorySeatbeltExecution=true)
+
+PRODUCTION_SEAM   = sdk/packages/core/src/runtime/command-policy/command-policy.ts
+                      evaluateOne   (line 237, returns at line 538-546
+                                     short-circuits to host_mode_safe_only_rule)
+                      aggregateSource (line 640, single-element short-circuit
+                                       at line 645-647 returns
+                                       perCommand[0].source UNCONDITIONALLY
+                                       — strict-suppressor at line 749-751
+                                       is unreachable on this path)
+                    apps/vscode/src/sdk/sdk-tool-policies.ts:710
+                      mandatorySeatbeltExecution =
+                        (source === "host_mode_all_seatbelt_required")
+                    apps/vscode/src/sdk/command-job-manager.ts:613-614
+                      Seatbelt enforcement gate (reads
+                      context.mandatorySeatbeltExecution)
+
+EXISTING_WITNESS  = C1_SINGLE_R0_WITNESS at
+                    apps/vscode/src/sdk/__tests__/seatbelt-all-workspace-
+                    realpath-authority-correction02.live-compound-shape.
+                    red.test.ts:232-261
+                    Classification: SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED.
+                    MUST REMAIN UNCHANGED (per Factory directive).
+                    This REPAIR01 ACT adds a new sibling RED file
+                    that asserts the desired post-fix shape; the
+                    classifier witness keeps pinning the historical
+                    pre-repair shape.
+
+SCOPE             = ONE bounded repair to aggregateSource() single-element
+                    short-circuit at line 645-647 (mirror the multi-element
+                    strict-suppressor at line 749-751). Do NOT alter
+                    evaluateOne (the per-command safe-rule match is correct;
+                    the bug is in the single-element aggregate short-circuit,
+                    not in the per-command evaluation). Do NOT broaden
+                    into approval cleanup, Idle repair, or other
+                    Seatbelt families. Do NOT bundle with CORRECTION02.
+
+STOP_CONDITIONS   =
+                    1. HALT_RED_NOT_REPRODUCED
+                       — if the new sibling RED passes against the
+                         pre-repair source, halt. Per-source code-reading
+                         is NOT a substitute for a RED that reproduces
+                         the defect through the real seam.
+                    2. HALT_GREEN_NOT_ACHIEVED
+                       — if the post-repair RED does not pass, halt.
+                    3. HALT_CONSERVATION_REGRESSION
+                       — if T1'-T4' / INV-1' / INV-2' / R5 suite /
+                         R0 corpus / typecheck regresses.
+                    4. HALT_BROADENING
+                       — if the proposed fix requires touching any
+                         file outside command-policy.ts (apart from
+                         the test file) or any other epic.
+
+FACTORY_RULE      = Stop once that first broken boundary is proven and
+                    repaired once. Do not recursively review the review.
+                    (ACT §21 verbatim)
+                    This ACT is the repair cycle; one bounded repair only.

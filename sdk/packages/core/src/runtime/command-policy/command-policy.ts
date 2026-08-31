@@ -643,6 +643,31 @@ function aggregateSource(
 	aggregateLatticeKind: CommandDecisionKind,
 ): CommandDecisionSource {
 	if (perCommand.length === 1) {
+		// ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01:
+		// The single-element short-circuit must mirror the multi-element
+		// strict-suppressor at line 749-751. Under
+		//   (auth.mandatorySeatbelt === true && auth.mode === "all")
+		// the executor-side Seatbelt obligation is already in force;
+		// the legacy R0 safe-rule source label is overridden in favor
+		// of the conditional Seatbelt-ALL branch so the executor
+		// obligation propagates for single-element inputs as well.
+		// Inversion ONLY fires when the aggregate lattice verdict is
+		// `allow` (when the per-command verdict is `ask`, the lattice
+		// correctly stays `ask` and the source label preserves the
+		// ASK-class provenance). This enforces the invariant:
+		//   source === "host_mode_all_seatbelt_required"
+		//     ⇒ kind === "allow"
+		// (an ALLOW-class authority label must not be attached to an
+		// ASK verdict).
+		const singleSeatbeltObligationActive =
+			auth.mandatorySeatbelt === true && auth.mode === "all"
+		if (
+			singleSeatbeltObligationActive &&
+			aggregateLatticeKind === "allow" &&
+			perCommand[0]!.source === "host_mode_safe_only_rule"
+		) {
+			return "host_mode_all_seatbelt_required"
+		}
 		return perCommand[0]!.source;
 	}
 	let anyDeny = false;
