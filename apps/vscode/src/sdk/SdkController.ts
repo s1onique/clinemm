@@ -16,6 +16,7 @@ import {
 	createUserInstructionConfigService,
 	ensureChatWorkspace,
 	getProviderAuthStorageId,
+	normalizeRunCommandsInput,
 	type PreparedRemoteConfigCoreIntegration,
 	readSessionCheckpointHistory,
 	resolveDefaultMcpSettingsPath,
@@ -445,6 +446,58 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 				pathAuthorityEvidenceOk: hostAuthorization.pathAuthorityEvidence !== undefined,
 			},
 		})
+		// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+		// Structural input-shape capture (default-off). Records ONLY
+		// structural data: inputForm, commandsArrayLength,
+		// normalizedCommandsLength, normalizedKinds. NO command text
+		// is captured at this seam — the existing `commandDigest`
+		// correlationId carries the verbatim content through the V2
+		// capture context (operators correlate the specimen by
+		// correlationId, not by replaying the text).
+		//
+		// Default-off: requires opt-in via
+		// `CLINEMM_DIAG_INPUT_SHAPE_V2=1` (or any non-empty value).
+		// This probe is the BLOCKING gate for the LIVE-failure
+		// investigation (Case S1 vs S2 vs S3 classification tree):
+		// the next ACT cannot proceed without this capture.
+		if (process.env.CLINEMM_DIAG_INPUT_SHAPE_V2) {
+			const toolInputRecord = toolInput && typeof toolInput === "object" ? (toolInput as Record<string, unknown>) : null
+			const inputForm: "command" | "commands" | "other" = toolInputRecord
+				? "commands" in toolInputRecord
+					? "commands"
+					: "command" in toolInputRecord
+						? "command"
+						: "other"
+				: "other"
+			const commandsArrayLength: number =
+				inputForm === "commands" && Array.isArray((toolInputRecord as { commands?: unknown }).commands)
+					? (toolInputRecord as { commands: unknown[] }).commands.length
+					: inputForm === "command"
+						? 1
+						: -1
+			let normalizedCommandsLength = -1
+			let normalizedKinds: Array<string> = []
+			try {
+				const normalized = normalizeRunCommandsInput(toolInput)
+				normalizedCommandsLength = normalized.length
+				normalizedKinds = normalized.map((element) => (typeof element === "string" ? "string" : "structured"))
+			} catch {
+				// normalizer rejected the input — leave the structural
+				// fields at their sentinel values so the operator can
+				// correlate the failure mode by correlationId.
+			}
+			emitV2Capture({
+				codePoint: "approval.sdk-controller.input-shape.v2",
+				data: {
+					sessionId: request.sessionId ?? "no-session",
+					toolName: request.toolName,
+					inputForm,
+					commandsArrayLength,
+					normalizedCommandsLength,
+					normalizedKinds,
+				},
+			})
+		}
 		if (request.toolName === "cancel_command") {
 			const cancelFn = options.evaluateCancel ?? evaluateCancelCommandToolApproval
 			const cancelResult = cancelFn(toolInput, hostAuthorization)

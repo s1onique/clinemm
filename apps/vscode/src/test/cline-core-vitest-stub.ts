@@ -150,6 +150,12 @@ export {
 	spawnSupervisableShellCommand,
 } from "../../../../sdk/packages/core/src/extensions/tools/executors/bash"
 export { createEditorExecutor } from "../../../../sdk/packages/core/src/extensions/tools/executors/editor"
+// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+// structural input-shape probe needs `normalizeRunCommandsInput` from
+// the REAL sdk source (deep relative import). The probe only calls the
+// pure normalizer; it does not pull any other @cline/core surface into
+// vitest scope.
+export { normalizeRunCommandsInput } from "../../../../sdk/packages/core/src/extensions/tools/helpers"
 export type { EditFileInput } from "../../../../sdk/packages/core/src/extensions/tools/schemas"
 export type { ApplyPatchExecutor, EditorExecutor, ToolExecutors } from "../../../../sdk/packages/core/src/extensions/tools/types"
 export {
@@ -202,6 +208,19 @@ export {
 	SAFE_ENVIRONMENT_BASELINE,
 	SECRET_BLOCKLIST,
 } from "../../../../sdk/packages/core/src/runtime/sandbox/environment"
+// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
+// Re-export the Seatbelt singleton + substrate probe + diagnostic
+// observer setter + accessor so the apps/vscode vitest suites (which
+// alias `@cline/core` to this stub) can construct the REAL backend
+// in tests. The SDK source IS the production code path; this is
+// purely a resolution bridge.
+export {
+	getSeatbeltDiagnosticObserver,
+	probeSeatbeltAvailability,
+	SANDBOX_EXEC_PATH,
+	SeatbeltSandboxBackendExperimental,
+	setSeatbeltDiagnosticObserver,
+} from "../../../../sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend"
 export { noSandboxBackend } from "../../../../sdk/packages/core/src/runtime/sandbox/no-sandbox-backend"
 export {
 	getSandboxBackend,
@@ -227,19 +246,6 @@ export {
 	type SandboxNetwork,
 	type SandboxPreparedInvocation,
 } from "../../../../sdk/packages/core/src/runtime/sandbox/types"
-// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
-// Re-export the Seatbelt singleton + substrate probe + diagnostic
-// observer setter + accessor so the apps/vscode vitest suites (which
-// alias `@cline/core` to this stub) can construct the REAL backend
-// in tests. The SDK source IS the production code path; this is
-// purely a resolution bridge.
-export {
-	getSeatbeltDiagnosticObserver,
-	probeSeatbeltAvailability,
-	SANDBOX_EXEC_PATH,
-	SeatbeltSandboxBackendExperimental,
-	setSeatbeltDiagnosticObserver,
-} from "../../../../sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend"
 export { projectSessionMessagesForDisplay } from "../../../../sdk/packages/core/src/session/display-messages"
 
 // Real file-read executor (dependency-light: node:fs/node:path + @cline/shared/storage)

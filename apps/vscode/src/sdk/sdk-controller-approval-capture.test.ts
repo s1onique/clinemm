@@ -308,3 +308,194 @@ describe("ACT-CLINEMM-SEATBELT-YOLO-APPROVAL-FRICTION-RECON01-CORRECTION01 / Sdk
 		expect(exists).toBe(false)
 	})
 })
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+// structural input-shape capture probe (`approval.sdk-controller.input-shape.v2`).
+//
+// Default-off contract: requires opt-in via `CLINEMM_DIAG_INPUT_SHAPE_V2=1`.
+// When UNSET (the production default), the probe is silent and the
+// approval pipeline is byte-identical to the pre-probe factory.
+// ---------------------------------------------------------------------------
+describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / SdkController input-shape probe", () => {
+	let tmpDir: string
+	let capturePath: string
+	let originalCaptureEnv: string | undefined
+	let originalInputShapeEnv: string | undefined
+
+	beforeEach(() => {
+		originalCaptureEnv = process.env.CLINEMM_CAPTURE_V2_PATH
+		originalInputShapeEnv = process.env.CLINEMM_DIAG_INPUT_SHAPE_V2
+		tmpDir = mkdtempSync(join(tmpdir(), "sdkctrl-input-shape-"))
+		capturePath = join(tmpDir, "capture.jsonl")
+		process.env.CLINEMM_CAPTURE_V2_PATH = capturePath
+		__resetV2CaptureForTests()
+	})
+
+	afterEach(() => {
+		if (originalCaptureEnv === undefined) {
+			delete process.env.CLINEMM_CAPTURE_V2_PATH
+		} else {
+			process.env.CLINEMM_CAPTURE_V2_PATH = originalCaptureEnv
+		}
+		if (originalInputShapeEnv === undefined) {
+			delete process.env.CLINEMM_DIAG_INPUT_SHAPE_V2
+		} else {
+			process.env.CLINEMM_DIAG_INPUT_SHAPE_V2 = originalInputShapeEnv
+		}
+		__resetV2CaptureForTests()
+		try {
+			rmSync(tmpDir, { recursive: true, force: true })
+		} catch {
+			// best-effort cleanup
+		}
+	})
+
+	function makeCallback() {
+		const auth = commandHostAuthorization({
+			mode: "all",
+			explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+			mandatorySeatbelt: true,
+		})
+		const helper: FakeHelper = makeHelperReturningNull()
+		const callback = buildSdkControllerEvaluateCommandToolApproval({
+			resolveHostAuthorization: async (_toolName, requestInput) => ({
+				hostAuthorization: auth,
+				toolInput: requestInput,
+			}),
+			getHelper: () => helper as never,
+		})
+		return { callback, auth }
+	}
+
+	// -----------------------------------------------------------------
+	// T-SHAPE-1 - input-shape probe is default-off
+	// -----------------------------------------------------------------
+	it("T-SHAPE-1: env UNSET → input-shape probe is silent (no input-shape.v2 record)", async () => {
+		delete process.env.CLINEMM_DIAG_INPUT_SHAPE_V2
+		__resetV2CaptureForTests()
+
+		const correlationId = newV2CorrelationId()
+		const commandDigest = v2CommandDigest("cat package.json")
+		const { callback } = makeCallback()
+
+		await withV2CaptureContext({ correlationId, commandDigest }, async () => {
+			await callback({
+				sessionId: "session-TS1",
+				toolName: "run_commands",
+				input: { command: "cat package.json" },
+			})
+		})
+
+		const records = readFileSync(capturePath, "utf8")
+			.trim()
+			.split("\n")
+			.filter((l) => l.length > 0)
+			.map((l) => JSON.parse(l))
+		const inputShapeRecord = records.find((r) => r.codePoint === "approval.sdk-controller.input-shape.v2")
+		expect(inputShapeRecord).toBeUndefined()
+		expect(records.length).toBeGreaterThanOrEqual(2)
+	})
+
+	// -----------------------------------------------------------------
+	// T-SHAPE-2 - input-shape probe fires for { command: "..." } (Case S1 shape)
+	// -----------------------------------------------------------------
+	it("T-SHAPE-2: env SET + { command: '...' } → inputForm=command, normalizedCommandsLength=1", async () => {
+		process.env.CLINEMM_DIAG_INPUT_SHAPE_V2 = "1"
+		__resetV2CaptureForTests()
+
+		const correlationId = newV2CorrelationId()
+		// Use a benign command that the Zod normalizer accepts; the
+		// probe records structural metadata only.
+		const commandDigest = v2CommandDigest("pwd && ls")
+		const { callback } = makeCallback()
+
+		await withV2CaptureContext({ correlationId, commandDigest }, async () => {
+			await callback({
+				sessionId: "session-TS2",
+				toolName: "run_commands",
+				input: { command: "pwd && ls" },
+			})
+		})
+
+		const records = readFileSync(capturePath, "utf8")
+			.trim()
+			.split("\n")
+			.filter((l) => l.length > 0)
+			.map((l) => JSON.parse(l))
+		const inputShapeRecord = records.find((r) => r.codePoint === "approval.sdk-controller.input-shape.v2")
+		expect(inputShapeRecord).toBeDefined()
+		expect(inputShapeRecord.correlationId).toBe(correlationId)
+		expect(inputShapeRecord.data.sessionId).toBe("session-TS2")
+		expect(inputShapeRecord.data.toolName).toBe("run_commands")
+		expect(inputShapeRecord.data.inputForm).toBe("command")
+		expect(inputShapeRecord.data.commandsArrayLength).toBe(1)
+		// Case S1: compound `&&` collapses to ONE normalized element.
+		expect(inputShapeRecord.data.normalizedCommandsLength).toBe(1)
+		expect(inputShapeRecord.data.normalizedKinds).toEqual(["string"])
+		const flat = JSON.stringify(inputShapeRecord.data)
+		expect(flat).not.toContain("pwd")
+		expect(flat).not.toContain("&&")
+	})
+
+	// -----------------------------------------------------------------
+	// T-SHAPE-3 - input-shape probe fires for { commands: [...] } (Case S2 shape)
+	// -----------------------------------------------------------------
+	it("T-SHAPE-3: env SET + { commands: [...] } → inputForm=commands, normalizedCommandsLength>1", async () => {
+		process.env.CLINEMM_DIAG_INPUT_SHAPE_V2 = "1"
+		__resetV2CaptureForTests()
+
+		const correlationId = newV2CorrelationId()
+		const commandDigest = v2CommandDigest("pwd; ls")
+		const { callback } = makeCallback()
+
+		await withV2CaptureContext({ correlationId, commandDigest }, async () => {
+			await callback({
+				sessionId: "session-TS3",
+				toolName: "run_commands",
+				input: { commands: ["pwd", "ls"] },
+			})
+		})
+
+		const records = readFileSync(capturePath, "utf8")
+			.trim()
+			.split("\n")
+			.filter((l) => l.length > 0)
+			.map((l) => JSON.parse(l))
+		const inputShapeRecord = records.find((r) => r.codePoint === "approval.sdk-controller.input-shape.v2")
+		expect(inputShapeRecord).toBeDefined()
+		expect(inputShapeRecord.data.inputForm).toBe("commands")
+		expect(inputShapeRecord.data.commandsArrayLength).toBe(2)
+		// Case S2: array preserved; each element is a single string.
+		expect(inputShapeRecord.data.normalizedCommandsLength).toBe(2)
+		expect(inputShapeRecord.data.normalizedKinds).toEqual(["string", "string"])
+	})
+
+	// -----------------------------------------------------------------
+	// T-SHAPE-4 - approval semantics unchanged when input-shape probe fires
+	// -----------------------------------------------------------------
+	it("T-SHAPE-4: env SET → approval semantics unchanged (input-shape probe is observational)", async () => {
+		process.env.CLINEMM_DIAG_INPUT_SHAPE_V2 = "1"
+		__resetV2CaptureForTests()
+
+		const correlationId = newV2CorrelationId()
+		const commandDigest = v2CommandDigest("pwd; pwd")
+		const { callback, auth } = makeCallback()
+
+		const result = await withV2CaptureContext({ correlationId, commandDigest }, async () =>
+			callback({
+				sessionId: "session-TS4",
+				toolName: "run_commands",
+				input: { command: "pwd; pwd" },
+			}),
+		)
+
+		expect(result).toBeDefined()
+		expect(result?.approved).toBe(true)
+		expect(result?.decision?.kind).toBe("allow")
+		expect(result?.decision?.source).toBe("host_mode_all_seatbelt_required")
+		expect(result?.mandatorySeatbeltExecution).toBe(true)
+		expect(result?.hostAuthorization?.mode).toBe(auth.mode)
+		expect(result?.hostAuthorization?.mandatorySeatbelt).toBe(true)
+	})
+})

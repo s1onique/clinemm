@@ -30,21 +30,20 @@
 > verdict pair. 11/11 conservation matrix GREEN.
 >
 > **P0_1 / P0_2** remain UNRESOLVED. The CORRECTION01/CORRECTION02
-> fixes do NOT explain the observed `codium-factory` live failure,
-> because the live tool input is a single normalized command element
-> (the canonical normalizer collapses `wc ... && cat ...` to one
-> element), and `aggregateSource()` early-returns at
-> `perCommand.length === 1` (line 644-646) — meaning the
-> CORRECTION01/CORRECTION02 source-election repair is not on the
-> causal path of the live failure at all. The live failure must be
-> on a different code path (likely the `evaluateOne` per-command
-> resolution at line 540, or the R5 catastrophic hard floor at
-> command-risk.ts:454, or a stale-evidence binding in
-> command-policy.ts:329-411). Identifying the actual causal seam
-> requires an operator-driven LIVE capture of the exact
-> `toolInput` shape for a fresh `codium-factory` reproduction
-> (`normalizedCommands.length`, `rendered command(s)`, evidence
-> builder trace). A fresh ACT
+> fixes do NOT explain the observed `codium-factory` live failure.
+> **Note (CORRECTION02 review residue)**: the UI rendering is NOT
+> sufficient evidence for the input-shape claim; what we actually
+> know is that *if* the live request arrived as `{ command: "wc ...
+> && cat ..." }` then `normalizeRunCommandsInput` gives one element
+> and `aggregateSource()` early-return makes the aggregate fix
+> non-causal. The V2 trace does not yet distinguish
+> `command: "wc ... && cat ..."` from
+> `commands: ["wc ...", "cat ..."]`. The exact live `toolInput`
+> shape remains UNBOUND until the CORRECTION02 capture lands.
+> Identifying the actual causal seam requires an operator-driven
+> LIVE capture of the exact `toolInput` shape for a fresh
+> `codium-factory` reproduction (`inputForm`, `commandsArrayLength`,
+> `normalizedCommandsLength`, `normalizedKinds`). A fresh ACT
 > (`ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02`)
 > is the next step.
 >

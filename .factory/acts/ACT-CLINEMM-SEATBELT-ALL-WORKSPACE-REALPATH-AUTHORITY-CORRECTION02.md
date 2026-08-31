@@ -10,13 +10,20 @@
 > investigation target. The live failure must be on a different
 > code path.
 >
-> **Reviewer disposition**: `HALT_RED_NOT_REPRODUCED` from CORRECTION01
-> reviewer; reopen condition was exact live `toolInput` shape + exact
-> production-seam reproduction. This ACT is the bounded continuation.
+> **Reviewer disposition**: `PASS_WITH_NONBLOCKING_RESIDUE C1: GO` from
+> CORRECTION02 reviewer. P1 (source-kind coherence) closed. P2
+> (documentary residue — premature claim that the live tool input is
+> a single normalized element) corrected by rephrasing as a conditional.
+> The exact live `toolInput` shape remains UNBOUND until the
+> input-shape capture lands; this ACT is the bounded continuation.
+> **Do not revisit `aggregateSource()` and do not broaden recon.**
+> Get the exact live `toolInput → normalizedCommands` shape; that
+> single observation decides the next causal branch.
 >
 > **Mission**: capture the exact normalized live tool input for a
-> fresh `codium-factory` reproduction, then localize the actual
-> causal seam and apply the bounded repair.
+> fresh `codium-factory` reproduction (input-shape capture + RED
+> matrix below), then localize the actual causal seam and apply the
+> bounded repair.
 
 ## 0. Mission
 
@@ -83,59 +90,177 @@ The actual causal seam is somewhere else. The candidate paths:
 apps/vscode/src/sdk/__tests__/seatbelt-all-workspace-realpath-authority-correction02.c0-live-shape.test.ts
 ```
 
-### RED cases
+### RED matrix (small and causal — per CORRECTION02 reviewer)
+
+The reviewer-recommended matrix. Smaller than the original T-* set;
+focuses on the necessity discriminator between "compound string
+extraction is the defect" and "compound is a red herring".
 
 ```text
-T-SHAPE-CAPTURE
-  Capture the exact normalized live toolInput for the corr=XBQ0RRD7BC
-  reproduction. The artifact MUST include:
-    - toolInput shape (string | record<string, unknown>)
-    - normalizedCommands.length (the post-normalizer element count)
-    - rendered command(s) (the post-normalization strings)
-    - evidence.ok + evidence.evidence (or undefined)
-    - auth shape (mode, mandatorySeatbelt, workspaceRoots, cwd, ...)
+C0  EXACT LIVE INPUT SHAPE MECHANICALLY FROZEN
+    Input: the live-shaped toolInput for the corr=XBQ0RRD7BC
+           reproduction (string OR array, whichever the V2
+           capture records for that correlationId).
+    Output: toolInput shape frozen verbatim (no interpretation;
+            the goal is to mechanically capture the shape that
+            produced the live approval card).
 
-T-SINGLE-COMPOUND
-  Live-shape reproduction through the real production seam.
-  Input shape: { command: "wc -l <abs-inside-root> && cat <abs-inside-root>/package.json" }
-  Expected pre-fix: ASK / host_workspace_realpath_authority
-  Expected post-fix: ALLOW / host_mode_all_seatbelt_required /
-                     mandatorySeatbeltExecution = true
-  (this is the live failure shape, the single-element compound)
+C1  CONTROL_SIMPLE_CAT (POSITIVE CONTROL)
+    Input: { command: "cat <abs-inside-root>/package.json" }
+    Setup: contained operand + valid evidence + ALL +
+           mandatorySeatbelt + correct R0 evidence
+    Expected: ALLOW
+    (A simple contained `cat` with correct R0 evidence is one of
+     the healthy controls. If this fails, the live failure is
+     NOT compound-specific; the simpler command path is also
+     broken. STOP and reopen at the simpler path.)
 
-T-SINGLE-PATH
-  Input shape: { command: "cat <abs-inside-root>/package.json" }
-  Expected pre-fix (defect): ASK / host_workspace_realpath_authority
-  (because expectedOperands extraction for "cat" on a single-element
-   compound would have been: ["package.json"], but the safe-rule
-   extractor for `cat` would have produced: [] — no operand expected?
-   Need to verify against `extractR0PathOperands` for `host_safe_cat`
-   on a compound string.)
+RED COMPOUND (NECESSITY DISCRIMINATOR)
+    Input: { command: "wc -l <abs-inside-root>/.../file.ts &&
+                    cat <abs-inside-root>/package.json" }
+    Setup: contained operands + valid evidence + ALL +
+           mandatorySeatbelt
+    Expected pre-fix: ASK / host_workspace_realpath_authority
+    Expected post-fix: ALLOW /
+                       host_mode_all_seatbelt_required /
+                       mandatorySeatbeltExecution = true
+    (If simple `cat` is ALLOW but compound becomes ASK /
+     host_workspace_realpath_authority, you have an excellent
+     necessity discriminator: the compound representation is
+     the load-bearing trigger.)
 
-T-EVIDENCE-OPERAND-MISMATCH
-  Drive `extractR0PathOperands("wc -l <abs> && cat <abs>", "host_safe_cat")`
-  directly and observe what it returns. If the returned operand list
-  does not equal the expected list, that's the live-failure mechanism.
+ABL SAME-OPERANDS-BUT-SEPARATELY-NORMALIZED
+    Input: { commands: ["wc -l <abs-inside-root>/.../file.ts",
+                       "cat <abs-inside-root>/package.json"] }
+    Setup: same operands, same evidence, same auth as RED COMPOUND
+    Expected: classify whether failure depends on compound
+              representation vs. shared operand identity.
+    (If ABL reproduces the same ASK as RED COMPOUND, the failure
+     is NOT compound-representation specific; it's operand-shape
+     specific. If ABL is ALLOW but RED COMPOUND is ASK, the
+     compound string is the load-bearing cause.)
+
+C2  STALE EVIDENCE
+    Input: same as C1 with operand-identity mismatch in evidence
+    Expected: ASK (realpath gate preserved; this is the established
+              behavior, included as a conservation control)
+
+C3  OUTSIDE-ROOT
+    Input: { command: "cat <abs-outside-root>/file.ts" }
+    Expected: ASK (must NOT become ALLOW under ALL+Seatbelt;
+              kernel is the containment gate; this is the established
+              behavior, included as a conservation control)
 ```
 
-### STOP rule
+### STOP rule (corrected)
 
 ```text
-T-SINGLE-COMPOUND FAILS pre-fix (reproduces live failure)
-  → causal binding RESTORED; continue with bounded repair on the
-    identified seam (likely `extractR0PathOperands` or
-    `evaluateOne` per-command).
+RED COMPOUND FAILS pre-fix (reproduces live failure)
+  → causal binding RESTORED; continue with bounded repair on
+    the identified seam (likely `extractR0PathOperands` for
+    compound strings, or `evaluateOne` per-command).
 
-T-SINGLE-COMPOUND PASSES pre-fix
-  → causal binding STILL BROKEN; the live failure is on a
-    different code path entirely (R5 catastrophic hard floor,
-    parser-proven promotion, or something we have not yet
-    considered). Reopen at the new seam.
+C1 CONTROL_SIMPLE_CAT FAILS pre-fix
+  → STOP. The defect is NOT compound-specific; the simpler
+    command path is also broken. Reopen at the simpler path.
 
-T-SHAPE-CAPTURE fails to acquire the exact toolInput shape
-  → halt; cannot continue without the canonical shape evidence.
-    Operator-driven runbook required.
+ABL reproduces the same ASK as RED COMPOUND
+  → the failure is NOT compound-representation specific;
+    it's operand-shape specific.
+
+C0 EXACT LIVE INPUT SHAPE cannot be acquired
+  → halt; cannot continue without the canonical shape
+    evidence. Operator-driven runbook required.
 ```
+
+## 1a. Input-shape capture probe (added 2026-08-30, CORRECTION02 review)
+
+A default-off structural input-shape capture probe has been added
+at the existing SDK-controller approval callback
+(`apps/vscode/src/sdk/SdkController.ts`, alongside the existing
+`approval.sdk-controller.authorization.v2` inner probe).
+
+```text
+codePoint: approval.sdk-controller.input-shape.v2
+data: {
+  sessionId,
+  toolName,
+  inputForm: "command" | "commands" | "other",
+  commandsArrayLength,
+  normalizedCommandsLength,
+  normalizedKinds: ["string", ...]
+}
+```
+
+Properties:
+- **Default-off**: requires opt-in via
+  `CLINEMM_DIAG_INPUT_SHAPE_V2=1` (any non-empty value).
+- **No raw command contents**: structural data only. The existing
+  `commandDigest` correlationId carries the verbatim content
+  through the V2 capture context (operators correlate the specimen
+  by correlationId, not by replaying the text).
+- **Sentinel values**: `normalizedCommandsLength = -1` and
+  `normalizedKinds = []` if the normalizer rejects the input;
+  allows the operator to correlate the failure mode by
+  correlationId.
+
+### Classification tree (per CORRECTION02 reviewer)
+
+For the fresh `codium-factory` reproduction:
+
+#### Case S1 — one normalized element
+
+```text
+inputForm=command
+normalizedCommandsLength=1
+hostDecision=ASK / host_workspace_realpath_authority
+```
+
+Then the multi-element `aggregateSource()` fixes are definitively
+unrelated to the live bug.
+
+Next RED should drive the **exact compound string** through:
+
+```text
+normalizeRunCommandsInput
+→ evaluateOne
+→ extractR0PathOperands / realpath conformance
+```
+
+and inspect the exact reason.
+
+This becomes the likely path:
+
+```text
+compound string
+→ safe-rule match on part of string
+→ path operand extraction against whole string
+→ evidence identity/conformance mismatch
+→ ASK / host_workspace_realpath_authority
+```
+
+But only promote that after RED.
+
+#### Case S2 — multiple normalized elements
+
+```text
+inputForm=commands
+normalizedCommandsLength>1
+```
+
+Then the previous dismissal of `aggregateSource()` as non-causal
+was premature. In that case rerun the **exact live array shape**
+against pre/post `3a198388d` and bind whether the independent
+aggregate fix actually participates in the symptom.
+
+#### Case S3 — unexpected input shape
+
+```text
+inputForm=other
+```
+
+Then halt at `CAPTURE_INSUFFICIENT` and trace the adapter
+producing `run_commands` input. Do not repair policy yet.
 
 ## 2. Out-of-scope (defended against scope creep)
 
