@@ -2,6 +2,22 @@
 
 > Status: **OPEN / HIGH** (LIVE-failure investigation)
 >
+> **Amendment (post `7c28ad729`)**: synthetic production-seam classifier
+> landed at HEAD; the committed test is a CLASSIFIER (asserts desired
+> post-fix shape, observes current disagreement), NOT a captured-live-
+> fact. A prior closure summary incorrectly promoted an offline
+> synthetic-seam observation into a live S2 claim; this amendment
+> (a) adds a `CLASSIFIER VS LIVE FACT` section to the test header,
+> (b) renames `RED_EXACT_COMPOUND` → `WITNESS_SINGLE_STRING_COMPOUND`
+> to make the test's epistemic role explicit, and (c) closes the
+> over-strong claim by retracting "Phase1 DECISION: CASE S2 is the
+> live causal shape" from the summary. Disposition is now
+> `HALT_LIVE_INPUT_SHAPE_UNBOUND` (per the causal reviewer's
+> correction), NOT `HALT_RED_NOT_REPRODUCED`. No production repair.
+> Live `toolInput` shape remains UNBOUND until a fresh codium-factory
+> reproduction with the committed `approval.sdk-controller.input-shape.v2`
+> probe fires (`CLINEMM_DIAG_INPUT_SHAPE_V2=1`, default-off).
+>
 > **Predecessor**: `ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01` (REOPENED).
 > CORRECTION01 (`3a198388d`) and CORRECTION02 (`dd694b6bc`) closed
 > source-election bugs in `aggregateSource()` but did NOT reproduce

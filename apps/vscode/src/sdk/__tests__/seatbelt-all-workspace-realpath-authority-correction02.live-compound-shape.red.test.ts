@@ -22,6 +22,52 @@
  * that gap with a small bounded RED matrix.
  *
  * -------------------------------------------------------------------------
+ * CLASSIFIER VS LIVE FACT (load-bearing epistemic distinction)
+ * -------------------------------------------------------------------------
+ *
+ * This file is a CLASSIFIER, not a captured-live-fact. Each test
+ * asserts the DESIRED POST-FIX shape the policy MUST emit under the
+ * given input + auth composition. A failure is the locus where the
+ * current production behavior disagrees with the desired contract; it
+ * is NOT evidence that the live `codium-factory` request arrived in
+ * the same shape.
+ *
+ * RED_EXACT_COMPOUND is a witness (it accepts either pre-fix or
+ * post-fix state) and is therefore NOT a true failing RED. A genuine
+ * RED for any of these cases must assert the desired post-fix state
+ * and observe the production state disagree.
+ *
+ * What is and is not established by this file:
+ *
+ *   ESTABLISHED (synthetic production seam, no codium-factory):
+ *     - C1 / ABL disagree with the desired post-fix contract at the
+ *       current HEAD. Both disagreements are reproducible today
+ *       without any live environment.
+ *     - C1 is a focused candidate for a per-command Seatbelt-
+ *       execution-obligation propagation fix (the single-R0-ALLOW
+ *       case). It is also a natural test for the P1 sibling
+ *       SEATBELT_EXECUTION_OBLIGATION_NOT_PROPAGATED_ON_SINGLE_R0_ALLOW.
+ *     - ABL suggests an operand-count binding defect in the multi-
+ *       element array path (the evidence builder flattens operands
+ *       across siblings while the per-command expectedOperands list
+ *       is single-command-scoped). The array-shape locus is NOT
+ *       live-bound.
+ *
+ *   NOT ESTABLISHED:
+ *     - The live `toolInput` shape. S1 vs S2 vs S3 is UNBOUND. The
+ *       committed `approval.sdk-controller.input-shape.v2` probe is
+ *       the only sanctioned discriminator and requires a fresh live
+ *       codium-factory reproduction to fire.
+ *     - That the live failure would be reproduced by the same input
+ *       the operator typed in chat. Model adapters can re-shape
+ *       input before it reaches the SDK callback.
+ *
+ *   AUTHORITY:
+ *     - Do NOT use this suite alone to authorize a production
+ *       repair. The suite is evidence-of-contract; the live capture
+ *       is the only evidence-of-cause.
+ *
+ * -------------------------------------------------------------------------
  * RED CONTRACT (load-bearing)
  * -------------------------------------------------------------------------
  *
@@ -207,9 +253,23 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 	})
 
 	// -------------------------------------------------------------------
-	// RED_EXACT_COMPOUND — load-bearing reproduction of the live specimen
+	// WITNESS_SINGLE_STRING_COMPOUND — synthetic production-seam witness
 	// -------------------------------------------------------------------
-	it("RED_EXACT_COMPOUND: command='wc -l <inside> && cat <inside>' under ALL+Seatbelt+valid evidence — captures the live failure mode", () => {
+	//
+	// This is NOT a true failing RED. It is a WITNESS: it accepts EITHER
+	// the pre-fix reproduction (ASK / host_workspace_realpath_authority
+	// with mandatorySeatbeltExecution=false) OR a post-fix pass (ALLOW /
+	// host_mode_all_seatbelt_required with mandatorySeatbeltExecution=
+	// true). The test exists to (a) verify the production seam does not
+	// produce an intermediate incoherent verdict and (b) emit the
+	// observed state into vitest stdout for offline correlation with the
+	// committed `approval.sdk-controller.input-shape.v2` probe.
+	//
+	// If a future ACT wants to bound a repair to the single-string
+	// compound shape, it must add a sibling assertion here that REJECTS
+	// the pre-fix (ASK) state — this witness alone is insufficient
+	// authorization for a production repair.
+	it("WITNESS_SINGLE_STRING_COMPOUND: command='wc -l <inside> && cat <inside>' under ALL+Seatbelt+valid evidence — synthetic witness, NOT a true RED", () => {
 		// The compound specimen the operator types in chat. The
 		// realpath evidence is built for the EXACT same string
 		// (matches the buildPathAuthorityEvidence contract — the host
@@ -267,7 +327,7 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 		// Diagnostic surface (visible in vitest output).
 		// eslint-disable-next-line no-console
 		console.log(
-			`[RED_EXACT_COMPOUND] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
+			`[WITNESS_SINGLE_STRING_COMPOUND] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
 	})
 
