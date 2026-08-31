@@ -168,6 +168,19 @@ apps/examples/desktop-app/.cursor/settings.json
 # so the ACT file AND the captures/ binding record must both be
 # durably tracked for the canonical link to survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
+# ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+# halted-ACT record authored 2026-08-31 per Factory causal reviewer.
+# Status HALT_DOGFOOD_IDENTITY_ABSENT (no truthful runtime dogfood identity
+# exists in the codebase at HEAD 6739ddbf1; per ACT spec section 18 "Do not
+# invent a broad settings subsystem", the halt cannot be resolved from a
+# sandboxed shell). Recon completed (no production code delta): knob
+# registry at HEAD (V=I=OPEN/opt-in, A=P=NOT LANDED), dogfood-identity
+# inspection table, telemetry-header landscape, SdkInteractionCoordinator
+# publication seam. The epic ledger at .factory/epic-board.md row 19 binds
+# to the ACT file, so it must be durably tracked for the canonical link to
+# survive a fresh clone (mirroring the prior editor-tool-recon ACT's
+# durability pattern).
+!/.factory/acts/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01.md
 # Same durable-binding reason as the ACT file above.
 # Mirror the .factory/acts/ default-deny + whitelist pattern:
 #   1. re-include the .factory/evidence/ directory so git can recurse,
@@ -177,6 +190,10 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/evidence/
 /.factory/evidence/*
 !/.factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/
+# ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01 evidence
+# (currently empty; reserved for the future re-open ACT to land). Mirrors
+# the editor-tool-recon ACT's evidence-directory durability pattern.
+!/.factory/evidence/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01/
 # ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01 evidence
 # (hermetic-fixture/happy-path-matrix.json + negative-matrix.json).
 # Same durable-binding reason as the ACT file: the matrices prove
