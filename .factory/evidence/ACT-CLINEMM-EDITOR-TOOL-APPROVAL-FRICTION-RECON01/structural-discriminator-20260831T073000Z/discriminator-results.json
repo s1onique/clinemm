@@ -6,7 +6,7 @@
   "tree": "a0b32ce0440acc994a276e6a9aa59952e04bf30d",
   "executable_env": "sandboxed-shell (no Aqua; no VSCodium restart; bun test works; bun -e on production source works; vitest child-process kill fails with EPERM)",
   "headless_shell_constraint_recorded_in": ".factory/epic-board.md row 18",
-  "label_correctness_note": "Per Factory causal reviewer P0+P1 (2026-08-31): LIVE_SPECIMEN is NOT_EXECUTED (not NOT_REPRODUCED); HALT is CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE (not HALT_LIVE_FAILURE_NOT_REPRODUCED); CASE_A is STRUCTURALLY_EXONERATED_ONLY as a sub-verdict (not LIVE_EXONERATED); E3 is CONTRACT_CONFLICT_DISCOVERED (override=all currently lifts persisted editFiles=false; contradicts frozen ACT E3 expectation).",
+  "label_correctness_note": "Per Factory causal reviewer P0+P1 (2026-08-31): LIVE_SPECIMEN is NOT_EXECUTED (not NOT_REPRODUCED); HALT is CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE (not HALT_LIVE_FAILURE_NOT_REPRODUCED); CASE_A is STRUCTURALLY_EXONERATED_ONLY as a sub-verdict (not LIVE_EXONERATED); E3 was CONTRACT_CONFLICT_DISCOVERED then resolved to PASS_BY_PRODUCT_CONTRACT per Factory causal reviewer product-policy decision (2026-08-31). Upstream basis: permission-handling.mdx lists editor and apply_patch in its canonical auto-approve-everything example; acp.mdx states 'Cline edits files and runs commands without asking' when auto-approval is on.",
   "seam_drift_since_frozen_seam_map": {
     "frozen_seam_map_head": "f8dca1fda",
     "frozen_seam_map_tree": "6f2e01b56",
@@ -156,7 +156,7 @@
   "captures_and_conservation": {
     "E1_Act_ALL_Seatbelt_editorOn": "PROVEN at policy seam (T4-T8); live UI outcome NOT bounded in this shell",
     "E2_Act_noALL_editorOn": "PROVEN at policy seam (T2b: persistedOff+override=none => ASK)",
-    "E3_Act_ALL_editorOff": "CONTRACT_CONFLICT_DISCOVERED (see contract_conflict block below; structural finding: persistedOff+override=all => ALLOW; frozen ACT E3 expectation: ASK; not a conservation PASS)",
+    "E3_Act_ALL_editorOff": "PASS_BY_PRODUCT_CONTRACT (resolved 2026-08-31 per Factory causal reviewer product-policy decision; see product_policy_decision block below; structural finding: persistedOff+override=all => ALLOW is now the intended product behavior, NOT a defect)",
     "E4_Plan_mode": "Not exercised; not in this ACT scope",
     "E5_command_run": "Not exercised (out of scope; run_commands is command-policy lane)",
     "E6_MCP_per_tool_policy": "PROVEN at policy seam (sdk-tool-policies.test.ts CORRECTION03 cases pass at HEAD)",
@@ -172,7 +172,9 @@
     "P1_PRODUCT_CONTRACT_CONFLICT": "session ALL currently overrides persisted editor OFF; ACT froze editor permission OFF as a negative control; the two expectations disagree",
     "decision_required": "Decide whether 'ALL literally means ALL' for native editor tools too. Suspected intended ClineMM product contract (given Seatbelt work): ALL + effective Seatbelt => editor OFF persisted setting is overridden for this task. But that needs explicit product-policy confirmation rather than being smuggled into conservation PASS.",
     "next_step_for_resolution": "Product-policy decision recorded in epic ledger (.factory/epics/approval-protection.md row 19 SCOPE_BOUNDARY) before this ACT can be treated as E3 PASS",
-    "this_run_disposition": "E3 reclassified as CONTRACT_CONFLICT_DISCOVERED (not PASS); does not block the structural PASS for the policy predicate"
+    "this_run_disposition": "E3 reclassified from CONTRACT_CONFLICT_DISCOVERED to PASS_BY_PRODUCT_CONTRACT (not a defect; matches upstream contract). Does not block the structural PASS for the policy predicate.",
+    "resolution_status": "RESOLVED_VIA_PRODUCT_POLICY_DECISION",
+    "resolution_recorded_at": "2026-08-31 by Factory causal reviewer product-policy decision (clinemm ACT bdd6f3574+)"
   },
   "test_execution": {
     "scope": "apps/vscode/src/sdk/sdk-tool-policies.test.ts (bun test)",
@@ -187,16 +189,37 @@
   "verdict": {
     "headline": "OPEN / STRUCTURAL_POLICY_PASS / LIVE_BINDING_UNEXECUTED",
     "sub_verdict": "PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1",
-    "summary": "At the policy predicate seam, the editor/non-command tool approval surface returns ALLOW for editor-family tools when override=all (regardless of persisted.editFiles value; override lifts persisted OFF - this is the E3 contract conflict). CASE A is STRUCTURALLY_EXONERATED_ONLY (sub-verdict; not LIVE_EXONERATED). CASES B/C remain UNBOUND without live execution in a headed VSCodium instance or a new default-off probe at the SdkInteractionCoordinator publication seam.",
-    "disposition": "POLICY_PREDICATE_STRUCTURAL_PASS / LIVE_BOUNDARY_UNEXECUTED / E3_CONTRACT_CONFLICT_DISCOVERED",
+    "summary": "At the policy predicate seam, the editor/non-command tool approval surface returns ALLOW for editor-family tools when override=all (regardless of persisted.editFiles value; override lifts persisted OFF - this is now resolved as PASS_BY_PRODUCT_CONTRACT per Factory causal reviewer product-policy decision). CASE A is STRUCTURALLY_EXONERATED_ONLY (sub-verdict; not LIVE_EXONERATED). CASES B/C remain UNBOUND without live execution in a headed VSCodium instance or a new default-off probe at the SdkInteractionCoordinator publication seam.",
+    "disposition": "POLICY_PREDICATE_STRUCTURAL_PASS / LIVE_BOUNDARY_UNEXECUTED / E3_PASS_BY_PRODUCT_CONTRACT",
     "halt_per_ACT_13": "CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE",
     "live_specimen_status": "NOT_EXECUTED (not NOT_REPRODUCED - no reproduction was attempted in this shell)",
     "live_cause": "UNBOUND",
-    "production_repair": "NOT_AUTHORIZED"
+    "production_repair": "NOT_AUTHORIZED",
+    "e3_status": "PASS_BY_PRODUCT_CONTRACT"
   },
   "durable_next_step": {
-    "what_moves_frontier": "(1) headed VSCodium runbook per ACT section 17.3 to attempt live CASE B / CASE C classification; OR (2) separately-authorized new default-off probe at the SdkInteractionCoordinator publication seam; OR (3) product-policy decision on E3 (whether ALL literally means ALL for native editor tools too) recorded in .factory/epics/approval-protection.md row 19 SCOPE_BOUNDARY.",
+    "what_moves_frontier": "(1) headed VSCodium runbook per ACT section 17.3 to attempt live CASE B / CASE C classification; OR (2) separately-authorized new default-off probe at the SdkInteractionCoordinator publication seam. E3 is RESOLVED by product-policy decision.",
     "operator_runbook_referenced": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 section 17.3",
     "red_test_authorized": "If a live run reproduces CASE B / CASE C, the RED must be authored at the real SdkInteractionCoordinator publication seam (sdk-interaction-coordinator.ts:417 ASK branch), not at the policy seam (which already returns ALLOW)."
+  },
+  "product_policy_decision": {
+    "decided_by": "Factory causal reviewer (2026-08-31 P0 follow-up)",
+    "decision_summary": "Intended ClineMM product contract: SESSION_OVERRIDE=ALL + effective Seatbelt confinement active => ALL means ALL for native editor tools as well. Persisted editFiles=false is a baseline/default preference, NOT a hard deny against an explicit task-scoped ALL override.",
+    "distinction": "persisted editor auto-approve OFF = default preference, overridable by task-scoped ALL. Explicit disabled/forbidden tool = hard authority boundary, NOT overridden merely by ALL.",
+    "consistency_with_command_policy": "ALL + Seatbelt => user delegates approval to sandbox/kernel. Explicit DENY / disabled capability remains DENY.",
+    "upstream_basis": {
+      "permission_handling_mdx": {
+        "url": "https://github.com/cline/cline/blob/main/docs/sdk/guides/permission-handling.mdx",
+        "verbatim_quote_1": "Tool names not listed in toolPolicies default to enabled and auto-approved, so set policies explicitly for tools that need review.",
+        "verbatim_quote_2": "Or with ClineCore: ... toolPolicies: { run_commands: { autoApprove: true }, editor: { autoApprove: true }, read_files: { autoApprove: true }, apply_patch: { autoApprove: true }, search_codebase: { autoApprove: true }, fetch_web_content: { autoApprove: true }, }, ... // canonical 'auto-approve everything' example explicitly sets editor AND apply_patch to autoApprove: true",
+        "verbatim_quote_3": "Auto-approving all tools means the agent can execute any shell command, modify any file, and make network requests without your review. Only use this in environments where the agent's actions are either sandboxed or fully trusted."
+      },
+      "acp_mdx": {
+        "url": "https://github.com/cline/cline/blob/main/docs/usage/acp.mdx",
+        "verbatim_quote_1": "Per session - sessions expose an Auto-approve tools toggle in the client's session settings ... Flipping it takes effect on the next tool call.",
+        "verbatim_quote_2": "With auto-approval on, Cline edits files and runs commands without asking. Only enable it in workspaces where you're comfortable with unattended changes."
+      }
+    },
+    "explicit_deny_preserved": "Explicit DENY / disabled capability remains non-overridable by ALL alone. This matches both upstream semantics and the command-policy work in this codebase."
   }
 }
