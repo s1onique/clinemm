@@ -153,4 +153,102 @@ Full inventory & rationale:
   .factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md
   (FW-11, recorded 2026-08-29 by the thread-future-work
   normalization ACT)
+
+### SINGLE-R0 SEATBELT EXECUTION-OBLIGATION PROPAGATION (sibling of CORRECTION02)
+
+```text
+Proposed ID:  ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01
+              (NOT yet opened; working name only)
+Priority:     P1
+State:        DEFER / NOT_STARTED / RECON_REQUIRED
+
+Classification:
+  BOUNDED DEFECT CANDIDATE
+  SYNTHETIC_REAL / REAL_PRODUCTION_SEAM
+  NOT demonstrated as cause of the intermittent approval-card bug
+    (`…CORRECTION02` is the owner of THAT live investigation;
+    this is a sibling candidate, NOT bundled into CORRECTION02)
+
+Observation site:
+  Synthetic production seam:
+    mode = all
+    mandatorySeatbelt = true
+    simple contained R0 path-bearing command
+    decision.kind = allow
+    source = host_mode_safe_only_rule
+    mandatorySeatbeltExecution = false
+
+Desired invariant:
+  if:
+    decision.kind == allow
+    AND mode == all
+    AND mandatorySeatbelt == true
+  then:
+    source == host_mode_all_seatbelt_required
+    mandatorySeatbeltExecution == true
+
+Sibling findings (preserved separately; do NOT collapse):
+  - Multi-element aggregate source-election defect:
+      repaired independently by 3a198388d + coherence correction dd694b6bc.
+  - Synthetic array operand-flattening hypothesis:
+      STRONG / NOT_LIVE_BOUND (the `…CORRECTION02` `WITNESS_SINGLE_STRING_COMPOUND`
+      classifier is a CLASSIFIER not a captured live fact).
+
+Mission shape (when ACT is authorized):
+  Read-only recon. NO production repair. NO new RED.
+  Observe the per-command verdict path
+    (sdk/packages/core/src/runtime/command-policy/command-policy.ts
+     evaluateOne line 237 / line 540; the per-command `matchedRuleSource`
+     emission; the gate at line 316; the mode-based resolution at 549..584)
+  under `mode=all + mandatorySeatbelt=true` for a single-element
+  contained R0 command.
+  Decide whether the propagation defect is REAL (the invariant
+  above is violated in the current source) and, if so, whether
+  it is also LIVE (whether the codium-factory intermittent
+  approval-card failure is on this path).
+  If REAL but NOT_LIVE: SUPERSEDED_BY = `…CORRECTION02` (treat as
+  bounded latent defect; one row in this epic only).
+  If LIVE: open the next ACT (`…RECON01` → optionally `…REPAIR01`).
+
+Search-first rule:
+  Search repo for an existing ACT/row owning this before opening
+  the new ACT. As of 2026-08-31: NO durable owner exists;
+  the synthetic observation is referenced in CORRECTION01 §3
+  ("aggregate defect" surface) and CORRECTION02 §3 review residue,
+  but neither ACT claims this lane.
+
+REOPEN_CONDITION = NOT_APPLICABLE
+  (this is a candidate lane awaiting ACT authorization, not a
+  blocked active ACT.)
+```
+
+### TEMP-APPROVAL-DIAGNOSTIC-CLEANUP (terminal debt)
+
+```text
+State:  DEFER / TERMINAL_CLEANUP / NO_OWNER
+Owner:  none yet; each diagnostic is tied to its capturing ACT.
+
+Inventory (default-off v2 capture probes, opt-in via CLINEMM_DIAG_*):
+  - approval.sdk-controller.input-shape.v2
+      required by `…CORRECTION02` §7 halt conditions + §10 capture
+      payload (gate: HALT_LIVE_INPUT_SHAPE_UNACQUIRED); opt-in via
+      CLINEMM_DIAG_INPUT_SHAPE_V2=1.
+  - approval.sdk-controller.authorization.v2
+  - approval.sdk-controller.entry.v2
+  - approval.ui.branch.v2
+  - approval.ui.published.v2
+      referenced by `…CORRECTION02` §3 + `…R5-IMPLEMENTATION01`
+      evidence tree + `…EDITOR-TOOL-APPROVAL-FRICTION-RECON01`
+      v2-capture test.
+
+Removal trigger (first of):
+  (a) root cause isolated for the owning ACT (capture no longer needed)
+  (b) capture insufficient (capture was a dead end)
+  (c) successor evidence supersedes the probe
+
+Do NOT remove anything required by an active live capture.
+Open ONE bounded removal ACT only when all capturing ACTs above
+have CLOSED.
+
+REOPEN_CONDITION = first of { (a) (b) (c) above }
 ```
