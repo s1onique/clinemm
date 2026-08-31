@@ -6,6 +6,7 @@
   "tree": "a0b32ce0440acc994a276e6a9aa59952e04bf30d",
   "executable_env": "sandboxed-shell (no Aqua; no VSCodium restart; bun test works; bun -e on production source works; vitest child-process kill fails with EPERM)",
   "headless_shell_constraint_recorded_in": ".factory/epic-board.md row 18",
+  "label_correctness_note": "Per Factory causal reviewer P0+P1 (2026-08-31): LIVE_SPECIMEN is NOT_EXECUTED (not NOT_REPRODUCED); HALT is CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE (not HALT_LIVE_FAILURE_NOT_REPRODUCED); CASE_A is STRUCTURALLY_EXONERATED_ONLY as a sub-verdict (not LIVE_EXONERATED); E3 is CONTRACT_CONFLICT_DISCOVERED (override=all currently lifts persisted editFiles=false; contradicts frozen ACT E3 expectation).",
   "seam_drift_since_frozen_seam_map": {
     "frozen_seam_map_head": "f8dca1fda",
     "frozen_seam_map_tree": "6f2e01b56",
@@ -51,8 +52,8 @@
     "live_VSCodium_invocation": "BLOCKED",
     "block_reason": "sandboxed environment; no Aqua session; code/open return error -54; user directive: DO NOT RESTART ANY VSCODIUM INSTANCE",
     "structural_evidence_substitute": "Bun + direct production-source import - exercises real buildToolPolicies, real isToolAutoApproved, real resolveEffectiveAutoApproval, real SessionAutoApprovalStore",
-    "halt_per_ACT_13": "HALT_LIVE_FAILURE_NOT_REPRODUCED (literal live binding cannot be attempted in this shell)",
-    "halt_decision": "structural qualification, no live binding claim"
+    "live_specimen_status": "NOT_EXECUTED (NOT NOT_REPRODUCED - no reproduction was attempted)",
+    "halt_per_ACT_13": "CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE"
   },
   "existing_capture_can_distinguish": {
     "approval_entry_v2_data_fields": [
@@ -90,7 +91,7 @@
       {
         "label": "persisted.editFiles=false + override=all",
         "result": "ALLOW",
-        "note": "override=all lifts persisted OFF; matches upstream contract"
+        "note": "override=all LIFTS persisted OFF; matches upstream autoApprove=true contract"
       }
     ],
     "T3_SessionAutoApprovalStore_pure_read": [
@@ -140,11 +141,12 @@
   },
   "case_classification_under_user_invariant": {
     "user_invariant": "VS Code interactive Act mode + YOLO_REQUESTED + Seatbelt selected+available + relevant editor permission enabled => an ordinary native editing tool MUST execute without an additional user approval",
-    "structural_evaluation": "At the policy seam (CASE A check), the invariant holds. shouldAutoApproveTool(request) returns true for editor-family tools when override=all, regardless of persisted.editFiles value (override lifts it).",
-    "case_a_status": "STRUCTURALLY_EXONERATED at HEAD policy seam (matches existing sdk-tool-policies.test.ts T1+T2 PASS at HEAD)",
-    "case_b_status": "CANNOT_BE_EXCLUDED_FROM_PRODUCTION_VIA_EXISTING_CAPTURE (would require new default-off probe at SdkInteractionCoordinator publication seam; out of scope for this shell)",
-    "case_c_status": "CANNOT_BE_EXCLUDED_FROM_PRODUCTION_VIA_EXISTING_CAPTURE",
-    "boundary_classification_under_user_invariant": "STRUCTURAL_PROVEN_AT_POLICY_SEAM / LIVE_BINDING_DEFERRED_TO_OPERATOR_RUNBOOK"
+    "structural_evaluation": "At the POLICY PREDICATE seam only, the invariant holds when override=all (regardless of persisted.editFiles value, because override lifts it).",
+    "case_a_status": "STRUCTURALLY_EXONERATED_ONLY (sub-verdict for the policy predicate; NOT promoted to LIVE_EXONERATED because no live request was exercised)",
+    "case_a_promotion_blocked_reason": "no live VSCodium invocation occurred; existing capture can only confirm entry/terminal, not the final non-command decision outcome",
+    "case_b_status": "UNBOUND (cannot be excluded from production via existing capture; would require new default-off probe at SdkInteractionCoordinator publication seam)",
+    "case_c_status": "UNBOUND (cannot be excluded from production via existing capture)",
+    "boundary_classification_under_user_invariant": "POLICY_PREDICATE_STRUCTURALLY_PASS / LIVE_BOUNDARY_UNEXECUTED"
   },
   "structural_red_status": {
     "production_shaped_red_written": false,
@@ -154,12 +156,23 @@
   "captures_and_conservation": {
     "E1_Act_ALL_Seatbelt_editorOn": "PROVEN at policy seam (T4-T8); live UI outcome NOT bounded in this shell",
     "E2_Act_noALL_editorOn": "PROVEN at policy seam (T2b: persistedOff+override=none => ASK)",
-    "E3_Act_ALL_editorOff": "PROVEN at policy seam (T2d: persistedOff+override=all => ALLOW via override lift) - design choice: override=all overrides persisted OFF",
+    "E3_Act_ALL_editorOff": "CONTRACT_CONFLICT_DISCOVERED (see contract_conflict block below; structural finding: persistedOff+override=all => ALLOW; frozen ACT E3 expectation: ASK; not a conservation PASS)",
     "E4_Plan_mode": "Not exercised; not in this ACT scope",
     "E5_command_run": "Not exercised (out of scope; run_commands is command-policy lane)",
     "E6_MCP_per_tool_policy": "PROVEN at policy seam (sdk-tool-policies.test.ts CORRECTION03 cases pass at HEAD)",
     "E7_rejected_native_editor": "Not exercised",
     "E8_requestToolApproval_callback_cardinality": "Not exercised; would require live SdkInteractionCoordinator run"
+  },
+  "contract_conflict_e3": {
+    "discovered_by": "Factory causal reviewer 2026-08-31 P1 review",
+    "observed": "persisted.editFiles=false + override=all => isToolAutoApproved = true (ALLOW)",
+    "frozen_ACT_E3_expectation": "ASK (approval required / operation not silently auto-approved)",
+    "current_implementation": "override=all LIFTS persisted editFiles=false via resolveEffectiveAutoApproval (session-auto-approval.ts:235)",
+    "upstream_contract_reference": "https://github.com/cline/cline/blob/main/docs/sdk/guides/permission-handling.mdx - upstream documents that autoApprove=true means tool runs without asking; editor/apply_patch listed as auto-approvable tools; defensible as product policy",
+    "P1_PRODUCT_CONTRACT_CONFLICT": "session ALL currently overrides persisted editor OFF; ACT froze editor permission OFF as a negative control; the two expectations disagree",
+    "decision_required": "Decide whether 'ALL literally means ALL' for native editor tools too. Suspected intended ClineMM product contract (given Seatbelt work): ALL + effective Seatbelt => editor OFF persisted setting is overridden for this task. But that needs explicit product-policy confirmation rather than being smuggled into conservation PASS.",
+    "next_step_for_resolution": "Product-policy decision recorded in epic ledger (.factory/epics/approval-protection.md row 19 SCOPE_BOUNDARY) before this ACT can be treated as E3 PASS",
+    "this_run_disposition": "E3 reclassified as CONTRACT_CONFLICT_DISCOVERED (not PASS); does not block the structural PASS for the policy predicate"
   },
   "test_execution": {
     "scope": "apps/vscode/src/sdk/sdk-tool-policies.test.ts (bun test)",
@@ -172,15 +185,18 @@
   },
   "production_delta": 0,
   "verdict": {
-    "code": "PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1",
-    "summary": "At the policy seam, the editor/non-command tool approval surface ALREADY satisfies the user-facing invariant under the frozen section 0 frozen-invariant gate (override=all lifts persisted OFF; persisted ON keeps ALLOW). CASE A is structurally exonerated by the existing test lattice at HEAD. CASE B / CASE C require live execution in a headed VSCodium instance or a new default-off probe at the SdkInteractionCoordinator publication seam; both are out of scope of this shell executability and per ACT section 3A require stronger justification than this ACT currently has.",
-    "disposition": "STRUCTURAL_PASS_AT_POLICY_SEAM / LIVE_BINDING_DEFERRED_TO_OPERATOR_RUNBOOK",
-    "halt_per_ACT_13": "HALT_LIVE_FAILURE_NOT_REPRODUCED",
-    "live_specimen_recorded": "Not Reproduced / Live binding Deferred to Operator Runbook (ACT section 17.3)"
+    "headline": "OPEN / STRUCTURAL_POLICY_PASS / LIVE_BINDING_UNEXECUTED",
+    "sub_verdict": "PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1",
+    "summary": "At the policy predicate seam, the editor/non-command tool approval surface returns ALLOW for editor-family tools when override=all (regardless of persisted.editFiles value; override lifts persisted OFF - this is the E3 contract conflict). CASE A is STRUCTURALLY_EXONERATED_ONLY (sub-verdict; not LIVE_EXONERATED). CASES B/C remain UNBOUND without live execution in a headed VSCodium instance or a new default-off probe at the SdkInteractionCoordinator publication seam.",
+    "disposition": "POLICY_PREDICATE_STRUCTURAL_PASS / LIVE_BOUNDARY_UNEXECUTED / E3_CONTRACT_CONFLICT_DISCOVERED",
+    "halt_per_ACT_13": "CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE",
+    "live_specimen_status": "NOT_EXECUTED (not NOT_REPRODUCED - no reproduction was attempted in this shell)",
+    "live_cause": "UNBOUND",
+    "production_repair": "NOT_AUTHORIZED"
   },
   "durable_next_step": {
-    "what_moves_frontier": "The editor-tool lane remaining live-binding gate is the CASE B / CASE C classifier, which requires either (a) a headed VSCodium runbook per ACT section 17.3, or (b) a separately-authorized new default-off probe at the SdkInteractionCoordinator publication seam. Neither is in this ACT scope to authorize.",
+    "what_moves_frontier": "(1) headed VSCodium runbook per ACT section 17.3 to attempt live CASE B / CASE C classification; OR (2) separately-authorized new default-off probe at the SdkInteractionCoordinator publication seam; OR (3) product-policy decision on E3 (whether ALL literally means ALL for native editor tools too) recorded in .factory/epics/approval-protection.md row 19 SCOPE_BOUNDARY.",
     "operator_runbook_referenced": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 section 17.3",
-    "red_test_authorized": "If an operator-runbook run reproduces CASE B / CASE C, the RED must be authored at the real SdkInteractionCoordinator publication seam (sdk-interaction-coordinator.ts:417 ASK branch), not at the policy seam (which already returns ALLOW)."
+    "red_test_authorized": "If a live run reproduces CASE B / CASE C, the RED must be authored at the real SdkInteractionCoordinator publication seam (sdk-interaction-coordinator.ts:417 ASK branch), not at the policy seam (which already returns ALLOW)."
   }
 }

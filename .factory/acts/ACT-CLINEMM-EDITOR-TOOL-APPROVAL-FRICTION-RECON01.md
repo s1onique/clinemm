@@ -1,6 +1,6 @@
 # ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01
 
-> Status: **OPEN / STRUCTURAL_PASS_AT_POLICY_SEAM / LIVE_BINDING_DEFERRED_TO_OPERATOR_RUNBOOK** —
+> Status: **OPEN / STRUCTURAL_POLICY_PASS / LIVE_BINDING_UNEXECUTED** —
 > recon §2 PASS at HEAD f8dca1fda / TREE 6f2e01b56 (committed at
 > dbd7c6449); §3 live specimen remains **GATED** behind
 > `ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01`
@@ -22,22 +22,26 @@
 > Sandbox-shell structural discriminator run under user directive
 > "DO NOT RESTART ANY VSCODIUM INSTANCE" (matches the headless-shell
 > constraint already recorded in epic-board.md row 18). Verdict at the
-> **policy seam** is **STRUCTURAL_PASS** (`PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1`):
-> `buildToolPolicies(editor).autoApprove=false` is the load-bearing
-> entry-level forcing (T1); `shouldAutoApproveTool` returns ALLOW for
-> editor-family tools whenever override="all" (T4-T8), including the
-> case where persisted.editFiles=false (override lifts it per the
-> upstream contract); CASES B/C cannot be excluded from production
-> without live VSCodium or a new default-off probe at the
-> SdkInteractionCoordinator publication seam (CAPTURE_INSUFFICIENT_FOR_CASE_A_VS_CASE_B).
+> **policy predicate seam** is **STRUCTURAL_PASS** as a SUB-VERDICT
+> (`PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1`): `buildToolPolicies(editor).autoApprove=false`
+> is the load-bearing entry-level forcing (T1); `shouldAutoApproveTool` returns
+> ALLOW for editor-family tools whenever override="all" (T4-T8), including the
+> case where persisted.editFiles=false (override lifts it). CASES B/C cannot be
+> excluded from production without live VSCodium or a new default-off probe at
+> the SdkInteractionCoordinator publication seam (CAPTURE_INSUFFICIENT_FOR_CASE_A_VS_CASE_B).
 > Decision: NO production RED authored against the policy seam
 > (would PASS, halting per ACT §5 own stop rules); NO repair
 > fabricated. Evidence: `.factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/structural-discriminator-20260831T073000Z/discriminator-results.json`.
-> Halt per ACT §13: `HALT_LIVE_FAILURE_NOT_REPRODUCED` (live binding
-> cannot be attempted in this shell). The remaining CASE B/C classifier
-> requires either (a) a headed VSCodium runbook per ACT §17.3, or
-> (b) a separately-authorized new default-off probe. Both are out of
-> this ACT's scope to authorize from this shell.
+>
+> **2026-08-31 causal-reviewer P0/P1 correction (HEAD `370f0bcb5`)**:
+> LIVE_SPECIMEN is `NOT_EXECUTED` (not `NOT_REPRODUCED`; no reproduction
+> was attempted in this shell); HALT is `CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE`
+> (not `HALT_LIVE_FAILURE_NOT_REPRODUCED`); CASE_A is `STRUCTURALLY_EXONERATED_ONLY`
+> (sub-verdict for the policy predicate, NOT promoted to LIVE_EXONERATED because
+> no live request was exercised); E3 is `CONTRACT_CONFLICT_DISCOVERED`
+> (override=all currently lifts persisted editFiles=false, contradicting the
+> frozen ACT E3 expectation of ASK; product-policy decision required before this
+> ACT can be treated as E3 PASS).
 >
 > **Primary purpose**: LIVE REPRODUCTION → approval-boundary
 > classification → RED at real production seam → causal discriminator →
@@ -65,7 +69,13 @@
 > - `CAPTURE_INSUFFICIENT`
 > - **`PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1`** (added 2026-08-31;
 >   structural PASS at the policy seam under sandbox-shell execution;
->   CASES B/C remain LIVE-BOUND-DEFERRABLE)
+>   SUB-VERDICT only — does not promote to LIVE_EXONERATED because no
+>   live request was exercised; CASES B/C remain UNBOUND)
+> - **`E3_CONTRACT_CONFLICT_DISCOVERED`** (added 2026-08-31 per Factory
+>   causal reviewer P1; override=all currently lifts persisted
+>   editFiles=false, contradicting the frozen ACT E3 expectation of ASK;
+>   product-policy decision required before this ACT can be treated as
+>   E3 PASS)
 >
 > **2026-08-30 continuation-session verdict**:
 > - `CAPTURE_INSUFFICIENT / PREDECESSOR_BLOCKED` (this commit; recorded,
@@ -951,12 +961,12 @@ What was executable in this shell:
 | §5  | RED                                | NOT_AUTHORIZED |
 | §6  | Necessity / ablation               | N/A (no RED) |
 | §7  | Bounded repair                     | NOT_AUTHORIZED |
-| §8  | Conservation matrix                | PARTIAL (E1-E3, E6 PROVEN at policy seam) |
+| §8  | Conservation matrix                | PARTIAL (E1, E2, E6 PROVEN at policy seam; E3 CONTRACT_CONFLICT_DISCOVERED, NOT PASS) |
 | §9  | Executable gates                   | DONE (bun test sdk-tool-policies.test.ts -> 36/37 PASS; 1 BASELINE_ONLY) |
 | §10 | Live dogfood qualification         | NOT_EXECUTABLE |
 | §11 | Temporary diagnostics              | NOT_TOUCHED |
 | §12 | Durability / closure               | DONE |
-| §13 | Halt                               | `HALT_LIVE_FAILURE_NOT_REPRODUCED` |
+| §13 | Halt                               | `CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE` (NOT `HALT_LIVE_FAILURE_NOT_REPRODUCED`; no reproduction was attempted) |
 | §14 | Final report                       | DONE below |
 
 #### §17.4 structural discriminator results (PASS at policy seam)
@@ -994,12 +1004,13 @@ SUBJECT_HEAD                = 0b3dada93
 FINAL_HEAD                  = 0b3dada93 (this commit only amends ACT + adds evidence; no production delta)
 WORKTREE                    = clean (no production/test/config delta)
 
-LIVE_SPECIMEN               = NOT_REPRODUCED (live binding cannot be attempted in sandbox-shell; user directive forbids VSCodium restart)
-BOUNDARY                    = CASE_A_STRUCTURALLY_EXONERATED_AT_POLICY_SEAM / CASE_B_AND_C_LIVE_BOUND_DEFERRED_TO_OPERATOR_RUNBOOK
+LIVE_SPECIMEN               = NOT_EXECUTED (live binding cannot be attempted in sandbox-shell; user directive forbids VSCodium restart; NO reproduction was attempted)
+LIVE_CAUSE                  = UNBOUND
+BOUNDARY                    = POLICY_PREDICATE_STRUCTURALLY_PASS / LIVE_BOUNDARY_UNEXECUTED
 RED                         = not authored (no live binding; authoring a RED at the policy seam would PASS, halting per ACT §5 own stop rules)
 NECESSITY                   = not applicable
 PRODUCTION_DELTA            = 0
-CONSERVATION                = E1 PROVEN at policy seam; E2 PROVEN at policy seam; E3 PROVEN at policy seam (override lift design choice); E6 PROVEN at policy seam
+CONSERVATION                = E1 PROVEN at policy seam; E2 PROVEN at policy seam; E3 CONTRACT_CONFLICT_DISCOVERED (not PASS); E6 PROVEN at policy seam
 TESTS                       = bun test sdk-tool-policies.test.ts -> 36/37 PASS; 1 BASELINE_ONLY failure (owned by ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01)
 DOGFOOD                     = NOT_EXECUTABLE (no Aqua session; user directive)
 P0                          = NONE
@@ -1011,10 +1022,10 @@ NEXT                        = continuation of this ACT (operator-driven) on a ho
 #### §17.4 HALT gates (per spec §13)
 
 ```text
-HALT_LIVE_FAILURE_NOT_REPRODUCED    = YES (live binding cannot be attempted in this shell; structural qualification instead)
+HALT_LIVE_FAILURE_NOT_REPRODUCED    = NOT_APPLICABLE (no reproduction was attempted; correct halt code is CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE)
 HALT_RED_NOT_REPRODUCED              = NOT_REACHED (RED not authored; would halt if authored)
 HALT_SEAM_MOVED                      = NO (seam architecture preserved at HEAD; only line-number drift)
-HALT_CAPTURE_INSUFFICIENT            = YES for CASE_A_VS_CASE_B (existing capture cannot distinguish them without a new probe at SdkInteractionCoordinator publication seam)
+HALT_CAPTURE_INSUFFICIENT            = YES reason=HOST_NOT_EXECUTABLE (live binding impossible in this shell; CASE_A_VS_CASE_B also remains unbound - existing capture cannot distinguish them without a new probe at SdkInteractionCoordinator publication seam)
 HALT_COMMAND_POLICY_DELTA            = NO (this ACT does not modify command policy)
 HALT_MCP_POLICY_REGRESSION           = NO (sdk-tool-policies.test.ts CORRECTION03 cases pass at HEAD)
 HALT_MANUAL_ACT_REGRESSION           = NO (T2b persistedOff+override=none => ASK proves manual approval path preserved)
@@ -1027,17 +1038,30 @@ HALT_NEW_P0                          = NO (no new P0; environmental constraint w
 #### §17.4 durable record
 
 ```text
-This ACT remains OPEN with structural qualification PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1 at the policy seam.
+This ACT remains OPEN. The 2026-08-31 sandbox-shell structural discriminator produced a sub-verdict:
+  PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1 (structural PASS for the policy predicate only).
 
-The remaining live-binding gate (CASE B / CASE C classifier) requires either:
+Strict classification (per Factory causal reviewer P0+P1 correction):
+  STATUS                  = OPEN / STRUCTURAL_POLICY_PASS / LIVE_BINDING_UNEXECUTED
+  LIVE_SPECIMEN           = NOT_EXECUTED (no reproduction was attempted)
+  LIVE_CAUSE              = UNBOUND
+  CASE_A                  = STRUCTURALLY_EXONERATED_ONLY (sub-verdict; NOT promoted to LIVE_EXONERATED)
+  CASE_B                  = UNBOUND
+  CASE_C                  = UNBOUND
+  E3                      = CONTRACT_CONFLICT_DISCOVERED (NOT a conservation PASS)
+  HALT                    = CAPTURE_INSUFFICIENT reason=HOST_NOT_EXECUTABLE
+  PRODUCTION_REPAIR       = NOT_AUTHORIZED
+
+The remaining live-binding gate (CASE B / CASE C classifier + E3 product-policy decision) requires:
   (a) a headed VSCodium runbook per ACT §17.3 operator-runbook (ACTIVE Aqua session, code restart, CONTROL_A + CONTROL_B + live specimen), OR
-  (b) a separately-authorized new default-off probe at the SdkInteractionCoordinator publication seam (sdk-interaction-coordinator.ts:417 ASK branch) that captures the final requestToolApproval decision outcome for non-command tools.
+  (b) a separately-authorized new default-off probe at the SdkInteractionCoordinator publication seam (sdk-interaction-coordinator.ts:417 ASK branch) that captures the final requestToolApproval decision outcome for non-command tools, OR
+  (c) a product-policy decision on E3 recorded in .factory/epics/approval-protection.md row 19 SCOPE_BOUNDARY before this ACT can be treated as E3 PASS.
 
-Neither is in this ACT scope to authorize from a sandboxed shell.
+Neither (a), (b), nor (c) is in this ACT scope to authorize from a sandboxed shell.
 
 Evidence files (durably persisted):
   .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/structural-discriminator-20260831T073000Z/discriminator-results.json
   .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/source-seam-map.md (re-verified at HEAD; architecture preserved)
 
-Factory rule: STOP. The load-bearing claim (CASE A structural exoneration at the policy seam) is proven and qualified. Do not recursively review the review. The next chat should resume this ACT only when (a) a headed VSCodium becomes available, or (b) the probe-authorization question is settled by a separate ACT.
+Factory rule: STOP. The load-bearing claim (policy predicate structural PASS) is proven and qualified as a sub-verdict. Do not recursively review the review. The next chat should resume this ACT only when (a) a headed VSCodium becomes available, (b) the probe-authorization question is settled by a separate ACT, or (c) the E3 product-policy decision is recorded.
 ```
