@@ -209,26 +209,35 @@ export interface TaskShadowHostWiringWithSink extends TaskShadowHostWiring {
 	 */
 	readonly getLastObservedShadowPhase: () => import("@shared/ExtensionMessage").TurnPhase | undefined
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
 	 *
-	 * Returns the TurnStateTracker.seq value the comparator had
-	 * stamped on its LAST observation, or `undefined` when no
-	 * observation has been recorded yet (Hub/Remote absence or
-	 * Local pre-observation). The publication selectors
-	 * (`selectTaskHeaderPresentation`,
-	 * `selectThinkingPresentation`) consume this seq to detect
-	 * "shadow is stale relative to the legacy tracker" and fall
-	 * through to the legacy branch — forbidding a stale shadow
-	 * projection from overriding a fresh legacy phase.
+	 * Returns the TurnStateTracker.seq value the comparator
+	 * stamped on its LAST observation yielding the SPECIFIC
+	 * projected phase `phase`. The phase-keyed stamp collapses
+	 * the previous unbounded observation-count stamp into a
+	 * per-projection invariant: a noop observation that yields
+	 * the same projection as the prior observation does NOT
+	 * bypass the staleness gate.
 	 *
-	 * **DOMAIN IDENTITY (CORRECTION02):** this seq is in the
-	 * **TurnState sequence domain** — same domain as the
-	 * publication's `turnState.seq`. The cross-domain numeric
-	 * comparison CORRECTION01 attempted has been removed.
+	 * `undefined` when the comparator has never accepted an
+	 * observation yielding `phase` (Hub/Remote absence, Local
+	 * pre-observation, or the shadow never projected `phase`).
+	 *
+	 * **DOMAIN IDENTITY (CORRECTION02):** the returned value
+	 * is in the **TurnState sequence domain** — same domain
+	 * as the publication's `turnState.seq`. The cross-domain
+	 * numeric comparison CORRECTION01 attempted has been
+	 * removed.
+	 *
+	 * **PROJECTION BINDING (CORRECTION03):** the key `phase`
+	 * must be the SAME phase the shadow currently projects
+	 * (`getLastObservedShadowPhase()`) — the caller asks "for
+	 * the phase the shadow is currently projecting, when was
+	 * that phase last established in the TurnState domain?".
 	 *
 	 * Read-only advisory accessor; non-mutating.
 	 */
-	readonly getLastObservedTurnSeq: () => number | undefined
+	readonly getLastObservedTurnSeqForPhase: (phase: TurnPhase) => number | undefined
 }
 
 /**
@@ -490,19 +499,19 @@ export function createTaskShadowHostWiring(deps: TaskShadowHostWiringDeps): Task
 			const canonical = TaskState.projectTurnState(model)
 			return toLegacyPhase(canonical)
 		},
-		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
 		// Returns the TurnStateTracker.seq value the comparator
-		// stamped on its LAST observation, or `undefined` when
-		// no observation has been recorded. Both sides of the
-		// publication-selector staleness gate are now in the
-		// SAME TurnState sequence domain — replacing the
-		// cross-domain numeric comparison CORRECTION01's
-		// reviewer halted on.
-		getLastObservedTurnSeq: (): number | undefined => {
+		// stamped on its LAST observation yielding the SPECIFIC
+		// projected phase `phase`. The phase-keyed stamp
+		// collapses the unbounded observation-count stamp into
+		// a per-projection invariant — a noop observation that
+		// yields the same projection as the prior observation
+		// does NOT bypass the staleness gate.
+		getLastObservedTurnSeqForPhase: (phase: TurnPhase): number | undefined => {
 			if (!comparator.hasObservedShadowState()) {
 				return undefined
 			}
-			return comparator.debugLastObservedTurnSeq()
+			return comparator.debugLastObservedTurnSeqForPhase(phase)
 		},
 		coordinator,
 		observeCanonicalRuntimeEvent(input: TaskShadowCanonicalEvent): void {
@@ -689,14 +698,14 @@ function createNoopWiring(): TaskShadowHostWiringWithSink {
 		// with the Hub/Remote absence state.
 		getLastObservedArbiter: () => undefined,
 		getLastObservedShadowPhase: () => undefined,
-		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
 		// Noop wiring: same advisory accessor, returning
 		// `undefined` (no observation has happened). The selector's
 		// staleness gate treats `canonicalShadowObservedTurnSeq ===
-		// undefined` as "no observation yet" and falls through to
-		// the legacy branch, so the no-op wiring remains a
-		// coherent publication producer.
-		getLastObservedTurnSeq: () => undefined,
+		// undefined` as "no observation yet for this phase" and
+		// falls through to the legacy branch, so the no-op wiring
+		// remains a coherent publication producer.
+		getLastObservedTurnSeqForPhase: () => undefined,
 		coordinator: noopCoordinator,
 		observeCanonicalRuntimeEvent(_input: TaskShadowCanonicalEvent): void {
 			/* No-op: wiring disabled by env flag. */

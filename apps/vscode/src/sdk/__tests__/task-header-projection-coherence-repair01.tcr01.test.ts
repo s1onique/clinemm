@@ -65,6 +65,7 @@ interface ProductionSeamFixture {
 	readonly minter: MessageIdMinter
 	readonly comparator: TaskShadowComparator
 	observeViaCanonicalShadow(): TurnPhase
+	observeNoopViaCanonicalShadow(turnSeq?: number): TurnPhase
 	currentShadowPhase(): TurnPhase | undefined
 }
 
@@ -80,15 +81,42 @@ function fixture(): ProductionSeamFixture {
 			const now = Date.now()
 			const legacyPhase = tracker.currentPhase
 			const turnSeq = tracker.get().seq
+			// Use a real `task_requested` TaskMsg (NOT `"noop"`) so
+			// the comparator's CORRECTION03 stamping rule (only
+			// stamp on non-noop events) actually fires. The
+			// comparator accepts real TaskMsg types like
+			// `task_requested`; using `"noop"` would bypass the
+			// stamp entirely, leaving the Map empty.
 			comparator.observeTaskMsg(
 				{
-					type: "noop",
-					ts: now,
-				} as unknown as Parameters<TaskShadowComparator["observeTaskMsg"]>[0],
+					type: "task_requested",
+					taskId: "test",
+					at: now,
+				},
 				legacyPhase,
 				now,
 				turnSeq,
 			)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			const canonical = TaskState.projectTurnState(model)
+			return toLegacyPhase(canonical)
+		},
+		// Adversarial: drive a `"noop"` observation through the
+		// comparator that does NOT advance the comparator's
+		// phase-keyed stamp. This mirrors the production path at
+		// shadow-adapter.ts:212 (`observeRuntimeEvent` returns
+		// `shadow.noop(now)` when the event has no shadow
+		// analogue). The CORRECTION03 invariant requires that
+		// such noop observations do NOT bypass the staleness gate.
+		observeNoopViaCanonicalShadow(turnSeq?: number): TurnPhase {
+			const now = Date.now()
+			const effectiveTurnSeq = turnSeq ?? tracker.get().seq
+			// Drive an `observeRuntimeEvent` for an event type
+			// that the adapter does not translate (e.g. plain
+			// `"noop"`); production's `observeRuntimeEvent` falls
+			// back to the shadow.noop observation in this case.
+			comparator.observeRuntimeEvent(runtimeEvent("noop"), tracker.currentPhase, now, effectiveTurnSeq)
 			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
 			const model = comparator.debugSnapshot()
 			const canonical = TaskState.projectTurnState(model)
@@ -137,14 +165,14 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 		// Same-domain assertion: the comparator's stamp equals
 		// the TurnStateTracker.seq that was live when the
 		// observation occurred.
-		expect(fx.comparator.debugLastObservedTurnSeq()).toBe(seqAtFirstSet)
+		expect(fx.comparator.debugLastObservedTurnSeqForPhase("idle")).toBe(seqAtFirstSet)
 		expect(shadowPhase).toBe("idle")
 		fx.tracker.set("streaming")
 		const seqAfterStreaming = fx.tracker.get().seq
 		expect(seqAfterStreaming).toBeGreaterThan(seqAtFirstSet)
 
 		const publicationSeq = fx.tracker.get().seq
-		const publicationShadowStamp = fx.comparator.debugLastObservedTurnSeq()
+		const publicationShadowStamp = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
 		// The publication's `seq` and the comparator's stamp
 		// are BOTH sampled from the SAME TurnStateTracker.
 		expect(publicationSeq).toBe(seqAfterStreaming)
@@ -165,8 +193,11 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 	it("THCP11_C02_RED_INVERSE: stale shadow 'streaming' MUST NOT override fresh legacy 'completed'", () => {
 		const fx = fixture()
 		fx.tracker.set("idle")
-		fx.comparator.observeRuntimeEvent(runtimeEvent("execution-state-changed"), "idle", Date.now(), fx.tracker.get().seq)
-		const stampedTurnSeqAfterFirstObserve = fx.comparator.debugLastObservedTurnSeq()
+		// Observe via the real TaskMsg-driven seam (uses
+		// `task_requested` — produces a non-noop event, stamps
+		// the comparator's phase-keyed entry).
+		fx.observeViaCanonicalShadow()
+		const stampedTurnSeqAfterFirstObserve = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
 		expect(stampedTurnSeqAfterFirstObserve).toBe(fx.tracker.get().seq)
 		expect(stampedTurnSeqAfterFirstObserve).toBeDefined()
 
@@ -178,7 +209,7 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 			canonicalShadowPhase: fx.currentShadowPhase(),
 			currentLegacyPhase: fx.tracker.currentPhase,
 			seq: fx.tracker.get().seq,
-			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeq(),
+			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeqForPhase(fx.currentShadowPhase() ?? "idle"),
 		})
 
 		expect(projection.phase).not.toBe("streaming")
@@ -232,10 +263,85 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 			canonicalShadow: staleShadow,
 			currentLegacyPhase: fx.tracker.currentPhase,
 			seq: fx.tracker.get().seq,
-			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeq(),
+			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeqForPhase(fx.currentShadowPhase() ?? "idle"),
 		})
 		expect(projection.modelStreaming).toBe(true)
 		expect(projection.source).toBe("legacy")
+	})
+
+	// -----------------------------------------------------------------------
+	// CORRECTION03 adversarial RED (HALT_SHADOW_PHASE_STAMP_NOT_BOUND_TO_PROJECTION):
+	// A no-op shadow observation under TurnState generation N+1 advances
+	// `lastObservedTurnSeq` to N+1 WITHOUT changing the shadow's projected
+	// phase (still "idle"). The publication's `seq` is also N+1 (because
+	// the legacy tracker advanced to `streaming` at N+1). The numeric
+	// comparison `seq > canonicalShadowObservedTurnSeq` evaluates to
+	// `false`, the staleness gate does NOT fire, and the shadow branch
+	// returns `phase="idle"` against `currentLegacyPhase="streaming"`
+	// — the LIVE contradiction resurfaces.
+	//
+	// CORE ASSERTION: this schedule MUST be forbidden. The publication
+	// phase must NOT be "idle" when the legacy is "streaming".
+	// -----------------------------------------------------------------------
+	it("THCP11_C03_RED: unrelated no-op shadow observation after legacy transitions MUST NOT bypass the staleness gate", () => {
+		const fx = fixture()
+		// Step 1: legacy is idle (seq=N). Shadow observes idle → stamps at N.
+		fx.tracker.set("idle")
+		fx.observeViaCanonicalShadow()
+		const seqAtIdle = fx.tracker.get().seq
+		const stampAtIdle = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
+		expect(stampAtIdle).toBe(seqAtIdle)
+
+		// Step 2: legacy transitions to streaming (seq=N+1). The shadow
+		// is NOT given a corresponding streaming observation. Its
+		// projected phase remains "idle".
+		fx.tracker.set("streaming")
+		const seqAfterStreaming = fx.tracker.get().seq
+		expect(seqAfterStreaming).toBeGreaterThan(seqAtIdle)
+		// Shadow's projected phase is still "idle" — it never received
+		// a streaming transition.
+		const shadowPhaseBeforeNoop = fx.currentShadowPhase()
+		expect(shadowPhaseBeforeNoop).toBe("idle")
+
+		// Step 3: an unrelated shadow noop observation occurs under
+		// seq=N+1 that does NOT change the shadow's projected phase.
+		// Production emits noop observations for many events
+		// (shadow-adapter.ts:212). Per the CORRECTION03 invariant,
+		// the noop observation does NOT advance the comparator's
+		// phase-keyed stamp — the comparator's stamp for "idle"
+		// remains at seqAtIdle (NOT seqAfterStreaming). This is the
+		// load-bearing assertion.
+		fx.observeNoopViaCanonicalShadow()
+		const stampAfterNoop = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
+		expect(stampAfterNoop).toBe(seqAtIdle)
+		expect(stampAfterNoop).not.toBe(seqAfterStreaming)
+		// The shadow's projection is still "idle" (no new model
+		// transition occurred):
+		const shadowPhaseAfterNoop = fx.currentShadowPhase()
+		expect(shadowPhaseAfterNoop).toBe("idle")
+
+		// Step 4: publication. The publication's `seq` is
+		// `seqAfterStreaming` (legacy advanced) but the phase-keyed
+		// stamp for "idle" remains at `seqAtIdle`. The selector's
+		// staleness gate `seq > stamp` evaluates to TRUE; the gate
+		// fires; the shadow branch is bypassed; the legacy branch
+		// returns phase="streaming" — the LIVE contradiction is
+		// forbidden by the phase-keyed stamp.
+		const projection = selectTaskHeaderPresentation({
+			canonicalShadowPhase: fx.currentShadowPhase(),
+			currentLegacyPhase: fx.tracker.currentPhase,
+			seq: fx.tracker.get().seq,
+			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeqForPhase(fx.currentShadowPhase() ?? "idle"),
+		})
+
+		// CORE ASSERTION (CORRECTION03): the publication MUST NOT be
+		// "idle" when the legacy is "streaming" — even though the
+		// numerical comparison `seq > canonicalShadowObservedTurnSeq`
+		// evaluates to false. The reviewer's P0
+		// SHADOW_PHASE_STAMP_NOT_BOUND_TO_PROJECTION requires the
+		// stamp to be bound to the projected phase.
+		expect(projection.phase).not.toBe("idle")
+		expect(projection.phase).toBe("streaming")
 	})
 })
 // ---------------------------------------------------------------------------

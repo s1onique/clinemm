@@ -111,29 +111,38 @@ export class TaskShadowComparator {
 	private readonly divergences: TaskShadowDivergence[] = []
 	private seq = 0
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
 	 *
 	 * Stores the TurnStateTracker.seq value at the moment the
-	 * comparator accepted its LAST observation. The publication
-	 * selectors use this to detect "shadow is stale relative to
-	 * the legacy tracker" — both sides are compared within the
-	 * SAME TurnState sequence domain (no cross-domain numeric
-	 * comparison; CORRECTION01's review-blocker P0).
+	 * comparator accepted its LAST observation that **yielded
+	 * the projected phase at the key**. This is a phase-keyed
+	 * stamp (NOT a single observation-stamp), so a no-op
+	 * observation that yields the same projection as the prior
+	 * observation does NOT advance the stamp for that phase.
+	 *
+	 * Rationale (CORRECTION03 review-blocker P0
+	 * HALT_SHADOW_PHASE_STAMP_NOT_BOUND_TO_PROJECTION):
+	 * the publication-selector staleness gate compares
+	 * `publication.seq > lastStamp`. If the gate is keyed by
+	 * the *phase* the shadow currently projects — not by the
+	 * *last* observation cardinality — then a noop
+	 * observation under a fresh TurnState generation that
+	 * leaves the shadow projection unchanged can no longer
+	 * bypass the gate (the stamp for that unchanged phase
+	 * still points at the older generation).
 	 *
 	 * `undefined` when:
 	 *   - the comparator has never accepted an observation
-	 *     (`hasObservedShadowState() === false`)
+	 *     yielding this phase
 	 *   - the observation was made by a host without a
 	 *     TurnStateTracker in the same domain (Hub/Remote
 	 *     fallback path), so no TurnState seq was available
-	 *     to stamp.
+	 *     to stamp
 	 *
-	 * Initialized at `undefined`; advances to the LAST accepted
-	 * observation's `turnSeq` (overwritten by each new
-	 * observation, not accumulated). Mirrors the public
-	 * `debugSnapshot()` shadow accessor pattern.
+	 * Initialized lazily — entries are added when
+	 * `compareWith` first observes that phase.
 	 */
-	private lastObservedTurnSeq: number | undefined = undefined
+	private lastObservedTurnSeqByPhase = new Map<TurnPhase, number | undefined>()
 
 	/**
 	 * Feed a runtime event through the shadow and compare against the
@@ -172,8 +181,27 @@ export class TaskShadowComparator {
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
 		this.seq += 1
 		this.legacyPhases.push(legacyPhase)
-		this.lastObservedTurnSeq = turnSeq
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
+		// Stamp the TurnStateTracker.seq value keyed by the
+		// PHASE the comparator is currently observing (the
+		// shadow's projected phase), BUT ONLY when this
+		// observation actually represents a transition into
+		// the phase. The `"noop"` sentinel means the runtime
+		// event had no shadow analogue and the shadow state
+		// was simply re-read (compareWith-shadow-adapter.ts:212
+		// in the agents package); for these, the phase
+		// projection is established by a PRIOR observation
+		// under a PRIOR TurnState generation. Re-stamping
+		// would lose that invariant.
+		//
+		// Invariant preserved: for any phase P the map keys,
+		//   lastObservedTurnSeqByPhase[P] === N
+		// ⇔ a NON-NOOP observation yielded a transition that
+		//   established phase P under TurnState generation N.
 		const shadowPhase = toLegacyPhase(observation.projections.turnPhase)
+		if (event !== "noop") {
+			this.lastObservedTurnSeqByPhase.set(shadowPhase, turnSeq)
+		}
 		if (shadowPhase !== legacyPhase) {
 			const divergence: TaskShadowDivergence = {
 				seq: this.seq,
@@ -207,7 +235,7 @@ export class TaskShadowComparator {
 		this.divergences.length = 0
 		this.legacyPhases.length = 0
 		this.seq = 0
-		this.lastObservedTurnSeq = undefined
+		this.lastObservedTurnSeqByPhase.clear()
 	}
 
 	/**
@@ -221,24 +249,36 @@ export class TaskShadowComparator {
 	}
 
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
 	 *
-	 * Read-only accessor for the TurnStateTracker.seq value at
-	 * the moment the comparator accepted its LAST observation.
-	 * Both sides of the publication-selector staleness gate
-	 * (`seq > canonicalShadowObservedTurnSeq`) are now in the
-	 * SAME TurnState sequence domain — the CORRECTION01
-	 * cross-domain comparison is removed.
+	 * Read-only accessor for the TurnStateTracker.seq value
+	 * the comparator stamped on its LAST observation yielding
+	 * the SPECIFIC projected phase `phase`. The phase-keyed
+	 * stamp collapses the previous unbounded observation-count
+	 * stamp into a per-projection invariant:
+	 *
+	 *   (getLastObservedShadowPhase() === P) AND
+	 *   (debugLastObservedTurnSeqForPhase(P) === N)
+	 *   ⇒ P was the shadow projection established/validated
+	 *     at TurnState generation N
 	 *
 	 * Returns `undefined` when the comparator has never accepted
-	 * an observation, or when the observation lacked a
-	 * TurnState-domain seq (Hub/Remote fallback).
+	 * an observation yielding `phase`, or when the observation
+	 * lacked a TurnState-domain seq (Hub/Remote fallback).
 	 *
-	 * The wiring's `getLastObservedTurnSeq()` accessor wraps this
-	 * with the `hasObservedShadowState()` presence gate.
+	 * The wiring's `getLastObservedTurnSeqForPhase(phase)`
+	 * accessor wraps this with the `hasObservedShadowState()`
+	 * presence gate.
 	 */
-	debugLastObservedTurnSeq(): number | undefined {
-		return this.lastObservedTurnSeq
+	debugLastObservedTurnSeqForPhase(phase: TurnPhase): number | undefined {
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
+		// Phase-keyed stamp. Returns the TurnStateTracker.seq
+		// value the comparator stamped on its LAST observation
+		// yielding the SPECIFIC projected phase `phase`. Phase-
+		// keyed (not observation-keyed) so a no-op observation
+		// that yields the same projection as the prior
+		// observation does NOT bypass the staleness gate.
+		return this.lastObservedTurnSeqByPhase.get(phase)
 	}
 
 	/**
