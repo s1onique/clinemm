@@ -194,6 +194,14 @@ apps/examples/desktop-app/.cursor/settings.json
 # durably tracked (mirroring the prior identity-halt ACT's durability
 # pattern).
 !/.factory/acts/ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01.md
+# Operator-owned Nix configuration (separate home-manager repo),
+# temporarily placed at the repo root on 2026-08-31 by the operator
+# for review of ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01's producer-side
+# evidence. NOT a ClineMM-tracked artifact; NOT durable project state.
+# This entry must be removed (and the file deleted) once the review
+# commit lands, otherwise the file will accumulate as a stray untracked
+# copy on every future worktree.
+/darwin-configuration.nix
 # Same durable-binding reason as the ACT file above.
 # Mirror the .factory/acts/ default-deny + whitelist pattern:
 #   1. re-include the .factory/evidence/ directory so git can recurse,

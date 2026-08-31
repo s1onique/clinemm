@@ -108,19 +108,28 @@ describe("resolveClineMmRuntimeProfile (ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01)"
 	})
 
 	// R7: PURE / SEMANTIC - resolver performs no side effects.
-	// The contract is encoded in the type signature: the resolver takes
-	// a `NodeJS.ProcessEnv` and returns a `ClineMmRuntimeProfile`. It
-	// cannot write, mutate state, spawn processes, or perform network
-	// I/O because it has no reference to any such facility.
-	it("R7: resolver signature is pure (env in, profile out; no other params)", () => {
-		// Type-level enforcement: the resolved values come only from
-		// the env argument, and the function body has no access to
-		// file/network/process APIs beyond what the test itself uses.
-		const before = {}
+	//
+	// Note (P2 review correction 2026-08-31): the resolver's TYPE
+	// SIGNATURE alone does not prove purity - a TypeScript function
+	// taking only `env: NodeJS.ProcessEnv` can still `import fs`,
+	// `import fetch`, or call global `process.exit`. Purity is a
+	// property of the IMPLEMENTATION BODY, not the signature. This
+	// test therefore verifies the body-level claim (no mutation of
+	// its input, no observable side effects via the public surface)
+	// rather than re-stating signature purity as a tautology.
+	it("R7: resolver body does not mutate its input env (body-level purity witness)", () => {
+		// The resolver takes one argument (env) and returns one value
+		// (the profile). The body must not modify `before`, must not
+		// write to disk, must not spawn processes, must not perform
+		// network I/O. This test exercises the only property visible
+		// from outside the resolver without mocking globals: the
+		// input reference is unchanged after the call.
+		const before = { CLINEMM_RUNTIME_PROFILE: "dogfood" }
+		const beforeSnapshot = { ...before }
 		const result = resolveClineMmRuntimeProfile(before)
-		const after = {}
-		expect(before).toEqual(after) // no mutation
-		expect(result).toBe("public")
+		const after = before
+		expect(after).toEqual(beforeSnapshot) // input not mutated
+		expect(result).toBe("dogfood")
 	})
 
 	// Defensive: env with other CLINEMM_* variables but the marker
