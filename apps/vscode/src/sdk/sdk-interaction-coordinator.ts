@@ -6,7 +6,6 @@ import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { ClineAskResponse } from "@shared/WebviewMessage"
 import { Logger } from "@/shared/services/Logger"
 import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
-import { resolveAutoV2CapturePath } from "./dogfood-runtime-capture-path"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
 import { MessageIdMinter } from "./message-id-minter"
 import { buildToolApprovalAskMessage } from "./message-translator"
@@ -16,7 +15,7 @@ import { buildToolApprovalDenialReason } from "./tool-approval-denial"
 import {
 	emitV2Capture,
 	newV2CorrelationId,
-	resolveCapturePathForProfile,
+	resolveCapturePathForProfileEffective,
 	v2CommandDigest,
 	withV2CaptureContext,
 } from "./v2-capture"
@@ -199,6 +198,58 @@ export function buildMistakeLimitAdvisoryText(input: {
  * from "user dismissed the advisory".
  */
 type MistakeLimitDecision = ConsecutiveMistakeLimitDecision & { kind: "advisory" | "user-resolved" }
+
+/**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+ *
+ * Emit the `approval.noncommand.decision.v1` probe at the actual
+ * decision boundary for non-command tools. This is the
+ * load-bearing CASE B/C discriminator (per
+ * `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01`): every
+ * ALLOW or ASK return path for a non-command tool MUST emit a
+ * decision record BEFORE returning, paired with the optional
+ * `approval.noncommand.ui-published.v1` record that fires later
+ * from the manual-ASK branch.
+ *
+ * Useful compositions:
+ *
+ *   decision=ALLOW + no publication    -> normal auto-approval
+ *   decision=ASK   + publication       -> normal manual approval
+ *   decision=ALLOW + publication       -> CASE B (live UI / publication defect)
+ *   tool request + no decision record  -> CASE C (seam moved)
+ *
+ * Identity-gated: fires ONLY when the effective diagnostic profile's
+ * `p` knob is ON. The probe is purely observational (never throws).
+ */
+function emitNonCommandDecisionProbe(input: {
+	request: ToolApprovalRequest
+	approved: boolean
+	decisionKind?: "allow" | "ask" | "deny"
+	decisionReason?: string
+	decisionSource?: string
+}): void {
+	const profile = resolveEffectiveDiagnosticKnobs(
+		process.env,
+		isDogfoodRuntime(process.env),
+		resolveCapturePathForProfileEffective(process.env),
+	)
+	if (!profile.p) {
+		return
+	}
+	emitV2Capture({
+		codePoint: "approval.noncommand.decision.v1",
+		scope: "request",
+		data: {
+			conversationId: input.request.conversationId,
+			toolName: input.request.toolName,
+			isCommand: false,
+			approved: input.approved,
+			decisionKind: input.decisionKind,
+			decisionReason: input.decisionReason,
+			decisionSource: input.decisionSource,
+		},
+	})
+}
 
 export class SdkInteractionCoordinator {
 	private pendingAskResolve: ((answer: string) => void) | undefined
@@ -426,6 +477,21 @@ export class SdkInteractionCoordinator {
 			}
 			if (commandEval.approved) {
 				Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
+				// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+				// Decision-boundary probe for the non-command ALLOW path that
+				// flows through the atomic command evaluator. The probe fires
+				// BEFORE the return so the discriminator captures the ALLOW
+				// decision (without it, this ALLOW was invisible to the
+				// editor-tool ACT's CASE B/C analysis).
+				if (!isCommand) {
+					emitNonCommandDecisionProbe({
+						request,
+						approved: true,
+						decisionKind: "allow",
+						decisionReason: commandEval.decision?.reason,
+						decisionSource: commandEval.decision?.source,
+					})
+				}
 				return {
 					approved: true,
 					decision: commandEval.decision,
@@ -454,6 +520,19 @@ export class SdkInteractionCoordinator {
 				// upstream v4.1.10 wiring).
 				if (request.policy.autoApprove === true || this.options.shouldAutoApproveTool?.(request) === true) {
 					Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
+					// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+					// Decision-boundary probe for the legacy non-command ALLOW
+					// path. Mirrors the atomic-evaluator ALLOW probe above; both
+					// fire BEFORE the return so the editor-tool ACT can correlate
+					// "ALLOW returned" with the same conversationId + toolName it
+					// sees in the (optional) `ui-published.v1` record downstream.
+					emitNonCommandDecisionProbe({
+						request,
+						approved: true,
+						decisionKind: "allow",
+						decisionReason: "policy-or-shouldAutoApprove",
+						decisionSource: request.policy.autoApprove === true ? "sdk-policy" : "host-callback",
+					})
 					return { approved: true }
 				}
 			}
@@ -476,26 +555,43 @@ export class SdkInteractionCoordinator {
 		})
 
 		// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
-		// P probe — `approval.noncommand.result.v1` +
-		// `approval.noncommand.ui-published.v1`. Gates on the
+		// P probe — `approval.noncommand.result.v1`. Gates on the
 		// effective diagnostic profile (not on the bare
 		// `process.env`): public installs NEVER fire this code
 		// point even if `CLINEMM_DIAG_APPROVAL_PUBLICATION_V2=1`
 		// is exported (the identity resolver is the sole gate).
 		// The gate returns false in public (fail-closed) and true
 		// in dogfood by default unless explicitly overridden down.
-		// The capture is structurally identical to the existing
-		// `branch` / `published` probes above; we emit two records
-		// (the result + the publication) so CASE B (ask resolved
-		// without ever opening a card) and CASE C (ask opened,
-		// card published, user rejected) can be distinguished.
+		// This code point fires ONLY at the ASK fall-through
+		// (after `branch`); the matching `decision.v1` probe at
+		// every return boundary (ALLOW + ASK) is the load-bearing
+		// CASE B/C discriminator (see ACT-CLINEMM-EDITOR-TOOL-
+		// APPROVAL-FRICTION-RECON01).
 		if (!isCommand) {
-			const pProfile = resolveEffectiveDiagnosticKnobs(
+			const pProfileAsk = resolveEffectiveDiagnosticKnobs(
 				process.env,
 				isDogfoodRuntime(process.env),
-				resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+				resolveCapturePathForProfileEffective(process.env),
 			)
-			if (pProfile.p) {
+			if (pProfileAsk.p) {
+				// Decision-boundary probe for the ASK fall-through. Fires
+				// BEFORE the result.v1 emit so a single correlationId
+				// surfaces both the decision (kind=ask) and the result
+				// (`approvalResult: "ask"`); the editor-tool ACT correlates
+				// them via the AsyncLocalStorage context. `commandEval` is
+				// `undefined` here for non-command tools (the atomic
+				// command evaluator only runs for `isCommand === true`),
+				// so the reason/source fields default to `undefined`; the
+				// downstream `result.v1` and `ui-published.v1` records
+				// still carry the conversationId + toolName + correlationId
+				// for cross-record joining.
+				emitNonCommandDecisionProbe({
+					request,
+					approved: false,
+					decisionKind: "ask",
+					decisionReason: commandEval?.decision?.reason,
+					decisionSource: commandEval?.decision?.source,
+				})
 				emitV2Capture({
 					codePoint: "approval.noncommand.result.v1",
 					scope: "request",
@@ -556,7 +652,7 @@ export class SdkInteractionCoordinator {
 			const pProfilePublished = resolveEffectiveDiagnosticKnobs(
 				process.env,
 				isDogfoodRuntime(process.env),
-				resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+				resolveCapturePathForProfileEffective(process.env),
 			)
 			if (pProfilePublished.p) {
 				emitV2Capture({

@@ -169,15 +169,22 @@ apps/examples/desktop-app/.cursor/settings.json
 # durably tracked for the canonical link to survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
 # ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
-# reopened ACT authored 2026-08-31 per Factory causal reviewer (C1: GO).
-# Status (after structural re-open at HEAD <this-commit>):
-# PASS_DOGFOOD_DIAGNOSTIC_PROFILE_V1_STRUCTURAL + LIVE_QUALIFICATION_REMAINING.
-# Production delta: dogfood-diagnostic-profile.ts resolver (V/I/P knobs,
+# reopened + bounded-correction ACT authored 2026-08-31 per Factory
+# causal reviewer (initial C1: GO; bounded followup C1: GO_LIVE after
+# HALT_P_PROBE_NOT_BOUND + V_HEADER_STATE_DIVERGES review).
+# Status (after structural re-open + bounded followup at HEAD <this-commit>):
+# PASS_DOGFOOD_DIAGNOSTIC_PROFILE_V1_STRUCTURAL + LIVE_QUALIFICATION
+# cleared (operator may launch headed codium-clinemm / codium-factory).
+# Production delta: dogfood-diagnostic-profile.ts resolver (V is a structural
+# mirror of the writer's effective state; I/P gated on identity + per-knob env;
 # A hard-coded false until its owner ACT lands); dogfood-runtime-capture-path.ts
 # identity-gated auto-path for V; v2-capture.ts identity-gated auto-path
-# fallback; SdkController.ts I auto-enables in dogfood + diagnosticKnobs
-# field on ExtensionState; sdk-interaction-coordinator.ts:417 P probe
-# (approval.noncommand.result.v1 + approval.noncommand.ui-published.v1);
+# fallback + resolveCapturePathForProfileEffective() export so callers can
+# feed the writer's effective state into the resolver; SdkController.ts
+# I auto-enables in dogfood + diagnosticKnobs field on ExtensionState;
+# sdk-interaction-coordinator.ts P probe now has THREE code points
+# (decision.v1 at every non-command return boundary + result.v1 +
+# ui-published.v1; decision.v1 is the load-bearing CASE B/C discriminator);
 # webview TaskHeaderTelemetry indicator (data-testid=task-header-diagnostic-knobs).
 # Initial effective knobs in dogfood (no env): V=ON, I=ON, A=OFF, P=ON
 # (header reads "VIP"). The epic ledger at .factory/epic-board.md row 19

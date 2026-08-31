@@ -223,6 +223,26 @@ export function resolveCapturePathForProfile(env: NodeJS.ProcessEnv = process.en
 }
 
 /**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+ *
+ * Resolve the V2 capture path the EMITTER would actually use at the
+ * current moment, mirroring `resolveCapturePath()`'s full precedence
+ * (user-set env var -> identity-gated auto-path -> null). Unlike the
+ * internal `resolveCapturePath()`, this function is uncached and
+ * re-evaluates every call so callers (notably `SdkController.get
+ * StateToPostToWebview`) can wire the resulting truth into the
+ * `diagnosticKnobs.v` field — the header MUST mirror the writer's
+ * effective state, not just the env-var-only signal.
+ */
+export function resolveCapturePathForProfileEffective(env: NodeJS.ProcessEnv = process.env): string | null {
+	const userPath = resolveCapturePathForProfile(env)
+	if (userPath !== null) {
+		return userPath
+	}
+	return resolveAutoV2CapturePath(env)
+}
+
+/**
  * Append a single JSONL record. Never throws.
  *
  * Returns true if a record was emitted, false otherwise (capture

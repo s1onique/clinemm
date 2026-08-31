@@ -77,7 +77,6 @@ import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
-import { resolveAutoV2CapturePath } from "./dogfood-runtime-capture-path"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
@@ -165,7 +164,7 @@ import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
 import { TurnStateTracker } from "./turn-state-tracker"
-import { emitV2Capture, resolveCapturePathForProfile } from "./v2-capture"
+import { emitV2Capture, resolveCapturePathForProfileEffective } from "./v2-capture"
 import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
 import { VscodeSessionHost } from "./vscode-session-host"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
@@ -476,7 +475,7 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 		const iProfile = resolveEffectiveDiagnosticKnobs(
 			process.env,
 			isDogfoodRuntime(process.env),
-			resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+			resolveCapturePathForProfileEffective(process.env),
 		)
 		const inputShapeGate = Boolean(process.env.CLINEMM_DIAG_INPUT_SHAPE_V2) || iProfile.i
 		if (inputShapeGate) {
@@ -3923,10 +3922,17 @@ export class Controller {
 				//   2. auto-resolved
 				//      <dataDir>/runtime-diag/<id>.jsonl (via
 				//      resolveAutoV2CapturePath; identity-gated)
+				//
+				// We feed `resolveCapturePathForProfileEffective` (the
+				// emitter's full precedence) into the resolver so V in
+				// the wire payload MIRRORS the writer's effective state
+				// (per ACT followup review: header must never lie about
+				// whether the writer is active). The other knobs (I, P)
+				// still gate on identity + per-knob env vars as before.
 				diagnosticKnobs: resolveEffectiveDiagnosticKnobs(
 					process.env,
 					isDogfoodRuntime(process.env),
-					resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+					resolveCapturePathForProfileEffective(process.env),
 				),
 				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
 				//

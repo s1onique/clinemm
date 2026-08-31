@@ -19,7 +19,13 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 		})
 	})
 
-	it("C2: public + env tries to enable -> still OFF (public wins)", () => {
+	it("C2: public + env with explicit capture path -> V=true (legacy opt-in preserved)", () => {
+		// V is a structural mirror of the writer's effective state
+		// (per ACT followup review). If the caller passes a non-null
+		// `vCapturePath`, V=true regardless of profile. Public + env
+		// with the legacy explicit path preserves the old opt-in. The
+		// diagnostic-profile resolver never SILENTLY auto-enables V in
+		// public; the env var is the long-standing opt-in surface.
 		expect(
 			resolveEffectiveDiagnosticKnobs(
 				{
@@ -30,7 +36,7 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 				false,
 				"/tmp/capture.jsonl",
 			),
-		).toEqual({ v: false, i: false, a: false, p: false })
+		).toEqual({ v: true, i: false, a: false, p: false })
 	})
 
 	it("C3: dogfood + no env + no path -> V/I/P partial; A off", () => {
@@ -55,8 +61,14 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 		expect(knobs.p).toBe(true)
 	})
 
-	it("C5b: dogfood + V=0 -> V forced OFF", () => {
-		const knobs = resolveEffectiveDiagnosticKnobs({ CLINEMM_CAPTURE_V2_PATH: "0" }, true, AUTO_PATH)
+	it("C5b: dogfood + emitter-disabled path (null) -> V OFF (header mirrors writer)", () => {
+		// V override-down (`CLINEMM_CAPTURE_V2_PATH=0`) is honored at
+		// the EMITTER layer in v2-capture.ts. The resolver reflects
+		// the writer's effective state: if the caller passes `null`
+		// as the third argument, V=false (writer disabled). This
+		// test verifies the resolver correctly mirrors an emitter
+		// that has honored the override-down.
+		const knobs = resolveEffectiveDiagnosticKnobs({ CLINEMM_CAPTURE_V2_PATH: "0" }, true, null)
 		expect(knobs.v).toBe(false)
 		expect(knobs.i).toBe(true)
 		expect(knobs.p).toBe(true)

@@ -2,25 +2,27 @@
 
 **Type:** OBSERVABILITY ENABLEMENT + LIVE EVIDENCE ACQUISITION (NOT a repair ACT)
 
-**Status (this commit):** **REOPENED / DOGFOOD_IDENTITY_STRUCTURALLY_AVAILABLE** — `PASS_DOGFOOD_DIAGNOSTIC_PROFILE_V1_STRUCTURAL` + `LIVE_QUALIFICATION_REMAINING`
+**Status (this commit):** **REOPENED / DOGFOOD_IDENTITY_STRUCTURALLY_AVAILABLE + P_PROBE_BOUNDED_FIX + V_CANONICAL_TRUTH** — `PASS_DOGFOOD_DIAGNOSTIC_PROFILE_V1_STRUCTURAL` + `LIVE_QUALIFICATION_REMAINING` (now **C1: GO_LIVE** per Factory causal reviewer's followup).
 
 **Status history:**
 
   - 2026-08-31 (predecessor at HEAD `6739ddbf1`): HALT_DOGFOOD_IDENTITY_ABSENT (no truthful runtime dogfood identity existed at HEAD)
-  - 2026-08-31 (successor at HEAD `f63556b17` → `5f0c15763` → `a7ae5b890`): identity resolver shipped at `apps/vscode/src/sdk/dogfood-runtime-profile.ts` (22/22 vitest GREEN, tsc EXIT=0, biome clean); HALT_LAUNCHER_SOURCE_UNBOUND recorded (ablation requires headed host)
-  - 2026-08-31 (this commit): per Factory causal reviewer **C1: GO** — identity chain is structurally pinned; this ACT re-opens and implements the V/I/P diagnostic profile (A is intentionally NOT landed; the reviewer's directive says A's probe must not be shown before it exists)
+  - 2026-08-31 (identity ACT at HEAD `f63556b17` → `5f0c15763` → `a7ae5b890`): identity resolver shipped at `apps/vscode/src/sdk/dogfood-runtime-profile.ts` (22/22 vitest GREEN, tsc EXIT=0, biome clean); HALT_LAUNCHER_SOURCE_UNBOUND recorded (ablation requires headed host)
+  - 2026-08-31 (initial re-open at HEAD `9d595e4cf`): per Factory causal reviewer **C1: GO** — identity chain is structurally pinned; this ACT re-opened and shipped the V/I/P diagnostic profile (A is intentionally NOT landed; the reviewer's directive says A's probe must not be shown before it exists)
+  - 2026-08-31 (this bounded-correction followup at HEAD `<this-commit>`): per Factory causal reviewer's **HALT_P_PROBE_NOT_BOUND + V_HEADER_STATE_DIVERGES_FROM_ACTUAL_ENV_ENABLED_CAPTURE** — closes the load-bearing P0 discriminator gap (decision.v1 probe now fires at every non-command return boundary, not only ASK) and the bounded P1 V-header state divergence (V is now a structural mirror of the writer's effective state). Reviewer authorized **C1: GO_LIVE** after this followup. New evidence file at `.factory/evidence/.../p-probe-discriminator-followup.md`.
 
 **Priority:** P1 / HIGH
 
 **Factory disposition (this commit):**
 
-  C0: PROCEED_TO_RECON_ONLY       (predecessor: satisfied 2026-08-31)
-  C1: GO                          (satisfied 2026-08-31 by identity ACT)
-  C2: STRUCTURAL_IMPLEMENTATION   (satisfied 2026-08-31 by this commit)
+  C0: PROCEED_TO_RECON_ONLY                  (predecessor: satisfied 2026-08-31)
+  C1: GO_LIVE                                (satisfied 2026-08-31 by this followup)
+  C2: STRUCTURAL_IMPLEMENTATION              (satisfied 2026-08-31 by initial re-open)
+  C3: P_PROBE_BOUNDED_FIX + V_CANONICAL_TRUTH (satisfied 2026-08-31 by this followup)
 
-**Date frozen:** 2026-08-31 (predecessor); 2026-08-31 (this commit)
-**Subject HEAD:** `6739ddbf17276b0a0ae4107dfde3af7ef6f21db5` (predecessor); `<this-commit>` (this commit)
-**Final HEAD:** `<this-commit>` (production delta committed; tests green)
+**Date frozen:** 2026-08-31 (predecessor); 2026-08-31 (initial re-open); 2026-08-31 (this followup)
+**Subject HEAD:** `6739ddbf17276b0a0ae4107dfde3af7ef6f21db5` (predecessor); `9d595e4cf` (initial re-open); `<this-commit>` (this followup)
+**Final HEAD:** `<this-commit>` (production delta committed; tests green; operator may launch headed `codium-factory`)
 
 ---
 

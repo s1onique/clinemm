@@ -117,16 +117,27 @@ export function resolveEffectiveDiagnosticKnobs(
 	isDogfood: boolean,
 	vCapturePath: string | null,
 ): EffectiveDiagnosticKnobs {
-	// V is gated by the same decideKnob precedence as the other
-	// knobs, but its `dogfoodDefault` is additionally conditional
-	// on a resolvable capture path: identity alone is not enough
-	// for V (a dogfood install without a sink cannot write JSONL).
-	// We compose that by short-circuiting on the OFF branch before
-	// delegating to decideKnob (explicit OFF always wins; identity
-	// gate then decides).
+	// V is determined ENTIRELY by whether the V2 writer has a
+	// resolvable path. Three precedence rules (canonical-truth model,
+	// per ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-
+	// CAPTURE01 followup review):
+	//
+	//   1. user-set CLINEMM_CAPTURE_V2_PATH   -> V=true (legacy
+	//      public-install opt-in; preserves prior diagnostic workflows
+	//      that were never gated on identity).
+	//   2. dogfood + auto path (resolved via
+	//      `dogfood-runtime-capture-path.ts`) -> V=true.
+	//   3. otherwise                          -> V=false (public default
+	//      remains OFF; "header matches writer" guarantee).
+	//
+	// `decideKnob` is NOT used for V because V is a structural fact
+	// about the writer, not a profile-gated activation. The env-var
+	// override-down (`CLINEMM_CAPTURE_V2_PATH=0`) is honored at the
+	// emitter layer in `v2-capture.ts` (the env var is the canonical
+	// opt-in; the resolver observes the writer's effective state).
 	const vResolved = vCapturePath !== null
 	return {
-		v: vResolved ? decideKnob(env, "v", isDogfood) : false,
+		v: vResolved,
 		i: decideKnob(env, "i", isDogfood),
 		// A is not landed; this ACT pins the contract that it can
 		// ONLY be flipped by its owner ACT (the probe site, when it
