@@ -1,0 +1,186 @@
+{
+  "act": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+  "phase": "structural-discriminator",
+  "capturedAt": "2026-08-31T07:30:00Z",
+  "head": "0b3dada93cfead75ec1460e822e91ac2ea965e7e",
+  "tree": "a0b32ce0440acc994a276e6a9aa59952e04bf30d",
+  "executable_env": "sandboxed-shell (no Aqua; no VSCodium restart; bun test works; bun -e on production source works; vitest child-process kill fails with EPERM)",
+  "headless_shell_constraint_recorded_in": ".factory/epic-board.md row 18",
+  "seam_drift_since_frozen_seam_map": {
+    "frozen_seam_map_head": "f8dca1fda",
+    "frozen_seam_map_tree": "6f2e01b56",
+    "current_head": "0b3dada93",
+    "drift_summary": "Architecture preserved at HEAD; only line-number drift from intervening commits/refactors.",
+    "buildToolPolicies_editor_set_line": {
+      "frozen": 65,
+      "current": 69,
+      "delta": "+4"
+    },
+    "shouldAutoApproveTool_disjunct_line": {
+      "frozen": 417,
+      "current": 430,
+      "delta": "+13"
+    },
+    "isToolAutoApproved_definition_line": {
+      "frozen": "952..1001",
+      "current": 1055,
+      "delta": "+103"
+    },
+    "resolveEffectiveAutoApproval": {
+      "frozen": "221..244",
+      "current": "221..243",
+      "delta": "1 line"
+    },
+    "approval_entry_v2_emit_line": {
+      "frozen": "265..272",
+      "current": 291,
+      "delta": "+26"
+    },
+    "approval_terminal_v2_emit_line": {
+      "frozen": "265..272",
+      "current": 308,
+      "delta": "+36"
+    },
+    "SessionAutoApprovalStore_API": {
+      "frozen": "preArm",
+      "current": "setOverride(sessionId, override)",
+      "delta": "renamed; semantic preserved"
+    }
+  },
+  "live_executable_constraint": {
+    "live_VSCodium_invocation": "BLOCKED",
+    "block_reason": "sandboxed environment; no Aqua session; code/open return error -54; user directive: DO NOT RESTART ANY VSCODIUM INSTANCE",
+    "structural_evidence_substitute": "Bun + direct production-source import - exercises real buildToolPolicies, real isToolAutoApproved, real resolveEffectiveAutoApproval, real SessionAutoApprovalStore",
+    "halt_per_ACT_13": "HALT_LIVE_FAILURE_NOT_REPRODUCED (literal live binding cannot be attempted in this shell)",
+    "halt_decision": "structural qualification, no live binding claim"
+  },
+  "existing_capture_can_distinguish": {
+    "approval_entry_v2_data_fields": [
+      "toolName",
+      "isCommand"
+    ],
+    "approval_terminal_v2_data_fields": [
+      "(terminal pair; no decision payload)"
+    ],
+    "approval_authorization_v2_scope": "COMMAND-ONLY (sdk-tool-policies.ts:470 comment)",
+    "approval_sdk_controller_input_shape_v2_scope": "owned by ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02; this ACT MUST NOT widen it",
+    "classification_capability": "Existing capture can confirm editor-tool request ENTERED requestToolApproval (CASE C detection). It CANNOT distinguish CASE A from CASE B because the final decision is not captured in v2 records.",
+    "verdict": "CAPTURE_INSUFFICIENT_FOR_CASE_A_VS_CASE_B (would need new probe to advance beyond this ACT existing scope)"
+  },
+  "structural_discriminator_results": {
+    "T1_buildToolPolicies_editor": {
+      "editor.autoApprove": false,
+      "replace_in_file.autoApprove": false,
+      "apply_patch.autoApprove": false,
+      "load_bearing": "editor-tool entry to requestToolApproval ALWAYS carries autoApprove=false; the request.policy.autoApprove===true disjunct at sdk-interaction-coordinator.ts:430 is therefore NEVER taken for editor tools. The only ALLOW path is shouldAutoApproveTool(request)===true."
+    },
+    "T2_isToolAutoApproved_under_persisted_x_override": [
+      {
+        "label": "persisted.editFiles=true + override=none",
+        "result": "ALLOW"
+      },
+      {
+        "label": "persisted.editFiles=false + override=none",
+        "result": "ASK"
+      },
+      {
+        "label": "persisted.editFiles=true + override=all",
+        "result": "ALLOW"
+      },
+      {
+        "label": "persisted.editFiles=false + override=all",
+        "result": "ALLOW",
+        "note": "override=all lifts persisted OFF; matches upstream contract"
+      }
+    ],
+    "T3_SessionAutoApprovalStore_pure_read": [
+      {
+        "call": "getOverride(sess-A) 1st after setOverride",
+        "result": "all"
+      },
+      {
+        "call": "getOverride(sess-A) 2nd, must be PURE",
+        "result": "all"
+      },
+      {
+        "call": "getOverride(sess-X) unknown session",
+        "result": "none"
+      },
+      {
+        "call": "getOverride(undefined) no session",
+        "result": "none"
+      }
+    ],
+    "T4_to_T8_editor_family_under_override_all_persistedOff": [
+      {
+        "tool": "editor",
+        "result": "ALLOW"
+      },
+      {
+        "tool": "replace_in_file",
+        "result": "ALLOW"
+      },
+      {
+        "tool": "apply_patch",
+        "result": "ALLOW"
+      },
+      {
+        "tool": "delete_file",
+        "result": "ALLOW"
+      }
+    ],
+    "T9_T10_isYoloSessionRequested": [
+      {
+        "persistedOff + override=all": true
+      },
+      {
+        "persistedOff + override=none": false
+      }
+    ]
+  },
+  "case_classification_under_user_invariant": {
+    "user_invariant": "VS Code interactive Act mode + YOLO_REQUESTED + Seatbelt selected+available + relevant editor permission enabled => an ordinary native editing tool MUST execute without an additional user approval",
+    "structural_evaluation": "At the policy seam (CASE A check), the invariant holds. shouldAutoApproveTool(request) returns true for editor-family tools when override=all, regardless of persisted.editFiles value (override lifts it).",
+    "case_a_status": "STRUCTURALLY_EXONERATED at HEAD policy seam (matches existing sdk-tool-policies.test.ts T1+T2 PASS at HEAD)",
+    "case_b_status": "CANNOT_BE_EXCLUDED_FROM_PRODUCTION_VIA_EXISTING_CAPTURE (would require new default-off probe at SdkInteractionCoordinator publication seam; out of scope for this shell)",
+    "case_c_status": "CANNOT_BE_EXCLUDED_FROM_PRODUCTION_VIA_EXISTING_CAPTURE",
+    "boundary_classification_under_user_invariant": "STRUCTURAL_PROVEN_AT_POLICY_SEAM / LIVE_BINDING_DEFERRED_TO_OPERATOR_RUNBOOK"
+  },
+  "structural_red_status": {
+    "production_shaped_red_written": false,
+    "rationale": "Per ACT section 5: Required pre-fix: approved=false / ASK. Desired: approved=true. The RED must fail before repair. If it passes: HALT_RED_NOT_REPRODUCED. No repair. A RED at the shouldAutoApproveTool seam would PASS today (it returns true), which would immediately halt per the ACT own stop rules. This is the structural PASS_NOT_REPRODUCED finding, NOT a defect.",
+    "decision": "Do not author a fabricated RED against a seam that already returns the desired value."
+  },
+  "captures_and_conservation": {
+    "E1_Act_ALL_Seatbelt_editorOn": "PROVEN at policy seam (T4-T8); live UI outcome NOT bounded in this shell",
+    "E2_Act_noALL_editorOn": "PROVEN at policy seam (T2b: persistedOff+override=none => ASK)",
+    "E3_Act_ALL_editorOff": "PROVEN at policy seam (T2d: persistedOff+override=all => ALLOW via override lift) - design choice: override=all overrides persisted OFF",
+    "E4_Plan_mode": "Not exercised; not in this ACT scope",
+    "E5_command_run": "Not exercised (out of scope; run_commands is command-policy lane)",
+    "E6_MCP_per_tool_policy": "PROVEN at policy seam (sdk-tool-policies.test.ts CORRECTION03 cases pass at HEAD)",
+    "E7_rejected_native_editor": "Not exercised",
+    "E8_requestToolApproval_callback_cardinality": "Not exercised; would require live SdkInteractionCoordinator run"
+  },
+  "test_execution": {
+    "scope": "apps/vscode/src/sdk/sdk-tool-policies.test.ts (bun test)",
+    "command": "bun test src/sdk/sdk-tool-policies.test.ts",
+    "result": "36 pass / 1 fail",
+    "failed_test": "CORRECTION02: buildTempAuthorityEvidence (host adapter authenticity) > on darwin with /usr/bin/mktemp first in PATH: identity-bound evidence",
+    "failure_ownership": "ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01 (NOT this ACT); BASELINE_ONLY for editor-tool lane",
+    "editor_tool_tests": "all 4 editor-tool cases PASS at HEAD",
+    "vitest_run": "EPERM kill in sandboxed shell; cannot run vitest child processes"
+  },
+  "production_delta": 0,
+  "verdict": {
+    "code": "PASS_EDITOR_TOOL_POLICY_SEAM_STRUCTURAL_V1",
+    "summary": "At the policy seam, the editor/non-command tool approval surface ALREADY satisfies the user-facing invariant under the frozen section 0 frozen-invariant gate (override=all lifts persisted OFF; persisted ON keeps ALLOW). CASE A is structurally exonerated by the existing test lattice at HEAD. CASE B / CASE C require live execution in a headed VSCodium instance or a new default-off probe at the SdkInteractionCoordinator publication seam; both are out of scope of this shell executability and per ACT section 3A require stronger justification than this ACT currently has.",
+    "disposition": "STRUCTURAL_PASS_AT_POLICY_SEAM / LIVE_BINDING_DEFERRED_TO_OPERATOR_RUNBOOK",
+    "halt_per_ACT_13": "HALT_LIVE_FAILURE_NOT_REPRODUCED",
+    "live_specimen_recorded": "Not Reproduced / Live binding Deferred to Operator Runbook (ACT section 17.3)"
+  },
+  "durable_next_step": {
+    "what_moves_frontier": "The editor-tool lane remaining live-binding gate is the CASE B / CASE C classifier, which requires either (a) a headed VSCodium runbook per ACT section 17.3, or (b) a separately-authorized new default-off probe at the SdkInteractionCoordinator publication seam. Neither is in this ACT scope to authorize.",
+    "operator_runbook_referenced": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 section 17.3",
+    "red_test_authorized": "If an operator-runbook run reproduces CASE B / CASE C, the RED must be authored at the real SdkInteractionCoordinator publication seam (sdk-interaction-coordinator.ts:417 ASK branch), not at the policy seam (which already returns ALLOW)."
+  }
+}
