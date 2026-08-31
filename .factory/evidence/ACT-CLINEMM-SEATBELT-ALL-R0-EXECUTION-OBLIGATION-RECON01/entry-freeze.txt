@@ -1,0 +1,65 @@
+ACT_ID            = ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01
+ENTRY_COMMIT      = fa66f7a6205a6d47a9067dba47d30ad538de67ce (HEAD)
+ENTRY_TREE        = 324995b547acc755ce5c955d12003d5b9b1b3c85
+ENTRY_BRANCH      = main
+ENTRY_REMOTE      = fa66f7a6205a6d47a9067dba47d30ad538de67ce (origin/main)
+ENTRY_STATUS      = clean tracked worktree + dirty uncommitted A-probe delta from
+                    prior ACT (ACT-CLINEMM-CANCEL-AFFORDANCE-AUTHORITY-RECON01
+                    closed and CONTINUED to NEXT_NOW = this ACT)
+ENTRY_STASHES     = (none)
+ENTRY_RECOVERY    = (none)
+
+PREVIOUS_ACT      = ACT-CLINEMM-CANCEL-AFFORDANCE-AUTHORITY-RECON01 (CLOSED)
+                    Reviewer verdict: PASS_WITH_NONBLOCKING_RESIDUE.
+                    Three P0s mechanically closed (shadow cross-binding,
+                    synthetic-sink tests, A-knob gate). NEXT_NOW =
+                    this ACT.
+
+CYCLE             = RECON_ONLY. NO production repair. NO new RED.
+                    NO new v2 capture probe. NO opening of
+                    …REPAIR01 from within this ACT.
+
+CANDIDATE_DEFECT  = single-element contained R0 path-bearing command under
+                    (mode=all + mandatorySeatbelt=true) gets
+                      source = host_mode_safe_only_rule
+                      mandatorySeatbeltExecution = false
+                    Desired invariant:
+                      (decision.kind=allow AND mode=all AND mandatorySeatbelt=true)
+                        => (source=host_mode_all_seatbelt_required
+                            AND mandatorySeatbeltExecution=true)
+
+PRODUCTION_SEAM   = sdk/packages/core/src/runtime/command-policy/command-policy.ts
+                      evaluateOne   (line 237, returns at line 538-546)
+                      aggregateSource (line 640, short-circuits at line 644)
+                    apps/vscode/src/sdk/sdk-tool-policies.ts:710
+                      mandatorySeatbeltExecution = (source === "host_mode_all_seatbelt_required")
+                    apps/vscode/src/sdk/command-job-manager.ts:591-614
+                      Seatbelt enforcement gate (reads mandatorySeatbeltExecution)
+
+EXISTING_TESTS    = sdk/packages/core/src/runtime/command-policy/command-policy.test.ts
+                    sdk/packages/core/src/runtime/command-policy/command-policy.mktemp-host-evidence-bound.test.ts
+
+LIVE_OBSERVATION  = DEFERRED. No headed dogfood host available in this shell;
+                    no bun-installed substrate available; no operator-driven
+                    natural reappearance. The existing
+                    `approval.sdk-controller.authorization.v2` v2-capture
+                    probe already captures `decision.source` for live-binding
+                    analysis if the operator reopens this lane for live
+                    reproduction under the `…CORRECTION02` umbrella or a
+                    fresh REPAIR01 ACT.
+
+DISPOSITION       = SUPERSEDED_BY_CORRECTION02
+                    (formal verdict, see final-report.md §1)
+REVIEW_DISPOSITION = PASS_WITH_NONBLOCKING_RESIDUE (C1: GO)
+REVIEWER_NOTE      = "qualify live using the existing CORRECTION02
+                      probe; do NOT repair now. On match:
+                      open ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01.
+                      On no-match: preserve structural finding;
+                      do not repair speculatively."
+
+FACTORY_RULE      = Stop once that first broken boundary is proven and
+                    repaired once. Do not recursively review the review.
+                    (ACT §21 verbatim)
+
+STOP_CONDITIONS   = HALT_REPAIR_CYCLE (this ACT is RECON_ONLY; no behavior
+                    repair is attempted).

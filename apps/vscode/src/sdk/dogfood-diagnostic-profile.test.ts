@@ -40,24 +40,32 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 	})
 
 	it("C3: dogfood + no env + no path -> V/I/P partial; A off", () => {
+		// A now lands via CANCEL-AFFORDANCE-AUTHORITY-RECON: identity-gated,
+		// default-on in dogfood regardless of the V capture path. The
+		// activity record is gated by the PTAD workspace toggle, NOT the V
+		// path; the A knob only reports whether the diagnostic-profile
+		// resolver would arm the probe. The capture sink itself still
+		// requires the PTAD toggle to be enabled (which is identity-gated
+		// and auto-arms in dogfood via CLINEMM_PTAD or the workspace flag).
 		expect(resolveEffectiveDiagnosticKnobs({}, true, EMPTY_PATH)).toEqual({
 			v: false,
 			i: true,
-			a: false,
+			a: true,
 			p: true,
 		})
 	})
 
-	it("C4: dogfood + no env + auto path -> VIP (canonical indicator)", () => {
+	it("C4: dogfood + no env + auto path -> VIAP (canonical indicator, A landed)", () => {
 		const knobs = resolveEffectiveDiagnosticKnobs({}, true, AUTO_PATH)
-		expect(knobs).toEqual({ v: true, i: true, a: false, p: true })
-		expect(formatEffectiveKnobLetters(knobs)).toBe("VIP")
+		expect(knobs).toEqual({ v: true, i: true, a: true, p: true })
+		expect(formatEffectiveKnobLetters(knobs)).toBe("VIAP")
 	})
 
-	it("C5: dogfood + I=0 -> I forced OFF", () => {
+	it("C5: dogfood + I=0 -> I forced OFF; A follows its own precedence", () => {
 		const knobs = resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_INPUT_SHAPE_V2: "0" }, true, AUTO_PATH)
 		expect(knobs.i).toBe(false)
 		expect(knobs.v).toBe(true)
+		expect(knobs.a).toBe(true)
 		expect(knobs.p).toBe(true)
 	})
 
@@ -71,14 +79,16 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 		const knobs = resolveEffectiveDiagnosticKnobs({ CLINEMM_CAPTURE_V2_PATH: "0" }, true, null)
 		expect(knobs.v).toBe(false)
 		expect(knobs.i).toBe(true)
+		expect(knobs.a).toBe(true)
 		expect(knobs.p).toBe(true)
 	})
 
-	it("C5c: dogfood + P=false -> P forced OFF", () => {
+	it("C5c: dogfood + P=false -> P forced OFF; A follows its own precedence", () => {
 		const knobs = resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_APPROVAL_PUBLICATION_V2: "false" }, true, AUTO_PATH)
 		expect(knobs.p).toBe(false)
 		expect(knobs.v).toBe(true)
 		expect(knobs.i).toBe(true)
+		expect(knobs.a).toBe(true)
 	})
 
 	it("C5d: dogfood + ' OFF ' -> I forced OFF (case + whitespace tolerant)", () => {
@@ -96,12 +106,29 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 		expect(knobs.i).toBe(true)
 	})
 
-	it("C7: A is hard-coded false regardless of dogfood or env", () => {
-		const knobs = resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "1" }, true, AUTO_PATH)
-		expect(knobs.a).toBe(false)
+	it("C7: A is governed by dogfood + env precedence (LANDED by CANCEL-AFFORDANCE-AUTHORITY-RECON)", () => {
+		// C7a: explicit-on "1" in dogfood -> A=true
+		expect(
+			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "1" }, true, AUTO_PATH).a,
+		).toBe(true)
+		// C7b: explicit-off "0" in dogfood -> A=false (override-down)
+		expect(
+			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "0" }, true, AUTO_PATH).a,
+		).toBe(false)
+		// C7c: no env var in dogfood -> A=true (auto-on, same as I/P)
+		expect(resolveEffectiveDiagnosticKnobs({}, true, AUTO_PATH).a).toBe(true)
+		// C7d: explicit-on in public -> A=false (no public product setting;
+		// identity is the SOLE gate per ACT section 18 invariant)
+		expect(
+			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "1" }, false, EMPTY_PATH).a,
+		).toBe(false)
+		// C7e: garbage env value falls through to dogfood default
+		expect(
+			resolveEffectiveDiagnosticKnobs({ CLINEMM_DIAG_ACTIVITY_STATE_V1: "banana" }, true, AUTO_PATH).a,
+		).toBe(true)
 	})
 
-	it("C8: empty-string env values fall through to default", () => {
+	it("C8: empty-string env values fall through to default (A on in dogfood)", () => {
 		const knobs = resolveEffectiveDiagnosticKnobs(
 			{
 				CLINEMM_CAPTURE_V2_PATH: "",
@@ -111,7 +138,7 @@ describe("resolveEffectiveDiagnosticKnobs", () => {
 			true,
 			AUTO_PATH,
 		)
-		expect(knobs).toEqual({ v: true, i: true, a: false, p: true })
+		expect(knobs).toEqual({ v: true, i: true, a: true, p: true })
 	})
 
 	it("V: dogfood + explicit user path -> V ON", () => {
@@ -141,15 +168,18 @@ describe("formatEffectiveKnobLetters", () => {
 		expect(formatEffectiveKnobLetters({ v: true, i: false, a: false, p: false })).toBe("V")
 	})
 
-	it("'VIP' for the canonical dogfood initial render", () => {
+	it("'VIP' for the legacy pre-A dogfood initial render (frozen for historical-context)", () => {
+		// This test pins the LEGACY header value (before A landed). The
+		// current dogfood initial render is "VIAP"; see C4 above and the
+		// "VIAP for the current canonical dogfood initial render" test.
 		expect(formatEffectiveKnobLetters({ v: true, i: true, a: false, p: true })).toBe("VIP")
 	})
 
-	it("'VIAP' when A is hypothetically ON", () => {
+	it("'VIAP' when A is ON (current canonical dogfood initial render)", () => {
 		expect(formatEffectiveKnobLetters({ v: true, i: true, a: true, p: true })).toBe("VIAP")
 	})
 
-	it("'IP' when V is overridden off in dogfood", () => {
-		expect(formatEffectiveKnobLetters({ v: false, i: true, a: false, p: true })).toBe("IP")
+	it("'IAP' when V is overridden off in dogfood (A still ON)", () => {
+		expect(formatEffectiveKnobLetters({ v: false, i: true, a: true, p: true })).toBe("IAP")
 	})
 })

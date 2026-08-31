@@ -125,14 +125,17 @@ export interface ExtensionState {
 	 * {@link resolveEffectiveDiagnosticKnobs} from
 	 * `isDogfoodRuntime()` + env overrides + the resolved V2 capture
 	 * path. The webview TaskHeader indicator renders the letters V / I
-	 * / A / P in canonical order (e.g. `"VIP"` for the dogfood initial
-	 * render). Hidden entirely in public (when `isDogfood === false`
-	 * all four are false and the field is omitted from the UI).
+	 * / A / P in canonical order (e.g. `"VIAP"` for the dogfood
+	 * initial render after A landed via
+	 * `CANCEL-AFFORDANCE-AUTHORITY-RECON`; `"VIP"` was the pre-A
+	 * historical value). Hidden entirely in public (when
+	 * `isDogfood === false` all four are false and the field is
+	 * omitted from the UI).
 	 *
-	 * Wire contract: always present. Each knob is a boolean. `a` is
-	 * hard-coded false in this ACT (the probe is not landed; only the
-	 * `CANCEL-AFFORDANCE-AUTHORITY-RECON` ACT may flip it via the same
-	 * resolver).
+	 * Wire contract: always present. Each knob is a boolean. `a`
+	 * follows the same identity+env-var precedence as `i` and `p`
+	 * (identity-gated, `CLINEMM_DIAG_ACTIVITY_STATE_V1` overridable,
+	 * default-on in dogfood).
 	 */
 	diagnosticKnobs?: {
 		readonly v: boolean

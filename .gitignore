@@ -568,3 +568,18 @@ apps/vscode/.factory/evidence/
 **/__pycache__/
 *.pyc
 *.pyo
+
+# ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01:
+# bounded RECON-only ACT authored 2026-08-31. Status
+# CLOSED / REAL_STATIC_DEFECT / LIVE_UNVERIFIED / disposition =
+# SUPERSEDED_BY_CORRECTION02 (per Factory review PASS_WITH_NONBLOCKING_RESIDUE).
+# The ACT body binds durably to .factory/epic-board.md row
+# `Single-R0 Seatbelt execution-obligation propagation` (the board row
+# text links to this ACT path), and the evidence directory contains
+# the line-anchored source-seam trace + final-report + entry-freeze
+# that establish the structural defect claim. Same durable-binding
+# reason as the editor-tool / network-egress / network-live-downstream
+# ACTs: the board row + the ACT body + the evidence directory all
+# must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01/

@@ -77,6 +77,7 @@ import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
+import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
@@ -4050,6 +4051,64 @@ export class Controller {
 						messageTranslatorState: this.messageTranslatorState,
 					}),
 				)
+			}
+			// ACT-CLINEMM-CANCEL-AFFORDANCE-AUTHORITY-RECON:
+			// Synchronized runtime-activity / TurnPhase / publication-identity
+			// capture. ONE `activity.publication.v1` JSONL record per
+			// ExtensionState publication. The GATE is the EFFECTIVE A knob
+			// (resolved by the diagnostic-profile resolver at the call
+			// site, NOT by the PTAD workspace-state toggle). Emits via the
+			// existing V2 capture sink so no new file format, no new env
+			// var ceremony, no new wire field, no new public setting.
+			//
+			// All payload construction is delegated to a pure builder
+			// (`./activity-publication-v1`) so the exact shape is
+			// exercisable from a unit test without instantiating the
+			// controller. The builder records `shadowPublicationBinding`
+			// honestly: "MISSING" when the shadow was undefined at the
+			// seam, "UNBOUND" otherwise (because ArbiterSnapshot carries
+			// no generation identity — see
+			// task-state-shadow-recorder.ts:153-158). The shadow-derived
+			// fields (hostStatus, modelStreaming, toolActive) are emitted
+			// as observed; callers and post-capture analysis MUST NOT
+			// treat them as proven same-generation without independent
+			// corroboration.
+			//
+			// Webview-side fields (cancelVisible, cancelEnabled,
+			// cancelAuthority, composerEnabled, lastMessage*) are
+			// LIVE_UNOBSERVABLE from the extension-side seam; the
+			// webview-side PTAD ring buffer captures them under the same
+			// `stateVersion`, deterministic post-capture join.
+			//
+			// Contract (per ACT section 10):
+			//   A1 dogfood + capture on  -> A=true (header "VIAP")
+			//   A2 public  + capture on  -> A=false
+			//   A3 header canonical order = VIAP
+			//   A4 one publication produces one activity record (PRODUCTION-SEAM TEST)
+			//   A5 all snapshot-derived fields share the publication identity;
+			//      shadow-derived fields are recorded as shadowPublicationBinding="UNBOUND"
+			//   A6 capture disabled/public -> zero activity records (sink test)
+			//   A7 writer failure -> zero state-semantic delta (sink test)
+			//   A8 existing V/I/P behavior unchanged (regression)
+			{
+				const activityKnobs = resolveEffectiveDiagnosticKnobs(
+					process.env,
+					isDogfoodRuntime(process.env),
+					resolveCapturePathForProfileEffective(process.env),
+				)
+				const built = buildActivityPublicationV1Record({
+					snapshot,
+					shadow: this.getLocalShadowProjection(),
+					knobs: activityKnobs,
+					ptadPushId,
+				})
+				if (built.kind === "emit") {
+					emitV2Capture({
+						codePoint: "activity.publication.v1",
+						scope: "request",
+						data: built.data,
+					})
+				}
 			}
 			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
 			// Synchronized host-ownership capture at the SAME `stateVersion` +

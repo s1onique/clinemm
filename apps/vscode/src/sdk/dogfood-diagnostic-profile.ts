@@ -15,9 +15,24 @@
  *         (`CLINEMM_DIAG_INPUT_SHAPE_V2=<truthy>`).
  *   A = runtime activity-state diagnostic active
  *         (`CLINEMM_DIAG_ACTIVITY_STATE_V1=<truthy>`).
- *         NOT LANDED in this ACT - probe absent at HEAD; forced
- *         false until its owner ACT (`CANCEL-AFFORDANCE-AUTHORITY-RECON`)
- *         lands the probe and re-opens this resolver.
+ *         LANDED by `CANCEL-AFFORDANCE-AUTHORITY-RECON` (this ACT's
+ *         owner). The probe site is
+ *         `SdkController.getStateToPostToWebview()` — exactly one
+ *         `activity.publication.v1` JSONL record per ExtensionState
+ *         publication when A=true. The record is built by a pure
+ *         function (`./activity-publication-v1.ts`) that reads the
+ *         UI-authority fields (taskHeaderPhase, thinkingVisible,
+ *         thinkingModelStreaming) from the same `snapshot` object
+ *         the wire payload is built from. The host-authority fields
+ *         (hostStatus, modelStreaming, toolActive) are read from
+ *         the independently sampled shadow projection; the builder
+ *         records `shadowPublicationBinding="UNBOUND"` because
+ *         `ArbiterSnapshot` carries no generation identity, so the
+ *         post-capture join knows these fields are not proven
+ *         same-generation. The A knob IS the emission gate at the
+ *         production seam (mechanically enforced in
+ *         `buildActivityPublicationV1Record`); identity is the SOLE
+ *         gate for the public path so public installs never emit.
  *   P = approval publication/final-decision diagnostic active
  *         (`CLINEMM_DIAG_APPROVAL_PUBLICATION_V2=<truthy>`; gates the
  *         `approval.noncommand.result.v1` +
@@ -109,8 +124,15 @@ function decideKnob(env: NodeJS.ProcessEnv, knob: DiagnosticKnob, isDogfood: boo
  *                     by `resolveAutoV2CapturePath()` which the
  *                     activation site composes with this resolver.
  *
- * Output: the four-knob object. `a` is forced false because the
- * probe is not landed at this ACT.
+ * Output: the four-knob object. `a` is governed by the same
+ * identity+env-var precedence as `i` and `p`:
+ *   - dogfood + `CLINEMM_DIAG_ACTIVITY_STATE_V1` truthy -> A=true
+ *   - dogfood + no env var                              -> A=true
+ *     (auto-on in dogfood; the `CLINEMM_DIAG_ACTIVITY_STATE_V1=0`
+ *      override-down flips it back off, identical to I/P)
+ *   - public + any env var                              -> A=false
+ *     (no public product setting; identity is the SOLE gate)
+ *   - public + no env var                               -> A=false
  */
 export function resolveEffectiveDiagnosticKnobs(
 	env: NodeJS.ProcessEnv,
@@ -139,10 +161,11 @@ export function resolveEffectiveDiagnosticKnobs(
 	return {
 		v: vResolved,
 		i: decideKnob(env, "i", isDogfood),
-		// A is not landed; this ACT pins the contract that it can
-		// ONLY be flipped by its owner ACT (the probe site, when it
-		// lands, will gate on this resolver's `a` field).
-		a: false,
+		// A is LANDED by `CANCEL-AFFORDANCE-AUTHORITY-RECON`. Same
+		// precedence as I and P: identity-gated, env-var overridable,
+		// `decideKnob` covers the truthy/falsy/garbage branches the
+		// dogfood-diagnostic-profile.test.ts suite already pins.
+		a: decideKnob(env, "a", isDogfood),
 		p: decideKnob(env, "p", isDogfood),
 	}
 }
