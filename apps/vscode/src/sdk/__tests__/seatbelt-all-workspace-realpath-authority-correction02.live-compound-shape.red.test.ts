@@ -336,7 +336,20 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / s
 	// confirms the live shape is S2 AND a bounded repair is landed in
 	// the same ACT. The repair's failing-RED must be created from
 	// scratch at that point.
-	it("ABL_ARRAY_WITNESS: commands=['wc -l <inside>', 'cat <inside>'] under ALL+Seatbelt+valid evidence — current kind=ask, source=host_workspace_realpath_authority (OPERAND_FLATTENING_HYPOTHESIS / NOT_LIVE_CAUSAL)", () => {
+	//
+	// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02
+	// POST-FIX (this ACT closed): the multi-element array shape ALLOWs
+	// under ALL + mandatory Seatbelt + valid evidence when every
+	// operand is contained. The witness is migrated to a
+	// post-fix regression guard:
+	//   - aggregate: ALLOW / host_mode_all_seatbelt_required /
+	//                mandatorySeatbeltExecution=true
+	// The legacy R0 realpath_authority ASK-class source is suppressed
+	// because the per-command cardinality binding repair
+	// (command-policy.ts:228..256 + command-policy.ts:362..374 +
+	// command-policy.ts:416..447) now slices the host's flat evidence
+	// operands array element-wise before the cardinality check.
+	it("ABL_ARRAY_WITNESS (POST-FIX): commands=['wc -l <inside>', 'cat <inside>'] under ALL+Seatbelt+valid evidence → ALLOW / host_mode_all_seatbelt_required / mandatorySeatbeltExecution=true (POST_FIX_REGRESSION_GUARD; per-command cardinality binding repair)", () => {
 		const arr = [wcCmd(), catCmd()]
 		const persistedAuth = makeProductionAuth({
 			workspaceRoot,
@@ -353,12 +366,15 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / s
 
 		// eslint-disable-next-line no-console
 		console.log(
-			`[ABL_ARRAY_WITNESS] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
+			`[ABL_ARRAY_WITNESS POST-FIX] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
-		expect(result.approved).toBe(false)
-		expect(result.decision.kind).toBe("ask")
-		expect(result.decision.source).toBe("host_workspace_realpath_authority")
-		expect(result.mandatorySeatbeltExecution).toBe(false)
+		// POST-FIX assertions: the per-command cardinality binding repair
+		// makes the multi-element array ALLOW under ALL+Seatbelt when all
+		// operands are inside the workspace root with valid evidence.
+		expect(result.approved).toBe(true)
+		expect(result.decision.kind).toBe("allow")
+		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
+		expect(result.mandatorySeatbeltExecution).toBe(true)
 	})
 
 	// -------------------------------------------------------------------

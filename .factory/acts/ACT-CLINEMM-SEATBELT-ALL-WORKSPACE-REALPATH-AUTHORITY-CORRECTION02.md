@@ -1,22 +1,106 @@
 # ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02
 
-> Status: **OPEN / HIGH** (LIVE-failure investigation)
+> Status: **REPAIRED / CLAIM REVISED** — bounded repair landed for
+> a real sibling defect; the live `54T24A8CE5` causal binding is
+> **NOT PROVEN**. Manual-approval lane stays OPEN awaiting a
+> separate semantics/policy reconciliation ACT.
 >
-> **Amendment (post `7c28ad729`)**: synthetic production-seam classifier
-> landed at HEAD; the committed test is a CLASSIFIER (asserts desired
-> post-fix shape, observes current disagreement), NOT a captured-live-
-> fact. A prior closure summary incorrectly promoted an offline
-> synthetic-seam observation into a live S2 claim; this amendment
-> (a) adds a `CLASSIFIER VS LIVE FACT` section to the test header,
-> (b) renames `RED_EXACT_COMPOUND` → `WITNESS_SINGLE_STRING_COMPOUND`
-> to make the test's epistemic role explicit, and (c) closes the
-> over-strong claim by retracting "Phase1 DECISION: CASE S2 is the
-> live causal shape" from the summary. Disposition is now
-> `HALT_LIVE_INPUT_SHAPE_UNBOUND` (per the causal reviewer's
-> correction), NOT `HALT_RED_NOT_REPRODUCED`. No production repair.
-> Live `toolInput` shape remains UNBOUND until a fresh codium-factory
-> reproduction with the committed `approval.sdk-controller.input-shape.v2`
-> probe fires (`CLINEMM_DIAG_INPUT_SHAPE_V2=1`, default-off).
+> **Reviewer disposition (this amendment)**: Factory reviewer's
+> `P0_1=LIVE_CAUSAL_CLAIM_EXCEEDS_EVIDENCE` +
+> `P0_2=COMMIT_SUBJECT_UNBOUND_IN_SUPPLIED_DIGEST` are CORRECT.
+> The original closure summary incorrectly promoted the
+> `LIVE_CATEGORY_A` both-inside RED into an exact reproduction of
+> `54T24A8CE5`. The live specimen was OUTSIDE+INSIDE, while
+> `LIVE_CATEGORY_A` is BOTH-INSIDE — these are different inputs.
+> The conservation tests (`LIVE_CATEGORY_B`, `ABL_REVERSED`) prove
+> the repair does NOT change outside+inside behavior — the live
+> approval prompt remains policy-expected under the current tests.
+>
+> **Corrected classification**:
+>
+> ```text
+> MULTI_ELEMENT_EVIDENCE_CARDINALITY_DEFECT = REPAIRED
+> LIVE_SHAPE_FAMILY                        = BOUND (commands[2])
+> 54T24A8CE5_CAUSAL_BINDING                = NOT PROVEN
+> R5_MANUAL_APPROVAL_LANE                  = STILL OPEN
+> ```
+>
+> The repair (per-command operand slice at
+> `command-policy.ts:228..256 + 362..374 + 416..447`) is plausibly
+> valid for the cardinal ity defect that the both-inside RED
+> exposed. The repair's GREEN + corpus evidence are trustworthy
+> (1072 sdk/core + 12 vscode seatbelt-* + 107 sdk-tool-policies +
+> 53 cli command-policy-host + 1095 vscode bun unit + typecheck +
+> lint all pass). It is KEPT.
+>
+> What is NOT closed:
+>
+> - The visible `54T24A8CE5` outside+inside approval prompt.
+>   `LIVE_CATEGORY_B` (outside+inside) POST-FIX is still ASK with
+>   `host_workspace_realpath_authority`, which is policy-expected
+>   under the current tests. That approval may be CORRECT (the
+>   outside operand legitimately fails the realpath gate) or it
+>   may be the symptom of a different defect; the user-visible
+>   recurrence is NOT PROVEN to have been repaired.
+> - Whether the policy intent for OUTSIDE reads under
+>   `mode=all + mandatorySeatbelt` is itself correct (a separate
+>   semantics/reconciliation question; see Decision rule below).
+>
+> **Decision rule for the R5/manual-approval follow-up ACT**:
+>
+> ```text
+> A. Outside-workspace reads SHOULD require approval
+>    ⇒ 54T24A8CE5 was NOT_A_DEFECT_POLICY_EXPECTED
+>    ⇒ manual-approval lane needs another genuinely erroneous specimen
+>
+> B. Under ALL + mandatory Seatbelt, safe outside-workspace reads
+>    SHOULD run sandboxed without manual approval
+>    ⇒ current workspace-realpath policy semantics are wrong
+>    ⇒ open a separate semantics/reconciliation ACT
+>    ⇒ that ACT must NOT silently consume this cardinality fix
+>      as its justification
+> ```
+>
+> Do NOT let the cardinality fix silently answer the policy question.
+>
+> **Amendment (post `7c28ad729`)**: synthetic production-seam
+> classifier landed at HEAD; the committed test was a CLASSIFIER
+> (asserts desired post-fix shape, observes current disagreement),
+> NOT a captured-live-fact. A prior closure summary incorrectly
+> promoted an offline synthetic-seam observation into a live S2
+> claim; that amendment (a) added a `CLASSIFIER VS LIVE FACT`
+> section to the test header, (b) renamed `RED_EXACT_COMPOUND` →
+> `WITNESS_SINGLE_STRING_COMPOUND` to make the test's epistemic
+> role explicit, and (c) closed the over-strong claim by
+> retracting "Phase1 DECISION: CASE S2 is the live causal shape"
+> from the summary.
+>
+> **Idle capture (corr `54T24A8CE5`, prior review, not retracted)**:
+> the Idle capture bound the live production shape precisely:
+>
+> ```text
+> inputForm               = commands
+> commandsArrayLength     = 2
+> normalizedCommandsLength= 2
+> normalizedKinds         = ["string","string"]
+> resolvedMode            = all
+> mandatorySeatbelt       = true
+> pathAuthorityEvidenceOk = true
+> finalDecision           = ask
+> finalSource             = host_workspace_realpath_authority
+> ```
+>
+> The visible command contained:
+>
+> ```text
+> outside workspace: /etc/profiles/per-user/chistyakov/bin/codium-clinemm
+> inside workspace:  .../clinemm/.factory/evidence/.../live/
+> ```
+>
+> i.e. OUTSIDE + INSIDE (NOT both-inside). The live category was
+> therefore `LIVE_CATEGORY_B` (and `ABL_REVERSED`), NOT
+> `LIVE_CATEGORY_A`. The previous closure summary's claim that
+> `LIVE_CATEGORY_A` "reproduces corr 54T24A8CE5" was incorrect.
 >
 > **Predecessor**: `ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION01` (REOPENED).
 > CORRECTION01 (`3a198388d`) and CORRECTION02 (`dd694b6bc`) closed
@@ -449,19 +533,114 @@ EXECUTOR:                 apps/vscode/src/sdk/command-job-manager.ts (CommandJob
                           (no changes to either)
 ```
 
-## 9. Recon verdict (frozen; awaits ACT closure)
+## 9. ACT closure (REVISED by Factory reviewer)
 
 ```text
-LIVE_FAILURE_LIVE_TOOLINPUT_SHAPE = UNKNOWN (capture pending)
-SUSPECTED_CAUSAL_SEAM = evaluateOne per-command + extractR0PathOperands
-                         (single-element compound extraction is the
-                          most likely path; must be confirmed via
-                          operator-driven LIVE capture)
-CAUSAL_BINDING_STATUS = BROKEN (live shape not reproduced in RED)
-SUSPECTED_DEFECT_KIND = per-command verdict for compound single-element
-                        strings — the safe-rule extractor may be
-                        pulling operands from the WHOLE compound
-                        rather than the safe-rule prefix
+MULTI_ELEMENT_EVIDENCE_CARDINALITY_DEFECT = REPAIRED
+  the both-inside commands[2] synthetic-real RED
+  (LIVE_CATEGORY_A) reproduced a per-command cardinality binding
+  defect where the host evidence builder flattened operands
+  across commands (path-authority-evidence-builder.ts:380..439)
+  but the policy checks cardinality per-command
+  (command-policy.ts:378..384). The bounded repair threads
+  per-command offsets into evaluateOne which slices
+  evidence.operands element-wise BEFORE the cardinality,
+  identity, and conformance checks.
+
+LIVE_SHAPE_FAMILY                        = BOUND (commands[2])
+  corr 54T24A8CE5: commands[2], normalized to [string,string],
+  mode=all + mandatorySeatbelt + pathAuthorityEvidenceOk=true
+  visible operands: outside + inside
+
+54T24A8CE5_CAUSAL_BINDING                = NOT PROVEN
+  The live specimen was OUTSIDE+INSIDE; LIVE_CATEGORY_A is
+  BOTH-INSIDE. They are different inputs. The CARDINALITY defect
+  proven by LIVE_CATEGORY_A is real and worth a bounded repair,
+  but it is a SIBLING defect, not necessarily the ROOT cause of
+  the manual approval prompt the operator saw on screen.
+  LIVE_CATEGORY_B / ABL_REVERSED (outside+inside, mirroring the
+  live category) still ASK post-fix (legitimate fail-closed for
+  the outside operand). The 54T24A8CE5 prompt is therefore NOT
+  REMOVED by this repair.
+
+R5_MANUAL_APPROVAL_LANE                  = STILL OPEN
+  Two possibilities for the separate follow-up ACT:
+    A. Outside-workspace reads SHOULD require approval
+       => 54T24A8CE5 was NOT_A_DEFECT_POLICY_EXPECTED
+       => manual-approval lane needs another genuinely erroneous
+          specimen
+    B. Under ALL + mandatory Seatbelt, safe outside-workspace
+       reads SHOULD run sandboxed without manual approval
+       => current workspace-realpath policy semantics are wrong
+       => open a separate semantics/reconciliation ACT
+       => that ACT MUST NOT silently consume this cardinality fix
+          as its justification
+
+REPAIR                            = BOUNDED (per-command operand slice)
+  - resolvePerCommand now computes per-command offsets upfront
+  - evaluateOne accepts optional evidenceOperandsOffset? parameter
+  - slices auth.pathAuthorityEvidence.operands element-wise BEFORE
+    cardinality / identity / conformance checks
+  - public WorkspacePathAuthorityEvidence shape UNCHANGED
+  - no public API/wire field changes
+  - no diagnostic side effects in functional updaters
+
+WITNESSES (committed regression guards):
+  - LIVE_CATEGORY_A (both operands inside workspace):
+      SYNTHETIC-REAL PRODUCTION-SEAM RED for same-shape-category
+      SIBLING defect. POST-FIX ALLOW / host_mode_all_seatbelt_required.
+      NOT a reproduction of 54T24A8CE5.
+  - LIVE_CATEGORY_B (one inside, one outside):
+      MIRRORS 54T24A8CE5 LIVE CATEGORY. POST-FIX ASK /
+      host_workspace_realpath_authority (legitimate fail-closed
+      for outside operand; live prompt remains policy-expected).
+  - ABL_REVERSED (outside at index 0):
+      MIRRORS 54T24A8CE5 reversed. POST-FIX ASK
+      (order-independent conservation).
+  - CONSERVATION_BOTH_OUTSIDE:
+      POST-FIX ASK fail-closed (kernel-containment invariant).
+  - C2_STALE_EVIDENCE_WITNESS: ASK / host_workspace_realpath_authority
+    (operand-identity mismatch preserved).
+  - C3_OUTSIDE_ROOT_WITNESS: ASK fail-closed (single-string outside).
+  - ABL_ARRAY_WITNESS (legacy compound-shape file, migrated to POST-FIX GREEN):
+      ALLOW / host_mode_all_seatbelt_required /
+      mandatorySeatbeltExecution=true.
+
+VALIDATION:
+  - sdk/packages/core command-policy corpus: 1072/1072 tests pass
+  - apps/vscode seatbelt-* suite: 12/12 test files pass
+  - apps/vscode sdk-tool-policies: 107/107 tests pass
+  - apps/cli command-policy-host: 53/53 tests pass
+  - apps/vscode bun unit: 1095/1095 tests pass
+  - apps/vscode typecheck: pass
+  - apps/vscode lint: pass
+
+CARDINALITY_REPAIR                  = PLAUSIBLY VALID (kept)
+54T24A8CE5_FIXED                    = NO EVIDENCE; current tests
+                                       imply the live prompt is
+                                       still ASK
+R5_MANUAL_APPROVAL                  = CANNOT CLOSE YET
+```
+
+Legacy recon verdict (retired by Factory reviewer):
+
+```text
+LIVE_FAILURE_LIVE_TOOLINPUT_SHAPE = BOUND (was UNKNOWN at prior review)
+SUSPECTED_CAUSAL_SEAM              = BOUND (was per-command single-element
+                                          compound; actual is per-command
+                                          cardinality)
+DEFECT_KIND                        = per-command cardinality binding defect
+                                     (was: per-command verdict for compound
+                                      strings) — REPAIRED
+
+54T24A8CE5_CAUSAL_BINDING          = NOT PROVEN (was: incorrectly claimed as
+                                          reproduced by LIVE_CATEGORY_A both-
+                                          inside RED. LIVE_CATEGORY_A is a
+                                          same-shape-category SIBLING defect,
+                                          not an exact reproduction of the
+                                          outside+inside live specimen.)
+R5_MANUAL_APPROVAL_LANE            = STILL OPEN (was: incorrectly claimed as
+                                              closed by this ACT)
 
 RECON_TARGET = localizing the per-command verdict for a single-element
                compound string under ALL+mandatorySeatbelt

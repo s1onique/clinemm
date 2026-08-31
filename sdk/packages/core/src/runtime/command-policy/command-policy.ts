@@ -59,6 +59,7 @@ import {
 	evaluateCommandRealpathConformance,
 	extractR0PathOperands,
 } from "./path-authority";
+import type { WorkspacePathOperandEvidence } from "./path-authority-evidence";
 import {
 	getSafeExecutionProfileForSource,
 	type SafeExecutionProfile,
@@ -228,15 +229,44 @@ function resolvePerCommand(
 	commands: ReadonlyArray<NormalizedCommand>,
 	auth: CommandHostAuthorization,
 ): PerCommandEvaluation[] {
+	// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+	// Precompute per-command expected-operand-count offsets UPFRONT so
+	// the per-command path-bearing gate can slice the flat evidence
+	// operands array element-wise. The host evidence builder flattens
+	// operands across commands (see
+	// path-authority-evidence-builder.ts:380-439): for EACH command in
+	// the input array it appends the command's path operands to the
+	// shared `operandEvidence[]` list, regardless of whether the
+	// command matches an R0 safe rule. Commands without an R0 safe
+	// rule still contribute operands (the builder's per-source
+	// dispatch falls through to the generic `extractPathOperands`
+	// which returns all non-option tokens). Therefore the offset
+	// advance must use the same per-source dispatch the gate uses,
+	// not just R0-matched commands.
+	let cumulativeOffset = 0
+	const offsets: number[] = []
+	for (const cmd of commands) {
+		offsets.push(cumulativeOffset)
+		const match = findSafeRuleMatch(cmd, auth.explicitAllowRules ?? [])
+		const source = match?.source ?? ""
+		cumulativeOffset += extractR0PathOperands(cmd, source).length
+	}
 	return commands.map((normalized, index) => {
-		const evaluated = evaluateOne(normalized, auth);
-		return { index, normalized, ...evaluated };
-	});
+		const evaluated = evaluateOne(normalized, auth, offsets[index]!)
+		return { index, normalized, ...evaluated }
+	})
 }
 
 function evaluateOne(
 	command: NormalizedCommand,
 	auth: CommandHostAuthorization,
+	// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+	// The cumulative offset into the flat `auth.pathAuthorityEvidence.operands`
+	// array where THIS command's operand evidence starts. For single-element
+	// inputs this is always 0; for multi-element inputs it accumulates
+	// preceding commands' expected operand counts. When `undefined`, no
+	// offset is applied (legacy callers; equivalent to offset=0).
+	evidenceOperandsOffset?: number,
 ): Omit<PerCommandEvaluation, "index" | "normalized"> {
 	// 1. Explicit deny rules win absolutely.
 	if (auth.explicitDenyRules && auth.explicitDenyRules.length > 0) {
@@ -333,6 +363,18 @@ function evaluateOne(
 						reason: "workspace realpath authority: host did not supply pathAuthorityEvidence; R0 path-bearing commands cannot be ALLOW'd without realpath evidence (CORRECTION02)",
 					};
 				}
+				// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+				// Slice the host's flat evidence.operands array by THIS
+				// command's offset. The host builder flattens operands
+				// across commands; without this slice the per-command
+				// cardinality check sees operands from sibling commands
+				// and fails closed (ASK with
+				// host_workspace_realpath_authority) for benign inputs.
+				const offset = evidenceOperandsOffset ?? 0;
+				const perCommandOperands: ReadonlyArray<WorkspacePathOperandEvidence> = evidence.operands.slice(
+					offset,
+					offset + expectedOperands.length,
+				);
 				// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
 				// V1 authority-context binding (the V2 binder
 				// does the same check; V1 must not be a
@@ -375,11 +417,11 @@ function evaluateOne(
 						reason: `workspace realpath authority: host authority cwd ("${auth.cwd ?? "<undefined>"}") does not match evidence.cwd ("${evidence.cwd ?? "<null>"}"); stale cwd rejected (CORRECTION04 invariant)`,
 					};
 				}
-				if (evidence.operands.length !== expectedOperands.length) {
+				if (perCommandOperands.length !== expectedOperands.length) {
 					return {
 						kind: "ask",
 						source: "host_workspace_realpath_authority",
-						reason: `workspace realpath authority: host evidence operand count (${evidence.operands.length}) does not match command operand count (${expectedOperands.length})`,
+						reason: `workspace realpath authority: host evidence operand count (${perCommandOperands.length}) does not match command operand count (${expectedOperands.length})`,
 					};
 				}
 				// Operand identity binding: each evidence operand
@@ -387,7 +429,7 @@ function evaluateOne(
 				// operand at the same index.
 				for (let i = 0; i < expectedOperands.length; i++) {
 					const expected = expectedOperands[i]!;
-					const actual = evidence.operands[i]?.operand;
+					const actual = perCommandOperands[i]?.operand;
 					if (actual !== expected) {
 						return {
 							kind: "ask",
@@ -396,7 +438,16 @@ function evaluateOne(
 						};
 					}
 				}
-				const conformance = evaluateCommandRealpathConformance(evidence);
+				// ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02:
+				// Realpath conformance MUST be evaluated on the per-command
+				// operand slice, not on the host's flat operands array.
+				// Sibling-command operands would otherwise be tested for
+				// containment in this command's workspace authority scope.
+				const perCommandEvidence = {
+					...evidence,
+					operands: perCommandOperands,
+				};
+				const conformance = evaluateCommandRealpathConformance(perCommandEvidence);
 				if (!conformance.conforming) {
 					const nonconforming = conformance.operands.find(
 						(o) => !o.result.conforming,
