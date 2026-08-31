@@ -89,6 +89,20 @@ interface ProductionSeamFixture {
 	 * `streaming` stays `streaming`).
 	 */
 	observeToolStarted(toolCallId: string): TurnPhase
+	/**
+	 * CORRECTION05 discriminator: drive a `recovery_changed`
+	 * TaskMsg. The shadow model materially mutates
+	 * (`recovery.*` + `telemetry.*` change) but the
+	 * canonical projection-authority tuple consumed by
+	 * `projectTurnState`
+	 * (`activity.{awaitingApproval,modelStreaming,
+	 *   activeToolCallIds}` + `lifecycle.kind`) is
+	 * untouched. The phase projected by the shadow is
+	 * unchanged. Per the CORRECTION05 invariant, the stamp
+	 * MUST NOT advance on a mutation that does not change
+	 * the phase-authority inputs.
+	 */
+	observeRecoveryChanged(): TurnPhase
 	currentShadowPhase(): TurnPhase | undefined
 }
 
@@ -183,6 +197,37 @@ function fixture(): ProductionSeamFixture {
 			// rule SHOULD advance the stamp.
 			const now = Date.now()
 			comparator.observeTaskMsg({ type: "tool_started", toolCallId, at: now }, tracker.currentPhase, now, tracker.get().seq)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			return toLegacyPhase(TaskState.projectTurnState(model))
+		},
+		observeRecoveryChanged(): TurnPhase {
+			// CORRECTION05 discriminator: `recovery_changed`
+			// updates `recovery.{state,episodeFailures,
+			// circuitNoticeCount}` and may grow
+			// `telemetry.recoveryBudgetFailures`
+			// (`updateRecoveryChanged` at update.ts:355). It
+			// does NOT touch `activity.*` or
+			// `lifecycle.*`, which are the only fields
+			// consumed by `projectTurnState` (selectors.ts:47).
+			// So the canonical phase projection is
+			// unchanged. Per the CORRECTION05 invariant,
+			// the stamp MUST NOT advance.
+			const now = Date.now()
+			comparator.observeTaskMsg(
+				{
+					type: "recovery_changed",
+					projection: {
+						state: "recovering",
+						episodeFailures: 1,
+						circuitNoticeCount: 1,
+					},
+					at: now,
+				},
+				tracker.currentPhase,
+				now,
+				tracker.get().seq,
+			)
 			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
 			const model = comparator.debugSnapshot()
 			return toLegacyPhase(TaskState.projectTurnState(model))
@@ -520,6 +565,94 @@ function thinkingInputs(overrides: Partial<ThinkingPresentationInputs> = {}): Th
 		...overrides,
 	}
 }
+
+// CORRECTION05 adversarial RED
+// (HALT_PHASE_STAMP_ADVANCES_ON_NON_PHASE_MUTATION).
+// CORRECTION04 advances on any TaskModel mutation.
+// But projectTurnState (selectors.ts:47) reads only
+// four axes: activity.{awaitingApproval, modelStreaming,
+// activeToolCallIds} + lifecycle.kind. Mutations to
+// recovery/telemetry/identity do NOT participate in
+// phase derivation. recovery_changed (update.ts:355)
+// materially mutates the model but touches NONE of
+// those four axes, so the projected phase is
+// unchanged. Per CORRECTION05, a mutation outside the
+// projection-authority tuple MUST NOT advance the
+// stamp.
+it("THCP11_C05_RED: recovery_changed (non-phase-authority mutation) MUST NOT bypass staleness gate", () => {
+	const fx = fixture()
+	fx.tracker.set("idle")
+	fx.observeViaCanonicalShadow()
+	const seqAtIdle = fx.tracker.get().seq
+	const stampAtIdle = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
+	expect(stampAtIdle).toBe(seqAtIdle)
+	expect(fx.currentShadowPhase()).toBe("idle")
+
+	fx.tracker.set("streaming")
+	const seqAfterStreaming = fx.tracker.get().seq
+	expect(seqAfterStreaming).toBeGreaterThan(seqAtIdle)
+	expect(fx.currentShadowPhase()).toBe("idle")
+
+	fx.observeRecoveryChanged()
+	const stampAfterRecovery = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
+	expect(stampAfterRecovery).toBe(seqAtIdle)
+	expect(stampAfterRecovery).not.toBe(seqAfterStreaming)
+	expect(fx.currentShadowPhase()).toBe("idle")
+
+	const projection = selectTaskHeaderPresentation({
+		canonicalShadowPhase: fx.currentShadowPhase(),
+		currentLegacyPhase: fx.tracker.currentPhase,
+		seq: fx.tracker.get().seq,
+		canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeqForPhase(fx.currentShadowPhase() ?? "idle"),
+	})
+	expect(projection.phase).not.toBe("idle")
+	expect(projection.phase).toBe("streaming")
+})
+
+// CORRECTION05 positive control: same-phase mutation
+// whose mutation IS in projection-authority inputs
+// (activeToolCallIds; isTooling reads length>0) SHOULD
+// still advance the stamp.
+it("THCP11_C05_AUTHORITY_POSITIVE: same-phase mutation IN projection-authority inputs SHOULD advance stamp", () => {
+	const fx = fixture()
+	fx.tracker.set("idle")
+	fx.observeViaCanonicalShadow()
+	fx.observeStreamingStart()
+	const seqAtStreaming = fx.tracker.get().seq
+	const stampAtStreaming = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+	expect(stampAtStreaming).toBe(seqAtStreaming)
+	expect(fx.currentShadowPhase()).toBe("streaming")
+
+	fx.tracker.set("streaming")
+	const seqAfterToolStart = fx.tracker.get().seq
+	expect(seqAfterToolStart).toBeGreaterThan(seqAtStreaming)
+	fx.observeToolStarted("toolA")
+	expect(fx.currentShadowPhase()).toBe("streaming")
+	const stampAfterToolStart = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+	expect(stampAfterToolStart).toBe(seqAfterToolStart)
+	expect(stampAfterToolStart).toBeGreaterThan(seqAtStreaming)
+})
+
+// CORRECTION05 second discriminator:
+// recovery_changed WHILE already streaming.
+it("THCP11_C05_STREAMING_RED: recovery_changed while already streaming MUST NOT advance stamp", () => {
+	const fx = fixture()
+	fx.tracker.set("idle")
+	fx.observeViaCanonicalShadow()
+	fx.observeStreamingStart()
+	const seqAtStreaming = fx.tracker.get().seq
+	const stampAtStreaming = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+	expect(stampAtStreaming).toBe(seqAtStreaming)
+
+	fx.tracker.set("streaming")
+	const seqAfterRecovery = fx.tracker.get().seq
+	expect(seqAfterRecovery).toBeGreaterThan(seqAtStreaming)
+	fx.observeRecoveryChanged()
+	const stampAfterRecovery = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+	expect(stampAfterRecovery).toBe(seqAtStreaming)
+	expect(stampAfterRecovery).not.toBe(seqAfterRecovery)
+	expect(fx.currentShadowPhase()).toBe("streaming")
+})
 
 describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02 / conservation", () => {
 	it("T1: idle turn → task header idle (no shadow)", () => {

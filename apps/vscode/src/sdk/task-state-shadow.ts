@@ -27,14 +27,53 @@ import type { TurnPhase } from "@/shared/ExtensionMessage"
 // `TaskModel` member is not promoted to a top-level package export.
 type TaskModel = TaskState.TaskModel
 
-// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
-// canonical structural equality over two `TaskModel`s from
-// `@cline/agents/runtime/state/task-state/model.ts`. Used to
-// distinguish "observation materially changed the model" from
-// "observation was a semantic no-op at the reducer" (e.g.
-// `approval_resolved` with no active approval
-// — `task-state.update.test.ts:312`).
-const { TaskStateShadow, isSameTaskModel } = TaskState
+// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION05:
+// Structural equality over the canonical phase-authority tuple
+// that `projectTurnState` (selectors.ts:47) consumes. The tuple
+// is exactly:
+//   activity.awaitingApproval    -> projects "awaiting_approval"
+//   activity.modelStreaming      -> projects "streaming"
+//   activity.activeToolCallIds   -> projects "streaming" via isTooling()
+//   lifecycle.kind               -> terminal/resumable axes
+//   lifecycle.reason             -> only when kind === "failed"
+// Recovery/telemetry/identity mutations do NOT participate in
+// phase derivation; they MUST NOT refresh the phase-keyed stamp.
+// Replace CORRECTION04's `isSameTaskModel` check with this
+// narrower projection-authority check.
+const { TaskStateShadow } = TaskState
+
+/**
+ * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION05:
+ *
+ * Returns `true` iff the canonical phase-authority tuple
+ * `projectTurnState` reads from a `TaskModel` is structurally
+ * identical in `a` and `b`. This is the load-bearing freshness
+ * bound: only mutations INSIDE this tuple can refresh the
+ * comparator's phase-keyed stamp.
+ *
+ * Phase-authority inputs (selectors.ts:47):
+ *   `activity.awaitingApproval`     (`awaiting_approval`)
+ *   `activity.modelStreaming`       (`streaming`)
+ *   `activity.activeToolCallIds`    (`streaming` via `isTooling()`)
+ *   `lifecycle.kind`                (terminal/resumable axes)
+ *   `lifecycle.reason`              (only when `kind === "failed"`)
+ *
+ * Order-sensitive `activeToolCallIds` comparison (the comparator
+ * itself is order-sensitive — see `isSameTaskModel`'s note).
+ */
+function isSameTurnProjectionAuthority(a: TaskModel, b: TaskModel): boolean {
+	if (a.activity.awaitingApproval !== b.activity.awaitingApproval) return false
+	if (a.activity.modelStreaming !== b.activity.modelStreaming) return false
+	if (a.lifecycle.kind !== b.lifecycle.kind) return false
+	if (a.lifecycle.kind === "failed" && b.lifecycle.kind === "failed") {
+		if (a.lifecycle.reason !== b.lifecycle.reason) return false
+	}
+	if (a.activity.activeToolCallIds.length !== b.activity.activeToolCallIds.length) return false
+	for (let i = 0; i < a.activity.activeToolCallIds.length; i++) {
+		if (a.activity.activeToolCallIds[i] !== b.activity.activeToolCallIds[i]) return false
+	}
+	return true
+}
 
 type TaskMsg = TaskState.TaskMsg
 type TaskShadowObservation = TaskState.TaskShadowObservation
@@ -262,8 +301,8 @@ export class TaskShadowComparator {
 		//   a transition that established phase P under
 		//   TurnState generation N.
 		const shadowPhase = toLegacyPhase(observation.projections.turnPhase)
-		const materialMutation = preModel === null ? true : !isSameTaskModel(preModel, observation.model)
-		if (event !== "noop" && materialMutation) {
+		const projectionAuthorityChanged = preModel === null ? true : !isSameTurnProjectionAuthority(preModel, observation.model)
+		if (event !== "noop" && projectionAuthorityChanged) {
 			this.lastObservedTurnSeqByPhase.set(shadowPhase, turnSeq)
 		}
 		if (shadowPhase !== legacyPhase) {
