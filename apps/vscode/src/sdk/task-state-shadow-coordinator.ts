@@ -122,6 +122,23 @@ export interface TaskShadowCoordinatorDeps {
 	readonly getArbiterSnapshot: () => ArbiterSnapshot
 	readonly getActiveSessionId: () => string | undefined
 	readonly getRuntimeStatus: () => AgentRunStatus
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+	 *
+	 * Returns the TurnStateTracker.seq value at the moment the
+	 * coordinator samples the legacy phase. The comparator
+	 * stamps this seq at observation time so the publication
+	 * selector can compare within the SAME TurnState sequence
+	 * domain — replacing the cross-domain numeric comparison
+	 * CORRECTION01's reviewer halted on.
+	 *
+	 * Optional: Hub/Remote hosts without a local
+	 * TurnStateTracker return `undefined` and the comparator
+	 * stamps `undefined` for `lastObservedTurnSeq`. The wiring
+	 * then surfaces `undefined` to the publication selectors
+	 * (no stale-shadow gate can fire for that branch).
+	 */
+	readonly getTurnSeq?: () => number | undefined
 	readonly onInvariantViolation?: (
 		record: ReturnType<TaskShadowRecorder["getRecords"]>[number] | undefined,
 		violations: readonly TaskInvariantViolation[],
@@ -442,9 +459,15 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 		const arbiter = deps.getArbiterSnapshot()
 		const activeSession = deps.getActiveSessionId()
 		const taskEpochOrOpaqueTaskKey = activeSession
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+		// Sample the TurnStateTracker.seq at the same instant we
+		// sample the legacy phase. The comparator stamps this seq
+		// on the observation so the publication selector can compare
+		// within the SAME TurnState sequence domain.
+		const turnSeq = deps.getTurnSeq?.()
 
 		// 2. Apply the transition to the shadow via the comparator.
-		const observationResult = applyToComparator(input, legacyPhase, now)
+		const observationResult = applyToComparator(input, legacyPhase, now, turnSeq)
 		const observation: ShadowObservation = observationResult.observation
 		const divergence: TaskShadowDivergence | undefined = observationResult.divergence
 
@@ -498,14 +521,15 @@ export function createTaskShadowObservationCoordinator(deps: TaskShadowCoordinat
 		input: TaskShadowObservationInput,
 		legacyPhase: TurnPhase,
 		now: number,
+		turnSeq: number | undefined,
 	): { observation: ShadowObservation; divergence: TaskShadowDivergence | undefined } {
 		switch (input.kind) {
 			case "runtime-canonical":
 			case "runtime-reconstructed":
-				return deps.comparator.observeRuntimeEvent(input.event, legacyPhase, now)
+				return deps.comparator.observeRuntimeEvent(input.event, legacyPhase, now, turnSeq)
 			case "host-task":
 			case "host-recovery":
-				return deps.comparator.observeTaskMsg(input.msg, legacyPhase, now)
+				return deps.comparator.observeTaskMsg(input.msg, legacyPhase, now, turnSeq)
 		}
 	}
 

@@ -1090,6 +1090,12 @@ export class Controller {
 				onSendError: () => undefined,
 			},
 			getLegacyPhase: () => this.turnStateTracker.currentPhase,
+			// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+			// Sample the TurnStateTracker.seq at the moment the wiring
+			// observes an event. The comparator stamps this seq on the
+			// observation so the publication selectors can compare
+			// within the SAME TurnState sequence domain.
+			getTurnSeq: () => this.turnStateTracker.get().seq,
 			getArbiterSnapshot: () => {
 				// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-F1-CANONICAL-RUNTIME-EVENT-SEAM01-ELM-02F-CORRECTION01:
 				// Canonical arbiter source. The legacy mirror that
@@ -1933,24 +1939,32 @@ export class Controller {
 	}
 
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
 	 *
-	 * Returns the seq stamp the canonical shadow had when it
-	 * produced its last observation, or `undefined` when no
-	 * shadow observation has been recorded yet. The wiring's
-	 * comparator carries a monotonic `seq` counter that
-	 * increments on every `observeRuntimeEvent` /
-	 * `observeTaskMsg`. Reading this seq lets the publication
-	 * selectors detect "shadow is stale relative to the legacy
-	 * tracker" — i.e. forbids a stale `getLocalShadowPhase()`
-	 * from overriding a fresh `turnStateTracker.currentPhase`
-	 * (the LIVE contradiction this ACT repairs).
+	 * Returns the TurnStateTracker.seq value the canonical
+	 * shadow had stamped on its last observation, or `undefined`
+	 * when no shadow observation has been recorded yet. The
+	 * wiring's comparator carries this seq at observation
+	 * time (sampled from `turnStateTracker.get().seq` at the
+	 * instant the observation is accepted). Reading this seq
+	 * lets the publication selectors detect "shadow is stale
+	 * relative to the legacy tracker" — i.e. forbids a stale
+	 * `getLocalShadowPhase()` from overriding a fresh
+	 * `turnStateTracker.currentPhase` (the LIVE contradiction
+	 * this ACT repairs).
+	 *
+	 * **DOMAIN IDENTITY (CORRECTION02):** the returned value
+	 * is in the **TurnState sequence domain** — same domain as
+	 * the publication's `turnState.seq`. Both sides of the
+	 * selector's staleness gate are now in the same domain;
+	 * the cross-domain numeric comparison CORRECTION01
+	 * attempted has been removed.
 	 *
 	 * Non-mutating advisory accessor.
 	 */
-	getLocalShadowSeq(): number | undefined {
+	getLocalShadowTurnSeq(): number | undefined {
 		if (!this.taskStateShadowWiring) return undefined
-		const seq = this.taskStateShadowWiring.getLastObservedShadowSeq()
+		const seq = this.taskStateShadowWiring.getLastObservedTurnSeq()
 		return seq
 	}
 
@@ -3985,14 +3999,13 @@ export class Controller {
 					canonicalShadow: this.getLocalShadowProjection(),
 					currentLegacyPhase: this.turnStateTracker.currentPhase,
 					seq: this.turnStateTracker.get().seq,
-					// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
-					// Pass the shadow's last-observation seq so the
-					// selector can detect "shadow is stale relative to
-					// the legacy tracker" and fall through to the
-					// legacy branch — forbidding the LIVE contradiction
-					// where a stale shadow projection would override a
-					// fresh `turnStateTracker.currentPhase`.
-					canonicalShadowSeq: this.getLocalShadowSeq(),
+					// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+					// Pass the TurnState-domain seq the shadow had at its
+					// last observation. Both sides of the staleness gate
+					// are in the SAME TurnState sequence domain — the
+					// cross-domain comparison CORRECTION01 attempted has
+					// been removed.
+					canonicalShadowObservedTurnSeq: this.getLocalShadowTurnSeq(),
 				}),
 				// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01:
 				//
@@ -4027,14 +4040,13 @@ export class Controller {
 					canonicalShadowPhase: this.getLocalShadowPhase(),
 					currentLegacyPhase: this.turnStateTracker.currentPhase,
 					seq: this.turnStateTracker.get().seq,
-					// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
-					// Pass the shadow's last-observation seq so the
-					// selector can detect "shadow is stale relative to
-					// the legacy tracker" and fall through to the
-					// legacy branch — forbidding the LIVE contradiction
-					// where a stale shadow projection would override a
-					// fresh `turnStateTracker.currentPhase`.
-					canonicalShadowSeq: this.getLocalShadowSeq(),
+					// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+					// Pass the TurnState-domain seq the shadow had at its
+					// last observation. Both sides of the staleness gate
+					// are in the SAME TurnState sequence domain — the
+					// cross-domain comparison CORRECTION01 attempted has
+					// been removed.
+					canonicalShadowObservedTurnSeq: this.getLocalShadowTurnSeq(),
 				}),
 				// ACT-CLINEMM-SESSION-AUTONOMY01 + CORRECTION01:
 				// ephemeral session override state. The store is the host-owned

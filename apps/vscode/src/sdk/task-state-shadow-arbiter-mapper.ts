@@ -226,31 +226,36 @@ export interface ThinkingPresentationInputs {
 	 */
 	readonly seq: number
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
 	 *
-	 * The seq stamp the canonical shadow had when it produced
-	 * `canonicalShadow` (or, equivalently, when it produced the
-	 * last `getLastObservedShadowPhase()` projection). Used to
-	 * forbid the LIVE contradiction where the canonical shadow's
-	 * LAST observation was a prior lifecycle state (e.g.
-	 * `streaming` from a prior turn, or the initial `idle`
-	 * projection of a never-observed TaskModel) and the legacy
-	 * `TurnStateTracker` has since advanced to a different
-	 * phase (e.g. `completed`, `error`, `resumable`, or
-	 * `streaming`).
+	 * The TurnStateTracker.seq value the canonical shadow had
+	 * when it produced `canonicalShadow` (or, equivalently,
+	 * when it produced the last `getLastObservedShadowPhase()`
+	 * projection). Used to forbid the LIVE contradiction where
+	 * the canonical shadow's LAST observation was a prior
+	 * lifecycle state (e.g. `streaming` from a prior turn, or
+	 * the initial `idle` projection of a never-observed
+	 * TaskModel) and the legacy `TurnStateTracker` has since
+	 * advanced to a different phase (e.g. `completed`,
+	 * `error`, `resumable`, or `streaming`).
 	 *
-	 * When `canonicalShadowSeq !== undefined && seq > canonicalShadowSeq`
-	 * the shadow is STALE relative to the legacy phase. The
-	 * selector MUST fall through to the legacy branch — the same
-	 * rule that forbids a stale `getLastObservedShadowPhase()`
-	 * from overriding a fresh `turnStateTracker.currentPhase`.
+	 * **DOMAIN IDENTITY (CORRECTION02):** this value MUST be in
+	 * the **TurnState sequence domain** — the same domain as
+	 * `seq`. The shadow observation is stamped with the
+	 * TurnStateTracker.seq at the moment the shadow accepted
+	 * the observation (via `wiring.getLastObservedTurnSeq()`).
+	 *
+	 * When `canonicalShadowObservedTurnSeq !== undefined &&
+	 * seq > canonicalShadowObservedTurnSeq` the shadow is STALE
+	 * relative to the legacy phase. The selector MUST fall
+	 * through to the legacy branch.
 	 *
 	 * Hub/Remote hosts and Local sessions with no observation
-	 * pass `canonicalShadowSeq === undefined`, which is the
-	 * absence-collapse case (the shadow branch does not fire
-	 * anyway).
+	 * pass `canonicalShadowObservedTurnSeq === undefined`, which
+	 * is the absence-collapse case (the shadow branch does not
+	 * fire anyway).
 	 */
-	readonly canonicalShadowSeq?: number
+	readonly canonicalShadowObservedTurnSeq?: number
 }
 
 /**
@@ -266,13 +271,17 @@ export interface ThinkingPresentationInputs {
  * enforced by the body shape, not by an assertion.
  */
 export function selectThinkingPresentation(input: ThinkingPresentationInputs): ThinkingPresentationProjection {
-	// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
 	// When the shadow observation is STALE relative to the most
-	// recent legacy transition (`seq > canonicalShadowSeq`), fall
-	// through to the legacy branch. A stale shadow must NOT
-	// override a fresh legacy phase.
+	// recent legacy transition (`seq > canonicalShadowObservedTurnSeq`),
+	// fall through to the legacy branch. Both `seq` and
+	// `canonicalShadowObservedTurnSeq` are in the SAME TurnState
+	// sequence domain — the cross-domain numeric comparison
+	// CORRECTION01 attempted has been removed.
 	const isShadowStale =
-		input.canonicalShadow !== undefined && input.canonicalShadowSeq !== undefined && input.seq > input.canonicalShadowSeq
+		input.canonicalShadow !== undefined &&
+		input.canonicalShadowObservedTurnSeq !== undefined &&
+		input.seq > input.canonicalShadowObservedTurnSeq
 	if (input.canonicalShadow && !isShadowStale) {
 		return {
 			modelStreaming: input.canonicalShadow.execution.modelStreaming,
@@ -413,24 +422,31 @@ export interface TaskHeaderPresentationInputs {
 	/**
 	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
 	 *
-	 * The seq stamp the canonical shadow had when it produced
-	 * `canonicalShadowPhase`. Used to forbid the LIVE
-	 * contradiction where the canonical shadow's LAST observation
-	 * was a prior lifecycle state (e.g. `streaming` from a prior
-	 * turn, or the initial `idle` projection of a never-observed
-	 * TaskModel) and the legacy `TurnStateTracker` has since
-	 * advanced to a different phase (e.g. `completed`, `error`,
-	 * `resumable`, or `streaming`).
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
 	 *
-	 * When `canonicalShadowSeq !== undefined && seq > canonicalShadowSeq`
-	 * the shadow is STALE relative to the legacy phase. The
-	 * selector MUST fall through to the legacy branch — the
-	 * same rule that forbids a stale `getLastObservedShadowPhase()`
-	 * from overriding a fresh `turnStateTracker.currentPhase`.
+	 * The TurnStateTracker.seq value the canonical shadow had
+	 * when it produced `canonicalShadowPhase`. Used to forbid
+	 * the LIVE contradiction where the canonical shadow's LAST
+	 * observation was a prior lifecycle state (e.g. `streaming`
+	 * from a prior turn, or the initial `idle` projection of a
+	 * never-observed TaskModel) and the legacy `TurnStateTracker`
+	 * has since advanced to a different phase (e.g. `completed`,
+	 * `error`, `resumable`, or `streaming`).
+	 *
+	 * **DOMAIN IDENTITY (CORRECTION02):** this value MUST be in
+	 * the **TurnState sequence domain** — the same domain as
+	 * `seq`. The shadow observation is stamped with the
+	 * TurnStateTracker.seq at the moment the shadow accepted
+	 * the observation (via `wiring.getLastObservedTurnSeq()`).
+	 *
+	 * When `canonicalShadowObservedTurnSeq !== undefined &&
+	 * seq > canonicalShadowObservedTurnSeq` the shadow is STALE
+	 * relative to the legacy phase. The selector MUST fall
+	 * through to the legacy branch.
 	 *
 	 * Mirrors the same parameter on `ThinkingPresentationInputs`.
 	 */
-	readonly canonicalShadowSeq?: number
+	readonly canonicalShadowObservedTurnSeq?: number
 }
 
 /**
@@ -513,16 +529,23 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 	// host-owned phases (compacting / awaiting_followup) are
 	// handled by the two host-override branches above.
 	//
-	// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
 	// When the canonical shadow's last observation is STALE
 	// relative to the most recent legacy transition (`seq >
-	// canonicalShadowSeq`), fall through to the legacy branch. A
-	// stale shadow must NOT override a fresh legacy phase — this
-	// is the LIVE contradiction the REPAIR01 captures
-	// (publicationId 15/17 of taskId 1788189447617_rw5zx:
-	// turnState.phase="streaming" + taskHeaderPresentation.phase="idle").
+	// canonicalShadowObservedTurnSeq`), fall through to the
+	// legacy branch. A stale shadow must NOT override a fresh
+	// legacy phase — this is the LIVE contradiction the
+	// REPAIR01 captures (publicationId 15/17 of taskId
+	// 1788189447617_rw5zx: turnState.phase="streaming" +
+	// taskHeaderPresentation.phase="idle").
+	//
+	// Both `seq` and `canonicalShadowObservedTurnSeq` are in
+	// the SAME TurnState sequence domain — the cross-domain
+	// numeric comparison CORRECTION01 attempted has been
+	// removed.
 	if (input.canonicalShadowPhase !== undefined) {
-		const isShadowStale = input.canonicalShadowSeq !== undefined && input.seq > input.canonicalShadowSeq
+		const isShadowStale =
+			input.canonicalShadowObservedTurnSeq !== undefined && input.seq > input.canonicalShadowObservedTurnSeq
 		if (!isShadowStale) {
 			return {
 				phase: input.canonicalShadowPhase,

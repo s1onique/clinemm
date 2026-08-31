@@ -1,69 +1,51 @@
 // ===========================================================================
-// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 /
-// THCP11 / TCR01 — STALE-SHADOW-OVERRIDES-FRESH-LEGACY RED.
+// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02
 //
-// Why this test exists:
+// RED suite — drives the REAL production seam end-to-end.
 //
-//   The LIVE capture from `activity.publication.v1` for
-//   taskId 1788189447617_rw5zx epoch=2 published:
+// What CORRECTION01 got wrong:
+//   The original REPAIR01 compared the publication `turnState.seq`
+//   against the shadow's INTERNAL observation counter
+//   (`TaskShadowComparator.seq`). Those are unrelated counters with
+//   different cardinalities — comparing them numerically does not
+//   establish chronology. The RED tests at that time encoded the
+//   invalid identity assumption by hand.
 //
-//     pub 13  turnPhase=idle      taskHeaderPhase=idle      (coherent)
-//     pub 15  turnPhase=streaming taskHeaderPhase=idle      (CONTRADICTION)
-//     pub 17  turnPhase=streaming taskHeaderPhase=idle      (CONTRADICTION)
-//     pub 21  turnPhase=error     taskHeaderPhase=error     (coherent)
+// What CORRECTION02 fixes:
+//   The shadow observation is now stamped, at the moment of
+//   observation, with the **TurnStateTracker.seq** value the
+//   observation occurred under. Both sides of the staleness gate
+//   (`seq` and `canonicalShadowObservedTurnSeq`) are now in the
+//   same TurnState sequence domain.
 //
-//   `turnPhase` and `taskHeaderPhase` are snapshot-derived from the
-//   SAME publication object (per the activity-publication-v1.ts
-//   builder). So the contradiction cannot come from
-//   "two different times" — it MUST come from "two different
-//   authorities disagreeing on the same instant":
-//
-//     turnState.phase              ← TurnStateTracker.currentPhase
-//                                       (host-driven, synchronous, advances
-//                                        on every setTurnPhase() call)
-//     taskHeaderPresentation.phase ← selectTaskHeaderPresentation(
-//                                       canonicalShadowPhase,
-//                                       currentLegacyPhase,
-//                                       seq)
-//
-//   `selectTaskHeaderPresentation`'s branch-3 fires whenever
-//   `canonicalShadowPhase !== undefined && !== "compacting" && !==
-//   "awaiting_followup"` and returns `phase = canonicalShadowPhase,
-//   source = "shadow"` — with NO generation/seq comparison against
-//   the legacy phase. So when the canonical shadow last observed a
-//   pre-streaming idle event and the legacy tracker has since
-//   advanced to "streaming", the selector returns phase="idle" and
-//   the publication carries:
-//
-//     turnState.phase              = "streaming"   (real)
-//     taskHeaderPresentation.phase = "idle"        (stale shadow)
-//
-//   which is exactly the LIVE contradiction this RED reproduces.
-//
-// REPAIR01 fix surface (the test passes when the fix lands):
-//
-//   The selector must compare `currentLegacyPhase`'s authoring seq
-//   to `canonicalShadowPhase`'s observation seq (or use whatever
-//   generation-tagged authority the implementation prefers). When
-//   the shadow's last observation predates a more recent legacy
-//   transition, the selector must fall back to the legacy branch
-//   (preserving the "shadow is authoritative when FRESH" property
-//   while forbidding "stale shadow overrides fresh legacy").
-//
-//   The fix is bounded: one extra input parameter to
-//   `selectTaskHeaderPresentation` (`canonicalShadowSeq` /
-//   equivalent), one extra precedence check.
-//
-// This file lives at `apps/vscode/src/sdk/__tests__/...` (not under
-// `__tests__/c2-4-c-bridge/`) because the selectors in
-// `task-state-shadow-arbiter-mapper.ts` are pure functions in the
-// host (`apps/vscode`) and are exercised end-to-end by the
-// production-seam vitest suite (`bun run test:unit` /
-// `vitest run`); no SDK bridge config is required.
+// RED structure (CORRECTION02):
+//   1. Real `MessageIdMinter`.
+//   2. Real `TurnStateTracker` (so `tracker.set(phase)` advances
+//      the SAME `seq` the selector and the comparator see).
+//   3. Real `TaskShadowComparator` (so observation stamps
+//      `lastObservedTurnSeq` from the SAME `tracker.get().seq`).
+//   4. Drive the live sequence:
+//        a. tracker.set("idle")           → seq=1
+//        b. comparator.observe(...) with turnSeq=tracker.get().seq
+//                                        → stamps seq=1
+//        c. tracker.set("streaming")       → seq=2 (legacy advances)
+//        d. selectTaskHeaderPresentation(canonicalShadowPhase,
+//                                        currentLegacyPhase,
+//                                        seq=tracker.get().seq,
+//                                        canonicalShadowObservedTurnSeq
+//                                          =comparator.debugLastObservedTurnSeq())
+//      The publication MUST NOT carry
+//      `taskHeaderPresentation.phase = "idle"`.
+//   5. Repeat for the inverse case (stale shadow "streaming"
+//      overridden by fresh legacy "completed").
 // ===========================================================================
 
+import { TaskState } from "@cline/agents"
+import type { AgentRuntimeEvent } from "@cline/shared"
 import type { TurnPhase } from "@shared/ExtensionMessage"
 import { describe, expect, it } from "vitest"
+import { MessageIdMinter } from "../message-id-minter"
+import { TaskShadowComparator, toLegacyPhase } from "../task-state-shadow"
 import {
 	selectTaskHeaderPresentation,
 	selectThinkingPresentation,
@@ -72,10 +54,194 @@ import {
 } from "../task-state-shadow-arbiter-mapper"
 import { emptyArbiterSnapshot } from "../task-state-shadow-host-wiring"
 import type { ArbiterSnapshot } from "../task-state-shadow-recorder"
+import { TurnStateTracker } from "../turn-state-tracker"
 
 // ---------------------------------------------------------------------------
-// Test helpers (mirror thcp01's shape; intentionally duplicated to keep
-// the RED self-contained and easy to delete on PASS).
+// Production-seam helpers.
+// ---------------------------------------------------------------------------
+
+interface ProductionSeamFixture {
+	readonly tracker: TurnStateTracker
+	readonly minter: MessageIdMinter
+	readonly comparator: TaskShadowComparator
+	observeViaCanonicalShadow(): TurnPhase
+	currentShadowPhase(): TurnPhase | undefined
+}
+
+function fixture(): ProductionSeamFixture {
+	const minter = new MessageIdMinter()
+	const tracker = new TurnStateTracker(minter)
+	const comparator = new TaskShadowComparator()
+	return {
+		tracker,
+		minter,
+		comparator,
+		observeViaCanonicalShadow(): TurnPhase {
+			const now = Date.now()
+			const legacyPhase = tracker.currentPhase
+			const turnSeq = tracker.get().seq
+			comparator.observeTaskMsg(
+				{
+					type: "noop",
+					ts: now,
+				} as unknown as Parameters<TaskShadowComparator["observeTaskMsg"]>[0],
+				legacyPhase,
+				now,
+				turnSeq,
+			)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			const canonical = TaskState.projectTurnState(model)
+			return toLegacyPhase(canonical)
+		},
+		currentShadowPhase(): TurnPhase | undefined {
+			if (!comparator.hasObservedShadowState()) return undefined
+			const model = comparator.debugSnapshot()
+			const canonical = TaskState.projectTurnState(model)
+			return toLegacyPhase(canonical)
+		},
+	}
+}
+
+function runtimeEvent(type: string): AgentRuntimeEvent {
+	return { type, snapshot: { runId: "test", status: "running" } } as unknown as AgentRuntimeEvent
+}
+
+// ---------------------------------------------------------------------------
+// RED — REPAIR01-CORRECTION02 / TCR01:
+// STALE SHADOW MUST NOT OVERRIDE FRESH LEGACY (same-domain proof).
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02 / production-seam RED", () => {
+	it("THCP11_C02_RED: stale shadow 'idle' MUST NOT override fresh legacy 'streaming' (LIVE contradiction, real seam)", () => {
+		// Same-domain identity proof:
+		//   1. tracker.set("idle") advances the SAME seq that
+		//      the comparator stamps on its observation.
+		//   2. observeViaCanonicalShadow() reads
+		//      tracker.get().seq AT THE MOMENT of observation
+		//      and passes it to comparator.observeTaskMsg().
+		//   3. tracker.set("streaming") advances the SAME seq.
+		//   4. The publication reads tracker.get().seq for the
+		//      `seq` field and comparator.debugLastObservedTurnSeq()
+		//      for `canonicalShadowObservedTurnSeq`.
+		//
+		// Both values are in the SAME TurnState sequence
+		// domain. The numeric comparison `seq >
+		// canonicalShadowObservedTurnSeq` now has causal
+		// meaning: it asks whether the legacy has advanced
+		// since the shadow last observed.
+		const fx = fixture()
+		fx.tracker.set("idle")
+		const seqAtFirstSet = fx.tracker.get().seq
+		const shadowPhase = fx.observeViaCanonicalShadow()
+		// Same-domain assertion: the comparator's stamp equals
+		// the TurnStateTracker.seq that was live when the
+		// observation occurred.
+		expect(fx.comparator.debugLastObservedTurnSeq()).toBe(seqAtFirstSet)
+		expect(shadowPhase).toBe("idle")
+		fx.tracker.set("streaming")
+		const seqAfterStreaming = fx.tracker.get().seq
+		expect(seqAfterStreaming).toBeGreaterThan(seqAtFirstSet)
+
+		const publicationSeq = fx.tracker.get().seq
+		const publicationShadowStamp = fx.comparator.debugLastObservedTurnSeq()
+		// The publication's `seq` and the comparator's stamp
+		// are BOTH sampled from the SAME TurnStateTracker.
+		expect(publicationSeq).toBe(seqAfterStreaming)
+		expect(publicationShadowStamp).toBeLessThan(publicationSeq)
+
+		const projection = selectTaskHeaderPresentation({
+			canonicalShadowPhase: fx.currentShadowPhase(),
+			currentLegacyPhase: fx.tracker.currentPhase,
+			seq: publicationSeq,
+			canonicalShadowObservedTurnSeq: publicationShadowStamp,
+		})
+
+		expect(projection.phase).not.toBe("idle")
+		expect(projection.phase).toBe("streaming")
+		expect(projection.source).toBe("legacy")
+	})
+
+	it("THCP11_C02_RED_INVERSE: stale shadow 'streaming' MUST NOT override fresh legacy 'completed'", () => {
+		const fx = fixture()
+		fx.tracker.set("idle")
+		fx.comparator.observeRuntimeEvent(runtimeEvent("execution-state-changed"), "idle", Date.now(), fx.tracker.get().seq)
+		const stampedTurnSeqAfterFirstObserve = fx.comparator.debugLastObservedTurnSeq()
+		expect(stampedTurnSeqAfterFirstObserve).toBe(fx.tracker.get().seq)
+		expect(stampedTurnSeqAfterFirstObserve).toBeDefined()
+
+		fx.tracker.set("streaming")
+		fx.tracker.set("completed")
+		expect(fx.tracker.get().seq).toBeGreaterThan(stampedTurnSeqAfterFirstObserve!)
+
+		const projection = selectTaskHeaderPresentation({
+			canonicalShadowPhase: fx.currentShadowPhase(),
+			currentLegacyPhase: fx.tracker.currentPhase,
+			seq: fx.tracker.get().seq,
+			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeq(),
+		})
+
+		expect(projection.phase).not.toBe("streaming")
+		expect(projection.phase).toBe("completed")
+		expect(projection.source).toBe("legacy")
+	})
+
+	it("THCP11_C02_RED_FRESH_SHADOW_PRESERVED: when the shadow's stamp equals the legacy seq AND shadow agrees with legacy, no regression", () => {
+		// Conservation baseline — proves the repair doesn't
+		// regress the "shadow is authoritative when fresh"
+		// property. With the shadow stamp equal to the legacy
+		// seq AND the shadow projection agreeing with the
+		// legacy phase, the staleness gate does NOT fire and
+		// the selector returns the shadow branch (the LIVE
+		// contradiction is forbidden because shadow agrees).
+		//
+		// We drive this by passing canonicalShadowPhase =
+		// currentLegacyPhase directly (i.e. simulate that the
+		// canonical shadow DID observe the legacy transition
+		// and agrees with it). The staleness gate's
+		// `seq > canonicalShadowObservedTurnSeq` does NOT
+		// fire (equal values), so the shadow branch wins.
+		const fx = fixture()
+		fx.tracker.set("idle")
+		fx.tracker.set("streaming")
+		const seq = fx.tracker.get().seq
+		const projection = selectTaskHeaderPresentation({
+			canonicalShadowPhase: "streaming",
+			currentLegacyPhase: "streaming",
+			seq,
+			canonicalShadowObservedTurnSeq: seq, // same-domain equality
+		})
+		expect(projection.phase).toBe("streaming")
+		expect(projection.source).toBe("shadow")
+	})
+
+	it("THCP11_C02_THINKING_RED: selectThinkingPresentation staleness gate honors same-domain comparator stamp", () => {
+		const fx = fixture()
+		fx.tracker.set("idle")
+		fx.observeViaCanonicalShadow()
+		fx.tracker.set("streaming")
+		const staleShadow: ArbiterSnapshot = {
+			...emptyArbiterSnapshot(),
+			execution: {
+				modelStreaming: false,
+				tooling: false,
+				awaitingApproval: false,
+			},
+		}
+		const projection = selectThinkingPresentation({
+			canonicalShadow: staleShadow,
+			currentLegacyPhase: fx.tracker.currentPhase,
+			seq: fx.tracker.get().seq,
+			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeq(),
+		})
+		expect(projection.modelStreaming).toBe(true)
+		expect(projection.source).toBe("legacy")
+	})
+})
+// ---------------------------------------------------------------------------
+// Conservation suite (T1..T14) — pure-selector tests using
+// `canonicalShadowObservedTurnSeq` (the renamed parameter). These
+// pin the precedence contract through the new staleness gate.
 // ---------------------------------------------------------------------------
 
 function taskHeaderInputs(overrides: Partial<TaskHeaderPresentationInputs> = {}): TaskHeaderPresentationInputs {
@@ -108,31 +274,21 @@ function thinkingInputs(overrides: Partial<ThinkingPresentationInputs> = {}): Th
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Conservation suite (T1..T11) — proves the repair does NOT regress any
-// frozen contract from the THCP01 / E7.1 / THCP11 witnesses. Pinned by
-// ACT body PHASE 7.
-// ---------------------------------------------------------------------------
-
-describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conservation", () => {
+describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02 / conservation", () => {
 	it("T1: idle turn → task header idle (no shadow)", () => {
 		const out = selectTaskHeaderPresentation(
-			taskHeaderInputs({
-				canonicalShadowPhase: undefined,
-				currentLegacyPhase: "idle",
-				seq: 1,
-			}),
+			taskHeaderInputs({ canonicalShadowPhase: undefined, currentLegacyPhase: "idle", seq: 1 }),
 		)
 		expect(out).toEqual({ phase: "idle", source: "legacy", seq: 1 })
 	})
 
-	it("T2: streaming turn → task header NOT idle (shadow fresh)", () => {
+	it("T2: streaming turn → task header NOT idle (shadow fresh, same domain)", () => {
 		const out = selectTaskHeaderPresentation(
 			taskHeaderInputs({
 				canonicalShadowPhase: "streaming",
 				currentLegacyPhase: "streaming",
 				seq: 5,
-				canonicalShadowSeq: 5,
+				canonicalShadowObservedTurnSeq: 5,
 			}),
 		)
 		expect(out.phase).toBe("streaming")
@@ -145,7 +301,7 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conser
 				canonicalShadowPhase: "completed",
 				currentLegacyPhase: "completed",
 				seq: 10,
-				canonicalShadowSeq: 10,
+				canonicalShadowObservedTurnSeq: 10,
 			}),
 		)
 		expect(out).toEqual({ phase: "completed", source: "shadow", seq: 10 })
@@ -157,17 +313,13 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conser
 				canonicalShadowPhase: "error",
 				currentLegacyPhase: "error",
 				seq: 7,
-				canonicalShadowSeq: 7,
+				canonicalShadowObservedTurnSeq: 7,
 			}),
 		)
 		expect(out).toEqual({ phase: "error", source: "shadow", seq: 7 })
 	})
 
 	it("T5: resumable task reopened from History → Resume presentation preserved (shadow absent)", () => {
-		// Mirrors `SdkTaskControlCoordinator.showTaskWithId()` which
-		// sets turnState.phase = "resumable" with no shadow
-		// observation. The selector must fall through to the
-		// legacy branch.
 		const out = selectTaskHeaderPresentation(
 			taskHeaderInputs({
 				canonicalShadowPhase: undefined,
@@ -207,20 +359,20 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conser
 				canonicalShadowPhase: "streaming",
 				currentLegacyPhase: "resumable",
 				seq: 10,
-				canonicalShadowSeq: 5,
+				canonicalShadowObservedTurnSeq: 5,
 			}),
 		)
 		expect(out.phase).toBe("resumable")
 		expect(out.source).toBe("legacy")
 	})
 
-	it("T9: stale older projection/generation cannot overwrite newer authoritative phase", () => {
+	it("T9: stale older projection/generation cannot overwrite newer authoritative phase (THE LIVE CONTRADICTION)", () => {
 		const out = selectTaskHeaderPresentation(
 			taskHeaderInputs({
 				canonicalShadowPhase: "idle",
 				currentLegacyPhase: "streaming",
 				seq: 5,
-				canonicalShadowSeq: 2,
+				canonicalShadowObservedTurnSeq: 2,
 			}),
 		)
 		expect(out.phase).toBe("streaming")
@@ -234,7 +386,7 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conser
 				canonicalShadow: staleShadow,
 				currentLegacyPhase: "streaming",
 				seq: 5,
-				canonicalShadowSeq: 2,
+				canonicalShadowObservedTurnSeq: 2,
 			}),
 		)
 		expect(out.modelStreaming).toBe(true)
@@ -248,7 +400,7 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conser
 				canonicalShadow: freshShadow,
 				currentLegacyPhase: "streaming",
 				seq: 5,
-				canonicalShadowSeq: 5,
+				canonicalShadowObservedTurnSeq: 5,
 			}),
 		)
 		expect(out.modelStreaming).toBe(true)
@@ -261,7 +413,7 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conser
 				canonicalShadowPhase: "awaiting_followup",
 				currentLegacyPhase: "compacting",
 				seq: 42,
-				canonicalShadowSeq: 42,
+				canonicalShadowObservedTurnSeq: 42,
 			}),
 		)
 		expect(out).toEqual({ phase: "compacting", source: "host", seq: 42 })
@@ -273,155 +425,26 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / conser
 				canonicalShadowPhase: "awaiting_followup",
 				currentLegacyPhase: "streaming",
 				seq: 7,
-				canonicalShadowSeq: 7,
+				canonicalShadowObservedTurnSeq: 7,
 			}),
 		)
 		expect(out).toEqual({ phase: "awaiting_followup", source: "shadow", seq: 7 })
 	})
 
-	it("T14: canonicalShadowSeq === undefined keeps legacy-absent fallback (Hub/Remote)", () => {
+	it("T14: canonicalShadowObservedTurnSeq === undefined keeps legacy-absent fallback (Hub/Remote)", () => {
 		const out = selectTaskHeaderPresentation(
 			taskHeaderInputs({
 				canonicalShadowPhase: "idle",
 				currentLegacyPhase: "streaming",
 				seq: 1,
-				// canonicalShadowSeq intentionally omitted
+				// canonicalShadowObservedTurnSeq intentionally omitted
 			}),
 		)
-		// With undefined canonicalShadowSeq, the staleness gate
-		// does NOT fire — the shadow branch wins, source="shadow".
-		// This is the pre-repair behavior preserved for the
-		// "no observation yet" case.
+		// With undefined canonicalShadowObservedTurnSeq, the
+		// staleness gate does NOT fire — the shadow branch
+		// wins, source="shadow". This is the pre-repair
+		// behavior preserved for the "no observation yet" case.
 		expect(out.phase).toBe("idle")
 		expect(out.source).toBe("shadow")
-	})
-})
-//
-// Reproduces the LIVE capture:
-//
-//   turnState.phase              = "streaming"
-//   taskHeaderPresentation.phase = "idle"   <-- MUST NOT HAPPEN
-//
-// On the current source tree (HEAD = 7caca443b), the selector returns:
-//
-//   { phase: "idle", source: "shadow", seq: <legacy seq> }
-//
-// because canonicalShadowPhase="idle" and branch-3 fires. This RED
-// will FAIL until the repair enforces shadow-vs-legacy generation
-// coherence (Phase 6).
-// ---------------------------------------------------------------------------
-
-describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 / RED", () => {
-	it("THCP11_RED: stale shadow 'idle' MUST NOT override fresh legacy 'streaming' (LIVE capture contradiction)", () => {
-		// Reproduction of the LIVE capture at pubId 15/17 of
-		// taskId 1788189447617_rw5zx epoch=2:
-		//
-		//   turnState.phase              = "streaming"
-		//   taskHeaderPresentation.phase = "idle"
-		//
-		// The selector's input contract (post-REPAIR01):
-		//   - canonicalShadowPhase: the LAST shadow observation
-		//   - currentLegacyPhase:   the LIVE TurnStateTracker phase
-		//   - seq:                  the LIVE legacy seq
-		//   - canonicalShadowSeq:   the shadow's last-observation seq
-		//     (undefined when no shadow observation; otherwise the
-		//     seq the comparator had at its last observation)
-		//
-		// Here the legacy tracker has advanced to seq=5 since the
-		// shadow's last observation at seq=2. The shadow says
-		// "idle" from that prior observation; the selector must
-		// fall through to the legacy branch.
-		const projection = selectTaskHeaderPresentation(
-			taskHeaderInputs({
-				canonicalShadowPhase: "idle",
-				currentLegacyPhase: "streaming",
-				seq: 5,
-				canonicalShadowSeq: 2,
-			}),
-		)
-
-		// CORE RED ASSERTION:
-		//   the published projection MUST agree with the LIVE
-		//   turn phase when the legacy phase says "streaming".
-		//   An "idle" projection alongside a "streaming"
-		//   `turnState` is the defect.
-		expect(projection.phase).not.toBe("idle")
-		// Stronger form: the projection should match the legacy
-		// phase when the shadow is stale (the repair's documented
-		// outcome).
-		expect(projection.phase).toBe("streaming")
-		// The source should also reflect the skew: a stale shadow
-		// does not earn the "shadow" attribution.
-		expect(projection.source).not.toBe("shadow")
-		expect(projection.source).toBe("legacy")
-	})
-
-	it("THCP11_RED_INVERSE: stale shadow 'streaming' MUST NOT override fresh legacy 'completed'", () => {
-		// Mirror case: the shadow was last observed "streaming"
-		// (from a prior turn at seq=8) and the legacy tracker
-		// has since advanced to "completed" at seq=12. The
-		// selector must NOT return "streaming" as the task-header
-		// phase when the legacy phase says "completed".
-		const projection = selectTaskHeaderPresentation(
-			taskHeaderInputs({
-				canonicalShadowPhase: "streaming",
-				currentLegacyPhase: "completed",
-				seq: 12,
-				canonicalShadowSeq: 8,
-			}),
-		)
-		expect(projection.phase).not.toBe("streaming")
-		expect(projection.phase).toBe("completed")
-		expect(projection.source).not.toBe("shadow")
-		expect(projection.source).toBe("legacy")
-	})
-
-	it("THCP11_RED_FRESH_SHADOW_PRESERVED: when the shadow matches the legacy phase, no regression", () => {
-		// The repair MUST NOT regress the "shadow is authoritative
-		// when fresh" property (per the E7.1 / THCP01 contract).
-		// If shadow and legacy both say "streaming" and the
-		// shadow's last observation is at-or-after the legacy's
-		// last transition (canonicalShadowSeq >= seq), the
-		// selector must still return phase="streaming",
-		// source="shadow".
-		const projection = selectTaskHeaderPresentation(
-			taskHeaderInputs({
-				canonicalShadowPhase: "streaming",
-				currentLegacyPhase: "streaming",
-				seq: 5,
-				canonicalShadowSeq: 5,
-			}),
-		)
-		expect(projection).toEqual({ phase: "streaming", source: "shadow", seq: 5 })
-	})
-
-	it("THCP11_THINKING_RED: selectThinkingPresentation modelStreaming must match legacy 'streaming' when shadow is stale", () => {
-		// The thinking projection has the same dual-authority
-		// structure. With a STALE shadow whose
-		// modelStreaming=false (the shadow hasn't observed the
-		// current streaming turn — last observation at seq=2
-		// while legacy is now at seq=5), the current source
-		// returns source="shadow" with modelStreaming=false —
-		// same defect class as THCP11.
-		//
-		// The RED mirrors the THCP11 reproduction exactly.
-		const staleShadow = shadowWith({ modelStreaming: false })
-		const projection = selectThinkingPresentation(
-			thinkingInputs({
-				canonicalShadow: staleShadow,
-				currentLegacyPhase: "streaming",
-				seq: 5,
-				canonicalShadowSeq: 2,
-			}),
-		)
-		// CORE RED ASSERTION: modelStreaming must reflect the
-		// live legacy phase when the shadow is stale (the repair
-		// outcome). On current HEAD (pre-repair), modelStreaming=false
-		// is returned from the shadow branch even though the
-		// legacy phase is "streaming" — same LIVE contradiction
-		// class.
-		expect(projection.modelStreaming).toBe(true)
-		expect(projection.source).not.toBe("shadow")
-		expect(projection.source).toBe("legacy")
 	})
 })

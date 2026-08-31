@@ -110,6 +110,30 @@ export class TaskShadowComparator {
 	private readonly legacyPhases: TurnPhase[] = []
 	private readonly divergences: TaskShadowDivergence[] = []
 	private seq = 0
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
+	 *
+	 * Stores the TurnStateTracker.seq value at the moment the
+	 * comparator accepted its LAST observation. The publication
+	 * selectors use this to detect "shadow is stale relative to
+	 * the legacy tracker" — both sides are compared within the
+	 * SAME TurnState sequence domain (no cross-domain numeric
+	 * comparison; CORRECTION01's review-blocker P0).
+	 *
+	 * `undefined` when:
+	 *   - the comparator has never accepted an observation
+	 *     (`hasObservedShadowState() === false`)
+	 *   - the observation was made by a host without a
+	 *     TurnStateTracker in the same domain (Hub/Remote
+	 *     fallback path), so no TurnState seq was available
+	 *     to stamp.
+	 *
+	 * Initialized at `undefined`; advances to the LAST accepted
+	 * observation's `turnSeq` (overwritten by each new
+	 * observation, not accumulated). Mirrors the public
+	 * `debugSnapshot()` shadow accessor pattern.
+	 */
+	private lastObservedTurnSeq: number | undefined = undefined
 
 	/**
 	 * Feed a runtime event through the shadow and compare against the
@@ -120,9 +144,10 @@ export class TaskShadowComparator {
 		event: AgentRuntimeEvent,
 		legacyPhase: TurnPhase,
 		now: number,
+		turnSeq?: number,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
 		const observation = this.shadow.observeRuntimeEvent(event, now) ?? this.shadow.noop(now)
-		return this.compareWith(observation, legacyPhase, observation.event)
+		return this.compareWith(observation, legacyPhase, observation.event, turnSeq)
 	}
 
 	/**
@@ -133,18 +158,21 @@ export class TaskShadowComparator {
 		msg: TaskMsg,
 		legacyPhase: TurnPhase,
 		now: number,
+		turnSeq?: number,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
 		const observation = this.shadow.observe(msg, now)
-		return this.compareWith(observation, legacyPhase, msg.type)
+		return this.compareWith(observation, legacyPhase, msg.type, turnSeq)
 	}
 
 	private compareWith(
 		observation: TaskShadowObservation,
 		legacyPhase: TurnPhase,
 		event: TaskMsg["type"] | "noop",
+		turnSeq?: number,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
 		this.seq += 1
 		this.legacyPhases.push(legacyPhase)
+		this.lastObservedTurnSeq = turnSeq
 		const shadowPhase = toLegacyPhase(observation.projections.turnPhase)
 		if (shadowPhase !== legacyPhase) {
 			const divergence: TaskShadowDivergence = {
@@ -179,6 +207,7 @@ export class TaskShadowComparator {
 		this.divergences.length = 0
 		this.legacyPhases.length = 0
 		this.seq = 0
+		this.lastObservedTurnSeq = undefined
 	}
 
 	/**
@@ -192,26 +221,24 @@ export class TaskShadowComparator {
 	}
 
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02:
 	 *
-	 * Read-only accessor for the comparator's monotonic
-	 * observation seq. Used by the wiring's
-	 * `getLastObservedShadowSeq()` accessor to surface the
-	 * shadow's generation to the publication selectors, so the
-	 * selectors can detect "shadow is stale relative to the
-	 * legacy tracker" and forbid the LIVE contradiction where
-	 * a stale `getLastObservedShadowPhase()` would override a
-	 * fresh `turnStateTracker.currentPhase`.
+	 * Read-only accessor for the TurnStateTracker.seq value at
+	 * the moment the comparator accepted its LAST observation.
+	 * Both sides of the publication-selector staleness gate
+	 * (`seq > canonicalShadowObservedTurnSeq`) are now in the
+	 * SAME TurnState sequence domain — the CORRECTION01
+	 * cross-domain comparison is removed.
 	 *
-	 * Returns 0 when the comparator has never accepted an
-	 * observation (i.e. `hasObservedShadowState() === false`).
-	 * The wiring's accessor wraps this with the
-	 * `hasObservedShadowState()` presence gate and returns
-	 * `undefined` for the absence case — so production
-	 * consumers never see `0`.
+	 * Returns `undefined` when the comparator has never accepted
+	 * an observation, or when the observation lacked a
+	 * TurnState-domain seq (Hub/Remote fallback).
+	 *
+	 * The wiring's `getLastObservedTurnSeq()` accessor wraps this
+	 * with the `hasObservedShadowState()` presence gate.
 	 */
-	debugObservedSeq(): number {
-		return this.seq
+	debugLastObservedTurnSeq(): number | undefined {
+		return this.lastObservedTurnSeq
 	}
 
 	/**
