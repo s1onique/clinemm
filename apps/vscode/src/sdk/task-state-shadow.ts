@@ -27,7 +27,15 @@ import type { TurnPhase } from "@/shared/ExtensionMessage"
 // `TaskModel` member is not promoted to a top-level package export.
 type TaskModel = TaskState.TaskModel
 
-const { TaskStateShadow } = TaskState
+// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
+// canonical structural equality over two `TaskModel`s from
+// `@cline/agents/runtime/state/task-state/model.ts`. Used to
+// distinguish "observation materially changed the model" from
+// "observation was a semantic no-op at the reducer" (e.g.
+// `approval_resolved` with no active approval
+// — `task-state.update.test.ts:312`).
+const { TaskStateShadow, isSameTaskModel } = TaskState
+
 type TaskMsg = TaskState.TaskMsg
 type TaskShadowObservation = TaskState.TaskShadowObservation
 
@@ -111,36 +119,51 @@ export class TaskShadowComparator {
 	private readonly divergences: TaskShadowDivergence[] = []
 	private seq = 0
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
 	 *
-	 * Stores the TurnStateTracker.seq value at the moment the
-	 * comparator accepted its LAST observation that **yielded
-	 * the projected phase at the key**. This is a phase-keyed
-	 * stamp (NOT a single observation-stamp), so a no-op
-	 * observation that yields the same projection as the prior
-	 * observation does NOT advance the stamp for that phase.
+	 * Phase-keyed TurnStateTracker.seq stamp. Advances only
+	 * when a non-`"noop"` observation MATERIALLY MUTATES the
+	 * shadow model — i.e. when the canonical structural
+	 * equality `isSameTaskModel(preModel, postModel) === false`,
+	 * OR this is the comparator's very first observation
+	 * (no pre-model to compare against).
 	 *
-	 * Rationale (CORRECTION03 review-blocker P0
-	 * HALT_SHADOW_PHASE_STAMP_NOT_BOUND_TO_PROJECTION):
-	 * the publication-selector staleness gate compares
-	 * `publication.seq > lastStamp`. If the gate is keyed by
-	 * the *phase* the shadow currently projects — not by the
-	 * *last* observation cardinality — then a noop
-	 * observation under a fresh TurnState generation that
-	 * leaves the shadow projection unchanged can no longer
-	 * bypass the gate (the stamp for that unchanged phase
-	 * still points at the older generation).
+	 * Rationale — chain of corrections:
+	 *
+	 *   CORRECTION02:
+	 *     P0 `HALT_SEQ_DOMAIN_IDENTITY_NOT_PROVEN`.
+	 *     Stamp was on a single `number | undefined`, sampled
+	 *     from `turnStateTracker.get().seq` at observation.
+	 *
+	 *   CORRECTION03:
+	 *     P0 `HALT_SHADOW_PHASE_STAMP_NOT_BOUND_TO_PROJECTION`.
+	 *     Stamp is now per-phase (`Map<TurnPhase, ...>`) and
+	 *     gated on `event !== "noop"` (adapter-generated
+	 *     `"noop"` sentinels don't refresh).
+	 *
+	 *   CORRECTION04 (this entry):
+	 *     P0 `HALT_PHASE_STAMP_ADVANCES_ON_SEMANTIC_NOOP`.
+	 *     The `event !== "noop"` rule was a label-based proxy
+	 *     for mutation. The production reducer accepts
+	 *     non-`"noop"` TaskMsgs as semantic no-ops — e.g.
+	 *     "an approval_resolved WITHOUT an active approval
+	 *     is a no-op" (`task-state.update.test.ts:312`).
+	 *     The label proxy permitted those to bypass the gate
+	 *     too, restoring the LIVE contradiction. CORRECTION04
+	 *     replaces the label proxy with the canonical
+	 *     structural-equality check on the shadow model.
 	 *
 	 * `undefined` when:
-	 *   - the comparator has never accepted an observation
-	 *     yielding this phase
+	 *   - the comparator has never accepted a model-material
+	 *     observation yielding this phase
 	 *   - the observation was made by a host without a
 	 *     TurnStateTracker in the same domain (Hub/Remote
 	 *     fallback path), so no TurnState seq was available
 	 *     to stamp
 	 *
 	 * Initialized lazily — entries are added when
-	 * `compareWith` first observes that phase.
+	 * `compareWith` first sees a model-material observation
+	 * yielding that phase.
 	 */
 	private lastObservedTurnSeqByPhase = new Map<TurnPhase, number | undefined>()
 
@@ -155,8 +178,17 @@ export class TaskShadowComparator {
 		now: number,
 		turnSeq?: number,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
+		// Snapshot the shadow model BEFORE replaying the
+		// runtime event so `compareWith` can detect "this
+		// observation materially changed the model" via
+		// `isSameTaskModel`. Semantic-noop observations
+		// (e.g. `approval_resolved` with no active approval
+		// — `task-state.update.test.ts:312`) leave the model
+		// untouched; the stamp MUST NOT advance on those.
+		const preModel = this.hasObservedShadowState() ? this.shadow.debugSnapshot() : null
 		const observation = this.shadow.observeRuntimeEvent(event, now) ?? this.shadow.noop(now)
-		return this.compareWith(observation, legacyPhase, observation.event, turnSeq)
+		return this.compareWith(observation, legacyPhase, observation.event, turnSeq, preModel)
 	}
 
 	/**
@@ -169,8 +201,13 @@ export class TaskShadowComparator {
 		now: number,
 		turnSeq?: number,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
+		// Same-domain snapshot for `observeTaskMsg` (test seam
+		// and any direct TaskMsg path). See the comment on
+		// `observeRuntimeEvent` above.
+		const preModel = this.hasObservedShadowState() ? this.shadow.debugSnapshot() : null
 		const observation = this.shadow.observe(msg, now)
-		return this.compareWith(observation, legacyPhase, msg.type, turnSeq)
+		return this.compareWith(observation, legacyPhase, msg.type, turnSeq, preModel)
 	}
 
 	private compareWith(
@@ -178,28 +215,55 @@ export class TaskShadowComparator {
 		legacyPhase: TurnPhase,
 		event: TaskMsg["type"] | "noop",
 		turnSeq?: number,
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
+		// Pre-observation snapshot of the shadow model —
+		// `null` when this is the comparator's very first
+		// observation (no model has been recorded yet;
+		// the first observation always establishes a phase
+		// projection and is allowed to stamp).
+		preModel: TaskModel | null = null,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
 		this.seq += 1
 		this.legacyPhases.push(legacyPhase)
-		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03:
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
 		// Stamp the TurnStateTracker.seq value keyed by the
 		// PHASE the comparator is currently observing (the
 		// shadow's projected phase), BUT ONLY when this
-		// observation actually represents a transition into
-		// the phase. The `"noop"` sentinel means the runtime
-		// event had no shadow analogue and the shadow state
-		// was simply re-read (compareWith-shadow-adapter.ts:212
-		// in the agents package); for these, the phase
-		// projection is established by a PRIOR observation
-		// under a PRIOR TurnState generation. Re-stamping
-		// would lose that invariant.
+		// observation materially CHANGED the shadow model.
 		//
-		// Invariant preserved: for any phase P the map keys,
+		// The previous rule (CORRECTION03,
+		// "only when `event !== "noop"`") was a label-based
+		// proxy for mutation. The production shadow reducer
+		// has documented semantic-noop paths
+		// (`task-state.update.test.ts:312` and
+		// `task-state.update.test.ts:335`):
+		//   "an approval_resolved WITHOUT an active approval
+		//    is a no-op"
+		// i.e. a perfectly valid TaskMsg with a non-`"noop"`
+		// event label that the reducer accepts but leaves
+		// the model untouched. The label-based rule cannot
+		// distinguish those from real mutations.
+		//
+		// CORRECTION04 replaces the label proxy with the
+		// canonical structural-equality check
+		// `isSameTaskModel` (`@cline/agents/.../model.ts`).
+		// The stamp advances only when the model
+		// structurally changed, OR when this is the very
+		// first observation (no pre-model to compare
+		// against). Every other observation — adapter
+		// `"noop"` sentinels, semantic no-ops at the
+		// reducer, same-phase reads — leaves the stamp at
+		// the generation it was last established under.
+		//
+		// Invariant preserved: for any phase P the map
+		// keys,
 		//   lastObservedTurnSeqByPhase[P] === N
-		// ⇔ a NON-NOOP observation yielded a transition that
-		//   established phase P under TurnState generation N.
+		// ⇔ a NON-NOOP, model-material observation yielded
+		//   a transition that established phase P under
+		//   TurnState generation N.
 		const shadowPhase = toLegacyPhase(observation.projections.turnPhase)
-		if (event !== "noop") {
+		const materialMutation = preModel === null ? true : !isSameTaskModel(preModel, observation.model)
+		if (event !== "noop" && materialMutation) {
 			this.lastObservedTurnSeqByPhase.set(shadowPhase, turnSeq)
 		}
 		if (shadowPhase !== legacyPhase) {

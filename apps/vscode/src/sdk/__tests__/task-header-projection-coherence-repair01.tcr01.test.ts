@@ -66,6 +66,29 @@ interface ProductionSeamFixture {
 	readonly comparator: TaskShadowComparator
 	observeViaCanonicalShadow(): TurnPhase
 	observeNoopViaCanonicalShadow(turnSeq?: number): TurnPhase
+	/**
+	 * CORRECTION04 discriminator: drive a real TaskMsg whose
+	 * event label is non-`"noop"` but which the reducer
+	 * accepts as a semantic no-op (the model does not
+	 * change). The canonical example is
+	 * `approval_resolved` with no active approval
+	 * (`task-state.update.test.ts:312`):
+	 *   "an approval_resolved WITHOUT an active approval
+	 *    is a no-op"
+	 */
+	observeSemanticNoopApprovalResolved(): TurnPhase
+	/**
+	 * CORRECTION04 helper: drive a streaming projection by
+	 * feeding `model_stream_started` to the shadow.
+	 */
+	observeStreamingStart(): TurnPhase
+	/**
+	 * CORRECTION04 positive-control helper: drive
+	 * `tool_started` (materially mutates the model by
+	 * adding to `activeToolCallIds`; projected phase
+	 * `streaming` stays `streaming`).
+	 */
+	observeToolStarted(toolCallId: string): TurnPhase
 	currentShadowPhase(): TurnPhase | undefined
 }
 
@@ -127,6 +150,42 @@ function fixture(): ProductionSeamFixture {
 			const model = comparator.debugSnapshot()
 			const canonical = TaskState.projectTurnState(model)
 			return toLegacyPhase(canonical)
+		},
+		observeSemanticNoopApprovalResolved(): TurnPhase {
+			// CORRECTION04 discriminator: a real TaskMsg
+			// (`approval_resolved`) that the production reducer
+			// accepts as a semantic no-op. The shadow model is
+			// unchanged; the event label is non-`"noop"`.
+			// Per CORRECTION04 invariant, this MUST NOT
+			// advance the phase-keyed stamp.
+			const now = Date.now()
+			comparator.observeTaskMsg({ type: "approval_resolved", at: now }, tracker.currentPhase, now, tracker.get().seq)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			return toLegacyPhase(TaskState.projectTurnState(model))
+		},
+		observeStreamingStart(): TurnPhase {
+			// CORRECTION04 helper: drive `model_stream_started`
+			// through the comparator so the shadow projects
+			// "streaming" (modelStreaming=true). Used by the
+			// positive control.
+			const now = Date.now()
+			comparator.observeTaskMsg({ type: "model_stream_started", at: now }, tracker.currentPhase, now, tracker.get().seq)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			return toLegacyPhase(TaskState.projectTurnState(model))
+		},
+		observeToolStarted(toolCallId: string): TurnPhase {
+			// CORRECTION04 positive control: `tool_started`
+			// materially mutates the model
+			// (`activeToolCallIds.push(toolCallId)`) without
+			// changing the projected phase. The model-change
+			// rule SHOULD advance the stamp.
+			const now = Date.now()
+			comparator.observeTaskMsg({ type: "tool_started", toolCallId, at: now }, tracker.currentPhase, now, tracker.get().seq)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			return toLegacyPhase(TaskState.projectTurnState(model))
 		},
 	}
 }
@@ -342,6 +401,88 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 		// stamp to be bound to the projected phase.
 		expect(projection.phase).not.toBe("idle")
 		expect(projection.phase).toBe("streaming")
+	})
+
+	// -----------------------------------------------------------------------
+	// CORRECTION04 adversarial RED
+	// (HALT_PHASE_STAMP_ADVANCES_ON_SEMANTIC_NOOP):
+	//
+	// CORRECTION03's stamping rule is "only update the phase-keyed
+	// stamp when `event !== \"noop\"`". But the production shadow
+	// reducer has a documented semantic-noop path
+	// (`task-state.update.test.ts:312` and `update.ts:113`):
+	//   "an approval_resolved WITHOUT an active approval is a
+	//    no-op"
+	// i.e. a perfectly valid TaskMsg with a non-`"noop"` event
+	// label that the reducer accepts but leaves the model
+	// untouched. The current rule cannot distinguish a
+	// semantic-noop TaskMsg from one that actually mutates
+	// state -- both pass the `event !== \"noop\"` test.
+	//
+	// CORE ASSERTION: a real TaskMsg that does NOT mutate the
+	// shadow model (semantic no-op) MUST NOT bypass the
+	// staleness gate. The CORRECTION04 repair binds the stamp
+	// to ACTUAL model mutation, not event-label.
+	// -----------------------------------------------------------------------
+	it("THCP11_C04_RED: real TaskMsg that is a semantic no-op MUST NOT bypass the staleness gate", () => {
+		const fx = fixture()
+		fx.tracker.set("idle")
+		fx.observeViaCanonicalShadow()
+		const seqAtIdle = fx.tracker.get().seq
+		const stampAtIdle = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
+		expect(stampAtIdle).toBe(seqAtIdle)
+		expect(fx.currentShadowPhase()).toBe("idle")
+
+		fx.tracker.set("streaming")
+		const seqAfterStreaming = fx.tracker.get().seq
+		expect(seqAfterStreaming).toBeGreaterThan(seqAtIdle)
+		expect(fx.currentShadowPhase()).toBe("idle")
+
+		// Real TaskMsg, non-"noop" event label, but a semantic
+		// no-op at the reducer (approval_resolved with no
+		// active approval). Per CORRECTION04 invariant, this
+		// MUST NOT advance the phase-keyed stamp.
+		fx.observeSemanticNoopApprovalResolved()
+		const stampAfterSemanticNoop = fx.comparator.debugLastObservedTurnSeqForPhase("idle")
+		expect(stampAfterSemanticNoop).toBe(seqAtIdle)
+		expect(stampAfterSemanticNoop).not.toBe(seqAfterStreaming)
+		expect(fx.currentShadowPhase()).toBe("idle")
+
+		const projection = selectTaskHeaderPresentation({
+			canonicalShadowPhase: fx.currentShadowPhase(),
+			currentLegacyPhase: fx.tracker.currentPhase,
+			seq: fx.tracker.get().seq,
+			canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeqForPhase(fx.currentShadowPhase() ?? "idle"),
+		})
+		expect(projection.phase).not.toBe("idle")
+		expect(projection.phase).toBe("streaming")
+	})
+
+	// -----------------------------------------------------------------------
+	// CORRECTION04 positive control (regression guard):
+	// Same-phase mutation that materially changes the model
+	// (e.g. another tool starting while already "streaming")
+	// SHOULD advance the phase-keyed stamp -- otherwise the
+	// repair degenerates into "stamp only on phase changes."
+	// -----------------------------------------------------------------------
+	it("THCP11_C04_POSITIVE: real TaskMsg that materially mutates the model without changing phase SHOULD advance the stamp", () => {
+		const fx = fixture()
+		fx.tracker.set("idle")
+		fx.observeViaCanonicalShadow()
+		fx.observeStreamingStart()
+		const seqAtStreaming = fx.tracker.get().seq
+		const stampAtStreaming = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+		expect(stampAtStreaming).toBe(seqAtStreaming)
+		expect(fx.currentShadowPhase()).toBe("streaming")
+
+		fx.tracker.set("streaming")
+		const seqAfterToolStart = fx.tracker.get().seq
+		expect(seqAfterToolStart).toBeGreaterThan(seqAtStreaming)
+		fx.observeToolStarted("toolA")
+		expect(fx.currentShadowPhase()).toBe("streaming")
+		const stampAfterToolStart = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+		expect(stampAfterToolStart).toBe(seqAfterToolStart)
+		expect(stampAfterToolStart).toBeGreaterThan(seqAtStreaming)
 	})
 })
 // ---------------------------------------------------------------------------
