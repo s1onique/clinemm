@@ -228,17 +228,21 @@ If the operator / product owner chooses CAPTURE_INSUFFICIENT:
 ## 11. ACT closure (this ACT, the recon)
 
 ```text
-STATUS                 = RECON_COMPLETE / NO_REPAIR / NO_RED
+STATUS                 = RECON_COMPLETE / NO_REPAIR / NO_RED / CLOSED
 BOUNDARY               = policy/contract reconciliation, not repair
 SOURCE_SEAM_MAP        = .factory/evidence/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01/source-seam-map.md
 ADVERSARIAL_INVENTORY  = .factory/evidence/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01/adversarial-case-inventory.md
 FINAL_REPORT           = .factory/evidence/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01/final-report.md
-DECISION_PENDING       = operator / product owner
-54T24A8CE5_CLASS       = NOT_A_DEFECT_UNTIL_POLICY_DECISION_LANDS
-R5_LANE                = STILL OPEN (separate from this ACT)
-CORRECTION02_LANE      = CLOSED (no impact)
+VERDICT_RECORD         = .factory/evidence/ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01/verdict-record.md
+DECISION               = NOT_A_DEFECT_POLICY_EXPECTED
+POLICY                 = WORKSPACE_IS_DATA_AUTHORITY_BOUNDARY
+54T24A8CE5             = CLOSED_EXPECTED
+R5_MANUAL_APPROVAL_LANE = STILL OPEN (new trigger shape documented in §13;
+                        awaiting genuinely erroneous specimen only)
+CORRECTION02_LANE      = CLOSED (no impact; sibling defect, not this lane)
 PRODUCTION_DELTA       = NONE
-FACTORY_BOARD_DELTA    = epic-board.md + safe-yolo-seatbelt.md updated
+C1_VERDICT             = GO  (operator: "No outside-read REPAIR01")
+BOARD_DELTA            = epic-board.md + safe-yolo-seatbelt.md updated
 ```
 
 ---
@@ -266,4 +270,168 @@ Upstream basis (context, not proof):
   "autoApprove: true means run without asking; Cline also supports
   command-permission restrictions separately."
 ```
+
+
+## 13. Operator verdict (post-ACT, recorded for closure)
+
+**Recorded by:** operator (Product-security architect + Factory reviewer) on 2026-08-31 via the verdict prompt.
+
+```text
+ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01
+
+DECISION =
+  NOT_A_DEFECT_POLICY_EXPECTED
+
+POLICY =
+  workspace realpath authority IS a data-authority boundary;
+  ALL does NOT bypass it
+
+54T24A8CE5 =
+  CLOSED_EXPECTED
+
+PRODUCTION_CHANGE =
+  NONE
+
+R5_MANUAL_APPROVAL_LANE =
+  OPEN, awaiting genuinely erroneous specimen
+
+NEXT_R5_TRIGGER =
+  ASK under ALL+mandatorySeatbelt where ALL applicable authority
+  conditions ARE satisfied:
+    - mode = all
+    - mandatorySeatbelt = true
+    - all path-bearing operands INSIDE authorized workspace roots
+      (or no path authority is relevant)
+    - no explicit deny / hard floor / missing evidence
+  BUT finalDecision = ask AND approval UI published
+
+C1: GO. No outside-read REPAIR01.
+```
+
+
+### Why `ALL` does NOT override workspace authority
+
+Upstream Cline `autoApprove: true` baseline executes tools without asking, but separately supports conditional permission logic and warns that "auto approve everything" is appropriate only in a fully trusted or sufficiently sandboxed environment. ClineMM is intentionally stronger than that baseline. The operator authoritative definition of `ALL`:
+
+> **Auto-approve every operation that has already satisfied the applicable security/data-authority constraints.**
+
+Not:
+
+> Bypass all authorization boundaries.
+
+This gives `ALL` coherent semantics without turning it into `--dangerously-disable-everything`:
+
+```text
+  explicit DENY              still wins
+  stale authority evidence   still fails closed
+  risk hard floor            still wins
+  outside data authority     still asks
+  mandatory Seatbelt         controls execution after ALLOW
+```
+
+### Why `54T24A8CE5` specifically is EXPECTED
+
+The outside operand on the live specimen was:
+
+```text
+  /etc/profiles/per-user/chistyakov/bin/codium-clinemm
+```
+
+It happens to be benign. But the policy cannot safely distinguish benign by inspecting the file content — the same primitive can target:
+
+```text
+  ~/.aws/credentials
+  ~/.kube/config
+  ~/.netrc
+  ~/.git-credentials
+  ~/.bash_history  ~/.zsh_history  ~/.python_history
+  ~/.mysql_history  ~/.psql_history
+  ~/.ssh/config    ~/.ssh/known_hosts    ~/.ssh/known_hosts2
+  /Users/<other-user>/...
+  /Volumes/<other-volume>/...
+  /etc/passwd      /etc/shadow (perms-dependent)
+```
+
+(See `adversarial-case-inventory.md` §2 for the full inventory.) The manual prompt was correct; the live ASK is the policy working as intended, not a defect.
+
+
+
+### Out of scope for this lane (recorded, NOT acted on)
+
+The operator surfaced one **P2 product-copy/usability item** that this ACT does NOT touch:
+
+```text
+  Current UI copy:  "Auto-approve: ⚡ ALL — this task"
+  Suggests:         "I will never be asked."
+  Reality:          "ALL eligible operations, subject to security/
+                     data-authority gates."
+
+  Future UX copy (suggested):  "Auto-approve: ALL safe operations"
+  or shorter:                  "Auto-approve: ALL*"
+  with explanation:
+    "Operations crossing workspace, security, or explicit-deny
+     boundaries can still require approval."
+```
+
+This is a separate small product-copy/usability item. It is NOT part of this R5 lane and is NOT introduced by any production change here.
+
+### P2 residue items in the supplied digest (recorded, NOT acted on)
+
+Per operator: "None should block execution under our policy."
+
+```text
+  - git diff --check: four blank lines at EOF
+  - gate-summary:     stale/invalid schema
+  - Leamas:           generator/subject identity warning
+```
+
+These are pre-existing P2 hygiene items outside the scope of this ACT and the safe-yolo-seatbelt epic. They do not affect the verdict or the closure of this ACT.
+
+### Verbatim sources cited by the operator (post-ACT, recorded for completeness)
+
+```text
+  [1] anthropic-experimental/sandbox-runtime  (upstream default read model:
+      "allow everywhere unless denied"; doc recommends denying broad
+      host regions and selectively re-allowing the workspace when
+      filesystem confidentiality matters)
+
+  [2] cline/cline/docs/sdk/guides/permission-handling.mdx  (upstream
+      autoApprove baseline: "run without asking" + separate command-
+      permission restrictions; warns "auto approve everything" only in
+      fully trusted or sufficiently sandboxed environment)
+```
+
+These corroborate the policy semantics but are NOT proof of ClineMM intent; ClineMM is intentionally stronger than the upstream default.
+
+
+---
+
+## 14. Closure summary
+
+```text
+ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01
+
+PRE-VERDICT (this ACT produced):
+  POLICY_INTENT_FOR_OUTSIDE_READS_UNDER_ALL_SEATBELT =
+    UNDOCUMENTED_OR_AMBIGUOUS_IN_SOURCE
+  54T24A8CE5_CLASS =
+    NOT_A_DEFECT_UNTIL_POLICY_DECISION_LANDS
+
+POST-VERDICT (operator decision):
+  DECISION  = NOT_A_DEFECT_POLICY_EXPECTED
+  POLICY    = WORKSPACE_IS_DATA_AUTHORITY_BOUNDARY
+  54T24A8CE5 = CLOSED_EXPECTED
+
+CLOSED_PASS_RECON_NO_DEFECT_FOUND_V1
+
+NEXT_R5_TRIGGER_SHAPE =
+  ASK under ALL+mandatorySeatbelt where ALL applicable authority
+  conditions ARE satisfied
+  (see §13 for the precise predicate)
+
+PRODUCTION_DELTA = NONE
+PENDING_ITEMS    = 1 P2 UX-copy residue (out of lane; see §13)
+```
+
+---
 
