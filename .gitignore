@@ -181,6 +181,19 @@ apps/examples/desktop-app/.cursor/settings.json
 # survive a fresh clone (mirroring the prior editor-tool-recon ACT's
 # durability pattern).
 !/.factory/acts/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01.md
+# ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01: successor ACT to the halted
+# DOGFOOD-DIAGNOSTIC-PROFILE ACT. Authored 2026-08-31 per Factory causal
+# reviewer; establishes the extension-side runtime identity resolver
+# (`resolveClineMmRuntimeProfile` + `isDogfoodRuntime`) at
+# `apps/vscode/src/sdk/dogfood-runtime-profile.ts` with frozen
+# `CLINEMM_RUNTIME_PROFILE=dogfood` contract. Status
+# `PASS_DOGFOOD_RUNTIME_IDENTITY_V1_STRUCTURAL` +
+# `HALT_LAUNCHER_SOURCE_UNBOUND` (the launcher-side producer is
+# operator-owned and not visible to this shell). The epic ledger at
+# .factory/epic-board.md row 20 binds to this ACT file, so it must be
+# durably tracked (mirroring the prior identity-halt ACT's durability
+# pattern).
+!/.factory/acts/ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01.md
 # Same durable-binding reason as the ACT file above.
 # Mirror the .factory/acts/ default-deny + whitelist pattern:
 #   1. re-include the .factory/evidence/ directory so git can recurse,
