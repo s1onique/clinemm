@@ -591,4 +591,57 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			expect(screen.queryByTestId("task-header-mechanism-total")).toBeNull()
 		})
 	})
+
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	describe("diagnostic-knob indicator", () => {
+		it("hides the indicator when diagnosticKnobs is undefined", () => {
+			render(<TaskHeaderTelemetry telemetry={telemetry()} turnState={ts("streaming")} />)
+			expect(screen.queryByTestId("task-header-diagnostic-knobs")).toBeNull()
+		})
+
+		it("hides the indicator when all knobs are OFF (public default)", () => {
+			render(
+				<TaskHeaderTelemetry
+					diagnosticKnobs={{ v: false, i: false, a: false, p: false }}
+					telemetry={telemetry()}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.queryByTestId("task-header-diagnostic-knobs")).toBeNull()
+		})
+
+		it("renders 'VIP' for the canonical dogfood initial render", () => {
+			render(
+				<TaskHeaderTelemetry
+					diagnosticKnobs={{ v: true, i: true, a: false, p: true }}
+					telemetry={telemetry()}
+					turnState={ts("streaming")}
+				/>,
+			)
+			const indicator = screen.getByTestId("task-header-diagnostic-knobs")
+			expect(indicator.textContent).toBe("VIP")
+		})
+
+		it("renders 'VIAP' when all four knobs are ON (future A probe landed)", () => {
+			render(
+				<TaskHeaderTelemetry
+					diagnosticKnobs={{ v: true, i: true, a: true, p: true }}
+					telemetry={telemetry()}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAP")
+		})
+
+		it("renders 'IP' when V is overridden off in dogfood", () => {
+			render(
+				<TaskHeaderTelemetry
+					diagnosticKnobs={{ v: false, i: true, a: false, p: true }}
+					telemetry={telemetry()}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("IP")
+		})
+	})
 })

@@ -99,6 +99,21 @@ interface TaskHeaderTelemetryProps {
 	telemetry: TaskHeaderTelemetryStrip | undefined
 	taskHeaderPresentation: TaskHeaderPresentationProjection | undefined
 	turnState: TurnState | undefined
+	/**
+	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	 * Effective diagnostic-knob state from the host. When present
+	 * AND at least one knob is ON, the indicator renders the active
+	 * letters (e.g. `"VIP"`) at the right of the row. When absent or
+	 * all-OFF (the public default), the indicator is hidden entirely.
+	 */
+	diagnosticKnobs?:
+		| {
+				readonly v: boolean
+				readonly i: boolean
+				readonly a: boolean
+				readonly p: boolean
+		  }
+		| undefined
 }
 
 const LIVE_TICK_MS = 1_000
@@ -164,7 +179,12 @@ function MechanismChip({ descriptor, count }: { descriptor: MechanismDescriptor;
 	)
 }
 
-const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, taskHeaderPresentation, turnState }) => {
+const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
+	telemetry,
+	taskHeaderPresentation,
+	turnState,
+	diagnosticKnobs,
+}) => {
 	const state = taskHeaderPresentationStateLabel(taskHeaderPresentation, turnState)
 	// Local presentation timer — DOES NOT mutate telemetry authority.
 	// We re-read telemetry.startedAt/endedAt each tick so the value
@@ -209,6 +229,25 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, ta
 	// calls: 10` against `visible: 🔧9 ✏️3 >_3 ...`).
 	const mechanism = telemetry.mechanism
 	const hasMechanismProjection = isUsableMechanismProjection(mechanism, telemetry.toolCalls)
+
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	// Compose the diagnostic-knob indicator from the host-supplied
+	// `diagnosticKnobs` field. Empty string -> nothing to render
+	// (the public default). Non-empty -> render the letters in the
+	// canonical V → I → A → P order (matches the host resolver's
+	// `formatEffectiveKnobLetters` output, mirrored here so the
+	// webview can render without re-importing the host resolver).
+	const indicatorLetters = diagnosticKnobs
+		? [
+				diagnosticKnobs.v ? "V" : "",
+				diagnosticKnobs.i ? "I" : "",
+				diagnosticKnobs.a ? "A" : "",
+				diagnosticKnobs.p ? "P" : "",
+			].join("")
+		: ""
+	const tooltipBody = diagnosticKnobs
+		? `V=${diagnosticKnobs.v ? "on" : "off"}, I=${diagnosticKnobs.i ? "on" : "off"}, A=${diagnosticKnobs.a ? "on" : "off"}, P=${diagnosticKnobs.p ? "on" : "off"}`
+		: ""
 
 	return (
 		<div
@@ -263,6 +302,23 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({ telemetry, ta
 					title="Cumulative failures counted toward bounded-recovery episode limits (the recovery second-stage counter). Only grows while the recovery second stage is idle — armed / terminating state does not increment it.">
 					<span aria-hidden>↻</span>
 					<span className="font-mono">{telemetry.recoveryBudgetFailures}</span>
+				</span>
+			) : null}
+			{/* ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+			    Diagnostic-knob indicator. Rendered ONLY when at least one
+			    knob is ON. In public the field is all-false and the
+			    indicator stays hidden — the operator-facing contract is
+			    that diagnostic letters are visible iff dogfood diagnostics
+			    are active. The order is canonical V → I → A → P. The
+			    tooltip enumerates the knobs so the user can hover to see
+			    what each letter means. */}
+			{indicatorLetters ? (
+				<span
+					aria-label={`Diagnostic knobs active: ${tooltipBody}`}
+					className="inline-flex items-center gap-0.5 px-1 rounded-sm bg-badge-foreground/15 font-mono"
+					data-testid="task-header-diagnostic-knobs"
+					title={tooltipBody}>
+					<span aria-hidden>{indicatorLetters}</span>
 				</span>
 			) : null}
 		</div>

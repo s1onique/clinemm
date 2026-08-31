@@ -119,6 +119,28 @@ export interface ExtensionState {
 	 */
 	taskTelemetry?: TaskHeaderTelemetryStrip
 	/**
+	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	 * effective diagnostic-knob state for the current extension host
+	 * runtime. Computed host-side by
+	 * {@link resolveEffectiveDiagnosticKnobs} from
+	 * `isDogfoodRuntime()` + env overrides + the resolved V2 capture
+	 * path. The webview TaskHeader indicator renders the letters V / I
+	 * / A / P in canonical order (e.g. `"VIP"` for the dogfood initial
+	 * render). Hidden entirely in public (when `isDogfood === false`
+	 * all four are false and the field is omitted from the UI).
+	 *
+	 * Wire contract: always present. Each knob is a boolean. `a` is
+	 * hard-coded false in this ACT (the probe is not landed; only the
+	 * `CANCEL-AFFORDANCE-AUTHORITY-RECON` ACT may flip it via the same
+	 * resolver).
+	 */
+	diagnosticKnobs?: {
+		readonly v: boolean
+		readonly i: boolean
+		readonly a: boolean
+		readonly p: boolean
+	}
+	/**
 	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
 	 *
 	 * The webview-facing projection of the canonical TaskState shadow for

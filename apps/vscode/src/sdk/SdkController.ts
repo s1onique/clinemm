@@ -76,6 +76,9 @@ import { AuthService, LogoutReason } from "./auth-service"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
+import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
+import { resolveAutoV2CapturePath } from "./dogfood-runtime-capture-path"
+import { isDogfoodRuntime } from "./dogfood-runtime-profile"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
@@ -162,7 +165,7 @@ import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
 import { TurnStateTracker } from "./turn-state-tracker"
-import { emitV2Capture } from "./v2-capture"
+import { emitV2Capture, resolveCapturePathForProfile } from "./v2-capture"
 import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
 import { VscodeSessionHost } from "./vscode-session-host"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
@@ -460,7 +463,23 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 		// This probe is the BLOCKING gate for the LIVE-failure
 		// investigation (Case S1 vs S2 vs S3 classification tree):
 		// the next ACT cannot proceed without this capture.
-		if (process.env.CLINEMM_DIAG_INPUT_SHAPE_V2) {
+		//
+		// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+		// Auto-enable in dogfood via the diagnostic-profile resolver.
+		// The resolver's `i` knob flips ON by default when
+		// `isDogfoodRuntime === true` and is honored here so a dogfood
+		// install does NOT require the operator to manually export the
+		// env var (the manual env var remains the public-install opt-in
+		// path, preserved for the CORRECTION02 owner ACT). The gate is
+		// computed once per call and consulted in place of the bare
+		// `process.env` check below.
+		const iProfile = resolveEffectiveDiagnosticKnobs(
+			process.env,
+			isDogfoodRuntime(process.env),
+			resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+		)
+		const inputShapeGate = Boolean(process.env.CLINEMM_DIAG_INPUT_SHAPE_V2) || iProfile.i
+		if (inputShapeGate) {
 			const toolInputRecord = toolInput && typeof toolInput === "object" ? (toolInput as Record<string, unknown>) : null
 			const inputForm: "command" | "commands" | "other" = toolInputRecord
 				? "commands" in toolInputRecord
@@ -3888,6 +3907,27 @@ export class Controller {
 				// canonical projection (it already returns the strip-or-
 				// undefined shape the wire field expects).
 				taskTelemetry: this.taskTelemetry.get(),
+				// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+				// Project the EFFECTIVE diagnostic-knob state to the
+				// webview. The TaskHeader indicator renders the active
+				// letters (e.g. `"VIP"` for the dogfood initial render).
+				// In public all four are false and the field is still
+				// emitted (so the UI's optional-chain check is stable),
+				// but the indicator itself hides when no letters are
+				// active (see TaskHeaderTelemetry).
+				//
+				// V gating: V is only ON when dogfood AND a resolvable
+				// capture path exists. The path preference order is:
+				//   1. user-set CLINEMM_CAPTURE_V2_PATH (via
+				//      resolveCapturePathForProfile)
+				//   2. auto-resolved
+				//      <dataDir>/runtime-diag/<id>.jsonl (via
+				//      resolveAutoV2CapturePath; identity-gated)
+				diagnosticKnobs: resolveEffectiveDiagnosticKnobs(
+					process.env,
+					isDogfoodRuntime(process.env),
+					resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+				),
 				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
 				//
 				// The webview-facing Thinking/presentation projection. LOCAL

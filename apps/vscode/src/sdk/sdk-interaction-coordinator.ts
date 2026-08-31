@@ -5,12 +5,21 @@ import type { ClineAskQuestion, ClineMessage, TurnPhase } from "@shared/Extensio
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { ClineAskResponse } from "@shared/WebviewMessage"
 import { Logger } from "@/shared/services/Logger"
+import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
+import { resolveAutoV2CapturePath } from "./dogfood-runtime-capture-path"
+import { isDogfoodRuntime } from "./dogfood-runtime-profile"
 import { MessageIdMinter } from "./message-id-minter"
 import { buildToolApprovalAskMessage } from "./message-translator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { isCommandTool } from "./sdk-tool-policies"
 import { buildToolApprovalDenialReason } from "./tool-approval-denial"
-import { emitV2Capture, newV2CorrelationId, v2CommandDigest, withV2CaptureContext } from "./v2-capture"
+import {
+	emitV2Capture,
+	newV2CorrelationId,
+	resolveCapturePathForProfile,
+	v2CommandDigest,
+	withV2CaptureContext,
+} from "./v2-capture"
 
 /**
  * =============================================================================
@@ -417,7 +426,12 @@ export class SdkInteractionCoordinator {
 			}
 			if (commandEval.approved) {
 				Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
-				return { approved: true, decision: commandEval.decision, executionPlan: commandEval.executionPlan, mandatorySeatbeltExecution: commandEval.mandatorySeatbeltExecution }
+				return {
+					approved: true,
+					decision: commandEval.decision,
+					executionPlan: commandEval.executionPlan,
+					mandatorySeatbeltExecution: commandEval.mandatorySeatbeltExecution,
+				}
 			}
 			// ASK: fall through to open approval UI.
 		} else {
@@ -461,6 +475,40 @@ export class SdkInteractionCoordinator {
 			},
 		})
 
+		// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+		// P probe — `approval.noncommand.result.v1` +
+		// `approval.noncommand.ui-published.v1`. Gates on the
+		// effective diagnostic profile (not on the bare
+		// `process.env`): public installs NEVER fire this code
+		// point even if `CLINEMM_DIAG_APPROVAL_PUBLICATION_V2=1`
+		// is exported (the identity resolver is the sole gate).
+		// The gate returns false in public (fail-closed) and true
+		// in dogfood by default unless explicitly overridden down.
+		// The capture is structurally identical to the existing
+		// `branch` / `published` probes above; we emit two records
+		// (the result + the publication) so CASE B (ask resolved
+		// without ever opening a card) and CASE C (ask opened,
+		// card published, user rejected) can be distinguished.
+		if (!isCommand) {
+			const pProfile = resolveEffectiveDiagnosticKnobs(
+				process.env,
+				isDogfoodRuntime(process.env),
+				resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+			)
+			if (pProfile.p) {
+				emitV2Capture({
+					codePoint: "approval.noncommand.result.v1",
+					scope: "request",
+					data: {
+						conversationId: request.conversationId,
+						toolName: request.toolName,
+						isCommand: false,
+						approvalResult: "ask",
+					},
+				})
+			}
+		}
+
 		// Open the edit diff preview before the Approve/Reject buttons render. This is the only
 		// pre-execution point where the adapter has the full tool input (the SDK emits the
 		// tool's content events only after approval resolves).
@@ -485,6 +533,45 @@ export class SdkInteractionCoordinator {
 				messageTs: toolAskMessage.ts,
 			},
 		})
+		// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+		// P probe (noncommand pair). Fires alongside the existing
+		// `approval.ui.published.v2` only when (a) the tool is
+		// non-command AND (b) the effective diagnostic profile's
+		// `p` knob is ON. The two code points together let
+		// `...EDITOR-TOOL-APPROVAL-FRICTION-RECON01` distinguish:
+		//   CASE A: `result`+`ui-published` both fire (full
+		//           approval UI round-trip — the
+		//           ALREADY-RESOLVED auto-approve path).
+		//   CASE B: `result` fires, `ui-published` does NOT
+		//           (ask resolved without the card being
+		//           published — e.g. a synchronous policy
+		//           override).
+		//   CASE C: `result`+`ui-published` both fire and
+		//           the user REJECTS the card (the
+		//           ALREADY-OPENED path).
+		// The probe is gated by `isCommand === false` to keep the
+		// existing command-tool capture site (`branch` /
+		// `published`) authoritative for command-tool friction.
+		if (!isCommand) {
+			const pProfilePublished = resolveEffectiveDiagnosticKnobs(
+				process.env,
+				isDogfoodRuntime(process.env),
+				resolveCapturePathForProfile(process.env) ?? resolveAutoV2CapturePath(process.env),
+			)
+			if (pProfilePublished.p) {
+				emitV2Capture({
+					codePoint: "approval.noncommand.ui-published.v1",
+					scope: "request",
+					data: {
+						conversationId: request.conversationId,
+						toolName: request.toolName,
+						isCommand: false,
+						publicationOccurred: true,
+						messageTs: toolAskMessage.ts,
+					},
+				})
+			}
+		}
 		this.options.setTurnPhase?.("awaiting_approval", toolAskMessage.ts, "interaction-handle-tool-approval")
 		await this.options.postStateToWebview()
 

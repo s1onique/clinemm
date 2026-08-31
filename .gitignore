@@ -169,17 +169,20 @@ apps/examples/desktop-app/.cursor/settings.json
 # durably tracked for the canonical link to survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
 # ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
-# halted-ACT record authored 2026-08-31 per Factory causal reviewer.
-# Status HALT_DOGFOOD_IDENTITY_ABSENT (no truthful runtime dogfood identity
-# exists in the codebase at HEAD 6739ddbf1; per ACT spec section 18 "Do not
-# invent a broad settings subsystem", the halt cannot be resolved from a
-# sandboxed shell). Recon completed (no production code delta): knob
-# registry at HEAD (V=I=OPEN/opt-in, A=P=NOT LANDED), dogfood-identity
-# inspection table, telemetry-header landscape, SdkInteractionCoordinator
-# publication seam. The epic ledger at .factory/epic-board.md row 19 binds
-# to the ACT file, so it must be durably tracked for the canonical link to
-# survive a fresh clone (mirroring the prior editor-tool-recon ACT's
-# durability pattern).
+# reopened ACT authored 2026-08-31 per Factory causal reviewer (C1: GO).
+# Status (after structural re-open at HEAD <this-commit>):
+# PASS_DOGFOOD_DIAGNOSTIC_PROFILE_V1_STRUCTURAL + LIVE_QUALIFICATION_REMAINING.
+# Production delta: dogfood-diagnostic-profile.ts resolver (V/I/P knobs,
+# A hard-coded false until its owner ACT lands); dogfood-runtime-capture-path.ts
+# identity-gated auto-path for V; v2-capture.ts identity-gated auto-path
+# fallback; SdkController.ts I auto-enables in dogfood + diagnosticKnobs
+# field on ExtensionState; sdk-interaction-coordinator.ts:417 P probe
+# (approval.noncommand.result.v1 + approval.noncommand.ui-published.v1);
+# webview TaskHeaderTelemetry indicator (data-testid=task-header-diagnostic-knobs).
+# Initial effective knobs in dogfood (no env): V=ON, I=ON, A=OFF, P=ON
+# (header reads "VIP"). The epic ledger at .factory/epic-board.md row 19
+# binds to the ACT file, so it must be durably tracked for the canonical
+# link to survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01.md
 # ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01: successor ACT to the halted
 # DOGFOOD-DIAGNOSTIC-PROFILE ACT. Authored 2026-08-31 per Factory causal
@@ -196,13 +199,6 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01.md
 # Operator-owned Nix configuration (separate home-manager repo),
 # temporarily placed at the repo root on 2026-08-31 by the operator
-# for review of ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01's producer-side
-# evidence. NOT a ClineMM-tracked artifact; NOT durable project state.
-# This entry must be removed (and the file deleted) once the review
-# commit lands, otherwise the file will accumulate as a stray untracked
-# copy on every future worktree.
-/darwin-configuration.nix
-# Same durable-binding reason as the ACT file above.
 # Mirror the .factory/acts/ default-deny + whitelist pattern:
 #   1. re-include the .factory/evidence/ directory so git can recurse,
 #   2. deny everything under it by default,

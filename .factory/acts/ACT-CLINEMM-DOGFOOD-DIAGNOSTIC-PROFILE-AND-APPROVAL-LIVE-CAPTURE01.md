@@ -2,20 +2,25 @@
 
 **Type:** OBSERVABILITY ENABLEMENT + LIVE EVIDENCE ACQUISITION (NOT a repair ACT)
 
-**Status at freeze:** **HALT_DOGFOOD_IDENTITY_ABSENT** (no truthful runtime dogfood identity exists in the codebase at HEAD `6739ddbf1`; per ACT spec section 18 "Do not invent a broad settings subsystem", this halt cannot be resolved from a sandboxed shell)
+**Status (this commit):** **REOPENED / DOGFOOD_IDENTITY_STRUCTURALLY_AVAILABLE** — `PASS_DOGFOOD_DIAGNOSTIC_PROFILE_V1_STRUCTURAL` + `LIVE_QUALIFICATION_REMAINING`
 
-**Priority:** P1 / HIGH (would-be priority; deferred behind halt-resolution)
+**Status history:**
+
+  - 2026-08-31 (predecessor at HEAD `6739ddbf1`): HALT_DOGFOOD_IDENTITY_ABSENT (no truthful runtime dogfood identity existed at HEAD)
+  - 2026-08-31 (successor at HEAD `f63556b17` → `5f0c15763` → `a7ae5b890`): identity resolver shipped at `apps/vscode/src/sdk/dogfood-runtime-profile.ts` (22/22 vitest GREEN, tsc EXIT=0, biome clean); HALT_LAUNCHER_SOURCE_UNBOUND recorded (ablation requires headed host)
+  - 2026-08-31 (this commit): per Factory causal reviewer **C1: GO** — identity chain is structurally pinned; this ACT re-opens and implements the V/I/P diagnostic profile (A is intentionally NOT landed; the reviewer's directive says A's probe must not be shown before it exists)
+
+**Priority:** P1 / HIGH
 
 **Factory disposition (this commit):**
 
-  C0: PROCEED_TO_RECON_ONLY
-       recon completed; no production code delta
-  C1: GO
-       conditional on dogfood-identity existence (NOT met in this shell)
+  C0: PROCEED_TO_RECON_ONLY       (predecessor: satisfied 2026-08-31)
+  C1: GO                          (satisfied 2026-08-31 by identity ACT)
+  C2: STRUCTURAL_IMPLEMENTATION   (satisfied 2026-08-31 by this commit)
 
-**Date frozen:** 2026-08-31
-**Subject HEAD:** `6739ddbf17276b0a0ae4107dfde3af7ef6f21db5` (HEAD at recon time)
-**Final HEAD:** `6739ddbf17276b0a0ae4107dfde3af7ef6f21db5` (no production delta; HALT commits nothing)
+**Date frozen:** 2026-08-31 (predecessor); 2026-08-31 (this commit)
+**Subject HEAD:** `6739ddbf17276b0a0ae4107dfde3af7ef6f21db5` (predecessor); `<this-commit>` (this commit)
+**Final HEAD:** `<this-commit>` (production delta committed; tests green)
 
 ---
 

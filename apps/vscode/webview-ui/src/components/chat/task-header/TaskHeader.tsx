@@ -54,6 +54,19 @@ interface TaskHeaderProps {
 	// `turnState.phase` derivation.
 	taskHeaderPresentation?: TaskHeaderPresentationProjection
 	turnState?: TurnState
+	/**
+	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	 * Effective diagnostic-knob state from the host (V / I / A / P).
+	 * When at least one knob is ON, the indicator renders the active
+	 * letters in canonical order (e.g. `"VIP"`); when absent or all
+	 * OFF (the public default), the indicator is hidden.
+	 */
+	diagnosticKnobs?: {
+		readonly v: boolean
+		readonly i: boolean
+		readonly a: boolean
+		readonly p: boolean
+	}
 }
 
 const BUTTON_CLASS = "max-h-3 border-0 font-bold bg-transparent hover:opacity-100 text-foreground"
@@ -72,6 +85,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	taskTelemetry: taskTelemetryProp,
 	taskHeaderPresentation: taskHeaderPresentationProp,
 	turnState: turnStateProp,
+	diagnosticKnobs: diagnosticKnobsProp,
 }) => {
 	const {
 		apiConfiguration,
@@ -85,6 +99,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		turnState: turnStateFromContext,
 		taskTelemetry: taskTelemetryFromContext,
 		taskHeaderPresentation: taskHeaderPresentationFromContext,
+		diagnosticKnobs: diagnosticKnobsFromContext,
 	} = useExtensionState()
 
 	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: prefer the prop if provided
@@ -95,6 +110,13 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01: same
 	// preference pattern for the new TaskHeader presentation projection.
 	const taskHeaderPresentation = taskHeaderPresentationProp ?? taskHeaderPresentationFromContext
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	// Effective diagnostic-knob state. Host-owned; projected via
+	// `useExtensionState()` (which extends the wire `ExtensionState`
+	// type). The TaskHeader telemetry strip renders the active
+	// letters when at least one knob is ON; in public (all OFF) the
+	// indicator is hidden.
+	const diagnosticKnobs = diagnosticKnobsProp ?? diagnosticKnobsFromContext
 
 	const [isHighlightedTextExpanded, setIsHighlightedTextExpanded] = useState(false)
 	const [isTextOverflowing, setIsTextOverflowing] = useState(false)
@@ -213,6 +235,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						when the host has no canonical telemetry on the wire. */}
 					<div className="flex items-center justify-between gap-2 mt-0.5">
 						<TaskHeaderTelemetry
+							diagnosticKnobs={diagnosticKnobs}
 							taskHeaderPresentation={taskHeaderPresentation}
 							telemetry={taskTelemetry}
 							turnState={turnState}

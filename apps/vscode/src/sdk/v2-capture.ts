@@ -144,6 +144,7 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import { createHash } from "node:crypto"
 import { appendFileSync } from "node:fs"
 import { ulid } from "ulid"
+import { resolveAutoV2CapturePath } from "./dogfood-runtime-capture-path"
 
 const ENV_FLAG = "CLINEMM_CAPTURE_V2_PATH"
 
@@ -156,16 +157,68 @@ const context = new AsyncLocalStorage<V2CaptureContext>()
 
 let cachedPath: string | null | undefined
 
+/**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+ *
+ * Resolve the effective V2 capture path. Three precedence rules:
+ *
+ *   1. user-set `CLINEMM_CAPTURE_V2_PATH` (operator opt-in wins).
+ *   2. auto-resolved dogfood path under
+ *      `<dataDir>/runtime-diag/<id>.jsonl` (identity-gated via
+ *      `isDogfoodRuntime()`).
+ *   3. otherwise `null` (capture disabled; public default).
+ *
+ * The auto-path is computed lazily by
+ * `resolveAutoV2CapturePath()` from `dogfood-runtime-capture-path.ts`;
+ * we import it here so the existing emitter API stays unchanged
+ * (callers of `resolveCapturePath()` / `emitCaptureAttach()` /
+ * `safeAppend()` automatically pick up the auto path).
+ */
 function resolveCapturePath(): string | null {
 	if (cachedPath !== undefined) {
 		return cachedPath
 	}
 	const raw = process.env[ENV_FLAG]
+	if (typeof raw === "string" && raw.length > 0) {
+		cachedPath = raw
+		return raw
+	}
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	// Identity-gated fallback. The auto-path module is imported
+	// statically at the top of this file; the function call itself
+	// is identity-gated so public installs get `null` here (the
+	// existing tests' "env var unset -> capture disabled"
+	// expectation is preserved because the test environment is
+	// not dogfood).
+	const auto = resolveAutoV2CapturePath(process.env)
+	if (auto !== null) {
+		cachedPath = auto
+		return auto
+	}
+	cachedPath = null
+	return null
+}
+
+/**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+ *
+ * Resolve the V2 capture path used by the diagnostic-profile
+ * resolver. Returns the USER-SET path (via `CLINEMM_CAPTURE_V2_PATH`)
+ * if non-empty, otherwise returns `null`. This is the read-only
+ * counterpart to the auto-path machinery in
+ * `apps/vscode/src/sdk/dogfood-runtime-capture-path.ts`; the
+ * activation site composes them so the V knob is gated on the
+ * presence of a writable path (identity alone is not enough for V).
+ *
+ * Kept separate from the internal `resolveCapturePath()` cache so
+ * tests can exercise the resolver without disturbing the live
+ * emitter's path cache.
+ */
+export function resolveCapturePathForProfile(env: NodeJS.ProcessEnv = process.env): string | null {
+	const raw = env[ENV_FLAG]
 	if (typeof raw !== "string" || raw.length === 0) {
-		cachedPath = null
 		return null
 	}
-	cachedPath = raw
 	return raw
 }
 
