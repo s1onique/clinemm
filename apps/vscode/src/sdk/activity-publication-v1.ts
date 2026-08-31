@@ -130,10 +130,10 @@ export function buildActivityPublicationV1Record(args: {
 	// record. (Mechanical enforcement of the bounded ACT contract
 	// §18: identity is the SOLE gate for the public path; A is the
 	// runtime-effective gate for the dogfood path.)
-	if (!knobs || typeof knobs.a !== "boolean") {
+	if (!args.knobs || typeof args.knobs.a !== "boolean") {
 		return { kind: "skip", reason: "A_MISSING" }
 	}
-	if (knobs.a !== true) {
+	if (args.knobs.a !== true) {
 		return { kind: "skip", reason: "A_DISABLED" }
 	}
 
