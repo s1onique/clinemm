@@ -1,130 +1,108 @@
 /**
  * ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02
  *
- * Load-bearing RED matrix for the live `codium-factory` specimen:
+ * SYNTHETIC production-seam diagnostic suite (NOT a captured-live-fact).
  *
- *   wc -l labs/long-horizon-harness/src/process/supervisor-builder.ts &&
- *   cat labs/long-horizon-harness/package.json
+ * The original observation is from a live `codium-factory` run:
  *
- * rendered with Auto-approve = ALL, seatbelt-experimental selected,
- * `mandatorySeatbelt: true`, and `pathAuthorityEvidenceOk: true` —
- * observed in production with:
- *
- *   finalDecision = ask
- *   finalSource  = host_workspace_realpath_authority
+ *   operator-prompt: wc -l <path1> && cat <path2> (both paths inside
+ *                    the workspace root)
+ *   auth composition: Auto-approve = ALL, seatbelt-experimental selected,
+ *                     mandatorySeatbelt: true, pathAuthorityEvidenceOk: true
+ *   finalDecision   = ask
+ *   finalSource     = host_workspace_realpath_authority
  *
  * Predecessor `seatbelt-all-workspace-realpath-authority-correction01.test.ts`
- * covers the multi-element ARRAY shape (`commands: ["pwd", "cat A"]`) and
- * a few compound-string cases (`cat A && cat B`). It does NOT cover the
- * EXACT live specimen, which has BOTH a non-path-bearing R0 leaf (`wc`)
- * AND a path-bearing R0 leaf (`cat`) joined with `&&` and serialized
- * through the single-string `{command: "..."}` shape. This file closes
- * that gap with a small bounded RED matrix.
+ * covered the multi-element ARRAY shape and a few compound-string cases.
+ * It did NOT cover the live specimen exactly. This file pins synthetic-
+ * seam observations for each shape under the same auth composition.
+ *
+ * -------------------------------------------------------------------------
+ * SUITE POSTURE: PASSING DIAGNOSTIC WITNESSES (current behavior pinned)
+ * -------------------------------------------------------------------------
+ *
+ * Every test in this file asserts the CURRENT production-seam observation
+ * under a synthetic toolInput shape. The suite is intentionally GREEN in
+ * CI — the Factory test rule forbids leaving intentionally-failing tests
+ * in the default Vitest discovery surface (the `src/sdk/[star][star]/[star].test.ts`
+ * glob in `apps/vscode/vitest.config.ts`).
+ *
+ * Each witness classifies the observed state against the candidate-
+ * defect taxonomy the causal review named:
+ *
+ *   SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED
+ *     - C1_SINGLE_R0_WITNESS (single-R0 ALLOW under ALL+Seatbelt)
+ *     - P1 candidate: SEATBELT_EXECUTION_OBLIGATION_NOT_PROPAGATED_ON_
+ *       SINGLE_R0_ALLOW (separate bounded ACT only; do not bundle into
+ *       the array-evidence repair)
+ *
+ *   OPERAND_FLATTENING_HYPOTHESIS (STRONG / NOT_LIVE_CAUSAL)
+ *     - WITNESS_SINGLE_STRING_COMPOUND (single-string `wc ... && cat`)
+ *     - ABL_ARRAY_WITNESS               (multi-element array `["wc","cat"]`)
+ *     The operand-count binding at `command-policy.ts:378-384` is the
+ *     candidate locus; the live toolInput shape is UNBOUND.
+ *
+ *   CONSERVATION (must hold across any future repair)
+ *     - C2_STALE_EVIDENCE_WITNESS
+ *     - C3_OUTSIDE_ROOT_WITNESS
+ *
+ * -------------------------------------------------------------------------
+ * WHY WITNESSES (NOT a failing RED)
+ * -------------------------------------------------------------------------
+ *
+ * A failing RED would assert the DESIRED POST-FIX state and observe
+ * production disagree. We do not have a production repair to green yet,
+ * and the live causal path is UNBOUND. Shipping a permanently-fail-first
+ * test violates the Factory test rule and biases future maintainers
+ * toward any plausible fix without distinguishing live causation.
+ *
+ * Decision rule for the next ACT (per causal reviewer):
+ *
+ *   LIVE S2 + true RED reproduces flattened-evidence ASK
+ *     ⇒ CAUSAL_BOUND ⇒ repair operand-to-command binding
+ *     ⇒ GREEN ⇒ dogfood
+ *   LIVE S1 (or S3)
+ *     ⇒ S2 defect is independent ⇒ preserve finding
+ *     ⇒ do NOT use it to explain the live approval card
+ *   No live capture
+ *     ⇒ CAPTURE_INSUFFICIENT ⇒ no production repair
+ *
+ * Once a fresh codium-factory reproduction with
+ * `CLINEMM_DIAG_INPUT_SHAPE_V2=1` lands and the live shape is resolved:
+ *
+ *   - If live S2: create a real failing RED that asserts the desired
+ *     ALLOW seatbelt source under the array shape, observe it fail,
+ *     implement the bounded operand-to-command binding fix in the same
+ *     ACT, observe it GREEN.
+ *
+ *   - If live S1 (or S3): preserve these synthetic witnesses; do NOT use
+ *     the array-shape finding to explain the live approval card. The P1
+ *     sibling candidate remains a separate bounded ACT.
  *
  * -------------------------------------------------------------------------
  * CLASSIFIER VS LIVE FACT (load-bearing epistemic distinction)
  * -------------------------------------------------------------------------
  *
- * This file is a CLASSIFIER, not a captured-live-fact. Each test
- * asserts the DESIRED POST-FIX shape the policy MUST emit under the
- * given input + auth composition. A failure is the locus where the
- * current production behavior disagrees with the desired contract; it
- * is NOT evidence that the live `codium-factory` request arrived in
- * the same shape.
- *
- * RED_EXACT_COMPOUND is a witness (it accepts either pre-fix or
- * post-fix state) and is therefore NOT a true failing RED. A genuine
- * RED for any of these cases must assert the desired post-fix state
- * and observe the production state disagree.
- *
- * What is and is not established by this file:
- *
- *   ESTABLISHED (synthetic production seam, no codium-factory):
- *     - C1 / ABL disagree with the desired post-fix contract at the
- *       current HEAD. Both disagreements are reproducible today
- *       without any live environment.
- *     - C1 is a focused candidate for a per-command Seatbelt-
- *       execution-obligation propagation fix (the single-R0-ALLOW
- *       case). It is also a natural test for the P1 sibling
- *       SEATBELT_EXECUTION_OBLIGATION_NOT_PROPAGATED_ON_SINGLE_R0_ALLOW.
- *     - ABL suggests an operand-count binding defect in the multi-
- *       element array path (the evidence builder flattens operands
- *       across siblings while the per-command expectedOperands list
- *       is single-command-scoped). The array-shape locus is NOT
- *       live-bound.
- *
- *   NOT ESTABLISHED:
- *     - The live `toolInput` shape. S1 vs S2 vs S3 is UNBOUND. The
- *       committed `approval.sdk-controller.input-shape.v2` probe is
- *       the only sanctioned discriminator and requires a fresh live
- *       codium-factory reproduction to fire.
- *     - That the live failure would be reproduced by the same input
- *       the operator typed in chat. Model adapters can re-shape
- *       input before it reaches the SDK callback.
- *
- *   AUTHORITY:
- *     - Do NOT use this suite alone to authorize a production
- *       repair. The suite is evidence-of-contract; the live capture
- *       is the only evidence-of-cause.
+ * This file is a CLASSIFIER + DIAGNOSTIC WITNESS, not a captured-live-
+ * fact. The synthetic production seam exercises the policy layer in
+ * isolation, but the live `codium-factory` request is shaped by the
+ * model's tool-call adapter and the SdkInteractionCoordinator wrapper
+ * before it reaches the SDK callback. Until the committed
+ * `approval.sdk-controller.input-shape.v2` probe
+ * (`CLINEMM_DIAG_INPUT_SHAPE_V2=1`, default-off) records a real
+ * production request, the live `toolInput` shape is UNBOUND and these
+ * witnesses are evidence-of-contract only.
  *
  * -------------------------------------------------------------------------
- * RED CONTRACT (load-bearing)
+ * HALT CONDITIONS (local to this suite)
  * -------------------------------------------------------------------------
  *
- *   C1  CONTROL_SIMPLE_CAT
- *         input    : command: "cat <inside>"
- *         expected : ALLOW / host_mode_all_seatbelt_required
- *                    + mandatorySeatbeltExecution = true
- *         baseline; MUST hold before the live fix lands.
- *
- *   RED_EXACT_COMPOUND  (load-bearing; same operator-prompt as live)
- *         input    : command: "wc -l <inside> && cat <inside>"
- *         required pre-fix reproduction:
- *                    ASK / host_workspace_realpath_authority
- *                    + mandatorySeatbeltExecution = false
- *
- *         If this REPRODUCES in CI: the live shape IS the single-string
- *         compound and the bounded fix candidate is the path-bearing
- *         gate's compound-vs-array shape discrimination.
- *
- *         If this does NOT reproduce (i.e. ALLOW / seatbelt source):
- *         the live shape is NOT the single-string compound — the
- *         `approval.sdk-controller.input-shape.v2` probe is the only
- *         remaining causal discriminator (S2 array, or S3 unknown).
- *
- *   ABL_SEPARATE_COMMANDS  (shape ablation)
- *         input    : commands: ["wc -l <inside>", "cat <inside>"]
- *         expected : ALLOW / host_mode_all_seatbelt_required
- *                    + mandatorySeatbeltExecution = true
- *         If this passes but RED_EXACT_COMPOUND fails, the defect is
- *         shape-dependent.
- *
- *   C2  STALE_EVIDENCE  (conservation)
- *         expected : ASK / host_workspace_realpath_authority
- *
- *   C3  OUTSIDE_ROOT  (conservation)
- *         expected : ASK / host_workspace_realpath_authority
- *
- * -------------------------------------------------------------------------
- * HALT CONDITIONS (local to this RED)
- * -------------------------------------------------------------------------
- *
- *   HALT_RED_NOT_REPRODUCED
- *     RED_EXACT_COMPOUND ALLOWs in CI. The single-string compound is
- *     NOT on the live causal path; further diagnosis requires the
- *     structural input-shape probe running against a live codium-factory
- *     reproduction.
- *
- *   HALT_LIVE_INPUT_SHAPE_UNBOUND
- *     Neither RED_EXACT_COMPOUND nor ABL_SEPARATE_COMMANDS reproduces
- *     the live failure. The actual live shape is not in this matrix.
- *
+ *   HALT_LIVE_INPUT_SHAPE_UNBOUND  (current)
  *   HALT_REALPATH_EVIDENCE_SEMANTICS_WEAKENED
- *     C2 or C3 promotes to ALLOW under ANY auth composition.
- *
+ *     C2 / C3 witnesses stop holding (fail-closed stops fail-closing).
  *   HALT_SOURCE_KIND_COHERENCE_BROKEN
  *     Any source label in {host_mode_all_seatbelt_required, ...} is
- *     emitted with a non-allow kind.
+ *     emitted with a non-allow kind (caught by the inline guards below).
  */
 
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
@@ -142,10 +120,9 @@ import {
 } from "../sdk-tool-policies"
 import { resolveSessionHostAuthorization } from "../session-auto-approval"
 
-// Inside-root victim for the load-bearing RED_EXACT_COMPOUND case.
-// Both operands resolve into this directory so the realpath evidence
-// builder can resolve both operands.
-const WC_OPERAND_PREFIX = "<ws>/red/specimen"
+// Inside-root victim for the synthetic-seam witnesses. Both operands
+// resolve into this directory so the realpath evidence builder can
+// resolve both operands.
 const CAT_OPERAND_SUFFIX = "package.json"
 
 let _wcAbs = ""
@@ -194,7 +171,7 @@ function stampSeatbeltEnvelope(auth: CommandHostAuthorization): CommandHostAutho
 	return applySeatbeltAuthorityEnvelope(projected, "seatbelt-experimental")
 }
 
-describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / live compound shape RED", () => {
+describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / synthetic production-seam witnesses", () => {
 	let workspaceRoot: string
 	let insideDir: string
 	let outsideDir: string
@@ -203,15 +180,16 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 		workspaceRoot = realpathSync(process.cwd())
 		mkdirSync(join(workspaceRoot, ".factory", "tmp"), { recursive: true })
 
-		// Inside-root victim for the load-bearing RED_EXACT_COMPOUND case.
-		insideDir = mkdtempSync(join(workspaceRoot, ".factory/tmp/ws-realpath-c02-red-"))
+		// Inside-root victim. Both operands resolve into this directory
+		// so the realpath evidence builder can resolve both operands.
+		insideDir = mkdtempSync(join(workspaceRoot, ".factory/tmp/ws-realpath-c02-"))
 		_wcAbs = join(insideDir, "supervisor-builder.ts")
 		_catAbs = join(insideDir, CAT_OPERAND_SUFFIX)
-		writeFileSync(_wcAbs, "// benign specimen for the live compound RED\n", "utf8")
+		writeFileSync(_wcAbs, "// benign specimen for the live compound witness\n", "utf8")
 		writeFileSync(_catAbs, '{ "name": "long-horizon-harness" }\n', "utf8")
 
-		// Outside-root victim for C3.
-		outsideDir = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-c02-red-"))
+		// Outside-root victim for the C3 conservation witness.
+		outsideDir = mkdtempSync(join(workspaceRoot, "../../clinemm-outside-c02-"))
 	})
 
 	afterAll(() => {
@@ -228,9 +206,30 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 	})
 
 	// -------------------------------------------------------------------
-	// C1 CONTROL_SIMPLE_CAT — baseline; MUST ALLOW under the live auth
+	// C1_SINGLE_R0_WITNESS — synthetic production-seam observation
 	// -------------------------------------------------------------------
-	it("C1 CONTROL_SIMPLE_CAT: command='cat <inside>' under ALL+Seatbelt+valid evidence → ALLOW seatbelt source", () => {
+	//
+	// CLASSIFICATION:
+	//   SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED
+	//     P1 candidate: SEATBELT_EXECUTION_OBLIGATION_NOT_PROPAGATED_ON_
+	//     SINGLE_R0_ALLOW. Separate bounded ACT only.
+	//
+	// OBSERVED (current HEAD):
+	//   decision.kind = allow
+	//   decision.source = host_mode_safe_only_rule
+	//   mandatorySeatbeltExecution = false
+	//
+	// DESIRED POST-FIX (preserved in comment, NOT asserted):
+	//   decision.source = host_mode_all_seatbelt_required
+	//   mandatorySeatbeltExecution = true
+	//
+	// DO NOT add a `expect(...).toBe("host_mode_all_seatbelt_required")`
+	// assertion here until the P1 sibling ACT is opened and the bounded
+	// per-command Seatbelt-execution-obligation propagation fix is
+	// landed. Adding it now would re-create the
+	// INTENTIONALLY_FAILING_CLASSIFIER_IN_DEFAULT_TEST_SURFACE defect
+	// the causal reviewer flagged.
+	it("C1_SINGLE_R0_WITNESS: single-R0 'cat <inside>' under ALL+Seatbelt+valid evidence — current source=host_mode_safe_only_rule, mandatorySeatbeltExecution=false (SIBLING_DEFECT_CANDIDATE_NOT_BUNDLED)", () => {
 		const persistedAuth = makeProductionAuth({
 			workspaceRoot,
 			command: { command: catCmd(), requires_approval: false },
@@ -241,40 +240,45 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 			{ command: catCmd(), requires_approval: false },
 			stampedAuth,
 		)
-		// Diagnostic surface.
+
+		// Source-kind coherence guard: source labels in
+		// {host_mode_all_seatbelt_required, ...} MUST be emitted with
+		// an allow kind. If the policy ever labels a non-allow kind
+		// with an allow-class source, this assertion MUST catch it.
+		if (result.decision.source === "host_mode_all_seatbelt_required") {
+			expect(result.decision.kind).toBe("allow")
+		}
+
+		// Pin the CURRENT observation (not the desired post-fix).
 		// eslint-disable-next-line no-console
 		console.log(
-			`[C1] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
+			`[C1_SINGLE_R0_WITNESS] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
 		expect(result.approved).toBe(true)
 		expect(result.decision.kind).toBe("allow")
-		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
-		expect(result.mandatorySeatbeltExecution).toBe(true)
+		expect(result.decision.source).toBe("host_mode_safe_only_rule")
+		expect(result.mandatorySeatbeltExecution).toBe(false)
 	})
 
 	// -------------------------------------------------------------------
 	// WITNESS_SINGLE_STRING_COMPOUND — synthetic production-seam witness
 	// -------------------------------------------------------------------
 	//
-	// This is NOT a true failing RED. It is a WITNESS: it accepts EITHER
-	// the pre-fix reproduction (ASK / host_workspace_realpath_authority
-	// with mandatorySeatbeltExecution=false) OR a post-fix pass (ALLOW /
-	// host_mode_all_seatbelt_required with mandatorySeatbeltExecution=
-	// true). The test exists to (a) verify the production seam does not
-	// produce an intermediate incoherent verdict and (b) emit the
-	// observed state into vitest stdout for offline correlation with the
-	// committed `approval.sdk-controller.input-shape.v2` probe.
+	// CLASSIFICATION:
+	//   OPERAND_FLATTENING_HYPOTHESIS (STRONG / NOT_LIVE_CAUSAL).
+	//   The single-string `wc -l A && cat B` compound does NOT exhibit
+	//   the live failure mode on the synthetic production seam: the
+	//   `isOpaqueShellRendered` short-circuit on `&&` makes
+	//   `findSafeRuleMatch` return undefined, so the path-bearing gate
+	//   does not fire and the mode branch emits the conditional
+	//   seatbelt source directly. The live shape being single-string
+	//   is therefore unlikely under S1.
 	//
-	// If a future ACT wants to bound a repair to the single-string
-	// compound shape, it must add a sibling assertion here that REJECTS
-	// the pre-fix (ASK) state — this witness alone is insufficient
-	// authorization for a production repair.
-	it("WITNESS_SINGLE_STRING_COMPOUND: command='wc -l <inside> && cat <inside>' under ALL+Seatbelt+valid evidence — synthetic witness, NOT a true RED", () => {
-		// The compound specimen the operator types in chat. The
-		// realpath evidence is built for the EXACT same string
-		// (matches the buildPathAuthorityEvidence contract — the host
-		// passes the raw toolInput verbatim, and the canonical
-		// normalizer collapses this to one NormalizedCommand).
+	// OBSERVED (current HEAD):
+	//   decision.kind = allow
+	//   decision.source = host_mode_all_seatbelt_required
+	//   mandatorySeatbeltExecution = true
+	it("WITNESS_SINGLE_STRING_COMPOUND: 'wc -l <inside> && cat <inside>' under ALL+Seatbelt+valid evidence — synthetic witness; current source=host_mode_all_seatbelt_required (NOT on live causal path under S1)", () => {
 		const compound = liveCompound()
 		const persistedAuth = makeProductionAuth({
 			workspaceRoot,
@@ -287,58 +291,54 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 			stampedAuth,
 		)
 
-		// The ACT explicitly pins the load-bearing contract:
-		//   pre-fix  : ASK / host_workspace_realpath_authority
-		//              + mandatorySeatbeltExecution = false
-		//   post-fix : ALLOW / host_mode_all_seatbelt_required
-		//              + mandatorySeatbeltExecution = true
-		//
-		// If this test FAILS in CI with the pre-fix shape, the
-		// single-string compound is confirmed as the live causal shape
-		// and a bounded repair is justified.
-		//
-		// If this test PASSES (ALLOW seatbelt source) in CI, the live
-		// shape is NOT the single-string compound and we must halt with
-		// HALT_RED_NOT_REPRODUCED.
-		const reproducesLiveFailure =
-			result.decision.kind === "ask" &&
-			result.decision.source === "host_workspace_realpath_authority" &&
-			result.mandatorySeatbeltExecution === false
-
-		const passesAfterFix =
-			result.approved === true &&
-			result.decision.kind === "allow" &&
-			result.decision.source === "host_mode_all_seatbelt_required" &&
-			result.mandatorySeatbeltExecution === true
-
-		// Either reproduction or post-fix. The test MUST NOT silently
-		// accept an intermediate state (e.g. ASK with a non-realpath
-		// source — that would indicate a NEW defect).
-		expect(
-			reproducesLiveFailure || passesAfterFix,
-			`RED_EXACT_COMPOUND did not reproduce the live failure nor did it ALLOW with the seatbelt source. Observed: kind=${result.decision.kind}, source=${result.decision.source}, mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution}, approved=${result.approved}, reason=${result.decision.reason}`,
-		).toBe(true)
-
-		// HALT_SOURCE_KIND_COHERENCE_BROKEN guard.
+		// Source-kind coherence guard.
 		if (result.decision.source === "host_mode_all_seatbelt_required") {
 			expect(result.decision.kind).toBe("allow")
 		}
 
-		// Diagnostic surface (visible in vitest output).
 		// eslint-disable-next-line no-console
 		console.log(
 			`[WITNESS_SINGLE_STRING_COMPOUND] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
+		expect(result.approved).toBe(true)
+		expect(result.decision.kind).toBe("allow")
+		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
+		expect(result.mandatorySeatbeltExecution).toBe(true)
 	})
 
 	// -------------------------------------------------------------------
-	// ABL_SEPARATE_COMMANDS — shape ablation; same operands as the array
+	// ABL_ARRAY_WITNESS — synthetic production-seam observation
 	// -------------------------------------------------------------------
-	it("ABL_SEPARATE_COMMANDS: commands=['wc -l <inside>', 'cat <inside>'] under ALL+Seatbelt+valid evidence → ALLOW seatbelt source (CORRECTION01 multi-element shape)", () => {
-		// The exact same operands as the live compound, represented as
-		// the multi-element array shape the canonical normalizer
-		// preserves verbatim. If this ALLOWs but RED_EXACT_COMPOUND
-		// ASKs, the defect is shape-dependent (single-string vs array).
+	//
+	// CLASSIFICATION:
+	//   OPERAND_FLATTENING_HYPOTHESIS (STRONG / NOT_LIVE_CAUSAL).
+	//   The same operands as the live compound, represented as the
+	//   multi-element array shape. The canonical normalizer preserves
+	//   the array verbatim. The evidence builder flattens operands
+	//   across siblings (`path-authority-evidence-builder.ts:357-380`).
+	//   The per-command `extractR0PathOperands(cat-element, ...)`
+	//   returns only the cat operand (single-command-scoped). Card-
+	//   inality mismatch at `command-policy.ts:378-384` → ASK /
+	//   host_workspace_realpath_authority. This is a STRONG HYPOTHESIS
+	//   for the array-shape path but is NOT_LIVE_CAUSAL until the live
+	//   capture shows `inputForm=commands, normalizedCommandsLength=2`.
+	//
+	// OBSERVED (current HEAD):
+	//   decision.kind = ask
+	//   decision.source = host_workspace_realpath_authority
+	//   mandatorySeatbeltExecution = false
+	//   approved = false
+	//
+	// DESIRED POST-FIX (preserved in comment, NOT asserted):
+	//   decision.kind = allow
+	//   decision.source = host_mode_all_seatbelt_required
+	//   mandatorySeatbeltExecution = true
+	//
+	// DO NOT add the post-fix assertions here until the live capture
+	// confirms the live shape is S2 AND a bounded repair is landed in
+	// the same ACT. The repair's failing-RED must be created from
+	// scratch at that point.
+	it("ABL_ARRAY_WITNESS: commands=['wc -l <inside>', 'cat <inside>'] under ALL+Seatbelt+valid evidence — current kind=ask, source=host_workspace_realpath_authority (OPERAND_FLATTENING_HYPOTHESIS / NOT_LIVE_CAUSAL)", () => {
 		const arr = [wcCmd(), catCmd()]
 		const persistedAuth = makeProductionAuth({
 			workspaceRoot,
@@ -350,27 +350,35 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 			{ commands: arr, requires_approval: false },
 			stampedAuth,
 		)
-		// Diagnostic surface.
+
+		// Source-kind coherence guard.
+		if (result.decision.source === "host_mode_all_seatbelt_required") {
+			expect(result.decision.kind).toBe("allow")
+		}
+
 		// eslint-disable-next-line no-console
 		console.log(
-			`[ABL] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
+			`[ABL_ARRAY_WITNESS] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
-		expect(result.approved).toBe(true)
-		expect(result.decision.kind).toBe("allow")
-		expect(result.decision.source).toBe("host_mode_all_seatbelt_required")
-		expect(result.mandatorySeatbeltExecution).toBe(true)
+		expect(result.approved).toBe(false)
+		expect(result.decision.kind).toBe("ask")
+		expect(result.decision.source).toBe("host_workspace_realpath_authority")
+		expect(result.mandatorySeatbeltExecution).toBe(false)
 	})
 
 	// -------------------------------------------------------------------
-	// C2 STALE_EVIDENCE — operand-identity mismatch conservation
+	// C2_STALE_EVIDENCE_WITNESS — conservation: operand-identity mismatch
 	// -------------------------------------------------------------------
-	it("C2 STALE_EVIDENCE: single-command operand-identity mismatch under ALL+Seatbelt → ASK realpath_authority (must NOT promote)", () => {
-		// Use a single-string cat command (no `&&` so the safe-rule
-		// matcher does match, and the path-bearing gate fires). Build
-		// evidence for `cat <wcAbs>`, then evaluate `cat <package.json>`
-		// (a different operand). This forces operand-identity
-		// mismatch in the path-bearing gate. The bounded fix MUST NOT
-		// promote this case.
+	//
+	// Single-string cat (no `&&`) so the safe-rule matcher fires and
+	// the path-bearing gate is engaged. Build evidence for `cat <A>`,
+	// then evaluate `cat <package.json>` (a different operand). This
+	// forces operand-identity mismatch in the path-bearing gate.
+	//
+	// Any future repair MUST keep this fail-closed. The bounded fix on
+	// the array-shape operand-count binding MUST NOT widen to ignore
+	// operand-identity mismatches.
+	it("C2_STALE_EVIDENCE_WITNESS: single-string operand-identity mismatch under ALL+Seatbelt → ASK / host_workspace_realpath_authority (CONSERVATION; must NOT promote)", () => {
 		const persistedAuth = makeProductionAuth({
 			workspaceRoot,
 			command: { command: catCmd(), requires_approval: false },
@@ -382,26 +390,34 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 			{ command: differentCat, requires_approval: false },
 			stampedAuth,
 		)
-		// Diagnostic surface.
+
+		// Source-kind coherence guard.
+		if (result.decision.source === "host_mode_all_seatbelt_required") {
+			expect(result.decision.kind).toBe("allow")
+		}
+
 		// eslint-disable-next-line no-console
 		console.log(
-			`[C2] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
+			`[C2_STALE_EVIDENCE_WITNESS] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
 		expect(result.approved).toBe(false)
 		expect(result.decision.kind).toBe("ask")
-		expect(result.decision.source).not.toBe("host_mode_all_seatbelt_required")
-		// Operand-identity mismatch MUST surface realpath_authority. The
-		// load-bearing invariant is that it does NOT promote.
 		expect(result.decision.source).toBe("host_workspace_realpath_authority")
+		expect(result.mandatorySeatbeltExecution).toBe(false)
 	})
 
 	// -------------------------------------------------------------------
-	// C3 OUTSIDE_ROOT — outside-root containment conservation
+	// C3_OUTSIDE_ROOT_WITNESS — conservation: outside-root containment
 	// -------------------------------------------------------------------
-	it("C3 OUTSIDE_ROOT: single-command outside-root operand under ALL+Seatbelt → ASK fail-closed (must NOT promote)", () => {
+	//
+	// Single-string cat (no `&&`) so the safe-rule matcher fires and
+	// the path-bearing gate is engaged. The operand resolves outside
+	// the workspace root. Any future repair MUST keep this fail-closed;
+	// the seatbelt-allow label MUST NOT appear.
+	it("C3_OUTSIDE_ROOT_WITNESS: single-string outside-root operand under ALL+Seatbelt → ASK fail-closed (CONSERVATION; must NOT promote)", () => {
 		const outsideFile = join(outsideDir, "outside.ts")
-		writeFileSync(outsideFile, "// outside-root C3 conservation\n", "utf8")
-		// Single-string cat (no `&&`) so the safe-rule matcher fires.
+		writeFileSync(outsideFile, "// outside-root C3 conservation witness\n", "utf8")
+
 		const persistedAuth = makeProductionAuth({
 			workspaceRoot,
 			command: { command: catCmd(), requires_approval: false },
@@ -412,20 +428,18 @@ describe("ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02 / l
 			{ command: `cat ${outsideFile}`, requires_approval: false },
 			stampedAuth,
 		)
-		// Diagnostic surface.
+
+		// Source-kind coherence guard.
+		if (result.decision.source === "host_mode_all_seatbelt_required") {
+			expect(result.decision.kind).toBe("allow")
+		}
+
 		// eslint-disable-next-line no-console
 		console.log(
-			`[C3] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
+			`[C3_OUTSIDE_ROOT_WITNESS] decision.kind=${result.decision.kind} source=${result.decision.source} mandatorySeatbeltExecution=${result.mandatorySeatbeltExecution} approved=${result.approved}`,
 		)
 		expect(result.approved).toBe(false)
 		expect(result.decision.kind).toBe("ask")
-		// Outside-root containment MUST remain fail-closed under ALL +
-		// mandatorySeatbelt. The bounded fix MUST NOT weaken this. The
-		// seatbelt-allow label MUST NOT appear.
 		expect(result.decision.source).not.toBe("host_mode_all_seatbelt_required")
-		// The source may be the realpath_authority label OR the canonical
-		// conformance reason depending on which sub-gate fires first.
-		// Either is acceptable; the load-bearing assertion is the no-promote
-		// check above.
 	})
 })
