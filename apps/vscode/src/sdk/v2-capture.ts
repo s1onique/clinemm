@@ -175,7 +175,23 @@ let cachedPath: string | null | undefined
  * `safeAppend()` automatically pick up the auto path).
  */
 function resolveCapturePath(): string | null {
-	if (cachedPath !== undefined) {
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	// CORRECTION03 — cache-ordering bounded repair.
+	//
+	// Invariant: positive resolutions (env-var set, or auto-path
+	// resolver returned a path) are memoized; absence before the
+	// host bound a storage root is NOT memoized, so the next call
+	// can re-resolve against the freshly bound root. This protects
+	// the emitter from being permanently stuck at `null` if any
+	// caller invokes `resolveCapturePath()` before the host's
+	// `activate()` runs `configureDogfoodCaptureStorage(...)`.
+	//
+	// The cache still memoizes successful resolutions so repeated
+	// emits remain O(1) and the auto-path module's instance id is
+	// not re-minted per emit. The negative-result branch is the
+	// only place a transient absence can be permanent; we remove
+	// that one write.
+	if (cachedPath !== undefined && cachedPath !== null) {
 		return cachedPath
 	}
 	const raw = process.env[ENV_FLAG]
@@ -183,11 +199,11 @@ function resolveCapturePath(): string | null {
 		cachedPath = raw
 		return raw
 	}
-	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
-	// Identity-gated fallback. The auto-path module is imported
-	// statically at the top of this file; the function call itself
-	// is identity-gated so public installs get `null` here (the
-	// existing tests' "env var unset -> capture disabled"
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	// (CORRECTION02): Identity-gated fallback. The auto-path module
+	// is imported statically at the top of this file; the function
+	// call itself is identity-gated so public installs get `null`
+	// here (the existing tests' "env var unset -> capture disabled"
 	// expectation is preserved because the test environment is
 	// not dogfood).
 	const auto = resolveAutoV2CapturePath(process.env)
@@ -195,7 +211,8 @@ function resolveCapturePath(): string | null {
 		cachedPath = auto
 		return auto
 	}
-	cachedPath = null
+	// Transient absence (e.g. the host has not yet bound a
+	// storage root) MUST remain retryable. Do NOT cache `null`.
 	return null
 }
 

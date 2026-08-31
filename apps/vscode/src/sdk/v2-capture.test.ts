@@ -306,3 +306,9 @@ describe("ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-LIVE-CAPTURE01
 		expect(existsSync(capturePath)).toBe(false)
 	})
 })
+
+// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+// CORRECTION03 (cache-ordering repair) lives in
+// `v2-capture.cache-ordering.test.ts` (a sibling file that imports
+// `bun:test`) so the RED can run on `bun test` without the Node-based
+// vitest harness.

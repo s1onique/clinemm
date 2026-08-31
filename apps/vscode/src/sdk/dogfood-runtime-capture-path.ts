@@ -117,10 +117,15 @@ let cachedRuntimeInstanceId: string | undefined
  *   - MUST be called with a non-empty, writable directory path.
  *     `activate` supplies `context.globalStorageUri.fsPath`; the
  *     standalone host supplies its `DATA_DIR`.
- *   - MUST be called BEFORE the first capture sink query. The
- *     capture-sink resolver is memoized, so a late bind only
- *     takes effect after an explicit cache reset (which
- *     production code never does).
+ *   - SHOULD be called during activation by the host boundary
+ *     (VS Code's `extension.ts:activate` and the standalone
+ *     `vscode-context.ts:initializeContext`). The auto-path
+ *     resolver is memoized; a late bind re-resolves correctly on
+ *     the next call because positive resolutions are cached and
+ *     transient absence (root not yet bound) is not memoized —
+ *     see ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-
+ *     LIVE-CAPTURE01 CORRECTION03 (cache-ordering repair).
+ *     Queries made before binding therefore remain retryable.
  *   - Re-binding during a session invalidates the memoized path
  *     (`cachedAutoPath` is reset) so the next query re-resolves
  *     against the new root.
