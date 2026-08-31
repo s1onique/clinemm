@@ -103,6 +103,21 @@ interface ProductionSeamFixture {
 	 * the phase-authority inputs.
 	 */
 	observeRecoveryChanged(): TurnPhase
+	/**
+	 * CORRECTION06 discriminator: drive an
+	 * `approval_requested` TaskMsg. The shadow model
+	 * promotes `activity.awaitingApproval=true` and
+	 * projects "awaiting_approval".
+	 */
+	observeApprovalRequested(): TurnPhase
+	/**
+	 * CORRECTION06 discriminator: drive an
+	 * `approval_resolved` TaskMsg. Resolves the approval
+	 * gate so the shadow projection falls back through
+	 * `modelStreaming || isTooling()` per the canonical
+	 * precedence in `projectTurnState` (selectors.ts:47).
+	 */
+	observeApprovalResolved(): TurnPhase
 	currentShadowPhase(): TurnPhase | undefined
 }
 
@@ -228,6 +243,27 @@ function fixture(): ProductionSeamFixture {
 				now,
 				tracker.get().seq,
 			)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			return toLegacyPhase(TaskState.projectTurnState(model))
+		},
+		observeApprovalRequested(): TurnPhase {
+			// CORRECTION06 helper: drive `approval_requested`.
+			// Shadow projection becomes "awaiting_approval".
+			const now = Date.now()
+			comparator.observeTaskMsg({ type: "approval_requested", at: now }, tracker.currentPhase, now, tracker.get().seq)
+			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
+			const model = comparator.debugSnapshot()
+			return toLegacyPhase(TaskState.projectTurnState(model))
+		},
+		observeApprovalResolved(): TurnPhase {
+			// CORRECTION06 helper: drive `approval_resolved`.
+			// Shadow projection falls back through
+			// `modelStreaming || isTooling()` per the
+			// canonical precedence in
+			// `projectTurnState` (selectors.ts:47).
+			const now = Date.now()
+			comparator.observeTaskMsg({ type: "approval_resolved", at: now }, tracker.currentPhase, now, tracker.get().seq)
 			if (!comparator.hasObservedShadowState()) return "idle" as TurnPhase
 			const model = comparator.debugSnapshot()
 			return toLegacyPhase(TaskState.projectTurnState(model))
@@ -511,11 +547,24 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 	// repair degenerates into "stamp only on phase changes."
 	// -----------------------------------------------------------------------
 	it("THCP11_C04_POSITIVE: real TaskMsg that materially mutates the model without changing phase SHOULD advance the stamp", () => {
+		// CORRECTION06 REWRITE: the C04 control codified the
+		// mutation-driven stamping rule. Under CORRECTION06
+		// the rule is agreement-driven; mutation alone is
+		// insufficient. The control now uses a sequence
+		// where shadow and legacy agree on the same phase
+		// (both streaming) at the moment of observation.
 		const fx = fixture()
 		fx.tracker.set("idle")
 		fx.observeViaCanonicalShadow()
 		fx.observeStreamingStart()
+		// Sync legacy to streaming so the next observation
+		// observes agreement.
+		fx.tracker.set("streaming")
 		const seqAtStreaming = fx.tracker.get().seq
+		// Drive a fresh shadow observation under agreement.
+		// model_stream_started -> shadow=streaming;
+		// legacy=streaming (just set above); agree -> stamp.
+		fx.observeStreamingStart()
 		const stampAtStreaming = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
 		expect(stampAtStreaming).toBe(seqAtStreaming)
 		expect(fx.currentShadowPhase()).toBe("streaming")
@@ -614,11 +663,22 @@ it("THCP11_C05_RED: recovery_changed (non-phase-authority mutation) MUST NOT byp
 // (activeToolCallIds; isTooling reads length>0) SHOULD
 // still advance the stamp.
 it("THCP11_C05_AUTHORITY_POSITIVE: same-phase mutation IN projection-authority inputs SHOULD advance stamp", () => {
+	// CORRECTION06 REWRITE: under C06 the rule is
+	// agreement-driven. Pin: when both authorities agree
+	// on "streaming" and a real TaskMsg drives an
+	// activeToolCallIds mutation, the stamp MUST
+	// advance (because agreement holds).
 	const fx = fixture()
 	fx.tracker.set("idle")
 	fx.observeViaCanonicalShadow()
 	fx.observeStreamingStart()
+	// Sync legacy to streaming before re-observing so
+	// the next observation sees agreement.
+	fx.tracker.set("streaming")
 	const seqAtStreaming = fx.tracker.get().seq
+	// Re-observe under agreement: shadow=streaming,
+	// legacy=streaming -> stamp(seqAtStreaming).
+	fx.observeStreamingStart()
 	const stampAtStreaming = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
 	expect(stampAtStreaming).toBe(seqAtStreaming)
 	expect(fx.currentShadowPhase()).toBe("streaming")
@@ -635,12 +695,29 @@ it("THCP11_C05_AUTHORITY_POSITIVE: same-phase mutation IN projection-authority i
 
 // CORRECTION05 second discriminator:
 // recovery_changed WHILE already streaming.
-it("THCP11_C05_STREAMING_RED: recovery_changed while already streaming MUST NOT advance stamp", () => {
+it("THCP11_C05_STREAMING_RED: recovery_changed while already streaming — agreement-driven advance is correct", () => {
+	// CORRECTION06 REWRITE: under C06 the rule is
+	// agreement. The previous framing ("recovery_changed
+	// MUST NOT advance the streaming stamp") is no longer
+	// load-bearing: when shadow=streaming AND
+	// legacy=streaming, agreement holds and the stamp
+	// MUST advance — regardless of whether the
+	// observation also mutated recovery.*. The C05 P0 is
+	// captured at a different axis: shadow=idle,
+	// legacy=streaming (DISAGREE) where the non-phase-
+	// authority mutation previously refreshed the idle
+	// stamp. That's THCP11_C05_RED (idle projection)
+	// and the still-active THCP11_C06_MASKED_RED
+	// (awaiting_approval mask). Both pass under C06.
 	const fx = fixture()
 	fx.tracker.set("idle")
 	fx.observeViaCanonicalShadow()
 	fx.observeStreamingStart()
+	// Sync legacy to streaming BEFORE re-observing so
+	// the next observation sees agreement.
+	fx.tracker.set("streaming")
 	const seqAtStreaming = fx.tracker.get().seq
+	fx.observeStreamingStart()
 	const stampAtStreaming = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
 	expect(stampAtStreaming).toBe(seqAtStreaming)
 
@@ -648,10 +725,144 @@ it("THCP11_C05_STREAMING_RED: recovery_changed while already streaming MUST NOT 
 	const seqAfterRecovery = fx.tracker.get().seq
 	expect(seqAfterRecovery).toBeGreaterThan(seqAtStreaming)
 	fx.observeRecoveryChanged()
+	// Shadow projection remains "streaming" (recovery.*
+	// does NOT participate in projectTurnState). Legacy
+	// is "streaming". Agreement holds. Stamp advances.
 	const stampAfterRecovery = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
-	expect(stampAfterRecovery).toBe(seqAtStreaming)
-	expect(stampAfterRecovery).not.toBe(seqAfterRecovery)
+	expect(stampAfterRecovery).toBe(seqAfterRecovery)
+	expect(stampAfterRecovery).toBeGreaterThan(seqAtStreaming)
 	expect(fx.currentShadowPhase()).toBe("streaming")
+})
+
+// CORRECTION06 adversarial RED
+// (HALT_PHASE_STAMP_REFRESHED_BY_MASKED_AUTHORITY_MUTATION):
+//
+// projectTurnState() (selectors.ts:47) has precedence:
+//   awaitingApproval  >  modelStreaming || tooling  >  lifecycle
+// A mutation to a LOWER-precedence authority input
+// (e.g. tool_started growing activeToolCallIds while
+// awaitingApproval=true) does NOT change the projected
+// phase, but DOES mutate a "projection-authority input"
+// per CORRECTION05's helper. So CORRECTION05 stamps
+// the awaiting_approval phase anyway, restoring the
+// LIVE contradiction under a different label.
+//
+// Schedule:
+//   tracker awaiting_approval at N
+//   -> shadow approval_requested
+//      shadow projects awaiting_approval
+//      shadow stamp awaiting_approval = N (corroborated)
+//
+//   tracker streaming at N+1
+//   -> shadow has NOT received approval_resolved
+//      (per the pre-existing S04 conservation test at
+//      task-state.update.test.ts:121)
+//
+//   shadow tool_started at N+1
+//      activeToolCallIds grows
+//      projection stays awaiting_approval
+//
+//   CORE ASSERTION:
+//      awaiting_approval stamp MUST remain N
+//      (not advance to N+1).
+//      publication.phase MUST be "streaming"
+//      (legacy wins because shadow stamp is stale).
+it("THCP11_C06_MASKED_RED: tool_started under awaitingApproval MUST NOT bypass awaiting_approval staleness", () => {
+	const fx = fixture()
+	fx.tracker.set("awaiting_approval")
+	const seqAtApproval = fx.tracker.get().seq
+	// Shadow side approves; legacy agrees. Stamps
+	// awaiting_approval=N.
+	const observedA = fx.observeApprovalRequested()
+	expect(observedA).toBe("awaiting_approval")
+	const stampAtApproval = fx.comparator.debugLastObservedTurnSeqForPhase("awaiting_approval")
+	expect(stampAtApproval).toBe(seqAtApproval)
+
+	// Legacy advances. Shadow has NOT seen
+	// approval_resolved. Projection is still
+	// awaiting_approval.
+	fx.tracker.set("streaming")
+	const seqAfterStreaming = fx.tracker.get().seq
+	expect(seqAfterStreaming).toBeGreaterThan(seqAtApproval)
+	expect(fx.currentShadowPhase()).toBe("awaiting_approval")
+
+	// Adversarial: shadow tool_started while
+	// awaitingApproval=true mutates
+	// activeToolCallIds (LATER precedence) without
+	// changing the projection. CORRECTION05 sees a
+	// projection-authority mutation and would stamp;
+	// CORRECTION06 must NOT.
+	fx.observeToolStarted("c1")
+	expect(fx.currentShadowPhase()).toBe("awaiting_approval")
+	const stampAfterTool = fx.comparator.debugLastObservedTurnSeqForPhase("awaiting_approval")
+	expect(stampAfterTool).toBe(seqAtApproval)
+	expect(stampAfterTool).not.toBe(seqAfterStreaming)
+
+	const projection = selectTaskHeaderPresentation({
+		canonicalShadowPhase: fx.currentShadowPhase(),
+		currentLegacyPhase: fx.tracker.currentPhase,
+		seq: fx.tracker.get().seq,
+		canonicalShadowObservedTurnSeq: fx.comparator.debugLastObservedTurnSeqForPhase(
+			fx.currentShadowPhase() ?? "awaiting_approval",
+		),
+	})
+	expect(projection.phase).not.toBe("awaiting_approval")
+	expect(projection.phase).toBe("streaming")
+})
+
+// CORRECTION06 corroboration positive controls.
+// Phase freshness is now defined as
+// shadowPhase === legacyPhase at the same seq.
+// These keep "stamp advances when both authorities
+// agree on the same phase" working under the
+// simplified invariant.
+it("THCP11_C06_CORROBORATION_POSITIVE: same-phase tool_started while legacy agrees on streaming SHOULD advance stamp", () => {
+	const fx = fixture()
+	fx.tracker.set("idle")
+	fx.observeViaCanonicalShadow()
+	fx.observeStreamingStart()
+	// Sync legacy to streaming so the next observation
+	// sees agreement.
+	fx.tracker.set("streaming")
+	const seqAtStreaming = fx.tracker.get().seq
+	// Re-observe under agreement to establish the
+	// streaming stamp.
+	fx.observeStreamingStart()
+	const stampAtStreaming = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+	expect(stampAtStreaming).toBe(seqAtStreaming)
+
+	// Legacy already in streaming AND shadow in
+	// streaming at the same seq -> agree -> stamp.
+	fx.tracker.set("streaming")
+	const seqAfterTool = fx.tracker.get().seq
+	fx.observeToolStarted("toolA")
+	expect(fx.currentShadowPhase()).toBe("streaming")
+	const stampAfterTool = fx.comparator.debugLastObservedTurnSeqForPhase("streaming")
+	expect(stampAfterTool).toBe(seqAfterTool)
+	expect(stampAfterTool).toBeGreaterThan(seqAtStreaming)
+})
+
+it("THCP11_C06_CORROBORATION_AGREEMENT: tool_started while legacy also reports awaiting_approval SHOULD advance stamp", () => {
+	const fx = fixture()
+	fx.tracker.set("awaiting_approval")
+	const seqA = fx.tracker.get().seq
+	fx.observeApprovalRequested()
+	const stampA = fx.comparator.debugLastObservedTurnSeqForPhase("awaiting_approval")
+	expect(stampA).toBe(seqA)
+	expect(fx.currentShadowPhase()).toBe("awaiting_approval")
+
+	// Legacy still awaiting_approval AND shadow still
+	// awaiting_approval -> same-phase agreement ->
+	// same-generation tool_started SHOULD advance.
+	const seqB = fx.tracker.get().seq
+	fx.tracker.set("awaiting_approval")
+	const seqAfter = fx.tracker.get().seq
+	expect(seqAfter).toBeGreaterThan(seqB)
+	fx.observeToolStarted("toolB")
+	expect(fx.currentShadowPhase()).toBe("awaiting_approval")
+	const stampAfter = fx.comparator.debugLastObservedTurnSeqForPhase("awaiting_approval")
+	expect(stampAfter).toBe(seqAfter)
+	expect(stampAfter!).toBeGreaterThan(stampA!)
 })
 
 describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02 / conservation", () => {

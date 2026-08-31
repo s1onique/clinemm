@@ -42,39 +42,6 @@ type TaskModel = TaskState.TaskModel
 // narrower projection-authority check.
 const { TaskStateShadow } = TaskState
 
-/**
- * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION05:
- *
- * Returns `true` iff the canonical phase-authority tuple
- * `projectTurnState` reads from a `TaskModel` is structurally
- * identical in `a` and `b`. This is the load-bearing freshness
- * bound: only mutations INSIDE this tuple can refresh the
- * comparator's phase-keyed stamp.
- *
- * Phase-authority inputs (selectors.ts:47):
- *   `activity.awaitingApproval`     (`awaiting_approval`)
- *   `activity.modelStreaming`       (`streaming`)
- *   `activity.activeToolCallIds`    (`streaming` via `isTooling()`)
- *   `lifecycle.kind`                (terminal/resumable axes)
- *   `lifecycle.reason`              (only when `kind === "failed"`)
- *
- * Order-sensitive `activeToolCallIds` comparison (the comparator
- * itself is order-sensitive — see `isSameTaskModel`'s note).
- */
-function isSameTurnProjectionAuthority(a: TaskModel, b: TaskModel): boolean {
-	if (a.activity.awaitingApproval !== b.activity.awaitingApproval) return false
-	if (a.activity.modelStreaming !== b.activity.modelStreaming) return false
-	if (a.lifecycle.kind !== b.lifecycle.kind) return false
-	if (a.lifecycle.kind === "failed" && b.lifecycle.kind === "failed") {
-		if (a.lifecycle.reason !== b.lifecycle.reason) return false
-	}
-	if (a.activity.activeToolCallIds.length !== b.activity.activeToolCallIds.length) return false
-	for (let i = 0; i < a.activity.activeToolCallIds.length; i++) {
-		if (a.activity.activeToolCallIds[i] !== b.activity.activeToolCallIds[i]) return false
-	}
-	return true
-}
-
 type TaskMsg = TaskState.TaskMsg
 type TaskShadowObservation = TaskState.TaskShadowObservation
 
@@ -158,16 +125,20 @@ export class TaskShadowComparator {
 	private readonly divergences: TaskShadowDivergence[] = []
 	private seq = 0
 	/**
-	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
+	 * ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION06:
 	 *
 	 * Phase-keyed TurnStateTracker.seq stamp. Advances only
-	 * when a non-`"noop"` observation MATERIALLY MUTATES the
-	 * shadow model — i.e. when the canonical structural
-	 * equality `isSameTaskModel(preModel, postModel) === false`,
-	 * OR this is the comparator's very first observation
-	 * (no pre-model to compare against).
+	 * when a non-`"noop"` observation finds both phase
+	 * authorities in AGREEMENT — i.e. when the canonical
+	 * shadow projection equals the legacy TurnState phase
+	 * at the same observation:
 	 *
-	 * Rationale — chain of corrections:
+	 *   lastObservedTurnSeqByPhase[P] === N
+	 *   iff shadowPhase === legacyPhase === P
+	 *     at TurnState generation N
+	 *
+	 * Rationale — chain of corrections (this is the FINAL
+	 * correction; the chain is closed at C06):
 	 *
 	 *   CORRECTION02:
 	 *     P0 `HALT_SEQ_DOMAIN_IDENTITY_NOT_PROVEN`.
@@ -180,7 +151,7 @@ export class TaskShadowComparator {
 	 *     gated on `event !== "noop"` (adapter-generated
 	 *     `"noop"` sentinels don't refresh).
 	 *
-	 *   CORRECTION04 (this entry):
+	 *   CORRECTION04:
 	 *     P0 `HALT_PHASE_STAMP_ADVANCES_ON_SEMANTIC_NOOP`.
 	 *     The `event !== "noop"` rule was a label-based proxy
 	 *     for mutation. The production reducer accepts
@@ -188,21 +159,46 @@ export class TaskShadowComparator {
 	 *     "an approval_resolved WITHOUT an active approval
 	 *     is a no-op" (`task-state.update.test.ts:312`).
 	 *     The label proxy permitted those to bypass the gate
-	 *     too, restoring the LIVE contradiction. CORRECTION04
-	 *     replaces the label proxy with the canonical
-	 *     structural-equality check on the shadow model.
+	 *     too. Replaced with full-model `isSameTaskModel`.
+	 *
+	 *   CORRECTION05:
+	 *     P0 `HALT_PHASE_STAMP_ADVANCES_ON_NON_PHASE_MUTATION`.
+	 *     Full-model equality was over-broad: mutations to
+	 *     recovery/telemetry/identity don't participate in
+	 *     phase derivation but did refresh the stamp.
+	 *     Replaced with the narrower projection-authority
+	 *     check `isSameTurnProjectionAuthority` (compares
+	 *     only the canonical phase-authority tuple).
+	 *
+	 *   CORRECTION06 (this entry — final):
+	 *     P0 `HALT_PHASE_STAMP_REFRESHED_BY_MASKED_AUTHORITY_MUTATION`.
+	 *     Even a correctly-bounded projection-authority check
+	 *     can't model `projectTurnState`'s precedence
+	 *     (`awaitingApproval` > `modelStreaming || tooling`
+	 *     > `lifecycle`). A `tool_started` under awaitingApproval
+	 *     mutates `activeToolCallIds` (a lower-precedence axis)
+	 *     while the projection stays `awaiting_approval`. The
+	 *     C05 helper still detected the mutation and refreshed
+	 *     the awaiting_approval stamp.
+	 *     C06 DELETES the mutation-proxy and replaces the
+	 *     stamping rule with same-generation agreement:
+	 *       shadowPhase === legacyPhase  AND  event !== "noop"
+	 *     The comparator already had all three facts at the
+	 *     observation site. No copied dependency list, no
+	 *     precedence-masking trap. The selector's input
+	 *     graph is no longer redundantly maintained.
 	 *
 	 * `undefined` when:
-	 *   - the comparator has never accepted a model-material
-	 *     observation yielding this phase
+	 *   - the comparator has never accepted a same-phase
+	 *     agreement observation yielding this phase
 	 *   - the observation was made by a host without a
 	 *     TurnStateTracker in the same domain (Hub/Remote
 	 *     fallback path), so no TurnState seq was available
 	 *     to stamp
 	 *
 	 * Initialized lazily — entries are added when
-	 * `compareWith` first sees a model-material observation
-	 * yielding that phase.
+	 * `compareWith` first sees a same-phase agreement
+	 * observation yielding that phase.
 	 */
 	private lastObservedTurnSeqByPhase = new Map<TurnPhase, number | undefined>()
 
@@ -217,17 +213,8 @@ export class TaskShadowComparator {
 		now: number,
 		turnSeq?: number,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
-		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
-		// Snapshot the shadow model BEFORE replaying the
-		// runtime event so `compareWith` can detect "this
-		// observation materially changed the model" via
-		// `isSameTaskModel`. Semantic-noop observations
-		// (e.g. `approval_resolved` with no active approval
-		// — `task-state.update.test.ts:312`) leave the model
-		// untouched; the stamp MUST NOT advance on those.
-		const preModel = this.hasObservedShadowState() ? this.shadow.debugSnapshot() : null
 		const observation = this.shadow.observeRuntimeEvent(event, now) ?? this.shadow.noop(now)
-		return this.compareWith(observation, legacyPhase, observation.event, turnSeq, preModel)
+		return this.compareWith(observation, legacyPhase, observation.event, turnSeq)
 	}
 
 	/**
@@ -240,13 +227,8 @@ export class TaskShadowComparator {
 		now: number,
 		turnSeq?: number,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
-		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
-		// Same-domain snapshot for `observeTaskMsg` (test seam
-		// and any direct TaskMsg path). See the comment on
-		// `observeRuntimeEvent` above.
-		const preModel = this.hasObservedShadowState() ? this.shadow.debugSnapshot() : null
 		const observation = this.shadow.observe(msg, now)
-		return this.compareWith(observation, legacyPhase, msg.type, turnSeq, preModel)
+		return this.compareWith(observation, legacyPhase, msg.type, turnSeq)
 	}
 
 	private compareWith(
@@ -254,13 +236,6 @@ export class TaskShadowComparator {
 		legacyPhase: TurnPhase,
 		event: TaskMsg["type"] | "noop",
 		turnSeq?: number,
-		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04:
-		// Pre-observation snapshot of the shadow model —
-		// `null` when this is the comparator's very first
-		// observation (no model has been recorded yet;
-		// the first observation always establishes a phase
-		// projection and is allowed to stamp).
-		preModel: TaskModel | null = null,
 	): { readonly observation: TaskShadowObservation; readonly divergence: TaskShadowDivergence | undefined } {
 		this.seq += 1
 		this.legacyPhases.push(legacyPhase)
@@ -301,8 +276,43 @@ export class TaskShadowComparator {
 		//   a transition that established phase P under
 		//   TurnState generation N.
 		const shadowPhase = toLegacyPhase(observation.projections.turnPhase)
-		const projectionAuthorityChanged = preModel === null ? true : !isSameTurnProjectionAuthority(preModel, observation.model)
-		if (event !== "noop" && projectionAuthorityChanged) {
+		// ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION06:
+		//
+		// Simplification. Phase freshness is now defined
+		// by same-generation agreement between the two
+		// phase authorities:
+		//
+		//   stamp[P] = N
+		//   iff shadowPhase === legacyPhase === P
+		//     at TurnState generation N
+		//
+		// No mutation inference, no copied dependency
+		// list, no precedence-masking trap. The
+		// comparator already has all three facts at
+		// this observation site (shadowPhase, legacyPhase,
+		// turnSeq). We just compose them.
+		//
+		// RATIONALE (chain of corrections):
+		//   CORRECTION02 same-domain identity
+		//   CORRECTION03 phase-key + adapter-noop guard
+		//   CORRECTION04 model-equality (isSameTaskModel)
+		//   CORRECTION05 projection-authority
+		//     (isSameTurnProjectionAuthority)
+		//   CORRECTION06 (this) same-generation
+		//     shadowPhase === legacyPhase agreement.
+		//
+		// CORRECTION06 closes
+		// HALT_PHASE_STAMP_REFRESHED_BY_MASKED_AUTHORITY_MUTATION:
+		// a tool_started under awaitingApproval=true
+		// mutates the lower-precedence activeToolCallIds
+		// but does NOT change the projected phase. The
+		// previous mutation-based proxies (C04, C05)
+		// both incorrectly refreshed the awaiting_approval
+		// stamp because they couldn't model the canonical
+		// selector's precedence. Agreement-based stamping
+		// is precedence-agnostic by construction.
+		const phaseAuthoritiesAgree = shadowPhase === legacyPhase
+		if (event !== "noop" && phaseAuthoritiesAgree) {
 			this.lastObservedTurnSeqByPhase.set(shadowPhase, turnSeq)
 		}
 		if (shadowPhase !== legacyPhase) {
