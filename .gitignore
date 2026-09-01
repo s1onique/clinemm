@@ -822,3 +822,12 @@ apps/vscode/.factory/evidence/
 # must survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01.md
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-REPAIR01/
+
+# 2026-09-01: ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01
+# Board amendment at 975d3315c opens the context-compaction-token-accounting
+# lane and binds this ACT as the first recon ACT. The ACT body file +
+# evidence directory must survive a fresh clone so the recon's source-of-
+# truth entry-freeze, Q1-Q12 recon, R1-R5 discriminator, and final report
+# are all durable.
+!/.factory/acts/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/
