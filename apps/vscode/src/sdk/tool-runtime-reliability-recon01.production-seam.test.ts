@@ -64,8 +64,8 @@
  */
 
 import { EventEmitter } from "events"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { ITerminal } from "@/integrations/terminal/types"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import * as vscode from "vscode"
 import { VscodeTerminalProcess } from "@/hosts/vscode/terminal/VscodeTerminalProcess"
 
 // -----------------------------------------------------------------------
@@ -133,7 +133,16 @@ const OSC633_D = "\x1b]633;D;0\x07"
 // Build a mock terminal with shellIntegration whose executeCommand
 // yields the given chunks through the read() stream. The terminal's
 // `exitStatus` is undefined (live shell) by default.
-function makeTerminal(options: { hanging?: boolean; chunks?: string[] } = {}): ITerminal {
+//
+// IMPORTANT: this fixture is shaped after the public `vscode.Terminal`
+// surface that `VscodeTerminalProcess.run(terminal: vscode.Terminal, ...)`
+// requires — not the narrower internal `ITerminal` from
+// `@/integrations/terminal/types`. The production seam dereferences
+// `terminal.exitStatus` (see VscodeTerminalProcess.run() entry guard),
+// and TypeScript rejects structurally-incompatible mocks. A typed
+// fixture here keeps future API drift visible at the production seam
+// instead of being hidden behind a double-cast.
+function makeTerminal(options: { hanging?: boolean; chunks?: string[] } = {}): vscode.Terminal {
 	const session: ShellSession = {
 		terminal: undefined as any,
 		execution: undefined as any,
@@ -141,7 +150,13 @@ function makeTerminal(options: { hanging?: boolean; chunks?: string[] } = {}): I
 		hanging: options.hanging ?? false,
 	}
 	currentSession = session
-	const execution = {
+	// Typed against the public `vscode.TerminalShellExecution` shape so the
+	// fixture stays structurally faithful to the production seam — the
+	// required `commandLine` / `cwd` fields live here, even though
+	// VscodeTerminalProcess only reads `execution.read()`.
+	const execution: vscode.TerminalShellExecution = {
+		commandLine: { value: "", isTrusted: true, confidence: 2 /* High */ },
+		cwd: undefined,
 		read: () => ({
 			async *[Symbol.asyncIterator]() {
 				for (const chunk of session.readChunks) {
@@ -154,17 +169,31 @@ function makeTerminal(options: { hanging?: boolean; chunks?: string[] } = {}): I
 		}),
 	}
 	session.execution = execution
-	session.terminal = {
+	const terminal: vscode.Terminal = {
 		name: "mock",
 		processId: Promise.resolve(12345),
+		// creationOptions is `Readonly<TerminalOptions | ExtensionTerminalOptions>`;
+		// an empty literal is a valid TerminalOptions. The production seam does not
+		// read this — it is required only by the public `vscode.Terminal` shape.
+		creationOptions: {},
 		exitStatus: undefined,
-		shellIntegration: { executeCommand: () => execution },
+		// TerminalState carries isInteractedWith + shell — also unused by the
+		// production seam but mandatory on the public type.
+		state: { isInteractedWith: false, shell: undefined },
+		shellIntegration: {
+			// cwd is `Uri | undefined` on TerminalShellIntegration. The
+			// production seam does not read this — required only by the
+			// public type.
+			cwd: undefined,
+			executeCommand: () => execution,
+		},
 		sendText: () => {},
 		show: () => {},
 		hide: () => {},
 		dispose: () => {},
 	}
-	return session.terminal as ITerminal
+	session.terminal = terminal
+	return terminal
 }
 
 function fireExecutionEnd(exitCode: number | undefined) {

@@ -1,0 +1,59 @@
+ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01 — entry freeze
+
+Predecessor ACT: ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01
+  Status: CLOSED (NOT_REPRODUCED + STRUCTURAL_OBSERVATION)
+  Head at authoring: 2a0cfbd85
+  ACT file: .factory/acts/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01.md
+  Evidence: .factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01/
+
+Correction ACT: ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01
+  Status: CLOSED (P1 BUILD-CONTRACT CORRECTION, NOT_A_PRODUCTION_DEFECT)
+  Authored: 2026-09-01
+  Author: ACT lane ClineMM (operator-driven, build gate blocked)
+
+Repository state at authoring (pre-commit):
+  HEAD         = b1c1659f4a8d9128ca4b3ea5da2868725f12acfd
+  HEAD short   = b1c1659f4
+  HEAD subject = docs+test(factory): ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 — HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND
+  Tree (with correction staged, uncommitted) = 8f20fbef984305202e923faa993c336d21f03dc7
+  Branch       = main
+  Worktree     = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  Clean        = NO (one modified file pending commit: the test fixture)
+  Files staged for the correction commit:
+    M apps/vscode/src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts
+  Files to be added in the correction commit (for durability binding):
+    A .factory/acts/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01.md
+    A .factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01/entry-freeze.txt
+    A .factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01/verification.md
+    A .factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01/source-bound-vsix.md (operator-authored)
+    M .gitignore (whitelist lines for the ACT file + evidence directory)
+
+Predecessor ACT verdict (UNCHANGED by this correction):
+  TOOL_RUNTIME_HAZARD        = STRUCTURAL_OBSERVATION (no reachable defect proven)
+  UNBOUNDED_FOREGROUND_AWAIT = STRUCTURAL (real)
+  CASE_C_WAITER_RESOLUTION   = NOT_REPRODUCED at production seam
+  CASE_E_FROM_UNRESOLVED_VSCODE_TERMINAL_PROCESS = NOT_REPRODUCED
+  GENERAL_CASE_E_REGISTRY_RESIDUE = UNTESTED / RADAR
+  ROOT_CAUSE_ISOLATED = NO
+
+This correction adds:
+  P1_BUILD_CONTRACT_DEFECT = CLOSED
+  PRODUCTION_DELTA         = ZERO
+  TSWPD_AUTOENABLE         = CONTINUE_UNCHANGED
+  ACT_VERDICT_RECON01      = UNCHANGED
+
+Hard-stop rule respected (per the predecessor ACT §"Hard-stop rule respected"):
+  - No production source code change (verified by `git diff --stat`)
+  - No test exclusion from typecheck (verified: 0 tsc errors)
+  - No `any` introduced into production code paths
+  - TSWPD logic untouched
+  - ACT verdict not reopened
+
+Stop list confirmed unchanged:
+  - Idle/task-header coherence (CORRECTION06 CLOSED)
+  - R5 manual approval (WATCH_ONLY)
+  - R0 execution obligation (CLOSED)
+  - R3/R4 (DEFER/HARDENING)
+  - Task-progression semantics
+  - Approval / risk classification
+  - Telemetry classification

@@ -197,6 +197,21 @@ apps/examples/desktop-app/.cursor/settings.json
 # fresh clone. NO production code change; one synthetic-real TEST
 # file added (drift witness); LIVE bind DEFERRED to operator.
 !/.factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
+# ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01: bounded
+# P1 build-contract correction ACT authored 2026-09-01 against the
+# closed recon ACT's test fixture. The recon ACT authored
+# apps/vscode/src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts
+# with a typed-ITerminal fixture, which fails to satisfy
+# VscodeTerminalProcess.run(terminal: vscode.Terminal, ...) at HEAD.
+# Status CLOSED / NOT_A_PRODUCTION_DEFECT (test-only correction;
+# production delta = zero; TSWPD auto-enable = continue unchanged).
+# The ACT file AND the evidence directory
+# .factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01/
+# (entry-freeze.txt + verification.md + source-bound-vsix.md) must both
+# be durably tracked for the source-bound VSIX hash + SHA-256 binding
+# to survive a fresh clone, mirroring the prior CORRECTION-pattern
+# durability contracts.
+!/.factory/acts/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01.md
 # ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 # reopened + bounded-correction ACT authored 2026-08-31 per Factory
 # causal reviewer (initial C1: GO; bounded followup C1: GO_LIVE after
@@ -276,6 +291,16 @@ apps/examples/desktop-app/.cursor/settings.json
 # .factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
 # (whitelisted above) AND to the audit-trail entry in .factory/epic-board.md.
 !/.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/
+# ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01 evidence:
+# entry-freeze.txt (Phase 0 freeze: HEAD, branch, worktree, predecessor ACT),
+# verification.md (Steps 1-7 results, verbatim command output proving
+# `bunx tsc --noEmit`, focused vitest 5/5 PASS, `bun run check-types`,
+# `bun run build:sdk`, `bun run vscode:prepublish` all exit 0),
+# source-bound-vsix.md (operator-produced VSIX bytes / SHA-256 /
+# source HEAD / source tree binding per the ACT's operator follow-up #1-#4).
+# Binds durably to .factory/acts/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-
+# RECON01-CORRECTION01.md (whitelisted above).
+!/.factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01/
 # ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
 # final-report.md (338-line closed ACT evidence: identity, conservation
 # matrix, quality gates, §15 correction-cycle section, §16 deferred
