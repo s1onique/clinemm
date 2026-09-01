@@ -204,6 +204,38 @@ describe("materializeEnvironment — synthetic HOME / TMPDIR override", () => {
 		expect(out.TMPDIR).toBe("/sandbox/tmp");
 	});
 
+	// ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01 (CORRECTED scope):
+	// synthetic temp dir is materialized as TMPDIR + TMP + TEMP. Node.js
+	// checks TMPDIR → TMP → TEMP in that order on non-Windows systems;
+	// GNU coreutils `mktemp`, `sort -T`, etc. consult $TMP / $TEMP. The
+	// production-seam witness is T3 of
+	// `darwin-seatbelt-temp-write-authority01.c1-green.test.ts` which
+	// runs a real Node process inside the sandbox and asserts these
+	// vars match os.tmpdir() inside the sandbox.
+	it("also sets TMP and TEMP to syntheticTempDir (so tooling honoring $TMP / $TEMP is steered to capability tempRoot)", () => {
+		const out = materializeEnvironment(
+			{ mode: "sanitized", allow: [] },
+			{
+				parentEnv: {},
+				syntheticTempDir: "/sandbox/tmp",
+			},
+		);
+		expect(out.TMP).toBe("/sandbox/tmp");
+		expect(out.TEMP).toBe("/sandbox/tmp");
+	});
+
+	it("does NOT emit TMP / TEMP / TMPDIR when no syntheticTempDir is provided (no leak of process.env.TMPDIR to sandbox)", () => {
+		const out = materializeEnvironment(
+			{ mode: "sanitized", allow: [] },
+			{
+				parentEnv: { TMPDIR: "/parent/tmp", TMP: "/parent/tmp", TEMP: "/parent/tmp" },
+			},
+		);
+		expect(out.TMPDIR).toBeUndefined();
+		expect(out.TMP).toBeUndefined();
+		expect(out.TEMP).toBeUndefined();
+	});
+
 	it("keeps the parent's HOME when no synthetic HOME is provided", () => {
 		const out = materializeEnvironment(
 			{ mode: "sanitized", allow: [] },

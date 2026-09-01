@@ -197,13 +197,32 @@ export function materializeEnvironment(
 				: fallback;
 	}
 
-	// 2) Synthetic HOME / TMPDIR override the baseline when the
-	// caller has computed them.
+	// 2) Synthetic HOME / TMPDIR / TMP / TEMP override the baseline
+	// when the caller has computed them.
+	//
+	// ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01 (CORRECTED scope):
+	// steering per-user temp authority through TMPDIR alone is
+	// insufficient for Node.js, which checks TMPDIR → TMP → TEMP
+	// in that order on non-Windows systems (Node.js os module).
+	// Setting all three also covers GNU coreutils (`mktemp`,
+	// `sort -T`, …) and miscellaneous language runtimes that consult
+	// $TMP / $TEMP. The bounded pattern is: tooling honors
+	// capability-private tempRoot rather than falling back to the
+	// global `/tmp` (which we DO grant as a compat allowance) or
+	// the un-canonicalized process TMPDIR.
+	//
+	// macOS BSD mktemp specifically does NOT consult $TMP / $TEMP /
+	// $TMPDIR; it uses getconf _CS_DARWIN_USER_TEMP_DIR for its
+	// default. The T1 mktemp /tmp/... test in
+	// `darwin-seatbelt-temp-write-authority01.c1-green.test.ts` is
+	// the explicit compatibility witness for that BSD behavior.
 	if (options.syntheticHome) {
 		out.HOME = options.syntheticHome;
 	}
 	if (options.syntheticTempDir) {
 		out.TMPDIR = options.syntheticTempDir;
+		out.TMP = options.syntheticTempDir;
+		out.TEMP = options.syntheticTempDir;
 	}
 
 	// 3) Caller-provided allow list. The allow list is a positive

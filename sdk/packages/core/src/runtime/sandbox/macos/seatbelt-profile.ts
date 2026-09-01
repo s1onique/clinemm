@@ -40,6 +40,8 @@
  *      explicitly called out the need for a tested escape function.
  */
 
+import { realpathSync } from "node:fs";
+
 import type { CommandCapability } from "../types";
 import { SandboxError } from "../types";
 
@@ -49,11 +51,13 @@ import { SandboxError } from "../types";
  * required for almost every dev tool to function (process startup,
  * redirection targets).
  *
- * We intentionally do NOT include `/private/var/folders` or `/tmp`
- * here: those are too broad and would let a sandboxed process write
- * to any per-user temp file on the host, which is exactly the kind
- * of damage the sandbox is supposed to bound. Tools that need a
- * scratch dir must use the capability's `tempRoot`.
+ * The capability's `tempRoot` is for per-invocation synthesized scratch
+ * space (allocated under `os.tmpdir()` and torn down on completion).
+ * It is NOT a substitute for canonical `/tmp` — many tools hard-code
+ * literal `/tmp` (which on darwin resolves to `/private/tmp`) and BSD
+ * `mktemp` ignores `$TMPDIR` per Apple's platform contract. See
+ * {@link ALWAYS_WRITABLE_TEMP_SUBPATHS} for the explicit `/tmp`
+ * compatibility grant.
  *
  * `/dev/null` is the canonical redirection target; `/dev/tty` is
  * needed for interactive prompts; `/dev/zero` is occasionally needed
@@ -69,9 +73,77 @@ export const ALWAYS_WRITABLE_LITERALS: readonly string[] = Object.freeze([
  * platform-required writable subpaths (e.g. for system service
  * sockets). Keep EMPTY by default — broad write grants defeat
  * defense-in-depth.
+ *
+ * Note: this constant does NOT carry the system-temp grant.
+ * That lives in {@link ALWAYS_WRITABLE_TEMP_SUBPATHS}, which
+ * has a dedicated category because it is
+ *   (a) ALWAYS allowed (independent of capability),
+ *   (b) bounded to canonical temp roots only (NOT `/var/folders`
+ *       blanket or arbitrary per-user dirs), and
+ *   (c) load-bearing for ordinary tooling (compilers, package
+ *       managers, shell pipelines, archive tools, test runners,
+ *       language runtimes that hard-code `/tmp`).
  */
 export const ALWAYS_WRITABLE_SYSTEM_SUBPATHS: readonly string[] = Object.freeze(
 	[],
+);
+
+/**
+ * ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01:
+ *
+ * Canonical `/tmp` granted as an always-writable subpath in seatbelt
+ * workspace-write mode. This is an EXPLICIT PRODUCT-POLICY CHOICE for
+ * `/tmp` compatibility (many tools hard-code literal `/tmp` and BSD
+ * `mktemp` ignores `$TMPDIR`), not a "capability-private scratch area"
+ * pattern. The blast radius is documented in the kernel matrix test
+ * `darwin-seatbelt-temp-write-authority01.c1-green.test.ts` T9.
+ *
+ * The invariant: write authority for `os.tmpdir()` (the per-user
+ * `/private/var/folders/.../T`) is NOT included here. Tooling that
+ * honors `$TMPDIR` (Node.js, GNU coreutils, most non-BSD tools) is
+ * steered into the capability's private `tempRoot` via
+ * {@link materializeEnvironment} setting `TMPDIR`/`TMP`/`TEMP` to
+ * the synthesized per-invocation root. That is the bounded path.
+ *
+ * Why canonicalize `/tmp`:
+ *
+ *   macOS exposes `/tmp` as a synthetic symlink to `/private/tmp`.
+ *   Seatbelt subpath filters match the RESOLVED vnode path (per
+ *   canonical-paths.ts and the recon), so the textual `/tmp` in a
+ *   profile would NOT match a process opening `/tmp/foo` (which the
+ *   kernel resolves to `/private/tmp/foo`). We must canonicalize.
+ *
+ * Why NOT also canonicalize `os.tmpdir()`:
+ *
+ *   `os.tmpdir()` returns the current process's per-user temp root
+ *   (`/private/var/folders/<user>/T`). Granting that entire subtree
+ *   as always-writable lets a sandboxed command overwrite, delete,
+ *   or rename ANY temp artifact owned by that user — not just its
+ *   own scratch area. That is a materially larger authority expansion
+ *   than `/tmp` (which is a shared system temp, not user-owned). The
+ *   bounded pattern is to keep per-user temp authority inside the
+ *   capability-private `tempRoot` (one subtree per invocation, with
+ *   `TMPDIR`/`TMP`/`TEMP` materialization to steer tooling).
+ *
+ * Resolution: compute the canonical subpath LAZILY at module load
+ * via `realpathSync`. If `realpathSync` fails (defensive; on linux
+ * `/tmp` resolves to the linux tmp root which the Seatbelt backend
+ * never sees), the array is empty — the profile generator emits
+ * nothing. The Seatbelt backend itself only activates on darwin.
+ *
+ * Module-private: the constant is consumed by `buildWriteRule` only.
+ * Test coverage asserts on the RENDERED profile SBPL (the real
+ * authority surface), not on this constant's contents — no SDK
+ * surface is added for test introspection.
+ */
+const ALWAYS_WRITABLE_TEMP_SUBPATHS: readonly string[] = Object.freeze(
+	(() => {
+		try {
+			return [realpathSync("/tmp")];
+		} catch {
+			return [];
+		}
+	})(),
 );
 
 /**
@@ -209,7 +281,28 @@ function buildWriteRule(
 		subpaths.push(`(literal "${p}")`);
 	}
 	for (const p of ALWAYS_WRITABLE_SYSTEM_SUBPATHS) {
-		subpaths.push(`(subpath "${p}")`);
+		subpaths.push(`(subpath "${escapeSbplString(p)}")`);
+	}
+	// ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01:
+	// Explicit /tmp compatibility grant. Emits `(subpath "<canonical /tmp>")`
+	// (which on darwin resolves to /private/tmp via realpath). The
+	// capability-private `tempRoot` (synthesized under `os.tmpdir()`)
+	// is already in `subpaths` above; this loop only ADDS the canonical
+	// `/tmp` root. Per-user `os.tmpdir()` is deliberately NOT in this
+	// list — that authority is bounded to the capability's `tempRoot`
+	// (one subtree per invocation, steered via TMPDIR/TMP/TEMP env
+	// materialization in `materializeEnvironment`).
+	//
+	// If the capability's `tempRoot` happens to equal the canonical
+	// /tmp root (extremely unusual), the Seatbelt `(subpath ...)` duplicate
+	// is harmless — the kernel collapses overlapping subpath allows.
+	//
+	// Each entry is canonical (realpath-resolved) by construction;
+	// see ALWAYS_WRITABLE_TEMP_SUBPATHS docstring. Untrusted callers
+	// cannot inject non-canonical paths here because the constant
+	// is computed once at module load from the host filesystem.
+	for (const p of ALWAYS_WRITABLE_TEMP_SUBPATHS) {
+		subpaths.push(`(subpath "${escapeSbplString(p)}")`);
 	}
 	const allowPart = `(allow file-write*\n  ${subpaths.join("\n  ")})`;
 	const denyPart = buildWriteDenyRule(readonlyRoots);

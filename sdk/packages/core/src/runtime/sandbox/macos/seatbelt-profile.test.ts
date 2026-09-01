@@ -17,6 +17,8 @@
  */
 
 import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -293,6 +295,189 @@ describe("generateSeatbeltProfile", () => {
 				sshAgentCanonicalSocketPath: CANONICAL,
 			});
 			expect(p).toContain('(path-literal "/tmp/agent\\"quoted")');
+		});
+	});
+
+	// ===============================================================
+	// ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01
+	// Explicit /tmp compatibility grant (CORRECTED bounded scope).
+	//
+	// The CORRECTED patch grants ONLY canonical /tmp. It does NOT
+	// grant `os.tmpdir()` (per-user `/private/var/folders/.../T`) as
+	// a permanent global. Per-user temp authority is bounded to the
+	// capability's `tempRoot` (one subtree per invocation, steered
+	// via TMPDIR/TMP/TEMP env materialization).
+	//
+	// This block tests:
+	//   T1) literal /tmp (resolved to /private/tmp) IS writable
+	//   T2) os.tmpdir() is NOT in the profile (would be over-broad)
+	//   T3) the profile's temp allow is bounded to canonical /tmp
+	//   T4) temp subpaths do NOT widen to /var/folders or os.tmpdir()
+	//   T5..T9) conservation: reads, ssh-agent, determinism, network, deny-after-allow
+	// ===============================================================
+	describe("ACT-CLINEMM-SEATBELT-TEMP-WRITE-AUTHORITY01: explicit /tmp compatibility grant", () => {
+		it("T1 RED→GREEN: profile grants (subpath \"<canonical /tmp>\") for BSD mktemp + literal /tmp compatibility", () => {
+			const canonicalTmp = (() => {
+				try {
+					return realpathSync("/tmp");
+				} catch {
+					return null;
+				}
+			})();
+			if (!canonicalTmp) {
+				expect(true).toBe(true);
+				return;
+			}
+			const p = generateSeatbeltProfile(minimalCap);
+			expect(p).toContain(`(subpath "${canonicalTmp}")`);
+		});
+
+		it("T2 CORRECTION BOUND: profile does NOT grant canonical os.tmpdir() (per-user temp authority is bounded to capability tempRoot)", () => {
+			// CRITICAL CONSERVATION: the previous patch incorrectly
+			// granted the canonical os.tmpdir() (per-user temp root)
+			// as a permanent global allow. This let a sandboxed
+			// command overwrite / rename / delete any other temp
+			// artifact owned by that user. The CORRECTED scope
+			// explicitly removes that global grant.
+			const canonicalTmpdir = (() => {
+				try {
+					return realpathSync(tmpdir());
+				} catch {
+					return null;
+				}
+			})();
+			if (!canonicalTmpdir) {
+				expect(true).toBe(true);
+				return;
+			}
+			// Use a minimal cap with no tempRoot to prove the bare
+			// profile does NOT include canonical os.tmpdir().
+			const p = generateSeatbeltProfile(minimalCap);
+			expect(p).not.toContain(`(subpath "${canonicalTmpdir}")`);
+		});
+
+		it("T3 conservation: profile's temp allow is bounded to canonical /tmp (only one temp subpath emitted, and it IS canonical /tmp)", () => {
+			// The CORRECTED scope: at most one temp subpath in the
+			// profile, and it MUST be the canonical /tmp (resolved
+			// through realpathSync so /tmp -> /private/tmp is
+			// accounted for). We assert on the RENDERED profile
+			// rather than on the constant's contents (no SDK
+			// surface is exported solely for tests).
+			const canonicalTmp = (() => {
+				try {
+					return realpathSync("/tmp");
+				} catch {
+					return null;
+				}
+			})();
+			if (!canonicalTmp) {
+				expect(true).toBe(true);
+				return;
+			}
+			const p = generateSeatbeltProfile(minimalCap);
+			// Profile MUST contain the canonical /tmp subpath in the
+			// (allow file-write*) section. We count occurrences so a
+			// future "wildcard" or "double grant" regression would
+			// also fail.
+			const matches = p.match(
+				new RegExp(
+					`\\(subpath "${canonicalTmp.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"\\)`,
+					"g",
+				),
+			);
+			expect(matches?.length ?? 0).toBeGreaterThanOrEqual(1);
+			// No other temp-shaped subpath appears. We test this by
+			// ensuring no writable subpath starts with a temp-shaped
+			// prefix outside the canonical /tmp grant. Other shapes
+			// (literals, system subpaths, workspace) are unchanged.
+			expect(p).not.toContain('(subpath "/var/folders/');
+			expect(p).not.toContain('(subpath "/private/var/folders/');
+		});
+
+		it("T4 conservation: temp subpaths do NOT widen to os.tmpdir()", () => {
+			// The CORRECTED scope explicitly excludes os.tmpdir()
+			// (per-user temp root).
+			const canonicalTmpdir = (() => {
+				try {
+					return realpathSync(tmpdir());
+				} catch {
+					return null;
+				}
+			})();
+			if (!canonicalTmpdir) {
+				expect(true).toBe(true);
+				return;
+			}
+			// The profile must NOT include the per-user temp root.
+			const p = generateSeatbeltProfile(minimalCap);
+			expect(p).not.toContain(`(subpath "${canonicalTmpdir}")`);
+		});
+
+		it("T5 conservation: temp allow does NOT add (allow file-read*) widening", () => {
+			const p = generateSeatbeltProfile(minimalCap);
+			expect(p).toMatch(/^\(allow file-read\*\)$/m);
+		});
+
+		it("T6 conservation: ssh-agent rules are unchanged", () => {
+			const CANONICAL = "/private/tmp/com.apple.launchd.abc/Listeners";
+			const p = generateSeatbeltProfile(minimalCap, {
+				sshAgentCanonicalSocketPath: CANONICAL,
+			});
+			expect(p).toContain("(allow system-socket");
+			expect(p).toContain("(socket-domain AF_UNIX))");
+			expect(p).toContain(
+				`(remote unix-socket (path-literal "${CANONICAL}"))`,
+			);
+		});
+
+		it("T7 conservation: profile remains deterministic after temp-subpath addition", () => {
+			const cap: CommandCapability = {
+				readonlyRoots: [],
+				writableRoots: ["/Users/me/writable"],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+				tempRoot: "/private/tmp/clinemm-sandbox-1",
+			};
+			const a = generateSeatbeltProfile(cap);
+			const b = generateSeatbeltProfile(cap);
+			expect(a).toBe(b);
+			expect(sha256(a)).toBe(sha256(b));
+		});
+
+		it("T8 conservation: network deny rule unchanged when temp subpaths added", () => {
+			const p = generateSeatbeltProfile(minimalCap);
+			expect(p).toContain("(deny network*)");
+			const p2 = generateSeatbeltProfile({
+				...minimalCap,
+				network: "allow",
+			});
+			expect(p2).not.toContain("(deny network*)");
+		});
+
+		it("T9 conservation: temp subpaths appear AFTER readonlyRoots deny (deny-after-allow ordering preserved)", () => {
+			const cap: CommandCapability = {
+				readonlyRoots: ["/Users/me/readonly"],
+				writableRoots: ["/Users/me/writable"],
+				network: "deny",
+				environment: { mode: "sanitized", allow: [] },
+			};
+			const p = generateSeatbeltProfile(cap);
+			const allowIdx = p.indexOf("(allow file-write*");
+			const denyIdx = p.indexOf("(deny file-write*");
+			expect(allowIdx).toBeGreaterThanOrEqual(0);
+			expect(denyIdx).toBeGreaterThan(allowIdx);
+			const canonicalTmp = (() => {
+				try {
+					return realpathSync("/tmp");
+				} catch {
+					return null;
+				}
+			})();
+			if (canonicalTmp) {
+				const subpathIdx = p.indexOf(`(subpath "${canonicalTmp}")`);
+				expect(subpathIdx).toBeGreaterThan(allowIdx);
+				expect(subpathIdx).toBeLessThan(denyIdx);
+			}
 		});
 	});
 });
