@@ -1,0 +1,235 @@
+ACT_ID    = ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01
+EPIC      = EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01
+OPENED_AT = 2026-09-01 (operator pass; Fact reviewer disposition recorded)
+OWNER     = Factory runtime-state engineer + Factory reviewer
+           (joint; runtime-state engineer owns the source seam;
+            reviewer owns the ROOT_CAUSE_ISOLATED authority and the
+            GREEN gate)
+
+PHASE_0_FREEZE
+==============
+
+HEAD                = 5a47daa972aff5806ee3ebaedae404e800298ef0
+                     (verified via `git rev-parse HEAD`)
+ORIGIN_MAIN         = 5a47daa972aff5806ee3ebaedae404e800298ef0
+                     (verified via `git rev-parse origin/main`;
+                      HEAD == origin/main — clean HEAD)
+BRANCH              = main
+WORKTREE            = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+WORKTREE_STATUS     = clean (`git status --porcelain=v1` returns empty)
+STASHES             = none (`git stash list` empty)
+TRACKED_DIRT        = none (`git status --porcelain=v1` empty)
+`git diff --check`  = clean (no whitespace-only errors at HEAD)
+
+PRECEDENT_RELATIONSHIP
+======================
+
+The predecessor ACT `ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-
+DISCRIMINATOR01` (closed 2026-09-01 at `71a56613a`) ended at
+
+  HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND
+  ROOT_CAUSE_ISOLATED = NO
+  PRODUCTION_REPAIR   = NOT_AUTHORIZED
+
+because it had only SYNTHETIC_REAL evidence (no LIVE bind). The
+LIVE bind is now recorded by this ACT's reviewer disposition
+(verified in PHASE_1 below), which is the new decisive fact that
+crosses the threshold. This ACT OPENS the bounded repair ACT
+that the predecessor ACT explicitly deferred.
+
+LIVE_FIRST_IDLE_WRITER = controller-epoch-transition-reseed
+                         (LIVE bind; FULL_TSWPD capture cycle
+                          recorded, not yet attached to this
+                          evidence tree — see PHASE_1 §0.)
+ROOT_CAUSE_ISOLATED    = YES (reviewer disposition 2026-09-01)
+DEFECT                 = EPOCH_TRANSITION_RESEED_CLOBBERS_ACTIVE_TURNSTATE
+                         (aka controller-epoch-transition-reseed's
+                          streaming → idle policy is invalid for
+                          this LIVE transition class)
+REPAIR_AUTHORIZED      = YES (reviewer disposition 2026-09-01)
+                         but STRATEGY_UNDECIDED (A/B/C/D not
+                         chosen yet — must pass Q1..Q5 causal
+                         discriminators first)
+PRODUCTION_CODE_DELTA  = NOT YET APPLIED  (this ACT opens the
+                                          bounded recon + RED
+                                          cycle; the production
+                                          code change is gated
+                                          on the strategy choice
+                                          driven by §1 causal
+                                          discrimination + §2
+                                          strategy scoring)
+
+CORRECTION01_REVIEWER_DISPOSITION (2026-09-01)
+==============================================
+
+P0_1  Replace the passing defect-witness oracle with a true RED:
+      assert the INVARIANT (`currentPhase === "streaming"` after
+      the active chronology); the actual HEAD value (`idle`) is
+      the failure. The new RED-SYNTHETIC-PRIMARY test FAILS at
+      HEAD with:
+        AssertionError: expected 'idle' to be 'streaming'
+        Expected: "streaming"
+        Received: "idle"
+      Confirmed by `bun x vitest run` against
+      runtime-epoch-transition-active-turnstate-repair01.synthetic-real.test.ts
+      at HEAD `5a47daa97`:
+        Tests  1 failed | 4 passed | 1 skipped (6)
+
+P0_2  Relabel the harness as SYNTHETIC_REAL (not
+      REAL_PRODUCTION_SEAM). The composition-harness pattern
+      (read source, extract method body, `new Function()`,
+      execute against manual `MessageIdMinter` +
+      `MessageTranslatorState` + `TurnStateTracker` deps) is
+      the documented SYNTHETIC_REAL class — same pattern as the
+      predecessor `BHTD01` test, which was relabeled for the
+      same reason per the prior reviewer's P0_2 verdict.
+
+P1    Make the GREEN harness parameterizable so Strategy B is
+      mechanically runnable post-Repair01. The extractor
+      `getProductionReseedBody` accepts both
+        HEAD signature:     resetMessageTranslatorAndFence(): void
+        Post-Repair01 sig:  resetMessageTranslatorAndFence(requestedPhase?: TurnPhase): void
+      `executeProductionReseed` accepts an optional
+      `requestedPhase?: TurnPhase = "idle"` and binds it as a
+      closure variable the compiled body reads. The .skip
+      forward-declaration
+      `RED-SYNTHETIC-FORWARD-DECLARATION-GREEN-STRATEGY-B`
+      exercises the post-Repair01 flow by passing
+      `requestedPhase: "streaming"` and asserting
+      `currentPhase === "streaming"`.
+
+Plus: correct the §9 "GREEN-on-its-own-boundary" line in the ACT
+      body to the mandated Factory terminology:
+        LIVE_FAILURE          = PROVEN
+        SYNTHETIC_REAL_RED    = FAILING / REPRODUCED
+        CONSERVATION_CONTROL  = GREEN
+        SYNTHETIC_REAL_HARNESS = HONESTLY LABELED
+        STRATEGY              = UNDECIDED
+        PRODUCTION_DELTA      = ZERO
+
+VERDICT_AFTER_CORRECTION01 (2026-09-01)
+=======================================
+
+LIVE_FAILURE             = PROVEN
+SYNTHETIC_REAL_RED        = FAILING / REPRODUCED
+CONSERVATION_CONTROL      = GREEN
+SYNTHETIC_REAL_HARNESS    = HONESTLY LABELED
+STRATEGY_GREEN_FORWARD    = MECHANICALLY RUNNABLE
+STRATEGY                  = B (SELECTED FOR IMPLEMENTATION;
+                            Q5 graduated post-RED evidence)
+PRODUCTION_DELTA          = ZERO
+ACTION                    = FIX_ONCE_AND_CONTINUE
+                          (C1: GO per CORRECTION01 reviewer
+                           disposition; no second review loop
+                           unless the corrected RED fails to
+                           reproduce the live chronology)
+
+VERDICT_AFTER_STRATEGY_B_APPLIED (2026-09-01)
+==============================================
+
+Production patch applied to SdkController.ts:
+  - resetMessageTranslatorAndFence signature changed from
+    `(): void` to `(requestedPhase: TurnPhase = "idle"): void`
+  - Sites 2 (SdkFollowupCoordinator callback, line 1428) and
+    4 (edit-message-and-regenerate, line 3121) now pass
+    `"streaming"`
+  - Sites 1 (SdkModeCoordinator, line 1322), 3 (SessionRebuilds,
+    line 1421 — now NOT the seam), and 5
+    (controller-restore-checkpoint, line 3233) keep the
+    default `"idle"` for PTAD preservation
+
+VERDICT_AFTER_HALT_WRONG_PRODUCTION_SEAM (2026-09-01)
+=====================================================
+
+CORRECTION01 reviewer disposition flagged that the initial
+Strategy-B patch attached `"streaming"` to the GENERIC
+LIFECYCLE callback SdkTaskControlCoordinator.resetMessageTranslator
+at line 1472. That callback serves clearTask() and showTaskWithId()
+(consumers that are NOT active continuations). The patch was
+corrected to attach `"streaming"` to the ACTIVE ASK-RESPONSE
+callback SdkFollowupCoordinator.resetMessageTranslator at line
+1428, which serves continueIdleSession() and resumeSessionFromTask()
+(both after the controller-ask-response streaming write).
+
+After the correction:
+  - Production code: line 1428 SdkFollowupCoordinator passes
+    `"streaming"` (active ask-response seam);
+    line 1479 SdkTaskControlCoordinator defaults to `"idle"`
+    (lifecycle seam);
+    line 3121 edit-message-and-regenerate passes `"streaming"`
+    (active edit-and-regenerate seam);
+    sites 1322 / 1421 / 3233 default to `"idle"` (lifecycle)
+  - Test file gained 3 behavioral witnesses:
+    CONTROL_CLEAR_TASK (SdkTaskControlCoordinator.clearTask
+      consumer must NOT pass "streaming");
+    CONTROL_HISTORY_REOPEN (SdkTaskControlCoordinator.showTaskWithId
+      consumer must NOT pass "streaming");
+    ACTIVE_CONTINUATION (SdkFollowupCoordinator consumers must
+      reach the fence via the SdkController wiring that passes
+      "streaming")
+  - GREEN-SITE-2 was renamed GREEN-SITE-FOLLOWUP and now
+    targets SdkFollowupCoordinator (line 1428) instead of
+    SdkTaskControlCoordinator
+  - GREEN-SITE-4 was renamed GREEN-SITE-EDIT-AND-REGENERATE
+  - New GREEN-SITE-CONTROL-DEFAULT asserts that the
+    SdkTaskControlCoordinator callback does NOT pass
+    "streaming"
+
+B_VERIFIED criteria all satisfied (post-correction):
+  - production Strategy-B patch applied ✓
+  - GREEN-STRATEGY-B test GREEN ✓
+  - GREEN-SITE-FOLLOWUP (SdkFollowupCoordinator active
+    ask-response seam) GREEN ✓
+  - GREEN-SITE-CONTROL-DEFAULT (SdkTaskControlCoordinator
+    lifecycle callback defaults to idle) GREEN ✓
+  - GREEN-SITE-EDIT-AND-REGENERATE (edit-and-regenerate
+    active seam) GREEN ✓
+  - CONTROL_CLEAR_TASK (consumer semantics: clearTask) GREEN ✓
+  - CONTROL_HISTORY_REOPEN (consumer semantics: showTaskWithId)
+    GREEN ✓
+  - ACTIVE_CONTINUATION (consumer semantics: continueIdleSession
+    + resumeSessionFromTask) GREEN ✓
+  - RED-PTD-CTL01 + RED-PTD-CTL02 GREEN ✓
+  - ARETC01-C01 GREEN ✓ (updated to post-Repair01 shape;
+    primary chronology targets the active ask-response seam)
+  - BHTD01 GREEN ✓ (updated to post-Repair01 shape with the
+    controller-epoch-transition-reseed writer special-cased)
+  - tsc --noEmit clean ✓
+
+FINAL_STATE                = STRATEGY_B = VERIFIED
+                              (this ACT is ready to CLOSE)
+COLLATERAL_TESTS_PASS      = BHTD01 (6/6), ARETC01-C01 (6/6),
+                              Repair01 (12/12)
+REPAIR01_TEST_TOTAL        = 12 tests:
+                              RED-SOURCE, GREEN-STRATEGY-B,
+                              RED-PTD-CTL01, RED-PTD-CTL02,
+                              GREEN-SITE-FOLLOWUP,
+                              GREEN-SITE-CONTROL-DEFAULT,
+                              GREEN-SITE-EDIT-AND-REGENERATE,
+                              GREEN-PTAD-DEFAULT,
+                              CONTROL_CLEAR_TASK,
+                              CONTROL_HISTORY_REOPEN,
+                              ACTIVE_CONTINUATION,
+                              RED-UNION
+ACTIONS_TAKEN              = (1) rename seam-3 RED to
+                              GREEN-STRATEGY-B (chronology
+                              GREEN); (2) convert .skip
+                              forward-declaration into GREEN-
+                              SITE-FOLLOWUP/SITE-CONTROL-DEFAULT/
+                              SITE-EDIT-AND-REGENERATE structural
+                              witnesses; (3) add 3 behavioral
+                              witnesses (CONTROL_CLEAR_TASK,
+                              CONTROL_HISTORY_REOPEN,
+                              ACTIVE_CONTINUATION) for the
+                              CORRECTED seam classification
+                              per the HALT_WRONG_PRODUCTION_SEAM
+                              correction; (4) collateral-test
+                              update (ARETC01 + BHTD01) to
+                              acknowledge the post-Repair01
+                              shape; (5) HALT_WRONG_PRODUCTION_SEAM
+                              correction: moved "streaming"
+                              from SdkTaskControlCoordinator
+                              (generic lifecycle) to
+                              SdkFollowupCoordinator (active
+                              ask-response)
+

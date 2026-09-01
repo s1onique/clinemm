@@ -78,11 +78,11 @@ import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import {
+	applyTurnStateWriterProvenanceDiagnosticProfile,
 	composeEffectiveDiagnosticKnobs,
 	resolveEffectiveDiagnosticKnobs,
 } from "./dogfood-diagnostic-profile"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
-import { applyTurnStateWriterProvenanceDiagnosticProfile } from "./dogfood-diagnostic-profile"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
@@ -1418,7 +1418,14 @@ export class Controller {
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
 			isClineManagedProviderActive: () => this.isClineManagedProviderActive(),
 			emitClineAuthError: () => this.emitClineAuthErrorWithTelemetry(),
-			resetMessageTranslator: () => this.resetMessageTranslatorAndFence(),
+			// ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01 Strategy-B:
+			// this is the ACTUAL active ask-response seam. SdkFollowupCoordinator
+			// invokes this callback at `continueIdleSession()` (the post-ask-response
+			// active-continuation path) and `resumeSessionFromTask()` (the resume path).
+			// Both are preceded by the `controller-ask-response` `streaming` write in
+			// SdkController.askResponse, so the fence must preserve `streaming` across
+			// the epoch transition.
+			resetMessageTranslator: () => this.resetMessageTranslatorAndFence("streaming"),
 			postStateToWebview: () => this.postStateToWebview(),
 			onResumeFailed: () => {
 				this.turnStateTracker.setWithWriter("error", undefined, this.writerIdentity("followup-on-resume-failed"))
@@ -3111,7 +3118,7 @@ export class Controller {
 				this.writerIdentity("controller-edit-message-and-regenerate"),
 			)
 			this.messageTranslatorState.clearTurnOutcome()
-			this.resetMessageTranslatorAndFence()
+			this.resetMessageTranslatorAndFence("streaming")
 
 			const task = createTaskProxy(
 				startResult.sessionId,
@@ -3749,11 +3756,21 @@ export class Controller {
 	 * the canonical state. The reseed is intentionally a one-shot invalidation
 	 * (not a fence that compares epochs per read); the next conversation writer
 	 * (task-start-init-task, etc.) will re-assert whatever phase is appropriate.
+	 *
+	 * ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01 Strategy-B:
+	 * callers that have just established an active turn (the
+	 * `controller-ask-response` and `controller-edit-message-and-regenerate`
+	 * writers at sites 2 and 4) pass `requestedPhase: "streaming"` so the
+	 * fence preserves the active phase across the epoch transition. The
+	 * other three call sites (1, 3, 5) — mode reset, session rebuild, and
+	 * checkpoint restore — are not preceded by an active-prior write and
+	 * continue to default to `"idle"`; this preserves the PTAD
+	 * 1787358662798_o2lwn negative-control invariant.
 	 */
-	resetMessageTranslatorAndFence(): void {
+	resetMessageTranslatorAndFence(requestedPhase: TurnPhase = "idle"): void {
 		this.messageTranslatorState.reset()
 		this.messageTranslatorState.getMinter().bumpEpoch()
-		this.turnStateTracker.setWithWriter("idle", undefined, this.writerIdentity("controller-epoch-transition-reseed"))
+		this.turnStateTracker.setWithWriter(requestedPhase, undefined, this.writerIdentity("controller-epoch-transition-reseed"))
 	}
 
 	async getStateToPostToWebview(): Promise<ExtensionState> {
@@ -4004,13 +4021,13 @@ export class Controller {
 				// D) still gate on identity + per-knob env vars as
 				// before.
 				//
-			// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01 (Round 2 fix):
-			// `diagnosticKnobsResolved` is the COMPOSED 5-knob shape
-			// from composeEffectiveDiagnosticKnobs(...) above; the D
-			// knob reflects the workspace-toggle-aware precedence
-			// (env > workspace > profile). The wire field is the
-			// single source of truth for the UI's VIAPD indicator.
-			diagnosticKnobs: diagnosticKnobsResolved,
+				// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01 (Round 2 fix):
+				// `diagnosticKnobsResolved` is the COMPOSED 5-knob shape
+				// from composeEffectiveDiagnosticKnobs(...) above; the D
+				// knob reflects the workspace-toggle-aware precedence
+				// (env > workspace > profile). The wire field is the
+				// single source of truth for the UI's VIAPD indicator.
+				diagnosticKnobs: diagnosticKnobsResolved,
 				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
 				//
 				// The webview-facing Thinking/presentation projection. LOCAL

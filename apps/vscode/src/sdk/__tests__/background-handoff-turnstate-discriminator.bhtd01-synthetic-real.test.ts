@@ -56,6 +56,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
+import type { TurnPhase } from "@shared/ExtensionMessage"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import {
 	clearTurnStateWriterProvenanceDiagnostic,
@@ -81,8 +82,22 @@ const SDK_CONTROLLER_PATH = resolve(__dirname, "../SdkController.ts")
 
 function expectProductionLineExists(writerId: TurnStateWriterId): void {
 	const source = readFileSync(SDK_CONTROLLER_PATH, "utf8")
-	const needle = `setWithWriter("idle", undefined, this.writerIdentity("${writerId}")`
 	const lines = source.split("\n")
+	if (writerId === "controller-epoch-transition-reseed") {
+		// ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01
+		// Strategy-B: this writer is now parameterized via `requestedPhase`.
+		// The production setWithWriter argument is the closure variable
+		// `requestedPhase` (not the literal `"idle"`).
+		const hit = lines.find((l) =>
+			l.includes('setWithWriter(requestedPhase, undefined, this.writerIdentity("controller-epoch-transition-reseed")'),
+		)
+		expect(
+			hit,
+			`production setWithWriter(requestedPhase, ...) line missing for writerId=controller-epoch-transition-reseed in ${SDK_CONTROLLER_PATH}`,
+		).toBeTruthy()
+		return
+	}
+	const needle = `setWithWriter("idle", undefined, this.writerIdentity("${writerId}")`
 	const hit = lines.find((l) => l.includes(needle))
 	expect(
 		hit,
@@ -95,6 +110,16 @@ function expectProductionLineExists(writerId: TurnStateWriterId): void {
 
 function readProductionLine(writerId: TurnStateWriterId): string {
 	const source = readFileSync(SDK_CONTROLLER_PATH, "utf8")
+	const lines = source.split("\n")
+	if (writerId === "controller-epoch-transition-reseed") {
+		const hit = lines.find((l) =>
+			l.includes('setWithWriter(requestedPhase, undefined, this.writerIdentity("controller-epoch-transition-reseed")'),
+		)
+		if (!hit) {
+			throw new Error(`production line not found for writerId=${writerId}`)
+		}
+		return hit
+	}
 	const needle = `setWithWriter("idle", undefined, this.writerIdentity("${writerId}")`
 	const hit = source.split("\n").find((l) => l.includes(needle))
 	if (!hit) {
@@ -111,10 +136,15 @@ function readProductionLine(writerId: TurnStateWriterId): string {
 
 function getResetMessageTranslatorAndFenceBody(): string {
 	const source = readFileSync(SDK_CONTROLLER_PATH, "utf8")
-	const sig = "resetMessageTranslatorAndFence(): void"
-	const start = source.indexOf(sig)
+	let start = source.indexOf("resetMessageTranslatorAndFence(): void")
 	if (start < 0) {
-		throw new Error("resetMessageTranslatorAndFence signature not found")
+		start = source.indexOf("resetMessageTranslatorAndFence(requestedPhase")
+	}
+	if (start < 0) {
+		throw new Error(
+			"resetMessageTranslatorAndFence signature not found " +
+				'(tried HEAD `(): void` and post-Repair01 `(requestedPhase: TurnPhase = "idle"): void`)',
+		)
 	}
 	const braceStart = source.indexOf("{", start)
 	if (braceStart < 0) {
@@ -141,10 +171,18 @@ function executeProductionReseed(args: {
 		reset(): void
 		getMinter(): MessageIdMinter
 	}
+	requestedPhase?: TurnPhase
 }): void {
 	const body = getResetMessageTranslatorAndFenceBody()
 	const inner = body.slice(1, body.lastIndexOf("}"))
-	const compiled = new Function("messageTranslatorState", "turnStateTracker", "minter", `"use strict"; ${inner}`)
+	const compiled = new Function(
+		"messageTranslatorState",
+		"turnStateTracker",
+		"minter",
+		"requestedPhase",
+		`"use strict"; ${inner}`,
+	)
+	const requestedPhase = args.requestedPhase ?? "idle"
 	compiled.call(
 		{
 			messageTranslatorState: args.messageTranslatorState,
@@ -154,10 +192,12 @@ function executeProductionReseed(args: {
 				taskId: undefined,
 				epoch: args.minter.epoch,
 			}),
+			requestedPhase,
 		},
 		args.messageTranslatorState,
 		args.turnStateTracker,
 		args.minter,
+		requestedPhase,
 	)
 }
 

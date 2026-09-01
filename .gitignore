@@ -329,6 +329,32 @@ apps/examples/desktop-app/.cursor/settings.json
 # .factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
 # (whitelisted above) AND to the audit-trail entry in .factory/epic-board.md.
 !/.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/
+# ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01: repair ACT
+# authored 2026-09-01 against the LIVE epoch-4 evidence captured by the
+# Factory reviewer disposition (2026-09-01 epoch-4 modelStreaming +
+# toolActive continuing while authoritative turnPhase remains idle).
+# Status: OPEN / REPAIR01_AUTHORIZED / STRATEGY_B_VERIFIED. ROOT_CAUSE_ISOLATED
+# = YES; LIVE_FIRST_IDLE_WRITER = controller-epoch-transition-reseed; the
+# bounded repair ACT is sequenced after
+# ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 (CLOSED
+# HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND — LIVE bind was elevated by
+# the reviewer's new epoch-4 evidence, no longer awaiting operator capture).
+# Mission: preserve the correct active TurnState across a legitimate epoch
+# transition instead of unconditionally reseeding the new generation to
+# idle. Strategy B SELECTED FOR IMPLEMENTATION (Q5 graduated post-RED
+# evidence; A, C, D rejected) and then VERIFIED (production patch applied
+# to SdkController.ts; sites 1428 + 3121 pass "streaming"; sites 1322 /
+# 1479 / 3233 default to "idle" for PTAD preservation; B_VERIFIED criteria
+# all satisfied). The reviewer disposition's HALT_WRONG_PRODUCTION_SEAM
+# correction moved the "streaming" call from the GENERIC LIFECYCLE seam
+# (SdkTaskControlCoordinator at line 1479, which serves clearTask +
+# showTaskWithId) to the ACTIVE ASK-RESPONSE seam (SdkFollowupCoordinator
+# at line 1428, which serves continueIdleSession + resumeSessionFromTask
+# after the controller-ask-response streaming write); behavioral witnesses
+# (CONTROL_CLEAR_TASK, CONTROL_HISTORY_REOPEN, ACTIVE_CONTINUATION) verify
+# the consumer semantics of each seam. Test file:
+# apps/vscode/src/sdk/__tests__/runtime-epoch-transition-active-turnstate-repair01.synthetic-real.test.ts.
+!/.factory/acts/ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01.md
 # ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01 evidence:
 # entry-freeze.txt (Phase 0 freeze: HEAD, branch, worktree, predecessor ACT),
 # verification.md (Steps 1-7 results, verbatim command output proving
@@ -339,6 +365,20 @@ apps/examples/desktop-app/.cursor/settings.json
 # Binds durably to .factory/acts/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-
 # RECON01-CORRECTION01.md (whitelisted above).
 !/.factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01/
+# ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01 evidence:
+# entry-freeze.txt (Phase 0 freeze + LIVE bind elevation),
+# source-seam-trace.md (§0 sources + §1 single reseed site + §2 five call
+# sites + §3 ask-response write + §4 LIVE chronology + §5 producer-consumer
+# sequence + §6 what this file does NOT prove),
+# causal-discriminator.md (Q1..Q5 reviewer-mandated causal questions scored
+# against source-level + RED-test-level evidence),
+# strategy-options.md (A/B/C/D repair strategies + T1.A/T2.B/T2.B-PTAD/
+# T3.C/T4.D RED assertions + summary table + relationship to predecessors).
+# Status: OPEN / REPAIR01_AUTHORIZED / STRATEGY_B_VERIFIED. Binds durably to
+# .factory/acts/ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01.md
+# (whitelisted above) AND to the audit-trail entry in .factory/epic-board.md
+# (added at ACT closure).
+!/.factory/evidence/ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01/
 # ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02 evidence (CLOSED / GREEN):
 # entry-freeze.txt (Phase 0 freeze: HEAD = a90f36a4b at ACT opening,
 # branch, worktree state clean). The recon body (source-seam-map.md

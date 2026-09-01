@@ -60,6 +60,7 @@
 
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import type { TurnPhase } from "@shared/ExtensionMessage"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { MessageIdMinter } from "../message-id-minter"
@@ -88,24 +89,31 @@ function readSource(path: string): string {
  *   - The harness invokes the SAME `setWithWriter` method the production
  *     SdkController invokes — same closure, same writerIdentity contract.
  *
- * This is the production seam. The test proves the production body
- * behaves as expected against real state.
+ * ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01 Strategy-B
+ * update: the production body now takes a `requestedPhase?: TurnPhase`
+ * parameter (default `"idle"`). The harness binds it as a closure
+ * variable the compiled body reads. Tests that mirror an active-prior
+ * call site (site 2: `controller-ask-response`) pass
+ * `requestedPhase: "streaming"`; tests that mirror a default-prior
+ * call site (sites 1/3/5: mode-reset, session-rebuild, restore-
+ * checkpoint) pass nothing (the parameter defaults to `"idle"`).
  */
 function executeProductionReseed(args: {
 	messageTranslatorState: MessageTranslatorState
 	turnStateTracker: TurnStateTracker
 	minter: MessageIdMinter
+	requestedPhase?: TurnPhase
 }): void {
-	// Read the production body. If the source drifts, the body drifts.
 	const body = getProductionReseedBody()
-	// Strip the outer braces for Function() (which expects an expression body).
 	const inner = body.slice(1, body.lastIndexOf("}"))
-	// Compile the production body with `this` bound to a harness object.
-	// The harness exposes exactly the deps the production body touches:
-	//   messageTranslatorState (with reset + getMinter().bumpEpoch)
-	//   turnStateTracker (with setWithWriter)
-	//   writerIdentity (stamps taskId + epoch from the harness state)
-	const compiled = new Function("messageTranslatorState", "turnStateTracker", "minter", `"use strict"; ${inner}`)
+	const compiled = new Function(
+		"messageTranslatorState",
+		"turnStateTracker",
+		"minter",
+		"requestedPhase",
+		`"use strict"; ${inner}`,
+	)
+	const requestedPhase = args.requestedPhase ?? "idle"
 	compiled.call(
 		{
 			messageTranslatorState: args.messageTranslatorState,
@@ -115,10 +123,12 @@ function executeProductionReseed(args: {
 				taskId: undefined,
 				epoch: args.minter.epoch,
 			}),
+			requestedPhase,
 		},
 		args.messageTranslatorState,
 		args.turnStateTracker,
 		args.minter,
+		requestedPhase,
 	)
 }
 
@@ -126,18 +136,29 @@ function executeProductionReseed(args: {
  * Returns the literal body of SdkController.resetMessageTranslatorAndFence
  * (between the opening brace and the matching closing brace). If the
  * production source drifts, this returns the new body verbatim.
+ *
+ * ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01
+ * Strategy-B update: tolerant of both the original HEAD signature
+ *   `resetMessageTranslatorAndFence(): void`
+ * and the post-Repair01 signature
+ *   `resetMessageTranslatorAndFence(requestedPhase: TurnPhase = "idle"): void`.
  */
 function getProductionReseedBody(): string {
 	const source = readSource(SDK_CONTROLLER_PATH)
-	const start = source.indexOf("resetMessageTranslatorAndFence(): void")
+	let start = source.indexOf("resetMessageTranslatorAndFence(): void")
 	if (start < 0) {
-		throw new Error("SdkController.resetMessageTranslatorAndFence signature not found")
+		start = source.indexOf("resetMessageTranslatorAndFence(requestedPhase")
+	}
+	if (start < 0) {
+		throw new Error(
+			"SdkController.resetMessageTranslatorAndFence signature not found " +
+				'(tried HEAD `(): void` and post-Repair01 `(requestedPhase: TurnPhase = "idle"): void`)',
+		)
 	}
 	const braceStart = source.indexOf("{", start)
 	if (braceStart < 0) {
 		throw new Error("SdkController.resetMessageTranslatorAndFence opening brace not found")
 	}
-	// Find the matching closing brace at depth 0 by walking forward.
 	let depth = 0
 	for (let i = braceStart; i < source.length; i++) {
 		const ch = source[i]
@@ -170,23 +191,33 @@ describe("ACT-CLINEMM-ASK-RESPONSE-EPOCH-TURNSTATE-COHERENCE01-CORRECTION01 / RE
 	// -------------------------------------------------------------------------
 	// SOURCE-LEVEL: the production reseed line lives in the production body
 	// -------------------------------------------------------------------------
-	it("C01-P0-1: SdkController.resetMessageTranslatorAndFence body contains the bounded reseed line", () => {
+	it("C01-P0-1: SdkController.resetMessageTranslatorAndFence body contains the bounded reseed line (post-Repair01 shape)", () => {
 		const body = getProductionReseedBody()
-		// The production line:
+		// ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01
+		// Strategy-B update: the production body now references the
+		// closure variable `requestedPhase` instead of the literal
+		// `"idle"`. The first call argument to setWithWriter MUST be
+		// a name, not a string literal.
 		expect(body).toMatch(
-			/turnStateTracker\.setWithWriter\(\s*"idle"\s*,\s*undefined\s*,\s*this\.writerIdentity\(\s*"controller-epoch-transition-reseed"\s*\)/,
+			/turnStateTracker\.setWithWriter\(\s*requestedPhase\s*,\s*undefined\s*,\s*this\.writerIdentity\(\s*"controller-epoch-transition-reseed"\s*\)/,
 		)
 		// The production line follows bumpEpoch (order matters).
 		const bumpIdx = body.indexOf("bumpEpoch()")
 		const reseedIdx = body.indexOf('"controller-epoch-transition-reseed"')
 		expect(bumpIdx).toBeGreaterThanOrEqual(0)
 		expect(reseedIdx).toBeGreaterThan(bumpIdx)
+		// Source-level witness for the post-Repair01 parameter
+		// declaration.
+		const source = readSource(SDK_CONTROLLER_PATH)
+		expect(source).toMatch(/resetMessageTranslatorAndFence\(\s*requestedPhase:\s*TurnPhase\s*=\s*"idle"\s*\)/)
 	})
 
 	// -------------------------------------------------------------------------
-	// RUNTIME-LEVEL PRIMARY: real-seam RED-then-GREEN, NOT a local helper
+	// RUNTIME-LEVEL PRIMARY: real-seam GREEN (post-Repair01 Strategy-B).
+	// The ask-response path at site 2 passes `requestedPhase="streaming"`
+	// to the production seam, so the active phase survives the fence.
 	// -------------------------------------------------------------------------
-	it("C01-PRIMARY: real production seam reseeds the tracker from epoch-E streaming to epoch-(E+1) idle", () => {
+	it("C01-PRIMARY: real production seam (site 2 ask-response) keeps streaming across epoch transition (POST-REPAIR01 GREEN)", () => {
 		// Pre-load: bump epoch to 2, mint task-start-init-task streaming,
 		// walk seq to compaction-restore-entry-preserve awaiting_followup,
 		// then controller-ask-response commits streaming at seq=3878 in epoch=2.
@@ -216,22 +247,36 @@ describe("ACT-CLINEMM-ASK-RESPONSE-EPOCH-TURNSTATE-COHERENCE01-CORRECTION01 / RE
 		expect(turnStateTracker.get().seq).toBe(3878)
 		expect(minter.epoch).toBe(2)
 
-		// EXECUTE THE PRODUCTION SEAM. This calls the same methods the
-		// production SdkController.resetMessageTranslatorAndFence calls,
-		// against real state (real MessageIdMinter + real
-		// MessageTranslatorState + real TurnStateTracker).
+		// EXECUTE THE PRODUCTION SEAM at the ACTIVE ASK-RESPONSE SEAM:
+		// the SdkFollowupCoordinator callback in SdkController
+		// (line ~1428) passes `requestedPhase: "streaming"`. This is
+		// the actual active continuation seam — SdkFollowupCoordinator
+		// invokes it from `continueIdleSession()` (post-ask-response
+		// active continuation) and `resumeSessionFromTask()`. Both
+		// are preceded by the `controller-ask-response` `streaming`
+		// write in SdkController.askResponse.
+		//
+		// (The previous version of this test wired to the
+		// SdkTaskControlCoordinator resetMessageTranslator callback
+		// at line ~1472 — that was a GENERIC LIFECYCLE seam, not
+		// the active ask-response seam. Per the CORRECTION01
+		// reviewer disposition's HALT_WRONG_PRODUCTION_SEAM, the
+		// wiring was corrected and this chronology now points at
+		// the right seam.)
 		executeProductionReseed({
 			messageTranslatorState,
 			turnStateTracker,
 			minter,
+			requestedPhase: "streaming",
 		})
 
-		// AFTER THE PRODUCTION SEAM:
+		// AFTER THE PRODUCTION SEAM (post-Repair01):
 		//   - epoch advanced 2 -> 3 (real bumpEpoch())
-		//   - tracker.currentPhase flipped to "idle" (real setWithWriter)
+		//   - tracker.currentPhase PRESERVED at "streaming" (active
+		//     continuation invariant from REPAIR01 Strategy-B)
 		//   - tracker.get().seq > 3878 (a fresh mutation minted)
 		expect(minter.epoch).toBe(3)
-		expect(turnStateTracker.currentPhase).toBe("idle")
+		expect(turnStateTracker.currentPhase).toBe("streaming")
 		expect(turnStateTracker.get().seq).toBeGreaterThan(3878)
 	})
 
