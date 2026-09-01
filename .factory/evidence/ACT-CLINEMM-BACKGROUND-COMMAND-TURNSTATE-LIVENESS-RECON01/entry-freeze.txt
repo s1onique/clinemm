@@ -1,0 +1,100 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01
+EPIC      = EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01
+OPENED_AT = 2026-09-01 (operator pass)
+OWNER     = Factory runtime-state engineer + Factory reviewer
+
+PHASE_0_FREEZE
+==============
+
+HEAD                = 2a0cfbd85848ec441f9f2aec84dc3564813bc0b2
+                     (verified via `git rev-parse HEAD`)
+ORIGIN_MAIN         = 2a0cfbd85848ec441f9f2aec84dc3564813bc0b2
+                     (verified via `git rev-parse origin/main`;
+                      HEAD == origin/main — clean HEAD)
+BRANCH              = main
+WORKTREE            = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+                     (verified via `git worktree list`;
+                      dogfood worktree /private/var/folders/.../clinemm-dogfood.Bz4sp1
+                      is detached HEAD f6b6697e5 and is OUT-OF-SCOPE
+                      for this ACT — it is the operator dogfood clone)
+WORKTREE_STATUS     = clean (`git status --short` returns empty)
+
+INSTALLED_ARTIFACT   = the live-bug specimen the operator preserved
+                      points at task 1788213818870_vmswf. The
+                      installed extension is bound to the
+                      ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-
+                      REPAIR01-CORRECTION06 chain (the six-correction
+                      closure that the prior live capture proved
+                      PASS for the projection-coherence invariant —
+                      i.e. taskHeader.phase now equals turnState.phase).
+LIVE_CAPTURE_PATH   = (preserved verbatim by the operator; the four-value
+                      publication is `turnPhase=idle`,
+                      `taskHeaderPhase=idle`,
+                      `backgroundCommandRunning=true`,
+                      `foregroundCommandRunning=false` repeated across many
+                      publications and epochs for task 1788213818870_vmswf).
+                      A local copy of the captured publications is mirrored
+                      in this ACT's evidence/live-capture-preserved/.
+SPECIMEN_PUBLICATION_IDS = to be filled by the live-capture-preserved mirror
+
+PRECEDENT_ACT_VERDICTS_RESPECTED
+================================
+  ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01 + CORRECTION02..06
+      CLOSED. TaskHeader is faithful projection of TurnState.
+      DO NOT REOPEN in this ACT (per ACT §FORBIDDEN).
+  ACT-CLINEMM-TASK-CANCEL-UI-RECON01
+      CLOSED / RECON_ONLY / CAPTURE_INSUFFICIENT at 162dfb137 over 15c7e3374.
+      Its four-value LIVE capture schema
+      (turnState.phase, foregroundCommandRunning,
+       backgroundCommandRunning, lastMessage.{type, say, ask, partial})
+      IS the same schema this ACT inspects; the operator's new
+      four-value specimen (1788213818870_vmswf) supplies exactly
+      the discrimination evidence the cancel-recon ACT
+      said it was awaiting.
+  ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
+      OPEN / AWAITING_TERMINAL_DISCRIMINATOR.
+      Source-seam-map row TASK_OWNER_SEAM documents:
+        `SdkController.ts:987 — onBackgroundStateChange callback flips
+         the projection to Waiting state when RUNNING is returned.
+         CALLBACK_EXISTENCE = REAL_PRODUCTION_SEAM;
+         WAKEUP_SEMANTICS = STRUCTURAL ABSENT (proven by ACL02)
+         AND UNOBSERVED (on the bound specimen)`.
+      That row IS the production seam this ACT isolates.
+      The wakeup-semantics question is the predecessor ACT's open
+      question; this ACT explicitly narrows to the
+      TurnState-liveness half of that question
+      (do NOT also reopen the wakeup half — that is the
+      predecessor's owned seam).
+  ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL01..ACL10
+      CLOSED-CLEAN structurally (CORRECTION01 closed with bounded
+      binding 4cef3d59c5e4d9ea4901a4d3efb5f0e4a3c029db).
+      ACL01 confirmed the projection reset still works.
+      ACL02 PROVED that the onBackgroundStateChange callback
+      (the projection reset) is the END of the host pipeline for
+      background commands — it does NOT also schedule a successor
+      agent turn (STRUCTURAL ABSENT).
+      ACL04 confirmed the typed `intent` field distinguishing
+      HOST_DEFERRED_FOREGROUND from MODEL_INTENTIONAL_BACKGROUND
+      does not exist (schema is plain). ASYNC_CONTRACT = AMBIGUOUS.
+      This ACT respects ACL02/ACL04 — it does NOT try to assert a
+      wakeup semantic; it isolates the upstream boundary: what
+      does TurnState do when the tool returns RUNNING(jobId)?
+
+CORRECTION06_LIVE_QUALIFICATION_STATUS
+======================================
+  PASS for the projection-coherence invariant.
+  TaskHeader == TurnState (per the operator's preserved specimen).
+  Symptom has moved one boundary upstream:
+    backgroundCommandRunning=true  (projection)
+    turnPhase=idle                 (authoritative TurnState)
+  -> This is a NEW LIVE defect at the TurnState-liveness seam.
+     The previous defect was a projection mismatch; the new
+     defect is a TurnState-while-background-job-active mismatch.
+
+UNEXPECTED_TRACKED_DIRT = NONE.
+
+HALT_RULE
+=========
+  HALT_UNEXPECTED_TRACKED_DIRT — NOT triggered.
+
+PHASE_0 = PASS. Proceed to PHASE_1 SOURCE RECON.

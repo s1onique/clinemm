@@ -168,6 +168,19 @@ apps/examples/desktop-app/.cursor/settings.json
 # so the ACT file AND the captures/ binding record must both be
 # durably tracked for the canonical link to survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
+# ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01: recon ACT
+# authored 2026-09-01 per Factory reviewer halt on the prior self-asserted
+# ROOT_CAUSE_ISOLATED closure. Status HALT_ROOT_CAUSE_NOT_ISOLATED /
+# LIVE_BOUND_RECON_OPEN. The epic ledger at .factory/epic-board.md row 111
+# (audit-trail) + .factory/epics/runtime-task-progression.md row 94
+# (compact row) bind to this ACT file AND to the evidence directory
+# .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01/
+# (entry-freeze.txt + source-seam-map/01-source-recon-q1-q8.md +
+# 02-real-seam-red-and-classification.md + live-capture-preserved/README.md),
+# so both the ACT file and the evidence directory must be durably tracked
+# for the canonical link to survive a fresh clone. NO production code
+# change; NO production test; recon-only.
+!/.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01.md
 # ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 # reopened + bounded-correction ACT authored 2026-08-31 per Factory
 # causal reviewer (initial C1: GO; bounded followup C1: GO_LIVE after
@@ -223,6 +236,15 @@ apps/examples/desktop-app/.cursor/settings.json
 # Same durable-binding reason as the ACT file: the matrices prove
 # the corrected collector's P0.2 / P0.3 / P1 invariants end-to-end.
 !/.factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/
+# ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01 evidence:
+# entry-freeze.txt (Phase 0 freeze), source-seam-map/01-source-recon-q1-q8.md
+# (Phase 1 source recon Q1..Q8 + summary), 02-real-seam-red-and-classification.md
+# (Phases 2..6: RED, classification, discriminator, ablation, STOP), and
+# live-capture-preserved/README.md (specimen marker). Mirrors the
+# editor-tool-recon ACT's evidence-directory durability pattern.
+# Binds durably to .factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01.md
+# (whitelisted above) AND to .factory/epics/runtime-task-progression.md row 94.
+!/.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01/
 # ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
 # final-report.md (338-line closed ACT evidence: identity, conservation
 # matrix, quality gates, §15 correction-cycle section, §16 deferred
