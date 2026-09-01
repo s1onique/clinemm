@@ -1,0 +1,105 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01
+EPIC      = EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01
+OPENED_AT = 2026-09-01 (operator pass)
+OWNER     = Factory runtime-state engineer + Factory ACT designer
+
+PHASE_0_FREEZE
+==============
+
+HEAD                = 71a56613a136fdb29d05f6f8e92c85ed74519ea1
+                     (verified via `git rev-parse HEAD`)
+ORIGIN_MAIN         = 71a56613a136fdb29d05f6f8e92c85ed74519ea1
+                     (verified via `git rev-parse origin/main`;
+                      HEAD == origin/main — clean HEAD)
+BRANCH              = main
+WORKTREE            = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+WORKTREE_STATUS     = clean (`git status --porcelain=v1` returns empty)
+STASHES             = none (`git stash list` empty)
+TRACKED_DIRT        = none (`git status --porcelain=v1` empty)
+
+INSTALLED_ARTIFACT   = bound to CORRECTION06 lineage
+                       (the dogfood extension on
+                        /private/var/folders/.../clinemm-dogfood.Bz4sp1,
+                        task 1788213818870_vmswf).
+LIVE_CAPTURE_PATH   = the operator-preserved four-value publication:
+                        turnPhase              = idle
+                        taskHeaderPhase        = idle
+                        backgroundCommandRunning = true
+                        foregroundCommandRunning = false
+                      REPEATED across many publications and epochs for
+                      task 1788213818870_vmswf (REAL + LIVE + SAME_PUBLICATION).
+                      The TaskHeader = turnState projection invariant is
+                      LIVE-QUALIFIED for this specimen (CORRECTION06 chain
+                      PASSED). DO NOT REOPEN TaskHeader projection coherence.
+
+PRECEDENT_ACT_VERDICTS_RESPECTED
+=================================
+
+- ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01
+    + CORRECTION01..06 (CLOSED chain). TaskHeader == turnState projection
+    invariant proven for this specimen.
+- ACT-CLINEMM-TASK-CANCEL-UI-RECON01 (CLOSED). The four-value LIVE capture
+    schema (turnState.phase, foregroundCommandRunning, backgroundCommandRunning,
+    lastMessage.{type, say, ask, partial}) is the discriminator schema. The
+    operator-preserved specimen satisfies it.
+- ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 (OPEN). The TASK_OWNER_SEAM
+    row maps to this ACT's scope (foreground-turn writer identity). The
+    wakeup-semantics half remains the predecessor's owned seam.
+- ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL01..ACL10 (CLOSED-CLEAN).
+    ACL02 STRUCTURAL ABSENT witness (the background-execution pipeline ends
+    at `SdkController.updateBackgroundCommandState`, which only updates a
+    UI projection) is documentary support for this ACT's classification.
+- ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01 (predecessor):
+    LIVE_BOUND_RECON_OPEN. UNRESOLVED-FREEZE BLOCK:
+      - WHICH EXACT production event/write produces TurnState=idle
+        for this specimen (vs awaiting_followup / completed / resumable)
+        = NOT_YET_BOUND
+      - WHICH idle-writer is responsible
+        (task-control-clear-task / followup-on-follow-up-abandoned /
+         controller-epoch-transition-reseed) = NOT_YET_BOUND
+      - Whether the same-publication idle is contract-correct
+        (CASE_B/E) or contract-bug (CASE_A/C/D) = NOT_ADJUDICATED
+    THIS ACT'S MISSION: bind the FIRST idle writer; adjudicate.
+
+UNEXPECTED_DIRT_HALT = none.
+
+ACT_SCOPE_FREEZE
+================
+
+This ACT must:
+  1. Enumerate the COMPLETE closed union of TurnState writers in HEAD.
+  2. Identify which writers can fire `"idle"` and from which call sites.
+  3. Bind the FIRST production write/event that produces `turnPhase=idle`
+     in a same-task/same-epoch LIVE specimen that ALSO observes
+     `backgroundCommandRunning=true`.
+  4. Adjudicate whether the bound write is contract-correct or a defect.
+
+This ACT must NOT:
+  - Reopen TaskHeader projection coherence (TaskHeader == turnState is
+    LIVE-qualified for this specimen).
+  - Mutate TurnState for presentation convenience.
+  - Repair production behavior.
+  - Open a UX affordance, badge, label, or "running in background" affordance
+    BEFORE adjudication.
+  - Open a follow-up child ACT for repair (only authorized; not opened).
+
+TSWPD_USAGE
+===========
+
+The legacy TurnState writer-provenance diagnostic (TSWPD / `tswpdEnabled`)
+already exposes, at the single mutation seam `TurnStateTracker.setWithWriter`:
+  - writerId (closed union of N tags, see writer-inventory.md)
+  - taskId (stamped by the controller-side wrapper when the active session
+    is known; undefined when the caller is coordinator-level)
+  - epoch (same)
+  - previous.phase, previous.seq, previous.anchorTs
+  - requested.phase, requested.anchorTs
+  - committed.phase, committed.seq, committed.anchorTs
+  - capturedAt (Date.now())
+
+The closed union is sufficient to bind every idle write to:
+  (writerId, taskId, epoch, previous.seq, committed.seq)
+without code change. Per the ACT design constraint, this ACT uses
+the existing TSWPD operationally. No DEFAULT_OFF discriminator added.
+
+WORKTREE_OK_FOR_PROCEED = YES

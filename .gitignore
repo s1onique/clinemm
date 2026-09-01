@@ -181,6 +181,22 @@ apps/examples/desktop-app/.cursor/settings.json
 # for the canonical link to survive a fresh clone. NO production code
 # change; NO production test; recon-only.
 !/.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01.md
+# ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01: discriminator
+# ACT authored 2026-09-01 to bind the FIRST production TurnState->idle
+# writer in the LIVE-bound specimen (task 1788213818870_vmswf). Status:
+# HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND — the LIVE bind requires a
+# one-cycle operator TSWPD capture on the live recurrence. The
+# synthetic-real test at apps/vscode/src/sdk/__tests__/background-
+# handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts proves
+# the TSWPD CAPABILITY but does NOT bind the LIVE writer.
+# The ACT file AND the evidence directory
+# .factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/
+# (entry-freeze.txt + writer-inventory.md + discriminator-capture.md +
+# adjudication.md + final-report.md + bhtd01-jsonl-bind-evidence.md)
+# must both be durably tracked for the canonical link to survive a
+# fresh clone. NO production code change; one synthetic-real TEST
+# file added (drift witness); LIVE bind DEFERRED to operator.
+!/.factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
 # ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 # reopened + bounded-correction ACT authored 2026-08-31 per Factory
 # causal reviewer (initial C1: GO; bounded followup C1: GO_LIVE after
@@ -245,6 +261,21 @@ apps/examples/desktop-app/.cursor/settings.json
 # Binds durably to .factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01.md
 # (whitelisted above) AND to .factory/epics/runtime-task-progression.md row 94.
 !/.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01/
+# ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 evidence:
+# entry-freeze.txt (Phase 0 freeze), writer-inventory.md (Phase 2 closed
+# union of TurnState writers + LIVE-specimen narrowing), discriminator-
+# capture.md (Phases 3..5: TSWPD capability + capture protocol + source-
+# truth inference), adjudication.md (Phase 6: idle vs awaiting_followup
+# Q1..Q8 + per-candidate contract verdict + LIVE deferral), final-report.md
+# (summary), bhtd01-jsonl-bind-evidence.md (synthetic-real test log +
+# contract-only second-order adjudication; LIVE legitimacy DEFERRED).
+# Status: HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND — the synthetic-real
+# test proves the discriminator CAPABILITY but does NOT bind the LIVE
+# specimen's actual writer. The LIVE bind requires a one-cycle operator
+# TSWPD capture on the live recurrence. Binds durably to
+# .factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
+# (whitelisted above) AND to the audit-trail entry in .factory/epic-board.md.
+!/.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/
 # ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
 # final-report.md (338-line closed ACT evidence: identity, conservation
 # matrix, quality gates, §15 correction-cycle section, §16 deferred

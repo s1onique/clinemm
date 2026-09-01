@@ -1,7 +1,13 @@
 # ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01
 
-> Status: **HALT_ROOT_CAUSE_NOT_ISOLATED / LIVE_BOUND_RECON_OPEN /
-> NO_PRODUCTION_REPAIR_AUTHORIZED / UX_REPAIR_NOT_YET_AUTHORIZED**.
+> Status: **PENDING_CLOSURE / LIVE_BIND_REQUIRED /
+> ROOT_CAUSE_ISOLATED = NO / LIVE_CLASSIFICATION = DEFERRED /
+> PRODUCTION_REPAIR = NOT_AUTHORIZED /
+> UX_STATUS_SEMANTICS_CHILD_ACT = NOT_YET_AUTHORIZED /
+> NEXT = one operator TSWPD live capture on the live recurrence,
+> then this ACT closes via
+> ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01**.
+>
 > Epistemic purpose: root-cause isolation only (per ACT mission).
 >
 > ```text
@@ -17,22 +23,39 @@
 > ```text
 > LIVE_BOUNDARY                              = PROVEN
 > BACKGROUND_LIFETIME_DECOUPLING             = PROVEN / INTENTIONAL
-> TURNSTATE_IDLE_CAUSE                       = NOT_YET_BOUND
+> TURNSTATE_IDLE_CAUSE                       = NOT_YET_BOUND  (LIVE bind
+>                                                      requires operator
+>                                                      TSWPD capture; only
+>                                                      the synthetic-real
+>                                                      discriminator test
+>                                                      is in hand)
 > CASE_B/E                                   = PLAUSIBLE CONTRACT INTERPRETATION
 >                                             NOT FINAL CAUSAL CLASSIFICATION
-> ROOT_CAUSE_ISOLATED                        = NO
+> ROOT_CAUSE_ISOLATED                        = NO  (depends on DISCRIMINATOR01
+>                                                     recording the LIVE bind;
+>                                                     not yet recorded)
 > DETERMINISTIC_RED                          = ABSENT  (live-bound, not
->                                                      synthesized)
+>                                                      synthesized; required
+>                                                      before this ACT can
+>                                                      close, regardless of
+>                                                      which candidate the
+>                                                      LIVE writer is)
 > LIVE_FAILURE_SPECIMEN                      = PROVEN  (real + same-
 >                                                      publication)
 > CASE_B/CASE_E (PRODUCER INTENT)            = STRONG BUT NOT ADJUDICATED
-> FINAL                                      = LIVE_BOUND_RECON_OPEN
+> FINAL (LIVE)                               = DEFERRED  (→ LIVE_BIND_GATED)
 > ```
 >
 > This ACT previously self-asserted `ROOT_CAUSE_ISOLATED`; the reviewer's
 > reopen correctly observed that the same Phase 4 listed the E1..E5
 > candidates as unresolved, contradicting the verdict. This file has been
-> corrected. The PROVEN findings below remain valid.
+> corrected. The PROVEN findings below remain valid. The downstream
+> ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 has produced
+> synthetic-real evidence of the TSWPD discriminator CAPABILITY but
+> has not yet recorded the LIVE bind; until the operator captures
+> the LIVE TSWPD JSONL for the bound specimen (taskId=1788213818870_
+> vmswf), the per-candidate conditional verdicts in DISCRIMINATOR01 §
+> remain conditional and this ACT remains PENDING.
 >
 > **Predecessor ACTs respected**:
 > - `ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01` +
@@ -354,18 +377,22 @@ Adjudication options (resolved by the discriminator ACT):
 A. writer intentionally performs:
      foreground released → idle
    and contract/tests explicitly define that
-   => NOT_A_RUNTIME_DEFECT
-   => UX/status-semantics ACT authorized (after that)
+   => NOT_A_RUNTIME_DEFECT (per-candidate conditional, contract-only)
+   => UX/status-semantics ACT authorized ONLY AFTER the LIVE bind
+      confirms this candidate with legitimate triggering context
    => no code mutation
 
 B. writer should produce awaiting_followup / remain active
    but writes idle
-   => ROOT_CAUSE_ISOLATED
-   => bounded progression repair ACT authorized
+   => ROOT_CAUSE_ISOLATED (LIVE verdict)
+   => bounded progression repair ACT authorized (LIVE verdict required)
    => test-only ablation required
 
 C. no safe binding (still CAPTURE_INSUFFICIENT after the discriminator)
    => reopen LIVE capture; another operational cycle
+   => CURRENT STATUS: this ACT sits at this branch. The synthetic-real
+      test proves the TSWPD CAPABILITY but does not record the LIVE
+      bind. The operator's TSWPD capture cycle is the only missing step.
 ```
 
 DO NOT mutate `TurnState` merely because a background process exists.
@@ -382,3 +409,84 @@ progression bug.
 DO open the discriminator ACT and bind the first idle writer first.
 That single piece of evidence resolves the CASE_A-E classification
 without any production repair.
+
+(STATUS 2026-09-01: the discriminator ACT is open and has produced
+synthetic-real TSWPD CAPABILITY evidence, but the LIVE bind has not
+yet been recorded. Until the operator captures the LIVE TSWPD JSONL
+for taskId=1788213818870_vmswf and the discriminator ACT records the
+observed writer + triggering context, the CASE_A-E classification
+remains CONDITIONAL on the contract semantics, not confirmed on the
+LIVE specimen.)
+
+## 10. Closure (2026-09-01, downstream ACT)
+
+Pending closure by `ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01`
+(at HEAD `71a56613a`). The downstream ACT:
+
+  - Enumerated the COMPLETE union of production TurnState writers in
+    HEAD and identified exactly five that produce `phase="idle"`.
+  - Narrowed the LIVE specimen (turn mid-execution while
+    `backgroundCommandRunning=true`) to TWO viable candidates:
+    `controller-epoch-transition-reseed` and
+    `followup-on-follow-up-abandoned`. The other three writers
+    (`task-control-idle-fallback`, `controller-clear-task`,
+    `controller-restore-checkpoint`) are structurally incompatible
+    with the LIVE observation.
+  - Verified that `SdkController.updateBackgroundCommandState` is
+    STRUCTURALLY FORBIDDEN from writing TurnState (no
+    `setWithWriter` call anywhere in the projection-only seam).
+  - PRODUCED a synthetic-real discriminator test at
+    `apps/vscode/src/sdk/__tests__/background-handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts`
+    that drives both candidate writers through the production
+    code path against a real `TurnStateTracker`, enables TSWPD on
+    the singleton ring, runs the production dump helper, parses
+    the JSONL, and asserts the writerId is the expected one for
+    each synthetic scenario. 6 tests, all passing.
+  - HONEST CLASSIFICATION: this is SYNTHETIC_REAL (real
+    TurnStateTracker + real MessageIdMinter + real TSWPD ring +
+    source-extracted production statements + synthetic
+    orchestration), NOT a real production-seam test (which would
+    require instantiating the production SdkController and its
+    dependencies). Per the Factory reviewer's P0_2 verdict, the
+    test is honestly relabeled.
+  - DID NOT bind the LIVE specimen's actual writer. The LIVE
+    bind is UNBOUND and requires a one-cycle operator TSWPD
+    capture on the live recurrence (no new test, no new ACT, no
+    new instrumentation).
+  - Verified that BOTH viable idle-writers are contract-correct
+    in their intended preconditions: neither inspects
+    `CommandJobManager`; both perform pure turn-side reset of the
+    legacy tracker after a conversation boundary; the background
+    job is intentionally owned by `CommandJobManager`
+    independently of the foreground turn's phase.
+  - LIVE legitimacy verification is DEFERRED to the operator
+    (cannot be performed in this authoring shell).
+
+The visible contradiction (TaskHeader says "Idle" while a
+background job is alive) is therefore a **UI presentation gap,
+NOT a writer defect**, conditional on the LIVE bind confirming
+either:
+
+  - writer = controller-epoch-transition-reseed under a
+    legitimate epoch transition, OR
+  - writer = followup-on-follow-up-abandoned under a legitimately
+    abandoned follow-up.
+
+The `awaiting_followup` alternative would mis-anchor the
+conversation: `awaiting_followup` is exclusively for AGENT-DRIVEN
+continuation requests, and the background job is OS-level, not
+agent-driven.
+
+This predecessor recon cannot close as ROOT_CAUSE_ISOLATED /
+NOT_A_RUNTIME_DEFECT until the LIVE bind is recorded by the
+operator. Closure depends on the downstream ACT's
+operator-capture step.
+
+Conservation matrix PRESERVED (no production source path touched;
+the test file is durably tracked under
+`apps/vscode/src/sdk/__tests__/` alongside other real-seam tests;
+this ACT remains read-only in the tree as historical forensic
+evidence).
+
+The downstream ACT's evidence is at
+`.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/`.
