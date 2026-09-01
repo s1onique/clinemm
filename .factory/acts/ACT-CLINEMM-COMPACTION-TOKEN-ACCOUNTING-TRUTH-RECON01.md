@@ -266,12 +266,90 @@ Summarizer-call usage bookkeeping → (cite file:line: where do
                                             summarizer tokens land?)
 ```
 
-## §6 — Discriminator plan (R1–R3 first; R4/R5 conditional)
+## §6 — Discriminator plan (R0 highest-value; R1–R3 supplementary; R4/R5 conditional)
 
 Do NOT author all five probes before source recon proves they correspond
 to real seams. Recon first; then probably **one discriminator**.
 
-### Primary discriminators (R1–R3)
+The factory causal reviewer (2026-09-02) reordered priority: the LIVE
+symptom (header ~7.1k vs divider 680.1k → 28.9k) is numerically
+explained by the post-compaction TaskHeader rescaling. R0 tests that
+seam DIRECTLY. If R0 REDs while R1–R3 GREEN, ownership migrates
+toward `task-presentation` / shared metrics rather than the core
+compaction lane. Run R0 BEFORE generic R1–R3.
+
+### R0 — HEADER POST-COMPACTION PROJECTION (HIGHEST VALUE)
+
+```text
+Setup (matches LIVE symptom arithmetic):
+
+  last api_req_started  = { tokensIn: 167_100, tokensOut: <ignored>,
+                           cacheReads: 0, cacheWrites: 0 }
+  subsequent completed compaction =
+    { status: "completed",
+      tokensBefore: 680_100,
+      tokensAfter:  28_900 }
+
+  shrinkFraction = tokensAfter / tokensBefore ≈ 0.04249
+  production getLastApiReqContextInputTokens returns:
+    ceil(167_100 * (28_900 / 680_100)) = ceil(7_098.7) = 7_099
+
+That is exactly the LIVE header value (~7.1k).
+
+The discriminator does THREE assertions, in sequence:
+
+  A. CONCRETE-ARITHMETIC: the production implementation returns
+     approximately 7_099 for the LIVE-symptom input. (RED if not; that
+     would mean the LIVE symptom is something else entirely.)
+
+  B. SEMANTIC-ORACLE-FROM-CONTRACT: per §0 truth domains, the header
+     should display one of these — NOT a multiplicative interpolation
+     between two unrelated baselines:
+
+       - REQUEST_INPUT_TOKENS of the last request = 167_100
+         (provider-reported exactly what was sent last)
+       - WORKING_CONTEXT_ESTIMATE of the next request = 28_900
+         (tokensAfter from the most recent completed compaction;
+          what the model will actually see next)
+       - WORKING_CONTEXT_ESTIMATE of the last request = 680_100
+         (tokensBefore from the most recent completed compaction)
+
+     The production return (~7_099) is none of these. It is:
+       lastRequestInput × (tokensAfter / tokensBefore)
+
+     This crosses two semantic quantities (REQUEST_INPUT_TOKENS and
+     the WORKING_CONTEXT ESTIMATE) via a proportional projection
+     whose only justification is the comment claim "only the ratio
+     carries over". The justification is undocumented and
+     undemonstrated; prior closure (ACT-CLINEMM-CONTEXT-ACCOUNTING-
+     TRUTH01 CORRECTION01, commit b64d9ef22, 2026-08-20) approved
+     the rescaling but did not establish a source-of-truth oracle
+     for what the header SHOULD display.
+
+  C. CORRECTNESS-OF-RESIDUAL-CONTRACT: even if the implementation
+     is "intentional rescaling", the COMMENT-CLAIM is contradicted
+     by the fact that the LIVE symptom is precisely the LIVE
+     miscount. The behavior is at minimum DOCUMENTATION-DRIFT and
+     most likely a REGRESSION of the truth-domain contract.
+
+R0 RED-establishes:
+
+  CORE_COMPACTION_ARITHMETIC      = CONSERVED (R1 territory)
+  BILLING/CONTEXT_SEPARATION      = CONSERVED (R2 territory)
+  UI_POST_COMPACTION_PROJECTION   = DEFECTIVE / NOT-VALIDATED
+  ROOT_CAUSE-LIKELY               = getApiMetrics rescaling semantics
+                                    (apps/vscode/src/shared/getApiMetrics.ts:174-225)
+
+R0 GREEN-validates only if the function instead returns one of the
+three contract-permitted values. That would mean the implementation
+already corrected the defect (no work needed). R0 GREEN is therefore
+unlikely in ClineMM's current state.
+```
+
+### Supplementary discriminators (R1–R3)
+
+```text
+R1 — SAME-PAYLOAD ACCOUNTING
 
 ```text
 R1 — SAME-PAYLOAD ACCOUNTING
@@ -383,21 +461,51 @@ R5 — MODEL_INPUT_BUDGET
 
 ```text
 CASE_A — TRUTH_DOMAINS_PRESERVED / LIVE_SYMPTOM_EXPLAINED
-  R1-R3 GREEN. I1-I7 hold. COMPACTION_BEFORE / COMPACTION_AFTER
-  use the same estimator as WORKING_CONTEXT_ESTIMATE on the
-  corresponding payload. SESSION_CUMULATIVE_USAGE does NOT
+  R0 GREEN and R1-R3 GREEN. I1-I7 hold. COMPACTION_BEFORE /
+  COMPACTION_AFTER use the same estimator as WORKING_CONTEXT_ESTIMATE
+  on the corresponding payload. SESSION_CUMULATIVE_USAGE does NOT
   contaminate the working-context estimate. Per-request working
-  context is snapshot per-request, not cumulative.
+  context is snapshot per-request, not cumulative. AND the header's
+  post-compaction value is one of the three contract-permitted
+  quantities (lastRequestInput, tokensAfter, or tokensBefore) — NOT
+  a multiplicative interpolation between two unrelated baselines.
 
-  Sub-case A.label-only: Q0C proves the two UI fields are
-  intentionally different metrics; the LIVE symptom is label
-  ambiguity, not arithmetic corruption. First durable conclusions
-  about UI field semantics are written; recon closes GREEN.
+  Sub-case A.label-only (DOWNGRADED, factory causal reviewer
+  2026-09-02): Q0C proves the two UI fields are intentionally
+  different metrics. This is a NECESSARY but not SUFFICIENT condition
+  for A.label-only. A.label-only also requires R0 GREEN, because the
+  difference in semantic quantity does not excuse the cross-domain
+  multiplicative projection. If R0 REDs but Q0C holds, the
+  classification is CASE_B.UI, not CASE_A.
+
+CASE_A.UI — UI_PROJECTION_BOUND / DOC_DRIFT
+  R1-R3 GREEN, R0 GREEN. The post-compaction rescaling in
+  getApiMetrics.ts is bounded (does not miscount on the LIVE-symptom
+  input). Doc comment matches behavior. Live UI presents one of the
+  three contract-permitted quantities. Sub-case A.label-only holds.
 
 CASE_B — ACCOUNTING_DRIFT_CONFIRMED / STRUCTURAL_DEFECT
   R1-R3 (and any conditional R4/R5 if authored) RED with a clear
   causal pattern. The repair ACT is gated on the recon's root-cause
   isolation, naming the violated invariant (I1-I7) and the file:line.
+
+CASE_B.UI — POST_COMPACTION_PROJECTION_DEFECTIVE
+  R0 RED, R1-R3 GREEN. CORE_COMPACTION_ARITHMETIC is conserved.
+  BILLING/CONTEXT_SEPARATION is conserved. Only the UI projection
+  via getApiMetrics.ts (apps/vscode/src/shared/getApiMetrics.ts:174-225)
+  is defective — it produces a cross-domain multiplicative
+  interpolation between REQUEST_INPUT_TOKENS of the last request and
+  the WORKING_CONTEXT shrink ratio. Ownership migrates toward
+  task-presentation / shared-metrics rather than the core compaction
+  lane. The downstream repair ACT is
+  ACT-CLINEMM-COMPACTION-TOKEN-PROCOUNTING-REPAIR01 (re-numbered from
+  -REPAIR01; or a new -UI-REPAIR01).
+
+CASE_B.HYBRID — BOTH CORE AND UI DEFECTIVE
+  R0 RED AND (R1 / R2 / R3) RED. Two-layer defect. Root-cause
+  isolation must name both layers. The downstream repair ACT is
+  sequenced (UI first, then core) because the core arithmetic may
+  already be wrong but is masked by the UI's interpolation.
 
 CASE_C — ACCOUNTING_INDETERMINATE / CAPTURE_INSUFFICIENT
   R* inconclusive because of test-environment limitations. The recon
@@ -417,13 +525,26 @@ may freeze a specific behavior, but only if recon proves the seam.
 
 ## §8 — Stop rule
 
-  - **R1-R3 GREEN, I1-I7 hold** → `CASE_A` → `CLOSED_NOT_REPRODUCED`
-    (or `CLOSED_WITH_RESIDUE` if a non-load-bearing drift is observed
-    but explained).
-  - **R*-RED with structural defect** → `CASE_B` → recon reports
-    `ROOT_CAUSE_ISOLATED` and a future repair ACT is named (with
-    specific I1-I7 violation + file:line). This ACT closes without
-    authorizing the repair (separate ACT, separate review).
+  - **R0 GREEN and R1-R3 GREEN, I1-I7 hold** → `CASE_A` →
+    `CLOSED_NOT_REPRODUCED` (or `CLOSED_WITH_RESIDUE` if a non-load-
+    bearing drift is observed but explained).
+  - **R0 GREEN, R1-R3 GREEN, doc comment matches behavior** →
+    `CASE_A.UI` → `CLOSED_NOT_REPRODUCED`. (LIVE symptom was label
+    ambiguity all along.)
+  - **R0 RED, R1-R3 GREEN** → `CASE_B.UI` → recon reports
+    `ROOT_CAUSE_ISOLATED` naming the violated invariant
+    (`I1` / `I4` / `I6`) and `apps/vscode/src/shared/getApiMetrics.ts:174-225`.
+    Downstream repair ACT is `ACT-CLINEMM-COMPACTION-TOKEN-PROCOUNTING-
+    UI-REPAIR01` (separate ACT, separate review). This ACT closes.
+    **Ownership migrates to task-presentation / shared-metrics
+    territory, NOT core compaction.**
+  - **R0 RED and (R1 / R2 / R3) RED** → `CASE_B.HYBRID` → two-layer
+    defect. The repair ACT must address both layers; sequencing is
+    UI first (because the UI's interpolation may be masking the core
+    defect's symptom).
+  - **R1-R3 RED with structural defect, R0 unknown** → `CASE_B` →
+    recon reports `ROOT_CAUSE_ISOLATED` (with specific I1-I7 violation
+    + file:line). Run R0 to disambiguate UI vs core before closing.
   - **Live capture blocked** → `CASE_C` → `CAPTURE_INSUFFICIENT` and
     the epic detail file gains the LIVE-capture runbook.
   - **Real-prompt required** → `CASE_D` → `HOST_REQUIRED` and the

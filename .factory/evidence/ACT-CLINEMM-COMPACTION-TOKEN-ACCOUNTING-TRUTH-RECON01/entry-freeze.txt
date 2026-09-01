@@ -1,6 +1,8 @@
 ACT_ID=ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01
-TIMESTAMP=2026-09-01T23:55:00Z (opening) / 2026-09-02T00:25:00Z (contract correction)
-REPO_HEAD=8c04d77fb (post-ACT-opening; contract correction is docs-only)
+TIMESTAMP=2026-09-01T23:55:00Z (opening) /
+           2026-09-02T00:25:00Z (contract correction) /
+           2026-09-02T01:10:00Z (R0 promotion + Q0D softening)
+REPO_HEAD=7c24ab02f (post-contract-correction; R0 promotion is docs+test)
 OWNER=CONTEXT / COMPACTION / TOKEN-ACCOUNTING
 EPIC=EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING (new epic opened 2026-09-01
      by board amendment commit 975d3315c; the recon ACT is the first
@@ -35,9 +37,17 @@ CAUSAL_DISTINCTION=
   defect class — performance, not accounting truth).
   NOT a duplicate of upstream #12388 (checkpoint run-identity; different
   defect class — run-identity bookkeeping, not token accounting).
+  NOT a duplicate of ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01,
+  commit b64d9ef22, 2026-08-20) — that prior ACT closed with rescaling
+  approved. This ACT reopens the rescaling question with the LIVE
+  symptom as evidence. If the rescaling was correct at CORRECTION01
+  closure, this ACT classifies as CASE_B.UI only if the rescaling has
+  since regressed.
   THIS ACT asks: do the separated truth domains in §0 remain preserved
   across the compaction boundary, with NO additive arithmetic across
   billing/context divides and NO estimator asymmetry across writers/readers?
+  AND: does the post-compaction TaskHeader projection cross semantic
+  baselines?
 
 CONTRACT_NOTES=
   Frozen contract uses SEPARATED TRUTH DOMAINS (REQUEST_INPUT_TOKENS,
@@ -49,34 +59,50 @@ CONTRACT_NOTES=
   recon DISCOVERS the actual final-authority seam.
 EXPECTED_FIRST_OUTPUT=
   1. entry-freeze.txt                  (this file)
-  2. Q0A-Q0C producer-binding          → producers.md (BEFORE §4 recon)
-  3. Q1-Q12 recon                      → truth-domain-map.md
-  4. trust model                        → trust-model.md (every §0 truth
+  2. Q0A-Q0C producer-binding          → producers.md (DONE; commit 901287e15)
+  3. R0 discriminator test             → R0 test added in
+                                          apps/vscode/src/shared/__tests__/getApiMetrics.test.ts
+                                          (HIGHEST VALUE; explains LIVE symptom)
+  4. Q1-Q12 recon                      → truth-domain-map.md
+  5. trust model                        → trust-model.md (every §0 truth
                                           domain mapped to file:line or
                                           NOT_PRESENT)
-  5. R1-R3 discriminator tests         → apps/vscode/sdk OR
+  6. R1-R3 supplementary discriminators  → authored AFTER R0 lands; tests
+                                          in apps/vscode/sdk OR
                                           sdk/packages/core (RED-then-GREEN
                                           progression, source-extraction)
-  6. R4/R5 conditional discriminators   → authored ONLY if recon proves
+  7. R4/R5 conditional discriminators   → authored ONLY if recon proves
                                           the seam exists
-  7. classification                     → classification.md (CASE_A / B / C / D)
-  8. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
+  8. classification                     → classification.md (CASE_A / A.UI
+                                          / B / B.UI / B.HYBRID / C / D)
+  9. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
                                           ACCOUNTING-TRUTH-RECON01.md
-  9. final report                       → final-report.md
-  10. epic detail file update           → context-compaction-token-accounting.md
+                                          (R0 promoted ahead of R1-R3;
+                                          A.label-only downgraded;
+                                          CASE_B.UI / CASE_A.UI added)
+  10. final report                       → final-report.md
+  11. epic detail file update           → context-compaction-token-accounting.md
 
 STOP_RULE=
-  R1-R3 GREEN, I1-I7 hold
+  R0 GREEN and R1-R3 GREEN, I1-I7 hold
     → TRUTH_DOMAINS_PRESERVED / CASE_A / CLOSED_NOT_REPRODUCED.
       (Or CLOSED_WITH_RESIDUE if a non-load-bearing drift is observed
       but explained.)
-      Sub-case A.label-only: Q0C proves the two UI fields are
-      intentionally different metrics → LIVE symptom is label ambiguity,
-      not arithmetic corruption. First durable conclusions about UI
-      field semantics are written; recon closes GREEN.
-  R*-RED with structural defect → ROOT_CAUSE_ISOLATED / CASE_B.
-    Names the violated invariant (I1-I7) and file:line. This ACT closes
-    WITHOUT authorizing a repair (separate ACT).
+  R0 GREEN, R1-R3 GREEN, doc comment matches behavior
+    → CASE_A.UI / CLOSED_NOT_REPRODUCED. (LIVE symptom was label
+      ambiguity all along.)
+  R0 RED, R1-R3 GREEN
+    → CASE_B.UI / ROOT_CAUSE_ISOLATED.
+      Names apps/vscode/src/shared/getApiMetrics.ts:174-225.
+      Downstream repair ACT = ACT-CLINEMM-COMPACTION-TOKEN-PROCOUNTING-
+      UI-REPAIR01. Ownership migrates to task-presentation /
+      shared-metrics territory, NOT core compaction.
+  R0 RED and (R1 / R2 / R3) RED
+    → CASE_B.HYBRID. Two-layer defect. Repair ACT must address both
+      layers; sequencing is UI first (UI's interpolation may mask
+      core defect symptom).
+  R1-R3 RED with structural defect, R0 unknown
+    → CASE_B / ROOT_CAUSE_ISOLATED. Run R0 to disambiguate.
   Cannot exercise the compaction seam → CAPTURE_INSUFFICIENT / CASE_C.
   Real-prompt / real-provider required → HOST_REQUIRED / CASE_D.
   Threshold-failure behavior discovered → reported as a FINDING (not a
@@ -90,8 +116,10 @@ SCOPE_CALIBRATION=
   budget-projection/* allowed in this ACT.
 
   Surface bounded to the SDK compaction pipeline + token-counting utilities +
-  the host-side overflowRecovery consumer + the CLI integration seam +
-  the desktop sidecar. NOT in scope: task-presentation (UI rendering),
+  the post-compaction TaskHeader projection seam (apps/vscode/src/shared/
+  getApiMetrics.ts:174-225) + the host-side overflowRecovery consumer +
+  the CLI integration seam + the desktop sidecar.
+  NOT in scope: task-presentation (UI rendering),
   runtime-task-progression (post-tool-result continuation),
   tool-runtime-reliability (CLOSED at 9f0e66353).
 
@@ -100,15 +128,38 @@ CONTRACT_CORRECTION=
   contract in §0/R1-R3 that conflated billing-tokens with context-tokens
   as if they were additive. Factory causal reviewer (2026-09-02)
   identified the additive-arithmetic error and the overprescribed
-  threshold-failure policy. The contract was rewritten (commit pending)
+  threshold-failure policy. The contract was rewritten (commit 7c24ab02f)
   to use separated truth domains + invariants I1-I7 + conditional
-  discriminators. PRODUCTION_DELTA_SINCE_OPENING: ZERO.
+  discriminators. R0 was promoted (commit pending) ahead of R1-R3 to
+  address the new P1 candidate (post-compaction TaskHeader projection).
+  PRODUCTION_DELTA_SINCE_OPENING: ZERO.
+
+NEW_CAUSAL_CANDIDATE (factory causal reviewer, 2026-09-02)=
+  The post-compaction TaskHeader rescaling (apps/vscode/src/shared/
+  getApiMetrics.ts:174-225) crosses two semantic baselines:
+    - LAST_REQUEST_INPUT (provider-normalized per-request occupancy)
+    - WORKING_CONTEXT ESTIMATE shrink ratio (tokensAfter / tokensBefore)
+  The displayed header value is their product:
+    header = lastRequestInput × (tokensAfter / tokensBefore)
+  For the LIVE symptom input (167.1k × 0.04249 ≈ 7.1k), the production
+  implementation returns exactly this product. The transformation is
+  documented but its semantic validity was not established by ACT-CLINEMM-
+  CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01) — that closure approved the
+  rescaling on the basis of "only the ratio carries over" without
+  establishing a source-of-truth oracle for what the header SHOULD
+  display.
+  Resolution requires R0 execution (RED expected). If R0 REDs and
+  R1-R3 GREEN, classification is CASE_B.UI; ownership migrates.
 
 DOWNSTREAM_ACT=
   ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-REPAIR01 (only if CASE_B,
   with its own scope, entry-freeze, and review; NOT opened from this ACT).
+  OR ACT-CLINEMM-COMPACTION-TOKEN-PROCOUNTING-UI-REPAIR01 (only if
+  CASE_B.UI, with its own scope, entry-freeze, and review; NOT opened
+  from this ACT).
 
 SEQUENCING=
-  After this ACT reaches CASE_A / CASE_B / CASE_C / CASE_D:
+  After this ACT reaches CASE_A / CASE_A.UI / CASE_B / CASE_B.UI /
+  CASE_B.HYBRID / CASE_C / CASE_D:
     ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01
     (board frontier #2 per factory causal reviewer 2026-09-01)

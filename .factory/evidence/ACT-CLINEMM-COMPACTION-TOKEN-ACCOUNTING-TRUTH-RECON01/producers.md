@@ -209,11 +209,25 @@ request, not a cumulative total?
 These questions are for the discriminators (R1-R3) in the next recon
 step. They cannot be settled by producer-binding alone.
 
-## Q0D — Sub-finding: provider-reported vs estimated
+## Q0D — Sub-finding: provider-normalized vs estimated
+
+**Correction (factory causal reviewer, 2026-09-02):** the previous
+draft of this section called the header field "provider-reported exact
+usage." Soften this to **"provider-normalized request-input accounting
+snapshot"** until the MiniMax adapter / provider event normalization is
+verified. Upstream precedent (issue #11037) showed that treating
+normalized provider fields as naively additive led to a wrong value
+under specific OpenAI-compatible adapters; the source-comment claim
+that buckets are disjoint is encouraging but not yet executable
+evidence.
 
 The header field reads from `tokensIn` / `cacheReads` / `cacheWrites`
-in the `api_req_started` message — those are **provider-reported**
-exact usage for the last request (I7 satisfied: not an estimate).
+in the `api_req_started` message — those are **provider-normalized
+request-input accounting** values for the last request. They are NOT
+provider-billed totals (`tokensOut` is excluded by design). The
+disjoint-bucket claim relies on the `normalizeUsageEvent` seam at
+`apps/vscode/src/sdk/message-translator.ts:86-110`. Future recon step
+must verify this seam against the MiniMax adapter end-to-end.
 
 The divider field reads from `tokensBefore` / `tokensAfter` written
 by the SDK — those are **ESTIMATES** (`estimateRequestInputTokens` /
@@ -221,13 +235,37 @@ by the SDK — those are **ESTIMATES** (`estimateRequestInputTokens` /
 
 The estimates are written into the divider. The header rescales by
 `tokensAfter / tokensBefore` (i.e. uses the ESTIMATED divider ratio
-to rescale the PROVIDER-REPORTED last request). This is consistent
-with I7 (estimates labeled/treated as estimates) and is the source
+to rescale the PROVIDER-NORMALIZED last request). This is the source
 of the divider-rescale behavior.
 
 This is a bounded pattern: the divider's `tokensBefore` and
 `tokensAfter` are ESTIMATES of the working-context payload. They are
-not provider-billed totals.
+not provider-billed totals. The header's per-request value is a
+provider-normalized snapshot, not an exact provider bill.
+
+### R0 candidate (NEW): post-compaction header projection
+
+The factory causal reviewer (2026-09-02) noted that the LIVE symptom
+(`~7.1k` header vs `680.1k → 28.9k` divider) is numerically consistent
+with the production rescaling:
+
+```text
+shrinkFraction = 28_900 / 680_100 ≈ 0.04249
+header         = ceil(167_100 × 0.04249) = 7_099
+```
+
+i.e. the displayed header value is the LAST REQUEST INPUT multiplied
+by the COMPACTION SHRINK RATIO. The two inputs are different semantic
+quantities (REQUEST_INPUT_TOKENS of last request, vs. the SDK's
+WORKING_CONTEXT ESTIMATE before/after compaction). The transformation
+crosses two baselines.
+
+This is R0 territory; see ACT §6 R0 for the full discriminator plan
+and what would constitute GREEN (return one of the three contract-
+permitted quantities: `lastRequestInput`, `tokensAfter`, or
+`tokensBefore` — NOT a multiplicative interpolation). R0 RED is the
+expected outcome; the recon must establish it by execution before
+closing CASE_A.
 
 ---
 
@@ -252,5 +290,15 @@ producers, and each producer's source code already separates truth
 domains. The additive-arithmetic anti-pattern does NOT appear in
 either producer.
 
-R1-R3 discriminators: **NOT YET RUN**. Authoring them is the next
-recon step.
+**NEW candidate defect (factory causal reviewer, 2026-09-02):**
+post-compaction header projection (`getApiMetrics.ts:174-225`) crosses
+two semantic baselines — the LAST REQUEST INPUT is multiplied by the
+WORKING_CONTEXT ESTIMATE shrink ratio. The LIVE symptom's arithmetic
+(167.1k × 0.04249 ≈ 7.1k) is exactly what the production code returns.
+
+**A.label-only is NOT YET ESTABLISHED.** Q0C (semantic-difference) is
+necessary but not sufficient; R0 must execute before CASE_A is valid.
+
+R0-R3 discriminators: **NOT YET RUN**. Authoring them is the next
+recon step. **R0 runs first** per reviewer directive (highest-value
+discriminator, directly explains LIVE symptom).
