@@ -327,7 +327,8 @@ identified that:
    transformation result tracks the active provider context.
 
 **Calibrated verdict (R0' semantic-contract recon, 2026-09-02 second
-review, post-calibration):**
+review, post-calibration; third-review DISCRIMINATOR CALIBRATION
+2026-09-02T03:30:00Z):**
 
 - MANUAL_AUTO_INPUT_ASYMMETRY = PROVEN_STRUCTURAL (durable).
 - MANUAL_WRONG_INPUT_PROJECTION (R0'.B) = RETRACT_PENDING_SEMANTIC_BIND.
@@ -341,13 +342,20 @@ review, post-calibration):**
   The textual evidence supports S3 as plausible; the causal proof
   requires the ratio discriminator.
 - ROOT_CAUSE = UNKNOWN (NOT ISOLATED). Pending the ratio
-  discriminator, root cause could be S1-label-only (presentation
-  residue only), S3-proven (ratio non-invariance), or INDETERMINATE.
+  discriminator, root cause could be S3-proven (ratio
+  non-invariance at the deterministic projection seam),
+  S3_RATIO_TRANSFER_NOT_REPRODUCED (presentation residue plausible
+  but other accounting defects may remain; R1-R3 still deferred),
+  or CAPTURE_INSUFFICIENT.
 - MANUAL_ENTRY_POINTS_AS_DEFECT = RETRACTED (they correctly
   implement their respective design intents).
 - S1 (MATERIAL_BEING_COMPACTED) PROVEN-BY-DOCSTRING = RETRACTED
   (overclaim from this turn's first draft; docstring establishes
   unit/scale only, not payload-identity).
+- P_after/P_before AS_CAUSAL_ORACLE = RETRACTED (third-review P1;
+  intervening turns between compaction and next provider request
+  contaminate the comparison; P observations become
+  LIVE_PROVIDER_QUALIFICATION only).
 
 **Repair options (NOT RANKED; only ranked after the discriminator):**
 
@@ -359,8 +367,9 @@ review, post-calibration):**
   rescale `tokensIn`; display a neutral divider. For auto mode,
   keep current rescaling.
 - (e) Label-only — update UI title attribute + divider label to
-  match the producer's actual contract (trivial; only sufficient
-  if S1-label-only is the verdict).
+  match the producer's actual contract. Trivial; only sufficient
+  if `S3_RATIO_TRANSFER_NOT_REPRODUCED` is the verdict AND no
+  other accounting defects surface from R1-R3.
 - (c) Producer-side harmonization — RETRACTED (would break the
   full-canonical manual-compaction invariant).
 
@@ -432,10 +441,20 @@ the ratio transfers to the provider-context shrink is exactly
 what the ratio discriminator tests.
 
 **Root cause = UNKNOWN until the discriminator runs.** Possible
-verdicts:
-- S3-PROVEN (ratio non-invariance) → repair options a/b/d.
-- S1-LABEL-ONLY (presentation residue only) → repair option e
-  (label-only fix).
+verdicts (CALIBRATED 2026-09-02 third-review; primary discriminator
+is `manual_ratio = H_after/H_before` vs `provider_projection_ratio
+= W_after/W_before`, both captured deterministically around the
+SAME manual-compaction event with `prepareProviderMessagesForApi`
+applied to pre/post snapshots; P observations demoted to
+LIVE_PROVIDER_QUALIFICATION):
+- S3-PROVEN (ratio non-invariance at the deterministic production
+  projection seam) → repair options a/b/d.
+- S3_RATIO_TRANSFER_NOT_REPRODUCED (ratio invariance holds) →
+  presentation residue plausible (UI title / divider label
+  mismatch); CLOSED_WITH_RESIDUE only after R1-R3 and remaining
+  ACT stop conditions are also evaluated. Repair option (e)
+  label-only is one candidate; R1-R3 territory may surface other
+  accounting defects.
 - INDETERMINATE → CAPTURE_INSUFFICIENT; expand the run.
 
 The two manual entry points (CLI:99-100, VSCode SDK bridge:101-102)

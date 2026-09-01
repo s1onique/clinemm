@@ -10,7 +10,7 @@
 >
 > **PASS_WITH_ONE_P1_FIX (factory causal reviewer, 2026-09-02 SECOND REVIEW — CALIBRATION):** two P1 overclaims corrected: (a) "S1 proven by telemetry docstring" was overclaimed — the docstring establishes unit/scale only, not payload-identity; (b) "S3 = CURRENT_BEST_CLASSIFICATION / ROOT_CAUSE_ISOLATED = AMBIGUOUS_WIRE_CONTRACT" was overclaimed — S3 is PLAUSIBLE but UNPROVEN; ROOT_CAUSE remains UNKNOWN until the ratio discriminator runs. Repair options NOT pre-ranked; Factory doctrine prefers the smallest bounded fix until evidence proves the wire itself needs new semantics.
 >
-> **R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX):** the producer is a transformation on the supplied request (no semantic claim); the UI consumer applies a ratio whose transfer to the provider-context shrink for manual mode is exactly the discriminator's question. Defect (if any) is AMBIGUOUS_WIRE_CONTRACT (CASE_S3, candidate) or SEMANTIC_LABEL (CASE_S1) — pending the ratio discriminator. The defect (if confirmed) is in the schema/wire or the UI label, NOT in the compactor entry points. The discriminator's question: does `manual_ratio = H_after/H_before` track `provider_projection_ratio = W_after/W_before` AND `actual_provider_ratio = P_after/P_before`?
+> **R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX; third-review DISCRIMINATOR CALIBRATION 2026-09-02T03:30:00Z):** the producer is a transformation on the supplied request (no semantic claim); the UI consumer applies a ratio whose transfer to the provider-context shrink for manual mode is exactly the discriminator's question. Defect (if any) is AMBIGUOUS_WIRE_CONTRACT (CASE_S3, candidate) or SEMANTIC_LABEL (CASE_S1) — pending the ratio discriminator. The defect (if confirmed) is in the schema/wire or the UI label, NOT in the compactor entry points. The PRIMARY discriminator: does `manual_ratio = H_after/H_before` track `provider_projection_ratio = W_after/W_before`, both captured deterministically around the SAME manual-compaction event with `prepareProviderMessagesForApi` applied to pre/post canonical snapshots? P observations (`P_after/P_before`) are NOT a valid causal compaction oracle (intervening turns between compaction and next provider request contaminate the comparison); P observations become LIVE_PROVIDER_QUALIFICATION (conservation check only).
 >
 > **Distinct from `task-presentation.md`.** That epic owns the rendering of state to the user. This epic owns whether the working-context estimate, the compaction before/after markers, and the session usage counters tell consistent truth — and whether the producers expose semantic quantities that match what the UI fields appear to claim.
 >
@@ -27,19 +27,29 @@
 - Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the discriminator resolves the S3 question.
 - Blocked by: n/a (the HOST_REQUIRED ratio discriminator is sequenced after the recon's calibrated findings are written; the reviewer explicitly said NOT to author more Factory scaffolding before the discriminator runs).
 - Sequenced after this ACT (gated on the discriminator's verdict):
-  - If discriminator shows ratio invariance → `CASE_A` with
-    `S1_LABEL_ONLY` residue → `CLOSED_WITH_RESIDUE`; downstream
-    repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01`
-    with **option (e) label-only** as the bounded fix (smallest
-    possible; addresses only presentation).
-  - If discriminator shows ratio non-invariance → `CASE_A` with
+  - If discriminator shows ratio non-invariance (manual_ratio
+    materially differs from provider_projection_ratio at the
+    deterministic production projection seam) → `CASE_A` with
     `S3_PROVEN` residue → `CLOSED_WITH_RESIDUE`;
     `ROOT_CAUSE_ISOLATED` at the schema/wire; downstream repair
     ACT = `ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01` with
     **options (a) / (b) / (d)** as candidate bounded fixes
-    (ranked after discriminator).
-  - If discriminator cannot correlate provider counts →
-    `CAPTURE_INSUFFICIENT` / `CASE_C`.
+    (ranked after discriminator; Factory doctrine prefers smallest).
+  - If discriminator shows ratio invariance →
+    `S3_RATIO_TRANSFER_NOT_REPRODUCED`. S3 ratio-transfer
+    hypothesis is FALSIFIED; this does NOT auto-prove
+    S1-LABEL-ONLY. Other accounting defects may remain (R1-R3
+    still deferred; UI title still claims S2). Proceed to remaining
+    ACT stop conditions; presentation residue remains plausible.
+    CLOSED_WITH_RESIDUE only after R1-R3 and remaining stop
+    conditions are also evaluated. Downstream repair ACT (only
+    after remaining stops) = `ACT-CLINEMM-COMPACTION-WIRE-
+    CONTRACT-REPAIR01` with **option (e) label-only** as the
+    bounded fix for the presentation residue — but R1-R3 territory
+    may surface other accounting defects that need a different
+    bounded fix.
+  - If H or W cannot be captured deterministically around the
+    same compaction event → `CAPTURE_INSUFFICIENT` / `CASE_C`.
   - If `CASE_B` (R1-R3 RED with structural defect, not yet probed) →
     bounded core-arithmetic repair ACT (R1-R3 are DEFERRED until
     the discriminator resolves the S3 question).

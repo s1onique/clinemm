@@ -40,6 +40,29 @@
 >   actually tracks the ratio in the provider-working-context space
 >   (or in actual provider-normalized observation). That requires a
 >   real-trace ratio discriminator, not another scaffolding pass.
+>
+> **Third review (2026-09-02):** PASS_WITH_ONE_P1_FIX.
+> Reviewer notes one P1 causal flaw in the proposed live
+> discriminator, plus a wording overclaim, that this turn corrects:
+> - `P_after/P_before` is NOT a valid causal compaction oracle.
+>   Between the compaction event and the next provider request,
+>   intervening assistant/user/tool traffic can change the input;
+>   comparing actual provider traffic before/after manufactures
+>   exactly the ratio mismatch we're trying to interpret causally.
+>   Fix: primary discriminator is `manual_ratio = H_after/H_before`
+>   vs `provider_projection_ratio = W_after/W_before`, both
+>   captured deterministically around the SAME manual-compaction
+>   event with `prepareProviderMessagesForApi` applied to
+>   pre/post compaction canonical snapshots. P observations become
+>   LIVE_PROVIDER_QUALIFICATION (conservation check), not the causal
+>   oracle.
+> - "Ratio invariance → S1-LABEL-ONLY is the verdict" was overclaimed.
+>   Ratio invariance only eliminates the *ratio-transfer defect*.
+>   It does NOT by itself prove that the only remaining issue is
+>   labeling — R1-R3 are still deferred. Right framing: ratio
+>   invariance → `S3_RATIO_TRANSFER_NOT_REPRODUCED` → presentation
+>   residue remains plausible → proceed to remaining ACT stop
+>   conditions.
 ## Producer contract
 
 ### Producer's transformation contract (calibrated 2026-09-02 second review)
@@ -434,57 +457,115 @@ or (d) become necessary.
 
 ## Next discriminator (the one bounded test that matters)
 
-Execute one real manual compaction session with these captures
-(instrumented; HOST_REQUIRED):
+**Reviewer's third-review P1 (PASS_WITH_ONE_P1_FIX):** the previous
+turn's `P_after/P_before` capture was *not* a valid causal
+compaction oracle. Between the compaction event and the next
+provider request, intervening assistant/user/tool traffic can
+change the input; comparing actual provider traffic before/after
+manufactures exactly the ratio mismatch we're trying to interpret
+causally. P observations are useful as a **conservation check**
+(`P_after ≈ corresponding W_after`), but NOT as the primary
+discriminator.
+
+The primary discriminator is an estimator-space A/B on the same
+logical conversation state — **both H and W captured
+deterministically around the SAME manual-compaction event**, with
+`prepareProviderMessagesForApi` applied to the canonical snapshots
+on both sides. This is the only comparison where the two ratios
+have a shared causal basis.
+
+### Primary captures (deterministic around the same compaction event)
 
 ```text
-H_before = estimate(systemPrompt + canonical_messages + tools)
+H_before = estimate(systemPrompt + manualCompactionInput + tools)
            // same estimator the compactor uses, on the manual input
+           // (canonical full transcript per the design intent)
 
-W_before = estimate(systemPrompt + buildForApi(canonical) + tools)
-           // the next provider-bound projection BEFORE compaction
+H_after  = estimate(systemPrompt + compactorOutput + tools)
+           // same estimator, on the compactor's actual output
 
-H_after  = estimate(systemPrompt + compactor_output + tools)
-           // the compactor's output, on the manual transform basis
+W_before = estimate(prepareProviderMessagesForApi(
+                     preCompactCanonicalSnapshot) + systemPrompt + tools)
+           // provider-bound projection of the SAME pre-compaction
+           // canonical state the manual compactor saw
 
-W_after  = estimate(systemPrompt + buildForApi(compactor_output) + tools)
-           // the next provider-bound projection AFTER compaction
-
-P_before = provider-normalized input of the last actual request before compaction
-P_after  = provider-normalized input of the first actual request after compaction
+W_after  = estimate(prepareProviderMessagesForApi(
+                     postCompactCanonicalSnapshot) + systemPrompt + tools)
+           // provider-bound projection of the SAME post-compaction
+           // canonical state the compactor produced
 ```
 
-Then ask:
+### Primary discriminator (causal A/B)
+
 ```text
-manual_ratio           = H_after / H_before
+manual_ratio             = H_after / H_before
 provider_projection_ratio = W_after / W_before
-actual_provider_ratio  = P_after / P_before
 
-ASSERT: manual_ratio tracks provider_projection_ratio AND actual_provider_ratio
+ASSERT (or refute): manual_ratio tracks provider_projection_ratio
 
-(For the AUTO path, the same setup; expect a much smaller
- divergence because the producer's caller already passed the
- provider-projected input.)
+(For the AUTO path, the same captures; expect the assertion to
+ TRIVIALLY hold because the producer's caller already passed the
+ provider-projected input, so W ≈ H by construction.)
 ```
 
-**If manual_ratio materially differs from W_after/W_before
-AND/OR P_after/P_before**, while `getApiMetrics` applies the
-manual-mode ratio to `P_before`, then S3 is proven and
-ROOT_CAUSE_ISOLATED = AMBIGUOUS/UNTAGGED COMPACTION RATIO. The
-ratio comparison is the necessity proof the recon currently lacks.
+### Provider observations (LIVE_PROVIDER_QUALIFICATION, NOT the causal oracle)
 
-**If manual_ratio ≈ provider_projection_ratio ≈ actual_provider_ratio**,
-then the ratio transfers despite the different underlying payloads;
-S1-label-only is the verdict (presentation residue in the divider
-label and UI title; the rescaling arithmetic is conserved).
+```text
+P_before = provider-normalized input of the last actual request
+           BEFORE compaction (may include post-request assistant
+           turn, tool results, hook output — i.e., not necessarily
+           the same input the compactor saw)
+P_after  = provider-normalized input of the first actual request
+           AFTER compaction (may include intervening user
+           continuation, followup turns, system changes)
+```
 
-**If provider counts cannot be correlated to the exact pre/post
-requests** (different sessions, model caching quirks, telemetry
-loss), then CAPTURE_INSUFFICIENT — expand the run, or settle for
-the textual evidence already gathered.
+P captures can be used only as a **conservation / qualification**
+check:
 
-Do not infer S3 from chronology or plausible absolute values
-alone.
+```text
+ASSERT (weak): P_after ≈ corresponding W_after
+   — proves the provider-side projection agrees with our
+     deterministic W_after at the model-invocation boundary.
+   — but P_after includes anything that arrived between the
+     compaction event and the actual request, so this is NOT
+     a compaction-ratio equality test.
+```
+
+### Verdict (CAUSAL, not overclaimed)
+
+**If `manual_ratio` materially differs from `provider_projection_ratio`**,
+then S3 is REPRODUCED at the **deterministic production projection
+seam**. Necessity is demonstrated: the manual-mode ratio is not a
+valid proxy for the active provider-context shrink that the UI
+consumer applies. ROOT_CAUSE_ISOLATED = AMBIGUOUS / UNTAGGED
+COMPACTION RATIO. Repair options (a)/(b)/(d) become candidates.
+
+**If `manual_ratio ≈ provider_projection_ratio`**, then the
+**S3 ratio-transfer hypothesis is NOT REPRODUCED**. This does NOT
+automatically prove `S1_LABEL_ONLY` is the verdict; it only
+eliminates the ratio-transfer defect. Other accounting defects may
+remain — R1-R3 are still deferred, and the UI title still claims
+"Current tokens used in this request" while the producer is a
+transformation over caller-supplied input. The right framing:
+ratio invariance → `S3_RATIO_TRANSFER_NOT_REPRODUCED` →
+presentation residue remains plausible → proceed to remaining
+ACT stop conditions.
+
+**If H or W cannot be captured deterministically around the same
+event** (transcript corruption, snapshot capture hook missing,
+buildForApi not deterministic for some payload shape), then
+`CAPTURE_INSUFFICIENT` — expand the instrumentation or settle for
+the textual evidence.
+
+**If P_after cannot be related to a corresponding W_after** (different
+sessions, model caching quirks, telemetry loss, intervening turns
+between compaction and next provider request), then P observations
+are NOT usable as qualification. H/W comparison still stands.
+
+**Do not infer S3 from chronology or absolute values alone.** The
+discriminator is *ratio equality under same-event capture*, not
+*absolute token count plausibility*.
 
 ## Repair options (NOT RANKED — only ranked after the ratio discriminator)
 
@@ -560,6 +641,8 @@ shrink for manual mode, and the UI title is a presentation residue.
 | `S1 (MATERIAL_BEING_COMPACTED) is the producer's contract` (this turn's first draft) | **OVERCLAIMED.** The telemetry docstring establishes a UNIT/SCALE contract only; the producer's actual contract is a *transformation* on whatever request the caller supplied. The semantic content of that request is determined by the caller, not by the producer. |
 | `S3 = CURRENT_BEST_CLASSIFICATION` (this turn's first draft) | **OVERCLAIMED.** S3 is PLAUSIBLE but UNPROVEN. `ROOT_CAUSE_ISOLATED = AMBIGUOUS_WIRE_CONTRACT` is unjustified without the ratio discriminator. The two were inconsistent with each other and both retracted in the second-review calibration. |
 | `(a) Tag the field = most likely correct repair` (this turn's first draft) | **OVERCLAIMED.** Repair options are NOT RANKED until the discriminator runs. Factory doctrine prefers the smallest bounded fix; if ratio invariance holds, no new protocol fields are needed. |
+| `P_after/P_before` is the causal compaction oracle (second-review calibration) | **OVERCLAIMED.** Between the compaction event and the next provider request, intervening assistant/user/tool traffic can change the input; comparing actual provider traffic before/after manufactures exactly the ratio mismatch we're trying to interpret causally. P observations become LIVE_PROVIDER_QUALIFICATION (conservation check), NOT the causal oracle. Primary discriminator is now `manual_ratio = H_after/H_before` vs `provider_projection_ratio = W_after/W_before`, both captured deterministically around the SAME manual-compaction event. |
+| `Ratio invariance → S1-LABEL-ONLY is the verdict` (second-review calibration) | **OVERCLAIMED.** Ratio invariance only eliminates the *ratio-transfer defect*. R1-R3 are still deferred; other accounting defects may remain. Correct framing: ratio invariance → `S3_RATIO_TRANSFER_NOT_REPRODUCED` → presentation residue remains plausible → proceed to remaining ACT stop conditions. |
 
 ## What changed vs commit 9083ecd56
 

@@ -470,15 +470,22 @@ R0' deliverable (RECON, not unit-test):
   4. The next bounded step is a RATIO DISCRIMINATOR (not R1-R3,
      not more Factory scaffolding). See semantic-contract-recon.md
      "Next discriminator" section for the exact captures. The
-     three captures per pre/post a real manual /compact session:
-       manual_ratio               = H_after / H_before
-       provider_projection_ratio   = W_after / W_before
-       actual_provider_ratio      = P_after / P_before
-     The key comparison is whether manual_ratio tracks
-     provider_projection_ratio AND actual_provider_ratio.
+     PRIMARY discriminator is estimator-space A/B on the same
+     logical conversation state:
+       manual_ratio             = H_after / H_before
+       provider_projection_ratio = W_after / W_before
+     where H, W are both captured deterministically around the
+     SAME manual-compaction event with prepareProviderMessagesForApi
+     applied to pre/post compaction canonical snapshots. P
+     observations become LIVE_PROVIDER_QUALIFICATION (conservation
+     check, P_after ≈ corresponding W_after) — NOT the causal
+     oracle, because intervening turns between the compaction
+     event and the next provider request contaminate the
+     comparison.
 
 R0' discriminator output (CALIBRATED 2026-09-02 second-review
-PASS_WITH_ONE_P1_FIX):
+PASS_WITH_ONE_P1_FIX; THIRD-REVIEW discriminator calibration
+2026-09-02T03:30:00Z):
 
   CORE_COMPACTION_ARITHMETIC      = CONSERVED (no producer defect
     identified; the compactor transformation is correct on its
@@ -504,20 +511,30 @@ PASS_WITH_ONE_P1_FIX):
     the ratio discriminator).
 
 NEXT (after the semantic-contract recon): the real-trace RATIO
-DISCRIMINATOR (HOST_REQUIRED). It does NOT require the previously
-retracted E_before ≈ W_before ≈ P_before (that presupposed S2).
-Instead compute three ratios:
+DISCRIMINATOR (HOST_REQUIRED). PRIMARY captures H, W — both
+captured deterministically around the SAME manual-compaction event
+with prepareProviderMessagesForApi applied to pre/post compaction
+canonical snapshots:
   manual_ratio              = H_after / H_before
-  provider_projection_ratio = W_after / W_before
-  actual_provider_ratio     = P_after / P_before
-where H, W, P are estimated / observed at the pre/post
-boundaries of a single real manual /compact session. Ask:
-  Does manual_ratio track provider_projection_ratio AND
-  actual_provider_ratio?
-- If YES (ratio invariance holds): S1-label-only is the verdict;
-  only the UI title and divider label need a presentation fix.
-- If NO (ratio non-invariance): S3 is PROVEN; ROOT_CAUSE_ISOLATED
-  at the schema/wire; repair options (a/b/d) become candidates.
+  provider_projection_ratio  = W_after / W_before
+Ask: Does manual_ratio track provider_projection_ratio?
+- If NO (ratio non-invariance at the deterministic production
+  projection seam): S3 is PROVEN; ROOT_CAUSE_ISOLATED at the
+  schema/wire; repair options (a/b/d) become candidates (ranked
+  smallest first; Factory doctrine).
+- If YES (ratio invariance holds): S3_RATIO_TRANSFER_NOT_
+  REPRODUCED. This does NOT auto-prove S1-LABEL-ONLY; other
+  accounting defects may remain (R1-R3 still deferred; UI title
+  still claims S2). Proceed to remaining ACT stop conditions;
+  presentation residue remains plausible.
+
+LIVE_PROVIDER_QUALIFICATION (NOT the causal oracle; only a
+conservation check):
+  P_after ≈ corresponding W_after
+This proves the provider-side projection agrees with our
+deterministic W_after at the model-invocation boundary. It is NOT
+a compaction-ratio equality test — intervening turns contaminate
+the comparison.
 - If provider counts cannot be correlated: CAPTURE_INSUFFICIENT.
 
 The recon's source-recon alone is sufficient to NAME the suspect
@@ -643,15 +660,22 @@ R5 — MODEL_INPUT_BUDGET
 ```text
 CASE_A — TRUTH_DOMAINS_PRESERVED / LIVE_SYMPTOM_EXPLAINED
   R0-A WITNESS_ONLY (not a discriminator), R0' semantic-contract
-  recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX)
+  recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX;
+  third-review discriminator calibration 2026-09-02T03:30:00Z)
   classifies the asymmetry as a TRANSFORMATION CONTRACT (producer)
   vs IMPLICIT S2 ASSUMPTION (UI consumer) — a wire-contract
   question, NOT a producer defect. Resolution requires the ratio
   discriminator to run; the verdict is one of:
-  - S1-LABEL-ONLY (ratio invariance holds) → option (e) label-only
-    fix suffices.
-  - S3-PROVEN (ratio non-invariance) → option (a)/(b)/(d) become
-    candidates (ranked after discriminator).
+  - S3-PROVEN (ratio non-invariance at the deterministic
+    production projection seam) → option (a)/(b)/(d) become
+    candidates (ranked after discriminator; Factory doctrine
+    prefers smallest).
+  - S3_RATIO_TRANSFER_NOT_REPRODUCED (ratio invariance holds) →
+    presentation residue plausible (UI title / divider label
+    mismatch); CLOSED_WITH_RESIDUE only after R1-R3 and remaining
+    ACT stop conditions are also evaluated. Repair option (e)
+    label-only is one candidate; R1-R3 territory may surface
+    other accounting defects.
   R1-R3 GREEN. I1-I7 hold. COMPACTION_BEFORE / COMPACTION_AFTER
   use the same estimator as WORKING_CONTEXT_ESTIMATE on the
   corresponding payload. SESSION_CUMULATIVE_USAGE does NOT
@@ -705,16 +729,20 @@ CASE_S1 — SEMANTIC_LABEL_DEFECT (UI title vs producer contract)
       used in this request" (apps/vscode/webview-ui/src/components/
       chat/task-header/ContextWindow.tsx:175) — which the user
       reasonably interprets as active model context.
-  The defect, IF the ratio discriminator shows ratio invariance
-  holds, is SEMANTIC_LABEL / PRESENTATION: the UI's title implies a
-  different semantic quantity than the producer's transformation
+  The presentation residue, IF the ratio discriminator shows ratio
+  invariance holds AND R1-R3 do not surface other accounting
+  defects, is SEMANTIC_LABEL / PRESENTATION: the UI's title implies
+  a different semantic quantity than the producer's transformation
   result.
-  → IF ratio invariance holds: S1 is the verdict; only label-only
-    fix (option e) is needed. Downstream repair ACT =
-    ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 with option (e)
-    as the bounded fix. The TaskHeader / shared-metrics layer is
-    at fault for the label, not for the rescaling arithmetic.
-  → IF ratio non-invariance: S1 is FALSIFIED; verdict moves to S3.
+  → IF ratio invariance holds: S3_RATIO_TRANSFER_NOT_REPRODUCED;
+    presentation residue plausible. CLOSED_WITH_RESIDUE only after
+    R1-R3 and remaining ACT stop conditions are also evaluated.
+    Downstream repair ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-
+    REPAIR01 with option (e) label-only as the bounded fix for the
+    presentation residue — but R1-R3 territory may surface other
+    accounting defects that need a different bounded fix.
+  → IF ratio non-invariance: S3 is the verdict; S1 presentation-
+    only is FALSIFIED.
 
 CASE_S3 — WIRE_CONTRACT_OVERLOADED (PLAUSIBLE, NOT ISOLATED)
   R0' semantic-contract recon (CALIBRATED) establishes that the
@@ -729,15 +757,22 @@ CASE_S3 — WIRE_CONTRACT_OVERLOADED (PLAUSIBLE, NOT ISOLATED)
     - Consumer applies a ratio to a provider-bound tokensIn.
     - The wire does not carry a `kind` discriminator.
   But the causal proof — that the manual-mode ratio
-  `H_after/H_before` does NOT track the provider-context shrink
-  (`W_after/W_before` and `P_after/P_before`) — is UNPROVEN.
-  The ratio discriminator resolves this.
+  `H_after/H_before` does NOT track the provider-projection
+  ratio `W_after/W_before` at the **deterministic production
+  projection seam** (both captured around the SAME manual-
+  compaction event) — is UNPROVEN. The ratio discriminator
+  resolves this. (P_after/P_before is NOT a valid causal
+  compaction oracle because intervening turns between the
+  compaction event and the next provider request contaminate
+  the comparison; P observations become LIVE_PROVIDER_
+  QUALIFICATION only.)
   → IF discriminator shows ratio non-invariance: S3 PROVEN;
     ROOT_CAUSE_ISOLATED at the schema/wire between the producer
     (core-events.ts:773) and the UI rescaling consumer
     (getApiMetrics.ts:174-225). Downstream repair ACT =
     ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01. Repair options
-    (NOT RANKED, ranked after discriminator):
+    (NOT RANKED, ranked after discriminator; Factory doctrine
+    prefers smallest):
       (a) Producer emits tokensBeforeKind; consumer uses ratio
           only when kind matches.
       (b) Producer emits separate compactionInputTokensBefore AND
@@ -745,8 +780,13 @@ CASE_S3 — WIRE_CONTRACT_OVERLOADED (PLAUSIBLE, NOT ISOLATED)
       (d) Consumer reconciles: for manual mode, do NOT rescale
           tokensIn (use a neutral divider label); for auto mode,
           keep the current rescaling.
-  → IF discriminator shows ratio invariance: S3 FALSIFIED;
-    verdict moves to S1-label-only.
+  → IF discriminator shows ratio invariance: S3_RATIO_TRANSFER_
+    NOT_REPRODUCED. S3 ratio-transfer hypothesis is falsified.
+    Other accounting defects may remain (R1-R3 territory; UI title
+    still claims S2). Proceed to remaining ACT stop conditions;
+    presentation residue remains plausible. S1-label-only is NOT
+    auto-proven; option (e) label-only becomes one candidate for
+    the presentation residue, but other fixes may also be needed.
 
 CASE_B.MANUAL_PROJECTION — RETRACTED 2026-09-02 SECOND REVIEW
   Premature. The producer makes no semantic claim (it is a
@@ -783,27 +823,36 @@ may freeze a specific behavior, but only if recon proves the seam.
     TRANSFORMATION + UI consumer as IMPLICIT S2, R0' ratio
     discriminator runs, R1-R3 GREEN, I1-I7 hold** → depends on
     discriminator outcome:
-    - **Discriminator shows ratio invariance** (manual_ratio ≈
-      provider_projection_ratio ≈ actual_provider_ratio) → S1
-      label-only residue; `CASE_A` with `S1_LABEL_ONLY` residue;
-      `CLOSED_WITH_RESIDUE` (UI title + divider label need a
-      presentation fix; rescaling arithmetic is conserved).
-      Downstream repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-
-      CONTRACT-REPAIR01` with **option (e) label-only** as the
-      bounded fix (smallest possible; addresses only presentation).
     - **Discriminator shows ratio non-invariance** (manual_ratio
-      materially differs from W_after/W_before and/or
-      P_after/P_before) → S3 PROVEN; `CASE_A` with `S3_PROVEN`
-      residue; `CLOSED_WITH_RESIDUE`. ROOT_CAUSE_ISOLATED at the
-      schema/wire between producer (core-events.ts:773) and UI
-      rescaling consumer (getApiMetrics.ts:174-225).
+      materially differs from `provider_projection_ratio =
+      W_after/W_before`, both captured deterministically around
+      the SAME manual-compaction event) → S3 PROVEN; `CASE_A`
+      with `S3_PROVEN` residue; `CLOSED_WITH_RESIDUE`.
+      ROOT_CAUSE_ISOLATED at the schema/wire between producer
+      (core-events.ts:773) and UI rescaling consumer
+      (getApiMetrics.ts:174-225).
       Downstream repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-
       CONTRACT-REPAIR01` with **options (a) / (b) / (d)** as
       candidate bounded fixes (ranked AFTER the discriminator;
       Factory doctrine prefers the smallest, which may be (d)
-      consumer-side reconciliation or (e) label-only if it
-      adequately addresses the residue).
-    - **Discriminator cannot correlate provider counts** →
+      consumer-side reconciliation).
+    - **Discriminator shows ratio invariance** (manual_ratio ≈
+      provider_projection_ratio) → `S3_RATIO_TRANSFER_NOT_
+      REPRODUCED`. S3 ratio-transfer hypothesis is FALSIFIED. This
+      does NOT auto-prove S1-LABEL-ONLY; other accounting defects
+      may remain (R1-R3 still deferred; UI title still claims
+      S2). Proceed to remaining ACT stop conditions; presentation
+      residue remains plausible. CLOSED_WITH_RESIDUE only after
+      R1-R3 and remaining stop conditions are also evaluated.
+      Downstream repair ACT (only after remaining stops) =
+      `ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01` with
+      **option (e) label-only** as the bounded fix for the
+      presentation residue — but R1-R3 territory may surface
+      other accounting defects that need a different bounded fix.
+    - **Discriminator cannot capture H or W deterministically
+      around the same compaction event** (transcript corruption,
+      snapshot capture hook missing, buildForApi not
+      deterministic for some payload shape) →
       `CAPTURE_INSUFFICIENT` / `CASE_C` → recon gains the
       expanded runbook.
   - **R1-R3 RED with structural defect** → `CASE_B` → recon reports
@@ -811,7 +860,10 @@ may freeze a specific behavior, but only if recon proves the seam.
     file:line). R0' / R0-A do not contribute to this branch.
   - **CASE_B.UI / CASE_B.HYBRID / CASE_B.MANUAL_PROJECTION all
     RETIRED 2026-09-02** (R0-B oracle unfounded; previous-turn
-    root-cause isolation on manual entry points was incorrect).
+    root-cause isolation on manual entry points was incorrect;
+    the second-review and third-review PASS_WITH_ONE_P1_FIX
+    calibrations captured the corrections in subsequent
+    commits).
   - **Live capture blocked** → `CASE_C` → `CAPTURE_INSUFFICIENT` and
     the epic detail file gains the LIVE-capture runbook.
   - **Real-prompt required** → `CASE_D` → `HOST_REQUIRED` and the
@@ -827,21 +879,27 @@ may freeze a specific behavior, but only if recon proves the seam.
     R1-R3 are DEFERRED until the ratio discriminator resolves the
     S3 question. They will not be the next turn's primary deliverable.
   - **OWNERSHIP** of any resolved defect:
-    - S1-label-only → UI rendering layer (ContextWindow.tsx:175
-      title + cli-divider label).
-    - S3-proven → schema/wire layer (the schema gap between the
+    - S3-PROVEN → schema/wire layer (the schema gap between the
       producer's transformation and the consumer's implicit S2
       assumption). NOT the compactor entry points and NOT core
       compaction.
+    - S3_RATIO_TRANSFER_NOT_REPRODUCED (presentation residue
+      plausible) → UI rendering layer (ContextWindow.tsx:175
+      title + cli-divider label). But R1-R3 territory may surface
+      additional accounting defects that need separate fixes.
 
 ## §9 — Operational action
 
 1. Run the recon against the SDK source tree at HEAD `975d3315c` (post
    board-amendment).
 2. Produce `.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/`
-   with: `entry-freeze.txt`, `compaction-arithmetic-map.md` (Q1–Q12),
-   `trust-model.md`, R1–R5 discriminator test files (RED-then-GREEN
-   progression, source-extraction tests), `classification.md`, `final-report.md`.
+   with: `entry-freeze.txt`, `producers.md`, `semantic-contract-recon.md`
+   (DONE in this calibration), and — pending the ratio discriminator's
+   verdict — `compaction-arithmetic-map.md` (Q1–Q12), `trust-model.md`,
+   `classification.md`, `final-report.md`. Per the factory causal
+   reviewer's third-review PASS_WITH_ONE_P1_FIX directive: do NOT
+   author another 400 lines of Factory scaffolding before the ratio
+   discriminator runs.
 3. Update the epic detail file with first durable conclusions if CASE_A.
 4. **DO NOT** open `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-REPAIR01`
    from this ACT. Any repair is a separate ACT with its own scope,
@@ -853,7 +911,11 @@ may freeze a specific behavior, but only if recon proves the seam.
 ## §10 — Acceptance criteria
 
   - Recon ACT body committed with `OPEN / RECON_ONLY` status.
-  - Entry-freeze, Q1-Q12 recon, trust model, R1-R5 discriminator, final report.
+  - Entry-freeze, semantic-contract recon, ratio-discriminator
+    specification (DONE in this calibration). Q1-Q12 / trust model /
+    classification / final report DEFERRED until the ratio discriminator
+    resolves the S3 question (per the third-review PASS_WITH_ONE_P1_FIX
+    directive).
   - `bun run check-types` clean on `sdk/packages/core`.
   - `bun x vitest run sdk/packages/core/src/extensions/context/compaction*.test.ts` green.
   - No production code change.
