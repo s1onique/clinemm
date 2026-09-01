@@ -256,27 +256,80 @@ named to NOT overclaim.
   affect the manual-compaction discriminator because manual
   compaction always uses the latest canonical history.)
 
-## Reopen-condition for executing the discriminator
+## Reopen-condition for executing the discriminator — CALIBRATED 2026-09-02 fourth-review-second-pass
 
-**C1 GO is NOT yet granted.** Before execution, the next turn
-must:
+**Correction:** the previous wording of the buildForApi gate
+was over-constrained. The proposed universal equivalence
+`buildForApi(prepareTurn(x).messages) ≈ buildForApi(x.messages)`
+is FALSE by design — `prepareTurn(x).messages` is supposed to
+be materially different from `x.messages` (compaction
+projection replaces a canonical prefix with the compacted
+artifact). Requiring that the second-stage builder be
+"transparent to compaction" would defeat the entire purpose of
+measuring the production working-context projection.
 
-1. Confirm `buildForApi` has no compaction-aware logic that
-   would invalidate the equality
-   `buildForApi(prepareTurn(x).messages) ≈ buildForApi(x.messages)`
-   for any x (i.e., the second-stage transformation is
-   compaction-independent). Targeted source-extraction test
-   under `sdk/packages/agents/src/runtime/__tests__/`
-   or equivalent.
-2. Author the corrected discriminator formula in
-   `semantic-contract-recon.md` (replace
-   `prepareProviderMessagesForApi(...)` with the
-   `buildForApi(prepareTurn(...).messages)` form, and rename W
-   to WORKING_CONTEXT_RATIO).
-3. Commit those changes.
+**Correct gate** (per factory causal reviewer's
+PASS_WITH_ONE_P1_FIX, 2026-09-02):
 
-After that, **C1: GO — execute the discriminator immediately,
-no further review loop.**
+```text
+BUILD_FOR_API_SIDE_CHANNEL_INVARIANT:
+
+For the two A/B captures, buildForApi must be invoked through
+the same production path with identical non-message
+inputs/configuration. It must not independently read mutable
+compaction state outside the prepared messages in a way that
+differs between A/B.
+```
+
+Concretely, the A/B harness must satisfy:
+
+```text
+NON_MESSAGE_INPUTS_BEFORE == NON_MESSAGE_INPUTS_AFTER
+CANONICAL_BEFORE          == CANONICAL_AFTER
+ONLY_MUTATED_AUTHORITY    == compactionState
+```
+
+If `buildForApi` deterministically rewrites the message arrays
+differently because **the arrays themselves differ**, that is
+not contamination — that is precisely part of the production
+working/provider projection we want to measure. We **include**
+the second-stage transformation in W, not exclude it.
+
+### Targeted inspection result (2026-09-02)
+
+Inspected `MessageBuilder` at
+`sdk/packages/core/src/session/services/message-builder.ts:166`:
+
+```text
+buildForApi(messages: Message[]): Message[] { ... }
+```
+
+The signature accepts only the prepared messages; no
+`compactionState`, `session.compaction`, `currentCompaction`,
+or `compactionMode` parameters. Searched the file body and
+the broader `message-builder.ts` for any of those identifiers
+— zero matches. The base builder receives compaction only
+through its message argument.
+
+(There is a "Known gap" note at
+`sdk/packages/core/src/extensions/context/compaction.ts:253`
+about plugin-registered message builders — that is a
+different concern from the base builder we drive; plugins
+register custom builders via `registerMessageBuilder()`,
+which is opt-in extension territory. The base builder path
+used by manual compaction is the one we control.)
+
+### C1 GO status — corrected
+
+**C1: GO — execute the discriminator immediately, no further
+review loop.** The seam is sufficiently bound.
+
+The corrected discriminator formula was already authored in
+this commit's `semantic-contract-recon.md` update (the
+`buildForApi(prepareTurn(...).messages)` form), so step 2 is
+already satisfied. The narrowing check (no independent
+compaction-state side channel) is satisfied by source
+inspection above.
 
 ## What this commit DOES NOT change
 

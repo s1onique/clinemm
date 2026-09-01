@@ -58,7 +58,47 @@ TIMESTAMP=2026-09-01T23:55:00Z (opening) /
                                 file working-context-seam-recon.md
                                 captures the full binding; C1 GO NOT yet
                                 granted pending buildForApi compaction-
-                                independence confirmation)
+                                independence confirmation) /
+           2026-09-02T05:00:00Z (PASS_WITH_ONE_P1_FIX from factory
+                                causal reviewer; FOURTH-REVIEW-SECOND-
+                                PASS executed: the proposed universal
+                                buildForApi-equivalence gate was over-
+                                constrained (it's FALSE by design;
+                                prepareTurn's projection IS supposed to
+                                replace the canonical prefix); correct
+                                gate is BUILD_FOR_API_SIDE_CHANNEL_
+                                INVARIANT (same production path,
+                                identical non-message inputs, no
+                                independent mutable compaction-state
+                                side channel); MessageBuilder.buildForApi
+                                at message-builder.ts:166 verified to
+                                take only messages argument; C1: GO
+                                granted) /
+           2026-09-02T05:30:00Z (DISCRIMINATOR EXECUTED via
+                                sdk/packages/core/src/extensions/
+                                context/compaction.working-context-
+                                ratio.test.ts; CASE 1 trivial canonical
+                                → S3_RATIO_TRANSFER_NOT_REPRODUCED
+                                (ratios bit-identical at 0.00718);
+                                CASE 2 realistic canonical (assistant
+                                text > 200K) → S3_REPRODUCED with
+                                66.6% relative divergence; manualRatio
+                                0.000210 vs workingContextRatio
+                                0.000629; the compactor's input/output
+                                scale (raw canonical) differs from
+                                buildForApi's output scale (truncated)
+                                when assistant text exceeds the 200K
+                                cap; UI consumer at getApiMetrics.ts
+                                applies the manual compactor's ratio to
+                                provider-bound tokensIn, predicting a
+                                ~3× more aggressive shrink than the
+                                working context actually achieves;
+                                verdict: S3 wire-contract-overload
+                                REPRODUCED at the real production
+                                working-context seam; existing 94
+                                compaction tests still pass;
+                                discriminator.md committed; 3 tests
+                                pass / 0 fail in the new file)
 REPO_HEAD=7c24ab02f (post-contract-correction; R0 promotion is docs+test)
 OWNER=CONTEXT / COMPACTION / TOKEN-ACCOUNTING
 EPIC=EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING (new epic opened 2026-09-01

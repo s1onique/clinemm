@@ -519,26 +519,49 @@ CALIBRATION 2026-09-02T04:00:00Z):
     applies ratio to provider-bound tokensIn via
     getApiMetrics.ts:174-225; whether the ratio transfers is
     exactly the discriminator's question).
-  WIRE_CONTRACT                   = S3_CANDIDATE (textual
-    ingredients present; causal proof UNPROVEN until ratio
-    discriminator runs).
+  WIRE_CONTRACT                   = S3_PROVEN (CAUSAL, REPRODUCED
+    by the discriminator; see discriminator.md).
   POST_COMPACTION_WORKING_CONTEXT_SEAM = BOUND (working-context-
     seam-recon.md committed; createCompactionStateAwarePrepareTurn
     at compaction.ts:672-712; projectSessionCompactionState at
     session-compaction.ts:161-193).
-  ROOT_CAUSE                      = UNKNOWN (NOT_ISOLATED; pending
-    the ratio discriminator; C1 GO NOT yet granted —
-    buildForApi compaction-independence must be confirmed first).
+  DISCRIMINATOR_RESULT            = S3_REPRODUCED (case 2 realistic
+    canonical, assistant text > 200K cap; manualRatio 0.000210 vs
+    workingContextRatio 0.000629, 66.6% relative divergence; the
+    compactor's input/output scale (raw canonical) differs from
+    buildForApi's output scale (truncated) when assistant text
+    exceeds the 200K cap; UI consumer at getApiMetrics.ts applies
+    the manual compactor's ratio to provider-bound tokensIn,
+    predicting a ~3× more aggressive shrink than the working
+    context actually achieves).
+  TRIVIAL_CASE                    = S3_RATIO_TRANSFER_NOT_REPRODUCED
+    (case 1 small canonical; both ratios bit-identical at 0.00718
+    because buildForApi does not transform small inputs; the
+    defect only surfaces when the working context is large enough
+    to engage buildForApi's truncation budgets).
+  ROOT_CAUSE                      = ISOLATED (WIRE_CONTRACT_OVERLOADED).
+    The producer (core-events.ts:773) emits a ratio on the
+    compactor's input/output scale (raw canonical → tiny summary).
+    The UI consumer (getApiMetrics.ts:174-225) applies that
+    ratio to provider-bound tokensIn (buildForApi output). The
+    two scales differ when buildForApi's truncation has already
+    done some of the shrinkage the compactor assumes is undone.
+    Discriminator (case 2, realistic canonical with assistant
+    text > 200K): manualRatio 0.000210 vs workingContextRatio
+    0.000629, 66.6% relative divergence. The UI consumer would
+    predict ~3× more aggressive shrink than the working context
+    actually achieves. See discriminator.md for the full binding.
 
 NEXT (after the semantic-contract recon): the real-trace RATIO
-DISCRIMINATOR (HOST_REQUIRED). PRIMARY captures H, W — W is
-bound to the REAL production turn-preparation seam
-(createCompactionStateAwarePrepareTurn at
-compaction.ts:672-712, driving projectSessionCompactionState at
-session-compaction.ts:161-193) twice against identical canonical
-state with exactly one manual compaction applied between
-captures. See working-context-seam-recon.md for the full
-binding:
+DISCRIMINATOR (HOST_REQUIRED) — **EXECUTED 2026-09-02**. See
+discriminator.md for the full binding and verdict. Verdict:
+S3_REPRODUCED at the real production working-context seam.
+REPAIR_ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (NOT
+opened from this ACT). Downstream repair options (a)/(b)/(d)
+become candidates, ranked smallest first per Factory doctrine.
+R1-R3 remain DEFERRED per the reviewer's HALT directive. This
+S3 verdict does NOT auto-prove S1-LABEL-ONLY or eliminate other
+accounting defects.
   manual_ratio          = H_after / H_before
   working_context_ratio = W_after / W_before
 Ask: Does manual_ratio track working_context_ratio?
@@ -772,7 +795,7 @@ CASE_S1 — SEMANTIC_LABEL_DEFECT (UI title vs producer contract)
   → IF ratio non-invariance: S3 is the verdict; S1 presentation-
     only is FALSIFIED.
 
-CASE_S3 — WIRE_CONTRACT_OVERLOADED (PLAUSIBLE, NOT ISOLATED)
+CASE_S3 — WIRE_CONTRACT_OVERLOADED (CAUSAL REPRODUCED, 2026-09-02)
   R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review
   PASS_WITH_ONE_P1_FIX; third-review discriminator calibration
   2026-09-02T03:30:00Z; fourth-review WORKING-CONTEXT-SEAM
@@ -904,6 +927,40 @@ may freeze a specific behavior, but only if recon proves the seam.
       before execution** → C1 GO NOT yet granted; re-open the
       recon to bind the buildForApi seam before running the
       discriminator.
+
+DISCRIMINATOR OUTCOME (executed 2026-09-02; see `discriminator.md`):
+  Case 1 (trivial canonical, no buildForApi truncation) →
+    S3_RATIO_TRANSFER_NOT_REPRODUCED. The compactor's ratio
+    correctly predicts the working-context shrink when buildForApi
+    does not transform the inputs.
+  Case 2 (realistic canonical, assistant text > 200K cap) →
+    S3_REPRODUCED with 66.6% relative divergence. The compactor's
+    claim of "99.98% reduction" overstates the actual working-
+    context shrink of "99.94%" by ~3×, because buildForApi's
+    `truncateAssistantText` (DEFAULT_MAX_ASSISTANT_TEXT_CHARS =
+    200K) has already done some of the shrinkage the compactor
+    assumes is undone.
+  Trivial-case S3_RATIO_TRANSFER_NOT_REPRODUCED does NOT
+  falsify S3; the defect only surfaces when the working
+  context is large enough to engage buildForApi's budgets.
+  This is the production regime: real sessions routinely
+  exceed 200K of assistant text. S3 IS REPRODUCED.
+
+VERDICT:
+  CASE_A — S3_PROVEN (WIRE_CONTRACT_OVERLOADED).
+  CLOSED_WITH_RESIDUE — defect isolated at the schema/wire
+    between producer (core-events.ts:773) and UI rescaling
+    consumer (getApiMetrics.ts:174-225).
+  ROOT_CAUSE_ISOLATED.
+  Repair options (a)/(b)/(d) become candidates, ranked smallest
+    first per Factory doctrine. (e) label-only is NOT sufficient
+    because the defect is NOT purely a label issue — the ratio
+    itself is on the wrong scale. (c) RETRACTED as unsafe.
+  R1-R3 territory remains DEFERRED per the reviewer's HALT
+    directive; this S3 verdict does NOT auto-prove S1-LABEL-ONLY
+    or eliminate other accounting defects.
+  Downstream repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-
+    CONTRACT-REPAIR01` (NOT opened from this ACT).
   - **R1-R3 RED with structural defect** → `CASE_B` → recon reports
     `ROOT_CAUSE_ISOLATED` (with specific I1-I7 violation +
     file:line). R0' / R0-A do not contribute to this branch.

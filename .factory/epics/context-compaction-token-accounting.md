@@ -22,7 +22,28 @@
 
 ## Current status
 
-- Status: OPEN — recon ACT is OPEN; Q0A-Q0C producer-binding DONE (commit 901287e15); R0-A witness test DONE (commit 2916fb9fd); R0' source-recon DONE (commit 9083ecd56); R0' semantic-contract recon DONE & CALIBRATED (this commit). CASE_B.MANUAL_PROJECTION RETRACTED. Ratio discriminator (HOST_REQUIRED) is the next load-bearing step.
+- Status: DISCRIMINATOR EXECUTED — recon ACT is **CLOSED_WITH_RESIDUE**
+  (CASE_A — S3_PROVEN, ROOT_CAUSE_ISOLATED). Q0A-Q0C producer-binding
+  DONE (commit 901287e15); R0-A witness test DONE (commit 2916fb9fd);
+  R0' source-recon DONE (commit 9083ecd56); R0' semantic-contract
+  recon DONE & CALIBRATED; working-context-seam-recon DONE
+  (commit be15a56a0); ratio discriminator EXECUTED (current commit).
+  Discriminator result: case 1 (trivial canonical) → ratios
+  bit-identical (S3_RATIO_TRANSFER_NOT_REPRODUCED); case 2
+  (realistic canonical, assistant text > 200K cap) → S3_REPRODUCED
+  with 66.6% relative divergence (manualRatio 0.000210 vs
+  workingContextRatio 0.000629). The compactor's input/output scale
+  (raw canonical → tiny summary) differs from buildForApi's output
+  scale (truncated) when assistant text exceeds the 200K cap. UI
+  consumer at getApiMetrics.ts applies the manual compactor's ratio
+  to provider-bound tokensIn, predicting ~3× more aggressive shrink
+  than the working context actually achieves. ROOT_CAUSE_ISOLATED
+  at the wire/schema between producer (core-events.ts:773) and UI
+  rescaling consumer (getApiMetrics.ts:174-225). Downstream repair
+  ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (NOT opened
+  from this ACT). R1-R3 territory remains DEFERRED per the
+  reviewer's HALT directive; this S3 verdict does NOT auto-prove
+  S1-LABEL-ONLY or eliminate other accounting defects. CASE_B.MANUAL_PROJECTION RETRACTED.
 - Priority: **P1** (HIGH value production learning; affects compaction threshold, context-limit safety, long-session behavior). May be promoted to P0 if the discriminator reproduces an actual structural defect.
 - Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the discriminator resolves the S3 question.
 - Blocked by: n/a (the HOST_REQUIRED ratio discriminator is sequenced after the recon's calibrated findings are written; the reviewer explicitly said NOT to author more Factory scaffolding before the discriminator runs).
