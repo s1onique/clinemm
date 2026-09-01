@@ -269,6 +269,17 @@ apps/examples/desktop-app/.cursor/settings.json
 # durably tracked (mirroring the prior identity-halt ACT's durability
 # pattern).
 !/.factory/acts/ACT-CLINEMM-DOGFOOD-RUNTIME-IDENTITY01.md
+# ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01: bounded
+# extension of `…DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01`. Adds
+# the D knob (TurnState writer-provenance / causal Diagnosability) so
+# the legacy TSWPD ring auto-arms in dogfood via the same
+# `decideKnob` precedence the V/I/A/P knobs already use. Default ON
+# in dogfood, OFF in public, overridable down via
+# `CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE=0`. The bounded patch
+# extends the existing 4-knob resolver to a 5-knob resolver (no
+# parallel system). The epic ledger at .factory/epic-board.md row 19
+# binds to this ACT file, so it must be durably tracked.
+!/.factory/acts/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01.md
 # Operator-owned Nix configuration (separate home-manager repo),
 # temporarily placed at the repo root on 2026-08-31 by the operator
 # Mirror the .factory/acts/ default-deny + whitelist pattern:
@@ -283,6 +294,12 @@ apps/examples/desktop-app/.cursor/settings.json
 # (currently empty; reserved for the future re-open ACT to land). Mirrors
 # the editor-tool-recon ACT's evidence-directory durability pattern.
 !/.factory/evidence/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01/
+# ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01 evidence
+# (reserved for the bounded patch's LIVE qualification runbook; not
+# created in this commit because the bounded patch is structural-only).
+# Same durable-binding reason as the ACT file: the future LIVE
+# qualification evidence binds to this epic board row 19.
+!/.factory/evidence/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01/
 # ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01 evidence
 # (hermetic-fixture/happy-path-matrix.json + negative-matrix.json).
 # Same durable-binding reason as the ACT file: the matrices prove
