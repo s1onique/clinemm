@@ -266,84 +266,171 @@ Summarizer-call usage bookkeeping → (cite file:line: where do
                                             summarizer tokens land?)
 ```
 
-## §6 — Discriminator plan (R0 highest-value; R1–R3 supplementary; R4/R5 conditional)
+## §6 — Discriminator plan (R0-A witness; R0' recon first; R1–R3 supplementary; R4/R5 conditional)
 
 Do NOT author all five probes before source recon proves they correspond
 to real seams. Recon first; then probably **one discriminator**.
 
-The factory causal reviewer (2026-09-02) reordered priority: the LIVE
-symptom (header ~7.1k vs divider 680.1k → 28.9k) is numerically
-explained by the post-compaction TaskHeader rescaling. R0 tests that
-seam DIRECTLY. If R0 REDs while R1–R3 GREEN, ownership migrates
-toward `task-presentation` / shared metrics rather than the core
-compaction lane. Run R0 BEFORE generic R1–R3.
+The factory causal reviewer (2026-09-02) reordered priority twice:
 
-### R0 — HEADER POST-COMPACTION PROJECTION (HIGHEST VALUE)
+  1. First reordering: R0 (UI projection) before R1–R3.
+     → Authored in commit 2916fb9fd. R0-A confirmed LIVE arithmetic;
+     R0-B was HALT_RED_NOT_REPRODUCED (oracle unfounded);
+     R0-C was inconclusive (doc and behavior actually agree).
+     R0-B and R0-C removed from the default suite.
+
+  2. Second reordering (same reviewer, after new LIVE specimen): the
+     strong new clue is `tokensBefore ≈ 1,000,000` emitted by the
+     COMPACTION PIPELINE itself, not the UI projection. The suspect
+     is no longer the TaskHeader rescaling — it is whether the
+     compactor is measuring the right object at all.
+
+### R0-A — POST-COMPACTION HEADER PROJECTION (WITNESS, NOT ORACLE)
 
 ```text
-Setup (matches LIVE symptom arithmetic):
+STATUS: WITNESS ONLY (factory causal reviewer 2026-09-02 second reordering)
 
-  last api_req_started  = { tokensIn: 167_100, tokensOut: <ignored>,
-                           cacheReads: 0, cacheWrites: 0 }
-  subsequent completed compaction =
-    { status: "completed",
-      tokensBefore: 680_100,
-      tokensAfter:  28_900 }
+The production rescaling formula is:
+  header = ceil(lastRequestInput * (tokensAfter / tokensBefore))
 
-  shrinkFraction = tokensAfter / tokensBefore ≈ 0.04249
-  production getLastApiReqContextInputTokens returns:
-    ceil(167_100 * (28_900 / 680_100)) = ceil(7_098.7) = 7_099
+For the LIVE-symptom input observed in ClineMM:
+  lastRequestInput = 167_100
+  tokensBefore     = 680_100
+  tokensAfter      = 28_900
+  ⇒ header         = ceil(7_100.7) = 7_101
 
-That is exactly the LIVE header value (~7.1k).
+The function returns 7_101, matching the observed header value
+(~7.1k) within rounding noise. This is arithmetic bind only; it does
+NOT establish the projection's semantic validity. R0-A is a
+documentary witness and is retained as `PROJECTION_FORMULA_BOUND /
+LIVE_ARITHMETIC_BIND_PROVEN`. R0-B and R0-C are withdrawn.
 
-The discriminator does THREE assertions, in sequence:
+The validity of the projection depends on whether the calibration
+factor (lastRequestInput / tokensBefore) is stable across the two
+payloads it compares — a question that requires either a real
+provider run or a code-trace recon (R0').
+```
 
-  A. CONCRETE-ARITHMETIC: the production implementation returns
-     approximately 7_099 for the LIVE-symptom input. (RED if not; that
-     would mean the LIVE symptom is something else entirely.)
+### R0' — COMPACTION INPUT IDENTITY (RECON, NOT UNIT-TEST DISCRIMINATOR)
 
-  B. SEMANTIC-ORACLE-FROM-CONTRACT: per §0 truth domains, the header
-     should display one of these — NOT a multiplicative interpolation
-     between two unrelated baselines:
+```text
+LOAD-BEARING NEXT DISCRIMINATOR (factory causal reviewer 2026-09-02
+second reordering, supersedes R0-B/C from commit 2916fb9fd).
 
-       - REQUEST_INPUT_TOKENS of the last request = 167_100
-         (provider-reported exactly what was sent last)
-       - WORKING_CONTEXT_ESTIMATE of the next request = 28_900
-         (tokensAfter from the most recent completed compaction;
-          what the model will actually see next)
-       - WORKING_CONTEXT_ESTIMATE of the last request = 680_100
-         (tokensBefore from the most recent completed compaction)
+INVARIANT UNDER TEST:
 
-     The production return (~7_099) is none of these. It is:
-       lastRequestInput × (tokensAfter / tokensBefore)
+  COMPACTION_BEFORE_TOKENS must describe the same effective
+  provider-bound working context that the compaction is replacing.
 
-     This crosses two semantic quantities (REQUEST_INPUT_TOKENS and
-     the WORKING_CONTEXT ESTIMATE) via a proportional projection
-     whose only justification is the comment claim "only the ratio
-     carries over". The justification is undocumented and
-     undemonstrated; prior closure (ACT-CLINEMM-CONTEXT-ACCOUNTING-
-     TRUTH01 CORRECTION01, commit b64d9ef22, 2026-08-20) approved
-     the rescaling but did not establish a source-of-truth oracle
-     for what the header SHOULD display.
+  It must NOT silently measure a larger canonical-history object
+  while the UI presents the result as active context.
 
-  C. CORRECTNESS-OF-RESIDUAL-CONTRACT: even if the implementation
-     is "intentional rescaling", the COMMENT-CLAIM is contradicted
-     by the fact that the LIVE symptom is precisely the LIVE
-     miscount. The behavior is at minimum DOCUMENTATION-DRIFT and
-     most likely a REGRESSION of the truth-domain contract.
+WHY THE 1M → 72.9k LIVE SPECIMEN IS THE STRONG CLUE:
 
-R0 RED-establishes:
+  Operator observation: "Context compacted (manual) · 1M → 72.9k
+  tokens · 1234 → 86 messages" with the model having not actually
+  been carrying ~1M tokens of active context.
 
-  CORE_COMPACTION_ARITHMETIC      = CONSERVED (R1 territory)
-  BILLING/CONTEXT_SEPARATION      = CONSERVED (R2 territory)
-  UI_POST_COMPACTION_PROJECTION   = DEFECTIVE / NOT-VALIDATED
-  ROOT_CAUSE-LIKELY               = getApiMetrics rescaling semantics
-                                    (apps/vscode/src/shared/getApiMetrics.ts:174-225)
+  This makes the previous R0-B hypothesis (UI projection defect)
+  insufficient. The upstream denominator itself says 1M, which can
+  only be the canonical history size (1234 messages × estimator
+  rate ≈ 1M is consistent with the local character-count estimator).
 
-R0 GREEN-validates only if the function instead returns one of the
-three contract-permitted values. That would mean the implementation
-already corrected the defect (no work needed). R0 GREEN is therefore
-unlikely in ClineMM's current state.
+SOURCE RECON (executed 2026-09-02):
+
+  apps/cli/src/runtime/interactive/compaction.ts:99-100
+    manual /compact passes:
+      messages:    input.messages  (canonical full transcript)
+      apiMessages: input.messages  (SAME as canonical)
+
+  apps/vscode/src/sdk/sdk-compaction.ts:101-102
+    SdkCompactionCoordinator.compactTask() passes:
+      messages:    input.messages  (canonical full transcript)
+      apiMessages: input.messages  (SAME as canonical)
+
+  sdk/packages/core/src/extensions/context/compaction.ts:309
+    The strategy computes:
+      requestInputTokens = estimateRequestInputTokens({
+        systemPrompt, messages: context.apiMessages, tools })
+    This value is what feeds `tokensBefore` in the compaction metadata.
+
+  sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1149
+    For AUTO compaction the orchestrator computes:
+      apiMessages = await this.prepareProviderMessagesForApi(messages)
+    This goes through messageBuilder.buildForApi() and any registered
+    messageBuilder plugins — i.e., the SAME pipeline that constructs
+    the next provider-bound request.
+```
+
+```text
+CAUSAL SPLIT:
+
+  CASE R0'.A — SAME PAYLOAD
+    compaction receives M (the working context)
+    next-model working context before compaction would also be M
+    tokensBefore = estimate(M)
+    → 1M may be legitimate; operator intuition misleading
+    → continue provider/estimator calibration investigation
+    → applies to AUTO compaction in current code
+
+  CASE R0'.B — WRONG PROJECTION
+    canonical history = H
+    actual model-facing working set = W
+    H ≠ W
+    compaction computes tokensBefore = estimate(H)
+    while context UX implies tokensBefore describes W
+    → REAL semantic defect; first broken boundary bound
+    → applies to MANUAL compaction in current code
+    → ROOT_CAUSE_LIKELY at:
+         apps/cli/src/runtime/interactive/compaction.ts:99-100
+         apps/vscode/src/sdk/sdk-compaction.ts:101-102
+
+  CASE R0'.C — SAME PAYLOAD, BAD ESTIMATOR
+    M is genuinely the model-facing payload
+    provider-normalized input for M ≪ estimate(M)
+    → estimator/provider normalization mismatch
+    → separate code path (sdk/packages/shared/src/llms/tokens.ts)
+
+R0' deliverable (RECON, not unit-test):
+
+  1. Bind the message projection used at MANUAL compaction:
+     apiMessages === canonical.messages (per source recon above).
+
+  2. Bind the message projection used at the next provider-bound
+     request:
+     prepareMessagesForModelRequest → prepareProviderMessagesForApi
+       → buildForApi (sdk/packages/core/src/runtime/orchestration/
+         session-runtime-orchestrator.ts:1183-1201)
+     This is the provider-bound working context the model will
+     actually see after compaction.
+
+  3. Compare (1) vs (2) on a specimen with a real manual /compact
+     trace:
+       - If equal → R0'.A holds; calibration question still open.
+       - If different → R0'.B isolated; UI consumes a
+         canonical-history-sized number while labeling it
+         "pre-compaction working context."
+
+R0' discriminator output:
+
+  CORE_COMPACTION_ARITHMETIC      = NOT YET PROBED (R1 territory)
+  BILLING/CONTEXT_SEPARATION      = NOT YET PROBED (R2 territory)
+  WORKING_CONTEXT_PROJECTION_AT_MANUAL_COMPACTION = WRONG_INPUT_PROJECTION
+    (code-trace bound; awaits real-trace specimen for full proof)
+  UI_POST_COMPACTION_PROJECTION   = DEPRIORITIZED pending R0' outcome
+  ROOT_CAUSE-LIKELY               = apps/cli/src/runtime/interactive/
+                                      compaction.ts:99-100
+                                      apps/vscode/src/sdk/sdk-compaction.ts:
+                                      101-102
+                                    (manual compaction passes
+                                    apiMessages = canonical)
+
+NEXT, only if R0' source recon alone is insufficient: a real-trace
+specimen (HOST_REQUIRED) capturing (a) manual /compact with a known
+canonical history and (b) the next provider-bound request's
+`buildForApi` output, then asserting:
+  E_before (estimate(canonical)) vs W_before (estimate(buildForApi(canonical)))
+  P_before (provider tokensIn of the next actual request)
 ```
 
 ### Supplementary discriminators (R1–R3)
@@ -461,51 +548,55 @@ R5 — MODEL_INPUT_BUDGET
 
 ```text
 CASE_A — TRUTH_DOMAINS_PRESERVED / LIVE_SYMPTOM_EXPLAINED
-  R0 GREEN and R1-R3 GREEN. I1-I7 hold. COMPACTION_BEFORE /
+  R0-A WITNESS_ONLY (not a discriminator), R0' source-recon
+  establishes SAME_PAYLOAD for both auto and manual compaction
+  paths, R1-R3 GREEN. I1-I7 hold. COMPACTION_BEFORE /
   COMPACTION_AFTER use the same estimator as WORKING_CONTEXT_ESTIMATE
   on the corresponding payload. SESSION_CUMULATIVE_USAGE does NOT
   contaminate the working-context estimate. Per-request working
-  context is snapshot per-request, not cumulative. AND the header's
-  post-compaction value is one of the three contract-permitted
-  quantities (lastRequestInput, tokensAfter, or tokensBefore) — NOT
-  a multiplicative interpolation between two unrelated baselines.
+  context is snapshot per-request, not cumulative.
 
-  Sub-case A.label-only (DOWNGRADED, factory causal reviewer
+  Sub-case A.label-only (DOWNGRADED twice, factory causal reviewer
   2026-09-02): Q0C proves the two UI fields are intentionally
   different metrics. This is a NECESSARY but not SUFFICIENT condition
-  for A.label-only. A.label-only also requires R0 GREEN, because the
-  difference in semantic quantity does not excuse the cross-domain
-  multiplicative projection. If R0 REDs but Q0C holds, the
-  classification is CASE_B.UI, not CASE_A.
+  for A.label-only. A.label-only also requires R0' to confirm that
+  both UI fields' producers measure the same payload class — i.e.,
+  that COMPACTION_BEFORE_TOKENS describes the working-context the
+  UI is labeling, NOT a different canonical-history object.
 
 CASE_A.UI — UI_PROJECTION_BOUND / DOC_DRIFT
-  R1-R3 GREEN, R0 GREEN. The post-compaction rescaling in
-  getApiMetrics.ts is bounded (does not miscount on the LIVE-symptom
-  input). Doc comment matches behavior. Live UI presents one of the
-  three contract-permitted quantities. Sub-case A.label-only holds.
+  R0-A witness consistent with behavior, R0' source-recon establishes
+  SAME_PAYLOAD for both auto and manual, R1-R3 GREEN. The
+  post-compaction rescaling in getApiMetrics.ts is bounded. Doc
+  comment matches behavior. Sub-case A.label-only holds.
 
 CASE_B — ACCOUNTING_DRIFT_CONFIRMED / STRUCTURAL_DEFECT
   R1-R3 (and any conditional R4/R5 if authored) RED with a clear
   causal pattern. The repair ACT is gated on the recon's root-cause
   isolation, naming the violated invariant (I1-I7) and the file:line.
 
-CASE_B.UI — POST_COMPACTION_PROJECTION_DEFECTIVE
-  R0 RED, R1-R3 GREEN. CORE_COMPACTION_ARITHMETIC is conserved.
-  BILLING/CONTEXT_SEPARATION is conserved. Only the UI projection
-  via getApiMetrics.ts (apps/vscode/src/shared/getApiMetrics.ts:174-225)
-  is defective — it produces a cross-domain multiplicative
-  interpolation between REQUEST_INPUT_TOKENS of the last request and
-  the WORKING_CONTEXT shrink ratio. Ownership migrates toward
-  task-presentation / shared-metrics rather than the core compaction
-  lane. The downstream repair ACT is
-  ACT-CLINEMM-COMPACTION-TOKEN-PROCOUNTING-REPAIR01 (re-numbered from
-  -REPAIR01; or a new -UI-REPAIR01).
+CASE_B.UI — POST_COMPACTION_PROJECTION_DEFECTIVE (RETIRED 2026-09-02)
+  R0-B HALT_RED_NOT_REPRODUCED. The "three permitted quantities"
+  oracle was unfounded. WITHDRAWN. Any future CASE_B.UI from R0-A
+  alone requires an independently established production invariant;
+  see ACT §6 R0-A and §0 truth domains for what counts.
 
-CASE_B.HYBRID — BOTH CORE AND UI DEFECTIVE
-  R0 RED AND (R1 / R2 / R3) RED. Two-layer defect. Root-cause
-  isolation must name both layers. The downstream repair ACT is
-  sequenced (UI first, then core) because the core arithmetic may
-  already be wrong but is masked by the UI's interpolation.
+CASE_B.HYBRID — BOTH CORE AND UI DEFECTIVE (RETIRED 2026-09-02)
+  Same rationale as CASE_B.UI. R0's UI branch is no longer a valid
+  discriminator. Defects requiring this classification must come
+  from R0' or R1-R3 GREEN/RED patterns.
+
+CASE_B.MANUAL_PROJECTION — MANUAL COMPACTION WRONG_INPUT_PROJECTION
+  R0' source-recon establishes that manual compaction (CLI
+  apps/cli/src/runtime/interactive/compaction.ts:99-100 and VSCode
+  apps/vscode/src/sdk/sdk-compaction.ts:101-102) passes
+  apiMessages = canonical, while the UI consumes tokensBefore as if
+  it described the provider-bound working context. R1-R3 GREEN
+  (auto path uses prepareProviderMessagesForApi correctly).
+  → ROOT_CAUSE_ISOLATED at the two call sites above. Downstream
+  repair ACT = ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01 (new;
+  named here for sequencing; NOT opened from this ACT). Ownership
+  migrates toward SDK entry-point normalization (CLI + VSCode).
 
 CASE_C — ACCOUNTING_INDETERMINATE / CAPTURE_INSUFFICIENT
   R* inconclusive because of test-environment limitations. The recon
@@ -525,26 +616,37 @@ may freeze a specific behavior, but only if recon proves the seam.
 
 ## §8 — Stop rule
 
-  - **R0 GREEN and R1-R3 GREEN, I1-I7 hold** → `CASE_A` →
-    `CLOSED_NOT_REPRODUCED` (or `CLOSED_WITH_RESIDUE` if a non-load-
-    bearing drift is observed but explained).
-  - **R0 GREEN, R1-R3 GREEN, doc comment matches behavior** →
-    `CASE_A.UI` → `CLOSED_NOT_REPRODUCED`. (LIVE symptom was label
-    ambiguity all along.)
-  - **R0 RED, R1-R3 GREEN** → `CASE_B.UI` → recon reports
-    `ROOT_CAUSE_ISOLATED` naming the violated invariant
-    (`I1` / `I4` / `I6`) and `apps/vscode/src/shared/getApiMetrics.ts:174-225`.
-    Downstream repair ACT is `ACT-CLINEMM-COMPACTION-TOKEN-PROCOUNTING-
-    UI-REPAIR01` (separate ACT, separate review). This ACT closes.
-    **Ownership migrates to task-presentation / shared-metrics
-    territory, NOT core compaction.**
-  - **R0 RED and (R1 / R2 / R3) RED** → `CASE_B.HYBRID` → two-layer
-    defect. The repair ACT must address both layers; sequencing is
-    UI first (because the UI's interpolation may be masking the core
-    defect's symptom).
-  - **R1-R3 RED with structural defect, R0 unknown** → `CASE_B` →
-    recon reports `ROOT_CAUSE_ISOLATED` (with specific I1-I7 violation
-    + file:line). Run R0 to disambiguate UI vs core before closing.
+  - **R0-A witness consistent with behavior, R0' source-recon
+    establishes SAME_PAYLOAD for both auto and manual paths,
+    R1-R3 GREEN, I1-I7 hold** → `CASE_A` → `CLOSED_NOT_REPRODUCED`
+    (or `CLOSED_WITH_RESIDUE` if a non-load-bearing drift is
+    observed but explained).
+  - **R0-A witness, R0' source-recon SAME_PAYLOAD, R1-R3 GREEN,
+    doc comment matches behavior** → `CASE_A.UI` →
+    `CLOSED_NOT_REPRODUCED`. (LIVE symptom was label ambiguity all
+    along.)
+  - **R0' source-recon establishes MANUAL COMPACTION WRONG_INPUT
+    PROJECTION (apiMessages = canonical at the two manual entry
+    points), R1-R3 GREEN (auto path uses
+    prepareProviderMessagesForApi correctly), R0-A witness consistent
+    with behavior** → `CASE_B.MANUAL_PROJECTION` →
+    `ROOT_CAUSE_ISOLATED` at:
+      - apps/cli/src/runtime/interactive/compaction.ts:99-100
+      - apps/vscode/src/sdk/sdk-compaction.ts:101-102
+    Downstream repair ACT = `ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-
+    REPAIR01` (separate ACT, separate review; not opened from this
+    ACT). **Ownership migrates to SDK entry-point normalization
+    (CLI + VSCode compaction bridges), NOT core compaction AND NOT
+    task-presentation.** The TaskHeader / shared-metrics layer is
+    not at fault for this defect — it correctly consumes what
+    `tokensBefore` says, but `tokensBefore` is wrong for manual
+    compaction because it measures canonical history rather than
+    provider-bound working context.
+  - **R1-R3 RED with structural defect** → `CASE_B` → recon reports
+    `ROOT_CAUSE_ISOLATED` (with specific I1-I7 violation +
+    file:line). R0' / R0-A do not contribute to this branch.
+  - **CASE_B.UI / CASE_B.HYBRID retired 2026-09-02** (R0-B oracle
+    unfounded; classification retired).
   - **Live capture blocked** → `CASE_C` → `CAPTURE_INSUFFICIENT` and
     the epic detail file gains the LIVE-capture runbook.
   - **Real-prompt required** → `CASE_D` → `HOST_REQUIRED` and the

@@ -245,27 +245,79 @@ provider-normalized snapshot, not an exact provider bill.
 
 ### R0 candidate (NEW): post-compaction header projection
 
-The factory causal reviewer (2026-09-02) noted that the LIVE symptom
-(`~7.1k` header vs `680.1k → 28.9k` divider) is numerically consistent
-with the production rescaling:
+The factory causal reviewer (2026-09-02, first reordering) noted that
+the LIVE symptom (`~7.1k` header vs `680.1k → 28.9k` divider) is
+numerically consistent with the production rescaling:
 
 ```text
 shrinkFraction = 28_900 / 680_100 ≈ 0.04249
-header         = ceil(167_100 × 0.04249) = 7_099
+header         = ceil(167_100 × 0.04249) = 7_101
 ```
 
 i.e. the displayed header value is the LAST REQUEST INPUT multiplied
-by the COMPACTION SHRINK RATIO. The two inputs are different semantic
-quantities (REQUEST_INPUT_TOKENS of last request, vs. the SDK's
-WORKING_CONTEXT ESTIMATE before/after compaction). The transformation
-crosses two baselines.
+by the COMPACTION SHRINK RATIO. R0-A is now retained as a documentary
+witness (LIVE_ARITHMETIC_BIND_PROVEN) — see ACT §6 R0-A. R0-B was
+HALT_RED_NOT_REPRODUCED (the "three permitted quantities" oracle was
+unfounded). R0-C was inconclusive (the doc comment actually matches
+the behavior). Both removed.
 
-This is R0 territory; see ACT §6 R0 for the full discriminator plan
-and what would constitute GREEN (return one of the three contract-
-permitted quantities: `lastRequestInput`, `tokensAfter`, or
-`tokensBefore` — NOT a multiplicative interpolation). R0 RED is the
-expected outcome; the recon must establish it by execution before
-closing CASE_A.
+### R0' candidate (NEW): manual compaction wrong-input projection
+
+The factory causal reviewer (2026-09-02, second reordering) — pivoted
+away from the UI projection after a new LIVE specimen ("Context
+compacted (manual) · 1M → 72.9k tokens · 1234 → 86 messages") showed
+the upstream denominator itself is suspicious. Operator intuition was
+that the model was not actually carrying ~1M tokens of active context.
+
+**Source recon (executed 2026-09-02):**
+
+```text
+apps/cli/src/runtime/interactive/compaction.ts:99-100
+  manual /compact passes:
+    messages:    input.messages  (canonical full transcript)
+    apiMessages: input.messages  (SAME as canonical)
+
+apps/vscode/src/sdk/sdk-compaction.ts:101-102
+  SdkCompactionCoordinator.compactTask() passes:
+    messages:    input.messages  (canonical full transcript)
+    apiMessages: input.messages  (SAME as canonical)
+
+sdk/packages/core/src/extensions/context/compaction.ts:309
+  strategy computes:
+    requestInputTokens = estimateRequestInputTokens({
+      systemPrompt, messages: context.apiMessages, tools })
+  This value is what feeds `tokensBefore` in the compaction metadata.
+
+sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1149
+  For AUTO compaction the orchestrator computes:
+    apiMessages = await this.prepareProviderMessagesForApi(messages)
+  This goes through messageBuilder.buildForApi() and any registered
+  messageBuilder plugins — i.e., the SAME pipeline that constructs
+  the next provider-bound request.
+```
+
+**CAUSAL FINDING:** Manual compaction's `apiMessages = canonical`
+while the next provider-bound request's projection goes through
+`buildForApi`. For manual compaction, `tokensBefore` measures the
+canonical transcript (intended: "size of full history being
+summarized"), not the provider-bound working context the UI labels.
+
+For AUTO compaction, `apiMessages = prepareProviderMessagesForApi(
+canonical)` → CONSISTENT with the next request's projection.
+
+This is **R0'.B (WRONG_PROJECTION)** for manual compaction + UI
+interaction. The TaskHeader / shared-metrics layer is not at fault —
+it correctly consumes what `tokensBefore` says. The defect lives in
+the two manual entry points (CLI + VSCode) that pass canonical as
+`apiMessages`. Ownership migrates to SDK entry-point normalization.
+
+Downstream repair ACT (named but NOT opened from this ACT):
+**ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01** — separate scope,
+separate review.
+
+R1-R3 (core compaction arithmetic, cumulative-usage non-interference,
+repeated-request snapshot) remain supplementary discriminators; their
+territory is unaffected by this finding.
 
 ---
 
@@ -290,15 +342,27 @@ producers, and each producer's source code already separates truth
 domains. The additive-arithmetic anti-pattern does NOT appear in
 either producer.
 
-**NEW candidate defect (factory causal reviewer, 2026-09-02):**
-post-compaction header projection (`getApiMetrics.ts:174-225`) crosses
-two semantic baselines — the LAST REQUEST INPUT is multiplied by the
-WORKING_CONTEXT ESTIMATE shrink ratio. The LIVE symptom's arithmetic
-(167.1k × 0.04249 ≈ 7.1k) is exactly what the production code returns.
+**R0-A (LIVE_ARITHMETIC_BIND_PROVEN):** production rescaling
+(`getApiMetrics.ts:174-225`) returns ~7.1k for the LIVE-symptom input
+(167.1k × 0.04249). Documentary witness only.
+
+**R0-B / R0-C (WITHDRAWN, 2026-09-02 second reordering):** "three
+permitted quantities" oracle was unfounded; doc-comment-vs-behavior
+assertion was inconclusive.
+
+**R0' (NEW, load-bearing next discriminator, 2026-09-02 second
+reordering):** manual compaction's `apiMessages = canonical` at both
+entry points (CLI + VSCode). The TaskHeader / shared-metrics layer
+consumes `tokensBefore` correctly; the defect lives in the SDK
+compaction bridges. Source-recon bound; awaits real-trace specimen
+for full proof. ROOT_CAUSE_ISOLATED candidate at:
+- `apps/cli/src/runtime/interactive/compaction.ts:99-100`
+- `apps/vscode/src/sdk/sdk-compaction.ts:101-102`
 
 **A.label-only is NOT YET ESTABLISHED.** Q0C (semantic-difference) is
-necessary but not sufficient; R0 must execute before CASE_A is valid.
+necessary but not sufficient; R0' source-recon must complete before
+CASE_A is valid. R0-A alone does NOT close CASE_A — it only proves
+arithmetic.
 
-R0-R3 discriminators: **NOT YET RUN**. Authoring them is the next
-recon step. **R0 runs first** per reviewer directive (highest-value
-discriminator, directly explains LIVE symptom).
+R1-R3 discriminators: **NOT YET RUN**. Authoring them is the next
+recon step (auto-path supplementary).

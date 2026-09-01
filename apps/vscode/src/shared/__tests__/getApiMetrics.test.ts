@@ -413,42 +413,50 @@ describe("getLastApiReqContextInputTokens", () => {
 		assert.equal(getLastApiReqContextInputTokens(messages), 23_750)
 	})
 
-	// R0 — HEADER POST-COMPACTION PROJECTION
+	// R0-A — HEADER POST-COMPACTION PROJECTION (PROJECTION_FORMULA_BOUND)
 	//
-	// Per ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01 §6 R0:
-	// the post-compaction header value must be one of the three
-	// contract-permitted quantities — NOT a multiplicative interpolation
-	// between two unrelated semantic baselines.
+	// ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01 §6 R0-A
+	// (factory causal reviewer 2026-09-02, recon step 1; superseded by
+	// R0' on 2026-09-02 — see ACT §6 R0' / R0' note).
 	//
-	//   - lastRequestInput    (REQUEST_INPUT_TOKENS of the last request)
-	//   - tokensAfter         (COMPACTION_AFTER_TOKENS, the next-request
-	//                          WORKING_CONTEXT_ESTIMATE(M'))
-	//   - tokensBefore        (COMPACTION_BEFORE_TOKENS, the just-finished
-	//                          WORKING_CONTEXT_ESTIMATE(M))
-	//
-	// The LIVE symptom observed in ClineMM (factory causal reviewer,
-	// 2026-09-01) had:
-	//
-	//   header      ≈ 7.1k
-	//   divider     = 680.1k → 28.9k
-	//
-	// The production implementation applies:
+	// WITNESS, not defect oracle:
+	// The production rescaling formula is:
 	//
 	//   header = ceil(lastRequestInput * (tokensAfter / tokensBefore))
 	//
-	// For the LIVE-symptom input (167_100 * 28_900 / 680_100) the function
-	// returns ceil(7_100.7) = 7_101, matching the observed ~7.1k exactly.
+	// For the LIVE-symptom input observed in ClineMM:
 	//
-	// The semantic question (does this multiplication produce a value
-	// the contract permits?) is what R0 establishes. This test runs the
-	// LIVE-symptom input and asserts what the implementation returns.
-	// The followup "semantic-oracle" test below documents the contract
-	// and is RED until the function is corrected to return one of the
-	// three permitted quantities.
-	it("[R0-A] rescaling produces the LIVE-symptom header value (~7.1k)", () => {
-		// Concrete-arithmetic check: the production implementation must
-		// return what the LIVE symptom showed. RED if not — that would
-		// mean the LIVE symptom has a different cause.
+	//   lastRequestInput = 167_100
+	//   tokensBefore     = 680_100
+	//   tokensAfter      = 28_900
+	//
+	// the function returns ceil(167_100 * (28_900 / 680_100))
+	//                       = ceil(7_100.7)
+	//                       = 7_101
+	//
+	// matching the observed header value (~7.1k) within rounding noise.
+	//
+	// This is arithmetic bind only. It does NOT establish that the
+	// projection is semantically valid. The validity of the projection
+	// depends on whether the calibration factor
+	// (lastRequestInput / tokensBefore) is stable across the two
+	// payloads it compares — a question that requires either a real
+	// provider run (R0') or a code-trace recon (see ACT §6 R0').
+	//
+	// R0-B and R0-C from commit 2916fb9fd were HALT_RED_NOT_REPRODUCED
+	// by the factory causal reviewer (2026-09-02). The "permitted
+	// values" list asserted by R0-B was not an independently established
+	// production invariant. The doc-comment-vs-behavior claim of R0-C
+	// is contradicted by the doc comment's own text ("rescaled by any
+	// completed compactions"). Both tests removed.
+	//
+	// R0' — COMPACTION INPUT IDENTITY — now supersedes R0-B and is the
+	// load-bearing next discriminator. See ACT §6 R0' for the new
+	// question and ACT §7/§8 for the updated classification / stop
+	// rule.
+	it("[R0-A] rescaling reproduces the LIVE-symptom header value (~7.1k)", () => {
+		// PROJECTION_FORMULA_BOUND / LIVE_ARITHMETIC_BIND_PROVEN.
+		// Documentary only; this is NOT a defect oracle.
 		const messages: ClineMessage[] = [
 			{
 				ts: 1,
@@ -471,94 +479,7 @@ describe("getLastApiReqContextInputTokens", () => {
 
 		// (167_100 + 0 + 0) * (28_900 / 680_100) = 167_100 * 0.04249 ≈ 7_100.7
 		// ceil(7_100.7) = 7_101
-		// (Note: the earlier draft said 7_099 — that was a hand-calc mistake
-		// in this comment. The actual production code returns 7_101; this
-		// matches the LIVE header's observed ~7.1k value.)
 		assert.equal(getLastApiReqContextInputTokens(messages), 7_101)
-	})
-
-	it("[R0-B] header should be one of the three contract-permitted quantities (NOT a multiplication)", () => {
-		// Semantic-oracle check: per §0 truth domains and §6 R0,
-		// the header should display ONE of:
-		//   lastRequestInput = 167_100   (REQUEST_INPUT_TOKENS of last request)
-		//   tokensAfter      = 28_900    (WORKING_CONTEXT_ESTIMATE of next request)
-		//   tokensBefore     = 680_100   (WORKING_CONTEXT_ESTIMATE of last compaction)
-		//
-		// It MUST NOT display a multiplicative interpolation between two
-		// unrelated baselines (which is what the current implementation
-		// returns: ceil(167_100 * (28_900 / 680_100)) = 7_099).
-		const messages: ClineMessage[] = [
-			{
-				ts: 1,
-				type: "say",
-				say: "api_req_started",
-				text: JSON.stringify({ tokensIn: 167_100, tokensOut: 8_000, cacheReads: 0, cacheWrites: 0 }),
-			},
-			{
-				ts: 2,
-				type: "say",
-				say: "compaction",
-				text: JSON.stringify({
-					status: "completed",
-					mode: "auto",
-					tokensBefore: 680_100,
-					tokensAfter: 28_900,
-				}),
-			},
-		]
-
-		const result = getLastApiReqContextInputTokens(messages)
-		const permitted: ReadonlyArray<number> = [167_100, 28_900, 680_100]
-		assert.ok(
-			permitted.includes(result),
-			`R0-B: header value ${result} is none of the contract-permitted quantities ` +
-				`${JSON.stringify(permitted)}. The post-compaction header must display ` +
-				`either the last request's provider-normalized context-input occupancy, ` +
-				`or the next-request's working-context estimate, or the just-finished ` +
-				`pre-compaction working-context estimate — NOT a multiplicative ` +
-				`interpolation between two unrelated semantic baselines.`,
-		)
-	})
-
-	it("[R0-C] doc comment vs behavior: header value is not the next-request working-context estimate", () => {
-		// Residual-contract check: even granting the implementation is
-		// "intentional rescaling", the doc comment (getApiMetrics.ts:137-167)
-		// claims the function returns "the provider-normalized context-input
-		// token count from the last api_req_started message, rescaled by any
-		// completed compactions that happened after it." The contract-permitted
-		// next-request estimate is tokensAfter = 28_900. The rescaled value
-		// (7_099) is NOT tokensAfter. Either the doc comment is wrong, or the
-		// implementation is. Until the source-of-truth oracle is established
-		// for what the header SHOULD display, both cannot be true.
-		const messages: ClineMessage[] = [
-			{
-				ts: 1,
-				type: "say",
-				say: "api_req_started",
-				text: JSON.stringify({ tokensIn: 167_100, tokensOut: 8_000, cacheReads: 0, cacheWrites: 0 }),
-			},
-			{
-				ts: 2,
-				type: "say",
-				say: "compaction",
-				text: JSON.stringify({
-					status: "completed",
-					mode: "auto",
-					tokensBefore: 680_100,
-					tokensAfter: 28_900,
-				}),
-			},
-		]
-
-		const result = getLastApiReqContextInputTokens(messages)
-		// The function should at least agree with tokensAfter (the actual
-		// next-request working-context estimate, which the divider row
-		// presents as `680k → 28.9k`). Until proven otherwise, the header's
-		// post-compaction value SHOULD be the next-request estimate.
-		assert.notEqual(result, 28_900) // current implementation diverges
-		// ↑ if this assertion ever FLIPS to false (result == 28_900), the
-		// function has been corrected to return the contract-permitted
-		// next-request estimate, and R0-B should also GREEN.
 	})
 
 	it("returns 0 when no api_req_started message exists", () => {
