@@ -455,6 +455,43 @@ apps/examples/desktop-app/.cursor/settings.json
 # hypothetical awaiting_continuation.
 !/.factory/acts/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01/
+# ACT-CLINEMM-LONG-SESSION-UI-UNRESPONSIVENESS-RECON01: long-session
+# whole-window freeze recon ACT. Operator-supplied REAL/LIVE dogfood
+# specimen (macOS / VSCodium displayed "The window is not responding"
+# during a many-hour active ClineMM session with large accumulated
+# task/conversation history). The ACT freezes a candidate-state
+# classification: cases A/C are PLAUSIBLE; cases B/D are LOW STRUCTURAL
+# PRIOR but **NOT source-eliminated** (native capture is what
+# eliminates them, per reviewer P0 #2); cases E/F are OPEN; cases
+# G/H are DISFAVORED_BY_TRIGGER but NOT source-eliminated; case I
+# is OPEN. The verdict is `SOURCE_CANDIDATES_NARROWED /
+# LIVE_PROCESS_CLASS_UNBOUND` — i.e. `PROCESS_CLASS_BOUND = NO`
+# because no native process has actually been observed as hot yet
+# (per reviewer P0 #1). The single discriminator is native process /
+# stack classification (ps sorted by %CPU, NOT %MEM, + `codium
+# --status` + per-process `sample` on each materially-hot process —
+# NOT auto-pick a single PID by one metric, per reviewer P1 #1).
+# Status OPEN / RECON_ONLY / REPAIR_AUTHORIZED=NO. No production
+# code change; no new RED; no temp instrumentation. The launch
+# contract explicitly authorizes this lane as the independent,
+# already-LIVE production frontier while VIAPD waits for live
+# evidence.
+# PREDECESSOR ACTs respected (cause-disjoint): TASK-CANCEL-UI-RECON01
+# (CLOSED CAPTURE_INSUFFICIENT), TOOL-RUNTIME-RELIABILITY-RECON01/02
+# (CLOSED NOT_REPRODUCED_WITHIN_OWNED_BOUNDARY), and the
+# operator-gated BHTD01 (NOT in scope). NEXT (operator-gated): run §3
+# capture protocol on the next freeze to discriminate A/B/C/D/E/F
+# (per the corrected classification table in §5); reach one of
+# ROOT_CAUSE_ISOLATED (downstream bounded repair ACT — NOT
+# pre-authorized here), PROCESS_CLASS_BOUND (next discriminator),
+# NOT_REPRODUCED (STOP), or CAPTURE_INSUFFICIENT. Same durable-binding
+# reason as the other recon ACTs: this ACT and its evidence directory
+# are referenced from the frontmatter link block of this ACT itself
+# (source-seam-map.md, scale-inventory.md, live-process-capture.md,
+# final-report.md), and a future epic-board row will bind to the
+# post-capture disposition. Both must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-LONG-SESSION-UI-UNRESPONSIVENESS-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-LONG-SESSION-UI-UNRESPONSIVENESS-RECON01/
 # ACT-CLINEMM-SEATBELT-ALL-R5-AUTHORITY-CONTRACT01: contract-preflight
 # ACT that freezes the conditional authority invariant for the
 # successor IMPLEMENTATION01. PHASE_0 = PASS (reviewer disposition
