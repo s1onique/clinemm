@@ -261,7 +261,7 @@ HALT_RED_NOT_REPRODUCED (the "three permitted quantities" oracle was
 unfounded). R0-C was inconclusive (the doc comment actually matches
 the behavior). Both removed.
 
-### R0' candidate (NEW): manual compaction wrong-input projection
+### R0' candidate (REFRAMED 2026-09-02 second review): manual compaction semantic-contract question
 
 The factory causal reviewer (2026-09-02, second reordering) — pivoted
 away from the UI projection after a new LIVE specimen ("Context
@@ -269,7 +269,8 @@ compacted (manual) · 1M → 72.9k tokens · 1234 → 86 messages") showed
 the upstream denominator itself is suspicious. Operator intuition was
 that the model was not actually carrying ~1M tokens of active context.
 
-**Source recon (executed 2026-09-02):**
+**Source recon (executed 2026-09-02 first pass; superseded by
+semantic-contract recon 2026-09-02 second review):**
 
 ```text
 apps/cli/src/runtime/interactive/compaction.ts:99-100
@@ -296,28 +297,69 @@ sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1149
   the next provider-bound request.
 ```
 
-**CAUSAL FINDING:** Manual compaction's `apiMessages = canonical`
-while the next provider-bound request's projection goes through
-`buildForApi`. For manual compaction, `tokensBefore` measures the
-canonical transcript (intended: "size of full history being
-summarized"), not the provider-bound working context the UI labels.
+**HALT_ROOT_CAUSE_NOT_ISOLATED (factory causal reviewer, 2026-09-02
+second review):**
 
-For AUTO compaction, `apiMessages = prepareProviderMessagesForApi(
-canonical)` → CONSISTENT with the next request's projection.
+The previous turn concluded `CASE_B.MANUAL_PROJECTION = MANUAL WRONG
+INPUT PROJECTION`. This was an epistemic jump from structural
+asymmetry to defect classification. The reviewer correctly
+identified that:
 
-This is **R0'.B (WRONG_PROJECTION)** for manual compaction + UI
-interaction. The TaskHeader / shared-metrics layer is not at fault —
-it correctly consumes what `tokensBefore` says. The defect lives in
-the two manual entry points (CLI + VSCode) that pass canonical as
-`apiMessages`. Ownership migrates to SDK entry-point normalization.
+1. The producer documents `tokensBefore` as "Full-request token
+   estimates, in the same units as the trigger and limit" (sdk/
+   packages/core/src/services/telemetry/core-events.ts:773). This
+   is the S1 contract (MATERIAL_BEING_COMPACTED).
+2. Manual compaction's design comment ("intentionally summarizes
+   the full canonical transcript", apps/cli/src/runtime/interactive/
+   compaction.ts:86-88) is consistent with S1, NOT S2.
+3. Classifying manual compaction as "wrong input" requires the
+   producer to claim S2, which it does not.
+4. The UI consumer (apps/vscode/webview-ui/src/components/chat/
+   task-header/ContextWindow.tsx:175: "Current tokens used in
+   this request") implicitly assumes S2.
+
+**Both contracts are valid within their own layer. The defect is
+the WIRE between them: AMBIGUOUS_WIRE_CONTRACT (CASE_S3) or
+SEMANTIC_LABEL_DEFECT (CASE_S1).**
+
+**Updated verdict (R0' semantic-contract recon, 2026-09-02 second
+review):**
+
+- MANUAL_AUTO_INPUT_ASYMMETRY = PROVEN_STRUCTURAL (durable).
+- MANUAL_WRONG_INPUT_PROJECTION (R0'.B) = RETRACT_PENDING_SEMANTIC_BIND.
+- CASE_B.MANUAL_PROJECTION = PREMATURE / RETRACTED.
+- PRODUCER_CONTRACT = S1 (correctly implemented at both manual
+  entry points per the design intent; NOT a defect).
+- UI_CONSUMER_CONTRACT = S2 (implicit; correctly implemented
+  given its assumption; the defect is the assumption itself, not
+  the implementation).
+- WIRE_CONTRACT = S3 (OVERLOADED_FIELD).
+- ROOT_CAUSE_LIKELY = AMBIGUOUS_WIRE_CONTRACT (between the producer's
+  S1 and the UI consumer's S2).
+- MANUAL_ENTRY_POINTS_AS_DEFECT = RETRACTED (they correctly
+  implement S1).
+
+**Repair options (NOT EXECUTED FROM THIS ACT, named for sequencing):**
+
+- (a) Tag the field — emit `tokensBeforeKind` alongside
+  `tokensBefore`; consumer uses the ratio only when kind matches.
+- (b) Split into two fields — `compactionInputTokensBefore` AND
+  `activeContextTokensBefore`; UI uses only the latter.
+- (d) Consumer-side reconciliation — for manual mode, do NOT
+  rescale `tokensIn`; display a neutral divider. For auto mode,
+  keep current rescaling.
 
 Downstream repair ACT (named but NOT opened from this ACT):
-**ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01** — separate scope,
-separate review.
+**ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01** — separate scope,
+separate review. The previous turn's
+ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01 is RETRACTED — the
+manual entry points are NOT the defect.
 
 R1-R3 (core compaction arithmetic, cumulative-usage non-interference,
-repeated-request snapshot) remain supplementary discriminators; their
-territory is unaffected by this finding.
+repeated-request snapshot) are SUPERSEDED on the recon's current
+frontier: the reviewer's HALT explicitly said "Do R1-R3 NOT yet"
+because they won't answer the current ambiguity. They become relevant
+again after CASE_S1 / CASE_S3 is closed.
 
 ---
 
@@ -350,19 +392,34 @@ either producer.
 permitted quantities" oracle was unfounded; doc-comment-vs-behavior
 assertion was inconclusive.
 
-**R0' (NEW, load-bearing next discriminator, 2026-09-02 second
-reordering):** manual compaction's `apiMessages = canonical` at both
-entry points (CLI + VSCode). The TaskHeader / shared-metrics layer
-consumes `tokensBefore` correctly; the defect lives in the SDK
-compaction bridges. Source-recon bound; awaits real-trace specimen
-for full proof. ROOT_CAUSE_ISOLATED candidate at:
-- `apps/cli/src/runtime/interactive/compaction.ts:99-100`
-- `apps/vscode/src/sdk/sdk-compaction.ts:101-102`
+**R0' (REFRAMED 2026-09-02 second review, after
+HALT_ROOT_CAUSE_NOT_ISOLATED):** the structural asymmetry between
+manual and auto compaction is real and durable. But the previous
+turn's conclusion (manual compaction passes the wrong input) was
+an epistemic jump. The semantic-contract recon classifies the
+defect as AMBIGUOUS_WIRE_CONTRACT (CASE_S3) or
+SEMANTIC_LABEL_DEFECT (CASE_S1), NOT producer defect. The producer
+documents S1 (MATERIAL_BEING_COMPACTED); the UI consumer assumes
+S2 (ACTIVE_PROVIDER_CONTEXT); the wire does not tag which scale
+is in use. The two manual entry points correctly implement S1
+per the explicit design intent ("intentionally summarizes the full
+canonical transcript"); they are NOT the defect. ROOT_CAUSE_ISOLATED
+candidate: the schema/wire between the producer (core-events.ts:773)
+and the UI rescaling consumer (getApiMetrics.ts:174-225 +
+ContextWindow.tsx:175). Downstream repair ACT =
+ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (named but NOT
+opened from this ACT).
+
+**CASE_B.MANUAL_PROJECTION is RETRACTED** (2026-09-02 second
+review); the producer docstring establishes S1, not S2, and the
+manual entry points correctly implement S1 per the design intent.
 
 **A.label-only is NOT YET ESTABLISHED.** Q0C (semantic-difference) is
-necessary but not sufficient; R0' source-recon must complete before
-CASE_A is valid. R0-A alone does NOT close CASE_A — it only proves
-arithmetic.
+necessary but not sufficient; the semantic-contract recon
+classifying the producer/consumer mismatch as CASE_S1 or CASE_S3
+is necessary before CASE_A can be cleanly closed.
 
-R1-R3 discriminators: **NOT YET RUN**. Authoring them is the next
-recon step (auto-path supplementary).
+R1-R3 discriminators: **SUPERSEDED ON CURRENT FRONTIER** (per
+reviewer's HALT directive: "Do R1-R3 NOT yet; they won't answer the
+current ambiguity"). They become relevant again after CASE_S1 /
+CASE_S3 is closed.

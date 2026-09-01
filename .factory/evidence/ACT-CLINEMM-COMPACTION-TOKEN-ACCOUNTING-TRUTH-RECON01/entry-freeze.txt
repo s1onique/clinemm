@@ -3,7 +3,14 @@ TIMESTAMP=2026-09-01T23:55:00Z (opening) /
            2026-09-02T00:25:00Z (contract correction) /
            2026-09-02T01:10:00Z (R0 promotion + Q0D softening) /
            2026-09-02T01:45:00Z (R0-B retracted; R0' source-recon;
-                                R0' MANUAL_PROJECTION candidate bound)
+                                MANUAL_PROJECTION candidate proposed) /
+           2026-09-02T02:10:00Z (HALT_ROOT_CAUSE_NOT_ISOLATED on
+                                CASE_B.MANUAL_PROJECTION; semantic-contract
+                                recon executed; classification reframed
+                                as CASE_S3 / CASE_S1; producer contract
+                                is S1, UI consumer contract is S2, wire
+                                is overloaded; manual entry points
+                                RETRACTED as defect location)
 REPO_HEAD=7c24ab02f (post-contract-correction; R0 promotion is docs+test)
 OWNER=CONTEXT / COMPACTION / TOKEN-ACCOUNTING
 EPIC=EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING (new epic opened 2026-09-01
@@ -67,65 +74,72 @@ EXPECTED_FIRST_OUTPUT=
                                           (LIVE_ARITHMETIC_BIND_PROVEN only;
                                           R0-B/R0-C WITHDRAWN 2026-09-02)
   4. R0' source-recon                  → recorded in §6 R0' + producers.md
-                                          (DONE in this turn; manual
+                                          (DONE in turn 9083ecd56; manual
                                           compaction passes
                                           apiMessages = canonical at both
-                                          entry points)
-  5. R0' real-trace specimen           → HOST_REQUIRED; captures (a)
-                                          manual /compact with known
-                                          canonical history and (b) next
-                                          provider-bound request's
-                                          buildForApi output, asserting
-                                          E_before ≈ W_before ≈ P_before
-                                          (PENDING; requires live run)
-  6. Q1-Q12 recon                      → truth-domain-map.md
-  7. trust model                        → trust-model.md (every §0 truth
+                                          entry points — PROVEN_STRUCTURAL)
+  5. R0' semantic-contract recon       → semantic-contract-recon.md
+                                          (DONE in this turn; producer
+                                          contract = S1, UI consumer
+                                          contract = S2, wire = S3;
+                                          CASE_B.MANUAL_PROJECTION RETRACTED
+                                          pending repair ACT)
+  6. R0' real-trace specimen           → HOST_REQUIRED; captures H, W, P
+                                          (no longer requires
+                                          E_before ≈ W_before ≈ P_before;
+                                          that presupposes S2)
+  7. Q1-Q12 recon                      → truth-domain-map.md
+  8. trust model                        → trust-model.md (every §0 truth
                                           domain mapped to file:line or
                                           NOT_PRESENT)
-  8. R1-R3 supplementary discriminators  → tests in sdk/packages/core
-                                          (auto-path RED-then-GREEN;
-                                          source-extraction)
-  9. R4/R5 conditional discriminators   → authored ONLY if recon proves
+  9. R1-R3 supplementary discriminators  → NOT YET (reviewer HALT — won't
+                                          answer current ambiguity;
+                                          semantically unblocked once
+                                          CASE_S1 / CASE_S3 is closed)
+  10. R4/R5 conditional discriminators  → authored ONLY if recon proves
                                           the seam exists
-  10. classification                    → classification.md (CASE_A / A.UI
-                                          / B / B.MANUAL_PROJECTION / C / D)
-  11. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
+  11. classification                    → classification.md (CASE_A / A.UI
+                                          / S1 / S3 / B / C / D)
+  12. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
                                           ACCOUNTING-TRUTH-RECON01.md
                                           (R0-A as witness, R0' as
-                                          recon; CASE_B.UI / B.HYBRID
-                                          RETIRED; CASE_B.MANUAL_PROJECTION
+                                          semantic-contract recon;
+                                          CASE_B.UI / B.HYBRID / B.MANUAL_PROJECTION
+                                          all RETIRED; CASE_S1 / CASE_S3
                                           added)
-  12. final report                       → final-report.md
-  13. epic detail file update           → context-compaction-token-accounting.md
+  13. final report                       → final-report.md
+  14. epic detail file update           → context-compaction-token-accounting.md
 
 STOP_RULE=
-  R0-A witness consistent with behavior, R0' source-recon establishes
-  SAME_PAYLOAD for both auto and manual paths, R1-R3 GREEN, I1-I7 hold
-    → TRUTH_DOMAINS_PRESERVED / CASE_A / CLOSED_NOT_REPRODUCED.
-      (Or CLOSED_WITH_RESIDUE if a non-load-bearing drift is observed
-      but explained.)
-  R0-A witness consistent, R0' source-recon SAME_PAYLOAD, R1-R3 GREEN,
-  doc comment matches behavior
-    → CASE_A.UI / CLOSED_NOT_REPRODUCED. (LIVE symptom was label
-      ambiguity all along.)
-  R0' source-recon establishes MANUAL COMPACTION WRONG_INPUT_PROJECTION
-  (apiMessages = canonical at the two manual entry points), R1-R3 GREEN
-  (auto path uses prepareProviderMessagesForApi correctly),
-  R0-A witness consistent with behavior
-    → CASE_B.MANUAL_PROJECTION / ROOT_CAUSE_ISOLATED at:
-        apps/cli/src/runtime/interactive/compaction.ts:99-100
-        apps/vscode/src/sdk/sdk-compaction.ts:101-102
+  R0-A witness consistent with behavior, R0' semantic-contract recon
+  classifies as CASE_S1 or CASE_S3, R1-R3 GREEN, I1-I7 hold
+    → TRUTH_DOMAINS_PRESERVED / CASE_A / CLOSED_NOT_REPRODUCED
+      or CLOSED_WITH_RESIDUE if the residue (UI title vs producer
+      contract mismatch) is load-bearing. Naming the residue is
+      the primary first-durable conclusion of this ACT.
       Downstream repair ACT =
-        ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01.
-      Ownership migrates to SDK entry-point normalization (CLI +
-      VSCode compaction bridges), NOT core compaction AND NOT
-      task-presentation. TaskHeader / shared-metrics layer is not
-      at fault for this defect — it correctly consumes what
-      tokensBefore says, but tokensBefore is wrong for manual
-      compaction because it measures canonical history rather than
-      provider-bound working context.
-  CASE_B.UI / CASE_B.HYBRID RETIRED 2026-09-02 (R0-B oracle
-    unfounded; classification retired).
+        ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (separate ACT,
+        separate review; NOT opened from this ACT). Ownership
+        migrates to the UI rendering layer (ContextWindow.tsx:175
+        title attribute) and/or the wire schema (the schema gap
+        between the producer's docstring and the consumer's
+        implicit assumption), NOT to the compactor entry points
+        and NOT to core compaction.
+      CASE_B.MANUAL_PROJECTION (the previous turn's claim) is
+      RETRACTED — the producer's docstring establishes S1, not S2,
+      and the manual entry points correctly implement S1.
+  CASE_S1 / CASE_S3 explicit sub-classes (named for completeness;
+  see ACT §7):
+    CASE_S1: SEMANTIC_LABEL_DEFECT — UI title implies S2, producer
+             is S1. Fix: relabel the UI title to match the
+             producer's actual contract.
+    CASE_S3: WIRE_CONTRACT_OVERLOADED — producer documents S1,
+             consumer assumes S2. Fix: tag the field, split the
+             schema, or reconcile the consumer (see ACT §6 R0'
+             repair options a / b / d).
+  CASE_B.UI / CASE_B.HYBRID / CASE_B.MANUAL_PROJECTION RETIRED
+    2026-09-02 (R0-B oracle unfounded; previous-turn root-cause
+    isolation on manual entry points was incorrect).
   R1-R3 RED with structural defect
     → CASE_B / ROOT_CAUSE_ISOLATED (with specific I1-I7 violation
       + file:line).
@@ -160,7 +174,8 @@ CONTRACT_CORRECTION=
   address the new P1 candidate (post-compaction TaskHeader projection).
   PRODUCTION_DELTA_SINCE_OPENING: ZERO.
 
-NEW_CAUSAL_CANDIDATE (factory causal reviewer, 2026-09-02 SECOND REORDERING)=
+NEW_CAUSAL_CANDIDATE (factory causal reviewer, 2026-09-02 SECOND REORDERING +
+SECOND REVIEW)=
   The post-compaction TaskHeader rescaling (apps/vscode/src/shared/
   getApiMetrics.ts:174-225) crosses two semantic baselines (R0-A):
     - LAST_REQUEST_INPUT (provider-normalized per-request occupancy)
@@ -201,36 +216,66 @@ NEW_CAUSAL_CANDIDATE (factory causal reviewer, 2026-09-02 SECOND REORDERING)=
       (goes through messageBuilder.buildForApi — same pipeline as next
       provider-bound request). CONSISTENT.
 
-  CAUSAL FINDING: Manual compaction's `apiMessages = canonical` while
-  the next provider-bound request's projection goes through
-  `buildForApi`. For manual compaction, `tokensBefore` measures the
-  canonical transcript, not the provider-bound working context the UI
-  labels. AUTO compaction is consistent.
+  HALT_ROOT_CAUSE_NOT_ISOLATED (factory causal reviewer, 2026-09-02
+  SECOND REVIEW):
+  The previous turn's conclusion (CASE_B.MANUAL_PROJECTION =
+  "manual compaction passes the wrong input") was an epistemic jump
+  from structural asymmetry to defect classification. The producer
+  documents tokensBefore as "Full-request token estimates, in the
+  same units as the trigger and limit" (sdk/packages/core/src/services/
+  telemetry/core-events.ts:773) — i.e., the producer's contract is
+  S1 (MATERIAL_BEING_COMPACTED), NOT S2 (ACTIVE_PROVIDER_CONTEXT).
+  The manual entry points correctly implement S1 per the explicit
+  design intent ("intentionally summarizes the full canonical
+  transcript", apps/cli/src/runtime/interactive/compaction.ts:86-88).
+  The UI consumer's docstring (getApiMetrics.ts:80-93, 165-167) and
+  rendering title (ContextWindow.tsx:175: "Current tokens used in
+  this request") implicitly assume S2. Both contracts are valid
+  within their own layer; the wire between them is overloaded.
 
-  The TaskHeader / shared-metrics layer is NOT at fault for this defect;
-  it correctly consumes what `tokensBefore` says. The defect lives in
-  the two manual entry points. Ownership migrates to SDK entry-point
-  normalization (CLI + VSCode compaction bridges).
+  R0' SEMANTIC-CONTRACT RECON (executed 2026-09-02 second review):
+  See semantic-contract-recon.md for the full binding. Verdict:
+    CORE_COMPACTION_ARITHMETIC                  = CONSERVED (R1 territory)
+    BILLING/CONTEXT_SEPARATION                  = CONSERVED (R2 territory)
+    MANUAL_AUTO_INPUT_ASYMMETRY                 = PROVEN_STRUCTURAL (durable)
+    MANUAL_WRONG_INPUT_PROJECTION (R0'.B)       = RETRACT_PENDING_SEMANTIC_BIND
+    CASE_B.MANUAL_PROJECTION                    = PREMATURE / RETRACTED
+    PRODUCER_CONTRACT                           = S1 (MATERIAL_BEING_COMPACTED)
+    UI_CONSUMER_CONTRACT                        = S2 (ACTIVE_PROVIDER_CONTEXT)
+    WIRE_CONTRACT                               = S3 (OVERLOADED_FIELD)
+    CURRENT_BEST_CLASSIFICATION                 = CASE_S3 (or CASE_S1)
+    ROOT_CAUSE_ISOLATION                        = AMBIGUOUS_WIRE_CONTRACT
+    MANUAL_ENTRY_POINTS_AS_DEFECT               = RETRACTED (they correctly
+                                                    implement S1)
 
   R0' deliverable: a real-trace specimen (HOST_REQUIRED) capturing (a)
   manual /compact with known canonical history and (b) the next
-  provider-bound request's `buildForApi` output, asserting
-  E_before ≈ W_before ≈ P_before on a real run. The current code-trace
-  recon is sufficient to NAME the suspect call sites; only a real run
-  proves the full three-way equality.
-
-  CASE_B.UI and CASE_B.HYBRID from §7 are RETIRED (R0-B oracle
-  unfounded). New branch: CASE_B.MANUAL_PROJECTION.
+  provider-bound request's `buildForApi` output. The assertion
+  E_before ≈ W_before ≈ P_before is RETRACTED (it presupposes S2,
+  which the producer does not claim). Instead capture:
+    H = estimate(canonical history)
+    W = estimate(buildForApi/current working projection)
+    P = provider-normalized request-input observation
+  and ask:
+    H == what manual tokensBefore claims to represent? (S1 contract test)
+    W/P == what active-context UI claims to represent? (S2 contract test)
 
 DOWNSTREAM_ACT=
-  ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01 (only if CASE_B.MANUAL_PROJECTION,
-  with its own scope, entry-freeze, and review; NOT opened from this ACT).
-  OR ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-REPAIR01 (only if CASE_B,
-  with its own scope, entry-freeze, and review; NOT opened from this ACT).
-  The two repair ACTs are mutually exclusive; only one will be needed.
+  ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (only if CASE_S3 or
+  CASE_S1 with load-bearing residue; with its own scope, entry-freeze,
+  and review; NOT opened from this ACT). Three repair options named
+  in ACT §6 R0' (option a: tag the field; option b: split into two
+  fields; option d: consumer-side reconciliation for manual mode).
+  OR ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-REPAIR01 (only if
+  CASE_B, with its own scope, entry-freeze, and review; NOT opened
+  from this ACT). The two repair ACTs are mutually exclusive; only
+  one will be needed.
+  ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01 (the previous
+  turn's proposed repair) is RETRACTED — the manual entry points
+  are NOT the defect.
 
 SEQUENCING=
-  After this ACT reaches CASE_A / CASE_A.UI / CASE_B /
-  CASE_B.MANUAL_PROJECTION / CASE_C / CASE_D:
+  After this ACT reaches CASE_A / CASE_A.UI / CASE_S1 / CASE_S3 /
+  CASE_B / CASE_C / CASE_D:
     ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01
     (board frontier #2 per factory causal reviewer 2026-09-01)
