@@ -1,12 +1,12 @@
 ACT_ID=ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01
-TIMESTAMP=2026-09-01T23:55:00Z
-REPO_HEAD=975d3315c
+TIMESTAMP=2026-09-01T23:55:00Z (opening) / 2026-09-02T00:25:00Z (contract correction)
+REPO_HEAD=8c04d77fb (post-ACT-opening; contract correction is docs-only)
 OWNER=CONTEXT / COMPACTION / TOKEN-ACCOUNTING
 EPIC=EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING (new epic opened 2026-09-01
      by board amendment commit 975d3315c; the recon ACT is the first
      contract owner)
 
-PRIMARY_EPISTEMIC_PURPOSE=VERIFY_TOKEN_ACCOUNTING_TRUTH_ACROSS_COMPACTION_BOUNDARY
+PRIMARY_EPISTEMIC_PURPOSE=VERIFY_TRUTH_DOMAIN_PRESERVATION_ACROSS_COMPACTION_BOUNDARY
 CLASS=RECON_ONLY / EVIDENCE_FIRST / READ_ONLY
 
 PRIORITY:
@@ -27,40 +27,62 @@ UPSTREAM_RADAR=
 
 CAUSAL_DISTINCTION=
   NOT a duplicate of task-presentation.md (that epic owns UI rendering;
-  this ACT owns the arithmetic of token accounting).
+  this ACT owns whether the working-context estimate, compaction
+  before/after markers, and session usage tell consistent truth).
   NOT a duplicate of runtime-task-progression.md (that epic owns post-tool-
   result continuation; this ACT owns the pre-turn boundary).
   NOT a duplicate of upstream #12939 (replace_in_file CPU; different
   defect class — performance, not accounting truth).
   NOT a duplicate of upstream #12388 (checkpoint run-identity; different
   defect class — run-identity bookkeeping, not token accounting).
-  THIS ACT asks: does the SDK compaction pipeline preserve token-
-  accounting truth across the compaction boundary, the model-billing
-  boundary, and the context-window threshold?
+  THIS ACT asks: do the separated truth domains in §0 remain preserved
+  across the compaction boundary, with NO additive arithmetic across
+  billing/context divides and NO estimator asymmetry across writers/readers?
 
+CONTRACT_NOTES=
+  Frozen contract uses SEPARATED TRUTH DOMAINS (REQUEST_INPUT_TOKENS,
+  REQUEST_OUTPUT_TOKENS, SESSION_CUMULATIVE_USAGE,
+  WORKING_CONTEXT_ESTIMATE, COMPACTION_BEFORE_TOKENS,
+  COMPACTION_AFTER_TOKENS, MODEL_INPUT_BUDGET, CONTEXT_UTILIZATION).
+  Invariants I1-I7 forbid additive arithmetic across the billing/context
+  divide. Compaction threshold-failure behavior is NOT pre-frozen;
+  recon DISCOVERS the actual final-authority seam.
 EXPECTED_FIRST_OUTPUT=
   1. entry-freeze.txt                  (this file)
-  2. Q1-Q12 recon                      → compaction-arithmetic-map.md
-  3. trust model                        → trust-model.md
-  4. R1-R5 discriminator tests          → apps/vscode/sdk OR sdk/packages/core
-                                          (RED-then-GREEN progression,
-                                          source-extraction tests)
-  5. executable result
-  6. classification                     → classification.md
-  7. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
+  2. Q0A-Q0C producer-binding          → producers.md (BEFORE §4 recon)
+  3. Q1-Q12 recon                      → truth-domain-map.md
+  4. trust model                        → trust-model.md (every §0 truth
+                                          domain mapped to file:line or
+                                          NOT_PRESENT)
+  5. R1-R3 discriminator tests         → apps/vscode/sdk OR
+                                          sdk/packages/core (RED-then-GREEN
+                                          progression, source-extraction)
+  6. R4/R5 conditional discriminators   → authored ONLY if recon proves
+                                          the seam exists
+  7. classification                     → classification.md (CASE_A / B / C / D)
+  8. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
                                           ACCOUNTING-TRUTH-RECON01.md
-  8. final report                       → final-report.md
-  9. epic detail file update            → context-compaction-token-accounting.md
+  9. final report                       → final-report.md
+  10. epic detail file update           → context-compaction-token-accounting.md
 
 STOP_RULE=
-  R1-R5 GREEN at the compaction boundary
-    → ACCOUNTING_TRUTH_PRESERVED / CASE_A / CLOSED_NOT_REPRODUCED.
+  R1-R3 GREEN, I1-I7 hold
+    → TRUTH_DOMAINS_PRESERVED / CASE_A / CLOSED_NOT_REPRODUCED.
       (Or CLOSED_WITH_RESIDUE if a non-load-bearing drift is observed
       but explained.)
+      Sub-case A.label-only: Q0C proves the two UI fields are
+      intentionally different metrics → LIVE symptom is label ambiguity,
+      not arithmetic corruption. First durable conclusions about UI
+      field semantics are written; recon closes GREEN.
   R*-RED with structural defect → ROOT_CAUSE_ISOLATED / CASE_B.
-    This ACT closes WITHOUT authorizing a repair (separate ACT).
+    Names the violated invariant (I1-I7) and file:line. This ACT closes
+    WITHOUT authorizing a repair (separate ACT).
   Cannot exercise the compaction seam → CAPTURE_INSUFFICIENT / CASE_C.
   Real-prompt / real-provider required → HOST_REQUIRED / CASE_D.
+  Threshold-failure behavior discovered → reported as a FINDING (not a
+    stop-rule trigger). Document whatever shape the final-authority seam
+    actually has. Future repair ACTs may target specific behaviors; the
+    recon does NOT pre-decide.
 
 SCOPE_CALIBRATION=
   Recon-only. Read-only on production code. No edits to compaction.ts,
@@ -72,6 +94,15 @@ SCOPE_CALIBRATION=
   the desktop sidecar. NOT in scope: task-presentation (UI rendering),
   runtime-task-progression (post-tool-result continuation),
   tool-runtime-reliability (CLOSED at 9f0e66353).
+
+CONTRACT_CORRECTION=
+  Initial opening of this ACT (commit 8c04d77fb) froze an incorrect
+  contract in §0/R1-R3 that conflated billing-tokens with context-tokens
+  as if they were additive. Factory causal reviewer (2026-09-02)
+  identified the additive-arithmetic error and the overprescribed
+  threshold-failure policy. The contract was rewritten (commit pending)
+  to use separated truth domains + invariants I1-I7 + conditional
+  discriminators. PRODUCTION_DELTA_SINCE_OPENING: ZERO.
 
 DOWNSTREAM_ACT=
   ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-REPAIR01 (only if CASE_B,
