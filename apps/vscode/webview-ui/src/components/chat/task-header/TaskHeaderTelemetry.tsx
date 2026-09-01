@@ -100,10 +100,11 @@ interface TaskHeaderTelemetryProps {
 	taskHeaderPresentation: TaskHeaderPresentationProjection | undefined
 	turnState: TurnState | undefined
 	/**
-	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	 * + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
 	 * Effective diagnostic-knob state from the host. When present
 	 * AND at least one knob is ON, the indicator renders the active
-	 * letters (e.g. `"VIP"`) at the right of the row. When absent or
+	 * letters (e.g. `"VIAPD"`) at the right of the row. When absent or
 	 * all-OFF (the public default), the indicator is hidden entirely.
 	 */
 	diagnosticKnobs?:
@@ -112,6 +113,7 @@ interface TaskHeaderTelemetryProps {
 				readonly i: boolean
 				readonly a: boolean
 				readonly p: boolean
+				readonly d: boolean
 		  }
 		| undefined
 }
@@ -230,11 +232,12 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	const mechanism = telemetry.mechanism
 	const hasMechanismProjection = isUsableMechanismProjection(mechanism, telemetry.toolCalls)
 
-	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	// + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
 	// Compose the diagnostic-knob indicator from the host-supplied
 	// `diagnosticKnobs` field. Empty string -> nothing to render
 	// (the public default). Non-empty -> render the letters in the
-	// canonical V → I → A → P order (matches the host resolver's
+	// canonical V → I → A → P → D order (matches the host resolver's
 	// `formatEffectiveKnobLetters` output, mirrored here so the
 	// webview can render without re-importing the host resolver).
 	const indicatorLetters = diagnosticKnobs
@@ -243,10 +246,11 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 				diagnosticKnobs.i ? "I" : "",
 				diagnosticKnobs.a ? "A" : "",
 				diagnosticKnobs.p ? "P" : "",
+				diagnosticKnobs.d ? "D" : "",
 			].join("")
 		: ""
 	const tooltipBody = diagnosticKnobs
-		? `V=${diagnosticKnobs.v ? "on" : "off"}, I=${diagnosticKnobs.i ? "on" : "off"}, A=${diagnosticKnobs.a ? "on" : "off"}, P=${diagnosticKnobs.p ? "on" : "off"}`
+		? `V=${diagnosticKnobs.v ? "on" : "off"}, I=${diagnosticKnobs.i ? "on" : "off"}, A=${diagnosticKnobs.a ? "on" : "off"}, P=${diagnosticKnobs.p ? "on" : "off"}, D=${diagnosticKnobs.d ? "on" : "off"}`
 		: ""
 
 	return (

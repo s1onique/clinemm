@@ -44,7 +44,11 @@ import {
 	emitV2Capture,
 	isV2CaptureEnabled,
 } from "./v2-capture"
-import { formatEffectiveKnobLetters, resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
+import {
+	composeEffectiveDiagnosticKnobs,
+	formatEffectiveKnobLetters,
+	resolveEffectiveDiagnosticKnobs,
+} from "./dogfood-diagnostic-profile"
 import {
 	buildActivityPublicationV1Record,
 	type ActivityPublicationSnapshotLike,
@@ -88,9 +92,14 @@ describe("A1-A3: diagnostic-profile A knob", () => {
 		expect(knobs.a).toBe(false)
 	})
 
-	it("A3: header canonical order = VIAP when all four knobs are ON", () => {
-		const knobs = { v: true, i: true, a: true, p: true }
-		expect(formatEffectiveKnobLetters(knobs)).toBe("VIAP")
+	it("A3: header canonical order = VIAPD when all five knobs are ON", () => {
+		// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01: D
+		// joined the canonical order V → I → A → P → D. The A3 test
+		// pins the new canonical dogfood initial render "VIAPD";
+		// a sibling test in `dogfood-diagnostic-profile.test.ts`
+		// pins the pre-D "VIAP" for historical-context preservation.
+		const knobs = { v: true, i: true, a: true, p: true, d: true }
+		expect(formatEffectiveKnobLetters(knobs)).toBe("VIAPD")
 	})
 })
 
@@ -335,8 +344,8 @@ describe("A8: existing V/I/P behavior unchanged", () => {
 	})
 
 	it("A8c: public defaults remain all OFF (no public surface drift)", () => {
-		const knobs = resolveEffectiveDiagnosticKnobs({}, false, EMPTY_PATH)
-		expect(knobs).toEqual({ v: false, i: false, a: false, p: false })
+		const knobs = composeEffectiveDiagnosticKnobs({}, false, EMPTY_PATH, null)
+		expect(knobs).toEqual({ v: false, i: false, a: false, p: false, d: false })
 		expect(formatEffectiveKnobLetters(knobs)).toBe("")
 	})
 })

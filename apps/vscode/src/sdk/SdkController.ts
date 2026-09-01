@@ -77,8 +77,12 @@ import { AuthService, LogoutReason } from "./auth-service"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
-import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
+import {
+	composeEffectiveDiagnosticKnobs,
+	resolveEffectiveDiagnosticKnobs,
+} from "./dogfood-diagnostic-profile"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
+import { applyTurnStateWriterProvenanceDiagnosticProfile } from "./dogfood-diagnostic-profile"
 import { captureFromActiveSession as captureHostOwnershipFactsAtStatePost } from "./host-ownership-capture"
 import { isHostOwnershipDiagnosticWorkspaceEnabled } from "./host-ownership-diagnostic-runtime"
 import { MessageTranslatorState, reshapeErrorForWebview } from "./message-translator"
@@ -3896,6 +3900,23 @@ export class Controller {
 			// shape is unchanged: when neither source is on, the field is
 			// absent (byte-for-byte identical to C1).
 			const ptadEnabled = isPostTerminalAuthorityDiagnosticEffectivelyEnabled(this.context)
+
+			// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
+			// Resolve the EFFECTIVE D knob (env > workspace toggle >
+			// profile default) using the SAME production helper that
+			// arms the ring in `extension.ts:activate`. This is the
+			// SINGLE source of truth for the wire `diagnosticKnobs.d`
+			// field — it cannot disagree with the actual ring state.
+			// The helper is idempotent so calling it here on every state
+			// push incurs only the cost of one env read + one
+			// workspaceState.get + a single boolean compare (the ring
+			// flip is skipped because the post-activate ring state
+			// already matches).
+			const tswpdEffective = applyTurnStateWriterProvenanceDiagnosticProfile(
+				process.env,
+				isDogfoodRuntime(process.env),
+				this.context,
+			)
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-W1-EPOCH-DOMAIN-MISMATCH-RED-FIX01:
 			//
 			// The single `nextSeq()` value is reused as `stateVersion` (the wire
@@ -3910,6 +3931,20 @@ export class Controller {
 			// The capture is OPT-IN: when isPostTerminalAuthorityDiagnosticEnabled("extension")
 			// is false (the default in production), the if-branch is skipped and the production
 			// path semantics are byte-for-byte unchanged.
+			// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01 (Round 2 fix):
+			// Compose the 5-knob wire shape via composeEffectiveDiagnosticKnobs:
+			//   - 4-knob { v, i, a, p } from resolveEffectiveDiagnosticKnobs
+			//   - 1-knob { d } from resolveEffectiveTurnStateWriterProvenanceD
+			//     (workspace-toggle precedence: env > workspace > profile).
+			// The workspace toggle read MUST match the one the activation
+			// helper used (single workspaceState.get per state push), so
+			// the wire `d` cannot disagree with the actual ring state.
+			const diagnosticKnobsResolved = composeEffectiveDiagnosticKnobs(
+				process.env,
+				isDogfoodRuntime(process.env),
+				resolveCapturePathForProfileEffective(process.env),
+				this.context.workspaceState.get<boolean>("tswpdEnabled"),
+			)
 			const snapshot = {
 				...state,
 				currentTaskItem: this.task?.taskId
@@ -3965,13 +4000,17 @@ export class Controller {
 				// emitter's full precedence) into the resolver so V in
 				// the wire payload MIRRORS the writer's effective state
 				// (per ACT followup review: header must never lie about
-				// whether the writer is active). The other knobs (I, P)
-				// still gate on identity + per-knob env vars as before.
-				diagnosticKnobs: resolveEffectiveDiagnosticKnobs(
-					process.env,
-					isDogfoodRuntime(process.env),
-					resolveCapturePathForProfileEffective(process.env),
-				),
+				// whether the writer is active). The other knobs (I, P,
+				// D) still gate on identity + per-knob env vars as
+				// before.
+				//
+			// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01 (Round 2 fix):
+			// `diagnosticKnobsResolved` is the COMPOSED 5-knob shape
+			// from composeEffectiveDiagnosticKnobs(...) above; the D
+			// knob reflects the workspace-toggle-aware precedence
+			// (env > workspace > profile). The wire field is the
+			// single source of truth for the UI's VIAPD indicator.
+			diagnosticKnobs: diagnosticKnobsResolved,
 				// ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
 				//
 				// The webview-facing Thinking/presentation projection. LOCAL

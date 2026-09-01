@@ -593,6 +593,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 	})
 
 	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
+	// + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
 	describe("diagnostic-knob indicator", () => {
 		it("hides the indicator when diagnosticKnobs is undefined", () => {
 			render(<TaskHeaderTelemetry telemetry={telemetry()} turnState={ts("streaming")} />)
@@ -602,7 +603,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		it("hides the indicator when all knobs are OFF (public default)", () => {
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: false, i: false, a: false, p: false }}
+					diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -610,10 +611,15 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			expect(screen.queryByTestId("task-header-diagnostic-knobs")).toBeNull()
 		})
 
-		it("renders 'VIP' for the canonical dogfood initial render", () => {
+		it("renders 'VIP' for the canonical pre-A dogfood initial render (frozen historical-context)", () => {
+			// Pinned as a frozen historical-context value (pre-A, pre-D).
+			// The current canonical dogfood initial render is "VIAPD";
+			// see the WV1 test below. The pre-A "VIP" value remains a
+			// useful regression guard so the indicator never silently
+			// drops a knob.
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: true, i: true, a: false, p: true }}
+					diagnosticKnobs={{ v: true, i: true, a: false, p: true, d: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -622,10 +628,14 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			expect(indicator.textContent).toBe("VIP")
 		})
 
-		it("renders 'VIAP' when all four knobs are ON (future A probe landed)", () => {
+		it("renders 'VIAP' for the post-A pre-D canonical dogfood initial render", () => {
+			// Pinned as the post-A, pre-D canonical value. After D landed,
+			// the canonical dogfood initial render is "VIAPD" (WV1); this
+			// test pins "VIAP" to guard the formatter against silent
+			// drops of D when D=false.
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: true, i: true, a: true, p: true }}
+					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
@@ -633,15 +643,51 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAP")
 		})
 
+		it("WV1: renders 'VIAPD' when all five knobs are ON (D landed, canonical dogfood initial render)", () => {
+			render(
+				<TaskHeaderTelemetry
+					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: true }}
+					telemetry={telemetry()}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAPD")
+		})
+
 		it("renders 'IP' when V is overridden off in dogfood", () => {
 			render(
 				<TaskHeaderTelemetry
-					diagnosticKnobs={{ v: false, i: true, a: false, p: true }}
+					diagnosticKnobs={{ v: false, i: true, a: false, p: true, d: false }}
 					telemetry={telemetry()}
 					turnState={ts("streaming")}
 				/>,
 			)
 			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("IP")
+		})
+
+		it("WV2: renders 'VIAP' when D is overridden off in dogfood (post-D override-down)", () => {
+			// Override-down: dogfood + CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE=0.
+			// The host resolver flips d=false; the webview must mirror
+			// that and render "VIAP" (the canonical pre-D render).
+			render(
+				<TaskHeaderTelemetry
+					diagnosticKnobs={{ v: true, i: true, a: true, p: true, d: false }}
+					telemetry={telemetry()}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("VIAP")
+		})
+
+		it("WV3: renders 'D' when only D is ON (TSWPD-only dogfood probe)", () => {
+			render(
+				<TaskHeaderTelemetry
+					diagnosticKnobs={{ v: false, i: false, a: false, p: false, d: true }}
+					telemetry={telemetry()}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("D")
 		})
 	})
 })

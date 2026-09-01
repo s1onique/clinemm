@@ -125,23 +125,28 @@ export interface ExtensionState {
 	 * {@link resolveEffectiveDiagnosticKnobs} from
 	 * `isDogfoodRuntime()` + env overrides + the resolved V2 capture
 	 * path. The webview TaskHeader indicator renders the letters V / I
-	 * / A / P in canonical order (e.g. `"VIAP"` for the dogfood
-	 * initial render after A landed via
-	 * `CANCEL-AFFORDANCE-AUTHORITY-RECON`; `"VIP"` was the pre-A
+	 * / A / P / D in canonical order (e.g. `"VIAPD"` for the dogfood
+	 * initial render after D landed via
+	 * `ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01`; `"VIAP"`
+	 * was the pre-D historical value; `"VIP"` was the pre-A
 	 * historical value). Hidden entirely in public (when
-	 * `isDogfood === false` all four are false and the field is
+	 * `isDogfood === false` all five are false and the field is
 	 * omitted from the UI).
 	 *
 	 * Wire contract: always present. Each knob is a boolean. `a`
 	 * follows the same identity+env-var precedence as `i` and `p`
 	 * (identity-gated, `CLINEMM_DIAG_ACTIVITY_STATE_V1` overridable,
-	 * default-on in dogfood).
+	 * default-on in dogfood). `d` is the TSWPD gate, identity-gated
+	 * and overridable via
+	 * `CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE=<truthy>` (default-on
+	 * in dogfood).
 	 */
 	diagnosticKnobs?: {
 		readonly v: boolean
 		readonly i: boolean
 		readonly a: boolean
 		readonly p: boolean
+		readonly d: boolean
 	}
 	/**
 	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:

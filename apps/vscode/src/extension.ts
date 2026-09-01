@@ -6,6 +6,10 @@ import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal
 import * as vscode from "vscode"
 import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import {
+	applyTurnStateWriterProvenanceDiagnosticProfile,
+} from "@/sdk/dogfood-diagnostic-profile"
+import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
+import {
 	dumpExtensionSideHostOwnershipDiagnostic,
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 } from "@/sdk/host-ownership-diagnostic-runtime"
@@ -94,6 +98,22 @@ export async function activate(context: vscode.ExtensionContext) {
 	// never the `vscode` API, so `vscode` is not imported into the
 	// SDK capture code.
 	configureDogfoodCaptureStorage(context.globalStorageUri.fsPath)
+
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
+	// Arm the legacy TSWPD ring at the EARLIEST initialization seam,
+	// BEFORE SdkController construction. The helper composes the
+	// effective D knob (env > workspace toggle > dogfood default)
+	// and flips the ring idempotently. Calling this here — at
+	// extension activation, not at state publication — guarantees
+	// the ring is armed BEFORE the first TurnState mutation so
+	// the bounded buffer captures the writer identity from the
+	// first observation. Verified by
+	// `order_diagnostic_armed_before_first_writer.test.ts`.
+	applyTurnStateWriterProvenanceDiagnosticProfile(
+		process.env,
+		isDogfoodRuntime(process.env),
+		context,
+	)
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool

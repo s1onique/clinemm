@@ -56,16 +56,19 @@ interface TaskHeaderProps {
 	turnState?: TurnState
 	/**
 	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
-	 * Effective diagnostic-knob state from the host (V / I / A / P).
+	 * + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
+	 * Effective diagnostic-knob state from the host (V / I / A / P / D).
 	 * When at least one knob is ON, the indicator renders the active
-	 * letters in canonical order (e.g. `"VIP"`); when absent or all
-	 * OFF (the public default), the indicator is hidden.
+	 * letters in canonical order (e.g. `"VIAPD"` for the dogfood
+	 * initial render after D landed); when absent or all OFF (the
+	 * public default), the indicator is hidden.
 	 */
 	diagnosticKnobs?: {
 		readonly v: boolean
 		readonly i: boolean
 		readonly a: boolean
 		readonly p: boolean
+		readonly d: boolean
 	}
 }
 
