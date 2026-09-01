@@ -54,14 +54,21 @@
 
 | ACT / ID | Verdict | Head | Purpose |
 |---|---|---|---|
-| `TOOL-RUNTIME-RELIABILITY-RECON01` (working label) | OPEN / HIGH | — | Bounded RECON + exact live RED across the 23-cluster inventory; do **not** pre-classify cause |
-| (terminal-timeout / wait lifecycle cluster — 9 issues) | RADAR / cluster-assigned | — | Upstream supporting signals; per-issue destination-contract test required for IMPORT |
+| `ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01` | CLOSED / NOT_REPRODUCED + STRUCTURAL_OBSERVATION | `b589f439b` | Foreground-await seam repro; A1-A4 PRODUCTION probes; verdict preserved (correction chain CLOSED). |
+| `ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01-CORRECTION01` | CLOSED / P1_BUILD_CONTRACT | `b589f439b` | Test-fixture type correction (`vscode.Terminal` typed, no `as` cast). |
+| `ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02` | CLOSED (GREEN) | `a90f36a4b` | Post-tool advance-stall recon, frozen at the `RESULT_EXISTS` entry seam. Cause-neutral; load-bearing cluster = `#10537` + `#10122`; `#13691` demoted to adjacent RADAR (no evidence the result exists); `#12079` is a heterogeneous witness. Single §2 production-seam discriminator `P1_RESULT_PUBLICATION_TO_SESSION_EVENT` at the `[1]→[3]` boundary (RESULT_EXISTS → `SdkMessageCoordinator.appendAndEmit` → session-event listener) = **GREEN**: `[1]→[3]` CONSERVED at the production seam. Disposition = `NOT_REPRODUCED_WITHIN_OWNED_BOUNDARY / HANDOFF_RUNTIME_TASK_PROGRESSION / STOP`. Production delta = ZERO. Test artifact: `apps/vscode/src/sdk/tool-runtime-reliability-recon02.production-seam.test.ts` (89 lines, bun:test + chai, PASSING). Evidence: `.factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02/{source-seam-map.md,probe-result-publication-to-session-event.md,probe-p1-run-log.txt,final-report.md}`. |
+| (terminal-timeout / wait lifecycle cluster — 9 issues) | RADAR / cluster-assigned | — | Upstream supporting signals; per-issue destination-contract test required for IMPORT. **RECON01 closed A1-A4** of this cluster at the foreground await surface; remaining radar (#11550 / #10931 / #12079 / #10063) carried by RECON02's OUT-OF-SCOPE list. |
 | (tool-call parsing cluster — 5 issues) | RADAR / cluster-assigned | — | Same pattern |
 | (MCP routing / approval / validation cluster — 3 issues) | RADAR / cluster-assigned | — | Cross-ref to `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` for the process-lifecycle subset |
 | (shell integration cluster — 2 issues) | RADAR / cluster-assigned | — | — |
 | (tool loop / retry cluster — 2 issues) | RADAR / cluster-assigned | — | — |
 | (file-edit reliability cluster — 1 issue) | RADAR / cluster-assigned | — | Cross-ref to `dynamic-editing-backends.md` if the defect is backend-dependent |
 | (tool-approval UX cluster — 1 issue) | RADAR / cluster-assigned | — | Cross-ref to `approval-protection.md` (YOLO + Seatbelt approval surface) |
+| (post-tool advance stall — load-bearing: `#10537`, `#10122`) | PROMOTED to RECON02 (entry seam: `RESULT_EXISTS`) | — | New cluster label; recon ACT may promote further to a bounded repair ACT only if `ROOT_CAUSE_ISOLATED` at a real production seam. |
+| (post-tool advance stall — adjacent RADAR: `#13691`) | RADAR / cluster-assigned (no result-exists evidence) | — | Carried for trace; not in load-bearing RECON02 cluster. |
+| (post-tool advance stall — heterogeneous witness: `#12079`) | RADAR / cluster-assigned (separate internal classification; user-restart only) | — | Carried for trace; the heterogeneous internal classification across #10537/#10122/#12079 is exactly why `CAUSE = UNKNOWN` and production-seam RED discipline are appropriate. |
+
+**Note.** The proposed foreground-waiter-bound repair was rejected before opening; it never acquired a canonical ACT identity. The durable halt is documented in this epic's prose, not in a ledger row.
 
 ## Open work
 

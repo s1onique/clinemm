@@ -1,0 +1,10 @@
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[0m
+src/sdk/tool-runtime-reliability-recon02.production-seam.test.ts:
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+
+[0m[32m✓[0m [0mP1_RESULT_PUBLICATION_TO_SESSION_EVENT[2m >[0m[1m RESULT_EXISTS-shaped message -> semantic identity persists across append + fanout[0m [0m[2m[2.18ms[0m[2m][0m
+
+[0m[32m 1 pass[0m
+[0m[2m 0 fail[0m
+Ran 1 test across 1 file. [0m[2m[[1m1442.00ms[0m[2m][0m

@@ -1,0 +1,25 @@
+a90f36a4b501a3c47c43b4df8d8c1c79e7e5d3a4
+branch=main
+worktree-state-at-entry=clean
+# Mutable `worktree-state-now=*` removed per reviewer correction 5:
+# the only durable assertion is the at-entry freeze; any later state
+# is captured by `git status --short` at the time of read.
+expected-launch-delta=untracked:
+  .factory/acts/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02.md
+  .factory/evidence/ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02/
+expected-launch-delta=modified:
+  .factory/epics/tool-runtime-reliability.md
+  .gitignore
+diff-stat=none-against-HEAD
+production-source-edits=none
+binding-intent=launch-artifacts-only; closure-commit-binding-reserved-for-closure-ACT
+test-binding-policy=per-RECON02-launch-contract: probe files (if any)
+  are filed in source-seam-map.md first, then committed by the closure
+  ACT; the opening ACT touches no production source.
+parallel-front-not-blocked-on=ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01
+operator-gate=NONE (this ACT is headless-runnable; the LIVE idle-writer
+  bind is on a separate ACT and is not required to begin RECON02)
+frozen-entry-seam=RESULT_EXISTS
+production-seam-admissibility=REAL_PRODUCTION_SEAM only
+load-bearing-upstream=#10537 #10122
+adjacent-radar=#13691
