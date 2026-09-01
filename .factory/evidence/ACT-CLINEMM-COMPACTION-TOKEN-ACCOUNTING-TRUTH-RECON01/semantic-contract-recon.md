@@ -19,9 +19,51 @@
 >
 > **Reviewer's directive:** "Bind `tokensBefore` producer/consumer
 > semantic contract. Do R1-R3 NOT yet. Classify as S1 / S2 / S3."
+>
+> **Second review (2026-09-02):** PASS_WITH_ONE_P1_FIX.
+> Reviewer notes two P1 overclaims that this turn corrects:
+> - "S1 proven by telemetry docstring" — overclaimed. The telemetry
+>   docstring ("Full-request token estimates, in the same units as
+>   the trigger and limit") establishes a UNIT/SCALE contract, NOT a
+>   payload-identity contract. The accurate statement is:
+>   `tokensBefore = estimate(systemPrompt + apiMessages + tools)` for
+>   the request object supplied to the compaction strategy. The
+>   semantic content of that request is determined by the caller —
+>   manual compaction passes canonical full transcript H, auto
+>   compaction passes provider-projected W. The producer's contract
+>   is a *transformation* on whatever payload was supplied, not a
+>   *semantic label*.
+> - "S3 = CURRENT_BEST_CLASSIFICATION" / "ROOT_CAUSE_ISOLATED =
+>   AMBIGUOUS_WIRE_CONTRACT" — overclaimed. S3 is CANDIDATE (plausible
+>   but unproven); ROOT_CAUSE = NOT_ISOLATED. The missing necessity
+>   proof is whether the manual-mode ratio `tokensAfter/tokensBefore`
+>   actually tracks the ratio in the provider-working-context space
+>   (or in actual provider-normalized observation). That requires a
+>   real-trace ratio discriminator, not another scaffolding pass.
 ## Producer contract
 
-### Docstring — telemetry schema
+### Producer's transformation contract (calibrated 2026-09-02 second review)
+
+The producer's actual contract is a **transformation** on the
+request object supplied to the compaction strategy:
+
+```text
+tokensBefore = estimate(systemPrompt + apiMessages + tools)
+```
+
+where `apiMessages` is whatever the caller passed:
+- Manual compaction passes `apiMessages = canonical full transcript`
+  (apps/cli/src/runtime/interactive/compaction.ts:99-100,
+  apps/vscode/src/sdk/sdk-compaction.ts:101-102; design intent
+  "intentionally summarizes the full canonical transcript").
+- Auto compaction passes `apiMessages = prepareProviderMessagesForApi(canonical)`
+  (sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1149).
+
+This is a transformation contract, NOT a payload-identity contract.
+The transformation produces the same numeric estimator output for
+both callers; the semantic content of the input differs by caller.
+
+### Docstring — telemetry schema (provides UNIT/SCALE contract only)
 
 `sdk/packages/core/src/services/telemetry/core-events.ts:773`:
 
@@ -33,18 +75,26 @@ tokensAfter: number;
 
 Both the `CaptureCompactionExecutedProperties` (line 776) and
 `CaptureCompactionSkippedProperties` (line 816) carry the same
-docstring. **The producer's documented contract is "full-request
-token estimate, in the same units as the trigger and limit."**
+docstring. **This docstring establishes a UNIT/SCALE contract — that
+`tokensBefore` is expressed in estimated input-token units consistent
+with the trigger's units. It does NOT establish a payload-identity
+contract (i.e., it does NOT say that `tokensBefore` measures a
+specific semantic object).**
 
-This means:
-- `tokensBefore` is an estimate of the **full request** (system
-  prompt + messages + tools) that the strategy saw.
-- It is on the **same scale as the trigger** (which is
-  `maxInputTokens * COMPACTION_TRIGGER_RATIO`, an absolute number
-  of provider-context tokens).
+What this means:
+- `tokensBefore` is on the same numeric scale as the trigger
+  (`maxInputTokens * COMPACTION_TRIGGER_RATIO`).
 - The trigger's scale is set by the model's `contextWindow` /
-  `maxInputTokens` — it represents the provider's input budget, not
-  the canonical history size.
+  `maxInputTokens` — i.e., an absolute number of provider-context
+  tokens.
+- This is a calibration invariant: the *same estimator* produces
+  `tokensBefore` and `triggerTokens`, so their **ratio** is
+  scale-free within the estimator's space.
+
+What this does NOT mean:
+- It does NOT prove that `tokensBefore` measures the active
+  provider context, the canonical history, or any specific
+  semantic object. That depends entirely on the caller's `apiMessages`.
 
 ### All production writes of `tokensBefore`
 
@@ -91,9 +141,13 @@ apiMessages: input.messages,  // canonical full transcript
   returns the canonical transcript.
 
 **Both manual entry points have the SAME design intent: summarize
-the canonical full transcript.** The producer contract per the
-intent: `tokensBefore = estimate(input actually summarized)`. This
-is **S1 (MATERIAL_BEING_COMPACTED)** for the producer.
+the canonical full transcript.** The producer's transformation
+contract on that input: `tokensBefore = estimate(input actually
+summarized)`. The producer does NOT semantically label this as
+"material being compacted" — it computes whatever estimator output
+the supplied request produces. Whether the result USEFULLY
+represents "material being compacted" depends on whether the caller
+wanted that semantic, and whether downstream consumers agree.
 
 ### Compactor's internal use of `tokensBefore`
 
@@ -333,99 +387,207 @@ gap is itself part of the S3 issue.
   distinguishing "input_to_compaction" vs "active_provider_context")
   rather than silently normalizing one producer to another.
 
-## Current best classification: S3 (with strong S1 lean)
+## Current best classification: S3 (CANDIDATE, NOT ISOLATED) — calibrated 2026-09-02 second review
 
-The producer's contract is **S1 (MATERIAL_BEING_COMPACTED)**, and
-the documentation explicitly says so. The consumer's contract is
-**S2 (ACTIVE_PROVIDER_CONTEXT)**, and the rendering explicitly says
-so. The producer-side evidence (manual compaction intentionally
-summarizes canonical) is consistent with S1, NOT S2.
+**S3 is PLAUSIBLE but UNPROVEN.** The recon above establishes the
+necessary *textual* ingredients for the S3 hypothesis — producer's
+transformation contract is documented; UI consumer implicitly
+assumes the result is on a specific semantic scale; the wire
+between them does not carry a `kind` discriminator. But the
+necessary *causal* proof — that the manual-mode ratio
+`tokensAfter/tokensBefore` actually fails to track the
+provider-working-context shrink — has NOT been established. That
+requires a real-trace ratio discriminator (see "Next discriminator"
+below).
 
 The **S2 hypothesis** ("manual compaction passes the wrong input")
 would require:
 - (a) The producer to claim its contract is S2 (it doesn't —
-  docstring says S1).
+  docstring establishes UNIT/SCALE only, not payload-identity).
 - (b) The architecture to disallow canonical-H inputs to manual
   compaction (it doesn't — manual mode is the path for "summarize
   the full canonical transcript").
-- (c) The S1 contract to be invalid (it isn't — the producer
-  documents exactly what it computes).
+- (c) The producer's transformation contract to be invalid (it
+  isn't — it correctly estimates whatever request it was supplied).
 
-The **S3 hypothesis** is the actual classification: the wire
-contract is overloaded, and the consumer assumes the producer's
-contract matches its own. Both contracts are valid; the gap is in
-the wire.
+The **S1 hypothesis** ("producer is correct, UI label is wrong")
+would require:
+- (d) The UI's rescaling to be wrong on the SAME numbers (it
+  isn't — the docstring explicitly says the ratio is scale-free).
+- (e) The UI's title attribute to be misleading for ALL modes
+  (it might be — but for AUTO mode the producer and consumer
+  happen to agree on scale).
 
-## Repair options (for S3, NOT S2)
+The **S3 hypothesis** is plausible because:
+- (f) The wire does not tag which semantic scale `tokensBefore`
+  is on.
+- (g) For MANUAL mode, producer's caller passes canonical H, but
+  consumer applies ratio to provider-bound `tokensIn`.
+- (h) Whether the **manual-mode ratio** (canonical-space) tracks
+  the **provider-space shrink** is exactly the empirical question
+  that is unresolved.
 
-| Option | Description | Pros | Cons |
-|--------|-------------|------|------|
-| **(a) Tag the field** | Producer emits `tokensBefore` + `tokensBeforeKind` ("input_to_compaction" / "active_provider_context"). Consumer uses ratio only when kind matches its assumed scale. | Preserves both contracts; explicit; small wire change; producer docstring unchanged in spirit. | Requires touching the producer (adds `kind` field to schema and JSON) and the consumer (read the kind). |
-| **(b) Split into two fields** | Producer emits `compactionInputTokensBefore` AND `activeContextTokensBefore` as distinct fields. UI uses only `activeContextTokensBefore`. | Explicit; no implicit contract; clean separation. | Producer must compute both; redundant writes; bigger schema change. |
-| **(c) Producer-side harmonization** (RETRACTED) | For manual compaction, producer computes `tokensBefore = estimate(buildForApi(canonical))`. | Symmetry with auto path. | **Breaks the explicit full-canonical manual-compaction invariant.** The reviewer correctly flagged this as an unsafe premise. |
-| **(d) Consumer-side reconciliation** | UI reads `tokensBefore`/`tokensAfter` ONLY when it can prove the producer used the working-context scale (e.g., only for auto mode). For manual mode, UI displays a neutral "compacted; X → Y tokens" divider WITHOUT rescaling `tokensIn`. | Preserves producer contract; UI stops assuming scale. | Loses the "bar updates immediately" benefit for manual compactions. |
+If (h) is FALSE (the manual-mode ratio tracks provider-space
+shrink), then S1-label-only (presentation residue only) is the
+verdict. If (h) is TRUE, S3 is proven and repair options (a), (b),
+or (d) become necessary.
 
-The most likely correct repair is **option (a) Tag the field** —
-the producer documents its contract, the consumer documents its
-contract, and a `kind` field lets each layer verify the wire.
-Option (d) Consumer-side reconciliation is a partial alternative
-that is less invasive but loses the manual-mode rescaling benefit.
+## Next discriminator (the one bounded test that matters)
+
+Execute one real manual compaction session with these captures
+(instrumented; HOST_REQUIRED):
+
+```text
+H_before = estimate(systemPrompt + canonical_messages + tools)
+           // same estimator the compactor uses, on the manual input
+
+W_before = estimate(systemPrompt + buildForApi(canonical) + tools)
+           // the next provider-bound projection BEFORE compaction
+
+H_after  = estimate(systemPrompt + compactor_output + tools)
+           // the compactor's output, on the manual transform basis
+
+W_after  = estimate(systemPrompt + buildForApi(compactor_output) + tools)
+           // the next provider-bound projection AFTER compaction
+
+P_before = provider-normalized input of the last actual request before compaction
+P_after  = provider-normalized input of the first actual request after compaction
+```
+
+Then ask:
+```text
+manual_ratio           = H_after / H_before
+provider_projection_ratio = W_after / W_before
+actual_provider_ratio  = P_after / P_before
+
+ASSERT: manual_ratio tracks provider_projection_ratio AND actual_provider_ratio
+
+(For the AUTO path, the same setup; expect a much smaller
+ divergence because the producer's caller already passed the
+ provider-projected input.)
+```
+
+**If manual_ratio materially differs from W_after/W_before
+AND/OR P_after/P_before**, while `getApiMetrics` applies the
+manual-mode ratio to `P_before`, then S3 is proven and
+ROOT_CAUSE_ISOLATED = AMBIGUOUS/UNTAGGED COMPACTION RATIO. The
+ratio comparison is the necessity proof the recon currently lacks.
+
+**If manual_ratio ≈ provider_projection_ratio ≈ actual_provider_ratio**,
+then the ratio transfers despite the different underlying payloads;
+S1-label-only is the verdict (presentation residue in the divider
+label and UI title; the rescaling arithmetic is conserved).
+
+**If provider counts cannot be correlated to the exact pre/post
+requests** (different sessions, model caching quirks, telemetry
+loss), then CAPTURE_INSUFFICIENT — expand the run, or settle for
+the textual evidence already gathered.
+
+Do not infer S3 from chronology or plausible absolute values
+alone.
+
+## Repair options (NOT RANKED — only ranked after the ratio discriminator)
+
+Factory doctrine strongly favors the smallest bounded repair until
+evidence proves the wire itself needs new semantics. **If the
+discriminator shows ratio invariance holds (S1-label-only
+verdict), then options (a) and (b) are unnecessary architecture —
+no new protocol fields are needed.** If the discriminator shows
+ratio invariance fails for manual mode only, option (d) may be the
+smallest bounded repair. Option (c) is RETRACTED as unsafe.
+
+| Option | Description | Pros | Cons | Status |
+|--------|-------------|------|------|--------|
+| **(a) Tag the field** | Producer emits `tokensBefore` + `tokensBeforeKind` ("input_to_compaction" / "active_provider_context"). Consumer uses ratio only when kind matches its assumed scale. | Preserves both contracts; explicit; small wire change. | Requires touching producer (adds `kind` field to schema and JSON) and consumer (read the kind). | DESIGN CANDIDATE; only justified if discriminator fails AND general wire-tag is the chosen fix. |
+| **(b) Split into two fields** | Producer emits `compactionInputTokensBefore` AND `activeContextTokensBefore` as distinct fields. UI uses only `activeContextTokensBefore`. | Explicit; no implicit contract; clean separation. | Producer must compute both; redundant writes; bigger schema change. | DESIGN CANDIDATE; only justified if (a) is insufficient. |
+| **(c) Producer-side harmonization** (RETRACTED) | For manual compaction, producer computes `tokensBefore = estimate(buildForApi(canonical))`. | Symmetry with auto path. | **Breaks the explicit full-canonical manual-compaction invariant.** The reviewer correctly flagged this as an unsafe premise. | RETRACTED — would destroy the manual mode's intentional canonical-summary behavior. |
+| **(d) Consumer-side reconciliation** | UI reads `tokensBefore`/`tokensAfter` ONLY when it can prove the producer used the working-context scale (i.e., only for auto mode). For manual mode, UI displays a neutral divider WITHOUT rescaling `tokensIn`. | Preserves producer contract; UI stops assuming scale; smallest bounded repair. | Loses the "bar updates immediately" benefit for manual compactions (UI shows the next request's `tokensIn` instead of the rescaled one). | DESIGN CANDIDATE; smallest fix if the failure is specifically manual-mode ratio non-invariance. |
+| **(e) Label-only** | Update the UI title attribute and divider label to match the producer's actual contract (e.g., "Compaction ratio" instead of "Current tokens used in this request"). | Trivial change; addresses only presentation residue. | Does not address the rescaling arithmetic if it actually fails. | DESIGN CANDIDATE; only sufficient if S1-label-only is the verdict. |
+
+The earlier "most likely correct repair is option (a)" framing was
+overclaimed and is RETRACTED. Until the discriminator runs, the
+correct default is **wait for evidence** — do not pre-rank.
 
 ## What this DOES NOT establish
 
 - It does NOT establish that the operator's intuition about
   "I wasn't carrying 1M tokens of active context" is wrong. The
-  intuition is consistent with S1: the canonical transcript
-  character count is 1M; the model may not have actually carried
-  1M. Both can be true.
+  intuition is consistent with the source code: the canonical
+  transcript character count is 1M; the model may not have
+  actually carried 1M. Both can be true.
 - It does NOT establish that the rescaling produces a
   provider-accurate `tokensIn`-equivalent for manual compaction.
   For manual mode the rescaling applies a ratio measured on H to
-  a `tokensIn` measured on W — these are different scales, so
-  the rescaled value can be wildly off.
-- It does NOT establish whether `getLastApiReqContextInputTokens`
-  should ignore the rescaling for manual mode (option d) or
-  require a tagged field (option a). Either is plausible.
+  a `tokensIn` measured on W — these are different scales, so the
+  rescaled value CAN be wildly off, OR it can be approximately
+  equivalent if the ratio transfers. The discriminator resolves
+  this.
+- It does NOT rank repair options. All of (a)/(b)/(d)/(e) are
+  design candidates pending the discriminator. (c) is RETRACTED.
+- It does NOT constitute `ROOT_CAUSE_ISOLATED`. The textual
+  evidence supports S3 as a CANDIDATE; the causal proof requires
+  the ratio discriminator. Until that runs, ROOT_CAUSE = NOT_ISOLATED.
 
 ## Defect ownership map (current best understanding)
 
-| Layer | Path | Contract | Defect? |
-|-------|------|----------|---------|
-| Producer (auto) | `session-runtime-orchestrator.ts:1149` | S1 (input to compaction = provider-bound) | CONSISTENT (auto path passes `prepareProviderMessagesForApi(canonical)`) |
-| Producer (manual CLI) | `apps/cli/.../compaction.ts:99-100` | S1 (input to compaction = canonical) | CONSISTENT with S1 contract |
-| Producer (manual VSCode) | `apps/vscode/.../sdk-compaction.ts:101-102` | S1 (input to compaction = canonical) | CONSISTENT with S1 contract |
-| Consumer (UI rescaling) | `apps/vscode/src/shared/getApiMetrics.ts:174-225` | S2 (active provider context) | **GAP: assumes S2; producer documents S1** |
+| Layer | Path | Contract | Status |
+|-------|------|----------|--------|
+| Producer (auto) | `session-runtime-orchestrator.ts:1149` | Transformation on `prepareProviderMessagesForApi(canonical)` | CONSISTENT (auto caller passes provider-bound input) |
+| Producer (manual CLI) | `apps/cli/.../compaction.ts:99-100` | Transformation on canonical full transcript H | CONSISTENT (manual design intent "intentionally summarizes the full canonical transcript") |
+| Producer (manual VSCode) | `apps/vscode/.../sdk-compaction.ts:101-102` | Transformation on canonical full transcript H | CONSISTENT (same intent as CLI manual) |
+| Consumer (UI rescaling) | `apps/vscode/src/shared/getApiMetrics.ts:174-225` | Assumes `tokensAfter/tokensBefore` tracks provider-context shrink (implicit S2) | CANDIDATE — ratio is scale-free within the estimator's space; whether it tracks the provider-context shrink for manual mode is exactly what the discriminator tests. |
+| Consumer (UI rendering) | `apps/vscode/webview-ui/src/.../ContextWindow.tsx:175` | Renders the rescaled value with title "Current tokens used in this request" | PRESENTATION — title implies S2; producer delivers transformation. Even if rescaling is correct, the title is misleading for manual mode. |
 | Consumer (CLI divider) | `apps/cli/src/tui/utils/compaction-status.ts:80-92` | Neutral display | CONSISTENT |
-| Telemetry | `sdk/packages/core/src/services/telemetry/core-events.ts:773,816` | S1 (matches producer docstring) | CONSISTENT with producer |
-| Threshold check | `compaction.ts:335,362` | S2 (only for auto mode) | CONSISTENT (only auto path applies it) |
+| Telemetry schema | `sdk/packages/core/src/services/telemetry/core-events.ts:773,816` | UNIT/SCALE contract only ("same units as the trigger and limit") | CONSISTENT (does not commit to a payload-identity contract) |
+| Threshold check | `compaction.ts:335,362` | Compares `requestInputTokens` to `maxInputTokens * COMPACTION_TRIGGER_RATIO` | BOUNDED to auto mode; manual bypasses. Auto path passes provider-bound input → CONSISTENT. |
 
-**The defect is in the WIRE between producer and UI rescaling.**
-The producer documents S1; the consumer assumes S2; the wire does
-not tag which scale is in use.
+**No producer defect is established by the recon.** Whether the
+S3 hypothesis (wire-contract ambiguity) is correct depends on the
+ratio discriminator. Until that runs, the most we can say is that
+the producer is a transformation on whatever was passed, the UI
+consumer applies a ratio that may or may not track provider-context
+shrink for manual mode, and the UI title is a presentation residue.
 
 ## Reclassification of previous turn
 
 | Previous claim | Reclassification |
 |----------------|------------------|
 | `MANUAL_AUTO_INPUT_ASYMMETRY = PROVEN_STRUCTURAL` | **CORRECT; durable.** |
-| `MANUAL_WRONG_INPUT_PROJECTION = WRONG_INPUT_PROJECTION` (case R0'.B) | **RETRACT_PENDING_SEMANTIC_BIND.** The asymmetry is real but its semantic interpretation is S3 (ambiguous wire contract), not S2 (wrong input). The producer contract per the docstring is S1, which is consistent with the manual intent. |
-| `CASE_B.MANUAL_PROJECTION = PROVEN_ROOT_CAUSE_ISOLATED` | **PREMATURE / RETRACT.** Reclassification: pending S3 wire-tag (option a) or S3 wire-split (option b) or S3 consumer-reconciliation (option d). |
+| `MANUAL_WRONG_INPUT_PROJECTION = WRONG_INPUT_PROJECTION` (case R0'.B) | **RETRACT_PENDING_SEMANTIC_BIND.** The asymmetry is real but its semantic interpretation is NOT YET BOUND. S3 (overloaded wire) is a CANDIDATE but is not proven until the ratio discriminator runs. The producer is a transformation on whatever input the caller supplied; manual compaction correctly supplies canonical H per the explicit design intent. |
+| `CASE_B.MANUAL_PROJECTION = PROVEN_ROOT_CAUSE_ISOLATED` | **PREMATURE / RETRACT.** Reclassification: pending the ratio discriminator. ROOT_CAUSE remains UNKNOWN until the discriminator decides between S1-label-only (presentation residue only), S3-proven (ratio non-invariance), or INDETERMINATE. |
 | `Repair01: pass prepareProviderMessagesForApi(canonical) for manual compaction` | **UNSAFE PREMISE.** This would break the explicit full-canonical manual-compaction invariant. The reviewer correctly flagged this. |
-| `ROOT_CAUSE = manual compaction entry points (CLI:99-100, VSCode SDK bridge:101-102)` | **REFINED.** The two entry points have a structural asymmetry, but the actual defect is the AMBIGUOUS_WIRE_CONTRACT between the producer (S1) and the UI rescaling consumer (S2). The two entry points are NOT the defect; they correctly implement the producer's S1 contract per the design intent. |
+| `ROOT_CAUSE = manual compaction entry points (CLI:99-100, VSCode SDK bridge:101-102)` | **RETRACTED.** The two entry points have a structural asymmetry (manual passes canonical H; auto passes provider-projected W) but the entry points correctly implement their respective design intents. The entry points are NOT the defect. The defect (if any) is in whether the manual-mode ratio transfers to the provider-context shrink — a question the discriminator tests. |
+| `S1 (MATERIAL_BEING_COMPACTED) is the producer's contract` (this turn's first draft) | **OVERCLAIMED.** The telemetry docstring establishes a UNIT/SCALE contract only; the producer's actual contract is a *transformation* on whatever request the caller supplied. The semantic content of that request is determined by the caller, not by the producer. |
+| `S3 = CURRENT_BEST_CLASSIFICATION` (this turn's first draft) | **OVERCLAIMED.** S3 is PLAUSIBLE but UNPROVEN. `ROOT_CAUSE_ISOLATED = AMBIGUOUS_WIRE_CONTRACT` is unjustified without the ratio discriminator. The two were inconsistent with each other and both retracted in the second-review calibration. |
+| `(a) Tag the field = most likely correct repair` (this turn's first draft) | **OVERCLAIMED.** Repair options are NOT RANKED until the discriminator runs. Factory doctrine prefers the smallest bounded fix; if ratio invariance holds, no new protocol fields are needed. |
 
 ## What changed vs commit 9083ecd56
 
 The previous turn's source-recon found the structural asymmetry and
 jumped to "manual compaction passes the wrong input." That jump was
-unwarranted. The producer documents its S1 contract explicitly; the
-manual entry points correctly implement S1 per the explicit design
-intent ("intentionally summarizes the full canonical transcript").
+unwarranted. The producer is a transformation on whatever request the
+caller supplied; the manual entry points correctly supply canonical
+H per the explicit design intent ("intentionally summarizes the full
+canonical transcript").
 
-The actual defect is **wire-contract ambiguity (S3)**: the
-producer doesn't tag its field with a `kind`, and the consumer
-assumes the field is on the working-context scale. Resolution
-requires a **producer tag OR a consumer reconciliation OR a
-producer/consumer schema split**, NOT a manual-entry-point change.
+The CALIBRATED version of this turn further refines two claims:
+1. "S1 (MATERIAL_BEING_COMPACTED) is the producer's contract" was
+   overclaimed — the docstring establishes a UNIT/SCALE contract,
+   not a payload-identity contract. The accurate statement is that
+   the producer's contract is a transformation on the supplied
+   request, with the semantic content determined by the caller.
+2. "S3 is the current best classification / root cause isolated"
+   was overclaimed — S3 is PLAUSIBLE but UNPROVEN; ROOT_CAUSE
+   remains UNKNOWN. The missing necessity proof is whether the
+   manual-mode ratio tracks the provider-context shrink, which is
+   the ratio discriminator's question.
+
+Resolution requires the ratio discriminator to run. If it shows
+ratio non-invariance, then wire-tag / wire-split / consumer-side
+reconciliation becomes necessary (and ownership migrates to the
+schema/wire layer or the UI consumer, NOT to the compactor entry
+points). If it shows ratio invariance, only presentation residue
+(UI title, divider label) needs fixing.
 
 ## Production delta since opening: 0
 

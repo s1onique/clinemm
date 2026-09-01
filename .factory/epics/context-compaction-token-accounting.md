@@ -6,9 +6,11 @@
 >
 > **R0' first pass (factory causal reviewer, 2026-09-02 SECOND REORDERING):** manual compaction's `apiMessages = canonical` at both entry points (`apps/cli/src/runtime/interactive/compaction.ts:99-100` and `apps/vscode/src/sdk/sdk-compaction.ts:101-102`) — PROVEN_STRUCTURAL asymmetry with the AUTO path (which uses `prepareProviderMessagesForApi`).
 >
-> **HALT_ROOT_CAUSE_NOT_ISOLATED (factory causal reviewer, 2026-09-02 SECOND REVIEW):** the previous turn's conclusion (manual compaction passes the wrong input) was an epistemic jump. The producer documents `tokensBefore` as "Full-request token estimates, in the same units as the trigger and limit" (`sdk/packages/core/src/services/telemetry/core-events.ts:773`) — i.e., the S1 contract (MATERIAL_BEING_COMPACTED). The manual entry points correctly implement S1 per the explicit design intent ("intentionally summarizes the full canonical transcript"). The UI consumer (ContextWindow.tsx:175 "Current tokens used in this request") implicitly assumes S2 (ACTIVE_PROVIDER_CONTEXT). Both contracts are valid within their own layer; the defect is the WIRE between them.
+> **HALT_ROOT_CAUSE_NOT_ISOLATED (factory causal reviewer, 2026-09-02 SECOND REVIEW):** the previous turn's conclusion (manual compaction passes the wrong input) was an epistemic jump. The producer's contract is a TRANSFORMATION on the request object supplied to the compactor (`tokensBefore = estimate(systemPrompt + apiMessages + tools)`); the telemetry docstring (`sdk/packages/core/src/services/telemetry/core-events.ts:773`) establishes a UNIT/SCALE contract only, NOT a payload-identity contract. The manual entry points correctly supply canonical H per the explicit design intent ("intentionally summarizes the full canonical transcript"); they are NOT the defect. The UI consumer (`ContextWindow.tsx:175` "Current tokens used in this request") implicitly assumes the transformation result tracks the active provider context. The semantic content of the request is determined by the caller (manual passes canonical H; auto passes provider-projected W); the producer makes no semantic claim.
 >
-> **R0' semantic-contract recon (2026-09-02 second review):** defect is AMBIGUOUS_WIRE_CONTRACT (CASE_S3) or SEMANTIC_LABEL_DEFECT (CASE_S1) — NOT a producer defect. Manual entry points RETRACTED as defect location. ROOT_CAUSE_ISOLATED candidate: schema/wire between producer (core-events.ts:773) and UI rescaling consumer (getApiMetrics.ts:174-225 + ContextWindow.tsx:175). Downstream repair ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (named but NOT opened from this ACT). Three repair options named: (a) tag the field, (b) split into two fields, (d) consumer-side reconciliation.
+> **PASS_WITH_ONE_P1_FIX (factory causal reviewer, 2026-09-02 SECOND REVIEW — CALIBRATION):** two P1 overclaims corrected: (a) "S1 proven by telemetry docstring" was overclaimed — the docstring establishes unit/scale only, not payload-identity; (b) "S3 = CURRENT_BEST_CLASSIFICATION / ROOT_CAUSE_ISOLATED = AMBIGUOUS_WIRE_CONTRACT" was overclaimed — S3 is PLAUSIBLE but UNPROVEN; ROOT_CAUSE remains UNKNOWN until the ratio discriminator runs. Repair options NOT pre-ranked; Factory doctrine prefers the smallest bounded fix until evidence proves the wire itself needs new semantics.
+>
+> **R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX):** the producer is a transformation on the supplied request (no semantic claim); the UI consumer applies a ratio whose transfer to the provider-context shrink for manual mode is exactly the discriminator's question. Defect (if any) is AMBIGUOUS_WIRE_CONTRACT (CASE_S3, candidate) or SEMANTIC_LABEL (CASE_S1) — pending the ratio discriminator. The defect (if confirmed) is in the schema/wire or the UI label, NOT in the compactor entry points. The discriminator's question: does `manual_ratio = H_after/H_before` track `provider_projection_ratio = W_after/W_before` AND `actual_provider_ratio = P_after/P_before`?
 >
 > **Distinct from `task-presentation.md`.** That epic owns the rendering of state to the user. This epic owns whether the working-context estimate, the compaction before/after markers, and the session usage counters tell consistent truth — and whether the producers expose semantic quantities that match what the UI fields appear to claim.
 >
@@ -20,46 +22,67 @@
 
 ## Current status
 
-- Status: OPEN — recon ACT is OPEN; Q0A-Q0C producer-binding DONE (commit 901287e15); R0-A witness test DONE (commit 2916fb9fd); R0' source-recon DONE (commit 9083ecd56); R0' semantic-contract recon DONE (this commit). CASE_B.MANUAL_PROJECTION RETRACTED. R0' real-trace specimen HOST_REQUIRED.
-- Priority: **P1** (HIGH value production learning; affects compaction threshold, context-limit safety, long-session behavior). May be promoted to P0 if the recon reproduces an actual structural defect.
-- Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the recon resolves the question.
-- Blocked by: n/a (the HOST_REQUIRED R0' real-trace specimen is sequenced after the recon's semantic-contract findings are written).
-- Sequenced after this ACT (gated on its verdict):
-  - If `CASE_A` / `CASE_A.UI` (with no S1/S3 residue) → `CLOSED_NOT_REPRODUCED`.
-  - If `CASE_A` with `CASE_S1` residue (UI label vs producer contract mismatch) → `CLOSED_WITH_RESIDUE`; downstream repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01` (option d partial).
-  - If `CASE_S3` (wire-contract overloaded) → `ROOT_CAUSE_ISOLATED` at the schema/wire; downstream repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01` (option a/b/d).
-  - If `CASE_B` (R1-R3 RED with structural defect, not yet probed) → bounded core-arithmetic repair ACT.
-  - If `CASE_C` / `CASE_D` → see ACT §7 / §8.
-- `CASE_B.UI` / `CASE_B.HYBRID` / `CASE_B.MANUAL_PROJECTION` all RETIRED (R0-B oracle unfounded; previous-turn root-cause isolation on manual entry points was incorrect per the second-review HALT).
+- Status: OPEN — recon ACT is OPEN; Q0A-Q0C producer-binding DONE (commit 901287e15); R0-A witness test DONE (commit 2916fb9fd); R0' source-recon DONE (commit 9083ecd56); R0' semantic-contract recon DONE & CALIBRATED (this commit). CASE_B.MANUAL_PROJECTION RETRACTED. Ratio discriminator (HOST_REQUIRED) is the next load-bearing step.
+- Priority: **P1** (HIGH value production learning; affects compaction threshold, context-limit safety, long-session behavior). May be promoted to P0 if the discriminator reproduces an actual structural defect.
+- Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the discriminator resolves the S3 question.
+- Blocked by: n/a (the HOST_REQUIRED ratio discriminator is sequenced after the recon's calibrated findings are written; the reviewer explicitly said NOT to author more Factory scaffolding before the discriminator runs).
+- Sequenced after this ACT (gated on the discriminator's verdict):
+  - If discriminator shows ratio invariance → `CASE_A` with
+    `S1_LABEL_ONLY` residue → `CLOSED_WITH_RESIDUE`; downstream
+    repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01`
+    with **option (e) label-only** as the bounded fix (smallest
+    possible; addresses only presentation).
+  - If discriminator shows ratio non-invariance → `CASE_A` with
+    `S3_PROVEN` residue → `CLOSED_WITH_RESIDUE`;
+    `ROOT_CAUSE_ISOLATED` at the schema/wire; downstream repair
+    ACT = `ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01` with
+    **options (a) / (b) / (d)** as candidate bounded fixes
+    (ranked after discriminator).
+  - If discriminator cannot correlate provider counts →
+    `CAPTURE_INSUFFICIENT` / `CASE_C`.
+  - If `CASE_B` (R1-R3 RED with structural defect, not yet probed) →
+    bounded core-arithmetic repair ACT (R1-R3 are DEFERRED until
+    the discriminator resolves the S3 question).
+- `CASE_B.UI` / `CASE_B.HYBRID` / `CASE_B.MANUAL_PROJECTION` all RETIRED (R0-B oracle unfounded; previous-turn root-cause isolation on manual entry points was incorrect per the second-review HALT; the second-review PASS_WITH_ONE_P1_FIX flagged two overclaims that were calibrated in this commit).
 
 ## Contract / durable conclusions
 
-The semantic-contract recon establishes three durable conclusions
-that will land in the recon's classification.md / final-report.md
-when the ACT closes:
+The semantic-contract recon (CALIBRATED) establishes four durable
+conclusions:
 
-1. **PRODUCER_CONTRACT = S1.** The producer (compactor) documents
-   `tokensBefore` as "Full-request token estimates, in the same
-   units as the trigger and limit" — i.e., the size of what was
-   supplied to compaction. For manual compaction this is the
-   canonical full transcript by design intent; for auto compaction
-   this is the provider-bound context (because the orchestrator
-   passes `apiMessages = prepareProviderMessagesForApi(canonical)`).
+1. **PRODUCER_CONTRACT = TRANSFORMATION on supplied request.**
+   `tokensBefore = estimate(systemPrompt + apiMessages + tools)`
+   for the request object supplied to the compaction strategy. The
+   telemetry docstring establishes a UNIT/SCALE contract only —
+   same units as the trigger and limit — NOT a payload-identity
+   contract. The semantic content of the request is determined by
+   the caller (manual passes canonical H; auto passes
+   provider-projected W). The producer makes no semantic claim.
 
-2. **UI_CONSUMER_CONTRACT = S2.** The TaskHeader / shared-metrics
-   layer treats `tokensBefore` as "active provider context" — i.e.,
-   what the model is currently carrying. This is implicit; the
-   docstring at `getApiMetrics.ts:80-93` assumes scale-free ratio,
-   and the rendering title at `ContextWindow.tsx:175` says "Current
-   tokens used in this request."
+2. **MANUAL_CALLER_INPUT = canonical full transcript H.** This is
+   by explicit design intent ("intentionally summarizes the full
+   canonical transcript", apps/cli/src/runtime/interactive/
+   compaction.ts:86-88). The two manual entry points (CLI:99-100
+   and VSCode SDK bridge:101-102) correctly implement this. They
+   are NOT the defect.
 
-3. **WIRE_CONTRACT = S3 (current best classification).** Neither
-   side explicitly verifies the producer's scale, so the consumer
-   applies a ratio on the canonical scale to a `tokensIn` measured
-   on the provider scale. For manual compaction this can produce
-   wildly off rescaling values.
+3. **AUTO_CALLER_INPUT = provider-projected W.** The orchestrator
+   passes `apiMessages = prepareProviderMessagesForApi(canonical)`
+   (sdk/packages/core/src/runtime/orchestration/
+   session-runtime-orchestrator.ts:1149). This is the SAME pipeline
+   as the next provider-bound request.
+
+4. **UI_CONSUMER_ASSUMPTION = IMPLICIT S2 (active provider
+   context).** The TaskHeader / shared-metrics layer
+   (`getApiMetrics.ts:174-225` + `ContextWindow.tsx:175` "Current
+   tokens used in this request") applies the compaction ratio to
+   provider-bound `tokensIn`. Whether the manual-mode ratio
+   transfers to the provider-context shrink is exactly the
+   discriminator's question.
 
 The frozen §0 contract (truth domains + invariants I1-I7) is
-unchanged. The first durable conclusion is that `tokensBefore` is
-overloaded across producer/consumer and needs explicit tagging or
-schema-split, NOT a producer change.
+unchanged. The durable conclusion about the producer is that
+`tokensBefore` is a transformation on the supplied request with no
+payload-identity claim; the durable conclusion about the UI is
+that its `tokensBefore/tokensAfter` rescaling is an implicit
+S2 assumption whose correctness is empirical, not proven.

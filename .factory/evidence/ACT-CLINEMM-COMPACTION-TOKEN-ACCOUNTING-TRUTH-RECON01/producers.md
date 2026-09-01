@@ -305,41 +305,51 @@ INPUT PROJECTION`. This was an epistemic jump from structural
 asymmetry to defect classification. The reviewer correctly
 identified that:
 
-1. The producer documents `tokensBefore` as "Full-request token
-   estimates, in the same units as the trigger and limit" (sdk/
-   packages/core/src/services/telemetry/core-events.ts:773). This
-   is the S1 contract (MATERIAL_BEING_COMPACTED).
+1. The producer's contract is a TRANSFORMATION on the request object
+   supplied to the compaction strategy:
+   `tokensBefore = estimate(systemPrompt + apiMessages + tools)`.
+   The telemetry docstring (sdk/packages/core/src/services/telemetry/
+   core-events.ts:773: "Full-request token estimates, in the same
+   units as the trigger and limit") establishes a UNIT/SCALE
+   contract, NOT a payload-identity contract. The semantic content
+   of the request is determined by the caller (manual passes
+   canonical H; auto passes provider-projected W).
 2. Manual compaction's design comment ("intentionally summarizes
    the full canonical transcript", apps/cli/src/runtime/interactive/
-   compaction.ts:86-88) is consistent with S1, NOT S2.
+   compaction.ts:86-88) is consistent with supplying canonical H
+   to the producer's transformation. NOT a defect.
 3. Classifying manual compaction as "wrong input" requires the
-   producer to claim S2, which it does not.
+   producer to claim S2 (semantic label "active provider context"),
+   which it does not — the producer makes no semantic claim.
 4. The UI consumer (apps/vscode/webview-ui/src/components/chat/
    task-header/ContextWindow.tsx:175: "Current tokens used in
-   this request") implicitly assumes S2.
+   this request") implicitly assumes S2 — i.e., that the
+   transformation result tracks the active provider context.
 
-**Both contracts are valid within their own layer. The defect is
-the WIRE between them: AMBIGUOUS_WIRE_CONTRACT (CASE_S3) or
-SEMANTIC_LABEL_DEFECT (CASE_S1).**
-
-**Updated verdict (R0' semantic-contract recon, 2026-09-02 second
-review):**
+**Calibrated verdict (R0' semantic-contract recon, 2026-09-02 second
+review, post-calibration):**
 
 - MANUAL_AUTO_INPUT_ASYMMETRY = PROVEN_STRUCTURAL (durable).
 - MANUAL_WRONG_INPUT_PROJECTION (R0'.B) = RETRACT_PENDING_SEMANTIC_BIND.
 - CASE_B.MANUAL_PROJECTION = PREMATURE / RETRACTED.
-- PRODUCER_CONTRACT = S1 (correctly implemented at both manual
-  entry points per the design intent; NOT a defect).
-- UI_CONSUMER_CONTRACT = S2 (implicit; correctly implemented
-  given its assumption; the defect is the assumption itself, not
-  the implementation).
-- WIRE_CONTRACT = S3 (OVERLOADED_FIELD).
-- ROOT_CAUSE_LIKELY = AMBIGUOUS_WIRE_CONTRACT (between the producer's
-  S1 and the UI consumer's S2).
+- PRODUCER_CONTRACT = TRANSFORMATION on supplied request
+  (NOT a semantic label; the caller determines semantic content).
+- UI_CONSUMER_CONTRACT = IMPLICIT S2 (assumes transformation
+  result tracks provider-context shrink; correctness is exactly
+  what the ratio discriminator tests).
+- WIRE_CONTRACT = S3 (OVERLOADED_FIELD) — CANDIDATE, NOT ISOLATED.
+  The textual evidence supports S3 as plausible; the causal proof
+  requires the ratio discriminator.
+- ROOT_CAUSE = UNKNOWN (NOT ISOLATED). Pending the ratio
+  discriminator, root cause could be S1-label-only (presentation
+  residue only), S3-proven (ratio non-invariance), or INDETERMINATE.
 - MANUAL_ENTRY_POINTS_AS_DEFECT = RETRACTED (they correctly
-  implement S1).
+  implement their respective design intents).
+- S1 (MATERIAL_BEING_COMPACTED) PROVEN-BY-DOCSTRING = RETRACTED
+  (overclaim from this turn's first draft; docstring establishes
+  unit/scale only, not payload-identity).
 
-**Repair options (NOT EXECUTED FROM THIS ACT, named for sequencing):**
+**Repair options (NOT RANKED; only ranked after the discriminator):**
 
 - (a) Tag the field — emit `tokensBeforeKind` alongside
   `tokensBefore`; consumer uses the ratio only when kind matches.
@@ -348,6 +358,11 @@ review):**
 - (d) Consumer-side reconciliation — for manual mode, do NOT
   rescale `tokensIn`; display a neutral divider. For auto mode,
   keep current rescaling.
+- (e) Label-only — update UI title attribute + divider label to
+  match the producer's actual contract (trivial; only sufficient
+  if S1-label-only is the verdict).
+- (c) Producer-side harmonization — RETRACTED (would break the
+  full-canonical manual-compaction invariant).
 
 Downstream repair ACT (named but NOT opened from this ACT):
 **ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01** — separate scope,
@@ -359,7 +374,7 @@ R1-R3 (core compaction arithmetic, cumulative-usage non-interference,
 repeated-request snapshot) are SUPERSEDED on the recon's current
 frontier: the reviewer's HALT explicitly said "Do R1-R3 NOT yet"
 because they won't answer the current ambiguity. They become relevant
-again after CASE_S1 / CASE_S3 is closed.
+again after the ratio discriminator resolves the S3 question.
 
 ---
 
@@ -392,34 +407,55 @@ either producer.
 permitted quantities" oracle was unfounded; doc-comment-vs-behavior
 assertion was inconclusive.
 
-**R0' (REFRAMED 2026-09-02 second review, after
-HALT_ROOT_CAUSE_NOT_ISOLATED):** the structural asymmetry between
-manual and auto compaction is real and durable. But the previous
-turn's conclusion (manual compaction passes the wrong input) was
-an epistemic jump. The semantic-contract recon classifies the
-defect as AMBIGUOUS_WIRE_CONTRACT (CASE_S3) or
-SEMANTIC_LABEL_DEFECT (CASE_S1), NOT producer defect. The producer
-documents S1 (MATERIAL_BEING_COMPACTED); the UI consumer assumes
-S2 (ACTIVE_PROVIDER_CONTEXT); the wire does not tag which scale
-is in use. The two manual entry points correctly implement S1
-per the explicit design intent ("intentionally summarizes the full
-canonical transcript"); they are NOT the defect. ROOT_CAUSE_ISOLATED
-candidate: the schema/wire between the producer (core-events.ts:773)
-and the UI rescaling consumer (getApiMetrics.ts:174-225 +
-ContextWindow.tsx:175). Downstream repair ACT =
-ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (named but NOT
-opened from this ACT).
+**R0' (CALIBRATED 2026-09-02 second review, after
+HALT_ROOT_CAUSE_NOT_ISOLATED and PASS_WITH_ONE_P1_FIX):**
+
+The structural asymmetry between manual and auto compaction is
+real and durable. The previous turn's conclusion (manual
+compaction passes the wrong input) was an epistemic jump; the
+factory causal reviewer's second review caught the overclaim.
+
+**Calibrated producer contract:** the producer is a TRANSFORMATION
+on the request object supplied to the compaction strategy:
+`tokensBefore = estimate(systemPrompt + apiMessages + tools)`. The
+telemetry docstring establishes a UNIT/SCALE contract (same units
+as the trigger and limit), NOT a payload-identity contract. The
+semantic content of the request is determined by the caller —
+manual passes canonical H, auto passes provider-projected W. The
+producer makes no semantic claim.
+
+**S3 is PLAUSIBLE but UNPROVEN.** The wire between producer and
+UI consumer does not carry a `kind` discriminator. The manual-mode
+ratio (tokensAfter/tokensBefore) is on the canonical-space scale;
+the UI consumer applies it to provider-bound tokensIn. Whether
+the ratio transfers to the provider-context shrink is exactly
+what the ratio discriminator tests.
+
+**Root cause = UNKNOWN until the discriminator runs.** Possible
+verdicts:
+- S3-PROVEN (ratio non-invariance) → repair options a/b/d.
+- S1-LABEL-ONLY (presentation residue only) → repair option e
+  (label-only fix).
+- INDETERMINATE → CAPTURE_INSUFFICIENT; expand the run.
+
+The two manual entry points (CLI:99-100, VSCode SDK bridge:101-102)
+correctly supply canonical H per the explicit design intent
+("intentionally summarizes the full canonical transcript"); they
+are NOT the defect.
+
+Downstream repair ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01
+(named but NOT opened from this ACT).
 
 **CASE_B.MANUAL_PROJECTION is RETRACTED** (2026-09-02 second
-review); the producer docstring establishes S1, not S2, and the
-manual entry points correctly implement S1 per the design intent.
+review); the producer makes no semantic claim, and the manual
+entry points correctly implement their respective design intents.
 
-**A.label-only is NOT YET ESTABLISHED.** Q0C (semantic-difference) is
-necessary but not sufficient; the semantic-contract recon
-classifying the producer/consumer mismatch as CASE_S1 or CASE_S3
-is necessary before CASE_A can be cleanly closed.
+**A.label-only is NOT YET ESTABLISHED.** The semantic-contract
+recon classifies the producer/consumer mismatch as CASE_S1 /
+CASE_S3 candidate, but the discriminator must run before the
+verdict is bound.
 
 R1-R3 discriminators: **SUPERSEDED ON CURRENT FRONTIER** (per
 reviewer's HALT directive: "Do R1-R3 NOT yet; they won't answer the
-current ambiguity"). They become relevant again after CASE_S1 /
-CASE_S3 is closed.
+current ambiguity"). They become relevant again after the ratio
+discriminator resolves the S3 question.

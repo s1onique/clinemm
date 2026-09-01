@@ -10,7 +10,16 @@ TIMESTAMP=2026-09-01T23:55:00Z (opening) /
                                 as CASE_S3 / CASE_S1; producer contract
                                 is S1, UI consumer contract is S2, wire
                                 is overloaded; manual entry points
-                                RETRACTED as defect location)
+                                RETRACTED as defect location) /
+           2026-09-02T02:45:00Z (PASS_WITH_ONE_P1_FIX from factory causal
+                                reviewer; CALIBRATION executed: producer
+                                contract is TRANSFORMATION not S1-PROVEN;
+                                S3 is CANDIDATE not ISOLATED; ROOT_CAUSE
+                                = UNKNOWN; (a) most-likely-correct
+                                RETRACTED; ratio discriminator is the
+                                load-bearing next step; R1-R3 DEFERRED;
+                                no further Factory scaffolding until
+                                discriminator runs)
 REPO_HEAD=7c24ab02f (post-contract-correction; R0 promotion is docs+test)
 OWNER=CONTEXT / COMPACTION / TOKEN-ACCOUNTING
 EPIC=EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING (new epic opened 2026-09-01
@@ -80,66 +89,68 @@ EXPECTED_FIRST_OUTPUT=
                                           entry points — PROVEN_STRUCTURAL)
   5. R0' semantic-contract recon       → semantic-contract-recon.md
                                           (DONE in this turn; producer
-                                          contract = S1, UI consumer
-                                          contract = S2, wire = S3;
-                                          CASE_B.MANUAL_PROJECTION RETRACTED
-                                          pending repair ACT)
-  6. R0' real-trace specimen           → HOST_REQUIRED; captures H, W, P
-                                          (no longer requires
-                                          E_before ≈ W_before ≈ P_before;
-                                          that presupposes S2)
-  7. Q1-Q12 recon                      → truth-domain-map.md
-  8. trust model                        → trust-model.md (every §0 truth
-                                          domain mapped to file:line or
-                                          NOT_PRESENT)
-  9. R1-R3 supplementary discriminators  → NOT YET (reviewer HALT — won't
-                                          answer current ambiguity;
-                                          semantically unblocked once
-                                          CASE_S1 / CASE_S3 is closed)
-  10. R4/R5 conditional discriminators  → authored ONLY if recon proves
-                                          the seam exists
-  11. classification                    → classification.md (CASE_A / A.UI
-                                          / S1 / S3 / B / C / D)
-  12. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
+                                          contract = TRANSFORMATION on
+                                          supplied request, UI consumer
+                                          contract = IMPLICIT S2, wire =
+                                          S3 CANDIDATE not isolated;
+                                          CASE_B.MANUAL_PROJECTION RETRACTED;
+                                          ratio discriminator is the next
+                                          load-bearing step)
+  6. R0' ratio discriminator           → HOST_REQUIRED; captures H, W, P
+                                          pre/post a real manual /compact;
+                                          computes manual_ratio vs
+                                          provider_projection_ratio vs
+                                          actual_provider_ratio; the
+                                          three-way equality is RETRACTED.
+                                          This is the LOAD-BEARING next
+                                          step (not more Factory
+                                          scaffolding).
+  7. R1-R3 supplementary discriminators  → DEFERRED until the ratio
+                                          discriminator resolves the S3
+                                          question (per reviewer's HALT
+                                          directive).
+  8. Q1-Q12 recon / trust model /
+     classification / final report      → Deferred until the discriminator
+                                          resolves the S3 question. The
+                                          reviewer explicitly said NOT to
+                                          author another 400 lines of
+                                          Factory scaffolding before the
+                                          ratio discriminator runs.
+  9. ACT body                           → ACT-CLINEMM-COMPACTION-TOKEN-
                                           ACCOUNTING-TRUTH-RECON01.md
                                           (R0-A as witness, R0' as
                                           semantic-contract recon;
-                                          CASE_B.UI / B.HYBRID / B.MANUAL_PROJECTION
-                                          all RETIRED; CASE_S1 / CASE_S3
-                                          added)
-  13. final report                       → final-report.md
-  14. epic detail file update           → context-compaction-token-accounting.md
+                                          CASE_B.UI / B.HYBRID /
+                                          B.MANUAL_PROJECTION all RETIRED)
+  10. epic detail file update          → context-compaction-token-accounting.md
+                                          (updated in calibration; S3 is
+                                          CANDIDATE not ISOLATED)
 
 STOP_RULE=
-  R0-A witness consistent with behavior, R0' semantic-contract recon
-  classifies as CASE_S1 or CASE_S3, R1-R3 GREEN, I1-I7 hold
-    → TRUTH_DOMAINS_PRESERVED / CASE_A / CLOSED_NOT_REPRODUCED
-      or CLOSED_WITH_RESIDUE if the residue (UI title vs producer
-      contract mismatch) is load-bearing. Naming the residue is
-      the primary first-durable conclusion of this ACT.
-      Downstream repair ACT =
-        ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (separate ACT,
-        separate review; NOT opened from this ACT). Ownership
-        migrates to the UI rendering layer (ContextWindow.tsx:175
-        title attribute) and/or the wire schema (the schema gap
-        between the producer's docstring and the consumer's
-        implicit assumption), NOT to the compactor entry points
-        and NOT to core compaction.
-      CASE_B.MANUAL_PROJECTION (the previous turn's claim) is
-      RETRACTED — the producer's docstring establishes S1, not S2,
-      and the manual entry points correctly implement S1.
-  CASE_S1 / CASE_S3 explicit sub-classes (named for completeness;
-  see ACT §7):
-    CASE_S1: SEMANTIC_LABEL_DEFECT — UI title implies S2, producer
-             is S1. Fix: relabel the UI title to match the
-             producer's actual contract.
-    CASE_S3: WIRE_CONTRACT_OVERLOADED — producer documents S1,
-             consumer assumes S2. Fix: tag the field, split the
-             schema, or reconcile the consumer (see ACT §6 R0'
-             repair options a / b / d).
+  R0-A witness consistent with behavior, ratio discriminator
+  runs, R1-R3 GREEN, I1-I7 hold
+    → If discriminator shows ratio invariance → CASE_A with
+      S1-label-only residue → CLOSED_WITH_RESIDUE; downstream
+      repair ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01
+      with option (e) label-only as the bounded fix.
+    → If discriminator shows ratio non-invariance → CASE_A with
+      S3-proven residue → CLOSED_WITH_RESIDUE; downstream repair
+      ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 with
+      option (a)/(b)/(d) as candidate bounded fixes (ranked after
+      discriminator).
+    → If discriminator cannot correlate provider counts to exact
+      pre/post requests → CAPTURE_INSUFFICIENT / CASE_C.
+  The discriminator is the load-bearing next step. R1-R3 remain
+  DEFERRED until the discriminator resolves the S3 question;
+  they will not be the next turn's primary deliverable.
+  CASE_B.MANUAL_PROJECTION (the previous turn's claim) is
+  RETRACTED. The producer's contract is a transformation on the
+  supplied request, NOT a semantic label; the manual entry points
+  correctly implement their design intents.
   CASE_B.UI / CASE_B.HYBRID / CASE_B.MANUAL_PROJECTION RETIRED
     2026-09-02 (R0-B oracle unfounded; previous-turn root-cause
-    isolation on manual entry points was incorrect).
+    isolation on manual entry points was incorrect; the second-review
+    PASS_WITH_ONE_P1_FIX flagged the overclaim and corrected it).
   R1-R3 RED with structural defect
     → CASE_B / ROOT_CAUSE_ISOLATED (with specific I1-I7 violation
       + file:line).
@@ -223,42 +234,80 @@ SECOND REVIEW)=
   from structural asymmetry to defect classification. The producer
   documents tokensBefore as "Full-request token estimates, in the
   same units as the trigger and limit" (sdk/packages/core/src/services/
-  telemetry/core-events.ts:773) — i.e., the producer's contract is
-  S1 (MATERIAL_BEING_COMPACTED), NOT S2 (ACTIVE_PROVIDER_CONTEXT).
-  The manual entry points correctly implement S1 per the explicit
-  design intent ("intentionally summarizes the full canonical
-  transcript", apps/cli/src/runtime/interactive/compaction.ts:86-88).
-  The UI consumer's docstring (getApiMetrics.ts:80-93, 165-167) and
-  rendering title (ContextWindow.tsx:175: "Current tokens used in
-  this request") implicitly assume S2. Both contracts are valid
-  within their own layer; the wire between them is overloaded.
+  telemetry/core-events.ts:773) — that establishes a UNIT/SCALE
+  contract, NOT a payload-identity contract. The producer's actual
+  contract is a TRANSFORMATION on the request object supplied to the
+  compaction strategy (`tokensBefore = estimate(systemPrompt +
+  apiMessages + tools)`); it makes no semantic claim. The manual
+  entry points correctly supply canonical H per the explicit design
+  intent ("intentionally summarizes the full canonical transcript",
+  apps/cli/src/runtime/interactive/compaction.ts:86-88); the AUTO
+  orchestrator correctly supplies provider-projected W. The UI
+  consumer's docstring (getApiMetrics.ts:80-93, 165-167) and rendering
+  title (ContextWindow.tsx:175: "Current tokens used in this request")
+  implicitly assume the transformation result tracks the active
+  provider context (an S2 assumption). The producer makes no
+  semantic claim; the UI consumer assumes one; the wire between them
+  does not carry a discriminator.
 
-  R0' SEMANTIC-CONTRACT RECON (executed 2026-09-02 second review):
-  See semantic-contract-recon.md for the full binding. Verdict:
+  PASS_WITH_ONE_P1_FIX (factory causal reviewer, 2026-09-02 SECOND
+  REVIEW — CALIBRATION):
+  Two P1 overclaims in the first-draft semantic-contract recon were
+  corrected:
+  - "S1 (MATERIAL_BEING_COMPACTED) is the producer's contract, proven
+    by the telemetry docstring" was overclaimed — the docstring
+    establishes UNIT/SCALE only, not payload-identity.
+  - "S3 is the current best classification / ROOT_CAUSE_ISOLATED =
+    AMBIGUOUS_WIRE_CONTRACT" was overclaimed — S3 is PLAUSIBLE but
+    UNPROVEN; ROOT_CAUSE remains UNKNOWN until the ratio
+    discriminator proves or falsifies ratio non-invariance.
+  Repair options are NOT pre-ranked; Factory doctrine prefers the
+  smallest bounded fix until evidence proves the wire itself needs
+  new semantics.
+
+  R0' SEMANTIC-CONTRACT RECON (executed 2026-09-02 second review;
+  CALIBRATED 2026-09-02 post PASS_WITH_ONE_P1_FIX):
+  See semantic-contract-recon.md for the full binding. Calibrated verdict:
     CORE_COMPACTION_ARITHMETIC                  = CONSERVED (R1 territory)
     BILLING/CONTEXT_SEPARATION                  = CONSERVED (R2 territory)
     MANUAL_AUTO_INPUT_ASYMMETRY                 = PROVEN_STRUCTURAL (durable)
     MANUAL_WRONG_INPUT_PROJECTION (R0'.B)       = RETRACT_PENDING_SEMANTIC_BIND
     CASE_B.MANUAL_PROJECTION                    = PREMATURE / RETRACTED
-    PRODUCER_CONTRACT                           = S1 (MATERIAL_BEING_COMPACTED)
-    UI_CONSUMER_CONTRACT                        = S2 (ACTIVE_PROVIDER_CONTEXT)
+    PRODUCER_CONTRACT                           = TRANSFORMATION on supplied
+                                                   request (NOT a semantic
+                                                   label; caller determines
+                                                   semantic content)
+    UI_CONSUMER_CONTRACT                        = IMPLICIT S2 (assumes
+                                                   transformation result
+                                                   tracks provider-context
+                                                   shrink; correctness is
+                                                   what the discriminator
+                                                   tests)
     WIRE_CONTRACT                               = S3 (OVERLOADED_FIELD)
-    CURRENT_BEST_CLASSIFICATION                 = CASE_S3 (or CASE_S1)
-    ROOT_CAUSE_ISOLATION                        = AMBIGUOUS_WIRE_CONTRACT
+                                                   CANDIDATE, NOT ISOLATED
+    CURRENT_BEST_CLASSIFICATION                 = (none yet; S3 plausible but
+                                                   unproven; verdict pending
+                                                   the ratio discriminator)
+    ROOT_CAUSE                                  = UNKNOWN (NOT_ISOLATED)
     MANUAL_ENTRY_POINTS_AS_DEFECT               = RETRACTED (they correctly
-                                                    implement S1)
+                                                   implement their design
+                                                   intents)
+    S1-PROVEN-BY-DOCSTRING (first-draft overclaim) = RETRACTED (docstring
+                                                   establishes unit/scale
+                                                   only, not payload-identity)
 
-  R0' deliverable: a real-trace specimen (HOST_REQUIRED) capturing (a)
-  manual /compact with known canonical history and (b) the next
-  provider-bound request's `buildForApi` output. The assertion
-  E_before ≈ W_before ≈ P_before is RETRACTED (it presupposes S2,
-  which the producer does not claim). Instead capture:
-    H = estimate(canonical history)
-    W = estimate(buildForApi/current working projection)
-    P = provider-normalized request-input observation
-  and ask:
-    H == what manual tokensBefore claims to represent? (S1 contract test)
-    W/P == what active-context UI claims to represent? (S2 contract test)
+  R0' deliverable: a real-trace ratio discriminator (HOST_REQUIRED).
+  Capture H, W, P pre/post a real manual /compact:
+    H = estimate(canonical input supplied to manual compaction)
+    W = estimate(provider-bound working projection BEFORE/AFTER compact)
+    P = provider-normalized input of the last/first actual request
+  Compute ratios:
+    manual_ratio                 = H_after / H_before
+    provider_projection_ratio     = W_after / W_before
+    actual_provider_ratio        = P_after / P_before
+  And ask: does manual_ratio track provider_projection_ratio AND
+  actual_provider_ratio? The three-way equality (H ≈ W ≈ P) is
+  RETRACTED (it presupposed S2 which the producer does not claim).
 
 DOWNSTREAM_ACT=
   ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (only if CASE_S3 or
