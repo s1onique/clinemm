@@ -63,6 +63,31 @@
 >   invariance → `S3_RATIO_TRANSFER_NOT_REPRODUCED` → presentation
 >   residue remains plausible → proceed to remaining ACT stop
 >   conditions.
+>
+> **Fourth review (2026-09-02):** HALT_WRONG_POST_COMPACTION_PROJECTION.
+> Reviewer flagged a P0 load-bearing seam error in the third-review
+> corrected discriminator: `W_after = prepareProviderMessagesForApi(
+> postCompactCanonicalSnapshot)` was wrong because canonical session
+> history is intentionally append-only / full-fidelity, and the
+> post-compaction active working context lives **separately** as a
+> compaction artifact (`${sessionId}.compaction.json` per
+> `sdk/ARCHITECTURE.md:497`). The function `prepareProviderMessagesForApi`
+> is a second-stage transformation that does NOT consult the
+> compaction artifact. So `W_after ≈ W_before` would be the
+> deterministic outcome even when the active working context has
+> shrunk dramatically — manufacturing a false S3 PROVEN. Fix: bind
+> W to the **real production turn-preparation seam**:
+> `prepareTurn = createCompactionStateAwarePrepareTurn({compact,
+> getState, saveState})` (compaction.ts:672-712), which reads
+> `activeSession.compactionState` and projects it against canonical
+> via `projectSessionCompactionState` (`session-compaction.ts:161-193`).
+> Then drive that seam twice against identical canonical state,
+> with exactly one manual compaction applied between captures. The
+> recon variable is renamed to **WORKING_CONTEXT_RATIO** to reflect
+> what `prepareTurn` actually produces (the working-context
+> projection, not the final provider-bound request — that requires
+> an additional buildForApi + safety normalization pass). See
+> `working-context-seam-recon.md` for the full binding.
 ## Producer contract
 
 ### Producer's transformation contract (calibrated 2026-09-02 second review)
@@ -455,57 +480,118 @@ shrink), then S1-label-only (presentation residue only) is the
 verdict. If (h) is TRUE, S3 is proven and repair options (a), (b),
 or (d) become necessary.
 
-## Next discriminator (the one bounded test that matters)
+## Next discriminator (the one bounded test that matters) — CALIBRATED 2026-09-02 fourth-review HALT_WRONG_POST_COMPACTION_PROJECTION
 
-**Reviewer's third-review P1 (PASS_WITH_ONE_P1_FIX):** the previous
-turn's `P_after/P_before` capture was *not* a valid causal
-compaction oracle. Between the compaction event and the next
-provider request, intervening assistant/user/tool traffic can
-change the input; comparing actual provider traffic before/after
-manufactures exactly the ratio mismatch we're trying to interpret
-causally. P observations are useful as a **conservation check**
-(`P_after ≈ corresponding W_after`), but NOT as the primary
-discriminator.
+**Reviewer's fourth-review P0:** the previous turn's
+`prepareProviderMessagesForApi(postCompactCanonicalSnapshot)`
+formula was wrong. That function is a **second-stage**
+transformation that does NOT consult the compaction artifact.
+Canonical session history is intentionally append-only / full-
+fidelity, and the post-compaction active working context lives
+**separately** as a compaction artifact
+(`${sessionId}.compaction.json` per `sdk/ARCHITECTURE.md:497`).
+Calling `prepareProviderMessagesForApi(postCompactCanonical
+Snapshot)` would pass canonical history to a function that
+ignores the compaction sidecar — i.e., `W_after ≈ W_before` even
+when the active working context has shrunk dramatically. That
+would manufacture a false S3 PROVEN (or a false
+`S3_RATIO_TRANSFER_NOT_REPRODUCED` if a hook happened to drift).
 
-The primary discriminator is an estimator-space A/B on the same
-logical conversation state — **both H and W captured
-deterministically around the SAME manual-compaction event**, with
-`prepareProviderMessagesForApi` applied to the canonical snapshots
-on both sides. This is the only comparison where the two ratios
-have a shared causal basis.
+**See `working-context-seam-recon.md` for the full binding.** The
+short version:
 
-### Primary captures (deterministic around the same compaction event)
+The real production seam that produces the post-compaction
+working context is the state-aware prepareTurn at
+`sdk/packages/core/src/extensions/context/compaction.ts:672-712`,
+which:
+
+1. reads the persisted compaction artifact via
+   `getState() → activeSessionRef.compactionState`
+   (wiring at `local-runtime-host.ts:663`),
+2. projects it against canonical via
+   `projectSessionCompactionState(existingState, context.messages)`
+   (`session-compaction.ts:161-193`) which returns
+   `[...compaction-artifact messages, ...canonical-tail messages]`,
+3. returns that as `ContextPipelinePrepareTurnResult.messages`.
+
+Then the agent's message-builder (`session-runtime-orchestrator.ts`
+constructor wires `messageBuilder = new MessageBuilder(...)`)
+turns those into provider-bound `apiMessages`, and
+`prepareProviderMessagesForApi` (line 1149 / 1186 / 1192) applies
+the second-stage normalization.
+
+### Primary captures (CAUSAL — bound to the real production seam)
 
 ```text
+STATE_PRE = canonical history (unchanged between runs)
+
+prepareTurn = createCompactionStateAwarePrepareTurn({
+                compact,
+                getState: () => session.compactionState,
+                saveState: ...,
+              })
+
 H_before = estimate(systemPrompt + manualCompactionInput + tools)
-           // same estimator the compactor uses, on the manual input
-           // (canonical full transcript per the design intent)
+           // canonical full transcript supplied to manual compaction
+           // (apps/cli/src/runtime/interactive/compaction.ts:99-100)
 
 H_after  = estimate(systemPrompt + compactorOutput + tools)
-           // same estimator, on the compactor's actual output
+           // compactor's actual output, same estimator basis
 
-W_before = estimate(prepareProviderMessagesForApi(
-                     preCompactCanonicalSnapshot) + systemPrompt + tools)
-           // provider-bound projection of the SAME pre-compaction
-           // canonical state the manual compactor saw
+W_before = estimate(buildForApi(
+              prepareTurn({ messages: STATE_PRE, ... }).messages
+            ) + systemPrompt + tools)
 
-W_after  = estimate(prepareProviderMessagesForApi(
-                     postCompactCanonicalSnapshot) + systemPrompt + tools)
-           // provider-bound projection of the SAME post-compaction
-           // canonical state the compactor produced
+apply exactly one manual compaction:
+   result = await compact({ messages: STATE_PRE, ... })
+   newState = createSessionCompactionState({
+                sourceMessages: STATE_PRE,
+                compactedMessages: result.messages,
+                conversationId, systemPrompt,
+              })
+   saveState(newState, STATE_PRE)   // installs the new artifact
+
+W_after = estimate(buildForApi(
+              prepareTurn({ messages: STATE_PRE, ... }).messages
+            ) + systemPrompt + tools)
 ```
 
-### Primary discriminator (causal A/B)
+### Why this is causal
+
+Both `W_before` and `W_after` are produced by the SAME production
+turn-preparation seam against the SAME canonical state. The ONLY
+state change between the two captures is the compaction artifact
+having been installed by the manual-compaction call. No model
+turn, no hook traffic, no canonical-tail growth.
+
+### Why the rename to WORKING_CONTEXT_RATIO (during recon)
+
+The seam ends at `prepareTurn(...).messages` — that is the
+working-context projection. After `prepareTurn`, the agent's
+message-builder (`buildForApi`) applies further transformations
+(image rewriting, system-prompt prefixing, schema fixes, hook
+rewrites, safety normalization) before the final `providerMessages`
+array. The recon variable is therefore named
+**WORKING_CONTEXT_RATIO** to reflect what `prepareTurn` produces,
+NOT "provider_projection_ratio". If subsequent inspection proves
+the buildForApi layer is deterministic and compaction-independent,
+the discriminator can promote:
 
 ```text
-manual_ratio             = H_after / H_before
-provider_projection_ratio = W_after / W_before
+WORKING_CONTEXT_RATIO
+  → PROVIDER_BOUND_PROJECTION_RATIO
+```
 
-ASSERT (or refute): manual_ratio tracks provider_projection_ratio
+with evidence. Until then, the recon variable is intentionally
+named to NOT overclaim.
 
-(For the AUTO path, the same captures; expect the assertion to
- TRIVIALLY hold because the producer's caller already passed the
- provider-projected input, so W ≈ H by construction.)
+### Primary discriminator (CAUSAL A/B)
+
+```text
+manual_ratio           = H_after / H_before
+working_context_ratio  = W_after / W_before
+
+ASSERT (or refute): manual_ratio tracks working_context_ratio
 ```
 
 ### Provider observations (LIVE_PROVIDER_QUALIFICATION, NOT the causal oracle)
@@ -524,9 +610,9 @@ P captures can be used only as a **conservation / qualification**
 check:
 
 ```text
-ASSERT (weak): P_after ≈ corresponding W_after
+ASSERT (weak): P_after ≈ corresponding W_after_promoted
    — proves the provider-side projection agrees with our
-     deterministic W_after at the model-invocation boundary.
+     deterministic projection at the model-invocation boundary.
    — but P_after includes anything that arrived between the
      compaction event and the actual request, so this is NOT
      a compaction-ratio equality test.
@@ -534,14 +620,13 @@ ASSERT (weak): P_after ≈ corresponding W_after
 
 ### Verdict (CAUSAL, not overclaimed)
 
-**If `manual_ratio` materially differs from `provider_projection_ratio`**,
-then S3 is REPRODUCED at the **deterministic production projection
-seam**. Necessity is demonstrated: the manual-mode ratio is not a
-valid proxy for the active provider-context shrink that the UI
-consumer applies. ROOT_CAUSE_ISOLATED = AMBIGUOUS / UNTAGGED
-COMPACTION RATIO. Repair options (a)/(b)/(d) become candidates.
+**If `manual_ratio` materially differs from `working_context_ratio`**,
+then S3 is REPRODUCED at the **real production working-context
+seam**. Necessity is demonstrated. ROOT_CAUSE_ISOLATED =
+AMBIGUOUS / UNTAGGED COMPACTION RATIO. Repair options (a)/(b)/(d)
+become candidates.
 
-**If `manual_ratio ≈ provider_projection_ratio`**, then the
+**If `manual_ratio ≈ working_context_ratio`**, then the
 **S3 ratio-transfer hypothesis is NOT REPRODUCED**. This does NOT
 automatically prove `S1_LABEL_ONLY` is the verdict; it only
 eliminates the ratio-transfer defect. Other accounting defects may
@@ -566,6 +651,24 @@ are NOT usable as qualification. H/W comparison still stands.
 **Do not infer S3 from chronology or absolute values alone.** The
 discriminator is *ratio equality under same-event capture*, not
 *absolute token count plausibility*.
+
+### Reopen-condition for executing this discriminator
+
+**C1 GO is NOT yet granted.** Before execution, the next turn
+must complete the `working-context-seam-recon.md`
+reopen-condition checklist:
+
+1. Confirm `buildForApi` has no compaction-aware logic that
+   would invalidate the equality
+   `buildForApi(prepareTurn(x).messages) ≈ buildForApi(x.messages)`
+   for any x (i.e., the second-stage transformation is
+   compaction-independent).
+2. (Done in this calibration) Author the corrected discriminator
+   formula with `buildForApi(prepareTurn(...).messages)`.
+3. Commit those changes.
+
+After that, **C1: GO — execute the discriminator immediately,
+no further review loop.**
 
 ## Repair options (NOT RANKED — only ranked after the ratio discriminator)
 
@@ -643,6 +746,7 @@ shrink for manual mode, and the UI title is a presentation residue.
 | `(a) Tag the field = most likely correct repair` (this turn's first draft) | **OVERCLAIMED.** Repair options are NOT RANKED until the discriminator runs. Factory doctrine prefers the smallest bounded fix; if ratio invariance holds, no new protocol fields are needed. |
 | `P_after/P_before` is the causal compaction oracle (second-review calibration) | **OVERCLAIMED.** Between the compaction event and the next provider request, intervening assistant/user/tool traffic can change the input; comparing actual provider traffic before/after manufactures exactly the ratio mismatch we're trying to interpret causally. P observations become LIVE_PROVIDER_QUALIFICATION (conservation check), NOT the causal oracle. Primary discriminator is now `manual_ratio = H_after/H_before` vs `provider_projection_ratio = W_after/W_before`, both captured deterministically around the SAME manual-compaction event. |
 | `Ratio invariance → S1-LABEL-ONLY is the verdict` (second-review calibration) | **OVERCLAIMED.** Ratio invariance only eliminates the *ratio-transfer defect*. R1-R3 are still deferred; other accounting defects may remain. Correct framing: ratio invariance → `S3_RATIO_TRANSFER_NOT_REPRODUCED` → presentation residue remains plausible → proceed to remaining ACT stop conditions. |
+| `W_after = prepareProviderMessagesForApi(postCompactCanonicalSnapshot)` (third-review calibration) | **WRONG — P0 seam error.** `prepareProviderMessagesForApi` is a second-stage transformation that does NOT consult the compaction artifact. Canonical session history is intentionally append-only / full-fidelity, and the post-compaction active working context lives separately as a compaction artifact (`sdk/ARCHITECTURE.md:497`). So `W_after ≈ W_before` would be the deterministic outcome even when the active working context has shrunk dramatically. Fix: bind W to the real production turn-preparation seam — `prepareTurn = createCompactionStateAwarePrepareTurn({compact, getState, saveState})` (compaction.ts:672-712), which reads `activeSession.compactionState` and projects it via `projectSessionCompactionState` (session-compaction.ts:161-193). Drive that seam twice against identical canonical state with exactly one manual compaction applied between captures. Rename to **WORKING_CONTEXT_RATIO** during recon. See `working-context-seam-recon.md`. |
 
 ## What changed vs commit 9083ecd56
 

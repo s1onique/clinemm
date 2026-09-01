@@ -1,0 +1,292 @@
+# Working-context seam recon
+
+**Authored 2026-09-02 in response to factory causal reviewer's
+HALT_WRONG_POST_COMPACTION_PROJECTION on `3b789ef16`.**
+
+**Status:** REOPEN, recon-only. The previous discriminator
+specification in `semantic-contract-recon.md` reconstructed
+`W_after` by calling `prepareProviderMessagesForApi(postCompact
+CanonicalSnapshot)`, but that function does NOT read the
+compaction artifact. Canonical session history is intentionally
+append-only / full-fidelity, and the post-compaction active
+working context lives separately as a compaction artifact.
+Calling `prepareProviderMessagesForApi(postCompactCanonical
+Snapshot)` would pass canonical history to a function that
+ignores the compaction sidecar — i.e., `W_after ≈ W_before` even
+when the active working context has shrunk dramatically.
+
+This recon binds the real production seam that produces the
+post-compaction working context, so the next revision of the
+discriminator exercises it correctly.
+
+## Source-of-truth citations
+
+- `sdk/ARCHITECTURE.md:480-498` ("9. Context Compaction"):
+  - "@cline/agents owns the generic turn-preparation seam"
+  - "@cline/core owns compaction policy... persist the latest
+    compacted working context as a session compaction artifact"
+  - "canonical session history lives in the session messages
+    artifact at full fidelity; compaction state lives separately
+    in `${sessionId}.compaction.json`"
+  - "resume loads the canonical transcript for history/debugging
+    and, when present, reuses the latest compaction state only
+    after validating a hash of the canonical prefix covered by
+    that state; valid state is projected by appending canonical
+    messages written after the compaction boundary"
+
+## The four inspection steps
+
+### Step 1 — Where the compaction result is persisted
+
+**Owner:** `@cline/core` runtime-host.
+
+- `sdk/packages/core/src/runtime/host/local-runtime-host.ts:655`
+  `const compact = createContextCompactionPrepareTurn(configWithProvider);`
+- `sdk/packages/core/src/runtime/host/local-runtime-host.ts:662-678`
+  `prepareTurn = createCompactionStateAwarePrepareTurn({ compact,
+  getState: () => activeSessionRef?.compactionState, saveState: ...
+  })` — the seam-aware prepareTurn writes via `saveState` and
+  reads via `getState`. The persisted artifact is
+  `SessionCompactionState` (defined at
+  `sdk/packages/core/src/session/models/session-compaction.ts`).
+- Persistence target: `${sessionId}.compaction.json` per the
+  architecture doc (line 497). Confirmed by
+  `local-runtime-host.ts:1512` `session.compactionState = state`
+  and `local-runtime-host.ts:2276`
+  (`if (session.compactionState) { ... session.compactionState,
+  ... session.compactionState = undefined }`) which orchestrate
+  read / clear around resume boundaries.
+
+### Step 2 — Where the artifact is read during the next turn
+
+- `sdk/packages/core/src/extensions/context/compaction.ts:673-675`
+  (inside `createCompactionStateAwarePrepareTurn`):
+  ```
+  const existingState = input.getState?.();
+  const projectedMessages = existingState
+      ? projectSessionCompactionState(existingState, context.messages)
+      : undefined;
+  ```
+  The next-turn read is `getState()` (called from
+  `local-runtime-host.ts:663`'s closure over
+  `activeSessionRef.compactionState`). When `existingState`
+  exists, `projectSessionCompactionState` projects it against
+  the canonical context; when `existingState` is undefined (or
+  the projection returns undefined due to hash mismatch), the
+  seam falls back to canonical context.
+
+### Step 3 — The canonical+artifact combiner
+
+- `sdk/packages/core/src/session/models/session-compaction.ts:161-193`:
+  ```
+  export function projectSessionCompactionState(
+      state: SessionCompactionState,
+      sourceMessages: readonly MessageWithMetadata[],
+  ): MessageWithMetadata[] | undefined {
+      const hasEnoughSourceMessages =
+          state.source_message_count <= sourceMessages.length;
+      if (!hasEnoughSourceMessages) return undefined;
+      const hasMatchingSourcePrefix =
+          !!state.source_prefix_hash &&
+          sourcePrefixHash(sourceMessages, state.source_message_count) ===
+              state.source_prefix_hash;
+      const boundary = sourceMessages[state.source_message_count - 1];
+      const hasMatchingLegacyBoundary =
+          !state.source_prefix_hash &&
+          state.source_message_count > 0 &&
+          !!state.source_last_message_key &&
+          messageBoundaryKey(boundary) === state.source_last_message_key;
+      const canProjectState = hasMatchingSourcePrefix || hasMatchingLegacyBoundary;
+      if (!canProjectState) return undefined;
+      return [
+          ...cloneMessages(state.messages),
+          ...cloneMessages(sourceMessages.slice(state.source_message_count)),
+      ];
+  }
+  ```
+  This is THE combiner. Result shape:
+  `[...compaction-artifact messages, ...canonical-tail messages
+  (those written after the compaction boundary)]`.
+
+  The state-aware prepareTurn returns this array as
+  `ContextPipelinePrepareTurnResult.messages`
+  (`compaction.ts:60-64`). That's the working-context messages
+  object.
+
+### Step 4 — The final pre-provider builder / safety normalization
+
+After `prepareTurn` returns `projectedMessages`, the agent
+runtime consumes them through the regular message-build pipeline:
+
+- `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1149`
+  `const apiMessages = await this.prepareProviderMessagesForApi(messages);`
+  where `messages` is the post-`prepareTurn` array.
+- `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1186`
+  `const providerMessages = await this.prepareProviderMessagesForApi(...)`
+  for the next provider call.
+- `sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts:1192`
+  `private async prepareProviderMessagesForApi(...)` — this is
+  the function the previous recon mistakenly suggested calling
+  directly on a canonical snapshot. In production it always runs
+  AFTER `prepareTurn`, on the post-compaction projected
+  messages. It applies additional normalization (image-URL
+  rewriting, system-prompt prefixing, schema fixes, hook
+  rewrites from the agent message-builder) — so it is a
+  second-stage transformation, not the producer of the working
+  context itself.
+
+The agent's message-builder (configured at
+`session-runtime-orchestrator.ts` constructor:
+`this.messageBuilder = new WX(KU())` — `KU` being the default
+config) is what turns the projected messages into provider-bound
+`apiMessages`. That builder is also where safety normalization
+hooks run.
+
+## Implication for the discriminator (CAUSAL CORRECTION)
+
+`3b789ef16` defined:
+
+```text
+W_before = estimate(prepareProviderMessagesForApi(preCompactCanonicalSnapshot) + systemPrompt + tools)
+W_after  = estimate(prepareProviderMessagesForApi(postCompactCanonicalSnapshot) + systemPrompt + tools)
+```
+
+**This is wrong.** `prepareProviderMessagesForApi` is a second-
+stage transformation; it does not consult the compaction
+artifact. `postCompactCanonicalSnapshot` is the canonical
+transcript (still full-fidelity); running it through
+`prepareProviderMessagesForApi` is **indistinguishable** from
+running `preCompactCanonicalSnapshot` through the same function
+unless canonical tail grew in between (which it should not — no
+model turn is allowed between pre and post). So `W_after ≈
+W_before` would be the deterministic outcome, and the
+discriminator would manufacture a false S3 PROVEN (or, if the
+ratio happened to drift due to a hook, a false
+`S3_RATIO_TRANSFER_NOT_REPRODUCED`). Either way: **useless**.
+
+The correct definition of `W_before` / `W_after` must drive the
+state-aware prepareTurn TWICE against identical surrounding
+canonical state, with exactly one manual compaction applied in
+between:
+
+```text
+STATE_PRE  = canonical history (unchanged between runs)
+
+W_before   = estimate(buildForApi(
+              prepareTurn({ messages: STATE_PRE, ... }).messages
+            ) + systemPrompt + tools)
+
+apply exactly one manual compaction:
+   result = await compact({ messages: STATE_PRE, ... })
+   newState = createSessionCompactionState({
+                sourceMessages: STATE_PRE,
+                compactedMessages: result.messages,
+                conversationId, systemPrompt,
+              })
+   saveState(newState, STATE_PRE)   // installs the new artifact
+
+W_after   = estimate(buildForApi(
+              prepareTurn({ messages: STATE_PRE, ... }).messages
+            ) + systemPrompt + tools)
+```
+
+Where:
+
+- `prepareTurn = createCompactionStateAwarePrepareTurn({ compact,
+  getState: () => session.compactionState, saveState: ... })` —
+  the same construction used at
+  `local-runtime-host.ts:665-678`.
+- `buildForApi(...)` is the agent's message-builder
+  constructor-time call (`session-runtime-orchestrator.ts`
+  constructor wires `messageBuilder = new MessageBuilder(...)`).
+- `systemPrompt` and `tools` are the SAME for both captures
+  (so only the working-context projection varies between
+  `W_before` and `W_after`).
+
+### Why this is causal
+
+Both `W_before` and `W_after` are produced by the SAME production
+turn-preparation seam against the SAME canonical state. The ONLY
+state change between the two captures is the compaction artifact
+having been installed by the manual-compaction call. No model
+turn, no hook traffic, no canonical-tail growth. This is the
+only A/B comparison where `working_ratio = W_after / W_before`
+isolates the compaction effect.
+
+### Why the rename to WORKING_CONTEXT_RATIO (during recon)
+
+The reviewer is right that "provider_projection_ratio" was
+overclaimed. The seam ends at `prepareTurn(...).messages` —
+that is the working-context projection. After `prepareTurn`, the
+agent's message-builder (`buildForApi`) applies further
+transformations (image rewriting, system-prompt prefixing,
+schema fixes, hook rewrites, safety normalization) before the
+final `providerMessages` array. Naming the recon variable
+WORKING_CONTEXT_RATIO reflects what `prepareTurn` produces. If
+subsequent inspection proves the buildForApi layer is
+deterministic and idempotent across the post-compaction state
+boundary (no extra compaction-aware logic), the discriminator can
+promote:
+
+```text
+WORKING_CONTEXT_RATIO
+  → PROVIDER_BOUND_PROJECTION_RATIO
+```
+
+with evidence. Until then, the recon variable is intentionally
+named to NOT overclaim.
+
+### What the recon does NOT yet prove
+
+- Whether `buildForApi` itself contains compaction-aware logic
+  beyond the `prepareTurn` projection (it shouldn't, per the
+  architecture: "keep compaction logic out of the low-level
+  agent message builder", `sdk/ARCHITECTURE.md:489`). A targeted
+  inspection is the next bounded step.
+- Whether the auto-vs-manual prepareTurn paths share the same
+  combiner. (Auto uses
+  `createContextCompactionPrepareTurn` → `compact(...)` →
+  `saveState`; manual uses the same `compact` factory but
+  passes canonical H. Both write through the same saveState;
+  the next-turn read is shared.)
+- Whether hash-mismatch recovery (when canonical was edited and
+  the stored artifact's `source_prefix_hash` no longer matches)
+  can occur on the manual-compaction path. (The recon evidence
+  so far does not establish this either way; it should not
+  affect the manual-compaction discriminator because manual
+  compaction always uses the latest canonical history.)
+
+## Reopen-condition for executing the discriminator
+
+**C1 GO is NOT yet granted.** Before execution, the next turn
+must:
+
+1. Confirm `buildForApi` has no compaction-aware logic that
+   would invalidate the equality
+   `buildForApi(prepareTurn(x).messages) ≈ buildForApi(x.messages)`
+   for any x (i.e., the second-stage transformation is
+   compaction-independent). Targeted source-extraction test
+   under `sdk/packages/agents/src/runtime/__tests__/`
+   or equivalent.
+2. Author the corrected discriminator formula in
+   `semantic-contract-recon.md` (replace
+   `prepareProviderMessagesForApi(...)` with the
+   `buildForApi(prepareTurn(...).messages)` form, and rename W
+   to WORKING_CONTEXT_RATIO).
+3. Commit those changes.
+
+After that, **C1: GO — execute the discriminator immediately,
+no further review loop.**
+
+## What this commit DOES NOT change
+
+- No production code change.
+- No test delta.
+- No review loop opened.
+- No discriminator executed yet.
+
+This file is the bound the next turn will use to revise the
+discriminator. It is internally consistent with the prior
+recons (producers.md, semantic-contract-recon.md,
+compaction-input-identity-recon.md, entry-freeze.txt) and the
+upstream architecture doc.

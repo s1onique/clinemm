@@ -356,6 +356,16 @@ review, post-calibration; third-review DISCRIMINATOR CALIBRATION
   intervening turns between compaction and next provider request
   contaminate the comparison; P observations become
   LIVE_PROVIDER_QUALIFICATION only).
+- W_after = prepareProviderMessagesForApi(postCompactCanonicalSnapshot)
+  = RETRACTED (fourth-review P0 seam error; canonical session
+  history is intentionally append-only/full-fidelity per
+  sdk/ARCHITECTURE.md:497, and prepareProviderMessagesForApi is
+  a second-stage transformation that does NOT consult the
+  compaction artifact; W rebound to the real production
+  turn-preparation seam at
+  sdk/packages/core/src/extensions/context/compaction.ts:672-712;
+  recon variable renamed to WORKING_CONTEXT_RATIO; see
+  working-context-seam-recon.md).
 
 **Repair options (NOT RANKED; only ranked after the discriminator):**
 
@@ -441,14 +451,26 @@ the ratio transfers to the provider-context shrink is exactly
 what the ratio discriminator tests.
 
 **Root cause = UNKNOWN until the discriminator runs.** Possible
-verdicts (CALIBRATED 2026-09-02 third-review; primary discriminator
-is `manual_ratio = H_after/H_before` vs `provider_projection_ratio
-= W_after/W_before`, both captured deterministically around the
-SAME manual-compaction event with `prepareProviderMessagesForApi`
-applied to pre/post snapshots; P observations demoted to
-LIVE_PROVIDER_QUALIFICATION):
-- S3-PROVEN (ratio non-invariance at the deterministic production
-  projection seam) → repair options a/b/d.
+verdicts (CALIBRATED 2026-09-02 third-review;
+fourth-review-corrected 2026-09-02T04:00:00Z; primary
+discriminator is `manual_ratio = H_after/H_before` vs
+`working_context_ratio = W_after/W_before`, where W is bound to
+the REAL production turn-preparation seam
+(`createCompactionStateAwarePrepareTurn` at
+`sdk/packages/core/src/extensions/context/compaction.ts:672-712`,
+driving `projectSessionCompactionState` at
+`sdk/packages/core/src/session/models/session-compaction.ts:161-193`
+twice against identical canonical state with exactly one manual
+compaction applied between captures — NOT
+`prepareProviderMessagesForApi(postCompactCanonicalSnapshot)`
+which is a second-stage transformation that does NOT consult the
+compaction artifact per the fourth-review
+HALT_WRONG_POST_COMPACTION_PROJECTION; P observations demoted to
+LIVE_PROVIDER_QUALIFICATION; recon variable renamed to
+WORKING_CONTEXT_RATIO; see working-context-seam-recon.md for the
+full binding):
+- S3-PROVEN (ratio non-invariance at the real production
+  working-context seam) → repair options a/b/d.
 - S3_RATIO_TRANSFER_NOT_REPRODUCED (ratio invariance holds) →
   presentation residue plausible (UI title / divider label
   mismatch); CLOSED_WITH_RESIDUE only after R1-R3 and remaining

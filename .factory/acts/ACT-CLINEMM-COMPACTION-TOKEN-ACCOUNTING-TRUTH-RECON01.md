@@ -430,9 +430,12 @@ HALT_ROOT_CAUSE_NOT_ISOLATED):
     Whether the transformation result on the manual-mode input
     (canonical H) tracks the provider-context shrink for the
     actual next request is exactly what the ratio discriminator
-    tests. If manual_ratio ≠ provider_projection_ratio, S3 is
-    PROVEN. If manual_ratio ≈ provider_projection_ratio, S3 is
-    FALSIFIED (and S1-label-only is the verdict).
+    tests. If manual_ratio ≠ working_context_ratio, S3 is
+    PROVEN at the REAL production working-context seam (bound
+    to createCompactionStateAwarePrepareTurn at
+    compaction.ts:672-712; see working-context-seam-recon.md).
+    If manual_ratio ≈ working_context_ratio, S3_RATIO_TRANSFER_
+    NOT_REPRODUCED (NOT auto-S1-LABEL-ONLY).
     Repair options (NOT RANKED, only ranked after the discriminator):
     (a) Tag the field — emit tokensBefore + tokensBeforeKind
         ("input_to_compaction" / "active_provider_context");
@@ -444,8 +447,9 @@ HALT_ROOT_CAUSE_NOT_ISOLATED):
         agree on scale); for manual mode, display a neutral divider
         WITHOUT rescaling tokensIn.
     (e) Label-only — update UI title + divider label to match the
-        producer's actual contract. Only sufficient if S1-label-only
-        is the verdict (i.e., ratio invariance holds).
+        producer's actual contract. Only sufficient if
+        S3_RATIO_TRANSFER_NOT_REPRODUCED is the verdict AND no
+        other accounting defects surface from R1-R3.
 
 R0' deliverable (RECON, not unit-test):
 
@@ -469,23 +473,34 @@ R0' deliverable (RECON, not unit-test):
 
   4. The next bounded step is a RATIO DISCRIMINATOR (not R1-R3,
      not more Factory scaffolding). See semantic-contract-recon.md
-     "Next discriminator" section for the exact captures. The
-     PRIMARY discriminator is estimator-space A/B on the same
-     logical conversation state:
-       manual_ratio             = H_after / H_before
-       provider_projection_ratio = W_after / W_before
-     where H, W are both captured deterministically around the
-     SAME manual-compaction event with prepareProviderMessagesForApi
-     applied to pre/post compaction canonical snapshots. P
-     observations become LIVE_PROVIDER_QUALIFICATION (conservation
-     check, P_after ≈ corresponding W_after) — NOT the causal
-     oracle, because intervening turns between the compaction
-     event and the next provider request contaminate the
-     comparison.
+     "Next discriminator" section and working-context-seam-recon.md
+     for the exact captures. The PRIMARY discriminator is
+     estimator-space A/B on the same logical conversation state:
+       manual_ratio          = H_after / H_before
+       working_context_ratio = W_after / W_before
+     where W is bound to the REAL production turn-preparation
+     seam (NOT `prepareProviderMessagesForApi` — that is a
+     second-stage transformation that does NOT consult the
+     compaction artifact; canonical session history is
+     intentionally append-only/full-fidelity per
+     `sdk/ARCHITECTURE.md:497`). Specifically:
+     `prepareTurn = createCompactionStateAwarePrepareTurn({
+     compact, getState: () => session.compactionState, saveState:
+     ... })` at
+     `sdk/packages/core/src/extensions/context/compaction.ts:672-712`,
+     driving `projectSessionCompactionState` at
+     `sdk/packages/core/src/session/models/session-compaction.ts:161-193`,
+     driven TWICE against identical canonical state with exactly
+     one manual compaction applied between captures. The
+     buildForApi layer (if confirmed compaction-independent) may
+     promote WORKING_CONTEXT_RATIO → PROVIDER_BOUND_PROJECTION_RATIO.
+     P observations become LIVE_PROVIDER_QUALIFICATION
+     (conservation check) — NOT the causal oracle.
 
 R0' discriminator output (CALIBRATED 2026-09-02 second-review
 PASS_WITH_ONE_P1_FIX; THIRD-REVIEW discriminator calibration
-2026-09-02T03:30:00Z):
+2026-09-02T03:30:00Z; FOURTH-REVIEW WORKING-CONTEXT-SEAM
+CALIBRATION 2026-09-02T04:00:00Z):
 
   CORE_COMPACTION_ARITHMETIC      = CONSERVED (no producer defect
     identified; the compactor transformation is correct on its
@@ -507,19 +522,28 @@ PASS_WITH_ONE_P1_FIX; THIRD-REVIEW discriminator calibration
   WIRE_CONTRACT                   = S3_CANDIDATE (textual
     ingredients present; causal proof UNPROVEN until ratio
     discriminator runs).
+  POST_COMPACTION_WORKING_CONTEXT_SEAM = BOUND (working-context-
+    seam-recon.md committed; createCompactionStateAwarePrepareTurn
+    at compaction.ts:672-712; projectSessionCompactionState at
+    session-compaction.ts:161-193).
   ROOT_CAUSE                      = UNKNOWN (NOT_ISOLATED; pending
-    the ratio discriminator).
+    the ratio discriminator; C1 GO NOT yet granted —
+    buildForApi compaction-independence must be confirmed first).
 
 NEXT (after the semantic-contract recon): the real-trace RATIO
-DISCRIMINATOR (HOST_REQUIRED). PRIMARY captures H, W — both
-captured deterministically around the SAME manual-compaction event
-with prepareProviderMessagesForApi applied to pre/post compaction
-canonical snapshots:
-  manual_ratio              = H_after / H_before
-  provider_projection_ratio  = W_after / W_before
-Ask: Does manual_ratio track provider_projection_ratio?
-- If NO (ratio non-invariance at the deterministic production
-  projection seam): S3 is PROVEN; ROOT_CAUSE_ISOLATED at the
+DISCRIMINATOR (HOST_REQUIRED). PRIMARY captures H, W — W is
+bound to the REAL production turn-preparation seam
+(createCompactionStateAwarePrepareTurn at
+compaction.ts:672-712, driving projectSessionCompactionState at
+session-compaction.ts:161-193) twice against identical canonical
+state with exactly one manual compaction applied between
+captures. See working-context-seam-recon.md for the full
+binding:
+  manual_ratio          = H_after / H_before
+  working_context_ratio = W_after / W_before
+Ask: Does manual_ratio track working_context_ratio?
+- If NO (ratio non-invariance at the real production working-
+  context seam): S3 is PROVEN; ROOT_CAUSE_ISOLATED at the
   schema/wire; repair options (a/b/d) become candidates (ranked
   smallest first; Factory doctrine).
 - If YES (ratio invariance holds): S3_RATIO_TRANSFER_NOT_
@@ -530,12 +554,16 @@ Ask: Does manual_ratio track provider_projection_ratio?
 
 LIVE_PROVIDER_QUALIFICATION (NOT the causal oracle; only a
 conservation check):
-  P_after ≈ corresponding W_after
+  P_after ≈ corresponding W_after_promoted
 This proves the provider-side projection agrees with our
-deterministic W_after at the model-invocation boundary. It is NOT
-a compaction-ratio equality test — intervening turns contaminate
-the comparison.
-- If provider counts cannot be correlated: CAPTURE_INSUFFICIENT.
+deterministic projection at the model-invocation boundary. It is
+NOT a compaction-ratio equality test — intervening turns
+contaminate the comparison.
+- If H or W cannot be captured deterministically around the same
+  compaction event: CAPTURE_INSUFFICIENT / CASE_C.
+- If buildForApi is NOT confirmed compaction-independent before
+  execution: C1 GO NOT granted; re-open the recon to bind the
+  buildForApi seam first.
 
 The recon's source-recon alone is sufficient to NAME the suspect
 contract surfaces (producer transformation vs UI consumer implicit
@@ -745,7 +773,10 @@ CASE_S1 — SEMANTIC_LABEL_DEFECT (UI title vs producer contract)
     only is FALSIFIED.
 
 CASE_S3 — WIRE_CONTRACT_OVERLOADED (PLAUSIBLE, NOT ISOLATED)
-  R0' semantic-contract recon (CALIBRATED) establishes that the
+  R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review
+  PASS_WITH_ONE_P1_FIX; third-review discriminator calibration
+  2026-09-02T03:30:00Z; fourth-review WORKING-CONTEXT-SEAM
+  calibration 2026-09-02T04:00:00Z) establishes that the
   producer is a transformation on the supplied request (no
   semantic claim), while the UI rescaling consumer implicitly
   assumes the transformation result tracks the active provider
@@ -757,15 +788,25 @@ CASE_S3 — WIRE_CONTRACT_OVERLOADED (PLAUSIBLE, NOT ISOLATED)
     - Consumer applies a ratio to a provider-bound tokensIn.
     - The wire does not carry a `kind` discriminator.
   But the causal proof — that the manual-mode ratio
-  `H_after/H_before` does NOT track the provider-projection
-  ratio `W_after/W_before` at the **deterministic production
-  projection seam** (both captured around the SAME manual-
-  compaction event) — is UNPROVEN. The ratio discriminator
-  resolves this. (P_after/P_before is NOT a valid causal
-  compaction oracle because intervening turns between the
-  compaction event and the next provider request contaminate
-  the comparison; P observations become LIVE_PROVIDER_
-  QUALIFICATION only.)
+  `H_after/H_before` does NOT track the **working-context
+  ratio** `W_after/W_before` at the **real production turn-
+  preparation seam** (bound to
+  `createCompactionStateAwarePrepareTurn` at
+  `sdk/packages/core/src/extensions/context/compaction.ts:672-712`,
+  driving `projectSessionCompactionState` at
+  `session-compaction.ts:161-193`, captured around the SAME
+  manual-compaction event with no intervening model turn) — is
+  UNPROVEN. The ratio discriminator resolves this. (P_after/
+  P_before is NOT a valid causal compaction oracle because
+  intervening turns between the compaction event and the next
+  provider request contaminate the comparison; P observations
+  become LIVE_PROVIDER_QUALIFICATION only. The previous
+  `prepareProviderMessagesForApi(postCompactCanonicalSnapshot)`
+  definition of W_after is RETRACTED per the fourth-review
+  HALT_WRONG_POST_COMPACTION_PROJECTION — it is a second-stage
+  transformation that does NOT consult the compaction artifact;
+  canonical history is intentionally append-only/full-fidelity
+  per `sdk/ARCHITECTURE.md:497`.)
   → IF discriminator shows ratio non-invariance: S3 PROVEN;
     ROOT_CAUSE_ISOLATED at the schema/wire between the producer
     (core-events.ts:773) and the UI rescaling consumer
@@ -824,10 +865,14 @@ may freeze a specific behavior, but only if recon proves the seam.
     discriminator runs, R1-R3 GREEN, I1-I7 hold** → depends on
     discriminator outcome:
     - **Discriminator shows ratio non-invariance** (manual_ratio
-      materially differs from `provider_projection_ratio =
-      W_after/W_before`, both captured deterministically around
-      the SAME manual-compaction event) → S3 PROVEN; `CASE_A`
-      with `S3_PROVEN` residue; `CLOSED_WITH_RESIDUE`.
+      materially differs from `working_context_ratio =
+      W_after/W_before`, both captured by driving the REAL
+      production turn-preparation seam
+      `createCompactionStateAwarePrepareTurn` at
+      `sdk/packages/core/src/extensions/context/compaction.ts:672-712`
+      twice against identical canonical state with exactly one
+      manual compaction applied between captures) → S3 PROVEN;
+      `CASE_A` with `S3_PROVEN` residue; `CLOSED_WITH_RESIDUE`.
       ROOT_CAUSE_ISOLATED at the schema/wire between producer
       (core-events.ts:773) and UI rescaling consumer
       (getApiMetrics.ts:174-225).
@@ -837,7 +882,7 @@ may freeze a specific behavior, but only if recon proves the seam.
       Factory doctrine prefers the smallest, which may be (d)
       consumer-side reconciliation).
     - **Discriminator shows ratio invariance** (manual_ratio ≈
-      provider_projection_ratio) → `S3_RATIO_TRANSFER_NOT_
+      working_context_ratio) → `S3_RATIO_TRANSFER_NOT_
       REPRODUCED`. S3 ratio-transfer hypothesis is FALSIFIED. This
       does NOT auto-prove S1-LABEL-ONLY; other accounting defects
       may remain (R1-R3 still deferred; UI title still claims
@@ -855,6 +900,10 @@ may freeze a specific behavior, but only if recon proves the seam.
       deterministic for some payload shape) →
       `CAPTURE_INSUFFICIENT` / `CASE_C` → recon gains the
       expanded runbook.
+    - **buildForApi is NOT confirmed compaction-independent
+      before execution** → C1 GO NOT yet granted; re-open the
+      recon to bind the buildForApi seam before running the
+      discriminator.
   - **R1-R3 RED with structural defect** → `CASE_B` → recon reports
     `ROOT_CAUSE_ISOLATED` (with specific I1-I7 violation +
     file:line). R0' / R0-A do not contribute to this branch.
@@ -893,9 +942,15 @@ may freeze a specific behavior, but only if recon proves the seam.
 1. Run the recon against the SDK source tree at HEAD `975d3315c` (post
    board-amendment).
 2. Produce `.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/`
-   with: `entry-freeze.txt`, `producers.md`, `semantic-contract-recon.md`
-   (DONE in this calibration), and — pending the ratio discriminator's
-   verdict — `compaction-arithmetic-map.md` (Q1–Q12), `trust-model.md`,
+   with: `entry-freeze.txt`, `producers.md`,
+ `semantic-contract-recon.md`,
+ `working-context-seam-recon.md` (DONE in this calibration —
+   fourth-review WORKING-CONTEXT-SEAM calibration; W is now bound
+   to the REAL production turn-preparation seam at
+   `sdk/packages/core/src/extensions/context/compaction.ts:672-712`,
+   NOT to `prepareProviderMessagesForApi(postCompactCanonicalSnapshot)`),
+   and — pending the ratio discriminator's verdict —
+   `compaction-arithmetic-map.md` (Q1–Q12), `trust-model.md`,
    `classification.md`, `final-report.md`. Per the factory causal
    reviewer's third-review PASS_WITH_ONE_P1_FIX directive: do NOT
    author another 400 lines of Factory scaffolding before the ratio
@@ -911,13 +966,17 @@ may freeze a specific behavior, but only if recon proves the seam.
 ## §10 — Acceptance criteria
 
   - Recon ACT body committed with `OPEN / RECON_ONLY` status.
-  - Entry-freeze, semantic-contract recon, ratio-discriminator
-    specification (DONE in this calibration). Q1-Q12 / trust model /
-    classification / final report DEFERRED until the ratio discriminator
-    resolves the S3 question (per the third-review PASS_WITH_ONE_P1_FIX
-    directive).
+  - Entry-freeze, semantic-contract recon,
+   working-context-seam-recon, ratio-discriminator specification
+   (DONE in this calibration; fourth-review WORKING-CONTEXT-SEAM
+   calibration closes the P0 seam error). Q1-Q12 / trust model /
+   classification / final report DEFERRED until the ratio discriminator
+   resolves the S3 question (per the third-review PASS_WITH_ONE_P1_FIX
+   directive).
+  - C1 GO is NOT yet granted; buildForApi compaction-independence
+   must be confirmed before the discriminator executes.
   - `bun run check-types` clean on `sdk/packages/core`.
   - `bun x vitest run sdk/packages/core/src/extensions/context/compaction*.test.ts` green.
   - No production code change.
   - No PR; this ACT is recon-only and the closure path is the discriminator
-    result, not a code merge.
+   result, not a code merge.
