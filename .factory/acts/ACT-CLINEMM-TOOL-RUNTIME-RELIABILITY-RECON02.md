@@ -1,9 +1,13 @@
 # ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02
 
-> Status: **OPEN / HEADLESS /
-> PRIMARY_PURPOSE = REPRODUCTION_AND_BOUNDARY_CLASSIFICATION /
-> CAUSE = UNKNOWN /
-> NO_REPAIR_AUTHORIZED**.
+> Status: **CLOSED / GREEN /
+> NOT_REPRODUCED_WITHIN_OWNED_BOUNDARY /
+> HANDOFF_RUNTIME_TASK_PROGRESSION /
+> STOP = yes**.
+>
+> Verdict: `P1_RESULT_PUBLICATION_TO_SESSION_EVENT = GREEN`
+> (exercised `[1] -> [3]` contract is conserved for the tested
+> RESULT_EXISTS-shaped schedule; see final-report.md).
 >
 > Owner: `EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY01`
 > Cluster: **POST_TOOL_ADVANCE_STALL** (new cluster label; promotion
@@ -471,7 +475,7 @@ discriminator and is the only probe RECON02 authors. No A–F
 follow-ons are pre-authorized — the next ACT (if any) lives at
 the runtime-task-progression epic.
 
-## Final disposition (CLOSED — GREEN — 2026-01-09)
+## Final disposition (CLOSED — GREEN — 2026-09-01)
 
 ```text
 RECON02_STATUS       = CLOSED

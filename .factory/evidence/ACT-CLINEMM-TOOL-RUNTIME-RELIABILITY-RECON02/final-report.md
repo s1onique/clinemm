@@ -15,7 +15,9 @@ P1_RESULT_PUBLICATION_TO_SESSION_EVENT = GREEN
     (ts / type / say / text / partial / epoch) preserved
   the real registered session-event listener is invoked once per
     appendAndEmit, receiving an array whose single element carries the
-    same say / text / seq / epoch, and the same event reference
+    same say / text / seq / epoch, and a semantically equal event
+    payload (asserted via `chai.deep.equal`, which compares the
+    visible payload and ignores JavaScript reference identity)
   seq is positive and strictly monotonic across the two appendAndEmit calls
   epoch equals minter.epoch for both calls
   the third appendAndEmit returns synchronously without throwing
@@ -83,7 +85,10 @@ PRODUCTION_DELTA          = ZERO
 
 ## What this ACT established
 
-1. The `[1] -> [3]` portion of the post-tool advance chain is **safe**:
+1. The exercised `[1] -> [3]` contract is **conserved for the tested
+   RESULT_EXISTS-shaped schedule** (one synthetic tool_result message,
+   two appended in sequence, one synchronous third call, one registered
+   listener that fires once per appendAndEmit):
    - `appendAndEmit` performs `appendMessages` + `emitSessionEvents`
      synchronously without leaking.
    - The result message reaches the registered session-event listener
@@ -94,9 +99,12 @@ PRODUCTION_DELTA          = ZERO
 
 2. RECON02's owned boundary (the entry seam from `RESULT_EXISTS`
    through `[1] -> [3]`) does not name a causal candidate for the
-   failure family `#10537` / `#10122` describe. The defect (if any
-   is reproducible) lives downstream of `[3]`, in the
-   runtime-task-progression epic.
+   failure family `#10537` / `#10122` describe, FOR THE EXERCISED
+   SCHEDULE. The defect (if any is reproducible) lives downstream of
+   `[3]`, in the runtime-task-progression epic. This ACT does NOT
+   claim that the overall post-tool advance failure is absent for
+   all schedules — only that the seam it owns does not name the
+   causal candidate.
 
 ## What this ACT did NOT establish
 
@@ -167,9 +175,12 @@ apps/vscode/src/sdk/tool-runtime-reliability-recon02.production-seam.test.ts
   claim. `ClineMessage` does not expose a `taskId` field; `taskId`
   lives on the `TaskProxy` and is not part of the message
   publication contract.
-- The test file is one contiguous compilable block of 89 lines
-  (including 17-line doc comment), with imports, mock.module
-  setup, describe, it, and assertions all present.
+- The staged test file (`apps/vscode/src/sdk/tool-runtime-reliability-recon02.production-seam.test.ts`,
+  89 lines including a 26-line doc comment + imports + `mock.module`
+  setup + describe + it + assertions) is one contiguous compilable
+  block. The executable body (lines 27-89) matches the code fence
+  under **The probe** in `probe-result-publication-to-session-event.md`
+  byte-for-byte (`diff -u` clean). Runner: `bun:test` + `chai`.
 - `setImmediate` budget was REMOVED — synchronous boundedness is
   established by `expect(() => appendAndEmit(...)).to.not.throw()`
   and by observing the listener count advance before the call
