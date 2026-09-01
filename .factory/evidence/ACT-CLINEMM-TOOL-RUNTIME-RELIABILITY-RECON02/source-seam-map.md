@@ -80,9 +80,9 @@ RESULT_EXISTS                                    ← frozen entry seam
 - **Gap analysis:** The unit test (`sdk-message-coordinator.test.ts`)
   exercises `appendMessages` / `emitSessionEvents` directly. None of
   the existing tests asserts what happens when `appendMessages` is
-  called with a `tool_result`-shaped message AND the subsequent
-  continuation does not schedule. **No RED reachable at this layer
-  on its own** — it requires the [5]+[6] boundary to participate.
+  called with a `command_output`-shaped RESULT_EXISTS message AND the
+  subsequent continuation does not schedule. **No RED reachable at this
+  layer on its own** — it requires the [5]+[6] boundary to participate.
 
 ### [4] — `webview-grpc-bridge`
 
@@ -226,10 +226,14 @@ REAL_PRODUCTION_SEAM:
   pushMessageToWebview    (vi.mock — natural external seam)
 
 INPUT (real shape, NOT a structural probe):
-  one ClineMessage shaped like a tool_result publication:
+  one ClineMessage shaped like a command_output publication:
     ts: monotonically increasing
     type: "say"
-    say: "tool_result"
+    say: "command_output"  // production-shaped ClineSay for tool/command
+                            // stdout publication (the value the real
+                            // producers use on this seam). `tool_result`
+                            // is NOT a valid ClineSay — only a model/tool
+                            // content vocabulary term.
     text: a small synthetic stdout
     partial: false
 

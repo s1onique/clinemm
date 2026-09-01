@@ -86,7 +86,9 @@ PRODUCTION_DELTA          = ZERO
 ## What this ACT established
 
 1. The exercised `[1] -> [3]` contract is **conserved for the tested
-   RESULT_EXISTS-shaped schedule** (one synthetic tool_result message,
+   command_output-shaped RESULT_EXISTS schedule** (one synthetic
+   `say: "command_output"` message — the production-shaped `ClineSay` for
+   tool/command stdout publication, see `apps/vscode/src/shared/ExtensionMessage.ts:745`,
    two appended in sequence, one synchronous third call, one registered
    listener that fires once per appendAndEmit):
    - `appendAndEmit` performs `appendMessages` + `emitSessionEvents`

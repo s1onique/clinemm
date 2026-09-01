@@ -53,50 +53,96 @@ mock.module("./webview-grpc-bridge", () => ({
 	pushMessageToWebview: mock(() => Promise.resolve()),
 }))
 
+import type { CoreSessionEvent } from "@cline/core"
 import type { ClineMessage } from "@shared/ExtensionMessage"
 import { MessageIdMinter } from "./message-id-minter"
+import type { SessionEventListener } from "./sdk-message-coordinator"
 import { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import { createTaskProxy } from "./task-proxy"
 
+// command_output is the production-shaped ClineSay for post-result publication
+// on this seam — it is the existing typed value used by real producers to
+// represent tool/command output flowing through the message coordinator.
+// `tool_result` is NOT a valid ClineSay — it is only a model/tool content
+// vocabulary term.
 const sampleResultMessage = (ts: number): ClineMessage => ({
 	ts,
 	type: "say",
-	say: "tool_result",
+	say: "command_output",
 	text: "synthetic stdout for probe; not a real tool invocation",
 	partial: false,
 })
 
+const requireSeq = (message: ClineMessage): number => {
+	if (message.seq === undefined) {
+		throw new Error("SdkMessageCoordinator did not stamp seq on a RESULT_EXISTS message")
+	}
+	return message.seq
+}
+
 describe("P1_RESULT_PUBLICATION_TO_SESSION_EVENT", () => {
-	it("RESULT_EXISTS-shaped message -> semantic identity persists across append + fanout", () => {
+	it("command_output-shaped RESULT_EXISTS message -> semantic identity persists across append + fanout", () => {
 		const task = createTaskProxy("session-123", () => Promise.resolve(), () => Promise.resolve())
 		const minter = new MessageIdMinter()
 		const coord = new SdkMessageCoordinator({ getTask: () => task, getMinter: () => minter })
-		const listener = mock(() => undefined)
+		// Type the listener with the real SessionEventListener callback signature so
+		// `listener.mock.calls[0]` is typed as the actual 2-tuple of arguments
+		// (`[ClineMessage[], CoreSessionEvent]`) instead of an inferred `[]` from
+		// the zero-argument `mock(() => undefined)` pattern.
+		const listener = mock<SessionEventListener>((messages: ClineMessage[], event: CoreSessionEvent) => {
+			void messages
+			void event
+		})
 		coord.onSessionEvent(listener)
-		// biome-ignore lint/suspicious/noExplicitAny: test-only event shape
-		const event = { type: "status", payload: { sessionId: "session-123", status: "tool_result" } } as any
+		const event: CoreSessionEvent = {
+			type: "status",
+			payload: { sessionId: "session-123", status: "running" },
+		}
 		const first = [sampleResultMessage(1)]
 		const second = [sampleResultMessage(2)]
 
 		coord.appendAndEmit(first, event)
 		coord.appendAndEmit(second, event)
 
-		// (1) RESULT_EXISTS-shaped message is present in the in-memory conversation (semantic)
+		// (1) command_output-shaped RESULT_EXISTS message is present in the
+		// in-memory conversation (semantic)
 		const stored = task.messageStateHandler.getClineMessages()
 		expect(stored).to.have.lengthOf(2)
-		expect(stored[0]).to.deep.include({ ts: 1, type: "say", say: "tool_result", text: first[0].text, partial: false, epoch: minter.epoch })
-		expect(stored[1]).to.deep.include({ ts: 2, type: "say", say: "tool_result", text: second[0].text, partial: false, epoch: minter.epoch })
+		expect(stored[0]).to.deep.include({
+			ts: 1,
+			type: "say",
+			say: "command_output",
+			text: first[0].text,
+			partial: false,
+			epoch: minter.epoch,
+		})
+		expect(stored[1]).to.deep.include({
+			ts: 2,
+			type: "say",
+			say: "command_output",
+			text: second[0].text,
+			partial: false,
+			epoch: minter.epoch,
+		})
 
 		// (2) session event reaches the production listener with semantic identity intact
 		expect(listener.mock.calls).to.have.lengthOf(2)
 		const [listenerFirst, listenerEvent] = listener.mock.calls[0]
 		expect(listenerFirst).to.have.lengthOf(1)
-		expect(listenerFirst[0]).to.deep.include({ say: "tool_result", text: first[0].text, seq: first[0].seq, epoch: first[0].epoch })
+		expect(listenerFirst[0]).to.deep.include({
+			say: "command_output",
+			text: first[0].text,
+			seq: first[0].seq,
+			epoch: first[0].epoch,
+		})
 		expect(listenerEvent).to.deep.equal(event)
 
-		// (3) seq/epoch conserved at the seam
-		expect(first[0].seq).to.be.greaterThan(0)
-		expect(second[0].seq).to.be.greaterThan(first[0].seq)
+		// (3) seq/epoch conserved at the seam — narrow explicitly so the
+		// numeric comparison is provably on stamped values, not undefined.
+		const firstSeq = requireSeq(first[0])
+		const secondSeq = requireSeq(second[0])
+		expect(firstSeq).to.be.greaterThan(0)
+		expect(secondSeq).to.be.greaterThan(firstSeq)
 		expect(first[0].epoch).to.equal(minter.epoch)
 		expect(second[0].epoch).to.equal(minter.epoch)
 
@@ -247,3 +293,51 @@ Final report (closure document):
 ```
 
 No production source edits. No repair ACT pre-authorized.
+
+## Test-contract correction (post-closure, P1, TEST_ONLY)
+
+`vscode:prepublish` (`bun run vscode:prepublish`, which runs
+`tsc --noEmit` plus the prepublish build steps) caught five defects
+in the originally-closed test
+`apps/vscode/src/sdk/tool-runtime-reliability-recon02.production-seam.test.ts`:
+
+| # | Defect | Resolution |
+|---|--------|------------|
+| P1_1 | Invented `say: "tool_result"` value (not in the `ClineSay` union — `"tool_result"` is only a model/tool content-vocabulary term, not a `ClineSay`). | Replaced with `say: "command_output"` — the existing typed `ClineSay` value used by real producers for tool/command stdout publication on this seam (see `ClineSay` union at `apps/vscode/src/shared/ExtensionMessage.ts:745`). |
+| P1_2 | `const listener = mock(() => undefined)` — zero-arg implementation, so `listener.mock.calls[0]` was inferred as `[]`, and `const [listenerFirst, listenerEvent] = listener.mock.calls[0]` failed to destructure. | Imported `SessionEventListener` from `./sdk-message-coordinator.ts` and used `mock<SessionEventListener>((messages: ClineMessage[], event: CoreSessionEvent) => { void messages; void event })`. Bun's `mock<T>` propagates `Parameters<T>` to `MockInstance<T>.calls`, so `listener.mock.calls[0]` is typed as `[ClineMessage[], CoreSessionEvent]`. No `as any` cast on `mock.calls` is needed downstream. |
+| P1_3 | `first[0].seq > 0` and `second[0].seq > first[0].seq` used the optional `seq?: number` without explicit narrowing — both sides could be `undefined`. | Added `requireSeq(message: ClineMessage): number` helper that throws if `message.seq === undefined` and returns the number otherwise. The numeric comparison now operates on stamped numbers, strengthening the semantic oracle. |
+| (related) | Stale header note claimed the `as any` cast was needed because typing `CoreSessionEvent` "pulls in the @cline/core bundle, which fails at import time". | Replaced with `import type { CoreSessionEvent } from "@cline/core"` — type-only imports are erased at compile time and therefore do not trigger the vitest-stub alias + zod initialization issue that affects runtime value imports. The `CoreSessionEvent.status` field is a free-form `string`, so any status string is type-valid. |
+
+### Disposition
+
+```text
+HALT_BUILD_CONTRACT_TEST_INVALID
+
+P1_1 = invented ClineSay "tool_result" → FIXED (use "command_output")
+P1_2 = zero-arg listener fake hides real callback contract → FIXED (typed via SessionEventListener)
+P1_3 = optional seq used without explicit stamping proof → FIXED (requireSeq helper)
+
+PRODUCTION_REPAIR = NO
+RECON02_CAUSAL_REPAIR = NO
+
+ACTION =
+  correct the test against the actual production message type,
+  rerun GREEN + typecheck + vscode:prepublish,
+  then continue
+```
+
+The corrected test above and the staged file at
+`apps/vscode/src/sdk/tool-runtime-reliability-recon02.production-seam.test.ts`
+are now in agreement and are both production-typed. **The previous
+GREEN verdict is preserved as load-bearing evidence only if a fresh
+`bun test` run on the corrected test still produces 1 pass / 0 fail
+AND `bun run vscode:prepublish` exits 0.** If the corrected
+production-shaped message REDs at runtime, the prior GREEN must be
+withdrawn and RECON02 reopens at this seam. If it stays GREEN, the
+RECON02 conclusion `[1]→[3] CONSERVED_FOR_TESTED_PRODUCTION_SHAPE`
+remains valid (the tested production shape is now actually
+production-shaped).
+
+The textual evidence statements (`final-report.md`, `source-seam-map.md`)
+were also updated to use `command_output-shaped RESULT_EXISTS message`
+in place of the prior invented `tool_result-shaped message` wording.
