@@ -1,6 +1,6 @@
 # ClineMM Epic Board
 
-Updated: 2026-09-01 (P2_BOARD_READABILITY_MICROFIX — restore SHARDING01 navigation-index contract per causal review: cells restricted to short tokens, narrative moved to detail files)
+Updated: 2026-09-01 (P2_BOARD_READABILITY_MICROFIX + frontier correction per factory causal reviewer: add Approval/MCP and Context/compaction frontier rows; both have new ACT IDs that are NOT derivable from existing epic detail files, per reviewer directive to avoid corrupting TOOL-RUNTIME-RELIABILITY-RECON01 causal ownership)
 
 Source-of-truth: `.factory/epics/*.md` (19 files) — the per-epic detail files. **This board is a navigation index, not an archive.**
 Contract: [`.factory/epics/_index-contract.md`](./epics/_index-contract.md) (frozen maintenance law)
@@ -32,6 +32,8 @@ One `NEXT` per lane. Closed items are not `NEXT`. See [`.factory/epics/_index-co
 | TaskHeader projection | P1 | `CLOSED` | (none) | [`task-presentation.md`](./epics/task-presentation.md) |
 | Host substrate (host-test runner) | P0 | OPEN | `HOST-TEST RUNNER` (`HOST_REQUIRED`) | [`host-test-infrastructure.md`](./epics/host-test-infrastructure.md) |
 | Build substrate / dogfood | P0 | `CLOSED` | (none) | [`factory-infrastructure.md`](./epics/factory-infrastructure.md) |
+| Approval / MCP | P0 | OPEN | `MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01` (upstream #10499) | [`approval-mcp-authority.md`](./epics/approval-mcp-authority.md) |
+| Context / compaction | P1 | OPEN | `COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` | [`context-compaction-token-accounting.md`](./epics/context-compaction-token-accounting.md) |
 
 ---
 
