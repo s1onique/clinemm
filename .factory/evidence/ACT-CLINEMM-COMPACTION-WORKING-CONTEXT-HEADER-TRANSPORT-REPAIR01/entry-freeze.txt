@@ -1,1269 +1,165 @@
+
 # ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-# entry-freeze.txt — frozen key=value summary of the ACT
-
-OWNING_EPIC         = EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING
-                     (see .factory/epics/
-                     context-compaction-token-accounting.md)
-
-PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-WORKING-
-                     CONTEXT-AUTHORITY-PUBLISH01
-                     (commits 6bffd75c0, fc906dfc6, 96336dc77;
-                     producer half GREEN; terminology fix
-                     accepted; PASS_WITH_ONE_P1_FIX on
-                     fc906dfc6; PASS_WITH_ONE_P1_FIX on
-                     96336dc77; transport gap PROVEN)
-
-DISPOSITION         = OPEN (RED not yet authored; doctrine
-                     and carrier audit present; carrier choice
-                     TBD by RED)
-
-PRIMARY_CONTRACT    = Carry the already-authoritative W from
-                     the core prepare-turn boundary to the
-                     TaskHeader context gauge exactly once,
-                     without recomputing or transforming its
-                     semantic domain
-
-AUTHORITY_BIND      = W_AUTHORITY_LOCATION =
-                     ContextPipelinePrepareTurnResult
-                     .currentWorkingContextEstimate
-                     (frozen at fc906dfc6; this ACT does
-                     NOT modify the producer seam)
-
-W_PRESENTATION_TRANSPORT
-                   = ABSENT / PROVEN
-                     (repo-wide absence bind via
-                       git grep -n -e 'currentWorking-
-                       ContextEstimate' -e
-                       'ContextPipelinePrepareTurnResult' \
-                       -- sdk apps
-                     returns exactly:
-                       sdk/.../compaction.ts (interface
-                         + helper + wiring)
-                       sdk/.../compaction.working-
-                         context-authority-publish.test.ts
-                         (producer tests)
-                       sdk/.../compaction.working-
-                         context-ratio.test.ts
-                         (producer tests)
-                     No occurrence in:
-                       sdk/packages/agents/src/
-                         (TODO at agent-runtime.ts:2300
-                          confirms; consume site at
-                          :2308-2324 drops the field)
-                       sdk/packages/core/src/runtime/
-                         (orchestration, adapters)
-                       apps/vscode/
-                         (extension host, webview, header))
-
-EXPLICIT_W_TRANSPORT     = ABSENT / PROVEN
-                           (calibration from W_PRESENTATION_
-                            TRANSPORT after seventh-pass
-                            review: the grep searched for
-                            `currentWorkingContextEstimate`
-                            and `ContextPipelinePrepare-
-                            TurnResult` only; it does NOT
-                            prove that no generic metadata-
-                            bearing carrier exists)
-
-GENERIC_REUSABLE_CARRIER = NOT YET SEMANTICALLY BOUND
-                           (eighth-pass halt
-                            HALT_WRONG_CARRIER_SEMANTICS:
-                            the carrier audit optimized for
-                            reachability, not cadence;
-                            SessionCompactionState is
-                            REACHABILITY_BOUND but NOT
-                            cadence-correct — see
-                            SessionCompactionState_C2_
-                            CADENCE below)
-
-SessionCompactionState_C2_CADENCE
-                         = FALSIFIED
-                           (eighth-pass halt;
-                            seventh-pass carrier verdict
-                            rejected on cadence grounds)
-
-PUBLISH_GAP             = REPRODUCED
-                           (real defect, next bounded
-                            repair; compaction.ts:730
-                            returns `result` undefined on
-                            no-compaction branch;
-                            publishWorkingContextEstimate
-                            is not called; B/C prepare-turn
-                            results carry no
-                            currentWorkingContext-
-                            Estimate; RED provenance
-                            preserved at
-                            .factory/evidence/ACT-CLINEMM-
-                            COMPACTION-WORKING-CONTEXT-
-                            HEADER-TRANSPORT-REPAIR01/
-                            cadence-discriminator-red.
-                            provenance.ts — OUTSIDE default
-                            vitest discovery)
-
-SIDECAR_CADENCE         = EXPECTED_ARCHITECTURAL_FACT
-                           (saveState fires only on real
-                            compaction;
-                            compaction.ts:705/:720;
-                            durable compaction artifact is
-                            the latest COMPACTED working
-                            context, NOT generic per-turn
-                            state; this REMAINS true after
-                            the next bounded repair — the
-                            architectural separation
-                            between durable artifact and
-                            per-turn W carrier is
-                            intentional)
-
-CARRIER_CADENCE_FALSIFIED
-                         = PASS / GREEN
-                           (committed falsification
-                            witness in compaction.working-
-                            context-authority-publish.test.
-                            ts:176 asserts the GREEN
-                            architectural invariant
-                            review-recommended after the
-                            ninth-pass causal correction
-                            HALT_DEFAULT_SUITE_RED:
-                             - resultA carries W
-                               (producer-side publish)
-                             - saveState only on real
-                               compaction
-                               (durable artifact cadence)
-                            resultB/resultC intentionally
-                            not asserted in the committed
-                            witness — their RED provenance
-                            lives in the evidence file
-                            above, NOT in the default suite)
-
-NEW_BOUNDED_FIELD        = NOT YET AUTHORIZED
-                           (until the cadence-correct
-                            carrier is bound; schema bump
-                            v1→v2 not authorized yet)
-
-PRODUCTION_W_AUTHORITIES = 1
-                           (one authority: core prepare-turn
-                            seam; only ONE place computes W)
-W_RECOMPUTE_IN_AGENT     = FORBIDDEN
-W_RECOMPUTE_IN_VSCODE    = FORBIDDEN
-W_RECOMPUTE_IN_CHATVIEW  = FORBIDDEN
-TEST_ORACLE_RECOMPUTATION = permitted
-                           (test may independently call
-                            estimateRequestInputTokens
-                            to derive an oracle; this is
-                            not a production authority)
-
-TRANSPORT_DOCTRINE   = W_COMPUTE_COUNT = one authority
-                       (core prepare-turn seam)
-                     W_RECOMPUTE_IN_AGENT    = FORBIDDEN
-                     W_RECOMPUTE_IN_VSCODE   = FORBIDDEN
-                     W_RECOMPUTE_IN_CHATVIEW = FORBIDDEN
-                     P                       = preserved
-                                                as last
-                                                provider
-                                                observation
-                     H                       = preserved
-                                                as compaction
-                                                estimator
-                                                telemetry
-                     HEADER                  = consumes
-                                                transported W
-
-CARRIER_PLAN        = ContextPipelinePrepareTurnResult
-                       .currentWorkingContextEstimate
-                       ↓
-                     SessionCompactionState  (NEW bound)
-                       .currentWorkingContextEstimate?
-                       (schema:
-                        sdk/packages/core/src/session/
-                        models/session-compaction.ts:18-30;
-                        persisted to
-                        ${sessionId}.compaction.json)
-                       ↓
-                     Host reads state on
-                       resume + via
-                       updateSessionCompactionState
-                       invoke (apps/vscode/src/sdk/
-                       sdk-compaction-coordinator.ts:518)
-                       ↓
-                     ExtensionState.lastWorkingContextEstimate
-                       (NEW field; host-side mirror of
-                        SessionCompactionState.)
-                       ↓
-                     ExtensionStateContext
-                       .currentWorkingContextEstimate
-                       ↓
-                     TaskHeader → ContextWindow
-                       numerator switch:
-                         lastApiReqContextInputTokens
-                           → currentWorkingContextEstimate
-                             ?? lastApiReqContextInputTokens
-                         (with a clear "no recent
-                          prepare-turn" fallback marker)
-
-CARRIER_AUDIT            = (2026-09-03; one source pass;
-                            see ACT body for full table)
-
-  | Candidate                          | Crosses agents->core? | Accepts scalar metadata? | Reaches VSCode/session projection? | Semantic owner |
-  | ---------------------------------- | -------------------: | -----------------------: | ---------------------------------: | -------------- |
-  | AgentModelRequest                  |                  yes |               via options |                              no   | @cline/agents  |
-  | runtime event payload (metadata)   |           partial    |                  yes     |                            yes     | @cline/core    |
-  | SessionCompactionState             |                  yes |                  yes     |                            yes     | @cline/core    |
-  | sessionSnapshot                    |                  yes |                  yes     |                              yes   | @cline/core    |
-  | lastApiReqContextInputTokens (P)   |                   -  |                  yes     |                              yes   | host/webview   |
-
-  CHOSEN CARRIER (REACHABILITY-BOUND, NOT
-                     C2-cadence-correct):
-                     SessionCompactionState
-                     (falsified by CARRIER_CADENCE
-                      RED at HEAD — see
-                      SessionCompactionState_C2_CADENCE
-                      and CADENCE_RED below)
-    REACHABILITY ✓
-      - existing durable artifact for the authoritative
-        compaction seam (architecture doc §9 line 487:
-        "persist the latest compacted working context
-        as a session compaction artifact")
-      - already crosses agents->core->host->VSCode
-      - already accepts scalar metadata
-      - canonical place where the producer seam's
-        messages + system_prompt are stored
-    CADENCE  ✗  (eighth-pass halt
-                  HALT_WRONG_CARRIER_SEMANTICS)
-      - createCompactionStateAwarePrepareTurn calls
-        input.saveState ONLY inside the
-        `if (result?.messages)` branches
-        (compaction.ts:705, :720)
-      - on an ordinary prepare-turn where the upstream
-        `compact` returned undefined (no compaction
-        needed), saveState is NEVER called
-      - AND publishWorkingContextEstimate is NOT
-        called on the no-compaction branch either
-        (compaction.ts:730 returns `result` which is
-        undefined)
-      - so W is not published AND not persisted on
-        ordinary turns
-      - the carrier moves ONLY when compaction
-        rewrites messages; that is the wrong cadence
-        for C2 (which requires live current W on
-        every authoritative prepare-turn)
-
-  PROVISIONAL USE OF SessionCompactionState:
-    valuable for resume qualification
-    (durable W at compacted boundary + canonical
-    tail projection); NOT the C2 live carrier.
-
-  REJECTED candidate: AgentModelRequest
-    - would require widening the request shape
-      beyond provider-usage semantics
-    - crosses only @cline/agents -> @cline/llms
-      (request flow), not @cline/agents ->
-      @cline/core (stateful orchestration)
-    - architecture doc §9 line 489: "keep
-      compaction logic out of the low-level
-      agent message builder"
-    - request carries provider-bound state; W is
-      compaction telemetry, not a request field
-
-  REJECTED candidate: runtime-event metadata
-    - core only emits typed event metadata; no
-      generic opaque scalar payload
-    - widening this surface would create a NEW
-      protocol field (more invasive than the
-      chosen bound)
-
-  The audit picks the LOWEST already-authoritative
-  existing seam. No new protocol field, no
-  AgentModelRequest mutation, no ChatView recompute.
-
-RED_PLAN            = CLOSED in tenth-pass producer cadence
-                       GREEN. PUBLISH_GAP fix landed at
-                       compaction.ts:730 (metadata-only
-                       return; P1_1 NO_COMPACTION_REQUEST
-                       _SEMANTICS_DELTA asserted). No
-                       outstanding RED at this ACT.
-                       RED-1/RED-2/RED-3 (seventh-pass) and
-                       the named repair field
-                       `ExtensionState.lastWorkingContext
-                       Estimate` (seventh-pass RED-2/3
-                       preselected repair) remain
-                       DEAUTHORIZED.
-
-GREEN_HEAD (tenth-pass 2026-09-03; producer cadence GREEN):
-
-  Defect closed: PUBLISH_GAP at compaction.ts:730
-    (reviewer ninth-pass halt HALT_DEFAULT_SUITE_RED).
-
-  Architecture preserved: SIDECAR_CADENCE = save only
-    on real compactions; saveState.length === 1
-    unchanged.
-
-  Conservation: NO_COMPACTION_REQUEST_SEMANTICS_DELTA = 0
-    (P1_1 reviewer-mandated control):
-      result.messages === undefined
-      result.systemPrompt === undefined
-      on the no-compaction branch
-    → downstream at agent-runtime.ts:2319-2324 sees
-      `next === request` (no-op projection, semantic
-      conservation).
-
-  Method: new metadata-only helper
-    publishWorkingContextEstimateMetadataOnly(
-      context.messages,
-      context.systemPrompt,
-      context.tools,
-    )
-    that returns ONLY `currentWorkingContextEstimate`
-    (no `messages` or `systemPrompt` set). Wired into
-    compaction.ts:730 (the no-compaction branch of
-    createCompactionStateAwarePrepareTurn).
-
-  GREEN matrix observed (mechanically):
-                     resultA      resultB      resultC
-    compaction       yes          no           no
-    W defined        yes          yes          yes
-    W value          670          !=A          !=B
-    saveState        +1           unchanged    unchanged
-    messages         T[]          undefined    undefined
-    systemPrompt     SYSTEM_PROMPT undefined    undefined
-
-  Interface revision: ContextPipelinePrepareTurnResult
-    now declares `messages?: T[]` (was `messages: T[]`).
-    Captures the actual three-shape contract:
-    projection, metadata-only return, undefined return.
-    Cascade fixes: 4 test files updated; typecheck = 23
-    (baseline; zero new errors).
-
-  RED PROVENANCE FILE retired:
-    .factory/evidence/.../cadence-discriminator-red.
-    provenance.ts (ninth-pass HALT_DEFAULT_SUITE_RED
-    transient RED) was DELETED in this commit because
-    the captured RED is no longer reproducible after
-    the fix; the post-fix GREEN state is now
-    authoritative in the committed CARRIER_CADENCE
-    test at compaction.working-context-authority-
-    publish.test.ts:176.
-
-  Test updated: compaction.test.ts "keeps stale
-    sidecar state when replacement compaction returns
-    no result" now asserts the post-fix metadata-only
-    return contract instead of `result === undefined`.
-
-NEXT_QUESTION = per-turn carrier inspection
-  (reviewer: "audit existing agent/runtime event /
-  snapshot surfaces that already move per prepare-
-  turn; do NOT assume a new event or AgentRuntime-
-  StateSnapshot field yet"). The producer now emits
-  W every prepare-turn; the next causal question is
-  the cadence-correct transport seam.
-
-  Selection invariant (unchanged):
-    for each prepareTurn yielding W_n:
-      downstream host eventually observes W_n
-    without requiring:
-      compaction, provider response, api_req_started
-
-CONSERVATION        = P (lastApiReqContextInputTokens) preserved
-                     H (compaction H-space) preserved
-                     Strategy-D (getApiMetrics.ts:174-225)
-                       untouched
-                     Cumulative usage / provider billing
-                       unchanged
-                     W_COMPUTE_COUNT exactly one
-                     H_a_TO_W_EQUIVALENCE still UNPROVEN
-                     lastProviderRequestInput P remains 364.9k
-                     compaction H values remain untouched
-
-OUT_OF_SCOPE        = introducing a second estimator in
-                     ChatView
-                     extending TokenEstimatedRequest input
-                     contract
-                     changing getApiMetrics Strategy-D logic
-                     widening AgentModelRequest (rejected by
-                     carrier audit)
-
-                     IN-SCOPE-but-DEFERRED (until cadence-
-                     correct carrier is bound):
-                     - bumping SessionCompactionState schema
-                       to v2 (not authorized yet; depends
-                       on cadence-correct carrier's
-                       parser/migration contract)
-                     - adding a NEW typed runtime event
-                       that fires per prepareTurn (NOT
-                       preselected; bound only after the
-                       cadence-correct carrier is chosen)
-
-TEST_TARGET         = cadence discriminator split into
-                     TWO RED forms (per ninth-pass
-                     causal correction):
-
-                     1. COMMITTED FALSIFICATION WITNESS
-                        (GREEN, in default suite per
-                        "transient RED = good / committed
-                        intentionally-failing default = not
-                        allowed" rule):
-                          CARRIER_CADENCE in compaction.
-                          working-context-authority-
-                          publish.test.ts:176
-                          — asserts the GREEN architectural
-                          invariant:
-                            resultA.currentWorkingContext
-                              Estimate defined
-                            saveState only on real compaction
-                          — resultB/resultC intentionally NOT
-                          asserted here
-
-                     2. RED PROVENANCE (transient, OUTSIDE
-                        default vitest discovery at
-                        .factory/evidence/ACT-CLINEMM-
-                        COMPACTION-WORKING-CONTEXT-HEADER-
-                        TRANSPORT-REPAIR01/cadence-
-                        discriminator-red.provenance.ts):
-                          — full mechanical RED observation
-                          — RUN via `bun $EVIDENCE_FILE`
-                          — 4 PUBLISH_GAP REDs + 1
-                            informational GREEN +
-                            informational SIDECAR_CADENCE
-                            preservation note
-
-                     Plus: compaction-shrink discriminator
-                       preserved (alongside transport GREEN,
-                       not as evidence for carrier selection)
-
-FORWARD_DISPOSITION = tenth-pass producer cadence GREEN
-                       shipped at compaction.ts:730 (with
-                       P1_1 NO_COMPACTION_REQUEST_SEMANTICS
-                       _DELTA control asserted in the
-                       committed CARRIER_CADENCE test).
-                     NEXT = per-turn carrier inspection
-                       (auditor pass; NO new event or
-                       AgentRuntimeStateSnapshot field
-                       assumed yet). Selection invariant
-                       unchanged.
-                     LATER = cadence-correct transport +
-                       ExtensionState population + header
-                       numerator switch.
-                     FUTURE (optional) = compose durable
-                       compaction artifact (resume
-                       baseline) with live per-turn event
-                       (current W authority).
-                     NEW_REVIEW_ROUND = NO at each commit
-                       (producer cadence GREEN is bounded
-                       and mechanical; doctrine is frozen).
-
-PRODUCTION_RUNTIME_DELTA
-                     = NONZERO this commit (tenth-pass;
-                        the producer-cadence GREEN
-                        physically modified compaction.ts
-                        at line 730 to call the new
-                        publishWorkingContextEstimate
-                        MetadataOnly helper; this is the
-                        intended defect repair)
-
-TYPECHECK_DELTA     = ZERO
-                       (interface revision made
-                        `messages?: T[]` (was `T[]`);
-                        cascade fixes in 4 test files;
-                        final count = 23 = baseline;
-                        no production-side type errors
-                        introduced)
-
-DEFAULT_SUITE_STATE = GREEN
-                       (committed CARRIER_CADENCE test
-                        in compaction.working-context-
-                        authority-publish.test.ts:176 is
-                        the post-fix GREEN matrix:
-                          resultA.W defined
-                          resultB.W defined and !== A.W
-                          resultC.W defined and !== B.W
-                          saveState.length === 1
-                        PLUS the four P1_1
-                        NO_COMPACTION_REQUEST_SEMANTICS
-                        _DELTA assertions:
-                          resultB.messages === undefined
-                          resultC.messages === undefined
-                          resultB.systemPrompt === undefined
-                          resultC.systemPrompt === undefined)
-
-C1                  = GO_C2_CARRIER_BIND
-                       (eleventh-pass API export bind
-                       recorded; producer cadence GREEN
-                       stays PASS; twelfth-pass carrier
-                       inspection COMPLETED —
-                       CADENCE_CORRECT_EXISTING_CARRIER
-                       = ABSENT/PROVEN, RED authored and
-                       reproduced mechanically; next
-                       bounded repair is C2 carrier
-                       bind = one new typed field on
-                       AgentRuntimeStateSnapshot that
-                       captures result.currentWorking
-                       ContextEstimate from
-                       prepareTurnForModelRequest)
-
-API_SURFACE_DELTA   = INTERNAL_ONLY
-                       (ContextPipelinePrepareTurnResult
-                       declared in compaction.ts:60 but
-                       NOT re-exported from
-                       @cline/core/src/index.ts; the
-                       only exports from that file are
-                       createCompactionStateAware-
-                       PrepareTurn + createContext-
-                       CompactionPrepareTurn; repo-wide
-                       absence bind via `git grep -n -e
-                       ContextPipelinePrepareTurnResult
-                       -- sdk apps` returns ZERO matches
-                       outside the definition file + the
-                       two co-located test files; the
-                       optionality change in 054ee75b9
-                       is safe at the documented public
-                       surface; reachable via direct path
-                       import or Awaited<ReturnType<...>>
-                       inference only, both non-canonical
-                       access patterns; → GO)
-
-P2_FIX              = CARRIER_CADENCE W-monotonicity
-                       assertions strengthened from
-                       `.not.toBe` to `.toBeLessThan`
-                       (fixture supports strict growth:
-                       0/4/8 padding turns to A/B/C;
-                       estimator linear in characters);
-                       test commentary now matches
-                       assertions
-
-NEW_REVIEW_ROUND    = NO
-
-CARRIER_INSPECTION_TABLE (twelfth-pass 2026-09-03):
-  +------------------------------------+----------+----------------+--------------+--------------+------------+
-  | candidate seam                     | after    | receives       | agents->core?| core->host?  | verdict    |
-  |                                    | every    | exact W w/o    |              |              |            |
-  |                                    | prepareT?| recompute?     |              |              |            |
-  +------------------------------------+----------+----------------+--------------+--------------+------------+
-  | AgentRuntimeEvent                  | NO       | n/a            | n/a          | n/a          | TEMPORAL   |
-  |   e.g. turn-started                | (fires   |                |              |              | BIND FAIL  |
-  |   (agent-runtime.ts:1374)          | BEFORE   |                |              |              |            |
-  +------------------------------------+----------+----------------+--------------+--------------+------------+
-  | AgentRuntime.snapshot()            | YES      | NO             | n/a          | n/a          | IDENTITY   |
-  |   AgentRuntimeStateSnapshot        | (query-  | (no W field)   |              |              | BIND FAIL  |
-  |   (agent-runtime.ts:1001)          | able)    |                |              |              |            |
-  +------------------------------------+----------+----------------+--------------+--------------+------------+
-  | snapshot.usage                     | YES      | NO             | n/a          | n/a          | NO         |
-  |   (shared/src/agent.ts:125)        |          | (usage accu-   |              |              | RECOMPUTE  |
-  |                                    |          | mulates from   |              |              | VIOLATION  |
-  |                                    |          | provider)      |              |              |            |
-  +------------------------------------+----------+----------------+--------------+--------------+------------+
-  | LocalRuntimeHost                   | NO       | n/a            | NO           | n/a          | INHERITS   |
-  |   session.updated / current        | (derives |                | (downstream) |              | UPSTREAM   |
-  |   snapshot projection              | from snap|                |              |              | GAP        |
-  +------------------------------------+----------+----------------+--------------+--------------+------------+
-  | usage / context event              | NO       | n/a            | n/a          | n/a          | POST-      |
-  |   (fires only on provider          | (fires   |                |              |              | PROVIDER   |
-  |   response)                        | on resp.)|                |              |              | (forbids)  |
-  +------------------------------------+----------+----------------+--------------+--------------+------------+
-
-CARRIER_INSPECTION_VERDICT (reviewer stop rule):
-  CADENCE_CORRECT_EXISTING_CARRIER = ABSENT / PROVEN
-  NEW_TYPED_PER_TURN_CARRIER       = AUTHORIZED
-
-RED_AFTER_BINDING = authored
-  file = .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
-    CONTEXT-HEADER-TRANSPORT-REPAIR01/per-turn-carrier-
-    inspection-red.provenance.ts
-  invocation = bun $RED_FILE
-  end = existing host-facing boundary (runtime.snapshot());
-    NOT yet at TaskHeader
-  reproduces mechanically:
-    Given prepareTurn returns W_N=4242, no provider
-    response / api_req_started follows,
-    expected: snapshot.currentWorkingContextEstimate
-              === W_N
-    actual:   snapshot.currentWorkingContextEstimate
-              === undefined (NO field on
-              AgentRuntimeStateSnapshot;
-              agent-runtime.ts:1738-1770 discards W)
-  actual_run_output = { status: "RED",
-    prepareTurnCalls: 1,
-    error: "snapshot.currentWorkingContextEstimate is
-            undefined; ... agent-runtime.ts:1738-1770
-            discards W after prepareTurnForModelRequest" }
-  run_does_not_block_default_suite = YES (file lives
-    outside vitest discovery; same convention as
-    prior cadence RED file)
-
-NEXT_QUESTION = C2 carrier bind
-  Authorize one new typed field (per carrier
-  inspection verdict). Do NOT resurrect
-  SessionCompactionState. Do NOT widen usage event.
-  The next bounded repair must:
-    (a) capture result.currentWorkingContextEstimate
-        in this.state at agent-runtime.ts:1738
-    (b) include it in AgentRuntimeStateSnapshot
-        at agent-runtime.ts:1001
-    (c) optionally emit a per-turn event that
-        crosses the agents->core seam
-
-NEW_REVIEW_ROUND = NO.
-
-CARRIER_INSPECTION_BOUNDARY_CALIBRATION (thirteenth-pass 2026-09-03):
-  twelfth-pass claim "RED ends at the existing host-
-    facing boundary (runtime.snapshot())" is
-    CALIBRATED:
-      runtime.snapshot() is INSIDE @cline/agents; it
-      is the AGENT-RUNTIME-STATE boundary, ONE HOP
-      UPSTREAM of the LocalRuntimeHost projection.
-  actual host-facing boundary = LocalRuntimeHost
-    session/runtime projection in @cline/core.
-
-W_AT_AGENT_RUNTIME_STATE_BOUNDARY = ABSENT / RED PROVEN
-HOST_VISIBLE_W                    = NOT YET TESTED
-                                     (next cycle)
-
-PUBLICATION_CADENCE_PROBE (thirteenth-pass):
-  - LocalRuntimeHost.subscribeRuntimeEvents
-    (local-runtime-host.ts:1659) fans out
-    AgentRuntimeEvent; the canonical arbiter mapper
-    (task-state-shadow-host-wiring.ts:755 +
-    SdkController.ts:1104 getArbiterSnapshot
-    closure) reads runtime.snapshot() SYNCHRONOUSLY
-    when an event fires.
-  - Between prepareTurnForModelRequest (line 1738)
-    and model.stream(...), the only signal that fires
-    is TASK_PROVIDER_REQUEST_STARTED_EVENT (line
-    1773) which is a captureTaskLifecycle TELEMETRY
-    signal — NOT an AgentRuntimeEvent.
-  - Next AgentRuntimeEvent after prepareTurn is
-    run-finished (line 1447), which fires only after
-    the model stream completes.
-  - Therefore a snapshot() field alone does NOT
-    notify the host until provider response or later.
-
-FROZEN_CONTRACT (reviewer):
-  for each prepareTurn yielding W_n:
-    downstream host eventually observes W_n
-  without requiring:
-    compaction
-    provider response
-    api_req_started
-
-Implication: STATE_BIND alone is INSUFFICIENT;
-PUBLICATION_BIND is required.
-
-API_SURFACE_CLASSIFICATION (thirteenth-pass):
-  AgentRuntimeStateSnapshot is exposed via the
-  documented agent.snapshot() SDK method
-  (sdk/clinecore.mdx; agent.mdx) on the Agent
-  interface. It is therefore a genuine PUBLIC
-  contract (NOT internal-only).
-  Proposed field currentWorkingContextEstimate?:
-    number is ADDITIVE-OPTIONAL → API_DELTA =
-    ADDITIVE (source-compatible).
-  Eleventh-pass INTERNAL_ONLY classification
-  applied to ContextPipelinePrepareTurnResult
-  (which was NOT re-exported from @cline/core),
-  NOT to AgentRuntimeStateSnapshot. Distinct.
-
-RED_WITNESS_P2_NOTE:
-  Header description "no provider response /
-    api_req_started follows" is loose; the scripted
-    model emits finish: stop (a model-stream event,
-    not a provider usage event, not an AgentRuntime
-    Event). Stronger accurate condition:
-    "no provider usage / accounting event + no
-    AgentRuntimeEvent until run-finished".
-  Fixture satisfies the spirit; prepareTurnCalls: 1
-  + missing snapshot W remains a valid
-  discriminator. No RED file rewrite required.
-
-TWO_CONTRACT_NEXT_BOUNDED_CYCLE:
-  STATE_BIND:
-    after prepareTurn returns W_n,
-    AgentRuntimeStateSnapshot
-      .currentWorkingContextEstimate === W_n
-    (twelfth-pass RED is the GREEN target.)
-
-  PUBLICATION_BIND:
-    the core/host layer receives a state/event
-    update carrying W_n
-      after that prepareTurn
-      and before provider-response-derived events
-
-  PUBLICATION_BIND has two candidate implementations:
-    (a) new typed AgentRuntimeEvent at
-        prepareTurnForModelRequest return
-        (post-prepare notification)
-    (b) change LocalRuntimeHost publication
-        mechanics to push a state-changed snapshot
-        when this.state mutates
-
-  Reviewer-preferred shape: option (a), smallest
-  typed post-prepare notification. Preserves
-  PRODUCTION_W_AUTHORITIES = 1.
-
-C1                        = GO_C2_CARRIER_BIND
-  thirteenth-pass boundary calibration + publication
-  probe COMPLETED; no production code change yet.
-  Next cycle: state-field RED->GREEN, then
-  publication-bind, then host-pre-provider-response
-  witness, then TaskHeader.
-
-NEW_REVIEW_ROUND          = NO.
-
-FOURTEENTH_PASS_STATE_BIND_LANDED (2026-09-03):
-
-  Reviewer (factory causal + SDK runtime/state/event
-  engineer) verdict on 2b15ee89f:
-    PASS_WITH_ONE_P1_FIX.
-    C1: GO_STATE_BIND, then PUBLICATION_BIND.
-    Boundary + cadence split accepted.
-    State retention is closed at the
-    agent-runtime-state boundary in this commit;
-    publication trigger is unbound and requires
-    separate bounded repair.
-
-  P1 (reviewer): do NOT preselect a new
-  AgentRuntimeEvent before proving there is no
-  existing internal state-notification primitive.
-  Hierarchy:
-    1. existing internal state-notification mechanism
-    2. existing generic runtime-state-updated event
-    3. new typed AgentRuntimeEvent
-    4. host-specific polling/recompute — forbidden
-  This commit makes no event choice.
-
-  P2 (cosmetic): wording correction. Replace "The host
-  sees W only at provider-response-derived events"
-  with the mechanically defensible statement:
-    HOST_SEES_UPDATED_SNAPSHOT_ONLY_AFTER_A_LATER_RUNTIME_EVENT
-    NO_POST_PREPARE_RUNTIME_EVENT = PROVEN
-  Key is ordering, not "provider-derived". P2 only;
-  fixed while touching the text this commit.
-
-FOURTEENTH_PASS_PRODUCTION_DELTA:
-
-  - sdk/packages/shared/src/agent.ts:
-      AgentRuntimePrepareTurnResult gains the
-      additive-optional field
-      currentWorkingContextEstimate?: number
-        (with a docstring tying it to the
-         prepareTurnForModelRequest capture site).
-      AgentRuntimeStateSnapshot gains the
-      additive-optional field
-      currentWorkingContextEstimate?: number
-        (with full lifecycle docstring).
-
-  - sdk/packages/agents/src/agent-runtime.ts:
-      Private state gains:
-        currentWorkingContextEstimate:
-          number | undefined (initial undefined).
-      prepareTurnForModelRequest (~line 2329)
-        captures result.currentWorkingContextEstimate
-        verbatim into this.state (NO RECOMPUTE;
-        PRODUCTION_W_AUTHORITIES = 1 preserved).
-        If result lacks the field, the prior
-        captured value is preserved (last-W-wins
-        until reset).
-      snapshot() (~line 1042) surfaces
-        currentWorkingContextEstimate from
-        this.state on the AgentRuntimeStateSnapshot
-        projection.
-      execute() (~line 1352) resets the field to
-        undefined at the start of every new run.
-      restore() (~line 925) resets the field to
-        undefined so a restored transcript starts
-        with no captured W.
-
-API_DELTA = ADDITIVE OPTIONAL
-  (AgentRuntimeStateSnapshot.currentWorkingContextEstimate?:
-   number is the new documented SDK field on
-   agent.snapshot(); AgentRuntimePrepareTurnResult
-   gains the same name for prepareTurn publishers.
-   Both source-compatible; legacy prepareTurn
-   implementations may omit the field; legacy
-   snapshot consumers may ignore it.)
-
-FOURTEENTH_PASS_TEST_ARTIFACT:
-
-  New committed test file:
-    sdk/packages/agents/src/
-      agent-runtime.current-working-context-state-bind
-      .test.ts
-  Tests (6 cases):
-    1. STATE_BIND.1: snapshot captures exact prepareTurn W
-    2. undefined-when-undefined: prepareTurn returns
-       undefined -> snapshot field undefined
-    3. lifetime: W1=100, W2=120 -> snapshot === 120
-       (no accumulation 220, no stale 100)
-    4. restore(): resets to undefined
-    5. fresh-run: execute() resets BEFORE next prepareTurn
-    6. additive-optional API delta: snapshot field optional
-
-  All 6 committed tests pass.
-  Transient RED provenance file at
-    .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
-      CONTEXT-HEADER-TRANSPORT-REPAIR01/
-      per-turn-carrier-inspection-red.provenance.ts
-  superseded by the committed test (reviewer:
-  "don't rely indefinitely on an external
-  provenance script for a permanently supported
-  API field"). File retained for audit; not run by
-  default CI.
-
-VERIFICATION:
-
-  bunx vitest run on sdk/packages/agents/:
-    Test Files 23 passed (23) [+1 file]
-    Tests      403 passed (403) [+6 tests]
-
-  bunx vitest run on sdk/packages/core/src/
-    extensions/context/:
-    Test Files 5 passed | 1 skipped (6)
-    Tests      116 passed | 1 skipped (117)
-
-  bun tsc -p tsconfig.dev.json --noEmit:
-    sdk/packages/shared  : 0 errors
-    sdk/packages/agents  : 0 errors
-    sdk/packages/core    : 23 errors
-      (= baseline; pre-existing; zero new)
-
-  bun \$RED_FILE:
-    status: 'GREEN'
-    prepareTurnCalls: 1
-    error: false
-
-  git diff --check: clean
-
-PUBLICATION_BIND_STATUS:
-  PROVEN structurally that state-only retention
-  does not notify LocalRuntimeHost. The publication
-  trigger remains UNBOUND. The next bounded cycle:
-    1. Inspect existing internal state-notification
-       primitives (emitRecoveryStateChangeIfChanged,
-       emitExecutionStateChangeIfChanged at
-       agent-runtime.ts:1105/1184).
-    2. Either reuse an existing primitive or add the
-       smallest typed post-prepare notification
-       (reviewer hierarchy: 1->2->3->4).
-    3. Publish a PUBLICATION_BIND RED that asserts
-       core/host observes the new W before any
-       later AgentRuntimeEvent.
-    4. GREEN that RED.
-  No production code change for publication in
-  this commit.
-
-STATE_BIND_DISPOSITION:
-
-  STATE_BIND_GAP                = CLOSED (this commit)
-  STATE_BIND_FIELD              =
-    AgentRuntimeStateSnapshot
-      .currentWorkingContextEstimate?: number
-      (ADDITIVE OPTIONAL)
-  STATE_BIND_CAPTURE            =
-    prepareTurnForModelRequest
-      (~agent-runtime.ts:2329)
-      captures result.currentWorkingContextEstimate
-      verbatim (NO RECOMPUTE)
-  STATE_BIND_RESET              =
-    execute() and restore() reset to undefined
-  STATE_BIND_LIFETIME           =
-    W_n remains current until
-    prepareTurn_{n+1} produces W_{n+1}
-    (no accumulation, no stale retention)
-  PUBLICATION_BIND_GAP          = PROVEN (open)
-
-NEXT:
-  - inspect internal state-notification primitives
-    (C1.5 emitRecoveryStateChangeIfChanged +
-    RSMT emitExecutionStateChangeIfChanged)
-  - PUBLICATION_BIND RED: assert host observes
-    new W before any later AgentRuntimeEvent
-  - smallest trigger -> GREEN
-  - then VSCode -> TaskHeader (Phase 3)
-
-NEW_REVIEW_ROUND                = NO.
-C1                              =
-  GO_STATE_BIND (this commit)
-  + GO_PUBLICATION_BIND (next cycle)
-
-FIFTEENTH_PASS_PUBLICATION_BIND_LANDED (2026-09-03):
-
-  Reviewer on aec3ff0c6:
-    PASS_WITH_ONE_P1_FIX.
-    C1: GO_PUBLICATION_BIND.
-    STATE_BIND PASS / CLOSED.
-    The boundary + cadence split is final;
-    this commit closes PUBLICATION_BIND.
-
-  P1 (reviewer): the thirteenth/fourteenth-pass
-  implementation preserved the prior captured W when a
-  later prepareTurn omitted it ("last-known-W"). The
-  reviewer requires fail-closed: if a producer
-  unexpectedly stops publishing W, the field MUST
-  become undefined (not stale-preserve). Missing-
-  authority must surface as undefined, not as a
-  stale plausible-looking UI value.
-
-  Closed in this commit.
-
-  Inspector (mechanical):
-    1. existing generic internal notification:
-       ABSENT (only domain-specific
-       emitRecoveryStateChangeIfChanged +
-       emitExecutionStateChangeIfChanged; both
-       domain-named, NOT generic)
-    2. existing generic runtime-state-updated event:
-       ABSENT (AgentRuntimeEvent union has
-       run-started/message-added/turn-started/
-       assistant-text-delta/assistant-reasoning-
-       delta/assistant-media/assistant-message/
-       tool-started/tool-updated/tool-finished/
-       usage-updated/turn-finished/status-notice/
-       run-finished/run-failed, plus the two
-       domain-specific *-state-changed; no generic
-       state-changed)
-    3. new typed AgentRuntimeEvent variant:
-       AUTHORIZED (working-context-state-changed)
-    4. host-specific polling/recompute: forbidden
-
-  → option 3: new typed event variant
-     working-context-state-changed
-     (additive).
-
-FIFTEENTH_PASS_PRODUCTION_DELTA:
-
-  - sdk/packages/shared/src/agent.ts:
-      AgentRuntimeEvent gains
-      working-context-state-changed
-      (additive; mirror of recovery-state-changed
-      and execution-state-changed; authority
-      remains snapshot, never the event payload).
-      Docstring pins the observation-event
-      semantics and the pre-model-stream ordering
-      guarantee.
-
-  - sdk/packages/agents/src/agent-runtime.ts:
-      * emit()'s isObservationEvent set joins
-        working-context-state-changed (mirrors
-        recovery-state-changed +
-        execution-state-changed; per-listener
-        try/catch swallow applies).
-      * Private helper
-        emitWorkingContextStateChangeIfChanged(
-          before: number | undefined)
-        — sole owner of the event. Mirrors
-        emitRecoveryStateChangeIfChanged EXACTLY:
-        async, uses emit(), inner try/catch,
-        outer try/catch swallow (observation
-        must not become control). Dedup: no emit
-        when before === after (state.W post-
-        capture).
-      * prepareTurnForModelRequest: lifetime
-        changed to FAIL-CLOSED.
-          prepareTurn returns W
-            → state.W = W
-          prepareTurn returns no W (undefined
-            result OR result without the field)
-            → state.W = undefined (NOT stale-
-              preserve)
-          new run() and restore() reset to
-            undefined.
-        Capture site calls
-        emitWorkingContextStateChangeIfChanged
-        (before → after) synchronously awaited
-        before the method returns; this pins the
-        ordering guarantee:
-          prepareTurn completes
-            < working-context-state-changed
-              listener invocation
-            < model.stream(...) begins
-            < run-finished
-
-  - sdk/packages/core/src/runtime/orchestration/
-    runtime-event-adapter.ts:
-      Adds the new variant to the legacy
-      AgentEvent translation switch. Like the
-      other *-state-changed variants, it
-      produces no legacy translation (returns
-      []). Truth lives on the runtime snapshot
-      surface, not on the legacy chat projection.
-
-FIFTEENTH_PASS_TEST_ARTIFACT:
-
-  Two committed test files (sized minimally):
-
-  (1) sdk/packages/agents/src/
-      agent-runtime.current-working-context-
-      state-bind.test.ts
-      Adds the FAIL-CLOSED lifetime test (W1=100
-      then prepareTurn-without-W → snapshot.W
-      === undefined). Now 7 tests; PASS.
-
-  (2) NEW sdk/packages/agents/src/
-      agent-runtime.working-context-publication
-      .test.ts
-      3 tests:
-        1. ordering: prepareTurn < W-publication
-           < model.stream < run-finished
-           (verified via a controllable model-
-           stream barrier — listener MUST
-           observe W before the barrier releases)
-        2. dedup: prepareTurn returning the same
-           W produces exactly one emit (the
-           undefined→W_SAME transition)
-        3. observation-event isolation: a
-           throwing subscriber must not unwind
-           the runtime
-      All 3 PASS.
-
-VERIFICATION:
-
-  bunx vitest run on sdk/packages/agents/:
-    Test Files 24 passed (24) [+1 file]
-    Tests      407 passed (407) [+3 tests]
-
-  bunx vitest run on sdk/packages/core/src/
-    extensions/context/:
-    Test Files 5 passed | 1 skipped (6)
-    Tests      116 passed | 1 skipped (117)
-
-  bun tsc -p tsconfig.dev.json --noEmit:
-    sdk/packages/shared  : 0 errors
-    sdk/packages/agents  : 0 errors
-    sdk/packages/core    : 23 errors (== baseline)
-
-  git diff --check: clean
-
-PUBLICATION_BIND_DISPOSITION:
-
-  STATE_BIND                       = PASS / CLOSED
-  PUBLICATION_BIND                 = PASS / CLOSED
-  PUBLICATION_TRIGGER              = BOUND
-  PUBLICATION_NOTIFICATION_PRIM   =
-    emitWorkingContextStateChangeIfChanged
-      (mirrors recovery/execution; new additive
-       working-context-state-changed typed event)
-  PUBLICATION_ORDERING             =
-    prepareTurn completes
-      < W-publication listener
-      < model.stream
-      < run-finished
-  PUBLICATION_AUTHORITY            =
-    runtime.snapshot()
-      .currentWorkingContextEstimate
-    (single source of truth; NOT duplicated on
-     the event payload)
-  PUBLICATION_OBSERVATION_EVENT    =
-    working-context-state-changed joins the
-    isObservationEvent set; throws are
-    swallowed, listeners isolated
-  PUBLICATION_DEDUP                =
-    before === after (post-capture value
-    compared to pre-capture) → no emit
-  NO_RECOMPUTE                     = PASS
-  PRODUCTION_W_AUTHORITIES         = 1
-
-NEXT:
-  C2 header transport (VSCode projection to
-  TaskHeader). With PUBLICATION_BIND closed, the
-  TaskHeader phase-3 plumbing is mechanical: read
-  runtime.snapshot().currentWorkingContextEstimate
-  + subscribe to working-context-state-changed;
-  no host polling; no recompute. P3 phase begins
-  in a separate bounded commit, NOT this one.
-
-NEW_REVIEW_ROUND                = NO
-P0                             = NONE
-P1                             = RESOLVED this commit
-                                (fail-closed lifetime)
-C1                             = GO_PUBLICATION_BIND
-                                  (closed this commit)
-
-SIXTEENTH_PASS_TEST_CORRECTION (2026-09-03):
-
-  Reviewer on 05ccaaf66:
-    PASS_WITH_ONE_P1_FIX.
-    C1: GO_P3 after one bounded test correction.
-
-    STATE_BIND_IMPLEMENTATION       = PASS
-    PUBLICATION_BIND_IMPLEMENTATION = PASS
-    AGENT_RUNTIME_ORDERING          = EXECUTABLE / PASS
-    HOST_PUBLICATION                = COMPOSED PROOF / PASS
-
-  P1 (reviewer): two claimed transition tests were
-  vacuous for the exact defect they claimed to
-  pin, because the execute() lifecycle reset on
-  a fresh runtime.run() was masking the in-run
-  transition. Closed in this commit by replacing
-  both vacuous tests with real two-iteration
-  prepareTurn fixtures in ONE execute() lifecycle
-  (no run()/restore() reset in between, driven by
-  a tool-call -> finish:tool-calls -> finish:stop
-  model script):
-    1. STATE_BIND FAIL-CLOSED:
-       prepareTurn #1 = W=100,
-       prepareTurn #2 = no W
-       -> snapshot.W === undefined (NOT 100)
-    2. STATE_BIND LIFETIME:
-       prepareTurn #1 = W=100,
-       prepareTurn #2 = W=120
-       -> snapshot.W === 120 (NOT 100, NOT 220)
-    3. PUBLICATION_BIND DEDUP:
-       prepareTurn #1 = W=1234,
-       prepareTurn #2 = W=1234
-       -> exactly ONE working-context-state-changed
-          event (the FIRST transition); no event on
-          the second prepareTurn (helper dedups)
-    4. PUBLICATION_BIND FAIL-CLOSED (publisher
-       side):
-       prepareTurn #1 = W=100,
-       prepareTurn #2 = no W
-       -> TWO working-context-state-changed events:
-          first carries snapshot.W === 100,
-          second carries snapshot.W === undefined
-          (NOT stale 100) and
-          previousWorkingContextEstimate === 100.
-          If production still preserved stale W,
-          the helper would dedup and total events
-          would be 1, not 2.
-
-  Sanity check (this commit): temporarily reverted
-  prepareTurnForModelRequest's fail-closed
-  assignment to the prior vacuous preserve-last
-  form (only update if result.currentWorking
-    ContextEstimate !== undefined); the new
-  FAIL-CLOSED test failed exactly as expected
-  ("expected 100 to be undefined"); production
-  code restored. The test is now genuinely pinned,
-  not vacuous.
-
-  Production code change in this commit:
-    NONE. Test-only correction.
-
-  P2 (terminology): PUBLICATION_AUTHORITY wording
-  corrected.
-    Was: snapshot is single source of truth,
-         NOT duplicated on event payload.
-    Now: NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
-         event carries authoritative runtime
-         snapshot.
-    The event necessarily carries W via
-    `snapshot: AgentRuntimeStateSnapshot`, but
-    that is the SAME immutable snapshot pulled
-    by every *-state-changed family — not an
-    independently computed scalar. Documentation-
-    only; no production change.
-
-  HOST_PUBLICATION closure is COMPOSED PROOF
-  rather than host-executable-only:
-    - AgentRuntime.subscribe() delivers
-      working-context-state-changed (verified
-      by tests pinning the ordering).
-    - LocalRuntimeHost.subscribeRuntimeEvents()
-      generically fans out AgentRuntimeEvent
-      to the host (verified by prior source
-      recon).
-    The architecture is @cline/agents ->
-    @cline/core -> host wiring; the
-    runtime-side test composes with the host
-    fanout to yield the result without a
-    separate host harness.
-
-VERIFICATION:
-
-  bunx vitest run on sdk/packages/agents/:
-    Test Files 24 passed (24)
-    Tests      408 passed (408) [+1 test:
-                                     DEDUP-via-two-
-                                     iterations]
-
-  bunx vitest run on sdk/packages/core/
-    src/extensions/context/:
-    Test Files 5 passed | 1 skipped (6)
-    Tests      116 passed | 1 skipped (117)
-
-  bun tsc -p tsconfig.dev.json --noEmit:
-    sdk/packages/shared  : 0 errors
-    sdk/packages/agents  : 0 errors
-    sdk/packages/core    : 23 errors
-                            (== baseline)
-
-  Sanity test (production revert):
-    FAIL-CLOSED test fails with
-      "expected 100 to be undefined"
-    confirming the test is genuinely pinned.
-
-  git diff --check: clean
-
-DISPOSITION:
-
-  STATE_BIND_CLOSED                  = PROVEN
-  STATE_BIND_IMPLEMENTATION          = PASS
-  STATE_BIND_DURABLE_TEST            = PROVEN
-    (vacuous witness replaced with real
-     two-iteration prepareTurn fixture)
-
-  PUBLICATION_BIND_CLOSED            = PROVEN
-  PUBLICATION_BIND_IMPLEMENTATION    = PASS
-  PUBLICATION_BIND_DURABLE_TEST      = PROVEN
-    (vacuous witness replaced with real
-     two-iteration prepareTurn fixture;
-     publisher-side fail-closed companion
-     added)
-
-  AGENT_RUNTIME_ORDERING             = EXECUTABLE
-  HOST_PUBLICATION                   =
-    COMPOSED PROOF / PASS
-
-  NO_INDEPENDENT_W_SCALAR_ON_EVENT   = TRUE
-    (event carries authoritative runtime
-     snapshot, no duplicate scalar)
-
-  P0 = NONE
-  P1 = RESOLVED this commit (vacuous witnesses
-       replaced with real two-iteration
-       fixtures)
-  P2 = RESOLVED this commit (PUBLICATION_
-       AUTHORITY wording corrected)
-  NEW_REVIEW_ROUND = NO
-  C1 = GO_P3
-
-NEXT:
-  P3 (VSCode projection to TaskHeader). With
-  STATE_BIND and PUBLICATION_BIND both closed
-  and properly tested with non-vacuous in-run
-  fixtures, the P3 phase becomes mechanical:
-    - subscribe to working-context-state-changed
-      on the LocalRuntimeHost orchestrator-side
-      runtime;
-    - read snapshot.currentWorkingContextEstimate
-      on each event;
-    - pipe W into the existing compaction
-      working-context header bar (no recompute,
-      no host-side estimation).
-  P3 RED: header projection numerator === W
-          (today it is P, the prior provider
-           metric, which is what the reviewer's
-           P_a/P cross-scale arithmetic
-           prohibition forbade).
-  P3 conservation (verbatim from reviewer):
-    W is transported, never recomputed in VSCode
-    P remains available for provider/request
-      metrics
-    H_b/H_a remain compaction telemetry
-    getApiMetrics Strategy-D stays untouched
-    undefined W fails closed:
-      no stale previous W silently displayed
-      as current
-
-  P3 is a separate bounded commit; not in this
-  commit.
-
-COMMIT_LINEAGE:
-
-  commit 7:   STATE_BIND            (aec3ff0c6)
-  commit 8:   PUBLICATION_BIND      (05ccaaf66)
-  commit 9:   TEST_CORRECTION       (this commit)
-               + P2_TERMINOLOGY
-                                    └─ C1: GO_P3
-
-PRODUCTION_RUNTIME_DELTA = test-only correction
-TYPECHECK_DELTA          = ZERO
-DEFAULT_SUITE_STATE      = GREEN
-NEW_REVIEW_ROUND         = NO
+# Entry-freeze (seventeenth-pass, 2026-09-03)
+#
+# Reviewer on bb5588150:
+#   PASS. C1: GO_P3.
+#
+# STATE             = GREEN
+# P0 / P1 / P2      = NONE
+# NEW_REVIEW_ROUND  = NO
+# C1                = GO_P3
+#
+# --- Component disposition (the actual state, ~10 lines) ---
+#
+#   W producer                = CLOSED (snapshot at prepareTurn boundary)
+#   W cadence                 = CLOSED (publish on transition)
+#   runtime state             = CLOSED (AgentRuntimeStateSnapshot.W)
+#   runtime publication       = CLOSED (working-context-state-changed,
+#                                       dedup, fail-closed)
+#   durable transition tests  = CLOSED (real two-iter in one execute(),
+#                                       sanity-verified via production
+#                                       revert: "expected 100 to be
+#                                       undefined")
+#   HOST_PUBLICATION          = COMPOSED PROOF / ACCEPTED
+#   NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
+#     (event carries authoritative runtime snapshot, NOT an
+#      independently computed scalar; helper emits iff
+#      snapshot.W differs from prior)
+#   VSCode projection         = OPEN  <-- P3 next bounded cycle
+#
+# --- Commit lineage ---
+#
+#   commit 7:   STATE_BIND            (aec3ff0c6)
+#   commit 8:   PUBLICATION_BIND      (05ccaaf66)
+#   commit 9:   TEST_CORRECTION       (bb5588150)
+#                + P2_TERMINOLOGY
+#                                    └─ C1: GO_P3
+#
+# --- P3 contract (verbatim from reviewer) ---
+#
+#   NO_STARTING_FROM_SUBSCRIBE:
+#     Do NOT begin P3 with "subscribe somewhere and add a
+#     field". Begin by binding the actual existing VS Code
+#     projection seam.
+#
+#   Required chain (top-down):
+#     AgentRuntime
+#       snapshot.currentWorkingContextEstimate = W
+#             +
+#       working-context-state-changed
+#             |
+#             v
+#     LocalRuntimeHost / core session projection
+#             |
+#             v
+#     SdkController / webview state
+#             |
+#             v
+#     ChatView / TaskHeader
+#             |
+#             v
+#     ContextWindow numerator
+#
+#   First P3 sub-step (BEFORE any code):
+#     Map every boundary in the chain (already-receives-event,
+#     can-read-snapshot, currently-carries-W). Stop at the
+#     FIRST missing edge. No new protocol field before the
+#     first missing edge is identified.
+#
+#   Boundary table (the 5 rows to fill in):
+#     | Boundary                       | Already receives runtime event? | Can read runtime snapshot? | Currently carries W? |
+#     | ------------------------------ | ------------------------------: | -------------------------: | -------------------: |
+#     | LocalRuntimeHost               |                             yes |                        yes |                    ? |
+#     | core session snapshot/event    |                               ? |                          ? |                    ? |
+#     | SdkController state            |                               ? |                          ? |                    ? |
+#     | ExtensionState/webview message |                               ? |                        n/a |                    ? |
+#     | ChatView token projection      |                             yes |                        n/a |     no — currently P |
+#
+#   P3 RED (synthetic sentinels, real projection seam):
+#     P = 364_900
+#     W = 271_337
+#     working-context-state-changed
+#       snapshot.W = 271_337
+#     no new api_req_started
+#     expected:
+#       TaskHeader context numerator = 271_337
+#     actual at HEAD:
+#       numerator = 364_900 (P)
+#     271_337 is deliberately synthetic. Do NOT use live
+#     264.3k; that remains screenshot evidence, not oracle.
+#
+#   UNDEFINED_W contract:
+#     UNDEFINED_W_STALE_REUSE = FORBIDDEN
+#     Acceptable outcomes when W === undefined:
+#       A. numerator falls back to P
+#       B. numerator becomes unavailable / unknown
+#     Forbidden:
+#       stale previous W displayed as current
+#     Fallback choice: PENDING. Read existing component
+#     contract (ContextWindow.tsx, getApiMetrics.ts) before
+#     deciding. Observed contract hints (read but not
+#     decided): ContextWindow returns null when tokenData is
+#     falsy (line 167); getLastApiReqContextInputTokens walks
+#     modifiedMessages for last api_req_started with
+#     tokensIn+cacheReads+cacheWrites (this is the "P"
+#     path that P3 replaces).
+#
+#   CONSERVATION (mechanically searchable post-GREEN):
+#     apps/vscode MUST NOT import/use:
+#       estimateRequestInputTokens
+#       estimateMessageTokens
+#     for this projection.
+#     The host is transport only. W is transported, never
+#     recomputed.
+#
+#   CONSERVATION (provider and Strategy-D):
+#     P remains available for provider / request metrics.
+#     H_b / H_a remain compaction telemetry.
+#     getApiMetrics Strategy-D stays untouched
+#     (getLastApiReqContextInputTokens continues to drive
+#     provider-activity contexts; it is the webview bar's
+#     numerator that P3 changes).
+#
+# --- Production-runtime delta ---
+#
+#   NONE. This commit is entry-freeze / ACT / board only.
+#   No production code, no test code, no factory historical
+#   bloat.
+#
+# --- Default-suite state ---
+#
+#   GREEN (carried from bb5588150).
+#
+# --- Disposition ---
+#
+#   STATE_BIND_CLOSED                = PROVEN
+#   STATE_BIND_IMPLEMENTATION        = PASS
+#   STATE_BIND_DURABLE_TEST          = PROVEN
+#   PUBLICATION_BIND_CLOSED          = PROVEN
+#   PUBLICATION_BIND_IMPLEMENTATION  = PASS
+#   PUBLICATION_BIND_DURABLE_TEST    = PROVEN
+#   HOST_PUBLICATION                 = COMPOSED PROOF
+#                                       / ACCEPTED
+#   NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
+#   VSCODE_PROJECTION                = OPEN
+#   P0 / P1 / P2                     = NONE
+#   NEW_REVIEW_ROUND                 = NO
+#   C1                               = GO_P3
+#
+# --- P2 (reviewer): Factory bloat ---
+#
+#   Reviewer (literal): "Do not add another multi-hundred-
+#   line historical section during P3."
+#   Resolution: bbbbb entry-freeze reduced from 1269 lines
+#   to ~120 (this pass). ACT body reduced accordingly.
+#   No historical narrative retained. The disposition is
+#   current-state-only.
+#
+# --- Next bounded cycle (separate commit) ---
+#
+#   P3 first sub-step: fill boundary table; identify first
+#   missing edge. NO CODE before that table is complete
+#   for all 5 rows. Then the smallest change at the first
+#   missing edge; then P3 RED with synthetic sentinels;
+#   then GREEN; then dogfood actual post-compaction bar.
