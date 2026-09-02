@@ -913,14 +913,23 @@ NEXT =
   Once the contract ACT closes, do NOT start another recon
   epic. Resume the umbrella ACT and finally execute the real
   Q5 RED with:
-    A. current owner has RUNNING J    → MUST NOT become awaiting_followup
+    A. current owner has RUNNING J    → after.phase must NOT be
+                                          `awaiting_followup` (do NOT yet
+                                          freeze the specific phase A *must*
+                                          become — could be `streaming`,
+                                          `awaiting_tool`, `resumable`, or
+                                          a new explicit background-owned
+                                          phase; that decision is the
+                                          umbrella ACT's Q5, not the contract
+                                          ACT's)
     B. current owner has no running J → awaiting_followup preserved (control)
     C. another owner has RUNNING J    → awaiting_followup preserved (cross-owner control)
     D. current owner's J completed    → awaiting_followup preserved (terminal control)
   If A fails while B/C/D pass:
     CASE_A = ADJUDICATED
     ROOT_CAUSE_ISOLATED = YES
-  and only then patch the lowest authority seam.
+  and only then patch the lowest authority seam. DO NOT smuggle
+  the eventual state-machine design into the contract ACT.
 
   The rename of `backgroundCommandTaskId` (which currently stores
   jobId) is a Cline-wide API surface decision and should be a
@@ -943,6 +952,33 @@ P1_CORRECTION_AT_2026-09-02_13:55 =
   `ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01`: the contract
   ACT MUST first persist owner identity on CommandJob; the carrier
   shape is a downstream consequence, not a precondition.
+
+P1_CORRECTION_AT_2026-09-02_14:30 (on the contract ACT's opening commit) =
+  The contract ACT's first opening draft prescribed in Q4:
+    "Add the chosen field(s) to the CommandJob interface
+     (command-job-manager.ts:386) AND CommandJobSnapshot (line 60)."
+  The reviewer correctly noted that CommandJobSnapshot may be consumed
+  by UI, tool output, diagnostics, persisted metadata, or any
+  public-facing adapter; adding owner identity there creates
+  unnecessary surface area and potentially a privacy/API-compatibility
+  commitment. Bounded fix applied in-process: CommandJob (the internal
+  record) retains owner identity; CommandJobSnapshot does NOT gain
+  owner identity unless source recon proves an internal-only snapshot
+  consumer mechanically requires it; the per-owner query
+  (`hasRunningBackgroundJobForOwner(ownerId)` or, if more info needed,
+  `getRunningBackgroundJobsForOwner(ownerId)`) encapsulates identity
+  instead of exposing raw ownership IDs broadly. Q1/Q2 also tightened
+  to force picking exactly ONE minimum lifecycle-correct owner via a
+  discrimination table (stable across turn iterations / changes on
+  new task / changes on session rebuild / available at job creation);
+  persisting both sessionId and conversationId is forbidden. Q3 RED
+  reframed as the combined identity+authority assertion: A starts
+  RUNNING J → `hasRunningBackgroundJobForOwner(A) === true`. The
+  post-ACT Q5 A-assertion softened from "MUST NOT become
+  awaiting_followup" to "after.phase must NOT be `awaiting_followup`;
+  do NOT yet freeze the specific phase A *must* become" — that
+  state-machine design is the umbrella ACT's Q5, not the contract
+  ACT's.
 ```
 
 ### Decisive final wording (per §15 stop rule)
@@ -952,6 +988,15 @@ AUTHORITY_IDENTITY_MISSING
   (carrying the convention that the contract ACT is `BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01`,
    starting at the PRODUCER (job creation), NOT at the CONSUMER (coordinator
    options); carrier shape is downstream, not precondition;
+   CommandJob (internal) retains owner identity;
+   CommandJobSnapshot does NOT gain owner identity unless
+   internal-only snapshot consumer is proved;
+   per-owner query encapsulates identity (hasRunningBackgroundJobForOwner);
+   Q1/Q2 force exactly ONE minimum lifecycle-correct owner via
+   discrimination table (never both sessionId+conversationId);
+   Q3 RED = combined identity+authority assertion;
+   post-ACT Q5 A-assertion softens to "not.toBe('awaiting_followup')"
+   — state-machine design is umbrella's Q5, not contract's;
    Q5 to be resumed inside this umbrella ACT as soon as the
    contract ACT closes; no new review round required; C1: GO_CONTRACT)
 ```

@@ -356,14 +356,25 @@ Likely candidates for the minimum identity (frozen here,
 to be inspected at the real job-creation seam):
     ownerSessionId
     ownerConversationId
-Only add ownerTaskId if source recon proves a stable task
-identity exists at the real run_commands creation seam.
+Q1/Q2 must pick **exactly ONE** minimum lifecycle-correct
+owner via the discrimination table (stable across turn
+iterations / changes on new task / changes on session
+rebuild / available at job creation). Persisting BOTH
+because both exist is forbidden. Only add ownerTaskId if
+source recon proves a stable task identity exists at the
+real run_commands creation seam.
+
+Persistence target = internal `CommandJob` record ONLY.
+`CommandJobSnapshot` does NOT gain owner identity unless
+source recon proves an existing internal-only snapshot
+consumer mechanically requires it. Identity is encapsulated
+behind the per-owner query.
 
 Desired resulting seam (semantically — shape to be picked
 during the contract ACT):
     hasRunningBackgroundJobForOwner(ownerId): boolean
     OR
-    getRunningBackgroundJobs(): Array<{ jobId, ownerSessionId? }>
+    getRunningBackgroundJobsForOwner(ownerId): ...
 NOT another controller-wide boolean — the current
 `backgroundCommandRunning` is exactly too lossy for
 authority decisions.
@@ -378,6 +389,18 @@ recon; the case is derived from the construction of
 this as an executed probe. No additional cleanup commit
 spend.
 
+### Q3 (contract ACT) — combined identity + authority RED
+
+The contract ACT's Q3 RED should be load-bearing:
+A starts RUNNING J → `hasRunningBackgroundJobForOwner(A) === true`.
+At HEAD this MUST FAIL because the chosen owner identity
+is absent from the manager's internal records. Reuse
+existing CommandJobManager test deterministic process-lifecycle
+controls where possible; if a real child is needed, prefer
+`/bin/sh -c 'sleep N'` with N very short and cleanup
+authoritative. The purpose is owner-state semantics, not
+process timing.
+
 ### Then immediately return to Q5 (still in the umbrella ACT)
 
 Once the contract ACT closes, **do not start another recon
@@ -390,7 +413,9 @@ same TurnState
 same production seam
 
 A. current owner has RUNNING J
-   → MUST NOT become awaiting_followup
+   → after.phase must NOT be `awaiting_followup`
+     (do NOT yet freeze the specific phase A *must* become;
+      state-machine design is umbrella Q5, not contract ACT's)
 B. current owner has no running J
    → awaiting_followup preserved (control / current behavior)
 C. another owner has RUNNING J

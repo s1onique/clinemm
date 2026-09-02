@@ -30,6 +30,50 @@ command job from creation through liveness/completion,
 sufficient for the existing umbrella ACT to execute its
 real Q5 RED.
 
+### P1 (in-process correction at commit `603ae6806+1`)
+
+The Factory causal reviewer's verdict on the opening commit
+of THIS contract ACT was again `PASS_WITH_ONE_P1_FIX / C1:
+GO_CONTRACT`. The P1 was:
+
+> Owner identity is prescribed onto `CommandJobSnapshot`
+> without proving snapshot exposure is necessary.
+
+Specifically, the previous Q4 wording said
+"Add the chosen field(s) to the CommandJob interface AND
+CommandJobSnapshot." The reviewer correctly noted that
+`CommandJobSnapshot` may be consumed by UI, tool output,
+diagnostics, persisted metadata, or any public-facing
+adapter; adding `sessionId`/`conversationId` there creates
+unnecessary surface area and potentially a privacy/API
+compatibility commitment.
+
+The bounded fix: `CommandJob` (the internal record) retains
+owner identity. `CommandJobSnapshot` does NOT gain owner
+identity UNLESS source recon proves an existing internal-only
+snapshot consumer mechanically requires it. The owner-scoped
+query encapsulates identity:
+
+```ts
+hasRunningBackgroundJobForOwner(ownerId): boolean
+```
+
+or, if more information is genuinely needed:
+
+```ts
+getRunningBackgroundJobsForOwner(ownerId): ...
+```
+
+rather than exposing raw ownership IDs broadly. This also
+better satisfies our own out-of-scope rule
+"no protocol field bloat."
+
+This is a bounded contract correction, not a design
+restart. Q1/Q2/Q3/Q5/Q6 are unchanged in spirit; only Q4
+and the post-ACT Q5 RED assertion shape are tightened.
+See §2 Scope, §3 Out of scope, §4 Q1/Q2/Q3/Q4, and §5
+for the frozen wording.
+
 ## 1. Mission
 
 > Define and minimally implement the authoritative ownership
@@ -46,15 +90,22 @@ real Q5 RED.
   `sessionId` and `conversationId` per
   `sdk/packages/shared/src/agent.ts:349,351`).
 - Choose the **minimum** identity to capture on each job
-  at creation time.
-- Persist that identity on `CommandJob` (interface field
-  on `command-job-manager.ts:386`).
+  at creation time. Q1/Q2's discrimination table (see §4)
+  forces picking **exactly one** semantic owner if
+  possible; persisting both because both exist is
+  forbidden.
+- Persist the chosen identity on the **internal**
+  `CommandJob` record (interface at
+  `command-job-manager.ts:386`). NOT on `CommandJobSnapshot`
+  by default.
 - Expose a per-owner liveness query on the manager's public
-  surface (semantically either
-  `hasRunningBackgroundJobForOwner(ownerId): boolean` or
-  `getRunningBackgroundJobs(): Array<{ jobId, ownerSessionId? }>`
-  — the exact shape is decided during this ACT, NOT
-  pre-decided here).
+  surface. Preferred shape (decided DURING this ACT):
+  `hasRunningBackgroundJobForOwner(ownerId): boolean`,
+  or, if more information is genuinely needed:
+  `getRunningBackgroundJobsForOwner(ownerId): ...`. The
+  exact shape is NOT pre-decided here. The query
+  encapsulates identity; callers do not receive raw
+  ownership IDs unless mechanically required.
 - Update any code path that constructs a CommandJob to
   populate the identity from the available context.
 
@@ -77,6 +128,17 @@ real Q5 RED.
   sources.
 - **DO NOT** add new protocol fields beyond the minimum needed
   to identify the owner.
+- **DO NOT** put owner identity on `CommandJobSnapshot`
+  (or any other externally-consumed shape — UI, tool output,
+  diagnostics, persisted metadata, public-facing adapter)
+  UNLESS source recon proves an existing **internal-only**
+  snapshot consumer mechanically requires the owner field.
+  Identity belongs on the internal `CommandJob` record by
+  default; the per-owner query encapsulates identity.
+- **DO NOT** persist BOTH `sessionId` and `conversationId`
+  simply because both exist on `AgentToolContext`. The
+  Q1/Q2 discrimination table (§4) must force a single
+  minimum lifecycle-correct owner.
 
 ## 4. Contract questions — progression
 
@@ -87,38 +149,95 @@ Q1. What owner IDs exist at real job creation?
    - Confirm sessionId / conversationId presence on
      run_commands invocations vs other tools.
 
-Q2. Which one has lifecycle semantics matching the
-    session-event owner?
-   - In particular, is `conversationId` stable across the
-     lifetime of a turn, across rebuilds, across clearTask?
-   - Is `sessionId` stable across rebuilds and clearTask?
-   - Decide between ownerSessionId / ownerConversationId /
-     (only if proven) ownerTaskId.
+Q2. Which identity is stable for exactly the lifecycle
+    that SdkSessionEventCoordinator calls "this owner"?
+   - For each candidate, fill the discrimination table:
+     | Identity         | stable across turn iterations? | changes on new task? | changes on session rebuild? | available at job creation? |
+     | sessionId        |                            ?  |                  ?   |                         ?   |                       ?    |
+     | conversationId   |                            ?  |                  ?   |                         ?   |                       ?    |
+     | task ID          |                            ?  |                  ?   |                         ?   |                       ?    |
+   - Decide on the MINIMUM identity with the correct
+     lifecycle semantics (exactly ONE of sessionId /
+     conversationId / task ID, never both, never all three).
+   - If NONE matches the SdkSessionEventCoordinator's
+     "this owner" semantics, halt at
+     HALT_UNANTICIPATED_IDENTITY_GAP. Do not invent
+     ownerTaskId.
 
-Q3. RED — starting J loses that owner identity today
+Q3. RED — combined identity + authority (load-bearing)
    - Write a minimal test (synthetic-real; uses
      /bin/sh -c 'sleep N' as bounded child following
-     command-job-manager.test.ts pattern) that starts a
-     job, asserts the chosen owner identity is recoverable
-     from the job record, and that it FAILS today.
+     command-job-manager.test.ts pattern, with N kept
+     very short and cleanup authoritative) that asserts:
 
-Q4. Bounded addition — persist that identity on CommandJob
-   - Add the chosen field(s) to the CommandJob interface
-     (command-job-manager.ts:386) and CommandJobSnapshot
-     (line 60).
-   - Wire manager.start() to capture the identity from the
-     available context.
+       A starts RUNNING J under owner A
+       → manager.canAnswer(hasRunningBackgroundJobForOwner(A))
+         === true
+       → hasRunningBackgroundJobForOwner(A) === true
+
+     At HEAD, this MUST FAIL because the chosen owner
+     identity is absent from the manager's internal
+     records. The test is load-bearing because it
+     combines identity preservation AND authority
+     usefulness into a single contract — not merely
+     asserting that a new property exists.
+
+   - Do NOT use a real 30-second process unless needed.
+     If existing CommandJobManager tests already provide
+     deterministic process-lifecycle controls, reuse them.
+
+Q4. Bounded addition — persist identity INTERNALLY only
+   - Add the chosen owner field to the **internal**
+     CommandJob interface (command-job-manager.ts:386)
+     ONLY.
+   - DO NOT extend CommandJobSnapshot (line 60) UNLESS
+     source recon proves an existing internal-only
+     snapshot consumer mechanically requires the owner
+     field. By default, snapshots remain unchanged.
+   - Wire manager.start() to capture the identity from
+     the available context.
    - Re-run Q3's RED → GREEN.
 
-Q5. Query/lookup exposes running jobs for owner X
+Q5. Owner-scoped liveness query on the manager's public
+    surface
    - Expose the chosen semantic on the manager's public
-     surface.
-   - Add unit tests for the cross-owner control scenarios.
+     surface. Preferred shape (decided DURING this ACT):
+       hasRunningBackgroundJobForOwner(ownerId): boolean
+     or, if more information is genuinely needed:
+       getRunningBackgroundJobsForOwner(ownerId): ...
+   - Callers do NOT receive raw ownership IDs unless
+     mechanically required.
+   - Add unit tests for the cross-owner control scenarios
+     (Q6).
 
 Q6. Controls (mandatory)
    - Job of owner A does NOT count for owner B's lookup.
    - Completed job no longer counts for any owner.
    - Empty repository still reads false.
+
+Q7. After this ACT closes — resume Q5 in the umbrella ACT
+    with the post-ACT RED matrix
+   - Same completion event, same TurnState, same production
+     seam.
+   - A. current owner has RUNNING J    → after.phase
+        must NOT be `awaiting_followup`. Do NOT yet freeze
+        the specific phase A *must* become (could be
+        `streaming`, `awaiting_tool`, `resumable`, or a new
+        explicit background-owned phase — that decision
+        is the umbrella ACT's Q5, not this contract ACT's).
+   - B. current owner has no running J → awaiting_followup
+        preserved (control / current behavior).
+   - C. another owner has RUNNING J    → awaiting_followup
+        preserved (cross-owner contamination control).
+   - D. current owner's J completed    → awaiting_followup
+        preserved (terminal control).
+   - If A fails while B/C/D pass:
+       CASE_A = ADJUDICATED
+       ROOT_CAUSE_ISOLATED = YES
+   - Only then patch the lowest authority seam.
+   - DO NOT smuggle the eventual state-machine design into
+     the identity contract ACT; that is a separate
+     architectural question.
 ```
 
 ## 5. Anti-overfit guarantee (carried forward verbatim)
