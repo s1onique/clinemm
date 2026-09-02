@@ -1,0 +1,46 @@
+ENTRY_HEAD         = 9f994b135ddb9175b78d19f619828fed78867369
+SUBJECT_HEAD        = 9f994b135ddb9175b78d19f619828fed78867369
+WORKTREE            = clean (only ACT file + evidence
+                     directory + .factory/epic-board.md
+                     + .factory/epics/context-compaction-
+                     token-accounting.md + .gitignore are
+                     pending this commit)
+PRODUCTION_DELTA    = ZERO
+PURPOSE             = RECON_ONLY (no production code
+                     change; no protocol change
+                     presupposed)
+
+ACT_DISPOSITION     = PASS_WITH_ONE_P1_FIX on
+                     predecessor empirical report
+                     (commit 9f994b135, defect A and
+                     defect B CLOSED at HEAD, defect C
+                     LIVE consumer-level witness);
+                     recon opens with the P1 carried
+                     forward.
+
+DEFECT_A            = CLOSED at cb5b52239 (Strategy-D)
+DEFECT_B            = CLOSED at HEAD (trailing
+                     postStateToWebview at
+                     sdk-compaction-coordinator.ts:365-396)
+DEFECT_C            = LIVE / consumer-level behaviour
+                     reproduced; full UI production-seam
+                     reproduction = NOT_YET (P1)
+
+WIRE_KIND_CHANGE    = NOT_AUTHORIZED_YET (option β
+                     deferred until recon proves C3 is
+                     the intended semantic contract)
+
+PRIMARY_QUESTION    = what semantic quantity should
+                     the header bar represent
+                     immediately after compaction and
+                     before the next API request?
+
+PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-
+                     PRESENTATION-FRESHNESS-EMPIRICAL01
+                     (commit 9f994b135; EMPIRICAL_REPORT
+                     = PASS)
+
+OWNING_EPIC         = EPIC-CONTEXT-COMPACTION-TOKEN-
+                     ACCOUNTING
+                     (see .factory/epics/context-
+                     compaction-token-accounting.md)

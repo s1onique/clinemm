@@ -219,3 +219,51 @@ next move:     (α) narrow recon-only ACT to bind the actual
                already-landed work and violate the Factory
                doctrine "real/live failure → RED
                reproduction → repair".
+
+## Current frontier — ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01 (OPEN 2026-09-02 18:30:00Z)
+
+The Factory causal reviewer's PASS_WITH_ONE_P1_FIX
+disposition on commit `9f994b135` (the empirical sanity
+check) chose option α (narrow recon) over option β
+(wire-contract `kind` discriminator) and named the next
+ACT explicitly: **`ACT-CLINEMM-COMPACTION-HEADER-BAR-
+FRESHNESS-RECON01`**.
+
+The recon is the current live frontier for this epic.
+It freezes the semantic contract of the TaskHeader context
+bar at the REAL render seam immediately after a compaction
+completes and before the next provider request. Its
+narrowed question: **what does the header bar represent
+immediately after compaction and before the next API
+request?**
+
+Three admissible contracts (C1/C2/C3) are classified in
+the recon's §3 decisive matrix; the recon's C1/C2/C3
+verdict decides which downstream repair ACT opens (if
+any). The wire-contract ACT remains NOT_AUTHORIZED_YET
+until the recon proves C3 is the intended semantic
+contract — adding `kind` before the contract is frozen
+would preselect the solution.
+
+The empirical P1 is carried into the recon: the 2/2
+behaviour witness exercises only the shared metrics
+consumer (`getLastApiReqContextInputTokens`), NOT the
+actual `ChatView → ContextWindow/TaskHeader` render
+chain. The recon MUST author the real RED only after the
+semantic contract is frozen; per the reviewer's directive,
+"do not write `expect(bar).toBe(264300)` until the bar
+is actually proven to represent working context. That is
+exactly how we avoid repeating the earlier
+accounting-domain mistake."
+
+Defect A and defect B remain CLOSED at HEAD; the §0 frozen
+contract + I1-I7 invariants are preserved unchanged. The
+recon MUST NOT touch the H-space producer, the P-space
+consumer, or the compactor entry points.
+
+See `.factory/acts/ACT-CLINEMM-COMPACTION-HEADER-BAR-
+FRESHNESS-RECON01.md` for the full mission, Q1-Q5
+questions, decisive matrix, P1 calibration, downstream
+repair ladder, and acceptance criteria. EVIDENCE:
+`.factory/evidence/ACT-CLINEMM-COMPACTION-HEADER-BAR-
+FRESHNESS-RECON01/entry-freeze.txt`.

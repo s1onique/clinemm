@@ -353,6 +353,20 @@ apps/examples/desktop-app/.cursor/settings.json
 # ACT-CLINEMM-COMPACTION-PRESENTATION-TRUTH-REPAIR01. Binds durably
 # to the Context / compaction row in .factory/epic-board.md.
 !/.factory/evidence/ACT-CLINEMM-COMPACTION-PRESENTATION-FRESHNESS-EMPIRICAL01/
+# ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01 evidence:
+# RECON_ONLY at HEAD = 9f994b135 that freezes the semantic contract of
+# the TaskHeader context bar at the REAL render seam immediately after
+# a compaction completes and before the next provider request. Binds
+# to ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01.md
+# (whitelisted below) AND to the Context / compaction row in
+# .factory/epic-board.md. Successor to the empirical sanity check at
+# commit 9f994b135 (defect A CLOSED at cb5b52239; defect B CLOSED at
+# HEAD; defect C LIVE consumer-level witness; full UI production-seam
+# RED = NOT YET per the empirical P1). Same durable-binding reason as
+# the empirical ACT: the recon's Q1-Q5 evidence dir is the durable
+# record of WHY the semantic contract was chosen; any downstream repair
+# ACT MUST cite it.
+!/.factory/evidence/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01/
 # ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01: repair ACT
 # authored 2026-09-01 against the LIVE epoch-4 evidence captured by the
 # Factory reviewer disposition (2026-09-01 epoch-4 modelStreaming +
@@ -887,6 +901,25 @@ apps/vscode/.factory/evidence/
 # clone so the repair ACT's source-of-truth entry-freeze is durable.
 !/.factory/acts/ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01.md
 !/.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01/
+# 2026-09-02: ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01
+# Factory causal reviewer disposition PASS_WITH_ONE_P1_FIX (2026-09-02)
+# on ACT-CLINEMM-COMPACTION-PRESENTATION-FRESHNESS-EMPIRICAL01 (commit
+# 9f994b135): defect A CLOSED at cb5b52239 (Strategy-D) and defect B
+# CLOSED at HEAD (trailing postStateToWebview in
+# sdk-compaction-coordinator.ts:365-396) — the proposed
+# ACT-CLINEMM-COMPACTION-PRESENTATION-TRUTH-REPAIR01 is NOT authorized
+# (its RED tests would be no-ops against already-closed defects). The
+# actual live defect (defect C) is the post-compaction header-bar
+# staleness, a PROJECTION-COHERENCE defect at the webview seam. The
+# reviewer selected option α (narrow recon) over option β (wire-contract
+# `kind` discriminator) and chose this ACT id. WIRE_KIND_CHANGE =
+# NOT_AUTHORIZED_YET (option β deferred until the recon proves C3 is the
+# intended semantic contract). The ACT body + evidence directory must
+# survive a fresh clone so the recon's Q1-Q5 evidence dir is the durable
+# record of WHY the semantic contract was chosen; any downstream repair
+# ACT MUST cite it. Production delta: zero (recon-only).
+!/.factory/acts/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01/
 # 2026-09-02: ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
 # LIVE specimen taskId 1788292664979_9qbpd, epoch 16: authoritative
 # TurnState streaming + persistent taskHeaderPhase=idle +
