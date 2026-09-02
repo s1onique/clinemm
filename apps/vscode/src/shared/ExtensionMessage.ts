@@ -279,6 +279,39 @@ export interface ExtensionState {
 	 */
 	_ptadPushId?: number
 	currentTaskItem?: HistoryItem
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (nineteenth-pass):
+	 *
+	 * Authoritative current working-context estimate (W) for the
+	 * active task, mirrored from
+	 * `AgentRuntimeStateSnapshot.currentWorkingContextEstimate`
+	 * by the host-side carrier
+	 * (`apps/vscode/src/sdk/working-context-host-capture.ts`)
+	 * and projected into the webview state payload by
+	 * `getStateToPostToWebview`.
+	 *
+	 * Distinct from `lastApiReqContextInputTokens` (which is the
+	 * disjoint sum `tokensIn + cacheReads + cacheWrites` from the
+	 * last `api_req_started` message — provider-driven P). The
+	 * numerator of the TaskHeader ContextWindow bar consumes W
+	 * INSTEAD OF P (when W is present). When W is `undefined`, the
+	 * fallback policy is left to Boundary 5 (the TaskHeader
+	 * component contract) and UNDEFINED_W_STALE_REUSE is
+	 * FORBIDDEN.
+	 *
+	 * Transport-only: the carrier does NOT call
+	 * `estimateRequestInputTokens` or `estimateMessageTokens` to
+	 * derive this value. W is read verbatim from the runtime
+	 * event payload.
+	 *
+	 * Fail-closed: the carrier uses unconditional assignment
+	 * semantics (includes undefined), so the host W slot becomes
+	 * undefined when the runtime emits a no-W
+	 * `working-context-state-changed` event. UNDEFINED_W_STALE_
+	 * REUSE is FORBIDDEN.
+	 */
+	currentWorkingContextEstimate?: number
 	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode
 	planActSeparateModelsSetting: boolean

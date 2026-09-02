@@ -14,6 +14,8 @@ import { featureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { getExtensionVariant } from "@/services/telemetry/rollout-metadata"
 import { getLatestAnnouncementId } from "@/utils/announcements"
+import type { WorkingContextHostCaptureState } from "@/sdk/working-context-host-capture"
+import { projectWorkingContextStateFromCarrier } from "./working-context-state-projection"
 import { getClineOnboardingModels } from "../models/getClineOnboardingModels"
 
 /**
@@ -31,6 +33,17 @@ export async function getStateToPostToWebview(controller: {
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
 	isRemoteConfigAvailable?: boolean
 	currentRemoteConfigRevision?: number
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (nineteenth-pass): Boundary 3 -> 4 carrier for the
+	// authoritative current working-context estimate (W).
+	// The SdkController owns an instance of
+	// WorkingContextHostCapture (apps/vscode/src/sdk/
+	// working-context-host-capture.ts) and threads it here.
+	// If the controller does not yet own a capture (legacy
+	// / classic), the field defaults to `undefined` (the
+	// numer on the TaskHeader bar falls back to P — see
+	// UNDEFINED_W_STALE_REUSE = FORBIDDEN in the ACT).
+	workingContextHostCapture?: WorkingContextHostCaptureState
 }): Promise<ExtensionState> {
 	const stateManager = controller.stateManager
 
@@ -116,6 +129,18 @@ export async function getStateToPostToWebview(controller: {
 		// Codex OAuth not available
 	}
 
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (nineteenth-pass): delegate the W-transport step to
+	// the pure projection helper
+	// (./working-context-state-projection.ts). The helper
+	// is the single source of truth for the transport
+	// contract: read the carrier verbatim, NO
+	// recompute, NO estimator imports. UNDEFINED_W_STALE_
+	// REUSE = FORBIDDEN is enforced by the carrier's
+	// assignment semantics, not by this producer.
+	const { currentWorkingContextEstimate } = projectWorkingContextStateFromCarrier(
+		controller.workingContextHostCapture,
+	)
 	return {
 		version,
 		extensionVariant: getExtensionVariant(),
@@ -123,6 +148,7 @@ export async function getStateToPostToWebview(controller: {
 		currentTaskItem,
 		clineMessages,
 		checkpointRestoreInput,
+		currentWorkingContextEstimate,
 		autoApprovalSettings,
 		browserSettings,
 		preferredLanguage,

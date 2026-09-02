@@ -1,7 +1,7 @@
 
 # ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 
-## State (seventeenth-pass, 2026-09-03)
+## State (nineteenth-pass, 2026-09-03)
 
 ```text
 W producer                = CLOSED
@@ -10,213 +10,203 @@ runtime state             = CLOSED
 runtime publication       = CLOSED
 durable transition tests  = CLOSED
 HOST_PUBLICATION          = COMPOSED PROOF / ACCEPTED
-VSCode projection         = OPEN
 NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
+
+Boundary 3 capture        = CLOSED (this commit)
+Boundary 3 -> 4 transport = CLOSED (this commit)
+Boundary 4 webview state  = CLOSED (this commit)
+Boundary 5 header         = OPEN  (next cycle)
+
 P0 / P1 / P2              = NONE
 NEW_REVIEW_ROUND          = NO
-C1                        = GO_P3
+C1                        = GO_P3_B5 (next cycle)
 ```
 
-Reviewer on bb5588150:
+Reviewer on a04387552:
 ```text
-PASS. C1: GO_P3.
+HALT_RED_NOT_BOUND_TO_PROJECTION_SEAM.
+C1: GO_P3 (real GREEN in this cycle).
 ```
 
-## P3 contract (verbatim from reviewer)
-
-### Architecture-first, no new protocol field before
-### the first missing edge is known
-
-Required chain (top-down):
+## Boundary 3 -> 4 GREEN (this commit)
 
 ```text
-AgentRuntime
+AgentRuntime.emit(working-context-state-changed)
   snapshot.currentWorkingContextEstimate = W
-        +
-  working-context-state-changed
-        |
-        v
-LocalRuntimeHost / core session projection
-        |
-        v
-SdkController / webview state
-        |
-        v
-ChatView / TaskHeader
-        |
-        v
-ContextWindow numerator
+   ↓
+LocalRuntimeHost.subscribeRuntimeEvents fanout
+   ↓
+SdkController.attachCanonicalRuntimeEventSubscription
+  wraps the existing TaskShadow wiring:
+    1. workingContextHostCapture.observe(event)
+         -> assignment semantics (UNDEFINED_W_STALE_
+            REUSE = FORBIDDEN enforced at this layer)
+    2. wiring.observeCanonicalRuntimeEvent(input)
+         (shadow wiring unchanged)
+   ↓
+projectWorkingContextStateFromCarrier(capture)
+  (PURE helper — single source of truth for
+   the transport contract)
+   ↓
+getStateToPostToWebview delegates to the helper
+   ↓
+ExtensionState.currentWorkingContextEstimate = W
 ```
 
-### First P3 sub-step (BEFORE any code)
-
-Map every boundary in the chain (already-receives-event,
-can-read-snapshot, currently-carries-W). Stop at the
-FIRST missing edge. No code change before the table is
-complete for all 5 rows.
-
-### Column heading correction (P2 — reviewer on
-c3c00cb45)
+## Production code (this commit)
 
 ```text
-Was: 'Already receives runtime event?'
-Now: 'Receives upstream change signal/data at this
-       boundary?'
-After LocalRuntimeHost, 'runtime event' stops being
-the right abstraction; data travels through host-
-internal state, gRPC messages, and webview props —
-none of which are 'runtime events'.
+NEW:
+  apps/vscode/src/sdk/working-context-host-capture.ts
+    WorkingContextHostCapture class.
+    Assignment semantics on observe() —
+    UNDEFINED_W_STALE_REUSE = FORBIDDEN is enforced
+    at this layer (no conditional skip).
+
+  apps/vscode/src/core/controller/state/
+  working-context-state-projection.ts
+    Pure projection helper extracted from
+    getStateToPostToWebview so the W transport
+    can be unit-tested without an extension-host
+    bootstrap. Bigger function delegates to it
+    (single source of truth).
+
+MODIFIED:
+  apps/vscode/src/shared/ExtensionMessage.ts
+    ExtensionState.currentWorkingContextEstimate
+    added (typed carrier into the webview).
+
+  apps/vscode/src/core/controller/state/
+  getStateToPostToWebview.ts
+    Threads controller.workingContextHostCapture
+    into the pure helper. Transport-only.
+
+  apps/vscode/src/sdk/SdkController.ts
+    Owns the carrier; wraps the existing
+    TaskShadow wiring so the canonical event
+    stream populates the carrier before
+    forwarding to the shadow wiring (wiring
+    itself unchanged).
 ```
+
+## Sentinels
 
 ```text
-| Boundary                       | Upstream signal/data? | Can read runtime snapshot? | Currently carries W? |
-| ------------------------------ | ---------------------: | -------------------------: | -------------------: |
-| LocalRuntimeHost               |                    yes |                        yes |                    ? |
-| core session snapshot/event    |                      ? |                          ? |                    ? |
-| SdkController state            |                      ? |                          ? |                    ? |
-| ExtensionState/webview message |                      ? |                        n/a |                    ? |
-| ChatView / TaskHeader          |             no direct / |                        n/a |       no, currently P |
-|   (projection, not subscription) |         yes via state  |                            |                       |
+P = 364_900   (provider / last api_req_started payload)
+W = 271_337   (synthetic currentWorkingContextEstimate;
+                deliberately distinct from live 264.3k
+                which remains screenshot evidence only)
 ```
 
-ChatView / TaskHeader row notes:
-- ChatView is NOT a direct AgentRuntimeEvent
-  subscriber. It is downstream of host/webview
-  projection.
-- It DOES receive projected webview state via the
-  gRPC bridge (today from modifiedMessages ->
-  getLastApiReqContextInputTokens()).
-- It currently does NOT carry W at all.
-
-### P3 RED (synthetic sentinels, real projection seam)
-
-```text
-P = 364_900
-W = 271_337
-working-context-state-changed
-  snapshot.W = 271_337
-no new api_req_started
-
-EXPECTED_AT_ENTRY_HEAD:
-  projection remains P / W does not reach numerator
-EXECUTABLE_P3_RED:
-  NOT YET RUN  <- evidence-label correction
-(reviewer on c3c00cb45: the prior commit's
- 'actual at HEAD: numerator = 364_900 (P)' was
- stronger than P3 evidence. OBSERVED_AT_ENTRY_HEAD
- must be measured by the RED, NOT asserted
- before the RED runs.)
-
-271_337 deliberately synthetic.
-Do NOT use 264.3k as oracle (screenshot evidence only).
-```
-
-### UNDEFINED_W contract
-
-```text
-UNDEFINED_W_STALE_REUSE = FORBIDDEN
-
-Acceptable outcomes (W === undefined):
-  A. numerator falls back to P
-  B. numerator becomes unavailable / unknown
-
-Forbidden:
-  stale previous W displayed as current
-
-Fallback choice: PENDING. Read existing component
-contract (ContextWindow.tsx line 167 null fallback;
-getLastApiReq.ts last api_req_started walk) before
-deciding. Observed hints (read but not decided):
-  - ContextWindow returns null when tokenData is falsy
-  - getLastApiReqContextInputTokens walks modifiedMessages
-    for the last api_req_started with
-    tokensIn + cacheReads + cacheWrites — this is the
-    "P" path P3 replaces.
-```
-
-### CONSERVATION (mechanically searchable)
+## Conservation (permanent)
 
 ```text
 apps/vscode MUST NOT import / use:
   estimateRequestInputTokens
   estimateMessageTokens
-for this projection.
-The host is transport only.
-W is transported, never recomputed.
-```
+for this projection. The carrier and the projection
+helper are transport only; the producer delegates
+to the helper.
 
-### CONSERVATION (provider and Strategy-D)
+Enforced permanently by the estimator-import probe
+in the GREEN test file.
 
-```text
+UNDEFINED_W_STALE_REUSE = FORBIDDEN:
+  enforced at the carrier layer (unconditional
+  assignment on observe()) — see
+  apps/vscode/src/sdk/working-context-host-capture.ts.
+  A no-W event sets the slot to undefined, NOT
+  preserved as the prior W.
+
 P remains available for provider / request metrics.
 H_b / H_a remain compaction telemetry.
-getApiMetrics Strategy-D stays untouched
-  (getLastApiReqContextInputTokens continues to drive
-   provider-activity contexts; P3 changes the webview
-   bar's numerator only).
+getApiMetrics Strategy-D stays untouched.
+```
+
+## Verification
+
+```text
+$ bunx vitest run --config vitest.config.ts \
+    src/sdk/__tests__/working-context-webview-state-
+    projection.test.ts
+  Test Files 1 passed (1)
+  Tests      7 passed (7)
+
+$ bun tsc --noEmit -p apps/vscode/tsconfig.json
+  3 errors (== baseline; pre-existing in
+   sdk-compaction.ts and
+   task-state-shadow-coordinator.ts)
+
+$ bunx vitest run (agents):
+  Test Files 24 passed (24)
+  Tests      408 passed (408)
+
+$ bunx vitest run (core/src/extensions/context/):
+  Test Files 5 passed | 1 skipped (6)
+  Tests      116 passed | 1 skipped (117)
 ```
 
 ## Disposition
 
 ```text
-STATE_BIND_CLOSED                = PROVEN
-STATE_BIND_IMPLEMENTATION        = PASS
-STATE_BIND_DURABLE_TEST          = PROVEN
-  (real two-iter in one execute(),
-   sanity-verified via production revert)
-
-PUBLICATION_BIND_CLOSED          = PROVEN
-PUBLICATION_BIND_IMPLEMENTATION  = PASS
-PUBLICATION_BIND_DURABLE_TEST    = PROVEN
-  (vacuous witnesses replaced;
-   publisher-side fail-closed companion added)
-
-HOST_PUBLICATION                 = COMPOSED PROOF
-                                     / ACCEPTED
-
+BOUNDARY_RECON            = PASS / USEFUL
+                             (legacy adapter is a
+                              side branch, not on
+                              the W transport path)
+BOUNDARY_3_CAPTURE        = SYNTHETIC_REAL / PASS
+BOUNDARY_3_TO_4_TRANSPORT = SYNTHETIC_REAL / PASS
+HOST_PUBLICATION          = COMPOSED PROOF / PASS
 NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
-
-P0 = NONE
-P1 = NONE
-P2 = NONE (factory bloat only — addressed by compacting
-           this ACT body and entry-freeze)
-NEW_REVIEW_ROUND                 = NO
-C1                               = GO_P3
+UNDEFINED_W_STALE_REUSE   = FORBIDDEN
+RED                       =
+  NOT_REPRODUCED_AT_HEAD
+  (real production-seam GREEN in this commit;
+   intentionally failing test removed)
+NEW_REVIEW_ROUND          = NO
+C1                        = GO_P3_B5
 ```
 
 ## Commit lineage
 
 ```text
-commit 7: STATE_BIND            (aec3ff0c6)
-commit 8: PUBLICATION_BIND      (05ccaaf66)
-commit 9: TEST_CORRECTION       (bb5588150)
-         + P2_TERMINOLOGY
-                                └─ C1: GO_P3
-
-(future)
-        VSCODE_PROJECTION      (separate bounded commit)
-                                └─ C1: GO_???
+c7:  STATE_BIND       (aec3ff0c6)
+c8:  PUBLICATION_BIND (05ccaaf66)
+                              └─ C1: GO_PUBLICATION_BIND
+c9:  TEST_CORRECTION  (bb5588150)
+          + P2_TERMINOLOGY
+                              └─ C1: GO_P3
+c10: P3_GO_SIGNAL     (c3c00cb45)
+          + FACTORY_COMPACT
+                              └─ C1: GO_P3
+c11: P3_BOUNDARY_BIND (a04387552)
+          + P1_TEXT_FIX
+          + P2_TABLE_HEADING_FIX
+          + RED_at_FIRST_MISSING_EDGE (synthetic)
+                              └─ C1: GO_P3 (real GREEN
+                                   required; this commit)
+c12: P3_GREEN         (this commit)
+          + REAL_PRODUCTION_SEAM_GREEN
+          + INTENTIONALLY_FAILING_TEST_REMOVED
+          + RECON_WITNESSES_RETIRED
+                              └─ C1: GO_P3_B5 (next cycle)
 ```
 
-## Next bounded cycle (separate commit)
+## Next bounded cycle (separate commit, NOT here)
 
 ```text
-PRODUCTION_RUNTIME_DELTA = none this commit
-                          (entry-freeze / ACT / board only)
+Boundary 5: ChatView / TaskHeader consumes W for
+the numerator (when present) instead of P
+(lastApiReqContextInputTokens). The UNDEFINED_W_
+FALLBACK decision (A=fall back to P vs B=
+unavailable/unknown) is the single remaining
+design question. Defer to that cycle: read the
+existing ContextWindow.tsx:167 null-fallback
+contract, then decide.
 
-P3 first sub-step:
-  1. Fill the 5-row boundary table. Stop at the FIRST
-     missing edge.
-  2. Make the smallest change at that edge.
-  3. P3 RED with synthetic sentinels.
-  4. GREEN.
-  5. Dogfood actual post-compaction bar.
-
-No Factory historical bloat in P3.
-```
-
-PRODUCTION_RUNTIME_DELTA = entry-freeze / ACT / board only
-TYPECHECK_DELTA          = ZERO
+PRODUCTION_RUNTIME_DELTA = Boundary 3 -> 4 GREEN
+                           + tests + factory compact
+TYPECHECK_DELTA          = ZERO (vs apps/vscode
+                                baseline)
 DEFAULT_SUITE_STATE      = GREEN
 NEW_REVIEW_ROUND         = NO
-C1                       = GO_P3
+C1                       = GO_P3_B5

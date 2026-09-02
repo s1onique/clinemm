@@ -165,7 +165,7 @@ import {
 	emitTaskRequested,
 	emitTaskReset,
 } from "./task-state-shadow-host-msgs"
-import { createTaskShadowHostWiring, type TaskShadowHostWiringWithSink } from "./task-state-shadow-host-wiring"
+import { createTaskShadowHostWiring, type TaskShadowHostWiring, type TaskShadowHostWiringWithSink } from "./task-state-shadow-host-wiring"
 import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
@@ -173,6 +173,7 @@ import { TurnStateTracker } from "./turn-state-tracker"
 import { emitV2Capture, resolveCapturePathForProfileEffective } from "./v2-capture"
 import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
 import { VscodeSessionHost } from "./vscode-session-host"
+import { WorkingContextHostCapture } from "./working-context-host-capture"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
 import { WebviewGrpcBridge } from "./webview-grpc-bridge"
 import { resolveWorkspaceManagerPaths, resolveWorkspaceRootPath } from "./workspace-root"
@@ -695,6 +696,15 @@ export class Controller {
 	 * controller; attached on each new task; disposed in `dispose()`.
 	 */
 	private readonly taskStateRuntimeEventsSubscription: CanonicalRuntimeShadowSubscription
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (nineteenth-pass): Boundary 3 host-side W capture.
+	// Lightweight in-memory store populated by the canonical
+	// runtime-event subscription (every
+	// `working-context-state-changed` event flow through here)
+	// and read by the webview-state projection
+	// (`getStateToPostToWebview`). Transport-only, no
+	// estimator imports.
+	private readonly workingContextHostCapture: WorkingContextHostCapture
 	private taskTelemetryPhaseUnsub: (() => void) | undefined
 	// ACT-CLINEMM-SESSION-AUTONOMY01:
 	// Single owner of the active-session auto-approval override ("none" | "all").
@@ -1069,6 +1079,7 @@ export class Controller {
 		// lazily inside `ensureSharedHostSubscription`, so wrapping here
 		// takes effect at the first event.
 		this.taskStateRuntimeEventsSubscription = new CanonicalRuntimeShadowSubscription()
+		this.workingContextHostCapture = new WorkingContextHostCapture()
 		this.taskStateShadowWiring = createTaskShadowHostWiring({
 			// Pass a self-reference so the wiring can reach back through
 			// `this.sessions` after the lifecycle is constructed. The
@@ -2707,8 +2718,35 @@ export class Controller {
 		// the single source of truth for the canonical subscription
 		// state, exercised by both the controller and the lifecycle
 		// qualification test.
+		//
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (nineteenth-pass): wrap the existing wiring's
+		// `observeCanonicalRuntimeEvent` so the canonical event
+		// stream ALSO populates the host-side W carrier before
+		// reaching the shadow wiring. Two reads of the same event:
+		//   1. capture.observe(event)
+		//      -> workingContextHostCapture._latest updated
+		//         (assignment semantics — see
+		//          working-context-host-capture.ts).
+		//   2. wiring.observeCanonicalRuntimeEvent(input)
+		//      -> shadow coordinator receives the event
+		//         (unchanged from previous behavior).
+		// Wrapping (rather than mutating the wiring type) keeps
+		// the change Boundary-3-local; TaskShadowHostWiring
+		// itself is not modified.
+		const baseWiring = this.taskStateShadowWiring
+		const capture = this.workingContextHostCapture
+		const wrappedWiring: TaskShadowHostWiring | undefined = baseWiring
+			? {
+					...baseWiring,
+					observeCanonicalRuntimeEvent(input) {
+						capture.observe(input.event)
+						baseWiring.observeCanonicalRuntimeEvent(input)
+					},
+				}
+			: undefined
 		const sdkHost = this.sessions.getActiveSession()?.sdkHost
-		this.taskStateRuntimeEventsSubscription.attach(sdkHost, this.taskStateShadowWiring, sessionId)
+		this.taskStateRuntimeEventsSubscription.attach(sdkHost, wrappedWiring, sessionId)
 	}
 
 	async reinitExistingTaskFromId(taskId: string): Promise<void> {
@@ -3852,8 +3890,17 @@ export class Controller {
 				// SdkController builds one lazily). The task-header working-directory
 				// badge and anything else keyed on workspaceRoots depend on it.
 				workspaceManager: await this.ensureWorkspaceManager(),
-			})
-			const sdkTaskHistory = (await this.taskHistory.listHistory({ limit: 100, hydrate: false }))
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+			// (nineteenth-pass): Boundary 3 -> 4 carrier. The
+			// host-side W capture is populated by the
+			// canonical runtime-event subscription
+			// (`attachCanonicalRuntimeEventSubscription`); this
+			// projection reader transports the captured value
+			// into the `ExtensionState.currentWorkingContext
+			// Estimate` payload that ChatView will consume.
+			workingContextHostCapture: this.workingContextHostCapture,
+		})
+		const sdkTaskHistory = (await this.taskHistory.listHistory({ limit: 100, hydrate: false }))
 				.map(sessionHistoryRecordToHistoryItem)
 				.filter((item) => item.ts && item.task)
 				.sort((a, b) => b.ts - a.ts)

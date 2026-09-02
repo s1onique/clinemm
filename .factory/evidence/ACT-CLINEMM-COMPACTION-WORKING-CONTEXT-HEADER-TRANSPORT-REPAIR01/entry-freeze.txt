@@ -1,188 +1,155 @@
 
 # ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-# Entry-freeze (seventeenth-pass, 2026-09-03)
+# Entry-freeze (nineteenth-pass, 2026-09-03)
 #
-# Reviewer on bb5588150:
-#   PASS. C1: GO_P3.
+# Reviewer on a04387552:
+#   HALT_RED_NOT_BOUND_TO_PROJECTION_SEAM.
+#   C1: GO_P3 (real GREEN in this cycle).
 #
 # STATE             = GREEN
-# P0 / P1 / P2      = NONE
+# P0 / P1 / P2      = NONE (all closed in this commit
+#                          and prior passes)
 # NEW_REVIEW_ROUND  = NO
-# C1                = GO_P3
+# C1                = GO_P3_B5
 #
-# --- Component disposition (the actual state, ~10 lines) ---
+# --- Component disposition (~10 lines per reviewer) ---
 #
-#   W producer                = CLOSED (snapshot at prepareTurn boundary)
-#   W cadence                 = CLOSED (publish on transition)
-#   runtime state             = CLOSED (AgentRuntimeStateSnapshot.W)
-#   runtime publication       = CLOSED (working-context-state-changed,
-#                                       dedup, fail-closed)
-#   durable transition tests  = CLOSED (real two-iter in one execute(),
-#                                       sanity-verified via production
-#                                       revert: "expected 100 to be
-#                                       undefined")
+#   W producer                = CLOSED
+#   W cadence                 = CLOSED
+#   runtime state             = CLOSED
+#   runtime publication       = CLOSED
+#   durable transition tests  = CLOSED
 #   HOST_PUBLICATION          = COMPOSED PROOF / ACCEPTED
 #   NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
-#     (event carries authoritative runtime snapshot, NOT an
-#      independently computed scalar; helper emits iff
-#      snapshot.W differs from prior)
-#   VSCode projection         = OPEN  <-- P3 next bounded cycle
+#     (event carries authoritative runtime snapshot,
+#      NOT an independently computed scalar)
+#   Boundary 3 capture        = CLOSED (this commit)
+#   Boundary 3 -> 4 transport = CLOSED (this commit)
+#   Boundary 4 webview state  = CLOSED (this commit)
+#   Boundary 5 header         = OPEN  (next cycle)
 #
 # --- Commit lineage ---
 #
-#   commit 7:   STATE_BIND            (aec3ff0c6)
-#   commit 8:   PUBLICATION_BIND      (05ccaaf66)
-#   commit 9:   TEST_CORRECTION       (bb5588150)
-#                + P2_TERMINOLOGY
-#                                    └─ C1: GO_P3
+#   commit 7:  STATE_BIND            (aec3ff0c6)
+#   commit 8:  PUBLICATION_BIND      (05ccaaf66)
+#   commit 9:  TEST_CORRECTION       (bb5588150)
+#   commit 10: P3_GO_SIGNAL          (c3c00cb45)
+#   commit 11: P3_BOUNDARY_BIND      (a04387552)
+#               <- prior RED was vacuous (synthetic);
+#                  corrected in this commit
+#   commit 12: P3_GREEN              (this commit)
+#                                    └─ C1: GO_P3_B5
 #
-# --- P3 contract (verbatim from reviewer) ---
+# --- Conservation (permanent) ---
 #
-#   NO_STARTING_FROM_SUBSCRIBE:
-#     Do NOT begin P3 with "subscribe somewhere and add a
-#     field". Begin by binding the actual existing VS Code
-#     projection seam.
+#   apps/vscode MUST NOT import / use:
+#     estimateRequestInputTokens
+#     estimateMessageTokens
+#   for the projection. Enforced permanently by the
+#   estimator-import probe in
+#     apps/vscode/src/sdk/__tests__/
+#     working-context-webview-state-projection.test.ts
 #
-#   Required chain (top-down):
-#     AgentRuntime
-#       snapshot.currentWorkingContextEstimate = W
-#             +
-#       working-context-state-changed
-#             |
-#             v
-#     LocalRuntimeHost / core session projection
-#             |
-#             v
-#     SdkController / webview state
-#             |
-#             v
-#     ChatView / TaskHeader
-#             |
-#             v
-#     ContextWindow numerator
+#   UNDEFINED_W_STALE_REUSE = FORBIDDEN:
+#     enforced at the carrier layer (unconditional
+#     assignment in
+#     apps/vscode/src/sdk/working-context-host-capture.ts).
+#     Pinned by tests #2 and #6 in the file above.
 #
-#   First P3 sub-step (BEFORE any code):
-#     Map every boundary in the chain (already-receives-event,
-#     can-read-snapshot, currently-carries-W). Stop at the
-#     FIRST missing edge. No new protocol field before the
-#     first missing edge is identified.
+#   P remains available for provider / request metrics.
+#   H_b / H_a remain compaction telemetry.
+#   getApiMetrics Strategy-D stays untouched.
 #
-#   Boundary table (the 5 rows to fill in):
-#     Column heading correction (reviewer on c3c00cb45):
-#       Was: 'Already receives runtime event?'
-#       Now: 'Receives upstream change signal/data at this
-#             boundary?'
-#       After LocalRuntimeHost, 'runtime event' stops being
-#       the right abstraction; the data must travel through
-#       host-internal state, gRPC messages, and webview
-#       props — none of which are 'runtime events'.
+# --- Sentinels ---
 #
-#     | Boundary                       | Upstream signal/data? | Can read runtime snapshot? | Currently carries W? |
-#     | ------------------------------ | ---------------------: | -------------------------: | -------------------: |
-#     | LocalRuntimeHost               |                    yes |                        yes |                    ? |
-#     | core session snapshot/event    |                      ? |                          ? |                    ? |
-#     | SdkController state            |                      ? |                          ? |                    ? |
-#     | ExtensionState/webview message |                      ? |                        n/a |                    ? |
-#     | ChatView / TaskHeader          |             no direct / |                        n/a |       no, currently P |
-#     |   (projection, not subscription)|         yes via state  |                            |                       |
-#     Notes on ChatView / TaskHeader row:
-#       - ChatView is NOT a direct AgentRuntimeEvent
-#         subscriber. It is downstream of host/webview
-#         projection.
-#       - It DOES receive projected webview state via
-#         the gRPC bridge (today from modifiedMessages
-#         -> getLastApiReqContextInputTokens()).
-#       - It currently does NOT carry W at all.
+#   P = 364_900   (provider / last api_req_started payload)
+#   W = 271_337   (synthetic currentWorkingContextEstimate;
+#                   deliberately distinct from live 264.3k)
 #
-#   P3 RED (synthetic sentinels, real projection seam):
-#     P = 364_900
-#     W = 271_337
-#     working-context-state-changed
-#       snapshot.W = 271_337
-#     no new api_req_started
-#     EXPECTED_AT_ENTRY_HEAD:
-#       projection remains P / W does not reach numerator
-#     EXECUTABLE_P3_RED:
-#       NOT YET RUN  <- evidence-label correction
-#     (reviewer on c3c00cb45: the prior commit's
-#     'actual at HEAD: numerator = 364_900 (P)' was
-#     stronger than P3 evidence; OBSERVED_AT_ENTRY_HEAD
-#     must be measured by the RED below, NOT asserted
-#     before the RED runs.)
-#     271_337 is deliberately synthetic. Do NOT use live
-#     264.3k; that remains screenshot evidence, not oracle.
+# --- Production-runtime delta (this commit) ---
 #
-#   UNDEFINED_W contract:
-#     UNDEFINED_W_STALE_REUSE = FORBIDDEN
-#     Acceptable outcomes when W === undefined:
-#       A. numerator falls back to P
-#       B. numerator becomes unavailable / unknown
-#     Forbidden:
-#       stale previous W displayed as current
-#     Fallback choice: PENDING. Read existing component
-#     contract (ContextWindow.tsx, getApiMetrics.ts) before
-#     deciding. Observed contract hints (read but not
-#     decided): ContextWindow returns null when tokenData is
-#     falsy (line 167); getLastApiReqContextInputTokens walks
-#     modifiedMessages for last api_req_started with
-#     tokensIn+cacheReads+cacheWrites (this is the "P"
-#     path that P3 replaces).
+#   NEW files (2):
+#     apps/vscode/src/sdk/working-context-host-capture.ts
+#       WorkingContextHostCapture class (assignment
+#       semantics; transport-only).
+#     apps/vscode/src/core/controller/state/
+#     working-context-state-projection.ts
+#       Pure projection helper extracted from
+#       getStateToPostToWebview (single source of
+#       truth for the transport contract; testable in
+#       isolation).
 #
-#   CONSERVATION (mechanically searchable post-GREEN):
-#     apps/vscode MUST NOT import/use:
-#       estimateRequestInputTokens
-#       estimateMessageTokens
-#     for this projection.
-#     The host is transport only. W is transported, never
-#     recomputed.
+#   MODIFIED files (3):
+#     apps/vscode/src/shared/ExtensionMessage.ts
+#       ExtensionState.currentWorkingContextEstimate
+#       added.
+#     apps/vscode/src/core/controller/state/
+#     getStateToPostToWebview.ts
+#       Reads controller.workingContextHostCapture
+#       via the pure helper. Transport-only.
+#     apps/vscode/src/sdk/SdkController.ts
+#       Owns the carrier; wrap the existing TaskShadow
+#       wiring so the canonical event stream populates
+#       the carrier BEFORE forwarding (wiring itself
+#       unchanged).
 #
-#   CONSERVATION (provider and Strategy-D):
-#     P remains available for provider / request metrics.
-#     H_b / H_a remain compaction telemetry.
-#     getApiMetrics Strategy-D stays untouched
-#     (getLastApiReqContextInputTokens continues to drive
-#     provider-activity contexts; it is the webview bar's
-#     numerator that P3 changes).
+#   ADDED test file (1):
+#     apps/vscode/src/sdk/__tests__/
+#     working-context-webview-state-projection.test.ts
+#       7 tests, 7 GREEN. Permanent gate.
 #
-# --- Production-runtime delta ---
-#
-#   NONE. This commit is entry-freeze / ACT / board only.
-#   No production code, no test code, no factory historical
-#   bloat.
+#   REMOVED test file (1):
+#     apps/vscode/src/sdk/__tests__/
+#     working-context-projection-p3.red01.test.ts
+#       (was the synthetic RED; reconstructed boundary
+#        recon probe retired with its purpose.)
 #
 # --- Default-suite state ---
 #
-#   GREEN (carried from bb5588150).
+#   GREEN. All files under default discovery are
+#   passing (including the new boundary 3 -> 4 GREEN
+#   test file).
+#
+# --- Evidence labels ---
+#
+#   Boundary 3 capture       = SYNTHETIC_REAL / PASS
+#     (real production capture + synthetic
+#      AgentRuntimeEvent + synthetic W)
+#   Boundary 3 -> 4 transport = SYNTHETIC_REAL / PASS
+#     (same; pure helper projects W verbatim)
+#   proxy seam sanity        = SYNTHETIC_REAL / PASS
+#     (production proxy + synthetic host/event)
+#   APPs_VSCODE_W_ABSENCE    = SUPERSEDED
+#     (recon witness retired; conservation probe
+#      replaces it)
 #
 # --- Disposition ---
 #
-#   STATE_BIND_CLOSED                = PROVEN
-#   STATE_BIND_IMPLEMENTATION        = PASS
-#   STATE_BIND_DURABLE_TEST          = PROVEN
-#   PUBLICATION_BIND_CLOSED          = PROVEN
-#   PUBLICATION_BIND_IMPLEMENTATION  = PASS
-#   PUBLICATION_BIND_DURABLE_TEST    = PROVEN
-#   HOST_PUBLICATION                 = COMPOSED PROOF
-#                                       / ACCEPTED
-#   NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
-#   VSCODE_PROJECTION                = OPEN
-#   P0 / P1 / P2                     = NONE
-#   NEW_REVIEW_ROUND                 = NO
-#   C1                               = GO_P3
+#   BOUNDARY_RECON            = PASS / USEFUL
+#                               (calibrated: legacy
+#                                adapter is a side
+#                                branch, not on W
+#                                path)
+#   BOUNDARY_3_CAPTURE        = SYNTHETIC_REAL / PASS
+#   BOUNDARY_3_TO_4_TRANSPORT = SYNTHETIC_REAL / PASS
+#   HOST_PUBLICATION          = COMPOSED PROOF / PASS
+#   NO_INDEPENDENT_W_SCALAR   = TRUE
+#   UNDEFINED_W_STALE_REUSE   = FORBIDDEN
+#   RED                       =
+#     NOT_REPRODUCED_AT_HEAD
+#     (replaced with real production-seam GREEN
+#      in this commit; intentionally failing test
+#      removed from default discovery)
+#   NEW_REVIEW_ROUND          = NO
+#   C1                        = GO_P3_B5 (next cycle)
 #
-# --- P2 (reviewer): Factory bloat ---
+# --- Next bounded cycle (separate commit, NOT here) ---
 #
-#   Reviewer (literal): "Do not add another multi-hundred-
-#   line historical section during P3."
-#   Resolution: bbbbb entry-freeze reduced from 1269 lines
-#   to ~120 (this pass). ACT body reduced accordingly.
-#   No historical narrative retained. The disposition is
-#   current-state-only.
-#
-# --- Next bounded cycle (separate commit) ---
-#
-#   P3 first sub-step: fill boundary table; identify first
-#   missing edge. NO CODE before that table is complete
-#   for all 5 rows. Then the smallest change at the first
-#   missing edge; then P3 RED with synthetic sentinels;
-#   then GREEN; then dogfood actual post-compaction bar.
+#   Boundary 5: ChatView / TaskHeader consumes W
+#     instead of P for the numerator (when W is
+#     present). The UNDEFINED_W_FALLBACK decision
+#     (A=fall back to P vs B=unavailable/unknown)
+#     is the single remaining design question.
+#     Defer to that cycle: read the existing
+#     ContextWindow.tsx:167 null-fallback contract,
+#     then decide.
