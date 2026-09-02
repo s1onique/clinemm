@@ -20,4 +20,21 @@
 #                  H = workspace-clean ALLOW (regression-preserving)
 #   No production code change in this commit.
 #   No new review round.
-#   See .factory/epic-board.md Updated: 2026-09-02 16:50:00Z entry.
+
+# CORRECTION2 (P1 wording fix, on commit a127aed18):
+#   Verdict  : PASS_WITH_ONE_P1_FIX
+#   P1       : LIVE target prematurely labeled outside the generic
+#              editor's authorized root before Q1/Q2 bind tool + root
+#   Fix      : ACTUAL_TOOL / ACTUAL_AUTHORIZED_ROOT marked UNBOUND
+#              until Q1/Q2 establish them; LIVE specimen is NOT
+#              classified as a capability-root escape on F1+F2 alone.
+#   Add      : apply_patch noted as a likely sibling that may share
+#              the editor's path resolver; if it does not, do NOT
+#              widen this ACT.
+#   No production code change in this commit.
+#   No new review round.
+#   C1       : GO_LIVE_BIND
+#
+#   See .factory/epic-board.md Updated: 2026-09-02 16:50:00Z entry
+#   (and the follow-up PASS_WITH_ONE_P1_FIX / GO_LIVE_BIND line
+#    recorded at the next board update).

@@ -28,13 +28,38 @@
 > `FRESH_POST_REPAIR_LIVE = PENDING / NON-BLOCKING`. Per the
 > Factory causal reviewer verdict on the P1 calibration
 > (commit `03af027a9`), this file-tool security lane takes
-> priority because our live evidence already suggests a
+> priority because our live evidence suggests a
 > model-controlled **host file mutation** created
-> `/Projects/Runtime/...` under a path that is **not in any
-> capability-specific authorized writable root** for the
-> generic editor / file mutation, while shell-side deletion
-> later hit Seatbelt denial — a containment-boundary candidate
+> `/Projects/Runtime/...` while shell-side deletion later
+> hit Seatbelt denial — a containment-boundary candidate
 > that the post-Q5-GREEN um ACT cannot host.
+>
+> ```text
+> LIVE host mutation target =
+>   /Projects/Runtime/...
+>
+> EXPECTED generic-editor authority =
+>   likely workspace / session-root bounded
+>   (per upstream docs, built-in tools respect CoreSessionConfig.cwd)
+>
+> ACTUAL_TOOL =
+>   UNBOUND  (not yet identified by this ACT)
+>
+> ACTUAL_AUTHORIZED_ROOT =
+>   UNBOUND  (not yet established by this ACT)
+>
+> AUTHORIZED_ROOT_VIOLATION =
+>   NOT YET PROVEN
+>   (the two observed facts — host mutation outside the
+>    intended Runity/srs tree, and shell-side deletion
+>    later denied by Seatbelt — are STRONG but do NOT by
+>    themselves classify the host mutation as a
+>    capability-root escape; classification requires Q1/Q2
+>    to bind the tool identity and its authorized root)
+>
+> NEXT_DECISION_OWNER =
+>   Q1 / Q2  (this ACT)
+> ```
 >
 > Owned by `EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY01`
 > (open alongside this ACT in the next deferred-work entry).
@@ -134,28 +159,65 @@ LIVE specimen (the reviewer's load-bearing evidence):
   file mutation while the workspace was elsewhere.
   Shell-side deletion later hit Seatbelt denial.
 
+OBSERVED FACTS (durable, before any tool classification):
+  F1. host mutation outside the intended Runity/srs tree
+  F2. shell-side deletion of the same tree later denied
+      by Seatbelt
+
+UNBOUND UNTIL Q1/Q2:
+  ACTUAL_TOOL                = UNBOUND
+  ACTUAL_AUTHORIZED_ROOT     = UNBOUND
+  AUTHORIZED_ROOT_VIOLATION  = NOT YET PROVEN
+
+Q1 TOOL-CANDIDATES (search the session/transcript around
+the LIVE specimen's creation; do not assume the upstream
+SDK name `editor` is the only one - ClineMM inherits
+legacy terminology including `write_to_file`,
+`replace_in_file`, `apply_patch`):
+  - editor             (current SDK built-in)
+  - write_to_file      (legacy / hook-receivable)
+  - replace_in_file    (legacy)
+  - apply_patch        (current SDK built-in; treats
+                        Add/Update/Delete/Move as a
+                        separate mutation tool)
+  - hostbridge mutation / controller/file/* handler
+                       (non-controller write path)
+```
+
 This is NOT a "candidate symptom" - it is the reviewer's
 primary evidence pointer for opening this lane. The recon's
 first job is to bind this LIVE specimen to:
 
   (a) the exact tool emitted by the model
-      (editor? write_to_file? apply_patch? hostbridge
-       mutation? controller/file handler?)
+      (editor? write_to_file? replace_in_file? apply_patch?
+       hostbridge mutation? controller/file handler?)
   (b) the exact production handler that performed the write
   (c) the path-authority primitive at that handler
       (lexical resolve, realpath, sanitization, basename,
        none)
 
 Until (a)-(c) are bound, the recon does NOT generalize to
-the 29 controller files and does NOT prescribe a repair.
+the 29 controller files and does NOT prescribe a repair;
+the LIVE specimen is NOT classified as a capability-root
+escape (F1+F2 alone do NOT establish that - they only
+establish host mutation occurred outside the intended tree
+and shell authority denied the deletion); and
+`FIRST_BROKEN_BOUNDARY = UNBOUND`.
 ```
 
-The current evidence is strong: the model-facing editor path
+The current evidence is strong: the model-facing tool path
 reported successful creation of files under the erroneous
 `/Projects/Runtime/srs/...` tree, while subsequent
-shell-side removal was denied by Seatbelt. That is enough to
-start Q1; a fresh TSWPD capture is NOT required to begin
-binding.
+shell-side removal was denied by Seatbelt. The host
+mutation succeeded (tool-side authority permitted it);
+the shell deletion was denied (shell-side Seatbelt
+authority refused it). Whether the host mutation
+constituted a capability-root escape depends on which
+tool produced it and what its authorized root was
+(Q1/Q2). A fresh TSWPD capture is NOT required to begin
+binding; the durable session/transcript around the LIVE
+creation is sufficient. Do NOT infer from directory
+contents alone.
 
 ## 2. Initial scan (LIVE bind priority)
 
@@ -219,10 +281,46 @@ model tool call
   -> filesystem mutation
 ```
 
-Find and record the **exact** tool emitted by the model
-(`editor`? `write_to_file`? `apply_patch`? hostbridge mutation?
-a `controller/file/*` handler?) and the **exact** production
-handler that performed the write.
+Find and record the **exact** tool emitted by the model.
+The candidates are NOT just the current SDK built-in
+`editor`. Search the session/transcript around the LIVE
+specimen's creation for any of:
+
+```text
+editor             (current SDK built-in)
+write_to_file      (legacy / hook-receivable)
+replace_in_file    (legacy)
+apply_patch        (current SDK built-in; treats
+                   Add/Update/Delete/Move as a separate
+                   mutation tool)
+hostbridge mutation / controller/file/* handler
+```
+
+Record the **exact** production handler that performed
+the write.
+
+Useful output (this is the bind):
+
+```text
+LIVE_TOOL              = (the exact tool name)
+LIVE_INPUT_PATH        = (the exact path or path component
+                         the model supplied)
+PRODUCTION_ENTRY       = (the exact handler / adapter
+                         entry point)
+PATH_NORMALIZER        = (the exact path normalization
+                         function used, if any)
+MUTATION_PRIMITIVE     = (the exact fs.* primitive invoked)
+```
+
+If the bind cannot be made from durable transcript/log
+evidence:
+
+```text
+CAPTURE_INSUFFICIENT
+```
+
+and add the smallest capture needed. Do NOT infer from
+directory contents alone.
 
 Deliverable: a section in
 `.factory/evidence/ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01/01-live-bind.md`
@@ -320,10 +418,17 @@ handler; OR a new option on an existing resolver that fails
 closed when the resolved path escapes
 `authorized_root(tool)`).
 
-This is per-tool, NOT universal. The Q4 seam for the editor
-may differ from the Q4 seam for the global-skill creator; the
-two tools have different authorized roots and should not
-share a single global check.
+This is per-tool, NOT universal. The Q4 seam for the bound
+tool may differ from the Q4 seam for the global-skill
+creator; the two tools have different authorized roots and
+should not share a single global check.
+
+Sibling check (after the LIVE bind):
+- `apply_patch` is a likely sibling of the editor. If it
+  shares the editor's path resolver, it belongs in the
+  same eventual repair conservation.
+- If `apply_patch` does NOT share the editor's resolver,
+  do NOT widen this ACT; record the divergence and stop.
 
 Deliverable: a section in
 `.factory/evidence/ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01/04-composition-seam.md`.
@@ -464,6 +569,11 @@ LIVE_SYMPTOM =
   HIGH VALUE  (load-bearing evidence, not a candidate
                symptom; the recon's first job is to bind it)
 
+OBSERVED_FACTS =
+  F1. host mutation outside the intended Runity/srs tree
+  F2. shell-side deletion of the same tree later denied
+      by Seatbelt
+
 CURRENT_AUTHORITY_CONTRACT =
   WRONG / OVERBROAD  (workspace-universal; would misclassify
                       legitimate global-skill / global-rule /
@@ -474,9 +584,26 @@ P0 =
   authority; legitimate global-config tools intentionally
   have non-workspace roots
 
+P1 =
+  LIVE target prematurely labeled outside the generic
+  editor's authorized root before Q1/Q2 bind tool + root
+
+FIX =
+  ACTUAL_TOOL                = UNBOUND  (until Q1)
+  ACTUAL_AUTHORIZED_ROOT     = UNBOUND  (until Q2)
+  AUTHORIZED_ROOT_VIOLATION  = NOT YET PROVEN
+  (F1 + F2 are STRONG but do NOT by themselves classify
+   the host mutation as a capability-root escape;
+   classification requires Q1/Q2)
+
 CORRECT_INVARIANT =
   mutation target must remain inside the
   capability-specific authorized writable root(s)
+
+EXPECTED_GENERIC_EDITOR_AUTHORITY =
+  likely workspace / session-root bounded
+  (per upstream docs, built-in tools respect
+   CoreSessionConfig.cwd)
 
 SEATBELT =
   separate shell authority;
@@ -488,19 +615,49 @@ PRODUCTION_REPAIR =
 NEXT =
   bounded contract correction (this ACT)
   -> bind exact LIVE file / editor tool (Q1)
+     search session/transcript for:
+       editor | write_to_file | replace_in_file | apply_patch
+     (do not assume upstream SDK name `editor` is the only
+      one; legacy terminology and apply_patch both apply)
   -> identify per-tool authorized root (Q2)
   -> inspect path-authority primitive (Q3)
+     - lexical resolve vs. authoritative base
+     - realpath of nearest existing ancestor
+       (file often does not exist yet)
+     - containment vs. authorized_root(tool)
+     - symlink / TOCTOU protection
   -> RED against real production seam with case-G
      global-skill conservation (Q5)
+     separate these for the first RED:
+       a) lexical escape       ../sibling
+       b) absolute escape      /outside/path
+       c) existing symlink     workspace/link -> outside
+       d) nonexistent target   outside/new/file
+     if all four reproduce through the same resolver,
+     centralization is justified
+     (race-safe mutation may need stronger OS primitives;
+      that is repair design, not recon)
   -> only then inventory sibling paths sharing that
      authority primitive (deferred to a downstream ACT)
+     including `apply_patch` as a likely sibling that
+     shares the editor's path resolver (or does not -
+     if it does not, do NOT widen this ACT)
 
 VERDICT =
-  HALT_WRONG_AUTHORITY_CONTRACT
-  (correction applied; recon proceeds with corrected contract)
+  PASS_WITH_ONE_P1_FIX  (Factory causal reviewer)
+  - a127aed18 = contract correction PASS
+  - this commit = P1 wording + apply_patch sibling note
+  - capability-specific authority model = CORRECT
+  - global-skill conservation = REQUIRED / CORRECT
+  - Seatbelt = separate / preserved
+  - LIVE tool / authorized root = UNBOUND until Q1/Q2
+  - production change = FORBIDDEN
+  - repair authorized = NO
+  - new review round = NO
+  C1: GO_LIVE_BIND
 
 NEW_REVIEW_ROUND =
   NO
-  (the correction is wording / mission / matrix reframing;
+  (the P1 fix is wording-only + sibling-candidate addition;
    no production code change; no new RED; no new test)
 ```
