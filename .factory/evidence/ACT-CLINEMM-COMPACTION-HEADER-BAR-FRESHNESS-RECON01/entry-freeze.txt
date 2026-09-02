@@ -116,8 +116,17 @@ RECON_VERDICT       = RECON_PASS
                      W_AUTHORITY        = ABSENT AT
                                           CURRENT WEBVIEW WIRE
                                           / PROVEN
-                     H_a ≡ W_e          = NOT PROVEN /
+                     H_a ≡ W_e          = UNPROVEN /
                                           PRESERVE
+                     H_a ≡ W_e BY ASSUMPTION
+                                       = FORBIDDEN (reviewer
+                                          P1 nomenclature;
+                                          equivalence may
+                                          be proven later
+                                          from identical
+                                          exact inputs +
+                                          identical
+                                          estimator)
                      PRODUCT_DECISION   = C2
                                           (product
                                           recommendation

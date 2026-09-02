@@ -52,15 +52,21 @@ H_b and H_a both originate from `compaction.ts:551-555,579-580` via `estimateMes
 
 ```text
 W_AUTHORITY  = ABSENT
-H_a ≡ W_e    = NOT PROVEN
+H_a ≡ W_e    = UNPROVEN
+H_a ≡ W_e BY ASSUMPTION = FORBIDDEN (reviewer P1 nomenclature;
+                            equivalence may one day be
+                            mechanically proven from identical
+                            exact inputs + identical estimator,
+                            but cannot be taken as a starting
+                            assumption)
 ```
 
 `compaction` say payload carries `{status, mode, tokensBefore?, tokensAfter?, messagesBefore?, messagesAfter?}` — all four numerics are H-space (`estimateMessageTokens` over canonical messages). `getLastApiReqContextInputTokens` does NOT consume the divider; the JSDoc at `getApiMetrics.ts:150-156` explicitly forbids ratio rescaling because the divider scale ≠ provider scale.
 
 Therefore:
 - **C2-as-consumer-only = UNACHIEVABLE_AT_CURRENT_WIRE** — there is no W-space field to consume.
-- **H_a ≡ W_e = NOT PROVEN**, and the spec forbids inferring equivalence from arithmetic coincidence.
-- A producer-side act (publish W_e on the `compaction` payload) is required to unlock C2 or C3 at the consumer.
+- **H_a ≡ W_e = UNPROVEN**, and the spec forbids inferring equivalence from arithmetic coincidence or from provider cache counters (this is the FORBIDDEN-by-assumption side of the I6 invariant; carried forward to ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01).
+- A producer-side act (publish W_e on the `compaction` payload, computed from canonical post-compaction request shape — system prompt + messages + tools + deterministic request-envelope overhead only where the existing estimator already includes it — NOT from provider cache counters) is required to unlock C2 or C3 at the consumer.
 
 
 
@@ -225,7 +231,13 @@ This directly fixes the observed stale bar without touching Strategy-D or revivi
 - C2_SOURCE_INTENT = NOT PROVEN
 - HEADER_BAR_NEXT_REQUEST_SEMANTIC = NOT PROVEN
 - W_AUTHORITY = ABSENT / PROVEN
-- H_a ≡ W = NOT PROVEN / PRESERVE
+- H_a ≡ W = UNPROVEN / PRESERVE
+- H_a ≡ W BY ASSUMPTION = FORBIDDEN (reviewer P1 nomenclature; carried to WORKING-CONTEXT-AUTHORITY-PUBLISH01)
+- W_INPUTS = system prompt + canonical post-compaction messages + tools + deterministic request-envelope overhead ONLY where the existing estimator already includes it (reviewer P1; carried to WORKING-CONTEXT-AUTHORITY-PUBLISH01)
+- PROVIDER_USAGE_BUCKETS = EXCLUDED from W unless the estimator's existing contract mechanically defines them as context-bearing inputs (reviewer P1)
+- cacheReads / cacheWrites = MUST NOT be added merely because they exist in API metrics (reviewer P1)
+- TASKHEADER_CONTEXTWINDOW = NO CHANGE (until W is RED + GREEN at WORKING-CONTEXT-AUTHORITY-PUBLISH01)
+- NEGATIVE_ASSERTION = W_after need not equal H_a (different semantic spaces; carried to WORKING-CONTEXT-AUTHORITY-PUBLISH01)
 - PRODUCT_DECISION = C2 (made by Factory this turn — product recommendation by Factory causal reviewer, NOT a source-intent claim)
 - W_PRODUCER_ACT = AUTHORIZED (now that PRODUCT_DECISION = C2)
 - NO_NEW_RECON = YES (do not open another Factory recon)

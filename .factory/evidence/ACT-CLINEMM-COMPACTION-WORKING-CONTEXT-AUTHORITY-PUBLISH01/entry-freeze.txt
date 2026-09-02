@@ -56,7 +56,47 @@ HEADER_BAR_NEXT_REQUEST_SEMANTIC
                    = NOT PROVEN
 W_AUTHORITY         = ABSENT AT CURRENT WEBVIEW WIRE /
                      PROVEN
-H_a ≡ W_e           = NOT PROVEN / PRESERVE
+H_a ≡ W_e           = UNPROVEN / PRESERVE
+H_a ≡ W_e BY ASSUMPTION
+                   = FORBIDDEN (reviewer P1 nomenclature)
+W_INPUTS            = system prompt + canonical post-
+                     compaction messages + tools +
+                     deterministic request-envelope overhead
+                     ONLY where the existing estimator
+                     already includes it
+PROVIDER_USAGE_BUCKETS
+                   = EXCLUDED from W unless the estimator's
+                     existing contract mechanically defines
+                     them as context-bearing inputs
+cacheReads / cacheWrites
+                   = MUST NOT be added merely because they
+                     exist in API metrics
+TASKHEADER_CONTEXTWINDOW
+                   = NO CHANGE (until W is RED + GREEN;
+                     commit 1 = producer seam; commit 2 =
+                     consumer switch — separable causality)
+RED_AUTHORIZED_AFTER
+                   = (i) seam evaluation table filled;
+                     (iii) WIRE_LOCATION selected from table;
+                     (iii) existing estimator contract that
+                     consumes the seam's inputs confirmed to
+                     include system prompt + canonical
+                     messages + tools (with deterministic
+                     request-envelope overhead only where the
+                     estimator already includes it)
+RED_SHAPE           = W_before =
+                     estimateRequestInputTokens(exact canonical
+                     pre-compaction request shape)
+                     W_after =
+                     estimateRequestInputTokens(exact canonical
+                     post-compaction request shape)
+                     after successful compaction:
+                     projected currentWorkingContextEstimate
+                     == W_after
+                     At HEAD expected RED: projected W = absent
+NEGATIVE_ASSERTION  = W_after need not equal H_a (different
+                     semantic spaces; any test that asserts
+                     W_after === H_a for a fixture is a smell)
 PRODUCT_DECISION    = C2 (product recommendation by
                      Factory causal reviewer; rationale:
                      a capacity gauge that remains at
@@ -86,23 +126,34 @@ PHASE_1_GOAL        = find the lowest production seam
                      tokensAfter); choose WIRE_LOCATION
 RED_SHAPE           = Given successful compaction and
                      no subsequent api_req_started,
-                     currentWorkingContextEstimate MUST
-                     be available to TaskHeader
-                     immediately as a finite authoritative
-                     W estimate
-GREEN_SHAPE         = header = W_before before
-                     compaction; header = W_after after
-                     compaction; header already reflects
-                     W_after before next provider request;
-                     invariant header == authoritative W
-                     (NOT header == H_a)
+                     W_before = estimateRequestInputTokens(
+                       exact canonical pre-compaction
+                       request shape)
+                     W_after = estimateRequestInputTokens(
+                       exact canonical post-compaction
+                       request shape)
+                     projected currentWorkingContextEstimate
+                     == W_after
+                     At HEAD expected RED: projected W = absent
+GREEN_SHAPE         = commit 1 (producer / projection seam):
+                       W_before, W_after available at the
+                       producer seam
+                       TaskHeader / ContextWindow = NO CHANGE
+                       invariant: header still reads P
+                     commit 2 (consumer switch):
+                       TaskHeader / ContextWindow = consumes W
+                       invariant: header == authoritative W
+                                   (NOT header == H_a)
+                     W_after need not equal H_a (negative
+                     assertion preserved across both commits)
 
 CONSERVATION        = lastProviderRequestInput P remains
                      364.9k; compaction H values remain
                      untouched; cumulative usage unchanged;
                      provider billing metrics unchanged;
-                     H_a ≡ W_e NOT claimed by arithmetic
-                     coincidence; Strategy-D consumer
+                     H_a ≡ W_e equivalence-by-assumption
+                     FORBIDDEN; H_a ≡ W_e itself UNPROVEN;
+                     Strategy-D consumer
                      (getApiMetrics.ts:174-225) untouched
 
 H_a_TO_W_e_EQUIVALENCE
@@ -115,12 +166,19 @@ FULL_UI_DOM_RENDER  = OPTIONAL (chain is a pure function;
                      ContextWindow.test.tsx is the existing
                      extracted-projection oracle at HEAD)
 
-I6_INVARIANT        = H_a ≡ W_e FORBIDDEN
-                     (compactor H-space ratio forbidden
-                     to transfer to provider/request-input
-                     P/W-space accounting; see
+I6_INVARIANT        = H_a ≡ W_e equivalence-by-assumption
+                     FORBIDDEN (compactor H-space ratio
+                     forbidden to transfer to provider/
+                     request-input P/W-space accounting
+                     without proof from identical exact
+                     inputs + identical estimator; see
                      ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
                      CONSUMER-REPAIR01)
+                     H_a ≡ W_e itself remains UNPROVEN (a
+                     future implementation may prove it
+                     from identical exact inputs and the
+                     identical estimator — that proof
+                     would be valid)
 
 OUT_OF_SCOPE        = C1 / C3 contract variants
                      (PRODUCT_DECISION = C2 is the gate);

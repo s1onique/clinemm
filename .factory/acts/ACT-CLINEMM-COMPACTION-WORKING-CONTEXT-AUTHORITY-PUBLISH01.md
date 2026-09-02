@@ -7,9 +7,11 @@
 > Epistemic purpose: **BOUNDED_PRODUCTION_ENGINEERING** —
 > bind the producer-side seam that holds the exact next-request
 > shape (system prompt + canonical post-compaction messages +
-> tools + request overhead), compute a single authoritative W
+> tools + deterministic request-envelope overhead only where the
+> estimator already includes it), compute a single authoritative W
 > estimate from that exact shape, publish W to the context-window
-> header. Do NOT claim `H_a ≡ W_e`; do NOT require `W = 264.3k`.
+> header. Do NOT claim `H_a ≡ W_e` BY ASSUMPTION; do NOT require
+> `W = 264.3k`; do NOT fold provider cache counters into W.
 >
 > ```text
 > ENTRY_HEAD            = <this commit>
@@ -30,7 +32,9 @@
 >                         FRESHNESS-EMPIRICAL01 (EMPIRICAL_REPORT = PASS)
 > RELATED_RECON         = ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-
 >                         TRUTH-RECON01 (closed recon; I1-I7
->                         invariants; H_a ≡ W_e forbidden by I6)
+>                         invariants; H_a ≡ W_e equivalence-by-
+>                         assumption FORBIDDEN by I6;
+>                         H_a ≡ W_e remains UNPROVEN)
 >                         and ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
 >                         CONSUMER-REPAIR01 (DEFECT A CLOSED at
 >                         cb5b52239; Strategy-D; cross-scale ratio
@@ -77,9 +81,22 @@
 > C2_SOURCE_INTENT          = NOT PROVEN
 > HEADER_BAR_NEXT_REQUEST_SEMANTIC = NOT PROVEN
 > W_AUTHORITY               = ABSENT / PROVEN
-> H_a ≡ W_e                 = NOT PROVEN / PRESERVE
+> H_a ≡ W_e                 = UNPROVEN / PRESERVE
+> H_a ≡ W_e BY ASSUMPTION   = FORBIDDEN (reviewer P1 nomenclature)
+> W_INPUTS                  = system prompt + canonical post-
+>                             compaction messages + tools +
+>                             deterministic request-envelope
+>                             overhead ONLY where the existing
+>                             estimator already includes it
+> PROVIDER_USAGE_BUCKETS    = EXCLUDED from W unless the
+>                             estimator's existing contract
+>                             mechanically defines them as
+>                             context-bearing inputs
+> cacheReads / cacheWrites   = MUST NOT be added merely because
+>                             they exist in API metrics
 > PRODUCT_DECISION          = C2
 > W_PRODUCER_ACT            = AUTHORIZED
+> TASKHEADER_CONTEXTWINDOW  = NO CHANGE (until W is RED + GREEN)
 > ```
 >
 > **This ACT is NOT authorized by source intent.** It is authorized
@@ -90,10 +107,23 @@
 > extend it into a different contract without re-opening the
 > upstream recon.
 >
-> **Do NOT claim `H_a ≡ W_e`.** The upstream recon's I6 invariant
-> (`H_a ≡ W_e FORBIDDEN`) applies to this ACT. Compute W from the
-> actual next-request shape (system prompt + canonical post-compaction
-> messages + tools + request overhead), not from `tokensAfter`.
+> **Do NOT claim `H_a ≡ W_e` by assumption.** The upstream recon's
+> invariant applies to this ACT as:
+>
+> ```text
+> H_a_TO_W_EQUIVALENCE_BY_ASSUMPTION = FORBIDDEN
+> H_a_TO_W_EQUIVALENCE               = UNPROVEN
+> ```
+>
+> What is **forbidden** is *assuming or deriving the equivalence
+> without proof*. The equivalence may eventually be true if a
+> future implementation proves it from identical exact inputs and
+> the identical estimator — but it must not be taken as a starting
+> assumption. Compute W from the actual next-request shape (system
+> prompt + canonical post-compaction messages + tools + deterministic
+> request-envelope/context overhead only where the estimator already
+> includes it), not from `tokensAfter` and not from provider
+> cache counters.
 >
 > **NO_NEW_RECON.** The reviewer explicitly forbids opening another
 > Factory recon before this ACT lands. The PRODUCT_DECISION is made;
@@ -103,19 +133,74 @@
 
 Goal: find the lowest production seam that holds the exact payload
 that would become the next request, and prove W can be computed
-from THAT exact post-compaction request shape — not from `tokensAfter`.
+from THAT exact post-compaction request shape — not from `tokensAfter`
+and not from provider usage / cache accounting.
 
-Inputs (in priority order — find the seam that holds all four):
+### What W is
 
 ```text
-1. system prompt
-2. canonical post-compaction messages
-3. tools
-4. request overhead (cache_reads/cache_writes estimation hooks,
-   tool result markers, environment markers)
+W = estimate(next request context occupancy)
+
+NOT
+
+W = reconstructed provider billing / input accounting
 ```
 
-Candidate seams (Phase 1 outcome will pick one):
+This is load-bearing. The prior Strategy-D repair
+(`ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01`)
+deliberately stopped ratio-transfer between provider accounting and
+compaction estimates. If this ACT computes W by starting with exact
+request content and then folds provider cache counters back into it,
+we recreate the same category defect by another route.
+
+Upstream #9433 is direct corroboration: the current bar's dependence
+on provider `usage` is precisely what makes it fail when usage is null,
+and the suggested fallback is **internal estimation**. That supports
+keeping **estimation authority distinct from provider-reported usage
+buckets**.
+
+### W inputs (frozen for Phase 1)
+
+```text
+W_INPUTS =
+  exactly the content-bearing inputs consumed by the same
+  request-input estimator used for context budgeting:
+
+    system prompt
+    canonical post-compaction messages
+    tools
+    deterministic request-envelope / context overhead
+      ONLY where that estimator already includes it
+
+PROVIDER_USAGE_BUCKETS =
+  EXCLUDED from W unless the estimator's existing contract
+  mechanically defines them as context-bearing inputs
+
+cacheReads / cacheWrites =
+  MUST NOT be added merely because they exist in API metrics
+```
+
+### Seam evaluation table (Phase 1 must fill)
+
+Phase 1 asks: **is there already one production estimator whose
+inputs are exactly the canonical post-compaction request content that
+would consume context on the next turn?** Start from the existing
+estimator rather than inventing W semantics.
+
+```text
+| Candidate seam               | Has system prompt | Has canonical post-compaction messages | Has tools | Uses canonical request-context estimator | Suitable W authority? |
+| ---------------------------- | ----------------- | -------------------------------------- | --------- | ---------------------------------------- | -------------------- |
+| compaction result seam       |                   |                                        |           |                                          |                      |
+| prepare-turn seam            |                   |                                        |           |                                          |                      |
+| coordinator publication seam |                   |                                        |           |                                          |                      |
+```
+
+(The table is intentionally blank — Phase 1 fills it from the
+production source. Do NOT preselect a winner from source code
+alone.)
+
+Candidate seams to evaluate (Phase 1 outcome will pick one or
+document why none suffice):
 
 ```text
 - sdk/packages/core/src/extensions/context/compaction.ts (the
@@ -131,25 +216,106 @@ Candidate seams (Phase 1 outcome will pick one):
   sdk/packages/core/src/extensions/context/compaction.ts:672-712)
 ```
 
+The likely winner is **not necessarily the compactor**. The compactor
+knows enough to estimate H, but the next-turn preparation seam may be
+closer to the actual payload that will constrain the next API call.
+Pick whichever seam satisfies:
+
+```text
+same semantic inputs
++
+same estimator contract
++
+no duplicate token logic
+```
+
 The producer seam is where W is computed **once** and published.
 The consumer (TaskHeader / ContextWindow.tsx) must NOT recompute W.
 
 ## RED (to author after Phase 1)
 
 ```text
-Given:  successful compaction, no subsequent api_req_started
-Then:  currentWorkingContextEstimate MUST be available to TaskHeader
-       immediately, as a finite authoritative W estimate
-At HEAD expected RED: actual = missing; expected = finite W
+W_before =
+  estimateRequestInputTokens(exact canonical pre-compaction
+                             request shape)
+
+W_after =
+  estimateRequestInputTokens(exact canonical post-compaction
+                             request shape)
+
+after successful compaction:
+  projected currentWorkingContextEstimate == W_after
+
+At HEAD expected RED:
+  projected W = absent
 ```
 
-GREEN (after the producer seam publishes W):
+That is a genuine RED once the producer seam is bound.
+
+### Negative assertion (mandatory)
 
 ```text
-before compaction:             header = W_before
-after compaction:              header = W_after
-before next provider request:  header already reflects W_after
-invariant: header == authoritative W (NOT header == H_a)
+W_after need not equal H_a
+```
+
+even when one fixture happens to produce equal numbers. The two
+quantities belong to **different semantic spaces** (H = compaction
+estimator; W = next-request context-bearing estimate). Any test
+that asserts `W_after === H_a` for a fixture is a smell — it would
+recreate the cross-scale arithmetic prohibition.
+
+### Authorization step before RED
+
+```text
+RED_AUTHORIZED_AFTER:
+  - the seam evaluation table is filled
+  - WIRE_LOCATION is selected from the table, not preselected
+  - the existing estimator contract that consumes the seam's
+    inputs has been confirmed to include system prompt +
+    canonical messages + tools (with deterministic request-
+    envelope / context overhead only where the estimator
+    already includes it)
+```
+
+## Don't touch the header yet
+
+Until W authority is actually bound and RED, the UI consumer stays
+unchanged:
+
+```text
+TaskHeader / ContextWindow = NO CHANGE
+```
+
+The first production delta should ideally establish W at one
+producer / projection seam. Then the smallest second delta switches
+the bar numerator from P to W. That separation gives clean
+causality:
+
+```text
+commit 1:
+  authoritative W exists
+
+commit 2:
+  header consumes W
+```
+
+with executable evidence after each. That is faster to debug than
+combining producer semantics and UI consumption in one patch.
+
+## GREEN (commit 1 + commit 2 separated)
+
+```text
+commit 1 (producer / projection seam):
+  W_before, W_after available at the producer seam
+  TaskHeader / ContextWindow   = NO CHANGE
+  invariant: header still reads P
+
+commit 2 (consumer switch):
+  TaskHeader / ContextWindow   = consumes W
+  invariant: header == authoritative W
+              (NOT header == H_a)
+
+W_after need not equal H_a  (negative assertion preserved)
 ```
 
 ## Conservation invariants (mandatory for this ACT)
@@ -159,7 +325,8 @@ lastProviderRequestInput P   remains 364.9k
 compaction H values         remain untouched
 cumulative usage            unchanged
 provider billing metrics    unchanged
-H_a ≡ W_e                   NOT claimed by arithmetic coincidence
+H_a_TO_W_EQUIVALENCE_BY_ASSUMPTION = FORBIDDEN
+H_a_TO_W_EQUIVALENCE               = UNPROVEN
 Strategy-D consumer (getApiMetrics.ts:174-225) untouched
 ```
 

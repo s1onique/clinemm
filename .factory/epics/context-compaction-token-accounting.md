@@ -314,3 +314,132 @@ producer-seam recon plan, RED/GREEN shape, conservation
 invariants, and stop conditions. EVIDENCE:
 `.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
 AUTHORITY-PUBLISH01/entry-freeze.txt`.
+
+## Current frontier update — 2026-09-02 21:30:00Z (reviewer P1)
+
+Factory causal reviewer second-pass disposition PASS_WITH_ONE_P1_FIX
+on commit `fd4b57ae3` (this epic's previous Current frontier update
+opened the W-authority ACT). The reviewer's product-decision framing
+is **accepted**: PRODUCT_DECISION = C2 stays; SOURCE_INTENT stays
+AMBIGUOUS; W_AUTHORITY stays ABSENT / PROVEN. The P1 fix tightens
+the Phase-1 contract so:
+
+```text
+W = estimate(next request context occupancy)
+
+NOT
+
+W = reconstructed provider billing / input accounting
+```
+
+The risk the reviewer flagged: if W is computed by starting with
+exact request content and then folding provider cache counters back
+into it, we recreate Strategy-D's category defect by another route.
+Upstream #9433 is direct corroboration — the current bar's
+dependence on provider `usage` is precisely what makes it fail when
+usage is null, and the suggested fallback is internal estimation.
+That supports keeping **estimation authority distinct from
+provider-reported usage buckets**.
+
+### Phase-1 contract freezes (added in this turn)
+
+```text
+W_INPUTS =
+  exactly the content-bearing inputs consumed by the same
+  request-input estimator used for context budgeting:
+
+    system prompt
+    canonical post-compaction messages
+    tools
+    deterministic request-envelope / context overhead
+      ONLY where that estimator already includes it
+
+PROVIDER_USAGE_BUCKETS =
+  EXCLUDED from W unless the estimator's existing contract
+  mechanically defines them as context-bearing inputs
+
+cacheReads / cacheWrites =
+  MUST NOT be added merely because they exist in API metrics
+```
+
+The likely winner is **not necessarily the compactor**. The
+compactor knows enough to estimate H, but the next-turn preparation
+seam may be closer to the actual payload that will constrain the
+next API call. Phase 1 fills a seam evaluation table from production
+source; WIRE_LOCATION is selected from the table, not preselected.
+
+### RED shape (mechanical)
+
+```text
+W_before =
+  estimateRequestInputTokens(exact canonical pre-compaction
+                             request shape)
+
+W_after =
+  estimateRequestInputTokens(exact canonical post-compaction
+                             request shape)
+
+after successful compaction:
+  projected currentWorkingContextEstimate == W_after
+
+At HEAD expected RED:
+  projected W = absent
+```
+
+Negative assertion (mandatory):
+
+```text
+W_after need not equal H_a
+```
+
+even when one fixture happens to produce equal numbers. Any test
+that asserts `W_after === H_a` for a fixture is a smell — it would
+recreate the cross-scale arithmetic prohibition.
+
+### Nomenclature tweak
+
+```text
+H_a_TO_W_EQUIVALENCE_BY_ASSUMPTION = FORBIDDEN  (doctrine)
+H_a_TO_W_EQUIVALENCE               = UNPROVEN   (evidence)
+```
+
+What is **forbidden** is assuming or deriving the equivalence
+without proof. The equivalence may eventually be true if a future
+implementation proves it from identical exact inputs and the
+identical estimator — but it must not be taken as a starting
+assumption. This prevents a future valid mathematical proof from
+conflicting with doctrine.
+
+### Causality split — don't touch the header yet
+
+```text
+TaskHeader / ContextWindow = NO CHANGE
+
+commit 1:
+  W authority exists at the producer / projection seam
+  TaskHeader / ContextWindow = NO CHANGE
+  invariant: header still reads P
+
+commit 2:
+  TaskHeader / ContextWindow = consumes W
+  invariant: header == authoritative W (NOT header == H_a)
+```
+
+That separation gives clean causality with executable evidence
+after each, faster to debug than combining producer semantics and
+UI consumption in one patch.
+
+### Conservation preserved
+
+- DEFECT A (cross-scale ratio transfer): CLOSED at cb5b52239
+  (Strategy-D; getApiMetrics.ts:174-225)
+- DEFECT B (post-restore publication): CLOSED at HEAD (trailing
+  postStateToWebview at sdk-compaction-coordinator.ts:380)
+- Strategy-D consumer untouched
+- 24/24 getApiMetrics bun:test PASS (re-verified)
+- git diff --check clean
+
+PRODUCTION DELTA: ZERO (this turn is text-only P1 fix in the
+new ACT's Phase-1 contract; no production code change)
+NEW REVIEW ROUND: NO
+C1: GO_W_AUTHORITY
