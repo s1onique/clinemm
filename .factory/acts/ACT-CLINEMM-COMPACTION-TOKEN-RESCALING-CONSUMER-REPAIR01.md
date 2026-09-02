@@ -397,3 +397,87 @@ REOPEN_CONDITION                           = G2 not yet authored;
                                                 ESCALATE to (a) tag
                                                 provenance.
 ```
+
+## ACT closure record (implementation turn, 2026-09-02 09:00:00Z)
+
+The implementation turn executed the factory causal reviewer's
+RED-first playbook directly. Summary:
+
+```text
+1. Author G2 only in getApiMetrics.test.ts.           DONE
+2. Run G2 at HEAD 9aef5245b.                          DONE (RED at HEAD)
+3. Inspect consumer-visible compatibility authority.  DONE (none exists)
+4. Apply smallest Strategy-D production patch.        DONE (drop ratio)
+5. Re-run G2.                                         GREEN
+6. Add G3 / G4 / G5.                                  DONE
+7. Re-run G1 + collateral.                            97/97 + 53/53 GREEN
+8. Typecheck.                                         CLEAN (tsc 0)
+9. Close.                                             (this section)
+```
+
+### Compatibility authority inspection result
+
+ClineCompactionInfo carries `status`, `mode`, `tokensBefore?`,
+`tokensAfter?`, `messagesBefore?`, `messagesAfter?`. None of these
+mechanically witnesses `INCOMPATIBLE_BASELINE` at the consumer
+seam. Per the reviewer's directive "Do not infer compatibility
+from chronology or mode", `mode` cannot be used as a discriminator
+upstream architecture makes this especially relevant since
+multiple message builders may transform provider-bound messages
+in sequence). And (a) tag provenance is a protocol change, which
+option (d) explicitly forbids in the first trial.
+
+**The smallest honest sub-case of option (d) without a
+discriminator is: drop the wrong-scale ratio transfer entirely.**
+The consumer returns the genuine prior provider observation
+unchanged. The bar holds the pre-compaction value (stale but
+truthful) until the next request lands; G3 then takes over.
+
+### Production delta
+
+```text
+apps/vscode/src/shared/getApiMetrics.ts  (84 lines net change)
+  - getLastApiReqTotalTokens: removed shrinkFraction accumulator
+    and `Math.ceil(total * shrinkFraction)`; returns genuine
+    disjoint-bucket sum from the last api_req_started.
+  - getLastApiReqContextInputTokens: same; returns genuine
+    `tokensIn + cacheReads + cacheWrites` from the last
+    api_req_started, no ratio applied.
+
+apps/vscode/src/shared/__tests__/getApiMetrics.test.ts
+                                              (258 lines net change)
+  - 4 pre-existing fabrication-locking tests updated: names
+    revised to reflect truthful behavior; assertion values
+    set to the genuine values (100_000, 100_000, 5_000,
+    95_000); R0-A re-purposed as INVERTED-INVARIANT witness.
+  - G2, G3, G4, G5 added: G2 is the regression oracle at
+    the consumer seam.
+```
+
+### Final state
+
+```text
+G1 (H/W scale divergence, necessity control)             GREEN
+G2 (consumer-seam regression oracle)                    GREEN
+G3 (genuine-truth restoration)                          GREEN
+G4 (positive compatibility, no-compaction regime)      GREEN
+G5 (presentation conservation)                          GREEN
+unrelated suites (97 compaction tests, 53 apps/vscode
+shared tests, typecheck)                                GREEN
+production delta                                        APPLIED
+protocol change                                         NONE
+```
+
+ACT closes here. Reviewer opens a fresh review pass on the
+implementation commit (REPAIR_AUTHORIZED = YES, ACT =
+IMPLEMENTATION_REVIEW). If the implementation review surfaces
+a protocol-level improvement (e.g., reintroducing ratio
+transfer for COMPATIBLE_BASELINE cases via a discriminator),
+that becomes a follow-on ACT; this ACT's contract — small,
+honest, within protocol — is satisfied.
+
+KNOWN UX-COST: the context-window bar will display a stale
+pre-compaction value in the brief window between a compaction
+divider and the next API request, where previously it
+synthesized a smaller fabricated value. This is the deliberate
+trade-off; the next request supersedes the stale display.

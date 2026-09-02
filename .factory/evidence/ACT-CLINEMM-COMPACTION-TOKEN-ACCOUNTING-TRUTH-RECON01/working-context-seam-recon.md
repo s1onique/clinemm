@@ -561,3 +561,75 @@ speculative design review." (factory causal reviewer, 2026-09-02
 08:30:00Z)
 
 C1: GO.
+
+---
+
+## POST-IMPLEMENTATION UPDATE (added 2026-09-02 09:00:00Z — implementation turn)
+
+The implementation turn executed the factory causal reviewer's RED-first
+playbook at HEAD 9aef5245b. Summary:
+
+```text
+- G2 authored in apps/vscode/src/shared/__tests__/getApiMetrics.test.ts
+- G2 RED-confirmed at HEAD 9aef5245b (the buggy consumer computed
+  ceil(100_000 * 1_000 / 1_000_000) = 100, the wrong-scale synthesis)
+- Compatibility authority inspection: NO mechanically available
+  discriminator exists (mode, messagesBefore/After, status, etc.
+  do NOT witness INCOMPATIBLE_BASELINE at the consumer seam; the
+  reviewer explicitly forbade inferring from chronology/mode)
+- Strategy-D smallest-truthful sub-case applied: drop the wrong-
+  scale ratio transfer entirely; consumer returns the genuine
+  prior provider observation unchanged
+- G2 → GREEN at post-repair HEAD
+- G3, G4, G5 added
+- 24/24 getApiMetrics.test.ts pass; 97/97 compaction + working-context-ratio
+  tests pass; 53/53 apps/vscode/src/shared/__tests__ pass;
+  typecheck clean
+```
+
+### R0' (compaction input identity) — outcome
+
+The R0' question (compaction input identity, was the load-bearing
+next discriminator per the recon ACT §6 R0') is **subsumed by the
+G2 oracle**. G2 asserts that the consumer does not synthesize
+`previousProviderInput × tokensAfter/tokensBefore` against an
+incompatible baseline, which is precisely the defect that R0' was
+trying to characterize. R0' was the question; the G2 oracle is
+the answer at the consumer seam.
+
+### FROZEN_CONTRACT status
+
+```text
+INCOMPATIBLE_BASELINE → no ratio transfer
+```
+
+This remains the active contract. The Strategy-D production patch
+is the smallest sub-case of this contract that can be honored
+without a discriminator (i.e., applies unconditionally; restores
+compatibility only when a discriminator is added in a future
+protocol-level change).
+
+### Implementation review recommended
+
+The factory causal reviewer's verdict authorized a fresh review
+pass on the implementation commit:
+
+```text
+REVIEWER_DISPOSITION = PASS_WITH_ONE_P1_FIX → HALT_WRONG_REPAIR_
+                       ORACLE (P0) → HALT_WRONG_RED_CLAIM (P1) →
+                       C1: GO → implementation RED-first executed
+                       → CLOSED
+NEW_PRE_EXECUTION_REVIEW = NO
+IMPLEMENTATION_REVIEW_RECOMMENDED = YES (this commit opens its
+                       own review pass; may flag further
+                       protocol-level work such as (a) tag
+                       provenance to re-enable ratio transfer
+                       for COMPATIBLE_BASELINE cases that this
+                       turn did not need to address)
+```
+
+This recon ACT does NOT re-open; it remains CLOSED_WITH_RESIDUE
+and the residue marker is updated to note "implementation
+executed; residual: protocol-level optimal UX (re-enable ratio
+for compatible-baseline cases) is a follow-on ACT, not part of
+this ACT's contract".

@@ -77,52 +77,39 @@ export function getApiMetrics(messages: ClineMessage[]): ApiMetrics {
  * This is used for context window progress display - it shows how much of the
  * context window is used in the current/most recent request, not cumulative totals.
  *
- * A completed compaction divider that postdates the last request rescales that
- * request's total by the compaction's tokensAfter/tokensBefore ratio, so the
- * context-window bar updates immediately instead of waiting for the next
- * request to run. The ratio is used rather than tokensAfter itself because the
- * compaction counters are the SDK's estimate (chars/4-class), a different
- * scale from the provider-reported usage that normally drives this value —
- * substituting the estimate would make the bar visibly re-snap when the next
- * request's real usage lands. Both counters come from the same estimator, so
- * their ratio is scale-free. Multiple compactions since the last request
- * compound. The ratio is deliberately not clamped to 1: compacting a small
- * conversation can grow the context (the summary outweighs the original
- * messages), and the header must move in the same direction as the divider row
- * (e.g. "1k → 1.3k tokens") rather than silently show the stale value.
+ * Returns the **genuine, last-known provider-reported total** from the most
+ * recent `api_req_started` message. A later `compaction` divider that
+ * postdates the request does NOT trigger any rescaling: the compaction's
+ * `tokensAfter/tokensBefore` ratio is on the SDK estimator scale (chars/4-class),
+ * which is not the same scale as the provider-reported usage that drives this
+ * value. Multiplying the provider observation by that ratio would produce a
+ * fabricated wrong-scale value (the live symptom: a 167,100 prior input
+ * collapsing to ~7,101 after a 0.0425× ratio, with the bar showing the
+ * fabricated number until the next request lands). See ACT-CLINEMM-COMPACTION-
+ * TOKEN-RESCALING-CONSUMER-REPAIR01 § "Frozen RED for the post-fix regression
+ * oracle" / G2 in `__tests__/getApiMetrics.test.ts` for the regression witness.
+ *
+ * The honest behavior is to retain the prior genuine observation and let the
+ * next request's real usage land. Until then the bar shows a stale
+ * pre-compaction value; that is truthful (it is not a synthesized estimate),
+ * and the next request supersedes it. Repair ACT § G3 establishes this exact
+ * contract.
  *
  * @param messages - An array of ClineMessage objects to process.
- * @returns The total tokens (tokensIn + tokensOut + cacheWrites + cacheReads) from the last api_req_started message, rescaled by any completed compactions that happened after it, or 0 if none found.
+ * @returns The total tokens (tokensIn + tokensOut + cacheWrites + cacheReads) from the last api_req_started message, or 0 if none found.
  */
 export function getLastApiReqTotalTokens(messages: ClineMessage[]): number {
-	let shrinkFraction: number | undefined
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i]
 		if (msg.type !== "say" || !msg.text) {
 			continue
-		}
-		if (msg.say === "compaction") {
-			try {
-				const { status, tokensBefore, tokensAfter } = JSON.parse(msg.text)
-				if (
-					status === "completed" &&
-					typeof tokensBefore === "number" &&
-					typeof tokensAfter === "number" &&
-					tokensBefore > 0 &&
-					tokensAfter > 0
-				) {
-					shrinkFraction = (shrinkFraction ?? 1) * (tokensAfter / tokensBefore)
-				}
-			} catch {
-				// Ignore JSON parse errors, continue searching
-			}
 		}
 		if (msg.say === "api_req_started") {
 			try {
 				const { tokensIn, tokensOut, cacheWrites, cacheReads } = JSON.parse(msg.text)
 				const total = (tokensIn || 0) + (tokensOut || 0) + (cacheWrites || 0) + (cacheReads || 0)
 				if (total > 0) {
-					return shrinkFraction === undefined ? total : Math.ceil(total * shrinkFraction)
+					return total
 				}
 			} catch {
 				// Ignore JSON parse errors, continue searching
@@ -160,39 +147,24 @@ export function getLastApiReqTotalTokens(messages: ClineMessage[]): number {
  * counters and is suitable only for cost / activity telemetry, not for the
  * context-window percentage.
  *
- * The same compaction-ratio rescaling semantics as {@link getLastApiReqTotalTokens}
- * apply: completed compaction dividers that postdate the last request rescale
- * the context-input count by the same `tokensAfter / tokensBefore` ratio so
- * the header tracks the divider without waiting for the next request to run.
+ * Like {@link getLastApiReqTotalTokens}, this function does NOT rescale by
+ * the compaction's `tokensAfter/tokensBefore` ratio. Same rationale: the ratio
+ * is on the SDK estimator scale, not the provider scale; multiplying produces
+ * a synthesized wrong-scale value. The honest behavior is to return the
+ * genuine prior provider observation unchanged, and let the next request's
+ * real usage supersede it. Repair ACT § G2/G3 establish this contract; see
+ * `__tests__/getApiMetrics.test.ts` for the regression oracle.
  *
  * @param messages - An array of ClineMessage objects to process.
  * @returns The provider-normalized context-input token count
  *   (`tokensIn + cacheReads + cacheWrites`) from the last `api_req_started`
- *   message, rescaled by any completed compactions that happened after it, or
- *   0 if none found.
+ *   message, or 0 if none found.
  */
 export function getLastApiReqContextInputTokens(messages: ClineMessage[]): number {
-	let shrinkFraction: number | undefined
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i]
 		if (msg.type !== "say" || !msg.text) {
 			continue
-		}
-		if (msg.say === "compaction") {
-			try {
-				const { status, tokensBefore, tokensAfter } = JSON.parse(msg.text)
-				if (
-					status === "completed" &&
-					typeof tokensBefore === "number" &&
-					typeof tokensAfter === "number" &&
-					tokensBefore > 0 &&
-					tokensAfter > 0
-				) {
-					shrinkFraction = (shrinkFraction ?? 1) * (tokensAfter / tokensBefore)
-				}
-			} catch {
-				// Ignore JSON parse errors, continue searching
-			}
 		}
 		if (msg.say === "api_req_started") {
 			try {
@@ -204,7 +176,7 @@ export function getLastApiReqContextInputTokens(messages: ClineMessage[]): numbe
 				const writes = typeof cacheWrites === "number" ? cacheWrites : 0
 				const total = tokensIn + reads + writes
 				if (total > 0) {
-					return shrinkFraction === undefined ? total : Math.ceil(total * shrinkFraction)
+					return total
 				}
 			} catch {
 				// Ignore JSON parse errors, continue searching

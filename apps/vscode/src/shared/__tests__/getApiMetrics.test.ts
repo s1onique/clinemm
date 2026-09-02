@@ -101,9 +101,16 @@ describe("getLastApiReqTotalTokens", () => {
 		assert.equal(total, 23)
 	})
 
-	it("scales the last request by the shrink ratio of a compaction completed after it", () => {
-		// The compaction counters are the SDK's estimate — a different scale from
-		// the provider-reported request total. Only the ratio carries over.
+	it("keeps the last request's genuine total when a compaction divider postdates it (no ratio transfer across scales)", () => {
+		// Strategy-D: the compaction counters are on the SDK estimator scale
+		// (chars/4-class), not the provider-reported request scale. Multiplying
+		// the genuine prior provider observation by `tokensAfter/tokensBefore`
+		// synthesized a wrong-scale value. The repair makes the consumer
+		// return the genuine prior observation unchanged, and let the next
+		// request's real usage supersede it. See
+		// ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01 §
+		// "Frozen RED for the post-fix regression oracle" and the function
+		// doc-comment in getApiMetrics.ts for the full rationale.
 		const messages: ClineMessage[] = [
 			{
 				ts: 1,
@@ -120,10 +127,17 @@ describe("getLastApiReqTotalTokens", () => {
 		]
 
 		const total = getLastApiReqTotalTokens(messages)
-		assert.equal(total, 25_000)
+		// Genuine prior total: 90_000 + 5_000 + 0 + 5_000 = 100_000.
+		// Pre-repair (buggy HEAD): 25_000 (the wrong-scale ratio
+		// was applied). Post-repair: 100_000 (truthful).
+		assert.equal(total, 100_000)
 	})
 
-	it("compounds multiple compactions completed since the last request", () => {
+	it("does not compound multiple compactions into the last request total (post-repair behavior)", () => {
+		// Strategy-D: the consumer returns the genuine prior provider
+		// observation unchanged, regardless of how many compaction
+		// dividers postdate it. Compaction ratios are not transferred
+		// across scales; there is nothing to "compound".
 		const messages: ClineMessage[] = [
 			{
 				ts: 1,
@@ -146,13 +160,21 @@ describe("getLastApiReqTotalTokens", () => {
 		]
 
 		const total = getLastApiReqTotalTokens(messages)
-		assert.equal(total, 25_000)
+		// Genuine prior total: 100_000. Pre-repair (buggy HEAD): 25_000
+		// ((100k → 50% → 50%) of 100k, compounded twice). Post-repair:
+		// 100_000 (no transfer, no compounding).
+		assert.equal(total, 100_000)
 	})
 
-	it("grows the request total when a compaction made the estimated context larger", () => {
-		// Compacting a tiny conversation can produce a summary bigger than the
-		// original messages. The header must follow the divider's direction
-		// instead of freezing at the pre-compaction value.
+	it("does not grow the request total when a compaction made the estimated context larger (post-repair: stale but truthful)", () => {
+		// Compacting a tiny conversation can produce a summary bigger than
+		// the original messages, so the post-compaction divisor ratio can
+		// exceed 1. Pre-repair: the header would multiply by 1.3,
+		// yielding 6_500 (a synthesized larger value). Post-repair: the
+		// consumer returns the genuine pre-compaction value unchanged.
+		// The header now displays a stale pre-compaction value until the
+		// next request's real usage lands; that is truthful (not
+		// synthesized), and the next request supersedes it (G3).
 		const messages: ClineMessage[] = [
 			{
 				ts: 1,
@@ -169,7 +191,10 @@ describe("getLastApiReqTotalTokens", () => {
 		]
 
 		const total = getLastApiReqTotalTokens(messages)
-		assert.equal(total, 6_500)
+		// Genuine prior total: 4_000 + 1_000 + 0 + 0 = 5_000.
+		// Pre-repair (buggy HEAD): 6_500 (4_000 * 1.3 + 1_000 * 1.3,
+		// etc., i.e. 5_000 * 1.3 = 6_500). Post-repair: 5_000.
+		assert.equal(total, 5_000)
 	})
 
 	it("leaves the request total unscaled when a completed compaction lacks token counters", () => {
@@ -390,10 +415,13 @@ describe("getLastApiReqContextInputTokens", () => {
 		assert.equal(getLastApiReqTotalTokens(messages), 500_010)
 	})
 
-	it("rescales the context-input total by the shrink ratio of a compaction completed after it", () => {
-		// The compaction counters are the SDK's estimate — a different scale
-		// from the provider-reported request total. Only the ratio carries
-		// over.
+	it("keeps the context-input total at the genuine prior observation when a compaction divider postdates it (Strategy-D: no ratio transfer across scales)", () => {
+		// Strategy-D mirror of `getLastApiReqTotalTokens`: the consumer must
+		// not synthesize a wrong-scale rescaled context-input value. The
+		// prior genuine `tokensIn + cacheReads + cacheWrites` is returned
+		// unchanged, regardless of any compaction ratio. See the function
+		// doc-comment in getApiMetrics.ts and the repair ACT § G2 (regression
+		// oracle). The disjoint-bucket semantics are preserved (G5).
 		const messages: ClineMessage[] = [
 			{
 				ts: 1,
@@ -409,39 +437,42 @@ describe("getLastApiReqContextInputTokens", () => {
 			},
 		]
 
-		// (90_000 + 0 + 5_000) * (50_000 / 200_000) = 95_000 * 0.25 = 23_750
-		assert.equal(getLastApiReqContextInputTokens(messages), 23_750)
+		// Genuine context-input total: 90_000 + 0 + 5_000 = 95_000.
+		// Pre-repair (buggy HEAD): 23_750 (95_000 * 0.25, wrong-scale
+		// synthesis). Post-repair: 95_000.
+		assert.equal(getLastApiReqContextInputTokens(messages), 95_000)
 	})
 
-	// R0-A — HEADER POST-COMPACTION PROJECTION (PROJECTION_FORMULA_BOUND)
+	// R0-A — LIVE-SYMPTOM FORENSIC WITNESS (re-purposed post-repair)
 	//
 	// ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01 §6 R0-A
 	// (factory causal reviewer 2026-09-02, recon step 1; superseded by
 	// R0' on 2026-09-02 — see ACT §6 R0' / R0' note).
 	//
-	// WITNESS, not defect oracle:
-	// The production rescaling formula is:
-	//
-	//   header = ceil(lastRequestInput * (tokensAfter / tokensBefore))
-	//
-	// For the LIVE-symptom input observed in ClineMM:
+	// Pre-repair, R0-A asserted that the buggy HEAD consumer at the
+	// LIVE-symptom input produced the fabricated header value (~7.1k)
+	// matching the observed header:
 	//
 	//   lastRequestInput = 167_100
 	//   tokensBefore     = 680_100
 	//   tokensAfter      = 28_900
 	//
-	// the function returns ceil(167_100 * (28_900 / 680_100))
-	//                       = ceil(7_100.7)
-	//                       = 7_101
+	//   buggy output = ceil(167_100 * (28_900 / 680_100))
+	//                = ceil(7_100.7)
+	//                = 7_101
 	//
-	// matching the observed header value (~7.1k) within rounding noise.
+	// That arithmetic binding is preserved here as a WITNESS
+	// (PRODUCTION_FORMULA_BIND), but the assertion now inverts the
+	// invariant: post-repair the consumer must NOT synthesize the
+	// fabricated wrong-scale value. The genuine prior provider
+	// observation (167_100, plus any cache buckets) is returned
+	// unchanged, regardless of subsequent compaction dividers.
 	//
-	// This is arithmetic bind only. It does NOT establish that the
-	// projection is semantically valid. The validity of the projection
-	// depends on whether the calibration factor
-	// (lastRequestInput / tokensBefore) is stable across the two
-	// payloads it compares — a question that requires either a real
-	// provider run (R0') or a code-trace recon (see ACT §6 R0').
+	// R0-A no longer demonstrates the LIVE-symptom; instead, it now
+	// witnesses that the consumer's post-repair output on those exact
+	// numbers is NOT the projected synthesized value. This is the same
+	// G2 invariant with the original LIVE numbers, kept for forensic
+	// continuity with the recon.
 	//
 	// R0-B and R0-C from commit 2916fb9fd were HALT_RED_NOT_REPRODUCED
 	// by the factory causal reviewer (2026-09-02). The "permitted
@@ -450,13 +481,16 @@ describe("getLastApiReqContextInputTokens", () => {
 	// is contradicted by the doc comment's own text ("rescaled by any
 	// completed compactions"). Both tests removed.
 	//
-	// R0' — COMPACTION INPUT IDENTITY — now supersedes R0-B and is the
-	// load-bearing next discriminator. See ACT §6 R0' for the new
-	// question and ACT §7/§8 for the updated classification / stop
-	// rule.
-	it("[R0-A] rescaling reproduces the LIVE-symptom header value (~7.1k)", () => {
-		// PROJECTION_FORMULA_BOUND / LIVE_ARITHMETIC_BIND_PROVEN.
-		// Documentary only; this is NOT a defect oracle.
+	// R0' — COMPACTION INPUT IDENTITY — was the load-bearing next
+	// discriminator (see ACT §6 R0'); see also
+	// ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01 §
+	// "Frozen RED for the post-fix regression oracle" which is now the
+	// authoritative repair oracle (G2 above; same invariant).
+	it("[R0-A] consumer does not synthesize the LIVE-symptom wrong-scale value (~7.1k) post-repair", () => {
+		// PRODUCTION_FORMULA_BIND / POST-REPAIR NOT_FABRICATED.
+		// The genuine prior provider observation must be returned
+		// unchanged; the rescaling that previously matched the LIVE
+		// header (~7.1k) is removed.
 		const messages: ClineMessage[] = [
 			{
 				ts: 1,
@@ -477,9 +511,16 @@ describe("getLastApiReqContextInputTokens", () => {
 			},
 		]
 
-		// (167_100 + 0 + 0) * (28_900 / 680_100) = 167_100 * 0.04249 ≈ 7_100.7
-		// ceil(7_100.7) = 7_101
-		assert.equal(getLastApiReqContextInputTokens(messages), 7_101)
+		// Genuine context-input total: 167_100 + 0 + 0 = 167_100.
+		// Pre-repair (buggy HEAD): 7_101 (the LIVE-observed fabricated
+		// value). Post-repair: 167_100 (genuine prior observation).
+		// Forensic note: the rescaling that previously matched the
+		// LIVE symptom has been REMOVED; the consumer no longer
+		// produces 7_101 in this configuration. The LIVE-symptom
+		// header itself, observed in production, WAS this projected
+		// value; the post-repair header on the same input returns
+		// 167_100 instead (stale pre-compaction value, not synthesized).
+		assert.equal(getLastApiReqContextInputTokens(messages), 167_100)
 	})
 
 	it("returns 0 when no api_req_started message exists", () => {
@@ -519,5 +560,134 @@ describe("getLastApiReqContextInputTokens", () => {
 		]
 
 		assert.equal(getLastApiReqContextInputTokens(messages), 0)
+	})
+
+	// G2 — CONSUMER-SEAM REPAIR ORACLE
+	//   ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01 §
+	//   "Frozen RED for the post-fix regression oracle".
+	//
+	// Honest shape (per factory causal reviewer 2026-09-02):
+	//   Given an incompatible baseline (compaction telemetry
+	//   tokensBefore/tokensAfter is on the SDK estimator scale,
+	//   a different scale from the provider-reported usage that
+	//   drives previousProviderInput), getApiMetrics must NOT
+	//   manufacture a synthesized post-compaction request-input
+	//   value:
+	//
+	//     fabricated = previousProviderInput * tokensAfter/tokensBefore
+	//
+	//   At buggy HEAD, this assertion FAILS because the consumer
+	//   currently synthesizes exactly that value.
+	//
+	//   After Strategy-D repair, this assertion PASSES — the
+	//   consumer returns the truthful (genuine, unchanged) prior
+	//   provider observation rather than fabricating a rescaled
+	//   value on the wrong scale.
+	//
+	// G2 deliberately does NOT pre-judge the post-repair value
+	// (it does not assert a specific number); it only asserts
+	// that the consumer does not synthesize a wrong-scale value.
+	it("[G2] does not synthesize a post-compaction request-input value by multiplying prior provider observation by the compaction H-space ratio", () => {
+		const previousProviderInput = 100_000
+		const previousRequest = {
+			ts: 1,
+			type: "say" as const,
+			say: "api_req_started" as const,
+			text: JSON.stringify({ tokensIn: previousProviderInput }),
+		}
+		const compactionDivider = {
+			ts: 2,
+			type: "say" as const,
+			say: "compaction" as const,
+			text: JSON.stringify({
+				status: "completed",
+				mode: "manual",
+				tokensBefore: 1_000_000,
+				tokensAfter: 1_000,
+			}),
+		}
+
+		const messages: ClineMessage[] = [previousRequest, compactionDivider]
+
+		const fabricated = Math.ceil((previousProviderInput * 1_000) / 1_000_000)
+		const actual = getLastApiReqContextInputTokens(messages)
+
+		// Genuine unchanged value (100_000) differs from fabricated
+		// (100); the two outcomes are not the same — the repair
+		// choice matters, so G2 is not a tautology.
+		assert.notEqual(previousProviderInput, fabricated)
+		// The repair oracle itself: the consumer must NOT
+		// synthesize the wrong-scale fabricated value.
+		assert.notEqual(actual, fabricated)
+	})
+
+	// G3 — GENUINE TRUTH RESTORATION
+	//   When a NEW api_req_started arrives AFTER the compaction
+	//   divider, the consumer must use the new provider observation
+	//   as the genuine post-compaction truth. No retroactive ratio
+	//   is applied to the new observation. Strategy D walks the
+	//   messages from the end and returns the first api_req_started
+	//   payload's disjoint-bucket sum.
+	it("[G3] uses the post-compaction api_req_started observation as ground truth (no retroactive ratio)", () => {
+		const preCompactRequest = {
+			ts: 1,
+			type: "say" as const,
+			say: "api_req_started" as const,
+			text: JSON.stringify({ tokensIn: 90_000 }),
+		}
+		const compactionDivider = {
+			ts: 2,
+			type: "say" as const,
+			say: "compaction" as const,
+			text: JSON.stringify({
+				status: "completed",
+				mode: "manual",
+				tokensBefore: 1_000_000,
+				tokensAfter: 1_000,
+			}),
+		}
+		const postCompactRequest = {
+			ts: 3,
+			type: "say" as const,
+			say: "api_req_started" as const,
+			text: JSON.stringify({ tokensIn: 123_456 }),
+		}
+
+		const messages: ClineMessage[] = [preCompactRequest, compactionDivider, postCompactRequest]
+		assert.equal(getLastApiReqContextInputTokens(messages), 123_456)
+	})
+
+	// G4 — POSITIVE COMPATIBILITY
+	//   When no compaction has occurred at all, the consumer returns
+	//   the genuine prior provider observation, unchanged. This is
+	//   the "truncation-doesn't-engage regime" — there's no ratio
+	//   to apply and no fabrication to suppress.
+	it("[G4] returns the genuine prior provider observation when no compaction has occurred", () => {
+		const request = {
+			ts: 1,
+			type: "say" as const,
+			say: "api_req_started" as const,
+			text: JSON.stringify({ tokensIn: 90_000, cacheReads: 5_000 }),
+		}
+		assert.equal(getLastApiReqContextInputTokens([request]), 95_000)
+	})
+
+	// G5 — PRESENTATION CONSERVATION
+	//   The shared input contract (`tokensIn + cacheReads +
+	//   cacheWrites`) is preserved by Strategy D — it modifies
+	//   only the ratio-removal decision, not the disjoint-bucket
+	//   semantics. cacheReads and cacheWrites continue to flow
+	//   through the sum.
+	it("[G5] preserves disjoint cacheReads/cacheWrites contribution (presentation conservation)", () => {
+		const request = {
+			ts: 1,
+			type: "say" as const,
+			say: "api_req_started" as const,
+			text: JSON.stringify({ tokensIn: 80_000, cacheReads: 12_000, cacheWrites: 8_000 }),
+		}
+		// 80_000 + 12_000 + 8_000 = 100_000 — the disjoint-bucket
+		// semantic total is preserved (no ratio, no rescale; just
+		// the disjoint sum).
+		assert.equal(getLastApiReqContextInputTokens([request]), 100_000)
 	})
 })

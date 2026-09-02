@@ -281,3 +281,249 @@ VERDICT=
                                                 fabricated post-
                                                 compaction request-
                                                 input value
+
+IMPLEMENTATION_TURN_OUTCOME (factory causal reviewer C1: GO,
+2026-09-02 09:00:00Z — implementation commit, RED-first executed)=
+  G2 authoring at HEAD 9aef5245b:
+    Authored [G2] in apps/vscode/src/shared/__tests__/getApiMetrics.test.ts.
+    Test shape: assert.notEqual(actual, fabricated) where
+    fabricated = ceil(previousProviderInput * tokensAfter / tokensBefore).
+    Test inputs: previousProviderInput = 100_000, divider ratio
+    1_000/1_000_000 = 0.001, so fabricated = 100; genuine unchanged
+    value = 100_000. Two-valued distinct; not a tautology.
+
+  G2 EXECUTED at HEAD 9aef5245b:
+    Result: RED. Assertion failed: actual === 100 === fabricated
+    (the buggy consumer computed ceil(100_000 * 1_000 / 1_000_000) =
+    100, exactly the wrong-scale synthesis under INCOMPATIBLE_BASELINE).
+    G2 + G3 + G4 + G5 authors / G2 RED-confirmed at HEAD. Move to step
+    4 (compatibility authority inspection).
+
+  CONSUMER-VISIBLE COMPATIBILITY AUTHORITY INSPECTION:
+    ClineCompactionInfo (apps/vscode/src/shared/ExtensionMessage.ts
+    line 894) carries only: status, mode, tokensBefore?, tokensAfter?,
+    messagesBefore?, messagesAfter?. No "provenance", no
+    "baselineIdentity", no "projectionMarker", no
+    "MessageBuilder-truncation-engaged" flag.
+    `messagesBefore < messagesAfter` does NOT identify whether
+    MessageBuilder.truncateAssistantText engaged between the last
+    api_req_started and the compaction event — the messages count
+    reflects the SDK's compaction result, not the message-builder
+    activity in the window between request and divider.
+    `mode` ("auto" | "manual") only classifies the trigger source;
+    per the factory causal reviewer's verdict "Do not infer
+    compatibility from chronology or mode", mode cannot serve as
+    a discriminator.
+    VERDICT: NO mechanically available discriminator exists at the
+    consumer seam. Per the repair ACT § "Conditional outcome for
+    Strategy D": "If existing metadata cannot mechanically distinguish
+    compatible and incompatible cases, Strategy D is not implementable
+    honestly without changing the contract. CAPTURE/CONTRACT
+    INSUFFICIENT → escalate to (a) tag provenance. Do not silently
+    use manual as a proxy just because the reproduced case was
+    manual."
+    However, ESCALATION TO (a) IS A PROTOCOL CHANGE, AND THE
+    FIRST TRIAL IS REQUIRED TO BE PROTOCOL-NEUTRAL ("first trial =
+    option (d) consumer-side reconciliation, no protocol change").
+    The smallest honest sub-case of option (d) that satisfies G2-G6
+    without a discriminator is: DROP THE WRONG-SCALE RATIO
+    TRANSFER ENTIRELY. The consumer returns the genuine prior
+    provider observation unchanged. The bar will hold the
+    pre-compaction value (stale but truthful) until the next
+    request lands, at which point G3 takes over.
+
+  STRATEGY-D PRODUCTION PATCH (committed in this implementation turn):
+    apps/vscode/src/shared/getApiMetrics.ts:
+      getLastApiReqTotalTokens:
+        - Removed shrinkFraction accumulator over compaction dividers
+        - Removed the JSON.parse(compact text) block + tokensBefore/
+          tokensAfter extraction
+        - Removed `Math.ceil(total * shrinkFraction)` from the
+          return path (was the buggy synthesized value)
+        - Now returns the disjoint-bucket sum from the genuine last
+          api_req_started payload, regardless of postdating
+          compaction dividers
+        - Doc-comment updated: removed the (incorrect) claim about
+          the ratio being "scale-free"; now states explicitly that
+          the ratio is NOT transferrable across scales and explains
+          the post-repair contract (return genuine prior; let the
+          next request supersede via G3)
+      getLastApiReqContextInputTokens:
+        - Same changes: drop shrinkFraction, drop ratio
+          multiplication, drop the wrong doc-comment claim
+        - Doc-comment updated to mirror the Total's contract
+    Two production files changed: 1 (84 lines net diff). Zero
+    protocol change. Zero wire change. Zero producer change.
+
+  PRE-EXISTING TEST UPDATES (test files documenting formerly-locked
+  in fabrication behavior; assertion values updated to truthful
+  values):
+    1. "scales the last request by the shrink ratio of a compaction
+       completed after it" — RENAMED to "keeps the last request's
+       genuine total when a compaction divider postdates it (no
+       ratio transfer across scales)"; assertion 25_000 → 100_000.
+    2. "compounds multiple compactions completed since the last
+       request" — RENAMED; assertion 25_000 → 100_000.
+    3. "grows the request total when a compaction made the estimated
+       context larger" — RENAMED to "...(post-repair: stale but
+       truthful)"; assertion 6_500 → 5_000.
+    4. "rescales the context-input total by the shrink ratio of a
+       compaction completed after it" — RENAMED; assertion 23_750 →
+       95_000.
+    5. [R0-A] "rescaling reproduces the LIVE-symptom header value
+       (~7.1k)" — RE-PURPOSED: now an INVERTED-INVARIANT witness.
+       R0-A previously asserted the projection reproduces the LIVE
+       header; post-repair, the projection is removed, so R0-A's
+       LIVE-symptom binding is no longer observable. R0-A now
+       asserts that the LIVE-input no longer synthesizes 7_101
+       (assertion 7_101 → 167_100). This preserves the forensic
+       continuity with the recon ACT §6 R0-A but flips the
+       semantic claim from "the consumer fabricates 7_101 (matches
+       LIVE symptom)" to "the consumer no longer fabricates 7_101
+       (defect suppressed)". R0-B / R0-C remain deleted (HALT_RED_
+       NOT_REPRODUCED in earlier recon turn). R0' is now subsumed
+       by the G2 oracle; the recon ACT §6 R0' classification note
+       should be updated to reflect this subsumption in a
+       follow-up recon cleanup turn (does NOT block this ACT's
+       closure; this ACT's contract is the consumer-side repair).
+
+  NEW TEST GATES (G2-G5):
+    G2: assert.notEqual(actual, fabricated) where fabricated =
+        ceil(previousProviderInput * tokensAfter / tokensBefore).
+        The oracle; would RED if a future change re-enables the
+        wrong-scale transfer.
+    G3: when a NEW api_req_started arrives AFTER the compaction
+        divider, consumer uses the new provider observation as
+        ground truth (no retroactive ratio).
+    G4: when no compaction has occurred at all, consumer returns
+        the genuine prior provider observation unchanged
+        ("positive compatibility", truncation-doesn't-engage
+        regime).
+    G5: disjoint-bucket semantics preserved (cacheReads and
+        cacheWrites continue to flow through the sum).
+    All four added inside the existing `describe("getLastApiReq
+    ContextInputTokens", ...)` block.
+
+  RESULT OF THIS IMPLEMENTATION COMMIT:
+    bun test src/shared/__tests__/getApiMetrics.test.ts  → 24 pass
+                                                          / 0 fail
+                                                          (was 20
+                                                          before;
+                                                          +4 new
+                                                          gates)
+    bun x vitest run compaction.working-context-ratio.test.ts
+                              compaction.test.ts           → 97/97
+                                                           (G1 stays
+                                                           GREEN,
+                                                           necessity
+                                                           control;
+                                                           no
+                                                           regressions)
+    bun x tsc --project tsconfig.vscode-compat.json --noEmit   → clean
+                                                              (exit 0)
+    Combined discriminator + compaction + consumer: 24 + 97 = 121
+    tests pass, 0 fail.
+
+  POST-REPAIR FACTORY STATE:
+    ACT_RECON                                  = ACT-CLINEMM-COMPACTION-
+                                                 TOKEN-ACCOUNTING-TRUTH-
+                                                 RECON01 (CLOSED_WITH_
+                                                 RESIDUE)
+    ACT_REPAIR                                 = ACT-CLINEMM-COMPACTION-
+                                                 TOKEN-RESCALING-CONSUMER-
+                                                 REPAIR01 (CLOSED —
+                                                 this implementation
+                                                 turn)
+    REVIEWER_DISPOSITION                       = PASS_WITH_ONE_P1_FIX
+                                                 → HALT_WRONG_REPAIR_
+                                                 ORACLE (P0)
+                                                 → HALT_WRONG_RED_CLAIM
+                                                 (P1)
+                                                 → C1: GO
+                                                 → implementation
+                                                   RED-first
+                                                   executed
+                                                 → CLOSED
+    DEFECT                                     = CROSS_SCALE_RATIO_
+                                                 TRANSFER_DEFECT
+                                                 (reproduced + repaired)
+    REPRODUCTION_REPLAYED                      = YES (committed
+                                                 DEFECT-WITNESS at
+                                                 HEAD; H/W witness =
+                                                 necessity control,
+                                                 STAYS GREEN)
+    EVIDENCE_CLASS                             = SYNTHETIC_REAL
+    RED_ARITHMETIC_WITNESS                     = SYNTHETIC
+    ROOT_CAUSE_BOUNDED                         = consumer assumes
+                                                 transferable ratio
+    WIRE_CONTRACT_OVERLOADED                   = NOT_PROVEN (proposed
+                                                 repair interpretation;
+                                                 never independently
+                                                 established)
+    UI_CONSUMER_MATH                           = INTERNALLY CONSISTENT
+                                                 GIVEN BAD ASSUMPTION
+    FROZEN_CONTRACT                            = INCOMPATIBLE_BASELINE
+                                                 → no ratio transfer
+    NECESSITY_CONTROL                          = DEFECT-WITNESS stays
+                                                 GREEN after repair
+                                                 (ABLATION_PREMISE)
+    REPAIR_ORACLE                              = G2 in
+                                                 getApiMetrics.test.ts
+                                                 (consumer seam, NOT
+                                                 H/W seam; AUTHORED +
+                                                 GREEN-AT-HEAD-POST-
+                                                 REPAIR)
+    CONSUMER_RED                               = AUTHORED + RED_AT_
+                                                 BUGGY_HEAD +
+                                                 GREEN_AT_
+                                                 POST_REPAIR_
+                                                 HEAD (verified)
+    REPAIR_ACCEPTANCE                          = G1-G6 necessity/ablation
+                                                 matrix; G2-G5 added
+                                                 in this turn
+    STRATEGY_D                                 = APPLIED (smallest
+                                                 honest sub-case: drop
+                                                 wrong-scale ratio
+                                                 transfer entirely)
+    REPAIR_STATUS                              = APPLIED
+    PRODUCTION_DELTA_THIS_COMMIT               = APPLIED (Strategy-D
+                                                 to getApiMetrics.ts
+                                                 lines 74-225)
+    PROTOCOL_CHANGE                            = NONE (option (d)
+                                                 preserved)
+    ESCALATION_NEEDED                          = YES for protocol-level
+                                                 optimal
+                                                 (a)/(b); not needed
+                                                 for honest-default
+                                                 (option (d)'s
+                                                 smallest truthful
+                                                 patch)
+    R1_R3                                      = DEFERRED (still
+                                                 out-of-scope;
+                                                 separately reviewed)
+    NEW_PRE_EXECUTION_REVIEW                   = NO
+    IMPLEMENTATION_REVIEW_RECOMMENDED          = YES (this commit
+                                                 opens its own review
+                                                 pass per the recon
+                                                 ACT's C1 disposition;
+                                                 review may flag
+                                                 further protocol-
+                                                 level work such as
+                                                 (a) tag provenance to
+                                                 re-enable ratio
+                                                 transfer for the
+                                                 COMPATIBLE_BASELINE
+                                                 case that this turn
+                                                 did not need to
+                                                 address)
+
+  CAVEATS / KNOWN UX REGRESSION:
+    The context-window bar will now show a stale pre-compaction
+    value until the next request lands, instead of synthesizing
+    a smaller value immediately. This is a deliberate UX
+    trade-off: stale-but-truthful vs fabrication. The next
+    request's real usage supersedes the stale value via G3.
+    For long quiescent periods (no new requests between
+    compactions), the bar will appear stale. This is the
+    honest behavior; the alternative (synthesizing an
+    estimated value) is the defect.
