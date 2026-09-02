@@ -940,7 +940,12 @@ on `CommandJobManager`), the Factory causal reviewer authorized the
 Q5 resume cycle (C1: RESUME_WAITING_Q5). The matrix was executed
 on the lowest composition seam that already has BOTH authority
 inputs in scope: `SdkController` (which holds the active session's
-`sdkHost`, which in turn holds the `CommandJobManager`).
+`sdkHost`, which in turn holds the `CommandJobManager`). The repair
+is bounded at that composition seam. The proof is **COMPOSED**
+(behavioral manager ownership + structural host/controller wiring +
+synthetic-real coordinator execution + necessity ablation) — not a
+literal end-to-end SdkController execution chain. See
+"Proof shape: COMPOSED, not literal end-to-end" below.
 
 ### Production delta (minimum bounded repair at the composition seam)
 
@@ -996,39 +1001,84 @@ Test file:
 `apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts`
 (350 lines, SYNTHETIC_REAL; mirrors the ACAS01 harness pattern).
 
-```text
-Q5-A PRE-REPAIR baseline
-  (liveness option wired to () => false, simulating pre-repair production)
-  → after.phase === "awaiting_followup"         PASS (RED captured)
+> **Factory causal reviewer P1 calibration (2026-09-02,
+> PASS_WITH_ONE_P1_FIX):** the original phrasing "Q5-A PRE-REPAIR
+> captured the RED" misclassified a CURRENT_BEHAVIOR_WITNESS as a
+> RED. The test asserts the buggy result (awaiting_followup under
+> owned-RUNNING-job precondition) and PASSES — that is exactly the
+> ACAS01 mistake we already corrected. The genuine RED evidence is
+> the **necessity ablation** (production-side consultation disabled
+> → invariant fails → restore → invariant holds). The matrix is
+> therefore re-labeled below.
 
-Q5-A POST-REPAIR
+```text
+Q5_A_BASELINE =
+  SYNTHETIC_REAL / CURRENT_BEHAVIOR_WITNESS
+  (liveness option wired to () => false, simulating pre-repair production)
+  → after.phase === "awaiting_followup"         PASS (witness, NOT RED)
+
+Q5_A_POST_REPAIR =
+  SYNTHETIC_REAL / 6/6 PASS
   (liveness option wired to () => true)
   → after.phase !== "awaiting_followup"         PASS (GREEN)
 
-Q5-B control (option returns false)
-  → after.phase === "awaiting_followup"         PASS (control)
+Q5_B_CONTROL =
+  SYNTHETIC_REAL / CURRENT_BEHAVIOR_WITNESS preserved
+  (option returns false)                        after.phase === "awaiting_followup"
+  (option omitted)                              after.phase === "awaiting_followup"
 
-Q5-B control (option omitted)
-  → after.phase === "awaiting_followup"         PASS (control;
-                                                    pre-Q5 behavior
-                                                    preserved)
+Q5_C_CONTROL =
+  SYNTHETIC_REAL / isolation control preserved
+  (liveness returns true only for non-active session)
+                                                after.phase === "awaiting_followup"
 
-Q5-C control (liveness returns true only for non-active session)
-  → after.phase === "awaiting_followup"         PASS (isolation
-                                                    control)
+Q5_D_CONTROL =
+  SYNTHETIC_REAL / terminal-state control preserved
+  (option returns false)                        after.phase === "awaiting_followup"
 
-Q5-D control (terminal-state; option returns false)
-  → after.phase === "awaiting_followup"         PASS (terminal-state
-                                                    control)
+Q5_RED =
+  NECESSITY_ABLATION / REPRODUCED
+  production-side consultation physically reverted to constant false
+  → post-repair invariant fails (1 failed | 5 passed)
+
+Q5_GREEN =
+  SYNTHETIC_REAL / 6/6 PASS
+  production-side consultation restored
+  → all six matrix assertions hold
 ```
 
-The Q5-A PRE-REPAIR baseline + Q5-A POST-REPAIR pairing constitutes
-the RED → GREEN proof at the composition seam. Independently
-verified by physically reverting the production-side
-`this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId)`
-call to a constant `false`; in that state Q5-A POST-REPAIR goes
-RED (1 failed | 5 passed). After restoring the consultation,
-all 6 pass (6/6 GREEN).
+### Proof shape: COMPOSED, not literal end-to-end SdkController execution
+
+> **Factory causal reviewer P1 calibration (2026-09-02,
+> PASS_WITH_ONE_P1_FIX):** Q5RR01 does NOT instantiate the
+> `SdkController → VscodeSessionHost → CommandJobManager` chain. It
+> constructs `SdkSessionEventCoordinator` and injects a boolean
+> callback. That alone is insufficient to claim a production-chain
+> test. The proof is **COMPOSED** of four pieces of evidence that
+> each cover one seam; together they close the chain:
+
+```text
+Q5_PROOF =
+  COMPOSED:
+    1. BEHAVIORAL  : CommandJobManager owner contract
+                     → real-shell run 9/9 PASS (env-gated in IDE)
+    2. STRUCTURAL  : VscodeSessionHost.hasRunningBackgroundJobForOwner
+                     delegates to CommandJobManager.hasRunningBackgroundJobForOwner
+                     (production code, this turn)
+    3. STRUCTURAL  : SdkController wires active-session sdkHost
+                     → VscodeSessionHost.hasRunningBackgroundJobForOwner
+                     (same duck-typed cast pattern as cancelBackgroundCommand)
+    4. SYNTHETIC_REAL : real SdkSessionEventCoordinator
+                     → guard changes awaiting_followup authority
+                     (Q5RR01 vitest 6/6 PASS)
+    5. NECESSITY   : production-side consultation disabled
+                     → invariant RED returns (1 failed | 5 passed)
+                     → restore consultation → 6/6 PASS
+
+Q5RR01 ALONE =
+  NOT a production-chain test
+  (it does NOT instantiate SdkController / VscodeSessionHost / CommandJobManager)
+```
 
 ### Conservation
 
@@ -1044,7 +1094,9 @@ Q6.2-Q6.8 owner-identity lifecycle   = environmentally gated (run
                                           command-job-manager.test.ts
                                           18/20 spawn-related failures
                                           in this IDE-sandbox - NOT a
-                                          regression)
+                                          regression; updated Q6 counts
+                                          below per Factory causal
+                                          reviewer calibration)
 OWN01 RED (sdk-session-event-coordinator.test.ts)
   = remains RED (was RED before this turn; authored as a separate
     P0 RED for the finish-reason discrimination path OWN02.
@@ -1056,37 +1108,57 @@ OWN01 RED (sdk-session-event-coordinator.test.ts)
 ### Disposition
 
 ```text
-CASE_A                            = ADJUDICATED
-ROOT_CAUSE_ISOLATED               = YES (the post-terminal-02 specimen's
-                                       authority defect traces to the
-                                       composition seam's missing
-                                       per-owner liveness consult)
-REPAIR_AUTHORIZED                 = YES
-REPAIR_SHAPE                      = per-owner background-job liveness
-                                       query (`hasRunningBackgroundJobForOwner`)
-                                       consulted BEFORE the
-                                       `setTurnPhase("awaiting_followup", ...)`
-                                       transition in the
-                                       done-without-completion branch
-REPAIR_DONE                       = YES (this turn; production delta
-                                       bounded at the composition seam)
-Q5_RED                            = AUTHORED + EXECUTED (6/6 PASS
-                                       in q5rr01)
+CASE_A                            = ADJUDICATED FOR EXERCISED CONTRACT
+ROOT_CAUSE                        = missing per-owner background-job
+                                     liveness at the turn-completion
+                                     authority decision
+OWNER_IDENTITY                    = sessionId
+OWNER_CONTRACT                    = EXECUTED / 9/9 PASS (real shell)
+REPAIR                            = bounded per-owner liveness consultation
+NECESSITY_ABLATION                = PASS
+                                     (guard removed -> RED returns;
+                                      restore -> GREEN; 6/6 PASS in
+                                      Q5RR01 with consultation on)
+Q5RR01                            = 6/6 PASS
+Q5_PROOF                          = COMPOSED
+                                     (BEHAVIORAL manager ownership 9/9 +
+                                      STRUCTURAL host delegation +
+                                      STRUCTURAL controller wiring +
+                                      SYNTHETIC_REAL coordinator execution +
+                                      NECESSITY ablation)
+                                     NOT literal end-to-end SdkController
+                                     execution (Q5RR01 alone does not
+                                     instantiate that chain)
+Q5_A_BASELINE                     = CURRENT_BEHAVIOR_WITNESS, not RED
+Q5_RED                            = NECESSITY_ABLATION (production-side
+                                       consultation disabled -> invariant
+                                       fails -> restore -> 6/6 PASS)
 Q5_CONTROL_NO_JOB                 = PASS (Q5-B)
 Q5_CONTROL_OTHER_OWNER            = PASS (Q5-C)
 Q5_CONTROL_COMPLETED_JOB          = PASS (Q5-D)
 NEW_REVIEW_ROUND                  = NO (reviewer directive)
-WAITING_Q5                        = CLOSED
+
+WAITING_Q5_IMPLEMENTATION         = CLOSED
+                                     REPAIR_VERIFIED_FOR_EXERCISED_CONTRACT
+FRESH_POST_REPAIR_LIVE            = PENDING / NON-BLOCKING
+                                     (no fresh long-running background
+                                      task observed on the repaired
+                                      dogfood build yet; ordinary
+                                      dogfood qualification;
+                                      do NOT wait for recurrence before
+                                      starting the security lane)
 
 NEXT_LANE = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
            (per the umbrella ACT's pre-existing
             RECOMMENDED-NEXT-LANE decision; the post-Q5-GREEN
-            um ACT pivots immediately)
+            um ACT pivots immediately; FRESH_POST_REPAIR_LIVE does
+            NOT gate the security lane)
 ```
 
 The umbrella ACT's NEXT-LANE work (the file-tool workspace-escape
 authority recon) is the higher-severity safety lane and begins
-in the next turn.
+in the next turn. The fresh-post-repair dogfood qualification runs
+in parallel and does NOT gate the security lane.
 
   The rename of `backgroundCommandTaskId` (which currently stores
   jobId) is a Cline-wide API surface decision and should be a

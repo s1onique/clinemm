@@ -138,6 +138,17 @@ apps/examples/desktop-app/.cursor/settings.json
 # to survive a fresh clone (mirroring the prior SSH-Authority
 # ACT's durability pattern).
 !/.factory/acts/ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01.md
+# ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01: opened
+# 2026-09-02 immediately after the umbrella ACT's Q5 GREEN landing
+# (commit 217e7f53c). Per Factory causal reviewer verdict
+# PASS_WITH_ONE_P1_FIX / C1: GO_FILE_TOOL_SECURITY_RECON, this lane
+# takes priority over the post-Q5-GREEN Waiting qualification.
+# The candidate symptom is a model-controlled host file mutation that
+# created /Projects/Runtime/... outside the workspace while shell-side
+# deletion later hit Seatbelt denial - a containment-boundary candidate.
+# The ACT, the evidence directory entry-freeze.txt + 00-scope.md, and
+# the deferred-work epic detail file all must be durably tracked.
+!/.factory/acts/ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01.md
 # ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01: successor ACT
 # to the SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01 closure. The
 # LIVE contradiction was an H2 hydration-layer defect (schema-default
@@ -465,6 +476,16 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/terminal-chronology-*.json
+# ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01 evidence:
+# entry-freeze.txt (Phase 0 freeze; ENTRY_HEAD = 217e7f53c) +
+# 00-scope.md (mission + Q1-Q5 plan + Q5 RED matrix). The future
+# Q1 endpoint enumeration, Q2/Q3 sanitization+base-authority tables,
+# Q4 composition seam identification, and Q5 RED matrix with
+# controls/ablations will live in this directory. The same
+# durable-binding reason as the ACT file: the deferred-work epic
+# detail at .factory/epics/file-tool-workspace-realpath-authority.md
+# binds to this evidence directory.
+!/.factory/evidence/ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01/
 # ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01: producer-side
 # contract ACT opened after the Q1-Q5 bounded recon of
 # RUNTIME-TASK-PROGRESSION-RECON01 reached AUTHORITY_IDENTITY_MISSING =

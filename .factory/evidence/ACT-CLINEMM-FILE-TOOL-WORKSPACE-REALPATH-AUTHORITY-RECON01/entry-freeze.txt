@@ -1,0 +1,1 @@
+26814d25 217e7f53c q5-resume-red-and-repair-green(factory): close Waiting Q5; bounded composition-seam fix for done-without-completion awaiting_followup; CASE_A ADJUDICATED
