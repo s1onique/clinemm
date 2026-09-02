@@ -165,9 +165,10 @@ W_PRODUCER_ACT      = AUTHORIZED (gate:
                      PRODUCT_DECISION = C2)
 NO_NEW_RECON        = YES
 
-WIRE_LOCATION       = ContextPipelinePrepareTurnResult
+W_AUTHORITY_LOCATION = ContextPipelinePrepareTurnResult
                      .currentWorkingContextEstimate
-                     (BOUND at Phase 1 source bind +
+                     (a CORE prepare-turn result field;
+                      BOUND at Phase 1 source bind +
                       GREEN producer-seam publish;
                       sdk/packages/core/src/extensions/
                       context/compaction.ts:60-75
@@ -177,6 +178,39 @@ WIRE_LOCATION       = ContextPipelinePrepareTurnResult
                       :712/:715/:726 [wiring into all three
                       return paths of
                       createCompactionStateAwarePrepareTurn])
+W_PRESENTATION_TRANSPORT
+                   = UNBOUND (the upstream
+                     `createContextPipelinePrepareTurn` returns
+                     the same shape and the state-aware
+                     wrapper applies W to every result that
+                     flows through it; but the consume site in
+                     `sdk/packages/agents/src/agent-runtime.ts`
+                     at 2308-2324 explicitly drops
+                     `currentWorkingContextEstimate` on the
+                     floor — TODO marker at line 2300 confirms
+                     this; production call sites all go through
+                     the state-aware wrapper at
+                     local-runtime-host.ts:670;
+                     `PRESENTATION_TRANSPORT_MISSING = PROVEN`)
+HEADER_CONSUMER_BINDING
+                   = NOT YET IMPLEMENTED
+                     (no path from
+                     `ContextPipelinePrepareTurnResult` →
+                     host/session state → extension state →
+                     webview/ChatView → TaskHeader
+                     exists in commit 2)
+
+WIRE_LOCATION       = ContextPipelinePrepareTurnResult
+                     .currentWorkingContextEstimate
+                     (ALIAS of W_AUTHORITY_LOCATION; same
+                      physical field; same review binding;
+                      same phase 1 source bind + GREEN
+                      producer-seam publish.
+                      IMPORTANT: this is a CORE result
+                      field, not a presentation/wire field;
+                      transport path to header is
+                      UNBOUND and is the explicit job of
+                      commit 3)
 WIRE_LOCATION_CANDIDATES
                    = compaction.payload.workingContextEstimate
                      / top-level projected
@@ -185,14 +219,13 @@ WIRE_LOCATION_CANDIDATES
                      producer-side calculation feeding a
                      dedicated presentation field
                      [SELECTED: producer-side calculation
-                     feeding a dedicated presentation field
-                     on the prepare-turn result; the upstream
-                     `createContextPipelinePrepareTurn` returns
-                     the same shape and the state-aware
-                     wrapper applies W to every result that
-                     flows through it; production call sites
-                     all go through the state-aware wrapper
-                     at local-runtime-host.ts:670]
+                     feeding a CORE prepare-turn result
+                     field (NOT a presentation field);
+                     this is the producer-side authority
+                     location, NOT the presentation
+                     transport; presentation transport
+                     is commit 3's job and is currently
+                     UNBOUND]
 PHASE_1_GOAL        = find the lowest production seam
                      that holds system prompt + canonical
                      post-compaction messages + tools +
@@ -287,3 +320,67 @@ RELATED_RECON       = ACT-CLINEMM-COMPACTION-TOKEN-
 OWNING_EPIC         = EPIC-CONTEXT-COMPACTION-TOKEN-
                      ACCOUNTING (see .factory/epics/
                      context-compaction-token-accounting.md)
+
+P1_TERMINOLOGY_FIX = factory causal reviewer fifth-pass on
+                     fc906dfc6 = PASS_WITH_ONE_P1_FIX.
+                     Rename applied to all artifacts:
+                       W_AUTHORITY_LOCATION =
+                         ContextPipelinePrepareTurnResult
+                         .currentWorkingContextEstimate
+                         (a CORE result field, NOT a
+                         presentation/wire field)
+                       W_PRESENTATION_TRANSPORT = UNBOUND
+                       HEADER_CONSUMER_BINDING =
+                         NOT YET IMPLEMENTED
+                       WIRE_LOCATION is now an ALIAS of
+                         W_AUTHORITY_LOCATION (same
+                         physical field; same review
+                         binding; transport path is
+                         commit 3's job)
+                     See ACT body "P1 FIX (terminology-only
+                     — no code change) — factory causal
+                     reviewer fifth-pass on fc906dfc6".
+
+TRANSPORT_GAP_PROVEN = PRESENTATION_TRANSPORT_MISSING = PROVEN
+                     (the consume site at
+                     sdk/packages/agents/src/agent-runtime.ts
+                     :2308-2324 explicitly drops
+                     `currentWorkingContextEstimate` on
+                     the floor — TODO marker at
+                     :2300 confirms:
+                       "TODO: have `prepareTurn` report
+                        the token estimates it already
+                        computed ...")
+
+TYPECHECK           = TYPECHECK_DELTA = ZERO
+                     BASELINE        = 23 (parent commit
+                                           b57aad242)
+                     SUBJECT         = 23 (commit 2)
+                     (NOT "GREEN" — the SDK typecheck
+                      has 23 pre-existing baseline
+                      errors; commit 2 introduces
+                      zero; the test and run claims
+                      come from supplied reports; the
+                      digest's own generated gate
+                      summary is unbound and not
+                      promoted to evidence)
+
+C1                 = GO_HEADER_PROJECTION (was
+                     GO_W_AUTHORITY; refined by
+                     fifth-pass — header projection
+                     is now the next causal
+                     question; producer half is
+                     done; transport half is
+                     open)
+
+NEW_REVIEW_ROUND    = NO
+DISPOSITION         = PASS_WITH_ONE_P1_FIX
+                     (Factory causal reviewer fifth
+                      pass: producer half passes;
+                      single bounded contract
+                      correction; one P1 fix for
+                      terminology + the implicit
+                      ask that we DO NOT pretend a
+                      presentation/wire binding
+                      exists before its
+                      transport is built)

@@ -891,3 +891,131 @@ Reviewer closing note restated: "the missing authority is
 reproduced; implement the producer now." Implemented. The
 GREEN is on `main`. The header-change (commit 3) is the next
 move; it does NOT enter this ACT's scope.
+
+## Current frontier update — 2026-09-02 23:30:00Z (commit 2.5 — P1 terminology-only fix per fc906dfc6 fifth-pass)
+
+Factory causal reviewer fifth-pass on `fc906dfc6`:
+**`PASS_WITH_ONE_P1_FIX. C1: GO_HEADER_PROJECTION`** after a
+single bounded contract correction.
+
+Important part succeeded: default-suite RED is gone, same
+missing-W invariant is now GREEN, W is derived independently
+from the **final prepared request shape** using
+`estimateRequestInputTokens`. The submitted range really contains
+the producer change in `compaction.ts` and the tightened 2-test
+GREEN witness. Patch hygiene is clean.
+
+### What is now mechanically proven
+
+```text
+CANONICAL_W_ESTIMATOR       = estimateRequestInputTokens
+W_INPUTS                    = final systemPrompt + final messages + tools
+PROVIDER_USAGE_COUPLING     = absent by estimator input contract
+MISSING_W_AT_PREPARE_TURN   = RED at 6bffd75c0 / GREEN at fc906dfc6
+H_a_TO_W_EQUIVALENCE        = UNPROVEN (equality-by-assumption FORBIDDEN)
+PRODUCER_W_AUTHORITY        = GREEN
+```
+
+### P1 — rename the wire location language (terminology-only, no code change)
+
+Earlier this turn the factory artifacts described:
+
+```text
+WIRE_LOCATION = ContextPipelinePrepareTurnResult
+                            .currentWorkingContextEstimate
+variant 4:
+  "producer-side calculation feeding a dedicated
+   presentation field"
+```
+
+But what `fc906dfc6` mechanically established is only:
+
+```text
+core prepare-turn result carries W
+```
+
+There is no transport path yet to webview/header. So freeze
+the terminology as the reviewer asked:
+
+```text
+W_AUTHORITY_LOCATION       = ContextPipelinePrepareTurnResult
+                              .currentWorkingContextEstimate
+                              (a CORE result field,
+                               NOT a presentation/wire field)
+W_PRESENTATION_TRANSPORT   = UNBOUND
+HEADER_CONSUMER_BINDING     = NOT YET IMPLEMENTED
+```
+
+rather than:
+
+```text
+WIRE_LOCATION = presentation field
+```
+
+### Transport gap (definitively reproduced today, before commit 3 begins)
+
+`grep -rn prepareTurn` in `sdk/packages/agents/src/` shows
+exactly one TODO marker and no propagation:
+
+```text
+sdk/packages/agents/src/agent-runtime.ts:2300:
+//   TODO: have `prepareTurn` report the token estimates it
+//   already computed (before/after) so this decision can use
+//   real numbers instead of re-deriving a proxy here.
+```
+
+The follow-up code at lines 2308-2324 returns only
+`messages` + `systemPrompt` from the prepare-turn result;
+`currentWorkingContextEstimate` is dropped on the floor.
+
+So today, `PRESENTATION_TRANSPORT_MISSING = PROVEN`. Commit 3
+must add the smallest carrier; it MUST NOT recompute W in
+`ChatView`. The hard rule for the next ACT:
+
+> **Transport W; do not recompute W.**
+
+### Typecheck reporting correction
+
+```text
+TYPECHECK_DELTA = ZERO
+BASELINE        = 23 (parent commit b57aad242)
+SUBJECT         = 23 (commit 2)
+```
+
+— the SDK typecheck has 23 pre-existing baseline errors that
+are inherited from the parent commit; commit 2 introduces zero.
+Commit 2 does not call the SDK typecheck itself "GREEN".
+
+### Disposition
+
+```text
+RED                     = MISSING_W_AT_PREPARE_TURN / REPRODUCED
+GREEN                   = 2/2 PASS
+PRODUCER_AUTHORITY      = PASS
+CANONICAL_W_ESTIMATOR   = estimateRequestInputTokens / PASS
+FINAL_SHAPE_DERIVATION  = PASS
+PROVIDER_USAGE_NON_INTERFERENCE
+                        = SOURCE/TYPE PROVEN
+H_a_TO_W                = UNPROVEN / preserved
+P0                      = NONE
+P1                      = ContextPipelinePrepareTurnResult
+                          was described as a presentation/wire
+                          field before a transport path to the
+                          VSCode/webview/header was bound
+                          (TERMINOLOGY-ONLY; fixed in place
+                          by this commit; no code change)
+HEADER_CHANGE           = AUTHORIZED
+C1                      = GO_HEADER_PROJECTION
+NEXT                    = bind W producer → webview transport
+                          → true header projection RED
+                          → transport W without recomputation
+                          → switch header P → W
+                          → compaction-shrink conservation
+                          → existing P/H suites GREEN
+NEW_REVIEW_ROUND        = NO
+```
+
+The producer half is done (`fc906dfc6`). The next causal
+question is no longer token arithmetic; it is whether the
+authoritative W `fc906dfc6` publishes actually has a path to
+the `TaskHeader`.

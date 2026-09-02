@@ -162,19 +162,28 @@ request overhead
 
 Then ask: can the existing `estimateRequestInputTokens(...)` (or equivalent) produce W from THAT exact post-compaction request shape? If yes, that is promising. But prove `W = estimate of next request input` from identical inputs — not `W = H_a because both happen to use estimators`.
 
-**WIRE_LOCATION = SELECTED.** Phase 1 source bind + GREEN producer-seam publish (commit 2 of ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01) selected:
+**W_AUTHORITY_LOCATION = SELECTED.** Phase 1 source bind + GREEN producer-seam publish (commit 2 of ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01) selected:
 
 ```text
 ContextPipelinePrepareTurnResult.currentWorkingContextEstimate
 ```
+
+which is a **CORE prepare-turn result field** (variant 4 of 4 in
+the original seam table — the producer-side calculation feeding a
+dedicated field on the prepare-turn result). It is **NOT a
+presentation/wire field**, contrary to any earlier hasty phrasing
+in this or downstream artifacts. (Factory causal reviewer fifth
+pass terminology correction: "freeze as CORE result field;
+transport path to header is UNBOUND, is commit 3's job.")
 
 ```text
 compaction.payload.workingContextEstimate
 top-level projected state.currentWorkingContextEstimate
 existing task/header projection
 producer-side calculation feeding a dedicated presentation field
-                                      ^^^^^^^^^^^^^^^^^^^^^^
-                                      SELECTED (variant 4 of 4)
+                              ^^^^^
+                              variant 4 of 4 = a CORE result
+                              field, NOT a presentation field
 ```
 
 W is computed at the prepare-turn seam
@@ -191,6 +200,33 @@ The upstream `createContextPipelinePrepareTurn` returns the same
 `ContextPipelinePrepareTurnResult` shape but is NOT modified; it
 is reached THROUGH the state-aware wrapper, which is the
 authoritative publish site.
+
+**W_PRESENTATION_TRANSPORT = UNBOUND.** The consume site in
+`sdk/packages/agents/src/agent-runtime.ts` (lines 2308-2324)
+explicitly drops `currentWorkingContextEstimate` on the floor and
+returns only the rebuilt `messages` + `systemPrompt`. A TODO at
+line 2300 confirms this gap. So:
+
+```text
+PRESENTATION_TRANSPORT_MISSING = PROVEN
+HEADER_CONSUMER_BINDING         = NOT YET IMPLEMENTED
+C1                              = GO_HEADER_PROJECTION
+                                 (header projection — not the
+                                 producer recompute — is the
+                                 next causal question)
+```
+
+The hard rule for the next ACT is "**Transport W; do not
+recompute W**." Adding a new estimator in `ChatView` would create
+two authoritative W values, which the upstream history (issues
+9433, et al.) has repeatedly shown is the wrong fix for this
+class of defect.
+
+The original `WIRE_LOCATION` is preserved as an **alias** of
+`W_AUTHORITY_LOCATION` throughout the artifacts to keep the
+contract term stable for downstream consumers, but the
+"presentation/wire field" descriptor in any earlier copy has been
+retired.
 
 **True RED** (once the producer seam is bound):
 
@@ -237,7 +273,10 @@ This directly fixes the observed stale bar without touching Strategy-D or revivi
 - C3_REQUIRES_W = NOT PROVEN
 - C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN
 - C3_REQUIRES_LABEL_CHANGE = PROVEN
-- WIRE_LOCATION = SELECTED = ContextPipelinePrepareTurnResult.currentWorkingContextEstimate (variant 4 of 4: producer-side calculation feeding a dedicated presentation field on the prepare-turn result; bound at Phase 1 source bind + GREEN producer-seam publish; prepare-turn seam is the authoritative publish site)
+- W_AUTHORITY_LOCATION = SELECTED = ContextPipelinePrepareTurnResult.currentWorkingContextEstimate (variant 4 of 4: producer-side calculation feeding a CORE prepare-turn result field — NOT a presentation field; bound at Phase 1 source bind + GREEN producer-seam publish; prepare-turn seam is the authoritative W publish site)
+- W_PRESENTATION_TRANSPORT = UNBOUND (consume site in sdk/packages/agents/src/agent-runtime.ts:2308-2324 drops the field on the floor; TODO at :2300 confirms the gap; commit 3 must add a transport seam, not a recompute)
+- HEADER_CONSUMER_BINDING = NOT YET IMPLEMENTED (header projection — the next causal question — is GO_HEADER_PROJECTION; producer half DONE; transport half OPEN)
+- WIRE_LOCATION (alias of W_AUTHORITY_LOCATION, retained for stability) = ContextPipelinePrepareTurnResult.currentWorkingContextEstimate (same physical field, same review binding; transport is commit 3's job)
 - NEXT_ACT = ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
 - DISPOSITION = PASS_WITH_ONE_P1_FIX (Factory causal reviewer; the prior verdict HALT_NO_INTENT_FROZEN overreached)
 - HEADER_BAR_INTENT = AMBIGUOUS (corrected this turn; "current tokens used in this request" is compatible with both C1 ("the request whose usage was just observed") and C2 ("the hypothetical next request if generated now"))

@@ -612,3 +612,197 @@ Cross-scale ratio arithmetic remains FORBIDDEN.
 ### Header change
 
 TASKHEADER_CONTEXTWINDOW = NO CHANGE (deferred to commit 3)
+
+## P1 FIX (terminology-only — no code change) — factory causal reviewer fifth-pass on fc906dfc6
+
+Reviewer verdict: **`PASS_WITH_ONE_P1_FIX. C1: GO_HEADER_PROJECTION`**
+
+after a single bounded contract correction.
+
+### What is mechanically proven by commit 2
+
+```text
+CANONICAL_W_ESTIMATOR       = estimateRequestInputTokens
+W_INPUTS                    = final systemPrompt + final messages + tools
+PROVIDER_USAGE_COUPLING     = absent by estimator input contract
+MISSING_W_AT_PREPARE_TURN   = REPRODUCED at 6bffd75c0 / GREEN at fc906dfc6
+H_a_TO_W_EQUIVALENCE        = UNPROVEN (equality-by-assumption FORBIDDEN)
+PRODUCER_W_AUTHORITY        = GREEN
+```
+
+### P1 — rename the wire location language (NOT a redesign, NOT a code change)
+
+The factory artifacts currently describe:
+
+```text
+WIRE_LOCATION =
+  ContextPipelinePrepareTurnResult.currentWorkingContextEstimate
+variant 4:
+  "producer-side calculation feeding a dedicated
+   presentation field"
+```
+
+But what `fc906dfc6` mechanically established is only:
+
+```text
+core prepare-turn result carries W
+```
+
+Commit 2 does NOT yet demonstrate:
+
+```text
+prepare-turn result
+  → host/session state
+  → extension message/webview state
+  → ChatView
+  → TaskHeader
+```
+
+And `ContextPipelinePrepareTurnResult` is fundamentally a
+**core prepare-turn result**, not itself a webview/presentation
+DTO. So freeze the terminology exactly as the reviewer asked:
+
+```text
+W_AUTHORITY_LOCATION      = ContextPipelinePrepareTurnResult
+                            .currentWorkingContextEstimate
+                            (a CORE result field, NOT a
+                            presentation/wire field)
+W_PRESENTATION_TRANSPORT  = UNBOUND
+HEADER_CONSUMER_BINDING    = NOT YET IMPLEMENTED
+```
+
+rather than:
+
+```text
+WIRE_LOCATION = presentation field
+```
+
+This is **not** a redesign and does **not** invalidate commit 2.
+It simply prevents commit 3 from assuming transport that hasn't
+been inspected or built.
+
+### Transport gap (definitively reproduced today, before commit 3 begins)
+
+`grep -rn prepareTurn` in `sdk/packages/agents/src/` shows
+exactly one TODO marker and no propagation:
+
+```text
+sdk/packages/agents/src/agent-runtime.ts:2300:
+//   TODO: have `prepareTurn` report the token estimates it
+//   already computed (before/after) so this decision can use
+//   real numbers instead of re-deriving a proxy here.
+```
+
+Below that:
+
+```typescript
+// sdk/packages/agents/src/agent-runtime.ts:2313-2324
+let next = request;
+if (result.messages) {
+    const preparedMessages = cloneMessages(result.messages);
+    next = { ...next, messages: cloneMessages(preparedMessages) };
+}
+if (result.systemPrompt !== undefined) {
+    next = { ...next, systemPrompt: result.systemPrompt };
+}
+return next;
+```
+
+— `currentWorkingContextEstimate` is dropped on the floor.
+
+So today, `PRESENTATION_TRANSPORT_MISSING = PROVEN` — there is
+no path from `ContextPipelinePrepareTurnResult` to the
+extension/webview state projection to `ChatView` to `TaskHeader`.
+
+Commit 3 must add the smallest carrier; it MUST NOT recompute
+W in `ChatView`. The hard rule for the next ACT:
+
+> **Transport W; do not recompute W.**
+
+### Useful test gap (not blocking this ACT) — will be addressed in commit 3
+
+The GREEN fixture deliberately uses a pass-through compact.
+Therefore `fc906dfc6` proves:
+
+```text
+prepare-turn result publishes W from its final shape
+```
+
+but not specifically:
+
+```text
+real compaction changed shape → W changed accordingly
+```
+
+For the **header repair** (commit 3), the live defect is
+specifically compaction freshness. The next test will therefore
+exercise a changed prepared shape, e.g. a deterministic injected
+`compact` function that returns visibly smaller messages:
+
+```text
+before: long canonical messages
+compact(): returns smaller messages
+after:  result.currentWorkingContextEstimate
+          == estimator(smaller final shape)
+        AND W_after < W_before
+```
+
+The `<` assertion is valid there because the fixture is
+deliberately constructed to shrink estimator inputs. It is
+**not** an assertion that W equals H_a.
+
+### Typecheck reporting correction
+
+The reported SDK typecheck remains at **23 existing errors**,
+equal to the parent baseline, so commit 2 introduces no
+typecheck regression. That is acceptable evidence as a baseline
+comparison, but the artifacts must not call the SDK typecheck
+itself "GREEN"; they must call it:
+
+```text
+TYPECHECK_DELTA = ZERO
+BASELINE        = 23
+SUBJECT         = 23
+```
+
+— which is what commit-2 evidence already records. No change
+required.
+
+### Disposition
+
+```text
+ACT                     = ACT-CLINEMM-COMPACTION-WORKING-
+                          CONTEXT-AUTHORITY-PUBLISH01
+RED                     = MISSING_W_AT_PREPARE_TURN / REPRODUCED
+GREEN                   = 2/2 PASS
+PRODUCER_AUTHORITY      = PASS
+CANONICAL_W_ESTIMATOR   = estimateRequestInputTokens / PASS
+FINAL_SHAPE_DERIVATION  = PASS
+PROVIDER_USAGE_NON_INTERFERENCE
+                        = SOURCE/TYPE PROVEN
+H_a_TO_W                = UNPROVEN / preserved
+P0                      = NONE
+P1                      = ContextPipelinePrepareTurnResult
+                          was described as a presentation/wire
+                          field before a transport path to the
+                          VSCode/webview/header was bound
+FIX                     = rename:
+                            W_AUTHORITY_LOCATION = prepare-turn
+                              result field (CORE, not wire)
+                            W_PRESENTATION_TRANSPORT = UNBOUND
+                          then trace transport during commit 3
+TYPECHECK               = BASELINE 23 / SUBJECT 23 / DELTA 0
+HEADER_CHANGE           = AUTHORIZED
+NEXT                    = bind W producer → webview transport
+                          → true header projection RED
+                          → transport W without recomputation
+                          → switch header P → W
+                          → compaction-shrink conservation
+                          → existing P/H suites GREEN
+NEW_REVIEW_ROUND        = NO
+C1                      = GO_HEADER_PROJECTION
+```
+
+The producer half is done. The next causal question is no
+longer token arithmetic; it is whether the authoritative W
+`fc906dfc6` publishes actually has a path to the `TaskHeader`.

@@ -217,20 +217,21 @@ RECON_VERDICT       = RECON_PASS
                                           shape, publish W to
                                           header; do NOT
                                           claim H_a ≡ W_e
-                     WIRE_LOCATION     = SELECTED at Phase 1
+                     W_AUTHORITY_LOCATION = SELECTED at Phase 1
                                           source bind + GREEN
                                           producer-seam
-                                          publish = ContextPipelinePrepareTurnResult
+                                          publish =
+                                          ContextPipelinePrepareTurnResult
                                           .currentWorkingContextEstimate
-                                          (variant 4 of 4:
+                                          (a CORE prepare-turn
+                                          result field —
+                                          variant 4 of 4:
                                           producer-side
-                                          calculation feeding
-                                          a dedicated
-                                          presentation field
-                                          on the prepare-turn
-                                          result; prepare-
-                                          turn seam is the
-                                          authoritative
+                                          calculation feeding a
+                                          CORE field, NOT a
+                                          presentation field;
+                                          prepare-turn seam is
+                                          the authoritative W
                                           publish site;
                                           sdk/packages/core/src/
                                           extensions/context/
@@ -240,11 +241,81 @@ RECON_VERDICT       = RECON_PASS
                                           [helper],
                                           :712/:715/:726
                                           [wiring])
+W_PRESENTATION_TRANSPORT = UNBOUND
+                                          (consume site in
+                                          sdk/packages/agents/
+                                          src/agent-runtime.ts
+                                          :2308-2324 drops the
+                                          field on the floor;
+                                          TODO at :2300
+                                          confirms the gap;
+                                          commit 3 must add a
+                                          transport seam, not
+                                          a recompute;
+                                          PRESENTATION_TRANSPORT_MISSING
+                                          = PROVEN)
+HEADER_CONSUMER_BINDING = NOT YET
+                                          IMPLEMENTED
+                                          (no path from
+                                          ContextPipelinePrepareTurnResult
+                                          → host/session state
+                                          → extension state →
+                                          webview/ChatView →
+                                          TaskHeader exists in
+                                          commit 2)
                      PRODUCTION_REPAIR = AUTHORIZED
                                           (PRODUCT_DECISION
                                           = C2 is the gate)
                      NEW_REVIEW_ROUND  = NO
                      C1: GO_W_AUTHORITY
+P1_TERMINOLOGY_FIX  = factory causal reviewer
+                     fifth-pass on fc906dfc6 =
+                     PASS_WITH_ONE_P1_FIX.
+                     Rename applied:
+                       W_AUTHORITY_LOCATION =
+                         ContextPipelinePrepareTurnResult
+                         .currentWorkingContextEstimate
+                         (a CORE prepare-turn result
+                         field, NOT a presentation/
+                         wire field)
+                       W_PRESENTATION_TRANSPORT =
+                         UNBOUND (consume site in
+                         agent-runtime.ts:2308-2324
+                         drops the field; TODO at
+                         :2300 confirms; commit 3
+                         must add a transport seam,
+                         not a recompute;
+                         PRESENTATION_TRANSPORT_MISSING
+                         = PROVEN)
+                       HEADER_CONSUMER_BINDING =
+                         NOT YET IMPLEMENTED
+                     WIRE_LOCATION is preserved
+                     as an alias of W_AUTHORITY_LOCATION
+                     throughout the artifacts to
+                     keep the contract term stable
+                     for downstream consumers;
+                     the "presentation/wire field"
+                     descriptor in any earlier copy
+                     has been retired.
+TYPECHECK           = TYPECHECK_DELTA = ZERO
+                     BASELINE        = 23 (parent
+                                           commit
+                                           b57aad242)
+                     SUBJECT         = 23 (commit 2)
+                     (NOT "GREEN" — the SDK typecheck
+                      has 23 pre-existing baseline
+                      errors; commit 2 introduces
+                      zero)
+DISPOSITION         = PASS_WITH_ONE_P1_FIX
+                     (Factory causal reviewer fifth
+                     pass: producer half passes;
+                     single bounded contract
+                     correction; one P1 fix for
+                     terminology + the implicit
+                     ask that we DO NOT pretend a
+                     presentation/wire binding
+                     exists before its transport
+                     is built)
 
 PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-
                      PRESENTATION-FRESHNESS-EMPIRICAL01
