@@ -485,17 +485,39 @@ DEFAULT_SUITE_STATE = GREEN
                           resultC.systemPrompt === undefined)
 
 C1                  = GO_PER_TURN_CARRIER_INSPECTION
-                       (was GO_CARRIER_BIND →
-                       GO_CADENCE_INSPECTION →
-                       GO_PRODUCER_CADENCE_GREEN; producer
-                       cadence GREEN landed in this
-                       commit; the next causal question
-                       is the per-turn carrier inspection
-                       — audit existing agent/runtime
-                       event/snapshot surfaces that
-                       already move per prepareTurn; do
-                       NOT assume a new event or
-                       AgentRuntimeStateSnapshot field
-                       yet)
+                       (eleventh-pass API export bind
+                       recorded; producer cadence GREEN
+                       stays PASS; C1 unchanged from
+                       tenth-pass)
+
+API_SURFACE_DELTA   = INTERNAL_ONLY
+                       (ContextPipelinePrepareTurnResult
+                       declared in compaction.ts:60 but
+                       NOT re-exported from
+                       @cline/core/src/index.ts; the
+                       only exports from that file are
+                       createCompactionStateAware-
+                       PrepareTurn + createContext-
+                       CompactionPrepareTurn; repo-wide
+                       absence bind via `git grep -n -e
+                       ContextPipelinePrepareTurnResult
+                       -- sdk apps` returns ZERO matches
+                       outside the definition file + the
+                       two co-located test files; the
+                       optionality change in 054ee75b9
+                       is safe at the documented public
+                       surface; reachable via direct path
+                       import or Awaited<ReturnType<...>>
+                       inference only, both non-canonical
+                       access patterns; → GO)
+
+P2_FIX              = CARRIER_CADENCE W-monotonicity
+                       assertions strengthened from
+                       `.not.toBe` to `.toBeLessThan`
+                       (fixture supports strict growth:
+                       0/4/8 padding turns to A/B/C;
+                       estimator linear in characters);
+                       test commentary now matches
+                       assertions
 
 NEW_REVIEW_ROUND    = NO

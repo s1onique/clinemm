@@ -230,8 +230,11 @@ describe("compaction working-context authority publish", () => {
 		// This test is now the FULL POST-FIX GREEN MATRIX:
 		//   - resultA/B/C all carry currentWorkingContextEstimate
 		//     (producer publishes W on every prepareTurn)
-		//   - B.W != A.W, C.W != B.W (W grows monotonically
-		//     with the canonical message stream)
+		//   - B.W > A.W, C.W > B.W strictly (asserted via
+		//     .toBeLessThan — the test fixture adds 0/4/8
+		//     padding turns to A/B/C so the estimator's
+		//     linear-in-characters behavior gives strict
+		//     monotonic growth, not just inequality)
 		//   - B/C carry messages=undefined + systemPrompt=
 		//     undefined (P1_1 no-op projection conservation)
 		//   - saveState fires ONLY on real compaction
@@ -391,17 +394,24 @@ describe("compaction working-context authority publish", () => {
 			(resultC as { currentWorkingContextEstimate?: number } | undefined)
 				?.currentWorkingContextEstimate,
 		).toBeDefined();
+		// The fixture adds 0/4/8 padding turns to A/B/C
+		// respectively; the estimator is roughly linear in
+		// character count, so B.W > A.W and C.W > B.W
+		// strictly (not merely !=). Strengthened from
+		// `.not.toBe` per reviewer P2 (test commentary
+		// claimed monotonic growth but assertions only
+		// checked inequality; monotonic growth is now
+		// asserted strictly).
 		expect(
 			(resultA as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
-		).not.toBe(
+		).toBeLessThan(
 			(resultB as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
 		);
 		expect(
 			(resultB as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
-		).not.toBe(
+		).toBeLessThan(
 			(resultC as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
 		);
-
 		// P1_1 NO_COMPACTION_REQUEST_SEMANTICS_DELTA = ZERO
 		// (reviewer-mandated conservation before producer-
 		// cadence GREEN). resultB and resultC MUST be

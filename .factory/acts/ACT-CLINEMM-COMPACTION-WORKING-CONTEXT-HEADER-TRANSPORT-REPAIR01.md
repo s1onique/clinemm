@@ -593,6 +593,112 @@ with comment:
 
 over the historical test-name-and-comment combination.
 
+## Eleventh-pass (2026-09-03) — API export bind (P1) + P2 strengthened assertions
+
+The factory causal reviewer + TypeScript SDK/API
+engineer issued `PASS_WITH_ONE_P1_FIX` on 054ee75b9.
+This commit resolves that P1 mechanically + tightens
+the P2 the reviewer flagged (no new review round, no
+producer-algorithm revisit).
+
+### P1 — API export bind
+
+```bash
+git grep -n \
+  -e 'ContextPipelinePrepareTurnResult' \
+  -- \
+  sdk/packages/core/src/index* \
+  sdk/packages/core/package.json \
+  sdk/packages/*/src/index*
+```
+
+Result: **ZERO matches**.
+
+Wider sweep:
+
+```bash
+git grep -n -e 'ContextPipelinePrepareTurnResult' \
+  -- sdk/ apps/ | \
+  grep -v 'extensions/context/compaction'
+```
+
+Result: **ZERO matches**.
+
+`@cline/core/src/index.ts` re-exports from
+`./extensions/context/compaction`:
+
+```ts
+export {
+    createCompactionStateAwarePrepareTurn,
+    createContextCompactionPrepareTurn,
+} from "./extensions/context/compaction";
+```
+
+Function-only. The interface
+`ContextPipelinePrepareTurnResult` is declared in the
+implementation file but is NOT a named export of the
+canonical `@cline/core` package surface.
+
+### Verdict
+
+```text
+API_SURFACE_DELTA = INTERNAL_ONLY
+→ GO
+```
+
+External consumers of `@cline/core` get the two
+factory functions; the interface is reachable only
+via:
+
+  - direct path import
+    (`@cline/core/dist/extensions/context/compaction`)
+  - `Awaited<ReturnType<typeof
+    createCompactionStateAwarePrepareTurn>>`
+    inference
+
+Both are non-canonical access patterns. The optionality
+change in 054ee75b9 (`messages?: T[]`, was `T[]`) is
+safe at the documented public surface.
+
+### P2 — strengthen W-monotonicity assertions
+
+The tenth-pass committed CARRIER_CADENCE test asserted
+`B.W != A.W` (inequality) but its commentary said
+"W grows monotonically" (strict). The fixture adds
+0/4/8 padding turns to A/B/C; the estimator is roughly
+linear in character count, so strict growth is
+supported. Strengthened assertions:
+
+```ts
+// Before
+expect(A.W).not.toBe(B.W);
+expect(B.W).not.toBe(C.W);
+// After
+expect(A.W).toBeLessThan(B.W);
+expect(B.W).toBeLessThan(C.W);
+```
+
+All 3 sub-tests still GREEN; typecheck = 23 = baseline.
+
+### Disposition
+
+```text
+ACT                       = HEADER-TRANSPORT-REPAIR01 = OPEN
+PRODUCER_CADENCE_GREEN    = PASS (unchanged)
+API_SURFACE_DELTA         = INTERNAL_ONLY → GO
+P2 W-monotonicity         = STRENGTHENED (not.toBe →
+                            toBeLessThan)
+P0 / P1 / P2              = ALL CLOSED
+PRODUCTION_RUNTIME_DELTA  = ZERO this commit
+TYPECHECK_DELTA           = ZERO (23 = baseline)
+DEFAULT_SUITE_STATE       = GREEN
+
+NEXT_QUESTION = per-turn carrier inspection
+  (auditor pass; do NOT assume a new event or
+   AgentRuntimeStateSnapshot field yet).
+NEW_REVIEW_ROUND = NO.
+```
+
 ## Forward disposition (tenth-pass)
 
 Producer cadence GREEN landed in this commit. The next
