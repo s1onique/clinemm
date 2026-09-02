@@ -1625,6 +1625,30 @@ export class Controller {
 			getTurnPhase: () => this.turnStateTracker.currentPhase,
 			captureProviderApiError: (event) => this.captureProviderFailure(event),
 			beginProviderFailureTelemetryTurn: () => this.beginProviderFailureTelemetryTurn(),
+			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5
+			// composition seam (resume Waiting Q5 RED/repair):
+			// thread the per-owner background-job liveness query
+			// through to the coordinator so the `done-without-
+			// completion` branch can suppress `awaiting_followup`
+			// when the active session still owns a RUNNING job.
+			// Reaches the host-only `VscodeSessionHost` method via
+			// the same duck-typed cast pattern used for
+			// `cancelBackgroundCommand` (see cancelBackgroundCommand
+			// at SdkController.ts:2794). Returns `false` when the
+			// active session host does not implement the method
+			// (Hub/Remote omit it by design - same absence semantic
+			// as `cancelBackgroundCommand`).
+			hasRunningBackgroundJobForOwner: (ownerSessionId) => {
+				const activeSession = this.sessions.getActiveSession()
+				if (!activeSession) return false
+				const host = activeSession.sdkHost as (VscodeSessionHost & {
+					hasRunningBackgroundJobForOwner?: (sessionId: string | undefined) => boolean
+				}) | undefined
+				if (!host || typeof host.hasRunningBackgroundJobForOwner !== "function") {
+					return false
+				}
+				return host.hasRunningBackgroundJobForOwner(ownerSessionId)
+			},
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder

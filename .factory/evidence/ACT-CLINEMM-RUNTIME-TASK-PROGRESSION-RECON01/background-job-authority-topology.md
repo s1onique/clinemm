@@ -477,3 +477,101 @@ ACAS01 test           : apps/vscode/src/sdk/__tests__/runtime-task-progression-p
 Board                 : .factory/epic-board.md (row 28 → AUTHORITY_IDENTITY_MISSING; contract ACT in flight)
 Epic detail           : .factory/epics/runtime-task-progression.md (deferred-work entry)
 ```
+
+---
+
+## POST-Q5 GREEN (resume Waiting Q5, 2026-09-02, per Factory causal reviewer C1: RESUME_WAITING_Q5)
+
+Following the contract ACT's GREEN landing at `c685317ea` (the per-owner background-job liveness primitive `CommandJobManager.hasRunningBackgroundJobForOwner`), the Factory causal reviewer authorized the Q5 resume cycle. The matrix A/B/C/D was executed at the lowest composition seam that already has BOTH authority inputs in scope: `SdkController` (which holds the active session's `sdkHost`, which in turn holds the `CommandJobManager`).
+
+### Production delta (minimum bounded repair at the composition seam)
+
+```text
+apps/vscode/src/sdk/vscode-session-host.ts
+  +hasRunningBackgroundJobForOwner(sessionId: string | undefined): boolean
+   (host-only method following the cancelBackgroundCommand precedent;
+    delegates to CommandJobManager.hasRunningBackgroundJobForOwner;
+    returns false when sessionId is missing or the host does not
+    implement the method - same absence semantic as cancelBackgroundCommand)
+
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+  +SdkSessionEventCoordinatorOptions.hasRunningBackgroundJobForOwner?:
+     (ownerSessionId: string | undefined) => boolean
+  The done-without-completion `else` branch (line ~172) NOW consults
+  the option BEFORE firing setTurnPhase("awaiting_followup", ...):
+  when the active session still owns a RUNNING `CommandJob`, the
+  transition is suppressed (the phase stays at the prior phase,
+  typically `streaming`). When the option is absent (tests, Hub/Remote
+  hosts), behavior is unchanged: unconditional `awaiting_followup`.
+
+apps/vscode/src/sdk/SdkController.ts
+  Wires the option at the composition seam (the same duck-typed cast
+  pattern used for `cancelBackgroundCommand` at SdkController.ts:2794):
+  hasRunningBackgroundJobForOwner: (ownerSessionId) => {
+    const activeSession = this.sessions.getActiveSession()
+    if (!activeSession) return false
+    const host = activeSession.sdkHost as (VscodeSessionHost & {
+      hasRunningBackgroundJobForOwner?: (sessionId) => boolean
+    }) | undefined
+    if (!host || typeof host.hasRunningBackgroundJobForOwner !== "function") return false
+    return host.hasRunningBackgroundJobForOwner(ownerSessionId)
+  }
+```
+
+Per the Factory reviewer's directive ("smallest correct repair at the
+composition seam ... do NOT yet freeze the specific phase A *must* become"),
+the suppression preserves the prior phase; no replacement phase is invented.
+
+### Q5 matrix executed (real-shell run, this turn)
+
+Test file: `apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts` (350 lines, SYNTHETIC_REAL; mirrors the ACAS01 harness pattern).
+
+```text
+Q5-A PRE-REPAIR baseline (liveness option wired to () => false, simulating pre-repair production)
+  → after.phase === "awaiting_followup"        PASS (RED captured)
+Q5-A POST-REPAIR (liveness option wired to () => true)
+  → after.phase !== "awaiting_followup"        PASS (GREEN)
+Q5-B control (option returns false)
+  → after.phase === "awaiting_followup"        PASS (control)
+Q5-B control (option omitted)
+  → after.phase === "awaiting_followup"        PASS (control; pre-Q5 behavior preserved)
+Q5-C control (liveness returns true only for non-active session)
+  → after.phase === "awaiting_followup"        PASS (isolation control)
+Q5-D control (terminal-state; option returns false)
+  → after.phase === "awaiting_followup"        PASS (terminal-state control)
+```
+
+The Q5-A PRE-REPAIR baseline + Q5-A POST-REPAIR pairing constitutes the RED → GREEN proof at the composition seam. Independently verified by physically reverting the production-side `this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId)` call to a constant `false`; in that state Q5-A POST-REPAIR goes RED (1 failed | 5 passed). After restoring the consultation, all 6 pass (6/6 GREEN).
+
+### Conservation
+
+```text
+typecheck apps/vscode                = clean (0 errors)
+ACAS01 vitest                         = preserved (4/4 PASS at b072d9807)
+BHTD01 vitest                         = preserved (6/6 PASS)
+Q5RR01 vitest                         = 6/6 PASS (new this turn)
+Q6.1 + Q6.1b owner-identity contract  = PASS in this IDE-sandbox
+Q6.2-Q6.8 owner-identity lifecycle   = environmentally gated (run green in non-sandboxed shell; same pre-existing 18/20 spawn-related failures in this IDE-sandbox; NOT a regression)
+OWN01 RED (sdk-session-event-coordinator.test.ts)
+  = remains RED (was RED before this turn; authored as a separate P0
+    RED for the finish-reason discrimination path OWN02. NOT
+    addressed by the Q5 per-owner liveness repair; remains owned by
+    the umbrella ACT's NEXT-LANE finish-reason discriminator work).
+```
+
+### Disposition
+
+```text
+CASE_A                            = ADJUDICATED
+ROOT_CAUSE_ISOLATED               = YES
+REPAIR_AUTHORIZED                 = YES
+REPAIR_SHAPE                      = per-owner background-job liveness query consulted BEFORE the setTurnPhase("awaiting_followup", ...) transition in the done-without-completion branch
+REPAIR_DONE                       = YES (this turn; production delta bounded at the composition seam)
+Q5_RED                            = AUTHORED + EXECUTED (6/6 PASS in q5rr01)
+Q5_CONTROL_NO_JOB                 = PASS (Q5-B)
+Q5_CONTROL_OTHER_OWNER            = PASS (Q5-C)
+Q5_CONTROL_COMPLETED_JOB          = PASS (Q5-D)
+NEW_REVIEW_ROUND                  = NO (reviewer directive)
+WAITING_Q5                        = CLOSED
+NEXT_LANE = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
+```

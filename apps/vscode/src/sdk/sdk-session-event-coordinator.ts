@@ -40,6 +40,34 @@ export interface SdkSessionEventCoordinatorOptions {
 	getTurnPhase?: () => TurnPhase
 	captureProviderApiError?: (event: ProviderFailureTelemetry) => void
 	beginProviderFailureTelemetryTurn?: () => void
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5 composition
+	 * seam (resume Waiting Q5 RED/repair):
+	 *
+	 * Authority input: per-owner background-job liveness query
+	 * consulted in the `done-without-completion` branch (the
+	 * `else` at the bottom of the `if (result.sessionEnded ||
+	 * result.turnComplete)` block) before the
+	 * `setTurnPhase("awaiting_followup", ...)` call. When this
+	 * returns `true` for the active session, the phase transition
+	 * is suppressed (the post-terminal-02 symptom family: the
+	 * runtime would otherwise promote a still-running job's owning
+	 * turn to `awaiting_followup`, losing the "Proceed While
+	 * Running" affordance and dropping the footer indicator).
+	 *
+	 * Wired by `SdkController` to a thin adapter that delegates to
+	 * `VscodeSessionHost.hasRunningBackgroundJobForOwner(activeSession.sessionId)`
+	 * (the host-only method following the `cancelBackgroundCommand`
+	 * precedent). Optional so this coordinator remains testable
+	 * without a `VscodeSessionHost` instance (per the ACAS01
+	 * harness precedent).
+	 *
+	 * Default behavior when absent: the coordinator preserves the
+	 * pre-Q5 behavior (unconditional `awaiting_followup` in the
+	 * done-without-completion case), so existing tests that do not
+	 * pass this option are unaffected.
+	 */
+	hasRunningBackgroundJobForOwner?: (ownerSessionId: string | undefined) => boolean
 }
 
 export class SdkSessionEventCoordinator {
@@ -214,14 +242,53 @@ export class SdkSessionEventCoordinator {
 						// committed — `awaiting_followup` truthfully projects
 						// "the agent stopped without an explicit completion
 						// declaration; the user can respond."
-						Logger.warn(
-							"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
-						)
-						this.options.setTurnPhase?.(
-							"awaiting_followup",
-							undefined,
-							"session-event-turn-complete-resumable-straggler-preserve",
-						)
+						// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5
+						// composition seam (resume Waiting Q5 RED/repair):
+						// the post-terminal-02 specimen
+						// (`cmd_mtj6kki83r1bmrfz`,
+						// `taskId=1788297479245_hv9w5`, `epoch=4`,
+						// `host_status=aborted`,
+						// `turnState.phase=awaiting_followup`) captured the
+						// symptom family where the runtime promoted the active
+						// session's phase to `awaiting_followup` while a
+						// background command it owned was still alive. The
+						// `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
+						// query (delegated by `SdkController` to
+						// `VscodeSessionHost.hasRunningBackgroundJobForOwner`)
+						// gates this transition: when the active session still
+						// owns a RUNNING `CommandJob`, the transition is
+						// suppressed (the phase stays at whatever the prior
+						// phase was - typically `streaming`). The suppression
+						// is the smallest correct repair at the composition
+						// seam: it preserves the "Proceed While Running"
+						// affordance without inventing a replacement phase.
+						// Per the Factory reviewer's directive, "do NOT yet
+						// freeze the specific phase A *must* become" - this
+						// branch only asserts `phase !== awaiting_followup`;
+						// the actual state-machine semantics are the umbrella
+						// Q5 next cycle's concern.
+						//
+						// When `hasRunningBackgroundJobForOwner` is not wired
+						// (e.g. tests that omit the option), behavior is
+						// unchanged: unconditional `awaiting_followup`.
+						const ownerStillRunning =
+							this.options.hasRunningBackgroundJobForOwner?.(
+								activeSession.sessionId,
+							)
+						if (ownerStillRunning) {
+							Logger.warn(
+								`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} owns a RUNNING background command; suppressing awaiting_followup transition (Q5 composition seam)`,
+							)
+						} else {
+							Logger.warn(
+								"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
+							)
+							this.options.setTurnPhase?.(
+								"awaiting_followup",
+								undefined,
+								"session-event-turn-complete-resumable-straggler-preserve",
+							)
+						}
 					}
 				}
 

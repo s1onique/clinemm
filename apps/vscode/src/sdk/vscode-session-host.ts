@@ -427,6 +427,46 @@ export class VscodeSessionHost implements SdkSessionHost {
 		return cancelled
 	}
 
+	/**
+	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5 composition
+	 * seam (resume Waiting Q5 RED/repair):
+	 *
+	 * Host-specific accessor that answers the per-owner background-job
+	 * liveness question for the turn-completion authority path. The
+	 * `SdkSessionEventCoordinator` consults this when deciding whether
+	 * a `done` event for the active session can legally transition the
+	 * turn phase to `awaiting_followup`: if the active session still
+	 * owns a RUNNING `CommandJob`, the transition is suppressed
+	 * (the post-terminal-02 symptom family).
+	 *
+	 * Returns `false` when:
+	 *   * `sessionId` is missing,
+	 *   * the host does not implement per-owner liveness (Hub/Remote
+	 *     omit it by design — same absence semantic as
+	 *     `cancelBackgroundCommand`).
+	 *
+	 * Read-only: never mutates runtime/session state, never inserts
+	 * state-post events, never schedules timers.
+	 *
+	 * NOT on the `SdkSessionHost` interface — host-only extension
+	 * following the precedent of `cancelBackgroundCommand`. The
+	 * turn-completion authority path reaches the method through
+	 * duck-typing on the concrete `VscodeSessionHost` class via
+	 * `activeSession.sdkHost as VscodeSessionHost & { ... }` at the
+	 * `SdkController` composition seam.
+	 *
+	 * The internal `CommandJobManager.hasRunningBackgroundJobForOwner`
+	 * primitive (from BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01 at
+	 * commit `c685317ea`) is the producer-side authority answer
+	 * this method delegates to. The P1 no-leak invariant is preserved:
+	 * owner identity stays on the internal `CommandJob` record and
+	 * `CommandJobSnapshot` is never read here.
+	 */
+	hasRunningBackgroundJobForOwner(sessionId: string | undefined): boolean {
+		if (!sessionId) return false
+		return this.commandJobManager.hasRunningBackgroundJobForOwner(sessionId)
+	}
+
 	async dispose(reason?: string): Promise<void> {
 		try {
 			await this.commandJobManager.dispose()

@@ -931,6 +931,163 @@ NEXT =
   and only then patch the lowest authority seam. DO NOT smuggle
   the eventual state-machine design into the contract ACT.
 
+## 7. Q5 RED + repair (resume Waiting Q5, 2026-09-02, per Factory
+# causal reviewer C1: RESUME_WAITING_Q5)
+
+Following the contract ACT's GREEN landing at `c685317ea` (the
+per-owner background-job liveness primitive `hasRunningBackgroundJobForOwner`
+on `CommandJobManager`), the Factory causal reviewer authorized the
+Q5 resume cycle (C1: RESUME_WAITING_Q5). The matrix was executed
+on the lowest composition seam that already has BOTH authority
+inputs in scope: `SdkController` (which holds the active session's
+`sdkHost`, which in turn holds the `CommandJobManager`).
+
+### Production delta (minimum bounded repair at the composition seam)
+
+```text
+apps/vscode/src/sdk/vscode-session-host.ts
+  +hasRunningBackgroundJobForOwner(sessionId: string | undefined): boolean
+   (host-only method following the cancelBackgroundCommand precedent;
+    delegates to CommandJobManager.hasRunningBackgroundJobForOwner;
+    returns false when sessionId is missing or the host does not
+    implement the method - same absence semantic as cancelBackgroundCommand)
+
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+  +SdkSessionEventCoordinatorOptions.hasRunningBackgroundJobForOwner?:
+     (ownerSessionId: string | undefined) => boolean
+  The else branch (line ~172, the done-without-completion
+  `awaiting_followup` transition) NOW consults this option:
+    const ownerStillRunning =
+      this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId)
+    if (ownerStillRunning) {
+      Logger.warn(... "suppressing awaiting_followup transition")
+    } else {
+      Logger.warn(... "yielding turn as awaiting_followup (liveness)")
+      this.options.setTurnPhase?.("awaiting_followup", ...)
+    }
+  When the option is absent (tests, Hub/Remote hosts that do not
+  implement it), behavior is unchanged: unconditional
+  `awaiting_followup` per the pre-Q5 contract.
+
+apps/vscode/src/sdk/SdkController.ts
+  Wires the option at the composition seam (the same duck-typed
+  cast pattern used for `cancelBackgroundCommand` at line 2794):
+    hasRunningBackgroundJobForOwner: (ownerSessionId) => {
+      const activeSession = this.sessions.getActiveSession()
+      if (!activeSession) return false
+      const host = activeSession.sdkHost as (VscodeSessionHost & {
+        hasRunningBackgroundJobForOwner?: (sessionId) => boolean
+      }) | undefined
+      if (!host || typeof host.hasRunningBackgroundJobForOwner !== "function") {
+        return false
+      }
+      return host.hasRunningBackgroundJobForOwner(ownerSessionId)
+    }
+```
+
+Per the Factory reviewer's directive ("smallest correct repair at
+the composition seam ... do NOT yet freeze the specific phase A
+*must* become"), the suppression preserves the prior phase
+(typically `streaming`); no replacement phase is invented.
+
+### Q5 matrix executed (real-shell run, this turn)
+
+Test file:
+`apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts`
+(350 lines, SYNTHETIC_REAL; mirrors the ACAS01 harness pattern).
+
+```text
+Q5-A PRE-REPAIR baseline
+  (liveness option wired to () => false, simulating pre-repair production)
+  → after.phase === "awaiting_followup"         PASS (RED captured)
+
+Q5-A POST-REPAIR
+  (liveness option wired to () => true)
+  → after.phase !== "awaiting_followup"         PASS (GREEN)
+
+Q5-B control (option returns false)
+  → after.phase === "awaiting_followup"         PASS (control)
+
+Q5-B control (option omitted)
+  → after.phase === "awaiting_followup"         PASS (control;
+                                                    pre-Q5 behavior
+                                                    preserved)
+
+Q5-C control (liveness returns true only for non-active session)
+  → after.phase === "awaiting_followup"         PASS (isolation
+                                                    control)
+
+Q5-D control (terminal-state; option returns false)
+  → after.phase === "awaiting_followup"         PASS (terminal-state
+                                                    control)
+```
+
+The Q5-A PRE-REPAIR baseline + Q5-A POST-REPAIR pairing constitutes
+the RED → GREEN proof at the composition seam. Independently
+verified by physically reverting the production-side
+`this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId)`
+call to a constant `false`; in that state Q5-A POST-REPAIR goes
+RED (1 failed | 5 passed). After restoring the consultation,
+all 6 pass (6/6 GREEN).
+
+### Conservation
+
+```text
+typecheck apps/vscode                = clean (0 errors)
+ACAS01 vitest                         = preserved (4/4 PASS at b072d9807)
+BHTD01 vitest                         = preserved (6/6 PASS)
+Q5RR01 vitest                         = 6/6 PASS (new this turn)
+Q6.1 + Q6.1b owner-identity contract  = PASS in this IDE-sandbox
+Q6.2-Q6.8 owner-identity lifecycle   = environmentally gated (run
+                                          green in non-sandboxed shell;
+                                          same pre-existing
+                                          command-job-manager.test.ts
+                                          18/20 spawn-related failures
+                                          in this IDE-sandbox - NOT a
+                                          regression)
+OWN01 RED (sdk-session-event-coordinator.test.ts)
+  = remains RED (was RED before this turn; authored as a separate
+    P0 RED for the finish-reason discrimination path OWN02.
+    NOT addressed by the Q5 per-owner liveness repair; remains
+    owned by the umbrella ACT's NEXT-LANE finish-reason
+    discriminator work).
+```
+
+### Disposition
+
+```text
+CASE_A                            = ADJUDICATED
+ROOT_CAUSE_ISOLATED               = YES (the post-terminal-02 specimen's
+                                       authority defect traces to the
+                                       composition seam's missing
+                                       per-owner liveness consult)
+REPAIR_AUTHORIZED                 = YES
+REPAIR_SHAPE                      = per-owner background-job liveness
+                                       query (`hasRunningBackgroundJobForOwner`)
+                                       consulted BEFORE the
+                                       `setTurnPhase("awaiting_followup", ...)`
+                                       transition in the
+                                       done-without-completion branch
+REPAIR_DONE                       = YES (this turn; production delta
+                                       bounded at the composition seam)
+Q5_RED                            = AUTHORED + EXECUTED (6/6 PASS
+                                       in q5rr01)
+Q5_CONTROL_NO_JOB                 = PASS (Q5-B)
+Q5_CONTROL_OTHER_OWNER            = PASS (Q5-C)
+Q5_CONTROL_COMPLETED_JOB          = PASS (Q5-D)
+NEW_REVIEW_ROUND                  = NO (reviewer directive)
+WAITING_Q5                        = CLOSED
+
+NEXT_LANE = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
+           (per the umbrella ACT's pre-existing
+            RECOMMENDED-NEXT-LANE decision; the post-Q5-GREEN
+            um ACT pivots immediately)
+```
+
+The umbrella ACT's NEXT-LANE work (the file-tool workspace-escape
+authority recon) is the higher-severity safety lane and begins
+in the next turn.
+
   The rename of `backgroundCommandTaskId` (which currently stores
   jobId) is a Cline-wide API surface decision and should be a
   SEPARATE contract ACT, frozen here as MISLEADING_NAME / STRUCTURAL FACT
