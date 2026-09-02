@@ -55,15 +55,38 @@ can-read-snapshot, currently-carries-W). Stop at the
 FIRST missing edge. No code change before the table is
 complete for all 5 rows.
 
+### Column heading correction (P2 — reviewer on
+c3c00cb45)
+
 ```text
-| Boundary                       | Already receives runtime event? | Can read runtime snapshot? | Currently carries W? |
-| ------------------------------ | ------------------------------: | -------------------------: | -------------------: |
-| LocalRuntimeHost               |                             yes |                        yes |                    ? |
-| core session snapshot/event    |                               ? |                          ? |                    ? |
-| SdkController state            |                               ? |                          ? |                    ? |
-| ExtensionState/webview message |                               ? |                        n/a |                    ? |
-| ChatView token projection      |                             yes |                        n/a |     no — currently P |
+Was: 'Already receives runtime event?'
+Now: 'Receives upstream change signal/data at this
+       boundary?'
+After LocalRuntimeHost, 'runtime event' stops being
+the right abstraction; data travels through host-
+internal state, gRPC messages, and webview props —
+none of which are 'runtime events'.
 ```
+
+```text
+| Boundary                       | Upstream signal/data? | Can read runtime snapshot? | Currently carries W? |
+| ------------------------------ | ---------------------: | -------------------------: | -------------------: |
+| LocalRuntimeHost               |                    yes |                        yes |                    ? |
+| core session snapshot/event    |                      ? |                          ? |                    ? |
+| SdkController state            |                      ? |                          ? |                    ? |
+| ExtensionState/webview message |                      ? |                        n/a |                    ? |
+| ChatView / TaskHeader          |             no direct / |                        n/a |       no, currently P |
+|   (projection, not subscription) |         yes via state  |                            |                       |
+```
+
+ChatView / TaskHeader row notes:
+- ChatView is NOT a direct AgentRuntimeEvent
+  subscriber. It is downstream of host/webview
+  projection.
+- It DOES receive projected webview state via the
+  gRPC bridge (today from modifiedMessages ->
+  getLastApiReqContextInputTokens()).
+- It currently does NOT carry W at all.
 
 ### P3 RED (synthetic sentinels, real projection seam)
 
@@ -73,10 +96,16 @@ W = 271_337
 working-context-state-changed
   snapshot.W = 271_337
 no new api_req_started
-expected:
-  TaskHeader context numerator = 271_337
-actual at HEAD:
-  numerator = 364_900 (P)
+
+EXPECTED_AT_ENTRY_HEAD:
+  projection remains P / W does not reach numerator
+EXECUTABLE_P3_RED:
+  NOT YET RUN  <- evidence-label correction
+(reviewer on c3c00cb45: the prior commit's
+ 'actual at HEAD: numerator = 364_900 (P)' was
+ stronger than P3 evidence. OBSERVED_AT_ENTRY_HEAD
+ must be measured by the RED, NOT asserted
+ before the RED runs.)
 
 271_337 deliberately synthetic.
 Do NOT use 264.3k as oracle (screenshot evidence only).
