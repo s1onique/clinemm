@@ -1,0 +1,16 @@
+     × TUSA01-RED: LIVE-shaped UNBOUND shadow idle MUST NOT demote authoritative legacy streaming 3ms
+     × TUSA01-RED-SOURCE: LIVE-shaped UNBOUND shadow MUST NOT yield source=shadow against authoritative active TurnState 1ms
+     ✓ TUSA01-CTL_A: legacy=idle + UNBOUND shadow=idle -> taskHeaderPhase remains idle 0ms
+     ✓ TUSA01-CTL_D: UNBOUND shadow=streaming agreeing with legacy=streaming -> shadow wins 0ms
+     ✓ TUSA01-REG_T9: REPAIR01-CORRECTION02 T9 -- stale shadow with explicit seq=2 demoted by legacy 0ms
+     ✓ TUSA01-REG_HOST_COMPACTING: host legacy compacting beats UNBOUND shadow idle 0ms
+     ✓ TUSA01-REG_HOST_AWAITING_FOLLOWUP: host legacy awaiting_followup beats UNBOUND shadow idle 0ms
+     ✓ TUSA01-REG_FRESH_SHADOW_WINS: shadow with fresh TurnState-domain seq wins over stale legacy 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01 / LIVE-bug RED > TUSA01-RED: LIVE-shaped UNBOUND shadow idle MUST NOT demote authoritative legacy streaming
+AssertionError: expected 'idle' not to be 'idle' // Object.is equality
+ FAIL  src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01 / LIVE-bug RED > TUSA01-RED-SOURCE: LIVE-shaped UNBOUND shadow MUST NOT yield source=shadow against authoritative active TurnState
+AssertionError: expected true to be false // Object.is equality
++ Received
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 passed (8)

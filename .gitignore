@@ -841,3 +841,20 @@ apps/vscode/.factory/evidence/
 # clone so the repair ACT's source-of-truth entry-freeze is durable.
 !/.factory/acts/ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01.md
 !/.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01/
+# 2026-09-02: ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
+# LIVE specimen taskId 1788292664979_9qbpd, epoch 16: authoritative
+# TurnState streaming + persistent taskHeaderPhase=idle +
+# taskHeaderSource=shadow + shadowPublicationBinding=UNBOUND. The
+# predecessor ACT (RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01)
+# is NOT contradicted (TSWPD proves streaming -> streaming). The
+# hypothesis is that the production selector at
+# apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:505 lets an
+# UNBOUND shadow demote authoritative ACTIVE TurnState via rule 3 when
+# canonicalShadowObservedTurnSeq === undefined. The ACT body + evidence
+# directory + the load-bearing test file at
+# apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts
+# must survive a fresh clone so the recon's RED reproduction + source-
+# seam map are durable. Production delta: bounded selector guard (CASE_A
+# classification to be confirmed by reviewer).
+!/.factory/acts/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01/
