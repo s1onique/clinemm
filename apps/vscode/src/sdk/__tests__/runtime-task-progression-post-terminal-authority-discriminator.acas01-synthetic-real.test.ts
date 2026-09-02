@@ -66,11 +66,18 @@
  * Instead recon upward/downward until you find the real
  * composition point where both are available."
  *
- * Production reconnaissance (2026-09-02) shows:
- *   - `CommandJobManager` lives on `VscodeSessionHost`
- *     (`apps/vscode/src/sdk/vscode-session-host.ts:190`), has NO
- *     `taskId` concept. Row (c) "another task owns RUNNING job" is
- *     structurally impossible.
+ * Production reconnaissance (2026-09-02) — calibrated per Factory
+ * reviewer's `PASS_WITH_ONE_P1_FIX`:
+ *   - EXPLICIT_TASK_IDENTITY_IN_COMMAND_JOB_MANAGER =
+ *       ABSENT / PROVEN
+ *     (`grep -n taskId apps/vscode/src/sdk/command-job-manager.ts`
+ *     yields empty). However, this does NOT yet prove that
+ *     cross-task ownership is impossible: the manager may encode
+ *     ownership BY OBJECT LIFETIME (one-per-session,
+ *     one-per-host, one-per-current-task).
+ *   - CROSS_TASK_JOB_OWNERSHIP_REPRESENTABILITY =
+ *       NOT YET BOUND (awaiting Q1 cardinality recon).
+ *   - POSSIBLE_IMPLICIT_OWNERSHIP = object / session / host lifetime.
  *   - `SdkController.backgroundCommandRunning` is a real projection
  *     of `CommandJobManager` liveness, set via
  *     `updateBackgroundCommandState(true, jobId)` callback (the
@@ -81,18 +88,32 @@
  *       SdkSessionEventCoordinator.handleSessionEvent → setTurnPhase
  *     `SdkController` has BOTH `backgroundCommandRunning` AND the
  *     session event listener but does NOT intervene. There is no
- *     host-side composition point where both authority inputs
- *     currently meet.
+ *     host-side composition point WHERE THE TWO AUTHORITY INPUTS
+ *     CURRENTLY MEET.
+ *   - CURRENT_OBSERVED_COMPOSITION_CANDIDATE = `SdkController`
+ *     (strongest candidate; uniqueness NOT YET PROVEN).
  *   - `done` events originate in `@cline/core` (agent runtime),
- *     which has NO view of `CommandJobManager`. Row (b) "upstream
- *     should never emit turnComplete while owned background work
- *     exists" is structurally impossible to implement at the
- *     agent-runtime layer.
+ *     which has NO view of `CommandJobManager` (architectural
+ *     decoupling by design). Whether "upstream should never emit
+ *     turnComplete while owned background work exists" is
+ *     achievable here depends on whether the agent runtime gains
+ *     an authority projection of its own (NOT in scope of this
+ *     recon).
+ *
+ * NEXT BOUNDED CYCLE (Q1–Q5, per Factory reviewer):
+ *   Q1: cardinality — how many CommandJobManager instances per
+ *       extension / controller / VscodeSessionHost / session / task
+ *   Q2: identity table — actual identity carried by
+ *       `backgroundCommandTaskId` (named `taskId` but stored `jobId`)
+ *   Q3: task/session switch — does a RUNNING job survive a switch?
+ *       (does the boolean reset?)
+ *   Q4: lowest already-authoritative seam for composing the two truths
+ *   Q5: only then, formulate the actual RED with controls/ablations
  *
  * Per the Factory reviewer's `forbidden_repairs_per_reviewer` list
  * and the C1 disposition, NO production change is authorized by
  * this ACT. CASE_A remains `STRONG_CANDIDATE`, NOT ADJUDICATED.
- * REPAIR_AUTHORIZED = NO.
+ * REPAIR_AUTHORIZED = NO. NEW_CHILD_ACT = NO.
  */
 
 import { readFileSync } from "node:fs"
@@ -332,15 +353,17 @@ describe("ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / post-terminal-02 specim
 		// writerId=session-event-turn-complete-awaiting-followup-liveness
 		// at line 169, NOT the writer under test). The writer under
 		// test (line 223) MUST NOT fire in this case.
+		//
+		// P1 fix per Factory reviewer (HALT_WRONG_DISCRIMINATOR):
+		// the previous version short-circuited via `hasSetAttemptCompletionSeen`
+		// which made the test report PASS without ever establishing
+		// `wasAttemptCompletionSeen=true → writer-under-test does not
+		// fire`. That made the control potentially vacuous. Now we
+		// assert the setter exists, then exercise it unconditionally.
 		const mtState = harness.messageTranslatorState as unknown as {
 			setAttemptCompletionSeen?: () => void
 		}
-		const hasSetAttemptCompletionSeen = typeof mtState.setAttemptCompletionSeen === "function"
-		if (!hasSetAttemptCompletionSeen) {
-			// Skip the assertion but keep the test as a drift witness.
-			expect(harness.turnStateTracker.currentPhase).toBe("streaming")
-			return
-		}
+		expect(typeof mtState.setAttemptCompletionSeen).toBe("function")
 		mtState.setAttemptCompletionSeen!()
 
 		const doneEvent: CoreSessionEvent = {
@@ -360,7 +383,8 @@ describe("ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / post-terminal-02 specim
 		// MUST NOT fire — the production code falls through to
 		// session-event-turn-complete-awaiting-followup-liveness
 		// (line 169) instead. If this REDs, the precondition chain
-		// is broken.
+		// is broken. P1 fix: this assertion is now reached
+		// unconditionally (no early return on `hasSetAttemptCompletionSeen`).
 		expect(
 			writerUnderTest.length,
 			"writer under test MUST NOT fire when wasAttemptCompletionSeen is true (precondition chain broken)",

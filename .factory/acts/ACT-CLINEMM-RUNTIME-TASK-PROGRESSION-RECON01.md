@@ -405,28 +405,52 @@ DISCRIMINATOR VERDICT (corrected post-HALT_WRONG_DISCRIMINATOR):
   authority both currently meet? See "Architecture recon"
   below.
 
-ACAS01 ESTABLISHES (durable findings):
+ACAS01 ESTABLISHES (durable findings, calibrated per Factory
+  reviewer PASS_WITH_ONE_P1_FIX):
   LIVE_WRITER_BIND                = PROVEN
-  BACKGROUND_LIVENESS_AT_WRITER   = STRUCTURALLY ABSENT (PROVEN_NO)
-  CURRENT_BEHAVIOR_WITNESS        = PASS under trivial case
-                                     (same trivial case the pre-existing
-                                      CRA02-coord test already covers)
-  PRECONDITION_CHAIN_CONTROL      = PASS
+  BACKGROUND_LIVENESS_AT_WRITER   = STRUCTURAL / PROVEN ABSENT
+  CURRENT_BEHAVIOR_WITNESS        = SYNTHETIC_REAL / PASS
+                                     (trivial "no job input" case)
+  PRECONDITION_CHAIN_CONTROL      = PASS / NON-VACUOUS (post-P1 fix:
+                                     unconditional exercise of the
+                                     precondition setter; no early
+                                     return)
 
 ACAS01 DOES NOT ESTABLISH:
   3-ROW_OWNED_JOB_DISCRIMINATOR   = NOT EXECUTED
-  AUTHORITY_INPUT_MISSING         = NOT YET DECIDED (recon in progress)
+  AUTHORITY_INPUT_MISSING         = NOT YET DECIDED
   CASE_A                          = STRONG_CANDIDATE, NOT ADJUDICATED
+  ROOT_CAUSE                      = NOT YET ISOLATED
 
-ARCHITECTURE RECON (2026-09-02, post-ACAS01 verdict):
-  - CommandJobManager lives on VscodeSessionHost
+ARCHITECTURE RECON (2026-09-02, post-ACAS01 verdict) —
+  calibrated per Factory reviewer's PASS_WITH_ONE_P1_FIX
+  (softer wording on claims that overreached presented
+  evidence):
+
+  EXPLICIT_TASK_IDENTITY_IN_COMMAND_JOB_MANAGER =
+    ABSENT / PROVEN
+    CommandJobManager lives on VscodeSessionHost
     (apps/vscode/src/sdk/vscode-session-host.ts:190), has NO
     taskId concept (grep -n taskId
     apps/vscode/src/sdk/command-job-manager.ts = empty).
-    Row (c) "another task owns RUNNING job" is STRUCTURALLY
-    IMPOSSIBLE in the current architecture.
 
-  - SdkController.backgroundCommandRunning (line 784) is a
+    CALIBRATION (per Factory reviewer): the absence of an
+    explicit `taskId` field does NOT prove that cross-task
+    job ownership is impossible. The manager may encode
+    ownership BY OBJECT LIFETIME (one-per-session,
+    one-per-host, one-per-current-task). Before the
+    discriminator can legitimately collapse row (c), the
+    Q1 cardinality recon must establish how many
+    CommandJobManager instances exist per
+    extension / controller / VscodeSessionHost / session /
+    task.
+
+  CROSS_TASK_JOB_OWNERSHIP_REPRESENTABILITY =
+    NOT YET BOUND (awaiting Q1 recon)
+  POSSIBLE_IMPLICIT_OWNERSHIP =
+    object / session / host lifetime
+
+  SdkController.backgroundCommandRunning (line 784) is a
     real projection of CommandJobManager liveness, set via
     updateBackgroundCommandState(true, jobId) callback
     (line 1168). The field backgroundCommandTaskId
@@ -434,7 +458,7 @@ ARCHITECTURE RECON (2026-09-02, post-ACAS01 verdict):
     with jobId per the callback wiring — MISLEADING NAME.
     The projection has no current-task ownership filter.
 
-  - Session event listener chain:
+  Session event listener chain:
       onSessionEvent(event)         [SdkController.ts:2298]
         → this.sessionEvents.handleSessionEvent(event)
                                      [SdkController.ts:1170]
@@ -443,42 +467,130 @@ ARCHITECTURE RECON (2026-09-02, post-ACAS01 verdict):
         → setTurnPhase(...)          [SdkController.ts:1627]
     SdkController has BOTH backgroundCommandRunning AND the
     session event listener but does NOT intervene. There is
-    NO host-side composition point where both authority
-    inputs currently meet.
+    NO host-side composition point WHERE THE TWO AUTHORITY
+    INPUTS CURRENTLY MEET.
 
-  - The done event that triggers turnComplete originates in
+  CURRENT_OBSERVED_COMPOSITION_CANDIDATE =
+    SdkController (strongest candidate; uniqueness NOT YET
+    PROVEN — Q4 recon must inventory object/callback
+    topology before this can be sharpened).
+
+  The done event that triggers turnComplete originates in
     the agent runtime
     (apps/vscode/src/sdk/message-translator.ts:2135 for
     agentEvent.type === "done"). The agent runtime has NO
-    view of CommandJobManager. Row (b) "upstream should never
-    emit turnComplete while owned background work exists" is
-    STRUCTURALLY IMPOSSIBLE to implement at the agent-runtime
-    layer in the current architecture.
+    view of CommandJobManager (architectural decoupling by
+    design). Whether "upstream should never emit
+    turnComplete while owned background work exists" is
+    achievable here depends on whether the agent runtime
+    gains an authority projection of its own — outside the
+    scope of this recon. Row (b) of the requested matrix
+    can therefore NOT be evaluated at the agent-runtime
+    layer with current evidence.
 
-  - The only host-side seam where both authority inputs
-    could in principle meet is SdkController. The
-    discriminator must recon to that seam (or to a future
-    seam that exposes the task-owned job relationship).
-    This recon is in progress under a future bounded cycle;
-    this ACT does NOT exercise it.
+NEXT BOUNDED CYCLE (Q1–Q5, per Factory reviewer
+  PASS_WITH_ONE_P1_FIX):
 
-CORRECTED FACTORY STATE (post-HALT_WRONG_DISCRIMINATOR):
+  Q1 — What owns CommandJobManager?
+    Establish the cardinality of CommandJobManager
+    instances per:
+      extension
+      controller
+      VscodeSessionHost
+      session
+      task
+    This decides whether job ownership is explicit,
+    implicit, or missing.
+
+  Q2 — What identity survives RUNNING(jobId)?
+    Trace the identity of each field in the projection:
+      field                     actual identity
+      ------------------------------------------------
+      backgroundCommandTaskId   jobId (per callback wiring)
+      sessionId                 ?
+      taskId                    ?
+      epoch                     ?
+
+  Q3 — What happens across task/session switches?
+    Determine whether a RUNNING job can survive
+      task A
+        → task switch / clear
+        → task B
+    while the controller's liveness projection remains true
+    or gets reset. This tells us whether the existing
+    boolean is globally meaningful or merely local
+    presentation state.
+
+  Q4 — Where can the two truths be composed without new
+    architecture? Find the lowest existing function which
+    can truthfully know both:
+      TURN_COMPLETION (event/session)
+      +
+      BACKGROUND_JOB_LIVENESS (job/owner)
+    Candidate ordering:
+      VscodeSessionHost
+      SdkController
+      session event callback wrapper
+      SdkSessionEventCoordinator
+    Pick the LOWEST ALREADY-AUTHORITATIVE SEAM. Do NOT
+    create a new dependency merely because the planned
+    test wants one.
+
+  Q5 — Then formulate the actual RED. Only after Q1–Q4.
+    If ownership is implicitly session-scoped, the RED
+    could reduce to:
+      current session has live CommandJobManager job
+      +
+      done-without-completion event
+      → MUST NOT transfer ownership to awaiting_followup
+    with control:
+      same session, no live job
+      → awaiting_followup remains valid
+    If the manager spans tasks, add the third row:
+      different task's job
+      → must not block this task
+    If no job → task/session identity exists at all:
+      AUTHORITY_IDENTITY_MISSING = PROVEN
+    That itself is the architectural finding and justifies
+    a small contract ACT before implementation.
+
+NEXT_BOUNDED_CYCLE_STATUS:
+  The Q1–Q5 recon is NOT yet executed. This ACT scopes
+  itself to (a) ACAS01 discriminator + (b) Architecture
+  recon scoping. The discriminator exercises Q4/Q5 only
+  after Q1–Q3 are mechanically answered.
+
+FACTORY DISPOSITION (per Factory reviewer
+  PASS_WITH_ONE_P1_FIX / C1: GO_ARCHITECTURE_RECON,
+  2026-09-02):
 
   ACT = ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
-  LIVE_WRITER_BIND = PASS
-  P1_T5_CALIBRATION = PASS
-  BACKGROUND_LIVENESS_ABSENT_FROM_WRITER = STRUCTURAL / PROVEN
-  REAL_RUNNING_JOB_DISCRIMINATOR = NOT EXECUTED
+  HALT_WRONG_DISCRIMINATOR = CORRECTLY ABSORBED
+  ACAS01_USEFUL_FINDINGS = PRESERVE
+  P1 = ACAS01.4 vacuous control FIXED (in this commit, the
+       test now asserts setAttemptCompletionSeen exists
+       and exercises the control unconditionally; no early
+       return)
+  ARCHITECTURE_FINDING = EXPLICIT_TASK_IDENTITY_IN_COMMAND_JOB_MANAGER
+                          ABSENT
+  IMPLICIT_OWNERSHIP = UNBOUND (awaiting Q1 cardinality
+                        recon)
+  COMPOSITION_POINT = SdkController = strongest current
+                      candidate; uniqueness NOT YET PROVEN
   CASE_A = STRONG_CANDIDATE / NOT ADJUDICATED
-  ROOT_CAUSE = NOT YET ISOLATED
-  P0 = discriminator did not exercise the required authority input
   REPAIR_AUTHORIZED = NO
-  NEXT = find real seam containing BOTH:
-           turn-completion authority
-           background-job ownership authority
-         → execute 3-row owned-job discriminator
-         → then classify A/B
-  VERDICT = HALT_WRONG_DISCRIMINATOR
+  NEXT = object-lifetime + identity topology recon (Q1–Q3)
+          → locate lowest real composition seam (Q4)
+          → true RED with ablation/control (Q5)
+          → only then authorize repair
+  NEW_CHILD_ACT = NO
+
+  Durable ACAS01 findings (frozen):
+    LIVE_WRITER_BIND = PROVEN
+    BACKGROUND_LIVENESS_AT_WRITER = STRUCTURAL / PROVEN ABSENT
+    CURRENT_BEHAVIOR_WITNESS = SYNTHETIC_REAL / PASS
+                                     (trivial "no job input" case)
+    PRECONDITION_CHAIN_CONTROL = PASS / NON-VACUOUS (post-P1 fix)
 ```
 
 DO NOT open a parallel ACT to host this discriminator until the
