@@ -1019,3 +1019,73 @@ The producer half is done (`fc906dfc6`). The next causal
 question is no longer token arithmetic; it is whether the
 authoritative W `fc906dfc6` publishes actually has a path to
 the `TaskHeader`.
+
+## Current frontier update — 2026-09-02 23:50:00Z (closing producer half; opening HEADER-TRANSPORT-REPAIR01)
+
+Factory causal reviewer sixth-pass on `96336dc77`:
+**`PASS_WITH_ONE_P1_FIX. C1: GO_HEADER_TRANSPORT`**.
+
+The P1 calibration ask was honored with the repo-wide absence
+bind:
+
+```text
+git grep -n -e 'currentWorkingContextEstimate' \
+           -e 'ContextPipelinePrepareTurnResult' \
+           -- sdk apps
+```
+
+returns exactly the producer site (`compaction.ts` +
+two producer test files) and the factory artifacts. There is
+**no occurrence** in `sdk/packages/agents/src/`,
+`sdk/packages/core/src/runtime/`, or `apps/vscode/`.
+`W_PRESENTATION_TRANSPORT = ABSENT / PROVEN`.
+
+Clean ownership split (now frozen in the artifacts):
+
+```text
+AUTHORITY-PUBLISH01
+  = produce truthful W
+  = PASS (close as the producer half)
+
+HEADER-TRANSPORT-REPAIR01
+  = transport + consume truthful W
+  = OPEN (new narrow ACT)
+```
+
+Authored:
+
+```text
+.factory/acts/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+  HEADER-TRANSPORT-REPAIR01.md (211 lines)
+  - primary contract (one-line)
+  - clean ownership split (frozen)
+  - W_PRESENTATION_TRANSPORT = ABSENT (re-calibrated)
+  - transport doctrine (frozen before implementation)
+  - carrier plan (audit existing first; one bounded
+    field addition if none fits)
+  - RED plan (projected-numerator seam; oracle = real
+    prepare-turn output; NOT 264_300)
+  - compaction-shrink discriminator
+  - conservation locked for this ACT
+  - test artifact target (~one file, ~two test cases)
+
+.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+  HEADER-TRANSPORT-REPAIR01/entry-freeze.txt (182 lines)
+```
+
+Transport doctrine (frozen BEFORE implementation):
+
+```text
+W_COMPUTE_COUNT            = one authority (core prepare-turn seam)
+W_RECOMPUTE_IN_AGENT       = FORBIDDEN
+W_RECOMPUTE_IN_VSCODE      = FORBIDDEN
+W_RECOMPUTE_IN_CHATVIEW    = FORBIDDEN
+P                          = preserved as last provider observation
+H                          = preserved as compaction estimator telemetry
+HEADER                     = consumes transported W
+```
+
+The producer half is closed at `96336dc77`. The next causal
+question is mechanical: whether the authoritative W
+published in `fc906dfc6` reaches the `TaskHeader` context
+gauge. C1: GO_HEADER_TRANSPORT.

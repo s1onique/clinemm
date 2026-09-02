@@ -1,0 +1,182 @@
+# ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+# entry-freeze.txt — frozen key=value summary of the ACT
+
+OWNING_EPIC         = EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING
+                     (see .factory/epics/
+                     context-compaction-token-accounting.md)
+
+PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-WORKING-
+                     CONTEXT-AUTHORITY-PUBLISH01
+                     (commits 6bffd75c0, fc906dfc6, 96336dc77;
+                     producer half GREEN; terminology fix
+                     accepted; PASS_WITH_ONE_P1_FIX on
+                     fc906dfc6; PASS_WITH_ONE_P1_FIX on
+                     96336dc77; transport gap PROVEN)
+
+DISPOSITION         = OPEN (RED not yet authored; doctrine
+                     and carrier audit present; carrier choice
+                     TBD by RED)
+
+PRIMARY_CONTRACT    = Carry the already-authoritative W from
+                     the core prepare-turn boundary to the
+                     TaskHeader context gauge exactly once,
+                     without recomputing or transforming its
+                     semantic domain
+
+AUTHORITY_BIND      = W_AUTHORITY_LOCATION =
+                     ContextPipelinePrepareTurnResult
+                     .currentWorkingContextEstimate
+                     (frozen at fc906dfc6; this ACT does
+                     NOT modify the producer seam)
+
+W_PRESENTATION_TRANSPORT
+                   = ABSENT / PROVEN
+                     (repo-wide absence bind via
+                       git grep -n -e 'currentWorking-
+                       ContextEstimate' -e
+                       'ContextPipelinePrepareTurnResult' \
+                       -- sdk apps
+                     returns exactly:
+                       sdk/.../compaction.ts (interface
+                         + helper + wiring)
+                       sdk/.../compaction.working-
+                         context-authority-publish.test.ts
+                         (producer tests)
+                       sdk/.../compaction.working-
+                         context-ratio.test.ts
+                         (producer tests)
+                     No occurrence in:
+                       sdk/packages/agents/src/
+                         (TODO at agent-runtime.ts:2300
+                          confirms; consume site at
+                          :2308-2324 drops the field)
+                       sdk/packages/core/src/runtime/
+                         (orchestration, adapters)
+                       apps/vscode/
+                         (extension host, webview, header))
+
+TRANSPORT_DOCTRINE   = W_COMPUTE_COUNT = one authority
+                       (core prepare-turn seam)
+                     W_RECOMPUTE_IN_AGENT    = FORBIDDEN
+                     W_RECOMPUTE_IN_VSCODE   = FORBIDDEN
+                     W_RECOMPUTE_IN_CHATVIEW = FORBIDDEN
+                     P                       = preserved
+                                                as last
+                                                provider
+                                                observation
+                     H                       = preserved
+                                                as compaction
+                                                estimator
+                                                telemetry
+                     HEADER                  = consumes
+                                                transported W
+
+CARRIER_PLAN        = ContextPipelinePrepareTurnResult
+                       .currentWorkingContextEstimate
+                       ↓ (TBD by RED:
+                          extend AgentModelRequest with
+                            metadata OR add explicit
+                            currentWorkingContextEstimate)
+                     AgentModelRequest
+                       ↓
+                     SessionRuntime
+                       ↓ (TBD by RED:
+                          audit existing turn /
+                          prepared / usage event carriers
+                          before adding a new field)
+                     LocalRuntimeHost
+                       ↓
+                     ExtensionState
+                       .lastWorkingContextEstimate
+                       (new field)
+                       ↓
+                     ExtensionStateContext
+                       .currentWorkingContextEstimate
+                       ↓
+                     TaskHeader → ContextWindow
+                       numerator switch:
+                         lastApiReqContextInputTokens
+                           → currentWorkingContextEstimate
+                             ?? lastApiReqContextInputTokens
+                         (with a clear "no recent
+                          prepare-turn" fallback marker)
+
+RED_PLAN            = projected-numerator seam (webview):
+                       given prepareTurn result carries
+                         currentWorkingContextEstimate = W_after
+                       and no subsequent api_req_started
+                       expected: TaskHeader projection
+                                  numerator = W_after
+                       actual at HEAD:    = P (RED)
+                       oracle = real prepare-turn output
+                                (NOT 264_300)
+
+GREEN_PLAN          = (1) choose smallest viable carrier
+                         (audit existing first; one bounded
+                          field addition if none fits)
+                     (2) wire carrier core → host state →
+                         webview ExtensionState
+                     (3) switch TaskHeader / ContextWindow
+                         numerator to currentWorkingContext-
+                         Estimate (fallback to P only when no
+                         recent prepare-turn)
+                     (4) add compaction-shrink discriminator:
+                         deterministic injected compact()
+                         returns visibly smaller messages;
+                         assert W_after < W_before;
+                         equal to estimateRequestInputTokens(
+                           smaller final shape)
+
+CONSERVATION        = P (lastApiReqContextInputTokens) preserved
+                     H (compaction H-space) preserved
+                     Strategy-D (getApiMetrics.ts:174-225)
+                       untouched
+                     Cumulative usage / provider billing
+                       unchanged
+                     W_COMPUTE_COUNT exactly one
+                     H_a_TO_W_EQUIVALENCE still UNPROVEN
+                     lastProviderRequestInput P remains 364.9k
+                     compaction H values remain untouched
+
+OUT_OF_SCOPE        = changing producer-side code in
+                     compaction.ts (AUTHORITY-PUBLISH01's
+                     frozen producer half)
+                     introducing a second estimator in ChatView
+                     extending TokenEstimatedRequest input
+                     contract
+                     modifying upstream
+                     createContextPipelinePrepareTurn shape
+                     changing getApiMetrics Strategy-D logic
+
+TEST_TARGET         = ~one test file (apps/vscode or smallest
+                       existing test oracle that exercises
+                       ExtensionState.lastWorkingContext-
+                       Estimate + TaskHeader numerator
+                       switch)
+                     ~two test cases:
+                       - REPRODUCES: header numerator = P
+                                     when authoritative W
+                                     exists
+                       - W_after < W_before when compaction
+                                     shrinks estimator inputs
+
+FORWARD_DISPOSITION = commit lane 1: RED
+                     commit lane 2: GREEN (+ compaction-shrink
+                                          discriminator RED
+                                          →GREEN transition)
+                     commit lane 3 (optional): wire ContextWindow
+                                              visual delta into
+                                              telemetry
+                     NEW_REVIEW_ROUND = NO at each commit
+                                        (transport is mechanical;
+                                         doctrine is frozen;
+                                         provenance is sufficient)
+
+TYPECHECK           = TYPECHECK_DELTA = ZERO at each commit
+                     (subject count reported against running
+                      parent baseline; SUBJECT not yet known
+                      for this ACT)
+
+C1                  = GO_HEADER_TRANSPORT
+
+NEW_REVIEW_ROUND    = NO

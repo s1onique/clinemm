@@ -277,7 +277,8 @@ This directly fixes the observed stale bar without touching Strategy-D or revivi
 - W_PRESENTATION_TRANSPORT = UNBOUND (consume site in sdk/packages/agents/src/agent-runtime.ts:2308-2324 drops the field on the floor; TODO at :2300 confirms the gap; commit 3 must add a transport seam, not a recompute)
 - HEADER_CONSUMER_BINDING = NOT YET IMPLEMENTED (header projection — the next causal question — is GO_HEADER_PROJECTION; producer half DONE; transport half OPEN)
 - WIRE_LOCATION (alias of W_AUTHORITY_LOCATION, retained for stability) = ContextPipelinePrepareTurnResult.currentWorkingContextEstimate (same physical field, same review binding; transport is commit 3's job)
-- NEXT_ACT = ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
+- NEXT_ACT = ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01 (was AUTHORITY-PUBLISH01; producer half CLOSED at fc906dfc6 + 96336dc77; transport half is the next causal question; new narrow ACT owns the smallest-carrier audit + one bounded core→host→header transport seam + TaskHeader numerator switch; C1: GO_HEADER_TRANSPORT)
+- AUTHORITY-PUBLISH01 = PASS (producer half settled: RED 6bffd75c0, GREEN fc906dfc6, P1-terminology 96336dc77; CURRENTLY THE LAST PRODUCTION-DELTA COMMIT IN THIS LINEAGE)
 - DISPOSITION = PASS_WITH_ONE_P1_FIX (Factory causal reviewer; the prior verdict HALT_NO_INTENT_FROZEN overreached)
 - HEADER_BAR_INTENT = AMBIGUOUS (corrected this turn; "current tokens used in this request" is compatible with both C1 ("the request whose usage was just observed") and C2 ("the hypothetical next request if generated now"))
 - UI_PURPOSE = context-window utilization guidance / PROVEN

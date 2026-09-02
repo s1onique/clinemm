@@ -326,3 +326,22 @@ OWNING_EPIC         = EPIC-CONTEXT-COMPACTION-TOKEN-
                      ACCOUNTING
                      (see .factory/epics/context-
                      compaction-token-accounting.md)
+
+NEXT_NARROW_ACT    = ACT-CLINEMM-COMPACTION-WORKING-
+                     CONTEXT-HEADER-TRANSPORT-REPAIR01
+                     (opened on 2026-09-02 23:50:00Z per
+                     factory causal reviewer sixth pass
+                     on 96336dc77 = PASS_WITH_ONE_P1_FIX;
+                     this ACT owns the smallest-carrier
+                     audit + one bounded core→host→header
+                     transport seam + TaskHeader numerator
+                     switch; AUTHORITY-PUBLISH01 has been
+                     closed as the producer half; the
+                     causal question is now whether the
+                     authoritative W published in fc906dfc6
+                     can reach TaskHeader; C1: GO_HEADER_TRANSPORT;
+                     see .factory/acts/ACT-CLINEMM-COMPACTION-
+                     WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01.md
+                     and .factory/evidence/ACT-CLINEMM-COMPACTION-
+                     WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01/
+                     entry-freeze.txt)

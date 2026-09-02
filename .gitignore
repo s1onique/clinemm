@@ -1010,3 +1010,21 @@ apps/vscode/.factory/evidence/
 # (operator opt-in on public preserved, public default OFF preserved).
 # REMOVAL_TRIGGER preserved verbatim from the predecessor ACT.
 !/.factory/acts/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01.md
+# 2026-09-02: ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+# Factory causal reviewer sixth-pass on 96336dc77 closed the producer half
+# (AUTHORITY-PUBLISH01 = PASS) and authorized this NEW narrow ACT to own
+# the missing core→host→header transport. The ACT file AND the evidence
+# directory must be durably tracked so the new ACT can be referenced as
+# the next causal question from AUTHORITY-PUBLISH01's entry-freeze.txt,
+# from the upstream HEADER-BAR-FRESHNESS-RECON01 (whose
+# NEXT_ACT bullet now points here), and from
+# .factory/epic-board.md row 2. Mirrors the predecessor durability
+# pattern in AUTHORITY-PUBLISH01. PRODUCTION_SEMANTIC_DELTA_PUBLIC = 0
+# this commit (ACT opening only; RED + GREEN happen later; the actor
+# chain is core prepare-turn seam -> AgentModelRequest -> session ->
+# LocalRuntimeHost -> ExtensionState.lastWorkingContextEstimate ->
+# ExtensionStateContext -> TaskHeader/ContextWindow numerator switch;
+# P/H accounting + Strategy-D (getApiMetrics.ts:174-225) untouched; no
+# recompute in ChatView; W_PRESENTATION_TRANSPORT = ABSENT / PROVEN).
+!/.factory/acts/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01.md
+!/.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01/
