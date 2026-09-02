@@ -155,12 +155,33 @@ describe("ContextWindow occupancy projection", () => {
 
 // ============================================================================
 // ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-// (twenty-first-pass) — Boundary 5: TaskHeader /
-// ContextWindow consumes W (currentWorkingContext
-// Estimate) instead of P (lastApiReqContextInputTokens)
-// when W is defined. When W is undefined, the bar is
-// unavailable (NOT silently replaced with P — P and
-// W are explicitly different authorities).
+// (twenty-first-pass, twenty-second-pass) — Boundary 5:
+// TaskHeader / ContextWindow consumes W
+// (currentWorkingContextEstimate) instead of P
+// (lastApiReqContextInputTokens) when W is defined.
+// When W is null, the bar is unavailable (NOT
+// silently replaced with P — P and W are explicitly
+// different authorities). When W is undefined, the
+// bar falls back to P (legacy / classic path).
+//
+// Reviewer (twenty-first-pass) verdict:
+//   PASS_WITH_ONE_P1_FIX.
+//   C1: GO_LIVE_QUALIFICATION after one bounded
+//   cleanup of the production delta.
+//
+// Reviewer (twenty-second-pass) P1 fix:
+//   The Math.round((numerator / contextWindow) *
+//   100) rounding is an UNRELATED presentation
+//   delta. Restore the raw ratio. The Boundary 5
+//   contract is only about NUMERATOR AUTHORITY
+//   (P -> W when defined), not percentage
+//   formatting.
+//
+// FACTORY CONSERVATION (twenty-second-pass):
+//   ONLY_NUMERATOR_AUTHORITY_CHANGES:
+//     P -> W
+//   PERCENTAGE_FORMATTING_SEMANTICS:
+//     PRESERVED
 //
 // Reviewer (twentieth-pass):
 //
@@ -172,8 +193,10 @@ describe("ContextWindow occupancy projection", () => {
 //                  legacy 264.3k screenshot evidence)
 //
 //   When W is defined, the bar numerator = W.
-//   When W is undefined, the bar is unavailable —
+//   When W is null, the bar is unavailable —
 //   do not silently substitute P.
+//   When W is undefined, the bar falls back to P
+//   (legacy / classic path).
 //   P provider metrics, H_b/H_a telemetry,
 //   Strategy-D, and getApiMetrics() are unchanged.
 //   Stale W reuse is FORBIDDEN.
@@ -181,7 +204,7 @@ describe("ContextWindow occupancy projection", () => {
 // RED (this commit, entry HEAD):
 //
 //   Test 1: numerator for W=271_337 / P=364_900 →
-//     expected 135.6685 % (~136)
+//     expected 135.6685 % (raw ratio)
 //     actual   182.45 % (current uses P)
 //     RED at entry.
 //
@@ -197,14 +220,33 @@ describe("ContextWindow occupancy projection", () => {
 //     (no estimator imports in production code):
 //     GREEN at entry.
 //
-//   Test 5 (PRESERVED): legacy P-only path — W null
-//     sentinel, P provided, bar shows P-driven
-//     occupancy. RED at entry (current implementation
-//     does not accept the null sentinel).
+//   Test 5 (PRESERVED): legacy P-only path — W
+//     omitted (undefined), P provided, bar shows
+//     P-driven occupancy. RED at entry (current
+//     implementation does not accept the null
+//     sentinel).
 //
-// GREEN (this commit): numerator = W when W is
-// defined; render null when W is undefined; preserve
-// the legacy null-sentinel P fallback.
+// GREEN (twenty-first-pass): numerator = W when
+// W is defined; render null when W is null;
+// preserve the legacy undefined -> P fallback.
+//
+// LIVE QUALIFICATION (twenty-second-pass):
+//   PENDING. The post-compaction dogfood test
+//   below is RECLASSIFIED as
+//   COMPACTION_PRESENTATION_TRANSITION_TEST =
+//   SYNTHETIC_REAL / PASS (NOT live dogfood).
+//   Real compaction requires the next bounded
+//   cycle: install/build dogfood, reproduce one
+//   real compaction, capture
+//     captured runtime W = W1
+//     displayed numerator = W1
+//   before compaction,
+//   then
+//     captured runtime W = W2 (post-compaction)
+//     ExtensionState W = W2
+//     displayed numerator = W2
+//   before the next api_req_started.
+//   W2 != stale W1. Do NOT require W2 = 264.3k.
 // ============================================================================
 
 describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextEstimate) instead of P (lastApiReqContextInputTokens)", () => {
@@ -234,8 +276,18 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 		//  shows > 100% by design — the user gets an
 		//  honest "more than full" signal rather than
 		//  a clipped 100% that hides overflow).
+		//
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+		// HEADER-TRANSPORT-REPAIR01 (twenty-second-
+		// pass): the percentage is the raw ratio
+		// (NOT pre-rounded). The mock Progress
+		// component in this test file displays
+		// `value` verbatim, so the assertion pins
+		// the raw float — see the
+		// "FACTORY CONSERVATION" note in
+		// ContextWindow.tsx for the rationale.
 		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String(Math.round((W_SENTINEL / 200_000) * 100)),
+			String((W_SENTINEL / 200_000) * 100),
 		)
 	})
 
@@ -362,28 +414,56 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 				useAutoCondense={false}
 			/>,
 		)
-		// 364_900 / 200_000 = 1.8245 = 182%.
+		// 364_900 / 200_000 = 1.8245 = 182.45%.
+		// Raw ratio (NOT pre-rounded) — see the
+		// "FACTORY CONSERVATION" note in
+		// ContextWindow.tsx for the rationale.
 		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String(Math.round((P_SENTINEL / 200_000) * 100)),
+			String((P_SENTINEL / 200_000) * 100),
 		)
 	})
 
-	it("DOGFOOD (RED -> GREEN): compaction recurrence — bar reflects W_before before compaction, W_after after the runtime emits a fresh W", () => {
-		// Real post-compaction dogfood: the runtime
-		// emits a sequence of
-		// `working-context-state-changed` events
-		// around a compaction step. The bar must
-		// reflect the latest W at each step:
+	it("COMPACTION_PRESENTATION_TRANSITION (SYNTHETIC_REAL / PASS): bar flips from W_before to W_after across a re-render — proves IF the webview receives W_after, ContextWindow updates", () => {
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+		// HEADER-TRANSPORT-REPAIR01 (twenty-second-
+		// pass) — RECLASSIFIED:
 		//
-		//   1. W_before = high (compact-needed)
-		//   2. Runtime triggers compaction
-		//   3. W_after = low (post-compaction)
+		//   COMPACTION_PRESENTATION_TRANSITION_TEST =
+		//     SYNTHETIC_REAL / PASS
 		//
-		// The bar's numerator must follow W, not
-		// retain a stale value. (Reviewer
-		// twentieth-pass: "Do not require the bar
-		// to equal 264.3k; use the runtime-published
-		// W as the oracle.")
+		// This is an extracted React projection test
+		// with synthetic W values. It is NOT a live
+		// dogfood test. It proves:
+		//
+		//   if the webview receives W_after,
+		//     ContextWindow updates from W_before to
+		//     W_after
+		//
+		// It does NOT prove the whole live chain:
+		//
+		//   real compaction
+		//   -> real prepareTurn W_after
+		//   -> AgentRuntime state/event
+		//   -> LocalRuntimeHost
+		//   -> SdkController capture
+		//   -> ExtensionState
+		//   -> React rerender
+		//
+		// The live qualification is PENDING and is
+		// the next bounded cycle (C1: GO_LIVE_
+		// QUALIFICATION, post twenty-second-pass).
+		//
+		// Bar numerator must follow W, not retain a
+		// stale value. Reviewer twentieth-pass:
+		// "Do not require the bar to equal 264.3k;
+		//  use the runtime-published W as the
+		//  oracle."
+		//
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+		// HEADER-TRANSPORT-REPAIR01 (twenty-second-
+		// pass): raw percentage ratio (NOT pre-
+		// rounded) — see the "FACTORY CONSERVATION"
+		// note in ContextWindow.tsx.
 		const W_BEFORE = 380_000 // 380k before compaction
 		const W_AFTER = 90_000 // 90k after compaction
 
@@ -395,9 +475,9 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 				useAutoCondense={false}
 			/>,
 		)
-		// 380_000 / 200_000 = 1.9 = 190%.
+		// 380_000 / 200_000 = 1.9 = 190% (raw ratio).
 		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String(Math.round((W_BEFORE / 200_000) * 100)),
+			String((W_BEFORE / 200_000) * 100),
 		)
 
 		// Runtime publishes a fresh W_after event.
@@ -410,12 +490,12 @@ describe("Boundary 5: ContextWindow numerator consumes W (currentWorkingContextE
 				useAutoCondense={false}
 			/>,
 		)
-		// 90_000 / 200_000 = 0.45 = 45%.
+		// 90_000 / 200_000 = 0.45 = 45% (raw ratio).
 		// The bar flipped from 190% to 45% — the
 		// compaction dropped W, and the bar reflects
 		// the new runtime-published value.
 		expect(screen.getByRole("progressbar")).toHaveTextContent(
-			String(Math.round((W_AFTER / 200_000) * 100)),
+			String((W_AFTER / 200_000) * 100),
 		)
 
 		// And: the displayed `used` value follows

@@ -217,15 +217,25 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 			numerator = lastApiReqContextInputTokens
 		}
 		return {
-			// Round to integer percent for display —
-			// matches the existing ContextWindow
-			// behavior (see "uses
-			// lastApiReqContextInputTokens" tests:
-			// 20_000 / 200_000 = 10). Raw floats
-			// (e.g. 135.6685) leak ugly precision in
-			// the progressbar tooltip and the
-			// "X%" label.
-			percentage: Math.round((numerator / contextWindow) * 100),
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+			// HEADER-TRANSPORT-REPAIR01 (twenty-second-
+			// pass): preserve the raw percentage ratio
+			// (NOT Math.round). The presentation-
+			// semantic / display-precision decision is
+			// a separate, evidence-backed concern and is
+			// NOT load-bearing for Boundary 5. The
+			// previous (c11 / c12 / c13) ratio was
+			// (lastApiReqContextInputTokens / context
+			// Window) * 100. Boundary 5 only changes the
+			// numerator authority (P -> W when defined);
+			// the ratio shape is preserved verbatim.
+			//
+			// FACTORY CONSERVATION (twenty-second-pass):
+			//   ONLY_NUMERATOR_AUTHORITY_CHANGES:
+			//     P -> W
+			//   PERCENTAGE_FORMATTING_SEMANTICS:
+			//     PRESERVED
+			percentage: (numerator / contextWindow) * 100,
 			max: contextWindow,
 			used: numerator,
 		}

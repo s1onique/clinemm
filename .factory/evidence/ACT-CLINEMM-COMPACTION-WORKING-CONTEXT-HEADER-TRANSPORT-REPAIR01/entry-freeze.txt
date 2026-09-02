@@ -1,48 +1,57 @@
 
 # ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-# Entry-freeze (twenty-first-pass, 2026-09-03)
+# Entry-freeze (twenty-second-pass, 2026-09-03)
 #
-# Reviewer on 1e9ce01a3:
-#   PASS_WITH_NONBLOCKING_RESIDUE.
-#   Boundary 3 -> 4 is closed; P0/P1_1/P1_2 closed
-#   via the A/B ablation test on the REAL
-#   getStateToPostToWebview producer. C1: GO_P3_B5.
-#   SDKCONTROLLER_WRAP classified as SYNTHETIC /
-#   PATTERN-PIN (not EXECUTED_PRODUCTION_METHOD).
-#   Documentary residue in p3-state-after-green.md
-#   is non-blocking; batch at terminal cleanup.
+# Reviewer on 2b371761d (twenty-first-pass):
+#   PASS_WITH_ONE_P1_FIX.
+#   The important repair is sound: W now reaches
+#   ContextWindow, a numeric W takes precedence over
+#   provider-derived P, explicit no-W does not silently
+#   masquerade as P, and the legacy/omitted path still
+#   has a P fallback.
+#   ONE P1: remove the unrelated percentage rounding.
+#   TWO P2 (wording only): (a) the DOGFOOD test is
+#   SYNTHETIC_REAL, not LIVE; (b) the `undefined -> P`
+#   legacy path is supported projection shape, but its
+#   production reachability is not shown.
+#   C1: GO_LIVE_QUALIFICATION after one bounded
+#   cleanup of the production delta.
 #
-# Closed in this commit (twenty-first-pass):
-#   P3_B5 production seam RED -> GREEN at Boundary 5:
-#     - ChatView / TaskSection / TaskHeader /
-#       ContextWindow accept the new
-#       `currentWorkingContextEstimate` prop.
-#     - ContextWindow uses W (when defined) instead
-#       of P (lastApiReqContextInputTokens) as the
-#       bar numerator.
-#     - W undefined fallback: render UNAVAILABLE
-#       (reviewer twentieth-pass fallback B).
-#       P must not masquerade as W.
-#     - P legacy fallback: preserved for the legacy /
-#       classic / no-Boundary-3-4-wiring path.
-#     - Compaction-recurrence dogfood: the bar
-#       follows W_before -> W_after across a
-#       runtime compaction step.
-#   Carrier surface normalized to `number | null`
-#     (Boundary 5) so the webview can distinguish
-#     "runtime cleared" (`null`) from "carrier
-#     absent / legacy path" (`undefined`).
-#   ExtensionState.currentWorkingContextEstimate:
-#     `number | null | undefined`. The legacy
-#     path persists `undefined`; the runtime path
-#     carries `number` or `null`.
+# Closed in this commit (twenty-second-pass):
+#   P1: restored raw percentage ratio in
+#       ContextWindow.tsx:
+#         percentage:
+#           (numerator / contextWindow) * 100
+#       (was: Math.round((numerator / contextWindow) *
+#        100) — unrelated presentation delta;
+#        Boundary 5 only changes numerator authority).
+#   P2a: re-classified the post-compaction dogfood
+#        test as
+#          COMPACTION_PRESENTATION_TRANSITION_TEST =
+#            SYNTHETIC_REAL / PASS
+#        (NOT LIVE DOGFOOD).
+#   P2b: noted (P2 wording only) that the legacy
+#        `undefined -> P` path is a SUPPORTED
+#        projection shape whose production
+#        reachability (a real production owner
+#        without the carrier) is not shown.
+#   LIVE_BUG                  = PENDING
+#   LIVE_QUALIFICATION        = PENDING
+#   IMPLEMENTATION_CHAIN      = CLOSED / TESTED IN
+#                                  COMPOSED PIECES
 #
-# STATE                = GREEN + B5_CLOSED
+# STATE                = GREEN + B5_CLOSED +
+#                          UNRELATED_DELTA_REVERTED
 # P0 / P1 / P3         = ALL CLOSED IN PRIOR CYCLES
 # BOUNDARY_3_CAPTURE   = CLOSED
 # BOUNDARY_3_TO_4_TRANSPORT = CLOSED
 # BOUNDARY_4_WEBVIEW_STATE   = CLOSED (B5 GREEN)
-# NECESSITY_OF_HOST_CAPTURE = PROVEN
+# BOUNDARY_5_HEADER         = CLOSED
+# P1_DELTA_REVERT            = CLOSED (this commit)
+# DOGFOOD_TEST_RECLASSIFIED  = CLOSED (this commit)
+# TERMINAL_CLEANUP           = OPEN  (non-blocking)
+# LIVE_QUALIFICATION         = PENDING (next cycle)
+# NECESSITY_OF_HOST_CAPTURE  = PROVEN
 # POST_HOC_NECESSITY_ABLATION = SYNTHETIC_REAL / PASS
 # GREEN                = SYNTHETIC_REAL / PASS
 # CAUSAL_COMPOSITION   =
@@ -51,10 +60,21 @@
 #   + exact-edge ablation (capture.observe never called)
 #   + GREEN repair (capture.observe fired)
 #   + GREEN numerator swap (W takes precedence over P)
-#   + GREEN W-undefined fallback (render UNAVAILABLE)
-#   + GREEN compaction dogfood
+#   + GREEN W-null fallback (render UNAVAILABLE)
+#   + GREEN compaction-presentation transition
+#     (re-render; SYNTHETIC_REAL / PASS, not LIVE)
 # NEW_REVIEW_ROUND     = NO
-# C1                   = GO_CLEANUP (terminal cleanup only)
+# C1                   = GO_LIVE_QUALIFICATION
+#
+# --- FACTORY CONSERVATION (twenty-second-pass) ---
+#
+#   ONLY_NUMERATOR_AUTHORITY_CHANGES:
+#     P -> W
+#   PERCENTAGE_FORMATTING_SEMANTICS:
+#     PRESERVED
+#   (i.e. the Math.round percentage delta in 2b371761d
+#    is REVERTED — it is not load-bearing for the
+#    W repair)
 #
 # --- Component disposition ---
 #
@@ -68,16 +88,18 @@
 #   Boundary 3 capture        = CLOSED
 #   Boundary 3 -> 4 transport = CLOSED
 #   Boundary 4 webview state  = CLOSED
-#   Boundary 5 header         = CLOSED  (this commit)
-#   Terminal cleanup          = OPEN  (non-blocking;
-#                                       p3-state-after-green.md
-#                                       residue)
+#   Boundary 5 header         = CLOSED
+#   LIVE_QUALIFICATION        = PENDING (next cycle)
+#   Terminal cleanup          = OPEN
 #
 # --- Sentinels ---
 #
-#   P = 364_900   (provider / last api_req_started payload)
-#   W = 271_337   (synthetic currentWorkingContextEstimate;
-#                   deliberately distinct from live 264.3k)
+#   P = 364_900   (provider / last api_req_started
+#                  payload)
+#   W = 271_337   (synthetic
+#                  currentWorkingContextEstimate;
+#                  deliberately distinct from live
+#                  264.3k)
 #
 # --- Conservation (permanent) ---
 #
@@ -94,37 +116,43 @@
 #   UNDEFINED_W_STALE_REUSE = FORBIDDEN:
 #     enforced at the carrier layer (unconditional
 #     assignment in
-#     apps/vscode/src/sdk/working-context-host-capture.ts).
-#     The runtime-published `undefined` is normalized
-#     to `null` so the Boundary 5 fallback (reviewer B)
-#     can distinguish "runtime cleared" from "carrier
-#     absent / legacy path". Pinned by:
+#     apps/vscode/src/sdk/working-context-host-
+#     capture.ts). The runtime-published `undefined`
+#     is normalized to `null` so the Boundary 5
+#     fallback (reviewer B) can distinguish "runtime
+#     cleared" from "carrier absent / legacy path".
+#     Pinned by:
 #       Boundary 3 -> 4 tests:
-#         - "GREEN: a `working-context-state-changed`
-#            event with W=undefined normalizes the
-#            carrier to null"
+#         - "GREEN: a `working-context-state-
+#           changed` event with W=undefined
+#           normalizes the carrier to null"
 #         - "GREEN: a sequence of W transitions
-#            (W=100, W=null, W=200) is mirrored exactly"
+#           (W=100, W=null, W=200) is mirrored
+#           exactly"
 #         - "WIRING WRAP (P1_2) FAIL-CLOSED"
 #       Boundary 5 tests:
 #         - "RED -> GREEN: W null (runtime-cleared)
-#            -> no bar"
+#           -> no bar"
 #         - "RED -> GREEN: W null (runtime-cleared)
-#            -> no W-token leaked into the displayed
-#            used value"
+#           -> no W-token leaked into the displayed
+#           used value"
 #
-#   P remains available for provider / request metrics.
+#   P remains available for provider / request
+#   metrics.
 #   H_b / H_a remain compaction telemetry.
 #   getApiMetrics Strategy-D stays untouched.
 #   lastApiReqTotalTokens stays untouched.
 #
-# --- Boundary 5 fallback policy (twenty-first-pass) ---
+# --- Boundary 5 fallback policy (twenty-first-pass,
+#     preserved in this commit) ---
 #
-#   W = number  -> bar numerator = W (Boundary 5 GREEN)
-#   W = null    -> bar UNAVAILABLE (reviewer B fallback;
-#                   P must not masquerade as W)
-#   W = undefined -> bar falls back to P (legacy path)
-#                    — only place where P drives the bar
+#   W = number  -> bar numerator = W (B5 GREEN)
+#   W = null    -> bar UNAVAILABLE (reviewer B
+#                   fallback; P must not masquerade
+#                   as W)
+#   W = undefined -> bar falls back to P (legacy
+#                    path) — only place where P
+#                    drives the bar
 #
 #   Carrier surface: number | null
 #     (Boundary 5 normalization: runtime-published
@@ -132,50 +160,42 @@
 #      distinguishes "runtime cleared" from "legacy
 #      carrier absent")
 #   Projection output: number | null | undefined
-#     (carrier absent -> undefined; carrier present ->
-#      number | null verbatim)
+#     (carrier absent -> undefined; carrier
+#      present -> number | null verbatim)
 #   ExtensionState field: number | null | undefined
 #     (legacy path persists undefined)
 #
-# --- A/B ablation (twentieth-pass; preserved) ---
+# --- LIVE_QUALIFICATION runbook (next bounded cycle) ---
 #
-#   A:   capture.observe(W=271337) + real
-#          getStateToPostToWebview
-#        -> payload.currentWorkingContextEstimate ===
-#           271337
+#   Per reviewer (twenty-second-pass):
 #
-#   B (ABLATION):
-#        capture.observe NEVER CALLED + real producer
-#        -> payload.currentWorkingContextEstimate ===
-#           null (Boundary 5 normalization)
+#   LIVE:
+#     before compaction
+#       captured runtime W = W1
+#       displayed numerator = W1
+#     real compaction occurs
+#     after post-compaction prepareTurn,
+#     before next api_req_started
+#       captured runtime W = W2
+#       ExtensionState W = W2
+#       displayed numerator = W2
+#     and:
+#       W2 != stale W1
 #
-#   A' (RESTORE):
-#        same capture, observe(W=271337) again + real
-#          producer
-#        -> payload.currentWorkingContextEstimate ===
-#           271337
+#     Do NOT require W2 = 264.3k.
+#     Also capture P concurrently if cheap:
+#       P remains pre-compaction/stale
+#       while
+#       bar displays fresh W2
 #
-#   CONTROL (no carrier):
-#        legacy path with no carrier
-#        -> payload.currentWorkingContextEstimate ===
-#           undefined (NOT null, NOT 271337)
+#   Implementation: install/build dogfood VS Code
+#   with the 2b371761d + 2b3717XXX (this commit)
+#   tree, reproduce one real compaction, capture
+#   the ExtensionState payload via the debug
+#   harness (or equivalent), and assert the
+#   invariants above.
 #
-#   WIRING WRAP (P1_2) [SYNTHETIC PATTERN-PIN, see below]:
-#        SdkController wrap pattern over a fake
-#          TaskShadowHostWiring
-#        -> capture.observe(event) runs BEFORE
-#           wiring.observeCanonicalRuntimeEvent(input)
-#        -> carrier holds W AND wiring saw the same
-#           envelope
-#
-#   WIRING WRAP FAIL-CLOSED:
-#        same wrap, drive a no-W event
-#        -> carrier transitions to null
-#        -> wiring saw the event envelope
-#
-# NECESSITY_OF_HOST_CAPTURE = PROVEN.
-#
-# --- Boundary 5 test summary (twenty-first-pass) ---
+# --- Boundary 5 test summary (twenty-second-pass) ---
 #
 #   apps/vscode/webview-ui/src/components/chat/
 #   task-header/ContextWindow.test.tsx:
@@ -184,9 +204,10 @@
 #       - 5 occupancy projection tests (P-driven,
 #         contextWindow=0, etc.) — all GREEN
 #
-#     Boundary 5 (NEW this commit):
+#     Boundary 5 (twenty-first-pass, preserved):
 #       1. RED -> GREEN: W defined takes precedence
 #          over P (numerator = W / contextWindow)
+#          [assertion: raw ratio, NOT pre-rounded]
 #       2. RED -> GREEN: W defined, the displayed
 #          `used` value is W (not P)
 #       3. RED -> GREEN: W null (runtime-cleared)
@@ -198,61 +219,47 @@
 #       6. PRESERVED (RED -> GREEN): legacy P-only
 #          path — W omitted (undefined), P provided,
 #          bar shows P-driven occupancy
-#       7. DOGFOOD: compaction recurrence —
-#          bar reflects W_before before compaction,
-#          W_after after the runtime emits a fresh W
+#          [assertion: raw ratio, NOT pre-rounded]
+#       7. RECLASSIFIED (SYNTHETIC_REAL / PASS):
+#          COMPACTION_PRESENTATION_TRANSITION_TEST
+#          — bar flips from W_before to W_after
+#          across a re-render; proves IF the webview
+#          receives W_after, ContextWindow updates
+#          [assertions: raw ratio, NOT pre-rounded]
 #       8. CONSERVATION: no estimator imports in
 #          ContextWindow production code
 #
 #     Total: 13 tests, 13 GREEN.
 #
-# --- Component changes (production) ---
+# --- Production changes (twenty-second-pass) ---
 #
 #   apps/vscode/webview-ui/src/components/chat/
 #   task-header/ContextWindow.tsx:
-#     - New prop: currentWorkingContextEstimate?:
-#       number | null
-#     - tokenData: W > null (unavailable) > P
-#     - percentage rounded to integer (was raw float;
-#       caused display of "135.6685" — now 136)
+#     - REVERTED Math.round: percentage is now the
+#       raw ratio
+#         (numerator / contextWindow) * 100
+#       (was: Math.round((numerator / contextWindow) *
+#        100) in 2b371761d — restored to the
+#        pre-twenty-first-pass ratio shape).
+#     - The tokenData precedence is unchanged
+#       (W number -> use W; W null -> render null;
+#        W undefined -> use P). Only the percentage
+#       formatting is restored.
+#
+# --- Test changes (twenty-second-pass) ---
 #
 #   apps/vscode/webview-ui/src/components/chat/
-#   task-header/TaskHeader.tsx:
-#     - New prop: currentWorkingContextEstimate?:
-#       number | null (forwarded to ContextWindow)
-#
-#   apps/vscode/webview-ui/src/components/chat/
-#   chat-view/components/layout/TaskSection.tsx:
-#     - New prop: currentWorkingContextEstimate?:
-#       number | null (forwarded to TaskHeader)
-#
-#   apps/vscode/webview-ui/src/components/chat/
-#   ChatView.tsx:
-#     - useExtensionState() destructures
-#       currentWorkingContextEstimate
-#     - TaskSection receives
-#       currentWorkingContextEstimate
-#
-#   apps/vscode/src/sdk/working-context-host-
-#   capture.ts:
-#     - Carrier surface: number | null (was number |
-#       undefined). Runtime-published undefined is
-#       normalized to null so the Boundary 5
-#       discriminator distinguishes "runtime cleared"
-#       from "carrier absent".
-#     - Assignment semantics UNCHANGED: still
-#       unconditional (no conditional skip).
-#
-#   apps/vscode/src/core/controller/state/
-#   working-context-state-projection.ts:
-#     - Type updated to `number | null` (was
-#       `number | undefined`) to match the carrier
-#       surface. Projection output type is
-#       `number | null | undefined`.
-#
-#   apps/vscode/src/shared/ExtensionMessage.ts:
-#     - currentWorkingContextEstimate type widened to
-#       `number | null` (was `number`).
+#   task-header/ContextWindow.test.tsx:
+#     - Updated Test 1, Test 6 (legacy), and Test 7
+#       (compaction-presentation transition)
+#       assertions to assert the raw ratio
+#       (NOT pre-rounded). The mock Progress
+#       component displays `value` verbatim, so
+#       the assertion pins the raw float.
+#     - Re-classified the post-compaction test as
+#       COMPACTION_PRESENTATION_TRANSITION_TEST =
+#       SYNTHETIC_REAL / PASS.
+#     - Total file: 13 tests, 13 GREEN.
 #
 # --- Verification (this commit) ---
 #
@@ -264,16 +271,14 @@
 #     Test Files 1 passed (1)
 #     Tests      13 passed (13)
 #
+#   $ bunx vitest run (webview-ui, TaskHeader):
+#     Test Files 1 passed (1)
+#     Tests      8 passed (8)
+#
 #   $ bun tsc --noEmit -p apps/vscode/tsconfig.json:
-#     3 errors (== baseline; pre-existing)
-#
-#   $ bunx vitest run (agents):
-#     Test Files 24 passed (24)
-#     Tests      408 passed (408)
-#
-#   $ bunx vitest run (core/src/extensions/context/):
-#     Test Files 5 passed | 1 skipped (6)
-#     Tests      116 passed | 1 skipped (117)
+#     3 errors (== baseline; pre-existing in
+#      sdk-compaction.ts and
+#      task-state-shadow-coordinator.ts)
 #
 #   $ git diff --check: clean
 #
@@ -307,13 +312,32 @@
 #     + exact-edge ablation (capture.observe never called)
 #     + GREEN repair (capture.observe fired)
 #     + GREEN numerator swap (W takes precedence over P)
-#     + GREEN W-undefined fallback (render UNAVAILABLE)
-#     + GREEN compaction dogfood
+#     + GREEN W-null fallback (render UNAVAILABLE)
+#     + GREEN compaction-presentation transition
+#       (SYNTHETIC_REAL / PASS; not LIVE)
+#
+#   IMPLEMENTATION_CHAIN       =
+#     CLOSED / TESTED IN COMPOSED PIECES
+#   LIVE_BUG                   = PENDING
+#   LIVE_QUALIFICATION         = PENDING
+#     (next bounded cycle: install/build dogfood,
+#      reproduce one real compaction, assert
+#      W2 != stale W1 in displayed numerator
+#      before next api_req_started)
 #
 #   SDKCONTROLLER_WRAP_TEST    =
 #     SYNTHETIC PATTERN-PIN
 #     + STRUCTURAL production composition
 #     (sufficient evidence; not a controller harness)
 #
+#   P1 = Math.round percentage delta reverted
+#       (unrelated presentation delta; restored
+#        to pre-twenty-first-pass ratio shape).
+#   P2 = DOGFOOD test reclassified as
+#       COMPACTION_PRESENTATION_TRANSITION_TEST =
+#       SYNTHETIC_REAL / PASS + legacy `undefined
+#       -> P` path is supported projection shape,
+#       production reachability not shown.
+#
 #   NEW_REVIEW_ROUND           = NO
-#   C1                         = GO_CLEANUP
+#   C1                         = GO_LIVE_QUALIFICATION
