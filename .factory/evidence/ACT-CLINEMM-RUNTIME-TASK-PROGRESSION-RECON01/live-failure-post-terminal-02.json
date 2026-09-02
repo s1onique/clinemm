@@ -1,0 +1,142 @@
+{
+  "evidence": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/live-failure-post-terminal-02",
+  "schema": "live-failure-capture.v2",
+  "head_at_freeze": "76e07c12f7a67b59c555e24b20a60d454d941082",
+  "head_at_capture": "76e07c12f7a67b59c555e24b20a60d454d941082",
+  "head_at_capture_source": "git rev-parse HEAD at evidence-collection time on main",
+  "status": "LIVE_POST_TERMINAL_CHRONOLOGY_BOUND / AUTHORITY_BIND_DEFERRED",
+  "captured_at": "2026-09-02T13:00:00Z",
+  "captured_by": "ClineMM Factory reviewer (Runtime-task-progression engineer) - TRIAGE_BIND post-terminal-02",
+  "triage_intent": "Bind the NEW background-command LIVE specimen (cmd_mtj6kki83r1bmrfz) as the POST-TERMINAL CHRONOLOGY for ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01. The prior TRIAGE_BIND at 586a3fc11 (specimen cmd_mtcjhkhygpteq8v9) bound only the RUNNING-state half; this TRIAGE_BIND closes the remaining chronology gap. Do NOT open a parallel ACT (the proposed ACT-CLINEMM-BACKGROUND-COMMAND-LOCAL-EXIT-TURN-ABORT-RECON01 was REJECTED as duplicative by the C1 review on 2026-09-02 - the existing recon owns this symptom). The new specimen is causally distinct from the prior bound specimen along four axes: (a) turnState.phase = awaiting_followup (not idle), (b) backgroundCommandRunning = false at capture (not true), (c) host_status = aborted (not RUNNING), (d) writerId = session-event-turn-complete-resumable-straggler-preserve (not UNBOUND). The classifier is the TSWPD T1/T2 transition log supplied by the operator: the same task's turnState was streaming at T1, awaiting_followup at T2, with writerId == session-event-turn-complete-resumable-straggler-preserve and the remote workload demonstrably alive at T2. ROOT_CAUSE_ISOLATED remains NO; this TRIAGE_BIND is evidence-collection, not adjudication. Adjudication is deferred to the next bounded discriminator cycle against the production writer/call path.",
+  "labels_used": ["LIVE", "REAL_PRODUCTION_SEAM", "INFERRED", "STRUCTURAL", "UNAVAILABLE_FROM_TRACE"],
+  "specimen_identity": {
+    "jobId": "cmd_mtj6kki83r1bmrfz",
+    "taskId": "1788297479245_hv9w5",
+    "epoch": 4,
+    "command_text": "install-deps-linux.sh (canonical user-facing description; full command text UNAVAILABLE_FROM_TRACE in this TRIAGE_BIND)",
+    "tool_name": "run_commands",
+    "host_returned_envelope": {
+      "status": "running",
+      "jobId": "cmd_mtj6kki83r1bmrfz",
+      "label": "LIVE",
+      "label_source": "operator TSWPD capture on the live recurrence; not present in this repository"
+    },
+    "remote_workload_proof": {
+      "remote_host": "192.168.50.31",
+      "process_tree": "install-deps-linux.sh still running; cpanm child actively executing",
+      "elapsed_at_capture": "approximately 13m20s",
+      "label": "LIVE",
+      "label_source": "operator-side SSH observation at the capture instant (not in repository)"
+    },
+    "local_command_ownership_proof": {
+      "local_extension_host": "alive, CPU ~0, no obvious command child",
+      "local_command_or_ssh_process_for_job": "absent",
+      "v2_runtime_jobId_search": "no direct match",
+      "backgroundCommandRunning": false,
+      "label": "LIVE",
+      "label_source": "operator-side htop + vscode-runtime-host probing at the capture instant"
+    }
+  },
+  "post_terminal_chronology_bind": {
+    "rule": "this artifact freezes the post-terminal half of the six-event capture schema at section 3b of the umbrella ACT, with T-events T4..T6 supplied by the operator's TSWPD capture and T-events T1..T3 UNOBSERVED (no PTAD ring capture was preserved at the host). Promotion to LIVE_FAILURE_BOUND = PASS is therefore CONDITIONAL on the operator retroactively binding T1..T3 from the host-side log if available; until then, the chronology is PARTIAL (T4..T6 are LIVE, T1..T3 are UNAVAILABLE_FROM_TRACE).",
+    "t_events": [
+      { "t": "T1", "name": "RUNNING_RETURNED", "ts_ms": null, "jobId": "cmd_mtj6kki83r1bmrfz", "label": "UNAVAILABLE_FROM_TRACE" },
+      { "t": "T2", "name": "TERMINAL_STATE", "ts_ms": null, "exit_code": null, "stdout_last_200": null, "label": "UNAVAILABLE_FROM_TRACE" },
+      { "t": "T3", "name": "BACKGROUND_STATE_CHANGE_FALSE", "ts_ms": null, "jobId": "cmd_mtj6kki83r1bmrfz", "label": "UNAVAILABLE_FROM_TRACE" },
+      { "t": "T4", "name": "RUNTIME_PHASE_AFTER", "ts_ms": null, "turnState_phase": "awaiting_followup", "task_header_label": "Waiting", "label": "LIVE", "label_source": "TSWPD capture + operator UI screenshot" },
+      { "t": "T5", "name": "CONTINUATION_EMITTED", "ts_ms": null, "value": "NO", "evidence": "TSWPD: only one transition recorded at epoch 4 (streaming -> awaiting_followup); no followup-on-follow-up-abandoned or followup-auto-continue-* writer fired in the T1..T6 window", "label": "LIVE" },
+      { "t": "T6", "name": "UI_STATE_OBSERVED", "ts_ms": null, "task_header": "Waiting", "input_enabled": "UNAVAILABLE_FROM_TRACE", "human_input_since_T1": "UNAVAILABLE_FROM_TRACE", "label": "LIVE", "label_source": "operator UI screenshot" }
+    ],
+    "tswpd_writerId_capture": {
+      "writerId": "session-event-turn-complete-resumable-straggler-preserve",
+      "writerId_source": "apps/vscode/src/shared/turn-state-writer-provenance.ts:71 (closed union)",
+      "writerId_producer_site": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts:223",
+      "writerId_producer_call_path": "setTurnPhase(\"awaiting_followup\", undefined, \"session-event-turn-complete-resumable-straggler-preserve\")",
+      "writerId_producer_branch": "else-branch at line 209-225 (wasAttemptCompletionSeen() === false && wasTerminalResponseCommittedThisTurn() === false) inside the turnComplete handler at line 101",
+      "writerId_producer_precondition_chain": "turnComplete (result.turnComplete) AND NOT resumable (line 117) AND NOT error (line 119) AND NOT wasAttemptCompletionSeen (line 123) AND NOT wasTerminalResponseCommittedThisTurn (line 203) => writer fires",
+      "writerId_producer_does_NOT_consult": [
+        "CommandJobManager.getJob(jobId)",
+        "backgroundCommandRunning",
+        "backgroundCommandTaskId",
+        "any background-job liveness probe",
+        "any SSH / remote-process ownership probe"
+      ],
+      "label": "REAL_PRODUCTION_SEAM"
+    },
+    "tswpd_transition_log": {
+      "taskId": "1788297479245_hv9w5",
+      "epoch": 4,
+      "transitions": [
+        { "from": "idle", "to": "streaming", "writerId": "task-start-init-task", "label": "LIVE" },
+        { "from": "streaming", "to": "awaiting_followup", "writerId": "session-event-turn-complete-resumable-straggler-preserve", "label": "LIVE" }
+      ]
+    }
+  },
+  "falsified_contract_claim": {
+    "claim_location": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts:210-216 (comment block immediately above the writer call at line 223)",
+    "claim_text_verbatim": "ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: explicit user-owned incomplete yield for the done-without-completion case. The phase is no longer runtime-owned (no work is in flight) but no terminal content was committed - awaiting_followup truthfully projects \"the agent stopped without an explicit completion declaration; the user can respond.\"",
+    "claim_under_examination": "The phase is no longer runtime-owned (no work is in flight)",
+    "falsification_evidence": "the remote workload (install-deps-linux.sh + cpanm child) is demonstrably RUNNING on 192.168.50.31 at the T4..T6 capture instant; the writer's call path does not consult any background-job liveness probe (see writerId_producer_does_NOT_consult list); the writer's contract is therefore unable to distinguish 'no work in flight' from 'local ownership of remote work is lost'",
+    "falsification_strength": "STRONG_CANDIDATE - not yet ROOT_CAUSE_ISOLATED. The TSWPD transition log proves the writer fired with a real taskId + epoch + writerId; the remote-workload-alive proof is from a parallel operator-side observation; the causal link is INFERRED via the writer's call path (it never reads background-job liveness), not directly observed in the same T-events."
+  },
+  "user_visible_symptom_to_capture": {
+    "rule": "do NOT begin with source hypotheses; capture one real occurrence of (task was progressing) -> (progress stops) -> (no truthful terminal transition) -> (user must type 'Continue') before any structural claim is made",
+    "last_visible_assistant_state": "UNAVAILABLE_FROM_TRACE - no transcript preserved at the host; the T1..T3 PTAD ring entries are absent",
+    "last_tool_name": "run_commands (LIVE - from TSWPD transition log)",
+    "last_tool_outcome": "RUNNING(jobId=cmd_mtj6kki83r1bmrfz) - INFERRED from the writerId precondition chain (writer fires on done-without-completion, which requires the turn to have been initiated and the tool to have returned)",
+    "last_tool_result_present": "INFERRED_TRUE - required for the precondition chain to hold",
+    "task_runtime_state": "OBSERVED: turnState.phase = awaiting_followup, backgroundCommandRunning = false, host_status = aborted (LIVE - from TSWPD + operator capture)",
+    "task_presentation_state": "Waiting (LIVE - from operator UI screenshot at T6)",
+    "task_application_owner": "UNOBSERVED - no PTAD capture of an explicit owner transition; INFERRED_USER_OWNERSHIP_ACQUIRED_FROM_AWAITING_FOLLOWUP via the writerId contract (awaiting_followup is the truthful projection of 'the agent stopped without an explicit completion declaration; the user can respond.')",
+    "cancel_visible": "UNAVAILABLE_FROM_TRACE",
+    "cancel_enabled": "UNAVAILABLE_FROM_TRACE",
+    "resume_visible": "UNAVAILABLE_FROM_TRACE",
+    "input_enabled": "UNAVAILABLE_FROM_TRACE",
+    "pending_model_request": "UNAVAILABLE_FROM_TRACE",
+    "pending_tool_request": "UNAVAILABLE_FROM_TRACE",
+    "queued_user_messages": "UNAVAILABLE_FROM_TRACE",
+    "time_since_last_progress": "approximately 13m20s (LIVE - from operator-side remote-process elapsed-at-capture)",
+    "agent_stated_intent": "UNAVAILABLE_FROM_TRACE"
+  },
+  "discriminator_load_bearing": {
+    "rule": "with a background job still logically RUNNING, can the session-event path still execute session-event-turn-complete-resumable-straggler-preserve and transition the task to awaiting_followup? If yes, the writer has been given authority to terminate a still-live background operation and the LOCAL_TRANSPORT_GONE != BACKGROUND_WORK_COMPLETED contract is violated.",
+    "verdict": "NOT_YET_EXECUTABLE - no bounded production-seam discriminator exists for this specific question. The downstream cycle must author a SYNTHETIC_REAL test that drives the real writer through the real call path against a real TurnStateTracker with a real CommandJobManager that has a live RUNNING job, and asserts the writer still fires (RED if the authority defect is real, GREEN if a future repair closes the gap).",
+    "ablation_attempted": false,
+    "ablation_inputs": ["CommandJobManager with RUNNING job + writer invocation", "CommandJobManager with no RUNNING job + writer invocation (control)"],
+    "ablation_outcome": null
+  },
+  "boundary_classification_a_through_h": null,
+  "boundary_classification_a_through_h_discipline": "Per the reviewer's C1 correction 2026-09-02: PRECLASSIFICATION = NONE. The strongest candidate from the captured evidence is CASE_A (LOCAL-EXIT AUTHORITY DEFECT - the writer was given authority to terminate a still-live background operation, as named in the proposed ACT's classification tree), but the actual writer path still needs executable proof that background-job liveness is absent from the authority decision. CASE_A is NOT adjudicated; it is the strongest STRONG_CANDIDATE. The discriminator runs ONLY after the next bounded synthetic-real test cycle. Per the reviewer's correction: 'I would not yet call the classification CASE_A proven. The evidence strongly points there, but the actual writer path still needs executable proof that background-job liveness is absent from the authority decision.'",
+  "open_product_questions_recorded": [
+    {
+      "question": "Does the writer at sdk-session-event-coordinator.ts:223 consult any background-job liveness probe?",
+      "current_state": "PROVEN_NO via direct read of the call path (lines 101-225) and the call-path observation that the writer only reads messageTranslatorState (wasAttemptCompletionSeen, wasTerminalResponseCommittedThisTurn, wasErrorSeen) and activeSession.isRunning / getTurnPhase(). It does NOT read CommandJobManager, backgroundCommandRunning, or backgroundCommandTaskId.",
+      "candidate_contract": "LOCAL_TRANSPORT_GONE != BACKGROUND_WORK_COMPLETED - the writer should consult backgroundCommandRunning / CommandJobManager before yielding to awaiting_followup. NOT_YET_ADOPTED in production code. The CPL01 comment block at lines 210-216 implicitly assumes the producer-side contract 'no work is in flight' is sufficient; the new specimen falsifies that assumption for the cross-host (local-command-owns-remote-workload) case.",
+      "candidate_contract_label": "PRODUCT_CONTRACT_CANDIDATE",
+      "implementation_decision": false,
+      "forbidden_repairs_per_reviewer": [
+        "mutate the writer's phase target (awaiting_followup is a truthful label for 'no work in flight, no terminal commit')",
+        "couple TurnState to background-job-liveness wholesale (breaks the background-job lifetime decouple contract proven in ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01)",
+        "synthesize a fake 'background still running' message into the chat",
+        "special-case MiniMax or any provider",
+        "reopen ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01 (the prior specimen was idle + backgroundCommandRunning=true, not awaiting_followup + backgroundCommandRunning=false; the two are distinct)"
+      ]
+    }
+  ],
+  "evidence_collection_command_paths": [
+    "do NOT begin with source hypotheses; capture the symptom first",
+    "if the real symptom cannot be reproduced locally, halt with HALT_RED_NOT_REPRODUCED and DO NOT repair from upstream reports alone",
+    "verdict for THIS specimen: PARTIAL_POST_TERMINAL_CHRONOLOGY_BOUND - T4..T6 are LIVE; T1..T3 are UNAVAILABLE_FROM_TRACE; promotion to LIVE_FAILURE_BOUND = PASS is CONDITIONAL on the operator retroactively binding T1..T3 from the host-side log if available",
+    "PARALLEL_ACT_OPENED = 0 (the proposed ACT-CLINEMM-BACKGROUND-COMMAND-LOCAL-EXIT-TURN-ABORT-RECON01 was REJECTED as duplicative by the C1 review on 2026-09-02; this TRIAGE_BIND preserves the existing recon's stop-rule discipline; no new ACT is opened for the symptom - only a future narrow authority-bind child ACT may be authorized by the next review cycle if the discriminator surfaces a load-bearing seam that the umbrella cannot host)"
+  ],
+  "scope_notes": [
+    "PRODUCTION_FILES_CHANGED = 0",
+    "PARALLEL_ACT_OPENED = 0 (do not open ACT-CLINEMM-BACKGROUND-COMMAND-LOCAL-EXIT-TURN-ABORT-RECON01; this TRIAGE_BIND preserves the existing recon's stop-rule discipline)",
+    "PTAD_CAPTURE_PRESENT_LOCALLY = partial (T4..T6 via TSWPD transition log; T1..T3 absent)",
+    "REMOTE_SIDE_PROOF_BLOB_NOT_IN_REPO = true (the operator's remote-process elapsed-at-capture observation is in the operator's chat, not in the repo; this binding is by reference to the writerId + remote-host + jobId shape, not by SHA-256 of any process-tree snapshot bytes)",
+    "SCOPE_OF_BOUND_WITNESS = POST_TERMINAL_CHRONOLOGY (the prior TRIAGE_BIND 586a3fc11 bound RUNNING-state only; this TRIAGE_BIND closes that gap for the new specimen, not the old one)",
+    "CANDIDATE_AUTHORITY_BIND = the writer at sdk-session-event-coordinator.ts:223 may have been given authority to terminate a still-live background operation; the next bounded synthetic-real test cycle must drive the writer through the real call path with a real RUNNING job in CommandJobManager and assert the writer still fires (or doesn't, after a future repair)",
+    "DO_NOT_PROMOTE_CASE_A = the C1 review explicitly held: 'I would not yet call the classification CASE_A proven. The evidence strongly points there, but the actual writer path still needs executable proof that background-job liveness is absent from the authority decision.'"
+  ]
+}
+

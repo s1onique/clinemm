@@ -25,7 +25,7 @@ One `NEXT` per lane. Closed items are not `NEXT`. See [`.factory/epics/_index-co
 | Approval / Seatbelt SSH credential authority | P1 | `OPEN` | `SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01` | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |
 | Cost provenance | P1 | `HOLD` | `TASK-COST-TRUTH-RECON01` (TWO-LAYER recon) | [`task-presentation.md`](./epics/task-presentation.md) |
 | Settings surface parity | P2 | `CLOSED_V2` | (none) | [`product-config-branding.md`](./epics/product-config-branding.md) |
-| Runtime progression | P1 | HOLD | `FRESH_POST_REPAIR_LIVE` (post-REPAIR01) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
+| Runtime progression | P1 | ACTIVE (OPEN umbrella) | `RUNTIME-TASK-PROGRESSION-RECON01` (OPEN / `LIVE_RUNNING_STATE_BOUND + LIVE_POST_TERMINAL_CHRONOLOGY_BOUND / AUTHORITY_BIND_DEFERRED` — TRIAGE_BIND 2026-08-28 specimen `cmd_mtcjhkhygpteq8v9` + TRIAGE_BIND post-terminal-02 2026-09-02 specimen `cmd_mtj6kki83r1bmrfz`; §3 discriminator still unbound; strongest candidate for the post-terminal specimen = `CASE_A = LOCAL-EXIT AUTHORITY DEFECT` against writer at `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:223`, NOT YET ADJUDICATED — needs synthetic-real test cycle) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
 | Task-start coordinator pre-existing REDs | P1 | `CLOSED` | (none) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
 | Runtime finish semantics | P1 | `CLOSED` | (none) | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
 | Seatbelt network egress | P0 | `CLOSED` | (none) | [`safe-yolo-seatbelt.md`](./epics/safe-yolo-seatbelt.md) |

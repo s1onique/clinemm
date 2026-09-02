@@ -1,6 +1,6 @@
 # ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
 
-> Status: **OPEN / LIVE_RUNNING_STATE_BOUND / AWAITING_TERMINAL_DISCRIMINATOR**.
+> Status: **OPEN / LIVE_RUNNING_STATE_BOUND + LIVE_POST_TERMINAL_CHRONOLOGY_BOUND / AUTHORITY_BIND_DEFERRED**.
 > RECON + LIVE FAILURE REPRODUCTION, no production repair.
 >
 > ```text
@@ -13,7 +13,10 @@
 >               (the HEAD the recon phase froze its subject against;
 >                see .factory/evidence/.../entry-freeze.txt)
 > TRIAGE_HEAD = 15f2adaf6c12dfdc79f47327e9ae93c46be52776
->               (HEAD at TRIAGE_BIND 2026-08-28)
+>               (HEAD at TRIAGE_BIND 2026-08-28, specimen cmd_mtcjhkhygpteq8v9)
+> TRIAGE_HEAD_2 = 76e07c12f7a67b59c555e24b20a60d454d941082
+>               (HEAD at TRIAGE_BIND post-terminal-02, 2026-09-02,
+>                specimen cmd_mtj6kki83r1bmrfz)
 > ```
 >
 > Operational state changed from `OPEN / WAITING_FOR_LIVE_EVIDENCE` to
@@ -28,10 +31,37 @@
 > was still RUNNING at capture time, and the recon's six continuation-
 > related seams remain UNVERIFIED. The discriminator has NOT yet run.
 >
+> Operational state further changed at TRIAGE_BIND post-terminal-02 on
+> 2026-09-02 (TRIAGE_HEAD_2 `76e07c12f`, specimen `cmd_mtj6kki83r1bmrfz`):
+> the background-command specimen `cmd_mtj6kki83r1bmrfz` was bound into
+> `.factory/evidence/.../live-failure-post-terminal-02.json` as the
+> awaited **post-terminal chronology** for the symptom family. This
+> specimen is causally distinct from the prior bound specimen along
+> four axes — turnState.phase=`awaiting_followup` (not `idle`),
+> backgroundCommandRunning=`false` (not `true`), host_status=`aborted`
+> (not `RUNNING`), writerId=`session-event-turn-complete-resumable-
+> straggler-preserve` (not UNBOUND). The T4..T6 events of the §3b
+> six-event schema are now LIVE; T1..T3 remain UNAVAILABLE_FROM_TRACE
+> for THIS specimen. The §3 discriminator's strongest candidate is
+> CASE_A (LOCAL-EXIT AUTHORITY DEFECT — the writer at
+> `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:223` was given
+> authority to terminate a still-live background operation; the writer
+> never reads `CommandJobManager` or `backgroundCommandRunning`),
+> but is NOT yet adjudicated. ROOT_CAUSE_ISOLATED remains NO; the next
+> bounded discriminator cycle must drive the writer through the real
+> call path with a real RUNNING job in `CommandJobManager` and assert
+> the writer still fires (RED if the authority defect is real, GREEN
+> if a future repair closes the gap).
+>
 > `red-result.txt` therefore records `CAPTURE_INSUFFICIENT_FOR_CAUSAL_RED`,
 > not a violated invariant. Per the C1 GO_WITH_EXISTING_RECON verdict
-> (2026-08-28), no parallel `ACT-CLINEMM-BACKGROUND-COMMAND-LOOP-LIVENESS01`
-> is opened; this ACT owns the symptom.
+> (2026-08-28) and the C1 GO_TRIAGE_BIND verdict (2026-09-02), no
+> parallel `ACT-CLINEMM-BACKGROUND-COMMAND-LOOP-LIVENESS01` and no
+> parallel `ACT-CLINEMM-BACKGROUND-COMMAND-LOCAL-EXIT-TURN-ABORT-
+> RECON01` is opened; this ACT owns the symptom. A future narrow
+> authority-bind child ACT may be authorized by the next review cycle
+> ONLY if the §3 discriminator surfaces a load-bearing seam that the
+> umbrella cannot host.
 > Owned by `EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01`.
 
 ## 0. Entry conditions (per spec)
@@ -224,6 +254,78 @@ Shape:
 - Do NOT pre-classify §3 boundary before the six events are bound.
 - Do NOT touch `apps/`, `sdk/`, `webview-ui/` from this capture.
 
+### Bound post-terminal-02 specimen (TRIAGE_BIND 2026-09-02)
+
+The new background-command specimen `cmd_mtj6kki83r1bmrfz`
+(taskId `1788297479245_hv9w5`, epoch 4) was bound at TRIAGE_BIND
+post-terminal-02 on 2026-09-02 (TRIAGE_HEAD_2 `76e07c12f`) into
+`.factory/evidence/.../live-failure-post-terminal-02.json`. This
+specimen is **the missing post-terminal chronology** for the
+existing symptom family and was captured against a real recurrence
+on a real live ClineMM instance. Frozen evidence (per the v2 schema
+of `live-failure.json`):
+
+```text
+LIVE_REMOTE_WORKLOAD_ALIVE    = PROVEN   (install-deps-linux.sh + cpanm child,
+                                          192.168.50.31, elapsed ≈13m20s at capture)
+LOCAL_JOB_OWNERSHIP           = LOST/ABSENT  (no local command/SSH process for
+                                              the jobId at capture; CPU ~0)
+BACKGROUND_COMMAND_RUNNING    = false    (SdkController.updateBackgroundCommandState flip)
+HOST_STATUS                   = aborted  (LocalRuntimeHost session status)
+TURNSTATE                     = awaiting_followup
+TASK_HEADER_LABEL             = Waiting
+WRITER                        = session-event-turn-complete-resumable-straggler-preserve
+WRITER_PRODUCER_SITE          = apps/vscode/src/sdk/sdk-session-event-coordinator.ts:223
+WRITER_FALSIFIED_COMMENT      = "the phase is no longer runtime-owned (no work is in flight)"
+                                  (verbatim from sdk-session-event-coordinator.ts:210-216)
+TSWPD_TRANSITIONS             = idle -> streaming (task-start-init-task)
+                                  streaming -> awaiting_followup
+                                  (session-event-turn-complete-resumable-straggler-preserve)
+T1..T3                        = UNAVAILABLE_FROM_TRACE
+T4..T6                        = LIVE
+```
+
+Promotion gate: this is **PARTIAL_POST_TERMINAL_CHRONOLOGY_BOUND**
+not **LIVE_FAILURE_BOUND = PASS** — the chronology is partial
+(T4..T6 are LIVE, T1..T3 are absent). The operator MAY retroactively
+bind T1..T3 from the host-side log if available; until then, the
+authoritative state is `OPEN / LIVE_RUNNING_STATE_BOUND +
+LIVE_POST_TERMINAL_CHRONOLOGY_BOUND / AUTHORITY_BIND_DEFERRED`.
+
+Strongest candidate from this bound specimen (NOT YET ADJUDICATED —
+the §3 discriminator still needs to run; per the C1 review
+2026-09-02, the analysis must not promote CASE_A from hypothesis
+to conclusion without executable proof that the writer's call path
+excludes `backgroundCommandRunning`):
+
+```text
+CASE_A = LOCAL-EXIT AUTHORITY DEFECT
+        the writer at sdk-session-event-coordinator.ts:223 was given
+        authority to terminate a still-live background operation
+        (LOCAL_TRANSPORT_GONE was treated as BACKGROUND_WORK_COMPLETED)
+```
+
+Required discriminator (next bounded cycle):
+
+> Drive the real `SdkSessionEventCoordinator` writer through the
+> real call path against a real `TurnStateTracker` and a real
+> `CommandJobManager` that has a live RUNNING job. Assert the writer
+> still fires. RED if the writer fires (the contract defect is real);
+> GREEN if the writer does NOT fire (a guard exists; the specimen
+> may have hit a different code path). Mirror the BHTD01
+> synthetic-real test pattern at
+> `apps/vscode/src/sdk/__tests__/background-handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts`.
+> Honest label: `SYNTHETIC_REAL`, not `REAL_PRODUCTION_SEAM`.
+
+DO NOT open a parallel ACT to host this discriminator until the
+bounded synthetic-real test cycle surfaces a load-bearing seam
+that the umbrella cannot host. If the synthetic-real test cycle
+succeeds and a real production-seam RED is needed, then — and
+only then — a narrow authority-bind child ACT
+(`ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-EMITTED-WITHOUT-
+WORKLOAD-AUTHORITY-BIND01`) may be authorized by the next
+review cycle.
+
 ## 4. Causal `Continue` discriminator
 
 Capture state immediately before typing `Continue`, then after.
@@ -324,7 +426,17 @@ Do NOT convert it into a speculative implementation test.
 `.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/`:
 
 ```text
-live-failure.json            captured symptom with all fields above
+live-failure.json            captured symptom (TRIAGE_BIND 2026-08-28,
+                             specimen cmd_mtcjhkhygpteq8v9) — RUNNING-state half
+                             with all fields above
+live-failure-post-terminal-02.json  captured symptom (TRIAGE_BIND post-terminal-02,
+                             2026-09-02, specimen cmd_mtj6kki83r1bmrfz) —
+                             POST-TERMINAL CHRONOLOGY half (T4..T6 LIVE,
+                             T1..T3 UNAVAILABLE_FROM_TRACE). Falsified
+                             contract claim against the writer at
+                             sdk-session-event-coordinator.ts:223 documented
+                             verbatim. See §3b "Bound post-terminal-02
+                             specimen" above.
 continue-discriminator.json  before/after pairs for the Continue probe
 cancel-authority.json        both directions of the cancel invariant
 source-seam-map.md           REAL_PRODUCTION_SEAM table per seam
@@ -334,7 +446,13 @@ terminal-chronology-<jobId>.json   six-event capture (T1..T6) from §3b,
                                    one per deterministic repro; the load-
                                    bearing artifact for promoting
                                    LIVE_FAILURE_BOUND from
-                                   RUNNING_STATE_BOUND to PASS
+                                   RUNNING_STATE_BOUND to PASS. (For the
+                                   post-terminal-02 specimen, T4..T6 are
+                                   LIVE in live-failure-post-terminal-02.json;
+                                   T1..T3 remain to be captured against a
+                                   future deterministic repro of the same
+                                   symptom on a host with PTAD fully
+                                   enabled.)
 final-assessment.md          written at closure
 ```
 
