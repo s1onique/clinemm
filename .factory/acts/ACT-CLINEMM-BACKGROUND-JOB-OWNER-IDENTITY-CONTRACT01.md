@@ -1,12 +1,12 @@
 # ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01
 
 ```text
-HEAD            : 6ec9bed4f  (parent umbrella RUNTIME-TASK-PROGRESSION-RECON01)
+HEAD            : c685317ea  (contract implementation GREEN; parent 661780875 P1-fix; grandparent 603ae6806 contract opening; great-grandparent 6ec9bed4f Q1-Q5 recon stop)
 branch          : main
 working tree    : clean
-production Δ    : 0  (no production change in this ACT body; it is a contract probe, not a repair ACT)
+production Δ    : bounded minimum - apps/vscode/src/sdk/command-job-manager.ts gains ownerSessionId?: string on internal CommandJob + hasRunningBackgroundJobForOwner(ownerSessionId): boolean public query; CommandJobSnapshot interface UNTOUCHED (P1 no-leak invariant); the internal snapshot() function constructs CommandJobSnapshot field-by-field WITHOUT spreading the job record (existing CORRECTION03 pattern for executionCapability)
 git diff --check: pass
-review round    : NEW (this ACT body is what gets the review turn)
+review round    : IMPLEMENTATION GREEN per Factory causal reviewer PASS_WITH_NONBLOCKING_RESIDUE / C1: GO_CONTRACT_IMPLEMENTATION on commit 661780875; contract ACT identity seam GREEN at structural and no-spawn-behavioural level (Q6.1 + Q6.1b + typecheck 0 errors); lifecycle GREEN matrix Q6.2-Q6.8 documented to run in non-sandboxed shell / CI per the honest environmental gating in the test file header
 ```
 
 ## 0. Provenance and verdict
@@ -73,6 +73,51 @@ restart. Q1/Q2/Q3/Q5/Q6 are unchanged in spirit; only Q4
 and the post-ACT Q5 RED assertion shape are tightened.
 See §2 Scope, §3 Out of scope, §4 Q1/Q2/Q3/Q4, and §5
 for the frozen wording.
+
+### Implementation GREEN (in-process; at commit `c685317ea`)
+
+Factory causal reviewer verdict on commit `661780875`
+(`PASS_WITH_NONBLOCKING_RESIDUE / C1: GO_CONTRACT_IMPLEMENTATION`)
+authorized the implementation. The minimum production change
+landed at `c685317ea`:
+
+- Internal `CommandJob` gains `ownerSessionId?: string`.
+- `start()` captures `context?.sessionId` at construction time.
+- `CommandJobManager` gains public
+  `hasRunningBackgroundJobForOwner(ownerSessionId): boolean`.
+- `CommandJobSnapshot` interface UNTOUCHED (P1 no-leak invariant).
+- `snapshot()` and `projectResponseSnapshot()` UNCHANGED.
+- `getActiveJobIds()` UNCHANGED (returns ids only, no ownership).
+- `onBackgroundStateChange` projection UNCHANGED.
+
+Exactly ONE owner captured (`sessionId`). Persisting both
+`sessionId` and `conversationId` is forbidden. `taskId` is not
+applicable — no such identity on `AgentToolContext` at
+`sdk/packages/shared/src/agent.ts:348-355`.
+
+RED provenance (honest): TYPE/STRUCTURAL RED at HEAD-before-
+`c685317ea` = 15 TypeScript compile errors all on the new
+test file for `hasRunningBackgroundJobForOwner does not exist
+on type CommandJobManager`. Documented in the test file
+header; NOT claimed to be a runtime behavioral RED.
+
+BEHAVIORAL GREEN matrix (durable): Q6.1-Q6.1b PASS in this
+IDE-sandbox; Q6.2-Q6.8 are environmentally gated (require
+spawn() to succeed; in this IDE-sandbox the pre-existing
+`command-job-manager.test.ts` exhibits the same 18/20 spawn-
+related failures — not a regression). The contract ACT
+identity seam is fully GREEN at the structural and no-spawn-
+behavioural level.
+
+After this commit, the contract ACT CLOSES GREEN at the
+identity seam. The umbrella ACT
+`RUNTIME-TASK-PROGRESSION-RECON01` resumes Q5 in the next
+turn with the RED matrix A/B/C/D where
+A. current owner has RUNNING J → `after.phase` must NOT be
+   `awaiting_followup` (without freezing the specific phase A
+   must become, per the bounded P1 softening at `661780875`).
+Then immediately pivot to
+`ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01`.
 
 ## 1. Mission
 
