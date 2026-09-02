@@ -718,3 +718,119 @@ without requiring:
 `NEW_REVIEW_ROUND = NO` for the producer cadence GREEN
 (mechanical, doctrine-frozen). Per-turn carrier
 inspection is the next review surface.
+
+## Twelfth-pass (2026-09-03) — per-turn carrier inspection COMPLETED
+
+The factory causal reviewer + SDK runtime/state
+engineer issued PASS on `47fd3c995` with C1:
+GO_PER_TURN_CARRIER_INSPECTION. This commit produces
+the source topology + executable RED the reviewer
+demanded (not more Factory prose).
+
+### Verdict
+
+```text
+CADENCE_CORRECT_EXISTING_CARRIER = ABSENT / PROVEN
+NEW_TYPED_PER_TURN_CARRIER       = AUTHORIZED
+```
+
+Source topology (full table in entry-freeze.txt):
+
+```text
++------------------------------------+----------+----------------+--------------+--------------+------------+
+| candidate seam                     | after    | receives       | agents->core?| core->host?  | verdict    |
+|                                    | every    | exact W w/o    |              |              |            |
+|                                    | prepareT?| recompute?     |              |              |            |
++------------------------------------+----------+----------------+--------------+--------------+------------+
+| AgentRuntimeEvent                  | NO       | n/a            | n/a          | n/a          | TEMPORAL   |
+|   e.g. turn-started                | (fires   |                |              |              | BIND FAIL  |
+|   (agent-runtime.ts:1374)          | BEFORE)  |                |              |              |            |
++------------------------------------+----------+----------------+--------------+--------------+------------+
+| AgentRuntime.snapshot()            | YES      | NO             | n/a          | n/a          | IDENTITY   |
+|   AgentRuntimeStateSnapshot        | (query-  | (no W field)   |              |              | BIND FAIL  |
+|   (agent-runtime.ts:1001)          | able)    |                |              |              |            |
++------------------------------------+----------+----------------+--------------+--------------+------------+
+| snapshot.usage                     | YES      | NO             | n/a          | n/a          | NO         |
+|   (shared/src/agent.ts:125)        |          | (usage from    |              |              | RECOMPUTE  |
+|                                    |          | provider)      |              |              | VIOLATION  |
++------------------------------------+----------+----------------+--------------+--------------+------------+
+| LocalRuntimeHost                   | NO       | n/a            | NO           | n/a          | INHERITS   |
+|   session.updated / current        | (derives |                | (downstream) |              | UPSTREAM   |
+|   snapshot projection              | from snap|                |              |              | GAP        |
++------------------------------------+----------+----------------+--------------+--------------+------------+
+| usage / context event              | NO       | n/a            | n/a          | n/a          | POST-      |
+|   (fires only on provider          | (fires   |                |              |              | PROVIDER   |
+|   response)                        | on resp.)|                |              |              | (forbids)  |
++------------------------------------+----------+----------------+--------------+--------------+------------+
+```
+
+### RED (authored + reproduced mechanically)
+
+File:
+`.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+  CONTEXT-HEADER-TRANSPORT-REPAIR01/per-turn-carrier-
+  inspection-red.provenance.ts`
+
+Invocation:
+
+```bash
+bun .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-\
+  CONTEXT-HEADER-TRANSPORT-REPAIR01/per-turn-carrier-\
+  inspection-red.provenance.ts
+```
+
+Mechanical output (HEAD = `47fd3c995`):
+
+```text
+{
+  "status": "RED",
+  "error": "snapshot.currentWorkingContextEstimate is
+            undefined; AgentRuntimeStateSnapshot at
+            shared/src/agent.ts:273 has NO currentWorking
+            ContextEstimate field; prepareTurn returned
+            4242 but the value is discarded at
+            agent-runtime.ts:1738-1770 (only flows into
+            the model request via openTaskLifecycleStream)",
+  "prepareTurnCalls": 1
+}
+```
+
+The RED ends at the existing host-facing boundary
+(`runtime.snapshot()`), NOT yet at TaskHeader (per
+reviewer's directive). The file lives outside any
+vitest config (same convention as prior cadence RED
+file); default suite stays GREEN.
+
+### Next bounded repair (C2 carrier bind)
+
+Authorize one new typed field on
+`AgentRuntimeStateSnapshot` that captures
+`result.currentWorkingContextEstimate` from
+`prepareTurnForModelRequest`:
+
+  (a) capture result.currentWorkingContextEstimate
+      in this.state at agent-runtime.ts:1738
+  (b) include it in AgentRuntimeStateSnapshot
+      at agent-runtime.ts:1001
+  (c) optionally emit a per-turn event that
+      crosses the agents->core seam
+
+Do NOT resurrect `SessionCompactionState`. Do NOT
+widen the usage event. The TODO at
+agent-runtime.ts:2300 explicitly anticipates this:
+"have `prepareTurn` report the token estimates it
+already computed (before/after)".
+
+```text
+PRODUCER_W           = CLOSED / GREEN (054ee75b9)
+API_SURFACE_BIND     = PASS / INTERNAL_ONLY (47fd3c995)
+CARRIER_INSPECTION   = COMPLETED (this commit)
+CADENCE_CORRECT_CARRIER = ABSENT / PROVEN
+NEW_TYPED_PER_TURN   = AUTHORIZED
+RED_AFTER_BINDING    = AUTHORED + REPRODUCED
+PRODUCTION_DELTA     = ZERO this commit
+TYPECHECK_DELTA      = ZERO
+DEFAULT_SUITE_STATE  = GREEN
+NEW_REVIEW_ROUND     = NO
+C1                   = GO_C2_CARRIER_BIND
+```

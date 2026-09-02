@@ -484,11 +484,20 @@ DEFAULT_SUITE_STATE = GREEN
                           resultB.systemPrompt === undefined
                           resultC.systemPrompt === undefined)
 
-C1                  = GO_PER_TURN_CARRIER_INSPECTION
+C1                  = GO_C2_CARRIER_BIND
                        (eleventh-pass API export bind
                        recorded; producer cadence GREEN
-                       stays PASS; C1 unchanged from
-                       tenth-pass)
+                       stays PASS; twelfth-pass carrier
+                       inspection COMPLETED —
+                       CADENCE_CORRECT_EXISTING_CARRIER
+                       = ABSENT/PROVEN, RED authored and
+                       reproduced mechanically; next
+                       bounded repair is C2 carrier
+                       bind = one new typed field on
+                       AgentRuntimeStateSnapshot that
+                       captures result.currentWorking
+                       ContextEstimate from
+                       prepareTurnForModelRequest)
 
 API_SURFACE_DELTA   = INTERNAL_ONLY
                        (ContextPipelinePrepareTurnResult
@@ -521,3 +530,74 @@ P2_FIX              = CARRIER_CADENCE W-monotonicity
                        assertions
 
 NEW_REVIEW_ROUND    = NO
+
+CARRIER_INSPECTION_TABLE (twelfth-pass 2026-09-03):
+  +------------------------------------+----------+----------------+--------------+--------------+------------+
+  | candidate seam                     | after    | receives       | agents->core?| core->host?  | verdict    |
+  |                                    | every    | exact W w/o    |              |              |            |
+  |                                    | prepareT?| recompute?     |              |              |            |
+  +------------------------------------+----------+----------------+--------------+--------------+------------+
+  | AgentRuntimeEvent                  | NO       | n/a            | n/a          | n/a          | TEMPORAL   |
+  |   e.g. turn-started                | (fires   |                |              |              | BIND FAIL  |
+  |   (agent-runtime.ts:1374)          | BEFORE   |                |              |              |            |
+  +------------------------------------+----------+----------------+--------------+--------------+------------+
+  | AgentRuntime.snapshot()            | YES      | NO             | n/a          | n/a          | IDENTITY   |
+  |   AgentRuntimeStateSnapshot        | (query-  | (no W field)   |              |              | BIND FAIL  |
+  |   (agent-runtime.ts:1001)          | able)    |                |              |              |            |
+  +------------------------------------+----------+----------------+--------------+--------------+------------+
+  | snapshot.usage                     | YES      | NO             | n/a          | n/a          | NO         |
+  |   (shared/src/agent.ts:125)        |          | (usage accu-   |              |              | RECOMPUTE  |
+  |                                    |          | mulates from   |              |              | VIOLATION  |
+  |                                    |          | provider)      |              |              |            |
+  +------------------------------------+----------+----------------+--------------+--------------+------------+
+  | LocalRuntimeHost                   | NO       | n/a            | NO           | n/a          | INHERITS   |
+  |   session.updated / current        | (derives |                | (downstream) |              | UPSTREAM   |
+  |   snapshot projection              | from snap|                |              |              | GAP        |
+  +------------------------------------+----------+----------------+--------------+--------------+------------+
+  | usage / context event              | NO       | n/a            | n/a          | n/a          | POST-      |
+  |   (fires only on provider          | (fires   |                |              |              | PROVIDER   |
+  |   response)                        | on resp.)|                |              |              | (forbids)  |
+  +------------------------------------+----------+----------------+--------------+--------------+------------+
+
+CARRIER_INSPECTION_VERDICT (reviewer stop rule):
+  CADENCE_CORRECT_EXISTING_CARRIER = ABSENT / PROVEN
+  NEW_TYPED_PER_TURN_CARRIER       = AUTHORIZED
+
+RED_AFTER_BINDING = authored
+  file = .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+    CONTEXT-HEADER-TRANSPORT-REPAIR01/per-turn-carrier-
+    inspection-red.provenance.ts
+  invocation = bun $RED_FILE
+  end = existing host-facing boundary (runtime.snapshot());
+    NOT yet at TaskHeader
+  reproduces mechanically:
+    Given prepareTurn returns W_N=4242, no provider
+    response / api_req_started follows,
+    expected: snapshot.currentWorkingContextEstimate
+              === W_N
+    actual:   snapshot.currentWorkingContextEstimate
+              === undefined (NO field on
+              AgentRuntimeStateSnapshot;
+              agent-runtime.ts:1738-1770 discards W)
+  actual_run_output = { status: "RED",
+    prepareTurnCalls: 1,
+    error: "snapshot.currentWorkingContextEstimate is
+            undefined; ... agent-runtime.ts:1738-1770
+            discards W after prepareTurnForModelRequest" }
+  run_does_not_block_default_suite = YES (file lives
+    outside vitest discovery; same convention as
+    prior cadence RED file)
+
+NEXT_QUESTION = C2 carrier bind
+  Authorize one new typed field (per carrier
+  inspection verdict). Do NOT resurrect
+  SessionCompactionState. Do NOT widen usage event.
+  The next bounded repair must:
+    (a) capture result.currentWorkingContextEstimate
+        in this.state at agent-runtime.ts:1738
+    (b) include it in AgentRuntimeStateSnapshot
+        at agent-runtime.ts:1001
+    (c) optionally emit a per-turn event that
+        crosses the agents->core seam
+
+NEW_REVIEW_ROUND = NO.
