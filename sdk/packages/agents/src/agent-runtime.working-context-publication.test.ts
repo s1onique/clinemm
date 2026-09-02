@@ -169,53 +169,97 @@ describe("AgentRuntime PUBLICATION_BIND — working-context-state-changed", () =
 });
 
 describe("AgentRuntime PUBLICATION_BIND — dedup + error isolation", () => {
-	it("does NOT emit working-context-state-changed when the W value did not change between consecutive prepareTurns", async () => {
-		// Dedup: on the FIRST prepareTurn on a run,
-		// the field transitions `undefined -> W_SAME`,
-		// which fires ONE publication event. (Between
-		// runs the runtime resets to `undefined`, so
-		// the per-run dedup is the only regime this test
-		// pins; the multi-iteration within-run dedup is
-		// covered by the cleaner W1->W2 (different W)
-		// case in the state-bind suite.)
-		const W_SAME = 1234;
-		const prepareTurn = vi.fn(async () => ({
-			currentWorkingContextEstimate: W_SAME,
-		}));
-		const model = new BlockingModel();
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (sixteenth-pass): real two-iteration dedup test
+	// using a tool-call-driven multi-iteration loop.
+	//
+	// Replaces the prior vacuous test that only
+	// exercised the FIRST transition
+	// (`undefined → 1234`) on a single-shot model.
+	// This new test drives:
+	//   prepareTurn #1: undefined → 1234  (transition)
+	//   prepareTurn #2: 1234 → 1234      (no-op)
+	// within ONE execute() lifecycle (no run/restore
+	// reset in between).
+	it("DEDUP via two prepareTurns in one execute(): undefined→1234 emits ONCE; 1234→1234 emits ZERO additional", async () => {
+		const prepareTurnCalls: Array<AgentRuntimePrepareTurnResult> = [];
+		prepareTurnCalls.push({ currentWorkingContextEstimate: 1234 });
+		prepareTurnCalls.push({ currentWorkingContextEstimate: 1234 });
+
+		const prepareTurn = vi.fn(
+			async (): Promise<AgentRuntimePrepareTurnResult> => {
+				const next =
+					prepareTurnCalls.shift() ??
+					{ currentWorkingContextEstimate: 1234 };
+				return next;
+			},
+		);
+
+		class TwoIterationModel implements AgentModel {
+			public stepCount = 0;
+			async stream(
+				_request: AgentModelRequest,
+			): Promise<AsyncIterable<AgentModelEvent>> {
+				this.stepCount += 1;
+				const stepIndex = this.stepCount;
+				async function* gen(): AsyncIterable<AgentModelEvent> {
+					if (stepIndex === 1) {
+						yield {
+							type: "tool-call-delta",
+							toolCallId: "call_1",
+							toolName: "echo",
+							inputText: '{"text":"hi"}',
+						};
+						yield { type: "finish", reason: "tool-calls" };
+					} else {
+						yield { type: "text-delta", text: "ok" };
+						yield { type: "finish", reason: "stop" };
+					}
+				}
+				return gen();
+			}
+		}
+
+		const echoTool: AgentTool = {
+			name: "echo",
+			description: "Echo input text",
+			inputSchema: { type: "object" },
+			async execute(input: { text: string }) {
+				return { echoed: input.text };
+			},
+		};
+		const model = new TwoIterationModel();
 		const runtime = new AgentRuntime({
 			model,
 			prepareTurn: prepareTurn as Parameters<
 				typeof AgentRuntime
 			>[0]["prepareTurn"],
+			tools: [echoTool],
 		});
-
-		void prepareTurn;
 
 		const eventLog: AgentRuntimeEvent[] = [];
-		const unsubscribe = runtime.subscribe((e) => {
-			eventLog.push(e);
+		const unsubscribe = runtime.subscribe((event) => {
+			eventLog.push(event);
 		});
 
-		const streamStarted = new Promise<void>((resolve) => {
-			model.streamStartedListeners.push(resolve);
-		});
+		const result = await runtime.run("start");
+		expect(result.status).toBe("completed");
+		expect(model.stepCount).toBe(2);
+		expect(prepareTurn).toHaveBeenCalledTimes(2);
 
-		const runPromise = runtime.run("hello");
-
-		await streamStarted;
-
-		// Exactly ONE publication event must fire (the
-		// transition from undefined -> 1234).
 		const pubEvents = eventLog.filter(
 			(e) => e.type === "working-context-state-changed",
 		);
 		expect(pubEvents.length).toBe(1);
+		const pub = pubEvents[0];
+		if (pub?.type === "working-context-state-changed") {
+			expect(pub.snapshot.currentWorkingContextEstimate).toBe(1234);
+			expect(pub.previousWorkingContextEstimate).toBeUndefined();
+		}
 
-		model.release();
-		await runPromise;
 		unsubscribe();
 	});
+
 
 	it("does NOT throw into the runtime if the working-context subscriber throws (observation event)", async () => {
 		const W_THROW = 9999;
@@ -257,3 +301,124 @@ describe("AgentRuntime PUBLICATION_BIND — dedup + error isolation", () => {
 		unsubscribe();
 	});
 });
+
+	// Companion: in-run fail-closed via two prepareTurns.
+	// Same fixture topology as the dedup test, but the
+	// second prepareTurn omits W. This pins BOTH
+	// "in-run dedup" AND "in-run fail-closed" using
+	// the same tool-call-driven two-iteration scaffold.
+	//
+	// This test was previously vacuous (the prior
+	// fail-closed test in the state-bind file used
+	// two separate run() calls). The publisher-side
+	// companion lives here so PUBLICATION_BIND has its
+	// own witness for the in-run fail-closed path.
+	it("FAIL-CLOSED (publisher side) via two prepareTurns in one execute(): working-context-state-changed does NOT carry a stale W", async () => {
+		const prepareTurnCalls: Array<
+			AgentRuntimePrepareTurnResult | undefined
+		> = [];
+		prepareTurnCalls.push({ currentWorkingContextEstimate: 100 });
+		// Second prepareTurn returns a result without
+		// the field (legacy / non-publisher shape).
+		prepareTurnCalls.push({ messages: [] });
+
+		const prepareTurn = vi.fn(
+			async (): Promise<AgentRuntimePrepareTurnResult | undefined> =>
+				prepareTurnCalls.shift(),
+		);
+
+		class TwoIterationModel implements AgentModel {
+			public stepCount = 0;
+			async stream(
+				_request: AgentModelRequest,
+			): Promise<AsyncIterable<AgentModelEvent>> {
+				this.stepCount += 1;
+				const stepIndex = this.stepCount;
+				async function* gen(): AsyncIterable<AgentModelEvent> {
+					if (stepIndex === 1) {
+						yield {
+							type: "tool-call-delta",
+							toolCallId: "call_1",
+							toolName: "echo",
+							inputText: '{"text":"hi"}',
+						};
+						yield { type: "finish", reason: "tool-calls" };
+					} else {
+						yield { type: "text-delta", text: "ok" };
+						yield { type: "finish", reason: "stop" };
+					}
+				}
+				return gen();
+			}
+		}
+
+		const echoTool: AgentTool = {
+			name: "echo",
+			description: "Echo input text",
+			inputSchema: { type: "object" },
+			async execute(input: { text: string }) {
+				return { echoed: input.text };
+			},
+		};
+		const model = new TwoIterationModel();
+		const runtime = new AgentRuntime({
+			model,
+			prepareTurn: prepareTurn as Parameters<
+				typeof AgentRuntime
+			>[0]["prepareTurn"],
+			tools: [echoTool],
+		});
+
+		const eventLog: AgentRuntimeEvent[] = [];
+		const unsubscribe = runtime.subscribe((event) => {
+			eventLog.push(event);
+		});
+
+		const result = await runtime.run("start");
+		expect(result.status).toBe("completed");
+		expect(model.stepCount).toBe(2);
+		expect(prepareTurn).toHaveBeenCalledTimes(2);
+
+		const pubEvents = eventLog.filter(
+			(e) => e.type === "working-context-state-changed",
+		);
+		// FAIL-CLOSED publisher-side invariant:
+		//   prepareTurn #1 (undefined -> 100) emits 1
+		//     event carrying snapshot.W === 100.
+		//   prepareTurn #2 (100 -> undefined, no field)
+		//     emits 1 event carrying snapshot.W ===
+		//     undefined (NOT stale 100).
+		//   Total: 2 events. The SECOND event is the
+		//   one that proves fail-closed semantics in
+		//   the publisher contract (if state.W were
+		//   stale-preserved, the helper would dedup and
+		//   we'd have only 1 event total).
+		expect(pubEvents.length).toBe(2);
+
+		const first = pubEvents[0];
+		const second = pubEvents[1];
+		if (first?.type === "working-context-state-changed") {
+			expect(first.snapshot.currentWorkingContextEstimate).toBe(100);
+			expect(first.previousWorkingContextEstimate).toBeUndefined();
+		}
+		if (second?.type === "working-context-state-changed") {
+			// The critical assertion: after a no-W
+			// prepareTurn, the next publication event
+			// MUST carry snapshot.W === undefined. NOT
+			// stale 100. This is the in-run fail-closed
+			// invariant on the publisher side.
+			expect(
+				second.snapshot.currentWorkingContextEstimate,
+			).toBeUndefined();
+			expect(
+				second.previousWorkingContextEstimate,
+			).toBe(100);
+		}
+
+		// Final snapshot also fails closed.
+		expect(
+			runtime.snapshot().currentWorkingContextEstimate,
+		).toBeUndefined();
+
+		unsubscribe();
+	});

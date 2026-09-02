@@ -46,6 +46,7 @@ import type {
 	AgentModelRequest,
 	AgentRuntimePrepareTurnResult,
 	AgentRuntimeStateSnapshot,
+	AgentTool,
 } from "@cline/shared";
 import { AgentRuntime } from "./index";
 
@@ -118,96 +119,95 @@ describe("AgentRuntime STATE_BIND — currentWorkingContextEstimate", () => {
 		expect(snapshot.currentWorkingContextEstimate).toBeUndefined();
 	});
 
-	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-	// (fifteenth-pass): P1 FIX. The reviewer requested exactly
-	// this test. With fail-closed semantics, a later
-	// prepareTurn that omits W must reset state.W to
-	// `undefined`, not preserve the prior W.
-	it("FAIL-CLOSED: W1=100 then prepareTurn-without-W resets snapshot.W to undefined", async () => {
-		const WByCall: Array<AgentRuntimePrepareTurnResult | undefined> = [
-			{ currentWorkingContextEstimate: 100 },
-			// Second prepareTurn returns no W at all.
-			{ messages: [] },
-		];
-		const prepareTurn = vi.fn(
-			async (): Promise<AgentRuntimePrepareTurnResult | undefined> =>
-				WByCall.shift(),
-		);
-		const model = new FinishingOnlyModel();
-		const runtime = new AgentRuntime({
-			model,
-			prepareTurn: prepareTurn as Parameters<
-				typeof AgentRuntime
-			>[0]["prepareTurn"],
-		});
-
-		// Single run, two prepareTurns (model yields finish:stop,
-		// causing the run loop to terminate; the two prepareTurns
-		// are produced against an execute() lifecycle by running
-		// two consecutive run() invocations).
-		await runtime.run("first");
-		// After the first run, snapshot.W === 100.
-		expect(
-			runtime.snapshot().currentWorkingContextEstimate,
-		).toBe(100);
-
-		// Second run: execute() resets lifecycle state, then
-		// prepareTurn #2 returns `{ messages: [] }` with no
-		// currentWorkingContextEstimate. With fail-closed
-		// semantics, snapshot.W MUST be undefined (NOT 100).
-		await runtime.run("second");
-		const snapshot: AgentRuntimeStateSnapshot = runtime.snapshot();
-		expect(snapshot.currentWorkingContextEstimate).toBeUndefined();
-		// The negative assertion: NOT preserved as 100.
-		expect(snapshot.currentWorkingContextEstimate).not.toBe(100);
-	});
 });
 
 describe("AgentRuntime STATE_BIND — lifetime semantics", () => {
-	it("captures the latest W across consecutive prepareTurns (no accumulation, no stale retention)", async () => {
-		// The frozen state-lifetime rule:
-		//   W_n remains current
-		//   until prepareTurn_{n+1} produces W_{n+1}
-		// So W1=100 followed by W2=120 must yield snapshot
-		// === 120, not 100 nor 100+120=220.
-		const prepareTurnCalls: Array<number | undefined> = [];
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (sixteenth-pass): real two-iteration prepareTurn
+	// transition test.
+	//
+	// Replaces the prior "captures the latest W
+	// across consecutive prepareTurns" test, which was
+	// vacuous: it exercised W=100 then W=120 across two
+	// separate `runtime.run()` calls, so the
+	// execute() lifecycle reset was masking whether the
+	// capture site handled consecutive in-run
+	// transitions. This new test drives W=100 then
+	// W=120 within ONE `execute()` lifecycle (no
+	// run()/restore() reset between them) by routing
+	// through a tool-call -> finish:tool-calls ->
+	// finish:stop model script.
+	it("LIFETIME via two prepareTurns in one execute(): W=100 then W=120 → snapshot.W === 120 (not 100, not 220)", async () => {
+		const prepareTurnCalls: Array<AgentRuntimePrepareTurnResult> = [];
+		prepareTurnCalls.push({ currentWorkingContextEstimate: 100 });
+		prepareTurnCalls.push({ currentWorkingContextEstimate: 120 });
+
 		const prepareTurn = vi.fn(
 			async (): Promise<AgentRuntimePrepareTurnResult> => {
-				const w = prepareTurnCalls.length === 0 ? 100 : 120;
-				prepareTurnCalls.push(w);
-				return { currentWorkingContextEstimate: w };
+				const next =
+					prepareTurnCalls.shift() ??
+					{ currentWorkingContextEstimate: 999 };
+				return next;
 			},
 		);
-		const model = new FinishingOnlyModel();
+
+		class TwoIterationModel implements AgentModel {
+			public stepCount = 0;
+			async stream(
+				_request: AgentModelRequest,
+			): Promise<AsyncIterable<AgentModelEvent>> {
+				this.stepCount += 1;
+				const stepIndex = this.stepCount;
+				async function* gen(): AsyncIterable<AgentModelEvent> {
+					if (stepIndex === 1) {
+						yield {
+							type: "tool-call-delta",
+							toolCallId: "call_1",
+							toolName: "echo",
+							inputText: '{"text":"hi"}',
+						};
+						yield { type: "finish", reason: "tool-calls" };
+					} else {
+						yield { type: "text-delta", text: "ok" };
+						yield { type: "finish", reason: "stop" };
+					}
+				}
+				return gen();
+			}
+		}
+
+		const echoTool: AgentTool = {
+			name: "echo",
+			description: "Echo input text",
+			inputSchema: { type: "object" },
+			async execute(input: { text: string }) {
+				return { echoed: input.text };
+			},
+		};
+		const model = new TwoIterationModel();
 		const runtime = new AgentRuntime({
 			model,
 			prepareTurn: prepareTurn as Parameters<
 				typeof AgentRuntime
 			>[0]["prepareTurn"],
+			tools: [echoTool],
 		});
 
-		// First run captures W1 = 100.
-		await runtime.run("first");
-		const snapshotAfterRun1: AgentRuntimeStateSnapshot =
-			runtime.snapshot();
-		expect(
-			snapshotAfterRun1.currentWorkingContextEstimate,
-		).toBe(100);
+		const result = await runtime.run("start");
+		expect(result.status).toBe("completed");
+		// Sanity: both iterations actually ran through model.stream.
+		expect(model.stepCount).toBe(2);
+		// Sanity: prepareTurn was called twice in the same execute().
+		expect(prepareTurn).toHaveBeenCalledTimes(2);
 
-		// Second run: execute() resets the field, then the
-		// next prepareTurn captures W2 = 120.
-		await runtime.run("second");
-		const snapshotAfterRun2: AgentRuntimeStateSnapshot =
-			runtime.snapshot();
-		expect(
-			snapshotAfterRun2.currentWorkingContextEstimate,
-		).toBe(120);
-		expect(
-			snapshotAfterRun2.currentWorkingContextEstimate,
-		).not.toBe(220); // not accumulated
-		expect(
-			snapshotAfterRun2.currentWorkingContextEstimate,
-		).not.toBe(100); // not stale
+		// LIFETIME invariant: in-run transitions are
+		// captured verbatim (W=120 wins, no accumulation,
+		// no stale retention). Crucially, no execute()
+		// reset happens between iterations.
+		const snapshot: AgentRuntimeStateSnapshot = runtime.snapshot();
+		expect(snapshot.currentWorkingContextEstimate).toBe(120);
+		expect(snapshot.currentWorkingContextEstimate).not.toBe(100);
+		expect(snapshot.currentWorkingContextEstimate).not.toBe(220);
 	});
 
 	it("restore() resets currentWorkingContextEstimate to undefined", async () => {
@@ -314,5 +314,104 @@ describe("AgentRuntime STATE_BIND — API delta", () => {
 		const _typeCheck: number | undefined =
 			snapshotWithout.currentWorkingContextEstimate;
 		void _typeCheck;
+	});
+
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (sixteenth-pass): real two-iteration prepare-turn
+	// fixture that pins MISSING_W_FAIL_CLOSED.
+	//
+	// Replaces the prior fail-closed test, which was
+	// vacuous: it exercised transitions across two
+	// separate `runtime.run()` calls, so the
+	// execute() lifecycle reset to `undefined` was
+	// masking the fail-closed path. This new test
+	// drives TWO prepareTurn invocations within ONE
+	// `execute()` lifecycle (no run()/restore() reset
+	// between them) by routing through a tool-call ->
+	// finish:tool-calls -> finish:stop model script.
+	it("FAIL-CLOSED via two prepareTurns in one execute(): W=100 then prepareTurn-without-W resets snapshot.W to undefined", async () => {
+		const prepareTurnCalls: Array<
+			AgentRuntimePrepareTurnResult | undefined
+		> = [];
+		// First prepareTurn returns W=100. Second
+		// prepareTurn returns a result that lacks
+		// currentWorkingContextEstimate (i.e. a legacy
+		// publisher or one that explicitly does not
+		// publish W). Both calls happen within the same
+		// `execute()` lifecycle.
+		prepareTurnCalls.push({ currentWorkingContextEstimate: 100 });
+		prepareTurnCalls.push({
+			messages: [], // no currentWorkingContextEstimate field
+		});
+
+		const prepareTurn = vi.fn(
+			async (): Promise<AgentRuntimePrepareTurnResult | undefined> =>
+				prepareTurnCalls.shift(),
+		);
+
+		// Drive two model iterations in ONE execute():
+		// iteration 1 ends with finish:tool-calls (so the
+		// run loop iterates back to prepareTurn + model
+		// stream again), iteration 2 ends with finish:stop
+		// to terminate the run.
+		class TwoIterationModel implements AgentModel {
+			public stepCount = 0;
+			async stream(
+				_request: AgentModelRequest,
+			): Promise<AsyncIterable<AgentModelEvent>> {
+				this.stepCount += 1;
+				const stepIndex = this.stepCount;
+				async function* gen(): AsyncIterable<AgentModelEvent> {
+					if (stepIndex === 1) {
+						yield {
+							type: "tool-call-delta",
+							toolCallId: "call_1",
+							toolName: "echo",
+							inputText: '{"text":"hi"}',
+						};
+						yield { type: "finish", reason: "tool-calls" };
+					} else {
+						yield { type: "text-delta", text: "ok" };
+						yield { type: "finish", reason: "stop" };
+					}
+				}
+				return gen();
+			}
+		}
+
+		const echoTool: AgentTool = {
+			name: "echo",
+			description: "Echo input text",
+			inputSchema: { type: "object" },
+			async execute(input: { text: string }) {
+				return { echoed: input.text };
+			},
+		};
+		const model = new TwoIterationModel();
+		const runtime = new AgentRuntime({
+			model,
+			prepareTurn: prepareTurn as Parameters<
+				typeof AgentRuntime
+			>[0]["prepareTurn"],
+			tools: [echoTool],
+		});
+
+		const result = await runtime.run("start");
+		expect(result.status).toBe("completed");
+		// Sanity: both iterations actually ran through model.stream.
+		expect(model.stepCount).toBe(2);
+		// Sanity: prepareTurn was called twice (one per
+		// iteration of the run loop) within the same
+		// execute() lifecycle.
+		expect(prepareTurn).toHaveBeenCalledTimes(2);
+
+		// FAIL-CLOSED invariant:
+		//   prepareTurn #1 returned W=100 (state.W = 100)
+		//   prepareTurn #2 returned no W (state.W must
+		//                                  become undefined,
+		//                                  NOT preserved)
+		const snapshot: AgentRuntimeStateSnapshot = runtime.snapshot();
+		expect(snapshot.currentWorkingContextEstimate).toBeUndefined();
+		expect(snapshot.currentWorkingContextEstimate).not.toBe(100);
 	});
 });

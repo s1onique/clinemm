@@ -1664,3 +1664,347 @@ TYPECHECK_DELTA          = ZERO
 DEFAULT_SUITE_STATE      = GREEN
 NEW_REVIEW_ROUND         = NO
 C1                       = GO_PUBLICATION_BIND (closed)
+
+## Sixteenth-pass (2026-09-03) — durable
+## test correction + P3 GO
+
+The factory causal reviewer issued
+`PASS_WITH_ONE_P1_FIX. C1: GO_P3 after one
+bounded test correction` on `05ccaaf66`.
+STATE_BIND and PUBLICATION_BIND
+implementations are PASS. The vacuous
+witnesses in the prior tests are fixed in
+this commit. P3 (VSCode projection to
+TaskHeader) is the next cycle; **not** in
+this commit.
+
+### Disposition
+
+```text
+STATE_BIND_CLOSED                = PROVEN
+STATE_BIND_IMPLEMENTATION        = PASS
+STATE_BIND_DURABLE_TEST          = PROVEN
+  (vacuous witnesses replaced with
+   real two-iteration prepareTurn
+   fixtures)
+
+PUBLICATION_BIND_CLOSED          = PROVEN
+PUBLICATION_BIND_IMPLEMENTATION  = PASS
+PUBLICATION_BIND_DURABLE_TEST    = PROVEN
+  (vacuous witness replaced with
+   real two-iteration prepareTurn
+   fixture; publisher-side fail-closed
+   companion added)
+
+AGENT_RUNTIME_ORDERING           = EXECUTABLE
+HOST_PUBLICATION                 =
+  COMPOSED PROOF / PASS
+
+NO_INDEPENDENT_W_SCALAR_ON_EVENT = TRUE
+  (event carries authoritative runtime
+   snapshot, no duplicate scalar)
+
+P0 = NONE
+P1 = RESOLVED this commit
+     (vacuous witnesses replaced with
+      real two-iteration fixtures)
+P2 = RESOLVED this commit
+     (PUBLICATION_AUTHORITY wording
+      corrected)
+NEW_REVIEW_ROUND                 = NO
+C1                               = GO_P3
+```
+
+### Vacuous witness problem and fix
+
+The prior commit's two claimed transition
+tests were vacuous for the exact defect
+they claimed to pin: they used two
+`runtime.run()` calls, and `execute()`
+resets `state.W = undefined` at the start
+of every run. So the observed `100 →
+undefined` was consistent with both the
+correct fail-closed implementation AND
+the broken preserve-last implementation;
+the test could not distinguish.
+
+**Fix** (this commit, test-only):
+
+Replace both vacuous tests with a real
+two-iteration prepareTurn fixture in ONE
+`execute()` lifecycle. No
+`run()`/`restore()` reset in between. The
+run loop is driven through two
+prepareTurn invocations by routing through
+a tool-call → finish:tool-calls →
+finish:stop model script (the existing
+two-step model pattern, established for
+other agent-runtime tests).
+
+```text
+1. STATE_BIND FAIL-CLOSED
+   prepareTurn #1 = W=100
+   prepareTurn #2 = no W
+   snapshot.W === undefined
+   (NOT 100)
+
+2. STATE_BIND LIFETIME
+   prepareTurn #1 = W=100
+   prepareTurn #2 = W=120
+   snapshot.W === 120
+   (NOT 100, NOT 220)
+
+3. PUBLICATION_BIND DEDUP
+   prepareTurn #1 = W=1234
+   prepareTurn #2 = W=1234
+   events === 1
+   (FIRST transition emits; same-W
+    second prepareTurn dedups)
+
+4. PUBLICATION_BIND FAIL-CLOSED
+   (publisher side)
+   prepareTurn #1 = W=100
+   prepareTurn #2 = no W
+   events === 2
+   first: snapshot.W === 100
+   second: snapshot.W === undefined
+           previous === 100
+   If production had preserve-last,
+   the helper would dedup and total
+   events === 1, not 2
+```
+
+### Sanity check (production revert)
+
+To prove the FAIL-CLOSED test is
+genuinely pinned (not vacuous), I
+temporarily reverted the production
+assignment back to the prior preserve-
+last form:
+
+```ts
+if (result.currentWorkingContextEstimate
+    !== undefined) {
+  this.state.currentWorkingContextEstimate =
+    result.currentWorkingContextEstimate;
+}
+```
+
+The new FAIL-CLOSED test failed with
+exactly:
+
+```
+AssertionError: expected 100 to be
+  undefined
+```
+
+Then production code was restored to
+the correct fail-closed assignment.
+**The test now genuinely pins the
+invariant.** No reuse of the production-
+code-driven behavior; the witness is
+real.
+
+### P2 — terminology correction
+
+PUBLICATION_AUTHORITY wording corrected.
+Was:
+
+```text
+PUBLICATION_AUTHORITY =
+  runtime.snapshot().currentWorking
+    ContextEstimate
+  (single source of truth; NOT duplicated
+   on event payload)
+```
+
+Now:
+
+```text
+NO_INDEPENDENT_W_SCALAR_ON_EVENT =
+  TRUE
+event carries authoritative runtime
+  snapshot
+```
+
+The event necessarily carries W via
+`snapshot: AgentRuntimeStateSnapshot`,
+but that is the SAME immutable snapshot
+pulled by every `*-state-changed`
+family — not an independently computed
+scalar. Documentation-only; no
+production change.
+
+### Why HOST_PUBLICATION is COMPOSED PROOF
+
+Architecture:
+
+```text
+@cline/agents  emits AgentRuntimeEvent
+  ↓
+@cline/core    subscribes via
+                LocalRuntimeHost
+                .subscribeRuntimeEvents
+                (generic fanout)
+  ↓
+host wiring   reads
+                runtime.snapshot()
+                  .currentWorking
+                    ContextEstimate
+```
+
+The runtime-side test (`agent-runtime
+.working-context-publication.test.ts`)
+pins the AgentRuntime boundary:
+ordering, dedup, observation-isolation.
+The prior source recon confirmed the
+LocalRuntimeHost subscribeRuntimeEvents
+fanout is generic over AgentRuntimeEvent.
+The composition yields host observation
+without a separate host test harness
+(per reviewer's explicit guidance: "do
+not build another host harness merely
+for ceremony").
+
+### Files changed (this commit)
+
+```text
+sdk/packages/agents/src/
+  agent-runtime.current-working-context-
+    state-bind.test.ts:
+    - Removed vacuous
+      run("first")/run("second")
+      FAIL-CLOSED test.
+    - Removed vacuous
+      run("first")/run("second")
+      LIFETIME test.
+    - Added real two-iteration
+      FAIL-CLOSED test
+      (tool-call -> tool-calls -> stop
+       fixture).
+    - Added real two-iteration LIFETIME
+      test (W=100 -> W=120 in one run).
+    Net: 7 tests, all GREEN (net 0
+    change in count because replacements).
+
+sdk/packages/agents/src/
+  agent-runtime.working-context-
+    publication.test.ts:
+    - Removed vacuous single-transition
+      dedup test.
+    - Added real two-iteration DEDUP test
+      (W=1234 -> W=1234 in one run).
+    - Added publisher-side fail-closed
+      companion (W=100 -> no-W in one
+      run, verifies TWO events).
+    Net: 4 tests (was 3, +1).
+```
+
+### Verification
+
+```text
+bunx vitest run on sdk/packages/agents/:
+  Test Files 24 passed (24)
+  Tests      408 passed (408) [+1 test]
+
+bunx vitest run on sdk/packages/core/
+  src/extensions/context/:
+  Test Files 5 passed | 1 skipped (6)
+  Tests      116 passed | 1 skipped (117)
+
+bun tsc -p tsconfig.dev.json --noEmit:
+  sdk/packages/shared  : 0 errors
+  sdk/packages/agents  : 0 errors
+  sdk/packages/core    : 23 errors
+                          (== baseline)
+
+Sanity (production revert + restore):
+  FAIL-CLOSED test fails on preserve-last
+  with "expected 100 to be undefined",
+  confirming genuine pinning.
+
+git diff --check: clean
+```
+
+### Production code change in this commit
+
+```text
+NONE.
+
+Production code is unchanged from
+05ccaaf66 (STATE_BIND + PUBLICATION_BIND
++ fail-closed lifetime, all correct).
+This commit corrects only test witnesses
+that were vacuous.
+```
+
+### Commit lineage
+
+```text
+commit 7:    STATE_BIND       (aec3ff0c6)
+  ...
+commit 8:    PUBLICATION_BIND (05ccaaf66)
+                                └─ C1: GO_PUBLICATION_BIND (closed)
+commit 9:    TEST_CORRECTION  (this commit)
+              + P2_TERMINOLOGY
+                                └─ C1: GO_P3
+```
+
+### Next bounded cycle (separate commit)
+
+P3: VSCode projection to TaskHeader.
+Mechanical given STATE_BIND and
+PUBLICATION_BIND are both closed and
+durable-tested:
+
+```text
+1. Subscribe to
+   working-context-state-changed on the
+   LocalRuntimeHost orchestrator-side
+   runtime.
+2. Read
+   snapshot.currentWorkingContextEstimate
+   on each event.
+3. Pipe W into the existing compaction
+   working-context header bar.
+4. NO recompute. NO host-side estimation.
+   NO host polling.
+```
+
+P3 RED (today's state):
+
+```text
+header projection numerator === P
+  (the prior provider metric, NOT W)
+```
+
+P3 GREEN (target):
+
+```text
+header projection numerator === W
+  (from snapshot, transported, no recompute)
+```
+
+Conservation rules (verbatim from
+reviewer, to be enforced during P3):
+
+```text
+- W is transported, never recomputed in
+  VSCode
+- P remains available for provider/request
+  metrics
+- H_b/H_a remain compaction telemetry
+- getApiMetrics Strategy-D stays untouched
+- undefined W fails closed:
+    no stale previous W silently displayed
+    as current
+```
+
+P3 is a separate bounded commit. NOT
+in this commit. This commit ends here.
+
+PRODUCTION_RUNTIME_DELTA = test-only correction
+TYPECHECK_DELTA          = ZERO
+DEFAULT_SUITE_STATE      = GREEN
+NEW_REVIEW_ROUND         = NO
+C1                       = GO_P3
