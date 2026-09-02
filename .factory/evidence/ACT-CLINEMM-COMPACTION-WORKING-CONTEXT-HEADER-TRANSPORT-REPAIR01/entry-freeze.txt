@@ -78,17 +78,62 @@ GENERIC_REUSABLE_CARRIER = NOT YET SEMANTICALLY BOUND
 
 SessionCompactionState_C2_CADENCE
                          = FALSIFIED
-                           (cadence discriminator test
-                            CARRIER_CADENCE in compaction.
-                            working-context-authority-publish.
-                            test.ts:176; runs three sequential
-                            prepare-turns A, B, C with B and
-                            C having no compaction; observes
-                            that saveState fires only on A
-                            and that publishWorkingContext-
-                            Estimate is not called on the
-                            no-compaction branch; RED at HEAD
-                            — see CADENCE_RED below)
+                           (eighth-pass halt;
+                            seventh-pass carrier verdict
+                            rejected on cadence grounds)
+
+PUBLISH_GAP             = REPRODUCED
+                           (real defect, next bounded
+                            repair; compaction.ts:730
+                            returns `result` undefined on
+                            no-compaction branch;
+                            publishWorkingContextEstimate
+                            is not called; B/C prepare-turn
+                            results carry no
+                            currentWorkingContext-
+                            Estimate; RED provenance
+                            preserved at
+                            .factory/evidence/ACT-CLINEMM-
+                            COMPACTION-WORKING-CONTEXT-
+                            HEADER-TRANSPORT-REPAIR01/
+                            cadence-discriminator-red.
+                            provenance.ts — OUTSIDE default
+                            vitest discovery)
+
+SIDECAR_CADENCE         = EXPECTED_ARCHITECTURAL_FACT
+                           (saveState fires only on real
+                            compaction;
+                            compaction.ts:705/:720;
+                            durable compaction artifact is
+                            the latest COMPACTED working
+                            context, NOT generic per-turn
+                            state; this REMAINS true after
+                            the next bounded repair — the
+                            architectural separation
+                            between durable artifact and
+                            per-turn W carrier is
+                            intentional)
+
+CARRIER_CADENCE_FALSIFIED
+                         = PASS / GREEN
+                           (committed falsification
+                            witness in compaction.working-
+                            context-authority-publish.test.
+                            ts:176 asserts the GREEN
+                            architectural invariant
+                            review-recommended after the
+                            ninth-pass causal correction
+                            HALT_DEFAULT_SUITE_RED:
+                             - resultA carries W
+                               (producer-side publish)
+                             - saveState only on real
+                               compaction
+                               (durable artifact cadence)
+                            resultB/resultC intentionally
+                            not asserted in the committed
+                            witness — their RED provenance
+                            lives in the evidence file
+                            above, NOT in the default suite)
 
 NEW_BOUNDED_FIELD        = NOT YET AUTHORIZED
                            (until the cadence-correct
@@ -230,132 +275,204 @@ CARRIER_AUDIT            = (2026-09-03; one source pass;
   existing seam. No new protocol field, no
   AgentModelRequest mutation, no ChatView recompute.
 
-RED_PLAN            = CADENCE-LED (per eighth-pass halt
-                       HALT_WRONG_CARRIER_SEMANTICS).
-                       RED-1 from the seventh-pass is
-                       DEAUTHORIZED: it tested the
-                       wrong invariant (persistence-on-
-                       compaction-write) and not the
-                       cadence invariant the reviewer
-                       actually halted on. The
-                       cadence RED IS THE RED and is
-                       already authored (CARRIER_CADENCE
-                       in compaction.working-context-
-                       authority-publish.test.ts:176).
-                       It is RED at HEAD on the publish-
-                       gap assertion.
+RED_PLAN            = SPLIT-INTO-LIFECYCLES (per
+                       ninth-pass correction
+                       HALT_DEFAULT_SUITE_RED +
+                       causal correction). The
+                       eighth-pass halt
+                       (HALT_WRONG_CARRIER_SEMANTICS)
+                       falsified SessionCompactionState
+                       as the live C2 W carrier; the
+                       ninth-pass correction split that
+                       falsification into TWO distinct
+                       lifecycle observations:
+                         PUBLISH_GAP (real defect, next
+                         bounded repair)
+                         SIDECAR_CADENCE (expected
+                         architectural fact — durable
+                         artifact cadence = actual
+                         compactions only)
 
-  RED-CADENCE (the cadence discriminator; already
-  RED at HEAD on test compaction.working-context-
-  authority-publish.test.ts:176):
+  RED-CADENCE (the cadence discriminator, split
+  per ninth-pass causal correction):
     Given three sequential prepare-turns A, B, C
     where:
-      A:  compaction rewrites messages (real
-          compaction)
+      A:  compaction rewrites messages
       B:  no compaction, ordinary canonical growth
-          (canonical messages strictly larger than
-          A's compacted projection)
       C:  no compaction, ordinary canonical growth
-          (canonical messages strictly larger than
-          B's)
 
-    EXPECTED: each prepare-turn publishes
-              currentWorkingContextEstimate AND
-              each prepare-turn calls saveState
-              with state semantically representing
-              the new W.
-
+    PUBLISH_GAP RED PROVENANCE (real defect,
+    next bounded repair at compaction.ts:730):
     ACTUAL (HEAD, mechanically observed):
-      - resultA.currentWorkingContextEstimate: defined
-      - resultB.currentWorkingContextEstimate: undefined
-            (compaction.ts:730 returns `result` which
-             is undefined on no-compaction branch;
-             publishWorkingContextEstimate is NOT
-             called)
-      - resultC.currentWorkingContextEstimate: undefined
-            (same reason)
-      - saveState calls: 1 (only A)
-      - wObserved[1] === wObserved[0]:
-            false (because wObserved[1] is undefined)
-            — RED at the publish-gap assertion
+      - resultA.currentWorkingContextEstimate:
+            defined (producer-side publish GREEN
+            from fc906dfc6)
+      - resultB.currentWorkingContextEstimate:
+            undefined (compaction.ts:730 returns
+            `result` undefined; publishWorking-
+            ContextEstimate not called)
+      - resultC.currentWorkingContextEstimate:
+            undefined (same reason)
+      - GREEN expected at next fix:
+            resultB.W and resultC.W both defined
+            and !==
+            resultB.W !== resultA.W,
+            resultC.W !== resultB.W
 
-    CADENCE-CORRECT CARRIER = NOT YET BOUND
-      - SessionCompactionState is REACHABILITY-BOUND
-        but NOT cadence-correct
-      - the carrier audit's column 'emits/updates
-        every prepare-turn' was missing; the
-        reviewer is correct that reachability is
-        insufficient
-      - the cadence-correct carrier likely requires
-        a NEW typed runtime event (or a snapshot
-        field) that fires on every prepareTurn,
-        not only on compaction. That is a NEW
-        protocol field and is NOT preselected
-        here.
+    SIDECAR_CADENCE FACT (expected architectural
+    behavior; NOT a defect):
+      - saveState calls: 1 (only on A)
+      - GREEN expected at next fix:
+            saveState.length === 1 still — durable
+            artifact cadence preserved.
+
+    RED provenance FILE (transient RED evidence,
+    OUTSIDE default vitest discovery):
+      .factory/evidence/ACT-CLINEMM-COMPACTION-
+        WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01/
+        cadence-discriminator-red.provenance.ts
+      Invocation:
+        bun $EVIDENCE_FILE
+
+    COMMITTED FALSIFICATION WITNESS (PASSING, in
+    default suite per "transient RED = good /
+    committed intentionally-failing default = not
+    allowed" rule):
+      compaction.working-context-authority-publish.
+        test.ts:176
+      Asserts only the GREEN architectural invariant
+      the reviewer wants preserved:
+        - resultA.currentWorkingContextEstimate
+          defined (W publication GREEN already shipped)
+        - saveState only on real compaction
+          (durable artifact cadence)
+        - resultB/resultC intentionally NOT asserted
+          (their RED provenance lives in evidence file)
 
   RED-1 / RED-2 / RED-3 (seventh-pass REDs):
-    DEAUTHORIZED until cadence-correct carrier
-    is bound. They tested persistence-on-compaction,
-    not cadence, and were structurally preselected
-    by the rejected SessionCompactionState verdict.
+    DEAUTHORIZED (ninth-pass correction; tested
+    persistence-on-compaction, not cadence, and
+    were structurally preselected by the rejected
+    SessionCompactionState verdict; also named a
+    repair field `ExtensionState.lastWorking-
+    ContextEstimate` that preselected the repair).
 
-GREEN_PLAN          = NOT YET WRITTEN (per eighth-pass halt
-                       HALT_WRONG_CARRIER_SEMANTICS).
-                       The seventh-pass GREEN_PLAN was
-                       bound to the rejected
-                       SessionCompactionState carrier
-                       (schema bump v1→v2 + merge into
-                       nextState + ExtensionState mirror
-                       + header numerator switch +
-                       compaction-shrink discriminator).
-                       That plan is the WRONG fix because
-                       the chosen carrier does not move at
-                       W's cadence.
+GREEN_PLAN          = SPLIT-INTO-LIFECYCLES GREEN
+                       (per ninth-pass correction
+                       HALT_DEFAULT_SUITE_RED +
+                       causal correction).
 
-                       The cadence-correct GREEN must:
-                         (a) ensure publishWorkingContext-
-                             Estimate fires on EVERY prepare-
-                             turn, not only on compaction
-                             (the publish gap at
-                             compaction.ts:730);
-                         (b) ensure a cadence-correct
-                             carrier delivers W to the
-                             host on every prepare-turn
-                             (this is the open causal
-                             question — the cadence-correct
-                             carrier is NOT YET BOUND);
-                         (c) populate ExtensionState /
-                             webview with W from (b);
-                         (d) switch the header numerator
-                             to W;
-                         (e) preserve the compaction-
-                             shrink discriminator.
+                       The eighth-pass GREEN (bound to
+                       SessionCompactionState) was rejected
+                       — that carrier has the wrong cadence
+                       AND conflates two lifecycles.
+
+                       The ninth-pass GREEN is split into
+                       FOUR bounded commit lanes; each lane
+                       fixes ONE thing and observes the
+                       GREEN matrix the reviewer requires.
+
+                       GREEN MATRIX the final design must
+                       pass (mechanically observed):
+
+                         A: compaction
+                            W defined + carrying final
+                              compacted-shape estimate
+                            saveState +1
+                         B: no compaction + changed req
+                            W defined and changed
+                            saveState unchanged
+                         C: no compaction + changed req
+                            W defined and changed again
+                            saveState unchanged
+
+                       COMMIT LANE 1 — producer cadence
+                       GREEN (next bounded repair):
+
+                         compaction.ts:730
+                         (or equivalent third-branch
+                         handle) — change
+                           return result
+                         to
+                           return publishWorkingContext
+                             Estimate(
+                               projectedMessages ??
+                                 context.messages,
+                               projectedSystemPrompt ??
+                                 context.systemPrompt,
+                               context.tools,
+                             )
+
+                         This closes PUBLISH_GAP. It does
+                         NOT touch saveState cadence.
+
+                       Required GREEN shape (after lane 1):
+                         - resultA.W defined (already
+                           shipped)
+                         - resultB.W defined and !==
+                           resultA.W
+                         - resultC.W defined and !==
+                           resultB.W
+                         - saveStateCalls.length === 1
+                           (UNCHANGED; durable artifact
+                           cadence preserved)
+
+                       COMMIT LANE 2 — per-turn carrier
+                       inspection (NEW source pass; no
+                       production code change):
+                         - audit existing agent/runtime
+                           event/snapshot surfaces that
+                           already move per prepare-turn
+                           (turn-started, turn-finished,
+                           status-notice, session-updated,
+                           snapshot-bearing events)
+                         - choose the lowest cadence-
+                           correct carrier using the
+                           selection invariant:
+                             for each prepareTurn yielding
+                             W_n:
+                               downstream host eventually
+                               observes W_n
+                             without requiring:
+                               compaction
+                               provider response
+                               api_req_started
+                         - do NOT assume a new event or
+                           AgentRuntimeStateSnapshot
+                           field yet
+
+                       COMMIT LANE 3 — cadence-correct
+                       transport GREEN + populate
+                       ExtensionState + header numerator
+                       switch:
+                         - wire the cadence-correct
+                           carrier from lane 2 to deliver
+                           W to the host on every
+                           prepare-turn
+                         - populate ExtensionState with W
+                         - TaskHeader / ContextWindow
+                           numerator switch:
+                             lastApiReqContextInputTokens
+                               ?? currentWorkingContext
+                                 Estimate
+                         - preserve the compaction-shrink
+                           discriminator
+
+                       COMMIT LANE 4 (optional) — compose
+                       durable compaction artifact
+                       (resume baseline) with live per-turn
+                       event (current W authority). Both
+                       lifecycles stay separate; only the
+                       header numerator is the composed
+                       consumer.
 
                        The SessionCompactionState v1→v2
-                       schema bump is NOT authorized in
-                       this commit. Whether v2 is needed
+                       schema bump is NOT authorized in any
+                       commit lane. Whether v2 is needed
                        depends on the cadence-correct
-                       carrier's parser/migration
-                       contract; that is bound only
-                       after (a) and (b) settle.
-
-                       A likely final design may
-                       COMPOSE:
-
-                         durable compaction artifact
-                           = baseline / resume authority
-                             (W at compacted boundary
-                              + canonical tail projection)
-
-                         live per-turn runtime
-                         event/snapshot
-                           = current W authority
-                             (W per authoritative
-                              prepare-turn)
-
-                       Both compose; do not build the
-                       composed design yet. First prove
-                       the cadence-correct carrier.
+                       carrier's parser/migration contract
+                       (lane 2); that is bound only after
+                       lane 1 ships.
 
 CONSERVATION        = P (lastApiReqContextInputTokens) preserved
                      H (compaction H-space) preserved
@@ -387,49 +504,70 @@ OUT_OF_SCOPE        = introducing a second estimator in
                        preselected; bound only after the
                        cadence-correct carrier is chosen)
 
-TEST_TARGET         = cadence discriminator (the only
-                     RED this commit):
-                       CARRIER_CADENCE in compaction.working-
-                       context-authority-publish.test.ts:176
-                       — three sequential prepare-turns
-                       A, B, C; RED at HEAD on the publish-
-                       gap assertion (B and C carry no
-                       currentWorkingContextEstimate
-                       because compaction.ts:730 returns
-                       `result` which is undefined on the
-                       no-compaction branch; saveState
-                       fires only on A)
+TEST_TARGET         = cadence discriminator split into
+                     TWO RED forms (per ninth-pass
+                     causal correction):
 
-                     seventh-pass RED-1/RED-2/RED-3:
-                       DEAUTHORIZED (wrong invariant;
-                       structurally preselected by the
-                       rejected SessionCompactionState
-                       verdict)
+                     1. COMMITTED FALSIFICATION WITNESS
+                        (GREEN, in default suite per
+                        "transient RED = good / committed
+                        intentionally-failing default = not
+                        allowed" rule):
+                          CARRIER_CADENCE in compaction.
+                          working-context-authority-
+                          publish.test.ts:176
+                          — asserts the GREEN architectural
+                          invariant:
+                            resultA.currentWorkingContext
+                              Estimate defined
+                            saveState only on real compaction
+                          — resultB/resultC intentionally NOT
+                          asserted here
+
+                     2. RED PROVENANCE (transient, OUTSIDE
+                        default vitest discovery at
+                        .factory/evidence/ACT-CLINEMM-
+                        COMPACTION-WORKING-CONTEXT-HEADER-
+                        TRANSPORT-REPAIR01/cadence-
+                        discriminator-red.provenance.ts):
+                          — full mechanical RED observation
+                          — RUN via `bun $EVIDENCE_FILE`
+                          — 4 PUBLISH_GAP REDs + 1
+                            informational GREEN +
+                            informational SIDECAR_CADENCE
+                            preservation note
 
                      Plus: compaction-shrink discriminator
                        preserved (alongside transport GREEN,
                        not as evidence for carrier selection)
 
 FORWARD_DISPOSITION = commit lane 1: cadence discriminator
-                       RED authored + RED verified at HEAD
-                       (this commit)
-                     commit lane 2: inspect per-turn
-                       runtime/session event/snapshot
-                       surfaces to choose the cadence-
-                       correct carrier (NEW source pass;
-                       no production code change)
-                     commit lane 3: ensure publishWorking-
-                       ContextEstimate fires on EVERY
-                       prepare-turn (close the publish
-                       gap at compaction.ts:730) +
-                       wire the cadence-correct carrier
-                       to deliver W to the host +
-                       populate ExtensionState +
-                       switch the header numerator to W
-                     commit lane 4 (optional): compose
-                       durable-compaction-artifact (resume
-                       baseline) with live per-turn event
-                       (current W authority)
+                       split into committed GREEN witness
+                       + transient RED provenance file
+                       (this commit; eighth-pass halt
+                       resolved + ninth-pass causal
+                       correction applied; GREEN in
+                       default suite; RED provenance
+                       preserved outside default suite)
+                     commit lane 2: producer cadence GREEN
+                       — close the publish gap at
+                       compaction.ts:730 (call
+                       publishWorkingContextEstimate on
+                       the no-compaction branch);
+                       saveState cadence UNCHANGED
+                     commit lane 3: per-turn carrier
+                       inspection (NEW source pass; no
+                       production code change)
+                     commit lane 4: cadence-correct
+                       transport GREEN + populate
+                       ExtensionState + header
+                       numerator switch + compaction-
+                       shrink discriminator
+                     commit lane 5 (optional): compose
+                       durable-compaction-artifact
+                       (resume baseline) with live
+                       per-turn event (current W
+                       authority)
                      NEW_REVIEW_ROUND = NO at each commit
                        (cadence discriminator is
                        mechanical; doctrine is frozen;
@@ -437,22 +575,50 @@ FORWARD_DISPOSITION = commit lane 1: cadence discriminator
                        RED-1/2/3 are de-authorized, not
                        pending review)
 
-TYPECHECK           = TYPECHECK_DELTA = ZERO at each commit
-                     (subject count reported against running
-                      parent baseline; SUBJECT not yet known
-                      for this ACT; this commit added one
-                      test case to compaction.working-
-                      context-authority-publish.test.ts —
-                      no production source touched)
+PRODUCTION_RUNTIME_DELTA
+                     = ZERO at each commit
+                       (subject count reported against
+                        running parent baseline; SUBJECT
+                        not yet known for this ACT; this
+                        commit changed ONE default-test
+                        case to its committed-
+                        falsification-witness GREEN form
+                        + added ONE transient RED
+                        provenance file OUTSIDE default
+                        discovery; zero production source
+                        touched)
 
-C1                  = GO_CADENCE_INSPECTION (was
-                       GO_CARRIER_BIND; carrier audit
-                       landed but cadence falsified the
-                       chosen carrier for C2; the next
-                       causal question is per-turn
-                       carrier inspection + bounded
-                       GREEN that closes the publish
-                       gap AND moves W at prepare-turn
-                       cadence)
+TYPECHECK_DELTA     = ZERO at each commit
+                       (= PRODUCTION_RUNTIME_DELTA; same
+                        implication: no production source
+                        touched in this commit; typecheck
+                        scope covers the source tree only,
+                        not test artifacts)
+
+DEFAULT_SUITE_STATE = GREEN
+                       (committed test in compaction.
+                        working-context-authority-publish.
+                        test.ts:176 is a passing
+                        falsification witness; the RED
+                        form is the transient evidence
+                        file in .factory/evidence/...
+                        — OUTSIDE default discovery;
+                        ≠ TYPECHECK_DELTA == safe because
+                        TYPECHECK_DELTA only checks the
+                        source tree, not default-suite
+                        state; the RED default test is the
+                        BLOCKING gate per ninth-pass halt)
+
+C1                  = GO_PRODUCER_CADENCE_GREEN
+                       (was GO_CARRIER_BIND then
+                       GO_CADENCE_INSPECTION; eighth-pass
+                       halt falsified SessionCompaction-
+                       State for C2; ninth-pass causal
+                       correction split concepts; the next
+                       causal question is the bounded
+                       producer-cadence repair at
+                       compaction.ts:730, followed by
+                       per-turn carrier inspection +
+                       cadence-correct transport GREEN)
 
 NEW_REVIEW_ROUND    = NO

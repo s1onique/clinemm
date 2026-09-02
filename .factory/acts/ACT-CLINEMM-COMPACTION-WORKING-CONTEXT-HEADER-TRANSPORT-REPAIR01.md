@@ -5,8 +5,8 @@
 | OWNING_EPIC | EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING |
 | PREDECESSOR_ACT | ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01 |
 | PRODUCTION_DELTA_TARGET | bounded (one new core→host carrier seam + one narrow header numerator switch) |
-| DISPOSITION | OPEN — CARRIER_BIND landed + CADENCE FALSIFIED (eighth-pass halt HALT_WRONG_CARRIER_SEMANTICS); cadence discriminator RED authored + verified at HEAD; RED-1/2/3 de-authorized |
-| C1 | GO_CADENCE_INSPECTION (was GO_CARRIER_BIND; carrier audit reached but cadence falsified the chosen carrier for C2; next causal question is per-turn carrier inspection + bounded GREEN that closes the publish gap AND moves W at prepare-turn cadence) |
+| DISPOSITION | OPEN — CARRIER_BIND landed + CADENCE FALSIFIED (eighth-pass halt) + ninth-pass causal correction (HALT_DEFAULT_SUITE_RED) applied; committed falsification witness PASSING (default suite GREEN); RED provenance preserved at .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01/cadence-discriminator-red.provenance.ts (OUTSIDE default vitest discovery); RED-1/2/3 + named repair field de-authorized |
+| C1 | GO_PRODUCER_CADENCE_GREEN (was GO_CARRIER_BIND → GO_CADENCE_INSPECTION; eighth-pass halt falsified SessionCompactionState; ninth-pass causal correction split concepts; next bounded repair = close the publish gap at compaction.ts:730, saveState cadence UNCHANGED) |
 
 ## Primary contract (one-line)
 
@@ -399,6 +399,194 @@ also named a proposed repair field
 preselects the repair (P1 from the seventh-pass review)
 and is therefore also de-authorized.
 
+## Ninth-pass correction (2026-09-03) — HALT_DEFAULT_SUITE_RED + causal correction
+
+The factory causal reviewer + runtime/context-pipeline
+engineer issued a second halt on the eighth-pass RED
+commit (8b857f634). Two distinct P0s:
+
+  P0_1 — administrative: the eighth-pass RED test was
+  committed in the default vitest suite. Repository
+  rule: transient RED evidence = good, committed RED
+  in default = not allowed.
+
+  P0_2 — causal (the load-bearing correction): the
+  RED test encoded `saveStateCalls === 3` as the
+  future GREEN, conflating two distinct lifecycles.
+  Upstream architecture assigns persistence to
+  @cline/core (the sidecar is the latest COMPACTED
+  working context, NOT generic per-turn state) and
+  turn preparation + runtime-event emission to
+  @cline/agents. Making saveState fire on every
+  prepareTurn would mutate a durable compaction
+  artifact at per-turn cadence and erase that
+  architectural distinction.
+
+```text
+PUBLISH_GAP     = REPRODUCED (real defect, next repair)
+SIDECAR_CADENCE = EXPECTED ARCHITECTURAL FACT
+                  (saveState only on real compaction —
+                   durable artifact cadence preserved)
+CHOSEN CARRIER  = REJECTED AS LIVE W CARRIER
+
+RED PROVENANCE preserved at:
+  .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+    CONTEXT-HEADER-TRANSPORT-REPAIR01/
+    cadence-discriminator-red.provenance.ts
+  (TRANSIENT RED evidence, OUTSIDE default vitest
+   discovery; invocation: bun $EVIDENCE_FILE)
+```
+
+### The corrected committed test (PASSING falsification witness)
+
+```ts
+// compaction.working-context-authority-publish.test.ts:176
+// — PASSING in default suite:
+
+expect(resultA?.currentWorkingContextEstimate)
+  .toBeDefined()
+// A: real compaction → W published (producer-seam GREEN
+//   from fc906dfc6)
+
+expect(saveStateCalls).toHaveLength(1)
+// Architectural separation: durable compaction artifact
+// moves ONLY on real compactions.
+
+expect(resultB).toBeDefined()  // REMOVED (was RED)
+// expect(resultC).toBeDefined()  // REMOVED (was RED)
+// At HEAD the no-compaction branch returns undefined;
+// that is the PUBLISH_GAP RED provenance (preserved in
+// evidence file, not in default suite).
+```
+
+After the next bounded repair (commit lane 2, producer
+cadence GREEN at compaction.ts:730) the GREEN matrix is:
+
+```text
+A: compaction               W defined   saveState +1
+B: no compaction, changed   W defined   saveState UNCHANGED
+C: no compaction, changed   W defined   saveState UNCHANGED
+                            (B.W !== A.W, C.W !== B.W)
+```
+
+That proves the architecture we want:
+
+```text
+W publication cadence      = every prepareTurn
+durable artifact cadence   = actual compactions only
+```
+
+This is stronger than forcing both to cadence 3.
+
+### The next production repair is bounded
+
+```text
+no compaction:
+  final request shape = original / projected
+  → publishWorkingContextEstimate(final shape)
+  → return prepareTurn result carrying W
+
+actual compaction:
+  preserve existing behavior
+  → save SessionCompactionState
+  → publish W from compacted final shape
+
+saveState cadence remains compaction-only
+```
+
+### Required GREEN matrix (commit lane 2)
+
+```text
+A: compaction               W defined   saveState +1
+B: no compaction, changed   W defined   saveState unchanged
+C: no compaction, changed   W defined   saveState unchanged
+```
+
+Executable causality. No host carrier needed yet.
+
+### Then inspect the real cadence carrier
+
+After W exists every prepare-turn, audit existing
+agent/runtime event/snapshot surfaces that already move
+per prepare-turn:
+
+| Candidate                             | Naturally emits every prepare-turn? | Already reaches core/host? | Snapshot/current-state semantics? |
+| ------------------------------------- | ----------------------------------: | -------------------------: | --------------------------------: |
+| existing agent runtime event          |                                   ? |                          ? |                               n/a |
+| agent/runtime state snapshot          |                                   ? |                          ? |                               yes |
+| session.updated / snapshot projection |                                   ? |                          ? |                               yes |
+| existing usage/context event          |                                   ? |                          ? |                                 ? |
+
+Do NOT assume a new event or AgentRuntimeStateSnapshot
+field yet. Selection invariant (the only load-bearing
+criterion):
+
+```text
+for each prepareTurn yielding W_n:
+  downstream host eventually observes W_n
+
+without requiring:
+  compaction, provider response, api_req_started
+```
+
+### Disposition
+
+```text
+ACT =
+  ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+  HEADER-TRANSPORT-REPAIR01
+
+SessionCompactionState =
+  REACHABILITY_BOUND
+  C2_CADENCE_FALSIFIED
+  REJECTED AS LIVE W CARRIER
+
+CADENCE_DISCOVERY     = PASS
+PUBLISH_GAP           = REPRODUCED
+COMPACTION_ARTIFACT_CADENCE
+                      = save only on actual compaction
+                        PRESERVE
+
+P0_1                  = intentionally failing test in
+                        default suite [RESOLVED via
+                        split into committed GREEN
+                        witness + transient RED
+                        provenance file]
+P0_2                  = test encoded
+                        saveStateCalls === 3 as future
+                        GREEN [RESOLVED: split into
+                        PUBLISH_GAP + SIDECAR_CADENCE]
+
+FIX_ONCE              = preserve RED evidence
+                        → repair W publication on every
+                          prepareTurn (compaction.ts:730)
+                        → keep saveState compaction-only
+                        → cadence test GREEN with:
+                             W_A / W_B / W_C defined and
+                             independently current
+                             saveState still only on real
+                             compaction
+
+NEXT                  = producer cadence GREEN (lane 2)
+                        → per-turn carrier inspection
+                        → cadence-correct transport GREEN
+                        → header RED → bounded repair
+
+SCHEMA_BUMP           = NOT AUTHORIZED
+NEW_RUNTIME_EVENT     = NOT AUTHORIZED YET
+HEADER_FIELD          = NOT AUTHORIZED YET
+NEW_REVIEW_ROUND      = NO
+
+VERDICT               = HALT_DEFAULT_SUITE_RED
+                        [RESOLVED in this commit]
+
+REOPEN_CONDITION      = default suite GREEN with:
+                          W_A / W_B / W_C all defined
+                          and independently current
+                          saveState still only on real
+                          compaction
+```
+
 ## Things this ACT does NOT do
 
 - does NOT introduce a second estimator in `ChatView`
@@ -429,22 +617,38 @@ and is therefore also de-authorized.
 ## Test artifact target
 
 ```text
-Cadence discriminator (the only RED this commit):
-  CARRIER_CADENCE in compaction.working-context-
-  authority-publish.test.ts:176
-  — three sequential prepare-turns A, B, C with B and
-    C having no compaction
-  — observe that saveState fires only on A AND
-    publishWorkingContextEstimate is not called on the
-    no-compaction branch
-  — RED at HEAD on the publish-gap assertion
-    (expect(wObserved[1]).toBeDefined() fails at HEAD)
-  — settles the cadence verdict mechanically
+Cadence discriminator split into TWO forms per
+ninth-pass causal correction:
+
+1. COMMITTED FALSIFICATION WITNESS (GREEN, in default
+   suite per "transient RED = good / committed
+   intentionally-failing default = not allowed" rule):
+     CARRIER_CADENCE in compaction.working-context-
+     authority-publish.test.ts:176
+     — asserts the GREEN architectural invariant:
+         resultA.currentWorkingContextEstimate defined
+         saveState only on real compaction
+     — resultB/resultC intentionally NOT asserted
+       (their RED provenance lives in evidence file)
+
+2. TRANSIENT RED PROVENANCE (RED, OUTSIDE default
+   vitest discovery):
+     .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+       CONTEXT-HEADER-TRANSPORT-REPAIR01/
+       cadence-discriminator-red.provenance.ts
+     — full mechanical RED observation (PUBLISH_GAP
+       REAL DEFECT)
+     — invocation:
+         bun $EVIDENCE_FILE
+     — 4 PUBLISH_GAP REDs + 1 informational GREEN +
+       informational SIDECAR_CADENCE preservation
+       note
 
 Seventh-pass RED-1/RED-2/RED-3:
-  DEAUTHORIZED (wrong invariant; structurally
-  preselected by the rejected SessionCompactionState
-  verdict)
+  DEAUTHORIZED (ninth-pass correction; wrong invariant;
+  structurally preselected by the rejected
+  SessionCompactionState verdict; also named a
+  preselected repair field)
 
 Plus: compaction-shrink discriminator preserved
   (alongside transport GREEN, not as evidence for
@@ -468,59 +672,86 @@ over the historical test-name-and-comment combination.
 ## Forward disposition
 
 ```text
-commit lane 1: cadence discriminator RED authored +
-                RED verified at HEAD
-                (this commit; CARRIER_CADENCE in
-                 compaction.working-context-authority-
-                 publish.test.ts:176; proves
-                 SessionCompactionState does not move
-                 at W's cadence AND
-                 publishWorkingContextEstimate is not
-                 called on the no-compaction branch)
+commit lane 1: cadence discriminator split into
+                committed GREEN falsification witness
+                + transient RED provenance file
+                (this commit; eighth-pass halt
+                resolved + ninth-pass causal
+                correction applied; default suite
+                GREEN; RED provenance preserved
+                OUTSIDE default vitest discovery
+                in
+                .factory/evidence/ACT-CLINEMM-
+                  COMPACTION-WORKING-CONTEXT-HEADER-
+                  TRANSPORT-REPAIR01/
+                  cadence-discriminator-red.provenance.ts)
 
-commit lane 2: per-turn carrier inspection (NEW source
+commit lane 2: producer cadence GREEN at
+                compaction.ts:730
+                — close the publish gap: call
+                  publishWorkingContextEstimate on
+                  the no-compaction branch with
+                  the final request shape (original
+                  or projected messages +
+                  systemPrompt + tools)
+                — saveState cadence UNCHANGED
+                  (still only on real compaction)
+                — required GREEN matrix:
+                    A: compaction
+                       W defined   saveState +1
+                    B: no compaction
+                       W defined   saveState unchanged
+                    C: no compaction
+                       W defined   saveState unchanged
+                       (B.W !== A.W, C.W !== B.W)
+
+commit lane 3: per-turn carrier inspection (NEW source
                 pass; no production code change)
-                — re-audit runtime/session event /
+                — audit existing agent/runtime event/
                   snapshot surfaces that already move
-                  per prepare-turn (or per turn-started,
-                  per turn-finished, per status-notice,
-                  per session.updated, per
-                  snapshot-bearing event)
+                  per prepare-turn
                 — choose the lowest cadence-correct
-                  carrier (likely requires a NEW
-                  typed runtime event OR adding
-                  currentWorkingContextEstimate to
-                  AgentRuntimeStateSnapshot AND firing
-                  an event after every
-                  prepareTurnForModelRequest)
+                  carrier using the selection
+                  invariant
+                — do NOT assume a new event or
+                  AgentRuntimeStateSnapshot field yet
 
-commit lane 3: ensure publishWorkingContextEstimate
-                fires on EVERY prepare-turn (close
-                the publish gap at compaction.ts:730)
-                + wire the cadence-correct carrier to
-                deliver W to the host on every
-                prepare-turn
-                + populate ExtensionState with W
-                + switch the header numerator to W
+commit lane 4: cadence-correct transport GREEN +
+                populate ExtensionState + header
+                numerator switch + compaction-shrink
+                discriminator
 
-commit lane 4 (optional): compose durable compaction
+commit lane 5 (optional): compose durable compaction
                 artifact (resume baseline) with live
                 per-turn event (current W authority)
 ```
 
 `NEW_REVIEW_ROUND = NO` for each commit (cadence discriminator
 is mechanical; doctrine is frozen; provenance is sufficient;
-RED-1/2/3 are de-authorized, not pending review).
+RED-1/2/3 + named repair field are de-authorized, not
+pending review).
+
+PRODUCTION_RUNTIME_DELTA = ZERO at each commit
+(subject count reported against running parent baseline;
+this commit changed ONE default-test case to its
+committed-falsification-witness GREEN form + added ONE
+transient RED provenance file outside default discovery;
+zero production source touched).
 
 TYPECHECK expectation = TYPECHECK_DELTA = ZERO at each commit
-(subject count reported against running parent baseline;
-this commit added one test case to compaction.working-
-context-authority-publish.test.ts — no production source
-touched).
+(same implication; typecheck scope = source tree).
 
-C1 = `GO_CADENCE_INSPECTION` (was `GO_CARRIER_BIND`;
-carrier audit reached but cadence falsified the chosen
-carrier for C2; the next causal question is per-turn
-carrier inspection + bounded GREEN that closes the
-publish gap AND moves W at prepare-turn cadence).
+DEFAULT_SUITE_STATE = GREEN
+(committed test in compaction.working-context-authority-
+publish.test.ts:176 is a passing falsification witness;
+the RED form is the transient evidence file in
+.factory/evidence/... — OUTSIDE default discovery).
+
+C1 = `GO_PRODUCER_CADENCE_GREEN` (was `GO_CARRIER_BIND`
+→ `GO_CADENCE_INSPECTION`; the eighth-pass halt falsified
+SessionCompactionState; the ninth-pass causal correction
+split concepts; the next causal question is the bounded
+producer-cadence repair at compaction.ts:730 with saveState
+cadence UNCHANGED, followed by per-turn carrier inspection
++ cadence-correct transport GREEN).
 No production code change in this commit.

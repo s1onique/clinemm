@@ -173,15 +173,16 @@ describe("compaction working-context authority publish", () => {
 		expect(w).toBe(expected);
 	});
 });
-	it("CARRIER_CADENCE: saveState fires only when compaction rewrites messages — NOT on every authoritative prepare-turn W (RED at HEAD)", async () => {
+	it("CARRIER_CADENCE: SessionCompactionState is the durable compaction artifact, NOT the per-turn W carrier (falsification witness)", async () => {
 		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-		// cadence discriminator (factory causal reviewer, 2026-09-03
-		// eighth-pass P0 halt: HALT_WRONG_CARRIER_SEMANTICS).
+		// cadence falsification witness
+		//   eighth-pass halt (2026-09-03) HALT_WRONG_CARRIER_SEMANTICS
+		//   ninth-pass correction (2026-09-03) HALT_DEFAULT_SUITE_RED
 		//
-		// The reviewer halted the seventh-pass carrier verdict
-		//   GENERIC_REUSABLE_CARRIER = BOUND / SessionCompactionState
-		// on the ground that the audit optimized for reachability
-		// and missed the cadence invariant:
+		// The eighth-pass halt falsified the seventh-pass carrier
+		// verdict GENERIC_REUSABLE_CARRIER = BOUND / SessionCompaction-
+		// State on the ground that the audit optimized for
+		// reachability and missed the cadence invariant:
 		//
 		//   for every successful prepareTurn producing authoritative W_n:
 		//     host-visible W eventually = W_n
@@ -190,31 +191,48 @@ describe("compaction working-context authority publish", () => {
 		//     provider response arrived
 		//     api_req_started arrived
 		//
-		// This test mechanically proves whether the chosen carrier
-		// moves at W's cadence across three prepare-turns:
-		//   A — compaction rewrites messages (saveState fires today)
-		//   B — no compaction, ordinary canonical growth (W_B != W_A)
-		//   C — no compaction, ordinary canonical growth (W_C != W_B)
+		// The ninth-pass correction refines the falsification into
+		// two distinct lifecycle observations, neither of which
+		// should become a committed default-suite RED:
 		//
-		// If saveState is invoked at B and C with state semantically
-		// representing W_B / W_C, the carrier survives review.
-		// If saveState is NOT invoked at B and C, the carrier is
-		// wrong for C2 — it would only update on compaction.
+		//   PUBLISH_GAP (real defect, next bounded repair):
+		//     compaction.ts:730 returns `result` (undefined) on the
+		//     no-compaction branch; publishWorkingContextEstimate is
+		//     NOT called → B/C prepare-turn results carry no
+		//     currentWorkingContextEstimate. The producer-side
+		//     publish cadence bug.
 		//
-		// RED at HEAD: saveState is called only inside the
-		// `if (result?.messages)` branches of
-		// createCompactionStateAwarePrepareTurn (compaction.ts:705,
-		// :720). On an ordinary prepare-turn where the upstream
-		// `compact` returned undefined (no compaction needed),
-		// result is undefined → result?.messages is undefined →
-		// saveState skipped. The carrier does NOT move at W's
-		// cadence.
+		//   SIDECAR_CADENCE (expected architectural fact):
+		//     saveState is invoked only inside the
+		//     `if (result?.messages)` branches (compaction.ts:705,
+		//     :720). On an ordinary prepare-turn where the upstream
+		//     `compact` returned undefined, saveState is NOT called.
+		//     That is intentional: the durable compaction artifact
+		//     is the latest COMPACTED working context, NOT generic
+		//     per-turn state. Mutating it on every prepareTurn
+		//     would erase the architectural distinction.
+		//
+		// This test is the PASSING FALSIFICATION WITNESS:
+		//   - resultA carries currentWorkingContextEstimate
+		//     (producer-side W publication GREEN already, from
+		//      fc906dfc6)
+		//   - saveState fires ONLY on real compaction
+		//     (durable artifact cadence = compactions only)
+		//
+		// The pre-fix RED evidence (B/C W undefined + the
+		// historical saveStateCalls === 3 discriminator that
+		// falsified the rejected carrier hypothesis) is preserved
+		// at
+		//   .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+		//     CONTEXT-HEADER-TRANSPORT-REPAIR01/
+		//     cadence-discriminator-red.provenance.ts
+		// outside any default vitest discovery path, per the
+		// "transient RED evidence = good / committed intentionally-
+		// failing default test = not allowed" rule.
 
 		const saveStateCalls: Array<{
 			sourceMessageCount: number;
 		}> = [];
-
-		const wObserved: Array<number | undefined> = [];
 
 		let compactCalls = 0;
 		const compactAThenSkip: ContextPipelinePrepareTurn = async (context) => {
@@ -280,42 +298,77 @@ describe("compaction working-context authority publish", () => {
 		const resultB = await prepareTurn(buildContext(2, 4));
 		const resultC = await prepareTurn(buildContext(3, 8));
 
-		// wObserved[i] is the W value carried on the prepare-turn
-		// RESULT (the value a host could read after every prepare-
-		// turn). Today this is only set when compaction rewrote
-		// messages; the no-compaction branch returns undefined.
-		wObserved.push(
+		// ===== POST-NINTH-PASS CAUSAL CORRECTION =====
+		//
+		// This test is now a PASSING FALSIFICATION WITNESS for the
+		// SessionCompactionState cadence observation. The previous
+		// RED-only form was halted at ninth-pass
+		// HALT_DEFAULT_SUITE_RED on the ground that it conflated
+		// two distinct lifecycles (durable compaction persistence
+		// vs. per-turn W publication) and committed an
+		// intentionally-failing default test.
+		//
+		// The committed assertions below preserve the architectural
+		// invariant:
+		//   - resultA carries currentWorkingContextEstimate
+		//     (producer-seam publish GREEN from fc906dfc6)
+		//   - saveState fires ONLY on real compaction
+		//     (durable artifact cadence = compactions only)
+		//
+		// The pre-fix RED evidence (B/C currentWorkingContext-
+		// Estimate === undefined + historical saveStateCalls === 3
+		// discriminator that falsified the rejected carrier) is
+		// preserved in
+		//   .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+		//     CONTEXT-HEADER-TRANSPORT-REPAIR01/
+		//     cadence-discriminator-red.provenance.ts
+		// which is OUTSIDE any default vitest discovery path
+		// (transient RED evidence = good; committed intentionally-
+		// failing default test = not allowed).
+		expect(
 			(resultA as { currentWorkingContextEstimate?: number } | undefined)
 				?.currentWorkingContextEstimate,
-			(resultB as { currentWorkingContextEstimate?: number } | undefined)
-				?.currentWorkingContextEstimate,
-			(resultC as { currentWorkingContextEstimate?: number } | undefined)
-				?.currentWorkingContextEstimate,
-		);
+		).toBeDefined();
 
-		// Cadence control: the fixture is constructed so canonical
-		// messages strictly increase. After the C2 fix, W must
-		// also differ across A, B, C — proving the carrier has
-		// something new to carry on each prepare-turn.
-		expect(wObserved[0]).toBeDefined();
-		expect(wObserved[1]).toBeDefined();   // RED at HEAD: undefined
-		expect(wObserved[2]).toBeDefined();   // RED at HEAD: undefined
-		expect(wObserved[1]).not.toBe(wObserved[0]);
-		expect(wObserved[2]).not.toBe(wObserved[1]);
+		// Architectural invariant: durable compaction artifact
+		// moves only on real compactions. This guard is
+		// load-bearing — if a future change forces saveState on
+		// every prepareTurn, this assertion fails and forces the
+		// author to justify erasing the durable / per-turn
+		// lifecycle distinction.
+		expect(saveStateCalls).toHaveLength(1);
 
-		// THE CADENCE RED.
+		// Future-proofing note for resultB/resultC:
 		//
-		// Hypothesis: saveState fires on A (compaction rewrote
-		// messages) but NOT on B or C (no compaction).
+		// At HEAD, the no-compaction branch in
+		// createCompactionStateAwarePrepareTurn (compaction.ts:730)
+		// returns the upstream `result` directly, which is
+		// `undefined` when the upstream `compact` returned
+		// undefined. So resultB and resultC are `undefined` at
+		// HEAD — both the prepare-turn RETURN and any embedded
+		// currentWorkingContextEstimate.
 		//
-		// If saveState.length === 1 at HEAD, the carrier does not
-		// move at W's cadence. SessionCompactionState is
-		// REACHABILITY_BOUND but NOT C2-cadence-correct — even
-		// after the producer publish-fix is in place, the
-		// persistence-side won't fire on ordinary turns.
+		// After the producer-cadence fix (the next bounded repair
+		// commit lands at compaction.ts:730 to call
+		// publishWorkingContextEstimate on the no-compaction
+		// branch too), resultB / resultC become defined + carry
+		// currentWorkingContextEstimate.
 		//
-		// GREEN (cadence-correct) would be saveState.length === 3,
-		// one call per prepare-turn, regardless of whether
-		// compaction rewrote messages.
-		expect(saveStateCalls.length).toBe(3); // RED at HEAD = 1; GREEN = 3.
+		// At that point, the committed test evolves to:
+		//   expect(resultB? .currentWorkingContextEstimate).toBeDefined()
+		//   expect(resultC? .currentWorkingContextEstimate).toBeDefined()
+		//   expect(resultB? .currentWorkingContextEstimate
+		//     !== resultA? .currentWorkingContextEstimate)
+		//   expect(resultC? .currentWorkingContextEstimate
+		//     !== resultB? .currentWorkingContextEstimate)
+		//   expect(saveStateCalls).toHaveLength(1)  // unchanged
+		//
+		// The RED provenance for the no-compaction branch is
+		// preserved at
+		//   .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+		//     CONTEXT-HEADER-TRANSPORT-REPAIR01/
+		//     cadence-discriminator-red.provenance.ts
+		// outside any default vitest discovery path. resultB /
+		// resultC are intentionally not asserted here — that
+		// would commit an RED in the default suite.
 	});
