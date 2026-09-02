@@ -75,8 +75,8 @@
   ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01 RETRACTED
   (manual entry points are NOT the defect).
 - Priority: **P1** (HIGH value production learning; affects compaction threshold, context-limit safety, long-session behavior). May be promoted to P0 if the discriminator reproduces an actual structural defect.
-- Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the discriminator resolves the S3 question.
-- Blocked by: n/a (the HOST_REQUIRED ratio discriminator is sequenced after the recon's calibrated findings are written; the reviewer explicitly said NOT to author more Factory scaffolding before the discriminator runs).
+- Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01` (OPEN; consumer-side reconciliation trial = option (d); P0 HALT_WRONG_REPAIR_ORACLE resolved; P0 HALT_WRONG_RED_CLAIM refined; **NEXT TURN MUST AUTHOR G2 IN getApiMetrics.test.ts AND CONFIRM RED AT CURRENT HEAD BEFORE ANY PRODUCTION MODIFICATION** per Factory doctrine "real/live failure → RED reproduction → repair"). The recon ACT (`ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01`) is `CLOSED_WITH_RESIDUE` and the discriminator/working-context-seam binding is established; repair ACT is the live frontier.
+- Blocked by: n/a (the recon's discriminator ran and resolved S3 in the affirmative at the consumer seam; the consumer-side reconciliation trial is authorized under the G1-G6 necessity/ablation matrix).
 - Sequenced after this ACT (gated on the discriminator's verdict;
   C1 GO NOT yet granted; buildForApi compaction-independence
   must be confirmed first):

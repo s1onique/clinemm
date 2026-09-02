@@ -62,9 +62,16 @@
                         input accounting)
 > STRATEGY_D            = SELECTED_FOR_IMPLEMENTATION
 > REPAIR_STATUS         = NOT_YET_APPLIED (this commit opens the
->                        ACT and authors the consumer-seam
->                        RED, but does NOT modify
->                        getApiMetrics.ts)
+>                        ACT and freezes the G1-G6 necessity/
+>                        ablation matrix; it does NOT modify
+>                        getApiMetrics.ts AND does NOT yet
+>                        author G2 — per Factory doctrine
+>                        "real/live failure → RED reproduction
+>                        → repair", the implementation turn must
+>                        FIRST author G2 in
+>                        getApiMetrics.test.ts and CONFIRM it
+>                        REDs at current HEAD before any
+>                        production modification)
 > PRODUCTION_DELTA      = ZERO (this opening commit; the
 >                        implementation commit will graduate
 >                        to APPLIED)
@@ -268,10 +275,18 @@ accounting defects) remains DEFERRED per the recon ACT's HALT.
 ## Test surface
 
 - **CONSUMER TEST** (`apps/vscode/src/shared/__tests__/getApiMetrics.test.ts`):
-  the load-bearing repair oracle. The implementation turn of
-  this ACT will author G2 (consumer RED → GREEN), G3
-  (genuine truth restoration), G4 (positive compatibility),
-  and G5 (presentation conservation). This is where the
+  the load-bearing repair oracle. **NOT YET AUTHORED at the
+  opening commit (`CONSUMER_RED = NOT_YET_AUTHORED`,
+  `CONSUMER_RED_EXECUTED = NO`).** The implementation turn of
+  this ACT will author G2 (consumer RED → GREEN) FIRST and
+  CONFIRM it REDs at current HEAD against the existing
+  fabrication (`getApiMetrics` consumer-side currently
+  manufactures `displayedInput = previousProviderInput ×
+  H_after/H_before` for the INCOMPATIBLE_BASELINE case). Only
+  after G2 REDs at the real consumer seam may Strategy D
+  remove the fabrication; only after that may G3 (genuine
+  truth restoration), G4 (positive compatibility), and G5
+  (presentation conservation) be added. This is where the
   Strategy-D implementation is verified.
 - **NECESSITY CONTROL** (`sdk/packages/core/src/extensions/context/compaction.working-context-ratio.test.ts`):
   the committed DEFECT-WITNESS test (G1) — **UNCHANGED**.
@@ -352,9 +367,33 @@ ESCALATION                                 = (a) tag the field or
                                                 fields, only if (d)
                                                 cannot satisfy G2-G6
                                                 with existing metadata
-REOPEN_CONDITION                           = consumer RED mechanically
-                                                reproduces current
-                                                fabricated post-
-                                                compaction request-
-                                                input value
+REOPEN_CONDITION                           = G2 not yet authored;
+                                                the next turn MUST
+                                                author G2 in
+                                                getApiMetrics.test.ts
+                                                and CONFIRM it
+                                                REDs at current HEAD
+                                                against the existing
+                                                fabrication. If G2
+                                                does NOT RED at HEAD,
+                                                HALT_RED_NOT_REPRODUCED
+                                                and re-investigate the
+                                                defect boundary before
+                                                any production change.
+                                                After G2 REDs, inspect
+                                                what existing metadata
+                                                the consumer actually
+                                                has to discriminate
+                                                compatible vs
+                                                incompatible baseline
+                                                (mode/type, metric
+                                                provenance, baseline
+                                                identity, projection/
+                                                truncation marker);
+                                                only if a mechanically
+                                                available discriminator
+                                                exists may Strategy D
+                                                proceed. Otherwise
+                                                ESCALATE to (a) tag
+                                                provenance.
 ```

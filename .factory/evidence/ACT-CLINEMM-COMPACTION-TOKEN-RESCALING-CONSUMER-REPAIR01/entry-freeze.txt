@@ -41,11 +41,23 @@ STRATEGY_CHOICE=(d) CONSUMER-SIDE RECONCILIATION (smallest bounded fix;
                   does NOT make H/W agree; makes the disagreement
                   irrelevant to provider-input accounting)
 STRATEGY_D=SELECTED_FOR_IMPLEMENTATION
-REPAIR_STATUS=NOT_YET_APPLIED (this opening commit; the implementation
-              commit will graduate to APPLIED)
+REPAIR_STATUS=NOT_YET_APPLIED (this opening commit; freezes the G1-G6
+              necessity/ablation matrix; does NOT modify
+              getApiMetrics.ts AND does NOT yet author G2. Per Factory
+              doctrine "real/live failure → RED reproduction → repair",
+              the implementation turn must FIRST author G2 in
+              getApiMetrics.test.ts and CONFIRM it REDs at current
+              HEAD before any production modification.)
+CONSUMER_RED=NOT_YET_AUTHORED (no test changes in this commit; the
+              opening commit touches ONLY Factory/evidence docs.
+              99b3fdf51..8c01a6d3c modified 0 test files and 0
+              production files.)
+CONSUMER_RED_EXECUTED=NO
 PRODUCTION_DELTA=ZERO (this opening commit; the implementation commit
                   will graduate to APPLIED with the consumer-side
-                  reconciliation change to getApiMetrics.ts:174-225)
+                  reconciliation change to getApiMetrics.ts:174-225
+                  — and ONLY AFTER G2 has been authored and
+                  mechanically confirmed to RED at the current HEAD)
 REPAIR_AUTHORIZED=YES (per C1: GO after P0 correction —
                   HALT_WRONG_REPAIR_ORACLE resolved)
 
@@ -115,14 +127,19 @@ FROZEN_RED_FOR_POSTFIX_REGRESSION_ORACLE=
 
   The repair oracle lives at the consumer seam. Author the
   following test in apps/vscode/src/shared/__tests__/getApiMetrics.test.ts
-  (this ACT's implementation turn will write it):
+  in the IMPLEMENTATION TURN of this ACT (NOT this opening commit;
+  CONSUMER_RED = NOT_YET_AUTHORED at 8c01a6d3c):
 
-    // At buggy HEAD (this opening commit):
+    // At buggy HEAD (the implementation turn runs against
+    // current HEAD):
     expect(fabricatedPostCompactProviderInput).not.toEqual(
       previousProviderInput × compactionHAfter ÷ compactionHBefore,
     );
-    // → FAILS at buggy HEAD (the fabricated P_after IS present
-    //   in current getApiMetrics output)
+    // → MUST FAIL at buggy HEAD — the fabricated P_after IS
+    //   present in current getApiMetrics output. If this
+    //   assertion does NOT fail, HALT_RED_NOT_REPRODUCED and
+    //   re-investigate the defect boundary before any
+    //   production change.
 
     // After Strategy D applied (implementation commit):
     // → PASSES (no fabricated P_after; the consumer refuses to
@@ -200,10 +217,19 @@ OUT_OF_SCOPE_THIS_ACT=
 R1_R3_STATUS=DEFERRED (per recon ACT's HALT)
 
 REOPEN_CONDITION=
-  Consumer RED mechanically reproduces current fabricated post-
-  compaction request-input value (this turn's RED authoring
-  proves it; if it doesn't, the recon contract is wrong and
-  needs review before any production change).
+  G2 not yet authored (CONSUMER_RED = NOT_YET_AUTHORED at
+  8c01a6d3c). The next turn MUST author G2 in
+  apps/vscode/src/shared/__tests__/getApiMetrics.test.ts and
+  CONFIRM it REDs at current HEAD against the existing
+  fabrication. If G2 does NOT RED at HEAD,
+  HALT_RED_NOT_REPRODUCED and re-investigate the defect
+  boundary before any production change. After G2 REDs,
+  inspect what existing metadata the consumer actually has to
+  discriminate compatible vs incompatible baseline (mode/type,
+  metric provenance, baseline identity, projection/truncation
+  marker); only if a mechanically available discriminator
+  exists may Strategy D proceed. Otherwise ESCALATE to (a)
+  tag provenance.
 
 VERDICT=
   DEFECT                                    = CROSS_SCALE_RATIO_TRANSFER
@@ -235,6 +261,13 @@ VERDICT=
   REPAIR_ORACLE                             = G2 in getApiMetrics.test.ts
                                                 (consumer seam, NOT
                                                  H/W seam)
+  CONSUMER_RED                              = NOT_YET_AUTHORED
+                                                (no test changes in
+                                                this commit;
+                                                99b3fdf51..8c01a6d3c
+                                                modified 0 test files
+                                                and 0 production files)
+  CONSUMER_RED_EXECUTED                     = NO
   NEW_REVIEW_ROUND                          = YES (repair ACT opens its
                                                 own review pass on the
                                                 implementation commit)

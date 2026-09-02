@@ -22,9 +22,14 @@
 >  repair ACT was corrected (oracle moved to consumer seam).
 > Downstream ACT: `ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
 >  CONSUMER-REPAIR01` (opened 2026-09-02 06:30:00Z;
->  P0-corrected 2026-09-02 08:00:00Z; opens its own review pass
->  on the implementation commit; PRODUCTION_DELTA = ZERO at
->  opening commit; APPLIED at the implementation commit).
+>  P0-corrected 2026-09-02 08:00:00Z; P0-HALT-WRONG-RED-CLAIM
+>  refined 2026-09-02 08:30:00Z; opens its own review pass on
+>  the implementation commit; PRODUCTION_DELTA = ZERO at
+>  opening commit; APPLIED at the implementation commit ONLY
+>  AFTER G2 has been authored in getApiMetrics.test.ts and
+>  mechanically confirmed to RED at current HEAD — per
+>  Factory doctrine "real/live failure → RED reproduction →
+>  repair").
 
 ## §0 — Frozen user-facing invariant (separated truth domains)
 

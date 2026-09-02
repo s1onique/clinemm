@@ -501,3 +501,63 @@ review pass.
 
 EOF NEWLINE (added 2026-09-02 08:00:00Z per factory causal
 reviewer's P2 cleanup directive).
+
+## POST-P0-CORRECTION REFINEMENT: HALT_WRONG_RED_CLAIM (added 2026-09-02 08:30:00Z)
+
+The factory causal reviewer's fifth-second-pass P0 halt identified
+that the repair ACT opened at 8c01a6d3c still contained wording
+equivalent to:
+
+```text
+- "this commit opens the ACT and authors the consumer-seam RED"
+- "this turn's RED authoring proves it" (REOPEN_CONDITION)
+```
+
+This was FALSE: `99b3fdf51..8c01a6d3c` modified 0 test files and 0
+production files. No G2 was authored at the consumer seam; no RED
+was mechanically reproduced; no fabrication was mechanically proven
+at the consumer boundary in that turn.
+
+The honest state at 8c01a6d3c is:
+
+```text
+CONSUMER_RED          = NOT_YET_AUTHORED
+CONSUMER_RED_EXECUTED = NO
+```
+
+The Factory doctrine requires "real/live failure → RED reproduction
+→ repair" — no production modification may precede mechanical RED
+reproduction at the repaired boundary.
+
+This refinement is a documentation/prose correction only; the
+P0-fixed necessity/ablation matrix (G1-G6) and the FROZEN CONTRACT
+(INCOMPATIBLE_BASELINE → no ratio transfer) remain UNCHANGED.
+The repair ACT's STRATEGY_D = SELECTED_FOR_IMPLEMENTATION;
+REPAIR_STATUS = NOT_YET_APPLIED; PRODUCTION_DELTA = ZERO all
+remain unchanged.
+
+The implementation turn is the next turn. It goes directly to:
+
+```text
+1. Author G2 only in apps/vscode/src/shared/__tests__/
+   getApiMetrics.test.ts.
+2. Run it against current HEAD.
+3. If it does not RED:
+     HALT_RED_NOT_REPRODUCED
+4. Inspect what existing metadata the consumer actually has
+   to discriminate compatible vs incompatible baseline (mode/
+   type, metric provenance, baseline identity, projection/
+   truncation marker).
+5. Apply the smallest Strategy-D production change.
+6. Run G2 again → GREEN.
+7. Add G3/G4/G5 conservation.
+8. Run G1 unchanged + collateral suites.
+9. Close.
+```
+
+"Maximum one pre-execution correction cycle has now been
+consumed. Do not send the implementation through another
+speculative design review." (factory causal reviewer, 2026-09-02
+08:30:00Z)
+
+C1: GO.

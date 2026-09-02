@@ -424,6 +424,69 @@ HALT_WRONG_REPAIR_ORACLE)=
   C1: GO (after the correction). Review round closed for this
   recon ACT. Implementation commit opens its own review pass.
 
+DOWNSTREAM_REPAIR_ACT_P0_HALT_WRONG_RED_CLAIM_REFINEMENT (factory
+causal reviewer, 2026-09-02 08:30:00Z FIFTH-SECOND-PASS HALT_WRONG_
+RED_CLAIM)=
+  The repair ACT opened at 8c01a6d3c still contained wording
+  equivalent to:
+    - "this commit opens the ACT and authors the consumer-seam
+       RED" (REPAIR_STATUS section)
+    - "this turn's RED authoring proves it" (REOPEN_CONDITION
+       section)
+  This was FALSE: 99b3fdf51..8c01a6d3c modified 0 test files
+  and 0 production files. No G2 was authored at the consumer
+  seam; no RED was mechanically reproduced; no fabrication
+  was mechanically proven at the consumer boundary in this
+  turn.
+
+  The honest state at 8c01a6d3c is:
+    CONSUMER_RED          = NOT_YET_AUTHORED
+    CONSUMER_RED_EXECUTED = NO
+  The Factory doctrine requires "real/live failure → RED
+  reproduction → repair" — no production modification may
+  precede mechanical RED reproduction at the repaired
+  boundary.
+
+  Refinement applied to the repair ACT and its entry-freeze:
+    - REPAIR_STATUS corrected: this commit freezes the G1-G6
+      necessity/ablation matrix; does NOT modify
+      getApiMetrics.ts AND does NOT yet author G2. The
+      implementation turn must FIRST author G2 in
+      getApiMetrics.test.ts and CONFIRM it REDs at current
+      HEAD before any production modification.
+    - REOPEN_CONDITION corrected: G2 not yet authored; the
+      next turn MUST author G2 and CONFIRM it REDs at HEAD
+      against the existing fabrication. If G2 does NOT RED
+      at HEAD, HALT_RED_NOT_REPRODUCED and re-investigate
+      the defect boundary before any production change.
+      After G2 REDs, inspect what existing metadata the
+      consumer actually has to discriminate compatible vs
+      incompatible baseline (mode/type, metric provenance,
+      baseline identity, projection/truncation marker);
+      only if a mechanically available discriminator exists
+      may Strategy D proceed. Otherwise ESCALATE to (a) tag
+      provenance.
+    - CONSUMER_RED = NOT_YET_AUTHORED and
+      CONSUMER_RED_EXECUTED = NO added as separate state
+      fields so the opening commit cannot be confused with a
+      RED-reproducing commit.
+    - "Maximum one pre-execution correction cycle has now
+      been consumed. Do not send the implementation through
+      another speculative design review." The implementation
+      turn is the next turn; it goes directly to authoring G2
+      and inspecting the consumer-seam discriminator.
+
+  This refinement is a documentation/prose correction only;
+  the P0-fixed necessity/ablation matrix and G1-G6 acceptance
+  gates remain UNCHANGED. The repair ACT's STRATEGY_D =
+  SELECTED_FOR_IMPLEMENTATION; REPAIR_STATUS =
+  NOT_YET_APPLIED; PRODUCTION_DELTA = ZERO all remain
+  unchanged.
+
+  C1: GO. Review round closed for this recon ACT (closed
+  again after refinement). Implementation commit opens its
+  own review pass on the bounded repair.
+
 NEW_CAUSAL_CANDIDATE (factory causal reviewer, 2026-09-02 SECOND REORDERING +
 SECOND REVIEW)=
   The post-compaction TaskHeader rescaling (apps/vscode/src/shared/
