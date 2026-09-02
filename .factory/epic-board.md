@@ -162,6 +162,7 @@ ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION01
 ACT-CLINEMM-TASKHEADER-LIVE-ACTIVITY-COHERENCE01
 ACT-CLINEMM-TASKHEADER-LIVE-TIMER-ZERO-RESET01
 ACT-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01
+ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
 ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS01
 ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-SUBSTRATE01
 ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01
@@ -178,6 +179,7 @@ Short transition notes for closures that materially change the live state. Detai
 
 | Date | Lane | Verdict | Detail |
 |---|---|---|---|
+| 2026-09-02 | Task presentation | CLOSED | [`task-presentation.md`](./epics/task-presentation.md) (ACT `6eaa0864`: ROOT_CAUSE_ISOLATED / REPAIR_VERIFIED — UNBOUND-shadow demotion guard at `selectTaskHeaderPresentation`; LIVE specimen taskId 1788292664979_9qbpd epoch 16 (authoritative streaming + displayed Idle) closed; CASE_A selector authority defect; 148/148 task-header-related tests PASS; typecheck clean) |
 | 2026-09-01 | Approval / classic | CLOSED | [`approval-protection.md`](./epics/approval-protection.md) (correlation ACT `0bbf3c1d7`: CORRELATION_HYPOTHESIS_ELIMINATED at the correlation layer; product-level #10783 immunity NOT YET PROVEN) |
 | 2026-09-01 | Runtime progression | CLOSED | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
 | 2026-08-31 | Approval / dogfood | CLOSED | [`approval-protection.md`](./epics/approval-protection.md) |
