@@ -892,3 +892,20 @@ apps/vscode/.factory/evidence/
 # new roundtrip test must survive a fresh clone.
 !/.factory/acts/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01.md
 !/.factory/evidence/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01/
+# 2026-09-02: ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01
+# Reviewer disposition 2026-09-02: fold the bounded TaskHeader
+# selector-input capture (CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1) into
+# the central dogfood diagnostic profile resolver so dogfood operators no
+# longer need to set the env var on every launcher. Frozen contract:
+# dogfood profile default ON, public default OFF, explicit env override
+# always wins in either profile. Single source of truth at
+# apps/vscode/src/sdk/dogfood-diagnostic-profile.ts:
+# resolveEffectiveTaskHeaderSelectorInputCapture; capture helper consults
+# module seam only (set by applyTaskHeaderSelectorInputCaptureDiagnostic
+# Profile at extension.ts:activate, sibling to TSWPD activation). NO VIAPD
+# UI letter (THSICAP is temporary forensic scaffolding with a removal
+# trigger; per Factory doctrine on temporary diagnostics, no quiet
+# promotion to architecture). PRODUCTION_SEMANTIC_DELTA_PUBLIC = ZERO
+# (operator opt-in on public preserved, public default OFF preserved).
+# REMOVAL_TRIGGER preserved verbatim from the predecessor ACT.
+!/.factory/acts/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01.md

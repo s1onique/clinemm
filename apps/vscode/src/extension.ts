@@ -4,7 +4,7 @@
 import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
-import { applyTurnStateWriterProvenanceDiagnosticProfile } from "@/sdk/dogfood-diagnostic-profile"
+import { applyTaskHeaderSelectorInputCaptureDiagnosticProfile, applyTurnStateWriterProvenanceDiagnosticProfile } from "@/sdk/dogfood-diagnostic-profile"
 import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
 import {
@@ -112,6 +112,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	// first observation. Verified by
 	// `order_diagnostic_armed_before_first_writer.test.ts`.
 	applyTurnStateWriterProvenanceDiagnosticProfile(process.env, isDogfoodRuntime(process.env), context)
+
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+	// Arm the TaskHeader selector-input capture (THSICAP) at the SAME
+	// EARLIEST initialization seam, BEFORE SdkController construction.
+	// The helper composes the effective capture state (explicit env
+	// override > dogfood profile default ON > public default OFF) and
+	// flips the module seam idempotently. The capture is at the
+	// publication seam (`SdkController.getStateToPostToWebview`), so
+	// running this BEFORE SdkController construction guarantees the
+	// seam is armed BEFORE the first publication. Verified by
+	// `dogfood-diagnostic-profile-thsicap-activation.test.ts`.
+	applyTaskHeaderSelectorInputCaptureDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool

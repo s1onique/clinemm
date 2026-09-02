@@ -4,10 +4,22 @@
 // Bounded diagnostic capture for the TaskHeader selector-input fields.
 // Lives at the same state-post boundary as the existing
 // activity.publication.v1 emission (SdkController.getStateToPostToWebview())
-// and is gated by the new env var
-// CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1=<truthy>. When the env var is
-// not truthy, no record is appended and production path-semantics are
-// unchanged in the default build.
+// and is gated by the EFFECTIVE capture state held in the module-level
+// `captureEnabled` seam. When the effective captureEnabled is false,
+// no record is appended and production path-semantics are unchanged in
+// the default build.
+//
+// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01 (this ACT):
+// the env-var gate is now CONSUMED by the central dogfood diagnostic
+// profile resolver (`apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`),
+// which is the SOLE parser of the env var (explicit env override >
+// dogfood profile default ON > public default OFF). The resolver arms
+// the module seam below at extension activation via
+// `applyTaskHeaderSelectorInputCaptureDiagnosticProfile`. The capture
+// helper consults ONLY the module seam — the env var is NOT read
+// anywhere in this module. Tests that bypass the activation path call
+// the seam helpers directly. See the "REMOVAL_TRIGGER" comment block
+// at the bottom of this file for the bounded-diagnostic doctrine.
 //
 // Why this exists (reviewer disposition 2026-09-02 HALT_LIVE_BINDING_NOT_PROVEN):
 //
@@ -77,6 +89,15 @@ export interface TaskHeaderSelectorInputRecord {
 const buffer: TaskHeaderSelectorInputRecord[] = []
 let bufferSize = DEFAULT_BUFFER_SIZE
 
+// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+// module-level capture seam. The dogfood diagnostic profile resolver
+// (apps/vscode/src/sdk/dogfood-diagnostic-profile.ts) computes the
+// EFFECTIVE capture state at extension activation and arms this seam.
+// Production capture (`captureTaskHeaderSelectorInput`) consults ONLY
+// this seam — the env var is read in exactly ONE place (the resolver).
+// Default: OFF (fail-closed).
+let captureEnabled = false
+
 function pushRecord(record: TaskHeaderSelectorInputRecord): void {
 	buffer.push(record)
 	if (buffer.length > bufferSize) {
@@ -84,12 +105,47 @@ function pushRecord(record: TaskHeaderSelectorInputRecord): void {
 	}
 }
 
-export function isTaskHeaderSelectorInputDiagnosticEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-	const raw = env["CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1"]
-	if (raw === undefined || raw === null) return false
-	const v = String(raw).trim().toLowerCase()
-	return v === "1" || v === "true" || v === "yes"
+/**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+ * Module-level seam for the capture state. The dogfood diagnostic
+ * profile resolver sets this once at extension activation; production
+ * capture consults this helper (NOT the env var directly) to decide
+ * whether to append. Tests that bypass the activation path can flip
+ * this directly via `setTaskHeaderSelectorInputCaptureEnabled`.
+ *
+ * Pure read of the module-level bit; no env-var reading here.
+ */
+export function isTaskHeaderSelectorInputCaptureEnabled(): boolean {
+	return captureEnabled
 }
+
+/**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+ * Flip the module-level capture seam. Idempotent: calling twice with
+ * the same value is a no-op. Used exclusively by the activation helper
+ * in `dogfood-diagnostic-profile.ts`; tests call this directly to
+ * exercise the capture path without going through activation.
+ */
+export function setTaskHeaderSelectorInputCaptureEnabled(enabled: boolean): void {
+	captureEnabled = Boolean(enabled)
+}
+
+// ===========================================================================
+// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+// The env-var parsing function (`isTaskHeaderSelectorInputDiagnosticEnabled`)
+// was REMOVED from this module in the P1-fix turn. The central dogfood
+// diagnostic profile resolver
+// (`apps/vscode/src/sdk/dogfood-diagnostic-profile.ts:
+// resolveEffectiveTaskHeaderSelectorInputCapture`) is now the SOLE parser of
+// the env var. This module exports ONLY: the module seam
+// (`isTaskHeaderSelectorInputCaptureEnabled` /
+// `setTaskHeaderSelectorInputCaptureEnabled`), the capture helper
+// (`captureTaskHeaderSelectorInput`), the ring buffer accessors
+// (`getTaskHeaderSelectorInputRecords` /
+// `clearTaskHeaderSelectorInputRecords` /
+// `setTaskHeaderSelectorInputBufferSize`). Production code in this
+// module never reads `process.env`.
+// ===========================================================================
 
 export function captureTaskHeaderSelectorInput(args: {
 	readonly stateVersion: number
@@ -101,7 +157,11 @@ export function captureTaskHeaderSelectorInput(args: {
 	readonly selectedPhase: TurnPhase
 	readonly selectedSource: "host" | "shadow" | "legacy"
 }): void {
-	if (!isTaskHeaderSelectorInputDiagnosticEnabled()) return
+	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+	// consult ONLY the module seam set by the activation profile
+	// resolver. The env var is read in exactly ONE place (the resolver);
+	// the capture helper is a downstream consumer of the resolved state.
+	if (!isTaskHeaderSelectorInputCaptureEnabled()) return
 	pushRecord({
 		stateVersion: args.stateVersion,
 		publicationShadowBinding: args.publicationShadowBinding,
@@ -129,3 +189,38 @@ export function setTaskHeaderSelectorInputBufferSize(n: number): void {
 		buffer.shift()
 	}
 }
+
+// ============================================================================
+// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01
+// REMOVAL_TRIGGER (per Factory doctrine on temporary diagnostics):
+//
+//   first successful LIVE binding of
+//     PUBLICATION_SHADOW_BINDING + LOCAL_SHADOW_TURNSEQ
+//     for a recurrence, OR
+//   CAPTURE_INSUFFICIENT
+//
+// No quiet promotion to architecture. When the Idle recurrence is
+// finally bound and this capture is no longer needed, REMOVE the
+// profile knob together with the diagnostic. The capture module,
+// the activation seam, the resolver helper, and this comment block
+// all go together.
+//
+// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01 (P1-fix
+// turn): the legacy `isTaskHeaderSelectorInputDiagnosticEnabled`
+// function was REMOVED from this module. The central dogfood
+// diagnostic profile resolver is now the SOLE parser of the env var;
+// this module exports the module seam + capture helper + ring buffer
+// accessors only. When the trigger fires, REMOVE THE FOLLOWING
+// TOGETHER:
+//   - this entire file (apps/vscode/src/sdk/task-header-selector-input-capture.ts)
+//   - the resolver+activation helper+THSICAP_ENV_VAR+THSICAP comment
+//     block in apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+//   - the activation call in apps/vscode/src/extension.ts
+//   - the seam-toggling in apps/vscode/src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts
+//   - the new canonical vitest suite at apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-thsicap-activation.test.ts
+//   - the operator dump runtime + commands
+//   - the capture call in apps/vscode/src/sdk/SdkController.ts
+//   - the ACT MD at .factory/acts/ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01.md
+//   - the .gitignore whitelist entry
+//   - the THSICAP row in .factory/epic-board.md
+// ============================================================================

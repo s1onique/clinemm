@@ -24,12 +24,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { resolveEffectiveTaskHeaderSelectorInputCapture } from "../dogfood-diagnostic-profile"
 import {
 	captureTaskHeaderSelectorInput,
 	clearTaskHeaderSelectorInputRecords,
 	getTaskHeaderSelectorInputRecords,
-	isTaskHeaderSelectorInputDiagnosticEnabled,
+	isTaskHeaderSelectorInputCaptureEnabled,
 	setTaskHeaderSelectorInputBufferSize,
+	setTaskHeaderSelectorInputCaptureEnabled,
 	type TaskHeaderSelectorInputRecord,
 } from "../task-header-selector-input-capture"
 import {
@@ -38,22 +40,59 @@ import {
 	type TaskHeaderSelectorInputDiagnosticContext,
 } from "../task-header-selector-input-capture-runtime"
 
-describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / gate", () => {
-	it("TUSIX01-GATE_OFF: default env (no CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1) returns false", () => {
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({})).toBe(false)
+// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01 (P1-fix turn):
+// the env-var parsing function
+// (`isTaskHeaderSelectorInputDiagnosticEnabled`) was REMOVED from the
+// capture module. The central dogfood diagnostic profile resolver
+// (`resolveEffectiveTaskHeaderSelectorInputCapture`) is the SOLE parser
+// of the env var. These gate tests now exercise the central resolver
+// directly — they pin the env-var reading contract at its sole
+// authority. Profile=public (isDogfood=false) is used so the gate
+// defaults are deterministic.
+describe("ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01 / central-resolver gate (was ACT-...-CORRECTION01 / gate)", () => {
+	it("TUSIX01-GATE_OFF: default env (no CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1) returns false (public profile)", () => {
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({}, false)).toEqual({ enabled: false, source: "profile" })
 	})
 
-	it("TUSIX01-GATE_ON: env=1 / true / yes (case-insensitive) returns true", () => {
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" })).toBe(true)
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "true" })).toBe(true)
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "YES" })).toBe(true)
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: " 1 " })).toBe(true)
+	it("TUSIX01-GATE_ON: env=1 / true / yes (case-insensitive) returns enabled=true source=env", () => {
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "1" }, false)).toEqual({
+			enabled: true,
+			source: "env",
+		})
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "true" }, false)).toEqual({
+			enabled: true,
+			source: "env",
+		})
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "YES" }, false)).toEqual({
+			enabled: true,
+			source: "env",
+		})
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: " 1 " }, false)).toEqual({
+			enabled: true,
+			source: "env",
+		})
 	})
 
-	it("TUSIX01-GATE_OTHER: env=0 / off / false / empty returns false", () => {
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" })).toBe(false)
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "off" })).toBe(false)
-		expect(isTaskHeaderSelectorInputDiagnosticEnabled({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "" })).toBe(false)
+	it("TUSIX01-GATE_OTHER: env=0 / off / false / empty / garbage returns enabled=false (public profile)", () => {
+		// explicit OFF (env-driven, but the result is OFF)
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "0" }, false)).toEqual({
+			enabled: false,
+			source: "env",
+		})
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "off" }, false)).toEqual({
+			enabled: false,
+			source: "env",
+		})
+		// empty / unset -> falls through to profile default (public = OFF)
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "" }, false)).toEqual({
+			enabled: false,
+			source: "profile",
+		})
+		// garbage -> falls through to profile default (public = OFF)
+		expect(resolveEffectiveTaskHeaderSelectorInputCapture({ CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1: "banana" }, false)).toEqual({
+			enabled: false,
+			source: "profile",
+		})
 	})
 })
 
@@ -64,15 +103,22 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 /
 		savedEnv = process.env
 		clearTaskHeaderSelectorInputRecords()
 		setTaskHeaderSelectorInputBufferSize(64)
+		// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+		// capture path consults the module seam (set by the activation
+		// helper in production). Tests bypass activation and toggle the
+		// seam directly.
+		setTaskHeaderSelectorInputCaptureEnabled(false)
 	})
 
 	afterEach(() => {
 		process.env = savedEnv
 		clearTaskHeaderSelectorInputRecords()
+		setTaskHeaderSelectorInputCaptureEnabled(false)
 	})
 
 	it("TUSIX01-CAPTURE_OFF: captureTaskHeaderSelectorInput is a complete no-op when disabled", () => {
-		delete process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1
+		setTaskHeaderSelectorInputCaptureEnabled(false)
+		expect(isTaskHeaderSelectorInputCaptureEnabled()).toBe(false)
 		captureTaskHeaderSelectorInput({
 			stateVersion: 27546,
 			publicationShadowBinding: "UNBOUND",
@@ -87,7 +133,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 /
 	})
 
 	it("TUSIX01-CAPTURE_LIVE_PATH_A: the LIVE-shaped tuple is recorded with localShadowTurnSeq=undefined", () => {
-		process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 = "1"
+		setTaskHeaderSelectorInputCaptureEnabled(true)
 		captureTaskHeaderSelectorInput({
 			stateVersion: 27546,
 			publicationShadowBinding: "UNBOUND",
@@ -120,7 +166,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 /
 		// AND the explicit-staleness gate does NOT fire either
 		// (seq === localShadowTurnSeq, not stale). The capture records
 		// this shape so the next recurrence can mechanically detect it.
-		process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 = "1"
+		setTaskHeaderSelectorInputCaptureEnabled(true)
 		captureTaskHeaderSelectorInput({
 			stateVersion: 27546,
 			publicationShadowBinding: "UNBOUND",
@@ -139,7 +185,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 /
 	})
 
 	it("TUSIX01-CAPTURE_FIELD_INDEPENDENCE: publicationShadowBinding and localShadowTurnSeq are independent fields", () => {
-		process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 = "1"
+		setTaskHeaderSelectorInputCaptureEnabled(true)
 		captureTaskHeaderSelectorInput({
 			stateVersion: 1,
 			publicationShadowBinding: "UNBOUND",
@@ -156,7 +202,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 /
 	})
 
 	it("TUSIX01-RING_BUFFER: setBufferSize truncates oldest entries", () => {
-		process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 = "1"
+		setTaskHeaderSelectorInputCaptureEnabled(true)
 		setTaskHeaderSelectorInputBufferSize(2)
 		for (let i = 1; i <= 5; i++) {
 			captureTaskHeaderSelectorInput({
@@ -177,7 +223,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 /
 	})
 
 	it("TUSIX01-CLEAR: clear removes all records", () => {
-		process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 = "1"
+		setTaskHeaderSelectorInputCaptureEnabled(true)
 		captureTaskHeaderSelectorInput({
 			stateVersion: 1,
 			publicationShadowBinding: "MISSING",
@@ -237,11 +283,17 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-F
 		savedEnv = process.env
 		clearTaskHeaderSelectorInputRecords()
 		setTaskHeaderSelectorInputBufferSize(64)
+		// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+		// operator-dump tests bypass activation and toggle the seam
+		// directly. See the companion comment in the capture describe
+		// block above.
+		setTaskHeaderSelectorInputCaptureEnabled(false)
 	})
 
 	afterEach(() => {
 		process.env = savedEnv
 		clearTaskHeaderSelectorInputRecords()
+		setTaskHeaderSelectorInputCaptureEnabled(false)
 		if (existsSync(tmp)) {
 			rmSync(tmp, { recursive: true, force: true })
 		}
@@ -261,7 +313,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-F
 	 * the diagnostic has zero production value.
 	 */
 	it("TUSIX01-OPERATOR_DUMP_ROUNDTRIP: record -> dump -> exact selector fields survive for the alternative LIVE-shape subcase", async () => {
-		process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 = "1"
+		setTaskHeaderSelectorInputCaptureEnabled(true)
 
 		// Step 1: simulate the production seam capturing the
 		// alternative LIVE-shape subcase (P0 reviewer's path B) where
@@ -311,7 +363,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-F
 	 * state and distinguish "no ring" from "no records".
 	 */
 	it("TUSIX01-OPERATOR_DUMP_EMPTY: empty ring produces an empty file (operator-distinguishable from missing)", async () => {
-		delete process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1
+		setTaskHeaderSelectorInputCaptureEnabled(false)
 		const { file, recordCount } = await dumpExtensionSideTaskHeaderSelectorInputDiagnostic(context)
 		expect(existsSync(file)).toBe(true)
 		expect(readFileSync(file, "utf8")).toBe("")
@@ -323,7 +375,7 @@ describe("ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-F
 	 * clear is observable on disk.
 	 */
 	it("TUSIX01-OPERATOR_CLEAR: clear removes both the ring and the dump file", async () => {
-		process.env.CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 = "1"
+		setTaskHeaderSelectorInputCaptureEnabled(true)
 		captureTaskHeaderSelectorInput({
 			stateVersion: 1,
 			publicationShadowBinding: "MISSING",

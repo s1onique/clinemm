@@ -122,6 +122,10 @@ import {
 	isTurnStateWriterProvenanceDiagnosticEnabled,
 } from "@shared/turn-state-writer-provenance"
 import type { TurnStateWriterProvenanceDiagnosticContext } from "./turn-state-writer-provenance-runtime"
+import {
+	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
+	setTaskHeaderSelectorInputCaptureEnabled,
+} from "./task-header-selector-input-capture"
 
 
 const ENV_VARS: Readonly<Record<DiagnosticKnob, string>> = {
@@ -415,4 +419,146 @@ export function applyTurnStateWriterProvenanceDiagnosticProfile(
 		return { d: false, source: resolved.source, flipped: true }
 	}
 	return { d: resolved.d, source: resolved.source, flipped: false }
+}
+
+// ===========================================================================
+// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01
+//
+// Bounded diagnostic-profile extension for the TaskHeader selector-input
+// capture (THSICAP). The capture was authored by
+// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 and
+// gated exclusively by the env var
+// `CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1=<truthy>`. Per Factory
+// doctrine on temporary diagnostics, the env-var gate is now folded into
+// the central dogfood diagnostic profile so dogfood operators no longer
+// need to set the env var on every launcher.
+//
+// Post-P1-fix: `resolveEffectiveTaskHeaderSelectorInputCapture` below
+// is the SOLE parser of the env var; the legacy env-reader in
+// `task-header-selector-input-capture.ts` was REMOVED so the capture
+// module's production code never reads `process.env` and there is no
+// risk of two independently evolvable interpretations of the same knob.
+//
+// Frozen contract:
+//
+//   dogfood profile (CLINEMM_RUNTIME_PROFILE=dogfood)
+//     + no env var                      -> THSICAP ON  (profile default)
+//     + env=1/true/yes                  -> THSICAP ON  (explicit ON)
+//     + env=0/off/false                 -> THSICAP OFF (explicit OFF)
+//     + garbage env                     -> THSICAP ON  (falls through)
+//
+//   public profile (anything-else)
+//     + no env var                      -> THSICAP OFF (public default)
+//     + env=1/true/yes                  -> THSICAP ON  (operator opt-in)
+//     + env=0/off/false                 -> THSICAP OFF (explicit OFF)
+//     + garbage env                     -> THSICAP OFF (public default)
+//
+//   explicit env override ALWAYS wins (in either profile): operator
+//   opt-in on public is preserved; override-down in dogfood flips the
+//   auto-on default off. This is the only piece of state that crosses
+//   profiles; identity is the SOLE gate for the profile default.
+//
+// REMOVAL_TRIGGER (preserved from the bounded-diagnostic doctrine):
+//   first successful LIVE binding of
+//     PUBLICATION_SHADOW_BINDING + LOCAL_SHADOW_TURNSEQ
+//     for a recurrence, OR
+//   CAPTURE_INSUFFICIENT
+// When the Idle recurrence is finally bound, REMOVE this resolver + the
+// activation helper + the capture module + the wiring in
+// `extension.ts:activate` TOGETHER.
+//
+// The capture is NOT exposed as a UI letter in the TaskHeader indicator
+// (which stays VIAPD). This is intentional: THSICAP is temporary
+// forensic scaffolding with a removal trigger; making it a sixth letter
+// risks turning it into permanent profile architecture.
+// ===========================================================================
+
+const THSICAP_ENV_VAR = "CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1"
+
+/**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+ *
+ * Pure / synchronous / no I/O. Resolves the EFFECTIVE THSICAP capture
+ * state from the env var and the dogfood identity bit. The env var is
+ * read in EXACTLY ONE place — this function. All consumers of the
+ * effective state go through this resolver (or the activation helper
+ * below); the capture helper itself reads ONLY the module seam set by
+ * the activation helper.
+ *
+ * Precedence (top wins; deterministic; fail-closed):
+ *
+ *   1. Explicit env override:
+ *        `=1`/`true`/`yes` (case-insensitive, whitespace tolerant)
+ *              -> ON  (honored in both profiles — operator opt-in
+ *                      on public is preserved verbatim per the
+ *                      predecessor ACT; explicit override-down in
+ *                      dogfood flips the auto-on default off)
+ *        `=0`/`off`/`false`
+ *              -> OFF (honored in both profiles)
+ *        garbage / unset -> falls through to (2)
+ *
+ *   2. Profile default:
+ *        `isDogfood === true`  -> ON  (auto-on in dogfood)
+ *        `isDogfood === false` -> OFF (public default OFF preserved)
+ */
+export function resolveEffectiveTaskHeaderSelectorInputCapture(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+): { readonly enabled: boolean; readonly source: "env" | "profile" } {
+	// Layer 1: explicit env override.
+	const raw = env[THSICAP_ENV_VAR]
+	if (typeof raw === "string" && raw.length > 0) {
+		const normalized = raw.trim().toLowerCase()
+		if (TRUTHY_DISABLE.has(normalized)) {
+			return { enabled: false, source: "env" }
+		}
+		if (TRUTHY_ENABLE.has(normalized)) {
+			return { enabled: true, source: "env" }
+		}
+		// garbage -> fall through to layer 2
+	}
+	// Layer 2: profile default.
+	return { enabled: isDogfood, source: "profile" }
+}
+
+/**
+ * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-TASKHEADER-CAPTURE01:
+ *
+ * THE single production activation helper for the THSICAP seam. Called
+ * from `extension.ts:activate` (sibling to
+ * `applyTurnStateWriterProvenanceDiagnosticProfile`); there is exactly
+ * ONE production activation path, no copied orchestration in tests.
+ *
+ * Contract:
+ *   - Reads the resolved THSICAP state via
+ *     `resolveEffectiveTaskHeaderSelectorInputCapture(env, isDogfood)`.
+ *   - Flips the module seam in
+ *     `./task-header-selector-input-capture.ts` via
+ *     `setTaskHeaderSelectorInputCaptureEnabled(enabled)` — idempotent
+ *     (only mutates when the resolved state diverges from the current
+ *     seam state).
+ *   - Returns `{ enabled, source, flipped }` for diagnostics.
+ *
+ * Called BEFORE the first `SdkController.getStateToPostToWebview()`
+ * (the publication seam where the capture helper fires). The capture
+ * is at the publication seam — not at a mutation seam — so the helper
+ * only needs to run BEFORE SdkController construction. Verified by
+ * the AC3 test in
+ * `dogfood-diagnostic-profile-thsicap-activation.test.ts`.
+ */
+export function applyTaskHeaderSelectorInputCaptureDiagnosticProfile(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+): { readonly enabled: boolean; readonly source: "env" | "profile"; readonly flipped: boolean } {
+	const resolved = resolveEffectiveTaskHeaderSelectorInputCapture(env, isDogfood)
+	const was = _isTaskHeaderSelectorInputCaptureEnabled()
+	if (resolved.enabled && !was) {
+		setTaskHeaderSelectorInputCaptureEnabled(true)
+		return { enabled: true, source: resolved.source, flipped: true }
+	}
+	if (!resolved.enabled && was) {
+		setTaskHeaderSelectorInputCaptureEnabled(false)
+		return { enabled: false, source: resolved.source, flipped: true }
+	}
+	return { enabled: resolved.enabled, source: resolved.source, flipped: false }
 }
