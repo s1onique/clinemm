@@ -9,8 +9,10 @@ ENTRY_HEAD     = 2df124d226a7a537ebc26b637613960d687d986d
 SUBJECT_HEAD   = 762b7cdb3c70ed55d97ab7c6b93247b2d0c8fc55
                  (operator-dump + roundtrip test commit)
 
-CLOSURE_HEAD   = 762b7cdb3c70ed55d97ab7c6b93247b2d0c8fc55
-                 (no production-code change to the selector;
+CLOSURE_HEAD   = fd1d659903e9b19bcc02d883c9eb5e2ab671a6a4
+                 (this ACT closes at the docs + board commit HEAD;
+                  verified via `git rev-parse HEAD` at closure;
+                  no production-code change to the selector;
                   dump / clear is observational only)
 ```
 
@@ -92,7 +94,10 @@ once; this is that record.
 | Metric                            | Predecessor claim              | FIX01 verdict                                |
 |-----------------------------------|--------------------------------|----------------------------------------------|
 | PRODUCTION_CODE_DELTA             | 0 lines (selectTask unchanged) | 0 lines (unchanged) — same selector         |
-| PRODUCTION_DIAGNOSTIC_DELTA       | (omitted)                      | YES (5 production-source files)              |
+| PRODUCTION_DIAGNOSTIC_DELTA       | (omitted)                      | YES                                          |
+| PRODUCTION_RUNTIME_SOURCE         | (omitted)                      | 3 files (extension.ts, registry.ts, +1 new runtime module) |
+| PRODUCTION_EXTENSION_MANIFEST     | (omitted)                      | 1 file (package.json contributes.commands)   |
+| TEST_DELTA                        | (omitted)                      | 1 file (3 new roundtrip tests)               |
 | PRODUCTION_SEMANTIC_DELTA         | (omitted)                      | ZERO when env var disabled (TUSIX01-CAPTURE_OFF) |
 | SELECTOR_REPAIR_DELTA             | (omitted)                      | ZERO (the bounded guard at 6eaa0864 stands)   |
 
@@ -189,7 +194,11 @@ P1_PRODUCTION_DELTA_WORDING         = CORRECTED
 P1_HELPER_COVERAGE                  = MECHANICALLY EXHAUSTIVE (4+2+2=8)
 
 PRODUCTION_CODE_DELTA               = selectTaskHeaderPresentation.ts unchanged
-PRODUCTION_DIAGNOSTIC_DELTA         = YES (5 production-source files)
+PRODUCTION_DIAGNOSTIC_DELTA         = YES
+PRODUCTION_RUNTIME_SOURCE           = 3 files (extension.ts, registry.ts,
+                                       +1 new runtime module)
+PRODUCTION_EXTENSION_MANIFEST       = 1 file (package.json)
+TEST_DELTA                          = 1 file (3 new roundtrip tests)
 PRODUCTION_SEMANTIC_DELTA_DISABLED  = ZERO
 
 TUSIX01_TESTS                       = 13/13 PASS (10 predecessor + 3 roundtrip)
@@ -199,7 +208,8 @@ WATCHDOG_TESTS                      = 57/57 PASS (HOHOD + PTAD + watchdog)
 
 APPS_VSCODE_CHECK_TYPES             = 0 diagnostics
 GIT_DIFF_CHECK                      = PASS
-WORKING_TREE                        = clean at SUBJECT_HEAD = CLOSURE_HEAD = 762b7cdb3
+WORKING_TREE                        = clean at SUBJECT_HEAD = 762b7cdb3
+                                     CLOSURE_HEAD         = fd1d65990
 
 LIVE_CLOSURE_VERDICT                = PENDING (one dogfood cycle)
 C1_GATE                             = GO (operator path mechanically executable)

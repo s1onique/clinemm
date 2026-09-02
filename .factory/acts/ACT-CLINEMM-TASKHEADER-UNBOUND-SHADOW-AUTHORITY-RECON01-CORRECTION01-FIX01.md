@@ -11,12 +11,19 @@
 > ENTRY_HEAD  = 2df124d226a7a537ebc26b637613960d687d986d
 >               (verified via git rev-parse HEAD at FIX01 entry;
 >                predecessor CORRECTION01 closure)
-> SUBJECT_HEAD = 762b7cdb3a8c8eb1f7d3b1e8d4f5e2c0a7b9c1d2
->               (operator-dump + roundtrip test commit; recorded
->                in final-report.md)
-> CLOSURE_HEAD = 762b7cdb3a8c8eb1f7d3b1e8d4f5e2c0a7b9c1d2
->               (this ACT closes at the same HEAD; no production
->                selector change)
+> SUBJECT_HEAD = 762b7cdb3c70ed55d97ab7c6b93247b2d0c8fc55
+>               (operator-dump + roundtrip test commit; verified
+>                via `git rev-parse 762b7cdb3` after commit)
+> CLOSURE_HEAD = fd1d659903e9b19bcc02d883c9eb5e2ab671a6a4
+>               (this ACT closes at the factory-corrections commit
+>                HEAD; verified via `git rev-parse HEAD` at closure;
+>                no production-code change to the selector;
+>                P1 SHA provenance + P2 production-delta taxonomy
+>                + EOF newlines + package.json indent corrected
+>                in this closure commit. The closure commit IS this
+>                doc's containing commit; any further amendment will
+>                move CLOSURE_HEAD forward and require a follow-on
+>                ACT amendment.)
 >
 > Predecessor ACT = ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01
 >                   HEAD: 2df124d22 (predecessor closure with the
@@ -152,11 +159,20 @@ the actual union, not inferred.
 ## 4. The corrected production-delta wording
 
 ```
-PRODUCTION_DIAGNOSTIC_DELTA =
-  YES (5 production-source files touched: package.json,
-       extension.ts, registry.ts,
-       +1 new module task-header-selector-input-capture-runtime.ts,
-       +1 new test file)
+PRODUCTION_DIAGNOSTIC_DELTA = YES
+
+PRODUCTION_RUNTIME_SOURCE =
+  apps/vscode/src/extension.ts
+  apps/vscode/src/registry.ts
+  apps/vscode/src/sdk/task-header-selector-input-capture-runtime.ts  (new module)
+
+PRODUCTION_EXTENSION_MANIFEST =
+  apps/vscode/package.json
+  (declares the two new cline.debug.* command contributions)
+
+TEST_DELTA =
+  apps/vscode/src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts
+  (3 new roundtrip tests)
 
 PRODUCTION_SEMANTIC_DELTA_WHEN_DISABLED =
   ZERO (env var CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1 is the
@@ -166,6 +182,12 @@ SELECTOR_REPAIR_DELTA = ZERO
   (selectTaskHeaderPresentation.ts unchanged; the bounded guard
    from 6eaa0864 is the production-code repair)
 ```
+
+The predecessor's wording collapsed test files + extension manifest
+into "production-source files". The corrected taxonomy separates the
+three concerns: production runtime source (the code that ships), the
+extension manifest (package.json `contributes`), and test surface
+(where the verification lives).
 
 ## 5. The LIVE binding forward path
 
@@ -214,7 +236,11 @@ P1_HELPER_COVERAGE           = verified mechanically against the
                               actual TurnPhase union (exhaustive:
                               4 + 2 + 2 = 8 literals)
 PRODUCTION_CODE_DELTA        = selectTaskHeaderPresentation unchanged
-PRODUCTION_DIAGNOSTIC_DELTA  = 5 files
+PRODUCTION_DIAGNOSTIC_DELTA  = YES
+PRODUCTION_RUNTIME_SOURCE    = 3 files (extension.ts, registry.ts,
+                                 +1 new module)
+PRODUCTION_EXTENSION_MANIFEST = 1 file  (package.json)
+TEST_DELTA                   = 1 file  (3 new roundtrip tests)
 PRODUCTION_SEMANTIC_DELTA_WHEN_DISABLED = ZERO
 TUSIX01_TESTS                 = 13/13 PASS (10 predecessor + 3 roundtrip)
 TASK_HEADER_TESTS             = 234/234 PASS across 18 files

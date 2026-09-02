@@ -5,10 +5,11 @@ ENTRY_HEAD                  = 2df124d226a7a537ebc26b637613960d687d986d
 SUBJECT_HEAD                 = 762b7cdb3c70ed55d97ab7c6b93247b2d0c8fc55
                               (operator-dump + roundtrip test commit)
 
-CLOSURE_HEAD                 = 762b7cdb3c70ed55d97ab7c6b93247b2d0c8fc55
-                              (this ACT closes at the same HEAD; no
-                               production selector change; observational
-                               surface only)
+CLOSURE_HEAD                 = fd1d659903e9b19bcc02d883c9eb5e2ab671a6a4
+                              (this ACT closes at the docs + board
+                               commit HEAD; verified via `git rev-parse
+                               HEAD` at closure; the production-source
+                               change landed at SUBJECT_HEAD above)
 
 Predecessor ACT              = ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01
                               HEAD: 2df124d22 (in-memory ring + capture
@@ -23,7 +24,11 @@ Reviewer disposition (2026-09-02 second pass):
 
 Operationally:
   TUSIX01_OPERATOR_DUMP_ROUNDTRIP = PASS
-  PRODUCTION_DIAGNOSTIC_DELTA     = YES (5 files)
+  PRODUCTION_DIAGNOSTIC_DELTA     = YES
+  PRODUCTION_RUNTIME_SOURCE       = 3 files (extension.ts, registry.ts,
+                                       +1 new module)
+  PRODUCTION_EXTENSION_MANIFEST   = 1 file (package.json)
+  TEST_DELTA                      = 1 file (3 new roundtrip tests)
   PRODUCTION_SEMANTIC_DELTA_DISABLED = ZERO
   SELECTOR_REPAIR_DELTA           = ZERO
   REMOVAL_TRIGGER                 = LIVE_PUBLICATION_SHADOW_BINDING +
