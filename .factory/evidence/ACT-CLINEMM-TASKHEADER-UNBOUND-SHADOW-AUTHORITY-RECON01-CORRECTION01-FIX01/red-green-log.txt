@@ -1,0 +1,5 @@
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01 / operator dump roundtrip > TUSIX01-OPERATOR_DUMP_ROUNDTRIP: record -> dump -> exact selector fields survive for the alternative LIVE-shape subcase 3ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01 / operator dump roundtrip > TUSIX01-OPERATOR_DUMP_EMPTY: empty ring produces an empty file (operator-distinguishable from missing) 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01 / operator dump roundtrip > TUSIX01-OPERATOR_CLEAR: clear removes both the ring and the dump file 1ms
+
+Tests  13 passed (13) (10 predecessor + 3 FIX01 roundtrip)

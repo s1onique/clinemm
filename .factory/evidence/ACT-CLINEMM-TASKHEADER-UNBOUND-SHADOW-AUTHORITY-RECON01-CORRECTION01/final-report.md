@@ -118,6 +118,40 @@ bounded completion is observational-only (a diagnostic capture). The
 LIVE closure verdict remains PENDING; one post-repair dogfood cycle
 with CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1=1 will mechanically
 bind the selector-input fields to the LIVE specimen.
+
+## 11. SEE_ALSO (FIX01 pointer)
+
+```
+ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01
+HEAD: 762b7cdb3
+
+Adds the operator-visible dump mechanism this CORRECTION01 omitted.
+Reuses the TSWPD debug command pattern exactly:
+
+  cline.debug.dumpTaskHeaderSelectorInputDiagnostic
+    -> flushes the bounded ring to
+       <globalStorageUri>/task-header-selector-input-capture.jsonl
+  cline.debug.clearTaskHeaderSelectorInputDiagnostic
+    -> unlinks the dump file and clears the ring
+
+TUSIX01-OPERATOR_DUMP_ROUNDTRIP proves the roundtrip
+(record -> dump -> JSONL -> exact selector fields survive).
+
+CORRECTION TO THE FORENSIC-NOTE WORDING ABOVE:
+  The "PRODUCTION_CODE_DELTA = 0 lines" wording preserved in §3
+  of this report narrowly refers to selectTaskHeaderPresentation.ts
+  (the selector production code, unchanged). It does NOT mean the
+  diagnostic surface is invisible to production code: it ships in
+  production as a default-off capture + dump mechanism. The FIX01
+  ACT documents the precise wording:
+    PRODUCTION_DIAGNOSTIC_DELTA = YES
+    PRODUCTION_SEMANTIC_DELTA   = ZERO WHEN DISABLED
+    SELECTOR_REPAIR_DELTA       = ZERO
+  and verifies mechanically that the helper coverage is exhaustive
+  against the TurnPhase union (4+2+2 = 8 literals). A REMOVAL_TRIGGER
+  is documented on the diagnostic so it cannot quietly promote to
+  architecture.
+```
 ```
 
 ## 7. Evidence labels

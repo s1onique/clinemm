@@ -164,6 +164,7 @@ ACT-CLINEMM-TASKHEADER-LIVE-TIMER-ZERO-RESET01
 ACT-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01
 ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
 ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01
+ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01
 ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS01
 ACT-CLINEMM-UPSTREAM-ISSUE-INTAKE-SUBSTRATE01
 ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01
@@ -180,7 +181,7 @@ Short transition notes for closures that materially change the live state. Detai
 
 | Date | Lane | Verdict | Detail |
 |---|---|---|---|
-| 2026-09-02 | Task presentation | CLOSED_WITH_CORRECTION_PENDING | [`task-presentation.md`](./epics/task-presentation.md) (ACT `6eaa0864`: ROOT_CAUSE_ISOLATED_FOR_GENERIC_SUBCASE / REPAIR_VERIFIED_FOR_EXERCISED_CONTRACT — UNBOUND-shadow demotion guard at `selectTaskHeaderPresentation`; LIVE specimen taskId 1788292664979_9qbpd epoch 16 NOT YET closed by reviewer disposition 2026-09-02 HALT_LIVE_BINDING_NOT_PROVEN; bounded diagnostic capture landed at `84dbaaade` via CORRECTION01 enables one post-repair dogfood cycle to mechanically bind the selector-input to the publication; CASE_A selector authority defect; 196/196 task-header-related tests PASS; typecheck clean) |
+| 2026-09-02 | Task presentation | CLOSED_WITH_OPERATOR_DUMP_LANDED_C1_GO | [`task-presentation.md`](./epics/task-presentation.md) (predecessor ACT `6eaa0864`: ROOT_CAUSE_ISOLATED_FOR_GENERIC_SUBCASE / REPAIR_VERIFIED_FOR_EXERCISED_CONTRACT — UNBOUND-shadow demotion guard at `selectTaskHeaderPresentation`; LIVE specimen taskId 1788292664979_9qbpd epoch 16 NOT YET closed; reviewer dispositions 2026-09-02 HALT_LIVE_BINDING_NOT_PROVEN (CORRECTION01) + HALT_CAPTURE_NOT_EXPORTABLE (FIX01) both honored; CORRECTION01 (`84dbaaade`) landed bounded in-memory diagnostic capture; FIX01 (`762b7cdb3`) closed the operator-export gap by adding `cline.debug.dumpTaskHeaderSelectorInputDiagnostic` + `cline.debug.clearTaskHeaderSelectorInputDiagnostic` mirroring the TSWPD runtime exactly; TUSIX01-OPERATOR_DUMP_ROUNDTRIP proves record → dump → exact selector fields survive; operator runbook now mechanically executable end-to-end (env var + reproduce + command palette + JSONL inspection); REMOVAL_TRIGGER documented per Factory doctrine; helper coverage pinned mechanically against the TurnPhase union (4+2+2=8 literals); PRODUCTION_DIAGNOSTIC_DELTA = YES (5 files), PRODUCTION_SEMANTIC_DELTA = ZERO WHEN DISABLED, SELECTOR_REPAIR_DELTA = ZERO; CASE_A selector authority defect; 234/234 task-header-related tests PASS across 18 files; typecheck clean; C1: GO to dogfood) |
 | 2026-09-01 | Approval / classic | CLOSED | [`approval-protection.md`](./epics/approval-protection.md) (correlation ACT `0bbf3c1d7`: CORRELATION_HYPOTHESIS_ELIMINATED at the correlation layer; product-level #10783 immunity NOT YET PROVEN) |
 | 2026-09-01 | Runtime progression | CLOSED | [`runtime-task-progression.md`](./epics/runtime-task-progression.md) |
 | 2026-08-31 | Approval / dogfood | CLOSED | [`approval-protection.md`](./epics/approval-protection.md) |

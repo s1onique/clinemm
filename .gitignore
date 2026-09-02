@@ -879,3 +879,16 @@ apps/vscode/.factory/evidence/
 # completion step is durable.
 !/.factory/acts/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01.md
 !/.factory/evidence/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01/
+# 2026-09-02: ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01
+# Reviewer disposition 2026-09-02 HALT_CAPTURE_NOT_EXPORTABLE:
+# predecessor CORRECTION01 built an in-memory ring without an
+# operator-visible dump mechanism. Required bounded completion: a
+# single dump command + a single clear command (mirrors the TSWPD
+# pattern at apps/vscode/src/sdk/turn-state-writer-provenance-
+# runtime.ts exactly). No new diagnostic subsystem, no new public
+# API, no new wire field. REMOVAL_TRIGGER: first successful LIVE
+# binding of PUBLICATION_SHADOW_BINDING + LOCAL_SHADOW_TURNSEQ, or
+# CAPTURE_INSUFFICIENT. The ACT body + evidence directory and the
+# new roundtrip test must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01.md
+!/.factory/evidence/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01/

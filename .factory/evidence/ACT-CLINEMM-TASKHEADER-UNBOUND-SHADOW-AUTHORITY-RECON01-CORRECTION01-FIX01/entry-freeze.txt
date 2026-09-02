@@ -1,0 +1,67 @@
+ENTRY_HEAD                  = 2df124d226a7a537ebc26b637613960d687d986d
+                              (verified via git rev-parse HEAD at FIX01 entry;
+                               predecessor CORRECTION01 closure)
+
+SUBJECT_HEAD                 = 762b7cdb3c70ed55d97ab7c6b93247b2d0c8fc55
+                              (operator-dump + roundtrip test commit)
+
+CLOSURE_HEAD                 = 762b7cdb3c70ed55d97ab7c6b93247b2d0c8fc55
+                              (this ACT closes at the same HEAD; no
+                               production selector change; observational
+                               surface only)
+
+Predecessor ACT              = ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01
+                              HEAD: 2df124d22 (in-memory ring + capture
+                                wiring + ACT body)
+
+Reviewer disposition (2026-09-02 second pass):
+  VERDICT                     = HALT_CAPTURE_NOT_EXPORTABLE
+  ROOT_CAUSE                  = In-memory ring without operator-visible dump
+  REQUIRED_FIX                = ONE operator-accessible dump mechanism
+                                 (existing debug dump command pattern preferred)
+  PRODUCTION_REWORK           = NONE AUTHORIZED
+
+Operationally:
+  TUSIX01_OPERATOR_DUMP_ROUNDTRIP = PASS
+  PRODUCTION_DIAGNOSTIC_DELTA     = YES (5 files)
+  PRODUCTION_SEMANTIC_DELTA_DISABLED = ZERO
+  SELECTOR_REPAIR_DELTA           = ZERO
+  REMOVAL_TRIGGER                 = LIVE_PUBLICATION_SHADOW_BINDING +
+                                    LOCAL_SHADOW_TURNSEQ bound for
+                                    a recurrence, OR CAPTURE_INSUFFICIENT
+
+REMOVAL_TRIGGER MECHANISM (Factory doctrine for temporary diagnostics):
+  FIRST OF:
+    1. LIVE_BINDING_SUCCESSFUL    — operator dumps the diagnostic,
+                                     detects the binary outcome
+                                     (MISSING or matching seq),
+                                     and the LIVE recurrence is
+                                     qualified as CLOSED.
+    2. CAPTURE_INSUFFICIENT       — evidence proves the in-memory
+                                     recorder captured wrong fields,
+                                     was bounded out, or missed the
+                                     transition. Open a successor ACT.
+    3. SUCCESSOR_EVIDENCE         — a downstream evidence channel
+                                     supersedes this capture. Open a
+                                     removal ACT.
+
+EXHAUSTIVE_TURNPHASE_HELPER_COVERAGE:
+  TurnPhase union (8 literals): idle, streaming, awaiting_approval,
+    awaiting_followup, compacting, completed, error, resumable.
+
+  isTerminalShadowPhase covers (4): idle, completed, error, resumable.
+  isActiveLegacyPhase covers  (2): streaming, awaiting_approval.
+  Rule 1 (host compacting override) covers compacting BEFORE rule 3.
+  Rule 2 (host awaiting_followup override) covers awaiting_followup
+    BEFORE rule 3.
+
+  Phases that can reach rule 3 (the UNBOUND-demotion guard):
+    { idle, completed, error, resumable }      ← TERMINAL shadow
+    { streaming, awaiting_approval }            ← ACTIVE legacy
+    PLUS: any phase whose canonical shadow ≠ phase-keyed map entry
+      (the UNBOUND-demotion guard's exact narrow scope per REPAIR01)
+
+  Total of helper-covered phases:
+    isTerminalShadowPhase (4) ∪ isActiveLegacyPhase (2)
+    ∪ Rule 1/2 short-circuits (2) = 8
+  == |TurnPhase| = 8. EXHAUSTIVE.
