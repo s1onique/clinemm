@@ -615,6 +615,17 @@ export class AgentRuntime {
 		pendingToolCalls: [] as string[],
 		usage: cloneUsage(DEFAULT_USAGE),
 		lastError: undefined as string | undefined,
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+		// TRANSPORT-REPAIR01 (fourteenth-pass): STATE_BIND.
+		// Captured verbatim from `prepareTurn` return value
+		// (`result.currentWorkingContextEstimate`) at
+		// `prepareTurnForModelRequest` (line ~2336); surfaced
+		// on `snapshot().currentWorkingContextEstimate`.
+		// Reset to `undefined` on new run, restore, and
+		// before any prepareTurn has fired. Pinned by
+		// `agent-runtime.current-working-context-state-bind
+		//   .test.ts`.
+		currentWorkingContextEstimate: undefined as number | undefined,
 		lastErrorClass: undefined as ProviderErrorClass | undefined,
 		/**
 		 * Whether the model layer already recorded `sdk.error` telemetry for
@@ -911,6 +922,12 @@ export class AgentRuntime {
 		this.state.executionAwaitingApproval = false;
 		this.state.lastErrorClass = undefined;
 		this.state.lastErrorReported = false;
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+		// TRANSPORT-REPAIR01 (fourteenth-pass): STATE_BIND.
+		// restore() resets the captured W so the new
+		// conversation starts with no stale working-context
+		// estimate from the prior transcript.
+		this.state.currentWorkingContextEstimate = undefined;
 		this.state.messages = cloneMessages(messages);
 		this.config = {
 			...this.config,
@@ -1028,6 +1045,15 @@ export class AgentRuntime {
 				executionAwaitingApproval: this.state.executionAwaitingApproval,
 				pendingToolCalls: this.state.pendingToolCalls,
 			}),
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+			// TRANSPORT-REPAIR01 (fourteenth-pass): STATE_BIND.
+			// Surface the captured exact-W state. The host
+			// /projection layer reads this field to drive the
+			// TaskHeader's compaction working-context bar.
+			// See `prepareTurnForModelRequest` (~line 2329)
+			// for the capture site.
+			currentWorkingContextEstimate:
+				this.state.currentWorkingContextEstimate,
 		};
 	}
 
@@ -1323,6 +1349,12 @@ export class AgentRuntime {
 		this.state.executionModelStreaming = false;
 		this.state.executionAwaitingApproval = false;
 		this.state.usage = cloneUsage(DEFAULT_USAGE);
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+		// TRANSPORT-REPAIR01 (fourteenth-pass): STATE_BIND.
+		// A new run begins with no captured W; the next
+		// prepareTurnForModelRequest call will populate
+		// this field with the producer-side estimate.
+		this.state.currentWorkingContextEstimate = undefined;
 		this.overflowRecoveryAttempted = false;
 
 		// C1.4: reset recovery bookkeeping that is scoped to a
@@ -2313,6 +2345,21 @@ export class AgentRuntime {
 		}
 		if (!result) {
 			return request;
+		}
+
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+		// TRANSPORT-REPAIR01 (fourteenth-pass): STATE_BIND.
+		// Capture the exact result-local W from the producer-side
+		// metadata-only helper into runtime state. NO RECOMPUTE.
+		// Per the frozen contract: the agent runtime does NOT
+		// independently re-estimate W. If `result` carries no W
+		// field (legacy / non-publisher prepareTurn), the field
+		// remains at its previous value (the last captured W)
+		// unless reset by a lifecycle transition. This preserves
+		// PRODUCTION_W_AUTHORITIES = 1.
+		if (result.currentWorkingContextEstimate !== undefined) {
+			this.state.currentWorkingContextEstimate =
+				result.currentWorkingContextEstimate;
 		}
 
 		let next = request;

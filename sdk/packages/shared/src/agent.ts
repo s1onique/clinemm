@@ -321,6 +321,35 @@ export interface AgentRuntimeStateSnapshot {
 	 * contract and the consumer rule.
 	 */
 	execution?: AgentRuntimeExecutionState;
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (fourteenth-pass): STATE_BIND.
+	 *
+	 * The exact working-context estimate the agent runtime
+	 * captured from the most recent `prepareTurnForModelRequest`
+	 * return value. The producer-side `prepareTurn` callback
+	 * publishes this verbatim (see
+	 * `sdk/packages/core/src/extensions/context/compaction.ts:
+	 *   publishWorkingContextEstimateMetadataOnly`); the agent
+	 * runtime does NOT recompute it. This field is the durable
+	 * state identity for W — the snapshot exposes it so the
+	 * host/projection layer can drive the TaskHeader's
+	 * compaction working-context bar.
+	 *
+	 * Lifecycle (pinned by
+	 * `agent-runtime.current-working-context-state-bind.test.ts`):
+	 *   - `undefined` initially (no prepareTurn yet)
+	 *   - replaced on every `prepareTurnForModelRequest` return
+	 *     that carries `currentWorkingContextEstimate` in its
+	 *     result
+	 *   - reset to `undefined` on new `run()`, on `restore()`,
+	 *     and on a constructor that has not yet produced a
+	 *     prepareTurn
+	 *
+	 * ADDITIVE-OPTIONAL API delta on a documented SDK type
+	 * (`agent.snapshot()`). Source-compatible.
+	 */
+	currentWorkingContextEstimate?: number;
 }
 
 // =============================================================================
@@ -559,6 +588,33 @@ export interface AgentRuntimePrepareTurnContext {
 export interface AgentRuntimePrepareTurnResult {
 	messages?: readonly AgentMessage[];
 	systemPrompt?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (fourteenth-pass): STATE_BIND.
+	 *
+	 * The exact working-context estimate the producer-side
+	 * prepareTurn seam published for the FINAL prepared
+	 * request shape (post-compaction if any). The agent
+	 * runtime captures this verbatim into runtime state at
+	 * `prepareTurnForModelRequest` return (see
+	 * `agent-runtime.ts:prepareTurnForModelRequest`) and
+	 * surfaces it on `AgentRuntimeStateSnapshot
+	 *   .currentWorkingContextEstimate`. The host/projection
+	 * layer reads the snapshot to drive the compaction
+	 * working-context header (TaskHeader etc.).
+	 *
+	 * ADDITIVE-OPTIONAL. Hosts that do not yet publish W may
+	 * omit this field (it remains `undefined` on the
+	 * snapshot, matching pre-fix behavior). Producers that
+	 * publish W MUST set it to the exact estimator output,
+	 * not a recomputation.
+	 *
+	 * Independent of the runtime-side publication trigger
+	 * (PUBLICATION_BIND) which lives one layer up in
+	 * `LocalRuntimeHost` and is handled in a separate
+	 * bounded repair.
+	 */
+	currentWorkingContextEstimate?: number;
 }
 
 export type AgentModelFinishReason =

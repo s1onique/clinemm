@@ -1124,3 +1124,314 @@ TYPECHECK_DELTA          = ZERO (verified; agents=0,
 DEFAULT_SUITE_STATE      = GREEN
 NEW REVIEW ROUND         = NO
 C1                       = GO_C2_CARRIER_BIND
+
+## Fourteenth-pass (2026-09-03) — STATE_BIND landed
+
+The factory causal reviewer + SDK runtime/state/event
+engineer issued **`PASS_WITH_ONE_P1_FIX. C1:
+GO_STATE_BIND, then PUBLICATION_BIND`** on
+`2b15ee89f`. The boundary + cadence split is accepted.
+This commit closes STATE_BIND with production code +
+committed GREEN test.
+
+### What is now proven
+
+```text
+STATE_BIND_GAP     = CLOSED
+PUBLICATION_BIND_GAP = PROVEN structurally
+                       (state-only retention does not
+                        notify LocalRuntimeHost)
+```
+
+STATE_BIND contract (now satisfied):
+
+```text
+after prepareTurn returns W_n,
+  AgentRuntimeStateSnapshot
+    .currentWorkingContextEstimate === W_n
+```
+
+PUBLICATION_BIND contract (still open, next cycle):
+
+```text
+the core/host layer receives a state/event update
+carrying W_n
+  after that prepareTurn
+  and before provider-response-derived events
+```
+
+### Production delta (this commit)
+
+**`sdk/packages/shared/src/agent.ts`** (no behavioral
+change; type-only additive optional):
+
+  - `AgentRuntimePrepareTurnResult` gains
+    `currentWorkingContextEstimate?: number`. The
+    docstring ties it to the `prepareTurnForModelRequest`
+    capture site and pins the producer-side NO_RECOMPUTE
+    contract. `prepareTurn` publishers (the
+    `createCompactionStateAwarePrepareTurn` wrapper at
+    `sdk/packages/core/src/extensions/context/
+    compaction.ts:706`) already emit this field on the
+    internal `ContextPipelinePrepareTurnResult`; this
+    bridges it to the SDK type.
+
+  - `AgentRuntimeStateSnapshot` gains
+    `currentWorkingContextEstimate?: number`. The
+    docstring pins the lifecycle (initial undefined;
+    replaced on every `prepareTurnForModelRequest`
+    that carries it; reset on new `run()` and on
+    `restore()`).
+
+**`sdk/packages/agents/src/agent-runtime.ts`**:
+
+  - Private `state` gains `currentWorkingContextEstimate:
+    number | undefined` (initial undefined).
+  - `prepareTurnForModelRequest` (~line 2329) captures
+    `result.currentWorkingContextEstimate` verbatim into
+    `this.state.currentWorkingContextEstimate` after the
+    pre-fix overflow-recovery check. NO RECOMPUTE.
+    `PRODUCTION_W_AUTHORITIES = 1` preserved.
+  - `snapshot()` (~line 1042) surfaces
+    `currentWorkingContextEstimate: this.state
+    .currentWorkingContextEstimate` on the
+    `AgentRuntimeStateSnapshot` projection.
+  - `execute()` (~line 1352) resets the field to
+    `undefined` at the start of every new run (alongside
+    the existing execution-authority flag reset).
+  - `restore()` (~line 925) resets the field to
+    `undefined` so a restored transcript starts with no
+    captured W.
+
+### Test artifact
+
+Committed test file:
+`sdk/packages/agents/src/agent-runtime.current-
+working-context-state-bind.test.ts`
+
+Tests (6 cases):
+
+  1. **STATE_BIND.1**: snapshot captures exact prepareTurn W
+  2. **undefined-when-undefined**: prepareTurn returns
+     `undefined` → snapshot field `undefined`
+  3. **lifetime**: W1=100, W2=120 → snapshot === 120 (no
+     accumulation 220, no stale 100)
+  4. **restore()**: resets to `undefined`
+  5. **fresh-run**: `execute()` resets BEFORE the next
+     prepareTurn fires
+  6. **additive-optional API delta**: snapshot field is
+     optional at the type level (legacy snapshots remain
+     valid)
+
+All 6 tests pass. The transient RED provenance file
+`.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+CONTEXT-HEADER-TRANSPORT-REPAIR01/per-turn-carrier-
+inspection-red.provenance.ts` is superseded by this
+committed test (per reviewer: "don't rely
+indefinitely on an external provenance script for a
+permanently supported API field"). The file is
+retained for audit and reproduces GREEN when invoked
+manually.
+
+### P1 — no preselected event choice (per reviewer)
+
+The reviewer explicitly directs:
+
+```text
+Hierarchy:
+  1. existing internal state-notification mechanism
+  2. existing generic runtime-state-updated event
+  3. new typed AgentRuntimeEvent
+  4. host-specific polling/recompute — forbidden
+```
+
+This commit makes NO event choice. Existing internal
+state-notification primitives already exist on
+`AgentRuntime`:
+
+  - `emitRecoveryStateChangeIfChanged` (C1.5,
+    agent-runtime.ts:1105): captures `before` and
+    `after` of `snapshot().recovery`, emits
+    `recovery-state-changed` only on change.
+  - `emitExecutionStateChangeIfChanged` (RSMT01,
+    agent-runtime.ts:1184): same pattern for
+    `snapshot().execution`, emits
+    `execution-state-changed`.
+
+The next bounded cycle must inspect these primitives
+and pick the lowest option from the hierarchy. If
+neither fits, the smallest typed post-prepare
+notification is justified.
+
+### P2 (cosmetic) — wording fix
+
+The thirteenth-pass ACT body said:
+
+> "The host sees W only at provider-response-derived
+> events."
+
+Mechanically defensible replacement:
+
+```text
+HOST_SEES_UPDATED_SNAPSHOT_ONLY_AFTER_A_LATER_RUNTIME_EVENT
+
+NO_POST_PREPARE_RUNTIME_EVENT = PROVEN
+```
+
+The key invariant is ordering, not whether the
+later event is "provider-derived". `run-finished`
+is a runtime event that fires after the model
+stream completes, but it is not strictly a
+provider usage event. The corrected wording is
+preserved in the entry-freeze and the corrected
+position is held in the new section above.
+
+### Verification
+
+```text
+bunx vitest run on
+  sdk/packages/agents/:
+    Test Files 23 passed (23) [+1 file]
+    Tests      403 passed (403) [+6 tests]
+
+bunx vitest run on
+  sdk/packages/core/src/
+    extensions/context/:
+    Test Files 5 passed | 1 skipped (6)
+    Tests      116 passed | 1 skipped (117)
+
+bun tsc -p tsconfig.dev.json
+  --noEmit:
+    sdk/packages/shared  : 0 errors
+    sdk/packages/agents  : 0 errors
+    sdk/packages/core    : 23 errors
+      (= baseline; pre-existing;
+       zero new)
+
+bun \$RED_FILE:
+  status: 'GREEN'
+  prepareTurnCalls: 1
+  error: false
+
+git diff --check: clean
+```
+
+### Disposition (fourteenth-pass)
+
+```text
+ACT                            =
+  ACT-CLINEMM-COMPACTION-
+  WORKING-CONTEXT-HEADER-
+  TRANSPORT-REPAIR01
+
+STATE_BIND_GAP                 = CLOSED (this commit)
+PUBLICATION_BIND_GAP           = PROVEN (open)
+
+STATE_BIND_FIELD               =
+  AgentRuntimeStateSnapshot
+    .currentWorkingContextEstimate?:
+    number (ADDITIVE OPTIONAL)
+
+STATE_BIND_CAPTURE             =
+  prepareTurnForModelRequest
+    (~agent-runtime.ts:2329)
+  captures result.currentWorking
+    ContextEstimate verbatim
+  NO RECOMPUTE
+  PRODUCTION_W_AUTHORITIES = 1
+
+STATE_BIND_LIFETIME            =
+  W_n remains current until
+  prepareTurn_{n+1} produces
+  W_{n+1}
+  No accumulation
+  No stale retention
+  Reset on new run()
+  Reset on restore()
+
+NEW_AGENT_RUNTIME_EVENT        =
+  NOT YET AUTHORIZED
+
+PUBLICATION_TRIGGER            = UNBOUND
+
+API_DELTA                      =
+  ADDITIVE OPTIONAL
+
+API_DELTA_SURFACES             =
+  - AgentRuntimeStateSnapshot
+      .currentWorkingContextEstimate
+      (public SDK)
+  - AgentRuntimePrepareTurnResult
+      .currentWorkingContextEstimate
+      (public SDK prepareTurn
+       return shape)
+
+HEADER_CHANGE                  = NOT YET
+
+NEXT                           =
+  inspect internal state-notification
+  primitives (C1.5 + RSMT01)
+  -> PUBLICATION_BIND RED
+  -> smallest trigger GREEN
+  -> VSCode/TaskHeader (Phase 3)
+
+PRODUCTION_DELTA               =
+  this commit introduces new
+  additive-optional SDK fields +
+  their capture in agent runtime
+  state (type-only + ~10 lines)
+
+TYPECHECK_DELTA                =
+  ZERO (verified; shared=0,
+  agents=0, core=23=baseline)
+
+DEFAULT_SUITE_STATE            = GREEN
+
+NEW_REVIEW_ROUND               = NO
+
+C1                             =
+  GO_STATE_BIND (this commit)
+  + GO_PUBLICATION_BIND (next cycle)
+```
+
+### Commit lineage (continued)
+
+```text
+commit 6:    CARRIER_INSPECTION
+              + RED            (77b3e2467)
+                                └─ PASS_WITH_ONE_P1_FIX
+commit 6.5:  BOUNDARY_CALIBRATION
+              + PUB_PROBE      (2b15ee89f)
+                                └─ C1: GO_C2_CARRIER_BIND
+commit 7:    STATE_BIND       (this commit)
+              + GREEN_TEST
+                                └─ C1: GO_STATE_BIND
+```
+
+### Why the factory stops here (not earlier)
+
+The thirteenth-pass commit stopped at the boundary
+calibration because the publication-trigger shape
+was unbounded. The fourteenth-pass commit closes
+STATE_BIND without preselecting the publication
+shape. The next bounded cycle must:
+
+  1. Inspect existing internal state-notification
+     primitives.
+  2. Decide between reuse and a new typed event.
+  3. Author the PUBLICATION_BIND RED.
+  4. GREEN it.
+
+No production code change for publication in this
+commit. Adding a new `AgentRuntimeEvent` variant
+without first proving the existing primitives
+cannot serve the role would over-authorize the
+public SDK surface area.
+
+PRODUCTION_RUNTIME_DELTA = additive-optional SDK
+                            fields + their capture
+TYPECHECK_DELTA          = ZERO
+DEFAULT_SUITE_STATE      = GREEN
+NEW REVIEW ROUND         = NO
+C1                       = GO_STATE_BIND
+                          + GO_PUBLICATION_BIND

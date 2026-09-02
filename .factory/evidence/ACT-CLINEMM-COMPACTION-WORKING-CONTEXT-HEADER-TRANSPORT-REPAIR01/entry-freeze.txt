@@ -705,3 +705,179 @@ C1                        = GO_C2_CARRIER_BIND
   witness, then TaskHeader.
 
 NEW_REVIEW_ROUND          = NO.
+
+FOURTEENTH_PASS_STATE_BIND_LANDED (2026-09-03):
+
+  Reviewer (factory causal + SDK runtime/state/event
+  engineer) verdict on 2b15ee89f:
+    PASS_WITH_ONE_P1_FIX.
+    C1: GO_STATE_BIND, then PUBLICATION_BIND.
+    Boundary + cadence split accepted.
+    State retention is closed at the
+    agent-runtime-state boundary in this commit;
+    publication trigger is unbound and requires
+    separate bounded repair.
+
+  P1 (reviewer): do NOT preselect a new
+  AgentRuntimeEvent before proving there is no
+  existing internal state-notification primitive.
+  Hierarchy:
+    1. existing internal state-notification mechanism
+    2. existing generic runtime-state-updated event
+    3. new typed AgentRuntimeEvent
+    4. host-specific polling/recompute — forbidden
+  This commit makes no event choice.
+
+  P2 (cosmetic): wording correction. Replace "The host
+  sees W only at provider-response-derived events"
+  with the mechanically defensible statement:
+    HOST_SEES_UPDATED_SNAPSHOT_ONLY_AFTER_A_LATER_RUNTIME_EVENT
+    NO_POST_PREPARE_RUNTIME_EVENT = PROVEN
+  Key is ordering, not "provider-derived". P2 only;
+  fixed while touching the text this commit.
+
+FOURTEENTH_PASS_PRODUCTION_DELTA:
+
+  - sdk/packages/shared/src/agent.ts:
+      AgentRuntimePrepareTurnResult gains the
+      additive-optional field
+      currentWorkingContextEstimate?: number
+        (with a docstring tying it to the
+         prepareTurnForModelRequest capture site).
+      AgentRuntimeStateSnapshot gains the
+      additive-optional field
+      currentWorkingContextEstimate?: number
+        (with full lifecycle docstring).
+
+  - sdk/packages/agents/src/agent-runtime.ts:
+      Private state gains:
+        currentWorkingContextEstimate:
+          number | undefined (initial undefined).
+      prepareTurnForModelRequest (~line 2329)
+        captures result.currentWorkingContextEstimate
+        verbatim into this.state (NO RECOMPUTE;
+        PRODUCTION_W_AUTHORITIES = 1 preserved).
+        If result lacks the field, the prior
+        captured value is preserved (last-W-wins
+        until reset).
+      snapshot() (~line 1042) surfaces
+        currentWorkingContextEstimate from
+        this.state on the AgentRuntimeStateSnapshot
+        projection.
+      execute() (~line 1352) resets the field to
+        undefined at the start of every new run.
+      restore() (~line 925) resets the field to
+        undefined so a restored transcript starts
+        with no captured W.
+
+API_DELTA = ADDITIVE OPTIONAL
+  (AgentRuntimeStateSnapshot.currentWorkingContextEstimate?:
+   number is the new documented SDK field on
+   agent.snapshot(); AgentRuntimePrepareTurnResult
+   gains the same name for prepareTurn publishers.
+   Both source-compatible; legacy prepareTurn
+   implementations may omit the field; legacy
+   snapshot consumers may ignore it.)
+
+FOURTEENTH_PASS_TEST_ARTIFACT:
+
+  New committed test file:
+    sdk/packages/agents/src/
+      agent-runtime.current-working-context-state-bind
+      .test.ts
+  Tests (6 cases):
+    1. STATE_BIND.1: snapshot captures exact prepareTurn W
+    2. undefined-when-undefined: prepareTurn returns
+       undefined -> snapshot field undefined
+    3. lifetime: W1=100, W2=120 -> snapshot === 120
+       (no accumulation 220, no stale 100)
+    4. restore(): resets to undefined
+    5. fresh-run: execute() resets BEFORE next prepareTurn
+    6. additive-optional API delta: snapshot field optional
+
+  All 6 committed tests pass.
+  Transient RED provenance file at
+    .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
+      CONTEXT-HEADER-TRANSPORT-REPAIR01/
+      per-turn-carrier-inspection-red.provenance.ts
+  superseded by the committed test (reviewer:
+  "don't rely indefinitely on an external
+  provenance script for a permanently supported
+  API field"). File retained for audit; not run by
+  default CI.
+
+VERIFICATION:
+
+  bunx vitest run on sdk/packages/agents/:
+    Test Files 23 passed (23) [+1 file]
+    Tests      403 passed (403) [+6 tests]
+
+  bunx vitest run on sdk/packages/core/src/
+    extensions/context/:
+    Test Files 5 passed | 1 skipped (6)
+    Tests      116 passed | 1 skipped (117)
+
+  bun tsc -p tsconfig.dev.json --noEmit:
+    sdk/packages/shared  : 0 errors
+    sdk/packages/agents  : 0 errors
+    sdk/packages/core    : 23 errors
+      (= baseline; pre-existing; zero new)
+
+  bun \$RED_FILE:
+    status: 'GREEN'
+    prepareTurnCalls: 1
+    error: false
+
+  git diff --check: clean
+
+PUBLICATION_BIND_STATUS:
+  PROVEN structurally that state-only retention
+  does not notify LocalRuntimeHost. The publication
+  trigger remains UNBOUND. The next bounded cycle:
+    1. Inspect existing internal state-notification
+       primitives (emitRecoveryStateChangeIfChanged,
+       emitExecutionStateChangeIfChanged at
+       agent-runtime.ts:1105/1184).
+    2. Either reuse an existing primitive or add the
+       smallest typed post-prepare notification
+       (reviewer hierarchy: 1->2->3->4).
+    3. Publish a PUBLICATION_BIND RED that asserts
+       core/host observes the new W before any
+       later AgentRuntimeEvent.
+    4. GREEN that RED.
+  No production code change for publication in
+  this commit.
+
+STATE_BIND_DISPOSITION:
+
+  STATE_BIND_GAP                = CLOSED (this commit)
+  STATE_BIND_FIELD              =
+    AgentRuntimeStateSnapshot
+      .currentWorkingContextEstimate?: number
+      (ADDITIVE OPTIONAL)
+  STATE_BIND_CAPTURE            =
+    prepareTurnForModelRequest
+      (~agent-runtime.ts:2329)
+      captures result.currentWorkingContextEstimate
+      verbatim (NO RECOMPUTE)
+  STATE_BIND_RESET              =
+    execute() and restore() reset to undefined
+  STATE_BIND_LIFETIME           =
+    W_n remains current until
+    prepareTurn_{n+1} produces W_{n+1}
+    (no accumulation, no stale retention)
+  PUBLICATION_BIND_GAP          = PROVEN (open)
+
+NEXT:
+  - inspect internal state-notification primitives
+    (C1.5 emitRecoveryStateChangeIfChanged +
+    RSMT emitExecutionStateChangeIfChanged)
+  - PUBLICATION_BIND RED: assert host observes
+    new W before any later AgentRuntimeEvent
+  - smallest trigger -> GREEN
+  - then VSCode -> TaskHeader (Phase 3)
+
+NEW_REVIEW_ROUND                = NO.
+C1                              =
+  GO_STATE_BIND (this commit)
+  + GO_PUBLICATION_BIND (next cycle)
