@@ -10,13 +10,17 @@ PURPOSE             = RECON_ONLY (no production code
                      change; no protocol change
                      presupposed)
 
-ACT_DISPOSITION     = PASS_WITH_ONE_P1_FIX on
-                     predecessor empirical report
-                     (commit 9f994b135, defect A and
-                     defect B CLOSED at HEAD, defect C
-                     LIVE consumer-level witness);
-                     recon opens with the P1 carried
-                     forward.
+ACT_DISPOSITION     = HALT_WRONG_SEMANTIC_CONTRACT on
+                     the previous version of this ACT
+                     (PASS_WITH_ONE_P1_FIX on predecessor
+                     empirical report 9f994b135;
+                     recon corrected to remove the
+                     H_a ≡ W_e conflation and the
+                     implicit C3 "source switch" framing;
+                     ACT now freezes equivalences as
+                     UNBOUND and reclassifies the
+                     C3 contract as multi-source
+                     presentation).
 
 DEFECT_A            = CLOSED at cb5b52239 (Strategy-D)
 DEFECT_B            = CLOSED at HEAD (trailing
@@ -26,14 +30,47 @@ DEFECT_C            = LIVE / consumer-level behaviour
                      reproduced; full UI production-seam
                      reproduction = NOT_YET (P1)
 
-WIRE_KIND_CHANGE    = NOT_AUTHORIZED_YET (option β
-                     deferred until recon proves C3 is
-                     the intended semantic contract)
+WIRE_KIND_CHANGE    = NEW_WIRE_KIND = UNBOUND
+                     NEED_FOR_NEW_DISCRIMINATOR =
+                       NOT PROVEN
+                     (option β deferred; the existing
+                      `compaction` message shape already
+                      has a distinct message type plus
+                      tokensBefore/tokensAfter; whether
+                      a new discriminator is required is
+                      itself a question the recon must
+                      answer from production code)
 
-PRIMARY_QUESTION    = what semantic quantity should
-                     the header bar represent
-                     immediately after compaction and
-                     before the next API request?
+H_a_TO_W_e_EQUIVALENCE
+                   = UNBOUND
+                     (the previous Factory correction
+                      rejected cross-domain promotion
+                      based on plausible arithmetic;
+                      H_a == 264.3k in this specimen does
+                      NOT prove H_a ≡ W_e; C2 cannot
+                      consume H_a as W_e without
+                      executable/structural proof)
+
+C2_UNACHIEVABILITY_GUARD
+                   = C2 is UNACHIEVABLE without
+                     producer-side work if Q4 finds no
+                     authoritative W-space source at the
+                     post-compaction seam
+
+FULL_UI_DOM_RENDER  = OPTIONAL
+                     (extracted projection test is
+                      sufficient if Q1/Q2 show a pure-seam
+                      projection; a heavyweight React
+                      harness is over-engineering)
+
+PRIMARY_QUESTION    = does the bar promise "last
+                     provider-observed request size"
+                     (C1) or "current context we would
+                     send if you made the next request
+                     right now" (C2) or both with
+                     explicit labels (C3)? Until answered,
+                     264.3k is NOT automatically the
+                     correct bar value.
 
 PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-
                      PRESENTATION-FRESHNESS-EMPIRICAL01
