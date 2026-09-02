@@ -1,1 +1,38 @@
-cb5b5223913e66688cc3f91dd4982b313878d908
+ENTRY_HEAD              = cb5b5223913e66688cc3f91dd4982b313878d908
+                          (verified via git rev-parse HEAD at ACT entry)
+
+RED_COMMIT              = cb6610f37 (RECON + RED captured)
+SUBJECT_HEAD            = 6eaa0864524fd60563277caa735351c90289bd52
+
+LIVE specimen:
+  taskId                = 1788292664979_9qbpd
+  epoch                 = 16
+  writerId              = controller-epoch-transition-reseed
+  previous              = { phase: "streaming", seq: 27543 }
+  committed             = { phase: "streaming", seq: 27545 }
+  first_divergent_pub   = 27546
+
+LIVE activity publication (publicationId 27546+):
+  publicationId            = 27546
+  hostStatus               = "idle"
+  turnPhase                = "streaming"
+  taskHeaderPhase          = "idle"
+  taskHeaderSource         = "shadow"
+  shadowPublicationBinding = "UNBOUND"
+  modelStreaming           = false
+  toolActive               = false
+  foregroundCommandRunning = false
+  backgroundCommandRunning = false
+
+Predecessor ACT (NOT contradicted by this specimen):
+  ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01
+  Status: CLOSED at 2993ec4e1
+  Strategy-B applied to resetMessageTranslatorAndFence
+
+CLASSIFICATION: CASE_A (selector authority defect)
+PRODUCTION_DELTA: 78 insertions, 10 deletions across 3 files
+                  (1 production source: task-state-shadow-arbiter-mapper.ts)
+TEST_DELTA: 1 new test file (226 lines)
+            2 existing test files updated (THCP04/THCP08/SHADOW_NECESSITY
+                                          reclassified to BOUND-shadow inputs;
+                                          TCR01 T14 inverted-to-fixed)
