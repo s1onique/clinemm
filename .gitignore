@@ -465,6 +465,18 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/
 !/.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/terminal-chronology-*.json
+# ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01: producer-side
+# contract ACT opened after the Q1-Q5 bounded recon of
+# RUNTIME-TASK-PROGRESSION-RECON01 reached AUTHORITY_IDENTITY_MISSING =
+# PROVEN at 6ec9bed4f. Per Factory reviewer PASS_WITH_ONE_P1_FIX /
+# C1: GO_CONTRACT, the contract ACT MUST begin at the PRODUCER
+# (job creation + per-job storage + liveness query), NOT at the
+# CONSUMER (coordinator options). Carry-over of the
+# backgroundCommandTaskId MISLEADING_NAME finding stays out of
+# this ACT (separate contract ACT). The epic ledger at
+# .factory/epics/runtime-task-progression.md (deferred-work entry)
+# binds to this ACT file, so it must survive a fresh clone.
+!/.factory/acts/ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01.md
 # ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01: producer-side causal
 # classification ACT. Successor slice to ACT-CLINEMM-RUNTIME-TASK-
 # PROGRESSION-RECON01 OWN02-OWN03-RECON (verdict CAPTURE_INSUFFICIENT for

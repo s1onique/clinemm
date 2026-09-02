@@ -314,28 +314,106 @@ git_diff_check  = pass
 PRODUCTION_DELTA = 0
 ```
 
-### Recommended next bounded cycle (still inside this umbrella ACT, no parent new ACT)
+### Recommended next bounded cycle — WITHOUT preselecting the transport shape
 
-A small **narrow contract ACT** (not a repair ACT) authorized
-in a future review round should ADD exactly one optional
-carrier slot to `SdkSessionEventCoordinatorOptions` (or a
-sibling carrier) sufficient to convey:
+The Q1–Q5 recon proved the **identity edge** is missing
+from in-process state. So the next bounded cycle starts at
+the **producer** (job creation), not the **consumer**
+(the coordinator's options). Concretely, this is what the
+next ACT must define:
 
 ```text
-- whether a RUNNING job exists                 (boolean)
-- the owning sessionId and/or taskId at job-creation
-                                               (string | undefined)
+tool invocation / job creation
+        ↓
+authoritative owner identity captured on CommandJob
+        ↓
+job liveness query preserves that identity
+        ↓
+turn-completion composition seam asks:
+  does THIS owner have unfinished work?
 ```
 
-With that contract slot in place, Q5 becomes exercisable
-inside this same umbrella ACT (no new parent ACT, no
-Factory-bound follow-up ACT body required). Then re-run
-Q5 to formulate the real RED with ablations and controls.
+**Do NOT preselect the carrier shape.** Adding a slot to
+`SdkSessionEventCoordinatorOptions` would only create a
+place to transport identity that does not yet exist; the
+producer must first persist the identity, and the carrier
+shape is a downstream consequence to be discovered during
+the contract ACT itself.
+
+The contract ACT is opened as:
+
+```text
+ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01
+
+Mission (from reviewer):
+  Define and minimally implement the authoritative
+  ownership identity carried by a background command job
+  from creation through liveness/completion, sufficient
+  for the existing runtime-task-progression ACT to
+  execute its true Q5 RED. Keep it tiny.
+
+Likely candidates for the minimum identity (frozen here,
+to be inspected at the real job-creation seam):
+    ownerSessionId
+    ownerConversationId
+Only add ownerTaskId if source recon proves a stable task
+identity exists at the real run_commands creation seam.
+
+Desired resulting seam (semantically — shape to be picked
+during the contract ACT):
+    hasRunningBackgroundJobForOwner(ownerId): boolean
+    OR
+    getRunningBackgroundJobs(): Array<{ jobId, ownerSessionId? }>
+NOT another controller-wide boolean — the current
+`backgroundCommandRunning` is exactly too lossy for
+authority decisions.
+```
+
+### Q3 — calibration reminder (in-process only; no separate commit)
+
+`Q3_CASE_C` here is **structural**, not behavioral: no
+runtime task/session-switch probe was executed in this
+recon; the case is derived from the construction of
+`getOrCreateSharedHost`. Future readers must not describe
+this as an executed probe. No additional cleanup commit
+spend.
+
+### Then immediately return to Q5 (still in the umbrella ACT)
+
+Once the contract ACT closes, **do not start another recon
+epic**. Resume `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01`
+inside the umbrella ACT and finally execute the real RED:
+
+```text
+same completion event
+same TurnState
+same production seam
+
+A. current owner has RUNNING J
+   → MUST NOT become awaiting_followup
+B. current owner has no running J
+   → awaiting_followup preserved (control / current behavior)
+C. another owner has RUNNING J
+   → awaiting_followup preserved (cross-owner contamination control)
+D. current owner's J completed
+   → awaiting_followup preserved (terminal control)
+```
+
+If A fails while B/C/D pass:
+
+```text
+CASE_A = ADJUDICATED
+ROOT_CAUSE_ISOLATED = YES
+```
+
+and only then patch the lowest authority seam.
 
 The rename of `backgroundCommandTaskId` (which currently
 stores `jobId`) is a Cline-wide API surface decision and
-should be a SEPARATE contract ACT, frozen here as a
-MISLEADING_NAME / STRUCTURAL FACT finding.
+SHOULD be a SEPARATE contract ACT, frozen here as a
+MISLEADING_NAME / STRUCTURAL FACT finding — but explicitly
+out of scope for `BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01`,
+whose mission is owner identity, not field renaming.
 
 ---
 
@@ -365,11 +443,12 @@ both expressible (in terms of in-process state) and load-bearing
 ## File map for cross-reference
 
 ```text
-ACT body         : .factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
-Q1-Q5 evidence   : .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/background-job-authority-topology.md (this file)
-Live specimen    : .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/live-failure-post-terminal-02.json
-Per-seam recon   : .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/source-seam-map/01-source-recon-q1-q8.md (prior; pre-Q1-Q5)
-ACAS01 test      : apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts
-Board            : .factory/epic-board.md (row 28 → AUTHORITY_BIND_DEFERRED_PENDING_Q1-Q5-RESOLVED)
-Epic detail      : .factory/epics/runtime-task-progression.md (deferred-work entry)
+ACT body              : .factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01.md
+Q1-Q5 evidence        : .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/background-job-authority-topology.md (this file)
+Contract ACT (opened) : .factory/acts/ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01.md
+Live specimen         : .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/live-failure-post-terminal-02.json
+Per-seam recon        : .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/source-seam-map/01-source-recon-q1-q8.md (prior; pre-Q1-Q5)
+ACAS01 test           : apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts
+Board                 : .factory/epic-board.md (row 28 → AUTHORITY_IDENTITY_MISSING; contract ACT in flight)
+Epic detail           : .factory/epics/runtime-task-progression.md (deferred-work entry)
 ```

@@ -881,31 +881,77 @@ PRODUCTION_DELTA = 0
 NEXT =
   §14 stop state: AUTHORITY_IDENTITY_MISSING = PROVEN.
 
-  Recommended: a small narrow contract ACT authorized in a future
-  review round that ADDS exactly one optional carrier slot to
-  SdkSessionEventCoordinatorOptions (or sibling carrier):
-    { jobRunning: boolean,
-      ownerSessionId?: string,
-      ownerTaskId?: string }
-  With that contract slot in place, re-run Q5 inside this same
-  umbrella ACT (no new parent ACT) to formulate the real RED
-  with ablations + controls.
+  The Q1–Q5 recon proved the identity edge is missing from
+  in-process state. The next bounded cycle starts at the
+  PRODUCER (job creation), not the CONSUMER (coordinator
+  options). Do NOT preselect the carrier shape; the producer
+  must first persist the identity, and the carrier shape is
+  discovered during the contract ACT itself.
+
+  Recommended: open `ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01`
+  with mission = define and minimally implement the authoritative
+  owner identity carried by a background command job from
+  creation through liveness/completion, sufficient for the
+  existing umbrella ACT to execute its true Q5 RED.
+
+  Likely candidates for the minimum identity (frozen here,
+  to be inspected at the real job-creation seam):
+    ownerSessionId
+    ownerConversationId
+  (Only add ownerTaskId if source recon proves a stable task
+   identity exists at the real run_commands creation seam.)
+
+  Desired resulting seam (semantically — shape picked
+  during the contract ACT):
+    hasRunningBackgroundJobForOwner(ownerId): boolean
+    OR
+    getRunningBackgroundJobs(): Array<{ jobId, ownerSessionId? }>
+  NOT another controller-wide boolean — the current
+  `backgroundCommandRunning` is exactly too lossy for
+  authority decisions.
+
+  Once the contract ACT closes, do NOT start another recon
+  epic. Resume the umbrella ACT and finally execute the real
+  Q5 RED with:
+    A. current owner has RUNNING J    → MUST NOT become awaiting_followup
+    B. current owner has no running J → awaiting_followup preserved (control)
+    C. another owner has RUNNING J    → awaiting_followup preserved (cross-owner control)
+    D. current owner's J completed    → awaiting_followup preserved (terminal control)
+  If A fails while B/C/D pass:
+    CASE_A = ADJUDICATED
+    ROOT_CAUSE_ISOLATED = YES
+  and only then patch the lowest authority seam.
 
   The rename of `backgroundCommandTaskId` (which currently stores
   jobId) is a Cline-wide API surface decision and should be a
-  SEPARATE contract ACT, frozen here as MISLEADING_NAME / STRUCTURAL FACT.
+  SEPARATE contract ACT, frozen here as MISLEADING_NAME / STRUCTURAL FACT
+  — explicitly OUT OF SCOPE for
+  BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01, whose mission is owner
+  identity, not field renaming.
 
-  AFTER this ACT reaches its terminal disposition (currently
-  AUTHORITY_IDENTITY_MISSING_RECOMMENDS_CONTRACT_ACT), the next
-  lane is:
+  AFTER the contract ACT closes and the umbrella ACT reaches GREEN,
+  the next lane is:
     ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
-    (no intervening Factory ceremony unless a new P0 appears).
+  (no intervening Factory ceremony unless a new P0 appears).
+
+P1_CORRECTION_AT_2026-09-02_13:55 =
+  The earlier §15 NEXT block over-prescribed a `SdkSessionEventCoordinatorOptions`
+  carrier `{ jobRunning, ownerSessionId?, ownerTaskId? }`. The reviewer
+  correctly noted that adding such a carrier would only create a place
+  to TRANSPORT identity that doesn't yet exist on the producer side.
+  Corrected in the commit that opens
+  `ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01`: the contract
+  ACT MUST first persist owner identity on CommandJob; the carrier
+  shape is a downstream consequence, not a precondition.
 ```
 
 ### Decisive final wording (per §15 stop rule)
 
 ```text
 AUTHORITY_IDENTITY_MISSING
-  (with the ACT-RECOMMENDED-NEXT = narrow contract ACT authorized in
-   a future review round; not gated on a new review pass first)
+  (carrying the convention that the contract ACT is `BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01`,
+   starting at the PRODUCER (job creation), NOT at the CONSUMER (coordinator
+   options); carrier shape is downstream, not precondition;
+   Q5 to be resumed inside this umbrella ACT as soon as the
+   contract ACT closes; no new review round required; C1: GO_CONTRACT)
 ```
